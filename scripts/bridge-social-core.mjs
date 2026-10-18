@@ -223,51 +223,105 @@ export function directoryFuzzyFilter(query) {
 	return `&or=(${clauses.join(',')})`;
 }
 
+const SHARED_WORKSPACES_LIMIT = 200;
+const COMEMBERS_PER_WORKSPACE_LIMIT = 500;
+const COLLEAGUE_INSERT_CAP = 500;
+
 /**
- * Auto-connect teammates: for every SHARED workspace the user belongs to (one
- * with at least one OTHER member), ensure an accepted source='colleague'
- * connection row exists for each co-member — without ever duplicating or
- * overwriting an existing edge. Best-effort + bounded: any failure is swallowed
- * (never throws into the request path), queries are capped, and a pre-existing
- * 'manual'/'blocked'/any-status row in EITHER direction is left untouched (we
- * SELECT the pair both ways first; we never write the generated pair_key).
+ * The one read that answers "who shares a workspace with `userId`": the caller's member rows
+ * (anchor, `user_id=eq.`), each with its workspace's other members. Both limits are the old
+ * ones (200 workspaces, 500 co-members); the nested limit is per workspace, so the insert
+ * is capped again in insertColleagueEdges.
  */
-export async function ensureColleagueConnections(config, fetchImpl, userId) {
-	if (!UUID_REGEX.test(String(userId))) return;
-	try {
-		// 1. Workspaces the user is a member of.
-		const myRows = await rest(config, fetchImpl, `osionos_workspace_members?user_id=eq.${userId}&select=workspace_id&limit=200`);
-		const workspaceIds = [...new Set((Array.isArray(myRows) ? myRows : []).map((row) => row.workspace_id).filter((id) => UUID_REGEX.test(String(id))))];
-		if (workspaceIds.length === 0) return;
-		// 2. Co-members of those workspaces (excludes the user → only SHARED teams yield rows).
-		const coRows = await rest(config, fetchImpl, `osionos_workspace_members?workspace_id=in.(${workspaceIds.join(',')})&user_id=neq.${userId}&select=user_id&limit=500`);
-		const coMembers = [...new Set((Array.isArray(coRows) ? coRows : []).map((row) => row.user_id).filter((id) => UUID_REGEX.test(String(id)) && id !== userId))];
-		if (coMembers.length === 0) return;
-		// 3. One SELECT for every existing edge touching the user (either direction).
-		const existing = await rest(config, fetchImpl, `osionos_connections?or=(requester_id.eq.${userId},addressee_id.eq.${userId})&select=requester_id,addressee_id&limit=1000`);
-		const paired = new Set();
-		for (const row of Array.isArray(existing) ? existing : []) {
-			paired.add(row.requester_id === userId ? row.addressee_id : row.requester_id);
+export function coMemberPath(userId) {
+	const query = new URLSearchParams({
+		user_id: `eq.${userId}`,
+		select: 'user_id,workspace_id,workspace:osionos_workspaces!workspace_id(members:osionos_workspace_members!workspace_id(user_id))',
+		limit: String(SHARED_WORKSPACES_LIMIT),
+		'workspace.members.user_id': `neq.${userId}`,
+		'workspace.members.limit': String(COMEMBERS_PER_WORKSPACE_LIMIT),
+	});
+	return `osionos_workspace_members?${query}`;
+}
+
+/** Every edge touching `userId`, newest first, whatever its status: the sync and the list share this read. */
+export function connectionEdgesPath(userId) {
+	return `osionos_connections?or=(requester_id.eq.${userId},addressee_id.eq.${userId})&select=*&order=created_at.desc`;
+}
+
+/**
+ * Distinct co-member ids from a coMemberPath answer, or null when any anchor row belongs to
+ * another user: a dropped `user_id=eq.` anchor would otherwise make everyone a colleague.
+ */
+export function coMembersFromRows(rows, userId) {
+	const self = String(userId).toLowerCase();
+	const anchors = Array.isArray(rows) ? rows : [];
+	if (anchors.some((row) => String(row?.user_id).toLowerCase() !== self)) return null;
+	const peers = new Set();
+	for (const row of anchors) {
+		if (!UUID_REGEX.test(String(row.workspace_id))) continue;
+		for (const member of Array.isArray(row.workspace?.members) ? row.workspace.members : []) {
+			if (UUID_REGEX.test(String(member?.user_id)) && String(member.user_id).toLowerCase() !== self) peers.add(member.user_id);
 		}
-		const toInsert = coMembers.filter((peer) => !paired.has(peer));
-		if (toInsert.length === 0) return;
-		// 4. Insert the missing colleague edges. on_conflict=pair_key +
-		//    resolution=ignore-duplicates guards the UNIQUE(pair_key) constraint
-		//    against a concurrent insert / inverse-direction row (never overwrites).
-		await rest(config, fetchImpl, 'osionos_connections?on_conflict=pair_key', {
+	}
+	return [...peers];
+}
+
+/** Co-members of every workspace `userId` belongs to. Best-effort: a failure is a warn and no peers, never a throw. */
+export async function sharedWorkspacePeers(config, fetchImpl, userId) {
+	if (!UUID_REGEX.test(String(userId))) return [];
+	try {
+		const peers = coMembersFromRows(await rest(config, fetchImpl, coMemberPath(userId)), userId);
+		if (peers !== null) return peers;
+		console.warn('[osionos-bridge] colleague sync skipped: the co-member read answered another user\'s rows');
+	} catch (error) {
+		console.warn(`[osionos-bridge] colleague sync skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
+	}
+	return [];
+}
+
+/**
+ * Insert an accepted source='colleague' edge to each of `peers` (the caller already removed
+ * every peer with an edge, in any status and direction) and return the rows this call
+ * inserted. on_conflict=pair_key + ignore-duplicates guards UNIQUE(pair_key) against a
+ * concurrent insert or an inverse-direction row, and with return=representation answers
+ * only the rows it really inserted. Best-effort: a failure is a warn and no rows.
+ */
+export async function insertColleagueEdges(config, fetchImpl, userId, peers) {
+	if (peers.length === 0) return [];
+	try {
+		const respondedAt = new Date().toISOString();
+		const rows = await rest(config, fetchImpl, 'osionos_connections?on_conflict=pair_key', {
 			method: 'POST',
-			body: toInsert.map((peer) => ({
+			body: peers.slice(0, COLLEAGUE_INSERT_CAP).map((peer) => ({
 				requester_id: userId,
 				addressee_id: peer,
 				status: 'accepted',
 				source: 'colleague',
-				responded_at: new Date().toISOString(),
+				responded_at: respondedAt,
 			})),
-			prefer: 'resolution=ignore-duplicates,return=minimal',
+			prefer: 'resolution=ignore-duplicates,return=representation',
 		});
+		return Array.isArray(rows) ? rows.filter((row) => row && typeof row === 'object') : [];
 	} catch (error) {
-		console.warn(`[osionos-bridge] ensureColleagueConnections skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
+		console.warn(`[osionos-bridge] colleague insert skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
+		return [];
 	}
+}
+
+const createdAtMs = (row) => {
+	const ms = Date.parse(row.created_at);
+	return Number.isFinite(ms) ? ms : Number.NEGATIVE_INFINITY;
+};
+
+/** Edge rows from several reads as one list: one row per id (the first list wins), newest created_at first. */
+export function mergeEdgesNewestFirst(...lists) {
+	const byId = new Map();
+	for (const row of lists.flat()) if (!byId.has(row.id ?? row)) byId.set(row.id ?? row, row);
+	return [...byId.values()].sort((left, right) => {
+		const [l, r] = [createdAtMs(left), createdAtMs(right)];
+		return l === r ? 0 : (r > l ? 1 : -1);
+	});
 }
 
 const MENTION_RE = /(?<![\w@])@([a-z0-9_]+(?:\.[a-z0-9_]+)*)/gi;

@@ -15,6 +15,10 @@
 // fixed parameter). Anything else is recorded in `violations` AND thrown: the colleague
 // sync swallows its own errors, so a throw alone could be hidden and a test would pass on
 // a query nobody declared. getConnections() asserts `violations` is empty.
+// Shapes were swapped in the commit that restructured the reads (the tests did not change):
+// the members->workspace->members embed replaced the two member reads, and the unfiltered
+// edges read replaced the sync's limit=1000 read. `leakAnchor` makes the embed answer every
+// user's rows, as a dropped `user_id=eq.` anchor would.
 // Caveat: a faithful evaluator of only the declared shapes. It does not model RLS, column
 // types or PostgREST's error bodies, and a failing shape answers a fixed 500.
 
@@ -26,6 +30,7 @@ export const CONFIG = { baasUrl: 'http://baas.test', serviceKey: 'svc-key', allo
 // Derived from the peer, not from insertion order, so a reordered batch yields the same ids.
 export const newEdgeId = (peer) => `0e${peer.slice(2)}`;
 export const NEW_EDGE_CREATED_AT = '2026-10-19T12:00:00.000Z';
+const EMBED_SELECT = 'user_id,workspace_id,workspace:osionos_workspaces!workspace_id(members:osionos_workspace_members!workspace_id(user_id))';
 const UUID_LIST = /^in\.\(([^)]*)\)$/;
 const OR_EDGES = /^\(requester_id\.eq\.([^,]+),addressee_id\.eq\.([^,)]+)\)$/;
 const OR_BLOCKS = /^\(blocked_id\.eq\.([^,]+),blocker_id\.eq\.([^,)]+)\)$/;
@@ -51,22 +56,24 @@ function insertEdges(world, rows, prefer) {
 /** Today's queries. `logical` names the failure switch a test flips. */
 const SHAPES = [
 	{
-		logical: 'members', method: 'GET', table: 'osionos_workspace_members', keys: ['user_id', 'select', 'limit'],
-		fixed: { select: 'workspace_id', limit: '200' },
-		run: (world, p) => world.members.filter((row) => `eq.${row.user_id}` === p.user_id).map(({ workspace_id }) => ({ workspace_id })),
-	},
-	{
-		logical: 'members', method: 'GET', table: 'osionos_workspace_members', keys: ['workspace_id', 'user_id', 'select', 'limit'],
-		fixed: { select: 'user_id', limit: '500' },
-		run: (world, p) => {
-			const wanted = new Set(UUID_LIST.exec(p.workspace_id)[1].split(','));
-			return world.members.filter((row) => wanted.has(row.workspace_id) && `neq.${row.user_id}` !== p.user_id).map(({ user_id }) => ({ user_id }));
+		logical: 'members', method: 'GET', table: 'osionos_workspace_members',
+		keys: ['user_id', 'select', 'limit', 'workspace.members.user_id', 'workspace.members.limit'],
+		fixed: { select: EMBED_SELECT, limit: '200', 'workspace.members.limit': '500' },
+		// The nested filter must exclude the same user the anchor names.
+		valid: (p) => p['workspace.members.user_id'] === `neq.${p.user_id.slice(3)}`,
+		run: (world, p, _body, _prefer, options) => {
+			const anchors = world.members.filter((row) => options.leakAnchor || `eq.${row.user_id}` === p.user_id).slice(0, Number(p.limit));
+			return anchors.map((row) => ({
+				user_id: row.user_id,
+				workspace_id: row.workspace_id,
+				workspace: {
+					members: world.members
+						.filter((member) => member.workspace_id === row.workspace_id && `neq.${member.user_id}` !== p['workspace.members.user_id'])
+						.slice(0, Number(p['workspace.members.limit']))
+						.map(({ user_id }) => ({ user_id })),
+				},
+			}));
 		},
-	},
-	{
-		logical: 'edges', method: 'GET', table: 'osionos_connections', keys: ['or', 'select', 'limit'],
-		fixed: { select: 'requester_id,addressee_id', limit: '1000' },
-		run: (world, p) => edgesOf(world, OR_EDGES.exec(p.or)[1]).map(({ requester_id, addressee_id }) => ({ requester_id, addressee_id })),
 	},
 	{
 		logical: 'edges', method: 'GET', table: 'osionos_connections', keys: ['or', 'select', 'order'],
@@ -95,20 +102,22 @@ const SHAPES = [
 		},
 	},
 	{
-		logical: 'insert', method: 'POST', table: 'osionos_connections', keys: ['on_conflict'], fixed: { on_conflict: 'pair_key' },
+		logical: 'insert', method: 'POST', table: 'osionos_connections', keys: ['on_conflict'], fixed: { on_conflict: 'pair_key' }, prefer: 'resolution=ignore-duplicates,return=representation',
 		run: (world, _p, body, prefer) => insertEdges(world, body, prefer),
 	},
 ];
 
-function matches(shape, method, table, params) {
+function matches(shape, method, table, params, prefer) {
 	if (shape.method !== method || shape.table !== table) return false;
 	const names = [...params.keys()].sort();
 	if (JSON.stringify(names) !== JSON.stringify([...shape.keys].sort())) return false;
-	return Object.entries(shape.fixed).every(([name, value]) => params.get(name) === value);
+	if (shape.prefer !== undefined && shape.prefer !== prefer) return false;
+	if (!Object.entries(shape.fixed).every(([name, value]) => params.get(name) === value)) return false;
+	return shape.valid === undefined || shape.valid(Object.fromEntries(params));
 }
 
 /** `world`: { members, connections, blocks, people }. `failing`: logical names that answer 500. */
-export function createSocialStub(world, { failing = [] } = {}) {
+export function createSocialStub(world, { failing = [], leakAnchor = false } = {}) {
 	const calls = [];
 	const violations = [];
 	const failures = new Set(failing);
@@ -118,7 +127,7 @@ export function createSocialStub(world, { failing = [] } = {}) {
 		const table = parsed.pathname.replace('/rest/v1/', '');
 		const record = { method, table, query: parsed.search, body: init.body === undefined ? undefined : JSON.parse(init.body), prefer: init.headers?.Prefer ?? '' };
 		calls.push(record);
-		const shape = SHAPES.find((candidate) => matches(candidate, method, table, parsed.searchParams));
+		const shape = SHAPES.find((candidate) => matches(candidate, method, table, parsed.searchParams, record.prefer));
 		if (!shape) {
 			const message = `social stub: undeclared query ${method} ${table}${parsed.search}`;
 			violations.push(message);
@@ -126,7 +135,7 @@ export function createSocialStub(world, { failing = [] } = {}) {
 		}
 		if (failures.has(shape.logical)) return reply({ message: 'stub failure' }, 500);
 		const params = Object.fromEntries(parsed.searchParams);
-		const rows = shape.run(world, params, record.body, record.prefer);
+		const rows = shape.run(world, params, record.body, record.prefer, { leakAnchor });
 		return reply(rows, method === 'POST' ? 201 : 200);
 	};
 	return { fetchImpl, calls, violations, world, posts: () => calls.filter((call) => call.method === 'POST') };
