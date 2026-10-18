@@ -62,8 +62,9 @@ test("collapse all, import/export buttons, and honest delete copy", async ({ pag
   await input.fill("test-folder");
   await input.press("Enter");
 
-  // Expand the folder row with ArrowRight.
-  const folderRow = page.locator('[role="treeitem"][data-rel="test-folder"]');
+  // Expand the folder row with ArrowRight. A new root folder is created in the Private
+  // section, so its display path carries the section.
+  const folderRow = page.locator('[role="treeitem"][data-rel="Private/test-folder"]');
   await expect(folderRow).toBeVisible({ timeout: 10_000 });
   await folderRow.focus();
   await page.keyboard.press("ArrowRight");
@@ -77,7 +78,12 @@ test("collapse all, import/export buttons, and honest delete copy", async ({ pag
   await expect(page.getByRole("button", { name: "Import folder", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Export as .zip", exact: true })).toBeVisible();
 
-  // Trigger delete on a page row: the dialog text contains "trash".
+  // Trigger delete on a page row: the dialog text contains "trash". Collapse all closed the
+  // Private section too, so it is opened again to reach its pages.
+  const privateRow = page.locator('[role="treeitem"][data-rel="Private"]');
+  await privateRow.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(privateRow).toHaveAttribute("aria-expanded", "true");
   const pageRow = page.locator('[role="treeitem"][data-rel$=".omd"]').first();
   await expect(pageRow).toBeVisible({ timeout: 10_000 });
   await pageRow.focus();
