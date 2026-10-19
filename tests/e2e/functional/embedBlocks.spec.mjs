@@ -13,7 +13,7 @@ import {
   selectSlashMenuEntry,
   slashCommandEntry,
 } from "../../browser/core/app.mjs";
-import { seedPage } from "../support/embedSeed.mjs";
+import { frameableSnapshot, seedPage } from "../support/embedSeed.mjs";
 
 const SANDBOX =
   "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation";
@@ -50,12 +50,14 @@ async function createLinkBlock(page, baseURL, slash, entry, url) {
 }
 
 const linkBlock = (page) => page.getByTestId("link-block-editor");
+const embedAnyway = (page) => linkBlock(page).getByRole("button", { name: "Embed anyway", exact: true });
 
 test.describe("embed and bookmark blocks", () => {
   test("/embed with a YouTube link shows a facade that loads the hardened player on click", async ({ page, baseURL }) => {
     await createLinkBlock(page, baseURL, "/embed", "Embed", YOUTUBE);
-    const play = linkBlock(page).getByRole("button", { name: /^Play .* on youtube/i });
+    const play = linkBlock(page).getByRole("button", { name: /^Play (.+ )?on youtube$/i });
     await expect(play).toBeVisible();
+    await expect(play).toHaveAccessibleName("Play on YouTube");
     await expect(linkBlock(page).locator("iframe")).toHaveCount(0);
     await play.click();
     const frame = linkBlock(page).locator("iframe");
@@ -76,6 +78,7 @@ test.describe("embed and bookmark blocks", () => {
 
   test("a generic embed uses the narrow allow list, shows its host and converts to a bookmark", async ({ page, baseURL }) => {
     await createLinkBlock(page, baseURL, "/embed", "Embed", "https://example.com/");
+    await embedAnyway(page).click();
     const frame = linkBlock(page).locator("iframe");
     await expect(frame).toHaveAttribute("allow", GENERIC_ALLOW);
     await expect(frame).not.toHaveAttribute("allowfullscreen", /.*/);
@@ -85,6 +88,15 @@ test.describe("embed and bookmark blocks", () => {
     await expect(page.getByLabel("Bookmark block")).toHaveCount(1);
     await expect(linkBlock(page).locator("iframe")).toHaveCount(0);
     await expect(linkBlock(page).getByText("example.com").first()).toBeVisible();
+  });
+
+  test("a page nobody confirmed frameable is a card with Embed anyway, framed only on that click", async ({ page, baseURL }) => {
+    await createLinkBlock(page, baseURL, "/embed", "Embed", "https://example.com/");
+    await expect(linkBlock(page).locator("iframe")).toHaveCount(0);
+    await expect(linkBlock(page).getByText("Not checked for embedding")).toBeVisible();
+    await embedAnyway(page).click();
+    await expect(linkBlock(page).locator("iframe")).toHaveCount(1);
+    await expect(embedAnyway(page)).toHaveCount(0);
   });
 
   test("/bookmark makes a card showing the host and a safe Open link", async ({ page, baseURL }) => {
@@ -117,7 +129,7 @@ test.describe("embed and bookmark blocks", () => {
   test("/video with a provider link renders a facade, not a <video>", async ({ page, baseURL }) => {
     await openVideoLinkTab(page, baseURL);
     await fillDialog(page, YOUTUBE);
-    await expect(page.getByRole("button", { name: /^Play .* on youtube/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Play (.+ )?on youtube$/i })).toBeVisible();
     await expect(page.locator("video")).toHaveCount(0);
   });
 
@@ -129,7 +141,7 @@ test.describe("embed and bookmark blocks", () => {
 
   test("embed and bookmark survive a reload", async ({ page, baseURL }) => {
     await seedPage(page, baseURL, [
-      { id: "e1", type: "embed", content: "https://example.com/app" },
+      { id: "e1", type: "embed", content: "https://example.com/app", embed: frameableSnapshot("https://example.com/app") },
       { id: "b1", type: "bookmark", content: "https://example.org/read" },
     ]);
     await expect(linkBlock(page)).toHaveCount(2);
@@ -223,7 +235,9 @@ test.describe("embed and bookmark blocks", () => {
   });
 
   test("a generic embed's resize grip commits one height that survives a reload", async ({ page, baseURL }) => {
-    await seedPage(page, baseURL, [{ id: "e1", type: "embed", content: "https://example.com/app" }]);
+    await seedPage(page, baseURL, [
+      { id: "e1", type: "embed", content: "https://example.com/app", embed: frameableSnapshot("https://example.com/app") },
+    ]);
     const grip = page.getByRole("separator", { name: "Resize embed" });
     await linkBlock(page).hover();
     const before = await linkBlock(page).locator("iframe").evaluate((el) => el.parentElement.getBoundingClientRect().height);

@@ -38,7 +38,7 @@ export const EMBED_HINTS: readonly EmbedHint[] = [
   { id: "soundcloud", label: "SoundCloud", example: "https://soundcloud.com/artist/track", aliases: ["soundcloud", "music", "audio link"] },
   { id: "loom", label: "Loom", example: "https://www.loom.com/share/…", aliases: ["loom", "video link", "screen recording"] },
   { id: "figma", label: "Figma", example: "https://www.figma.com/file/…", aliases: ["figma", "design"] },
-  { id: "google-maps", label: "Google Maps", example: "https://www.google.com/maps/embed?pb=…", aliases: ["google maps", "maps", "map", "location"] },
+  { id: "google-maps", label: "Google Maps", example: "https://www.google.com/maps/place/Eiffel+Tower/@48.8583701,2.2944813,17z", aliases: ["google maps", "maps", "map", "location"] },
   { id: "google-drive", label: "Google Drive", example: "https://drive.google.com/file/d/…", aliases: ["google drive", "drive", "gdrive", "docs"] },
   { id: "tweet", label: "Tweet (X)", example: "https://x.com/user/status/…", aliases: ["tweet", "twitter", "x", "post"] },
   { id: "instagram", label: "Instagram", example: "https://www.instagram.com/p/…", aliases: ["instagram", "insta"] },

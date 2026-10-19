@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { EmbedInfo, EmbedSnapshot } from "@/shared/lib/embed";
-import { chooseEmbedView, type EmbedView } from "@/shared/ui/embed/model/chooseEmbedView.ts";
+import { chooseEmbedView, playLabel, type EmbedView } from "@/shared/ui/embed/model/chooseEmbedView.ts";
 
 const APP = ["https://app.example"];
 const YOUTUBE = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
@@ -70,7 +70,7 @@ test("a snapshot player becomes a generic frame with a clamped aspect", () => {
 });
 
 test("hostile snapshot players are never framed", () => {
-  const js = choose("https://news.example/story", snapshot({ player: { src: "javascript:alert(1)", aspect: "16/9" } }));
+  const js = choose("https://news.example/story", snapshot({ frameable: true, player: { src: "javascript:alert(1)", aspect: "16/9" } }));
   assert.deepEqual(js, { kind: "frame", src: "https://news.example/story", policy: "generic" });
   const same = choose("https://news.example/story", snapshot({ player: { src: "https://app.example/steal", aspect: "16/9" } }));
   assert.equal(same.kind, "card");
@@ -99,11 +99,60 @@ test("a card keeps the requested url, not the snapshot's", () => {
   assert.equal(view.kind === "card" && view.info.url, "https://news.example/story");
 });
 
-test("a plain page is a generic frame; the app's own origin is not framed", () => {
-  assert.deepEqual(choose("https://news.example/story"), { kind: "frame", src: "https://news.example/story", policy: "generic" });
+test("a plain page with unknown frameability is a card, not a blind frame", () => {
+  const expected = (view: EmbedView) => view.kind === "card" && view.reason === "unknown";
+  assert.ok(expected(choose("https://news.example/story")));
+  assert.ok(expected(choose("https://news.example/story", snapshot({ frameable: null }))));
+});
+
+test("embedAnyway frames an unknown page with the generic policy and the same guards", () => {
+  const input = { url: "https://news.example/story", forbiddenOrigins: APP, embedAnyway: true };
+  assert.deepEqual(chooseEmbedView(input), { kind: "frame", src: "https://news.example/story", policy: "generic" });
+  const own = chooseEmbedView({ ...input, url: "https://app.example/page" });
+  assert.ok(own.kind === "card" && own.reason === "unsafe-frame");
+});
+
+test("embedAnyway never overrides a refusal", () => {
+  const view = chooseEmbedView({
+    url: "https://news.example/story", snapshot: snapshot({ frameable: false }), forbiddenOrigins: APP, embedAnyway: true,
+  });
+  assert.ok(view.kind === "card" && view.reason === "refused");
+});
+
+test("a page the bridge says is frameable is a generic frame; the app's own origin is not framed", () => {
+  assert.deepEqual(choose("https://news.example/story", snapshot({ frameable: true })), { kind: "frame", src: "https://news.example/story", policy: "generic" });
   const own = choose("https://app.example/page");
-  assert.equal(own.kind, "card");
-  if (own.kind === "card") assert.equal(own.reason, "unsafe-frame");
+  assert.ok(own.kind === "card" && own.reason === "unsafe-frame");
+});
+
+test("fixed-height audio players carry their pixel height into the facade", () => {
+  const cases: [string, number][] = [
+    ["https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC", 152],
+    ["https://soundcloud.com/artist/track", 166],
+    ["https://www.mixcloud.com/user/show/", 120],
+  ];
+  for (const [url, height] of cases) {
+    const view = choose(url);
+    assert.ok(view.kind === "facade" && view.height === height, url);
+  }
+});
+
+test("video facades have no fixed height: they keep the aspect", () => {
+  const view = choose(YOUTUBE);
+  assert.ok(view.kind === "facade" && view.height === undefined);
+});
+
+test("the facade title is the real title only; no title is empty, never the provider name", () => {
+  const bare = choose(YOUTUBE);
+  assert.ok(bare.kind === "facade" && bare.title === "");
+  const titled = choose(YOUTUBE, snapshot({ url: YOUTUBE, title: "Never Gonna Give You Up" }));
+  assert.ok(titled.kind === "facade" && titled.title === "Never Gonna Give You Up");
+});
+
+test("playLabel names the title when there is one, else only the provider", () => {
+  assert.equal(playLabel("Rick", "YouTube"), "Play Rick on YouTube");
+  assert.equal(playLabel("", "YouTube"), "Play on YouTube");
+  assert.equal(playLabel("   ", "YouTube"), "Play on YouTube");
 });
 
 test("direct files by extension are media", () => {
@@ -117,10 +166,11 @@ test("snapshot media is media; a hostile media src is dropped", () => {
   const ok = choose("https://files.example/dl", snapshot({ media: { src: "https://files.example/v", mime: "video/mp4" } }));
   assert.deepEqual(ok, { kind: "media", mediaKind: "video", src: "https://files.example/v" });
   const bad = choose("https://files.example/dl", snapshot({ media: { src: "javascript:1", mime: "video/mp4" } }));
-  assert.equal(bad.kind, "frame");
+  assert.ok(bad.kind === "card" && bad.reason === "unknown");
 });
 
 test("a garbage snapshot is ignored", () => {
   const garbage = { kind: "nope" } as unknown as EmbedSnapshot;
-  assert.equal(choose("https://news.example/story", garbage).kind, "frame");
+  const view = choose("https://news.example/story", garbage);
+  assert.ok(view.kind === "card" && view.reason === "unknown");
 });

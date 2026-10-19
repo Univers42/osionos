@@ -108,9 +108,10 @@ test("only http(s) video/audio/file links that are not bare media files may be p
   assert.equal(mayBeProviderLink("file", "https://drive.google.com/file/d/abc/view"), true);
 });
 
-test("C20: a .pdf link is a card, never a frame; a plain page is still a frame", () => {
+test("C20: a .pdf link is a card, never a frame; a plain page is a frame only once known frameable", () => {
   const view = chooseEmbedView({ url: "https://docs.example.net/sample.pdf", forbiddenOrigins: [] });
   assert.equal(view.kind, "card");
   assert.equal(view.kind === "card" ? view.reason : undefined, "pdf");
-  assert.equal(chooseEmbedView({ url: "https://example.com/page", forbiddenOrigins: [] }).kind, "frame");
+  assert.equal(chooseEmbedView({ url: "https://example.com/page", forbiddenOrigins: [] }).kind, "card");
+  assert.equal(chooseEmbedView({ url: "https://example.com/page", forbiddenOrigins: [], embedAnyway: true }).kind, "frame");
 });

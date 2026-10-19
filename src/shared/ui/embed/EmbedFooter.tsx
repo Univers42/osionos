@@ -26,6 +26,8 @@ interface Props {
   note?: string;
   bookmarkLabel?: string;
   onShowAsBookmark?: () => void;
+  /** Frames a page nobody confirmed frameable; shown only on the "unknown" card. */
+  onEmbedAnyway?: () => void;
 }
 
 const ACTION =
@@ -33,7 +35,7 @@ const ACTION =
 
 /** favicon · host · note · Open ↗ · optional "show as bookmark". */
 export const EmbedFooter: React.FC<Props> = ({
-  framedSrc, openUrl, note, bookmarkLabel = "Show as bookmark", onShowAsBookmark,
+  framedSrc, openUrl, note, bookmarkLabel = "Show as bookmark", onShowAsBookmark, onEmbedAnyway,
 }) => {
   const open = safeHttpUrl(openUrl);
   return (
@@ -42,6 +44,11 @@ export const EmbedFooter: React.FC<Props> = ({
       <span className="min-w-0 truncate">{displayHost(framedSrc)}</span>
       {note === undefined ? null : <span className="min-w-0 truncate text-[var(--osio-fg-subtle)]">{note}</span>}
       <span className="ml-auto flex shrink-0 items-center gap-1">
+        {onEmbedAnyway === undefined ? null : (
+          <button type="button" className={ACTION} onClick={onEmbedAnyway}>
+            Embed anyway
+          </button>
+        )}
         {onShowAsBookmark === undefined ? null : (
           <button type="button" className={ACTION} onClick={onShowAsBookmark}>
             {bookmarkLabel}

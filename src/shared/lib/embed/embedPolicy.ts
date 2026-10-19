@@ -91,3 +91,22 @@ export function safeAspect(value: unknown): string {
   if (ratio < 0.25 || ratio > 4) return DEFAULT_EMBED_ASPECT;
   return `${width}/${height}`;
 }
+
+/** A 9:16 player scaled to a 708 px column was 1458 px tall (TikTok, measured
+ *  2026-10-19); TikTok's own embed is about this tall. */
+const MAX_PORTRAIT_HEIGHT = 740;
+
+export interface AspectBoxStyle {
+  aspectRatio: string;
+  maxWidth?: string;
+  marginInline?: string;
+}
+
+/** The box of an aspect-sized embed. A portrait box is narrowed and centred so
+ *  its height stays at MAX_PORTRAIT_HEIGHT whatever the column width. */
+export function aspectBoxStyle(aspect: unknown): AspectBoxStyle {
+  const safe = safeAspect(aspect);
+  const [width, height] = safe.split("/").map(Number);
+  if (width >= height) return { aspectRatio: safe };
+  return { aspectRatio: safe, maxWidth: `${Math.round((MAX_PORTRAIT_HEIGHT * width) / height)}px`, marginInline: "auto" };
+}

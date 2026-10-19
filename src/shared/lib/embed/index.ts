@@ -17,7 +17,8 @@ export { embedInfoFromProvider, parseEmbedInfo, parseEmbedSnapshot } from "./emb
 export type { EmbedInfo, EmbedKind, EmbedSnapshot } from "./embedInfo";
 export {
   DEFAULT_EMBED_ASPECT, DEFAULT_EMBED_HEIGHT, EMBED_REFERRER_POLICY, GENERIC_ALLOW,
-  PROVIDER_ALLOW, RICH_ALLOW, THIRD_PARTY_SANDBOX, allowForPolicy, clampEmbedHeight, grantsFullscreen, safeAspect,
+  PROVIDER_ALLOW, RICH_ALLOW, THIRD_PARTY_SANDBOX, allowForPolicy, aspectBoxStyle, clampEmbedHeight, grantsFullscreen,
+  safeAspect,
 } from "./embedPolicy";
 export type { FramePolicy } from "./embedPolicy";
 export { playerSrcForHost, resolveProviderEmbed } from "./embedProviders";

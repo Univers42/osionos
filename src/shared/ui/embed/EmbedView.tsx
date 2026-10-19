@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useState } from "react";
 
 import { useHasBeenNearViewport } from "@/shared/lib/dom/useHasBeenNearViewport";
 import { DEFAULT_EMBED_HEIGHT, appForbiddenOrigins, type EmbedSnapshot } from "@/shared/lib/embed";
@@ -28,13 +28,20 @@ export interface EmbedViewProps {
   height?: number;
   /** When given, frames and refused cards offer "Show as bookmark". */
   onShowAsBookmark?: () => void;
+  /** Live surfaces only: a page nobody confirmed frameable shows "Embed anyway". Static surfaces get a plain card. */
+  canEmbedAnyway?: boolean;
   /** False while a parent drags a resize grip. */
   interactive?: boolean;
   /** Rendered inside a framed page's box (a resize grip); other views ignore it. */
   frameOverlay?: React.ReactNode;
 }
 
-const REASON_NOTE = { refused: "This site doesn't allow embedding", "unsafe-frame": "This link can't be embedded here", pdf: "PDFs open in their own tab" };
+const REASON_NOTE = {
+  refused: "This site doesn't allow embedding",
+  "unsafe-frame": "This link can't be embedded here",
+  pdf: "PDFs open in their own tab",
+  unknown: "Not checked for embedding",
+};
 
 const MEDIA = "block max-w-full rounded-md";
 
@@ -46,12 +53,14 @@ function renderMedia(view: Extract<EmbedViewModel, { kind: "media" }>): React.Re
 
 /** Whatever `chooseEmbedView` decides a link is: player, framed page, media file,
  *  bookmark card or plain text. Iframes mount once the block is near the viewport. */
-export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onShowAsBookmark, interactive = true, frameOverlay }) => {
+export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onShowAsBookmark, canEmbedAnyway = false, interactive = true, frameOverlay }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const isNear = useHasBeenNearViewport(rootRef);
+  // Component state on purpose: the choice is this viewer's, not the block's.
+  const [isEmbeddedAnyway, setIsEmbeddedAnyway] = useState(false);
   const view = useMemo(
-    () => chooseEmbedView({ url, snapshot, forbiddenOrigins: appForbiddenOrigins() }),
-    [url, snapshot],
+    () => chooseEmbedView({ url, snapshot, forbiddenOrigins: appForbiddenOrigins(), embedAnyway: canEmbedAnyway && isEmbeddedAnyway }),
+    [url, snapshot, canEmbedAnyway, isEmbeddedAnyway],
   );
   const title = snapshot?.title || url;
   let body: React.ReactNode;
@@ -71,6 +80,7 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onS
             openUrl={view.info.url}
             note={view.reason === undefined ? undefined : REASON_NOTE[view.reason]}
             onShowAsBookmark={onShowAsBookmark}
+            onEmbedAnyway={canEmbedAnyway && view.reason === "unknown" ? () => setIsEmbeddedAnyway(true) : undefined}
           />
         </>
       );
@@ -78,7 +88,7 @@ export const EmbedView: React.FC<EmbedViewProps> = ({ url, snapshot, height, onS
     case "facade":
       body = (
         <>
-          <PlayerFacade embed={view.embed} title={view.title} thumb={view.thumb} aspect={view.aspect} interactive={interactive} />
+          <PlayerFacade embed={view.embed} title={view.title} thumb={view.thumb} aspect={view.aspect} height={view.height} interactive={interactive} />
           <EmbedFooter framedSrc={view.embed.src} openUrl={url} />
         </>
       );

@@ -55,7 +55,7 @@ const SRC_TABLE: Array<[string, string, string]> = [
   ["vimeo player", "https://player.vimeo.com/video/1084537", "https://player.vimeo.com/video/1084537"],
   ["dailymotion", "https://www.dailymotion.com/video/x84sh87_some-title", "https://www.dailymotion.com/embed/video/x84sh87"],
   ["dai.ly", "https://dai.ly/x8oybe4", "https://www.dailymotion.com/embed/video/x8oybe4"],
-  ["tiktok", "https://www.tiktok.com/@scout2015/video/6718335390845095173", "https://www.tiktok.com/embed/v2/6718335390845095173"],
+  ["tiktok", "https://www.tiktok.com/@scout2015/video/6718335390845095173", "https://www.tiktok.com/player/v1/6718335390845095173"],
   ["twitch channel", "https://www.twitch.tv/monstercat", "https://player.twitch.tv/?channel=monstercat"],
   ["twitch video", "https://www.twitch.tv/videos/1000000000", "https://player.twitch.tv/?video=1000000000"],
   ["twitch clip", "https://www.twitch.tv/streamer/clip/FunnyClipSlug-abc", "https://clips.twitch.tv/embed?clip=FunnyClipSlug-abc"],
@@ -69,6 +69,11 @@ const SRC_TABLE: Array<[string, string, string]> = [
   ["loom", "https://www.loom.com/share/e5b8c04bca094dd8a5507925ab887002", "https://www.loom.com/embed/e5b8c04bca094dd8a5507925ab887002"],
   ["streamable", "https://streamable.com/moo", "https://streamable.com/e/moo"],
   ["figma", "https://www.figma.com/file/LKQ4FJ4bTnCSjedbRpk931/Sample-File", "https://www.figma.com/embed?embed_host=share&url=https%3A%2F%2Fwww.figma.com%2Ffile%2FLKQ4FJ4bTnCSjedbRpk931%2FSample-File"],
+  ["maps place", "https://www.google.com/maps/place/Eiffel+Tower/@48.8583701,2.2944813,17z/data=!3m1", "https://maps.google.com/maps?q=Eiffel%20Tower&ll=48.8583701,2.2944813&z=17&output=embed"],
+  ["maps place encoded name", "https://maps.google.com/maps/place/Caf%C3%A9+de+Flore/@48.854,2.333,15z", "https://maps.google.com/maps?q=Caf%C3%A9%20de%20Flore&ll=48.854,2.333&z=15&output=embed"],
+  ["maps coordinates", "https://www.google.com/maps/@48.8583701,-2.2944813,15z", "https://maps.google.com/maps?q=48.8583701,-2.2944813&z=15&output=embed"],
+  ["maps search", "https://www.google.com/maps/search/pizza+near+me/", "https://maps.google.com/maps?q=pizza%20near%20me&output=embed"],
+  ["maps q=", "https://maps.google.com/maps?q=Eiffel+Tower", "https://maps.google.com/maps?q=Eiffel%20Tower&output=embed"],
   ["google maps embed", "https://www.google.com/maps/embed?pb=!1m18!1m12", "https://www.google.com/maps/embed?pb=!1m18!1m12"],
   ["google drive", "https://drive.google.com/file/d/0B1MVW1mFO2zmZHVRWEQ3Rkc3SVE/view", "https://drive.google.com/file/d/0B1MVW1mFO2zmZHVRWEQ3Rkc3SVE/preview"],
   ["google docs", "https://docs.google.com/document/d/195j9eDD3ccgjQRttHhJPymLJUCOUjs-jmwTrekvdjFE/edit", "https://docs.google.com/document/d/195j9eDD3ccgjQRttHhJPymLJUCOUjs-jmwTrekvdjFE/preview"],
@@ -217,4 +222,59 @@ test("timestamps: plain, h/m/s, junk and overflow", () => {
   assert.equal(start("t=abc"), undefined);
   assert.equal(start("t=30x"), undefined);
   assert.equal(start("t=99999999999999999999"), "2147483647");
+});
+
+const MAPS_BASE = "https://maps.google.com/maps?";
+
+test("maps links are rebuilt on maps.google.com with output=embed, never passed through", () => {
+  const embed = resolveProviderEmbed("https://www.google.com/maps/place/Eiffel+Tower/@48.8583701,2.2944813,17z");
+  assert.equal(embed?.provider, "Google Maps");
+  assert.equal(embed?.kind, "rich");
+  assert.ok(embed?.src.startsWith(MAPS_BASE));
+  assert.ok(embed?.src.endsWith("&output=embed"));
+});
+
+test("hostile maps inputs yield a safe src or null", () => {
+  const hostile = [
+    "https://www.google.com/maps/place/a%26output%3Dx%22onload%3D1/@48.85,2.29,17z",
+    "https://www.google.com/maps/place/%22%3E%3Cscript%3E/@48.85,2.29,17z",
+    "https://www.google.com/maps/place/javascript:alert(1)/@48.85,2.29,17z",
+    "https://www.google.com/maps/search/javascript%3Aalert(1)",
+    "https://www.google.com/maps?q=a%26output%3Dx%22",
+    "https://www.google.com/maps?q=%00%0d%0a",
+  ];
+  for (const url of hostile) {
+    const src = resolveProviderEmbed(url)?.src;
+    if (src === undefined) continue;
+    const query = src.slice(MAPS_BASE.length);
+    assert.ok(src.startsWith(MAPS_BASE), url);
+    assert.match(query, /^[A-Za-z0-9%._~,=&-]+$/, url);
+    assert.equal(query.split("&").filter((pair) => pair.startsWith("output=")).length, 1, url);
+    assert.ok(query.endsWith("&output=embed"), url);
+  }
+  const first = resolveProviderEmbed(hostile[0])?.src;
+  assert.equal(first, `${MAPS_BASE}q=a%26output%3Dx%22onload%3D1&ll=48.85,2.29&z=17&output=embed`);
+});
+
+test("maps links with out-of-range numbers or no usable shape are null", () => {
+  const rejected = [
+    "https://www.google.com/maps/place/X/@999,2.29,17z",
+    "https://www.google.com/maps/place/X/@48.85,181,17z",
+    "https://www.google.com/maps/place/X/@48.85,2.29,99z",
+    "https://www.google.com/maps/place/X/@48.85,2.29,0z",
+    "https://www.google.com/maps/@48.85,2.29,3a,75y",
+    "https://www.google.com/maps/@abc,2.29,15z",
+    "https://www.google.com/maps/search/",
+    "https://www.google.com/maps/place/%E0%A4%A/@48.85,2.29,17z",
+    "https://www.google.com/maps",
+    "https://www.google.com/maps?z=12",
+    "https://maps.app.goo.gl/AbCdEf123",
+    "https://goo.gl/maps/AbCdEf123",
+  ];
+  for (const url of rejected) assert.equal(resolveProviderEmbed(url), null, url);
+});
+
+test("a maps embed with a pb token still passes through as written", () => {
+  const url = "https://www.google.com/maps/embed?pb=!1m18!1m12";
+  assert.equal(resolveProviderEmbed(url)?.src, url);
 });

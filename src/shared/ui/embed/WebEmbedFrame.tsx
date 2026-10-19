@@ -18,10 +18,10 @@ import {
   THIRD_PARTY_SANDBOX,
   allowForPolicy,
   appForbiddenOrigins,
+  aspectBoxStyle,
   clampEmbedHeight,
   frameableEmbedUrl,
   grantsFullscreen,
-  safeAspect,
   type FramePolicy,
 } from "@/shared/lib/embed";
 
@@ -51,7 +51,7 @@ export const WebEmbedFrame: React.FC<WebEmbedFrameProps> = ({
   const safeSrc = frameableEmbedUrl(src, appForbiddenOrigins());
   if (safeSrc === "") return <span className="break-all text-sm text-[var(--osio-fg-muted)]">{src}</span>;
   const boxStyle: React.CSSProperties =
-    height === undefined ? { aspectRatio: safeAspect(aspect ?? DEFAULT_EMBED_ASPECT) } : { height: clampEmbedHeight(height) };
+    height === undefined ? aspectBoxStyle(aspect ?? DEFAULT_EMBED_ASPECT) : { height: clampEmbedHeight(height) };
   return (
     <div style={boxStyle} className="relative w-full overflow-hidden rounded-md bg-[var(--osio-bg-subtle)]">
       {isActive ? (

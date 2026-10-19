@@ -49,7 +49,7 @@ test.describe("paste link menu", () => {
     await page.keyboard.press("Enter");
     await expect(linkBlock(page)).toHaveCount(1);
     await expect(linkBlock(page).locator("xpath=ancestor-or-self::*[@data-block-type]").first()).toHaveAttribute("data-block-type", "embed");
-    await expect(linkBlock(page).getByRole("button", { name: /^Play .* on youtube/i })).toBeVisible();
+    await expect(linkBlock(page).getByRole("button", { name: /^Play (.+ )?on youtube$/i })).toBeVisible();
   });
 
   test("a mid-sentence URL defaults to URL; Bookmark keeps the sentence and adds a bookmark after", async ({ page, baseURL }) => {
@@ -95,6 +95,6 @@ test.describe("paste link menu", () => {
       await expect(linkBlock(page)).toHaveCount(1);
       await expect(page.locator(`[data-block-type="${type}"]`).first()).toBeAttached();
     }
-    await expect(linkBlock(page).getByRole("button", { name: /^Play .* on youtube/i })).toBeVisible();
+    await expect(linkBlock(page).getByRole("button", { name: /^Play (.+ )?on youtube$/i })).toBeVisible();
   });
 });

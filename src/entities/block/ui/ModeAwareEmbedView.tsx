@@ -32,5 +32,5 @@ export const ModeAwareEmbedView: React.FC<{
     const card: LinkCardData = snapshot === null ? { url } : { ...snapshot, url };
     return <LinkCard data={card} />;
   }
-  return <EmbedView url={url} snapshot={snapshot} height={height} />;
+  return <EmbedView url={url} snapshot={snapshot} height={height} canEmbedAnyway={mode === "live"} />;
 };

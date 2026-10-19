@@ -81,13 +81,16 @@ export const dailymotion: Rule = (parts) => {
   return isId(id) ? video("Dailymotion", `https://www.dailymotion.com/embed/video/${id}`) : null;
 };
 
+// `/embed/v2/<id>` answers 500 for every id (measured in Chrome 2026-10-19); `/player/v1/<id>`
+// is the documented player and renders in our sandbox. Old embed links still resolve to it.
 export const tiktok: Rule = (parts) => {
   const { segments } = parts;
   let id: string | undefined;
   if (segments.length === 3 && segments[0].startsWith("@") && segments[1] === "video") id = segments[2];
   else if (segments.length === 3 && segments[0] === "embed" && segments[1] === "v2") id = segments[2];
+  else if (segments.length === 3 && segments[0] === "player" && segments[1] === "v1") id = segments[2];
   else if (segments.length === 2 && segments[0] === "embed") id = segments[1];
-  return isDigits(id) ? video("TikTok", `https://www.tiktok.com/embed/v2/${id}`, 340, 700) : null;
+  return isDigits(id) ? video("TikTok", `https://www.tiktok.com/player/v1/${id}`, 340, 700) : null;
 };
 
 export const streamable: Rule = (parts) => {
