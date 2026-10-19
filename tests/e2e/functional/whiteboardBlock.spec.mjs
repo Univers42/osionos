@@ -11,28 +11,16 @@ import {
   openSlashMenuFromEditor,
   selectSlashMenuEntry,
 } from "../../browser/core/app.mjs";
-import { mockInstalled } from "../support/whiteboardMocks.mjs";
+import { mockInstalled, mockWhiteboardService } from "../support/whiteboardMocks.mjs";
 
 const SLUG = "abc123def456";
-
-async function mockWhiteboardService(page, onCreate) {
-  await page.route("https://localhost:3007/**", (route) => {
-    const request = route.request();
-    const url = new URL(request.url());
-    if (request.method() === "POST" && url.pathname === "/v1/boards") {
-      onCreate(request.postDataJSON());
-      return route.fulfill({ status: 201, json: { slug: SLUG, title: "Sprint plan" } });
-    }
-    return route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>board</title><p>board</p>" });
-  });
-}
 
 const whiteboardRows = (page) => page.getByTestId("slash-command-entry").filter({ hasText: /whiteboard/i });
 
 test.describe("built-in whiteboard", () => {
   test("/whiteboard <name> creates a named board and embeds it inline", async ({ page, baseURL }) => {
     const created = [];
-    await mockWhiteboardService(page, (body) => created.push(body));
+    await mockWhiteboardService(page, { slug: SLUG, title: "Sprint plan", onCreate: (body) => created.push(body) });
     await openFreshPage(page, baseURL);
     const editor = await activateFirstEditor(page);
 
@@ -47,7 +35,7 @@ test.describe("built-in whiteboard", () => {
 
   test("/whiteboard Q3/Q4 plan keeps the slash inside the name", async ({ page, baseURL }) => {
     const created = [];
-    await mockWhiteboardService(page, (body) => created.push(body));
+    await mockWhiteboardService(page, { slug: SLUG, title: "Sprint plan", onCreate: (body) => created.push(body) });
     await openFreshPage(page, baseURL);
     const editor = await activateFirstEditor(page);
 
@@ -60,7 +48,7 @@ test.describe("built-in whiteboard", () => {
 
   test("/whiteboard with no name creates an Untitled board; Open full opens it in its own tab", async ({ page, baseURL }) => {
     const created = [];
-    await mockWhiteboardService(page, (body) => created.push(body));
+    await mockWhiteboardService(page, { slug: SLUG, title: "Sprint plan", onCreate: (body) => created.push(body) });
     await openFreshPage(page, baseURL);
     const editor = await activateFirstEditor(page);
     await openSlashMenuFromEditor(editor, "/whiteboard");
@@ -117,7 +105,7 @@ test.describe("built-in whiteboard", () => {
 
   test("/draw <name> creates a board with that name, not with the word draw", async ({ page, baseURL }) => {
     const created = [];
-    await mockWhiteboardService(page, (body) => created.push(body));
+    await mockWhiteboardService(page, { slug: SLUG, title: "Sprint plan", onCreate: (body) => created.push(body) });
     await openFreshPage(page, baseURL);
     const editor = await activateFirstEditor(page);
 
