@@ -219,6 +219,8 @@ const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
     kind: "whiteboard",
     section: "advanced",
     label: "Whiteboard",
+    // The retired Draw tool's words find the board that replaced it; there is no /draw entry.
+    aliases: ["draw", "drawing"],
     icon: <PenTool className="h-4 w-4" />,
     description: "New whiteboard board — /whiteboard <name>",
     requiresApp: "osionos.whiteboard",
