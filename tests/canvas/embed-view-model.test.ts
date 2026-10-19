@@ -46,10 +46,10 @@ test("a provider video is a facade on the provider src", () => {
   assert.equal(view.embed.provider, "YouTube");
 });
 
-test("a provider rich embed is a provider-policy frame", () => {
+test("a provider rich embed is a rich-policy frame (no fullscreen)", () => {
   const view = choose("https://www.figma.com/file/abc123/Name");
   assert.equal(view.kind, "frame");
-  if (view.kind === "frame") assert.equal(view.policy, "provider");
+  if (view.kind === "frame") assert.equal(view.policy, "rich");
 });
 
 test("the provider table wins over a snapshot player pointing elsewhere", () => {

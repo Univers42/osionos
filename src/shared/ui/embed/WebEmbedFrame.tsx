@@ -15,20 +15,21 @@ import React from "react";
 import {
   DEFAULT_EMBED_ASPECT,
   EMBED_REFERRER_POLICY,
-  GENERIC_ALLOW,
-  PROVIDER_ALLOW,
   THIRD_PARTY_SANDBOX,
+  allowForPolicy,
   appForbiddenOrigins,
   clampEmbedHeight,
   frameableEmbedUrl,
+  grantsFullscreen,
   safeAspect,
+  type FramePolicy,
 } from "@/shared/lib/embed";
 
 export interface WebEmbedFrameProps {
   src: string;
   title: string;
-  /** Which `allow` list: the provider table's players or anything else. */
-  policy: "provider" | "generic";
+  /** Which `allow` list, and whether the frame may go fullscreen. */
+  policy: FramePolicy;
   /** Fixed pixel height (clamped). Wins over `aspect`. */
   height?: number;
   aspect?: string;
@@ -58,8 +59,8 @@ export const WebEmbedFrame: React.FC<WebEmbedFrameProps> = ({
           src={safeSrc}
           title={title}
           sandbox={THIRD_PARTY_SANDBOX}
-          allow={policy === "provider" ? PROVIDER_ALLOW : GENERIC_ALLOW}
-          allowFullScreen
+          allow={allowForPolicy(policy)}
+          allowFullScreen={grantsFullscreen(policy)}
           referrerPolicy={EMBED_REFERRER_POLICY}
           loading="lazy"
           style={interactive ? undefined : { pointerEvents: "none" }}

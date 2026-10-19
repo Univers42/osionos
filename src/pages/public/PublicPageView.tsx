@@ -36,8 +36,9 @@ export const PublicPageView: React.FC = () => {
               {page.icon && <IconValueView value={page.icon} size={32} />}
               <h1 className="text-3xl font-bold leading-tight">{page.title}</h1>
             </header>
-            {/* The reader opened this page on purpose, so embeds may frame live. */}
-            <ReadOnlyEmbedModeContext.Provider value="live">
+            {/* Anonymous readers get cards and click-to-play facades, never a frame: any account
+                can publish a page, and a live frame under our URL bar can show a fake login (C29). */}
+            <ReadOnlyEmbedModeContext.Provider value="static">
               <PageBlocksRenderer blocks={page.content} />
             </ReadOnlyEmbedModeContext.Provider>
             <footer className="mt-16 border-t border-[var(--osio-border-default)] pt-4 text-xs text-[var(--osio-fg-subtle)]">

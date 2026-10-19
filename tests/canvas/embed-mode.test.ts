@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 // Which surfaces may mount a live third-party frame: the editor and locked pages (the
-// reader opened the page on purpose) and the public view, never a hover preview.
+// reader opened the page on purpose), never a hover preview or the anonymous public view.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -33,6 +33,12 @@ test("static mode allows facades and cards but not a live frame; live allows all
   assert.equal(youtube.kind, "facade");
   assert.equal(allowsView("static", youtube), true);
   assert.equal(allowsView("static", { kind: "card" }), true);
+});
+
+test("the public page never provides live: an anonymous reader gets cards and click facades, no frame (C29)", () => {
+  const source = read("src/pages/public/PublicPageView.tsx");
+  assert.match(source, /ReadOnlyEmbedModeContext\.Provider value="static"/);
+  assert.doesNotMatch(source, /value="live"/);
 });
 
 test("the editor surface (editable and locked) provides live; media embeds and read-only blocks read the mode", () => {
