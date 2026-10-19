@@ -65,10 +65,6 @@ export const googleDocs: Rule = (parts) => {
 export const googleCalendar: Rule = (parts) =>
   parts.host === "calendar.google.com" && parts.path.includes("/embed") ? page("Google Calendar", asGiven(parts), 800, 600) : null;
 
-export const googleMaps: Rule = (parts) =>
-  (parts.host === "google.com" || parts.host === "maps.google.com") && parts.path.startsWith("/maps/embed")
-    ? page("Google Maps", asGiven(parts), 600, 450) : null;
-
 export const figma: Rule = (parts) => {
   const square = (src: string): ProviderEmbed => page("Figma", src, 550, 550);
   if (parts.host === "embed.figma.com" || (parts.host === "figma.com" && parts.path === "/embed")) {

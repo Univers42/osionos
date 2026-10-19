@@ -13,9 +13,10 @@
 import React, { useState } from "react";
 import { Play } from "lucide-react";
 
-import { playerSrcForHost, safeHttpUrl, type ProviderEmbed } from "@/shared/lib/embed";
+import { aspectBoxStyle, clampEmbedHeight, playerSrcForHost, safeHttpUrl, type ProviderEmbed } from "@/shared/lib/embed";
 
 import { WebEmbedFrame } from "./WebEmbedFrame";
+import { playLabel } from "./model/chooseEmbedView";
 
 interface Props {
   embed: ProviderEmbed;
@@ -23,6 +24,8 @@ interface Props {
   /** Thumbnail URL; validated again here. "" shows a neutral tile. */
   thumb?: string;
   aspect: string;
+  /** A fixed-pixel player (audio strips): the box is this tall at full width, never aspect-scaled. */
+  height?: number;
   interactive?: boolean;
 }
 
@@ -35,18 +38,18 @@ function playingSrc(embed: ProviderEmbed): string {
 
 /** A thumbnail with a play button that mounts the real player on click. Every pane
  *  mounts a live editor, so without this a page of eight videos loads eight players. */
-export const PlayerFacade: React.FC<Props> = ({ embed, title, thumb = "", aspect, interactive = true }) => {
+export const PlayerFacade: React.FC<Props> = ({ embed, title, thumb = "", aspect, height, interactive = true }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   if (isPlaying) {
-    return <WebEmbedFrame src={playingSrc(embed)} title={title} policy="provider" aspect={aspect} interactive={interactive} />;
+    return <WebEmbedFrame src={playingSrc(embed)} title={title || embed.provider} policy="provider" aspect={aspect} height={height} interactive={interactive} />;
   }
   const image = safeHttpUrl(thumb);
   return (
     <button
       type="button"
-      aria-label={`Play ${title} on ${embed.provider}`}
+      aria-label={playLabel(title, embed.provider)}
       onClick={() => setIsPlaying(true)}
-      style={{ aspectRatio: aspect }}
+      style={height === undefined ? aspectBoxStyle(aspect) : { height: clampEmbedHeight(height) }}
       className="group/facade relative flex w-full items-center justify-center overflow-hidden rounded-md bg-[var(--osio-bg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]"
     >
       {image === "" ? (

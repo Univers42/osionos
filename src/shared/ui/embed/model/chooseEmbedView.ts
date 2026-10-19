@@ -16,10 +16,12 @@
  * written by any collaborator), so every URL that can become a `src` is validated
  * here, and the provider table, which we own, decides the player over any snapshot.
  *
- * Caveat: the direct-file test looks at the URL's extension only, so a media URL
- * without one (`/download?id=3`) is framed as a page unless the bridge snapshot
- * says `media`; an extension on a page that is not that file type mis-renders as
- * a broken <video>/<img>.
+ * Caveat: an unknown frameability (no bridge answer) is a card, so a site that would
+ * have framed fine needs one click, or the bridge, to show; the opposite default is a
+ * broken box on most sites. The direct-file test looks at the URL's extension only, so a
+ * media URL without one (`/download?id=3`) is a page unless the bridge snapshot says
+ * `media`; an extension on a page that is not that file type mis-renders as a broken
+ * <video>/<img>.
  */
 
 // Not the barrel: it re-exports the bridge client, which reads import.meta.env
@@ -31,10 +33,10 @@ import { frameableEmbedUrl, safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard
 
 export type MediaKind = "video" | "audio" | "image";
 export type { FramePolicy };
-export type CardReason = "refused" | "unsafe-frame" | "pdf";
+export type CardReason = "refused" | "unsafe-frame" | "pdf" | "unknown";
 
 export type EmbedView =
-  | { kind: "facade"; embed: ProviderEmbed; title: string; thumb: string; aspect: string }
+  | { kind: "facade"; embed: ProviderEmbed; title: string; thumb: string; aspect: string; height?: number }
   | { kind: "frame"; src: string; policy: FramePolicy; aspect?: string; height?: number }
   | { kind: "media"; mediaKind: MediaKind; src: string }
   | { kind: "card"; info: EmbedInfo; reason?: CardReason }
@@ -44,6 +46,8 @@ export interface EmbedViewInput {
   url: string;
   snapshot?: EmbedSnapshot | null;
   forbiddenOrigins: readonly string[];
+  /** The viewer chose to frame a page nobody has confirmed frameable. Never overrides a refusal. */
+  embedAnyway?: boolean;
 }
 
 const EXTENSION_KINDS: Record<string, MediaKind> = {
@@ -79,7 +83,7 @@ function providerView(embed: ProviderEmbed, info: EmbedInfo, input: EmbedViewInp
     return { kind: "frame", src, policy: "rich", aspect: embed.aspect, height: embed.height };
   }
   const thumb = safeHttpUrl(embed.thumb ?? info.image);
-  return { kind: "facade", embed: { ...embed, src }, title: info.title || embed.provider, thumb, aspect: embed.aspect };
+  return { kind: "facade", embed: { ...embed, src }, title: info.title, thumb, aspect: embed.aspect, height: embed.height };
 }
 
 function snapshotView(info: EmbedInfo, input: EmbedViewInput): EmbedView | null {
@@ -112,5 +116,15 @@ export function chooseEmbedView(input: EmbedViewInput): EmbedView {
   const fromSnapshot = snapshotView(info, input);
   if (fromSnapshot !== null) return fromSnapshot;
   const src = frameableEmbedUrl(href, input.forbiddenOrigins);
-  return src === "" ? { kind: "card", info, reason: "unsafe-frame" } : { kind: "frame", src, policy: "generic" };
+  if (src === "") return { kind: "card", info, reason: "unsafe-frame" };
+  // Most sites refuse framing and the browser shows no error for it, so a page is framed
+  // only once the bridge said it can be (or the viewer insists), as Notion does.
+  if (info.frameable === true || input.embedAnyway === true) return { kind: "frame", src, policy: "generic" };
+  return { kind: "card", info, reason: "unknown" };
+}
+
+/** The click-to-play label: the title only when the page really has one. */
+export function playLabel(title: string, provider: string): string {
+  const name = title.trim();
+  return name === "" ? `Play on ${provider}` : `Play ${name} on ${provider}`;
 }

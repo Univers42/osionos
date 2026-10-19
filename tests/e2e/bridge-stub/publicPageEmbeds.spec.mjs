@@ -42,12 +42,13 @@ async function openPublicPage(page) {
 test.describe("C29: a published page frames nothing until the reader clicks", () => {
   test("generic, CodePen and YouTube embeds render as cards and a facade, with no frame and no navigation", async ({ page }) => {
     const toWatchedHosts = await openPublicPage(page);
-    const play = page.getByRole("button", { name: /^Play .* on youtube/i });
+    const play = page.getByRole("button", { name: /^Play (.+ )?on youtube$/i });
     await expect(play).toBeVisible();
     await expect(page.locator('a[href^="https://generic-embed.test/app"]').first()).toBeVisible();
     await expect(page.locator('a[href^="https://codepen.io/team/pen/abcDEF"]').first()).toBeVisible();
     await page.waitForLoadState("networkidle");
     await expect(page.locator("iframe")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Embed anyway" })).toHaveCount(0);
     expect(toWatchedHosts.filter((type) => type === "document")).toEqual([]);
     console.log(`C29 image requests to watched hosts: ${toWatchedHosts.filter((type) => type === "image").length}`);
     expect(toWatchedHosts.filter((type) => type !== "image")).toEqual([]);
@@ -55,7 +56,7 @@ test.describe("C29: a published page frames nothing until the reader clicks", ()
 
   test("clicking the YouTube facade mounts exactly one frame", async ({ page }) => {
     await openPublicPage(page);
-    await page.getByRole("button", { name: /^Play .* on youtube/i }).click();
+    await page.getByRole("button", { name: /^Play (.+ )?on youtube$/i }).click();
     await expect(page.locator("iframe")).toHaveCount(1);
     await expect(page.locator("iframe")).toHaveAttribute("src", /^https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ/);
   });

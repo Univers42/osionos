@@ -30,10 +30,11 @@ import {
   codepen, codesandbox, desmos, jsfiddle, miro, openStreetMap, passThrough, stackblitz,
 } from "./embedCodeProviders";
 import {
-  figma, giphy, gist, googleCalendar, googleDocs, googleDrive, googleMaps, msForms, reddit,
+  figma, giphy, gist, googleCalendar, googleDocs, googleDrive, msForms, reddit,
   tweet, valTown,
 } from "./embedDocProviders";
 import type { ProviderEmbed } from "./embedKit";
+import { googleMaps } from "./embedMapsProvider";
 import {
   bilibili, dailymotion, facebook, instagram, loom, streamable, ted, tiktok, twitch, vimeo,
   youtube,

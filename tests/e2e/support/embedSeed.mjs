@@ -25,3 +25,13 @@ export async function seedPage(page, baseURL, blocks) {
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await explorerRow(page, "Embed seed").click();
 }
+
+// A snapshot the bridge would have stored for a page it found frameable. Without one an offline
+// generic embed is an "unknown" card, so specs that check the frame itself seed this.
+export function frameableSnapshot(url) {
+  return {
+    url, kind: "link", provider: null, title: "", description: "", siteName: "",
+    image: "", favicon: "", player: null, media: null, frameable: true,
+    resolvedAt: "2026-10-19T12:00:00.000Z",
+  };
+}

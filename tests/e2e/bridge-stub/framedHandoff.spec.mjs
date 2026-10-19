@@ -7,7 +7,7 @@
 import { expect, test } from "@playwright/test";
 
 import { stubBridge } from "../support/bridgeStub.mjs";
-import { seedPage } from "../support/embedSeed.mjs";
+import { frameableSnapshot, seedPage } from "../support/embedSeed.mjs";
 
 const REDIRECTOR = "https://embed-redirect.test/r";
 const CONSUME_PATH = "/api/auth/bridge/consume";
@@ -27,7 +27,7 @@ test("a frame redirected to the app's own origin reaches it but consumes nothing
   await page.route(REDIRECTOR, (route) =>
     route.fulfill({ status: 302, headers: { location: `${baseURL}/#bridge_token=probe` } }),
   );
-  await seedPage(page, baseURL, [{ id: "e1", type: "embed", content: REDIRECTOR }]);
+  await seedPage(page, baseURL, [{ id: "e1", type: "embed", content: REDIRECTOR, embed: frameableSnapshot(REDIRECTOR) }]);
   const frame = page.locator('[data-block-type="embed"] iframe');
   await expect(frame).toHaveAttribute("src", REDIRECTOR);
   await expect.poll(() => page.frames().some((entry) => entry !== page.mainFrame() && entry.url().startsWith(baseURL))).toBe(true);

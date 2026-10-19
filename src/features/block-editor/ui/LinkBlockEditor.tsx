@@ -52,7 +52,9 @@ export const LinkBlockEditor: React.FC<LinkBlockEditorProps> = ({ block, onKeyDo
     [url, snapshot],
   );
   // Provider players keep their aspect; only a plain framed page has a user height.
-  const isResizable = kind === "embed" && view.kind === "frame" && view.policy === "generic" && view.aspect === undefined;
+  // An "unknown" card becomes a generic frame on "Embed anyway", so it already offers the grip.
+  const isGenericFrame = view.kind === "frame" && view.policy === "generic" && view.aspect === undefined;
+  const isResizable = kind === "embed" && (isGenericFrame || (view.kind === "card" && view.reason === "unknown"));
   const frameHeight = clampEmbedHeight(block.embedHeight);
   const { isDragging, gripProps } = useHeightResizeGrip({
     height: frameHeight,
@@ -99,6 +101,7 @@ export const LinkBlockEditor: React.FC<LinkBlockEditorProps> = ({ block, onKeyDo
         url={url}
         snapshot={snapshot}
         height={isResizable ? frameHeight : undefined}
+        canEmbedAnyway
         interactive={!isDragging}
         frameOverlay={
           isResizable ? (

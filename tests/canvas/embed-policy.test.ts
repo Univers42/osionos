@@ -20,6 +20,7 @@ import {
   RICH_ALLOW,
   THIRD_PARTY_SANDBOX,
   allowForPolicy,
+  aspectBoxStyle,
   clampEmbedHeight,
   grantsFullscreen,
   safeAspect,
@@ -81,4 +82,14 @@ test("safeAspect keeps sane ratios and defaults everything else to 16/9", () => 
     "10000/1", "4001/1000", "5/1", "1/5", "4001/4001", "99999/1", "1/99999", 169, null, undefined, {},
   ];
   for (const value of bad) assert.equal(safeAspect(value), "16/9", String(value));
+});
+
+test("aspectBoxStyle narrows portrait boxes so they stay 740 px tall, centred", () => {
+  assert.deepEqual(aspectBoxStyle("16/9"), { aspectRatio: "16/9" });
+  assert.deepEqual(aspectBoxStyle("1/1"), { aspectRatio: "1/1" });
+  assert.deepEqual(aspectBoxStyle("17/35"), { aspectRatio: "17/35", maxWidth: "359px", marginInline: "auto" });
+  assert.deepEqual(aspectBoxStyle("9/16"), { aspectRatio: "9/16", maxWidth: "416px", marginInline: "auto" });
+  assert.deepEqual(aspectBoxStyle("1/4"), { aspectRatio: "1/4", maxWidth: "185px", marginInline: "auto" });
+  assert.deepEqual(aspectBoxStyle("1/5"), { aspectRatio: "16/9" }, "an unsafe aspect is normalised first");
+  assert.deepEqual(aspectBoxStyle(undefined), { aspectRatio: "16/9" });
 });

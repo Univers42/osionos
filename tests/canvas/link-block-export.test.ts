@@ -68,8 +68,14 @@ test("html: a provider rich frame (CodePen) gets neither fullscreen in allow nor
 });
 
 test("html: the frame height is the clamped embedHeight", () => {
-  const out = html(linkBlock("embed", { embed: undefined, embedHeight: 99999 }));
+  const out = html(linkBlock("embed", { embed: { ...SNAPSHOT, player: null, frameable: true }, embedHeight: 99999 }));
   assert.match(out, /height:1600px/);
+});
+
+test("html: a page whose frameability is unknown exports as a link, not a blind iframe", () => {
+  const out = html(linkBlock("embed", { embed: undefined }));
+  assert.equal(out.includes("<iframe"), false);
+  assert.match(out, /<a href="https:\/\/vimeo\.example\/76979871"/);
 });
 
 test("html: a bookmark is a card link with escaped title and description, and no iframe", () => {
