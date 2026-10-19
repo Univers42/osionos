@@ -5,7 +5,7 @@ import test from "node:test";
 // Caveat: slashMenuCatalog.tsx holds JSX, which node's type stripping cannot load, so this
 // reads the file as text. A catalog entry rebuilt by a helper or spread from another file
 // would not be seen (the scan would then fail loudly on a missing entry, never pass
-// silently). `/draw` not matching and `/white` matching are asserted in the browser by
+// silently). `/draw` and `/white` matching are asserted in the browser by
 // tests/e2e/functional/whiteboardBlock.spec.mjs.
 const catalogSource = readFileSync(new URL("../../src/features/slash-commands/model/slashMenuCatalog.tsx", import.meta.url), "utf8");
 
@@ -15,12 +15,18 @@ function whiteboardEntry(): string {
   return match[0];
 }
 
-test("/whiteboard is the only way to create a board: the entry has no alias", () => {
-  assert.doesNotMatch(whiteboardEntry(), /aliases\s*:/);
+test("/whiteboard is also found by the search words draw and drawing", () => {
+  const aliases = /aliases\s*:\s*\[([^\]]*)\]/.exec(whiteboardEntry());
+  assert.ok(aliases, "the whiteboard entry has search words");
+  const words = [...aliases[1].matchAll(/["'`]([^"'`]+)["'`]/g)].map((match) => match[1]);
+  assert.ok(words.includes("draw"), `draw is missing from ${JSON.stringify(words)}`);
+  assert.ok(words.includes("drawing"), `drawing is missing from ${JSON.stringify(words)}`);
 });
 
-test("no catalog entry lists draw as an alias", () => {
-  assert.doesNotMatch(catalogSource, /aliases\s*:\s*\[[^\]]*["'`]draw["'`]/i);
+test("/whiteboard stays the only board-creating command: no other entry lists draw", () => {
+  const listingDraw = [...catalogSource.matchAll(/aliases\s*:\s*\[[^\]]*["'`]draw(?:ing)?["'`]/gi)];
+  assert.equal(listingDraw.length, 1);
+  assert.equal((catalogSource.match(/kind: "whiteboard"/g) ?? []).length, 1);
 });
 
 test("the description does not advertise /draw", () => {
