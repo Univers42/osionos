@@ -13,12 +13,15 @@ import {
   selectSlashMenuEntry,
   slashCommandEntry,
 } from "../../browser/core/app.mjs";
+import { seedPage } from "../support/embedSeed.mjs";
 
 const SANDBOX =
   "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation";
 const PROVIDER_ALLOW =
   "autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; web-share";
-const GENERIC_ALLOW = "fullscreen; picture-in-picture";
+const RICH_ALLOW = "autoplay; encrypted-media; picture-in-picture; clipboard-write; web-share";
+const GENERIC_ALLOW = "picture-in-picture";
+const CODEPEN = "https://codepen.io/team/pen/abcDEF";
 const YOUTUBE = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
 
@@ -46,29 +49,6 @@ async function createLinkBlock(page, baseURL, slash, entry, url) {
   await fillDialog(page, url);
 }
 
-// Seeded before any app code runs, once per tab: a reload fires `pagehide`, which flushes the
-// app's own page cache over a key written after load, and a seed that re-ran on every reload
-// would undo the edits a persistence test is checking.
-async function seedPage(page, baseURL, blocks) {
-  await page.addInitScript((content) => {
-    if (sessionStorage.getItem("embed-seeded") !== null) return;
-    sessionStorage.setItem("embed-seeded", "1");
-    localStorage.setItem(
-      "osio:pages:mock-ws-private-0",
-      JSON.stringify([
-        {
-          _id: "embed-seed", title: "Embed seed", workspaceId: "mock-ws-private-0",
-          ownerId: "mock-user-0", visibility: "private", collaborators: [],
-          parentPageId: null, databaseId: null, archivedAt: null, content,
-        },
-      ]),
-    );
-    localStorage.setItem("pg:recents", "[]");
-  }, blocks);
-  await page.goto(baseURL, { waitUntil: "domcontentloaded" });
-  await explorerRow(page, "Embed seed").click();
-}
-
 const linkBlock = (page) => page.getByTestId("link-block-editor");
 
 test.describe("embed and bookmark blocks", () => {
@@ -82,13 +62,23 @@ test.describe("embed and bookmark blocks", () => {
     await expect(frame).toHaveAttribute("src", /^https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ\?.*autoplay=1/);
     await expect(frame).toHaveAttribute("sandbox", SANDBOX);
     await expect(frame).toHaveAttribute("allow", PROVIDER_ALLOW);
+    await expect(frame).toHaveAttribute("allowfullscreen", "");
     await expect(frame).toHaveAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+  });
+
+  test("C30: a CodePen frame (provider rich) gets neither fullscreen in allow nor allowfullscreen", async ({ page, baseURL }) => {
+    await createLinkBlock(page, baseURL, "/embed", "Embed", CODEPEN);
+    const frame = linkBlock(page).locator("iframe");
+    await expect(frame).toHaveAttribute("src", /^https:\/\/codepen\.io\/team\/embed\/abcDEF/);
+    await expect(frame).toHaveAttribute("allow", RICH_ALLOW);
+    await expect(frame).not.toHaveAttribute("allowfullscreen", /.*/);
   });
 
   test("a generic embed uses the narrow allow list, shows its host and converts to a bookmark", async ({ page, baseURL }) => {
     await createLinkBlock(page, baseURL, "/embed", "Embed", "https://example.com/");
     const frame = linkBlock(page).locator("iframe");
     await expect(frame).toHaveAttribute("allow", GENERIC_ALLOW);
+    await expect(frame).not.toHaveAttribute("allowfullscreen", /.*/);
     await expect(frame).toHaveAttribute("sandbox", SANDBOX);
     await expect(linkBlock(page).getByText("example.com").first()).toBeVisible();
     await linkBlock(page).getByRole("button", { name: "Show as bookmark", exact: true }).click();

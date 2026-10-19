@@ -17,20 +17,49 @@
  *
  * Deliberately absent from the sandbox: `allow-top-navigation*` (a frame could
  * redirect the app), `allow-modals`, `allow-downloads`, `allow-storage-access-*`.
- * `allow-same-origin` is safe only because `frameableEmbedUrl` refuses any URL
- * on the app's own origins (embedUrlGuard.ts); same-origin content would void
- * the sandbox.
+ *
+ * `allow-same-origin` is NOT made safe by `frameableEmbedUrl`: that check stops
+ * only a `src` that is already on the app's origin. A framed page can navigate
+ * itself anywhere, including back to the app, which then boots inside the frame
+ * same-origin and shares its storage. The defence is that the app refuses to be
+ * framed (frame-ancestors 'none' and X-Frame-Options: DENY from nginx, groot's TLS
+ * front and Vercel) and that a framed boot never consumes a bridge handoff
+ * (userStore.helpers.ts).
+ *
+ * Caveat: a deploy that serves this build without those headers frames the SPA
+ * same-origin; the client then refuses only the handoff, not other same-origin
+ * reach into the app's storage.
  */
 
 export const THIRD_PARTY_SANDBOX =
   "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation";
 
-/** For provider-table embeds, whose players need these to work. */
+/** For provider video/audio players: the provider's own code runs there, not the author's. */
 export const PROVIDER_ALLOW =
   "autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; web-share";
 
+/** For provider frames that host author-written content (CodePen, forms, ...): a
+ *  fullscreen frame hides the URL bar, so a fake browser chrome could show any address. */
+export const RICH_ALLOW = "autoplay; encrypted-media; picture-in-picture; clipboard-write; web-share";
+
 /** For a generic /embed of an arbitrary page a collaborator chose. */
-export const GENERIC_ALLOW = "fullscreen; picture-in-picture";
+export const GENERIC_ALLOW = "picture-in-picture";
+
+/** `provider`: video/audio player; `rich`: provider-hosted author content; `generic`: any other page. */
+export type FramePolicy = "provider" | "rich" | "generic";
+
+const ALLOW_BY_POLICY: Record<FramePolicy, string> = {
+  provider: PROVIDER_ALLOW, rich: RICH_ALLOW, generic: GENERIC_ALLOW,
+};
+
+export function allowForPolicy(policy: FramePolicy): string {
+  return ALLOW_BY_POLICY[policy];
+}
+
+/** Drives both the `allow` list and the `allowfullscreen` attribute, so they cannot disagree. */
+export function grantsFullscreen(policy: FramePolicy): boolean {
+  return policy === "provider";
+}
 
 /** YouTube answers error 153 to a frame that sends no Referer. */
 export const EMBED_REFERRER_POLICY = "strict-origin-when-cross-origin";

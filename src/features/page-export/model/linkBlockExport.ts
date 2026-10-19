@@ -20,7 +20,7 @@
 import type { Block } from "@/entities/block";
 import { parseEmbedSnapshot } from "@/shared/lib/embed/embedInfo";
 import {
-  EMBED_REFERRER_POLICY, GENERIC_ALLOW, PROVIDER_ALLOW, THIRD_PARTY_SANDBOX, clampEmbedHeight, safeAspect,
+  EMBED_REFERRER_POLICY, THIRD_PARTY_SANDBOX, allowForPolicy, clampEmbedHeight, grantsFullscreen, safeAspect,
 } from "@/shared/lib/embed/embedPolicy";
 import { appForbiddenOrigins, displayHost, safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard";
 import { escapeLinkLabel } from "@/shared/lib/embed/linkLabel";
@@ -71,12 +71,12 @@ function framedHtml(block: Block, target: LinkTarget): string {
   const view = chooseEmbedView({ url: target.href, snapshot: parseEmbedSnapshot(block.embed), forbiddenOrigins: appForbiddenOrigins() });
   if (view.kind !== "frame" && view.kind !== "facade") return "";
   const src = view.kind === "frame" ? view.src : view.embed.src;
-  const isProvider = view.kind === "facade" || view.policy === "provider";
+  const policy = view.kind === "facade" ? "provider" : view.policy;
   const aspect = view.aspect === undefined ? undefined : safeAspect(view.aspect);
   const height = aspect === undefined || block.embedHeight !== undefined ? clampEmbedHeight(block.embedHeight) : undefined;
   const box = height === undefined ? `aspect-ratio:${aspect}` : `height:${height}px`;
   return `<iframe src="${escapeHtml(src)}" title="${escapeHtml(target.title || displayHost(src))}" ` +
-    `sandbox="${THIRD_PARTY_SANDBOX}" allow="${isProvider ? PROVIDER_ALLOW : GENERIC_ALLOW}" allowfullscreen ` +
+    `sandbox="${THIRD_PARTY_SANDBOX}" allow="${allowForPolicy(policy)}"${grantsFullscreen(policy) ? " allowfullscreen" : ""} ` +
     `referrerpolicy="${EMBED_REFERRER_POLICY}" loading="lazy" style="width:100%;border:0;${box}"></iframe>`;
 }
 

@@ -25,12 +25,12 @@
 // Not the barrel: it re-exports the bridge client, which reads import.meta.env
 // at load and so cannot run under node --test.
 import { embedInfoFromProvider, parseEmbedInfo, type EmbedInfo, type EmbedSnapshot } from "@/shared/lib/embed/embedInfo";
-import { safeAspect } from "@/shared/lib/embed/embedPolicy";
+import { safeAspect, type FramePolicy } from "@/shared/lib/embed/embedPolicy";
 import { resolveProviderEmbed, type ProviderEmbed } from "@/shared/lib/embed/embedProviders";
 import { frameableEmbedUrl, safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard";
 
 export type MediaKind = "video" | "audio" | "image";
-export type FramePolicy = "provider" | "generic";
+export type { FramePolicy };
 export type CardReason = "refused" | "unsafe-frame" | "pdf";
 
 export type EmbedView =
@@ -76,7 +76,7 @@ function providerView(embed: ProviderEmbed, info: EmbedInfo, input: EmbedViewInp
   const src = frameableEmbedUrl(embed.src, input.forbiddenOrigins);
   if (src === "") return { kind: "card", info, reason: "unsafe-frame" };
   if (embed.kind === "rich") {
-    return { kind: "frame", src, policy: "provider", aspect: embed.aspect, height: embed.height };
+    return { kind: "frame", src, policy: "rich", aspect: embed.aspect, height: embed.height };
   }
   const thumb = safeHttpUrl(embed.thumb ?? info.image);
   return { kind: "facade", embed: { ...embed, src }, title: info.title || embed.provider, thumb, aspect: embed.aspect };

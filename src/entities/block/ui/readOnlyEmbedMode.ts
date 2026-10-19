@@ -13,9 +13,10 @@
 import { createContext } from "react";
 
 /** Whether a read-only embed block may mount a live third-party iframe.
- *  `static` (default): hover previews, marketplace, raw preview, profile cards render a
- *  link card instead of any generic frame. `live`: a surface the reader opened on purpose
- *  (the public page) renders the full embed. A provider player stays behind its click either way. */
+ *  `static` (default): hover previews, marketplace, raw preview, profile cards and the
+ *  anonymous public page render a link card instead of any frame. `live`: the editor, where
+ *  an authenticated member opened the page on purpose. A provider player stays behind its
+ *  click either way. */
 export type ReadOnlyEmbedMode = "static" | "live";
 
 export const ReadOnlyEmbedModeContext = createContext<ReadOnlyEmbedMode>("static");

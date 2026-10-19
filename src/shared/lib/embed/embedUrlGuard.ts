@@ -52,8 +52,22 @@ function originOf(href: string): string {
   }
 }
 
-/** `safeHttpUrl`, and not on any origin in `forbiddenOrigins`. A frame on the
- *  app's own origin runs with `allow-same-origin` and would void the sandbox. */
+/** Same scheme, host (ignoring a trailing dot) and port. Two unparseable or empty
+ *  inputs are not "the same". */
+export function isSameOrigin(a: string, b: string): boolean {
+  const origin = originOf(a);
+  return origin !== "" && origin === originOf(b);
+}
+
+/** `safeHttpUrl`, and not on any origin in `forbiddenOrigins`.
+ *
+ *  This stops only a `src` that is already on the app's origin. It does not make
+ *  `allow-same-origin` safe: a framed page can navigate itself anywhere, including
+ *  back to the app. The defence is the frame-ancestors/X-Frame-Options headers plus
+ *  the framed-boot guard in userStore.helpers.ts (see embedPolicy.ts).
+ *
+ *  Caveat: a deploy that serves the build without those headers frames the SPA
+ *  same-origin after a redirect, and the client refuses only the bridge handoff. */
 export function frameableEmbedUrl(raw: string, forbiddenOrigins: readonly string[]): string {
   const href = safeHttpUrl(raw);
   if (href === "") return "";

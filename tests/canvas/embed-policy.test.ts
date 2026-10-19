@@ -17,8 +17,11 @@ import {
   EMBED_REFERRER_POLICY,
   GENERIC_ALLOW,
   PROVIDER_ALLOW,
+  RICH_ALLOW,
   THIRD_PARTY_SANDBOX,
+  allowForPolicy,
   clampEmbedHeight,
+  grantsFullscreen,
   safeAspect,
 } from "../../src/shared/lib/embed/embedPolicy.ts";
 
@@ -28,7 +31,8 @@ test("the policy constants are exactly the devil-ruled strings (C15)", () => {
     "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation",
   );
   assert.equal(PROVIDER_ALLOW, "autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; web-share");
-  assert.equal(GENERIC_ALLOW, "fullscreen; picture-in-picture");
+  assert.equal(GENERIC_ALLOW, "picture-in-picture");
+  assert.equal(RICH_ALLOW, "autoplay; encrypted-media; picture-in-picture; clipboard-write; web-share");
   assert.equal(EMBED_REFERRER_POLICY, "strict-origin-when-cross-origin");
 });
 
@@ -37,6 +41,19 @@ test("the sandbox never carries top-navigation, modals, downloads or storage acc
     assert.doesNotMatch(token, /top-navigation|modals|downloads|storage-access/);
   }
   assert.doesNotMatch(GENERIC_ALLOW, /autoplay|clipboard-write|web-share/);
+});
+
+test("fullscreen is granted to provider players only, never to a generic or rich frame (C30)", () => {
+  assert.equal(grantsFullscreen("provider"), true);
+  assert.equal(grantsFullscreen("rich"), false);
+  assert.equal(grantsFullscreen("generic"), false);
+  assert.equal(allowForPolicy("provider"), PROVIDER_ALLOW);
+  assert.equal(allowForPolicy("rich"), RICH_ALLOW);
+  assert.equal(allowForPolicy("generic"), GENERIC_ALLOW);
+  assert.match(PROVIDER_ALLOW, /fullscreen/);
+  assert.doesNotMatch(RICH_ALLOW, /fullscreen/);
+  assert.doesNotMatch(GENERIC_ALLOW, /fullscreen/);
+  assert.equal(RICH_ALLOW, PROVIDER_ALLOW.replace("fullscreen; ", ""));
 });
 
 test("clampEmbedHeight: default, rounds, clamps to [120, 1600]", () => {

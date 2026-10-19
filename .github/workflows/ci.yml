@@ -257,6 +257,47 @@ jobs:
             test-results
           if-no-files-found: ignore
 
+  # The default build has no bridge URL, so the framed-handoff consume and the public-page fetch
+  # never run there and a test of either would pass vacuously. This job builds with a stub bridge
+  # URL and runs only tests/e2e/bridge-stub, whose specs answer that host themselves.
+  test-bridge-stub:
+    name: Browser tests (stub bridge URL)
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "1"
+      TEST_WORKERS: 2
+      PLAYWRIGHT_BRIDGE_STUB: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Run the stub-bridge specs
+        run: |
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d --wait mongodb
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml run --rm --no-deps \
+            browser-tests pnpm exec playwright test
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-bridge-stub
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
   # The production bundle (Dockerfile.prod's builder stage) must hold no legacy second brain
   # when built by default, and must still hold it when built with the gate ON: the ON build
   # is the control that proves the grep would see the legacy code if it were there.
@@ -325,17 +366,19 @@ jobs:
   # shard is therefore a failure here, not a silent pass.
   test-gate:
     name: Browser tests
-    needs: [test, test-legacy-on, bundle-legacy-gate]
+    needs: [test, test-legacy-on, test-bridge-stub, bundle-legacy-gate]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Require every shard, the gate-on job and the bundle check to have succeeded
+      - name: Require every shard, the gate-on job, the stub-bridge job and the bundle check to have succeeded
         env:
           SHARDS_RESULT: ${{ needs.test.result }}
           GATE_ON_RESULT: ${{ needs.test-legacy-on.result }}
+          BRIDGE_STUB_RESULT: ${{ needs.test-bridge-stub.result }}
           BUNDLE_RESULT: ${{ needs.bundle-legacy-gate.result }}
         run: |
-          echo "shards: $SHARDS_RESULT; gate-on legacy: $GATE_ON_RESULT; bundle legacy gate: $BUNDLE_RESULT"
+          echo "shards: $SHARDS_RESULT; gate-on legacy: $GATE_ON_RESULT; stub bridge: $BRIDGE_STUB_RESULT; bundle legacy gate: $BUNDLE_RESULT"
           test "$SHARDS_RESULT" = "success"
           test "$GATE_ON_RESULT" = "success"
+          test "$BRIDGE_STUB_RESULT" = "success"
           test "$BUNDLE_RESULT" = "success"

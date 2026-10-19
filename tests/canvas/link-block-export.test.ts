@@ -47,7 +47,8 @@ test("html: a generic embed is a sandboxed iframe with the generic allow list, t
   const out = html(linkBlock("embed", { embed: { ...SNAPSHOT, player: null } }));
   assert.match(out, /<iframe src="https:\/\/vimeo\.example\/76979871"/);
   assert.match(out, /sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-presentation"/);
-  assert.match(out, /allow="fullscreen; picture-in-picture"/);
+  assert.match(out, /allow="picture-in-picture"/);
+  assert.equal(out.includes("allowfullscreen"), false);
   assert.match(out, /referrerpolicy="strict-origin-when-cross-origin"/);
   assert.match(out, /<a href="https:\/\/vimeo\.example\/76979871"/);
 });
@@ -56,6 +57,14 @@ test("html: a provider URL frames the provider src with the provider allow list"
   const out = html(linkBlock("embed", { content: YOUTUBE, embed: undefined }));
   assert.match(out, /<iframe src="https:\/\/www\.youtube-nocookie\.com\/embed\/dQw4w9WgXcQ/);
   assert.match(out, /allow="autoplay; encrypted-media; fullscreen; picture-in-picture; clipboard-write; web-share"/);
+  assert.match(out, / allowfullscreen /);
+});
+
+test("html: a provider rich frame (CodePen) gets neither fullscreen in allow nor allowfullscreen", () => {
+  const out = html(linkBlock("embed", { content: "https://codepen.io/team/pen/abcDEF", embed: undefined }));
+  assert.match(out, /<iframe src="https:\/\/codepen\.io\/team\/embed\/abcDEF/);
+  assert.match(out, /allow="autoplay; encrypted-media; picture-in-picture; clipboard-write; web-share"/);
+  assert.equal(out.includes("fullscreen"), false);
 });
 
 test("html: the frame height is the clamped embedHeight", () => {

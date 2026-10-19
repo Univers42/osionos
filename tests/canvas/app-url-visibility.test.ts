@@ -37,6 +37,18 @@ test("marketplace launch policy: Desktop loopback hidden publicly, shown locally
   assert.equal(isListableApp("osionos.desktop", "https://desktop.example.net", PUBLIC_HOST), true);
 });
 
+test("marketplace launch policy: a launch URL on the page's own origin is refused (C28)", () => {
+  const url = "https://localhost:3001";
+  assert.equal(effectiveLaunchUrl("osionos.desktop", url, "localhost", "https://localhost:3001"), "");
+  assert.equal(isListableApp("osionos.desktop", url, "localhost", "https://localhost:3001"), false);
+  assert.equal(effectiveLaunchUrl("osionos.desktop", url, "localhost", "https://localhost:3002"), url);
+  assert.equal(effectiveLaunchUrl("osionos.desktop", "https://localhost:3001/./x", "localhost", "https://localhost:3001"), "");
+  assert.equal(effectiveLaunchUrl("osionos.desktop", "https://localhost.:3001", "localhost", "https://localhost:3001"), "");
+  assert.equal(effectiveLaunchUrl("osionos.desktop", "http://localhost:3001", "localhost", "https://localhost:3001"), "http://localhost:3001");
+  assert.equal(effectiveLaunchUrl("osionos.desktop", url, "localhost", ""), url);
+  assert.equal(effectiveLaunchUrl("osionos.draw", url, "localhost", "https://localhost:3001"), url);
+});
+
 test("marketplace launch policy: native Draw keeps working with its catalogue URL", () => {
   assert.equal(isListableApp("osionos.draw", "https://localhost:3001", PUBLIC_HOST), true);
 });
