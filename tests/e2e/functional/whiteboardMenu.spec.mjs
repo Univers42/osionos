@@ -5,7 +5,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
-import { mockWhiteboardService } from "../support/whiteboardMocks.mjs";
+import { mockWhiteboardFailure, mockWhiteboardService } from "../support/whiteboardMocks.mjs";
 
 const SLUG = "abc123def456";
 
@@ -27,11 +27,7 @@ test.describe("View > New whiteboard", () => {
   });
 
   test("a failed creation shows an error toast and opens no tab", async ({ page, baseURL }) => {
-    let posts = 0;
-    await page.route("https://localhost:3007/**", (route) => {
-      posts += 1;
-      return route.fulfill({ status: 500, json: { error: { code: "internal", message: "Board service is down." } } });
-    });
+    const posts = await mockWhiteboardFailure(page);
     await openFreshPage(page, baseURL);
     const tabs = page.locator("[data-tab-id]");
     const tabsBefore = await tabs.count();
@@ -42,6 +38,6 @@ test.describe("View > New whiteboard", () => {
     await expect(toast).toContainText("Board service is down.");
     await expect(tabs).toHaveCount(tabsBefore);
     await expect(page.locator('iframe[src*="/boards/"]')).toHaveCount(0);
-    expect(posts).toBe(1);
+    expect(posts.count).toBe(1);
   });
 });

@@ -38,6 +38,17 @@ export async function mockWhiteboardService(page, { slug, title, onCreate }) {
   });
 }
 
+/** Mocks the drawnosaurus service failing: every request answers 500 "Board service is down."
+ *  Returns a probe whose `count` is the number of requests it answered. */
+export async function mockWhiteboardFailure(page) {
+  const posts = { count: 0 };
+  await page.route("https://localhost:3007/**", (route) => {
+    posts.count += 1;
+    return route.fulfill({ status: 500, json: { error: { code: "internal", message: "Board service is down." } } });
+  });
+  return posts;
+}
+
 /** Answers GET /api/marketplace/installed with `installed`; returns a probe for the offline guard. */
 export async function mockInstalled(page, installed) {
   const probe = { requested: false };

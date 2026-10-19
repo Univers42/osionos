@@ -11,27 +11,30 @@ import {
   openSlashMenuFromEditor,
   selectSlashMenuEntry,
 } from "../../browser/core/app.mjs";
-import { mockInstalled, mockWhiteboardService } from "../support/whiteboardMocks.mjs";
+import { mockInstalled, mockWhiteboardFailure, mockWhiteboardService } from "../support/whiteboardMocks.mjs";
 
 const SLUG = "abc123def456";
 
 const whiteboardRows = (page) => page.getByTestId("slash-command-entry").filter({ hasText: /whiteboard/i });
 
 test.describe("built-in whiteboard", () => {
-  test("/whiteboard <name> creates a named board and embeds it inline", async ({ page, baseURL }) => {
-    const created = [];
-    await mockWhiteboardService(page, { slug: SLUG, title: "Sprint plan", onCreate: (body) => created.push(body) });
-    await openFreshPage(page, baseURL);
-    const editor = await activateFirstEditor(page);
+  // /draw is a search word for the same command: the name after it is the board's name.
+  for (const cmd of ["/whiteboard", "/draw"]) {
+    test(`${cmd} <name> creates a named board and embeds it inline`, async ({ page, baseURL }) => {
+      const created = [];
+      await mockWhiteboardService(page, { slug: SLUG, title: "Sprint plan", onCreate: (body) => created.push(body) });
+      await openFreshPage(page, baseURL);
+      const editor = await activateFirstEditor(page);
 
-    await openSlashMenuFromEditor(editor, "/whiteboard Sprint plan");
-    await selectSlashMenuEntry(page, "Create board");
+      await openSlashMenuFromEditor(editor, `${cmd} Sprint plan`);
+      await selectSlashMenuEntry(page, "Create board");
 
-    const block = page.locator('[data-block-type="whiteboard"]');
-    await expect(block.locator("iframe")).toHaveAttribute("src", new RegExp(`/boards/${SLUG}$`));
-    await expect(block.getByText("Sprint plan")).toBeVisible();
-    expect(created).toEqual([{ title: "Sprint plan" }]);
-  });
+      const block = page.locator('[data-block-type="whiteboard"]');
+      await expect(block.locator("iframe")).toHaveAttribute("src", new RegExp(`/boards/${SLUG}$`));
+      await expect(block.getByText("Sprint plan")).toBeVisible();
+      expect(created).toEqual([{ title: "Sprint plan" }]);
+    });
+  }
 
   test("/whiteboard Q3/Q4 plan keeps the slash inside the name", async ({ page, baseURL }) => {
     const created = [];
@@ -62,11 +65,7 @@ test.describe("built-in whiteboard", () => {
   });
 
   test("a failed creation shows Retry and does not retry on its own", async ({ page, baseURL }) => {
-    let posts = 0;
-    await page.route("https://localhost:3007/**", (route) => {
-      posts += 1;
-      return route.fulfill({ status: 500, json: { error: { code: "internal", message: "Board service is down." } } });
-    });
+    const posts = await mockWhiteboardFailure(page);
     await openFreshPage(page, baseURL);
     const editor = await activateFirstEditor(page);
     await openSlashMenuFromEditor(editor, "/whiteboard");
@@ -76,7 +75,7 @@ test.describe("built-in whiteboard", () => {
     await expect(block.getByRole("button", { name: "Retry" })).toBeVisible();
     await expect(block.getByRole("alert")).toContainText("Board service is down.");
     await page.waitForTimeout(1_500);
-    expect(posts).toBe(1);
+    expect(posts.count).toBe(1);
   });
 
   test("the command is present with an empty installed map", async ({ page, baseURL }) => {
@@ -102,17 +101,4 @@ test.describe("built-in whiteboard", () => {
       await expect(whiteboardRows(page)).toHaveCount(1);
     });
   }
-
-  test("/draw <name> creates a board with that name, not with the word draw", async ({ page, baseURL }) => {
-    const created = [];
-    await mockWhiteboardService(page, { slug: SLUG, title: "Sprint plan", onCreate: (body) => created.push(body) });
-    await openFreshPage(page, baseURL);
-    const editor = await activateFirstEditor(page);
-
-    await openSlashMenuFromEditor(editor, "/draw Sprint plan");
-    await selectSlashMenuEntry(page, "Create board");
-
-    await expect(page.locator('[data-block-type="whiteboard"] iframe')).toHaveAttribute("src", new RegExp(`/boards/${SLUG}$`));
-    expect(created).toEqual([{ title: "Sprint plan" }]);
-  });
 });
