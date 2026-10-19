@@ -5,6 +5,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
+import { mockWhiteboardService } from "../support/whiteboardMocks.mjs";
 
 const SLUG = "abc123def456";
 
@@ -16,14 +17,7 @@ async function clickNewWhiteboard(page) {
 test.describe("View > New whiteboard", () => {
   test("creates an Untitled board and opens a tab on its slug", async ({ page, baseURL }) => {
     const created = [];
-    await page.route("https://localhost:3007/**", (route) => {
-      const request = route.request();
-      if (request.method() === "POST" && new URL(request.url()).pathname === "/v1/boards") {
-        created.push(request.postDataJSON());
-        return route.fulfill({ status: 201, json: { slug: SLUG, title: "Untitled" } });
-      }
-      return route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>board</title><p>board</p>" });
-    });
+    await mockWhiteboardService(page, { slug: SLUG, title: "Untitled", onCreate: (body) => created.push(body) });
     await openFreshPage(page, baseURL);
 
     await clickNewWhiteboard(page);
