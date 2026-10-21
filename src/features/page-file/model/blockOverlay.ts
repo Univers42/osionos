@@ -88,6 +88,8 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   // hand-edited overlay can hand the renderer a nonsense width; it cannot reach
   // the prototype. Markdown carries only the column alignments of a table.
   tableConfig: isPlainRecord,
+  // The merge's marker on a conflict copy: the id of the block it is a copy of.
+  conflictOf: isBoundedText,
 });
 
 /** Is `key` one of the overlay's extra keys? Object.hasOwn: no inherited names. */
