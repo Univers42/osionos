@@ -66,3 +66,16 @@ test("chart-option-colors: categories and series grouped by a select carry real 
   assert.equal(stacked.categories[0].color, "var(--color-orange)");
   assert.deepEqual(stacked.series.map(s => s.color).sort(), ["var(--color-success)", "var(--color-warning)"]);
 });
+
+test("chart-option-colors: values that only look like colours are refused", () => {
+  for (const hostile of [
+    '#000"><img src=x onerror=alert(1)>',
+    'var(--x)"><svg onload=alert(1)>',
+    'rgb(1, 2, 3);background:url(https://evil.example/x)',
+    'red;background:url(x)',
+    'url(javascript:alert(1))',
+    'expression(alert(1))',
+    '#12345',            // 5 hex digits is not a colour
+    'var(--a) var(--b)',
+  ]) assert.equal(optionColorToCss(hostile), '', hostile);
+});
