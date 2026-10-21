@@ -23,6 +23,11 @@ fi
 
 SERVICE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SERVICE_DIR/../.." && pwd)
+# The network, the fixture and the migrations are shared with the golden-set
+# runner (eval/run.sh): the fixture SQL is written once, in eval/fixture.sql.
+HARNESS_LABEL=test
+HARNESS_DIR="$SERVICE_DIR/eval"
+. "$HARNESS_DIR/harness.sh"
 NETWORK="ai-test-$$"
 PG_CONTAINER="ai-test-pg-$$"
 REDIS_CONTAINER="ai-test-redis-$$"
@@ -36,14 +41,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 echo "[test] network $NETWORK"
-# Docker's default address pool can be exhausted on a busy machine (every
-# stack takes a block of it). Then the harness asks for a subnet of its own:
-# the last two bytes come from the pid, so two runs never share one.
-if ! docker network create "$NETWORK" >/dev/null 2>&1; then
-	SUBNET="172.16.$(( $$ % 250 + 1 )).0/24"
-	echo "[test] the address pool is full: the network takes $SUBNET"
-	docker network create --subnet "$SUBNET" "$NETWORK" >/dev/null
-fi
+harness_network_create "$NETWORK"
 docker run -d --name "$PG_CONTAINER" --network "$NETWORK" --network-alias pg \
 	-e POSTGRES_PASSWORD=ai_test_password \
 	-e POSTGRES_USER=postgres \
@@ -52,15 +50,7 @@ docker run -d --name "$PG_CONTAINER" --network "$NETWORK" --network-alias pg \
 docker run -d --name "$REDIS_CONTAINER" --network "$NETWORK" --network-alias redis \
 	redis:7.4-alpine >/dev/null
 
-waited=0
-until docker exec "$PG_CONTAINER" pg_isready -U postgres -d osionos_ai_test >/dev/null 2>&1; do
-	waited=$((waited + 1))
-	if [ "$waited" -gt 90 ]; then
-		echo "[test] postgres never became ready" >&2
-		exit 1
-	fi
-	sleep 1
-done
+harness_wait_postgres "$PG_CONTAINER" osionos_ai_test postgres
 waited=0
 until docker exec "$REDIS_CONTAINER" redis-cli ping >/dev/null 2>&1; do
 	waited=$((waited + 1))
@@ -73,82 +63,13 @@ done
 echo "[test] postgres and redis are ready"
 
 # The roles the AI migration grants to (service_role) and revokes from (anon,
-# authenticated) must exist before it runs.
-docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d osionos_ai_test >/dev/null <<'SQL'
-do $$
-begin
-	if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin; end if;
-	if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
-	if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
-end
-$$;
-
--- TEST-ONLY FIXTURE: the columns of osionos_workspace_members that
--- canAccessWorkspace reads. The production table (models/osionos-bridge-migration.sql)
--- carries created_at/updated_at and a foreign key to osionos_workspaces as well; this
--- fixture holds the same column types and nothing more.
-create table if not exists public.osionos_workspace_members (
-	workspace_id uuid not null,
-	user_id uuid not null,
-	role text not null,
-	permissions text[] not null default array['read'],
-	primary key (workspace_id, user_id)
-);
-
--- TEST-ONLY FIXTURE: the columns of osionos_pages that the page context of a
--- run reads (src/pageContext.ts) AND the columns the RAG triggers read (the
--- enqueue trigger, the ACL sync trigger and the delete trigger of
--- models/osionos-ai-rag-migration.sql): id, workspace_id, owner_id, title,
--- visibility, collaborators, content, archived_at. The production table
--- (models/osionos-bridge-migration.sql) carries many more; this fixture holds
--- the same column types and nothing more.
---
--- The visibility is nullable here, while the production column is NOT NULL:
--- the read rule handles a NULL visibility (it is 'private'), and the table of
--- the ACL agreement has to cover it.
-create table if not exists public.osionos_pages (
-	id uuid primary key default gen_random_uuid(),
-	workspace_id uuid not null,
-	owner_id uuid,
-	title text not null default 'Untitled',
-	visibility text default 'private',
-	collaborators jsonb not null default '[]'::jsonb,
-	content jsonb not null default '[]'::jsonb,
-	archived_at timestamptz
-);
-
--- TEST-ONLY FIXTURE: the block walker of the pages, copied verbatim from
--- models/osionos-page-search-migration.sql, so the real SQL of the page
--- context runs against the fixture.
-CREATE OR REPLACE FUNCTION public.osionos_page_blocks(doc jsonb)
-RETURNS SETOF jsonb
-LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
-  WITH RECURSIVE walk(b) AS (
-    SELECT jsonb_array_elements(CASE WHEN jsonb_typeof(doc) = 'array' THEN doc ELSE '[]'::jsonb END)
-    UNION ALL
-    SELECT jsonb_array_elements(w.b -> 'children')
-    FROM walk w
-    WHERE jsonb_typeof(w.b -> 'children') = 'array'
-  )
-  SELECT b FROM walk
-$$;
-
--- TEST-ONLY FIXTURE: the text projection of a page, copied verbatim from
--- models/osionos-page-search-migration.sql.
-CREATE OR REPLACE FUNCTION public.osionos_page_text(doc jsonb)
-RETURNS text
-LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
-  SELECT coalesce(string_agg(b ->> 'content', ' '), '')
-  FROM public.osionos_page_blocks(doc) AS b
-  WHERE b ? 'content'
-$$;
-SQL
+# authenticated) must exist before it runs, and the tables the service reads
+# must be there: that is the fixture, and it is the one the golden-set runner
+# uses too.
+harness_apply_fixture "$PG_CONTAINER" osionos_ai_test postgres
 
 echo "[test] applying the migrations"
-for MIGRATION in $MIGRATIONS; do
-	echo "[test] applying $MIGRATION"
-	docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d osionos_ai_test < "$MIGRATION" >/dev/null
-done
+harness_apply_migrations "$PG_CONTAINER" osionos_ai_test postgres $MIGRATIONS
 
 echo "[test] running the suite"
 # --test-concurrency=1: the files share one database, and the conversations of
