@@ -176,7 +176,10 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 				throw Object.assign(new Error('image_too_large'), { status: 422, code: 'image_too_large' });
 			}
 			const stripped = stripMetadata(fetched.bytes);
-			images.push({ data: stripped, mediaType: fetched.mediaType });
+			// The type of the image is the one its BYTES say: the bridge
+			// announces the type it stored, and a file that was stored with
+			// the wrong type must not decide what the model sees.
+			images.push({ data: stripped, mediaType: `image/${header.format}` });
 		}
 	} catch (error) {
 		const candidate = error as { status?: unknown; code?: unknown };
