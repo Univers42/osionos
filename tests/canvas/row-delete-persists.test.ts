@@ -15,6 +15,7 @@ import {
   deletedPageIdsBetween,
   loadPersistedKnownDatabaseState,
   serializeKnownDatabaseState,
+  tombstonesStillNeeded,
 } from "../../src/widgets/database-view/model/knownDatabasePersistedState.ts";
 import {
   sliceDatabase,
@@ -130,6 +131,14 @@ test("the server union does not resurrect a row deleted before its push landed",
   assert.deepEqual(Object.keys(sliceDatabase(union, "db-deals").pages), ["db-deals-row-1"]);
 });
 
+function otherRows(): NotionState {
+  return {
+    databases: { "db-tasks": database("db-tasks", "Tasks") },
+    pages: { "db-tasks-row-1": page("db-tasks-row-1", "db-tasks", "C") },
+    views: { "db-tasks-table": view("db-tasks-table", "db-tasks") },
+  } as unknown as NotionState;
+}
+
 test("a deleted seed starter row is not re-added by the code-seed union", () => {
   const seeded = {
     databases: { "db-acts": database("db-acts", "Activities") },
@@ -143,4 +152,28 @@ test("a deleted seed starter row is not re-added by the code-seed union", () => 
   const loaded = loadPersistedKnownDatabaseState(raw, seeded);
   assert.equal(loaded.state.pages["db-acts-row-1"], undefined, "seed must not resurrect the deleted row");
   assert.ok(loaded.state.databases["db-acts"], "the rest of the seed database still loads");
+});
+
+test("a tombstone the server no longer holds can be dropped", () => {
+  // row-2: the server still has it (its delete push has not landed yet).
+  // row-3: no server slice has it any more — the tombstone is dead weight.
+  // db-tasks-row-1: held by the SECOND server slice — still needed.
+  const tombstones = new Set(["db-deals-row-2", "db-deals-row-3", "db-tasks-row-1"]);
+  const stillNeeded = tombstonesStillNeeded(tombstones, [userRows(), otherRows()]);
+  assert.deepEqual(
+    [...stillNeeded].sort(),
+    ["db-deals-row-2", "db-tasks-row-1"],
+    "only the tombstones some server slice still holds survive",
+  );
+  assert.equal(stillNeeded.has("db-deals-row-3"), false, "a row the server dropped needs no tombstone");
+});
+
+test("an empty server list keeps every tombstone (never prune blind)", () => {
+  const tombstones = new Set(["db-deals-row-2", "db-deals-row-3"]);
+  const stillNeeded = tombstonesStillNeeded(tombstones, []);
+  assert.deepEqual(
+    [...stillNeeded].sort(),
+    ["db-deals-row-2", "db-deals-row-3"],
+    "an empty server list can mean 'not loaded' → keep every tombstone",
+  );
 });

@@ -22,7 +22,7 @@ import type { NotionState } from "@notion-db/object-database";
 import { api, getActivePageJwt, API_BASE } from "@/shared/api/client";
 import { isObjectDatabaseServerSyncEnabled } from "@/shared/config/featureFlags";
 import { hashSlice, sliceDatabase, userDatabaseIds, withMergedSlice, withServerSlice } from "./objectDatabaseSlice";
-import { withoutDeletedPages } from "./knownDatabasePersistedState";
+import { withoutDeletedPages, tombstonesStillNeeded } from "./knownDatabasePersistedState";
 import { startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objectDatabaseRealtime";
 
 const PUSHED_HASHES_KEY = "osionos.objectDb.pushed.v1";
@@ -38,6 +38,11 @@ export type ObjectDatabaseSyncHooks = {
   /** Pages the user deleted. Never pulled back from the server (the push that
    *  removes them may have been aborted by a reload). Optional: tests/no-store. */
   getDeletedPageIds?: () => ReadonlySet<string>;
+  /** The server no longer holds a deleted row → its tombstone is dead weight.
+   *  Called with the tombstones that are STILL needed; the store drops the
+   *  others and re-persists so the stored snapshot shrinks.
+   *  Optional: tests/no-store. */
+  pruneDeletedPageIds?: (stillNeeded: ReadonlySet<string>) => void;
   applyMerged: (state: NotionState) => void;
   notifyReloaded?: () => void;
   reconcileRegistry?: (userDbKeys: string[]) => void;
@@ -74,6 +79,12 @@ function savePushedHashes(map: Record<string, string>): void {
 function databaseTitle(state: NotionState, dbKey: string): string {
   const database = state.databases[dbKey] as { name?: string; title?: string } | undefined;
   return String(database?.name ?? database?.title ?? "Untitled").slice(0, 200) || "Untitled";
+}
+
+/** The server's copy of one database (the bridge answers `{}` for a row it
+ *  never got a state for). */
+function serverStateOf(row: ServerObjectDatabase): NotionState {
+  return row.state ?? ({ databases: {}, pages: {}, views: {} } as NotionState);
 }
 
 // ── bridge I/O (owner scoping is enforced server-side from the session token) ─
@@ -169,7 +180,7 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
   let changed = merged !== liveState;
 
   for (const [dbKey, row] of serverMap) {
-    const serverState = row.state ?? ({ databases: {}, pages: {}, views: {} } as NotionState);
+    const serverState = serverStateOf(row);
     const localHash = hashSlice(sliceDatabase(merged, dbKey));
     if (merged.databases[dbKey] && pushed[dbKey] !== localHash) {
       // Local is dirty/untracked — genuine offline edits OR a fresh placeholder
@@ -196,6 +207,15 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
   for (const dbKey of userDatabaseIds(merged, seedIds)) {
     if (!serverMap.has(dbKey)) delete nextPushed[dbKey]; // never on server → auto-repair on push
   }
+
+  // A tombstone is only needed until the server agrees the row is gone: the
+  // merge above already ran with the full set, so from here on a tombstone no
+  // server slice holds is dead weight — it would pile up in localStorage for
+  // every deletion the user ever made. An empty server map keeps them all (an
+  // empty list can mean "not loaded" — never prune blind).
+  hooks.pruneDeletedPageIds?.(
+    tombstonesStillNeeded(deletedPageIds, [...serverMap.values()].map(serverStateOf)),
+  );
 
   savePushedHashes(nextPushed);
   hydrationCompleted = true;

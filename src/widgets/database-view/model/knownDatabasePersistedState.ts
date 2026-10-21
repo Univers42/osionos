@@ -56,6 +56,31 @@ export function withoutDeletedPages(state: NotionState, deletedPageIds: Readonly
   return pages ? { ...state, pages } : state;
 }
 
+/** The tombstones that still protect a row: the deleted pages some server slice
+ *  still holds. Every other tombstone is confirmed gone and can be dropped.
+ *
+ *  An EMPTY server input keeps EVERY tombstone: an empty list can mean "not
+ *  loaded" (offline, a failed list request), and pruning blind would let a
+ *  deleted row come back. O(total server pages): one Set of every server page
+ *  id, no nested loops. */
+export function tombstonesStillNeeded(
+  deleted: ReadonlySet<string>,
+  serverStates: Iterable<NotionState>,
+): Set<string> {
+  const states = [...serverStates];
+  if (states.length === 0) return new Set(deleted);
+  const serverPageIds = new Set<string>();
+  for (const state of states) {
+    const pages = state.pages as Record<string, unknown> | undefined;
+    for (const pageId of Object.keys(pages ?? {})) serverPageIds.add(pageId);
+  }
+  const stillNeeded = new Set<string>();
+  for (const pageId of deleted) {
+    if (serverPageIds.has(pageId)) stillNeeded.add(pageId);
+  }
+  return stillNeeded;
+}
+
 /** Serialize a snapshot with its deletions; no deletions → the exact old format. */
 export function serializeKnownDatabaseState(
   state: NotionState,

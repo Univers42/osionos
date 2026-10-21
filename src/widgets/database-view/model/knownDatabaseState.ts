@@ -595,14 +595,34 @@ function seedSnapshot(): NotionState {
   return applyGradesSeed(applyHomeDemoSeed(applyWikiSeed(cloneState(seedState as NotionState))));
 }
 
-let seedDatabaseIdsCache: ReadonlySet<string> | null = null;
+let seedIdsCache: { databases: ReadonlySet<string>; pages: ReadonlySet<string> } | null = null;
 
 /** The ids of every code-shipped seed database (the JSON seed + the wiki/home/
- *  grades appliers). Anything NOT in this set is a user-created database that
- *  syncs to the server; the seeds regenerate from code, so they stay local. */
+ *  grades appliers) and of every page it ships. Anything NOT in the database
+ *  set is a user-created database that syncs to the server; the seeds
+ *  regenerate from code, so they stay local. Cached: the seed snapshot is a
+ *  heavy structuredClone. */
+function seedIds(): { databases: ReadonlySet<string>; pages: ReadonlySet<string> } {
+  if (!seedIdsCache) {
+    const seed = seedSnapshot();
+    seedIdsCache = {
+      databases: new Set(Object.keys(seed.databases)),
+      pages: new Set(Object.keys(seed.pages)),
+    };
+  }
+  return seedIdsCache;
+}
+
 function seedDatabaseIds(): ReadonlySet<string> {
-  if (!seedDatabaseIdsCache) seedDatabaseIdsCache = new Set(Object.keys(seedSnapshot().databases));
-  return seedDatabaseIdsCache;
+  return seedIds().databases;
+}
+
+/** The pages the code seed still ships. The seed merge fills every page the
+ *  snapshot lacks, so a deleted seed row would come back unless it stays
+ *  tombstoned — and the server never holds seed pages, so it can never
+ *  confirm their death. */
+function seedPageIds(): ReadonlySet<string> {
+  return seedIds().pages;
 }
 
 /** After a server pull merges into the store, nudge every mounted object-database
@@ -628,10 +648,28 @@ function reconcileObjectDatabaseRegistry(userDbKeys: string[]): void {
   if (entries.length) useDatabaseStore.getState().ensureRegistered(entries);
 }
 
+/** Drop the tombstones the server no longer needs: the deleted row is gone
+ *  from every server slice, so the server agrees it is dead and the tombstone
+ *  is dead weight (it would pile up in localStorage for every deletion the
+ *  user ever made). The code seed is the one exception — it fills every page
+ *  the snapshot lacks and the server never holds seed pages — so a seed row's
+ *  tombstone stays until the seed itself drops that page. */
+function pruneDeletedPageIds(stillNeeded: ReadonlySet<string>): void {
+  const kept = new Set(stillNeeded);
+  for (const pageId of seedPageIds()) {
+    if (deletedPageIds.has(pageId)) kept.add(pageId);
+  }
+  if (kept.size === deletedPageIds.size) return; // nothing to drop
+  deletedPageIds = kept;
+  // Re-persist: the stored snapshot must shrink together with the tombstones.
+  persistKnownDatabaseState(useKnownDatabaseStateStore.getState().state);
+}
+
 const objectDatabaseSyncHooks: ObjectDatabaseSyncHooks = {
   getSeedIds: seedDatabaseIds,
   getLiveState: () => useKnownDatabaseStateStore.getState().state,
   getDeletedPageIds: () => deletedPageIds,
+  pruneDeletedPageIds,
   applyMerged: (state) => useKnownDatabaseStateStore.getState().replaceState(state),
   notifyReloaded: notifyObjectDatabaseAdaptersReloaded,
   reconcileRegistry: reconcileObjectDatabaseRegistry,
