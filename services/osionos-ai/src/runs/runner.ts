@@ -3,8 +3,8 @@ import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { config } from '../config.ts';
 import { costMicroUsd } from '../gateway/platform.ts';
-import type { PlatformModelEntry } from '../gateway/platform.ts';
-import { reserve, settle } from '../budget.ts';
+import { reserveTarget, settleTarget } from '../gateway/resolve.ts';
+import type { ResolvedTarget } from '../gateway/resolve.ts';
 import { checkRunRateLimit } from '../rateLimit.ts';
 import { appendMessage, touchConversation } from '../conversations/repo.ts';
 import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
@@ -14,6 +14,7 @@ import {
 	buildUserTurn,
 	estimateMicroUsd,
 	historyChars,
+	historyMessages,
 	loadHistory,
 	loadPageContext,
 	quotedPageChars,
@@ -27,6 +28,9 @@ import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
  * The order is the one that matters for the money: the budget is reserved
  * BEFORE the upstream is called, and settled after it. A run that never reaches
  * the upstream costs nothing.
+ *
+ * The runner knows nothing about connections: it is given a target, and the
+ * target says whether the platform pays for the call.
  */
 
 /** A run that runs longer than this is stale: the sweep gives it up. */
@@ -47,10 +51,11 @@ export interface StartRunInput {
 	ownerId: string;
 	/** The pages the client quotes: at most three, and only the ones it may read. */
 	pageIds?: readonly string[];
-	/** The workspaces the caller is a member of: the gate of the pages. */
+	/** The workspaces of the caller: the gate of the pages. */
 	memberWorkspaceIds?: readonly string[];
 	text: string;
-	model: PlatformModelEntry;
+	/** Where the model is called, and who pays for it. */
+	target: ResolvedTarget;
 	emit: (event: RunEvent) => void;
 }
 
@@ -78,9 +83,9 @@ const PREFLIGHT_ERRORS: Record<string, number> = {
  * re-attaches to its stream instead of calling the model a second time.
  */
 export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
-	const { db, redis, runId, conversationId, ownerId, text, model } = input;
+	const { db, redis, runId, conversationId, ownerId, text, target } = input;
 
-	const inserted = await insertRun(db, { runId, conversationId, ownerId, model: model.id });
+	const inserted = await insertRun(db, { runId, conversationId, ownerId, model: target.modelId });
 	if (inserted.kind === 'conflict') {
 		// The conversation already has a running run: the partial unique index
 		// (ai_runs_one_running_per_conversation) says so, with no race.
@@ -120,18 +125,14 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		pageIds: input.pageIds ?? [],
 	});
 	const day = today();
-	const amount = estimateMicroUsd(model, {
+	const amount = estimateMicroUsd(target.pricing, {
 		text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(context.pages),
 	});
-	const reserved = await reserve(db, {
-		userId: ownerId,
-		day,
-		amount,
-		userLimit: config.userDailyMicroUsd,
-		platformLimit: config.platformDailyMicroUsd,
-	});
+	// A run on a connection of the user is not ours to pay for: the provider
+	// bills the user, and our ledger stays out of it.
+	const reserved = await reserveTarget(db, target, { userId: ownerId, day, amount });
 	if (!reserved) {
 		await markRun(db, runId, 'failed', 'budget_exhausted');
 		return { kind: 'refused', status: 402, code: 'budget_exhausted' };
@@ -147,7 +148,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		runId,
 	});
 	if (!userMessage) {
-		await settle(db, { userId: ownerId, day, reserved: amount, actual: 0 });
+		await settleTarget(db, target, { userId: ownerId, day, reserved: amount, actual: 0 });
 		await markRun(db, runId, 'failed', 'not_found');
 		return { kind: 'refused', status: 404, code: 'not_found' };
 	}
@@ -190,7 +191,7 @@ async function runUpstream(
 		conversationId,
 		ownerId,
 		text,
-		model,
+		target,
 		day,
 		reserved,
 		history,
@@ -217,20 +218,18 @@ async function runUpstream(
 		await emit('run.started', {
 			runId,
 			conversationId,
-			model: model.id,
+			model: target.modelId,
 			userMessageId,
 			skippedPageIds: [...skippedPageIds],
 		});
 
 		const messages: ModelMessage[] = [
-			...history
-				.filter((message) => message.role === 'user' || message.role === 'assistant')
-				.map((message) => ({ role: message.role as 'user' | 'assistant', content: message.text })),
+			...historyMessages(history),
 			{ role: 'user', content: buildUserTurn(text, pages) },
 		];
 
 		const outcome = await pumpUpstream({
-			model,
+			model: target.model,
 			messages,
 			controller,
 			onText: async (delta) => {
@@ -248,7 +247,7 @@ async function runUpstream(
 
 		const inputTokens = usage?.inputTokens ?? 0;
 		const outputTokens = usage?.outputTokens ?? 0;
-		const cost = costMicroUsd(model, { inputTokens, outputTokens });
+		const cost = costMicroUsd(target.pricing, { inputTokens, outputTokens });
 		await emit('usage', { inputTokens, outputTokens, costMicroUsd: cost });
 
 		const assistant = await appendMessage(db, {
@@ -258,7 +257,7 @@ async function runUpstream(
 			parts: reasoning
 				? [{ type: 'text', text: answer }, { type: 'reasoning', text: reasoning }]
 				: [{ type: 'text', text: answer }],
-			model: model.id,
+			model: target.modelId,
 			runId,
 			usage: { inputTokens, outputTokens, costMicroUsd: cost },
 		});
@@ -268,19 +267,23 @@ async function runUpstream(
 			outputTokens,
 			costMicroUsd: cost,
 		});
-		if (changed) await settle(db, { userId: ownerId, day, reserved, actual: cost });
+		if (changed) {
+			await settleTarget(db, target, { userId: ownerId, day, reserved, actual: cost });
+		}
 
 		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
 	} catch (error) {
 		const code = abortCode(controller.signal) ?? 'upstream_error';
-		const cost = costMicroUsd(model, {
+		const cost = costMicroUsd(target.pricing, {
 			inputTokens: usage?.inputTokens ?? 0,
 			outputTokens: usage?.outputTokens ?? 0,
 		});
 		await emit('error', { code, message: failureMessage(code, error) });
 		const status: RunStatus = code === 'cancelled' ? 'cancelled' : 'failed';
 		const changed = await markRun(db, runId, status, code);
-		if (changed) await settle(db, { userId: ownerId, day, reserved, actual: cost });
+		if (changed) {
+			await settleTarget(db, target, { userId: ownerId, day, reserved, actual: cost });
+		}
 	} finally {
 		runStore.releaseRun(runId);
 	}

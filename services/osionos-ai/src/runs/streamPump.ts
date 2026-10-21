@@ -1,8 +1,6 @@
 import { streamText } from 'ai';
-import type { LanguageModelUsage, ModelMessage } from 'ai';
+import type { LanguageModel, LanguageModelUsage, ModelMessage } from 'ai';
 import { config } from '../config.ts';
-import { platformModel } from '../gateway/platform.ts';
-import type { PlatformModelEntry } from '../gateway/platform.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
 
 /**
@@ -54,7 +52,8 @@ function failureName(error: unknown): string {
 }
 
 export interface PumpInput {
-	model: PlatformModelEntry;
+	/** The handle of the model: the platform's, or the one of a connection. */
+	model: LanguageModel;
 	messages: ModelMessage[];
 	/** The signal of the call: the caller owns it, so it can cancel the run. */
 	controller: AbortController;
@@ -103,7 +102,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 		touch();
 
 		const result = streamText({
-			model: platformModel(model.id),
+			model,
 			system: SYSTEM_PROMPT,
 			messages,
 			maxOutputTokens: config.maxOutputTokens,

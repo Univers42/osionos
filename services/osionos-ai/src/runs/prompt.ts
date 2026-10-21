@@ -1,4 +1,5 @@
 import type { Pool, QueryResultRow } from 'pg';
+import type { ModelMessage } from 'ai';
 import { config } from '../config.ts';
 import { costMicroUsd } from '../gateway/platform.ts';
 import type { PlatformModelEntry } from '../gateway/platform.ts';
@@ -78,6 +79,16 @@ export function historyChars(history: HistoryMessage[]): number {
 	let chars = 0;
 	for (const message of history) chars += message.text.length;
 	return chars;
+}
+
+/**
+ * The messages of the history, in the shape a model call takes: the user
+ * turns and the answers, in the order they were said.
+ */
+export function historyMessages(history: readonly HistoryMessage[]): ModelMessage[] {
+	return history
+		.filter((message) => message.role === 'user' || message.role === 'assistant')
+		.map((message) => ({ role: message.role as 'user' | 'assistant', content: message.text }));
 }
 
 /** One page of the prompt: its id, its title, and its text. */

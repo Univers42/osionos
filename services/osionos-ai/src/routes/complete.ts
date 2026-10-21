@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { config } from '../config.ts';
 import { readJson, sendError, sendSseHeaders, writeSseFrame } from '../http.ts';
-import { costMicroUsd, resolveModel } from '../gateway/platform.ts';
-import { reserve, settle } from '../budget.ts';
+import { resolveTarget } from '../gateway/resolve.ts';
+import { reserveTarget, settleTarget, targetCost } from '../gateway/resolve.ts';
 import { checkRunRateLimit } from '../rateLimit.ts';
 import { findCommand, renderTemplate } from '../commands/builtins.ts';
 import type { Command } from '../commands/builtins.ts';
@@ -26,6 +26,8 @@ const completeSchema = z.object({
 	command: z.string().min(1).max(64),
 	input: z.object({ text: z.string().min(1).max(8_000) }),
 	model: z.string().min(1).optional(),
+	// The connection the completion spends: the platform one, or one of the caller's.
+	connectionId: z.string().min(1).max(64).optional(),
 });
 
 /** The selection of the editor, quoted as data. */
@@ -63,11 +65,13 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 		sendError(ctx.response, 400, 'invalid_request');
 		return 400;
 	}
-	const model = resolveModel(body.model);
-	if (!model) {
-		sendError(ctx.response, 400, 'model_not_allowed');
-		return 400;
+	// The target of the completion: the platform connection, or one of the caller's.
+	const resolved = await resolveTarget(ctx.deps.db, user, body.connectionId, body.model);
+	if (resolved.kind === 'refused') {
+		sendError(ctx.response, resolved.status, resolved.code);
+		return resolved.status;
 	}
+	const target = resolved.target;
 	const turn = completionTurn(command, body.input.text);
 
 	// The rate limit and the budget, before the upstream call: a completion
@@ -78,14 +82,8 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 		return 429;
 	}
 	const day = today();
-	const amount = estimateMicroUsd(model, { text: turn, historyChars: 0 });
-	const reserved = await reserve(ctx.deps.db, {
-		userId: user.userId,
-		day,
-		amount,
-		userLimit: config.userDailyMicroUsd,
-		platformLimit: config.platformDailyMicroUsd,
-	});
+	const amount = estimateMicroUsd(target.pricing, { text: turn, historyChars: 0 });
+	const reserved = await reserveTarget(ctx.deps.db, target, { userId: user.userId, day, amount });
 	if (!reserved) {
 		sendError(ctx.response, 402, 'budget_exhausted');
 		return 402;
@@ -104,7 +102,7 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 	let usage: { inputTokens?: number; outputTokens?: number } | undefined;
 	try {
 		const outcome = await pumpUpstream({
-			model,
+			model: target.model,
 			messages: [{ role: 'user', content: turn }],
 			controller,
 			onText: async (delta) => {
@@ -121,7 +119,7 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 		emit('usage', {
 			inputTokens,
 			outputTokens,
-			costMicroUsd: costMicroUsd(model, { inputTokens, outputTokens }),
+			costMicroUsd: targetCost(target, { inputTokens, outputTokens }),
 		});
 		// Nothing is persisted here, so there is no assistant message to point at.
 		emit('done', { runId: body.runId, assistantMessageId: null, finishReason: outcome.finishReason });
@@ -131,11 +129,11 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 	} finally {
 		ctx.response.off('close', stop);
 		// The settlement: what the upstream reported, or nothing at all.
-		const cost = costMicroUsd(model, {
+		const cost = targetCost(target, {
 			inputTokens: usage?.inputTokens ?? 0,
 			outputTokens: usage?.outputTokens ?? 0,
 		});
-		await settle(ctx.deps.db, { userId: user.userId, day, reserved: amount, actual: cost });
+		await settleTarget(ctx.deps.db, target, { userId: user.userId, day, reserved: amount, actual: cost });
 		if (!ctx.response.writableEnded && !ctx.response.destroyed) ctx.response.end();
 	}
 	return 200;

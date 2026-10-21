@@ -13,6 +13,13 @@ import { handleModels } from './routes/models.ts';
 import { handleCommands } from './routes/commands.ts';
 import { handleComplete } from './routes/complete.ts';
 import { handleRunCancel, handleRunEvents, handleRuns } from './routes/runs.ts';
+import {
+	handleConnectionDelete,
+	handleConnections,
+	handleConnectionTest,
+	handleProviders,
+} from './routes/connections.ts';
+import { handleUsage } from './routes/usage.ts';
 import { sweepStaleRuns } from './runs/runner.ts';
 import * as runStore from './runs/runStore.ts';
 import type { RouteEntry, RouteHandler } from './routes/types.ts';
@@ -51,6 +58,27 @@ const ROUTES: RouteEntry[] = [
 	},
 	{ methods: ['GET'], pattern: /^\/api\/ai\/models$/, label: '/api/ai/models', handle: handleModels },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/commands$/, label: '/api/ai/commands', handle: handleCommands },
+	{ methods: ['GET'], pattern: /^\/api\/ai\/providers$/, label: '/api/ai/providers', handle: handleProviders },
+	{ methods: ['GET'], pattern: /^\/api\/ai\/usage$/, label: '/api/ai/usage', handle: handleUsage },
+	{
+		methods: [],
+		pattern: /^\/api\/ai\/connections$/,
+		label: '/api/ai/connections',
+		handle: handleConnections,
+		anyMethod: true,
+	},
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/connections\/([^/]+)\/test$/,
+		label: '/api/ai/connections/:id/test',
+		handle: handleConnectionTest,
+	},
+	{
+		methods: ['DELETE'],
+		pattern: /^\/api\/ai\/connections\/([^/]+)$/,
+		label: '/api/ai/connections/:id',
+		handle: handleConnectionDelete,
+	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/complete$/, label: '/api/ai/complete', handle: handleComplete },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/runs$/, label: '/api/ai/runs', handle: handleRuns },
 	{
