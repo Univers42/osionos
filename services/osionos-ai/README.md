@@ -3,9 +3,11 @@
 The AI assistant of osionos: a stateless Node service, separate from the
 single-process bridge. It carries the bridge's `osionos_v1` app-session tokens
 (scripts/bridge-session-token.mjs), the workspace-access rule, conversations, and
-the runs: a run takes the user's message, calls one OpenAI-compatible upstream
+the runs: a run takes the user's message, calls an OpenAI-compatible upstream
 through the Vercel AI SDK, streams the answer over SSE, and keeps every event in
-a Redis Stream, so a client that reconnects resumes the run on any replica.
+a Redis Stream, so a client that reconnects resumes the run on any replica. The
+model may call the tools of the assistant while it answers, and the answer comes
+after them.
 
 ## Routes
 
@@ -15,7 +17,7 @@ a Redis Stream, so a client that reconnects resumes the run on any replica.
 | `POST /api/ai/conversations` | yes | 201 with the row, 404 when the workspace is not accessible |
 | `GET /api/ai/conversations?workspaceId=<uuid>` | yes | the caller's own conversations, newest first |
 | `GET /api/ai/conversations/:id/messages` | yes | 404 unless the caller owns the conversation |
-| `POST /api/ai/runs` | yes | SSE: `run.started`, `text.delta`, `reasoning.delta`, `usage`, `done` or `error` |
+| `POST /api/ai/runs` | yes | SSE: `run.started`, `citation`, `tool.called`, `tool.result`, `text.delta`, `reasoning.delta`, `usage`, `done` or `error` |
 | `GET /api/ai/runs/:id/events` | yes | SSE: the events after `Last-Event-ID`, then the live ones |
 | `POST /api/ai/runs/:id/cancel` | yes | 202; the run stops wherever it runs |
 | `GET /api/ai/models` | yes | `{ models: [{ id, label, default }] }`, never a price |
@@ -83,6 +85,51 @@ the failure is logged once.
 The search needs the embedding service of the deployment — the same one the
 indexer writes its vectors with (`OSIONOS_AI_EMBED_URL`). Without it the
 service has no search: the runs go on without sources.
+
+## The tools of the assistant
+
+The model may call tools. There are two of them, and both READ: `search_workspace`
+(the passages of the caller's workspaces that answer a question) and `read_page`
+(the title and the text of one page). The write tools — the ones that change a
+workspace — are not here yet: they wait for a human, and the approval that waits
+with them is a phase of its own.
+
+They live in one library (`src/tools/`), and a tool is always the same shape: a
+name, a description, a schema of arguments, and the work. The model may not call
+a tool with arguments the schema does not take.
+
+Three rules the tools carry:
+
+- **The rule of the bridge decides.** A page the caller may not read does not
+  exist for them: the tool answers "no page with that id in your workspaces",
+  and it never says why. A page of another workspace is not read either, even
+  when it is public: the tool is stricter than the app, on purpose.
+- **The workspaces are read live**, at the moment of the call, from the token
+  and from `osionos_workspace_members`: a membership that ends ends at once. A
+  run that quotes no page has the same tools as a run that quotes three.
+- **The text of a page is data, never markup.** The result of a tool is quoted
+  the way the prompt quotes a page, so a page that writes `</page>` cannot forge
+  a page of its own through a tool either.
+
+The read tools hold NO token. The token of the caller is a full-account bearer:
+it opens the bridge and it carries the workspaces of the user. A read tool has
+no use for it, so it never holds it — the write path gets its own context, and
+the token never reaches a read tool.
+
+A run is a loop: the model may call a tool, and the answer comes after the tool.
+The loop is bounded at five steps. The events of a tool are `tool.called` (the
+call of the model, with its arguments) and `tool.result` (the outcome of the
+tool). The client of today ignores the events it does not know, so the two
+arrive without breaking anything. The pages a tool found are sources of the
+answer: they are cited like the ones of the search, and the answer cites them
+the same way.
+
+A call with the wrong arguments never kills a run: the schema of a tool is
+loose on purpose, and the tool answers the model with what it needs.
+
+The reservation of a run is the cost of the WHOLE loop, not of its first call:
+a run that reserves for one call and spends five books a spend the cap never
+allowed. The ledger books the real cost, and never more than the reservation.
 
 ## The keys of Redis
 

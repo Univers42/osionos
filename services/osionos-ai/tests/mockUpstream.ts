@@ -29,6 +29,14 @@ export interface MockOptions {
 	 * This is the server that does not know `stream_options.include_usage`.
 	 */
 	neverSendUsage: boolean;
+	/**
+	 * The tool the next answer calls: the name of the tool, and the
+	 * arguments of the call.
+	 *
+	 * The call is answered once: the answer after it is the text, so the loop
+	 * of the model ends.
+	 */
+	toolCall: { name: string; arguments: Record<string, unknown> } | null;
 }
 
 const DEFAULT_OPTIONS: MockOptions = {
@@ -41,6 +49,7 @@ const DEFAULT_OPTIONS: MockOptions = {
 	authKey: 'sk-openrouter-mock-0123456789',
 	authFail: false,
 	neverSendUsage: false,
+	toolCall: null,
 };
 
 export interface MockUpstream {
@@ -93,6 +102,38 @@ function serializeChunk(content: string, last: boolean, sendUsage: boolean): str
 }
 
 /**
+ * One chunk of a tool call: the name of the tool and its arguments.
+ *
+ * The wire is the OpenAI one: the arguments travel as a string, and the
+ * provider parses them when the call is complete.
+ */
+function serializeToolCallChunk(
+	id: string,
+	name: string,
+	args: string,
+	last: boolean,
+	sendUsage: boolean,
+): string {
+	const payload = {
+		id: 'chatcmpl-mock-0001',
+		object: 'chat.completion.chunk',
+		created: 0,
+		model: 'mock-model',
+		choices: [
+			{
+				index: 0,
+				delta: last
+					? {}
+					: { tool_calls: [{ index: 0, id, type: 'function', function: { name, arguments: args } }] },
+				finish_reason: last ? 'tool_calls' : null,
+			},
+		],
+		...(last && sendUsage ? { usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 } } : {}),
+	};
+	return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
+/**
  * Whether the request asks for the usage: `stream_options.include_usage`.
  *
  * A real upstream reports the tokens of a stream only when it is asked to, and
@@ -116,6 +157,9 @@ function readBody(request: IncomingMessage): Promise<string> {
 /** The mock upstream, on a random port of the loopback. */
 export async function startMockUpstream(initial?: Partial<MockOptions>): Promise<MockUpstream> {
 	let options: MockOptions = { ...DEFAULT_OPTIONS, ...initial };
+	// The tool call that is waiting for its answer: it is asked for once, and
+	// the answer after it is the text.
+	let pendingToolCall: MockOptions['toolCall'] = null;
 	let calls = 0;
 	const texts: string[] = [];
 	const bodies: unknown[] = [];
@@ -185,9 +229,18 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 				return;
 			}
 			const chunks = chunkTexts(options.chunkCount);
-			texts.push(chunks.join(''));
 			// The usage comes only when the request asks for it.
 			const sendUsage = !options.neverSendUsage && askedForUsage(body);
+			// The tool call is answered once: the answer after it is the text.
+			const toolCall = pendingToolCall;
+			pendingToolCall = null;
+			if (toolCall) {
+				streamToolCall(response, toolCall, options, sendUsage, () => {
+					aborted += 1;
+				});
+				return;
+			}
+			texts.push(chunks.join(''));
 			streamAnswer(response, chunks, options, sendUsage, () => {
 				aborted += 1;
 			});
@@ -237,6 +290,8 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 		},
 		setOptions(next: Partial<MockOptions>): void {
 			options = { ...options, ...next };
+			// A tool call that is asked for waits for the next answer.
+			if (next.toolCall) pendingToolCall = next.toolCall;
 		},
 		async close(): Promise<void> {
 			await new Promise<void>((resolve) => {
@@ -274,6 +329,40 @@ function streamAnswer(
 	setTimeout(send, options.preDelayMs);
 	response.on('close', () => {
 		// The client went away before the end: the stream was cut.
+		if (!response.writableEnded) {
+			onAbort();
+			response.destroy();
+		}
+	});
+}
+
+/**
+ * The stream of one tool call: the call, then the end of the step.
+ *
+ * The step ends with `tool_calls`: the model asked for a tool, and the
+ * answer comes after the tool has run.
+ */
+function streamToolCall(
+	response: ServerResponse,
+	toolCall: { name: string; arguments: Record<string, unknown> },
+	options: MockOptions,
+	sendUsage: boolean,
+	onAbort: () => void,
+): void {
+	response.writeHead(200, {
+		'content-type': 'text/event-stream',
+		'cache-control': 'no-cache',
+	});
+	const id = `call_mock_${toolCall.name}`;
+	const args = JSON.stringify(toolCall.arguments);
+	const send = () => {
+		if (response.writableEnded || response.destroyed) return;
+		response.write(serializeToolCallChunk(id, toolCall.name, args, false, sendUsage));
+		response.write(serializeToolCallChunk(id, toolCall.name, args, true, sendUsage));
+		response.end('data: [DONE]\n\n');
+	};
+	setTimeout(send, options.preDelayMs);
+	response.on('close', () => {
 		if (!response.writableEnded) {
 			onAbort();
 			response.destroy();

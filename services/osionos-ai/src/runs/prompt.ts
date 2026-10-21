@@ -8,6 +8,7 @@ import { listMessages } from '../conversations/repo.ts';
 import type { AuthUser } from '../auth.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import { attributeText, quotedData, sourceBlock, SOURCE_INSTRUCTION } from './sources.ts';
+import { MAX_STEPS, TOOL_OUTPUT_CHARS } from '../tools/loop.ts';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 
 /**
@@ -240,13 +241,15 @@ export function promptCharCount({
 	historyChars,
 	pageChars = 0,
 	sourceChars = 0,
+	toolChars = 0,
 }: {
 	text: string;
 	historyChars: number;
 	pageChars?: number;
 	sourceChars?: number;
+	toolChars?: number;
 }): number {
-	return text.length + historyChars + pageChars + sourceChars + SYSTEM_PROMPT.length;
+	return text.length + historyChars + pageChars + sourceChars + toolChars + SYSTEM_PROMPT.length;
 }
 
 /**
@@ -264,10 +267,52 @@ export function estimateMicroUsd(
 		historyChars,
 		pageChars = 0,
 		sourceChars = 0,
-	}: { text: string; historyChars: number; pageChars?: number; sourceChars?: number },
+		toolChars = 0,
+	}: {
+		text: string;
+		historyChars: number;
+		pageChars?: number;
+		sourceChars?: number;
+		toolChars?: number;
+	},
 ): number {
 	const estimatedInputTokens = estimateTokens(
-		promptCharCount({ text, historyChars, pageChars, sourceChars }),
+		promptCharCount({ text, historyChars, pageChars, sourceChars, toolChars }),
 	);
 	return costMicroUsd(model, { inputTokens: estimatedInputTokens, outputTokens: config.maxOutputTokens });
+}
+
+/**
+ * The reservation of a run: the ceiling of the WHOLE loop.
+ *
+ * A run is not one call: the model may call a tool, and the answer comes
+ * after the tool. A run that reserves for one call and spends five books a
+ * spend the cap never allowed, so the reservation is the cost of every step
+ * the loop may take, each of them with the room the tools of a step may take
+ * in the prompt.
+ */
+export function estimateLoopMicroUsd(
+	model: PlatformModelEntry,
+	{
+		text,
+		historyChars,
+		pageChars = 0,
+		sourceChars = 0,
+	}: {
+		text: string;
+		historyChars: number;
+		pageChars?: number;
+		sourceChars?: number;
+	},
+): number {
+	return (
+		MAX_STEPS *
+		estimateMicroUsd(model, {
+			text,
+			historyChars,
+			pageChars,
+			sourceChars,
+			toolChars: TOOL_OUTPUT_CHARS,
+		})
+	);
 }

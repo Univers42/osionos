@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **AI Tools**: The assistant may call tools while it answers. Two of them, and both read: `search_workspace` (the passages of the caller's workspaces that answer a question) and `read_page` (the title and the text of one page). They live in one library (`services/osionos-ai/src/tools/`), and every tool has the same shape: a name, a description, a schema of arguments, and the work. The rule of the bridge decides what a tool may read (a page the caller may not read does not exist for them, and the tool never says why), the workspaces of the caller are read live at the moment of the call, and the text of a page is quoted as data — a page cannot forge a page of its own through a tool. The read tools hold no token of the caller: the token is a full-account bearer, and a read tool has no use for it. A run is a loop bounded at five steps, and the new events `tool.called` and `tool.result` say what the model asked and what the tool answered. The pages a tool found are sources of the answer, and are cited like the ones of the search.
 - **MCP Policy Tests**: Added 18 unit tests for `mcpPolicy.ts` pure functions (`canConnectApp`, `addConnection`, `removeConnection`, `connectedAppIds`) covering edge cases including undefined `approvedApps` and idempotent connection adds.
 - **Layout Tree Tests**: Added 27 unit tests for `layoutTree.ts` tree operations (`genId`, `findPane`, `collectPanes`, `updatePane`, `findOpenTab`, `activeTabOf`) covering DFS traversal, immutable updates, referential equality, and fallback chains.
 - **Page Stamp Tests**: Added 27 unit tests for `pageStamp.ts` sync-engine functions (`isPersistablePage`, `pageStamp`, `buildDesiredPages`) covering stamp determinism, field sensitivity, `CONTENT_UNLOADED` sentinel invariant, content hash caching, and outbox filtering.
@@ -15,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Responsive Layout Testing**: Added `responsiveLayout.spec.mjs` Playwright test suite to verify frontend responsiveness across desktop, tablet, and mobile viewports.
 
 ### Fixed
+- **AI Budget**: The reservation of a run is the cost of the WHOLE loop (five steps), not of its first call: a run that reserves for one call and spends five books a spend the cap never allowed. The ledger books the real cost, and never more than the reservation, so a settlement can never push the daily cap over.
 - **Mobile TopBar Overflow**: Fixed an issue where the TopBar exceeded the mobile viewport width (375px) by hiding non-essential elements (`TopBarMenu`, `SharedSpacePresenceBar`, `QuickCaptureButton`, `UpdateButton`, and the brand name) using Tailwind responsive classes (`hidden md:block`, `hidden sm:flex`).
 - **Responsive Tests Stability**: Improved the robustness of the responsive layout tests by creating an `overflowDetector` that safely ignores expected overflow from the fixed-width toggleable sidebar panel.
 
