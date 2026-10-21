@@ -17,9 +17,11 @@ after them.
 | `POST /api/ai/conversations` | yes | 201 with the row, 404 when the workspace is not accessible |
 | `GET /api/ai/conversations?workspaceId=<uuid>` | yes | the caller's own conversations, newest first |
 | `GET /api/ai/conversations/:id/messages` | yes | 404 unless the caller owns the conversation |
-| `POST /api/ai/runs` | yes | SSE: `run.started`, `citation`, `tool.called`, `tool.result`, `text.delta`, `reasoning.delta`, `usage`, `done` or `error` |
+| `POST /api/ai/runs` | yes | SSE: `run.started`, `citation`, `tool.called`, `tool.result`, `permission.asked`, `text.delta`, `reasoning.delta`, `usage`, `done` or `error` |
 | `GET /api/ai/runs/:id/events` | yes | SSE: the events after `Last-Event-ID`, then the live ones |
 | `POST /api/ai/runs/:id/cancel` | yes | 202; the run stops wherever it runs |
+| `GET /api/ai/approvals/:id` | yes | the approval of the caller: the tool, the target, the arguments, the preview |
+| `POST /api/ai/approvals/:id` | yes | `{ decision: 'approve' \| 'decline' }`; the write happens once, with the token of the request |
 | `GET /api/ai/models` | yes | `{ models: [{ id, label, default }] }`, never a price |
 | `GET /api/ai/commands?surface=editor\|chat` | yes | `{ commands: Command[] }`, the built-ins of that surface |
 | `POST /api/ai/complete` | yes | SSE: `text.delta`, `usage`, `done` or `error`, nothing persisted |
@@ -88,11 +90,10 @@ service has no search: the runs go on without sources.
 
 ## The tools of the assistant
 
-The model may call tools. There are two of them, and both READ: `search_workspace`
-(the passages of the caller's workspaces that answer a question) and `read_page`
-(the title and the text of one page). The write tools — the ones that change a
-workspace — are not here yet: they wait for a human, and the approval that waits
-with them is a phase of its own.
+The model may call tools. Two of them READ: `search_workspace` (the passages
+of the caller's workspaces that answer a question) and `read_page` (the title
+and the text of one page). Three of them WRITE: `create_page`, `rename_page`
+and `archive_page` — and a write tool never writes: it asks.
 
 They live in one library (`src/tools/`), and a tool is always the same shape: a
 name, a description, a schema of arguments, and the work. The model may not call
@@ -113,8 +114,50 @@ Three rules the tools carry:
 
 The read tools hold NO token. The token of the caller is a full-account bearer:
 it opens the bridge and it carries the workspaces of the user. A read tool has
-no use for it, so it never holds it — the write path gets its own context, and
-the token never reaches a read tool.
+no use for it, so it never holds it — and a write tool holds it neither: a
+write tool does not write. The token is used by the request that DECIDES an
+approval, and by nothing else.
+
+## The write tools, and the approvals
+
+A write tool never writes. It validates its arguments, drops the ones its
+schema does not know, stores the rest in an `ai_approvals` row (`pending`),
+emits `permission.asked`, and tells the model to stop and wait. The run ends
+right there, with the finish reason `awaiting_approval`: the run is terminal,
+and the APPROVAL ROW is what waits — so the conversation may carry on while
+the question is open.
+
+The write happens when the user decides: `POST /api/ai/approvals/:id` with
+`{decision: 'approve'}` or `{decision: 'decline'}` — nothing else in the body.
+An approval of somebody else does not exist for the caller: a 404. The claim
+is one statement (`update … where status = 'pending'`), so two decisions that
+race write ONCE, and the write goes out with the token of THAT request. The
+outcome is recorded before the continuation starts: the continuation is a NEW
+run in the same conversation, with its own reservation.
+
+Three rules the write tools carry:
+
+- **The arguments are a strict whitelist.** `visibility`, `collaborators`,
+  `properties`, the `workspaceId` of a page that exists and `archivedAt` never
+  reach the bridge, whatever the model sends: the schema drops them, and the
+  body of the bridge is built from the fields the tool owns.
+- **The archive is a stamp.** `archive_page` sends `PATCH {archivedAt}`, and
+  never a DELETE: a page can be restored. The card counts the sub-pages that
+  go with it.
+- **The content of a page is not written.** `rename_page` changes the title
+  and nothing else; the versioned append of blocks comes later.
+
+The bridge is operator configuration (`OSIONOS_AI_BRIDGE_URL`): no argument
+of a tool and no word of a user can move it, and without it the write tools
+are not registered at all — the reads keep working.
+
+The event `permission.asked` is the DATA of the card:
+
+    { approvalId, tool, verb, target: { pageId?, title, workspaceId, workspaceName },
+      args, preview: { unit, count }, provenance: { pageIds }, approvedInRun, expiresAt }
+
+`GET /api/ai/approvals/:id` answers the same thing, rebuilt from the row: the
+card survives the fifteen minutes of the event stream.
 
 A run is a loop: the model may call a tool, and the answer comes after the tool.
 The loop is bounded at five steps. The events of a tool are `tool.called` (the
@@ -223,8 +266,9 @@ needs none), `OSIONOS_AI_MAX_OUTPUT_TOKENS` (1024), `OSIONOS_AI_USER_DAILY_MICRO
 (20), `OSIONOS_AI_EMBED_URL` and `OSIONOS_AI_EMBED_MODEL`
 (`intfloat/multilingual-e5-small`) — the embedding service of the search of a
 workspace, the same one the indexer writes its vectors with; without it the
-service has no search. A missing or broken variable stops the service and names the
-variable, never its value.
+service has no search. `OSIONOS_AI_BRIDGE_URL` (the bridge of the write
+tools; a deployment in production refuses to start without it). A missing or
+broken variable stops the service and names the variable, never its value.
 
 The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_URL` and
 `OSIONOS_AI_EMBED_MODEL` (`intfloat/multilingual-e5-small`).
