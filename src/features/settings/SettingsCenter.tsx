@@ -45,6 +45,7 @@ import {
   User,
   UserPlus,
   Users,
+  Volume2,
   X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -56,7 +57,8 @@ import { LazyAutomationManager } from '@/features/automations/ui/LazyAutomationM
 import { PeopleDatabasePanel } from '@/features/settings/people/PeopleDatabasePanel';
 import { McpPanel } from '@/features/settings/mcp/McpPanel';
 import { AiConnectionsPanel } from '@/features/settings/ai/AiConnectionsPanel';
-import { AI_CONNECTIONS_TAB, type AppSettingsTab } from '@/features/settings/appSettingsTab';
+import { ACCESSIBILITY_VOICE_TAB, AI_CONNECTIONS_TAB, type AppSettingsTab } from '@/features/settings/appSettingsTab';
+import { VoiceSettingsPanel } from '@/features/settings/voice/VoiceSettingsPanel';
 import { usePeopleCounts } from '@/features/settings/people/usePeopleCounts';
 import type { PeopleSourceKey } from '@/features/settings/people/peopleModel';
 import { ImageAvatarUpload } from '@/features/settings/profile/ImageAvatarUpload';
@@ -135,6 +137,7 @@ const tabGroups: Array<{ label: string; tabs: TabItem[] }> = [
       { id: 'import', label: 'Import', icon: <Import size={16} /> },
       { id: 'page_settings', label: 'Page settings', icon: <FileText size={16} /> },
       { id: 'shortcuts', label: 'Keyboard shortcuts', icon: <Keyboard size={16} /> },
+      { id: ACCESSIBILITY_VOICE_TAB, label: 'Accessibility & voice', icon: <Volume2 size={16} /> },
     ],
   },
   {
@@ -170,6 +173,7 @@ const prompts: Record<AppSettingsTab, { title: string; subtitle: string }> = {
   import: { title: 'Import', subtitle: 'Import data from other apps and files into osionos' },
   page_settings: { title: 'Page settings', subtitle: 'Actions, style switches, analytics and connections from settings_page.md' },
   shortcuts: { title: 'Keyboard shortcuts', subtitle: 'Rebind, add, toggle, and export keyboard shortcuts — each is an editable automation' },
+  [ACCESSIBILITY_VOICE_TAB]: { title: 'Accessibility & voice', subtitle: 'Dictate what you say, and hear an answer read aloud — on your device by default' },
   ai: { title: 'osionos AI', subtitle: 'Search everywhere, automate meeting notes and configure AI features' },
   [AI_CONNECTIONS_TAB]: { title: 'AI connections', subtitle: 'Bring your own model access — your keys stay on the server' },
   mcp: { title: 'osionos MCP', subtitle: 'Connect osionos to your AI tools to summarize, search, and move faster' },
@@ -575,6 +579,7 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
               {activeTab === 'page_settings' && <PageSettingsPanel />}
               {activeTab === 'shortcuts' && <LazyAutomationManager />}
               {activeTab === 'ai' && <AiPanel />}
+              {activeTab === ACCESSIBILITY_VOICE_TAB && <VoiceSettingsPanel />}
               {activeTab === AI_CONNECTIONS_TAB && <AiConnectionsPanel />}
               {activeTab === 'mcp' && <McpPanel />}
               {activeTab === 'public_pages' && <PublicPagesPanel />}

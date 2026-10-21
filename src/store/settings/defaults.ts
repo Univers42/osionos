@@ -18,6 +18,7 @@ import type {
   EmailRecord,
   NotificationSettings,
   UserPreferences,
+  VoiceSettings,
   WorkspaceMember,
   WorkspaceSettings,
 } from './types';
@@ -84,6 +85,18 @@ export function defaultPreferences(userId: string): UserPreferences {
     createdAt: timestamp,
     updatedAt: timestamp,
     removedAt: null,
+  };
+}
+
+/** The voice settings, as they are before the user touches them. */
+export function defaultVoiceSettings(): VoiceSettings {
+  return {
+    dictationLanguage: 'auto',
+    readAloudVoiceURI: '',
+    readAloudRate: 1,
+    // The online voices are OFF: the text read aloud stays on the device.
+    allowOnlineVoices: false,
+    updatedAt: nowIso(),
   };
 }
 

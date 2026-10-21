@@ -220,6 +220,24 @@ export interface AiSettings {
   updatedAt: string;
 }
 
+/**
+ * The voice settings of a user: the dictation and the read-aloud.
+ *
+ * `allowOnlineVoices` is OFF by default: a voice that is not local sends the
+ * text that is read aloud to the browser's vendor.
+ */
+export interface VoiceSettings {
+  /** The language of the dictation: `auto` or a language code. */
+  dictationLanguage: string;
+  /** The voice of the read-aloud: the URI of a voice of the browser. */
+  readAloudVoiceURI: string;
+  /** The rate of the read-aloud. */
+  readAloudRate: number;
+  /** The voices that are not local: OFF until the user says otherwise. */
+  allowOnlineVoices: boolean;
+  updatedAt: string;
+}
+
 export type McpAllowedTool = 'status' | 'search' | 'read' | 'create' | 'update' | 'archive';
 
 // How members are allowed to connect external AI apps through osionos MCP.

@@ -35,6 +35,7 @@ import type {
   SlashMediaPickerCommand,
   SlashTurnIntoCommand,
   SlashWhiteboardCommand,
+  SlashDictateCommand,
 } from "@/features/slash-commands/model/types";
 
 type SelectableSlashCommand = Exclude<SlashCommand, SlashMediaPickerCommand>;
@@ -55,7 +56,7 @@ interface SlashCommandMenuProps {
   position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (
-    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand | SlashAiCommand,
+    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand | SlashAiCommand | SlashDictateCommand,
   ) => void;
   onMediaSelect: (kind: MediaBlockType, value: string) => void;
   onClose: () => void;

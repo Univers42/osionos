@@ -266,12 +266,17 @@ test("the AI group of the slash menu appears only when the service is configured
   assert.deepEqual(aiSlashCommands(false), [], "no service, no AI action");
 
   const withAi = aiSlashCommands(true);
-  assert.equal(withAi.length, 10, "one entry per editor command of the service");
+  assert.equal(withAi.length, 11, "one entry per editor command of the service, and the dictation");
+  const commands = withAi.filter((entry) => entry.kind === "ai");
   assert.deepEqual(
-    withAi.map((entry) => entry.command),
+    commands.map((entry) => entry.command),
     ["ask", "summarize", "continue", "improve", "fix", "shorter", "longer", "translate", "action-items", "explain"],
   );
-  assert.ok(withAi.every((entry) => entry.kind === "ai" && entry.section === "ai"));
+  // The dictation is NOT a command of the service: it writes at the caret.
+  const dictate = withAi.find((entry) => entry.kind === "dictate");
+  assert.ok(dictate, "the dictation is in the group");
+  assert.equal(dictate.label, "Dictate");
+  assert.ok(withAi.every((entry) => entry.section === "ai"));
   assert.deepEqual(
     withAi.map((entry) => entry.label),
     [
@@ -284,6 +289,7 @@ test("the AI group of the slash menu appears only when the service is configured
       "Make longer",
       "Translate",
       "Action items",
+      "Dictate",
       "Explain",
     ],
   );

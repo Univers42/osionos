@@ -25,5 +25,6 @@ export * from './useBillingStore';
 export * from './useSettingsAuditStore';
 export * from './useAiSettingsStore';
 export * from './useMcpSettingsStore';
+export * from './useVoiceSettingsStore';
 export * from './useTeamspacesStore';
 export * from './types';
