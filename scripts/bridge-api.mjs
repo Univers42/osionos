@@ -444,7 +444,8 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 	return { token: `osionos_v1.${encodedPayload}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
 }
 
-export function verifyAppSessionToken(token, config, now = Date.now()) {
+export function verifyAppSessionToken(token, config, now = undefined) {
+	const resolvedNow = now ?? config?.sessionCutoffs?.now?.() ?? Date.now();
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const [version, encodedPayload, signature, extra] = safeText(token, 4096).split('.');
 	if (version !== APP_SESSION_TOKEN_VERSION || !encodedPayload || !signature || extra !== undefined) {
@@ -472,7 +473,7 @@ export function verifyAppSessionToken(token, config, now = Date.now()) {
 		throw Object.assign(new Error('App session token subject is invalid.'), { status: 401 });
 	}
 	const exp = Number(payload.exp);
-	if (!Number.isFinite(exp) || exp <= Math.floor(now / 1000)) {
+	if (!Number.isFinite(exp) || exp <= Math.floor(resolvedNow / 1000)) {
 		throw Object.assign(new Error('App session token has expired.'), { status: 401 });
 	}
 	assertSessionNotCutOff(config.sessionCutoffs, String(payload.sub).toLowerCase(), tokenIssuedAtMs(payload));
