@@ -628,6 +628,14 @@ function postgrestQuery(params) {
 }
 
 export function pageRowToEntry(row) {
+	// The version of the page's CONTENT, as the client PATCHes against it. Absent while
+	// the database has no version column (the migration ships separately): every select
+	// that feeds this mapper and carries content reads '*' (fetchPageRow, the search, the
+	// create's representation), so the column comes for free where it exists and is
+	// simply missing where it does not. The only select that names its columns is
+	// PAGE_LIST_SELECT — the metadata-only bulk hydrate, which carries no content and so
+	// has no version to give (a base without content cannot merge).
+	const contentVersion = pageVersionOf(row);
 	return {
 		_id: row.id,
 		title: typeof row.title === 'string' && row.title ? row.title : 'Untitled',
@@ -656,6 +664,7 @@ export function pageRowToEntry(row) {
 		isDefaultTemplate: row.is_default_template === true,
 		templateSurface: row.template_surface === 'profile' || row.template_surface === 'marketplace-app' ? row.template_surface : undefined,
 		recurrence: safeRecurrence(row.recurrence),
+		...(contentVersion === null ? {} : { contentVersion }),
 	};
 }
 
@@ -3375,7 +3384,11 @@ function parseBaseVersion(payload) {
 
 /** The row's version, as the answer carries it (null while the column is not there yet). */
 function pageVersionOf(row) {
-	const version = Number(row?.version);
+	// A row without the column has no `version` key at all, and a row whose column is
+	// NULL has one — neither is a version: `Number(null)` is 0, and 0 would look like
+	// "the first version" to every caller.
+	if (row?.version === null || row?.version === undefined) return null;
+	const version = Number(row.version);
 	return Number.isSafeInteger(version) && version >= 0 ? version : null;
 }
 
