@@ -27,7 +27,14 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 echo "[test] network $NETWORK"
-docker network create "$NETWORK" >/dev/null
+# Docker's default address pool can be exhausted on a busy machine (every
+# stack takes a block of it). Then the harness asks for a subnet of its own:
+# the last two bytes come from the pid, so two runs never share one.
+if ! docker network create "$NETWORK" >/dev/null 2>&1; then
+	SUBNET="172.16.$(( $$ % 250 + 1 )).0/24"
+	echo "[test] the address pool is full: the network takes $SUBNET"
+	docker network create --subnet "$SUBNET" "$NETWORK" >/dev/null
+fi
 docker run -d --name "$PG_CONTAINER" --network "$NETWORK" --network-alias pg \
 	-e POSTGRES_PASSWORD=ai_test_password \
 	-e POSTGRES_USER=postgres \

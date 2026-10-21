@@ -16,6 +16,10 @@ export interface MockOptions {
 	chunkGapMs: number;
 	/** The upstream answers with an error instead of the stream. */
 	fail: boolean;
+	/** The models the list of /models answers with. */
+	models: string[];
+	/** The status of the answer of /models: 200, or a 3xx to redirect. */
+	modelsStatus: number;
 }
 
 const DEFAULT_OPTIONS: MockOptions = {
@@ -23,6 +27,8 @@ const DEFAULT_OPTIONS: MockOptions = {
 	chunkCount: 4,
 	chunkGapMs: 0,
 	fail: false,
+	models: ['mock-model', 'mock-small'],
+	modelsStatus: 200,
 };
 
 export interface MockUpstream {
@@ -36,8 +42,14 @@ export interface MockUpstream {
 	readonly bodies: unknown[];
 	/** The number of streams the client cut before the end. */
 	readonly aborted: number;
+	/** The Authorization header of every request, in the order of the calls. */
+	readonly authorizations: string[];
+	/** The number of calls of the list of the models. */
+	readonly modelsCalls: number;
 	/** The body of the last request: the prompt the service sent. */
 	lastBody(): unknown;
+	/** The Authorization header of the last request. */
+	lastAuthorization(): string;
 	setOptions(next: Partial<MockOptions>): void;
 	close(): Promise<void>;
 }
@@ -78,15 +90,37 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 	let calls = 0;
 	const texts: string[] = [];
 	const bodies: unknown[] = [];
+	const authorizations: string[] = [];
 	let aborted = 0;
+	let modelsCalls = 0;
 
 	const server = createServer((request, response) => {
-		if (!request.url?.endsWith('/chat/completions')) {
+		const url = request.url ?? '';
+		if (url.endsWith('/models')) {
+			// The list of the models: what a connection is tested against.
+			modelsCalls += 1;
+			authorizations.push(String(request.headers.authorization ?? ''));
+			if (options.modelsStatus >= 300 && options.modelsStatus < 400) {
+				response.writeHead(options.modelsStatus, { location: 'https://elsewhere.example/v1/models' });
+				response.end();
+				return;
+			}
+			response.writeHead(options.modelsStatus, { 'content-type': 'application/json' });
+			response.end(
+				JSON.stringify({
+					object: 'list',
+					data: options.models.map((id) => ({ id, object: 'model', owned_by: 'mock' })),
+				}),
+			);
+			return;
+		}
+		if (!url.endsWith('/chat/completions')) {
 			response.writeHead(404, { 'content-type': 'application/json' });
 			response.end(JSON.stringify({ error: { message: 'not found' } }));
 			return;
 		}
 		calls += 1;
+		authorizations.push(String(request.headers.authorization ?? ''));
 		void readBody(request).then((raw) => {
 			try {
 				bodies.push(JSON.parse(raw));
@@ -126,8 +160,17 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 		get aborted(): number {
 			return aborted;
 		},
+		get authorizations(): string[] {
+			return authorizations;
+		},
+		get modelsCalls(): number {
+			return modelsCalls;
+		},
 		lastBody(): unknown {
 			return bodies[bodies.length - 1];
+		},
+		lastAuthorization(): string {
+			return authorizations[authorizations.length - 1] ?? '';
 		},
 		setOptions(next: Partial<MockOptions>): void {
 			options = { ...options, ...next };

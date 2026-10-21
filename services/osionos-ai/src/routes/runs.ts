@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { ServerResponse } from 'node:http';
 import { readJson, sendError, sendJson, sendSseHeaders, writeSseFrame, writeSsePing } from '../http.ts';
-import { resolveModel } from '../gateway/platform.ts';
+import { resolveTarget } from '../gateway/resolve.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
 import { getOwnedRun } from '../runs/repo.ts';
 import { startRun } from '../runs/runner.ts';
@@ -22,6 +22,8 @@ const startRunSchema = z.object({
 	conversationId: z.string().regex(UUID, 'conversationId must be a uuid'),
 	text: z.string().min(1).max(32_000),
 	model: z.string().min(1).optional(),
+	// The connection the run spends: the platform one, or one of the caller's.
+	connectionId: z.string().min(1).max(64).optional(),
 	context: z
 		.object({
 			// At most three pages: the prompt carries them, and the prompt has a size.
@@ -75,10 +77,11 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 	const user = requireUser(ctx);
 	if (!user) return 401;
 	const body = await readJson(ctx.request, startRunSchema);
-	const model = resolveModel(body.model);
-	if (!model) {
-		sendError(ctx.response, 400, 'model_not_allowed');
-		return 400;
+	// The target of the run: the platform connection, or one of the caller's.
+	const resolved = await resolveTarget(ctx.deps.db, user, body.connectionId, body.model);
+	if (resolved.kind === 'refused') {
+		sendError(ctx.response, resolved.status, resolved.code);
+		return resolved.status;
 	}
 	const conversation = await getOwnedConversation(ctx.deps.db, { id: body.conversationId, ownerId: user.userId });
 	if (!conversation) {
@@ -96,7 +99,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		conversationId: body.conversationId,
 		ownerId: user.userId,
 		text: body.text,
-		model,
+		target: resolved.target,
 		pageIds,
 		memberWorkspaceIds: workspaces,
 		emit: (event) => writeSseFrame(ctx.response, event),
