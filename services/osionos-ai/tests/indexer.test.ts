@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
-import { Pool } from 'pg';
+import { Client, Pool } from 'pg';
 import { Embedder } from '../src/indexer/embedder.ts';
 import { IndexerWorker } from '../src/indexer/worker.ts';
 import { startMockEmbedder } from './mockEmbed.ts';
@@ -190,6 +190,61 @@ describe('the indexer', { skip: hasRag ? false : 'the RAG migration was not appl
 		assert.equal(line?.embedded, 3);
 		assert.equal(typeof line?.ms, 'number');
 		assert.ok(!JSON.stringify(line).includes('the body of the first section'));
+	});
+
+	it('takes the permissions of the page under a row lock: a change during the indexing reaches the new chunks', async () => {
+		const worker = newWorker();
+		const pageId = await insertPage({
+			title: 'Race',
+			visibility: 'shared',
+			content: [{ id: 'b1', type: 'paragraph', content: 'The text of the page.' }],
+		});
+
+		// The service holds its answer: the worker is inside the embedding of
+		// the page, and it waits there.
+		mock.closeGate();
+		const arrivedBefore = mock.arrived;
+		const tick = worker.tick();
+		try {
+			await waitFor(() => mock.arrived > arrivedBefore);
+
+			// Another connection makes the page private WHILE the worker embeds
+			// it. The UPDATE must not wait for the worker: the row of the page
+			// is not locked yet.
+			const other = new Client({ connectionString: DATABASE_URL });
+			other.on('error', () => undefined);
+			await other.connect();
+			try {
+				const outcome = await Promise.race([
+					other
+						.query("update public.osionos_pages set visibility = 'private' where id = $1", [
+							pageId,
+						])
+						.then(
+							() => 'committed',
+							() => 'failed',
+						),
+					new Promise((resolve) => setTimeout(() => resolve('still waiting'), 5_000)),
+				]);
+				// The gate is still closed: the UPDATE did not wait for the
+				// worker, it went through.
+				assert.equal(outcome, 'committed', 'the UPDATE committed while the gate was closed');
+			} finally {
+				await other.end().catch(() => undefined);
+			}
+		} finally {
+			mock.openGate();
+		}
+		await tick;
+
+		// The chunks of the page carry the NEW visibility: the worker took the
+		// ACL of the page under a row lock, just before it wrote them.
+		const chunks = await chunksOf(pageId);
+		assert.equal(chunks.length, 1);
+		for (const chunk of chunks) {
+			assert.equal(chunk.visibility, 'private');
+		}
+		assert.equal(await queueRow(pageId), null);
 	});
 
 	it('normalizes the visibility and the collaborators the way the trigger does', async () => {

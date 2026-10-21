@@ -96,6 +96,14 @@ queue ROW is not held while a page is indexed, so an edit that lands in the
 meantime bumps `dirty_at`, the last delete leaves the row alone, and the page
 is indexed again.
 
+The permissions of the page are read AGAIN, under a row lock (`FOR SHARE`),
+just before its chunks are written. The queue does not re-index a page whose
+visibility only changed, so a page made private while it was being embedded
+must not be written back with the old visibility: the copy that answers a
+search has to be the one the page has now. An update that comes later waits
+for the write, and its trigger then puts the new permissions on the new
+chunks.
+
 A failure (the embedding service is down, a page is broken) counts an attempt
 and pushes the next try: 2, 4, 8… seconds, ten minutes at most. After ten
 attempts the page is left alone, and logged once.

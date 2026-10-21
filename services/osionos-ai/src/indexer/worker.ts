@@ -19,13 +19,17 @@
  * page takes the latency of the embedding service for one page (a batch of
  * thirty-two texts, under a second on a local model). A slow service slows the
  * indexing of every page behind it.
+ *
+ * The page itself is indexed by indexPage.ts, and the statements are in
+ * sql.ts: this file is the loop that claims the queue and the failures.
  */
 
 import { Client } from 'pg';
-import type { Pool, PoolClient, QueryResultRow } from 'pg';
-import { chunkPage } from './chunker.ts';
-import type { PageChunk } from './chunker.ts';
+import type { Pool } from 'pg';
+import { indexPage } from './indexPage.ts';
 import type { Embedder } from './embedder.ts';
+import { CLAIM_SQL, FAILURE_SQL } from './sql.ts';
+import type { QueueRow } from './sql.ts';
 
 /** The configuration of the worker. */
 export interface IndexerWorkerOptions {
@@ -52,139 +56,6 @@ export interface IndexerWorkerOptions {
 	/** The log: one line per page, never the content of a page. */
 	log?: (entry: Record<string, unknown>) => void;
 }
-
-/** A row of the queue: the page to index, and when it was dirtied. */
-interface QueueRow extends QueryResultRow {
-	page_id: string;
-	workspace_id: string;
-	/**
-	 * The moment the page was dirtied, in seconds since the epoch.
-	 *
-	 * It is NOT a date: Postgres keeps the microseconds of a timestamp, and
-	 * the driver reads a date with the milliseconds only. The epoch is a
-	 * number, so it is exact — and the last delete compares what it was
-	 * claimed with.
-	 */
-	dirty_epoch: string;
-}
-
-/** The page to index: its text, and the ACL that is copied on its chunks. */
-interface PageRow extends QueryResultRow {
-	id: string;
-	title: string | null;
-	content: unknown;
-	workspace_id: string;
-	owner_id: string | null;
-	visibility: string | null;
-	collaborators: unknown;
-	archived_at: Date | null;
-}
-
-/** The chunk that is already in the index: its hash and its vector. */
-interface ExistingChunk extends QueryResultRow {
-	ord: number;
-	content_hash: string;
-	embedding: string;
-}
-
-/**
- * The claim: the pages that need indexing, the oldest first.
- *
- * The ten seconds of the debounce are a parameter, so the tests do not have to
- * wait for them; the default is the ten seconds of the migration.
- *
- * FOR UPDATE SKIP LOCKED keeps two replicas from waiting for each other: the
- * second one takes the next rows. The lock is released as soon as the claim
- * is over — the page is taken by its own advisory lock instead.
- */
-const CLAIM_SQL = `
-select page_id, workspace_id, extract(epoch from dirty_at) as dirty_epoch
-  from public.ai_index_queue
- where dirty_at < now() - make_interval(secs => $1)
-   and attempts < $2
- order by dirty_at
- limit $3
- for update skip locked`;
-
-/**
- * The page: its title, its blocks, and the ACL its chunks carry.
- */
-const PAGE_SQL = `
-select id, title, content, workspace_id, owner_id, visibility, collaborators, archived_at
-  from public.osionos_pages
- where id = $1`;
-
-/**
- * The chunks of the page that are already in the index: their hash and their
- * vector. The hash is the hex of the bytea, the vector the text of the
- * halfvec: both are read as text, so the worker needs no pgvector type.
- */
-const EXISTING_SQL = `
-select ord, encode(content_hash, 'hex') as content_hash, embedding::text as embedding
-  from public.ai_chunks
- where source_kind = 'page' and source_id = $1`;
-
-/**
- * The chunks of the page, under ANY workspace: a page that moved workspace
- * must not keep its chunks in the one it left.
- */
-const DELETE_CHUNKS_SQL = `
-delete from public.ai_chunks
- where source_kind = 'page' and source_id = $1`;
-
-/**
- * One chunk. The ACL columns are NOT copied by hand: the visibility and the
- * collaborators go through the very functions the ACL trigger uses
- * (ai_page_visibility and ai_collaborator_ids), so the copy is exactly what
- * the trigger writes.
- */
-const INSERT_SQL = `
-insert into public.ai_chunks (
-	workspace_id, source_kind, source_id, block_id, ord, title, heading_path,
-	content, content_hash, owner_id, visibility, collaborator_ids, embedding, embedding_model
-) values (
-	$1, 'page', $2, $3, $4, $5, $6, $7, $8, $9,
-	public.ai_page_visibility($10), public.ai_collaborator_ids($11), $12::halfvec, $13
-)`;
-
-/**
- * The queue row, gone — but only if it is still the row that was claimed.
- *
- * The dirty_at condition is the whole point: when the page was edited while
- * it was being indexed, the row carries another dirty_at, the delete touches
- * nothing, and the page is indexed again.
- *
- * The moment is compared as an epoch, not as a date: a date would come back
- * from the driver with the milliseconds only, and the microseconds of the
- * row would never match.
- */
-const DELETE_QUEUE_SQL = `
-delete from public.ai_index_queue
- where page_id = $1 and extract(epoch from dirty_at) = $2::numeric`;
-
-/**
- * The failure: one more attempt, the reason, and the next try.
- *
- * The delay doubles with the attempts, up to ten minutes: 2, 4, 8… seconds.
- * The reason is the message of the error and nothing else, and it is cut at
- * 300 characters.
- */
-const FAILURE_SQL = `
-update public.ai_index_queue
-   set attempts = attempts + 1,
-       last_error = $2,
-       dirty_at = now() + make_interval(secs => least(2 ^ (attempts + 1), 600))
- where page_id = $1
- returning attempts`;
-
-/**
- * The lock of a page, between the replicas.
- *
- * It is an advisory lock and not the row of the queue: a row lock would block
- * the edit that lands while the page is being indexed, and that edit is
- * exactly what the dirty_at condition of the last delete is there for.
- */
-const ADVISORY_LOCK_SQL = `select pg_try_advisory_xact_lock(hashtextextended($1::text, 0)) as locked`;
 
 /** The default debounce: the ten seconds the migration talks about. */
 export const DEBOUNCE_SECONDS = 10;
@@ -353,118 +224,25 @@ export class IndexerWorker {
 	/**
 	 * One page: its chunks are cut, embedded and written back.
 	 *
-	 * Everything happens in ONE transaction: the chunks of the page are
-	 * replaced, and the queue row is deleted, or it is not.
+	 * The page does the work in its own transaction; a failure is recorded
+	 * and the page is left alone until the next try.
 	 */
 	private async indexPage(candidate: QueueRow): Promise<boolean> {
-		const started = Date.now();
 		const client = await this.pool.connect();
 		try {
-			await client.query('BEGIN');
-			const locked = await client.query<{ locked: boolean }>(ADVISORY_LOCK_SQL, [candidate.page_id]);
-			if (locked.rows[0]?.locked !== true) {
-				// Another replica is indexing this page right now.
-				await client.query('ROLLBACK');
-				return false;
-			}
-			const page = await client.query<PageRow>(PAGE_SQL, [candidate.page_id]);
-			const row = page.rows[0];
-			if (!row || row.archived_at) {
-				// The page is gone, or it was archived: its chunks must not
-				// answer a search any more.
-				await client.query(DELETE_CHUNKS_SQL, [candidate.page_id]);
-				await client.query(DELETE_QUEUE_SQL, [candidate.page_id, candidate.dirty_epoch]);
-				await client.query('COMMIT');
-				this.write({
-					event: 'indexed',
-					pageId: candidate.page_id,
-					chunks: 0,
-					embedded: 0,
-					ms: Date.now() - started,
-				});
-				return true;
-			}
-			const chunks = chunkPage({ title: row.title ?? '', content: row.content });
-			// The embedding happens INSIDE the transaction, and inside the lock
-			// of the page: the batches are small, and a lock that is held for
-			// the latency of the service for ONE page is simpler than a lock
-			// that is taken and given back.
-			const { vectors, embedded } = await this.vectorsOf(client, candidate.page_id, chunks);
-			await client.query(DELETE_CHUNKS_SQL, [candidate.page_id]);
-			for (const chunk of chunks) {
-				const vector = vectors.get(chunk.contentHash);
-				if (vector === undefined) throw new Error('chunk_without_vector');
-				await client.query(INSERT_SQL, [
-					row.workspace_id,
-					candidate.page_id,
-					chunk.blockId,
-					chunk.ord,
-					row.title ?? '',
-					chunk.headingPath,
-					chunk.content,
-					Buffer.from(chunk.contentHash, 'hex'),
-					row.owner_id,
-					row.visibility,
-					JSON.stringify(row.collaborators ?? []),
-					vector,
-					this.embedder.model,
-				]);
-			}
-			await client.query(DELETE_QUEUE_SQL, [candidate.page_id, candidate.dirty_epoch]);
-			await client.query('COMMIT');
-			this.write({
-				event: 'indexed',
-				pageId: candidate.page_id,
-				chunks: chunks.length,
-				embedded,
-				ms: Date.now() - started,
+			const result = await indexPage({
+				client,
+				embedder: this.embedder,
+				candidate,
+				log: this.write,
 			});
-			return true;
+			return result.indexed;
 		} catch (error) {
-			await client.query('ROLLBACK').catch(() => undefined);
 			await this.recordFailure(candidate, error);
 			return false;
 		} finally {
 			client.release();
 		}
-	}
-
-	/**
-	 * The vectors of the chunks: the ones that are already in the index are
-	 * taken from it, the others are embedded.
-	 *
-	 * A chunk whose hash did not change keeps its vector, even when its place
-	 * in the page moved: the vector is the meaning of the text, not of the
-	 * place.
-	 */
-	private async vectorsOf(
-		client: PoolClient,
-		pageId: string,
-		chunks: readonly PageChunk[],
-	): Promise<{ vectors: Map<string, string>; embedded: number }> {
-		const vectors = new Map<string, string>();
-		const existing = await client.query<ExistingChunk>(EXISTING_SQL, [pageId]);
-		const stored = new Map<string, string>();
-		for (const row of existing.rows) stored.set(row.content_hash, row.embedding);
-		const wanted = new Map<string, PageChunk>();
-		for (const chunk of chunks) {
-			const known = stored.get(chunk.contentHash);
-			if (known !== undefined) {
-				vectors.set(chunk.contentHash, known);
-				continue;
-			}
-			wanted.set(chunk.contentHash, chunk);
-		}
-		if (wanted.size === 0) return { vectors, embedded: 0 };
-		const inputs = [...wanted.values()].map((chunk) =>
-			this.embedder.passageInput(chunk.headingPath, chunk.content),
-		);
-		const embedded = await this.embedder.embed(inputs);
-		const hashes = [...wanted.keys()];
-		hashes.forEach((hash, index) => {
-			vectors.set(hash, JSON.stringify(embedded[index]));
-		});
-		return { vectors, embedded: embedded.length };
 	}
 
 	/**
@@ -492,7 +270,7 @@ export class IndexerWorker {
 	}
 
 	/** One line of the log. */
-	private write(entry: Record<string, unknown>): void {
+	private readonly write = (entry: Record<string, unknown>): void => {
 		this.log(entry);
-	}
+	};
 }
