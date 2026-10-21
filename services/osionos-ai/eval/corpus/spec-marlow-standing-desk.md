@@ -34,7 +34,7 @@ word.
 
 The motor has a twelve-week lead time from the supplier, which is the reason the control
 box is not being changed this year. There are four memory positions and a counter that
-shows the height in millimetres rather than a level.
+shows the height in millimetres rather than a level. <!-- answer:q57 -->
 
 - Anti-collision: the frame stops and reverses if it meets an obstruction.
 - The child lock is a two-second hold on the control.

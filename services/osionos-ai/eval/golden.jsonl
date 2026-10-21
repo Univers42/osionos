@@ -48,3 +48,21 @@
 {"id":"q48","q":"How many examination rooms does the Arcway programme cover and what is its total value?","lang":"en","kind":"acl","asker":"u_ben","expected":["deal-arc-hospitals"]}
 {"id":"q49","q":"What are the salary bands for the workshop team in 2026?","lang":"en","kind":"acl","asker":"u_ben","expected":[]}
 {"id":"q50","q":"What are the salary bands for the workshop team in 2026?","lang":"en","kind":"acl","asker":"u_chloe","expected":[]}
+{"id":"q51","q":"Combien de semaines prend une fabrication sur mesure ?","lang":"fr","kind":"xl","asker":"u_ben","expected":["deal-contract-terms"]}
+{"id":"q52","q":"Au maximum, combien de jours consécutifs de congé peuvent être pris par an ?","lang":"fr","kind":"xl","asker":"u_chloe","expected":["hr-leave-policy"]}
+{"id":"q53","q":"En quelles quantités commande-t-on les fixations des étagères murales ?","lang":"fr","kind":"xl","asker":"u_ben","expected":["runbook-ordering-spares"]}
+{"id":"q54","q":"Que fait-on d'un fauteuil qui grince au bout de quelques mois ?","lang":"fr","kind":"xl","asker":"u_ana","expected":["meeting-quality-review-may"]}
+{"id":"q55","q":"De combien de degrés s'écartent les pieds du fauteuil de salon ?","lang":"fr","kind":"xl","asker":"u_chloe","expected":["spec-brindle-lounge-chair"]}
+{"id":"q56","q":"Au bout de combien de temps une opportunité disparaît-elle du rapport ?","lang":"fr","kind":"xl","asker":"u_ana","expected":["meeting-sales-kickoff-q1"]}
+{"id":"q57","q":"Pour combien de réglages en mémoire le bureau à hauteur réglable propose-t-il ?","lang":"fr","kind":"xl","asker":"u_ben","expected":["spec-marlow-standing-desk"]}
+{"id":"q58","q":"Quelle réduction est demandée sur les quantités de panneaux ?","lang":"fr","kind":"xl","asker":"u_chloe","expected":["deal-competitive-pricing"]}
+{"id":"q59","q":"Quel chantier a été le premier point de l'ordre du jour, et pour combien de salles d'examen ?","lang":"fr","kind":"xl","asker":"u_ana","expected":["meeting-leadership-retreat"]}
+{"id":"q60","q":"Que doivent signer les fournisseurs et les visiteurs à l'accueil ?","lang":"fr","kind":"xl","asker":"u_ben","expected":["hr-code-of-conduct"]}
+{"id":"q61","q":"Who writes the quotes that go to the French market?","lang":"en","kind":"xl","asker":"u_ana","expected":["playbook-commercial-fr"]}
+{"id":"q62","q":"How often is the delivery fleet inspected?","lang":"en","kind":"xl","asker":"u_ben","expected":["entretien-flotte-fr"]}
+{"id":"q63","q":"How much money was budgeted for the Hamburg refurbishment, and over what period?","lang":"en","kind":"xl","asker":"u_chloe","expected":["reunion-presentation-fr"]}
+{"id":"q64","q":"In an archive room, what happens to the floor over the seasons?","lang":"en","kind":"xl","asker":"u_ana","expected":["cahier-des-charges-rive-nord-fr"]}
+{"id":"q65","q":"Quelles informations sont consignées après une inspection ?","lang":"fr","kind":"fr","asker":"u_chloe","expected":["entretien-flotte-fr"]}
+{"id":"q66","q":"Quel taux de remise déclenche une double signature ?","lang":"fr","kind":"fr","asker":"u_ben","expected":["playbook-commercial-fr"]}
+{"id":"q67","q":"Quels documents avons-nous transmis à l'architecte ?","lang":"fr","kind":"fr","asker":"u_chloe","expected":["reunion-presentation-fr"]}
+{"id":"q68","q":"Qui consulte le cahier des charges avant de passer commande ?","lang":"fr","kind":"fr","asker":"u_ana","expected":["cahier-des-charges-rive-nord-fr"]}

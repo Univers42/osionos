@@ -16,10 +16,10 @@ fréquence et ce qui se fait en cas de défaut.
 
 ## Contrôle hebdomadaire
 
-Chaque véhicule passe un contrôle hebdomadaire de la pression des pneus et des freins. <!-- answer:q37 -->
+Chaque véhicule passe un contrôle hebdomadaire de la pression des pneus et des freins. <!-- answer:q37,q62 -->
 
 Le contrôle prend vingt minutes et se fait sur la place, avant le premier départ. Il est
-inscrit dans le carnet de bord, avec la date et les initiales du conducteur.
+inscrit dans le carnet de bord, avec la date et les initiales du conducteur. <!-- answer:q65 -->
 
 - Pression des pneus : les quatre roues, à froid, avec la valeur inscrite sur la porte.
 - Freins : la course de la pédale et l'absence de bruit.

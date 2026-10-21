@@ -16,7 +16,7 @@ ce qui touche à un projet francophone passe par le studio : le devis, les plans
 de site et la signature.
 
 Un devis destiné à la France suit les mêmes trois étapes qu'ailleurs, mais il est rédigé
-par le studio de Lyon. <!-- answer:q38 -->
+par le studio de Lyon. <!-- answer:q38,q61 -->
 
 ## Les quatre étapes
 
@@ -55,7 +55,7 @@ exclusion écrite tard coûte un client.
 
 Le barème de remises est le même qu'ailleurs : cinq pour cent par le responsable
 commercial, jusqu'à douze pour cent avec l'accord de la direction, au-delà il faut deux
-signatures.
+signatures. <!-- answer:q66 -->
 
 Le premier paiement tombe à la commande, à trente pour cent du montant. <!-- answer:q39 -->
 

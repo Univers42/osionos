@@ -31,7 +31,7 @@ wet coat does not stay in the veneer.
 ## The frame
 
 The frame is solid ash, turned in our own shop, and joined with a steel dowel and glue. The
-legs splay four degrees, which is what stops the chair rocking on a soft carpet.
+legs splay four degrees, which is what stops the chair rocking on a soft carpet. <!-- answer:q55 -->
 
 | Part | Material | Replaceable |
 | --- | --- | --- |
