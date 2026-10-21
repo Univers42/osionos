@@ -23,7 +23,11 @@ import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh,
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { publishRealtime } from './bridge-social-core.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
-import { assertSessionNotCutOff, sessionCutoffsFromConfig, startSessionCutoffPoller, tokenIssuedAtMs } from './bridge-session-cutoff.mjs';
+import { sessionCutoffsFromConfig, startSessionCutoffPoller } from './bridge-session-cutoff.mjs';
+import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
+// Re-exported so every existing caller (bridge-chat, bridge-rtc, db-isolation-suite, the tests)
+// keeps importing the token helpers from here, as before the move.
+export { signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -89,8 +93,6 @@ const EMAIL_ATEXT = "A-Za-z0-9!#$%&'*+/=?^_`{|}~-";
 const EMAIL_LOCAL_PART = String.raw`(?:[${EMAIL_ATEXT}]+(?:\.[${EMAIL_ATEXT}]+)*|"[^"\r\n]+")`;
 const EMAIL_DOMAIN_LABEL = '(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)';
 const EMAIL_REGEX = new RegExp(String.raw`^${EMAIL_LOCAL_PART}@(?>${EMAIL_DOMAIN_LABEL}\.)+[A-Za-z]{2,63}$`.replace('(?>', '(?:'));
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
 const BRIDGE_FIELDS = new Set(['provider', 'subject', 'email', 'name', 'jti', 'emailVerified']);
 const SENSITIVE_FIELD_PATTERN = /password|pass|secret|service|role|key|jwt|token|cookie|consent|birth|city|address|phone|profile|metadata|database|connection/i;
 const DEFAULT_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
@@ -227,10 +229,6 @@ export function bridgeSignature(secret, timestamp, payload) {
 	return createHmac('sha256', secret).update(`${timestamp}.${stableStringify(payload)}`).digest('hex');
 }
 
-function base64url(input) {
-	return Buffer.from(input).toString('base64url');
-}
-
 function randomToken() {
 	return randomBytes(32).toString('base64url');
 }
@@ -240,20 +238,6 @@ function safeCompareHex(left, right) {
 	const leftBuffer = Buffer.from(left, 'hex');
 	const rightBuffer = Buffer.from(right, 'hex');
 	return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function safeCompareText(left, right) {
-	const leftBuffer = Buffer.from(String(left ?? ''), 'utf8');
-	const rightBuffer = Buffer.from(String(right ?? ''), 'utf8');
-	return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function safeText(value, limit) {
-	return String(value ?? '')
-		.normalize('NFKC')
-		.replaceAll(/[\u0000-\u001f\u007f]/g, '')
-		.trim()
-		.slice(0, limit);
 }
 
 function slugify(value, fallback) {
@@ -417,77 +401,6 @@ export function verifyBridgeRequest({ headers, payload, secret, now = Date.now()
 	}
 	replayStore.set(normalizedPayload.jti, { expiresAt: now + timestampSkewMs });
 	return { ...normalizedPayload, subject: normalizedPayload.subject.toLowerCase() };
-}
-
-export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], isAdmin = false }) {
-	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
-	const iat = Math.floor(now / 1000);
-	const exp = iat + config.sessionTtlSeconds;
-	const memberRoles = Object.fromEntries(memberWorkspaces.map((entry) => [entry._id, safeText(entry.role, 16) || 'member']));
-	const tokenPayload = {
-		iss: 'osionos-bridge',
-		aud: 'osionos-app',
-		sub: payload.subject,
-		provider: payload.provider,
-		workspace_ids: [workspace._id, ...memberWorkspaces.map((entry) => entry._id)],
-		roles: { ...memberRoles, [workspace._id]: 'owner' },
-		is_admin: isAdmin === true,
-		jti,
-		iat,
-		// Milliseconds: a cut-off and a token minted in the same second must still be ordered.
-		iat_ms: Math.floor(now),
-		exp,
-	};
-	const encodedPayload = base64url(JSON.stringify(tokenPayload));
-	const signature = createHmac('sha256', config.appSessionSecret).update(encodedPayload).digest('base64url');
-	return { token: `osionos_v1.${encodedPayload}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
-}
-
-export function verifyAppSessionToken(token, config, now = Date.now()) {
-	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
-	const [version, encodedPayload, signature, extra] = safeText(token, 4096).split('.');
-	if (version !== APP_SESSION_TOKEN_VERSION || !encodedPayload || !signature || extra !== undefined) {
-		throw Object.assign(new Error('App session token is invalid.'), { status: 401 });
-	}
-	const expectedSignature = createHmac('sha256', config.appSessionSecret).update(encodedPayload).digest('base64url');
-	if (!safeCompareText(signature, expectedSignature)) {
-		throw Object.assign(new Error('App session token signature is invalid.'), { status: 401 });
-	}
-
-	let payload;
-	try {
-		payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
-	} catch {
-		throw Object.assign(new Error('App session token payload is invalid.'), { status: 401 });
-	}
-
-	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-		throw Object.assign(new Error('App session token payload is invalid.'), { status: 401 });
-	}
-	if (payload.iss !== 'osionos-bridge' || payload.aud !== 'osionos-app') {
-		throw Object.assign(new Error('App session token audience is invalid.'), { status: 401 });
-	}
-	if (!UUID_REGEX.test(String(payload.sub ?? ''))) {
-		throw Object.assign(new Error('App session token subject is invalid.'), { status: 401 });
-	}
-	const exp = Number(payload.exp);
-	if (!Number.isFinite(exp) || exp <= Math.floor(now / 1000)) {
-		throw Object.assign(new Error('App session token has expired.'), { status: 401 });
-	}
-	assertSessionNotCutOff(config.sessionCutoffs, String(payload.sub).toLowerCase(), tokenIssuedAtMs(payload));
-	const workspaceIds = Array.isArray(payload.workspace_ids)
-		? payload.workspace_ids.map(String).filter((workspaceId) => UUID_REGEX.test(workspaceId))
-		: [];
-	if (workspaceIds.length === 0) {
-		throw Object.assign(new Error('App session token has no workspace access.'), { status: 401 });
-	}
-	return {
-		userId: String(payload.sub).toLowerCase(),
-		workspaceIds,
-		roles: payload.roles && typeof payload.roles === 'object' && !Array.isArray(payload.roles) ? payload.roles : {},
-		isAdmin: payload.is_admin === true,
-		raw: payload,
-	};
 }
 
 function bearerToken(request) {
