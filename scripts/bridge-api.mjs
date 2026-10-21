@@ -2792,8 +2792,12 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 // ── Record → note (workstream D) ────────────────────────────────────────────
 // A record in any engine the viewer's workspaces are linked to (via
 // osionos_workspace_databases) can be read or opened as a deterministic note.
-// Access is the SAME union handleGraphData uses: token.workspaceIds ∪ member
-// workspaces, then the dbId must appear in one of those workspaces' mounts.
+// Access is the token's workspaceIds ∪ the live member workspaces, then the
+// dbId must appear in one of those workspaces' mounts. handleGraphData no
+// longer uses this union: it reads the live members only (callerWorkspaces).
+// Caveat: the token's list outlives a removal by up to its TTL (an hour), so a
+// removed member keeps these mounts until the session cut-off the membership
+// trigger writes (auth_session_cutoffs, polled every 10 s) ends the session.
 
 /**
  * Resolve `{dbId}` to the wsdb mount the session may read, or 403. Returns the

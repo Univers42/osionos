@@ -6,7 +6,7 @@ import { getOwnedConversation } from '../conversations/repo.ts';
 import { getOwnedRun } from '../runs/repo.ts';
 import { bearerToken } from '../auth.ts';
 import { startRun } from '../runs/runner.ts';
-import { memberWorkspaceIds } from '../runs/prompt.ts';
+import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import * as runStore from '../runs/runStore.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
@@ -102,10 +102,11 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 	// The whole workspace of the caller is searched: the run quotes what it
 	// finds, and every page it quotes is checked again with the bridge's rule.
 	const searchWorkspace = body.context?.workspace === true;
-	// The workspaces of the caller are the gate of the pages: they are read
-	// only when the client quotes something. The search reads them again, on
-	// its own, when it needs them.
-	const workspaces = pageIds.length > 0 ? await memberWorkspaceIds(ctx.deps.db, user) : [];
+	// The workspaces of the caller are the gate of the pages, read LIVE from the
+	// members table (C127): the token's list outlives a removal by up to an
+	// hour. They are read only when the client quotes something; the search
+	// reads them again, on its own, when it needs them.
+	const workspaces = pageIds.length > 0 ? await liveMemberWorkspaces(ctx.deps.db, user) : [];
 	const outcome = await startRun({
 		db: ctx.deps.db,
 		redis: ctx.deps.redis,

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
+import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import { startHarness, USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } from './harness.ts';
 import type { JsonBody } from './harness.ts';
 import { textOf } from './ledger.ts';
@@ -223,6 +224,31 @@ describe('osionos-ai runs', () => {
 		const skipped = (started?.data as { skippedPageIds: string[] }).skippedPageIds;
 		assert.deepEqual(skipped, [foreign, missing]);
 		assert.equal(events[events.length - 1]?.event, 'done');
+	});
+
+	it('a member removed from a workspace is quoted none of its pages, whatever the token says (C127)', async () => {
+		const page = randomUUID();
+		await app.db.query(
+			`insert into public.osionos_pages (id, workspace_id, owner_id, title, visibility, content)
+			 values ($1, $2, $3, 'Team notes', 'shared', $4::jsonb)`,
+			[page, WORKSPACE_B, USER_B, JSON.stringify([{ content: 'the team page text' }])],
+		);
+		await app.db.query('delete from public.osionos_workspace_members where workspace_id = $1 and user_id = $2', [
+			WORKSPACE_B,
+			USER_A,
+		]);
+		// Minted while A was a member of B: the token lives an hour after the removal.
+		const token = signAppSessionToken({
+			payload: { subject: USER_A, provider: 'test' },
+			workspace: { _id: WORKSPACE_A },
+			config: { appSessionSecret: process.env.OSIONOS_APP_SESSION_SECRET ?? '', sessionTtlSeconds: 3600 },
+			memberWorkspaces: [{ _id: WORKSPACE_B, role: 'member' }],
+		}).token;
+		const conversationId = await createConversation('thread', token);
+		const response = await postRun(conversationId, randomUUID(), 'what do the notes say?', undefined, token, [page]);
+		const events = await collect(new SseStream(response));
+		assert.ok(!JSON.stringify(mock.lastBody()).includes('the team page text'));
+		assert.deepEqual((events[0]?.data as { skippedPageIds: string[] }).skippedPageIds, [page]);
 	});
 
 	it('the sweep gives up a stale run and gives its money back', async () => {
