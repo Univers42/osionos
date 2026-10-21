@@ -34,11 +34,16 @@ export function estimateTokens(chars: number): number {
  *
  * Caveat: chars/4 under-counts CJK and code, and over-counts short words. It
  * only applies when the provider reports nothing at all.
+ *
+ * The log line belongs to the settlement: a caller that only measures (the
+ * stop condition of the loop) asks for the estimate without the line, so the
+ * ledger is not told twice that the same run was not measured.
  */
 export function usageForSettlement(
 	runId: string,
 	reported: { inputTokens?: number; outputTokens?: number } | undefined,
 	{ promptChars, outputChars }: { promptChars: number; outputChars: number },
+	options: { log?: boolean } = {},
 ): SettledUsage {
 	const inputTokens = reported?.inputTokens ?? 0;
 	const outputTokens = reported?.outputTokens ?? 0;
@@ -46,7 +51,9 @@ export function usageForSettlement(
 		return { inputTokens, outputTokens, estimated: false };
 	}
 	// One line, so the ledger can be read: this run was not measured.
-	console.info(JSON.stringify({ event: 'usage_estimated', runId, usageEstimated: true }));
+	if (options.log !== false) {
+		console.info(JSON.stringify({ event: 'usage_estimated', runId, usageEstimated: true }));
+	}
 	return {
 		inputTokens: estimateTokens(promptChars),
 		outputTokens: estimateTokens(outputChars),

@@ -10,12 +10,12 @@ import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
 import type { RunEvent } from './upstream.ts';
 import {
-	estimateMicroUsd,
 	historyChars,
 	loadHistory,
 	loadPageContext,
 	quotedPageChars,
 } from './prompt.ts';
+import { estimateRunMicroUsd } from './estimate.ts';
 import { sourceChars } from './sources.ts';
 import { retrieve } from '../retrieval/search.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
@@ -161,7 +161,10 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// goes on without sources, and the failure is logged once.
 	const sources = await findSources(db, input, text);
 	const day = today();
-	const amount = estimateMicroUsd(target.pricing, {
+	// The reservation is TWO step ceilings: the first step of the loop, and
+	// the answer that must follow it. The steps after that ask the ledger
+	// for what they need, one at a time (src/runs/loopBudget.ts).
+	const amount = estimateRunMicroUsd(target.pricing, {
 		text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(context.pages),
@@ -207,6 +210,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			history,
 			pages: context.pages,
 			sources,
+			user: input.user,
 			skippedPageIds: context.skippedPageIds,
 			userMessageId: userMessage.id,
 			title,

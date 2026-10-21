@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage } from 'node:http';
+import { chunkTexts, streamAnswer, streamToolCall } from './mockStream.ts';
+import type { StreamOptions } from './mockStream.ts';
 
 /**
  * A mock OpenAI-compatible upstream: the SSE of the P0a spike, with the knobs
@@ -7,13 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
  * gap between two chunks, a failure mode) and a counter of the calls.
  */
 
-export interface MockOptions {
-	/** The wait before the first chunk. */
-	preDelayMs: number;
-	/** The number of text chunks of one answer. */
-	chunkCount: number;
-	/** The wait between two chunks. */
-	chunkGapMs: number;
+export interface MockOptions extends StreamOptions {
 	/** The upstream answers with an error instead of the stream. */
 	fail: boolean;
 	/** The models the list of /models answers with. */
@@ -29,6 +25,28 @@ export interface MockOptions {
 	 * This is the server that does not know `stream_options.include_usage`.
 	 */
 	neverSendUsage: boolean;
+	/**
+	 * The tool the next answer calls: the name of the tool, and the
+	 * arguments of the call.
+	 *
+	 * The call is answered once: the answer after it is the text, so the loop
+	 * of the model ends.
+	 */
+	toolCall: { name: string; arguments: Record<string, unknown> } | null;
+	/**
+	 * The model calls the tool on EVERY step, not only on the first one.
+	 *
+	 * A model that keeps calling a tool is a loop that keeps spending.
+	 */
+	toolCallEveryStep: boolean;
+	/**
+	 * The usage the upstream reports is the one of the FIRST step only.
+	 *
+	 * A test that needs one expensive step (and cheap ones after it) says so
+	 * here: the run pays for what the upstream really charged, and the
+	 * ledger reads the usage of every step.
+	 */
+	usageOnFirstStepOnly: boolean;
 }
 
 const DEFAULT_OPTIONS: MockOptions = {
@@ -41,6 +59,11 @@ const DEFAULT_OPTIONS: MockOptions = {
 	authKey: 'sk-openrouter-mock-0123456789',
 	authFail: false,
 	neverSendUsage: false,
+	toolCall: null,
+	usage: null,
+	toolCallEveryStep: false,
+	parallelToolCalls: 1,
+	usageOnFirstStepOnly: false,
 };
 
 export interface MockUpstream {
@@ -72,26 +95,6 @@ export interface MockUpstream {
 	close(): Promise<void>;
 }
 
-/** The text of the chunks: "part-0 part-1 …". */
-function chunkTexts(chunkCount: number): string[] {
-	const chunks: string[] = [];
-	for (let index = 0; index < chunkCount; index += 1) chunks.push(`part-${index} `);
-	return chunks;
-}
-
-/** One chunk of the OpenAI-compatible stream. */
-function serializeChunk(content: string, last: boolean, sendUsage: boolean): string {
-	const payload = {
-		id: 'chatcmpl-mock-0001',
-		object: 'chat.completion.chunk',
-		created: 0,
-		model: 'mock-model',
-		choices: [{ index: 0, delta: { content }, finish_reason: last ? 'stop' : null }],
-		...(last && sendUsage ? { usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 } } : {}),
-	};
-	return `data: ${JSON.stringify(payload)}\n\n`;
-}
-
 /**
  * Whether the request asks for the usage: `stream_options.include_usage`.
  *
@@ -101,6 +104,21 @@ function serializeChunk(content: string, last: boolean, sendUsage: boolean): str
 export function askedForUsage(body: unknown): boolean {
 	const options = (body as { stream_options?: { include_usage?: unknown } } | null)?.stream_options;
 	return options?.include_usage === true;
+}
+
+/**
+ * Whether the request asks for NO tool: `tool_choice: none`, or no tool at
+ * all.
+ *
+ * A real model obeys it and answers with text. The mock obeys it too: a step
+ * that runs without tools is a step that answers, and a test that counts the
+ * steps of a loop needs the mock to stop calling the tool.
+ */
+export function askedForNoTool(body: unknown): boolean {
+	const request = body as { tools?: unknown; tool_choice?: unknown } | null;
+	if (!request || typeof request !== 'object') return false;
+	if (request.tool_choice === 'none') return true;
+	return !Array.isArray(request.tools) || request.tools.length === 0;
 }
 
 /** The body of a request, read to the end. */
@@ -116,6 +134,9 @@ function readBody(request: IncomingMessage): Promise<string> {
 /** The mock upstream, on a random port of the loopback. */
 export async function startMockUpstream(initial?: Partial<MockOptions>): Promise<MockUpstream> {
 	let options: MockOptions = { ...DEFAULT_OPTIONS, ...initial };
+	// The tool call that is waiting for its answer: it is asked for once, and
+	// the answer after it is the text.
+	let pendingToolCall: MockOptions['toolCall'] = null;
 	let calls = 0;
 	const texts: string[] = [];
 	const bodies: unknown[] = [];
@@ -170,6 +191,7 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			return;
 		}
 		calls += 1;
+		const step = calls;
 		authorizations.push(String(request.headers.authorization ?? ''));
 		void readBody(request).then((raw) => {
 			let body: unknown = raw;
@@ -185,10 +207,25 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 				return;
 			}
 			const chunks = chunkTexts(options.chunkCount);
-			texts.push(chunks.join(''));
 			// The usage comes only when the request asks for it.
 			const sendUsage = !options.neverSendUsage && askedForUsage(body);
-			streamAnswer(response, chunks, options, sendUsage, () => {
+			// The usage of this step: the one of the test, or the default one
+			// when the test wants the expensive step alone.
+			const usage = options.usageOnFirstStepOnly && step > 1 ? null : options.usage;
+			// The tool call is answered once: the answer after it is the text.
+			// A model that calls a tool on every step keeps the loop going.
+			const toolCall = options.toolCallEveryStep ? options.toolCall : pendingToolCall;
+			pendingToolCall = null;
+			// A step that runs without tools is a step that answers: the
+			// model obeys the request and writes text.
+			if (toolCall && !askedForNoTool(body)) {
+				streamToolCall(response, toolCall, options, sendUsage, usage, () => {
+					aborted += 1;
+				});
+				return;
+			}
+			texts.push(chunks.join(''));
+			streamAnswer(response, chunks, options, sendUsage, usage, () => {
 				aborted += 1;
 			});
 		});
@@ -237,6 +274,8 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 		},
 		setOptions(next: Partial<MockOptions>): void {
 			options = { ...options, ...next };
+			// A tool call that is asked for waits for the next answer.
+			if (next.toolCall) pendingToolCall = next.toolCall;
 		},
 		async close(): Promise<void> {
 			await new Promise<void>((resolve) => {
@@ -245,38 +284,4 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			});
 		},
 	};
-}
-
-/** The stream of one answer: the chunks, one after the other. */
-function streamAnswer(
-	response: ServerResponse,
-	chunks: string[],
-	options: MockOptions,
-	sendUsage: boolean,
-	onAbort: () => void,
-): void {
-	response.writeHead(200, {
-		'content-type': 'text/event-stream',
-		'cache-control': 'no-cache',
-	});
-	let index = 0;
-	const send = () => {
-		if (response.writableEnded || response.destroyed) return;
-		const last = index === chunks.length - 1;
-		response.write(serializeChunk(chunks[index], last, sendUsage));
-		index += 1;
-		if (last) {
-			response.end('data: [DONE]\n\n');
-			return;
-		}
-		setTimeout(send, options.chunkGapMs);
-	};
-	setTimeout(send, options.preDelayMs);
-	response.on('close', () => {
-		// The client went away before the end: the stream was cut.
-		if (!response.writableEnded) {
-			onAbort();
-			response.destroy();
-		}
-	});
 }

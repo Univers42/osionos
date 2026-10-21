@@ -258,7 +258,7 @@ describe('osionos-ai runs', () => {
 		const answer = await call('/api/ai/models', { token: tokenFor(USER_A, WORKSPACE_A) });
 		assert.equal(answer.status, 200);
 		const models = answer.body?.models as { id: string; label: string; default: boolean }[];
-		assert.equal(models.length, 3);
+		assert.equal(models.length, 4);
 		assert.equal(models.filter((model) => model.default).length, 1);
 		assert.deepEqual(Object.keys(models[0]).sort(), ['default', 'id', 'label']);
 	});
