@@ -17,6 +17,8 @@
  *   "conflict" → the 409 path: merge, re-send ONCE, and on a second conflict the local
  *                edit goes to a copy. The batch goes ON — a conflict is not a failure.
  *   "refused"  → 403, "gone" → 404: the edit is recovered (copied), never dropped.
+ *                ONLY this route marks the page read-only: the server's verdict says
+ *                the reader may not write it. A conflict copy leaves the page writable.
  *   "failed"   → transient (offline / 5xx / 429): STOP the batch and back off.
  *
  * A refused or copied page is booked as FORGOTTEN (its ledger entry goes): the edit it
@@ -106,6 +108,13 @@ export async function publishOutboxPage(job: FlushJob, deps: FlushDeps): Promise
 }
 
 /**
+ * A CONFLICT is not a refusal: the server never said the reader may not write — it said
+ * the page moved under the edit. Marking the page refused would close it to every write
+ * for the rest of the session, so only the "refused" route marks it.
+ */
+const markNoRefusal = (): void => undefined;
+
+/**
  * Run the recovery for one refused/gone/conflicted page. The mark is written BEFORE
  * the network call so a hydrate landing mid-recovery keeps the local copy (it holds
  * the only copy of the refused edit), and cleared by applyRecoveryOutcome once the
@@ -121,7 +130,10 @@ async function recoverToCopy(
   // applyRecoveryOutcome books on a ledger: it gets this page's entry alone, and a removal
   // there becomes a `forgotten` booking for the flush to apply.
   const entry: SyncLedger = { [id]: "" };
-  const step = applyRecoveryOutcome(entry, recovering, id, outcome, markPageWriteRefused);
+  // The server's VERDICT ("you may not write") exists only on the "refused" route: a
+  // conflict copy leaves the page writable, the reader may still edit it.
+  const markRefused = reason === "refused" ? markPageWriteRefused : markNoRefusal;
+  const step = applyRecoveryOutcome(entry, recovering, id, outcome, markRefused);
   if (!Object.hasOwn(entry, id)) forgotten.add(id);
   saveOutboxLedger(OUTBOX_RECOVERING_KEY, recovering);
   return step === "stop" ? "failed" : outcome;
