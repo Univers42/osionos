@@ -19,9 +19,18 @@ JSONL="$OUT_DIR/part-a.jsonl"
 
 # The rule of the brief: the VRAM of the GPU never goes above 7.4 GiB.
 VRAM_LIMIT=7946554000
+# What the container of the server takes (the model, the buffers of Vulkan and
+# the pool of the KV cache): 2.9 to 3.1 GB in the runs of this spike.
+CONTAINER_VRAM=3070000000
+# The room that must be free on the card before the container starts, with a
+# margin for the growth of the KV cache during the run.
+VRAM_ROOM=$(( VRAM_LIMIT - CONTAINER_VRAM - 150000000 ))
 # The arrival rates of the brief, and the length of every window.
 LAMBDAS="${LAMBDAS:-0.25 0.5 1 2}"
-DURATION="${DURATION:-60}"
+# The length of the window of a run. The configuration decides it (the CPU one
+# gets the long window of the brief, 120 s; the GPU ones the short one, 60 s),
+# but the caller may fix it.
+DURATION="${DURATION:-}"
 PORT="${PORT:-18080}"
 MODEL_PATH=/models/models--unsloth--Qwen3-4B-Instruct-2507-GGUF/snapshots/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf
 
@@ -76,6 +85,27 @@ run_bench() {
 	rm -f "$stem.sample" "$stem.loadavg"
 }
 
+# wait_for_vram_room: the desktop of the user shares the card, and its use
+# moves. The container of the server needs about 3.1 GB, so the run waits for
+# the room, for at most 15 minutes. When the room does not come, the check
+# after the load decides: the configuration is recorded as "does not fit".
+wait_for_vram_room() {
+	deadline=$(( $(date +%s) + ${1:-600} ))
+	while :; do
+		used=$(vram_used)
+		if [ "$used" -le "$VRAM_ROOM" ]; then
+			echo "[part-a] the VRAM of the card is $used, the room is there"
+			return 0
+		fi
+		if [ "$(date +%s)" -ge "$deadline" ]; then
+			echo "[part-a] the VRAM of the card stayed at $used for 10 minutes" >&2
+			return 1
+		fi
+		echo "[part-a] the VRAM of the card is $used, waiting for room (room wanted: $VRAM_ROOM)"
+		sleep 30
+	done
+}
+
 # start_server <container> <image> <flags...>: the container, and the wait for
 # the model. The VRAM it takes is printed.
 start_server() {
@@ -83,6 +113,7 @@ start_server() {
 	image="$2"
 	shift 2
 	docker rm -f "$container" >/dev/null 2>&1 || true
+	wait_for_vram_room || true
 	before=$(vram_used)
 	echo "[part-a] $container: the VRAM before the container is $before"
 	docker run -d --name "$container" \

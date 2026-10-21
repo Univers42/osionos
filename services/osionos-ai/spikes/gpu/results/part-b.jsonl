@@ -1,0 +1,2 @@
+{"label":"tei-p0c-bench","kind":"p0c-bench","passages":2000,"loadavgStart":5.49}
+{"label":"tei-cpu","kind":"embed","base":"http://127.0.0.1:4911","style":"tei","model":"intfloat/multilingual-e5-small","queries":300,"passages":1000,"batch":32,"concurrency":4,"corpusChunks":291,"queryP50":7.01,"queryP95":8.49,"queryP99":10.13,"chunksPerSecond":56.1,"backfillS":17.8,"queryUnderLoadP50":1560.72,"queryUnderLoadP95":2270.52,"queryUnderLoadN":13,"loadavgStart":5.88}
