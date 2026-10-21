@@ -30,9 +30,20 @@ export function sendJson(response: ServerResponse, status: number, body: unknown
 	response.end(JSON.stringify(body));
 }
 
-/** A JSON refusal: the status and a code, never the internals. */
+/**
+ * A JSON refusal: the status and a code, never the internals.
+ *
+ * The envelope of the wire contract is `{ "error": { "code" } }`; the flat
+ * `code` is kept beside it, so a client that reads either shape is served.
+ */
 export function sendError(response: ServerResponse, status: number, code: string): void {
-	sendJson(response, status, { ok: false, code });
+	sendJson(response, status, { ok: false, code, error: { code } });
+}
+
+/** An answer with no content: the 204 of a deletion. */
+export function sendNoContent(response: ServerResponse): void {
+	response.writeHead(204, { ...CORS_HEADERS });
+	response.end();
 }
 
 /** The preflight answer: 204 and the CORS headers. */
