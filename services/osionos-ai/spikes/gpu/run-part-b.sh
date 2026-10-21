@@ -48,7 +48,7 @@ wait_for_quiet_cpu() {
 		if [ "$(date +%s)" -ge "$deadline" ]; then
 			echo "[part-b] the load average stayed at $load after 15 minutes; the measurement goes on anyway" >&2
 			LOAD_START="$load"
-			return 1
+			return 0
 		fi
 		echo "[part-b] the load average is $load, waiting for a quiet CPU"
 		sleep 60

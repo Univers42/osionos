@@ -25,7 +25,7 @@ EMBED_CONTAINER=ai-gpu-c-embed
 SHIM_CONTAINER=ai-gpu-c-shim
 MODEL_PATH=/models/models--unsloth--Qwen3-4B-Instruct-2507-GGUF/snapshots/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf
 # The GGUF of the embedder: the f16 one, the smallest of the two.
-GGUF=/models/multilingual-e5-small-F16.gguf
+GGUF=/models/multilingual-e5-small-official-f16.gguf
 DURATION="${DURATION:-60}"
 LAMBDA="${LAMBDA:-1}"
 
