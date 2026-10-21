@@ -27,6 +27,8 @@
 
 import type { ChatMessage, ChatMessagePart } from "./chatTypes";
 import { citationFromEvent } from "./citations";
+import { permissionFromEvent } from "./approvalParts";
+import type { PermissionPart } from "./approvalParts";
 
 /** What the dispatch needs from the store. */
 export interface RunEventActions {
@@ -44,6 +46,8 @@ export interface RunEventActions {
   patchAssistant(patch: Partial<ChatMessage>): void;
   /** The service named the conversation: the default title gives way to it. */
   applyServerTitle(title: string): void;
+  /** The assistant asks for the right to write: the card of the write. */
+  askPermission(permission: PermissionPart): void;
 }
 
 /**
@@ -82,6 +86,11 @@ export function dispatchRunEvent(
   }
   if (event === "tool.result") {
     actions.appendToolResult(data);
+    return;
+  }
+  if (event === "permission.asked") {
+    const permission = permissionFromEvent(data);
+    if (permission) actions.askPermission(permission);
     return;
   }
   if (event === "run.started") {

@@ -15,12 +15,14 @@
 import type { AiPart } from "@/features/ai/api/aiClient";
 
 import type { ToolActivityPart } from "./toolActivity";
+import type { PermissionPart } from "./approvalParts";
 
 /**
- * The parts of a message: the service's own (the sources of the answer), and
- * the calls the assistant made to its tools.
+ * The parts of a message: the service's own (the sources of the answer), the
+ * calls the assistant made to its tools, and the cards of the writes it asked
+ * for.
  */
-export type ChatMessagePart = AiPart | ToolActivityPart;
+export type ChatMessagePart = AiPart | ToolActivityPart | PermissionPart;
 
 export type MessageRole = "user" | "assistant" | "system";
 

@@ -93,6 +93,18 @@ export interface InferencePort {
     onEvent: (event: string, data: InferenceEventData) => void,
     signal?: AbortSignal,
   ): Promise<void>;
+  /**
+   * Attaches to a run that is ALREADY on the service. OPTIONAL, like `stream`.
+   *
+   * A write the user approved has a follow-up: the service continued the run
+   * on its own, and the client picks that run up — the same way it resumes a
+   * run whose connection dropped.
+   */
+  attach?(
+    runId: string,
+    onEvent: (event: string, data: InferenceEventData) => void,
+    signal?: AbortSignal,
+  ): Promise<void>;
 }
 
 /** Phase-1 stub: a fixed, obviously-fake assistant turn. Crosses no inference fence. */
