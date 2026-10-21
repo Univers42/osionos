@@ -87,6 +87,7 @@ export const OVERLAY_PROBES: Record<string, Probe> = {
     mk({ type: "table_block", tableData: [["A", "B", "C"], ["1", "2", "3"]], tableConfig: { columnWidths: [120, 80, 80] } }),
     "tableConfig",
   ),
+  conflictOf: probe(mk({ type: "paragraph", content: "p", conflictOf: "b1" }), "conflictOf"),
 };
 
 /** Everything Markdown or the overlay carries, on the types that own it. */

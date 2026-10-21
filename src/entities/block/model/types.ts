@@ -165,5 +165,6 @@ export interface Block {
   layoutConfig?: Partial<LayoutConfig>;
   layoutCells?: LayoutCell[];
   schemaVersion?: number;
+  conflictOf?: string;		/** The id of the block this one is a conflict copy of — the merge kept both variants */
   [key: string]: unknown;	/** Arbitrary metadata */
 }
