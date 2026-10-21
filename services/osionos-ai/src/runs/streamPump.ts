@@ -76,7 +76,8 @@ export interface PumpInput {
 	/** Override the SDK's URL download: throw, so no URL is ever fetched. */
 	experimentalDownload?: (options: unknown) => unknown;
 	/** Extra body fields forwarded to the upstream. */
-	providerOptions?: Record<string, unknown>;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	providerOptions?: Record<string, any>;
 	/** The signal of the call: the caller owns it, so it can cancel the run. */
 	controller: AbortController;
 	/** A piece of the answer. */
