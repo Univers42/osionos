@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
 import { startHarness, METERED, USER_A, USER_B, USER_DAILY_MICROUSD, WORKSPACE_A, WORKSPACE_B } from './harness.ts';
-import { spentOf } from './ledger.ts';
 import { SseStream, collect } from './sse.ts';
 import type { SseEvent } from './sse.ts';
 
@@ -17,8 +16,8 @@ import type { SseEvent } from './sse.ts';
  */
 const { app, mock, postRun, tokenFor, createConversation } = await startHarness();
 const { readPage } = await import('../src/tools/readTools.ts');
-const { estimateLoopMicroUsd, estimateMicroUsd } = await import('../src/runs/estimate.ts');
-const { MAX_STEPS, POOL_SPENT, TOOL_POOL_CHARS } = await import('../src/tools/index.ts');
+const { estimateMicroUsd } = await import('../src/runs/estimate.ts');
+const { POOL_SPENT, TOOL_POOL_CHARS } = await import('../src/tools/index.ts');
 
 after(async () => {
 	await app.close();
@@ -196,38 +195,6 @@ describe('the tools of the assistant', () => {
 		assert.equal(events[events.length - 1]?.event, 'done');
 	});
 
-	it('the loop stops itself when the next step would cost more than the run holds', async () => {
-		// The upstream charges more than the estimate: the run must stop
-		// itself before the money of the day is gone. The reservation is the
-		// ceiling of the loop, and the ceiling is kept by stopping the work.
-		const reservation = estimateLoopMicroUsd(METERED, { text: 'hello', historyChars: 0 });
-		const stepCeiling = Math.ceil(reservation / MAX_STEPS);
-		const stepCost = Math.ceil(stepCeiling * 1.5);
-		const tokens = Math.ceil(stepCost / (METERED.inputMicroUsdPerMTok / 1e6));
-		mock.setOptions({
-			toolCall: { name: 'search_workspace', arguments: { query: 'the notes' } },
-			toolCallEveryStep: true,
-			usage: { promptTokens: tokens, completionTokens: 0 },
-		});
-
-		const before = await spentOf(app.db, USER_A);
-		const calls = mock.calls;
-		const conversationId = await createConversation();
-		const events = await collect(
-			new SseStream(await postRun(conversationId, randomUUID(), 'hello', 'mock-metered')),
-		);
-
-		// The run ends normally: a `done`, never an error.
-		assert.equal(events[events.length - 1]?.event, 'done');
-		// The loop stopped itself: it did not spend its five steps.
-		const steps = mock.calls - calls;
-		assert.ok(steps >= 2 && steps <= 3, `the loop stopped itself: ${steps} steps`);
-		// The spend of the run stays inside the reservation.
-		const spent = (await spentOf(app.db, USER_A)) - before;
-		assert.ok(spent > 0, 'the run was paid for');
-		assert.ok(spent <= reservation, `the spend is inside the reservation: ${spent} <= ${reservation}`);
-	});
-
 	it('the tools of a run may not fill the context of the run', async () => {
 		// A page long enough to fill the pool of the run, read ten times at
 		// once: the pool is what stops the tenth read.
@@ -258,8 +225,8 @@ describe('the tools of the assistant', () => {
 	});
 
 	it('a run is refused when the loop does not fit in the budget of the day', async () => {
-		// What is left of the budget of the user is less than one step of the
-		// loop: the reservation of the run does not fit.
+		// What is left of the budget of the user is less than the
+		// reservation of the run (two step ceilings): the run does not start.
 		const oneCall = estimateMicroUsd(METERED, { text: 'hello', historyChars: 0 });
 		assert.ok(oneCall < 100, 'the estimate of one call fits in what is left');
 		await app.db.query(

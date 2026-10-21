@@ -3,7 +3,6 @@ import { costMicroUsd } from '../gateway/platform.ts';
 import type { PlatformModelEntry } from '../gateway/platform.ts';
 import { estimateTokens } from '../gateway/usage.ts';
 import { TOOL_DEFINITION_CHARS } from '../tools/index.ts';
-import { MAX_STEPS, TOOL_POOL_CHARS } from '../tools/loop.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
 
 /**
@@ -14,14 +13,6 @@ import { SYSTEM_PROMPT } from './prompt.ts';
  */
 
 /**
- * The characters the tools of a run may add to the context of a step.
- *
- * The pool of the outputs of the tools, and the definitions the tools are
- * sent as: both are input, on every step of the loop.
- */
-export const TOOL_CHARS = TOOL_POOL_CHARS + TOOL_DEFINITION_CHARS;
-
-/**
  * The characters of the prompt of a call: the question, the history, the pages
  * the run quotes, the sources it found, and the system prompt.
  */
@@ -30,15 +21,23 @@ export function promptCharCount({
 	historyChars,
 	pageChars = 0,
 	sourceChars = 0,
-	toolChars = 0,
 }: {
 	text: string;
 	historyChars: number;
 	pageChars?: number;
 	sourceChars?: number;
-	toolChars?: number;
 }): number {
-	return text.length + historyChars + pageChars + sourceChars + toolChars + SYSTEM_PROMPT.length;
+	return text.length + historyChars + pageChars + sourceChars + SYSTEM_PROMPT.length;
+}
+
+/**
+ * The characters of the prompt of ONE step of the loop.
+ *
+ * The prompt of the run, the outputs of the tools (the pool), and the
+ * definitions of the tools: the three are input on every step of the loop.
+ */
+export function stepPromptChars(baseChars: number, toolOutputChars = 0): number {
+	return baseChars + toolOutputChars + TOOL_DEFINITION_CHARS;
 }
 
 /**
@@ -56,37 +55,45 @@ export function estimateMicroUsd(
 		historyChars,
 		pageChars = 0,
 		sourceChars = 0,
-		toolChars = 0,
 	}: {
 		text: string;
 		historyChars: number;
 		pageChars?: number;
 		sourceChars?: number;
-		toolChars?: number;
 	},
 ): number {
-	const estimatedInputTokens = estimateTokens(
-		promptCharCount({ text, historyChars, pageChars, sourceChars, toolChars }),
-	);
+	const estimatedInputTokens = estimateTokens(promptCharCount({ text, historyChars, pageChars, sourceChars }));
 	return costMicroUsd(model, { inputTokens: estimatedInputTokens, outputTokens: config.maxOutputTokens });
 }
 
 /**
- * The reservation of a run: the ceiling of the WHOLE loop.
+ * The ceiling of ONE step of the loop: what the step may cost.
  *
- * A run is not one call: the model may call a tool, and the answer comes
- * after the tool. A run that reserves for one call and spends five books a
- * spend the cap never allowed, so the reservation is the cost of every step
- * the loop may take.
- *
- * Every step is counted with the pool of the tools and with their
- * definitions: the outputs of the tools accumulate, so the prompt of the
- * last step holds all of them, and the definitions are input on every step.
- * The pool is what keeps that true: with it, the prompt of a step never
- * holds more than the step the reservation counts, and the reservation is a
- * ceiling of the loop.
+ * The prompt it sends is the input, and the output it may write is the
+ * output: the ceiling of a step is what the step costs at its worst.
  */
-export function estimateLoopMicroUsd(
+export function stepCeilingMicroUsd(model: PlatformModelEntry, promptChars: number): number {
+	return costMicroUsd(model, {
+		inputTokens: estimateTokens(promptChars),
+		outputTokens: config.maxOutputTokens,
+	});
+}
+
+/**
+ * The reservation of a run, up front: TWO step ceilings.
+ *
+ * The first step, and the answer that must follow it. A run that reserves
+ * for one call and spends five books a spend the cap never allowed (the
+ * devil's condition C13), and a run that reserves for five worst cases at
+ * once is refused before it starts: with a platform model, the reservation
+ * of a five-step loop is five times what a "hello" costs, and the cap of
+ * the day is smaller than that.
+ *
+ * So the run holds what its first step needs and what its answer needs, and
+ * the steps after that ask the ledger for what they need, one at a time
+ * (`src/runs/loopBudget.ts`).
+ */
+export function estimateRunMicroUsd(
 	model: PlatformModelEntry,
 	{
 		text,
@@ -100,25 +107,6 @@ export function estimateLoopMicroUsd(
 		sourceChars?: number;
 	},
 ): number {
-	return (
-		MAX_STEPS *
-		estimateMicroUsd(model, {
-			text,
-			historyChars,
-			pageChars,
-			sourceChars,
-			toolChars: TOOL_CHARS,
-		})
-	);
-}
-
-/**
- * The ceiling of the characters one step of the loop may hold.
- *
- * It is the prompt of the run, the pool of the tools and the definitions of
- * the tools: the loop stops itself when the next step would cost more than
- * the run holds, and the cost of a step is read from this ceiling.
- */
-export function stepCeilingChars(baseChars: number): number {
-	return baseChars + TOOL_CHARS;
+	const base = promptCharCount({ text, historyChars, pageChars, sourceChars });
+	return 2 * stepCeilingMicroUsd(model, stepPromptChars(base));
 }

@@ -2,7 +2,7 @@ import type { LanguageModelUsage, ModelMessage } from 'ai';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { costMicroUsd } from '../gateway/platform.ts';
-import { settleTarget } from '../gateway/resolve.ts';
+import { reserveTarget, settleTarget } from '../gateway/resolve.ts';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
 import { usageForSettlement } from '../gateway/usage.ts';
 import type { SettledUsage } from '../gateway/usage.ts';
@@ -11,7 +11,8 @@ import { markRun } from './repo.ts';
 import type { RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
 import { buildUserTurn, historyChars, historyMessages, quotedPageChars } from './prompt.ts';
-import { promptCharCount, stepCeilingChars } from './estimate.ts';
+import { promptCharCount } from './estimate.ts';
+import type { LoopBudget } from './loopBudget.ts';
 import { sourceChars } from './sources.ts';
 import { readToolSet } from '../tools/index.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
@@ -109,6 +110,26 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		pageChars: quotedPageChars(pages),
 		sourceChars: sourceChars(sources),
 	});
+	// The budget of the loop: the money the run holds, and the ceiling of a
+	// step. The loop asks the ledger for what it needs, one extension at a
+	// time, and the extension is atomic: two runs never share it.
+	const budget: LoopBudget = {
+		reserved,
+		pricing: target.pricing,
+		baseChars: promptChars,
+		runId,
+		extend: async (amount: number) => {
+			const taken = await reserveTarget(db, target, { userId: ownerId, day, amount });
+			if (!taken) return false;
+			// The row of the run carries the money it holds: the sweep of the
+			// stale runs gives all of it back.
+			await db.query(
+				'update public.ai_runs set reserved_microusd = reserved_microusd + $2::bigint where id = $1',
+				[runId, amount],
+			);
+			return true;
+		},
+	};
 
 	try {
 		await emit('run.started', {
@@ -176,15 +197,10 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			messages,
 			controller,
 			...(tools ? { tools } : {}),
-			// The ceiling of the loop: the money the run holds, and the cost of
-			// one more step. The loop stops itself when the next step would
-			// cost more than the reservation.
-			budget: {
-				reserved,
-				pricing: target.pricing,
-				stepChars: stepCeilingChars(promptChars),
-				runId,
-			},
+			// The ceiling of the loop: the money the run holds, and the cost
+			// of one more step. The loop stops itself when the next step
+			// would cost more than the reservation.
+			budget,
 			onToolCall: async ({ toolCallId, toolName, input }) => {
 				await emit('tool.called', { toolCallId, toolName, input });
 			},
@@ -243,7 +259,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			costMicroUsd: cost,
 		});
 		if (changed) {
-			await settleTarget(db, target, { userId: ownerId, day, reserved, actual: cost });
+			// The settlement gives back everything the run holds: the
+			// reservation up front and the extensions of the loop.
+			await settleTarget(db, target, { userId: ownerId, day, reserved: outcome.reserved, actual: cost });
 		}
 
 		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
@@ -263,7 +281,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		const changed = await markRun(db, runId, status, code);
 		await emit('error', { code, message: failureMessage(code, error) });
 		if (changed) {
-			await settleTarget(db, target, { userId: ownerId, day, reserved, actual: cost });
+			await settleTarget(db, target, { userId: ownerId, day, reserved: budget.reserved, actual: cost });
 		}
 	} finally {
 		runStore.releaseRun(runId);
