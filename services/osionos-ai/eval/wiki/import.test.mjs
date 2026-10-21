@@ -181,15 +181,43 @@ describe("the SQL of the import", () => {
 });
 
 /** The importer in stdout mode on a JSONL of these articles. */
+function importerArgs(directory, articles, extra) {
+	const jsonl = join(directory, "articles.jsonl");
+	writeFileSync(jsonl, articles.map((one) => `${JSON.stringify(one)}\n`).join(""));
+	const script = fileURLToPath(new URL("./import.mjs", import.meta.url));
+	return [script, "--workspace-owner", OWNER_ID, "--jsonl", jsonl, ...extra];
+}
+
+const STDOUT_ENV = { ...process.env, DATABASE_URL: "" };
+
 function importToStdout(articles, extra) {
 	const directory = mkdtempSync(join(tmpdir(), "wiki-import-"));
 	try {
-		const jsonl = join(directory, "articles.jsonl");
-		writeFileSync(jsonl, articles.map((one) => `${JSON.stringify(one)}\n`).join(""));
-		const script = fileURLToPath(new URL("./import.mjs", import.meta.url));
-		const args = [script, "--workspace-owner", OWNER_ID, "--jsonl", jsonl, ...extra];
-		const env = { ...process.env, DATABASE_URL: "" };
-		return spawnSync(process.execPath, args, { encoding: "utf8", env });
+		const args = importerArgs(directory, articles, extra);
+		return spawnSync(process.execPath, args, { encoding: "utf8", env: STDOUT_ENV });
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
+/**
+ * The importer behind a reader that waits a second before it reads, as the
+ * pipe of `docker run` does: the 64 KiB of the pipe fill, and a write the
+ * importer does not wait for is lost at its exit.
+ *
+ * Caveat: the wait is fixed; if the importer needs more than a second to reach
+ * its exit, the test passes on the bug. It never fails a correct importer.
+ */
+function importBehindSlowReader(articles, extra) {
+	const directory = mkdtempSync(join(tmpdir(), "wiki-import-"));
+	try {
+		const args = importerArgs(directory, articles, extra);
+		const pipeline = '"$0" "$@" | { sleep 1; cat; }';
+		return spawnSync("sh", ["-c", pipeline, process.execPath, ...args], {
+			encoding: "utf8",
+			env: STDOUT_ENV,
+			maxBuffer: 8 * 1024 * 1024,
+		});
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
 	}
@@ -203,6 +231,17 @@ describe("the command line of the import", () => {
 		assert.equal(child.status, 0, child.stderr);
 		assert.ok(child.stdout.includes("INSERT INTO public.osionos_workspaces"));
 		for (const one of articles) assert.ok(child.stdout.includes(pageId(one.title)), one.title);
+	});
+
+	it("writes every batch before it exits, past the 64 KiB of a pipe", () => {
+		const many = Array.from({ length: 120 }, (_, index) => {
+			return article(`Long ${index}`, ["B".repeat(MIN_ARTICLE_CHARS * 20)], "History");
+		});
+		const child = importBehindSlowReader(many, ["--batch", "50"]);
+		assert.equal(child.status, 0, child.stderr);
+		assert.ok(child.stdout.length > 512 * 1024, `${child.stdout.length} bytes`);
+		assert.equal(child.stdout.match(/^COMMIT;$/gm)?.length, 3, "three batches, three commits");
+		assert.ok(child.stdout.includes(pageId("Long 119")));
 	});
 
 	it("stops after --limit articles", () => {

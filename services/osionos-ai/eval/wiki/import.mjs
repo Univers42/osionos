@@ -228,6 +228,19 @@ export async function run(options, write) {
 	return { imported, accepted, skipped, seen, reasons };
 }
 
+/**
+ * A writer of SQL to a stream that resolves once the stream has taken it: the
+ * batches wait for a slow reader, and process.exit loses nothing. Behind
+ * `docker run` the pipe of stdout fills at 64 KiB, and a write nobody waited
+ * for was dropped at the exit.
+ */
+function streamWriter(stream) {
+	return (sql) =>
+		new Promise((resolve, reject) => {
+			stream.write(`${sql}\n`, (error) => (error ? reject(error) : resolve()));
+		});
+}
+
 /** The main: the SQL on stdout, or the psql of a throwaway Postgres. */
 export async function main(argv) {
 	const options = parseArgs(argv);
@@ -243,20 +256,14 @@ export async function main(argv) {
 	const command = databaseUrl.length > 0 ? psqlCommand(databaseUrl) : null;
 	if (command === null) {
 		// The SQL on stdout: the caller pipes it into psql.
-		const print = async (sql) => {
-			process.stdout.write(`${sql}\n`);
-		};
+		const print = streamWriter(process.stdout);
 		await print(workspaceSql(options));
 		const result = await run(options, print);
 		process.stderr.write(`[import] ${result.imported} articles, ${result.skipped} skipped\n`);
 		return 0;
 	}
 	const psql = spawn("docker", command, { stdio: ["pipe", "inherit", "inherit"] });
-	const write = async (sql) => {
-		await new Promise((resolve, reject) => {
-			psql.stdin.write(`${sql}\n`, (error) => (error ? reject(error) : resolve()));
-		});
-	};
+	const write = streamWriter(psql.stdin);
 	try {
 		await write(workspaceSql(options));
 		const result = await run(options, write);
