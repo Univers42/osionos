@@ -84,6 +84,11 @@ const envSchema = z.object({
 	// The catalog of models.dev: the market's providers and their models. It is
 	// fetched once a day and shared between the replicas through Redis.
 	OSIONOS_AI_CATALOG_URL: z.string().min(1).default('https://models.dev/api.json'),
+	// The bridge: where the write tools send their writes. Operator
+	// configuration, never a parameter: no model, no user and no workspace may
+	// move it. Without it the write tools are NOT registered, and the reads
+	// keep working.
+	OSIONOS_AI_BRIDGE_URL: z.string().min(1).optional(),
 });
 
 const rawEnv = {
@@ -109,6 +114,7 @@ const rawEnv = {
 	OSIONOS_AI_DEV_ENDPOINT_HOSTS: process.env.OSIONOS_AI_DEV_ENDPOINT_HOSTS,
 	OSIONOS_AI_DEV_PROVIDER_BASE_URLS: process.env.OSIONOS_AI_DEV_PROVIDER_BASE_URLS,
 	OSIONOS_AI_CATALOG_URL: process.env.OSIONOS_AI_CATALOG_URL,
+	OSIONOS_AI_BRIDGE_URL: process.env.OSIONOS_AI_BRIDGE_URL,
 };
 
 const parsed = envSchema.safeParse(rawEnv);
@@ -231,6 +237,14 @@ export interface AiServiceConfig {
 	devProviderBaseUrls: Readonly<Record<string, string>>;
 	/** The URL of the catalog of models.dev. */
 	catalogUrl: string;
+	/**
+	 * The URL of the bridge: where the write tools send their writes.
+	 *
+	 * It is operator configuration and nothing else: no argument of a tool,
+	 * no field of a page and no word of a user can move it. Without it the
+	 * write tools are not registered at all.
+	 */
+	bridgeUrl?: string;
 }
 
 export const config: AiServiceConfig = Object.freeze({
@@ -256,4 +270,14 @@ export const config: AiServiceConfig = Object.freeze({
 	devEndpointHosts: parseDevHosts(parsed.data.OSIONOS_AI_DEV_ENDPOINT_HOSTS),
 	devProviderBaseUrls: parseDevProviderUrls(parsed.data.OSIONOS_AI_DEV_PROVIDER_BASE_URLS),
 	catalogUrl: parsed.data.OSIONOS_AI_CATALOG_URL,
+	bridgeUrl: parsed.data.OSIONOS_AI_BRIDGE_URL,
 });
+
+// A deployment that runs the write tools needs the bridge: the URL is
+// operator configuration, and a deployment without it has no write path at
+// all. The service says so and stops, rather than serving a half of the
+// assistant.
+if (isProduction() && !parsed.data.OSIONOS_AI_BRIDGE_URL) {
+	console.error('[osionos-ai] refusing to start: invalid environment variables: OSIONOS_AI_BRIDGE_URL');
+	process.exit(1);
+}

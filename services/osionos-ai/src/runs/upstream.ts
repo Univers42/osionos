@@ -1,6 +1,7 @@
 import type { LanguageModelUsage, ModelMessage } from 'ai';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
+import { config } from '../config.ts';
 import { costMicroUsd } from '../gateway/platform.ts';
 import { settleTarget } from '../gateway/resolve.ts';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
@@ -16,6 +17,9 @@ import { extendRunReservation } from './extend.ts';
 import type { LoopBudget } from './loopBudget.ts';
 import { sourceChars } from './sources.ts';
 import { readToolSet, createToolPool } from '../tools/index.ts';
+import type { ToolOutcome } from '../tools/index.ts';
+import { writeToolSet } from '../approvals/toolSet.ts';
+import type { ApprovalContext, PermissionAsked } from '../approvals/types.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
@@ -103,6 +107,10 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	let usage: LanguageModelUsage | undefined;
 	let settled: SettledUsage | undefined;
 	let finishReason = 'stop';
+	// The run asked the user for the right to write: it ends with the reason
+	// 'awaiting_approval', and the APPROVAL ROW is what waits. The run itself
+	// is terminal, so the conversation may carry on.
+	let awaitingApproval = false;
 	// The size of the prompt, for the estimate of a provider that reports
 	// nothing: the reservation reads it from the same place.
 	const promptChars = promptCharCount({
@@ -155,32 +163,54 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// them, and the answer cites them the same way.
 		const cited: RetrievedChunk[] = [...sources];
 
+		// The hooks of the tools: the sources they find, what they did, and
+		// the approval they asked for.
+		const hooks = {
+			firstSourceNumber: sources.length,
+			onSources: async (found: readonly { n: number; source: RetrievedChunk }[]) => {
+				for (const { n, source } of found) {
+					cited.push(source);
+					await emit('citation', {
+						n,
+						pageId: source.pageId,
+						...(source.blockId ? { blockId: source.blockId } : {}),
+						title: source.title,
+						snippet: source.snippet,
+					});
+				}
+			},
+			onResult: async (outcome: ToolOutcome) => {
+				await emit('tool.result', outcome);
+			},
+			onApproval: async (asked: PermissionAsked) => {
+				awaitingApproval = true;
+				await emit('permission.asked', asked);
+			},
+		};
+
 		// The tools of the assistant: the search of a workspace, and the read
 		// of a page. They read the workspace of the caller, and they carry no
 		// token: a read tool has no use for one.
+		//
+		// The WRITE tools are here too, when the bridge is configured: they
+		// ask the user for the right to write, and they write nothing. Without
+		// a bridge URL they are not registered at all, and the reads keep
+		// working.
+		const approval: ApprovalContext = {
+			runId,
+			conversationId,
+			ownerId,
+			// The pages the run had read or quoted: where the request comes
+			// from. It grows as the run reads more.
+			provenance: () => [
+				...new Set([...pages.map((page) => page.id), ...cited.map((source) => source.pageId)]),
+			],
+		};
 		const tools = user
-			? readToolSet(
-					{ db, user },
-					{
-						firstSourceNumber: sources.length,
-						onSources: async (found) => {
-							for (const { n, source } of found) {
-								cited.push(source);
-								await emit('citation', {
-									n,
-									pageId: source.pageId,
-									...(source.blockId ? { blockId: source.blockId } : {}),
-									title: source.title,
-									snippet: source.snippet,
-								});
-							}
-						},
-						onResult: async (outcome) => {
-							await emit('tool.result', outcome);
-						},
-					},
-					pool,
-				)
+			? {
+					...readToolSet({ db, user }, hooks, pool),
+					...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
+				}
 			: undefined;
 
 		const messages: ModelMessage[] = [
@@ -216,6 +246,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		usage = outcome.usage;
 		finishReason = outcome.finishReason;
 		if (outcome.error !== undefined) throw outcome.error;
+		// The run asked the user for the right to write: it ends with that
+		// reason, and the approval row is what waits for the answer.
+		if (awaitingApproval) finishReason = 'awaiting_approval';
 
 		// The usage the upstream reported, or the estimate of what it did not.
 		settled = usageForSettlement(runId, usage, {
@@ -254,7 +287,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			inputTokens,
 			outputTokens,
 			costMicroUsd: cost,
-		});
+		}, finishReason);
 		if (changed) {
 			// The settlement gives back everything the run holds: the
 			// reservation up front and the extensions of the loop.

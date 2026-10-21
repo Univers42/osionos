@@ -14,10 +14,12 @@ export interface RunRow extends QueryResultRow {
 	reserved_microusd: string | number;
 	created_at: Date;
 	ended_at: Date | null;
+	/** Why the run ended the way it did: 'awaiting_approval' when it asked. */
+	finish_reason: string | null;
 }
 
 const RUN_COLUMNS =
-	'id, conversation_id, owner_id, status, model, error, usage, reserved_microusd, created_at, ended_at';
+	'id, conversation_id, owner_id, status, model, error, usage, reserved_microusd, created_at, ended_at, finish_reason';
 
 /** One run, whatever its owner. */
 export async function getRun(db: Pool, id: string): Promise<RunRow | null> {
@@ -68,6 +70,10 @@ export async function insertRun(
 /**
  * The end of a run. The row moves out of 'running' only once: the second
  * attempt finds nothing to update and does not settle the budget twice.
+ *
+ * The finish reason says WHY the run ended: 'awaiting_approval' for a run
+ * that asked the user for the right to write. It is written once, here, and
+ * never by the sweeper.
  */
 export async function markRun(
 	db: Pool,
@@ -75,13 +81,21 @@ export async function markRun(
 	status: RunStatus,
 	error?: string | null,
 	usage?: unknown,
+	finishReason?: string | null,
 ): Promise<boolean> {
 	const result = await db.query(
 		`update public.ai_runs
-		 set status = $2, error = $3, ended_at = now(), usage = coalesce($4::jsonb, usage)
+		 set status = $2, error = $3, ended_at = now(), usage = coalesce($4::jsonb, usage),
+		     finish_reason = coalesce($5::text, finish_reason)
 		 where id = $1 and status = 'running'
 		 returning id`,
-		[runId, status, error ?? null, usage === undefined ? null : JSON.stringify(usage)],
+		[
+			runId,
+			status,
+			error ?? null,
+			usage === undefined ? null : JSON.stringify(usage),
+			finishReason ?? null,
+		],
 	);
 	return result.rowCount === 1;
 }
