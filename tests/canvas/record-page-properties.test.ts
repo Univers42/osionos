@@ -184,3 +184,33 @@ test("edits: computed properties are read-only", () => {
   assert.deepEqual(editsAfter("weighted", "99"), []);
   assert.deepEqual(editsAfter("tasks", "9"), []);
 });
+
+/** A row whose select stores a LABEL and whose multi_select holds an unknown id. */
+function legacyPage(): DatabasePage {
+  return {
+    ...page,
+    properties: {
+      ...page.properties,
+      stage: "Proposal",
+      products: ["prod-whiteboard", "prod-retired"],
+    },
+  } as unknown as DatabasePage;
+}
+
+test("a row with legacy and unknown values opens without a write", () => {
+  const legacy = legacyPage();
+  const projected = projectRecordProperties(database, legacy, resolver);
+  assert.deepEqual(recordPropertyEdits(database, legacy, projected), []);
+});
+
+test("removing one tag keeps an unknown id", () => {
+  const legacy = legacyPage();
+  const entries = projectRecordProperties(database, legacy, resolver).map((item) =>
+    item.key === "products"
+      ? { ...item, value: (item.value as string[]).filter((label) => label !== "Whiteboard") }
+      : item,
+  );
+  assert.deepEqual(recordPropertyEdits(database, legacy, entries), [
+    { propertyId: "products", value: ["prod-retired"] },
+  ]);
+});
