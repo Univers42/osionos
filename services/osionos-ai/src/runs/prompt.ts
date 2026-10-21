@@ -1,9 +1,5 @@
 import type { Pool, QueryResultRow } from 'pg';
 import type { ModelMessage } from 'ai';
-import { config } from '../config.ts';
-import { costMicroUsd } from '../gateway/platform.ts';
-import type { PlatformModelEntry } from '../gateway/platform.ts';
-import { estimateTokens } from '../gateway/usage.ts';
 import { listMessages } from '../conversations/repo.ts';
 import type { AuthUser } from '../auth.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
@@ -226,48 +222,4 @@ export function buildUserTurn(
 	}
 	if (blocks.length === 0) return text;
 	return `${blocks.join('\n\n')}\n\n${text}`;
-}
-
-/**
- * The characters of the prompt of a call: the question, the history, the pages
- * the run quotes, the sources it found, and the system prompt.
- *
- * The reservation and the settlement of a call read the size of the prompt
- * from here, so the two never disagree.
- */
-export function promptCharCount({
-	text,
-	historyChars,
-	pageChars = 0,
-	sourceChars = 0,
-}: {
-	text: string;
-	historyChars: number;
-	pageChars?: number;
-	sourceChars?: number;
-}): number {
-	return text.length + historyChars + pageChars + sourceChars + SYSTEM_PROMPT.length;
-}
-
-/**
- * The reservation of a call: what the prompt is expected to cost.
- *
- * Caveat: the input tokens are estimated at four characters per token, which
- * under-counts CJK and code-heavy text. The estimate is a ceiling for the
- * reservation, not a bill: the settlement corrects it with the usage the
- * upstream reports.
- */
-export function estimateMicroUsd(
-	model: PlatformModelEntry,
-	{
-		text,
-		historyChars,
-		pageChars = 0,
-		sourceChars = 0,
-	}: { text: string; historyChars: number; pageChars?: number; sourceChars?: number },
-): number {
-	const estimatedInputTokens = estimateTokens(
-		promptCharCount({ text, historyChars, pageChars, sourceChars }),
-	);
-	return costMicroUsd(model, { inputTokens: estimatedInputTokens, outputTokens: config.maxOutputTokens });
 }

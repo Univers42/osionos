@@ -10,10 +10,15 @@ import { appendMessage } from '../conversations/repo.ts';
 import { markRun } from './repo.ts';
 import type { RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
-import { buildUserTurn, historyChars, historyMessages, promptCharCount, quotedPageChars } from './prompt.ts';
+import { buildUserTurn, historyChars, historyMessages, quotedPageChars } from './prompt.ts';
+import { promptCharCount } from './estimate.ts';
+import { extendRunReservation } from './extend.ts';
+import type { LoopBudget } from './loopBudget.ts';
 import { sourceChars } from './sources.ts';
+import { readToolSet, createToolPool } from '../tools/index.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
+import type { AuthUser } from '../auth.ts';
 import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
 
 /**
@@ -48,6 +53,13 @@ export interface UpstreamRunInput {
 	pages: readonly PageContext[];
 	/** The sources of the answer: the chunks the retrieval found. */
 	sources: readonly RetrievedChunk[];
+	/**
+	 * The caller, when the run has one.
+	 *
+	 * The tools of the assistant read the workspace of the caller, so a run
+	 * without a caller has no tools: it answers with what it was given.
+	 */
+	user?: AuthUser;
 	skippedPageIds: readonly string[];
 	userMessageId: string;
 	/** The title of the conversation: the first frame carries it. */
@@ -71,6 +83,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		history,
 		pages,
 		sources,
+		user,
 		skippedPageIds,
 		userMessageId,
 		title,
@@ -98,6 +111,20 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		pageChars: quotedPageChars(pages),
 		sourceChars: sourceChars(sources),
 	});
+	// The budget of the loop: the money the run holds, and the ceiling of a
+	// step. The loop asks the ledger for what it needs, one extension at a
+	// time, and the extension is atomic: two runs never share it.
+	const budget: LoopBudget = {
+		reserved,
+		pricing: target.pricing,
+		baseChars: promptChars,
+		runId,
+		extend: (amount: number) => extendRunReservation(db, target, { userId: ownerId, day, runId, amount }),
+	};
+	// The pool of the tools of THIS run: the tools of a run may not put
+	// more in its context than the reservation of the run counted, and one
+	// step may not add more than a step's share of it.
+	const pool = createToolPool();
 
 	try {
 		await emit('run.started', {
@@ -123,6 +150,39 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			});
 		}
 
+		// The sources of the whole run: the ones of the prompt first, then
+		// the ones the tools found. The number of a source is its rank among
+		// them, and the answer cites them the same way.
+		const cited: RetrievedChunk[] = [...sources];
+
+		// The tools of the assistant: the search of a workspace, and the read
+		// of a page. They read the workspace of the caller, and they carry no
+		// token: a read tool has no use for one.
+		const tools = user
+			? readToolSet(
+					{ db, user },
+					{
+						firstSourceNumber: sources.length,
+						onSources: async (found) => {
+							for (const { n, source } of found) {
+								cited.push(source);
+								await emit('citation', {
+									n,
+									pageId: source.pageId,
+									...(source.blockId ? { blockId: source.blockId } : {}),
+									title: source.title,
+									snippet: source.snippet,
+								});
+							}
+						},
+						onResult: async (outcome) => {
+							await emit('tool.result', outcome);
+						},
+					},
+					pool,
+				)
+			: undefined;
+
 		const messages: ModelMessage[] = [
 			...historyMessages(history),
 			{ role: 'user', content: buildUserTurn(text, pages, sources) },
@@ -132,6 +192,18 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			model: target.model,
 			messages,
 			controller,
+			...(tools ? { tools } : {}),
+			// The ceiling of the loop: the money the run holds, and the cost
+			// of one more step. The loop decides before every step: a step
+			// it cannot pay for becomes the answer.
+			budget,
+			pool,
+			onToolCall: async ({ toolCallId, toolName, input }) => {
+				await emit('tool.called', { toolCallId, toolName, input });
+			},
+			onToolError: async ({ toolCallId, toolName }) => {
+				await emit('tool.result', { toolCallId, toolName, ok: false, error: 'the tool failed' });
+			},
 			onText: async (delta) => {
 				await emit('text.delta', { text: delta });
 			},
@@ -165,7 +237,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 					: [{ type: 'text', text: answer }]),
 				// The sources of the answer, in the order they were given to the
 				// model: the part of a source is its number minus one.
-				...sources.map((source) => ({
+				...cited.map((source) => ({
 					type: 'citation',
 					pageId: source.pageId,
 					...(source.blockId ? { blockId: source.blockId } : {}),
@@ -184,7 +256,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			costMicroUsd: cost,
 		});
 		if (changed) {
-			await settleTarget(db, target, { userId: ownerId, day, reserved, actual: cost });
+			// The settlement gives back everything the run holds: the
+			// reservation up front and the extensions of the loop.
+			await settleTarget(db, target, { userId: ownerId, day, reserved: outcome.reserved, actual: cost });
 		}
 
 		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
@@ -197,11 +271,14 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			outputChars: answer.length + reasoning.length,
 		});
 		const cost = costMicroUsd(target.pricing, billed);
-		await emit('error', { code, message: failureMessage(code, error) });
+		// The row of the run is closed BEFORE the terminal frame: a client
+		// that reads the row when it sees the frame reads the truth. The
+		// success path does the same.
 		const status: RunStatus = code === 'cancelled' ? 'cancelled' : 'failed';
 		const changed = await markRun(db, runId, status, code);
+		await emit('error', { code, message: failureMessage(code, error) });
 		if (changed) {
-			await settleTarget(db, target, { userId: ownerId, day, reserved, actual: cost });
+			await settleTarget(db, target, { userId: ownerId, day, reserved: budget.reserved, actual: cost });
 		}
 	} finally {
 		runStore.releaseRun(runId);
