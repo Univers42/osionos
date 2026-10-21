@@ -114,3 +114,27 @@ test("echarts-builders: stacking/percent/horizontal variants are wired", () => {
   const colSum = percent[0].data[0] + percent[1].data[0];
   assert.ok(Math.abs(colSum - 100) < 0.51);
 });
+
+test("echarts-builders: the funnel keeps option colours and drops empty stages", () => {
+  const funnelResult: ChartResult = {
+    categories: [
+      { key: "won", label: "Won", color: "var(--color-success)", values: {}, pageIds: {}, total: 5 },
+      { key: "lead", label: "Lead", color: "", values: {}, pageIds: {}, total: 9 },
+      { key: "lost", label: "Lost", color: "var(--color-danger)", values: {}, pageIds: {}, total: 0 },
+    ],
+    series: [],
+    total: 14,
+    truncatedGroups: false,
+    truncatedSeries: false,
+  };
+  const funnel = buildEChartsOption({
+    result: funnelResult, settings: {}, def: getChartTypeDef("funnel"),
+    colors: ["#111111"],
+  }).series as { data: { name: string; value: number; itemStyle?: { color: string } }[] }[];
+  assert.equal(funnel[0].data.length, 2, "zero-total stage dropped");
+  assert.ok(!funnel[0].data.some((item) => item.name === "Lost"), "no Lost stage");
+  const won = funnel[0].data.find((item) => item.name === "Won");
+  assert.equal(won?.itemStyle?.color, "var(--color-success)");
+  const lead = funnel[0].data.find((item) => item.name === "Lead");
+  assert.equal(lead?.itemStyle, undefined, "colourless Lead keeps the palette");
+});
