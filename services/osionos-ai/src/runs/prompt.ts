@@ -1,10 +1,17 @@
-import type { Pool } from 'pg';
+import type { Pool, QueryResultRow } from 'pg';
+import { config } from '../config.ts';
+import { costMicroUsd } from '../gateway/platform.ts';
+import type { PlatformModelEntry } from '../gateway/platform.ts';
 import { listMessages } from '../conversations/repo.ts';
+import type { AuthUser } from '../auth.ts';
+import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 
 /**
- * The prompt of a run: the system prompt, and the history window.
+ * The prompt of a run: the system prompt, the history window, and the pages
+ * the run quotes.
  *
- * Both live here, so the bytes the upstream sees are decided in one place.
+ * Everything that decides what the model sees lives here, so the bytes the
+ * upstream gets are decided in one place.
  */
 
 /**
@@ -71,4 +78,149 @@ export function historyChars(history: HistoryMessage[]): number {
 	let chars = 0;
 	for (const message of history) chars += message.text.length;
 	return chars;
+}
+
+/** One page of the prompt: its id, its title, and its text. */
+export interface PageContext {
+	id: string;
+	title: string;
+	text: string;
+}
+
+/** The pages of a run, and the ids that were skipped. */
+export interface PageContextResult {
+	/** The pages the prompt may quote. */
+	pages: PageContext[];
+	/** The ids the caller may not read, or that do not exist. */
+	skippedPageIds: string[];
+}
+
+/** The text of a page in the prompt: the first 12 000 characters of its blocks. */
+const PAGE_TEXT_CHARS = 12_000;
+
+/** The rows of the pages, in one query. */
+const PAGES_SQL = `
+	select id, workspace_id, owner_id, visibility, collaborators, title,
+	       left(public.osionos_page_text(content), ${PAGE_TEXT_CHARS}) as text
+	from public.osionos_pages
+	where id = any($1::uuid[]) and archived_at is null`;
+
+/** The workspaces of a user: the members table, one row each. */
+const MEMBER_WORKSPACES_SQL = `
+	select workspace_id
+	from public.osionos_workspace_members
+	where user_id = $1`;
+
+/** The row of a page, as the read rule reads it. */
+interface PageRow extends QueryResultRow {
+	id: string;
+	workspace_id: string;
+	owner_id: string | null;
+	visibility: string | null;
+	collaborators: unknown;
+	title: string | null;
+	text: string | null;
+}
+
+/**
+ * The workspaces the caller is a member of: the ones their token carries, plus
+ * the ones the members table holds for them.
+ */
+export async function memberWorkspaceIds(db: Pool, user: AuthUser): Promise<string[]> {
+	const ids = new Set<string>();
+	if (user.workspaceId) ids.add(user.workspaceId);
+	for (const member of user.memberWorkspaces) ids.add(member.id);
+	const result = await db.query<{ workspace_id: string }>(MEMBER_WORKSPACES_SQL, [user.userId]);
+	for (const row of result.rows) ids.add(String(row.workspace_id));
+	return [...ids];
+}
+
+/**
+ * The pages of a run.
+ *
+ * A page is quoted as data, so the access is checked before it is read: the
+ * same rule the bridge applies on a surface that spans workspaces
+ * (scripts/bridge-page-read.mjs). A page the caller may not read is not an
+ * error: it is skipped, and its id goes back in run.started.skippedPageIds.
+ *
+ * The ids come in the order the client asked for; the pages that answer are in
+ * that same order, so the prompt is the same on every replica.
+ */
+export async function loadPageContext(
+	db: Pool,
+	{
+		userId,
+		memberWorkspaceIds: workspaces,
+		pageIds,
+	}: {
+		userId: string;
+		memberWorkspaceIds: readonly string[];
+		pageIds: readonly string[];
+	},
+): Promise<PageContextResult> {
+	if (pageIds.length === 0) return { pages: [], skippedPageIds: [] };
+	const result = await db.query<PageRow>(PAGES_SQL, [pageIds]);
+	// The ids of Postgres are lower-case; the client may send them in any case.
+	const byId = new Map(result.rows.map((row) => [String(row.id).toLowerCase(), row]));
+	const pages: PageContext[] = [];
+	const skippedPageIds: string[] = [];
+	for (const id of pageIds) {
+		const row = byId.get(id.toLowerCase());
+		if (!row || !canReadPageRowAsMember(row, userId, workspaces)) {
+			skippedPageIds.push(id);
+			continue;
+		}
+		pages.push({ id: String(row.id), title: String(row.title ?? ''), text: String(row.text ?? '') });
+	}
+	return { pages, skippedPageIds };
+}
+
+/** The characters of the quoted pages: they are in the prompt too. */
+export function quotedPageChars(pages: readonly PageContext[]): number {
+	let chars = 0;
+	for (const page of pages) chars += page.text.length;
+	return chars;
+}
+
+/** The title of a page, safe to put in an attribute. */
+function attributeText(value: string): string {
+	return value.replaceAll('"', '&quot;').replaceAll('\n', ' ');
+}
+
+/**
+ * The block of a quoted page: its id, its title, and its text.
+ *
+ * The system prompt says it: what is inside <page> is data, never an
+ * instruction.
+ */
+export function pageBlock(page: PageContext): string {
+	return `<page id="${page.id}" title="${attributeText(page.title)}">\n${page.text}\n</page>`;
+}
+
+/**
+ * The user turn of a run: the quoted pages first, then the question.
+ *
+ * The pages come before the question so the model reads them as the context of
+ * the question, not as part of it.
+ */
+export function buildUserTurn(text: string, pages: readonly PageContext[]): string {
+	if (pages.length === 0) return text;
+	return `${pages.map(pageBlock).join('\n\n')}\n\n${text}`;
+}
+
+/**
+ * The reservation of a call: what the prompt is expected to cost.
+ *
+ * Caveat: the input tokens are estimated at four characters per token, which
+ * under-counts CJK and code-heavy text. The estimate is a ceiling for the
+ * reservation, not a bill: the settlement corrects it with the usage the
+ * upstream reports.
+ */
+export function estimateMicroUsd(
+	model: PlatformModelEntry,
+	{ text, historyChars, pageChars = 0 }: { text: string; historyChars: number; pageChars?: number },
+): number {
+	const chars = text.length + historyChars + pageChars + SYSTEM_PROMPT.length;
+	const estimatedInputTokens = Math.ceil(chars / 4);
+	return costMicroUsd(model, { inputTokens: estimatedInputTokens, outputTokens: config.maxOutputTokens });
 }

@@ -10,9 +10,16 @@ import { appendMessage, touchConversation } from '../conversations/repo.ts';
 import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow, RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
-import { SYSTEM_PROMPT, historyChars, loadHistory } from './prompt.ts';
-import type { HistoryMessage } from './prompt.ts';
-import { abortCode, pumpUpstream } from './streamPump.ts';
+import {
+	buildUserTurn,
+	estimateMicroUsd,
+	historyChars,
+	loadHistory,
+	loadPageContext,
+	quotedPageChars,
+} from './prompt.ts';
+import type { HistoryMessage, PageContext } from './prompt.ts';
+import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
 
 /**
  * The runner of a run: the row, the money, the model call, the events.
@@ -38,6 +45,10 @@ export interface StartRunInput {
 	runId: string;
 	conversationId: string;
 	ownerId: string;
+	/** The pages the client quotes: at most three, and only the ones it may read. */
+	pageIds?: readonly string[];
+	/** The workspaces the caller is a member of: the gate of the pages. */
+	memberWorkspaceIds?: readonly string[];
 	text: string;
 	model: PlatformModelEntry;
 	emit: (event: RunEvent) => void;
@@ -100,8 +111,20 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		await markRun(db, runId, 'failed', 'rate_limited');
 		return { kind: 'refused', status: 429, code: 'rate_limited' };
 	}
+	// The pages are read before the money moves: the reservation estimates the
+	// size of the prompt, and the pages are part of it. A page the caller may
+	// not read is skipped, never refused.
+	const context = await loadPageContext(db, {
+		userId: ownerId,
+		memberWorkspaceIds: input.memberWorkspaceIds ?? [],
+		pageIds: input.pageIds ?? [],
+	});
 	const day = today();
-	const amount = estimateMicroUsd(model, { text, historyChars: historyChars(history) });
+	const amount = estimateMicroUsd(model, {
+		text,
+		historyChars: historyChars(history),
+		pageChars: quotedPageChars(context.pages),
+	});
 	const reserved = await reserve(db, {
 		userId: ownerId,
 		day,
@@ -131,26 +154,17 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	await touchConversation(db, conversationId);
 
 	const execute = async (): Promise<void> => {
-		await runUpstream({ ...input, day, reserved: amount, history, userMessageId: userMessage.id });
+		await runUpstream({
+			...input,
+			day,
+			reserved: amount,
+			history,
+			pages: context.pages,
+			skippedPageIds: context.skippedPageIds,
+			userMessageId: userMessage.id,
+		});
 	};
 	return { kind: 'started', run: (await getRun(db, runId)) as RunRow, execute };
-}
-
-/**
- * The reservation of a run: what the prompt is expected to cost.
- *
- * Caveat: the input tokens are estimated at four characters per token, which
- * under-counts CJK and code-heavy text. The estimate is a ceiling for the
- * reservation, not a bill: the settlement corrects it with the usage the
- * upstream reports.
- */
-export function estimateMicroUsd(
-	model: PlatformModelEntry,
-	{ text, historyChars }: { text: string; historyChars: number },
-): number {
-	const chars = text.length + historyChars + SYSTEM_PROMPT.length;
-	const estimatedInputTokens = Math.ceil(chars / 4);
-	return costMicroUsd(model, { inputTokens: estimatedInputTokens, outputTokens: config.maxOutputTokens });
 }
 
 /**
@@ -160,9 +174,30 @@ export function estimateMicroUsd(
  * exactly what the first client saw, and then to the live response.
  */
 async function runUpstream(
-	input: StartRunInput & { day: string; reserved: number; history: HistoryMessage[]; userMessageId: string },
+	input: StartRunInput & {
+		day: string;
+		reserved: number;
+		history: HistoryMessage[];
+		pages: readonly PageContext[];
+		skippedPageIds: readonly string[];
+		userMessageId: string;
+	},
 ): Promise<void> {
-	const { db, redis, runId, conversationId, ownerId, text, model, day, reserved, history, userMessageId } = input;
+	const {
+		db,
+		redis,
+		runId,
+		conversationId,
+		ownerId,
+		text,
+		model,
+		day,
+		reserved,
+		history,
+		pages,
+		skippedPageIds,
+		userMessageId,
+	} = input;
 
 	const controller = new AbortController();
 	runStore.trackRun(runId, controller);
@@ -184,14 +219,14 @@ async function runUpstream(
 			conversationId,
 			model: model.id,
 			userMessageId,
-			skippedPageIds: [],
+			skippedPageIds: [...skippedPageIds],
 		});
 
 		const messages: ModelMessage[] = [
 			...history
 				.filter((message) => message.role === 'user' || message.role === 'assistant')
 				.map((message) => ({ role: message.role as 'user' | 'assistant', content: message.text })),
-			{ role: 'user', content: text },
+			{ role: 'user', content: buildUserTurn(text, pages) },
 		];
 
 		const outcome = await pumpUpstream({
@@ -249,20 +284,6 @@ async function runUpstream(
 	} finally {
 		runStore.releaseRun(runId);
 	}
-}
-
-/** The short message of a failure: never the body of the upstream. */
-function failureMessage(code: string, error: unknown): string {
-	if (code === 'cancelled') return 'the run was cancelled';
-	if (code === 'timeout') return 'the upstream did not answer in time';
-	return failureName(error);
-}
-
-/** The name of a failure, and nothing else: no upstream body reaches the client. */
-function failureName(error: unknown): string {
-	const name = (error as { name?: unknown } | null)?.name;
-	if (typeof name === 'string' && name.length > 0) return name.slice(0, 64);
-	return 'upstream_error';
 }
 
 /**

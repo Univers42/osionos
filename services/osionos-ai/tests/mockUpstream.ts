@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import type { ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 /**
  * A mock OpenAI-compatible upstream: the SSE of the P0a spike, with the knobs
@@ -32,6 +32,12 @@ export interface MockUpstream {
 	readonly calls: number;
 	/** The text of every answer, in the order of the calls. */
 	readonly texts: string[];
+	/** The body of every request, in the order of the calls. */
+	readonly bodies: unknown[];
+	/** The number of streams the client cut before the end. */
+	readonly aborted: number;
+	/** The body of the last request: the prompt the service sent. */
+	lastBody(): unknown;
 	setOptions(next: Partial<MockOptions>): void;
 	close(): Promise<void>;
 }
@@ -56,11 +62,23 @@ function serializeChunk(content: string, last: boolean): string {
 	return `data: ${JSON.stringify(payload)}\n\n`;
 }
 
+/** The body of a request, read to the end. */
+function readBody(request: IncomingMessage): Promise<string> {
+	return new Promise((resolve) => {
+		const chunks: Buffer[] = [];
+		request.on('data', (chunk: Buffer) => chunks.push(chunk));
+		request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+		request.on('error', () => resolve(''));
+	});
+}
+
 /** The mock upstream, on a random port of the loopback. */
 export async function startMockUpstream(initial?: Partial<MockOptions>): Promise<MockUpstream> {
 	let options: MockOptions = { ...DEFAULT_OPTIONS, ...initial };
 	let calls = 0;
 	const texts: string[] = [];
+	const bodies: unknown[] = [];
+	let aborted = 0;
 
 	const server = createServer((request, response) => {
 		if (!request.url?.endsWith('/chat/completions')) {
@@ -69,15 +87,23 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			return;
 		}
 		calls += 1;
-		request.resume();
-		if (options.fail) {
-			response.writeHead(500, { 'content-type': 'application/json' });
-			response.end(JSON.stringify({ error: { message: 'the upstream is down' } }));
-			return;
-		}
-		const chunks = chunkTexts(options.chunkCount);
-		texts.push(chunks.join(''));
-		streamAnswer(response, chunks, options);
+		void readBody(request).then((raw) => {
+			try {
+				bodies.push(JSON.parse(raw));
+			} catch {
+				bodies.push(raw);
+			}
+			if (options.fail) {
+				response.writeHead(500, { 'content-type': 'application/json' });
+				response.end(JSON.stringify({ error: { message: 'the upstream is down' } }));
+				return;
+			}
+			const chunks = chunkTexts(options.chunkCount);
+			texts.push(chunks.join(''));
+			streamAnswer(response, chunks, options, () => {
+				aborted += 1;
+			});
+		});
 	});
 
 	await new Promise<void>((resolve) => {
@@ -94,6 +120,15 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 		get texts(): string[] {
 			return texts;
 		},
+		get bodies(): unknown[] {
+			return bodies;
+		},
+		get aborted(): number {
+			return aborted;
+		},
+		lastBody(): unknown {
+			return bodies[bodies.length - 1];
+		},
 		setOptions(next: Partial<MockOptions>): void {
 			options = { ...options, ...next };
 		},
@@ -107,7 +142,7 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 }
 
 /** The stream of one answer: the chunks, one after the other. */
-function streamAnswer(response: ServerResponse, chunks: string[], options: MockOptions): void {
+function streamAnswer(response: ServerResponse, chunks: string[], options: MockOptions, onAbort: () => void): void {
 	response.writeHead(200, {
 		'content-type': 'text/event-stream',
 		'cache-control': 'no-cache',
@@ -126,6 +161,10 @@ function streamAnswer(response: ServerResponse, chunks: string[], options: MockO
 	};
 	setTimeout(send, options.preDelayMs);
 	response.on('close', () => {
-		if (!response.writableEnded) response.destroy();
+		// The client went away before the end: the stream was cut.
+		if (!response.writableEnded) {
+			onAbort();
+			response.destroy();
+		}
 	});
 }

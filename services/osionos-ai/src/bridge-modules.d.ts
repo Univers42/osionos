@@ -62,3 +62,23 @@ declare module '*scripts/bridge-session-cutoff.mjs' {
 		options?: { intervalMs?: number; timeoutMs?: number },
 	): { tick(): Promise<void>; stop(): void };
 }
+
+declare module '*scripts/bridge-page-read.mjs' {
+	/**
+	 * The read rule of a page for a member of its workspace. The row carries the
+	 * raw columns: workspace_id, visibility, owner_id and collaborators.
+	 */
+	export function canReadPageRowAsMember(
+		row:
+			| {
+					workspace_id?: unknown;
+					visibility?: unknown;
+					owner_id?: unknown;
+					collaborators?: unknown;
+			  }
+			| null
+			| undefined,
+		userId: string,
+		memberWorkspaceIds: readonly string[],
+	): boolean;
+}
