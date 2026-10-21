@@ -129,6 +129,18 @@ export const aiInferencePort: InferencePort = {
       signal?.removeEventListener("abort", onAbort);
     }
   },
+
+  /** Attaches to a run that is already on the service: the follow-up of a write. */
+  async attach(runId, onEvent, signal) {
+    await streamRun({
+      // The run went on without the client: it picks up the frames it has not
+      // seen — the same stream it resumes after a drop.
+      start: () => resumeRun(runId, undefined, signal),
+      resume: (lastEventId) => resumeRun(runId, lastEventId, signal),
+      onEvent,
+      signal,
+    });
+  },
 };
 
 /**
