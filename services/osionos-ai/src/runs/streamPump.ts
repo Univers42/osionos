@@ -39,6 +39,20 @@ export function abortCode(signal: AbortSignal): 'timeout' | 'cancelled' | null {
 	return reason?.name === 'timeout' ? 'timeout' : 'cancelled';
 }
 
+/** The short message of a failure: never the body of the upstream. */
+export function failureMessage(code: string, error: unknown): string {
+	if (code === 'cancelled') return 'the run was cancelled';
+	if (code === 'timeout') return 'the upstream did not answer in time';
+	return failureName(error);
+}
+
+/** The name of a failure, and nothing else: no upstream body reaches the client. */
+function failureName(error: unknown): string {
+	const name = (error as { name?: unknown } | null)?.name;
+	if (typeof name === 'string' && name.length > 0) return name.slice(0, 64);
+	return 'upstream_error';
+}
+
 export interface PumpInput {
 	model: PlatformModelEntry;
 	messages: ModelMessage[];

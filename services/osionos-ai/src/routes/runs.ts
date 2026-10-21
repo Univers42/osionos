@@ -5,6 +5,7 @@ import { resolveModel } from '../gateway/platform.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
 import { getOwnedRun } from '../runs/repo.ts';
 import { startRun } from '../runs/runner.ts';
+import { memberWorkspaceIds } from '../runs/prompt.ts';
 import * as runStore from '../runs/runStore.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
@@ -21,6 +22,12 @@ const startRunSchema = z.object({
 	conversationId: z.string().regex(UUID, 'conversationId must be a uuid'),
 	text: z.string().min(1).max(32_000),
 	model: z.string().min(1).optional(),
+	context: z
+		.object({
+			// At most three pages: the prompt carries them, and the prompt has a size.
+			pageIds: z.array(z.string().regex(UUID, 'pageIds must be uuids')).max(3),
+		})
+		.optional(),
 });
 
 /** A quiet stream is kept alive with a comment every fifteen seconds. */
@@ -78,6 +85,10 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		sendError(ctx.response, 404, 'not_found');
 		return 404;
 	}
+	const pageIds = body.context?.pageIds ?? [];
+	// The workspaces of the caller are the gate of the pages: they are read
+	// only when the client quotes something.
+	const workspaces = pageIds.length > 0 ? await memberWorkspaceIds(ctx.deps.db, user) : [];
 	const outcome = await startRun({
 		db: ctx.deps.db,
 		redis: ctx.deps.redis,
@@ -86,6 +97,8 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		ownerId: user.userId,
 		text: body.text,
 		model,
+		pageIds,
+		memberWorkspaceIds: workspaces,
 		emit: (event) => writeSseFrame(ctx.response, event),
 	});
 	if (outcome.kind === 'refused') {

@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
 import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import { startMockUpstream } from './mockUpstream.ts';
+import { SseStream, collect } from './sse.ts';
+import type { SseEvent } from './sse.ts';
 
 const APP_SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
 const USER_A = '11111111-1111-4111-8111-111111111111';
@@ -56,69 +58,6 @@ after(async () => {
 	await mock.close();
 });
 
-/** One event of a stream: the id of the frame, its type, its data. */
-interface SseEvent {
-	id: string;
-	event: string;
-	data: unknown;
-}
-
-/** The events of a stream, read one at a time. */
-class SseStream {
-	private readonly reader: ReadableStreamDefaultReader<Uint8Array>;
-	private readonly decoder = new TextDecoder();
-	private buffer = '';
-
-	constructor(response: Response) {
-		this.reader = response.body!.getReader();
-	}
-
-	async next(): Promise<SseEvent | null> {
-		while (true) {
-			const cut = this.buffer.indexOf('\n\n');
-			if (cut >= 0) {
-				const frame = this.buffer.slice(0, cut);
-				this.buffer = this.buffer.slice(cut + 2);
-				const parsed = parseFrame(frame);
-				if (parsed) return parsed;
-				continue;
-			}
-			const { value, done } = await this.reader.read();
-			if (done) return null;
-			this.buffer += this.decoder.decode(value, { stream: true });
-		}
-	}
-
-	/** The connection goes away: the run keeps going on the server. */
-	async drop(): Promise<void> {
-		await this.reader.cancel();
-	}
-}
-
-/** One frame of a stream: the id, the type, the data. A ping has no data. */
-function parseFrame(frame: string): SseEvent | null {
-	let id = '';
-	let event = 'message';
-	const data: string[] = [];
-	for (const line of frame.split('\n')) {
-		if (line.startsWith('id: ')) id = line.slice(4);
-		else if (line.startsWith('event: ')) event = line.slice(7);
-		else if (line.startsWith('data: ')) data.push(line.slice(6));
-	}
-	if (data.length === 0) return null;
-	return { id, event, data: JSON.parse(data.join('\n')) as unknown };
-}
-
-/** Every event of a stream, until it ends. */
-async function collect(stream: SseStream): Promise<SseEvent[]> {
-	const events: SseEvent[] = [];
-	while (true) {
-		const event = await stream.next();
-		if (!event) return events;
-		events.push(event);
-	}
-}
-
 /** A JSON answer of the service. */
 async function call(
 	path: string,
@@ -151,11 +90,18 @@ function postRun(
 	text: string,
 	model?: string,
 	token = tokenFor(USER_A, WORKSPACE_A),
+	pageIds: string[] = [],
 ): Promise<Response> {
 	return fetch(`${base}/api/ai/runs`, {
 		method: 'POST',
 		headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-		body: JSON.stringify({ runId, conversationId, text, ...(model ? { model } : {}) }),
+		body: JSON.stringify({
+			runId,
+			conversationId,
+			text,
+			...(model ? { model } : {}),
+			...(pageIds.length > 0 ? { context: { pageIds } } : {}),
+		}),
 	});
 }
 
@@ -338,6 +284,44 @@ describe('osionos-ai runs', () => {
 		assert.equal(response.status, 400);
 		const body = (await response.json()) as JsonBody;
 		assert.equal(body.code, 'model_not_allowed');
+	});
+
+	it('a run quotes the pages the caller may read, and skips the others', async () => {
+		const shared = randomUUID();
+		const foreign = randomUUID();
+		const missing = randomUUID();
+		await app.db.query(
+			`insert into public.osionos_pages (id, workspace_id, owner_id, title, visibility, content)
+			 values ($1, $2, $3, 'Shared notes', 'shared', $4::jsonb),
+			        ($5, $6, $7, 'Private notes', 'private', $8::jsonb)`,
+			[
+				shared,
+				WORKSPACE_A,
+				USER_A,
+				JSON.stringify([{ content: 'the readable page text' }]),
+				foreign,
+				WORKSPACE_B,
+				USER_B,
+				JSON.stringify([{ content: 'the private page text' }]),
+			],
+		);
+
+		const conversationId = await createConversation();
+		const events = await collect(
+			new SseStream(await postRun(conversationId, randomUUID(), 'what do the notes say?', undefined, undefined, [shared, foreign, missing])),
+		);
+
+		// The prompt carries the page the caller may read, and only that one.
+		const prompt = JSON.stringify(mock.lastBody());
+		assert.ok(prompt.includes('the readable page text'));
+		assert.ok(!prompt.includes('the private page text'));
+
+		// The pages that are not readable are skipped, never refused.
+		const started = events[0];
+		assert.equal(started?.event, 'run.started');
+		const skipped = (started?.data as { skippedPageIds: string[] }).skippedPageIds;
+		assert.deepEqual(skipped, [foreign, missing]);
+		assert.equal(events[events.length - 1]?.event, 'done');
 	});
 
 	it('the sweep gives up a stale run and gives its money back', async () => {

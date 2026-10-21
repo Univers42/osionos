@@ -10,6 +10,8 @@ import { sendError, sendPreflight } from './http.ts';
 import { handleHealth } from './routes/health.ts';
 import { handleConversationMessages, handleConversations } from './routes/conversations.ts';
 import { handleModels } from './routes/models.ts';
+import { handleCommands } from './routes/commands.ts';
+import { handleComplete } from './routes/complete.ts';
 import { handleRunCancel, handleRunEvents, handleRuns } from './routes/runs.ts';
 import { sweepStaleRuns } from './runs/runner.ts';
 import * as runStore from './runs/runStore.ts';
@@ -48,6 +50,8 @@ const ROUTES: RouteEntry[] = [
 		anyMethod: true,
 	},
 	{ methods: ['GET'], pattern: /^\/api\/ai\/models$/, label: '/api/ai/models', handle: handleModels },
+	{ methods: ['GET'], pattern: /^\/api\/ai\/commands$/, label: '/api/ai/commands', handle: handleCommands },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/complete$/, label: '/api/ai/complete', handle: handleComplete },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/runs$/, label: '/api/ai/runs', handle: handleRuns },
 	{
 		methods: ['GET'],

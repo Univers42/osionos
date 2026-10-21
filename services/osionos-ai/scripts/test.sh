@@ -78,6 +78,47 @@ create table if not exists public.osionos_workspace_members (
 	permissions text[] not null default array['read'],
 	primary key (workspace_id, user_id)
 );
+
+-- TEST-ONLY FIXTURE: the columns of osionos_pages that the page context of a
+-- run reads (src/pageContext.ts). The production table
+-- (models/osionos-bridge-migration.sql) carries many more; this fixture holds
+-- the same column types and nothing more.
+create table if not exists public.osionos_pages (
+	id uuid primary key default gen_random_uuid(),
+	workspace_id uuid not null,
+	owner_id uuid,
+	title text not null default 'Untitled',
+	visibility text not null default 'private',
+	collaborators jsonb not null default '[]'::jsonb,
+	content jsonb not null default '[]'::jsonb,
+	archived_at timestamptz
+);
+
+-- TEST-ONLY FIXTURE: the block walker of the pages, copied verbatim from
+-- models/osionos-page-search-migration.sql, so the real SQL of the page
+-- context runs against the fixture.
+CREATE OR REPLACE FUNCTION public.osionos_page_blocks(doc jsonb)
+RETURNS SETOF jsonb
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+  WITH RECURSIVE walk(b) AS (
+    SELECT jsonb_array_elements(CASE WHEN jsonb_typeof(doc) = 'array' THEN doc ELSE '[]'::jsonb END)
+    UNION ALL
+    SELECT jsonb_array_elements(w.b -> 'children')
+    FROM walk w
+    WHERE jsonb_typeof(w.b -> 'children') = 'array'
+  )
+  SELECT b FROM walk
+$$;
+
+-- TEST-ONLY FIXTURE: the text projection of a page, copied verbatim from
+-- models/osionos-page-search-migration.sql.
+CREATE OR REPLACE FUNCTION public.osionos_page_text(doc jsonb)
+RETURNS text
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+  SELECT coalesce(string_agg(b ->> 'content', ' '), '')
+  FROM public.osionos_page_blocks(doc) AS b
+  WHERE b ? 'content'
+$$;
 SQL
 
 echo "[test] applying the AI migration"

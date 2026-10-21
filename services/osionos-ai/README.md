@@ -19,11 +19,36 @@ a Redis Stream, so a client that reconnects resumes the run on any replica.
 | `GET /api/ai/runs/:id/events` | yes | SSE: the events after `Last-Event-ID`, then the live ones |
 | `POST /api/ai/runs/:id/cancel` | yes | 202; the run stops wherever it runs |
 | `GET /api/ai/models` | yes | `{ models: [{ id, label, default }] }`, never a price |
+| `GET /api/ai/commands?surface=editor\|chat` | yes | `{ commands: Command[] }`, the built-ins of that surface |
+| `POST /api/ai/complete` | yes | SSE: `text.delta`, `usage`, `done` or `error`, nothing persisted |
 
 A run that is asked again with the same `runId` re-attaches to its stream: the
 events are replayed and no model is called a second time. A client that
 disconnects does NOT cancel a run: it keeps going and stays resumable. Only
 `POST /runs/:id/cancel` stops it.
+
+## The commands
+
+The ten built-ins live in the code (`src/commands/builtins.ts`), frozen: a
+command is a name, a description, a template with `$ARGUMENTS` in it, and a
+surface (`editor`, `chat`, or `both`). `GET /commands?surface=…` answers the
+commands of that surface.
+
+`POST /api/ai/complete` runs one of them on the selection of the editor: the
+input is wrapped in `<selection>`, the template is rendered around it, and the
+answer streams straight back. Nothing is persisted — no conversation, no run
+row, no stream in Redis — so `done.assistantMessageId` is always `null`. The
+client that goes away aborts the upstream call, and the budget is settled with
+what the upstream reported.
+
+## The pages of a run
+
+`POST /api/ai/runs` takes `context: { pageIds: uuid[] }` (at most three). The
+server reads the pages in one query and re-checks the access of every one with
+the bridge's own rule (`canReadPageRowAsMember`, scripts/bridge-page-read.mjs):
+a page the caller may not read is skipped, never refused, and its id comes back
+in `run.started.skippedPageIds`. The pages that pass are quoted in the prompt
+as `<page id="…" title="…">…</page>` blocks, before the question.
 
 ## The keys of Redis
 
