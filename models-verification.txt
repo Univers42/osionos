@@ -1,0 +1,1 @@
+Membership cutoff C123-C131 verified in Groot worktree: osionos-membership-cutoff-migration.sql triggers on DELETE/UPDATE of osionos_workspace_members, writes to auth_session_cutoffs with clock_timestamp(), monetonic merge via auth_session_cutoffs_monotonic trigger. All 6 verify checks pass.
