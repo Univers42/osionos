@@ -1,14 +1,23 @@
 #!/bin/sh
 # Integration harness for the osionos-ai service: a throwaway Postgres and a
-# throwaway Redis on a private network, the AI migration applied on top, the test
-# suite run in node:22. Nothing here touches the running stack.
+# throwaway Redis on a private network, the AI migrations applied on top, the
+# test suite run in node:22. Nothing here touches the running stack.
 #
-# usage: sh scripts/test.sh /path/to/osionos-ai-migration.sql
+# usage: sh scripts/test.sh /path/to/osionos-ai-migration.sql [/path/to/other.sql]
+# The migrations are applied in the order they are given. The single-file call
+# still works: the RAG migration (ai_chunks, ai_index_queue) is a second one.
 set -eu
 
-MIGRATION=${1:-}
-if [ -z "$MIGRATION" ] || [ ! -f "$MIGRATION" ]; then
-	echo "usage: test.sh <path to osionos-ai-migration.sql>" >&2
+MIGRATIONS=""
+for MIGRATION in "$@"; do
+	if [ ! -f "$MIGRATION" ]; then
+		echo "usage: test.sh <path to osionos-ai-migration.sql> [/path/to/other.sql]" >&2
+		exit 2
+	fi
+	MIGRATIONS="$MIGRATIONS $MIGRATION"
+done
+if [ -z "$MIGRATIONS" ]; then
+	echo "usage: test.sh <path to osionos-ai-migration.sql> [/path/to/other.sql]" >&2
 	exit 2
 fi
 
@@ -87,7 +96,10 @@ create table if not exists public.osionos_workspace_members (
 );
 
 -- TEST-ONLY FIXTURE: the columns of osionos_pages that the page context of a
--- run reads (src/pageContext.ts). The production table
+-- run reads (src/pageContext.ts) AND the columns the RAG triggers read (the
+-- enqueue trigger, the ACL sync trigger and the delete trigger of
+-- models/osionos-ai-rag-migration.sql): id, workspace_id, owner_id, title,
+-- visibility, collaborators, content, archived_at. The production table
 -- (models/osionos-bridge-migration.sql) carries many more; this fixture holds
 -- the same column types and nothing more.
 create table if not exists public.osionos_pages (
@@ -128,8 +140,11 @@ LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
 $$;
 SQL
 
-echo "[test] applying the AI migration"
-docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d osionos_ai_test < "$MIGRATION" >/dev/null
+echo "[test] applying the migrations"
+for MIGRATION in $MIGRATIONS; do
+	echo "[test] applying $MIGRATION"
+	docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d osionos_ai_test < "$MIGRATION" >/dev/null
+done
 
 echo "[test] running the suite"
 # --test-concurrency=1: the files share one database, and the conversations of
