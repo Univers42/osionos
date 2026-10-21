@@ -16,6 +16,10 @@ import {
 	loadPageContext,
 	quotedPageChars,
 } from './prompt.ts';
+import { sourceChars } from './sources.ts';
+import { retrieve } from '../retrieval/search.ts';
+import type { RetrievedChunk } from '../retrieval/search.ts';
+import type { AuthUser } from '../auth.ts';
 
 export type { RunEvent };
 
@@ -43,6 +47,20 @@ export interface StartRunInput {
 	pageIds?: readonly string[];
 	/** The workspaces of the caller: the gate of the pages. */
 	memberWorkspaceIds?: readonly string[];
+	/**
+	 * The caller, with the workspaces of their token.
+	 *
+	 * The retrieval needs them: a search is done in the caller's workspaces,
+	 * and only the token says which ones are theirs.
+	 */
+	user?: AuthUser;
+	/**
+	 * The caller's whole workspace is searched.
+	 *
+	 * The run then quotes the pages that answer the question, and the client
+	 * gets them as `citation` events.
+	 */
+	searchWorkspace?: boolean;
 	text: string;
 	/** Where the model is called, and who pays for it. */
 	target: ResolvedTarget;
@@ -64,6 +82,29 @@ const PREFLIGHT_ERRORS: Record<string, number> = {
 	rate_limited: 429,
 	budget_exhausted: 402,
 };
+
+/**
+ * The sources of a run: the chunks of the caller's workspaces that answer the
+ * question.
+ *
+ * A run without a search has no sources, and a search that fails has none
+ * either: the embedding service may be down, and an answer without sources
+ * is better than no answer. The failure is logged once, and the run goes on.
+ */
+async function findSources(
+	db: Pool,
+	input: StartRunInput,
+	text: string,
+): Promise<RetrievedChunk[]> {
+	if (input.searchWorkspace !== true || !input.user) return [];
+	try {
+		return await retrieve(db, input.user, { query: text });
+	} catch (error) {
+		const code = error instanceof Error ? error.message : 'retrieval_failed';
+		console.warn(JSON.stringify({ event: 'retrieval_failed', code }));
+		return [];
+	}
+}
 
 /**
  * The start of a run.
@@ -114,11 +155,17 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		memberWorkspaceIds: input.memberWorkspaceIds ?? [],
 		pageIds: input.pageIds ?? [],
 	});
+	// The sources of the run: the pages of the caller's workspaces that answer
+	// the question. They are read before the money moves too: they are part of
+	// the prompt. A retrieval that fails is not a failure of the run: the run
+	// goes on without sources, and the failure is logged once.
+	const sources = await findSources(db, input, text);
 	const day = today();
 	const amount = estimateMicroUsd(target.pricing, {
 		text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(context.pages),
+		sourceChars: sourceChars(sources),
 	});
 	// A run on a connection of the user is not ours to pay for: the provider
 	// bills the user, and our ledger stays out of it.
@@ -159,6 +206,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			reserved: amount,
 			history,
 			pages: context.pages,
+			sources,
 			skippedPageIds: context.skippedPageIds,
 			userMessageId: userMessage.id,
 			title,

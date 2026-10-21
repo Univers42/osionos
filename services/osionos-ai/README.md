@@ -50,6 +50,40 @@ a page the caller may not read is skipped, never refused, and its id comes back
 in `run.started.skippedPageIds`. The pages that pass are quoted in the prompt
 as `<page id="…" title="…">…</page>` blocks, before the question.
 
+## The search of a workspace
+
+`context: { workspace: true }` asks for more: the caller's own workspaces are
+searched, and the run quotes what it found.
+
+One statement does the whole search (`src/retrieval/search.ts`): the lexical
+half (the tsvector of the chunk) and the vector half (its embedding) are read
+side by side — the fifty best of each — and the two lists are fused with RRF
+(reciprocal rank fusion, `Σ 1/(60 + rank)`). The twenty best chunks of the
+fusion go to the model, at most three of them of the same page.
+
+The permission predicate (`src/retrieval/acl.ts`) filters both halves: it is
+the exact twin of `canReadPageRowAsMember`, read over the copy of the
+permissions the index stores with the chunks (the normalized visibility, the
+ids of the collaborators that carry a role). It is only a pre-filter: every
+page that comes out of the search is checked AGAIN with the bridge's own
+function, so a stale copy of the permissions can never leak a page. The
+workspaces of the caller are read live, from the token and from
+`osionos_workspace_members`: a membership that ends ends at once.
+
+The sources of the answer are sent as `citation` events, one per source, after
+`run.started` and before the first `text.delta`, and they are kept with the
+assistant message as `citation` parts, in the same order. The answer cites them
+as `[n]`, and the prompt says what they are: workspace data, never
+instructions.
+
+A search that fails (the embedding service is down) is not a failure of the
+run: the run goes on without sources, `run.started.retrievedCount` is 0, and
+the failure is logged once.
+
+The search needs the embedding service of the deployment — the same one the
+indexer writes its vectors with (`OSIONOS_AI_EMBED_URL`). Without it the
+service has no search: the runs go on without sources.
+
 ## The keys of Redis
 
 | Key | What it holds | TTL |
@@ -124,8 +158,11 @@ Optional: `OSIONOS_AI_PORT` (4300), `OSIONOS_ALLOWED_ORIGIN` (the app URL),
 (`off` turns the cut-off check off), `OSIONOS_AI_UPSTREAM_API_KEY` (a local runtime
 needs none), `OSIONOS_AI_MAX_OUTPUT_TOKENS` (1024), `OSIONOS_AI_USER_DAILY_MICROUSD`
 (200000), `OSIONOS_AI_PLATFORM_DAILY_MICROUSD` (20000000), `OSIONOS_AI_RUNS_PER_MINUTE`
-(20). A missing or broken variable stops the service and names the variable, never
-its value.
+(20), `OSIONOS_AI_EMBED_URL` and `OSIONOS_AI_EMBED_MODEL`
+(`intfloat/multilingual-e5-small`) — the embedding service of the search of a
+workspace, the same one the indexer writes its vectors with; without it the
+service has no search. A missing or broken variable stops the service and names the
+variable, never its value.
 
 The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_URL` and
 `OSIONOS_AI_EMBED_MODEL` (`intfloat/multilingual-e5-small`).

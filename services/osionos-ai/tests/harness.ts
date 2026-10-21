@@ -72,6 +72,7 @@ export interface Harness {
 		model?: string,
 		token?: string,
 		pageIds?: string[],
+		context?: { pageIds?: string[]; workspace?: boolean },
 	): Promise<Response>;
 	/** The POST of a completion: the answer is a stream. */
 	postComplete(body: JsonBody, token?: string): Promise<Response>;
@@ -143,7 +144,7 @@ export async function startHarness(): Promise<Harness> {
 		base,
 		tokenFor,
 		call,
-		postRun(conversationId, runId, text, model, token, pageIds = []) {
+		postRun(conversationId, runId, text, model, token, pageIds = [], context) {
 			return fetch(`${base}/api/ai/runs`, {
 				method: 'POST',
 				headers: {
@@ -155,7 +156,11 @@ export async function startHarness(): Promise<Harness> {
 					conversationId,
 					text,
 					...(model ? { model } : {}),
-					...(pageIds.length > 0 ? { context: { pageIds } } : {}),
+					...(context
+						? { context }
+						: pageIds.length > 0
+							? { context: { pageIds } }
+							: {}),
 				}),
 			});
 		},
