@@ -3,12 +3,18 @@
 /*   score.ts                                          the numbers of a run    */
 /*                                                                            */
 /*   One question, and the groups of questions. The scoring is the same for  */
-/*   every question of the golden set: the recall is the share of the        */
-/*   expected pages the answer holds, and the MRR is the rank of the first    */
-/*   of them.                                                                 */
+/*   every variant of the retrieval: the golden set does not change, only    */
+/*   the way the chunks are picked.                                         */
+/*                                                                            */
+/*     - recall@5: the share of the expected pages the answer holds;         */
+/*     - MRR@5: the rank of the first expected page;                         */
+/*     - the leaks: a page the asker may not read, or an archived one.       */
 /*                                                                            */
 /*   No dependencies. Node 22.                                                */
 /* ************************************************************************** */
+
+import { canReadPageRowAsMember } from '../../../scripts/bridge-page-read.mjs';
+import { pageId } from './lib.mjs';
 
 /** One question of the golden set. */
 export interface GoldenQuestion {
@@ -48,16 +54,20 @@ export interface QuestionResult {
 	rank: number;
 	/** The pages the asker may not read, or that are archived. */
 	leaks: { page: string; reason: string }[];
-	/** The milliseconds retrieve() took, the embedding included. */
+	/** The milliseconds the retrieval took, the embedding included. */
 	latencyMs: number;
 	/** The score of the best chunk; null when the answer is empty. */
 	topScore: number | null;
 	/** The title of the best chunk. */
 	topTitle: string | null;
+	/** The raw cosine similarity of the best vector hit; null when there is none. */
+	topCosine: number | null;
+	/** The milliseconds the LLM took to rewrite the question; null when there was none. */
+	llmMs: number | null;
 }
 
 /** The kinds of the golden set, in the order of the brief. */
-export const KINDS = ['lexical', 'paraphrase', 'multi', 'fr', 'negative', 'acl'];
+export const KINDS = ['lexical', 'paraphrase', 'multi', 'fr', 'xl', 'negative', 'acl'];
 
 /** The numbers of one group of questions. */
 export interface Group {
@@ -109,4 +119,81 @@ export function groupTable(groups: readonly { label: string; group: Group }[]): 
 		return `| ${label} | ${value.n} | ${value.scored} | ${recall} | ${mrr} |`;
 	});
 	return ['| kind | n | scored | recall@5 | MRR@5 |', '| --- | --- | --- | --- | --- |', ...rows].join('\n');
+}
+
+/** One chunk of an answer, as the variants return it. */
+export interface AnswerChunk {
+	pageId: string;
+	title: string;
+	score: number;
+}
+
+/** What a variant answered. */
+export interface VariantAnswer {
+	chunks: AnswerChunk[];
+	latencyMs: number;
+	llmMs: number | null;
+	topCosine: number | null;
+}
+
+/**
+ * What one question answered, for one variant.
+ *
+ * The leak check is here: every page of the answer must be readable by the
+ * asker, under the bridge's own rule, and it must not be archived.
+ */
+export function toResult(
+	question: GoldenQuestion,
+	answer: VariantAnswer,
+	context: {
+		pages: Map<string, PageRow>;
+		slugByPageId: Map<string, string>;
+	},
+	askerUserId: string,
+	workspaces: readonly string[],
+): QuestionResult {
+	const returned: string[] = [];
+	for (const chunk of answer.chunks) {
+		const id = String(chunk.pageId).toLowerCase();
+		if (!returned.includes(id)) returned.push(id);
+	}
+	const leaks: { page: string; reason: string }[] = [];
+	for (const id of returned) {
+		const row = context.pages.get(id);
+		if (!row) {
+			leaks.push({ page: context.slugByPageId.get(id) ?? id, reason: 'the page is not in the database' });
+			continue;
+		}
+		if (row.archived_at) {
+			leaks.push({ page: context.slugByPageId.get(id) ?? id, reason: 'the page is archived' });
+			continue;
+		}
+		if (!canReadPageRowAsMember(row, askerUserId, workspaces)) {
+			leaks.push({ page: context.slugByPageId.get(id) ?? id, reason: 'the asker may not read the page' });
+		}
+	}
+	// The expected pages, and the rank of the first one of them. The rank is
+	// the rank of the PAGE in the answer (the answer is a list of pages: a
+	// page may take three chunks of the five), so the MRR and the recall read
+	// the same list.
+	const expectedIds = question.expected.map((slug) => pageId(slug).toLowerCase());
+	const found = expectedIds.filter((id) => returned.includes(id));
+	const rank = returned.findIndex((id) => expectedIds.includes(id)) + 1;
+	return {
+		id: question.id,
+		kind: question.kind,
+		asker: question.asker,
+		question: question.q,
+		expected: question.expected,
+		returned: returned.map((id) => context.slugByPageId.get(id) ?? id),
+		chunks: answer.chunks.length,
+		recall: expectedIds.length === 0 ? null : found.length / expectedIds.length,
+		rank,
+		leaks,
+		latencyMs: answer.latencyMs,
+		topScore: answer.chunks.length > 0 ? Number(answer.chunks[0]?.score ?? 0) : null,
+		topTitle: answer.chunks.length > 0 ? String(answer.chunks[0]?.title ?? '') : null,
+		topCosine: answer.topCosine,
+		llmMs: answer.llmMs,
+	};
 }

@@ -1,8 +1,8 @@
-# The golden set — a synthetic workspace and 50 questions with known answers
+# The golden set — a synthetic workspace and 68 questions with known answers
 
 The RAG phase (plan P3) is accepted on a golden set: recall@5 of hybrid retrieval over a
 demo workspace. There was no text corpus yet, so this directory writes one: 40 pages of
-prose about a fictional company, 50 questions about it, a seed generator and a gate that
+prose about a fictional company, 68 questions about it, a seed generator and a gate that
 proves the corpus and the questions agree with each other.
 
 Everything here is DATA, and the runner that measures the retrieval on it. The corpus is the golden
@@ -14,15 +14,25 @@ set; the runner is the report card of the retrieval (`src/retrieval/search.ts`),
 | Path | What it is |
 | --- | --- |
 | `corpus/*.md` | 40 pages with front matter (`title`, `visibility`, `owner`, `collaborators`, `archived`) |
-| `golden.jsonl` | 50 questions, one JSON object per line |
+| `golden.jsonl` | 68 questions, one JSON object per line |
 | `seed.mjs` | reads the corpus, writes idempotent SQL for `osionos_pages` on stdout |
 | `check.mjs` | the gate: the corpus and the questions must agree, or it exits non-zero |
-| `lib.mjs` | the parsing both of the above share |
+| `check-corpus.mjs`, `check-questions.mjs`, `check-lib.mjs` | the two halves of the gate and their shared ground |
+| `lib.mjs` | the parsing the seed and the gate share |
+| `text.mjs` | the text helpers the question rules are written against |
 | `fixture.sql` | the fixture of the throwaway stack (the roles, the two tables, the two functions) |
 | `harness.sh` | the shared parts of the throwaway stacks: the network, the fixture, the migrations |
-| `run.sh` | the runner: a throwaway Postgres, a throwaway TEI, and node:22 that measures |
+| `run.sh` | the runner: a throwaway Postgres, a throwaway TEI, a throwaway LLM, and node:22 that measures |
 | `run.ts` | the measurement: recall@5, MRR, leaks, the negative scores, the latency |
-| `RESULTS.md` | the last measurement, written by `run.ts` |
+| `stack.ts` | the throwaway stack of a run: the seed, the members, the indexer |
+| `score.ts` | the numbers of a run: the recall, the MRR, the groups |
+| `report.ts` | the markdown of `RESULTS.md` |
+| `fusion.ts` | the lists of a search (several at once, one per language) and their RRF fusion |
+| `variants.ts` | the four variants of the multilingual experiment |
+| `llm.ts` | the query translation of the local llama.cpp server |
+| `multilingual-report.ts` | the markdown of `RESULTS-multilingual.md` |
+| `RESULTS.md` | the last measurement of the baseline, written by `run.ts` |
+| `RESULTS-multilingual.md` | the last measurement of the four variants |
 
 ## The corpus
 
@@ -47,7 +57,7 @@ client review.
 ## The questions
 
 ```json
-{"id":"q01","q":"…","lang":"en|fr","kind":"lexical|paraphrase|multi|fr|negative|acl","asker":"u_ana|u_ben|u_chloe","expected":["slug",…]}
+{"id":"q01","q":"…","lang":"en|fr","kind":"lexical|paraphrase|multi|fr|xl|negative|acl","asker":"u_ana|u_ben|u_chloe","expected":["slug",…]}
 ```
 
 | Kind | N | What it tests |
@@ -55,7 +65,8 @@ client review.
 | `lexical` | 12 | a rare exact term (SKU, codename, error code) that lives in the expected page only |
 | `paraphrase` | 14 | the question shares no content word with the answer sentence, so the vector side has to carry it |
 | `multi` | 8 | two pages answer it, and both are listed |
-| `fr` | 6 | asked in French; two of them ask about an English page |
+| `fr` | 10 | asked in French; two of them ask about an English page |
+| `xl` | 14 | asked in one language, answered by a page written in the other one: ten asked in French about an English page, four asked in English about a French page |
 | `negative` | 4 | nothing in the corpus answers it, so `expected` is empty |
 | `acl` | 6 | the only answer is on a page the asker may not read, so `expected` is empty — and the same question from a reader who may read it expects that page |
 
@@ -64,6 +75,19 @@ client review.
 page is readable by every member, a `public` page by anybody, and a `private` page only by
 its owner and its collaborators. An archived page answers nothing to anybody: the RAG
 migration deletes the chunks of an archived page, so it is out of the index.
+
+### The cross-lingual questions
+
+The `xl` questions are the ones that ask in French about an English page (and the other way
+round). The lexical half of the search is blind on them: the `simple` dictionary matches
+whole tokens, and a French token is not an English one. So the gate holds them to a
+stronger rule than the other kinds — no content word of the question is a token of the
+expected page, and no rare term at all. A question with "stock" in it, when the expected
+page has "stock", fails the gate: the lexical half would have a way in, and the question
+would not measure what it says it measures.
+
+The `fr` questions are the same-language control. Eight of the ten ask about a French page;
+two (q35, q36) ask about an English page, and they are the misses of the baseline.
 
 ### Answer markers
 
@@ -83,6 +107,19 @@ reader that groups by `lang` sees six French questions and forty-four English on
 The brief also says the acl questions include the same question asked by a reader who can
 read the page, and that those are counted in the six. They are: two of the six are the
 readable twin of a refused question, four are refused.
+
+### What the set holds today
+
+The set grew to sixty-eight questions: the fifty of the first brief, plus the eighteen of
+the cross-lingual one. The kind table is above, and the gate holds the counts.
+
+One of the fifty is broken and was left alone: **q35** asks u_chloe for the commercial
+value agreed with the Northlake Hotels Group, and that page is private to u_ana (u_ben is a
+collaborator). u_chloe may not read it, so no retrieval can answer q35, and every variant
+scores 0 on it. The `fr` bucket is therefore capped at 0.90 for every variant, and the
+gate of the cross-lingual brief (fr ≥ 0.8) is harder than it looks. Fixing it is a
+one-line change (ask it as u_ben), but the golden set is a regression gate: changing a
+question to move a number is the one thing it must never do.
 
 ## Running it
 
@@ -134,6 +171,41 @@ when the script exits, whatever happens.
 
 The report is written to `RESULTS.md`. The runner measures: it never tunes the retrieval,
 and the numbers are what they are.
+
+### The variants
+
+`AI_EVAL_VARIANTS` picks the variants of the retrieval the runner measures, on the same
+corpus, the same index and the same questions:
+
+| Variant | What it does |
+| --- | --- |
+| `A` | `retrieve()`, the retrieval of the service, unchanged. The default, and the baseline of every comparison |
+| `B` | the vector list is run once per language (the language of every chunk is read with the detector of `text.mjs`), and the lexical list and every per-language list are fused with the same RRF |
+| `C` | the query is rewritten in English and in French by a small local LLM, and the lexical and the vector list of every rewrite are fused with the same RRF |
+| `D` | B and C together: every query (the question and its two rewrites) gets a lexical list and a vector list per language |
+
+```sh
+AI_EVAL_VARIANTS=all AI_EVAL_RESULTS_FILE=RESULTS-multilingual.md \
+	sh services/osionos-ai/eval/run.sh <migration> <rag-migration>
+```
+
+One variant writes the report of the golden set (`RESULTS.md`); several variants write the
+comparison of the experiment (`RESULTS-multilingual.md`, with the gate of the brief, the
+latency of each variant, the cosine of the negative questions and the cross-lingual
+questions one by one).
+
+The variants C and D need the LLM, so `run.sh` starts a throwaway
+`ghcr.io/ggml-org/llama.cpp:server-b11580` named `ai-eval-llm` with the model volume of
+the deployment (`osionos_ai_models_llm`) mounted READ-ONLY, `--cpus 8 --memory 6g`, the
+model found by `find /models -name '*Q4_K_M*.gguf'`. It is on the network of the run and
+removed with the rest. The LLM is asked for a JSON array with the question in English and
+the question in French, at temperature zero; its latency is measured on its own and never
+hidden inside the latency of the retrieval.
+
+`AI_EVAL_DEBUG=1` prints the rewrites of the LLM and the pages of every answer: it is
+the way to see what a variant returned, question by question.
+
+The production code is not touched by any of this: the variants live here, in `eval/`.
 
 ### The bite of the leak check
 

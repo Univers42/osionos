@@ -19,12 +19,18 @@ export interface ReportInput {
 	overall: Group;
 	leaks: number;
 	latency: { p50: number; p95: number };
-	index: { ms: number; workMs: number; pages: number; chunks: number; embedded: number; withVector: number };
+	index: { ms: number; workMs: number; pages: number; chunks: number; embedded: number; withVector: number; bytes: number };
 	mode: string;
 	/** The title of a corpus page, by its slug. */
 	titleBySlug: Map<string, string>;
 	/** The model the embedder loads. */
 	embedModel: string;
+}
+
+/** The size of the index, in the unit that reads well. */
+function size(bytes: number): string {
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+	return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
 
 /** The results of one run, as the markdown of the report. */
@@ -73,6 +79,10 @@ export function report(input: ReportInput): string {
 	lines.push(
 		`- Indexing time: ${(index.ms / 1000).toFixed(1)} s (the indexer's own 10 s debounce included; ` +
 			`${(index.workMs / 1000).toFixed(1)} s of page work)`,
+	);
+	lines.push(
+		`- The index in the database: ${size(index.bytes)}; ` +
+			`${index.workMs > 0 ? (index.chunks / (index.workMs / 1000)).toFixed(1) : '—'} chunks embedded per second`,
 	);
 	lines.push('');
 	lines.push('## The results');
