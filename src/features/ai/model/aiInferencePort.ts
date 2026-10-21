@@ -42,14 +42,15 @@ import {
 } from "@/features/chat/model/inferencePort";
 
 /**
- * The model the service is asked for. The app names a model "provider:model"
- * and knows "auto"; the service owns an allowlist of its own and picks its
- * default when the client does not choose. Anything the service would refuse
- * is simply not sent.
+ * The model the service is asked for.
+ *
+ * "auto" means "the service's default", which the service picks when the
+ * client does not choose. Every other name comes from the service's own list
+ * (the picker reads it there), so it is sent as it is.
  */
 function serviceModel(model?: string): string | undefined {
   const value = model?.trim();
-  if (!value || value === "auto" || value.includes(":")) return undefined;
+  if (!value || value === "auto") return undefined;
   return value;
 }
 
@@ -84,6 +85,7 @@ export const aiInferencePort: InferencePort = {
       command: "ask",
       input: { text: lastUserText(request.messages) },
       model: serviceModel(request.model),
+      connectionId: request.connectionId,
     });
     let content = "";
     await pumpSseStream(response, (event, data) => {
@@ -113,6 +115,7 @@ export const aiInferencePort: InferencePort = {
               conversationId,
               text: request.text,
               model: serviceModel(request.model),
+              connectionId: request.connectionId,
             },
             signal,
           ),

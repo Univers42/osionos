@@ -26,6 +26,8 @@ export interface InferenceRequest {
   connectorId: string;
   model: string;
   messages: InferenceMessage[];
+  /** The connection the answer is paid for — `platform` when the caller does not say. */
+  connectionId?: string;
 }
 
 export interface InferenceResult {
@@ -51,6 +53,8 @@ export interface StreamInferenceRequest {
   model?: string;
   /** The provider the app has selected, if any. */
   connectorId?: string;
+  /** The connection the run is paid for — the user's own, or the platform's. */
+  connectionId?: string;
   /** The server-side conversation, when the local one already has one. */
   serverConversationId?: string;
   /** The title the server-side conversation gets when it is created. */

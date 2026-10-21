@@ -24,6 +24,8 @@ export interface ChatMessage {
   createdAt: string;
   connectorId?: string;
   model?: string;
+  /** The connection the answer was paid for — the user's own, or the platform's. */
+  connectionId?: string;
   /** The message parts, in the service's shape. */
   parts?: AiPart[];
   /** The run that produced this message, once the service answered. */

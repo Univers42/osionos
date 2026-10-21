@@ -33,6 +33,10 @@ const WORDS: Record<string, string> = {
   run_expired: "That answer expired and can no longer be resumed.",
   resume_failed: "The connection dropped and the run could not be resumed.",
   no_stream: "The service answered without a stream.",
+  endpoint_not_allowed: "Our server refused that address. Use a public https://<host>/v1 URL.",
+  provider_not_supported: "We do not support that provider yet. Try OpenRouter or another provider.",
+  network_error: "We could not reach the server. Check your connection and try again.",
+  oauth_failed: "The sign-in did not go through. Start it again.",
 };
 
 /** The sentence for a code — never the code alone. */

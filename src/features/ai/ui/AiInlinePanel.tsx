@@ -76,6 +76,7 @@ export const AiInlinePanel: React.FC = () => {
   const status = useInlineAiStore((state) => state.status);
   const text = useInlineAiStore((state) => state.text);
   const errorCode = useInlineAiStore((state) => state.errorCode);
+  const selection = useInlineAiStore((state) => state.selection);
 
   const [instruction, setInstruction] = useState("");
   const [commands, setCommands] = useState<AiCommand[]>([]);
@@ -310,6 +311,9 @@ export const AiInlinePanel: React.FC = () => {
           </>
         )}
         <span className="flex-1" />
+        {selection?.model ? (
+          <span className="text-2xs text-[var(--osio-fg-subtle)]">{selection.model}</span>
+        ) : null}
         <span className="text-2xs text-[var(--osio-fg-subtle)]">
           {command ? commandLabel(command) : ""}
         </span>

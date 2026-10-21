@@ -15,11 +15,13 @@ import { Plus } from "lucide-react";
 
 import { useChatStore, getInferencePort } from "@/features/chat/model/useChatStore";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
+import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/features/ai/model/aiSelection";
+import { openAiConnections } from "@/features/settings/settingsOpener";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
 import { EmptyStateHero } from "./EmptyStateHero";
 import { ConnectionOnboarding } from "./ConnectionOnboarding";
-import { resolveModel } from "./ModelPicker";
 
 /** The multi-model AI Chat Shell. Talking without a connection triggers a guided
  *  setup; once connected, the pending message is sent automatically. */
@@ -32,7 +34,6 @@ export const ChatShell: React.FC = () => {
   const allMessages = useChatStore((s) => s.messages);
   const createConversation = useChatStore((s) => s.createConversation);
   const setActive = useChatStore((s) => s.setActive);
-  const setConversationModel = useChatStore((s) => s.setConversationModel);
   const send = useChatStore((s) => s.send);
   const stop = useChatStore((s) => s.stop);
 
@@ -50,14 +51,21 @@ export const ChatShell: React.FC = () => {
   // of the app's own. The offline stub does: it stands in for a provider.
   const needsConnection = !getInferencePort().stream;
   const fallbackConnector = connectedSnaps[0]?.providerKey ?? "anthropic";
-  const modelValue = active?.model && active.model !== "auto" && active.connectorId ? `${active.connectorId}:${active.model}` : "auto";
+  // The choice the user made — a connection and a model — is remembered on the
+  // device and sent with every run.
+  const [selection, setSelection] = useState<AiSelection>(
+    () => readAiSelection() ?? { connectionId: PLATFORM_CONNECTION_ID, model: "" },
+  );
 
   const submit = (explicit?: string) => {
     const value = (explicit ?? text).trim();
     if (!active || !value) return;
     if (needsConnection && !hasConnection) { setText(value); setOnboarding("ask"); return; } // ask to connect, keep the message
-    const { connectorId, model } = resolveModel(modelValue, fallbackConnector);
-    void send(active.id, value, { connectorId, model });
+    void send(active.id, value, {
+      connectorId: fallbackConnector,
+      model: selection.model || "auto",
+      connectionId: selection.connectionId,
+    });
     setText("");
   };
 
@@ -68,24 +76,32 @@ export const ChatShell: React.FC = () => {
     const value = text.trim();
     if (!active || !value) return;
     const connected = Object.values(useConnectorStore.getState().snapshots).find((x) => x.state === "connected");
-    const { connectorId, model } = resolveModel(modelValue, connected?.providerKey ?? fallbackConnector);
-    void send(active.id, value, { connectorId, model });
+    void send(active.id, value, {
+      connectorId: connected?.providerKey ?? fallbackConnector,
+      model: selection.model || "auto",
+      connectionId: selection.connectionId,
+    });
     setText("");
   };
 
-  const onModelChange = (next: string) => {
-    if (!active) return;
-    const { connectorId, model } = resolveModel(next, fallbackConnector);
-    setConversationModel(active.id, connectorId, model);
+  // With a service, the app's own connectors do not connect a model: the panel
+  // in Settings does. Without one (the offline stub), the local connectors are
+  // the only way to talk to a model at all.
+  const onConnect = () => {
+    if (isAiConfigured()) {
+      openAiConnections();
+      return;
+    }
+    setOnboarding("choose");
   };
 
   const composerProps = {
     value: text,
     onChange: setText,
     onSubmit: () => submit(),
-    onConnect: () => setOnboarding("choose"),
-    model: modelValue,
-    onModelChange,
+    onConnect,
+    selection,
+    onSelectionChange: setSelection,
     streaming,
     onStop: () => { if (active) stop(active.id); },
   };

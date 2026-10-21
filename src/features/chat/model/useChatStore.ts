@@ -14,6 +14,7 @@ import { create } from "zustand";
 
 import type { ChatMessage, Conversation, Project, SharedContextItem } from "./chatTypes";
 import { stubInferencePort, type InferencePort } from "./inferencePort";
+import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiSelection";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -71,7 +72,7 @@ export interface ChatStoreState extends ChatData {
   deleteConversation: (id: string) => void;
   setActive: (id: string | null) => void;
   setConversationModel: (id: string, connectorId: string, model: string) => void;
-  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string }) => Promise<void>;
+  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string }) => Promise<void>;
   stop: (conversationId: string) => void;
   attachContext: (scope: SharedContextItem["scope"], scopeId: string, item: Pick<SharedContextItem, "kind" | "label" | "ref">) => void;
   detachContext: (id: string) => void;
@@ -84,7 +85,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     const { projects, conversations, messages, contextItems } = get();
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, conversations, messages, contextItems })); } catch { /* quota */ }
   };
-  const addMessage = (conversationId: string, m: Pick<ChatMessage, "role" | "content" | "connectorId" | "model">) => {
+  const addMessage = (conversationId: string, m: Pick<ChatMessage, "role" | "content" | "connectorId" | "model" | "connectionId">) => {
     set((s) => ({
       messages: [...s.messages, { id: uid(), conversationId, createdAt: now(), ...m }],
       conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, updatedAt: now() } : c)),
@@ -140,14 +141,17 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       if (!conversation || !text.trim()) return;
       const connectorId = sel?.connectorId ?? conversation.connectorId ?? "anthropic";
       const model = sel?.model ?? conversation.model ?? "auto";
+      // Every run says which connection pays for it: the one the user picked,
+      // the one they remembered, or the platform's.
+      const connectionId = sel?.connectionId ?? readAiSelection()?.connectionId ?? PLATFORM_CONNECTION_ID;
       const port = getInferencePort();
 
       // No streaming port: the offline path — one complete answer, no frames.
       if (!port.stream) {
-        addMessage(conversationId, { role: "user", content: text.trim(), connectorId, model });
+        addMessage(conversationId, { role: "user", content: text.trim(), connectorId, model, connectionId });
         const history = get().messagesFor(conversationId).map((m) => ({ role: m.role, content: m.content }));
-        const result = await port.complete({ connectorId, model, messages: history });
-        addMessage(conversationId, { role: "assistant", content: result.content, connectorId, model });
+        const result = await port.complete({ connectorId, model, connectionId, messages: history });
+        addMessage(conversationId, { role: "assistant", content: result.content, connectorId, model, connectionId });
         return;
       }
 
@@ -156,11 +160,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       if (activeRuns.has(conversationId)) return;
 
       const body = text.trim();
-      addMessage(conversationId, { role: "user", content: body, connectorId, model });
+      addMessage(conversationId, { role: "user", content: body, connectorId, model, connectionId });
 
       const assistantId = uid();
       set((s) => ({
-        messages: [...s.messages, { id: assistantId, conversationId, role: "assistant", content: "", createdAt: now(), connectorId, model, status: "streaming" }],
+        messages: [...s.messages, { id: assistantId, conversationId, role: "assistant", content: "", createdAt: now(), connectorId, model, connectionId, status: "streaming" }],
         conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, updatedAt: now() } : c)),
       }));
       persist();
@@ -187,6 +191,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
             text: body,
             model,
             connectorId,
+            connectionId,
             title: conversation.title,
             serverConversationId: conversation.serverConversationId,
             onServerConversationId: rememberServerConversation,
