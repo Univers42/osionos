@@ -39,6 +39,8 @@ process.env.OSIONOS_AI_KEK = Buffer.alloc(32, 7).toString('base64');
 process.env.OSIONOS_AI_KEK_ID = 'k1';
 process.env.OSIONOS_AI_DEV_ENDPOINT_HOSTS = '127.0.0.1';
 process.env.OSIONOS_AI_DEV_PROVIDER_BASE_URLS = JSON.stringify({ openrouter: `${mock.baseUrl}/v1` });
+// The catalog of models.dev is out of reach here: the built-in list answers.
+process.env.OSIONOS_AI_CATALOG_URL = 'http://127.0.0.1:45999/api.json';
 
 const { createAiServer } = await import('../src/server.ts');
 
@@ -118,6 +120,7 @@ describe('osionos-ai connections', () => {
 	before(async () => {
 		await app.db.query('delete from public.ai_connections');
 		await app.db.query('delete from public.ai_usage_daily');
+		await app.redis.del('ai:catalog:v1'); // The copy of another test must not answer here.
 		mock.setOptions({ preDelayMs: 0, chunkCount: 4, chunkGapMs: 0, fail: false, modelsStatus: 200 });
 	});
 
@@ -234,21 +237,24 @@ describe('osionos-ai connections', () => {
 	it('the providers are the built-in list', async () => {
 		const answer = await call('/api/ai/providers', { token: tokenFor(USER_A, WORKSPACE_A) });
 		assert.equal(answer.status, 200);
-		const providers = answer.body?.providers as { id: string; supported: boolean; kind: string }[];
-		assert.deepEqual(providers.map((provider) => provider.id), [
-			'openrouter', 'opencode', 'openai', 'groq', 'deepseek', 'mistral', 'xai', 'anthropic', 'google',
-		]);
-		assert.equal(providers.find((provider) => provider.id === 'anthropic')?.supported, false);
-		assert.equal(providers.find((provider) => provider.id === 'openrouter')?.supported, true);
-		assert.ok(providers.every((provider) => provider.kind === 'api_key'));
+		const list = answer.body?.providers as { id: string; supported: boolean; kind: string }[];
+		const providers = new Map(list.map((provider) => [provider.id, provider]));
+		assert.deepEqual(
+			[...providers.keys()].sort(),
+			['anthropic', 'deepseek', 'endpoint', 'google', 'groq', 'mistral', 'openai', 'opencode', 'openrouter', 'xai'],
+		);
+		// The Anthropic and the Google adapters speak their wire, and OpenRouter
+		// is the provider the user signs in to.
+		assert.equal(providers.get('anthropic')?.supported, true);
+		assert.equal(providers.get('google')?.supported, true);
+		assert.equal(providers.get('openrouter')?.kind, 'oauth');
+		// The endpoint of the user is an entry of its own.
+		assert.equal(providers.get('endpoint')?.kind, 'endpoint');
 	});
 
-	it('a provider that has no adapter is refused', async () => {
-		const answer = await call('/api/ai/connections', {
-			method: 'POST',
-			token: tokenFor(USER_A, WORKSPACE_A),
-			body: { kind: 'api_key', provider: 'anthropic', apiKey: KEY },
-		});
+	it('a provider that is not in the list is refused', async () => {
+		const body = { kind: 'api_key', provider: 'no-such-provider', apiKey: KEY };
+		const answer = await call('/api/ai/connections', { method: 'POST', token: tokenFor(USER_A, WORKSPACE_A), body });
 		assert.equal(answer.status, 400);
 		assert.equal(answer.body?.code, 'provider_not_supported');
 	});

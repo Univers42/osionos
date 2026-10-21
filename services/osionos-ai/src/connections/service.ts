@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
+import type { Redis } from 'ioredis';
 import { connectionAad, openSecret, sealSecret } from './crypto.ts';
 import { checkEndpointUrl, guardedShortFetch } from './endpointGuard.ts';
-import { findProvider, providerBaseUrl } from './providers.ts';
+import { providerBaseUrl } from './providers.ts';
+import { providerEntry } from './catalog.ts';
 import { insertConnection } from './repo.ts';
 import type { ConnectionRow } from './repo.ts';
 
@@ -61,10 +63,15 @@ export function toConnection(row: ConnectionRow): Connection {
 	};
 }
 
-/** The base URL of a connection: the user's endpoint, or the provider's. */
-export function connectionBaseUrl(row: ConnectionRow): string | null {
+/**
+ * The base URL of a connection: the user's endpoint, or the provider's.
+ *
+ * The provider's base comes from the catalog of models.dev, and from the
+ * built-in list when the catalog does not know it.
+ */
+export async function connectionBaseUrl(redis: Redis, row: ConnectionRow): Promise<string | null> {
 	if (row.base_url) return row.base_url;
-	const entry = findProvider(row.provider);
+	const entry = await providerEntry(redis, row.provider);
 	return entry ? providerBaseUrl(entry) : null;
 }
 
@@ -102,8 +109,12 @@ function failureStatus(error: unknown): string {
  * provider is never read: only its status counts, so a body that carries the
  * key back never reaches the client or the log.
  */
-export async function testConnection(row: ConnectionRow, secret: string | null): Promise<ConnectionTest> {
-	const baseUrl = connectionBaseUrl(row);
+export async function testConnection(
+	redis: Redis,
+	row: ConnectionRow,
+	secret: string | null,
+): Promise<ConnectionTest> {
+	const baseUrl = await connectionBaseUrl(redis, row);
 	if (!baseUrl) return { status: 'error', statusMessage: 'unreachable' };
 	let base: URL;
 	try {

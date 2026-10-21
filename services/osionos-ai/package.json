@@ -11,6 +11,8 @@
     "test": "sh scripts/test.sh"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.79",
+    "@ai-sdk/google": "4.0.95",
     "@ai-sdk/openai-compatible": "3.0.68",
     "ai": "7.0.139",
     "ioredis": "6.0.0",

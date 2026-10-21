@@ -66,7 +66,7 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 		return 400;
 	}
 	// The target of the completion: the platform connection, or one of the caller's.
-	const resolved = await resolveTarget(ctx.deps.db, user, body.connectionId, body.model);
+	const resolved = await resolveTarget(ctx.deps.db, ctx.deps.redis, user, body.connectionId, body.model);
 	if (resolved.kind === 'refused') {
 		sendError(ctx.response, resolved.status, resolved.code);
 		return resolved.status;

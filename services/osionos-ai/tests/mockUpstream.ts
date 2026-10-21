@@ -20,6 +20,10 @@ export interface MockOptions {
 	models: string[];
 	/** The status of the answer of /models: 200, or a 3xx to redirect. */
 	modelsStatus: number;
+	/** The key the exchange of a sign-in answers with. */
+	authKey: string;
+	/** The exchange of a sign-in fails. */
+	authFail: boolean;
 }
 
 const DEFAULT_OPTIONS: MockOptions = {
@@ -29,6 +33,8 @@ const DEFAULT_OPTIONS: MockOptions = {
 	fail: false,
 	models: ['mock-model', 'mock-small'],
 	modelsStatus: 200,
+	authKey: 'sk-openrouter-mock-0123456789',
+	authFail: false,
 };
 
 export interface MockUpstream {
@@ -46,6 +52,12 @@ export interface MockUpstream {
 	readonly authorizations: string[];
 	/** The number of calls of the list of the models. */
 	readonly modelsCalls: number;
+	/** The number of calls of the exchange of a sign-in. */
+	readonly authCalls: number;
+	/** The body of every exchange of a sign-in, in the order of the calls. */
+	readonly authBodies: unknown[];
+	/** The key the exchange of a sign-in answers with. */
+	readonly authKey: string;
 	/** The body of the last request: the prompt the service sent. */
 	lastBody(): unknown;
 	/** The Authorization header of the last request. */
@@ -93,9 +105,30 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 	const authorizations: string[] = [];
 	let aborted = 0;
 	let modelsCalls = 0;
+	let authCalls = 0;
+	const authBodies: unknown[] = [];
 
 	const server = createServer((request, response) => {
 		const url = request.url ?? '';
+		if (url.endsWith('/auth/keys')) {
+			// The exchange of a sign-in: the code becomes a key.
+			authCalls += 1;
+			void readBody(request).then((raw) => {
+				try {
+					authBodies.push(JSON.parse(raw));
+				} catch {
+					authBodies.push(raw);
+				}
+				if (options.authFail) {
+					response.writeHead(403, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ error: { message: 'invalid code' } }));
+					return;
+				}
+				response.writeHead(200, { 'content-type': 'application/json' });
+				response.end(JSON.stringify({ key: options.authKey }));
+			});
+			return;
+		}
 		if (url.endsWith('/models')) {
 			// The list of the models: what a connection is tested against.
 			modelsCalls += 1;
@@ -165,6 +198,15 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 		},
 		get modelsCalls(): number {
 			return modelsCalls;
+		},
+		get authCalls(): number {
+			return authCalls;
+		},
+		get authBodies(): unknown[] {
+			return authBodies;
+		},
+		get authKey(): string {
+			return options.authKey;
 		},
 		lastBody(): unknown {
 			return bodies[bodies.length - 1];

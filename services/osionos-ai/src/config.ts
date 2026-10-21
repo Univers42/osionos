@@ -81,6 +81,9 @@ const envSchema = z.object({
 	OSIONOS_AI_DEV_ENDPOINT_HOSTS: z.string().optional(),
 	// The base URLs of the built-in providers, overridden for the tests.
 	OSIONOS_AI_DEV_PROVIDER_BASE_URLS: z.string().optional(),
+	// The catalog of models.dev: the market's providers and their models. It is
+	// fetched once a day and shared between the replicas through Redis.
+	OSIONOS_AI_CATALOG_URL: z.string().min(1).default('https://models.dev/api.json'),
 });
 
 const rawEnv = {
@@ -105,6 +108,7 @@ const rawEnv = {
 	OSIONOS_AI_KEK_ID: process.env.OSIONOS_AI_KEK_ID,
 	OSIONOS_AI_DEV_ENDPOINT_HOSTS: process.env.OSIONOS_AI_DEV_ENDPOINT_HOSTS,
 	OSIONOS_AI_DEV_PROVIDER_BASE_URLS: process.env.OSIONOS_AI_DEV_PROVIDER_BASE_URLS,
+	OSIONOS_AI_CATALOG_URL: process.env.OSIONOS_AI_CATALOG_URL,
 };
 
 const parsed = envSchema.safeParse(rawEnv);
@@ -225,6 +229,8 @@ export interface AiServiceConfig {
 	devEndpointHosts: readonly string[];
 	/** The base URLs of the built-in providers, overridden for the tests. */
 	devProviderBaseUrls: Readonly<Record<string, string>>;
+	/** The URL of the catalog of models.dev. */
+	catalogUrl: string;
 }
 
 export const config: AiServiceConfig = Object.freeze({
@@ -249,4 +255,5 @@ export const config: AiServiceConfig = Object.freeze({
 	kekId: parsed.data.OSIONOS_AI_KEK_ID,
 	devEndpointHosts: parseDevHosts(parsed.data.OSIONOS_AI_DEV_ENDPOINT_HOSTS),
 	devProviderBaseUrls: parseDevProviderUrls(parsed.data.OSIONOS_AI_DEV_PROVIDER_BASE_URLS),
+	catalogUrl: parsed.data.OSIONOS_AI_CATALOG_URL,
 });
