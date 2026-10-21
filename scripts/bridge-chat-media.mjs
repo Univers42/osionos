@@ -28,10 +28,6 @@ import { takeToken } from './bridge-ratelimit.mjs';
 import { assertPublicHttpUrl } from './bridge-url-guard.mjs';
 import { fetchPublicHtml } from './bridge-url-fetch.mjs';
 
-// Re-exported for the bridge entry point (the automation webhook validates its
-// target with the same guard as the link preview).
-export { assertPublicHttpUrl };
-
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const LINK_PREVIEW_BYTES = 512 * 1024;
 const LINK_PREVIEW_TIMEOUT_MS = 6_000;

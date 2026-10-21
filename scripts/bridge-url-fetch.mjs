@@ -11,17 +11,20 @@
 /* ************************************************************************** */
 
 /**
- * The fetch half of the SSRF guard: one GET that can only land on an address
- * bridge-url-guard.mjs approved, with the redirects followed by hand.
+ * The request half of the SSRF guard: one request that can only land on an
+ * address bridge-url-guard.mjs approved.
  *
  * `fetch` cannot be told which address to connect to, so the request goes
  * through node:http/node:https with a custom `lookup` — the guarded one. The
  * socket therefore never sees an address the blocklist did not clear, and the
  * name is resolved where the connection is made (no resolve-then-connect gap).
  *
- * Redirects are followed here, one hop at a time: at most three, each
- * `Location` resolved against the current URL and re-validated before it is
- * fetched. A fourth hop is a 502.
+ * `guardedRequest` never follows a redirect: a 3xx is the answer, not a door
+ * to the next host (`fetch`'s default `redirect: 'follow'` would walk one
+ * straight into the private network). `fetchPublicHtml` sits on top of the
+ * same transport and follows the hops by hand: at most three, each `Location`
+ * resolved against the current URL and re-validated before it is fetched. A
+ * fourth hop is a 502.
  *
  * Standard library only: node:http, node:https.
  */
@@ -32,11 +35,20 @@ import { lookup as dnsLookup } from 'node:dns/promises';
 import { assertPublicHttpUrl, createGuardedLookup, PRIVATE_ADDRESS_MESSAGE } from './bridge-url-guard.mjs';
 import { httpError } from './bridge-social-core.mjs';
 
-/** One GET over node:http/node:https, with the guarded lookup, a timeout and a byte cap. */
-function nodeTransport(url, { lookup, headers, timeoutMs, maxBytes }) {
+/** The byte cap when the caller names none: a response is never read whole. */
+const DEFAULT_MAX_BYTES = 1024 * 1024;
+
+/** One request over node:http/node:https, with the guarded lookup, a timeout and a byte cap. */
+function nodeTransport(url, { lookup, method = 'GET', headers, body, timeoutMs, maxBytes = DEFAULT_MAX_BYTES }) {
 	return new Promise((resolvePromise, reject) => {
 		const agent = url.protocol === 'https:' ? https : http;
-		const request = agent.request(url, { method: 'GET', headers, lookup, signal: AbortSignal.timeout(timeoutMs) }, (response) => {
+		const requestHeaders = { ...headers };
+		// A body of a known length: the receiver must not have to guess.
+		if (body !== undefined && body !== null
+			&& requestHeaders['content-length'] === undefined && requestHeaders['Content-Length'] === undefined) {
+			requestHeaders['content-length'] = Buffer.byteLength(body);
+		}
+		const request = agent.request(url, { method, headers: requestHeaders, lookup, signal: AbortSignal.timeout(timeoutMs) }, (response) => {
 			const status = response.statusCode ?? 0;
 			const responseHeaders = response.headers ?? {};
 			const answer = (body) => ({ status, headers: responseHeaders, ok: status >= 200 && status < 300, body, text: () => body.toString('utf8') });
@@ -72,8 +84,31 @@ function nodeTransport(url, { lookup, headers, timeoutMs, maxBytes }) {
 			});
 		});
 		request.on('error', reject);
-		request.end();
+		request.end(body ?? undefined);
 	});
+}
+
+/**
+ * One guarded request: the socket resolves the host through the guarded
+ * lookup, so it can only connect to an address the blocklist cleared, and no
+ * redirect is followed — a 3xx is the answer.
+ *
+ * The caller validates the URL up front (`assertPublicHttpUrl`) to get a
+ * readable 422; the lookup is what stops the socket. A host that answers
+ * public at the check and private at the connect is refused here, with the
+ * guard's own error (status 422, `code: 'private_address'`).
+ */
+export async function guardedRequest(url, {
+	method = 'GET',
+	headers,
+	body,
+	timeoutMs,
+	maxBytes = DEFAULT_MAX_BYTES,
+	resolve = dnsLookup,
+	transport = nodeTransport,
+} = {}) {
+	const lookup = createGuardedLookup(resolve);
+	return transport(new URL(url), { lookup, method, headers, body, timeoutMs, maxBytes });
 }
 
 /**
@@ -90,15 +125,15 @@ export async function fetchPublicHtml(rawUrl, {
 	maxBytes,
 	maxRedirects = 3,
 } = {}) {
-	const lookup = createGuardedLookup(resolve);
 	// The timeout is the budget of the whole chain, not of every hop.
 	const deadline = Date.now() + (timeoutMs ?? 0);
 	let current = new URL(rawUrl);
 	for (let hop = 0; hop <= maxRedirects; hop += 1) {
 		let response;
 		try {
-			response = await transport(current, {
-				lookup,
+			response = await guardedRequest(current, {
+				transport,
+				resolve,
 				headers,
 				timeoutMs: Math.max(1, deadline - Date.now()),
 				maxBytes,
