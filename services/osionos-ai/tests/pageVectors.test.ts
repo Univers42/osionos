@@ -32,7 +32,7 @@ function newWorker(): IndexerWorker {
 }
 
 /** A page, inserted: the trigger queues it. */
-async function insertPage(content: string[], title = 'A page'): Promise<string> {
+async function insertPage(content: unknown[], title = 'A page'): Promise<string> {
 	const id = randomUUID();
 	await pool.query(
 		`insert into public.osionos_pages (id, workspace_id, owner_id, title, visibility, collaborators, content)
