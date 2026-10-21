@@ -1,0 +1,124 @@
+import { streamText } from 'ai';
+import type { LanguageModelUsage, ModelMessage } from 'ai';
+import { config } from '../config.ts';
+import { platformModel } from '../gateway/platform.ts';
+import type { PlatformModelEntry } from '../gateway/platform.ts';
+import { SYSTEM_PROMPT } from './prompt.ts';
+
+/**
+ * The pump of the upstream: the model's stream, turned into the events of a
+ * run, with the two clocks that stop it.
+ *
+ * The clock of the idle time (no part for thirty seconds) and the clock of the
+ * whole call (two minutes) both abort the same signal, so the caller can tell
+ * a timeout from a cancellation.
+ */
+
+/** No part for thirty seconds: the upstream is stuck. */
+export const IDLE_TIMEOUT_MS = 30_000;
+/** Two minutes for the whole call. */
+export const TOTAL_TIMEOUT_MS = 120_000;
+
+/** The abort of a timeout: the reason of the signal says so. */
+export class UpstreamTimeout extends Error {
+	constructor() {
+		super('the upstream did not answer in time');
+		this.name = 'timeout';
+	}
+}
+
+/**
+ * Why the signal is aborted: a timeout, a cancellation, or nothing at all.
+ *
+ * The reason of the signal is the marker: the timeout aborts with its own
+ * error, a cancellation aborts with the default one.
+ */
+export function abortCode(signal: AbortSignal): 'timeout' | 'cancelled' | null {
+	if (!signal.aborted) return null;
+	const reason = signal.reason as { name?: unknown } | null;
+	return reason?.name === 'timeout' ? 'timeout' : 'cancelled';
+}
+
+export interface PumpInput {
+	model: PlatformModelEntry;
+	messages: ModelMessage[];
+	/** The signal of the call: the caller owns it, so it can cancel the run. */
+	controller: AbortController;
+	/** A piece of the answer. */
+	onText: (text: string) => Promise<void>;
+	/** A piece of the reasoning, when the model streams one. */
+	onReasoning: (text: string) => Promise<void>;
+}
+
+export interface PumpOutcome {
+	answer: string;
+	reasoning: string;
+	usage?: LanguageModelUsage;
+	finishReason: string;
+	/** The failure, when the stream broke. */
+	error?: unknown;
+}
+
+/**
+ * The call to the model, and nothing else: no budget, no row, no event.
+ *
+ * The failure never escapes: the caller gets it in the outcome, with the usage
+ * the upstream reported before it broke — that is what the settlement needs.
+ */
+export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
+	const { model, messages, controller, onText, onReasoning } = input;
+	let answer = '';
+	let reasoning = '';
+	let usage: LanguageModelUsage | undefined;
+	let finishReason = 'stop';
+	let idleTimer: ReturnType<typeof setTimeout> | undefined;
+	let totalTimer: ReturnType<typeof setTimeout> | undefined;
+
+	const onTimeout = () => controller.abort(new UpstreamTimeout());
+	const touch = () => {
+		if (idleTimer) clearTimeout(idleTimer);
+		idleTimer = setTimeout(onTimeout, IDLE_TIMEOUT_MS);
+	};
+	const clearTimers = () => {
+		if (idleTimer) clearTimeout(idleTimer);
+		if (totalTimer) clearTimeout(totalTimer);
+	};
+
+	try {
+		totalTimer = setTimeout(onTimeout, TOTAL_TIMEOUT_MS);
+		touch();
+
+		const result = streamText({
+			model: platformModel(model.id),
+			system: SYSTEM_PROMPT,
+			messages,
+			maxOutputTokens: config.maxOutputTokens,
+			abortSignal: controller.signal,
+		});
+
+		for await (const part of result.fullStream) {
+			touch();
+			if (part.type === 'text-delta') {
+				answer += part.text;
+				await onText(part.text);
+			} else if (part.type === 'reasoning-delta') {
+				reasoning += part.text;
+				await onReasoning(part.text);
+			} else if (part.type === 'finish-step') {
+				usage = part.usage;
+			} else if (part.type === 'finish') {
+				usage = part.totalUsage;
+				finishReason = part.finishReason;
+			} else if (part.type === 'error') {
+				throw part.error;
+			} else if (part.type === 'abort') {
+				throw new Error('aborted');
+			}
+		}
+		return { answer, reasoning, usage, finishReason };
+	} catch (error) {
+		return { answer, reasoning, usage, finishReason, error };
+	} finally {
+		clearTimers();
+	}
+}

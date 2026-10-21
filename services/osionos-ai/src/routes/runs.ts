@@ -1,0 +1,171 @@
+import { z } from 'zod';
+import type { ServerResponse } from 'node:http';
+import { readJson, sendError, sendJson, sendSseHeaders, writeSseFrame, writeSsePing } from '../http.ts';
+import { resolveModel } from '../gateway/platform.ts';
+import { getOwnedConversation } from '../conversations/repo.ts';
+import { getOwnedRun } from '../runs/repo.ts';
+import { startRun } from '../runs/runner.ts';
+import * as runStore from '../runs/runStore.ts';
+import { UUID, requireUser } from './support.ts';
+import type { RouteContext } from './types.ts';
+
+/**
+ * The runs: the start, the stream of the events, and the cancellation.
+ *
+ * A run that is not the caller's is a 404, never a 403: the answer must not
+ * tell that it exists.
+ */
+
+const startRunSchema = z.object({
+	runId: z.string().regex(UUID, 'runId must be a uuid'),
+	conversationId: z.string().regex(UUID, 'conversationId must be a uuid'),
+	text: z.string().min(1).max(32_000),
+	model: z.string().min(1).optional(),
+});
+
+/** A quiet stream is kept alive with a comment every fifteen seconds. */
+const SSE_PING_MS = 15_000;
+
+/** The ping of a stream, and the way to stop it. */
+function startPing(response: ServerResponse): () => void {
+	const timer = setInterval(() => writeSsePing(response), SSE_PING_MS);
+	const stop = () => clearInterval(timer);
+	response.on('close', stop);
+	return stop;
+}
+
+/**
+ * The events of a run, after the id the client last saw: the replay first, then
+ * the live ones, each event exactly once.
+ *
+ * The client closing the connection stops the reading, never the run: the run
+ * keeps going and stays resumable.
+ */
+async function streamRunEvents(ctx: RouteContext, runId: string, afterId: string): Promise<void> {
+	const { response, deps } = ctx;
+	const controller = new AbortController();
+	const stop = () => controller.abort();
+	response.on('close', stop);
+	try {
+		const entries = await runStore.readAfter(deps.redis, runId, afterId);
+		for (const entry of entries) writeSseFrame(response, entry);
+		const last = entries.length > 0 ? entries[entries.length - 1] : undefined;
+		if (last && runStore.TERMINAL_TYPES.has(last.type)) return;
+		await runStore.follow(
+			deps.blockingRedis,
+			runId,
+			last?.id ?? afterId,
+			(entry) => writeSseFrame(response, entry),
+			controller.signal,
+		);
+	} finally {
+		response.off('close', stop);
+	}
+}
+
+/** POST /api/ai/runs */
+export async function handleRuns(ctx: RouteContext): Promise<number> {
+	const user = requireUser(ctx);
+	if (!user) return 401;
+	const body = await readJson(ctx.request, startRunSchema);
+	const model = resolveModel(body.model);
+	if (!model) {
+		sendError(ctx.response, 400, 'model_not_allowed');
+		return 400;
+	}
+	const conversation = await getOwnedConversation(ctx.deps.db, { id: body.conversationId, ownerId: user.userId });
+	if (!conversation) {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	const outcome = await startRun({
+		db: ctx.deps.db,
+		redis: ctx.deps.redis,
+		runId: body.runId,
+		conversationId: body.conversationId,
+		ownerId: user.userId,
+		text: body.text,
+		model,
+		emit: (event) => writeSseFrame(ctx.response, event),
+	});
+	if (outcome.kind === 'refused') {
+		sendError(ctx.response, outcome.status, outcome.code);
+		return outcome.status;
+	}
+	if (outcome.kind === 'reattach') {
+		// The same run, asked again: the stream is replayed, and no model is
+		// called a second time.
+		if (!(await runStore.exists(ctx.deps.redis, body.runId))) {
+			sendError(ctx.response, 410, 'run_expired');
+			return 410;
+		}
+		sendSseHeaders(ctx.response);
+		const stopPing = startPing(ctx.response);
+		await streamRunEvents(ctx, body.runId, '');
+		stopPing();
+		if (!ctx.response.writableEnded && !ctx.response.destroyed) ctx.response.end();
+		return 200;
+	}
+	sendSseHeaders(ctx.response);
+	const stopPing = startPing(ctx.response);
+	try {
+		await outcome.execute();
+	} finally {
+		stopPing();
+		if (!ctx.response.writableEnded && !ctx.response.destroyed) ctx.response.end();
+	}
+	return 200;
+}
+
+/** GET /api/ai/runs/:id/events */
+export async function handleRunEvents(ctx: RouteContext): Promise<number> {
+	const user = requireUser(ctx);
+	if (!user) return 401;
+	const runId = ctx.params[0] ?? '';
+	if (!UUID.test(runId)) {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	// The owner check is the gate: a run of somebody else does not exist
+	// for this caller.
+	const run = await getOwnedRun(ctx.deps.db, { id: runId, ownerId: user.userId });
+	if (!run) {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	if (!(await runStore.exists(ctx.deps.redis, runId))) {
+		sendError(ctx.response, 410, 'run_expired');
+		return 410;
+	}
+	const header = ctx.request.headers['last-event-id'];
+	const afterId =
+		(typeof header === 'string' && header.length > 0 ? header : ctx.url.searchParams.get('after')) ?? '';
+	sendSseHeaders(ctx.response);
+	const stopPing = startPing(ctx.response);
+	await streamRunEvents(ctx, runId, afterId);
+	stopPing();
+	if (!ctx.response.writableEnded && !ctx.response.destroyed) ctx.response.end();
+	return 200;
+}
+
+/** POST /api/ai/runs/:id/cancel */
+export async function handleRunCancel(ctx: RouteContext): Promise<number> {
+	const user = requireUser(ctx);
+	if (!user) return 401;
+	const runId = ctx.params[0] ?? '';
+	if (!UUID.test(runId)) {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	const run = await getOwnedRun(ctx.deps.db, { id: runId, ownerId: user.userId });
+	if (!run) {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	// The cancellation travels on the channel: the replica that runs the
+	// model is the one that stops it.
+	await runStore.publishCancel(ctx.deps.redis, runId);
+	const status = 202;
+	sendJson(ctx.response, status, { ok: true, runId });
+	return status;
+}
