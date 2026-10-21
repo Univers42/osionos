@@ -137,9 +137,15 @@ export const searchWorkspace: ReadTool<z.infer<typeof searchArgs>, SearchData> =
 				limit: searchLimit(args.limit),
 			});
 			return { ok: true, data: { chunks } };
-		} catch {
+		} catch (error) {
 			// The search is a convenience: a search that fails is an answer
-			// without passages, never a failed run.
+			// without passages, never a failed run. The failure is logged once,
+			// the way the retrieval of a run logs it: the class and the
+			// message of the error, and never the query — the words the user
+			// searched for do not belong in a log.
+			const name = error instanceof Error ? error.name : 'retrieval_failed';
+			const message = error instanceof Error ? error.message : String(error);
+			console.warn(JSON.stringify({ event: 'tool_search_failed', name, message }));
 			return { ok: false, error: 'the search failed: the pages could not be reached' };
 		}
 	},
