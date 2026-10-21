@@ -19,6 +19,7 @@ import type { RunContext } from "@/features/ai/model/aiContext";
 import { citationFromEvent } from "./citations";
 import { resolveConversationTitle } from "./conversationTitle";
 import { withToolCall, withToolResult, withToolSource } from "./toolActivity";
+import { retryAfterOf } from "./runErrors";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -281,7 +282,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
         const assistant = get().messages.find((m) => m.id === assistantId);
         if (assistant?.status === "streaming") patchAssistant({ status: "done" });
       } catch (error) {
-        patchAssistant({ status: "error", errorCode: failureCode(error) });
+        patchAssistant({ status: "error", errorCode: failureCode(error), retryAfterSeconds: retryAfterOf(error) });
       } finally {
         activeRuns.delete(conversationId);
       }
