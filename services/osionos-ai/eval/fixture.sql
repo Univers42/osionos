@@ -68,6 +68,18 @@ create table if not exists public.osionos_pages (
 	updated_at timestamptz not null default now()
 );
 
+-- TEST-ONLY FIXTURE: the link store of the graph (C103). The production table
+-- (models/osionos-page-links-migration.sql) carries a foreign key on the source
+-- page and the trigger that fills it from the block content; this fixture holds
+-- the same columns and nothing more, so the graph's edge read runs against it.
+create table if not exists public.osionos_page_links (
+	source_page_id uuid not null,
+	target_page_id uuid not null,
+	owner_id uuid,
+	workspace_id uuid not null,
+	primary key (source_page_id, target_page_id)
+);
+
 -- TEST-ONLY FIXTURE: the block walker of the pages, copied verbatim from
 -- models/osionos-page-search-migration.sql, so the real SQL of the page
 -- context runs against the fixture.

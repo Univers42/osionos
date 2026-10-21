@@ -107,7 +107,18 @@ export function setAiTransport(impl: FetchLike): void {
   transport = impl;
 }
 
-async function requestJson<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
+/**
+ * The JSON transport of the service.
+ *
+ * It is exported so a route that lives in its own module (relatedPages.ts)
+ * rides the SAME transport — the session bearer, the base URL, the refusal
+ * envelope — instead of copying it.
+ */
+export async function requestJson<T>(
+  method: "GET" | "POST" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const response = await transport(`${aiBaseUrl()}${path}`, {
     method,
     headers: { Accept: "application/json", "Content-Type": "application/json" },

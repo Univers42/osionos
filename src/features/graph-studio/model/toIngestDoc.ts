@@ -123,12 +123,15 @@ function toNode(node: BridgeNode): IngestNode {
  * import), plus the direction. graph_render reads only an exact `child_of` as child-first
  * (`crates/graph-core/src/edgekind.rs` `child_first_from_type`), so a bridge `parent`
  * edge, which runs child → parent, must say so or the tree is drawn upside down.
+ *
+ * The bridge's `link` edge — the inline [[page:]] mention, read live from the one link
+ * store — is the graph's `note_link`: a page that points at another page.
  */
 function edgeShape(type: string | undefined): { kind: IngestEdgeKind; childFirst: boolean } {
   const lowered = (type ?? "").toLowerCase();
   if (lowered === "parent" || lowered === "child_of") return { kind: "hierarchy", childFirst: true };
   if (lowered === "parent_of" || lowered.includes("hierarchy")) return { kind: "hierarchy", childFirst: false };
-  if (lowered.includes("note_link") || lowered === "links_to") return { kind: "note_link", childFirst: false };
+  if (lowered === "link" || lowered.includes("note_link") || lowered === "links_to") return { kind: "note_link", childFirst: false };
   if (lowered.includes("note_of") || lowered === "annotates") return { kind: "note_of", childFirst: false };
   if (lowered.includes("tag")) return { kind: "tag", childFirst: false };
   return { kind: "relation", childFirst: false };
