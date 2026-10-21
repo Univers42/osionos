@@ -111,13 +111,16 @@ export function withToolResult(parts: ChatMessagePart[], data: Record<string, un
   const toolCallId = typeof data.toolCallId === "string" ? data.toolCallId : "";
   if (!toolCallId) return parts;
   const status: ToolActivityStatus = data.ok === true ? "done" : "failed";
+  // What the call found, already-cited passages included: its citations alone
+  // count only the new ones. An older service sends no count.
+  const found = typeof data.found === "number" && Number.isInteger(data.found) && data.found >= 0 ? data.found : null;
   const index = parts.findIndex(
     (part) => part.type === "tool-activity" && part.toolCallId === toolCallId,
   );
   if (index === -1) return parts;
   return parts.map((part, position) => {
     if (position !== index || part.type !== "tool-activity") return part;
-    return { ...part, status };
+    return found === null ? { ...part, status } : { ...part, status, count: found };
   });
 }
 
