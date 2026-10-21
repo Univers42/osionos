@@ -18,7 +18,7 @@ minutes read aloud.
 
 The first item was the Arcway programme, twenty-six examination rooms in Hellerup, and the
 question was whether to hold the price for twelve months as the client's procurement
-department asked. <!-- answer:q31 -->
+department asked. <!-- answer:q31,q59 -->
 
 The answer was no. A price lock on a healthcare job means holding the timber price, the
 labour rate and the surcharge list for a year, and one of the three will move. The

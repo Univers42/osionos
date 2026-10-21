@@ -13,7 +13,7 @@ archived: false
 Ce cahier des charges décrit le système d'étagères Rive Nord, un produit approuvé pour les
 salles de conservation et les réserves d'archives. Il s'adresse aux bureaux d'études, aux
 muséologues et aux chefs de projet qui posent des questions sur le stockage avant de
-commander.
+commander. <!-- answer:q68 -->
 
 ## Caractéristiques générales
 
@@ -24,7 +24,7 @@ commander.
   d'humidité.
 
 Le socle réglable est la raison d'être du produit. Dans une réserve d'archives, le sol
-n'est jamais tout à fait plat et le taux d'humidité varie au fil des saisons.
+n'est jamais tout à fait plat et le taux d'humidité varie au fil des saisons. <!-- answer:q64 -->
 
 Le système d'étagères NW-CEDAR-40 est livré en six semaines, à condition que la commande
 soit passée avant le 15 du mois. <!-- answer:q40 -->
