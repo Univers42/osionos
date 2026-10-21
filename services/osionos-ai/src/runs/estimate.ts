@@ -2,7 +2,8 @@ import { config } from '../config.ts';
 import { costMicroUsd } from '../gateway/platform.ts';
 import type { PlatformModelEntry } from '../gateway/platform.ts';
 import { estimateTokens } from '../gateway/usage.ts';
-import { MAX_STEPS, TOOL_OUTPUT_CHARS } from '../tools/loop.ts';
+import { TOOL_DEFINITION_CHARS } from '../tools/index.ts';
+import { MAX_STEPS, TOOL_POOL_CHARS } from '../tools/loop.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
 
 /**
@@ -11,6 +12,14 @@ import { SYSTEM_PROMPT } from './prompt.ts';
  * The reservation and the settlement of a call read the size of the prompt
  * from here, so the two never disagree.
  */
+
+/**
+ * The characters the tools of a run may add to the context of a step.
+ *
+ * The pool of the outputs of the tools, and the definitions the tools are
+ * sent as: both are input, on every step of the loop.
+ */
+export const TOOL_CHARS = TOOL_POOL_CHARS + TOOL_DEFINITION_CHARS;
 
 /**
  * The characters of the prompt of a call: the question, the history, the pages
@@ -68,8 +77,14 @@ export function estimateMicroUsd(
  * A run is not one call: the model may call a tool, and the answer comes
  * after the tool. A run that reserves for one call and spends five books a
  * spend the cap never allowed, so the reservation is the cost of every step
- * the loop may take, each of them with the room the tools of a step may take
- * in the prompt.
+ * the loop may take.
+ *
+ * Every step is counted with the pool of the tools and with their
+ * definitions: the outputs of the tools accumulate, so the prompt of the
+ * last step holds all of them, and the definitions are input on every step.
+ * The pool is what keeps that true: with it, the prompt of a step never
+ * holds more than the step the reservation counts, and the reservation is a
+ * ceiling of the loop.
  */
 export function estimateLoopMicroUsd(
 	model: PlatformModelEntry,
@@ -92,7 +107,18 @@ export function estimateLoopMicroUsd(
 			historyChars,
 			pageChars,
 			sourceChars,
-			toolChars: TOOL_OUTPUT_CHARS,
+			toolChars: TOOL_CHARS,
 		})
 	);
+}
+
+/**
+ * The ceiling of the characters one step of the loop may hold.
+ *
+ * It is the prompt of the run, the pool of the tools and the definitions of
+ * the tools: the loop stops itself when the next step would cost more than
+ * the run holds, and the cost of a step is read from this ceiling.
+ */
+export function stepCeilingChars(baseChars: number): number {
+	return baseChars + TOOL_CHARS;
 }

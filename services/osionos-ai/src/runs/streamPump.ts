@@ -1,6 +1,9 @@
 import { stepCountIs, streamText } from 'ai';
 import type { LanguageModel, LanguageModelUsage, ModelMessage, ToolSet } from 'ai';
 import { config } from '../config.ts';
+import { costMicroUsd } from '../gateway/platform.ts';
+import type { PlatformModelEntry } from '../gateway/platform.ts';
+import { estimateTokens, usageForSettlement } from '../gateway/usage.ts';
 import { MAX_STEPS } from '../tools/loop.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
 
@@ -52,6 +55,82 @@ function failureName(error: unknown): string {
 	return 'upstream_error';
 }
 
+/**
+ * The ceiling of the loop: the money the run holds, and the cost of a step.
+ *
+ * The reservation of a run is the ceiling of the whole loop, and the ceiling
+ * is kept by stopping the loop: the steps that ran are paid for whatever they
+ * cost, and the next one is not started when it would pass the money the run
+ * holds.
+ */
+export interface LoopBudget {
+	/** The money the run holds, in micro-USD. */
+	reserved: number;
+	/** The pricing of the model: the cost of a step is read from it. */
+	pricing: PlatformModelEntry;
+	/** The characters one step of the loop may hold. */
+	stepChars: number;
+	/** The id of the run: the estimate of a step carries it. */
+	runId: string;
+}
+
+/** What the stop condition reads of a finished step. */
+interface StepUsage {
+	/** What the provider reported of the step. */
+	usage?: { inputTokens?: number; outputTokens?: number };
+	/** The text of the step, when the SDK gives it as one string. */
+	text?: unknown;
+	/** The parts of the step, when it gives them as parts. */
+	content?: unknown;
+}
+
+/**
+ * The stop condition of the money: the loop stops when the next step would
+ * cost more than the run holds.
+ *
+ * The cost of the steps that ran is the usage the provider reported, and the
+ * estimate when it reported nothing: the estimate of a step is the same
+ * estimate the settlement uses, so the two never disagree.
+ */
+export function budgetReached(budget: LoopBudget) {
+	return ({ steps }: { steps: readonly StepUsage[] }): boolean => {
+		const accrued = steps.reduce((total, step) => total + stepCost(budget, step), 0);
+		return accrued + stepCeilingCost(budget) > budget.reserved;
+	};
+}
+
+/** The cost of a finished step: what the provider reported, or the estimate. */
+function stepCost(budget: LoopBudget, step: StepUsage): number {
+	const usage = usageForSettlement(
+		budget.runId,
+		step.usage,
+		{ promptChars: budget.stepChars, outputChars: stepTextChars(step) },
+		// The estimate of a step is not a settlement: the line that says the
+		// usage was estimated belongs to the settlement, which books it once.
+		{ log: false },
+	);
+	return costMicroUsd(budget.pricing, usage);
+}
+
+/** The cost of the ceiling of one more step. */
+function stepCeilingCost(budget: LoopBudget): number {
+	return costMicroUsd(budget.pricing, {
+		inputTokens: estimateTokens(budget.stepChars),
+		outputTokens: config.maxOutputTokens,
+	});
+}
+
+/** The characters the model wrote in a step. */
+function stepTextChars(step: StepUsage): number {
+	if (typeof step.text === 'string') return step.text.length;
+	let chars = 0;
+	for (const part of Array.isArray(step.content) ? step.content : []) {
+		const text = (part as { text?: unknown }).text;
+		if (typeof text === 'string') chars += text.length;
+	}
+	return chars;
+}
+
 export interface PumpInput {
 	/** The handle of the model: the platform's, or the one of a connection. */
 	model: LanguageModel;
@@ -70,6 +149,13 @@ export interface PumpInput {
 	 * the tool: that is the loop, and it is bounded by MAX_STEPS.
 	 */
 	tools?: ToolSet;
+	/**
+	 * The ceiling of the loop, when the call is one that may loop.
+	 *
+	 * Without it the loop is bounded by the steps alone: a call that holds no
+	 * money has no ceiling to stop at.
+	 */
+	budget?: LoopBudget;
 	/** The model called a tool. */
 	onToolCall?: (call: { toolCallId: string; toolName: string; input: unknown }) => Promise<void>;
 	/** A tool failed before it ran: the model never gets an answer of it. */
@@ -92,13 +178,19 @@ export interface PumpOutcome {
  * the upstream reported before it broke — that is what the settlement needs.
  */
 export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
-	const { model, messages, controller, onText, onReasoning, tools, onToolCall, onToolError } = input;
+	const { model, messages, controller, onText, onReasoning, tools, budget, onToolCall, onToolError } = input;
 	let answer = '';
 	let reasoning = '';
 	let usage: LanguageModelUsage | undefined;
 	let finishReason = 'stop';
 	let idleTimer: ReturnType<typeof setTimeout> | undefined;
 	let totalTimer: ReturnType<typeof setTimeout> | undefined;
+
+	// The two clocks of the loop: the steps, and the money the run holds. The
+	// second one stops the loop when the next step would cost more than the
+	// reservation: the ceiling of a run is kept by stopping the work.
+	const stopWhen = [stepCountIs(MAX_STEPS)];
+	if (budget) stopWhen.push(budgetReached(budget));
 
 	const onTimeout = () => controller.abort(new UpstreamTimeout());
 	const touch = () => {
@@ -123,7 +215,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			// The tools, and the ceiling of the loop: the model may call a
 			// tool, and the answer comes after the tool.
 			...(tools ? { tools } : {}),
-			stopWhen: stepCountIs(MAX_STEPS),
+			stopWhen,
 		});
 
 		for await (const part of result.fullStream) {

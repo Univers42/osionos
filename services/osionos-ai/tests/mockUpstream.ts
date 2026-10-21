@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage } from 'node:http';
+import { chunkTexts, streamAnswer, streamToolCall } from './mockStream.ts';
+import type { StreamOptions } from './mockStream.ts';
 
 /**
  * A mock OpenAI-compatible upstream: the SSE of the P0a spike, with the knobs
@@ -7,13 +9,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
  * gap between two chunks, a failure mode) and a counter of the calls.
  */
 
-export interface MockOptions {
-	/** The wait before the first chunk. */
-	preDelayMs: number;
-	/** The number of text chunks of one answer. */
-	chunkCount: number;
-	/** The wait between two chunks. */
-	chunkGapMs: number;
+export interface MockOptions extends StreamOptions {
 	/** The upstream answers with an error instead of the stream. */
 	fail: boolean;
 	/** The models the list of /models answers with. */
@@ -37,6 +33,12 @@ export interface MockOptions {
 	 * of the model ends.
 	 */
 	toolCall: { name: string; arguments: Record<string, unknown> } | null;
+	/**
+	 * The model calls the tool on EVERY step, not only on the first one.
+	 *
+	 * A model that keeps calling a tool is a loop that keeps spending.
+	 */
+	toolCallEveryStep: boolean;
 }
 
 const DEFAULT_OPTIONS: MockOptions = {
@@ -50,6 +52,9 @@ const DEFAULT_OPTIONS: MockOptions = {
 	authFail: false,
 	neverSendUsage: false,
 	toolCall: null,
+	usage: null,
+	toolCallEveryStep: false,
+	parallelToolCalls: 1,
 };
 
 export interface MockUpstream {
@@ -79,58 +84,6 @@ export interface MockUpstream {
 	lastAuthorization(): string;
 	setOptions(next: Partial<MockOptions>): void;
 	close(): Promise<void>;
-}
-
-/** The text of the chunks: "part-0 part-1 …". */
-function chunkTexts(chunkCount: number): string[] {
-	const chunks: string[] = [];
-	for (let index = 0; index < chunkCount; index += 1) chunks.push(`part-${index} `);
-	return chunks;
-}
-
-/** One chunk of the OpenAI-compatible stream. */
-function serializeChunk(content: string, last: boolean, sendUsage: boolean): string {
-	const payload = {
-		id: 'chatcmpl-mock-0001',
-		object: 'chat.completion.chunk',
-		created: 0,
-		model: 'mock-model',
-		choices: [{ index: 0, delta: { content }, finish_reason: last ? 'stop' : null }],
-		...(last && sendUsage ? { usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 } } : {}),
-	};
-	return `data: ${JSON.stringify(payload)}\n\n`;
-}
-
-/**
- * One chunk of a tool call: the name of the tool and its arguments.
- *
- * The wire is the OpenAI one: the arguments travel as a string, and the
- * provider parses them when the call is complete.
- */
-function serializeToolCallChunk(
-	id: string,
-	name: string,
-	args: string,
-	last: boolean,
-	sendUsage: boolean,
-): string {
-	const payload = {
-		id: 'chatcmpl-mock-0001',
-		object: 'chat.completion.chunk',
-		created: 0,
-		model: 'mock-model',
-		choices: [
-			{
-				index: 0,
-				delta: last
-					? {}
-					: { tool_calls: [{ index: 0, id, type: 'function', function: { name, arguments: args } }] },
-				finish_reason: last ? 'tool_calls' : null,
-			},
-		],
-		...(last && sendUsage ? { usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 } } : {}),
-	};
-	return `data: ${JSON.stringify(payload)}\n\n`;
 }
 
 /**
@@ -232,7 +185,8 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			// The usage comes only when the request asks for it.
 			const sendUsage = !options.neverSendUsage && askedForUsage(body);
 			// The tool call is answered once: the answer after it is the text.
-			const toolCall = pendingToolCall;
+			// A model that calls a tool on every step keeps the loop going.
+			const toolCall = options.toolCallEveryStep ? options.toolCall : pendingToolCall;
 			pendingToolCall = null;
 			if (toolCall) {
 				streamToolCall(response, toolCall, options, sendUsage, () => {
@@ -300,72 +254,4 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			});
 		},
 	};
-}
-
-/** The stream of one answer: the chunks, one after the other. */
-function streamAnswer(
-	response: ServerResponse,
-	chunks: string[],
-	options: MockOptions,
-	sendUsage: boolean,
-	onAbort: () => void,
-): void {
-	response.writeHead(200, {
-		'content-type': 'text/event-stream',
-		'cache-control': 'no-cache',
-	});
-	let index = 0;
-	const send = () => {
-		if (response.writableEnded || response.destroyed) return;
-		const last = index === chunks.length - 1;
-		response.write(serializeChunk(chunks[index], last, sendUsage));
-		index += 1;
-		if (last) {
-			response.end('data: [DONE]\n\n');
-			return;
-		}
-		setTimeout(send, options.chunkGapMs);
-	};
-	setTimeout(send, options.preDelayMs);
-	response.on('close', () => {
-		// The client went away before the end: the stream was cut.
-		if (!response.writableEnded) {
-			onAbort();
-			response.destroy();
-		}
-	});
-}
-
-/**
- * The stream of one tool call: the call, then the end of the step.
- *
- * The step ends with `tool_calls`: the model asked for a tool, and the
- * answer comes after the tool has run.
- */
-function streamToolCall(
-	response: ServerResponse,
-	toolCall: { name: string; arguments: Record<string, unknown> },
-	options: MockOptions,
-	sendUsage: boolean,
-	onAbort: () => void,
-): void {
-	response.writeHead(200, {
-		'content-type': 'text/event-stream',
-		'cache-control': 'no-cache',
-	});
-	const id = `call_mock_${toolCall.name}`;
-	const args = JSON.stringify(toolCall.arguments);
-	const send = () => {
-		if (response.writableEnded || response.destroyed) return;
-		response.write(serializeToolCallChunk(id, toolCall.name, args, false, sendUsage));
-		response.write(serializeToolCallChunk(id, toolCall.name, args, true, sendUsage));
-		response.end('data: [DONE]\n\n');
-	};
-	setTimeout(send, options.preDelayMs);
-	response.on('close', () => {
-		if (!response.writableEnded) {
-			onAbort();
-			response.destroy();
-		}
-	});
 }
