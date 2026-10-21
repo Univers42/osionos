@@ -50,7 +50,7 @@ export const DictationButton: React.FC<DictationButtonProps> = ({
   label = "Dictate",
   className = "",
 }) => {
-  const { status, secondsLeft, error, transcript, start, stop } = useDictation({ onText, language });
+  const { status, secondsLeft, error, errorKind, transcript, start, stop } = useDictation({ onText, language });
   const recording = status === "recording";
   const working = status === "working";
 
@@ -58,8 +58,14 @@ export const DictationButton: React.FC<DictationButtonProps> = ({
   // below carries the text of the dictation, and nothing else.
   useEffect(() => {
     if (!error) return;
-    useToastStore.getState().push({ kind: "error", title: "Dictation unavailable", description: error });
-  }, [error]);
+    // The refusal of the microphone is the toast of the voice note, word for
+    // word; the refusal of the service is the one of the dictation.
+    useToastStore.getState().push({
+      kind: "error",
+      title: errorKind === "microphone" ? "Microphone unavailable" : "Dictation unavailable",
+      description: error,
+    });
+  }, [error, errorKind]);
 
   const toggle = useCallback(() => {
     if (recording) {
