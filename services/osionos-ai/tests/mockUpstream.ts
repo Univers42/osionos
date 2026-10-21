@@ -24,6 +24,11 @@ export interface MockOptions {
 	authKey: string;
 	/** The exchange of a sign-in fails. */
 	authFail: boolean;
+	/**
+	 * The upstream never reports the usage, even when the request asks for it.
+	 * This is the server that does not know `stream_options.include_usage`.
+	 */
+	neverSendUsage: boolean;
 }
 
 const DEFAULT_OPTIONS: MockOptions = {
@@ -35,6 +40,7 @@ const DEFAULT_OPTIONS: MockOptions = {
 	modelsStatus: 200,
 	authKey: 'sk-openrouter-mock-0123456789',
 	authFail: false,
+	neverSendUsage: false,
 };
 
 export interface MockUpstream {
@@ -74,16 +80,27 @@ function chunkTexts(chunkCount: number): string[] {
 }
 
 /** One chunk of the OpenAI-compatible stream. */
-function serializeChunk(content: string, last: boolean): string {
+function serializeChunk(content: string, last: boolean, sendUsage: boolean): string {
 	const payload = {
 		id: 'chatcmpl-mock-0001',
 		object: 'chat.completion.chunk',
 		created: 0,
 		model: 'mock-model',
 		choices: [{ index: 0, delta: { content }, finish_reason: last ? 'stop' : null }],
-		...(last ? { usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 } } : {}),
+		...(last && sendUsage ? { usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 } } : {}),
 	};
 	return `data: ${JSON.stringify(payload)}\n\n`;
+}
+
+/**
+ * Whether the request asks for the usage: `stream_options.include_usage`.
+ *
+ * A real upstream reports the tokens of a stream only when it is asked to, and
+ * the mock does the same: a test that forgets the option sees no usage.
+ */
+export function askedForUsage(body: unknown): boolean {
+	const options = (body as { stream_options?: { include_usage?: unknown } } | null)?.stream_options;
+	return options?.include_usage === true;
 }
 
 /** The body of a request, read to the end. */
@@ -155,11 +172,13 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 		calls += 1;
 		authorizations.push(String(request.headers.authorization ?? ''));
 		void readBody(request).then((raw) => {
+			let body: unknown = raw;
 			try {
-				bodies.push(JSON.parse(raw));
+				body = JSON.parse(raw);
 			} catch {
-				bodies.push(raw);
+				body = raw;
 			}
+			bodies.push(body);
 			if (options.fail) {
 				response.writeHead(500, { 'content-type': 'application/json' });
 				response.end(JSON.stringify({ error: { message: 'the upstream is down' } }));
@@ -167,7 +186,9 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			}
 			const chunks = chunkTexts(options.chunkCount);
 			texts.push(chunks.join(''));
-			streamAnswer(response, chunks, options, () => {
+			// The usage comes only when the request asks for it.
+			const sendUsage = !options.neverSendUsage && askedForUsage(body);
+			streamAnswer(response, chunks, options, sendUsage, () => {
 				aborted += 1;
 			});
 		});
@@ -227,7 +248,13 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 }
 
 /** The stream of one answer: the chunks, one after the other. */
-function streamAnswer(response: ServerResponse, chunks: string[], options: MockOptions, onAbort: () => void): void {
+function streamAnswer(
+	response: ServerResponse,
+	chunks: string[],
+	options: MockOptions,
+	sendUsage: boolean,
+	onAbort: () => void,
+): void {
 	response.writeHead(200, {
 		'content-type': 'text/event-stream',
 		'cache-control': 'no-cache',
@@ -236,7 +263,7 @@ function streamAnswer(response: ServerResponse, chunks: string[], options: MockO
 	const send = () => {
 		if (response.writableEnded || response.destroyed) return;
 		const last = index === chunks.length - 1;
-		response.write(serializeChunk(chunks[index], last));
+		response.write(serializeChunk(chunks[index], last, sendUsage));
 		index += 1;
 		if (last) {
 			response.end('data: [DONE]\n\n');

@@ -1,128 +1,23 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
-import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
-import { startMockUpstream } from './mockUpstream.ts';
+import { startHarness, USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } from './harness.ts';
+import type { JsonBody } from './harness.ts';
+import { textOf } from './ledger.ts';
 import { SseStream, collect } from './sse.ts';
 import type { SseEvent } from './sse.ts';
 
-const APP_SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
-const USER_A = '11111111-1111-4111-8111-111111111111';
-const USER_B = '22222222-2222-4222-8222-222222222222';
-const WORKSPACE_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const WORKSPACE_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-
-type JsonBody = Record<string, unknown>;
-
-/** A token the way the bridge signs one: the same module, the test's secret. */
-function tokenFor(userId: string, workspaceId: string, secret = APP_SECRET): string {
-	return signAppSessionToken({
-		payload: { subject: userId, provider: 'test' },
-		workspace: { _id: workspaceId },
-		config: { appSessionSecret: secret, sessionTtlSeconds: 3600 },
-	}).token;
-}
-
 /**
- * The mock upstream comes first, and the environment points at it: the service
- * reads its configuration when it is imported.
+ * The runs: the stream of the events, the replay, the refusals, the pages of
+ * the prompt, and the sweep of the stale ones.
  */
-const mock = await startMockUpstream();
-process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${mock.baseUrl}/v1`;
-process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([
-	// The free model costs nothing: the runs of the other cases are not bounded
-	// by the daily budget.
-	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true },
-	// The priced model reserves more than the daily limit of one micro-USD.
-	{ id: 'mock-priced', label: 'Mock priced', inputMicroUsdPerMTok: 1000, outputMicroUsdPerMTok: 2000 },
-]);
-// The daily budget of a user: one micro-USD.
-process.env.OSIONOS_AI_USER_DAILY_MICROUSD = '1';
-process.env.OSIONOS_AI_PLATFORM_DAILY_MICROUSD = '20000000';
-process.env.OSIONOS_AI_RUNS_PER_MINUTE = '100';
-
-const { createAiServer } = await import('../src/server.ts');
+const { app, base, mock, call, postRun, tokenFor, createConversation } = await startHarness();
 const { sweepStaleRuns } = await import('../src/runs/runner.ts');
-const { costMicroUsd } = await import('../src/gateway/platform.ts');
-const { reserve, settle } = await import('../src/budget.ts');
-
-const app = createAiServer();
-await new Promise<void>((resolve) => {
-	app.server.listen(0, '127.0.0.1', () => resolve());
-});
-const address = app.server.address();
-const base = `http://127.0.0.1:${address && typeof address === 'object' ? address.port : 0}`;
 
 after(async () => {
 	await app.close();
 	await mock.close();
 });
-
-/** A JSON answer of the service. */
-async function call(
-	path: string,
-	options: { method?: string; token?: string; body?: unknown } = {},
-): Promise<{ status: number; body: JsonBody | null }> {
-	const response = await fetch(`${base}${path}`, {
-		method: options.method ?? 'GET',
-		headers: {
-			...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
-			...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
-		},
-		body: options.body === undefined ? undefined : JSON.stringify(options.body),
-	});
-	const text = await response.text();
-	let body: JsonBody | null = null;
-	try {
-		// A body that is not JSON is not an error here: the caller looks at the
-		// status, and a stream is not JSON.
-		body = text ? (JSON.parse(text) as JsonBody) : null;
-	} catch {
-		body = null;
-	}
-	return { status: response.status, body };
-}
-
-/** The POST of a run: the answer is a stream. */
-function postRun(
-	conversationId: string,
-	runId: string,
-	text: string,
-	model?: string,
-	token = tokenFor(USER_A, WORKSPACE_A),
-	pageIds: string[] = [],
-): Promise<Response> {
-	return fetch(`${base}/api/ai/runs`, {
-		method: 'POST',
-		headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-		body: JSON.stringify({
-			runId,
-			conversationId,
-			text,
-			...(model ? { model } : {}),
-			...(pageIds.length > 0 ? { context: { pageIds } } : {}),
-		}),
-	});
-}
-
-/** A conversation of the first user. */
-async function createConversation(title = 'thread'): Promise<string> {
-	const answer = await call('/api/ai/conversations', {
-		method: 'POST',
-		token: tokenFor(USER_A, WORKSPACE_A),
-		body: { workspaceId: WORKSPACE_A, title },
-	});
-	assert.equal(answer.status, 201);
-	return String(answer.body?.id);
-}
-
-/** The text of the deltas of a list of events. */
-function textOf(events: SseEvent[]): string {
-	return events
-		.filter((event) => event.event === 'text.delta')
-		.map((event) => (event.data as { text: string }).text)
-		.join('');
-}
 
 describe('osionos-ai runs', () => {
 	before(async () => {
@@ -233,7 +128,7 @@ describe('osionos-ai runs', () => {
 	it('a run without money is refused before the model is called', async () => {
 		const conversationId = await createConversation();
 		const calls = mock.calls;
-		const response = await postRun(conversationId, randomUUID(), 'too expensive', 'mock-priced');
+		const response = await postRun(conversationId, randomUUID(), 'too expensive', 'mock-dear');
 		assert.equal(response.status, 402);
 		const body = (await response.json()) as JsonBody;
 		assert.equal(body.code, 'budget_exhausted');
@@ -308,7 +203,13 @@ describe('osionos-ai runs', () => {
 
 		const conversationId = await createConversation();
 		const events = await collect(
-			new SseStream(await postRun(conversationId, randomUUID(), 'what do the notes say?', undefined, undefined, [shared, foreign, missing])),
+			new SseStream(
+				await postRun(conversationId, randomUUID(), 'what do the notes say?', undefined, undefined, [
+					shared,
+					foreign,
+					missing,
+				]),
+			),
 		);
 
 		// The prompt carries the page the caller may read, and only that one.
@@ -357,62 +258,8 @@ describe('osionos-ai runs', () => {
 		const answer = await call('/api/ai/models', { token: tokenFor(USER_A, WORKSPACE_A) });
 		assert.equal(answer.status, 200);
 		const models = answer.body?.models as { id: string; label: string; default: boolean }[];
-		assert.equal(models.length, 2);
+		assert.equal(models.length, 3);
 		assert.equal(models.filter((model) => model.default).length, 1);
 		assert.deepEqual(Object.keys(models[0]).sort(), ['default', 'id', 'label']);
-	});
-
-	it('the cost of a call is the price of its tokens, rounded up', () => {
-		const priced = { id: 'p', label: 'p', inputMicroUsdPerMTok: 1000, outputMicroUsdPerMTok: 2000, default: true };
-		assert.equal(costMicroUsd(priced, { inputTokens: 1_000_000, outputTokens: 0 }), 1000);
-		assert.equal(costMicroUsd(priced, { inputTokens: 0, outputTokens: 1_000_000 }), 2000);
-		assert.equal(costMicroUsd(priced, { inputTokens: 1, outputTokens: 1 }), 1);
-		assert.equal(costMicroUsd(priced, {}), 0);
-	});
-
-	it('the budget is reserved on the user and on the platform, and settled after', async () => {
-		const day = '2026-01-01';
-		const user = '33333333-3333-4333-8333-333333333333';
-
-		assert.equal(await reserve(app.db, { userId: user, day, amount: 5, userLimit: 10, platformLimit: 10 }), true);
-		const held = await app.db.query(
-			'select subject, spent_microusd, reserved_microusd from public.ai_usage_daily where day = $1 order by subject',
-			[day],
-		);
-		// The two subjects: the user and the platform.
-		assert.equal(held.rowCount, 2);
-		assert.deepEqual(
-			held.rows.map((row) => row.subject),
-			['33333333-3333-4333-8333-333333333333', 'platform'],
-		);
-		assert.equal(Number(held.rows[0].reserved_microusd), 5);
-
-		// The user's budget is not enough any more: the call is refused.
-		assert.equal(await reserve(app.db, { userId: user, day, amount: 6, userLimit: 10, platformLimit: 10 }), false);
-
-		// The platform refuses: the user's reservation is not kept either.
-		assert.equal(await reserve(app.db, { userId: user, day, amount: 1, userLimit: 100, platformLimit: 0 }), false);
-		const afterRefusals = await app.db.query(
-			'select subject, reserved_microusd from public.ai_usage_daily where day = $1 order by subject',
-			[day],
-		);
-		assert.deepEqual(
-			afterRefusals.rows.map((row) => Number(row.reserved_microusd)),
-			[5, 5],
-		);
-
-		// The settlement: the reservation back, the real spend in.
-		await settle(app.db, { userId: user, day, reserved: 5, actual: 3 });
-		const settled = await app.db.query(
-			'select subject, spent_microusd, reserved_microusd from public.ai_usage_daily where day = $1 order by subject',
-			[day],
-		);
-		assert.deepEqual(
-			settled.rows.map((row) => [row.subject, Number(row.spent_microusd), Number(row.reserved_microusd)]),
-			[
-				['33333333-3333-4333-8333-333333333333', 3, 0],
-				['platform', 3, 0],
-			],
-		);
 	});
 });

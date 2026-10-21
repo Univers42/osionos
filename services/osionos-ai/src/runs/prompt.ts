@@ -3,6 +3,7 @@ import type { ModelMessage } from 'ai';
 import { config } from '../config.ts';
 import { costMicroUsd } from '../gateway/platform.ts';
 import type { PlatformModelEntry } from '../gateway/platform.ts';
+import { estimateTokens } from '../gateway/usage.ts';
 import { listMessages } from '../conversations/repo.ts';
 import type { AuthUser } from '../auth.ts';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
@@ -220,6 +221,25 @@ export function buildUserTurn(text: string, pages: readonly PageContext[]): stri
 }
 
 /**
+ * The characters of the prompt of a call: the question, the history, the pages
+ * the run quotes, and the system prompt.
+ *
+ * The reservation and the settlement of a call read the size of the prompt
+ * from here, so the two never disagree.
+ */
+export function promptCharCount({
+	text,
+	historyChars,
+	pageChars = 0,
+}: {
+	text: string;
+	historyChars: number;
+	pageChars?: number;
+}): number {
+	return text.length + historyChars + pageChars + SYSTEM_PROMPT.length;
+}
+
+/**
  * The reservation of a call: what the prompt is expected to cost.
  *
  * Caveat: the input tokens are estimated at four characters per token, which
@@ -231,7 +251,6 @@ export function estimateMicroUsd(
 	model: PlatformModelEntry,
 	{ text, historyChars, pageChars = 0 }: { text: string; historyChars: number; pageChars?: number },
 ): number {
-	const chars = text.length + historyChars + pageChars + SYSTEM_PROMPT.length;
-	const estimatedInputTokens = Math.ceil(chars / 4);
+	const estimatedInputTokens = estimateTokens(promptCharCount({ text, historyChars, pageChars }));
 	return costMicroUsd(model, { inputTokens: estimatedInputTokens, outputTokens: config.maxOutputTokens });
 }

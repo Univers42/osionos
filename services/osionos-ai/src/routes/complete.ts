@@ -6,9 +6,11 @@ import { reserveTarget, settleTarget, targetCost } from '../gateway/resolve.ts';
 import { checkRunRateLimit } from '../rateLimit.ts';
 import { findCommand, renderTemplate } from '../commands/builtins.ts';
 import type { Command } from '../commands/builtins.ts';
-import { estimateMicroUsd } from '../runs/prompt.ts';
+import { estimateMicroUsd, promptCharCount } from '../runs/prompt.ts';
 import { today } from '../runs/runner.ts';
 import { abortCode, failureMessage, pumpUpstream } from '../runs/streamPump.ts';
+import { usageForSettlement } from '../gateway/usage.ts';
+import type { SettledUsage } from '../gateway/usage.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -100,12 +102,15 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 		writeSseFrame(ctx.response, { id: String(counter), type, data });
 	};
 	let usage: { inputTokens?: number; outputTokens?: number } | undefined;
+	let answer = '';
+	let settled: SettledUsage | undefined;
 	try {
 		const outcome = await pumpUpstream({
 			model: target.model,
 			messages: [{ role: 'user', content: turn }],
 			controller,
 			onText: async (delta) => {
+				answer += delta;
 				emit('text.delta', { text: delta });
 			},
 			onReasoning: async () => {
@@ -114,12 +119,15 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 		});
 		usage = outcome.usage;
 		if (outcome.error !== undefined) throw outcome.error;
-		const inputTokens = outcome.usage?.inputTokens ?? 0;
-		const outputTokens = outcome.usage?.outputTokens ?? 0;
+		// The usage the upstream reported, or the estimate of what it did not.
+		settled = usageForSettlement(body.runId, outcome.usage, {
+			promptChars: promptCharCount({ text: turn, historyChars: 0 }),
+			outputChars: answer.length,
+		});
 		emit('usage', {
-			inputTokens,
-			outputTokens,
-			costMicroUsd: targetCost(target, { inputTokens, outputTokens }),
+			inputTokens: settled.inputTokens,
+			outputTokens: settled.outputTokens,
+			costMicroUsd: targetCost(target, settled),
 		});
 		// Nothing is persisted here, so there is no assistant message to point at.
 		emit('done', { runId: body.runId, assistantMessageId: null, finishReason: outcome.finishReason });
@@ -128,12 +136,12 @@ export async function handleComplete(ctx: RouteContext): Promise<number> {
 		emit('error', { code, message: failureMessage(code, error) });
 	} finally {
 		ctx.response.off('close', stop);
-		// The settlement: what the upstream reported, or nothing at all.
-		const cost = targetCost(target, {
-			inputTokens: usage?.inputTokens ?? 0,
-			outputTokens: usage?.outputTokens ?? 0,
+		// The settlement: what the upstream reported, or what it is estimated at.
+		const billed = settled ?? usageForSettlement(body.runId, usage, {
+			promptChars: promptCharCount({ text: turn, historyChars: 0 }),
+			outputChars: answer.length,
 		});
-		await settleTarget(ctx.deps.db, target, { userId: user.userId, day, reserved: amount, actual: cost });
+		await settleTarget(ctx.deps.db, target, { userId: user.userId, day, reserved: amount, actual: targetCost(target, billed) });
 		if (!ctx.response.writableEnded && !ctx.response.destroyed) ctx.response.end();
 	}
 	return 200;
