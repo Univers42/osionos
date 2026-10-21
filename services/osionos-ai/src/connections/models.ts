@@ -57,7 +57,7 @@ export async function connectionModels(
 			// A broken cache entry is a miss, not a failure.
 		}
 	}
-	const baseUrl = connectionBaseUrl(row);
+	const baseUrl = await connectionBaseUrl(redis, row);
 	if (!baseUrl) return [];
 	const url = `${baseUrl.replace(/\/+$/, '')}/models`;
 	try {

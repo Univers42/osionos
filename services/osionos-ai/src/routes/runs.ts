@@ -78,7 +78,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 	if (!user) return 401;
 	const body = await readJson(ctx.request, startRunSchema);
 	// The target of the run: the platform connection, or one of the caller's.
-	const resolved = await resolveTarget(ctx.deps.db, user, body.connectionId, body.model);
+	const resolved = await resolveTarget(ctx.deps.db, ctx.deps.redis, user, body.connectionId, body.model);
 	if (resolved.kind === 'refused') {
 		sendError(ctx.response, resolved.status, resolved.code);
 		return resolved.status;

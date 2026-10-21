@@ -17,6 +17,8 @@ import {
 	handleConnectionDelete,
 	handleConnections,
 	handleConnectionTest,
+	handleOAuthComplete,
+	handleOAuthStart,
 	handleProviders,
 } from './routes/connections.ts';
 import { handleUsage } from './routes/usage.ts';
@@ -66,6 +68,18 @@ const ROUTES: RouteEntry[] = [
 		label: '/api/ai/connections',
 		handle: handleConnections,
 		anyMethod: true,
+	},
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/connections\/oauth\/openrouter\/start$/,
+		label: '/api/ai/connections/oauth/openrouter/start',
+		handle: handleOAuthStart,
+	},
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/connections\/oauth\/openrouter\/complete$/,
+		label: '/api/ai/connections/oauth/openrouter/complete',
+		handle: handleOAuthComplete,
 	},
 	{
 		methods: ['POST'],

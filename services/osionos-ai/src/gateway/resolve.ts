@@ -1,13 +1,20 @@
+import { createAnthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { LanguageModel } from 'ai';
 import type { Pool } from 'pg';
+import type { Redis } from 'ioredis';
 import type { AuthUser } from '../auth.ts';
 import { config } from '../config.ts';
 import { reserve, settle } from '../budget.ts';
 import { getOwnedConnection } from '../connections/repo.ts';
+import type { ConnectionRow } from '../connections/repo.ts';
 import { connectionBaseUrl, connectionSecret } from '../connections/service.ts';
 import { PLATFORM_CONNECTION_ID } from '../connections/service.ts';
 import { guardedFetch } from '../connections/endpointGuard.ts';
+import { ENDPOINT_PROVIDER, providerBaseUrl } from '../connections/providers.ts';
+import { providerEntry } from '../connections/catalog.ts';
+import type { ProviderEntry } from '../connections/providers.ts';
 import { costMicroUsd, platformModel, resolveModel } from './platform.ts';
 import type { PlatformModelEntry } from './platform.ts';
 
@@ -82,6 +89,42 @@ export async function settleTarget(
 }
 
 /**
+ * The handle of the model of a provider: the adapter of its wire.
+ *
+ * Every adapter goes through the guard, and every one of them is given the
+ * base URL of the provider: the one of the catalog, the built-in one, or the
+ * override of the tests.
+ */
+export function modelHandle(entry: ProviderEntry, modelId: string, secret: string | null): LanguageModel {
+	const baseURL = providerBaseUrl(entry);
+	const key = secret ? { apiKey: secret } : {};
+	switch (entry.wire) {
+		case 'anthropic':
+			return createAnthropic({ name: entry.id, baseURL, ...key, fetch: guardedFetch })(modelId);
+		case 'google':
+			return createGoogleGenerativeAI({ name: entry.id, baseURL, ...key, fetch: guardedFetch })(modelId);
+		default:
+			return createOpenAICompatible({ name: entry.id, baseURL, ...key, fetch: guardedFetch })(modelId);
+	}
+}
+
+/**
+ * The provider a connection calls.
+ *
+ * A connection of a provider is that provider of the catalog; an endpoint is
+ * the user's own box, which speaks the OpenAI wire.
+ */
+async function targetProvider(
+	redis: Redis,
+	row: ConnectionRow,
+	baseUrl: string,
+): Promise<ProviderEntry | null> {
+	if (row.kind === 'endpoint') return { ...ENDPOINT_PROVIDER, baseUrl };
+	const entry = await providerEntry(redis, row.provider);
+	return entry && entry.wire ? entry : null;
+}
+
+/**
  * The target of a request: the platform connection, or one of the user's.
  *
  * A connection that is not the caller's does not exist: the answer is a 404,
@@ -89,6 +132,7 @@ export async function settleTarget(
  */
 export async function resolveTarget(
 	db: Pool,
+	redis: Redis,
 	user: AuthUser,
 	connectionId: string | undefined,
 	modelId?: string,
@@ -115,20 +159,15 @@ export async function resolveTarget(
 	const model = (modelId ?? '').trim();
 	if (!MODEL_ID.test(model)) return { kind: 'refused', status: 400, code: 'invalid_request' };
 
-	const baseUrl = connectionBaseUrl(row);
+	const baseUrl = await connectionBaseUrl(redis, row);
 	if (!baseUrl) return { kind: 'refused', status: 400, code: 'invalid_request' };
+	const entry = await targetProvider(redis, row, baseUrl);
+	if (!entry) return { kind: 'refused', status: 400, code: 'provider_not_supported' };
 	const secret = connectionSecret(row);
-	const provider = createOpenAICompatible({
-		name: row.provider,
-		baseURL: baseUrl,
-		...(secret ? { apiKey: secret } : {}),
-		// Every call of a user connection goes through the guard.
-		fetch: guardedFetch,
-	});
 	return {
 		kind: 'resolved',
 		target: {
-			model: provider(model),
+			model: modelHandle(entry, model, secret),
 			modelId: model,
 			// The provider of the user bills them: our prices are zero.
 			pricing: { id: model, label: model, inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: false },

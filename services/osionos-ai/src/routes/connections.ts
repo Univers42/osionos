@@ -3,7 +3,8 @@ import type { AuthUser } from '../auth.ts';
 import { readJson, sendError, sendJson, sendNoContent } from '../http.ts';
 import { kekAvailable } from '../connections/crypto.ts';
 import { checkEndpointUrl } from '../connections/endpointGuard.ts';
-import { findProvider, providers, toContractProvider } from '../connections/providers.ts';
+import { providerEntries, providerEntry } from '../connections/catalog.ts';
+import { toContractProvider } from '../connections/providers.ts';
 import {
 	connectionSecret,
 	createConnection,
@@ -18,6 +19,7 @@ import {
 	listOwnedConnections,
 	updateConnectionStatus,
 } from '../connections/repo.ts';
+import { completeOpenRouterOAuth, startOpenRouterOAuth } from '../connections/openrouterOAuth.ts';
 import { requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -47,11 +49,21 @@ const createConnectionSchema = z.discriminatedUnion('kind', [
 	}),
 ]);
 
+const oauthStartSchema = z.object({
+	returnUrl: z.string().min(1).max(2048),
+});
+
+const oauthCompleteSchema = z.object({
+	code: z.string().min(1).max(2048),
+	state: z.string().min(1).max(256),
+});
+
 /** GET /api/ai/providers */
 export async function handleProviders(ctx: RouteContext): Promise<number> {
 	if (!requireUser(ctx)) return 401;
+	const entries = await providerEntries(ctx.deps.redis);
 	const status = 200;
-	sendJson(ctx.response, status, { providers: providers().map(toContractProvider) });
+	sendJson(ctx.response, status, { providers: entries.map(toContractProvider) });
 	return status;
 }
 
@@ -86,8 +98,10 @@ async function handleCreateConnection(ctx: RouteContext, user: AuthUser): Promis
 	let label = '';
 	let baseUrl: string | null = null;
 	if (body.kind === 'api_key') {
-		const entry = findProvider(body.provider);
-		if (!entry || !entry.supported) {
+		const entry = await providerEntry(ctx.deps.redis, body.provider);
+		// The entry of the user's own endpoint is not a provider of keys: it
+		// is a connection of its own kind.
+		if (!entry || !entry.supported || entry.kind === 'endpoint') {
 			sendError(ctx.response, 400, 'provider_not_supported');
 			return 400;
 		}
@@ -106,7 +120,7 @@ async function handleCreateConnection(ctx: RouteContext, user: AuthUser): Promis
 		baseUrl,
 		apiKey: body.apiKey ?? null,
 	});
-	const tested = await testConnection(row, connectionSecret(row));
+	const tested = await testConnection(ctx.deps.redis, row, connectionSecret(row));
 	await updateConnectionStatus(ctx.deps.db, row.id, tested.status, tested.statusMessage);
 	const status = 201;
 	sendJson(ctx.response, status, toConnection({ ...row, status: tested.status, status_message: tested.statusMessage }));
@@ -126,7 +140,7 @@ export async function handleConnectionTest(ctx: RouteContext): Promise<number> {
 		sendError(ctx.response, 503, 'connections_unavailable');
 		return 503;
 	}
-	const tested = await testConnection(row, connectionSecret(row));
+	const tested = await testConnection(ctx.deps.redis, row, connectionSecret(row));
 	await updateConnectionStatus(ctx.deps.db, row.id, tested.status, tested.statusMessage);
 	const status = 200;
 	sendJson(ctx.response, status, toConnection({ ...row, status: tested.status, status_message: tested.statusMessage }));
@@ -147,6 +161,67 @@ export async function handleConnectionDelete(ctx: RouteContext): Promise<number>
 	}
 	const status = 204;
 	sendNoContent(ctx.response);
+	return status;
+}
+
+/**
+ * POST /api/ai/connections/oauth/openrouter/start
+ *
+ * The URL of the sign-in: the browser goes there, and comes back with a code.
+ * A `returnUrl` of another site is refused: the sign-in never becomes an open
+ * redirect.
+ */
+export async function handleOAuthStart(ctx: RouteContext): Promise<number> {
+	const user = requireUser(ctx);
+	if (!user) return 401;
+	// Without a KEK the service cannot seal the key the sign-in brings.
+	if (!kekAvailable()) {
+		sendError(ctx.response, 503, 'connections_unavailable');
+		return 503;
+	}
+	const body = await readJson(ctx.request, oauthStartSchema);
+	const url = await startOpenRouterOAuth(ctx.deps.redis, { userId: user.userId, returnUrl: body.returnUrl });
+	if (!url) {
+		sendError(ctx.response, 400, 'invalid_request');
+		return 400;
+	}
+	const status = 200;
+	sendJson(ctx.response, status, { url });
+	return status;
+}
+
+/**
+ * POST /api/ai/connections/oauth/openrouter/complete
+ *
+ * The code becomes a connection: a 201 with the connection, and the key it
+ * carries never leaves the server.
+ */
+export async function handleOAuthComplete(ctx: RouteContext): Promise<number> {
+	const user = requireUser(ctx);
+	if (!user) return 401;
+	if (!kekAvailable()) {
+		sendError(ctx.response, 503, 'connections_unavailable');
+		return 503;
+	}
+	const body = await readJson(ctx.request, oauthCompleteSchema);
+	const outcome = await completeOpenRouterOAuth(ctx.deps.db, ctx.deps.redis, {
+		userId: user.userId,
+		code: body.code,
+		state: body.state,
+	});
+	// A state that is missing, expired or another user's is a 404: the sign-in
+	// does not exist for this caller.
+	if (outcome.kind === 'not_found') {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	// The exchange failed: the code was refused, and no row was written.
+	if (outcome.kind === 'exchange_failed') {
+		sendError(ctx.response, 400, 'invalid_request');
+		return 400;
+	}
+	const status = 201;
+	sendJson(ctx.response, status, toConnection(outcome.row));
 	return status;
 }
 
