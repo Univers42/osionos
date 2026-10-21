@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "type": "module",
+  "name": "osionos-ai-gateway-overhead-spike",
+  "dependencies": {
+    "ai": "7.0.139",
+    "@ai-sdk/openai-compatible": "3.0.68",
+    "zod": "4.6.7"
+  }
+}

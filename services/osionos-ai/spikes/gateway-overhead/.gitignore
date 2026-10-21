@@ -1,0 +1,3 @@
+node_modules/
+# The brief requires committing package-lock.json; the repo root ignores it.
+!package-lock.json
