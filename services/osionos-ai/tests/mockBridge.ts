@@ -108,6 +108,9 @@ export async function startMockBridge(): Promise<MockBridge> {
 	await new Promise<void>((resolve) => {
 		server.listen(0, '127.0.0.1', () => resolve());
 	});
+	// The listening socket does not keep the process alive: a test file that
+	// never writes anything must still be able to end.
+	server.unref();
 	const address = server.address();
 	const port = address && typeof address === 'object' ? address.port : 0;
 	mock.baseUrl = `http://127.0.0.1:${port}`;
