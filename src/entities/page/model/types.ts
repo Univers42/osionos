@@ -69,6 +69,14 @@ export interface PageEntry {
   archivedAt?: string | null;
   /** Block content (only populated in offline/seed mode) */
   content?: Block[];
+  /**
+   * The version of this page's CONTENT the client last saw (the bridge's `version`
+   * column). It is the base the outbox PATCHes against — a stale one is a 409 the
+   * client merges instead of losing — and it travels with a pending page, so a
+   * reload still knows which version its edit was made against. Absent while the
+   * database has no version column (the migration ships separately).
+   */
+  contentVersion?: number;
   /** Editable properties shown below the page title. */
   properties?: PagePropertyEntry[];
   /** Surface classification (agents, home). "folder" = a container that groups children, acts as a graph hub, and never opens on click (a file may also act as a folder). "wiki" = a governed knowledge root: groups children like a folder but OPENS onto its own index content; articles inside carry governance properties (owner, status, verified, domain). "code" = an IDE / Dev-Mode source file: line-based, rendered by the Monaco editor (not the block editor), body stored as a single `code` block. */
