@@ -246,9 +246,12 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			outputChars: answer.length + reasoning.length,
 		});
 		const cost = costMicroUsd(target.pricing, billed);
-		await emit('error', { code, message: failureMessage(code, error) });
+		// The row of the run is closed BEFORE the terminal frame: a client
+		// that reads the row when it sees the frame reads the truth. The
+		// success path does the same.
 		const status: RunStatus = code === 'cancelled' ? 'cancelled' : 'failed';
 		const changed = await markRun(db, runId, status, code);
+		await emit('error', { code, message: failureMessage(code, error) });
 		if (changed) {
 			await settleTarget(db, target, { userId: ownerId, day, reserved, actual: cost });
 		}
