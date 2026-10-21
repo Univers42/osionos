@@ -25,6 +25,8 @@ export interface ReportInput {
 	titleBySlug: Map<string, string>;
 	/** The model the embedder loads. */
 	embedModel: string;
+	/** The questions whose expected page the asker may not read. */
+	blind: { id: string; asker: string; slug: string }[];
 }
 
 /** The size of the index, in the unit that reads well. */
@@ -35,7 +37,7 @@ function size(bytes: number): string {
 
 /** The results of one run, as the markdown of the report. */
 export function report(input: ReportInput): string {
-	const { results, groups, overall, leaks, latency, index, mode, titleBySlug, embedModel } = input;
+	const { results, groups, overall, leaks, latency, index, mode, titleBySlug, embedModel, blind } = input;
 	const negatives = results.filter((result) => result.kind === 'negative');
 	// The top score of the negatives, and the lowest top score of a question
 	// that found its page: the two are what a threshold would have to tell
@@ -96,6 +98,13 @@ export function report(input: ReportInput): string {
 		`- Overall: n=${overall.n}, scored=${overall.scored}, recall@5=${overall.recall.toFixed(2)}, MRR@5=${overall.mrr.toFixed(3)}`,
 	);
 	lines.push(`- Leaks: ${leaks}${leaks === 0 ? ' (none)' : ''}`);
+	if (blind.length > 0) {
+		lines.push(
+			`- Questions no retrieval can answer (the asker may not read the page): ${blind
+				.map((entry) => `${entry.id} (${entry.asker} → ${entry.slug})`)
+				.join(', ')}`,
+		);
+	}
 	lines.push(
 		`- Latency of retrieve(): p50 ${latency.p50.toFixed(0)} ms, p95 ${latency.p95.toFixed(0)} ms (the embedding included)`,
 	);
@@ -154,7 +163,7 @@ export function report(input: ReportInput): string {
 	lines.push('## The caveat');
 	lines.push('');
 	lines.push('The corpus is synthetic, written by a model: the recall measured on it is a regression gate, not a');
-	lines.push('quality claim about real workspaces. Fifty questions: ±0.07 on recall is noise. The embedder runs');
+	lines.push('quality claim about real workspaces. Sixty-eight questions: ±0.07 on recall is noise. The embedder runs');
 	lines.push('on the CPU of this machine, shared with the other work that is running.');
 	lines.push('');
 	return lines.join('\n');

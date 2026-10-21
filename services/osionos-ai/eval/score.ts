@@ -14,7 +14,7 @@
 /* ************************************************************************** */
 
 import { canReadPageRowAsMember } from '../../../scripts/bridge-page-read.mjs';
-import { pageId } from './lib.mjs';
+import { USER_IDS, pageId } from './lib.mjs';
 
 /** One question of the golden set. */
 export interface GoldenQuestion {
@@ -119,6 +119,33 @@ export function groupTable(groups: readonly { label: string; group: Group }[]): 
 		return `| ${label} | ${value.n} | ${value.scored} | ${recall} | ${mrr} |`;
 	});
 	return ['| kind | n | scored | recall@5 | MRR@5 |', '| --- | --- | --- | --- | --- |', ...rows].join('\n');
+}
+
+/**
+ * The questions whose expected page the asker may not read.
+ *
+ * No retrieval can answer them: the page is out of the answer whatever the
+ * question is. They are a fixed zero in every bucket they sit in, and the
+ * reader of a report has to know about them.
+ */
+export function blindQuestions(
+	results: readonly QuestionResult[],
+	pages: Map<string, PageRow>,
+	workspaces: Map<string, string[]>,
+): { id: string; asker: string; slug: string }[] {
+	const blind: { id: string; asker: string; slug: string }[] = [];
+	for (const result of results) {
+		for (const slug of result.expected) {
+			const row = pages.get(pageId(slug).toLowerCase());
+			if (!row) continue;
+			const userId = (USER_IDS as Record<string, string>)[result.asker];
+			if (!userId) continue;
+			if (!canReadPageRowAsMember(row, userId, workspaces.get(result.asker) ?? [])) {
+				blind.push({ id: result.id, asker: result.asker, slug });
+			}
+		}
+	}
+	return blind;
 }
 
 /** One chunk of an answer, as the variants return it. */
