@@ -23,5 +23,8 @@ import type { SettingsTab } from "@/shared/ui";
 /** The tab of the AI connections panel. */
 export const AI_CONNECTIONS_TAB = "ai_connections";
 
+/** The tab of the accessibility and the voice: the dictation and the read-aloud. */
+export const ACCESSIBILITY_VOICE_TAB = "accessibility_voice";
+
 /** Every tab the Settings center can show. */
-export type AppSettingsTab = SettingsTab | typeof AI_CONNECTIONS_TAB;
+export type AppSettingsTab = SettingsTab | typeof AI_CONNECTIONS_TAB | typeof ACCESSIBILITY_VOICE_TAB;

@@ -14,10 +14,15 @@ import React, { useEffect, useRef } from "react";
 import { ArrowUp, FileText, Layers, Plug, Square, X } from "lucide-react";
 
 import { AiConnectionPicker } from "./AiConnectionPicker";
+import { AttachImageButton } from "./AttachImageButton";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import { WORKSPACE_CHIP, type ContextChip } from "@/features/ai/model/aiContext";
 import { PageSelectorMenu } from "@/features/block-editor/ui/PageSelectorMenu";
+import { DictationButton } from "@/features/voice/ui/DictationButton";
+import { insertTranscript } from "@/features/voice/model/insertTranscript";
+import { dictationLanguage } from "@/features/voice/model/language";
 import { usePageStore } from "@/store/usePageStore";
+import { useVoiceSettingsStore } from "@/store/settings";
 import { useContextPicker } from "../model/useContextPicker";
 
 interface Props {
@@ -37,6 +42,12 @@ interface Props {
   streaming?: boolean;
   /** Stops the answer in flight. */
   onStop?: () => void;
+  /** Whether the selected model can see images. */
+  vision?: boolean;
+  /** The attached image paths. */
+  attachments?: string[];
+  /** Replaces the attached image list. */
+  onAttachmentsChange?: (paths: string[]) => void;
 }
 
 /** Controlled composer (parent owns the text so it survives a connect prompt). */
@@ -52,10 +63,26 @@ export const ChatComposer: React.FC<Props> = ({
   autoFocus,
   streaming,
   onStop,
+  vision,
+  attachments = [],
+  onAttachmentsChange,
 }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
   const grow = (el: HTMLTextAreaElement) => { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 240)}px`; };
   useEffect(() => { if (ref.current) grow(ref.current); }, [value]);
+
+  // The dictation: the transcript lands where the caret is, as typed input.
+  // It never submits: the user still presses the key.
+  const voice = useVoiceSettingsStore((state) => state.data);
+  const applyTranscript = (text: string) => {
+    const element = ref.current;
+    const caret = element?.selectionStart ?? value.length;
+    onChange(insertTranscript(value, text, caret));
+    requestAnimationFrame(() => {
+      element?.focus();
+      element?.setSelectionRange(caret + text.length, caret + text.length);
+    });
+  };
 
   // What the assistant is pointed at: the "@" picker and the chips.
   const picker = useContextPicker({ value, onChange, chips, onChipsChange });
@@ -70,7 +97,10 @@ export const ChatComposer: React.FC<Props> = ({
   };
 
   return (
-    <div className="relative rounded-2xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-sm)] focus-within:border-[var(--osio-accent)]">
+    <div
+      data-dictation-composer="assistant"
+      className="relative rounded-2xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-sm)] focus-within:border-[var(--osio-accent)]"
+    >
       {chips.length > 0 ? (
         <div className="flex flex-wrap gap-1.5 px-3 pt-2" data-testid="ai-context-chips">
           {chips.map((chip) => (
@@ -108,6 +138,11 @@ export const ChatComposer: React.FC<Props> = ({
         className="block w-full resize-none bg-transparent px-4 pt-3 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
       />
       <div className="flex items-center gap-2 px-2 pb-2 pt-1">
+        <AttachImageButton
+          vision={vision}
+          attachments={attachments}
+          onChange={(paths) => onAttachmentsChange?.(paths)}
+        />
         <button
           type="button"
           onClick={onConnect}
@@ -118,6 +153,7 @@ export const ChatComposer: React.FC<Props> = ({
           <Plug size={16} /> Connect
         </button>
         <AiConnectionPicker value={selection} onChange={onSelectionChange} />
+        <DictationButton onText={applyTranscript} language={dictationLanguage(voice)} />
         {streaming ? (
           <button
             type="button"

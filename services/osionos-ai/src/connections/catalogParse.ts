@@ -15,6 +15,10 @@ export interface CatalogModel {
 	contextWindow?: number;
 	inputMicroUsdPerMTok?: number;
 	outputMicroUsdPerMTok?: number;
+	/** Whether the model accepts image input. */
+	vision?: boolean;
+	/** The modalities the catalog declares for the model. */
+	modalities?: { input?: string[]; output?: string[] };
 }
 
 /** A provider of the catalog, as the server keeps it. */
@@ -46,6 +50,12 @@ const modelSchema = z.object({
 			output: z.number().nonnegative().optional(),
 		})
 		.optional(),
+	modalities: z
+		.object({
+			input: z.array(z.string()).optional(),
+			output: z.array(z.string()).optional(),
+		})
+		.optional(),
 });
 
 /** The shape of a provider of the catalog. */
@@ -72,12 +82,16 @@ function toModel(raw: unknown): CatalogModel | null {
 	const context = model.limit?.context;
 	const input = model.cost?.input;
 	const output = model.cost?.output;
+	const modalities = model.modalities;
+	const vision = Array.isArray(modalities?.input) && modalities.input.includes('image');
 	return {
 		id: model.id,
 		label: model.name,
 		...(context === undefined ? {} : { contextWindow: context }),
 		...(input === undefined ? {} : { inputMicroUsdPerMTok: Math.round(input * 1e6) }),
 		...(output === undefined ? {} : { outputMicroUsdPerMTok: Math.round(output * 1e6) }),
+		...(modalities ? { modalities } : {}),
+		vision,
 	};
 }
 

@@ -18,6 +18,7 @@ import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiS
 import type { RunContext } from "@/features/ai/model/aiContext";
 import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTurn";
 import { dispatchRunEvent } from "./runEventDispatch";
+import { failureCode, retryAfterOf } from "./runErrors";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -42,12 +43,6 @@ export function getInferencePort(): InferencePort {
 
 /** The runs in flight, per conversation. A conversation speaks one at a time. */
 const activeRuns = new Map<string, AbortController>();
-
-/** The code of a failure — the service's own, when it carries one. */
-function failureCode(error: unknown): string {
-  const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === "string" ? code : "internal";
-}
 
 interface ChatData {
   projects: Project[];
@@ -75,7 +70,7 @@ export interface ChatStoreState extends ChatData {
   deleteConversation: (id: string) => void;
   setActive: (id: string | null) => void;
   setConversationModel: (id: string, connectorId: string, model: string) => void;
-  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; context?: RunContext }) => Promise<void>;
+  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; context?: RunContext; attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }> }) => Promise<void>;
   stop: (conversationId: string) => void;
   /**
    * The follow-up of a write the user just approved.
@@ -157,7 +152,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       // up): what arrived stays, and the answer is not marked as failed.
       turn.finish();
     } catch (error) {
-      turn.patchAssistant({ status: "error", errorCode: failureCode(error) });
+      turn.patchAssistant({ status: "error", errorCode: failureCode(error), retryAfterSeconds: retryAfterOf(error) });
     } finally {
       activeRuns.delete(conversationId);
     }
@@ -248,7 +243,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
             connectionId,
             title: conversation.title,
             serverConversationId: conversation.serverConversationId,
-            // What the answer is read from: the pages the reader pointed at.
+            attachments: sel?.attachments,
+            // What the answer may read: the pages the reader pointed at.
             context: sel?.context,
             onServerConversationId: rememberServerConversation,
           },

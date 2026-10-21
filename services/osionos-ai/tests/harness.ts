@@ -72,6 +72,22 @@ export const FREE = {
 	default: true,
 };
 
+/**
+ * The vision model: it sees the images the user attaches.
+ *
+ * Its price is one dollar a million tokens, so the reservation of a run with
+ * four images is a number a test can read: four images of sixteen hundred
+ * tokens are 6 400 micro-USD.
+ */
+export const VISION = {
+	id: 'mock-vision',
+	label: 'Mock vision',
+	input: ['text', 'image'],
+	inputMicroUsdPerMTok: 1_000_000,
+	outputMicroUsdPerMTok: 1_000_000,
+	default: false,
+};
+
 /** A JSON body of the service. */
 export type JsonBody = Record<string, unknown>;
 
@@ -111,19 +127,30 @@ export interface Harness {
 /** The secret the tokens are signed with. */
 const APP_SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
 
+/** The options of the harness: the upstream of the service may be another one. */
+export interface HarnessOptions {
+	/**
+	 * The base URL of the upstream the service calls.
+	 *
+	 * The harness brings its own mock; a test that needs a refusal, or a body
+	 * it reads, brings its own and says so here.
+	 */
+	upstreamBaseUrl?: string;
+}
+
 /**
  * The harness: the mock upstream comes first, and the environment points at
  * it.
  */
-export async function startHarness(): Promise<Harness> {
+export async function startHarness(options: HarnessOptions = {}): Promise<Harness> {
 	const mock = await startMockUpstream();
 	// The bridge comes before the service: the URL is read when the
 	// configuration is parsed, and the write tools are registered only when
 	// there is one.
 	const bridge = await startMockBridge();
-	process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${mock.baseUrl}/v1`;
+	process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${options.upstreamBaseUrl ?? mock.baseUrl}/v1`;
 	process.env.OSIONOS_AI_BRIDGE_URL = bridge.baseUrl;
-	process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([FREE, METERED, PLATFORM, DEAR]);
+	process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([FREE, METERED, PLATFORM, DEAR, VISION]);
 	// The daily budget of a user: the same as the deployment's, and the dear
 	// model asks for more than that.
 	process.env.OSIONOS_AI_USER_DAILY_MICROUSD = String(USER_DAILY_MICROUSD);
@@ -134,6 +161,12 @@ export async function startHarness(): Promise<Harness> {
 
 	const { createAiServer } = await import('../src/server.ts');
 	const app = createAiServer();
+	// Every file starts with empty run windows. The whole suite runs in under a
+	// minute and the Redis is shared, so the files otherwise share one window
+	// per user and the late ones get 429 (2026-10-21: started at :01 → 3
+	// failures in visionUpstream; started mid-minute → green).
+	const windows = await app.redis.keys('ai:rl:*');
+	if (windows.length > 0) await app.redis.del(...windows);
 	await new Promise<void>((resolve) => {
 		app.server.listen(0, '127.0.0.1', () => resolve());
 	});

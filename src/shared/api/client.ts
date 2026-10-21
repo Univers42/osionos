@@ -77,7 +77,7 @@ export function getActiveWorkspaceId(): string | null {
 }
 
 /** Tells the user store a bridge call came back 401 session_revoked, so it drops the session that owned the token. */
-function reportRevokedSession(token: string): void {
+export function reportRevokedSession(token: string): void {
   userStore((state) => (state.handleSessionRevoked as ((token: string) => void) | undefined)?.(token));
 }
 

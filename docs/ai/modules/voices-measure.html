@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>voices</title></head>
+  <body>
+    <pre id="out">pending</pre>
+    <script>
+      const write = (list) => {
+        document.getElementById('out').textContent = JSON.stringify(
+          list.map((v) => ({ name: v.name, lang: v.lang, localService: v.localService, default: v.default })),
+        );
+      };
+      const synth = window.speechSynthesis;
+      if (!synth) { write([{ name: 'NO_SPEECH_SYNTHESIS', lang: '', localService: false, default: false }]); }
+      else {
+        write(synth.getVoices());
+        synth.addEventListener('voiceschanged', () => write(synth.getVoices()));
+        setTimeout(() => write(synth.getVoices()), 1500);
+      }
+    </script>
+  </body>
+</html>

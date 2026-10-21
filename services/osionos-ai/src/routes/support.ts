@@ -1,4 +1,4 @@
-import { authenticate } from '../auth.ts';
+import { verifyRequest } from '../auth.ts';
 import type { AuthUser } from '../auth.ts';
 import { sendError } from '../http.ts';
 import type { RouteContext } from './types.ts';
@@ -15,10 +15,10 @@ export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
  * token. A refusal is written for the caller, and the handler stops there.
  */
 export function requireUser(ctx: RouteContext): AuthUser | null {
-	const user = authenticate(ctx.request);
-	if (!user) {
-		sendError(ctx.response, 401, 'unauthorized');
+	const result = verifyRequest(ctx.request);
+	if (!result.user) {
+		sendError(ctx.response, 401, result.code === 'session_revoked' ? 'session_revoked' : 'unauthorized');
 		return null;
 	}
-	return user;
+	return result.user;
 }
