@@ -29,6 +29,9 @@ export const AI_SELECTION_STORAGE_KEY = "osionos.ai.selection.v1";
 /** The connection that always exists: our key, our daily budget. */
 export const PLATFORM_CONNECTION_ID = "platform";
 
+/** The model name that means "the service's own choice" — it is not a model. */
+const AUTO_MODEL = "auto";
+
 /** A connection and a model — what every run is sent with. */
 export interface AiSelection {
   connectionId: string;
@@ -44,6 +47,8 @@ export interface AiConnectionLike {
 export interface AiModelLike {
   id: string;
   default?: boolean;
+  /** Whether the model can see images. */
+  vision?: boolean;
 }
 
 /** The slice of `Storage` this module uses — a test can pass its own. */
@@ -122,4 +127,22 @@ export function resolveAiSelection(
   const wantedModel = wanted && stored ? stored.model : "";
   const model = models.some((entry) => entry.id === wantedModel) ? wantedModel : defaultModelId(models);
   return { connectionId: connection.id, model };
+}
+
+/**
+ * Whether the chosen model sees images.
+ *
+ * Only the model that is picked can answer it, and only the service says which
+ * models that are: the flag belongs to the model, not to the choice. "auto" is
+ * not a model but the service's own choice, a model that is gone is not on the
+ * list, and a connection we have not heard of has no list at all — none of
+ * them ever sees an image.
+ */
+export function selectionSeesImages(
+  selection: AiSelection,
+  modelsByConnection: Record<string, AiModelLike[]>,
+): boolean {
+  if (selection.model === AUTO_MODEL) return false;
+  const models = modelsByConnection[selection.connectionId] ?? [];
+  return models.some((model) => model.id === selection.model && model.vision === true);
 }

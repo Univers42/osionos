@@ -31,6 +31,7 @@ import {
   PLATFORM_CONNECTION_ID,
   defaultModelId,
   resolveAiSelection,
+  selectionSeesImages,
   writeAiSelection,
   type AiSelection,
 } from "@/features/ai/model/aiSelection";
@@ -40,9 +41,11 @@ interface Props {
   value: AiSelection;
   /** The user picked another one. */
   onChange: (selection: AiSelection) => void;
+  /** Whether the chosen model sees images. */
+  onVisionChange?: (sees: boolean) => void;
 }
 
-export const AiConnectionPicker: React.FC<Props> = ({ value, onChange }) => {
+export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionChange }) => {
   const [connections, setConnections] = useState<AiConnection[]>([]);
   const [modelsByConnection, setModelsByConnection] = useState<Record<string, AiModel[]>>({});
 
@@ -52,6 +55,12 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange }) => {
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  // The same for the second callback: it only carries a fact, never a load.
+  const onVisionChangeRef = useRef(onVisionChange);
+  useEffect(() => {
+    onVisionChangeRef.current = onVisionChange;
+  }, [onVisionChange]);
 
   const apply = useCallback((next: AiSelection) => {
     writeAiSelection(next);
@@ -98,6 +107,13 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange }) => {
     if (resolved.connectionId === value.connectionId && resolved.model === value.model) return;
     apply(resolved);
   }, [apply, connections, modelsByConnection, value]);
+
+  // Whether the chosen model sees images. The picker is the one that holds the
+  // models, so it is the one that says: the composer only shows the button.
+  const sees = selectionSeesImages(value, modelsByConnection);
+  useEffect(() => {
+    onVisionChangeRef.current?.(sees);
+  }, [sees]);
 
   const connectionOptions = connections.map((connection) => ({
     value: connection.id,
