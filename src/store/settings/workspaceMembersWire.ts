@@ -61,6 +61,12 @@ function pickDates(row: Record<string, unknown>): Partial<WorkspaceMember> {
   return dates;
 }
 
+/** The one member a PATCH answers (`{ok, member}` or a bare row), or null. */
+export function workspaceMemberFromWire(workspaceId: string, body: unknown): WorkspaceMember | null {
+  const row = isRecord(body) && isRecord(body.member) ? body.member : body;
+  return workspaceMembersFromWire(workspaceId, [row])?.[0] ?? null;
+}
+
 /** Drops persisted entries that are not member arrays (what the broken build stored). */
 export function sanitizePersistedMembers(data: unknown): Record<string, WorkspaceMember[]> {
   if (!isRecord(data)) return {};

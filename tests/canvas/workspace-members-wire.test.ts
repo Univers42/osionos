@@ -19,7 +19,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { sanitizePersistedMembers, workspaceMembersFromWire } from "../../src/store/settings/workspaceMembersWire.ts";
+import { sanitizePersistedMembers, workspaceMemberFromWire, workspaceMembersFromWire } from "../../src/store/settings/workspaceMembersWire.ts";
 
 test("the bridge body becomes members with UI roles", () => {
   const members = workspaceMembersFromWire("ws-1", {
@@ -51,4 +51,9 @@ test("a persisted object where an array belongs is dropped on load", () => {
   assert.deepEqual(Object.keys(clean), ["ws-2"]);
   assert.equal(clean["ws-2"].length, 1);
   assert.deepEqual(sanitizePersistedMembers(undefined), {});
+});
+
+test("a PATCH answer ({ok, member}) maps to one member with the UI role", () => {
+  assert.equal(workspaceMemberFromWire("ws-1", { ok: true, member: { userId: "u-1", role: "editor" } })?.role, "member");
+  assert.equal(workspaceMemberFromWire("ws-1", { ok: true })?.userId, undefined);
 });

@@ -39,6 +39,7 @@ import { createTasksHandler } from './bridge-tasks.mjs';
 import { createCommentsHandler } from './bridge-comments.mjs';
 import { createPublicHandler } from './bridge-public.mjs';
 import { createCollabHandler } from './bridge-collab.mjs';
+import { createWorkspaceInvitesHandler } from './bridge-workspace-invites.mjs';
 import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
@@ -4183,6 +4184,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.feed(url, request, response, context.config)) return;
 	if (await context.social.social(url, request, response, context.config)) return;
 	if (await context.social.collab(url, request, response, context.config)) return;
+	if (await context.social.workspaceInvites(url, request, response, context.config)) return;
 	if (await context.social.realtimeToken(url, request, response, context.config)) return;
 	if (request.method === 'POST' && url.pathname === '/api/agent/claude/stream') {
 		await handleClaudeAgentStream(request, response, context.config, context.spawnImpl);
@@ -4250,6 +4252,7 @@ export function createBridgeServer(options = {}) {
 		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 	};
 	const server = createServer(async (request, response) => {
