@@ -13,9 +13,20 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { getActivePageJwt } from '@/shared/api/client';
+
 import { defaultWorkspaceMember } from './defaults';
 import { errorMessage, nowIso, pushSettingsError, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPost, upsertById } from './settingsStoreUtils';
 import type { WorkspaceMember, WorkspaceMemberRole } from './types';
+
+/**
+ * The members routes are bridge routes (scripts/bridge-collab.mjs), verified
+ * against the bridge app-session token. `settingsJwt()` is the BaaS JWT, which
+ * a bridge session never has: on the public build it is null, so hydrate never
+ * asked and every roster held only the caller (measured 2026-10-21: the
+ * agency owner saw no /members request and never joined her own space).
+ */
+const membersJwt = (): string | null => getActivePageJwt();
 
 interface WorkspaceMembersStore {
   data: Record<string, WorkspaceMember[]>;
@@ -53,7 +64,7 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
         if (!workspaceId) return;
         set((state) => ({ loading: { ...state.loading, [workspaceId]: true }, error: { ...state.error, [workspaceId]: null } }));
         try {
-          const remote = await trySettingsGet<WorkspaceMember[]>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members`);
+          const remote = await trySettingsGet<WorkspaceMember[]>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members`, membersJwt());
           set((state) => ({
             data: { ...state.data, [workspaceId]: remote ?? state.data[workspaceId] ?? fallbackMembers(workspaceId, activeUserId, seedUserIds) },
             loading: { ...state.loading, [workspaceId]: false },
@@ -73,7 +84,7 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
         const timestamp = nowIso();
         set((state) => ({ data: { ...state.data, [workspaceId]: previous.map((member) => member.userId === userId ? { ...member, role, updatedAt: timestamp } : member) } }));
         try {
-          const remote = await trySettingsPatch<WorkspaceMember>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`, { role });
+          const remote = await trySettingsPatch<WorkspaceMember>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`, { role }, membersJwt());
           if (remote) set((state) => ({ data: { ...state.data, [workspaceId]: upsertById(state.data[workspaceId] ?? [], remote) } }));
         } catch (error) {
           set((state) => ({ data: { ...state.data, [workspaceId]: previous }, error: { ...state.error, [workspaceId]: errorMessage(error) } }));
@@ -86,7 +97,7 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
         const targetId = previous.find((member) => member.userId === userId)?._id ?? userId;
         set((state) => ({ data: { ...state.data, [workspaceId]: previous.filter((member) => member.userId !== userId) } }));
         try {
-          await trySettingsDelete<void>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`);
+          await trySettingsDelete<void>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`, membersJwt());
         } catch (error) {
           set((state) => ({ data: { ...state.data, [workspaceId]: previous }, error: { ...state.error, [workspaceId]: errorMessage(error) } }));
           pushSettingsError(`Could not remove member ${targetId}`, error);
@@ -101,7 +112,7 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
           },
         }));
         try {
-          const remote = await trySettingsPost<WorkspaceMember[]>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/transfer-ownership`, { toUserId });
+          const remote = await trySettingsPost<WorkspaceMember[]>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/transfer-ownership`, { toUserId }, membersJwt());
           if (remote) set((state) => ({ data: { ...state.data, [workspaceId]: remote } }));
         } catch (error) {
           set((state) => ({ data: { ...state.data, [workspaceId]: previous }, error: { ...state.error, [workspaceId]: errorMessage(error) } }));
