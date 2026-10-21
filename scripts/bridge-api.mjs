@@ -188,6 +188,11 @@ export function configFromEnv(env = process.env) {
 		persistence: env.OSIONOS_BRIDGE_PERSISTENCE ?? 'auto',
 		// 'off' is the operator's escape hatch for a deployment without public.auth_session_cutoffs.
 		sessionCutoffsMode: String(env.OSIONOS_SESSION_CUTOFFS ?? '').trim().toLowerCase() === 'off' ? 'off' : 'on',
+		// The page PATCH's version precondition, staged: off until every client sends a
+		// baseVersion. With it on, a content-bearing PATCH without a baseVersion is
+		// compared against the stored content and refused when they differ. It reads the
+		// page's `version` column, so it only turns on after the migration that adds it.
+		strictPageVersion: ['1', 'true'].includes(String(env.OSIONOS_PAGE_STRICT_VERSION ?? '').trim().toLowerCase()),
 		translationApiUrl: (env.OSIONOS_TRANSLATION_API_URL ?? env.VITE_TRANSLATION_API_URL ?? '').trim(),
 		timestampSkewMs: Number(env.OSIONOS_BRIDGE_TIMESTAMP_SKEW_MS ?? DEFAULT_TIMESTAMP_SKEW_MS),
 		handoffTtlMs: Number(env.OSIONOS_BRIDGE_HANDOFF_TTL_MS ?? DEFAULT_HANDOFF_TTL_MS),
@@ -1047,8 +1052,13 @@ async function withoutUnreachableParent({ payload, ignored }, existing, authCont
 
 /** `row` when the caller may read it; otherwise the SAME 404 a missing id gets. */
 function requireReadablePage(row, userId) {
-	if (!row || !canReadPageRow(row, userId)) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	if (!row || !canReadPageRow(row, userId)) throw pageNotFound();
 	return row;
+}
+
+/** The one answer for a page the caller may not act on: the same 404 a missing id gets. */
+function pageNotFound() {
+	return Object.assign(new Error('Page not found.'), { status: 404 });
 }
 
 /**
@@ -2203,6 +2213,9 @@ const APP_ERROR_CODE = /^[a-z][a-z0-9_]*$/;
 function errorJson(response, error, config) {
 	const body = { ok: false, message: error instanceof Error ? error.message : 'Bridge request failed.' };
 	if (typeof error?.code === 'string' && APP_ERROR_CODE.test(error.code)) body.code = error.code;
+	// The details channel: the app's ApiError reads errorBody.details
+	// (packages/http-gate/src/client.ts), so a 409's server copy travels there.
+	if (error?.details && typeof error.details === 'object') body.details = error.details;
 	const retryAfter = Number.isFinite(error?.retryAfterSeconds) ? { 'retry-after': String(error.retryAfterSeconds) } : {};
 	json(response, error.status ?? 500, body, config, retryAfter);
 }
@@ -3344,10 +3357,65 @@ async function handlePageArchiveCascade(row, ids, archivedAt, config, fetchImpl)
 	}
 }
 
+/**
+ * The version precondition of a page PATCH: `baseVersion` is the version the caller
+ * last read. It is parsed as a plain non-negative integer BEFORE it is interpolated
+ * into the PostgREST filter (that filter is string-built), so anything else is refused
+ * with 400 and never reaches the BaaS. `null` = the payload carries none.
+ */
+function parseBaseVersion(payload) {
+	if (!hasOwn(payload, 'baseVersion')) return null;
+	const value = payload.baseVersion;
+	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+		throw Object.assign(new Error('baseVersion must be a non-negative integer.'), { status: 400 });
+	}
+	return value;
+}
+
+/** The row's version, as the answer carries it (null while the column is not there yet). */
+function pageVersionOf(row) {
+	const version = Number(row?.version);
+	return Number.isSafeInteger(version) && version >= 0 ? version : null;
+}
+
+/**
+ * The 409 a stale baseVersion answers. The server's own copy rides in `details`, the
+ * channel the app's ApiError reads (packages/http-gate/src/client.ts), so the client
+ * can merge without a second read.
+ */
+function versionConflict(current) {
+	return Object.assign(new Error('This page changed since you loaded it. Reload it and try again.'), {
+		status: 409,
+		code: 'version_conflict',
+		details: { version: pageVersionOf(current), content: Array.isArray(current?.content) ? current.content : [] },
+	});
+}
+
+/**
+ * The page's current version + content — the 409's details, and the comparison the
+ * strict flag makes. It reads the `version` column, so it only runs on the paths
+ * that already need it (a baseVersion, or the flag turned on).
+ */
+async function fetchPageVersionRow(pageId, config, fetchImpl) {
+	const id = requireUuid(pageId, 'pageId');
+	const query = postgrestQuery({ id: `eq.${id}`, select: 'version,content', limit: '1' });
+	const rows = await baasRest(config, fetchImpl, `osionos_pages?${query}`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
 async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	const pageId = pageIdFromPath(url.pathname);
 	if (!pageId) return false;
 	const { userId } = verifyAppSessionToken(bearerToken(request), config);
+	// The body is read before the page: a baseVersion that is not a plain non-negative
+	// integer is refused with 400 and NO BaaS call at all (C17).
+	const requested = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const baseVersion = parseBaseVersion(requested);
+	// baseVersion is a control field, not a page field: it never reaches the row
+	// (pageUpdateRowFromPayload stays a whitelist) and never counts as "something to
+	// write" for the sharing/parent checks below.
+	const pagePayload = { ...requested };
+	delete pagePayload.baseVersion;
 	// Auth-only columns — the update path never reads existing.content/title. The read
 	// check runs before any role check, so an unreadable page is a 404 for every role.
 	// Ponytail: readability is decided on this row and not re-checked by the PATCH — an
@@ -3362,46 +3430,62 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	const access = await ownerOrWorkspaceAccess(request, existing, 'update', config, fetchImpl);
 	requirePageOwnership(existing, access);
 
-	const requested = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	// Only the owner changes who may read the page; a non-owner's sharing keys are dropped
 	// (listed in `ignored` when they differed) while the rest of the edit is still written.
-	const sharingChecked = withoutForeignSharingChanges(requested, existing, access.userId);
+	const sharingChecked = withoutForeignSharingChanges(pagePayload, existing, access.userId);
 	const { payload, ignored } = await withoutUnreachableParent(sharingChecked, existing, access, config, fetchImpl);
-	if (Object.keys(payload).length === 0 && Object.keys(requested).length > 0) {
-		json(response, 200, { ok: true, ignored }, config); // nothing left to write — not even updated_at
+	if (Object.keys(payload).length === 0 && Object.keys(pagePayload).length > 0) {
+		// Nothing left to write — not even updated_at, so the version did not move and
+		// the caller's baseVersion stays valid (that is why no version is answered here).
+		json(response, 200, { ok: true, ignored }, config);
 		return true;
 	}
 	if (hasOwn(payload, 'workspaceId') && payload.workspaceId !== existing.workspace_id) {
 		await requireWorkspaceAccess(request, payload.workspaceId, 'create', config, fetchImpl);
 	}
+	// Strict mode (OSIONOS_PAGE_STRICT_VERSION=1): a content-bearing PATCH without a
+	// baseVersion is compared against the stored content and refused when the two
+	// differ. Off until every client sends a version.
+	if (baseVersion === null && config.strictPageVersion && hasOwn(payload, 'content')) {
+		const current = await fetchPageVersionRow(pageId, config, fetchImpl);
+		const stored = Array.isArray(current?.content) ? current.content : [];
+		if (stableStringify(stored) !== stableStringify(safeJsonArray(payload.content))) throw versionConflict(current);
+	}
 	const updateRow = pageUpdateRowFromPayload(payload);
-	// return=minimal: the outbox (pageOutbox.publishPage) and the archive/restore
-	// callers all ignore the response body, so echoing the full updated row (incl.
-	// the heavy content JSONB) was pure waste. The cascade guard must NOT depend on
-	// a returned row anymore — return=minimal yields no body (baasRest → null), so
-	// gate the cascade on the payload's archived_at, which is what we're applying.
+	// return=representation: the conflict branch has to tell "0 rows" from "1 row" —
+	// under return=minimal PostgREST answers 204 for both (C16) — and the answer
+	// carries the row's new version (C18). The cascade guard must NOT depend on a
+	// returned row: gate the cascade on the payload's archived_at, which is what
+	// we're applying.
 	// An archive lands descendants before the root so a prefix is always a
-	// consistent tree; a restore lands the root first for the same reason.
+	// consistent tree; a restore lands the root first for the same reason. With a
+	// version precondition the row goes first: it is the atomic gate, and a stale
+	// baseVersion must never reach a descendant.
 	const carriesArchive = hasOwn(updateRow, 'archived_at');
 	let cascadedIds = [];
-	if (carriesArchive && updateRow.archived_at !== null) {
+	const cascade = async (archivedAt, deepestFirst) => {
 		const descendantIds = await cascadeDescendantIds(request, existing, 'update', config, fetchImpl);
-		await handlePageArchiveCascade(existing, [...descendantIds].reverse(), updateRow.archived_at, config, fetchImpl);
+		await handlePageArchiveCascade(existing, deepestFirst ? [...descendantIds].reverse() : descendantIds, archivedAt, config, fetchImpl);
 		cascadedIds = descendantIds;
-	}
-	await baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
+	};
+	if (carriesArchive && updateRow.archived_at !== null && baseVersion === null) await cascade(updateRow.archived_at, true);
+	const filter = baseVersion === null ? `id=eq.${pageId}` : `id=eq.${pageId}&version=eq.${baseVersion}`;
+	const updatedRows = await baasRest(config, fetchImpl, `osionos_pages?${filter}`, {
 		method: 'PATCH',
 		body: updateRow,
-		prefer: 'return=minimal',
+		prefer: 'return=representation',
 	});
-	if (carriesArchive && updateRow.archived_at === null) {
-		const descendantIds = await cascadeDescendantIds(request, existing, 'update', config, fetchImpl);
-		await handlePageArchiveCascade(existing, descendantIds, updateRow.archived_at, config, fetchImpl);
-		cascadedIds = descendantIds;
+	const updated = Array.isArray(updatedRows) ? updatedRows[0] ?? null : null;
+	if (baseVersion !== null && !updated) {
+		// The row moved on: the version the caller held is stale. The server's copy
+		// comes with the 409 so the caller can merge without a second read.
+		throw versionConflict(await fetchPageVersionRow(pageId, config, fetchImpl));
 	}
+	if (carriesArchive && updateRow.archived_at === null) await cascade(updateRow.archived_at, false);
+	if (carriesArchive && updateRow.archived_at !== null && baseVersion !== null) await cascade(updateRow.archived_at, true);
 	// updated_at is stamped by pageUpdateRowFromPayload (no BEFORE-UPDATE trigger on
 	// osionos_pages), so the value we wrote IS the stored value — authoritative.
-	json(response, 200, { ok: true, updatedAt: updateRow.updated_at, ...(ignored.length > 0 ? { ignored } : {}), ...(carriesArchive ? { cascadedIds } : {}) }, config);
+	json(response, 200, { ok: true, updatedAt: updateRow.updated_at, version: pageVersionOf(updated), ...(ignored.length > 0 ? { ignored } : {}), ...(carriesArchive ? { cascadedIds } : {}) }, config);
 	return true;
 }
 

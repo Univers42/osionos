@@ -76,6 +76,13 @@ function project(row, select) {
 	return Object.fromEntries(select.split(',').filter((key) => Object.hasOwn(row, key)).map((key) => [key, row[key]]));
 }
 
+/** JSON with every object's keys sorted: two contents that differ only in key order are the same content. */
+function canonical(value) {
+	if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+	if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+	return JSON.stringify(value ?? null);
+}
+
 function readRows(rows, params) {
 	const found = matchingRows(rows, params).map((row) => project(row, params.get('select')));
 	// `id.asc` (a keyset scan) sorts by id before the limit; the comparison is the raw
@@ -106,7 +113,16 @@ function upsertRows(rows, body, params, prefer) {
 function writeRows(rows, method, params, body, prefer) {
 	if (method === 'POST') return upsertRows(rows, body, params, prefer);
 	const hits = matchingRows(rows, params);
-	if (method === 'PATCH') hits.forEach((row) => Object.assign(row, body));
+	if (method === 'PATCH') {
+		hits.forEach((row) => {
+			const before = row.content;
+			Object.assign(row, body);
+			// The content-scoped version bump the migration's trigger does: a row that
+			// carries a version and whose content changed moves one step forward. A row
+			// without the column is left alone (the column may not be there yet).
+			if (Object.hasOwn(row, 'version') && canonical(before) !== canonical(row.content)) row.version = Number(row.version) + 1;
+		});
+	}
 	if (method === 'DELETE') hits.forEach((row) => rows.splice(rows.indexOf(row), 1));
 	return hits;
 }
@@ -163,7 +179,7 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		}
 		const name = parsed.pathname.replace('/rest/v1/', '');
 		const prefer = String(init.headers?.Prefer ?? '');
-		const call = { method, table: name, params: parsed.searchParams, body };
+		const call = { method, table: name, params: parsed.searchParams, body, prefer };
 		calls.push(call);
 		const failure = failWhen(call);
 		if (failure) return jsonResponse(failure.body, failure.status);
@@ -198,7 +214,7 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 // request answers 503 until the poller's first load, which unrelated route tests must not wait for.
 // The administrator list is set explicitly: with it unset the bridge has no account administrator
 // and says so at start-up, which the boot-line test counts.
-export function harnessConfig({ sessionCutoffs = 'off' } = {}) {
+export function harnessConfig({ sessionCutoffs = 'off', env = {} } = {}) {
 	return configFromEnv({
 		OSIONOS_SESSION_CUTOFFS: sessionCutoffs,
 		OSIONOS_APP_URL: 'http://localhost:3001',
@@ -209,6 +225,7 @@ export function harnessConfig({ sessionCutoffs = 'off' } = {}) {
 		OSIONOS_QUERY_ROUTER_URL: QUERY_ROUTER_URL,
 		OSIONOS_BAAS_API_KEY: 'tenant-test-key',
 		OSIONOS_ADMIN_EMAILS: 'admin@example.test',
+		...env,
 	});
 }
 
