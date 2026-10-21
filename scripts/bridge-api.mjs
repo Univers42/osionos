@@ -13,6 +13,7 @@
 
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
+import { Buffer } from 'node:buffer';
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -914,9 +915,9 @@ async function fetchPageRowIfUuid(pageId, config, fetchImpl) {
 // ownerOrWorkspaceAccess: owner_id/workspace_id; the workspace-change guard:
 // workspace_id; withoutForeignSharingChanges: owner_id/visibility/collaborators/
 // workspace_id; handlePageArchiveCascade: id/workspace_id; withoutUnreachableParent:
-// parent_page_id), and nothing else. Skips the heavy content JSONB + search_doc
-// tsvector that fetchPageRow's select:'*' pulls.
-const PAGE_AUTH_SELECT = 'id,owner_id,workspace_id,visibility,properties,collaborators,parent_page_id';
+// parent_page_id; the append route: archived_at), and nothing else. Skips the heavy
+// content JSONB + search_doc tsvector that fetchPageRow's select:'*' pulls.
+const PAGE_AUTH_SELECT = 'id,owner_id,workspace_id,visibility,properties,collaborators,parent_page_id,archived_at';
 
 async function fetchPageAuthRow(pageId, config, fetchImpl) {
 	const id = requireUuid(pageId, 'pageId');
@@ -3489,6 +3490,83 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	return true;
 }
 
+// The append's shape: a bounded list of blocks, each with an id, and a retry-safe key.
+const APPEND_MAX_BLOCKS = 100;
+const APPEND_MAX_BYTES = 256 * 1024;
+const APPEND_IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,128}$/;
+
+function appendBadRequest(message) {
+	return Object.assign(new Error(message), { status: 400 });
+}
+
+/** The blocks an append carries: a non-empty list, each block an object with a string id. */
+function requireAppendBlocks(value) {
+	if (!Array.isArray(value) || value.length === 0) throw appendBadRequest('blocks must be a non-empty array.');
+	if (value.length > APPEND_MAX_BLOCKS) throw appendBadRequest(`blocks must hold at most ${APPEND_MAX_BLOCKS} blocks.`);
+	for (const block of value) {
+		if (!block || typeof block !== 'object' || Array.isArray(block)) throw appendBadRequest('each block must be an object.');
+		if (typeof block.id !== 'string' || block.id.trim() === '') throw appendBadRequest('each block must carry a string id.');
+	}
+	if (Buffer.byteLength(JSON.stringify(value), 'utf8') > APPEND_MAX_BYTES) throw appendBadRequest('blocks must be at most 256 KB.');
+	return value;
+}
+
+/** The retry key: a retried append must land once, so the key is required and bounded. */
+function requireAppendIdempotencyKey(value) {
+	const key = typeof value === 'string' ? value : '';
+	if (!APPEND_IDEMPOTENCY_KEY.test(key)) throw appendBadRequest('idempotencyKey must be 8-128 characters of [A-Za-z0-9_-].');
+	return key;
+}
+
+/** The block the append lands after, or null for the end of the page. */
+function requireAppendAfterBlockId(value) {
+	if (value === undefined || value === null) return null;
+	const after = safeText(value, 220);
+	if (!after) throw appendBadRequest('afterBlockId must be a non-empty string.');
+	return after;
+}
+
+/**
+ * POST /api/pages/:id/blocks — an atomic server-side append.
+ *
+ * The append is a Postgres function reached by RPC (public.osionos_page_append), never
+ * a PostgREST write of osionos_pages: the read-modify-write the bridge could do is a
+ * lost update (C20). The permission path is the PATCH's own — the same read check, the
+ * same EDIT check, the same 404 for a page the caller cannot read — and an archived
+ * page is a 404 too: there is nothing to append to.
+ */
+async function handlePageBlocksAppend(url, request, response, config, fetchImpl) {
+	const pageId = pageSubresourceIdFromPath(url.pathname, 'blocks');
+	if (!pageId) return false;
+	const { userId } = verifyAppSessionToken(bearerToken(request), config);
+	// The payload is checked before the page is fetched: an invalid append costs no
+	// BaaS call at all.
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const blocks = requireAppendBlocks(payload.blocks);
+	const idempotencyKey = requireAppendIdempotencyKey(payload.idempotencyKey);
+	const afterBlockId = requireAppendAfterBlockId(payload.afterBlockId);
+	const existing = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), userId);
+	const access = await ownerOrWorkspaceAccess(request, existing, 'update', config, fetchImpl);
+	requirePageOwnership(existing, access);
+	if (existing.archived_at) throw pageNotFound();
+	const rows = await baasRest(config, fetchImpl, 'rpc/osionos_page_append', {
+		method: 'POST',
+		body: {
+			p_page_id: pageId,
+			p_blocks: blocks,
+			p_after_block_id: afterBlockId,
+			p_idempotency_key: idempotencyKey,
+		},
+	});
+	const result = Array.isArray(rows) ? rows[0] ?? null : rows;
+	json(response, 200, {
+		ok: true,
+		version: pageVersionOf(result),
+		content: Array.isArray(result?.content) ? result.content : [],
+	}, config);
+	return true;
+}
+
 async function handlePageConfigPatch(url, request, response, config, fetchImpl) {
 	const pageId = pageSubresourceIdFromPath(url.pathname, 'config');
 	if (!pageId) return false;
@@ -3927,6 +4005,7 @@ async function handlePagesPost(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/auth/workspace/validate') return handleWorkspaceValidate(request, response, config, fetchImpl);
 	if (await handlePageActionCreate(url, request, response, config, fetchImpl)) return true;
 	if (await handlePageTranslate(url, request, response, config, fetchImpl)) return true;
+	if (await handlePageBlocksAppend(url, request, response, config, fetchImpl)) return true;
 	return false;
 }
 
