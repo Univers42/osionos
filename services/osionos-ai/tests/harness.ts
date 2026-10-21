@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import { startMockUpstream } from './mockUpstream.ts';
 import type { MockUpstream } from './mockUpstream.ts';
+import { startMockBridge } from './mockBridge.ts';
+import type { MockBridge } from './mockBridge.ts';
 import type { AiServer } from '../src/server.ts';
 
 /**
@@ -77,6 +79,8 @@ export type JsonBody = Record<string, unknown>;
 export interface Harness {
 	/** The mock upstream the service calls. */
 	mock: MockUpstream;
+	/** The mock bridge the write tools write to. */
+	bridge: MockBridge;
 	/** The service, and its database. */
 	app: AiServer;
 	/** The base URL of the service. */
@@ -113,13 +117,20 @@ const APP_SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
  */
 export async function startHarness(): Promise<Harness> {
 	const mock = await startMockUpstream();
+	// The bridge comes before the service: the URL is read when the
+	// configuration is parsed, and the write tools are registered only when
+	// there is one.
+	const bridge = await startMockBridge();
 	process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${mock.baseUrl}/v1`;
+	process.env.OSIONOS_AI_BRIDGE_URL = bridge.baseUrl;
 	process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([FREE, METERED, PLATFORM, DEAR]);
 	// The daily budget of a user: the same as the deployment's, and the dear
 	// model asks for more than that.
 	process.env.OSIONOS_AI_USER_DAILY_MICROUSD = String(USER_DAILY_MICROUSD);
 	process.env.OSIONOS_AI_PLATFORM_DAILY_MICROUSD = '20000000';
-	process.env.OSIONOS_AI_RUNS_PER_MINUTE = '100';
+	// The window of the runs: a test that needs a tight one sets it BEFORE the
+	// harness runs, and the harness keeps it.
+	process.env.OSIONOS_AI_RUNS_PER_MINUTE = process.env.OSIONOS_AI_RUNS_PER_MINUTE ?? '100';
 
 	const { createAiServer } = await import('../src/server.ts');
 	const app = createAiServer();
@@ -164,6 +175,7 @@ export async function startHarness(): Promise<Harness> {
 
 	return {
 		mock,
+		bridge,
 		app,
 		base,
 		tokenFor,
