@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
-import { startHarness, METERED, USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } from './harness.ts';
+import { startHarness, METERED, USER_A, USER_B, USER_DAILY_MICROUSD, WORKSPACE_A, WORKSPACE_B } from './harness.ts';
 import { SseStream, collect } from './sse.ts';
 import type { SseEvent } from './sse.ts';
 
@@ -16,7 +16,7 @@ import type { SseEvent } from './sse.ts';
  */
 const { app, mock, postRun, tokenFor, createConversation } = await startHarness();
 const { readPage } = await import('../src/tools/readTools.ts');
-const { estimateMicroUsd } = await import('../src/runs/prompt.ts');
+const { estimateMicroUsd } = await import('../src/runs/estimate.ts');
 
 after(async () => {
 	await app.close();
@@ -47,11 +47,31 @@ function eventsOf(events: SseEvent[], type: string): SseEvent[] {
 	return events.filter((event) => event.event === type);
 }
 
+/** The outputs of the tools, as the next prompt of the model holds them. */
+function toolOutputsOf(body: unknown): string[] {
+	const messages = (body as { messages?: { role?: string; content?: unknown }[] }).messages ?? [];
+	const outputs: string[] = [];
+	for (const message of messages) {
+		if (message.role !== 'tool') continue;
+		outputs.push(typeof message.content === 'string' ? message.content : '');
+	}
+	return outputs;
+}
+
 describe('the tools of the assistant', () => {
 	before(async () => {
 		await app.db.query('delete from public.ai_conversations');
 		await app.db.query('delete from public.ai_usage_daily');
-		mock.setOptions({ preDelayMs: 0, chunkCount: 4, chunkGapMs: 0, fail: false, toolCall: null });
+		mock.setOptions({
+			preDelayMs: 0,
+			chunkCount: 4,
+			chunkGapMs: 0,
+			fail: false,
+			toolCall: null,
+			toolCallEveryStep: false,
+			parallelToolCalls: 1,
+			usage: null,
+		});
 	});
 
 	it('the read tool reads a page of the workspace of the caller', async () => {
@@ -175,14 +195,15 @@ describe('the tools of the assistant', () => {
 	});
 
 	it('a run is refused when the loop does not fit in the budget of the day', async () => {
-		// What is left of the budget of the user is one call, not the loop.
+		// What is left of the budget of the user is less than one step of the
+		// loop: the reservation of the run does not fit.
 		const oneCall = estimateMicroUsd(METERED, { text: 'hello', historyChars: 0 });
 		assert.ok(oneCall < 100, 'the estimate of one call fits in what is left');
 		await app.db.query(
 			`insert into public.ai_usage_daily (subject, day, spent_microusd, reserved_microusd)
 			 values ($1, current_date, $2, 0)
 			 on conflict (subject, day) do update set spent_microusd = $2`,
-			[USER_A, 1000 - 100],
+			[USER_A, USER_DAILY_MICROUSD - 1],
 		);
 
 		const conversationId = await createConversation();

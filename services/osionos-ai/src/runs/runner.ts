@@ -10,12 +10,12 @@ import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
 import type { RunEvent } from './upstream.ts';
 import {
-	estimateLoopMicroUsd,
 	historyChars,
 	loadHistory,
 	loadPageContext,
 	quotedPageChars,
 } from './prompt.ts';
+import { estimateLoopMicroUsd } from './estimate.ts';
 import { sourceChars } from './sources.ts';
 import { retrieve } from '../retrieval/search.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
