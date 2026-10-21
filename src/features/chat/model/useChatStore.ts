@@ -15,6 +15,9 @@ import { create } from "zustand";
 import type { ChatMessage, Conversation, Project, SharedContextItem } from "./chatTypes";
 import { stubInferencePort, type InferencePort } from "./inferencePort";
 import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiSelection";
+import type { RunContext } from "@/features/ai/model/aiContext";
+import { citationFromEvent } from "./citations";
+import { resolveConversationTitle } from "./conversationTitle";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -72,7 +75,7 @@ export interface ChatStoreState extends ChatData {
   deleteConversation: (id: string) => void;
   setActive: (id: string | null) => void;
   setConversationModel: (id: string, connectorId: string, model: string) => void;
-  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string }) => Promise<void>;
+  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; context?: RunContext }) => Promise<void>;
   stop: (conversationId: string) => void;
   attachContext: (scope: SharedContextItem["scope"], scopeId: string, item: Pick<SharedContextItem, "kind" | "label" | "ref">) => void;
   detachContext: (id: string) => void;
@@ -177,6 +180,22 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
         const current = get().messages.find((m) => m.id === assistantId)?.content ?? "";
         patchAssistant({ content: current + chunk });
       };
+      /** A source of the answer: kept as a part, in the order it arrived. */
+      const appendCitation = (citation: NonNullable<ChatMessage["parts"]>[number]) => {
+        const current = get().messages.find((m) => m.id === assistantId)?.parts ?? [];
+        patchAssistant({ parts: [...current, citation] });
+      };
+      /** The service named the conversation: the default title gives way to it. */
+      const applyServerTitle = (serverTitle: string) => {
+        set((s) => ({
+          conversations: s.conversations.map((c) => {
+            if (c.id !== conversationId) return c;
+            const title = resolveConversationTitle(c.title, serverTitle);
+            return title === c.title ? c : { ...c, title };
+          }),
+        }));
+        persist();
+      };
       const rememberServerConversation = (serverConversationId: string) => {
         set((s) => ({ conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, serverConversationId } : c)) }));
         persist();
@@ -194,12 +213,27 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
             connectionId,
             title: conversation.title,
             serverConversationId: conversation.serverConversationId,
+            // What the answer is read from: the pages the reader pointed at.
+            context: sel?.context,
             onServerConversationId: rememberServerConversation,
           },
           (event, data) => {
             if (event === "text.delta" && typeof data.text === "string") appendText(data.text);
-            else if (event === "run.started" && typeof data.runId === "string") patchAssistant({ runId: data.runId });
-            else if (event === "done") patchAssistant({ status: "done" });
+            else if (event === "citation") {
+              const citation = citationFromEvent(data);
+              if (citation) {
+                appendCitation({
+                  type: "citation",
+                  pageId: citation.pageId,
+                  ...(citation.blockId ? { blockId: citation.blockId } : {}),
+                  title: citation.title,
+                  snippet: citation.snippet,
+                });
+              }
+            } else if (event === "run.started") {
+              if (typeof data.runId === "string") patchAssistant({ runId: data.runId });
+              if (typeof data.conversationTitle === "string") applyServerTitle(data.conversationTitle);
+            } else if (event === "done") patchAssistant({ status: "done" });
             else if (event === "error") patchAssistant({ status: "error", errorCode: typeof data.code === "string" ? data.code : "internal" });
           },
           controller.signal,
