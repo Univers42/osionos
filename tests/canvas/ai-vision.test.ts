@@ -32,6 +32,7 @@ import {
   runError,
   secondsLeft,
 } from "@/features/chat/model/runErrors";
+import { selectionSeesImages } from "@/features/ai/model/aiSelection";
 import { AttachImageButton } from "@/widgets/chat-shell/ui/AttachImageButton";
 import { RunErrorNotice } from "@/features/chat/model/runErrorNotice";
 
@@ -121,6 +122,62 @@ test("only the failures that may be tried again say so", () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* Whether the chosen model sees images                                        */
+/* -------------------------------------------------------------------------- */
+
+/** The models of two connections, as the service would answer. */
+const MODELS_BY_CONNECTION: Record<string, Array<{ id: string; vision?: boolean }>> = {
+  platform: [
+    { id: "platform-text" },
+    { id: "platform-vision", vision: true },
+  ],
+  "conn-1": [{ id: "conn-1-text" }],
+};
+
+test("the model that sees images is the one that says so", () => {
+  assert.equal(
+    selectionSeesImages({ connectionId: "platform", model: "platform-vision" }, MODELS_BY_CONNECTION),
+    true,
+  );
+});
+
+test("a model that cannot see images never sees one", () => {
+  assert.equal(
+    selectionSeesImages({ connectionId: "platform", model: "platform-text" }, MODELS_BY_CONNECTION),
+    false,
+  );
+  assert.equal(
+    selectionSeesImages({ connectionId: "conn-1", model: "conn-1-text" }, MODELS_BY_CONNECTION),
+    false,
+  );
+});
+
+test("auto is not a model: it sees nothing", () => {
+  assert.equal(
+    selectionSeesImages({ connectionId: "platform", model: "auto" }, MODELS_BY_CONNECTION),
+    false,
+  );
+});
+
+test("a model that is gone, and a connection without a list, see nothing", () => {
+  assert.equal(
+    selectionSeesImages({ connectionId: "platform", model: "a-model-that-is-gone" }, MODELS_BY_CONNECTION),
+    false,
+  );
+  assert.equal(
+    selectionSeesImages({ connectionId: "conn-without-models", model: "platform-vision" }, MODELS_BY_CONNECTION),
+    false,
+  );
+});
+
+test("a model of another connection does not lend its sight to this one", () => {
+  assert.equal(
+    selectionSeesImages({ connectionId: "conn-1", model: "platform-vision" }, MODELS_BY_CONNECTION),
+    false,
+  );
+});
+
+/* -------------------------------------------------------------------------- */
 /* The button that attaches an image                                         */
 /* -------------------------------------------------------------------------- */
 
@@ -130,10 +187,17 @@ test("the attach button is hidden for a model that cannot see images", () => {
   );
   assert.doesNotMatch(hidden, /Attach image/);
 
+  // Not knowing yet (the models are still loading) is "cannot see": the button
+  // never shows before the picker has said so.
+  const unknown = renderToStaticMarkup(
+    React.createElement(AttachImageButton, { attachments: [], onChange: () => {} }),
+  );
+  assert.doesNotMatch(unknown, /Attach image/);
+
   const shown = renderToStaticMarkup(
     React.createElement(AttachImageButton, { vision: true, attachments: [], onChange: () => {} }),
   );
-  assert.match(shown, /Attach image/);
+  assert.match(shown, /aria-label="Attach image"/);
 });
 
 /* -------------------------------------------------------------------------- */
