@@ -18,6 +18,7 @@ import { getActivePageJwt } from '@/shared/api/client';
 import { defaultWorkspaceMember } from './defaults';
 import { errorMessage, nowIso, pushSettingsError, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPost, upsertById } from './settingsStoreUtils';
 import type { WorkspaceMember, WorkspaceMemberRole } from './types';
+import { sanitizePersistedMembers, workspaceMembersFromWire } from './workspaceMembersWire';
 
 /**
  * The members routes are bridge routes (scripts/bridge-collab.mjs), verified
@@ -64,7 +65,7 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
         if (!workspaceId) return;
         set((state) => ({ loading: { ...state.loading, [workspaceId]: true }, error: { ...state.error, [workspaceId]: null } }));
         try {
-          const remote = await trySettingsGet<WorkspaceMember[]>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members`, membersJwt());
+          const remote = workspaceMembersFromWire(workspaceId, await trySettingsGet<unknown>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members`, membersJwt()));
           set((state) => ({
             data: { ...state.data, [workspaceId]: remote ?? state.data[workspaceId] ?? fallbackMembers(workspaceId, activeUserId, seedUserIds) },
             loading: { ...state.loading, [workspaceId]: false },
@@ -124,6 +125,7 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
     {
       name: STORE_NAME,
       partialize: (state) => ({ data: state.data }),
+      merge: (persisted, current) => ({ ...current, data: sanitizePersistedMembers((persisted as { data?: unknown } | undefined)?.data) }),
     },
   ),
 );
