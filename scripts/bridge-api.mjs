@@ -943,16 +943,22 @@ function workspaceAccessContext(authContext, workspaceId, member, permission) {
 	};
 }
 
+/**
+ * The caller's members row in `workspaceId`, or null. A workspace the token lists is asked of
+ * the RPC (an unreadable answer is a 503); any other is asked of the members table (an
+ * unreadable answer is a miss: deny on any miss). Org/teamspace membership lives in
+ * osionos_workspace_members — the app token only carries the user's PRIVATE workspace.
+ */
+async function callerWorkspaceMember(authContext, workspaceId, config, fetchImpl) {
+	return authContext.workspaceIds.includes(workspaceId)
+		? sessionWorkspaceMember(authContext.userId, workspaceId, config, fetchImpl)
+		: workspaceMemberRow(authContext.userId, workspaceId, config, fetchImpl).catch(() => null);
+}
+
 export async function requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl = fetch) {
 	const normalizedWorkspaceId = requireUuid(workspaceId, 'workspaceId');
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	// A workspace the token lists is asked of the RPC (an unreadable answer is a 503); any
-	// other is asked of the members table (an unreadable answer is a miss: deny on any miss).
-	// Org/teamspace membership lives in osionos_workspace_members — the app token only
-	// carries the user's PRIVATE workspace.
-	const member = authContext.workspaceIds.includes(normalizedWorkspaceId)
-		? await sessionWorkspaceMember(authContext.userId, normalizedWorkspaceId, config, fetchImpl)
-		: await workspaceMemberRow(authContext.userId, normalizedWorkspaceId, config, fetchImpl).catch(() => null);
+	const member = await callerWorkspaceMember(authContext, normalizedWorkspaceId, config, fetchImpl);
 	return workspaceAccessContext(authContext, normalizedWorkspaceId, member, permission);
 }
 
@@ -1025,14 +1031,20 @@ function pageOwnerContext(token, row) {
 /**
  * A page's OWNER may always access it, even when the workspace-membership gate
  * would deny — e.g. a record-note that landed in a read-only seed workspace the
- * user reaches via the MOUNT but not via that workspace's page role. Non-owners
- * still go through requireWorkspaceAccess. `owner_id` is server-stamped, so this
- * never widens cross-user access.
+ * user reaches via the MOUNT but not via that workspace's page role. `owner_id` is
+ * server-stamped, so this never widens cross-user access. A non-owner outside the
+ * page's workspace gets the 404 of a missing id (C101/C136): a 403 would confirm the
+ * page exists. A member lacking `permission` is told 403.
+ * Caveat: a hidden page costs one BaaS call more than a missing id (the members
+ * lookup), so the two differ in timing, not in status or body.
  */
 async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl = fetch) {
 	const token = verifyAppSessionToken(bearerToken(request), config);
 	if (row && sameId(row.owner_id, token.userId)) return pageOwnerContext(token, row);
-	return requireWorkspaceAccess(request, row.workspace_id, permission, config, fetchImpl);
+	const workspaceId = requireUuid(row.workspace_id, 'workspaceId');
+	const member = await callerWorkspaceMember(token, workspaceId, config, fetchImpl);
+	if (!member) throw pageNotFound();
+	return workspaceAccessContext(token, workspaceId, member, permission);
 }
 
 /** The caller's own membership context in `workspaceId` holding `permission`, or null when they lack it. */
@@ -1066,15 +1078,18 @@ export function canWritePageRow(row, userId, member, permission) {
 
 /**
  * A page the caller may READ, with their access context — or the SAME 404 a missing id
- * gets, so another member's private page is indistinguishable from a nonexistent one.
- * Readability is decided before the permission gate for that reason: a viewer asking
- * for 'update' on a private page must not get a 403 confirming that it exists.
+ * gets, so another member's private page, or any page of a workspace the caller is not
+ * in (C134), is indistinguishable from a nonexistent one. Readability and membership
+ * are decided before the permission gate for that reason: a viewer asking for 'update'
+ * on a private page must not get a 403 confirming that it exists. A member lacking
+ * `permission` is told 403.
  */
 export async function readablePageAccess(request, pageId, permission, config, fetchImpl) {
 	const token = verifyAppSessionToken(bearerToken(request), config);
 	const { row: found, member } = await fetchPageRowWithMember(pageId, token.userId, config, fetchImpl);
 	const row = requireReadablePage(found, token.userId);
 	if (sameId(row.owner_id, token.userId)) return { authContext: pageOwnerContext(token, row), row };
+	if (!member) throw pageNotFound();
 	return { authContext: workspaceAccessContext(token, requireUuid(row.workspace_id, 'workspaceId'), member, permission), row };
 }
 
@@ -1132,26 +1147,33 @@ async function withoutUnreachableParent({ payload, ignored }, existing, authCont
 	return { payload: kept, ignored: [...ignored, 'parentPageId'] };
 }
 
+/** The one answer for a page id the caller may not know exists, whatever the reason. */
+function pageNotFound() {
+	return Object.assign(new Error('Page not found.'), { status: 404 });
+}
+
 /** `row` when the caller may read it; otherwise the SAME 404 a missing id gets. */
 function requireReadablePage(row, userId) {
-	if (!row || !canReadPageRow(row, userId)) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	if (!row || !canReadPageRow(row, userId)) throw pageNotFound();
 	return row;
 }
 
 /**
  * Access for a page-scoped side route (config, actions, translate). A page the caller
- * cannot read takes the missing-page path: the same answer as a random id, scoped to
- * the caller's own workspace, so nothing is written under the page's workspace.
+ * cannot read, or reaches only from outside its workspace, takes the missing-page path:
+ * the same answer as a random id, scoped to the caller's own workspace, so nothing is
+ * written under the page's workspace.
  */
 async function requirePageScopeAccess(request, pageId, payload, permission, config, fetchImpl = fetch) {
 	const normalizedPageId = requirePageReference(pageId);
 	const tokenContext = verifyAppSessionToken(bearerToken(request), config);
 	const found = await fetchPageRowIfUuid(normalizedPageId, config, fetchImpl);
 	const row = found && canReadPageRow(found, tokenContext.userId) ? found : null;
-	if (row) {
-		const authContext = await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl);
-		return { pageId: normalizedPageId, workspaceId: row.workspace_id, authContext, row };
-	}
+	const pageAccess = row && await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl).catch((error) => {
+		if (error?.status === 404) return null;
+		throw error;
+	});
+	if (pageAccess) return { pageId: normalizedPageId, workspaceId: row.workspace_id, authContext: pageAccess, row };
 
 	const requestedWorkspaceId = UUID_REGEX.test(String(payload?.workspaceId ?? '')) ? String(payload.workspaceId) : '';
 	const workspaceId = requestedWorkspaceId && tokenContext.workspaceIds.includes(requestedWorkspaceId)
