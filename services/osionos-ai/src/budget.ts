@@ -99,14 +99,17 @@ async function settleOn(
 	reserved: number,
 	actual: number,
 ): Promise<void> {
-	// The ledger books the real spend, or the reservation when the real spend
-	// is above it: the reservation IS the ceiling of the run, and a run that
-	// books more than it reserved would spend money the cap never allowed.
-	// The cost the upstream really charged stays in the row of the run.
+	// The ledger books the REAL spend. The money is spent whatever the ledger
+	// says, so a ledger that books less than the upstream charged lies to the
+	// daily caps and to the platform breaker: the key spends over its cap
+	// while the ledger says it did not.
+	// The reservation is the ceiling of the LOOP, and the loop stops itself
+	// when it reaches it (src/runs/streamPump.ts): the ceiling is kept by
+	// stopping the work, never by under-booking what was paid.
 	await client.query(
 		`update public.ai_usage_daily
 		 set reserved_microusd = greatest(reserved_microusd - $3::bigint, 0),
-		     spent_microusd = spent_microusd + least($4::bigint, $3::bigint)
+		     spent_microusd = spent_microusd + $4::bigint
 		 where subject = $1 and day = $2`,
 		[subject, day, reserved, actual],
 	);
@@ -117,11 +120,11 @@ async function settleOn(
  * cost may differ from the reservation, in both directions: the reservation was
  * an estimate and the upstream is the one that knows.
  *
- * The ledger books the actual cost, and never more than the reservation: the
- * reservation is the ceiling of the run, and the cap was checked against it.
- * A run that costs more than it reserved (the estimate counts four characters
- * per token, and it under-counts) is booked at its reservation; the cost the
- * upstream really charged is in the row of the run.
+ * The ledger books the actual cost, always. A run that costs more than it
+ * reserved (the estimate counts four characters per token, and it under-counts)
+ * books what it really cost: the caps read this ledger, and a cap that reads
+ * a smaller number is a cap that does not hold. The cost the upstream really
+ * charged is in the row of the run too.
  */
 export async function settle(db: Pool, request: SettleRequest): Promise<void> {
 	const client = await db.connect();
