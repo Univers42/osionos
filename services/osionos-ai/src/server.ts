@@ -22,6 +22,7 @@ import {
 	handleProviders,
 } from './routes/connections.ts';
 import { handleUsage } from './routes/usage.ts';
+import { handleVoiceTranscribe } from './routes/voice.ts';
 import { sweepStaleRuns } from './runs/runner.ts';
 import * as runStore from './runs/runStore.ts';
 import type { RouteEntry, RouteHandler } from './routes/types.ts';
@@ -94,6 +95,12 @@ const ROUTES: RouteEntry[] = [
 		handle: handleConnectionDelete,
 	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/complete$/, label: '/api/ai/complete', handle: handleComplete },
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/voice\/transcribe$/,
+		label: '/api/ai/voice/transcribe',
+		handle: handleVoiceTranscribe,
+	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/runs$/, label: '/api/ai/runs', handle: handleRuns },
 	{
 		methods: ['GET'],
