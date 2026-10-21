@@ -55,6 +55,10 @@ export function createIdeTokenHandler({ config, verifySession, env = process.env
 			takeToken(`ide-token:${session.userId}`, { capacity: 10, refillPerSec: 0.2 });
 			const body = await readJsonBody(request, BODY_LIMIT_BYTES);
 			const { userId, workspaceId } = requireSandboxIdentity(session, body?.workspaceId, env);
+			// The app token may still list the workspace after removal (stale token): check the
+			// LIVE members row, not session.workspaceIds, so a removed member is refused at once.
+			const { requireWorkspaceAccess } = await import('./bridge-api.mjs');
+			await requireWorkspaceAccess(request, workspaceId, 'read', requestConfig, fetchImpl);
 			// approved / verified read a row here, after the mode check, so allowlist mode stays DB-free.
 			await requireIdeApproval(requestConfig, fetchImpl, userId, env);
 			// After the allowlist, so a refused account costs no query; a failed or slow lookup mints without a name.

@@ -365,14 +365,26 @@ async function apiSession() {
 
 async function apiRequest(path, { method = 'GET', body, auth = true } = {}) {
   const apiUrl = await resolveApiUrl();
-  const headers = { Accept: 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (auth) headers.Authorization = `Bearer ${await apiSession()}`;
-  return fetchJson(`${apiUrl}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const doOnce = async () => {
+    const headers = { Accept: 'application/json' };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    if (auth) headers.Authorization = `Bearer ${await apiSession()}`;
+    return fetchJson(`${apiUrl}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  };
+  try {
+    return await doOnce();
+  } catch (error) {
+    const code = error?.body?.code ?? error?.body?.error?.code;
+    if (auth && error?.status === 401 && code === 'session_revoked') {
+      cachedSession = null;
+      return await doOnce();
+    }
+    throw error;
+  }
 }
 
 function compact(value) {
