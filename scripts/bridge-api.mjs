@@ -45,7 +45,7 @@ import { createPermsHandler } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
-import { assertPublicHttpUrl } from './bridge-chat-media.mjs';
+import { handleAutomationWebhook } from './bridge-automations-webhook.mjs';
 import { createRequestMeter } from './bridge-perf.mjs';
 import { createBaasTransport } from './bridge-baas-transport.mjs';
 
@@ -4057,32 +4057,6 @@ async function handleAuthProxy(url, request, response, config, handoffStore, fet
 	}, config);
 }
 
-// Database automations deliver webhooks server-side: the browser can't reach
-// arbitrary hosts (CORS) and the bridge must not become an SSRF proxy — HTTPS
-// only, public hosts only, 5s cap, response body discarded.
-async function handleAutomationWebhook(request, response, config, fetchImpl) {
-	verifyAppSessionToken(bearerToken(request), config);
-	const payload = await readJson(request);
-	const rawUrl = safeText(payload.url, 2048);
-	const parsed = await assertPublicHttpUrl(rawUrl);
-	if (parsed.protocol !== 'https:') {
-		throw Object.assign(new Error('Automation webhooks must use https.'), { status: 422 });
-	}
-	let status = 0;
-	try {
-		const res = await fetchWithTimeout(fetchImpl, parsed.href, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(payload.payload ?? {}),
-		}, 5000);
-		status = res.status;
-	} catch {
-		json(response, 502, { ok: false, message: 'Webhook endpoint did not respond.' }, config);
-		return;
-	}
-	json(response, 200, { ok: status >= 200 && status < 300, status }, config);
-}
-
 /** Reads the request to its end and refuses any byte: logout names its subject only through the token. */
 async function requireEmptyBody(request) {
 	let bytes = 0;
@@ -4135,8 +4109,13 @@ async function handleBridgePost(url, request, response, config, handoffStore, re
 		await handleAuthProxy(url, request, response, config, handoffStore, fetchImpl);
 		return true;
 	}
+	// Database automations deliver webhooks server-side: the browser can't reach
+	// arbitrary hosts (CORS) and the bridge must not become an SSRF proxy — HTTPS
+	// only, public hosts only, 5s cap, response body discarded, no redirect
+	// followed. The handler (bridge-automations-webhook.mjs) goes through the
+	// same SSRF guard as the chat link preview.
 	if (url.pathname === '/api/automations/webhook') {
-		await handleAutomationWebhook(request, response, config, fetchImpl);
+		await handleAutomationWebhook({ verifySession: verifyAppSessionToken }, request, response, config);
 		return true;
 	}
 	if (url.pathname === '/api/media/unsplash/download') {
