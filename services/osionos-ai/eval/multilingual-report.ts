@@ -267,7 +267,7 @@ export function multilingualReport(input: MultilingualInput): string {
 	lines.push('');
 	lines.push('(filled in by hand after the run)');
 	lines.push('');
-	lines.push('## Caveat');
+	lines.push('## Caveat: the corpus, the questions and the machine');
 	lines.push('');
 	lines.push('The corpus is synthetic, written by a model: the recall measured on it is a regression gate, not');
 	lines.push('a quality claim about real workspaces. Sixty-eight questions over forty pages: one question is');
