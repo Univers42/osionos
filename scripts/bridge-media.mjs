@@ -29,6 +29,7 @@ import { readRawBody } from './bridge-chat-media.mjs';
 import {
 	ensureChatBucket,
 	extFromMime,
+	servedObjectHeaders,
 	storageGet,
 	storageObjectKey,
 	storagePut,
@@ -72,7 +73,7 @@ async function serveObject(deps, ownerId, key, request, response, config) {
 		throw httpError('Stored media is unavailable.', object.status === 404 ? 404 : 502);
 	}
 	response.writeHead(200, {
-		'content-type': object.contentType || 'application/octet-stream',
+		...servedObjectHeaders(object.contentType),
 		'content-length': String(object.buffer.length),
 		'cache-control': 'private, max-age=86400',
 		etag: `"${sha256}"`,
