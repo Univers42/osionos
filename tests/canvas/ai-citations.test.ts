@@ -158,6 +158,22 @@ test("the frames of a run and the stored parts are the same list of sources", ()
   assert.deepEqual(stored.map((citation) => citation.n), [1, 2], "the sources are numbered in order");
 });
 
+test("a stored part keeps its number: the sources are listed by number", () => {
+  const stored = citationsFromParts([
+    { type: "citation", n: 1, pageId: "page-a", title: "Alpha", snippet: "one" },
+    { type: "citation", n: 3, pageId: "page-c", title: "Gamma", snippet: "three" },
+    { type: "citation", n: 2, pageId: "page-b", title: "Beta", snippet: "two" },
+  ]);
+  assert.deepEqual(
+    stored.map(({ n, pageId }) => [n, pageId]),
+    [
+      [1, "page-a"],
+      [2, "page-b"],
+      [3, "page-c"],
+    ],
+  );
+});
+
 test("a frame that is not a source is dropped", () => {
   assert.equal(citationFromEvent({ n: 0, pageId: "page-a" }), null);
   assert.equal(citationFromEvent({ n: 1 }), null, "a source without a page is not a source");

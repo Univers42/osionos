@@ -257,3 +257,31 @@ test("three lines are shown as they are", () => {
   assert.match(html, /query 3/);
   assert.doesNotMatch(html, /aria-expanded/, "three lines need no button");
 });
+
+test("two parallel searches credit their own citations", async () => {
+  const activities = await activitiesOf([
+    ["tool.called", { toolCallId: "_1", toolName: "search_workspace", input: { query: "a" } }],
+    ["tool.called", { toolCallId: "_2", toolName: "search_workspace", input: { query: "b" } }],
+    ["citation", { n: 1, pageId: "p1", title: "T", snippet: "s1", toolCallId: "_1" }],
+    ["citation", { n: 2, pageId: "p2", title: "T", snippet: "s2", toolCallId: "_1" }],
+    ["citation", { n: 3, pageId: "p3", title: "T", snippet: "s3", toolCallId: "_2" }],
+    ["citation", { n: 4, pageId: "p4", title: "T", snippet: "s4", toolCallId: "_2" }],
+    ["citation", { n: 5, pageId: "p5", title: "T", snippet: "s5", toolCallId: "_2" }],
+  ]);
+  const first = activities.find((activity) => activity.toolCallId === "_1");
+  const second = activities.find((activity) => activity.toolCallId === "_2");
+  assert.equal(first?.count, 2, "the first search gets its two citations");
+  assert.equal(second?.count, 3, "the second search gets its three citations");
+});
+
+test("an untagged citation goes to the last running search", async () => {
+  const activities = await activitiesOf([
+    ["tool.called", { toolCallId: "_1", toolName: "search_workspace", input: { query: "a" } }],
+    ["tool.called", { toolCallId: "_2", toolName: "search_workspace", input: { query: "b" } }],
+    ["citation", { n: 1, pageId: "p1", title: "T", snippet: "s1" }],
+  ]);
+  const first = activities.find((activity) => activity.toolCallId === "_1");
+  const second = activities.find((activity) => activity.toolCallId === "_2");
+  assert.equal(first?.count ?? 0, 0, "the first search gets nothing");
+  assert.equal(second?.count, 1, "the untagged citation goes to the last running search");
+});

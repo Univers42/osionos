@@ -121,6 +121,15 @@ export function withToolResult(parts: ChatMessagePart[], data: Record<string, un
   });
 }
 
+/** The position of the last call that matches, or -1. */
+function lastActivity(parts: ChatMessagePart[], matches: (part: ToolActivityPart) => boolean): number {
+  for (let cursor = parts.length - 1; cursor >= 0; cursor -= 1) {
+    const part = parts[cursor];
+    if (part.type === "tool-activity" && matches(part)) return cursor;
+  }
+  return -1;
+}
+
 /**
  * The parts of a message, with the source of a call in them.
  *
@@ -130,15 +139,11 @@ export function withToolResult(parts: ChatMessagePart[], data: Record<string, un
  */
 export function withToolSource(parts: ChatMessagePart[], data: Record<string, unknown>): ChatMessagePart[] {
   const title = typeof data.title === "string" ? data.title : "";
-  // The call that is running: the last one that was called and not answered.
-  let index = -1;
-  for (let cursor = parts.length - 1; cursor >= 0; cursor -= 1) {
-    const part = parts[cursor];
-    if (part.type === "tool-activity" && part.status === "running") {
-      index = cursor;
-      break;
-    }
-  }
+  // The call that found this source: the one the citation names. A citation
+  // that names none (an older service) goes to the last running call.
+  const toolCallId = typeof data.toolCallId === "string" ? data.toolCallId : "";
+  let index = toolCallId ? lastActivity(parts, (part) => part.toolCallId === toolCallId) : -1;
+  if (index === -1) index = lastActivity(parts, (part) => part.status === "running");
   if (index === -1) return parts;
   return parts.map((part, position) => {
     if (position !== index || part.type !== "tool-activity") return part;

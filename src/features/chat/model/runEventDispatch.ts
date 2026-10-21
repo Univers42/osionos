@@ -70,6 +70,7 @@ export function dispatchRunEvent(
     if (!citation) return;
     actions.appendCitation({
       type: "citation",
+      n: citation.n,
       pageId: citation.pageId,
       ...(citation.blockId ? { blockId: citation.blockId } : {}),
       title: citation.title,
