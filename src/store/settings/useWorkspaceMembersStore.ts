@@ -18,7 +18,7 @@ import { getActivePageJwt } from '@/shared/api/client';
 import { defaultWorkspaceMember } from './defaults';
 import { errorMessage, nowIso, pushSettingsError, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPost, upsertById } from './settingsStoreUtils';
 import type { WorkspaceMember, WorkspaceMemberRole } from './types';
-import { sanitizePersistedMembers, workspaceMembersFromWire } from './workspaceMembersWire';
+import { sanitizePersistedMembers, workspaceMemberFromWire, workspaceMembersFromWire } from './workspaceMembersWire';
 
 /**
  * The members routes are bridge routes (scripts/bridge-collab.mjs), verified
@@ -85,8 +85,8 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
         const timestamp = nowIso();
         set((state) => ({ data: { ...state.data, [workspaceId]: previous.map((member) => member.userId === userId ? { ...member, role, updatedAt: timestamp } : member) } }));
         try {
-          const remote = await trySettingsPatch<WorkspaceMember>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`, { role }, membersJwt());
-          if (remote) set((state) => ({ data: { ...state.data, [workspaceId]: upsertById(state.data[workspaceId] ?? [], remote) } }));
+          const saved = workspaceMemberFromWire(workspaceId, await trySettingsPatch<unknown>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(userId)}`, { role }, membersJwt()));
+          if (saved) set((state) => ({ data: { ...state.data, [workspaceId]: upsertById(state.data[workspaceId] ?? [], saved) } }));
         } catch (error) {
           set((state) => ({ data: { ...state.data, [workspaceId]: previous }, error: { ...state.error, [workspaceId]: errorMessage(error) } }));
           pushSettingsError('Could not update member role', error);
@@ -113,8 +113,8 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
           },
         }));
         try {
-          const remote = await trySettingsPost<WorkspaceMember[]>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/transfer-ownership`, { toUserId }, membersJwt());
-          if (remote) set((state) => ({ data: { ...state.data, [workspaceId]: remote } }));
+          const saved = workspaceMembersFromWire(workspaceId, await trySettingsPost<unknown>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/transfer-ownership`, { toUserId }, membersJwt()));
+          if (saved) set((state) => ({ data: { ...state.data, [workspaceId]: saved } }));
         } catch (error) {
           set((state) => ({ data: { ...state.data, [workspaceId]: previous }, error: { ...state.error, [workspaceId]: errorMessage(error) } }));
           pushSettingsError('Could not transfer ownership', error);
