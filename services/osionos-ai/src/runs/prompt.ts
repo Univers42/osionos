@@ -7,7 +7,7 @@ import { estimateTokens } from '../gateway/usage.ts';
 import { listMessages } from '../conversations/repo.ts';
 import type { AuthUser } from '../auth.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
-import { attributeText, sourceBlock, SOURCE_INSTRUCTION } from './sources.ts';
+import { attributeText, quotedData, sourceBlock, SOURCE_INSTRUCTION } from './sources.ts';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 
 /**
@@ -193,7 +193,7 @@ export async function loadPageContext(
 /** The characters of the quoted pages: they are in the prompt too. */
 export function quotedPageChars(pages: readonly PageContext[]): number {
 	let chars = 0;
-	for (const page of pages) chars += page.text.length;
+	for (const page of pages) chars += quotedData(page.text).length;
 	return chars;
 }
 
@@ -204,7 +204,7 @@ export function quotedPageChars(pages: readonly PageContext[]): number {
  * instruction.
  */
 export function pageBlock(page: PageContext): string {
-	return `<page id="${page.id}" title="${attributeText(page.title)}">\n${page.text}\n</page>`;
+	return `<page id="${attributeText(page.id)}" title="${attributeText(page.title)}">\n${quotedData(page.text)}\n</page>`;
 }
 
 /**
