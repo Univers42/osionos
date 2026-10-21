@@ -17,6 +17,8 @@
  * this single port — e.g. the existing agent streaming / bridge-agent path.
  */
 
+import type { RunContext } from "@/features/ai/model/aiContext";
+
 export interface InferenceMessage {
   role: "user" | "assistant" | "system";
   content: string;
@@ -40,6 +42,16 @@ export interface InferenceEventData {
   code?: string;
   message?: string;
   runId?: string;
+  /** The title the service gave the conversation, on `run.started`. */
+  conversationTitle?: string;
+  /** How many sources the service read, on `run.started`. */
+  retrievedCount?: number;
+  /** The source of a `citation` frame. */
+  n?: number;
+  pageId?: string;
+  blockId?: string;
+  title?: string;
+  snippet?: string;
   [key: string]: unknown;
 }
 
@@ -61,6 +73,8 @@ export interface StreamInferenceRequest {
   title?: string;
   /** The workspace that owns the conversation, when the caller knows it. */
   workspaceId?: string;
+  /** What the answer is read from: pages of the workspace, or all of it. */
+  context?: RunContext;
   /** Called once the server-side conversation exists (created on the first send). */
   onServerConversationId?: (id: string) => void;
 }
