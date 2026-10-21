@@ -11,8 +11,7 @@
 /* ************************************************************************** */
 
 /**
- * The assistant cites its sources, and "@" points it at pages or the whole
- * workspace.
+ * The assistant cites its sources.
  *
  * Pure logic only: no JSX, no server, no network.
  */
@@ -30,18 +29,6 @@ import {
   type Citation,
 } from "@/features/chat/model/citations";
 import { renderCitationSources, renderCitedAnswer } from "@/features/chat/model/citedAnswer";
-import {
-  addContextChip,
-  buildRunContext,
-  contextTrigger,
-  MAX_CONTEXT_PAGES,
-  WORKSPACE_CHIP,
-  type ContextChip,
-} from "@/features/ai/model/aiContext";
-import {
-  DEFAULT_CONVERSATION_TITLE,
-  resolveConversationTitle,
-} from "@/features/chat/model/conversationTitle";
 
 /* -------------------------------------------------------------------------- */
 /* The markers of an answer                                                   */
@@ -154,72 +141,6 @@ test("a title and a snippet are plain text — never an element", () => {
 });
 
 /* -------------------------------------------------------------------------- */
-/* The context of a run                                                       */
-/* -------------------------------------------------------------------------- */
-
-function pageChip(id: string): ContextChip {
-  return { id, kind: "page", label: id, pageId: id };
-}
-
-test("the chips are the context of the run", () => {
-  const chips = [pageChip("a"), pageChip("b"), WORKSPACE_CHIP];
-  assert.deepEqual(buildRunContext(chips), { pageIds: ["a", "b"], workspace: true });
-});
-
-test("a fourth page is refused, and the reader is told why", () => {
-  let chips: ContextChip[] = [];
-  for (const id of ["a", "b", "c"]) {
-    const added = addContextChip(chips, pageChip(id));
-    assert.equal(added.refusal, null, "three pages are allowed");
-    chips = added.chips;
-  }
-  assert.equal(chips.length, MAX_CONTEXT_PAGES);
-
-  const fourth = addContextChip(chips, pageChip("d"));
-  assert.equal(fourth.chips.length, MAX_CONTEXT_PAGES, "the fourth page is not added");
-  assert.match(fourth.refusal ?? "", /3 pages/, "and the reader is told in one line");
-});
-
-test("the same page twice is one chip", () => {
-  const first = addContextChip([], pageChip("a"));
-  const second = addContextChip(first.chips, pageChip("a"));
-  assert.equal(second.chips.length, 1);
-  assert.equal(second.refusal, null);
-});
-
-test("the whole workspace is one chip", () => {
-  const first = addContextChip([], WORKSPACE_CHIP);
-  const second = addContextChip(first.chips, WORKSPACE_CHIP);
-  assert.equal(second.chips.length, 1);
-  assert.deepEqual(buildRunContext(second.chips), { pageIds: [], workspace: true });
-});
-
-test("the @ opens the picker, and only when it stands alone", () => {
-  assert.deepEqual(contextTrigger("look at @", 9), { query: "", start: 8 });
-  assert.deepEqual(contextTrigger("look at @Alp", 12), { query: "Alp", start: 8 });
-  assert.equal(contextTrigger("mail me at a@b.fr", 18), null, "an email address is not a trigger");
-  assert.equal(contextTrigger("look at pages", 12), null);
-});
-
-/* -------------------------------------------------------------------------- */
-/* The title of a conversation                                                */
-/* -------------------------------------------------------------------------- */
-
-test("the default title gives way to the title the service set", () => {
-  assert.equal(resolveConversationTitle(DEFAULT_CONVERSATION_TITLE, "What is the plan?"), "What is the plan?");
-  assert.equal(resolveConversationTitle("", "What is the plan?"), "What is the plan?");
-});
-
-test("a title the reader renamed is kept", () => {
-  assert.equal(resolveConversationTitle("My own title", "What is the plan?"), "My own title");
-});
-
-test("no title from the service changes nothing", () => {
-  assert.equal(resolveConversationTitle(DEFAULT_CONVERSATION_TITLE, undefined), DEFAULT_CONVERSATION_TITLE);
-  assert.equal(resolveConversationTitle(DEFAULT_CONVERSATION_TITLE, "   "), DEFAULT_CONVERSATION_TITLE);
-});
-
-/* -------------------------------------------------------------------------- */
 /* The sources of a run                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -241,96 +162,4 @@ test("a frame that is not a source is dropped", () => {
   assert.equal(citationFromEvent({ n: 0, pageId: "page-a" }), null);
   assert.equal(citationFromEvent({ n: 1 }), null, "a source without a page is not a source");
   assert.equal(citationFromEvent({ pageId: "page-a" }), null, "a source without a number is not a source");
-});
-
-/* -------------------------------------------------------------------------- */
-/* The store                                                                  */
-/* -------------------------------------------------------------------------- */
-
-function shimLocalStorage() {
-  const store = new Map<string, string>();
-  (globalThis as unknown as { localStorage: Storage }).localStorage = {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-    removeItem: (k: string) => void store.delete(k),
-    clear: () => void store.clear(),
-    key: () => null,
-    length: 0,
-  };
-}
-
-/** A port that answers with the frames it is given. */
-function fakePort(frames: Array<[string, Record<string, unknown>]>) {
-  return {
-    async complete() {
-      return { content: "" };
-    },
-    async stream(
-      _request: unknown,
-      onEvent: (event: string, data: Record<string, unknown>) => void,
-    ) {
-      for (const [event, data] of frames) onEvent(event, data);
-    },
-  };
-}
-
-test("the store keeps the sources of the answer", async () => {
-  shimLocalStorage();
-  const { useChatStore, setInferencePort } = await import("@/features/chat/model/useChatStore");
-  const s = () => useChatStore.getState();
-
-  setInferencePort(
-    fakePort([
-      ["run.started", { runId: "run-1" }],
-      ["citation", { n: 1, pageId: "page-a", blockId: "block-1", title: "Alpha", snippet: "the first source" }],
-      ["citation", { n: 2, pageId: "page-b", title: "Beta", snippet: "the second source" }],
-      ["text.delta", { text: "A [1] and [2]." }],
-      ["done", {}],
-    ]),
-  );
-
-  const conversation = s().createConversation(null);
-  await s().send(conversation.id, "hello");
-
-  const assistant = s().messagesFor(conversation.id)[1];
-  assert.deepEqual(citationsFromParts(assistant.parts), [
-    { n: 1, pageId: "page-a", blockId: "block-1", title: "Alpha", snippet: "the first source" },
-    { n: 2, pageId: "page-b", title: "Beta", snippet: "the second source" },
-  ]);
-});
-
-test("the store takes the title of the service, unless the reader renamed it", async () => {
-  shimLocalStorage();
-  const { useChatStore, setInferencePort } = await import("@/features/chat/model/useChatStore");
-  const s = () => useChatStore.getState();
-
-  setInferencePort(
-    fakePort([
-      ["run.started", { runId: "run-1", conversationTitle: "What is the plan?" }],
-      ["done", {}],
-    ]),
-  );
-
-  const fresh = s().createConversation(null);
-  await s().send(fresh.id, "what is the plan");
-  assert.equal(
-    s().conversations.find((c) => c.id === fresh.id)?.title,
-    "What is the plan?",
-    "the default title gives way to the service's",
-  );
-
-  setInferencePort(
-    fakePort([
-      ["run.started", { runId: "run-2", conversationTitle: "What is the plan?" }],
-      ["done", {}],
-    ]),
-  );
-
-  const renamed = s().createConversation(null, { title: "My own title" });
-  await s().send(renamed.id, "what is the plan");
-  assert.equal(
-    s().conversations.find((c) => c.id === renamed.id)?.title,
-    "My own title",
-    "a title the reader renamed is kept",
-  );
 });

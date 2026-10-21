@@ -27,7 +27,7 @@
  * Pure logic, no React: the rendering lives in citedAnswer.ts.
  */
 
-import type { AiPart } from "@/features/ai/api/aiClient";
+import type { ChatMessagePart } from "./chatTypes";
 
 import { codeRegions } from "./markdownCode";
 
@@ -79,7 +79,7 @@ export function citationFromEvent(data: Record<string, unknown>): Citation | nul
  * the markers of a loaded answer line up with the markers of the answer that
  * was streamed — the frames and the stored parts are the same list.
  */
-export function citationsFromParts(parts: AiPart[] | undefined): Citation[] {
+export function citationsFromParts(parts: ChatMessagePart[] | undefined): Citation[] {
   if (!parts) return [];
   const citations: Citation[] = [];
   for (const part of parts) {
