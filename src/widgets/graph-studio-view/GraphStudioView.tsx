@@ -14,7 +14,6 @@ import {
   type EdgeKind,
   type IngestDoc,
   type GraphScope,
-  EdgeKindToggles,
   EDGE_KINDS,
   GRAPH_SCOPES,
   GRAPH_STUDIO_TAG,
@@ -31,6 +30,9 @@ import {
   takeGraphFocus,
   toIngestDoc,
 } from "@/features/graph-studio";
+// The toggles are a component: the feature's barrel carries the model, not the
+// view (the node tests read the barrel, and node strips no JSX).
+import { EdgeKindToggles } from "@/features/graph-studio/ui/EdgeKindToggles";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { usePageStore } from "@/store/usePageStore";
 // Deep path, not the barrel: the database view's barrel has side effects this view does not need.
