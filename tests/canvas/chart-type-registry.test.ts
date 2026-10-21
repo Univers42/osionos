@@ -167,10 +167,11 @@ test("echarts-builders: a bar chart shows every one of a few category names", ()
     result: workload, settings: {}, def: getChartTypeDef("stacked_bar"),
     colors: ["#111111"],
   }) as {
-    xAxis: { axisLabel: { interval: number | string; formatter: (label: string) => string } };
+    xAxis: { axisLabel: { interval: number | string; lineHeight: number; formatter: (label: string) => string } };
     grid: { bottom: number };
   };
   assert.equal(vertical.xAxis.axisLabel.interval, 0, "few categories: show every label");
+  assert.equal(vertical.xAxis.axisLabel.lineHeight, 14, "wrapped second line is 14px tall");
   assert.equal(vertical.xAxis.axisLabel.formatter("Kenji Watanabe"), "Kenji\nWatanabe");
   assert.equal(vertical.grid.bottom, 62, "one extra 14px label line over the legend");
 
