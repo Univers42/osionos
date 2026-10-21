@@ -25,7 +25,7 @@ most of the weight.
 ## Visitors and suppliers
 
 Suppliers and visitors sign the conduct sheet at reception, and nobody is shown around the
-workshop floor without an escort. <!-- answer:q16 -->
+workshop floor without an escort. <!-- answer:q16,q60 -->
 
 The escort is not hospitality. The floor is a working environment with extraction, moving
 parts and a noise level that is not safe for untrained visitors. There is a viewing window

@@ -31,7 +31,7 @@ the objection was that it counted the museum twice, once as galleries and once a
 archive store.
 
 An opportunity drops out of the report when four weeks pass without a written request
-from inside the client. <!-- answer:q21 -->
+from inside the client. <!-- answer:q21,q56 -->
 
 The forecast page now shows one line per opportunity, with the galleries and the archive
 store inside the same row. The weighted number was not the point of the meeting.

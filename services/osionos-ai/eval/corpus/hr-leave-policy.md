@@ -15,7 +15,7 @@ Christmas and New Year, which are not counted. Nobody is expected to take more t
 twenty-eight days and nobody is asked to explain why they took fewer.
 
 Annual leave must be booked in the people system before the first day of the requested
-month, and no more than twenty-five consecutive days may be taken. <!-- answer:q15 -->
+month, and no more than twenty-five consecutive days may be taken. <!-- answer:q15,q52 -->
 
 ## Booking rules
 

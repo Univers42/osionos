@@ -25,7 +25,7 @@ two-week wait, and the buffer is chosen from the service log, not from a feeling
 ## Fast moving fittings
 
 Order the wall shelf fixings in packs of fifty, because the workshop loses them faster
-than it uses them. <!-- answer:q24 -->
+than it uses them. <!-- answer:q24,q53 -->
 
 - Wall shelf plate fixings: packs of fifty, six weeks.
 - Gas lift, class 4, for the task chair: boxes of four, eight weeks.
