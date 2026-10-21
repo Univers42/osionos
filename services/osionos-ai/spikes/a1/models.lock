@@ -24,6 +24,10 @@ sd	release	stable-diffusion.cpp-vulkan	github:leejet/stable-diffusion.cpp	master
 # --- the models of the image generation -------------------------------------
 sd	model	sd-turbo-q8_0	Green-Sky/SD-Turbo-GGUF	19a31586d02d64a73b4419bc193b3ecfaf38e1f0	sd_turbo-f16-q8_0.gguf	2023745376	d50be7655f0a554cf8041c145d88b210bd5f3c545423119dee62ae08cae51580	-
 sd	model	sdxl-turbo-q8_0	OlegSkutte/sdxl-turbo-GGUF	62a28b8b2c3cb4bf76d9aad45a5b798047dc786c	sd_xl_turbo_1.0.q8_0.gguf	4098988672	f5659e6cdad699b1432870cc9fe811359e45c8a331687be505d0ba05c8364720	-
+sd	model	z-image-turbo-q4_0	wbruna/Z-Image-Turbo-sdcpp-GGUF	ea7669b52d27042b4909e3413f58581c0d52d522	z_image_turbo-Q4_0.gguf	3470775264	545c2a06510949e5c62a7154a44729f92dbf1c2006836508aedd72c537c35ba6	545c2a06510949e5c62a7154a44729f92dbf1c2006836508aedd72c537c35ba6
+sd	model	z-image-ae-f16	wbruna/Z-Image-Turbo-sdcpp-GGUF	ea7669b52d27042b4909e3413f58581c0d52d522	ae-f16.gguf	167656704	1bed7b05318709e46a8cb9accc211168fc7f0b61ab594661860bbfe4d785cc46	1bed7b05318709e46a8cb9accc211168fc7f0b61ab594661860bbfe4d785cc46
+sd	model	z-image-taef1	wbruna/Z-Image-Turbo-sdcpp-GGUF	ea7669b52d27042b4909e3413f58581c0d52d522	taef1.safetensors	9848636	927f7de7f11bbd3b2d5ce402e608d97a7649e0921a9601995b044e8efc81e449	927f7de7f11bbd3b2d5ce402e608d97a7649e0921a9601995b044e8efc81e449
+sd	model	z-image-te-qwen3-4b-q4km	unsloth/Qwen3-4B-Instruct-2507-GGUF	a06e946bb6b655725eafa393f4a9745d460374c9	Qwen3-4B-Instruct-2507-Q4_K_M.gguf	2497281120	3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597	3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597
 
 # --- the models of the vision-language models --------------------------------
 vlm	model	smolvlm2-q4km	ggml-org/SmolVLM2-2.2B-Instruct-GGUF	1bc3c9f74ceafd4c8d4411cc9cf188bba3798f91	SmolVLM2-2.2B-Instruct-Q4_K_M.gguf	1112602656	0cf76814555b8665149075b74ab6b5c1d428ea1d3d01c1918c12012e8d7c9f58	-
