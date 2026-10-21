@@ -3,21 +3,24 @@
 # throwaway Redis on a private network, the AI migrations applied on top, the
 # test suite run in node:22. Nothing here touches the running stack.
 #
-# usage: sh scripts/test.sh /path/to/osionos-ai-migration.sql [/path/to/other.sql]
-# The migrations are applied in the order they are given. The single-file call
-# still works: the RAG migration (ai_chunks, ai_index_queue) is a second one.
+# usage: sh scripts/test.sh /path/to/osionos-ai-migration.sql [/path/to/other.sql ...]
+# The migrations are applied in the order they are given, and as many as are
+# given: the single-file call still works, the RAG migration (ai_chunks,
+# ai_index_queue) is a second one, and the graph migration (ai_page_vectors) a
+# third one. A migration given twice is applied twice — that is how the
+# idempotence of a migration is proved.
 set -eu
 
 MIGRATIONS=""
 for MIGRATION in "$@"; do
 	if [ ! -f "$MIGRATION" ]; then
-		echo "usage: test.sh <path to osionos-ai-migration.sql> [/path/to/other.sql]" >&2
+		echo "usage: test.sh <path to osionos-ai-migration.sql> [/path/to/other.sql ...]" >&2
 		exit 2
 	fi
 	MIGRATIONS="$MIGRATIONS $MIGRATION"
 done
 if [ -z "$MIGRATIONS" ]; then
-	echo "usage: test.sh <path to osionos-ai-migration.sql> [/path/to/other.sql]" >&2
+	echo "usage: test.sh <path to osionos-ai-migration.sql> [/path/to/other.sql ...]" >&2
 	exit 2
 fi
 

@@ -221,6 +221,10 @@ describe('the truth table of the related pages (C99)', () => {
 			await change(hidden);
 			const answer = await related(source, tokenFor(USER_A, WORKSPACE_A));
 			assert.ok(!answer.text.includes(hidden), 'the hidden page is not in the answer');
+			const body = JSON.parse(answer.text) as { related?: { pageId: string; linked: boolean }[] };
+			const neighbours = (body.related ?? []).filter((page) => page.pageId === hidden).length;
+			const suggestions = (body.related ?? []).filter((page) => page.pageId === hidden && !page.linked).length;
+			console.log(`[truth] ${name} | related ${neighbours} | suggestions ${suggestions}`);
 		});
 	}
 

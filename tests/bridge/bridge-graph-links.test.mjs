@@ -105,13 +105,17 @@ describe('the truth table of the graph (C99)', () => {
 			await withBridge(config, mock.fetchImpl, async (base) => {
 				// The token of B carries the team workspace, minted before the change.
 				const headers = sessionHeaders(config, IDS.userB, IDS.homeB, [IDS.team]);
+				const cells = [];
 				for (const [surface, call] of SURFACES) {
 					const response = await call(base, headers);
 					const body = JSON.stringify(response.body ?? {});
+					const leaks = forbiddenIds(hidden).filter((id) => body.includes(id)).length;
+					cells.push(`${surface} ${leaks}`);
 					for (const id of forbiddenIds(hidden)) {
 						assert.ok(!body.includes(id), `${surface} mentions ${id}`);
 					}
 				}
+				console.log(`[truth] ${name} | ${cells.join(' | ')}`);
 			});
 		});
 	}
