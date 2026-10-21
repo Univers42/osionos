@@ -46,6 +46,8 @@ export interface UpstreamRunInput {
 	text: string;
 	/** Where the model is called, and who pays for it. */
 	target: ResolvedTarget;
+	/** The images of this run, as bytes. They go only into this run's user message. */
+	images?: readonly { data: Uint8Array; mediaType: string }[];
 	emit: (event: RunEvent) => void;
 	/** The day of the ledger, and the money the run holds. */
 	day: string;
@@ -89,6 +91,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		userMessageId,
 		title,
 	} = input;
+	const images = input.images ?? [];
 
 	const controller = new AbortController();
 	runStore.trackRun(runId, controller);
@@ -167,9 +170,14 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		});
 		const tools = runTools.tools;
 
+		const userText = buildUserTurn(text, pages, sources);
+		const userContent = [
+			{ type: 'text' as const, text: userText },
+			...images.map((image) => ({ type: 'image' as const, image: image.data, mediaType: image.mediaType })),
+		];
 		const messages: ModelMessage[] = [
 			...historyMessages(history),
-			{ role: 'user', content: buildUserTurn(text, pages, sources) },
+			{ role: 'user', content: userContent } as ModelMessage,
 		];
 
 		const outcome = await pumpUpstream({
@@ -177,6 +185,10 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			messages,
 			controller,
 			...(tools ? { tools } : {}),
+			// Platform vision requests to OpenRouter carry the data-collection deny.
+			...(target.platformBudget && images.length > 0
+				? { providerOptions: { platform: { provider: { data_collection: 'deny' } } } }
+				: {}),
 			// The ceiling of the loop: the money the run holds, and the cost
 			// of one more step. The loop decides before every step: a step
 			// it cannot pay for becomes the answer.
@@ -258,7 +270,17 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 
 		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
 	} catch (error) {
-		const code = abortCode(controller.signal) ?? 'upstream_error';
+		let code = abortCode(controller.signal) ?? 'upstream_error';
+		const failure = error as { statusCode?: number; status?: number; responseBody?: string } | null;
+		const status = failure?.statusCode ?? failure?.status;
+		// The body of the answer says as much as its message: OpenRouter puts
+		// the reason of a refusal in the body.
+		const text = `${String(error ?? '')} ${failure?.responseBody ?? ''}`;
+		// A 404 that talks about the data policy is not a missing model: it
+		// is the refusal of the provider, and the caller must be told.
+		if (status === 404 && /data[ _-]?policy|data_collection|no endpoints found|free model training/i.test(text)) {
+			code = 'vision_unavailable';
+		}
 		// A cancelled or failed run settles what the upstream reported, or
 		// the estimate of what it streamed before it broke.
 		const billed = settled ?? usageForSettlement(runId, usage, {
@@ -269,8 +291,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// The row of the run is closed BEFORE the terminal frame: a client
 		// that reads the row when it sees the frame reads the truth. The
 		// success path does the same.
-		const status: RunStatus = code === 'cancelled' ? 'cancelled' : 'failed';
-		const changed = await markRun(db, runId, status, code);
+		const runStatus: RunStatus = code === 'cancelled' ? 'cancelled' : 'failed';
+		const changed = await markRun(db, runId, runStatus, code);
 		await emit('error', { code, message: failureMessage(code, error) });
 		if (changed) {
 			await settleTarget(db, target, { userId: ownerId, day, reserved: budget.reserved, actual: cost });

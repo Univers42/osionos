@@ -40,6 +40,8 @@ export interface ResolvedTarget {
 	pricing: PlatformModelEntry;
 	/** The platform budget applies to the platform connection only. */
 	platformBudget: boolean;
+	/** Whether the model accepts image input. */
+	vision?: boolean;
 }
 
 /** The answer of the resolver: a target, or a refusal. */
@@ -169,6 +171,7 @@ export async function resolveTarget(
 				modelId: entry.id,
 				pricing: entry,
 				platformBudget: true,
+				vision: entry.vision === true,
 			},
 		};
 	}
@@ -193,6 +196,7 @@ export async function resolveTarget(
 			// The provider of the user bills them: our prices are zero.
 			pricing: { id: model, label: model, inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: false },
 			platformBudget: false,
+			vision: false,
 		},
 	};
 }
