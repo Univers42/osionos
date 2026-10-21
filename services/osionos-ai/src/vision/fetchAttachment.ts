@@ -56,8 +56,9 @@ function attachmentError(status: number, code: string): Error {
  *
  * A 403 or a 404 of the bridge becomes a 404 `attachment_not_found`: the
  * caller may not read it, or it does not exist, and the two are the same
- * answer. The body is read with a ten-megabyte cap, and the read is aborted
- * when it is crossed.
+ * answer. A redirect is never followed: the bridge serves attachments itself,
+ * so a 3xx would send the caller's token somewhere else. The deadline covers
+ * the body too, and the read is aborted at ten megabytes.
  */
 export async function fetchAttachment(...args: unknown[]): Promise<FetchedAttachment> {
 	const { path, bridgeUrl: override, token, timeoutMs } = normalize(args);
@@ -67,47 +68,52 @@ export async function fetchAttachment(...args: unknown[]): Promise<FetchedAttach
 
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), timeoutMs);
-	let response: Response;
 	try {
-		response = await fetch(`${base}${path}`, {
-			method: 'GET',
-			headers: token ? { authorization: `Bearer ${token}` } : {},
-			signal: controller.signal,
-		});
-	} catch {
+		let response: Response;
+		try {
+			response = await fetch(`${base}${path}`, {
+				method: 'GET',
+				headers: token ? { authorization: `Bearer ${token}` } : {},
+				redirect: 'manual',
+				signal: controller.signal,
+			});
+		} catch {
+			throw attachmentError(504, 'attachment_timeout');
+		}
+		if (response.status === 403 || response.status === 404) {
+			throw attachmentError(404, 'attachment_not_found');
+		}
+		if (!response.ok) {
+			throw attachmentError(502, 'attachment_fetch_failed');
+		}
+		const bytes = await readCapped(response, controller);
+		const mediaType = (response.headers.get('content-type') ?? 'application/octet-stream').split(';')[0].trim();
+		return { bytes, mediaType };
+	} finally {
 		clearTimeout(timer);
-		throw attachmentError(504, 'attachment_timeout');
 	}
-	clearTimeout(timer);
+}
 
-	if (response.status === 403 || response.status === 404) {
-		throw attachmentError(404, 'attachment_not_found');
-	}
-	if (!response.ok) {
-		throw attachmentError(response.status, 'attachment_fetch_failed');
-	}
-
-	const reader = response.body?.getReader();
+/** The body, aborted past the cap; a read cut by the deadline is a timeout. */
+async function readCapped(response: Response, controller: AbortController): Promise<Uint8Array> {
 	const chunks: Uint8Array[] = [];
 	let total = 0;
-	if (reader) {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			if (value) {
-				total += value.byteLength;
-				if (total > MAX_ATTACHMENT_BYTES) {
-					controller.abort();
-					throw attachmentError(413, 'attachment_too_large');
-				}
-				chunks.push(value);
-			}
+	const reader = response.body?.getReader();
+	if (!reader) return new Uint8Array(0);
+	while (true) {
+		let step: Awaited<ReturnType<typeof reader.read>>;
+		try {
+			step = await reader.read();
+		} catch {
+			throw attachmentError(504, 'attachment_timeout');
 		}
-	} else {
-		const buffer = new Uint8Array(await response.arrayBuffer());
-		if (buffer.byteLength > MAX_ATTACHMENT_BYTES) throw attachmentError(413, 'attachment_too_large');
-		chunks.push(buffer);
-		total = buffer.byteLength;
+		if (step.done) break;
+		total += step.value.byteLength;
+		if (total > MAX_ATTACHMENT_BYTES) {
+			controller.abort();
+			throw attachmentError(413, 'attachment_too_large');
+		}
+		chunks.push(step.value);
 	}
 	const bytes = new Uint8Array(total);
 	let offset = 0;
@@ -115,8 +121,7 @@ export async function fetchAttachment(...args: unknown[]): Promise<FetchedAttach
 		bytes.set(chunk, offset);
 		offset += chunk.byteLength;
 	}
-	const mediaType = (response.headers.get('content-type') ?? 'application/octet-stream').split(';')[0].trim();
-	return { bytes, mediaType };
+	return bytes;
 }
 
 export default fetchAttachment;

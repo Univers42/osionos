@@ -233,4 +233,29 @@ describe('the attachments of a run', () => {
 		assert.equal(await codeOf(response), 'attachment_not_found');
 		assert.equal(mock.calls, calls);
 	});
+	it('never follows a redirect of the bridge, so the token goes nowhere else', async () => {
+		const token = tokenFor(USER_A, WORKSPACE_A);
+		const conversationId = await createConversation();
+		const calls = mock.calls;
+		const id = randomUUID();
+		const elsewhere = `/elsewhere/${id}.png`;
+		bridge.serve(elsewhere, { bytes: pngBytes(), contentType: 'image/png' });
+		bridge.serve(`/api/chat/uploads/${id}`, {
+			bytes: pngBytes(),
+			contentType: 'image/png',
+			status: 302,
+			location: `${bridge.baseUrl}${elsewhere}`,
+		});
+		bridge.reset();
+
+		const response = await postRun(
+			token,
+			runBody(conversationId, { model: VISION.id, attachments: [{ kind: 'chat', id }] }),
+		);
+
+		assert.equal(response.status, 502);
+		assert.equal(await codeOf(response), 'attachment_fetch_failed');
+		assert.deepEqual(bridge.calls.map((call) => call.path), [`/api/chat/uploads/${id}`]);
+		assert.equal(mock.calls, calls);
+	});
 });

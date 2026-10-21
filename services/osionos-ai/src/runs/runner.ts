@@ -163,6 +163,14 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		return { kind: 'refused', status: 400, code: 'model_no_vision' };
 	}
 
+	// The rate limit comes before the attachments: a refused run makes the
+	// service fetch nothing.
+	const rate = await checkRunRateLimit(redis, ownerId, config.runsPerMinute);
+	if (!rate.allowed) {
+		await markRun(db, runId, 'failed', 'rate_limited');
+		// The client counts the seconds down before it offers the retry.
+		return { kind: 'refused', status: 429, code: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
+	}
 	// The attachments are fetched through the bridge with the caller's token of
 	// THIS request. They are validated and stripped before the money moves.
 	const images: { data: Uint8Array; mediaType: string }[] = [];
@@ -196,13 +204,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// size of the prompt, so it has to know the prompt.
 	const history = await loadHistory(db, { conversationId, ownerId });
 
-	// (b) The rate limit and the budget, before any upstream call.
-	const rate = await checkRunRateLimit(redis, ownerId, config.runsPerMinute);
-	if (!rate.allowed) {
-		await markRun(db, runId, 'failed', 'rate_limited');
-		// The client counts the seconds down before it offers the retry.
-		return { kind: 'refused', status: 429, code: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
-	}
+	// (b) The budget, before any upstream call.
 	// The pages are read before the money moves: the reservation estimates the
 	// size of the prompt, and the pages are part of it. A page the caller may
 	// not read is skipped, never refused.

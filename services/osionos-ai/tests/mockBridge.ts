@@ -31,6 +31,8 @@ export interface BridgeFile {
 	contentType: string;
 	/** The status of the answer: 200 for the real one. */
 	status?: number;
+	/** The `location` of a redirect answer. */
+	location?: string;
 }
 
 export interface MockBridge {
@@ -119,7 +121,10 @@ export async function startMockBridge(): Promise<MockBridge> {
 			const file = files.get(path);
 			if (file) {
 				if (file.status && file.status !== 200) {
-					response.writeHead(file.status, { 'content-type': 'application/json' });
+					response.writeHead(file.status, {
+						'content-type': 'application/json',
+						...(file.location ? { location: file.location } : {}),
+					});
 					response.end(JSON.stringify({ error: { message: 'refused' } }));
 					return;
 				}
