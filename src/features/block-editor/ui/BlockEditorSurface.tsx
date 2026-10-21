@@ -17,6 +17,10 @@ import { Plus } from "lucide-react";
 
 import type { Block } from "@/entities/block";
 import { flattenColumns, findBlockInTree, isParentable, selfRendersChildren } from "@/entities/block";
+import { dictationSession } from "@/features/voice/model/useDictation";
+import { insertTranscript } from "@/features/voice/model/insertTranscript";
+import { dictationLanguage } from "@/features/voice/model/language";
+import { useVoiceSettingsStore } from "@/store/settings";
 import {
 	estimateBlockHeight,
 	measureScrollMargin,
@@ -406,6 +410,10 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	} = usePlaygroundBlockEditor(source ?? pageId);
 	const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
 	const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+	// The dictation: its state, and the language of the settings.
+	const voiceSettings = useVoiceSettingsStore((state) => state.data);
+	const [dictation, setDictation] = useState(() => dictationSession.getState());
+	useEffect(() => dictationSession.subscribe(setDictation), []);
 	const selectionRootRef = useRef<HTMLDivElement | null>(null);
 	const blocksRef = useRef<Block[]>(blocks);
 	// Pointer-down position on the bottom append zone, to tell a click from a drag.
@@ -798,6 +806,17 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 				</button>
 			)}
 
+			{dictation.status === "recording" ? (
+				<div
+					role="status"
+					data-testid="dictation-recording"
+					className="mx-auto mb-2 flex w-fit items-center gap-2 rounded-md border border-[var(--osio-accent)] px-2 py-1 text-2xs text-[var(--osio-fg-default)]"
+				>
+					<span className="h-1.5 w-1.5 rounded-full bg-[var(--osio-accent)] animate-pulse" />
+					Listening… {dictation.secondsLeft}s left
+				</div>
+			) : null}
+
 			{slashMenu ? (
 				<SlashCommandMenu
 					key={slashMenu.blockId}
@@ -831,6 +850,23 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 								if (item.command !== "ask") {
 									void useInlineAiStore.getState().run(item.command);
 								}
+							}
+							return;
+						}
+						if (item.kind === "dictate") {
+							// The dictation writes at the caret: the "/dictate" leaves
+							// the block, and the transcript lands where it was.
+							const trigger = slashMenu;
+							handleSlashInlineSelect("", currentBlocks);
+							if (trigger) {
+								const anchor = trigger.anchor ?? 0;
+								void dictationSession.start((text) => {
+									const block = findBlockInTree(blocksRef.current, trigger.blockId);
+									if (!block) return;
+									const content = insertTranscript(block.content ?? "", text, anchor);
+									updateBlock(pageId, trigger.blockId, { content });
+									focusBlock(trigger.blockId, true);
+								}, dictationLanguage(voiceSettings));
 							}
 							return;
 						}

@@ -21,10 +21,10 @@
  * (see `selectInferencePort`).
  */
 
-import type { SlashAiCommand } from "./types";
+import type { SlashAiCommand, SlashDictateCommand } from "./types";
 
-/** The AI actions of the slash menu — one per editor command. */
-export const AI_SLASH_COMMANDS: SlashAiCommand[] = [
+/** The AI actions of the slash menu — one per editor command, and the dictation. */
+export const AI_SLASH_COMMANDS: (SlashAiCommand | SlashDictateCommand)[] = [
   {
     id: "ai:ask",
     kind: "ai",
@@ -116,6 +116,15 @@ export const AI_SLASH_COMMANDS: SlashAiCommand[] = [
     command: "action-items",
   },
   {
+    id: "ai:dictate",
+    kind: "dictate",
+    section: "ai",
+    label: "Dictate",
+    aliases: ["dictate", "dictation", "voice"],
+    icon: "🎙️",
+    description: "Write what you say at the caret",
+  },
+  {
     id: "ai:explain",
     kind: "ai",
     section: "ai",
@@ -133,6 +142,6 @@ export const AI_SLASH_COMMANDS: SlashAiCommand[] = [
  * The flag is a parameter so the caller owns the check (the menu passes
  * `isAiConfigured()`) and so the rule is testable without a service.
  */
-export function aiSlashCommands(enabled: boolean): SlashAiCommand[] {
+export function aiSlashCommands(enabled: boolean): (SlashAiCommand | SlashDictateCommand)[] {
   return enabled ? AI_SLASH_COMMANDS : [];
 }
