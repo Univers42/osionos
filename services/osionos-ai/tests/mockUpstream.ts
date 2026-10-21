@@ -1,5 +1,4 @@
 import { createServer } from 'node:http';
-import type { IncomingMessage } from 'node:http';
 import { chunkTexts, streamAnswer, streamToolCall } from './mockStream.ts';
 import type { StreamOptions } from './mockStream.ts';
 import { lastUserText, readBody } from './mockRequest.ts';
