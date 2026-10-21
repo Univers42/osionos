@@ -66,8 +66,9 @@ function p50(samples: number[]): number {
 
 /** The caller of the corpus: a user of the eval, in the workspace of the corpus. */
 function callerOf(userKey: string | undefined): AuthUser {
+	const users = USER_IDS as Record<string, string>;
 	return {
-		userId: (userKey && USER_IDS[userKey]) || Object.values(USER_IDS)[0] || '',
+		userId: (userKey && users[userKey]) || Object.values(users)[0] || '',
 		workspaceId: WORKSPACE_ID,
 		memberWorkspaces: [],
 		isAdmin: false,
@@ -154,7 +155,8 @@ if (mode === 'indexer') {
 	for (const page of corpus) {
 		// The owner of the page: the measure is of a page the caller may read.
 		const started = Date.now();
-		const related = await relatedPages(pool, callerOf(page.meta.owner), pageId(page.slug), 8);
+		const owner = (page.meta as { owner?: string }).owner;
+		const related = await relatedPages(pool, callerOf(owner), pageId(page.slug), 8);
 		samples.push(Date.now() - started);
 		found += related?.length ?? 0;
 	}
