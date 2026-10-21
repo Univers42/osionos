@@ -59,11 +59,13 @@ export function isProfileTemplateEnabled(): boolean {
   return isFeatureFlagEnabled("osio.profile.template", false);
 }
 
-/** Shared-space live co-presence (AOC). Default OFF: the realtime channel is
- *  membership-gated at the bridge, but server-side namespace isolation is not
- *  fully enforced until the gateway `REALTIME_NAMESPACE_FALLBACK=deny` cutover
- *  (which first needs chat/feed/live-DB migrated to scoped tokens). Until then
- *  presence stays opt-in via `?osio.collab.shared=1` for dev/demo only. */
+/** Shared-space live co-presence (AOC). Default OFF. The precondition is a
+ *  DEPLOYMENT one, not build-time: the realtime gateway must run with
+ *  `REALTIME_NAMESPACE_FALLBACK=deny` (or `SECURITY_MODE=max`) so `collab:*`
+ *  topics are namespace-isolated server-side — until that cutover, presence
+ *  topics were reachable across spaces. A client build turns the flag ON with
+ *  `VITE_OSIO_COLLAB_SHARED=1` (`?osio.collab.shared=1` overrides per tab);
+ *  flipping it against a fallback-permissive gateway stays forbidden. */
 export function isSharedCollabEnabled(): boolean {
   return isFeatureFlagEnabled("osio.collab.shared", false);
 }
