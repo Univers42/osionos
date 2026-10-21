@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { configuredUrlFor, isReachableUrl, resolveAppUrl } from "@/shared/config/appUrls";
-import { effectiveLaunchUrl, isListableApp } from "@/features/marketplace/model/launchPolicy";
+import { effectiveLaunchUrl, isListableApp, launchUrlFor, listableFor } from "@/features/marketplace/model/launchPolicy";
 import { isTabRestorable, pruneUnrestorableTabs } from "@/widgets/workspace-grid/model/layoutSanitize";
 import { RAIL_GROUPS, visibleRailItems } from "@/widgets/activity-rail/model/railItems";
 import type { LayoutNode, WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
@@ -43,6 +43,21 @@ test("marketplace launch policy: native Draw keeps working with its catalogue UR
 
 test("marketplace launch policy: an app with no launch URL stays listed", () => {
   assert.equal(isListableApp("acme.notes", "", PUBLIC_HOST), true);
+});
+
+test("marketplace launch policy: the build's configured URL wins over the catalogue's", () => {
+  const dev = "https://localhost:3002", pub = "https://apps.example.net";
+  assert.equal(launchUrlFor("osionos.mail", dev, pub, PUBLIC_HOST), pub);
+  assert.equal(listableFor("osionos.mail", dev, pub, PUBLIC_HOST), true);
+  assert.equal(launchUrlFor("osionos.mail", "", pub, PUBLIC_HOST), pub);
+  assert.equal(launchUrlFor("osionos.mail", pub, "", PUBLIC_HOST), "");
+  assert.equal(listableFor("osionos.mail", pub, "", PUBLIC_HOST), false);
+  assert.equal(listableFor("osionos.mail", "", "", PUBLIC_HOST), false);
+  assert.equal(launchUrlFor("acme.notes", pub, null, PUBLIC_HOST), pub);
+  assert.equal(launchUrlFor("acme.notes", dev, null, PUBLIC_HOST), "");
+  assert.equal(listableFor("acme.notes", dev, null, PUBLIC_HOST), false);
+  assert.equal(launchUrlFor("acme.notes", dev, null, "localhost"), dev);
+  assert.equal(launchUrlFor("osionos.mail", dev, "http://localhost:3002", PUBLIC_HOST), "");
 });
 
 test("configuredUrlFor: gated surfaces report their URL, others have no gate", () => {
