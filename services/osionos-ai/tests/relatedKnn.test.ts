@@ -129,7 +129,12 @@ async function topOf(sql: string, workspaceId: string, limit: number): Promise<{
 	}
 }
 
+/** Whether the graph migration is applied: the kNN needs the page vectors. */
+const applied = await db.query("select to_regclass('public.ai_page_vectors') as vectors");
+const hasVectors = Boolean(applied.rows[0]?.vectors);
+
 before(async () => {
+	if (!hasVectors) return;
 	await db.query('delete from public.ai_page_vectors');
 	await db.query('delete from public.osionos_pages');
 });
@@ -137,14 +142,16 @@ before(async () => {
 after(async () => {
 	// The corpus of the test is gone: the suites that follow share the
 	// database, and a thousand pages would be in their way.
-	await db.query('delete from public.ai_page_vectors');
-	await db.query('delete from public.osionos_pages');
-	await db.query('delete from public.ai_index_queue');
+	if (hasVectors) {
+		await db.query('delete from public.ai_page_vectors');
+		await db.query('delete from public.osionos_pages');
+		await db.query('delete from public.ai_index_queue');
+	}
 	await harness.app.close();
 	await harness.mock.close();
 });
 
-describe('the kNN of the related read (C105)', () => {
+describe('the kNN of the related read (C105)', { skip: hasVectors ? false : 'the graph migration was not applied' }, () => {
 	it('a small workspace inside a big partition answers the exact top-8, and reads one partition', async () => {
 		const big = randomUUID();
 		await corpus(big, BIG, 1000);

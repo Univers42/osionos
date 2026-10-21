@@ -16,15 +16,12 @@
 // Ponytail: eq/in/gt compare case-insensitively (right for uuid columns, wrong for text
 // columns differing only by case); `order` is honoured only as `id.asc`, every other value
 // is ignored (insertion order); wfts is a substring match over title+content, not stemming.
-// Unknown operators throw, so a new query shape fails the test instead of silently
-// matching every row.
 // Ponytail: every GET whose `select` contains an embed goes to the strict embed stub
 // (embed-postgrest.mjs), which honours `updated_at.desc` and throws on any other order.
-// Every mock world gets a synthesized `osionos_workspaces {id}` row, so a "workspace row
-// missing" case cannot be written through this harness.
 
 import { randomUUID } from 'node:crypto';
 import { isEmbedRead, readEmbed } from './embed-postgrest.mjs';
+import { EDGE_RPCS } from './bridge-harness-rpcs.mjs';
 import { configFromEnv, createBridgeServer, createUserSession, validateBridgePayload } from '../../../scripts/bridge-api.mjs';
 
 const BAAS_URL = 'http://baas.local';
@@ -150,25 +147,6 @@ function workspaceMemberRpc(body, table) {
 		}));
 }
 
-/**
- * The two edge-read RPCs of the graph (scripts/bridge-graph-edges.mjs), as the
- * Postgres functions of models/osionos-ai-graph-migration.sql answer them: the
- * link rows whose source (or target) is in the given id sets, and the live
- * rows of a set of pages. The arrays ride in the BODY of the POST.
- */
-function graphLinksRpc(body, { table }) {
-	const sources = Array.isArray(body.p_source_ids) ? body.p_source_ids : null;
-	const targets = Array.isArray(body.p_target_ids) ? body.p_target_ids : null;
-	return table('osionos_page_links').filter((row) =>
-		(sources === null || sources.some((id) => sameText(id, row.source_page_id)))
-		&& (targets === null || targets.some((id) => sameText(id, row.target_page_id))));
-}
-
-function pagesByIdsRpc(body, { table }) {
-	const ids = Array.isArray(body.p_ids) ? body.p_ids : [];
-	return table('osionos_pages').filter((row) => ids.some((id) => sameText(id, row.id)));
-}
-
 /** seed: { table: rows[] }, records: { 'dbId/table': rows[] }, failWhen(call) → { status, body } | null. */
 export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null, realWorkspaceRpc = false, rpc = {} } = {}) {
 	const tables = new Map(Object.entries(seed).map(([name, rows]) => [name, rows.map((row) => structuredClone(row))]));
@@ -207,9 +185,9 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		}
 		// A registered RPC answers with its own body (the append function returns
 		// table(version bigint, content jsonb)); an unregistered one keeps the row path.
-		// The two edge reads are always registered: they are the graph's only edge
-		// store, and a test that does not seed links must still get an empty answer.
-		const rpcs = { osionos_bridge_graph_links: graphLinksRpc, osionos_bridge_pages_by_ids: pagesByIdsRpc, ...rpc };
+		// The two edge reads are always registered: a test that seeds no link must
+		// still get an empty answer, not a table named after the RPC.
+		const rpcs = { ...EDGE_RPCS, ...rpc };
 		if (method === 'POST' && Object.hasOwn(rpcs, name.slice(4))) {
 			return jsonResponse(rpcs[name.slice(4)](body, { table }), 200);
 		}

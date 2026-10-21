@@ -104,15 +104,28 @@ async function clear(): Promise<void> {
 	await db.query('delete from public.osionos_workspace_members');
 }
 
-before(clear);
-beforeEach(clear);
+/**
+ * Whether the graph migration is applied: the related read needs the page
+ * vectors, and a run with the AI migration alone skips the suite.
+ */
+const applied = await db.query("select to_regclass('public.ai_page_vectors') as vectors");
+const hasVectors = Boolean(applied.rows[0]?.vectors);
+
+before(async () => {
+	if (!hasVectors) return;
+	await clear();
+});
+beforeEach(async () => {
+	if (!hasVectors) return;
+	await clear();
+});
 
 after(async () => {
 	await harness.app.close();
 	await harness.mock.close();
 });
 
-describe('the related pages', () => {
+describe('the related pages', { skip: hasVectors ? false : 'the graph migration was not applied' }, () => {
 	it('a private page of another member is never a neighbour, and the answer is still full', async () => {
 		const topic = vectorOf('the topic');
 		const source = await seedPage({ vector: topic, title: 'Source' });
@@ -192,7 +205,7 @@ describe('the related pages', () => {
 	});
 });
 
-describe('the truth table of the related pages (C99)', () => {
+describe('the truth table of the related pages (C99)', { skip: hasVectors ? false : 'the graph migration was not applied' }, () => {
 	/** The rows: the page that is hidden, and the change that hides it. */
 	const ROWS: [string, Seed, (id: string) => Promise<void>][] = [
 		['private neighbour', { ownerId: USER_B, visibility: 'private' }, async () => {}],

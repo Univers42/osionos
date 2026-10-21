@@ -14,8 +14,8 @@ import {
   type EdgeKind,
   type IngestDoc,
   type GraphScope,
+  EdgeKindToggles,
   EDGE_KINDS,
-  EDGE_KIND_LABELS,
   GRAPH_SCOPES,
   GRAPH_STUDIO_TAG,
   HOST_API,
@@ -304,19 +304,7 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
               </button>
             ))}
           </div>
-          <div role="group" aria-label="Edge kinds" className="flex gap-1">
-            {EDGE_KINDS.map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                aria-pressed={chosenKinds.includes(kind)}
-                onClick={() => pickKind(kind)}
-                className={`rounded-xs px-1.5 py-0.5 transition-colors motion-reduce:transition-none ${chosenKinds.includes(kind) ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
-              >
-                {EDGE_KIND_LABELS[kind]}
-              </button>
-            ))}
-          </div>
+          <EdgeKindToggles kinds={chosenKinds} onPick={pickKind} />
           {view.phase === "ready" ? (
             <span>
               {view.nodes} nodes · {view.edges} links
