@@ -50,11 +50,10 @@ const noteConflict = (ctx: MergeContext, id: string): void => {
   if (!ctx.conflictIds.includes(id)) ctx.conflictIds.push(id);
 };
 
-/**
- * Which blocks survive. A block the other side deleted dies only when this side never touched
- * it; a block one side deleted and the other side changed is kept (the changed one) and
- * reported. Ponytail: "touched" means the whole block, nested content included. O(blocks).
- */
+/** Which blocks survive. A block the other side deleted dies only when this side never
+ *  touched it; a block one side deleted and the other side changed is kept (the changed
+ *  one) and reported. Ponytail: "touched" is the whole block, nested content included.
+ *  O(blocks). */
 function decideFates(ctx: MergeContext): void {
   const ids = new Set<string>([
     ...ctx.base.blocks.keys(),
@@ -82,11 +81,9 @@ function decideFates(ctx: MergeContext): void {
   }
 }
 
-/**
- * The container each kept block ends up in. A block that moved on one side only takes that
- * side's place; a block both sides moved takes the local's. A block whose container went with
- * a parent that is gone comes back to the page's list. O(blocks).
- */
+/** The container each kept block ends up in. A block that moved on one side only takes that
+ *  side's place; a block both sides moved takes the local's. A block whose container went
+ *  with a parent that is gone comes back to the page's list. O(blocks). */
 function decideHomes(ctx: MergeContext): void {
   for (const id of ctx.kept) {
     const base = ctx.base.home.get(id);
@@ -106,11 +103,9 @@ function decideHomes(ctx: MergeContext): void {
   }
 }
 
-/**
- * Two sides can drag blocks into each other: the local puts a block inside another one and the
- * server puts that other one inside the first. The merged tree would then hold a cycle, which
- * no tree can hold. The block the cycle turns on goes back to the page's list.
- */
+/** Two sides can drag blocks into each other: the local puts a block inside another one and
+ *  the server puts that other one inside the first. The merged tree would then hold a cycle,
+ *  which no tree can hold. The block the cycle turns on goes back to the page's list. */
 function breakCycles(ctx: MergeContext): void {
   const state = new Map<string, "visiting" | "done">();
   const stack: string[] = [];
@@ -140,7 +135,8 @@ function parentOf(container: string): string | null {
   return colon < 0 ? rest : rest.slice(0, colon);
 }
 
-/** Put an id right after its nearest preceding sibling that is already in the list (or first). */
+/** Put an id right after its nearest preceding sibling that is already in the list (or first).
+ *  O(list) per call: it scans the list for the sibling and for the id's own place. */
 function placeNear(list: string[], id: string, siblings: string[]): void {
   const at = list.indexOf(id);
   if (at >= 0) list.splice(at, 1);
@@ -159,24 +155,27 @@ function placeNear(list: string[], id: string, siblings: string[]): void {
  * blocks. The order comes from the three sides, the content from the block merge below.
  */
 function mergeContainer(ctx: MergeContext, key: string): Block[] {
-  const baseIds = ctx.base.containers.get(key) ?? [];
-  const localIds = ctx.local.containers.get(key) ?? [];
-  const serverIds = ctx.server.containers.get(key) ?? [];
   const keptIn = (ids: string[]): string[] =>
     ids.filter((id) => ctx.kept.has(id) && ctx.home.get(id) === key);
-  const baseList = keptIn(baseIds);
-  const localList = keptIn(localIds);
-  const serverList = keptIn(serverIds);
+  const baseList = keptIn(ctx.base.containers.get(key) ?? []);
+  const localList = keptIn(ctx.local.containers.get(key) ?? []);
+  const serverList = keptIn(ctx.server.containers.get(key) ?? []);
   const order = mergeOrder(baseList, localList, serverList);
+  // The ids the order holds, in a Set: the membership test is O(1) per block, where a scan
+  // of the order was O(n) — one side pasting a thousand blocks made the merge quadratic.
+  const placed = new Set(order);
+  const serverSet = new Set(serverList);
   // A block the server added lands next to its server siblings, never at the end of nowhere.
   for (const id of serverList) {
     if (ctx.base.blocks.has(id) || ctx.local.blocks.has(id)) continue;
     placeNear(order, id, serverList);
+    placed.add(id);
   }
   // Nothing kept may vanish: a block the order dropped goes back next to its siblings.
   for (const id of [...serverList, ...localList]) {
-    if (order.includes(id)) continue;
-    placeNear(order, id, serverList.includes(id) ? serverList : localList);
+    if (placed.has(id)) continue;
+    placeNear(order, id, serverSet.has(id) ? serverList : localList);
+    placed.add(id);
   }
   const out: Block[] = [];
   for (const id of order) {
@@ -252,9 +251,8 @@ function buildBlock(ctx: MergeContext, id: string, source: Block): Block {
  * The server's variant of a block both sides changed: a distinct block right after the
  * original, named after the original and the server's own fields, so the same merge twice
  * names it the same and never shows it twice.
- * Ponytail: the copy carries the server's OWN fields. The nested content is merged once and
- * stays with the block the local kept — repeating the server's children here would put the
- * same block id in the tree twice (C27).
+ * Ponytail: the copy carries the server's OWN fields; the nested content is merged once and
+ * stays with the local's block (repeating the server's children would put one id twice, C27).
  */
 function conflictCopy(ctx: MergeContext, id: string, server: Block): Block | null {
   const copyId = `${id}-c-${shortHash(stableStringify(contentOf(server)))}`;

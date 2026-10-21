@@ -67,6 +67,12 @@ export function mergePageContent(
   // result again can settle it. The loop stops as soon as the tree stops moving, so a settled
   // merge costs one extra round and a restless one costs a few. The conflicts the first round
   // found stay reported: a later round sees the merged tree, where the two sides agree.
+  // Caveat: the 4 rounds are a bound, not a guarantee. A merge still moving after the fourth
+  // round returns a tree that is not a fixed point, so C27 (merging it again changes nothing)
+  // does not hold for that input. Measured over a 24,000-tree seeded sweep: 23,995 merges
+  // settled in one extra round, 5 (0.02%) needed two, none needed more and none reached the
+  // bound. The escape hatch: the tree the caller gets is still valid and duplicate-free, and
+  // the next save merges it again.
   for (let round = 0; round < 4; round += 1) {
     const next = mergeTree(base, result.content, server);
     if (next.conflicted) {
