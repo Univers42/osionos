@@ -50,6 +50,61 @@ export function sourceBlock(source: RetrievedChunk, n: number): string {
 	return `<source n="${n}" title="${attributeText(source.title)}" path="${attributeText(path)}">\n${quotedData(source.snippet)}\n</source>`;
 }
 
+/**
+ * The identity of a passage: what makes two sources the same source.
+ *
+ * The snippet is part of it because a page read in full has no block id: the
+ * text is what tells that source from the chunks of the same page.
+ */
+export function sourceKey(source: RetrievedChunk): string {
+	return `${source.pageId}\u0000${source.blockId ?? ''}\u0000${source.headingPath}\u0000${source.snippet}`;
+}
+
+/** A source the tools found, and the number the answer cites it by. */
+export interface ToolSource {
+	/** The number of the source: the answer cites it as [n]. */
+	n: number;
+	/** The source itself. */
+	source: RetrievedChunk;
+}
+
+/** The number of one source of a tool result, and whether it is quoted for the first time. */
+export interface SourceCite {
+	n: number;
+	fresh: boolean;
+}
+
+/**
+ * The numbers of the sources of one tool result.
+ *
+ * A passage keeps its first number: one the run already numbered (`numbers`,
+ * keyed by `sourceKey`) or one the result holds twice is not fresh. A new
+ * passage takes the number after `last`. `numbers` is only read: the caller
+ * commits the fresh ones once the model has read them.
+ */
+export function numberSources(
+	sources: readonly RetrievedChunk[],
+	numbers: ReadonlyMap<string, number>,
+	last: number,
+): { cites: SourceCite[]; fresh: ToolSource[] } {
+	const cites: SourceCite[] = [];
+	const fresh: ToolSource[] = [];
+	const inResult = new Map<string, number>();
+	for (const source of sources) {
+		const key = sourceKey(source);
+		const known = numbers.get(key) ?? inResult.get(key);
+		if (known !== undefined) {
+			cites.push({ n: known, fresh: false });
+			continue;
+		}
+		const n = last + fresh.length + 1;
+		inResult.set(key, n);
+		cites.push({ n, fresh: true });
+		fresh.push({ n, source });
+	}
+	return { cites, fresh };
+}
+
 /** The characters of the sources: they are in the prompt too. */
 export function sourceChars(sources: readonly RetrievedChunk[]): number {
 	if (sources.length === 0) return 0;

@@ -110,7 +110,7 @@ export type AiPart =
   | { type: "reasoning"; text: string }
   | { type: "tool-call"; toolCallId: string; toolName: string; input: unknown }
   | { type: "tool-result"; toolCallId: string; output: unknown }
-  | { type: "citation"; pageId: string; blockId?: string; title: string; snippet: string };
+  | { type: "citation"; n?: number; pageId: string; blockId?: string; title: string; snippet: string };
 
 /** A message, as the service stores it. */
 export interface AiMessage {
