@@ -69,12 +69,23 @@ function failureName(error: unknown): string {
  */
 export type { LoopBudget };
 
+/**
+ * The override of the SDK's download: it refuses.
+ *
+ * The SDK downloads the URL of a part it does not have the bytes of. The
+ * images of a run are bytes the service fetched itself, through the bridge,
+ * and a URL must never leave the service: the download is refused, and the
+ * run that asked for one fails.
+ */
+export function refuseDownload(options: readonly unknown[]): Promise<never[]> {
+	if (Array.isArray(options) && options.length === 0) return Promise.resolve([]);
+	return Promise.reject(new Error('url_download_disabled'));
+}
+
 export interface PumpInput {
 	/** The handle of the model: the platform's, or the one of a connection. */
 	model: LanguageModel;
 	messages: ModelMessage[];
-	/** Override the SDK's URL download: throw, so no URL is ever fetched. */
-	experimentalDownload?: (options: unknown) => unknown;
 	/** Extra body fields forwarded to the upstream. */
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	providerOptions?: Record<string, any>;
@@ -187,8 +198,8 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			messages,
 			maxOutputTokens: config.maxOutputTokens,
 			abortSignal: controller.signal,
-			// The SDK must never fetch a URL: images are bytes we fetched.
-			...(input.experimentalDownload ? { experimental_download: input.experimentalDownload as never } : {}),
+			// The SDK must never fetch a URL: the images are bytes we fetched.
+			experimental_download: refuseDownload,
 			...(input.providerOptions ? { providerOptions: input.providerOptions } : {}),
 			// The tools, and the ceiling of the loop: the model may call a
 			// tool, and the answer comes after the tool.
