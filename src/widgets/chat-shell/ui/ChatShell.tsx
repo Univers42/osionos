@@ -43,6 +43,7 @@ export const ChatShell: React.FC = () => {
   // What the answer is read from: the pages the reader pointed at, and whether
   // the whole workspace is searched.
   const [chips, setChips] = useState<ContextChip[]>([]);
+  const [attachments, setAttachments] = useState<string[]>([]);
 
   useEffect(() => { initConnectors(); }, [initConnectors]);
   useEffect(() => { if (!activeId) createConversation(); }, [activeId, createConversation]);
@@ -69,10 +70,16 @@ export const ChatShell: React.FC = () => {
       connectorId: fallbackConnector,
       model: selection.model || "auto",
       connectionId: selection.connectionId,
+      attachments: attachments
+        .map((path) => {
+          if (path.startsWith("/api/media/")) return { kind: "media" as const, path };
+          return { kind: "chat" as const, id: path.split("/").pop() ?? "" };
+        }),
       // What the answer may read: the pages the reader pointed at.
       ...(chips.length > 0 ? { context: buildRunContext(chips) } : {}),
     });
     setText("");
+    setAttachments([]);
   };
 
   // Connecting through the onboarding modal flushes the pending message (read the
@@ -110,6 +117,8 @@ export const ChatShell: React.FC = () => {
     onSelectionChange: setSelection,
     chips,
     onChipsChange: setChips,
+    attachments,
+    onAttachmentsChange: setAttachments,
     streaming,
     onStop: () => { if (active) stop(active.id); },
   };
