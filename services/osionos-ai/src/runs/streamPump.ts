@@ -137,6 +137,20 @@ export interface PumpOutcome {
 }
 
 /**
+ * The separator between two steps of the loop: markdown needs a blank line to
+ * start a new paragraph, so the text of a step begins on a line of its own.
+ *
+ * Nothing is added when the answer is empty (the first step) or when it
+ * already ends with a blank line: the separator is only the missing break.
+ */
+export function stepSeparator(answer: string): string {
+	if (answer.length === 0) return '';
+	if (answer.endsWith('\n\n')) return '';
+	if (answer.endsWith('\n')) return '\n';
+	return '\n\n';
+}
+
+/**
  * The call to the model, and nothing else: no budget, no row, no event.
  *
  * The failure never escapes: the caller gets it in the outcome, with the usage
@@ -150,6 +164,9 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 	let finishReason = 'stop';
 	let idleTimer: ReturnType<typeof setTimeout> | undefined;
 	let totalTimer: ReturnType<typeof setTimeout> | undefined;
+	// The step that ended: the text of the step that follows it is another
+	// paragraph, and not the end of the sentence before it.
+	let stepEnded = false;
 
 	// The one clock of the loop: the steps. The money never stops it: a step
 	// the run cannot pay for becomes the ANSWER (prepareStep), so a run
@@ -211,8 +228,15 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 		for await (const part of result.fullStream) {
 			touch();
 			if (part.type === 'text-delta') {
-				answer += part.text;
-				await onText(part.text);
+				// The text of a step that follows another one begins on a
+				// line of its own: the two answers are two paragraphs.
+				const separator = stepEnded && answer.length > 0 ? stepSeparator(answer) : '';
+				// The break is used once: the rest of the step belongs to the
+				// paragraph its first text opened.
+				stepEnded = false;
+				const text = separator + part.text;
+				answer += text;
+				await onText(text);
 			} else if (part.type === 'reasoning-delta') {
 				reasoning += part.text;
 				await onReasoning(part.text);
@@ -222,6 +246,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 				await onToolError?.({ toolCallId: part.toolCallId, toolName: part.toolName });
 			} else if (part.type === 'finish-step') {
 				usage = part.usage;
+				stepEnded = true;
 			} else if (part.type === 'finish') {
 				usage = part.totalUsage;
 				finishReason = part.finishReason;
