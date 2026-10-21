@@ -11,28 +11,24 @@ import type { PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
 import {
   type Dropped,
-  type EdgeKind,
   type IngestDoc,
   type GraphScope,
-  EDGE_KINDS,
-  GRAPH_SCOPES,
   GRAPH_STUDIO_TAG,
   HOST_API,
   fetchBridgeGraph,
   filterEdges,
-  loadEdgeKinds,
   loadGraphScope,
   loadStudio,
   pageIdOf,
   recordRefOf,
-  saveEdgeKinds,
   saveGraphScope,
   takeGraphFocus,
   toIngestDoc,
 } from "@/features/graph-studio";
-// The toggles are a component: the feature's barrel carries the model, not the
+// The toggles are components: the feature's barrel carries the model, not the
 // view (the node tests read the barrel, and node strips no JSX).
-import { EdgeKindToggles } from "@/features/graph-studio/ui/EdgeKindToggles";
+import { EdgeKindToggles, useEdgeKinds } from "@/features/graph-studio/ui/EdgeKindToggles";
+import { ScopeToggles } from "@/features/graph-studio/ui/ScopeToggles";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { usePageStore } from "@/store/usePageStore";
 // Deep path, not the barrel: the database view's barrel has side effects this view does not need.
@@ -67,7 +63,6 @@ interface LoadBook {
   seen: string | null;
 }
 
-const SCOPE_LABELS: Record<GraphScope, string> = { workspace: "Workspace", all: "All pages", "all-data": "Everything" };
 const EMPTY_DOC: IngestDoc = { version: 1, nodes: [], edges: [] };
 
 function messageOf(error: unknown): string {
@@ -142,7 +137,7 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
   const [element, setElement] = useState<StudioElement | null>(null);
   const [view, setView] = useState<ViewState>({ phase: "loading" });
   const [chosenScope, setChosenScope] = useState<GraphScope>(loadGraphScope);
-  const [chosenKinds, setChosenKinds] = useState<EdgeKind[]>(loadEdgeKinds);
+  const [chosenKinds, pickKind] = useEdgeKinds();
   const [attempt, setAttempt] = useState(0);
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const scope = fixedScope ?? chosenScope;
@@ -266,18 +261,6 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
     setView({ phase: "loading" });
   }, []);
 
-  /** The kinds of edge the graph shows: a view choice, the store keeps them all. */
-  const pickKind = useCallback(
-    (kind: EdgeKind) => {
-      const next = chosenKinds.includes(kind) ? chosenKinds.filter((other) => other !== kind) : [...chosenKinds, kind];
-      // One kind stays: a graph with no edge at all is not a choice, it is a bug.
-      const kept = next.length > 0 ? next : [...EDGE_KINDS];
-      saveEdgeKinds(kept);
-      setChosenKinds(kept);
-    },
-    [chosenKinds],
-  );
-
   const retry = useCallback(() => {
     setView({ phase: "loading" });
     setAttempt((n) => n + 1);
@@ -293,19 +276,7 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
     >
       {fixedScope ? null : (
         <div className="flex items-center gap-2 border-b border-[var(--osio-border-default)] px-3 py-1.5 text-xs text-[var(--osio-fg-muted)]">
-          <div role="group" aria-label="Graph scope" className="flex gap-1">
-            {GRAPH_SCOPES.map((option) => (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={scope === option}
-                onClick={() => pickScope(option)}
-                className={`rounded-xs px-1.5 py-0.5 transition-colors motion-reduce:transition-none ${scope === option ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "hover:bg-[var(--osio-bg-hover)]"}`}
-              >
-                {SCOPE_LABELS[option]}
-              </button>
-            ))}
-          </div>
+          <ScopeToggles scope={scope} onPick={pickScope} />
           <EdgeKindToggles kinds={chosenKinds} onPick={pickKind} />
           {view.phase === "ready" ? (
             <span>
