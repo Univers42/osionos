@@ -148,6 +148,23 @@ describe('the truth table of the graph (C99)', () => {
 			assert.deepEqual(links, [`link:${PAGES.probe}:${PAGES.dst}`]);
 		});
 	});
+
+	it('a private page that links TO the probe is not one of its backlinks', async () => {
+		const world = truthWorld();
+		world.osionos_pages[0].visibility = 'private'; // src, owned by A
+		world.osionos_page_links.push(
+			{ source_page_id: PAGES.src, target_page_id: PAGES.probe, workspace_id: IDS.team },
+			{ source_page_id: PAGES.dst, target_page_id: PAGES.probe, workspace_id: IDS.team },
+		);
+		const mock = createPostgrestMock(world);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const headers = sessionHeaders(config, IDS.userB, IDS.homeB, [IDS.team]);
+			const backlinks = await send(base, `/api/pages/${PAGES.probe}/backlinks`, headers);
+			assert.equal(backlinks.status, 200, backlinks.text);
+			assert.ok(!JSON.stringify(backlinks.body).includes(PAGES.src), 'the private source is not a backlink');
+			assert.ok(JSON.stringify(backlinks.body.linked).includes(PAGES.dst), 'the readable source is');
+		});
+	});
 });
 
 describe('unreadable is non-existent (C101)', () => {
