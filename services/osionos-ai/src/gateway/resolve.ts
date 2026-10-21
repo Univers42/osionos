@@ -94,6 +94,12 @@ export async function settleTarget(
  * Every adapter goes through the guard, and every one of them is given the
  * base URL of the provider: the one of the catalog, the built-in one, or the
  * override of the tests.
+ *
+ * The OpenAI-compatible adapter is asked for the usage (includeUsage sends
+ * `stream_options: { include_usage: true }`): an upstream that reports the
+ * tokens only when it is asked to would leave the run free. Anthropic and
+ * Google report the usage of a stream on their own wire, so they are left
+ * alone.
  */
 export function modelHandle(entry: ProviderEntry, modelId: string, secret: string | null): LanguageModel {
 	const baseURL = providerBaseUrl(entry);
@@ -104,7 +110,13 @@ export function modelHandle(entry: ProviderEntry, modelId: string, secret: strin
 		case 'google':
 			return createGoogleGenerativeAI({ name: entry.id, baseURL, ...key, fetch: guardedFetch })(modelId);
 		default:
-			return createOpenAICompatible({ name: entry.id, baseURL, ...key, fetch: guardedFetch })(modelId);
+			return createOpenAICompatible({
+				name: entry.id,
+				baseURL,
+				...key,
+				fetch: guardedFetch,
+				includeUsage: true,
+			})(modelId);
 	}
 }
 
