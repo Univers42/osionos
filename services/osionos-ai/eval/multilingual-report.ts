@@ -34,6 +34,8 @@ export interface MultilingualInput {
 	index: { ms: number; workMs: number; pages: number; chunks: number; embedded: number; withVector: number; bytes: number };
 	titleBySlug: Map<string, string>;
 	embedModel: string;
+	/** The questions whose expected page the asker may not read. */
+	blind: { id: string; asker: string; slug: string }[];
 }
 
 /** The gate of the brief: xl and fr at 0.8, no kind down by more than 0.07, no leak. */
@@ -141,7 +143,7 @@ function crossLingualTable(runs: readonly VariantRun[]): string[] {
 
 /** The comparison of the variants, as the markdown of the report. */
 export function multilingualReport(input: MultilingualInput): string {
-	const { runs, llm, index, titleBySlug, embedModel } = input;
+	const { runs, llm, index, titleBySlug, embedModel, blind } = input;
 	const baseline = runs.find((run) => run.variant === 'A') ?? runs[0];
 	const lines: string[] = [];
 
@@ -232,6 +234,24 @@ export function multilingualReport(input: MultilingualInput): string {
 		lines.push(
 			`- The LLM alone: p50 ${percentile(sorted, 0.5).toFixed(0)} ms, p95 ${percentile(sorted, 0.95).toFixed(0)} ms ` +
 				`over ${sorted.length} calls (one per question).`,
+		);
+	}
+	lines.push('');
+	lines.push('## The questions no retrieval can answer');
+	lines.push('');
+	if (blind.length === 0) {
+		lines.push('None: every question with an expected page has an asker who may read it.');
+	} else {
+		lines.push('| id | asker | expected page | why |');
+		lines.push('| --- | --- | --- | --- |');
+		for (const entry of blind) {
+			lines.push(
+				`| ${entry.id} | ${entry.asker} | ${entry.slug} (${titleBySlug.get(entry.slug) ?? ''}) | the asker may not read the page |`,
+			);
+		}
+		lines.push('');
+		lines.push(
+			'These are a fixed zero in every variant, and every number of the `fr` bucket is read with them in it.',
 		);
 	}
 	lines.push('');

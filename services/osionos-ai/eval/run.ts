@@ -44,7 +44,7 @@ import { Translator } from './llm.ts';
 import { multilingualReport } from './multilingual-report.ts';
 import { report } from './report.ts';
 import type { GoldenQuestion, QuestionResult } from './score.ts';
-import { KINDS, group, groupTable, percentile, toResult } from './score.ts';
+import { KINDS, blindQuestions, group, groupTable, percentile, toResult } from './score.ts';
 import { startStack } from './stack.ts';
 import { answerOf } from './variants.ts';
 import type { VariantContext, VariantId } from './variants.ts';
@@ -225,6 +225,7 @@ async function main(): Promise<void> {
 						: 'the asker of the question retrieves, and the asker of the question scores',
 					titleBySlug: stack.titleBySlug,
 					embedModel,
+					blind: blindQuestions(runs[0]?.results ?? [], stack.pages, stack.workspaces),
 				})
 			: multilingualReport({
 					runs,
@@ -232,6 +233,7 @@ async function main(): Promise<void> {
 					index,
 					titleBySlug: stack.titleBySlug,
 					embedModel,
+					blind: blindQuestions(runs[0]?.results ?? [], stack.pages, stack.workspaces),
 				});
 	const target = path.join(EVAL_DIR, resultsFile);
 	writeFileSync(target, markdown, 'utf8');
