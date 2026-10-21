@@ -15,6 +15,9 @@
 // so the file is lint-clean on its own.
 /* global URL */
 
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+
 // Mirrors the Vite "@/*" -> "src/*" tsconfig path so tests can import modules
 // that use the alias for value imports (type-only "@/" imports are erased).
 const SRC_BASE = new URL("../../src/", import.meta.url);
@@ -111,12 +114,21 @@ const APP_URLS_MODULE = new URL("../../src/shared/config/appUrls.ts", import.met
 const AI_CLIENT_MODULE = new URL("../../src/features/ai/api/aiClient.ts", import.meta.url).href;
 
 export async function load(url, context, nextLoad) {
+  const [path] = url.split("?");
+
+  // A .tsx file: the markdown engine's React renderer is one (it calls
+  // React.createElement, so it holds NO JSX syntax) and node refuses the
+  // extension outright. Node's own type stripping reads it as TypeScript.
+  if (path.endsWith(".tsx")) {
+    const source = await readFile(fileURLToPath(path), "utf8");
+    return { format: "module-typescript", source, shortCircuit: true };
+  }
+
   const loaded = await nextLoad(url, context);
   if (loaded.source == null) return loaded;
   if (url === APP_URLS_MODULE) {
     return { ...loaded, source: `import.meta.env ??= { DEV: true };\n${loaded.source}` };
   }
-  const [path] = url.split("?");
   if (path === AI_CLIENT_MODULE) {
     const env = new URL(url).searchParams.get("env") ?? "{}";
     return { ...loaded, source: `import.meta.env ??= ${env};\n${loaded.source}` };

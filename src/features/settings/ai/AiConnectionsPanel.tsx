@@ -42,6 +42,7 @@ import {
 import { ENDPOINT_FORMAT, LOCALHOST_MESSAGE, validateApiKey, validateEndpointUrl } from "@/features/ai/model/aiConnectionForm";
 import { completeOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { PLATFORM_CONNECTION_ID } from "@/features/ai/model/aiSelection";
+import { formatUsage } from "@/features/settings/ai/aiUsageFormat";
 import { errorWords } from "@/widgets/chat-shell/ui/errorWords";
 
 /** The provider of the opencode Zen connection, when the service knows it. */
@@ -54,11 +55,6 @@ type ConnectForm = "none" | "openrouter" | "apikey" | "endpoint";
 function failureMessage(error: unknown): string {
   const code = (error as { code?: unknown } | null)?.code;
   return errorWords(typeof code === "string" ? code : "network_error");
-}
-
-/** Micro dollars → dollars, with two decimals. */
-function dollars(microUsd: number): string {
-  return (microUsd / 1_000_000).toFixed(2);
 }
 
 const CHIP =
@@ -174,7 +170,6 @@ export const AiConnectionsPanel: React.FC = () => {
       .catch((failure) => setError(failureMessage(failure)));
   }, [refresh]);
 
-  const platform = connections.find((connection) => connection.id === PLATFORM_CONNECTION_ID) ?? null;
   const own = connections.filter((connection) => connection.id !== PLATFORM_CONNECTION_ID);
 
   const filteredProviders = useMemo(() => {
@@ -327,7 +322,7 @@ export const AiConnectionsPanel: React.FC = () => {
               <span className={`${CHIP} bg-[var(--osio-accent)]/12 text-[var(--osio-accent-text)]`}>Included</span>
             </div>
             <p className="mt-1 text-sm leading-[18px] text-[var(--osio-fg-muted)]">
-              {platform?.label ?? "Our key and your daily budget. No account of your own is needed."}
+              Daily allowance on our key. No account of your own is needed.
             </p>
           </div>
         </div>
@@ -335,7 +330,7 @@ export const AiConnectionsPanel: React.FC = () => {
           <div className="flex items-baseline justify-between text-xs text-[var(--osio-fg-muted)]">
             <span>Today&apos;s usage</span>
             <span data-testid="ai-usage-label">
-              {usage ? `${dollars(spent)} of ${dollars(limit)}` : "—"}
+              {usage ? formatUsage(spent, limit) : "—"}
             </span>
           </div>
           <div
