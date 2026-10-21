@@ -64,16 +64,25 @@ export function buildRunTools(input: {
 	const run: RunTools = { tools: undefined, cited, awaitingApproval: false, permissions };
 
 	const hooks = {
-		firstSourceNumber: sources.length,
-		onSources: async (found: readonly { n: number; source: RetrievedChunk }[]) => {
+		citedSources: sources,
+		onSources: async (
+			found: readonly { n: number; source: RetrievedChunk }[],
+			toolCallId: string,
+		) => {
+			// Pushed before the first await: the calls of a step interleave at
+			// the awaits, and the list must stay in the order of the numbers
+			// (the stored part of a source is its number minus one).
+			cited.push(...found.map(({ source }) => source));
 			for (const { n, source } of found) {
-				cited.push(source);
 				await emit('citation', {
 					n,
 					pageId: source.pageId,
 					...(source.blockId ? { blockId: source.blockId } : {}),
 					title: source.title,
 					snippet: source.snippet,
+					// The call that found the passage: the client credits
+					// it to that call, and to no other.
+					toolCallId,
 				});
 			}
 		},

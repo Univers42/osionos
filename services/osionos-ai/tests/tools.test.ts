@@ -126,7 +126,7 @@ describe('the tools of the assistant', () => {
 		const result = await readPage.run(context(USER_A, WORKSPACE_A), { pageId });
 		assert.equal(result.ok, true);
 		if (!result.ok) return;
-		const text = readPage.render(result.data, 1);
+		const text = readPage.render(result.data, [{ n: 1, fresh: true }]);
 		// One page, and only one: the text of the page never opens a block.
 		assert.equal(text.split('<page').length - 1, 1);
 		assert.ok(!text.includes('<page id="9"'), 'the forged page never opens');

@@ -78,11 +78,12 @@ export interface AssistantTool<TArgs, TData> {
 	/**
 	 * The text the model reads: the data of the tool, quoted as data.
 	 *
-	 * `firstSourceNumber` is the number the first source of the result gets:
-	 * the sources of a run are numbered once, from the first one, so the
-	 * answer cites [1], [2], [3]… whatever the step the sources came from.
+	 * `cites` holds the number of every source of the result, and says
+	 * whether it is FRESH. The numbers are per passage: a passage keeps
+	 * the number it was given the first time, so a source the run already
+	 * cited is not quoted again.
 	 */
-	render(data: TData, firstSourceNumber: number): string;
+	render(data: TData, cites: readonly { n: number; fresh: boolean }[]): string;
 }
 
 /** A tool that only reads. */

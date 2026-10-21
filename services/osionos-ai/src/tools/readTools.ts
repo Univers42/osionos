@@ -149,10 +149,26 @@ export const searchWorkspace: ReadTool<z.infer<typeof searchArgs>, SearchData> =
 			return { ok: false, error: 'the search failed: the pages could not be reached' };
 		}
 	},
-	render(data, firstSourceNumber) {
+	render(data, cites) {
 		if (data.chunks.length === 0) return 'No page of your workspaces answers that search.';
-		const blocks = data.chunks.map((chunk, index) => sourceBlock(chunk, firstSourceNumber + index));
-		return [SOURCE_INSTRUCTION, ...blocks].join('\n\n');
+		// A passage the run already quoted is NOT quoted again: it keeps
+		// the number it was given, and the model is told it matches.
+		const blocks: string[] = [];
+		const already: number[] = [];
+		for (const [index, chunk] of data.chunks.entries()) {
+			const cite = cites[index];
+			if (cite.fresh) {
+				blocks.push(sourceBlock(chunk, cite.n));
+				continue;
+			}
+			if (!already.includes(cite.n)) already.push(cite.n);
+		}
+		already.sort((left, right) => left - right);
+		const parts = [SOURCE_INSTRUCTION, ...blocks];
+		if (already.length > 0) {
+			parts.push(`Also matching, already quoted above: ${already.map((n) => `[${n}]`).join(', ')}.`);
+		}
+		return parts.join('\n\n');
 	},
 	sources(data) {
 		return data.chunks;
