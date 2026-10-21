@@ -123,6 +123,11 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		emit: (event) => writeSseFrame(ctx.response, event),
 	});
 	if (outcome.kind === 'refused') {
+		// A rate limit says when to come back: the client counts the seconds
+		// down before it offers the retry.
+		if (outcome.retryAfterSeconds !== undefined) {
+			ctx.response.setHeader('retry-after', String(outcome.retryAfterSeconds));
+		}
 		sendError(ctx.response, outcome.status, outcome.code);
 		return outcome.status;
 	}
