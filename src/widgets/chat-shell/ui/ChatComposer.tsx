@@ -13,7 +13,8 @@
 import React, { useEffect, useRef } from "react";
 import { ArrowUp, Plug, Square } from "lucide-react";
 
-import { ModelPicker } from "./ModelPicker";
+import { AiConnectionPicker } from "./AiConnectionPicker";
+import type { AiSelection } from "@/features/ai/model/aiSelection";
 
 interface Props {
   value: string;
@@ -21,8 +22,9 @@ interface Props {
   onSubmit: () => void;
   /** Opens the "connect a provider" flow (the composer's + affordance). */
   onConnect: () => void;
-  model: string;
-  onModelChange: (value: string) => void;
+  /** The connection and the model every run is sent with. */
+  selection: AiSelection;
+  onSelectionChange: (selection: AiSelection) => void;
   autoFocus?: boolean;
   /** True while an answer is streaming: the send button becomes a stop. */
   streaming?: boolean;
@@ -31,7 +33,7 @@ interface Props {
 }
 
 /** Controlled composer (parent owns the text so it survives a connect prompt). */
-export const ChatComposer: React.FC<Props> = ({ value, onChange, onSubmit, onConnect, model, onModelChange, autoFocus, streaming, onStop }) => {
+export const ChatComposer: React.FC<Props> = ({ value, onChange, onSubmit, onConnect, selection, onSelectionChange, autoFocus, streaming, onStop }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
   const grow = (el: HTMLTextAreaElement) => { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 240)}px`; };
   useEffect(() => { if (ref.current) grow(ref.current); }, [value]);
@@ -57,13 +59,13 @@ export const ChatComposer: React.FC<Props> = ({ value, onChange, onSubmit, onCon
         <button
           type="button"
           onClick={onConnect}
-          aria-label="Connect a provider"
-          title="Connect a provider (Claude, …)"
+          aria-label="Connect a model"
+          title="Connect your own model (Settings › AI connections)"
           className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         >
           <Plug size={16} /> Connect
         </button>
-        <ModelPicker value={model} onChange={onModelChange} />
+        <AiConnectionPicker value={selection} onChange={onSelectionChange} />
         {streaming ? (
           <button
             type="button"

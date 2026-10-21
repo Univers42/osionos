@@ -37,9 +37,11 @@ import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
 import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
+import { registerSettingsOpener } from "@/features/settings/settingsOpener";
+import { AI_CONNECTIONS_TAB, type AppSettingsTab } from "@/features/settings/appSettingsTab";
+import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
-import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
 import { ExportHost } from "@/features/page-export/ui/ExportHost";
@@ -156,11 +158,27 @@ const App: React.FC = () => {
   const error = useUserStore((s) => s.error);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
-  const openSettings = (tab?: SettingsTab) => {
+  const [settingsTab, setSettingsTab] = useState<AppSettingsTab>("general");
+  const openSettings = (tab?: AppSettingsTab) => {
     setSettingsTab(tab ?? "general");
     setSettingsOpen(true);
   };
+
+  // The widgets that live far from the app shell (the chat's connector strip)
+  // ask for a tab through this door instead of threading props down the tree.
+  useEffect(() => {
+    // The way back from OpenRouter: the app comes back with ?code&state, and
+    // the panel that finishes the sign-in opens right away.
+    const href = globalThis.location?.href ?? "";
+    if (readOAuthReturn(href)) {
+      setSettingsTab(AI_CONNECTIONS_TAB);
+      setSettingsOpen(true);
+    }
+    return registerSettingsOpener((tab) => {
+      setSettingsTab(tab);
+      setSettingsOpen(true);
+    });
+  }, []);
   // Captured once at first render, before init effects can reset activePage,
   // so a refresh can reopen the page the user was last on.
   const [persistedActivePage] = useState(() => loadActivePage());

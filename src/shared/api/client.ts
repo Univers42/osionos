@@ -30,7 +30,9 @@ import { revocationAwareFetch } from './sessionRevocation';
 export { ApiError };
 export type { ApiErrorBody } from '@osionos/http-gate';
 
-export const API_BASE = ((import.meta.env as Record<string, string>)['VITE_API_URL'] ?? '').trim();
+// `import.meta.env` is Vite's; under plain node (the canvas tests) it is not
+// there at all, and reading a property of it would throw on import.
+export const API_BASE = (((import.meta.env ?? {}) as Record<string, string>)['VITE_API_URL'] ?? '').trim();
 
 /**
  * The user store publishes itself on `globalThis` as a decoupling seam (it is

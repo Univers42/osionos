@@ -31,6 +31,7 @@ import {
 } from "@/shared/lib/text/inlineSource";
 import type { BlockDraftCommitReason } from "@/features/block-editor/model/blockDraftStore";
 import type { CompleteInput } from "../api/aiClient";
+import { readAiSelection, type AiSelection } from "./aiSelection";
 
 /* -------------------------------------------------------------------------- */
 /* The shapes                                                                 */
@@ -161,6 +162,8 @@ export interface InlineAiState {
   errorCode: string | null;
   /** The id of the run — the idempotency key the service sees. */
   runId: string | null;
+  /** The choice the user made in the Assistant — the panel has no picker. */
+  selection: AiSelection | null;
   /** Opens the panel on a block. The answer is only asked for by `run`. */
   open: (target: InlineAiTarget, command?: string) => void;
   /** Runs a command on the target. */
@@ -183,13 +186,16 @@ export const useInlineAiStore = create<InlineAiState>((set, get) => {
     text: "",
     errorCode: null,
     runId: null,
+    selection: null,
   };
 
   return {
     ...closed,
 
     open: (target, command) => {
-      set({ ...closed, target, command: command ?? "ask" });
+      // The panel has no picker of its own: it speaks with the choice the user
+      // made in the Assistant, read when the panel opens.
+      set({ ...closed, target, command: command ?? "ask", selection: readAiSelection() });
     },
 
     run: async (command, instruction) => {
@@ -213,6 +219,7 @@ export const useInlineAiStore = create<InlineAiState>((set, get) => {
       const runId = globalThis.crypto.randomUUID();
       const controller = new AbortController();
       activeRun = controller;
+      const selection = readAiSelection();
       set({
         command,
         instruction: asked ?? "",
@@ -220,11 +227,18 @@ export const useInlineAiStore = create<InlineAiState>((set, get) => {
         text: "",
         errorCode: null,
         runId,
+        selection,
       });
 
       try {
         const response = await deps.complete(
-          { runId, command, input: { text: inputText } },
+          {
+            runId,
+            command,
+            input: { text: inputText },
+            ...(selection?.connectionId ? { connectionId: selection.connectionId } : {}),
+            ...(selection?.model ? { model: selection.model } : {}),
+          },
           controller.signal,
         );
         await pumpSseStream(response, (event, data) => {

@@ -45,6 +45,62 @@ export interface AiModel {
   id: string;
   label: string;
   default: boolean;
+  /** The context window, in tokens, when the service knows it. */
+  contextWindow?: number;
+  /** The price of a million input tokens, in micro dollars. */
+  inputMicroUsdPerMTok?: number;
+  /** The price of a million output tokens, in micro dollars. */
+  outputMicroUsdPerMTok?: number;
+}
+
+/* -------------------------------------------------------------------------- */
+/* The connections (the v2 additions of the wire contract)                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A provider of models the service knows. `supported` says whether the server
+ * has an adapter for the provider's wire format — an unsupported one can be
+ * seen, but not connected.
+ */
+export interface AiProvider {
+  id: string;
+  name: string;
+  kind: "api_key" | "oauth" | "endpoint";
+  supported: boolean;
+  docUrl?: string;
+  modelCount: number;
+}
+
+/**
+ * How a user brings their own model access. The platform connection (our key,
+ * our daily budget) always exists, with the id `platform`.
+ *
+ * A secret NEVER reaches the browser: the service answers with `last4` only.
+ */
+export interface AiConnection {
+  id: string;
+  kind: "platform" | "api_key" | "oauth" | "endpoint";
+  provider: string;
+  label: string;
+  baseUrl?: string;
+  /** The last four characters of the key — the only part of it we ever see. */
+  last4?: string;
+  status: "ok" | "error" | "untested";
+  statusMessage?: string;
+  createdAt: string;
+}
+
+/** The body of `POST /connections` — an API key, or an endpoint of the user's. */
+export type CreateConnectionInput =
+  | { kind: "api_key"; provider: string; apiKey: string; label?: string }
+  | { kind: "endpoint"; label: string; baseUrl: string; apiKey?: string };
+
+/** The platform's usage for the day — ours only, never the user's own spend. */
+export interface AiUsage {
+  /** The day the usage is about (YYYY-MM-DD). */
+  day: string;
+  spentMicroUsd: number;
+  limitMicroUsd: number;
 }
 
 /** A conversation, as the service stores it. */
@@ -82,6 +138,8 @@ export interface StartRunInput {
   conversationId: string;
   text: string;
   model?: string;
+  /** The connection the run spends — `platform` when the caller does not say. */
+  connectionId?: string;
   context?: { pageIds: string[] };
 }
 
@@ -91,6 +149,8 @@ export interface CompleteInput {
   command: string;
   input: { text: string };
   model?: string;
+  /** The connection the completion spends — `platform` when the caller does not say. */
+  connectionId?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -159,7 +219,7 @@ export function setAiTransport(impl: FetchLike): void {
   transport = impl;
 }
 
-async function requestJson<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+async function requestJson<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
   const response = await transport(`${aiBaseUrl()}${path}`, {
     method,
     headers: { Accept: "application/json", "Content-Type": "application/json" },
@@ -167,6 +227,15 @@ async function requestJson<T>(method: "GET" | "POST", path: string, body?: unkno
   });
   if (!response.ok) throw await toAiError(response);
   return (await response.json()) as T;
+}
+
+/** A route that answers with no content (204): the body is never read. */
+async function requestNoContent(method: "DELETE", path: string): Promise<void> {
+  const response = await transport(`${aiBaseUrl()}${path}`, {
+    method,
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw await toAiError(response);
 }
 
 /** A route that answers with an event stream: the response is handed over as is. */
@@ -201,9 +270,10 @@ export async function listCommands(surface: "editor" | "chat" = "chat"): Promise
   return body.commands ?? [];
 }
 
-/** `GET /models` — the platform's allowlist. */
-export async function listModels(): Promise<AiModel[]> {
-  const body = await requestJson<{ models?: AiModel[] }>("GET", "/models");
+/** `GET /models` — the platform's allowlist, or the models of one connection. */
+export async function listModels(connectionId?: string): Promise<AiModel[]> {
+  const query = connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : "";
+  const body = await requestJson<{ models?: AiModel[] }>("GET", `/models${query}`);
   return body.models ?? [];
 }
 
@@ -254,4 +324,66 @@ export async function cancelRun(runId: string): Promise<void> {
 /** `POST /complete` — a short-lived completion, never persisted. */
 export async function complete(input: CompleteInput, signal?: AbortSignal): Promise<Response> {
   return requestStream("POST", "/complete", input, { signal });
+}
+
+/* -------------------------------------------------------------------------- */
+/* The connections (the v2 additions of the wire contract)                    */
+/* -------------------------------------------------------------------------- */
+
+/** `GET /providers` — the catalog of model providers the service knows. */
+export async function listProviders(): Promise<AiProvider[]> {
+  const body = await requestJson<{ providers?: AiProvider[] }>("GET", "/providers");
+  return body.providers ?? [];
+}
+
+/** `GET /connections` — the user's connections, the platform one first. */
+export async function listConnections(): Promise<AiConnection[]> {
+  const body = await requestJson<{ connections?: AiConnection[] }>("GET", "/connections");
+  return body.connections ?? [];
+}
+
+/**
+ * `POST /connections` — a new connection. The key goes straight to the
+ * service: the browser keeps it in memory for the length of the call and
+ * never writes it down.
+ */
+export async function createConnection(input: CreateConnectionInput): Promise<AiConnection> {
+  return requestJson<AiConnection>("POST", "/connections", input);
+}
+
+/** `POST /connections/:id/test` — the connection, with a fresh status. */
+export async function testConnection(id: string): Promise<AiConnection> {
+  return requestJson<AiConnection>("POST", `/connections/${encodeURIComponent(id)}/test`);
+}
+
+/** `DELETE /connections/:id` — the connection is gone. */
+export async function deleteConnection(id: string): Promise<void> {
+  await requestNoContent("DELETE", `/connections/${encodeURIComponent(id)}`);
+}
+
+/**
+ * `POST /connections/oauth/openrouter/start` — the URL the browser must go to.
+ * The service keeps the PKCE verifier and the `state` for ten minutes.
+ */
+export async function startOpenRouterOAuth(returnUrl: string): Promise<string> {
+  const body = await requestJson<{ url?: string }>("POST", "/connections/oauth/openrouter/start", { returnUrl });
+  if (!body.url) {
+    throw new AiError(502, "oauth_failed", "The service did not give an OpenRouter sign-in URL.");
+  }
+  return body.url;
+}
+
+/** `POST /connections/oauth/openrouter/complete` — the signed-in connection. */
+export async function completeOpenRouterOAuth(code: string, state: string): Promise<AiConnection> {
+  return requestJson<AiConnection>("POST", "/connections/oauth/openrouter/complete", { code, state });
+}
+
+/** `GET /usage` — the platform's usage for the day. */
+export async function getUsage(): Promise<AiUsage> {
+  const body = await requestJson<Partial<AiUsage>>("GET", "/usage");
+  return {
+    day: body.day ?? "",
+    spentMicroUsd: body.spentMicroUsd ?? 0,
+    limitMicroUsd: body.limitMicroUsd ?? 0,
+  };
 }
