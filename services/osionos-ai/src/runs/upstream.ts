@@ -21,6 +21,7 @@ import type { HistoryMessage, PageContext } from './prompt.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
+import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
 
 /**
  * The upstream of a run: the model call, the events, the settlement.
@@ -270,17 +271,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 
 		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
 	} catch (error) {
-		let code = abortCode(controller.signal) ?? 'upstream_error';
-		const failure = error as { statusCode?: number; status?: number; responseBody?: string } | null;
-		const status = failure?.statusCode ?? failure?.status;
-		// The body of the answer says as much as its message: OpenRouter puts
-		// the reason of a refusal in the body.
-		const text = `${String(error ?? '')} ${failure?.responseBody ?? ''}`;
-		// A 404 that talks about the data policy is not a missing model: it
-		// is the refusal of the provider, and the caller must be told.
-		if (status === 404 && /data[ _-]?policy|data_collection|no endpoints found|free model training/i.test(text)) {
-			code = 'vision_unavailable';
-		}
+		const code = abortCode(controller.signal) ?? (isDataPolicyRefusal(error) ? 'vision_unavailable' : 'upstream_error');
 		// A cancelled or failed run settles what the upstream reported, or
 		// the estimate of what it streamed before it broke.
 		const billed = settled ?? usageForSettlement(runId, usage, {
