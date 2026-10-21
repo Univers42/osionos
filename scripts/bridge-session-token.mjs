@@ -10,6 +10,15 @@ import { assertSessionNotCutOff, tokenIssuedAtMs } from './bridge-session-cutoff
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
 
+/**
+ * The verified token: who the caller is, the workspaces they may reach, the
+ * role of each one, and the raw payload. The service reads it as the user it
+ * authenticates, so the type is named here and exported for the TypeScript
+ * callers of this module.
+ *
+ * @typedef {{ userId: string, workspaceIds: string[], roles: Record<string, string>, isAdmin: boolean, raw: Record<string, unknown> }} VerifiedAppSessionToken
+ */
+
 /** Constant-time comparison of two texts; the app-session signature is base64url, not hex. */
 export function safeCompareText(left, right) {
 	const leftBuffer = Buffer.from(String(left ?? ''), 'utf8');
@@ -54,6 +63,15 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 	return { token: `osionos_v1.${encodedPayload}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
 }
 
+/**
+ * The verification of a token: it throws when the token is not ours, and it
+ * answers the caller it belongs to.
+ *
+ * @param {string} token
+ * @param {{ appSessionSecret: string, sessionTtlSeconds?: number, sessionCutoffs?: unknown }} config
+ * @param {number} [now]
+ * @returns {VerifiedAppSessionToken}
+ */
 export function verifyAppSessionToken(token, config, now = Date.now()) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const [version, encodedPayload, signature, extra] = safeText(token, 4096).split('.');

@@ -2,7 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { LanguageModel } from 'ai';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Redis } from 'ioredis';
 import type { AuthUser } from '../auth.ts';
 import { config } from '../config.ts';
@@ -62,20 +62,29 @@ export function targetCost(target: ResolvedTarget, usage: { inputTokens?: number
  * The reservation of a run: the platform pays for the platform connection,
  * and nobody pays for a connection of the user — the provider bills them, and
  * the ledger of the platform must not even see the run.
+ *
+ * A client may be given: the caller then owns the transaction, and the
+ * reservation joins the statements it writes (the row of a run that extends
+ * itself and the money of the day, in ONE transaction).
  */
 export async function reserveTarget(
 	db: Pool,
 	target: ResolvedTarget,
 	{ userId, day, amount }: { userId: string; day: string; amount: number },
+	client?: PoolClient,
 ): Promise<boolean> {
 	if (!target.platformBudget) return true;
-	return reserve(db, {
-		userId,
-		day,
-		amount,
-		userLimit: config.userDailyMicroUsd,
-		platformLimit: config.platformDailyMicroUsd,
-	});
+	return reserve(
+		db,
+		{
+			userId,
+			day,
+			amount,
+			userLimit: config.userDailyMicroUsd,
+			platformLimit: config.platformDailyMicroUsd,
+		},
+		client,
+	);
 }
 
 /** The settlement of a run: nothing when the provider of the user bills them. */

@@ -10,22 +10,38 @@ import type { SseEvent } from './sse.ts';
  * The money of a run: what it reserves, and what it spends.
  *
  * The reservation of a run is NOT the cost of the whole loop: the run holds
- * two step ceilings up front (the first step, and the answer that follows
- * it), and the steps after that ask the ledger for what they need, one
- * extension at a time.
+ * the first step and the answer that follows it up front, and the steps
+ * after that ask the ledger for what they need, one extension at a time.
  *
  * And the step that is going to be the last one of the loop runs WITHOUT
  * tools: the model answers with what it has. A run that ends with a tool
  * call gives the user nothing.
  */
 const { app, mock, postRun, createConversation } = await startHarness();
-const { promptCharCount, stepCeilingMicroUsd, stepPromptChars } = await import('../src/runs/estimate.ts');
-const { MAX_STEPS } = await import('../src/tools/index.ts');
+const { estimateRunMicroUsd, promptCharCount, stepCeilingMicroUsd, stepPromptChars } = await import(
+	'../src/runs/estimate.ts'
+);
+const { costMicroUsd } = await import('../src/gateway/platform.ts');
+const { MAX_STEPS, TOOL_OUTPUT_CHARS } = await import('../src/tools/index.ts');
 
 after(async () => {
 	await app.close();
 	await mock.close();
 });
+
+/**
+ * The reservation of a run on the metered model: the first step, and the
+ * answer that follows it.
+ */
+const RESERVATION = estimateRunMicroUsd(METERED, { text: 'hello', historyChars: 0 });
+
+/**
+ * What the mock reports for a step: 100 prompt tokens on the metered model.
+ *
+ * The mock of the tests below reports that usage, so the money of the day
+ * moves by this much on every step.
+ */
+const STEP = costMicroUsd(METERED, { inputTokens: 100, outputTokens: 0 });
 
 /** The money the user has left today, in micro-USD. */
 async function setLeft(left: number): Promise<void> {
@@ -75,7 +91,7 @@ describe('the money of a run', () => {
 		});
 	});
 
-	it('a hello on a platform model is not refused, and the run reserves two step ceilings', async () => {
+	it('a hello on a platform model is not refused, and the run reserves its first step and its answer', async () => {
 		// The price of a real model: the reservation of a five-step loop used
 		// to cost more than the whole cap of the day, and every run was
 		// refused before it started.
@@ -86,13 +102,17 @@ describe('the money of a run', () => {
 		const events = await collect(new SseStream(response));
 		assert.equal(events[events.length - 1]?.event, 'done');
 
-		// The reservation of the run: two step ceilings. The row of the run
-		// carries the number the ledger was asked to reserve.
+		// The reservation of the run: the first step, and the answer that
+		// follows it. The answer reads what the tools of the first step add
+		// (one step's share), so its prompt is bigger than the first one's.
+		// The row of the run carries the number the ledger was asked to
+		// reserve.
 		const row = await app.db.query('select reserved_microusd from public.ai_runs where id = $1', [runId]);
 		const reserved = Number(row.rows[0]?.reserved_microusd ?? 0);
 		const base = promptCharCount({ text: 'hello', historyChars: 0 });
-		const ceiling = stepCeilingMicroUsd(PLATFORM, stepPromptChars(base));
-		assert.equal(reserved, 2 * ceiling);
+		const step = stepCeilingMicroUsd(PLATFORM, stepPromptChars(base));
+		const answer = stepCeilingMicroUsd(PLATFORM, stepPromptChars(base, TOOL_OUTPUT_CHARS));
+		assert.equal(reserved, step + answer);
 		// And the cap of the day held it: the run was not refused.
 		assert.ok(reserved < USER_DAILY_MICROUSD, `the reservation fits in the cap: ${reserved}`);
 	});
@@ -101,7 +121,11 @@ describe('the money of a run', () => {
 		// The model calls a tool on every step: the money of the day runs out
 		// after the second step, and the third one answers. A run that ends
 		// with a tool call gives the user nothing.
-		await setLeft(56);
+		//
+		// The money of the day: the reservation of the run, and the ONE
+		// extension the loop asks for. The extension is what the step the
+		// mock reports costs.
+		await setLeft(RESERVATION + STEP);
 		mock.setOptions({
 			toolCall: { name: 'read_page', arguments: { pageId: 'not-a-uuid' } },
 			toolCallEveryStep: true,
@@ -126,7 +150,7 @@ describe('the money of a run', () => {
 		// The spend of the run stays inside the money of the day.
 		const spent = (await spentOf(app.db, USER_A)) - before;
 		assert.ok(spent > 0, 'the run was paid for');
-		assert.ok(spent <= 56, `the spend is inside the money of the day: ${spent}`);
+		assert.ok(spent <= RESERVATION + STEP, `the spend is inside the money of the day: ${spent}`);
 		await setLeft(USER_DAILY_MICROUSD);
 	});
 
@@ -153,7 +177,7 @@ describe('the money of a run', () => {
 	it('a loop that wants five steps stops at the three the money of the day allows', async () => {
 		// The money of the day allows the first step, one extension, and the
 		// answer: the loop stops at the third step, and that step answers.
-		await setLeft(56);
+		await setLeft(RESERVATION + STEP);
 		mock.setOptions({
 			toolCall: { name: 'read_page', arguments: { pageId: 'not-a-uuid' } },
 			toolCallEveryStep: true,
@@ -184,7 +208,10 @@ describe('the money of a run', () => {
 		// Two runs of one user, and the money of the day is almost gone: the
 		// extension of one of them is refused, and that one answers without
 		// tools. The ledger never goes over the cap.
-		await setLeft(110);
+		//
+		// The money of the day: the reservation of TWO runs, and the one
+		// extension the loop asks for.
+		await setLeft(2 * RESERVATION + STEP);
 		mock.setOptions({
 			// The first step of the two runs waits: both reservations are
 			// held before either of them asks for an extension.

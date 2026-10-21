@@ -2,7 +2,7 @@ import type { LanguageModelUsage, ModelMessage } from 'ai';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { costMicroUsd } from '../gateway/platform.ts';
-import { reserveTarget, settleTarget } from '../gateway/resolve.ts';
+import { settleTarget } from '../gateway/resolve.ts';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
 import { usageForSettlement } from '../gateway/usage.ts';
 import type { SettledUsage } from '../gateway/usage.ts';
@@ -12,9 +12,10 @@ import type { RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
 import { buildUserTurn, historyChars, historyMessages, quotedPageChars } from './prompt.ts';
 import { promptCharCount } from './estimate.ts';
+import { extendRunReservation } from './extend.ts';
 import type { LoopBudget } from './loopBudget.ts';
 import { sourceChars } from './sources.ts';
-import { readToolSet } from '../tools/index.ts';
+import { readToolSet, createToolPool } from '../tools/index.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
@@ -118,18 +119,12 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		pricing: target.pricing,
 		baseChars: promptChars,
 		runId,
-		extend: async (amount: number) => {
-			const taken = await reserveTarget(db, target, { userId: ownerId, day, amount });
-			if (!taken) return false;
-			// The row of the run carries the money it holds: the sweep of the
-			// stale runs gives all of it back.
-			await db.query(
-				'update public.ai_runs set reserved_microusd = reserved_microusd + $2::bigint where id = $1',
-				[runId, amount],
-			);
-			return true;
-		},
+		extend: (amount: number) => extendRunReservation(db, target, { userId: ownerId, day, runId, amount }),
 	};
+	// The pool of the tools of THIS run: the tools of a run may not put
+	// more in its context than the reservation of the run counted, and one
+	// step may not add more than a step's share of it.
+	const pool = createToolPool();
 
 	try {
 		await emit('run.started', {
@@ -184,6 +179,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 							await emit('tool.result', outcome);
 						},
 					},
+					pool,
 				)
 			: undefined;
 
@@ -198,9 +194,10 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			controller,
 			...(tools ? { tools } : {}),
 			// The ceiling of the loop: the money the run holds, and the cost
-			// of one more step. The loop stops itself when the next step
-			// would cost more than the reservation.
+			// of one more step. The loop decides before every step: a step
+			// it cannot pay for becomes the answer.
 			budget,
+			pool,
 			onToolCall: async ({ toolCallId, toolName, input }) => {
 				await emit('tool.called', { toolCallId, toolName, input });
 			},

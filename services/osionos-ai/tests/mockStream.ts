@@ -127,6 +127,7 @@ export function streamAnswer(
 	chunks: string[],
 	options: StreamOptions,
 	sendUsage: boolean,
+	usage: StreamOptions['usage'],
 	onAbort: () => void,
 ): void {
 	response.writeHead(200, {
@@ -137,7 +138,7 @@ export function streamAnswer(
 	const send = () => {
 		if (response.writableEnded || response.destroyed) return;
 		const last = index === chunks.length - 1;
-		response.write(serializeChunk(chunks[index], last, sendUsage, options.usage));
+		response.write(serializeChunk(chunks[index], last, sendUsage, usage));
 		index += 1;
 		if (last) {
 			response.end('data: [DONE]\n\n');
@@ -167,6 +168,7 @@ export function streamToolCall(
 	toolCall: { name: string; arguments: Record<string, unknown> },
 	options: StreamOptions,
 	sendUsage: boolean,
+	usage: StreamOptions['usage'],
 	onAbort: () => void,
 ): void {
 	response.writeHead(200, {
@@ -181,8 +183,8 @@ export function streamToolCall(
 	}));
 	const send = () => {
 		if (response.writableEnded || response.destroyed) return;
-		response.write(serializeToolCallChunk(calls, false, sendUsage, options.usage));
-		response.write(serializeToolCallChunk(calls, true, sendUsage, options.usage));
+		response.write(serializeToolCallChunk(calls, false, sendUsage, usage));
+		response.write(serializeToolCallChunk(calls, true, sendUsage, usage));
 		response.end('data: [DONE]\n\n');
 	};
 	setTimeout(send, options.preDelayMs);

@@ -73,6 +73,15 @@ export const POOL_SPENT = 'The reading budget of this answer is used up: answer 
 export interface ToolPool {
 	/** Whether the pool still holds room for the output of a tool. */
 	readonly spent: boolean;
+	/**
+	 * The step begins: the tools of this step share ONE budget.
+	 *
+	 * A step may call ten tools at once, and the answer that follows reads
+	 * all of them: the share of the step (TOOL_OUTPUT_CHARS) is what keeps
+	 * the context of a run inside the ceiling the reservation counted. The
+	 * calls that come after the share is used up get the notice of the pool.
+	 */
+	startStep(): void;
 	/** The output of a tool, cut to the room the pool has left. */
 	draw(text: string): string;
 	/** The notice, paid for by the pool: nothing when it does not fit. */
@@ -87,9 +96,19 @@ export interface ToolPool {
  * still has room, and finds it empty when it comes back, is told the same:
  * the output of a tool that the pool cannot hold is dropped, not truncated
  * to nothing.
+ *
+ * The pool has two counters: the room of the run, and the share of the step
+ * that is running. The share is given back at every step (`startStep`), and
+ * it is what the reservation of a run counts: one step adds at most
+ * TOOL_OUTPUT_CHARS to the context, whatever the number of the calls it
+ * makes.
  */
 export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
 	let left = chars;
+	// The share of the step: the tools of ONE step may not add more than
+	// TOOL_OUTPUT_CHARS to the context of the run. It is empty until the
+	// step begins, so a pool that is never started gives nothing away.
+	let stepLeft = 0;
 	/** The notice, paid for by the pool: nothing when it does not fit. */
 	const notice = (): string => {
 		if (left < POOL_SPENT.length) return '';
@@ -100,12 +119,20 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
 		get spent(): boolean {
 			return left <= POOL_SPENT.length;
 		},
+		startStep(): void {
+			stepLeft = TOOL_OUTPUT_CHARS;
+		},
 		draw(text: string): string {
 			// The pool ran out while the tool worked.
 			if (left <= POOL_SPENT.length) return notice();
-			const room = Math.min(text.length, TOOL_OUTPUT_CHARS, left - POOL_SPENT.length);
+			// The share of the step is used up: the call gets the notice of
+			// the pool, and the context of the run grows by the notice and by
+			// nothing else.
+			if (stepLeft <= 0) return notice();
+			const room = Math.min(text.length, TOOL_OUTPUT_CHARS, stepLeft, left - POOL_SPENT.length);
 			const cut = text.slice(0, room);
 			left -= cut.length;
+			stepLeft -= cut.length;
 			return cut;
 		},
 		notice,
@@ -141,14 +168,14 @@ function toolDefinitionChars(tools: readonly AnyReadTool[]): number {
  * A tool never throws: a tool that fails answers with the reason, and the
  * model decides what to do with it. A tool that throws would end the step in
  * an error the model never sees.
+ *
+ * The pool is the one of the run: the caller holds it, so it can start the
+ * steps of the loop (the share of a step is given back at every step).
  */
-export function readToolSet(ctx: ReadToolContext, hooks: ToolHooks): ToolSet {
+export function readToolSet(ctx: ReadToolContext, hooks: ToolHooks, pool: ToolPool = createToolPool()): ToolSet {
 	// The sources of the run are numbered once: the ones of the prompt first,
 	// then the ones the tools find, in the order the tools found them.
 	let quoted = hooks.firstSourceNumber;
-	// The pool of THIS run: the tools of a run may not put more in its
-	// context than the reservation of the run counted.
-	const pool = createToolPool();
 	const set: ToolSet = {};
 	for (const tool of READ_TOOLS) {
 		set[tool.name] = {
