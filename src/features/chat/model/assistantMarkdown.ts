@@ -62,6 +62,15 @@ export const ASSISTANT_MARKDOWN_OPTIONS: ReactRenderOptions = {
 };
 
 /**
+ * The tables of an answer, for the element that holds it: a gutter between the
+ * cells and a rule under each row. The engine's cells carry no style, so
+ * without it two columns run together ("Above 20%CFO approval"). A wide table
+ * scrolls inside the answer instead of widening the pane.
+ */
+export const ANSWER_TABLE_CLASS =
+  "[&_table]:my-2 [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_table]:border-collapse [&_th]:border-b [&_th]:border-[var(--osio-border-strong)] [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_th]:font-semibold [&_td]:border-b [&_td]:border-[var(--osio-border-default)] [&_td]:px-2 [&_td]:py-1 [&_td]:align-top";
+
+/**
  * The answer, as React elements.
  *
  * A half-written answer (the `**` of a bold that has not arrived yet) parses
