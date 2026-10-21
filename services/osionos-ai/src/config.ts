@@ -84,6 +84,17 @@ const envSchema = z.object({
 	// The catalog of models.dev: the market's providers and their models. It is
 	// fetched once a day and shared between the replicas through Redis.
 	OSIONOS_AI_CATALOG_URL: z.string().min(1).default('https://models.dev/api.json'),
+	// The speech-to-text server of the dictation. It is INTERNAL: the URL is a
+	// deployment setting (the compose service name), never a caller's, so it is
+	// not an endpoint of the users' own. Unset = the service answers 503
+	// voice_unavailable: the assistant works, the dictation does not.
+	OSIONOS_AI_STT_URL: z.string().optional(),
+	// The model the speech-to-text server loads.
+	OSIONOS_AI_STT_MODEL: z.string().min(1).default('Systran/faster-whisper-small'),
+	// The deadline of one transcription: the call never waits for ever.
+	OSIONOS_AI_STT_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+	// The seconds of audio a user may dictate in a day.
+	OSIONOS_AI_STT_SECONDS_PER_DAY: z.coerce.number().int().nonnegative().default(600),
 });
 
 const rawEnv = {
@@ -109,6 +120,10 @@ const rawEnv = {
 	OSIONOS_AI_DEV_ENDPOINT_HOSTS: process.env.OSIONOS_AI_DEV_ENDPOINT_HOSTS,
 	OSIONOS_AI_DEV_PROVIDER_BASE_URLS: process.env.OSIONOS_AI_DEV_PROVIDER_BASE_URLS,
 	OSIONOS_AI_CATALOG_URL: process.env.OSIONOS_AI_CATALOG_URL,
+	OSIONOS_AI_STT_URL: process.env.OSIONOS_AI_STT_URL,
+	OSIONOS_AI_STT_MODEL: process.env.OSIONOS_AI_STT_MODEL,
+	OSIONOS_AI_STT_TIMEOUT_MS: process.env.OSIONOS_AI_STT_TIMEOUT_MS,
+	OSIONOS_AI_STT_SECONDS_PER_DAY: process.env.OSIONOS_AI_STT_SECONDS_PER_DAY,
 };
 
 const parsed = envSchema.safeParse(rawEnv);
@@ -231,6 +246,14 @@ export interface AiServiceConfig {
 	devProviderBaseUrls: Readonly<Record<string, string>>;
 	/** The URL of the catalog of models.dev. */
 	catalogUrl: string;
+	/** The URL of the internal speech-to-text server, when there is one. */
+	sttUrl?: string;
+	/** The model the speech-to-text server loads. */
+	sttModel: string;
+	/** The deadline of one transcription, in milliseconds. */
+	sttTimeoutMs: number;
+	/** The seconds of audio a user may dictate in a day. */
+	sttSecondsPerDay: number;
 }
 
 export const config: AiServiceConfig = Object.freeze({
@@ -256,4 +279,8 @@ export const config: AiServiceConfig = Object.freeze({
 	devEndpointHosts: parseDevHosts(parsed.data.OSIONOS_AI_DEV_ENDPOINT_HOSTS),
 	devProviderBaseUrls: parseDevProviderUrls(parsed.data.OSIONOS_AI_DEV_PROVIDER_BASE_URLS),
 	catalogUrl: parsed.data.OSIONOS_AI_CATALOG_URL,
+	sttUrl: parsed.data.OSIONOS_AI_STT_URL,
+	sttModel: parsed.data.OSIONOS_AI_STT_MODEL,
+	sttTimeoutMs: parsed.data.OSIONOS_AI_STT_TIMEOUT_MS,
+	sttSecondsPerDay: parsed.data.OSIONOS_AI_STT_SECONDS_PER_DAY,
 });
