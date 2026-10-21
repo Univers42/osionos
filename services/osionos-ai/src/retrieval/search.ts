@@ -1,5 +1,6 @@
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { AuthUser } from '../auth.ts';
+import type { QueryRunner } from '../db.ts';
 import { Embedder } from '../indexer/embedder.ts';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 import { ROW_ALLOWED_SQL, WORKSPACE_ALLOWED_SQL, liveMemberWorkspaces } from './acl.ts';
@@ -210,10 +211,11 @@ function snippet(content: string): string {
  * simply not there.
  *
  * The related-pages read (retrieval/related.ts) re-checks its candidates the
- * same way: one rule, one place.
+ * same way: one rule, one place. It runs the read on the connection it holds,
+ * so the parameter is a RUNNER and not a pool.
  */
 export async function readablePages(
-	db: Pool,
+	db: QueryRunner,
 	ids: readonly string[],
 	user: AuthUser,
 	workspaces: readonly string[],
