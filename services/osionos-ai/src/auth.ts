@@ -59,9 +59,11 @@ function failureCode(error: unknown): { status: number; code: string } {
 }
 
 /**
- * The caller of a request, or null when the request carries no valid app-session
- * token. Any verification failure is a refusal: the caller sees a 401, the log sees
- * the failure's code.
+ * The caller of a request, and the code of its refusal.
+ *
+ * Any verification failure is a refusal: the caller sees a 401 with the code (a
+ * session the cut-off refuses says `session_revoked`, every other failure says
+ * `unauthorized`), and the log sees the code too.
  */
 export function verifyRequest(request: IncomingMessage): { user: AuthUser | null; code: string | null } {
 	const token = bearerToken(request);
@@ -75,6 +77,7 @@ export function verifyRequest(request: IncomingMessage): { user: AuthUser | null
 	}
 }
 
+/** The caller of a request, or null when the request carries no valid app-session token. */
 export function authenticate(request: IncomingMessage): AuthUser | null {
 	return verifyRequest(request).user;
 }
