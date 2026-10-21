@@ -31,7 +31,7 @@ export const cutoffPoller = startSessionCutoffPoller(sessionCutoffs, {
 });
 
 /** The bearer token of a request, or null when there is none (the bridge: :406-411). */
-function bearerToken(request: IncomingMessage): string | null {
+export function bearerToken(request: IncomingMessage): string | null {
 	const header = String(request.headers.authorization ?? '');
 	const match = /^Bearer\s+(.+)$/i.exec(header);
 	return match ? match[1].trim() : null;
