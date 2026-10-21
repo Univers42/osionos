@@ -194,7 +194,7 @@ export async function run(options, write) {
 	let accepted = 0;
 	let skipped = 0;
 	let seen = 0;
-	let started = options.from.length > 0;
+	let started = options.from.length === 0;
 	let batch = [];
 	const flush = async () => {
 		if (batch.length === 0) return;
@@ -243,11 +243,11 @@ export async function main(argv) {
 	const command = databaseUrl.length > 0 ? psqlCommand(databaseUrl) : null;
 	if (command === null) {
 		// The SQL on stdout: the caller pipes it into psql.
-		await write(workspaceSql(options));
-		const result = await run(options, async (sql) => {
-			process.stdout.write(sql);
-			process.stdout.write("\n");
-		});
+		const print = async (sql) => {
+			process.stdout.write(`${sql}\n`);
+		};
+		await print(workspaceSql(options));
+		const result = await run(options, print);
 		process.stderr.write(`[import] ${result.imported} articles, ${result.skipped} skipped\n`);
 		return 0;
 	}

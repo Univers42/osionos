@@ -13,10 +13,10 @@
 #                     <path to osionos-ai-rag-migration.sql>
 set -eu
 
-WIKI_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-EVAL_DIR=$(CDPATH= cd -- "$WIKI_DIR/.." && pwd)
-SERVICE_DIR=$(CDPATH= cd -- "$EVAL_DIR/.." && pwd)
-REPO_ROOT=$(CDPATH= cd -- "$SERVICE_DIR/../.." && pwd)
+WIKI_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+EVAL_DIR=$(CDPATH='' cd -- "$WIKI_DIR/.." && pwd)
+SERVICE_DIR=$(CDPATH='' cd -- "$EVAL_DIR/.." && pwd)
+REPO_ROOT=$(CDPATH='' cd -- "$SERVICE_DIR/../.." && pwd)
 LOCK="$WIKI_DIR/wiki.lock"
 
 MODE="${1:-}"
@@ -62,6 +62,7 @@ SAMPLE_ARTICLES="${WIKI_SAMPLE_ARTICLES:-500}"
 # the migrations. HARNESS_DIR is the directory of harness.sh.
 HARNESS_LABEL=wiki
 HARNESS_DIR="$SERVICE_DIR/eval"
+# shellcheck source=../harness.sh
 . "$HARNESS_DIR/harness.sh"
 
 cleanup() {
@@ -134,19 +135,28 @@ docker run --rm --network "$NETWORK" -e TEI_URL="http://$TEI_CONTAINER:80" "$NOD
 '
 echo "[wiki] the embedder is ready"
 
-# The indexer needs pg: it is installed in a throwaway volume, never in the
-# repository.
-echo "[wiki] the node dependencies of the indexer are installed"
-
 echo "[wiki] importing $SAMPLE_ARTICLES articles"
 IMPORT_START=$(date +%s)
-docker run --rm -v "$REPO_ROOT:/app:ro" -v "$DATA_VOLUME:/data:ro" -w /app \
-	"$NODE_IMAGE" node services/osionos-ai/eval/wiki/import.mjs \
-	--workspace-owner "$OWNER_ID" \
-	--limit "$SAMPLE_ARTICLES" \
-	--batch "$BATCH_PAGES" \
-	--jsonl /data/articles.jsonl \
-	| docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DATABASE" >/dev/null
+# A POSIX pipeline exits with the status of psql, which is 0 on an empty
+# input: the status of the importer goes through a file, or a crashed import
+# reads as an empty success.
+IMPORT_STATUS=$(mktemp)
+{
+	status=0
+	docker run --rm -v "$REPO_ROOT:/app:ro" -v "$DATA_VOLUME:/data:ro" -w /app \
+		"$NODE_IMAGE" node services/osionos-ai/eval/wiki/import.mjs \
+		--workspace-owner "$OWNER_ID" \
+		--limit "$SAMPLE_ARTICLES" \
+		--batch "$BATCH_PAGES" \
+		--jsonl /data/articles.jsonl || status=$?
+	echo "$status" >"$IMPORT_STATUS"
+} | docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DATABASE" >/dev/null
+IMPORT_CODE=$(cat "$IMPORT_STATUS")
+rm -f "$IMPORT_STATUS"
+if [ "$IMPORT_CODE" != "0" ]; then
+	echo "[wiki] the import failed with status $IMPORT_CODE" >&2
+	exit 1
+fi
 IMPORT_END=$(date +%s)
 echo "[wiki] the import is done in $((IMPORT_END - IMPORT_START))s"
 

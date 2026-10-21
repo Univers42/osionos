@@ -10,8 +10,13 @@
 /* ************************************************************************** */
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import { NASTY, article, longArticle } from "./cases.mjs";
+import { NASTY, OWNER_ID, article, longArticle } from "./cases.mjs";
 import {
 	MIN_ARTICLE_CHARS,
 	WORKSPACE_NAME,
@@ -172,5 +177,46 @@ describe("the SQL of the import", () => {
 		assert.ok(sql.includes("INSERT INTO public.osionos_workspace_members"));
 		assert.ok(sql.includes("ON CONFLICT (workspace_id, user_id) DO UPDATE"));
 		assert.ok(sql.includes(`'${WORKSPACE_NAME}'`));
+	});
+});
+
+/** The importer in stdout mode on a JSONL of these articles. */
+function importToStdout(articles, extra) {
+	const directory = mkdtempSync(join(tmpdir(), "wiki-import-"));
+	try {
+		const jsonl = join(directory, "articles.jsonl");
+		writeFileSync(jsonl, articles.map((one) => `${JSON.stringify(one)}\n`).join(""));
+		const script = fileURLToPath(new URL("./import.mjs", import.meta.url));
+		const args = [script, "--workspace-owner", OWNER_ID, "--jsonl", jsonl, ...extra];
+		const env = { ...process.env, DATABASE_URL: "" };
+		return spawnSync(process.execPath, args, { encoding: "utf8", env });
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
+describe("the command line of the import", () => {
+	const articles = ["First", "Second", "Third"].map(longArticle);
+
+	it("writes the SQL of every article on stdout when no database is given", () => {
+		const child = importToStdout(articles, []);
+		assert.equal(child.status, 0, child.stderr);
+		assert.ok(child.stdout.includes("INSERT INTO public.osionos_workspaces"));
+		for (const one of articles) assert.ok(child.stdout.includes(pageId(one.title)), one.title);
+	});
+
+	it("stops after --limit articles", () => {
+		const child = importToStdout(articles, ["--limit", "1"]);
+		assert.equal(child.status, 0, child.stderr);
+		assert.ok(child.stdout.includes(pageId("First")));
+		assert.ok(!child.stdout.includes(pageId("Second")));
+	});
+
+	it("resumes at the --from article, which is imported again", () => {
+		const child = importToStdout(articles, ["--from", "Second"]);
+		assert.equal(child.status, 0, child.stderr);
+		assert.ok(!child.stdout.includes(pageId("First")));
+		assert.ok(child.stdout.includes(pageId("Second")));
+		assert.ok(child.stdout.includes(pageId("Third")));
 	});
 });
