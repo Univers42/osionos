@@ -106,6 +106,7 @@ export async function appendMessage(
 		parts,
 		model,
 		runId,
+		usage,
 	}: {
 		conversationId: string;
 		ownerId: string;
@@ -113,15 +114,29 @@ export async function appendMessage(
 		parts: unknown[];
 		model?: string;
 		runId?: string;
+		usage?: unknown;
 	},
 ): Promise<MessageRow | null> {
 	const result = await db.query<MessageRow>(
-		`insert into public.ai_messages (conversation_id, run_id, role, parts, model)
-		 select c.id, $3, $4, $5::jsonb, $6
+		`insert into public.ai_messages (conversation_id, run_id, role, parts, model, usage)
+		 select c.id, $3, $4, $5::jsonb, $6, $7::jsonb
 		 from public.ai_conversations c
 		 where c.id = $1 and c.owner_id = $2
 		 returning ${MESSAGE_COLUMNS}`,
-		[conversationId, ownerId, runId ?? null, role, JSON.stringify(parts), model ?? null],
+		[
+			conversationId,
+			ownerId,
+			runId ?? null,
+			role,
+			JSON.stringify(parts),
+			model ?? null,
+			usage === undefined ? null : JSON.stringify(usage),
+		],
 	);
 	return result.rows[0] ?? null;
+}
+
+/** A conversation touched now: the inbox lists the most recently touched first. */
+export async function touchConversation(db: Pool, conversationId: string): Promise<void> {
+	await db.query('update public.ai_conversations set updated_at = now() where id = $1', [conversationId]);
 }

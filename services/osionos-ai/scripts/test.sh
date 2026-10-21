@@ -84,6 +84,8 @@ echo "[test] applying the AI migration"
 docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d osionos_ai_test < "$MIGRATION" >/dev/null
 
 echo "[test] running the suite"
+# --test-concurrency=1: the files share one database, and the conversations of
+# one file must not disappear under the feet of another one.
 docker run --rm --network "$NETWORK" \
 	-v "$REPO_ROOT:/app" -w /app/services/osionos-ai \
 	-e OSIONOS_AI_PORT=0 \
@@ -95,4 +97,10 @@ docker run --rm --network "$NETWORK" \
 	-e OSIONOS_SESSION_CUTOFFS=off \
 	-e OSIONOS_BAAS_URL="http://baas.invalid" \
 	-e SERVICE_ROLE_KEY="test-service-role-key" \
-	node:22-bookworm-slim sh -c 'node --experimental-strip-types --test tests/*.test.ts'
+	-e OSIONOS_AI_UPSTREAM_BASE_URL="http://127.0.0.1:1/v1" \
+	-e OSIONOS_AI_PLATFORM_MODELS='[{"id":"placeholder","label":"Placeholder","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true}]' \
+	-e OSIONOS_AI_MAX_OUTPUT_TOKENS=1024 \
+	-e OSIONOS_AI_USER_DAILY_MICROUSD=200000 \
+	-e OSIONOS_AI_PLATFORM_DAILY_MICROUSD=20000000 \
+	-e OSIONOS_AI_RUNS_PER_MINUTE=100 \
+	node:22-bookworm-slim sh -c 'node --experimental-strip-types --test --test-concurrency=1 tests/*.test.ts'
