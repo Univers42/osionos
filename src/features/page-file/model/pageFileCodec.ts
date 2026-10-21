@@ -50,6 +50,7 @@ import {
  *     mediaAspect  deferMount  collectionRef  recordRef  fieldBind
  *     headingLevel (markdown keeps it on a toggle only; quote/callout lose it)
  *     tableConfig (markdown keeps only the column alignments)
+ *     conflictOf (the merge's marker: the block a conflict copy belongs to)
  *
  * Ponytail: `fileName`, `headingLevel` and `tableConfig` are partly in Markdown
  * too (`<object title>`, `##>`, the table separator row), and the overlay wins,
