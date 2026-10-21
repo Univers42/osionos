@@ -151,7 +151,7 @@ function workspaceMemberRpc(body, table) {
 }
 
 /** seed: { table: rows[] }, records: { 'dbId/table': rows[] }, failWhen(call) → { status, body } | null. */
-export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null, realWorkspaceRpc = false } = {}) {
+export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null, realWorkspaceRpc = false, rpc = {} } = {}) {
 	const tables = new Map(Object.entries(seed).map(([name, rows]) => [name, rows.map((row) => structuredClone(row))]));
 	const table = (name) => tables.get(name) ?? tables.set(name, []).get(name);
 	// The FKs of osionos_workspace_members / osionos_pages guarantee their workspace exists, so a
@@ -185,6 +185,11 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		if (failure) return jsonResponse(failure.body, failure.status);
 		if (name === 'rpc/osionos_bridge_list_workspaces') {
 			return jsonResponse(realWorkspaceRpc ? workspaceMemberRpc(body, table) : workspaceRpc(body));
+		}
+		// A registered RPC answers with its own body (the append function returns
+		// table(version bigint, content jsonb)); an unregistered one keeps the row path.
+		if (method === 'POST' && Object.hasOwn(rpc, name.slice(4))) {
+			return jsonResponse(rpc[name.slice(4)](body, { table }), 200);
 		}
 		if (method === 'GET' && isEmbedRead(parsed.searchParams)) {
 			try {
