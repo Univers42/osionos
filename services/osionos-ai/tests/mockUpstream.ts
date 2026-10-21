@@ -34,6 +34,20 @@ export interface MockOptions extends StreamOptions {
 	 */
 	toolCall: { name: string; arguments: Record<string, unknown> } | null;
 	/**
+	 * The text the step writes before it calls the tool.
+	 *
+	 * A model that says what it is about to do, and then does it: the words
+	 * and the call are ONE step, and the answer comes after the tool.
+	 */
+	toolCallText: string | null;
+	/**
+	 * The text the answer writes, instead of the chunks of the mock.
+	 *
+	 * A test that needs the answer of the run to be an exact string says so
+	 * here: the chunks of the mock are "part-0 part-1 …".
+	 */
+	answerText: string | null;
+	/**
 	 * The word that arms the tool call.
 	 *
 	 * The mock answers with the tool call only when the request carries the
@@ -68,6 +82,8 @@ const DEFAULT_OPTIONS: MockOptions = {
 	authFail: false,
 	neverSendUsage: false,
 	toolCall: null,
+	toolCallText: null,
+	answerText: null,
 	toolCallTrigger: null,
 	usage: null,
 	toolCallEveryStep: false,
@@ -205,7 +221,7 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 				response.end(JSON.stringify({ error: { message: 'the upstream is down' } }));
 				return;
 			}
-			const chunks = chunkTexts(options.chunkCount);
+			const chunks = options.answerText ? [options.answerText] : chunkTexts(options.chunkCount);
 			// The usage comes only when the request asks for it.
 			const sendUsage = !options.neverSendUsage && askedForUsage(body);
 			// The usage of this step: the one of the test, or the default one
@@ -227,9 +243,17 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			// A step that runs without tools is a step that answers: the
 			// model obeys the request and writes text.
 			if (toolCall && !askedForNoTool(body)) {
-				streamToolCall(response, toolCall, options, sendUsage, usage, () => {
-					aborted += 1;
-				});
+				streamToolCall(
+					response,
+					toolCall,
+					options,
+					sendUsage,
+					usage,
+					() => {
+						aborted += 1;
+					},
+					options.toolCallText ?? '',
+				);
 				return;
 			}
 			texts.push(chunks.join(''));
