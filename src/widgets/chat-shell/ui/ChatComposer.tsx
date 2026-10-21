@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useRef } from "react";
-import { ArrowUp, Plug } from "lucide-react";
+import { ArrowUp, Plug, Square } from "lucide-react";
 
 import { ModelPicker } from "./ModelPicker";
 
@@ -24,10 +24,14 @@ interface Props {
   model: string;
   onModelChange: (value: string) => void;
   autoFocus?: boolean;
+  /** True while an answer is streaming: the send button becomes a stop. */
+  streaming?: boolean;
+  /** Stops the answer in flight. */
+  onStop?: () => void;
 }
 
 /** Controlled composer (parent owns the text so it survives a connect prompt). */
-export const ChatComposer: React.FC<Props> = ({ value, onChange, onSubmit, onConnect, model, onModelChange, autoFocus }) => {
+export const ChatComposer: React.FC<Props> = ({ value, onChange, onSubmit, onConnect, model, onModelChange, autoFocus, streaming, onStop }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
   const grow = (el: HTMLTextAreaElement) => { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 240)}px`; };
   useEffect(() => { if (ref.current) grow(ref.current); }, [value]);
@@ -60,15 +64,26 @@ export const ChatComposer: React.FC<Props> = ({ value, onChange, onSubmit, onCon
           <Plug size={16} /> Connect
         </button>
         <ModelPicker value={model} onChange={onModelChange} />
-        <button
-          type="button"
-          aria-label="Send message"
-          onClick={onSubmit}
-          disabled={!value.trim()}
-          className="ml-auto rounded-full bg-[var(--osio-accent)] p-2 text-[var(--osio-accent-fg)] transition-colors hover:bg-[var(--osio-accent-hover,var(--osio-accent))] disabled:opacity-40"
-        >
-          <ArrowUp size={16} />
-        </button>
+        {streaming ? (
+          <button
+            type="button"
+            aria-label="Stop the answer"
+            onClick={() => onStop?.()}
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-[var(--osio-border-default)] px-3 py-1.5 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]"
+          >
+            <Square size={12} /> Stop
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="Send message"
+            onClick={onSubmit}
+            disabled={!value.trim()}
+            className="ml-auto rounded-full bg-[var(--osio-accent)] p-2 text-[var(--osio-accent-fg)] transition-colors hover:bg-[var(--osio-accent-hover,var(--osio-accent))] disabled:opacity-40"
+          >
+            <ArrowUp size={16} />
+          </button>
+        )}
       </div>
     </div>
   );
