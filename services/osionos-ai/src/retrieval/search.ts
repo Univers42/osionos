@@ -53,7 +53,7 @@ interface CandidateRow extends QueryResultRow {
 }
 
 /** One page, as the read rule reads it. */
-interface PageRow extends QueryResultRow {
+export interface PageRow extends QueryResultRow {
 	id: string;
 	workspace_id: string;
 	owner_id: string | null;
@@ -202,6 +202,33 @@ function snippet(content: string): string {
 }
 
 /**
+ * The pages of a set of ids the caller may read.
+ *
+ * The re-check of the retrieval: the chunks carry a COPY of the permissions of
+ * their page, and this reads the LIVE row and applies the bridge's own rule. A
+ * stale copy can never leak a page, and a page that is gone or archived is
+ * simply not there.
+ *
+ * The related-pages read (retrieval/related.ts) re-checks its candidates the
+ * same way: one rule, one place.
+ */
+export async function readablePages(
+	db: Pool,
+	ids: readonly string[],
+	user: AuthUser,
+	workspaces: readonly string[],
+): Promise<Map<string, PageRow>> {
+	const pages = new Map<string, PageRow>();
+	if (ids.length === 0) return pages;
+	const result = await db.query<PageRow>(PAGES_SQL, [ids]);
+	for (const row of result.rows) {
+		if (!canReadPageRowAsMember(row, user.userId, workspaces)) continue;
+		pages.set(String(row.id).toLowerCase(), row);
+	}
+	return pages;
+}
+
+/**
  * The candidates that survive the bridge's own rule.
  *
  * The pages are read in one query, and every one of them is checked with
@@ -218,15 +245,13 @@ async function readable(
 ): Promise<RetrievedChunk[]> {
 	if (candidates.length === 0) return [];
 	const ids = [...new Set(candidates.map((candidate) => candidate.source_id))];
-	const result = await db.query<PageRow>(PAGES_SQL, [ids]);
-	const pages = new Map(result.rows.map((row) => [String(row.id).toLowerCase(), row]));
+	const pages = await readablePages(db, ids, user, workspaces);
 	const perPage = new Map<string, number>();
 	const kept: RetrievedChunk[] = [];
 	for (const candidate of candidates) {
 		if (kept.length >= limit) break;
 		const page = pages.get(String(candidate.source_id).toLowerCase());
 		if (!page) continue;
-		if (!canReadPageRowAsMember(page, user.userId, workspaces)) continue;
 		const count = perPage.get(page.id) ?? 0;
 		if (count >= MAX_CHUNKS_PER_PAGE) continue;
 		perPage.set(page.id, count + 1);
