@@ -115,9 +115,17 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
   const [creating, setCreating] = useState<"group" | "guest" | null>(null);
   const inviteRequested = useWorkspaceInvitesStore((state) => state.inviteRequested);
   // The sidebar's "Invite members" card opens Settings on People and asks this
-  // panel to open the invite flow, whatever source tab is showing. Derive the
-  // modal from that flag rather than syncing it through an effect.
-  const activeCreating = creating ?? (inviteRequested ? "guest" : null);
+  // panel to open the invite flow, whatever source tab is showing. Not in the
+  // first commit: Modal portals into <body> and React places the deeper portal
+  // first, so an invite modal mounted together with Settings sat UNDER it,
+  // invisible and unclickable (public build, 2026-10-21). One frame later it
+  // is appended after Settings and stacks on top.
+  const [mountedFrame, setMountedFrame] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMountedFrame(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const activeCreating = creating ?? (inviteRequested && mountedFrame ? "guest" : null);
   const closeCreate = () => {
     if (inviteRequested) useWorkspaceInvitesStore.getState().consumeInviteRequest();
     setCreating(null);
