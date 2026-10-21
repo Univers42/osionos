@@ -97,6 +97,21 @@ export function askedForUsage(body: unknown): boolean {
 	return options?.include_usage === true;
 }
 
+/**
+ * Whether the request asks for NO tool: `tool_choice: none`, or no tool at
+ * all.
+ *
+ * A real model obeys it and answers with text. The mock obeys it too: a step
+ * that runs without tools is a step that answers, and a test that counts the
+ * steps of a loop needs the mock to stop calling the tool.
+ */
+export function askedForNoTool(body: unknown): boolean {
+	const request = body as { tools?: unknown; tool_choice?: unknown } | null;
+	if (!request || typeof request !== 'object') return false;
+	if (request.tool_choice === 'none') return true;
+	return !Array.isArray(request.tools) || request.tools.length === 0;
+}
+
 /** The body of a request, read to the end. */
 function readBody(request: IncomingMessage): Promise<string> {
 	return new Promise((resolve) => {
@@ -188,7 +203,9 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			// A model that calls a tool on every step keeps the loop going.
 			const toolCall = options.toolCallEveryStep ? options.toolCall : pendingToolCall;
 			pendingToolCall = null;
-			if (toolCall) {
+			// A step that runs without tools is a step that answers: the
+			// model obeys the request and writes text.
+			if (toolCall && !askedForNoTool(body)) {
 				streamToolCall(response, toolCall, options, sendUsage, () => {
 					aborted += 1;
 				});

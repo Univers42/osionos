@@ -127,9 +127,13 @@ the same way.
 A call with the wrong arguments never kills a run: the schema of a tool is
 loose on purpose, and the tool answers the model with what it needs.
 
-The reservation of a run is the cost of the WHOLE loop, not of its first call:
-a run that reserves for one call and spends five books a spend the cap never
-allowed. The ledger books the real cost, and never more than the reservation.
+The reservation of a run is TWO step ceilings: its first step, and the answer
+that must follow it. The steps after that ask the ledger for what they need,
+one extension at a time, and the extension is atomic: two runs never share
+it. The last step of the loop runs WITHOUT tools, so a run always ends with
+an answer and never with a tool call nobody reads. The ledger books the real
+cost, even when it is more than the reservation: the money is spent whatever
+the ledger says.
 
 ## The keys of Redis
 
@@ -151,6 +155,12 @@ neither does. The estimate counts four characters per token, which under-counts
 CJK and code-heavy text; the settlement corrects it with the usage the upstream
 reports. A refused reservation is a 402 `budget_exhausted`, and the run is
 failed, so the next one may start.
+
+A run of the assistant is a loop, so it reserves as it goes: the run holds the
+money of its first step and of the answer that follows it, and every step
+after that asks the ledger for one atomic extension — refused when the cap of
+the day is reached. A step that cannot be paid for runs without tools: the
+model answers with what it has.
 
 ## The indexer
 

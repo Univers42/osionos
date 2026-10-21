@@ -1,10 +1,9 @@
 import { stepCountIs, streamText } from 'ai';
 import type { LanguageModel, LanguageModelUsage, ModelMessage, ToolSet } from 'ai';
 import { config } from '../config.ts';
-import { costMicroUsd } from '../gateway/platform.ts';
-import type { PlatformModelEntry } from '../gateway/platform.ts';
-import { estimateTokens, usageForSettlement } from '../gateway/usage.ts';
 import { MAX_STEPS } from '../tools/loop.ts';
+import { budgetReached, stepHasTools } from './loopBudget.ts';
+import type { LoopBudget, StepUsage } from './loopBudget.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
 
 /**
@@ -63,73 +62,7 @@ function failureName(error: unknown): string {
  * cost, and the next one is not started when it would pass the money the run
  * holds.
  */
-export interface LoopBudget {
-	/** The money the run holds, in micro-USD. */
-	reserved: number;
-	/** The pricing of the model: the cost of a step is read from it. */
-	pricing: PlatformModelEntry;
-	/** The characters one step of the loop may hold. */
-	stepChars: number;
-	/** The id of the run: the estimate of a step carries it. */
-	runId: string;
-}
-
-/** What the stop condition reads of a finished step. */
-interface StepUsage {
-	/** What the provider reported of the step. */
-	usage?: { inputTokens?: number; outputTokens?: number };
-	/** The text of the step, when the SDK gives it as one string. */
-	text?: unknown;
-	/** The parts of the step, when it gives them as parts. */
-	content?: unknown;
-}
-
-/**
- * The stop condition of the money: the loop stops when the next step would
- * cost more than the run holds.
- *
- * The cost of the steps that ran is the usage the provider reported, and the
- * estimate when it reported nothing: the estimate of a step is the same
- * estimate the settlement uses, so the two never disagree.
- */
-export function budgetReached(budget: LoopBudget) {
-	return ({ steps }: { steps: readonly StepUsage[] }): boolean => {
-		const accrued = steps.reduce((total, step) => total + stepCost(budget, step), 0);
-		return accrued + stepCeilingCost(budget) > budget.reserved;
-	};
-}
-
-/** The cost of a finished step: what the provider reported, or the estimate. */
-function stepCost(budget: LoopBudget, step: StepUsage): number {
-	const usage = usageForSettlement(
-		budget.runId,
-		step.usage,
-		{ promptChars: budget.stepChars, outputChars: stepTextChars(step) },
-		// The estimate of a step is not a settlement: the line that says the
-		// usage was estimated belongs to the settlement, which books it once.
-		{ log: false },
-	);
-	return costMicroUsd(budget.pricing, usage);
-}
-
-/** The cost of the ceiling of one more step. */
-function stepCeilingCost(budget: LoopBudget): number {
-	return costMicroUsd(budget.pricing, {
-		inputTokens: estimateTokens(budget.stepChars),
-		outputTokens: config.maxOutputTokens,
-	});
-}
-
-/** The characters the model wrote in a step. */
-function stepTextChars(step: StepUsage): number {
-	if (typeof step.text === 'string') return step.text.length;
-	let chars = 0;
-	for (const part of Array.isArray(step.content) ? step.content : []) {
-		const text = (part as { text?: unknown }).text;
-		if (typeof text === 'string') chars += text.length;
-	}
-	return chars;
-}
+export type { LoopBudget };
 
 export interface PumpInput {
 	/** The handle of the model: the platform's, or the one of a connection. */
@@ -167,6 +100,11 @@ export interface PumpOutcome {
 	reasoning: string;
 	usage?: LanguageModelUsage;
 	finishReason: string;
+	/**
+	 * The money the run holds: the reservation up front and the extensions
+	 * of the loop. The settlement gives all of it back.
+	 */
+	reserved: number;
 	/** The failure, when the stream broke. */
 	error?: unknown;
 }
@@ -192,6 +130,24 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 	const stopWhen = [stepCountIs(MAX_STEPS)];
 	if (budget) stopWhen.push(budgetReached(budget));
 
+	// The step that is going to be the LAST one runs without tools: the
+	// model answers with what it has, and the run ends with an answer
+	// instead of a tool call nobody reads. The decision is the budget's:
+	// the cap of the steps, or the money of the day.
+	//
+	// `toolChoice: 'none'` and not `activeTools: []`: the first one is
+	// honoured by the SDK on EVERY wire — the OpenAI-compatible one sends
+	// `tool_choice: "none"`, the Anthropic one sends `{type: "none"}` — and
+	// it says what it means on the wire. The second one only drops the
+	// tools from the request, and the request then says nothing at all
+	// about them.
+	const prepareStep = budget
+		? async ({ stepNumber, steps }: { stepNumber: number; steps: readonly StepUsage[] }) => {
+				const hasTools = await stepHasTools(budget, { stepNumber, steps });
+				return hasTools ? undefined : { toolChoice: 'none' as const };
+			}
+		: undefined;
+
 	const onTimeout = () => controller.abort(new UpstreamTimeout());
 	const touch = () => {
 		if (idleTimer) clearTimeout(idleTimer);
@@ -216,6 +172,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			// tool, and the answer comes after the tool.
 			...(tools ? { tools } : {}),
 			stopWhen,
+			...(prepareStep ? { prepareStep } : {}),
 		});
 
 		for await (const part of result.fullStream) {
@@ -241,9 +198,9 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 				throw new Error('aborted');
 			}
 		}
-		return { answer, reasoning, usage, finishReason };
+		return { answer, reasoning, usage, finishReason, reserved: budget?.reserved ?? 0 };
 	} catch (error) {
-		return { answer, reasoning, usage, finishReason, error };
+		return { answer, reasoning, usage, finishReason, reserved: budget?.reserved ?? 0, error };
 	} finally {
 		clearTimers();
 	}
