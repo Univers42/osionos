@@ -22,7 +22,9 @@ import {
 	handleProviders,
 } from './routes/connections.ts';
 import { handleUsage } from './routes/usage.ts';
+import { handleApprovalDecision, handleApprovalGet } from './routes/approvals.ts';
 import { sweepStaleRuns } from './runs/runner.ts';
+import { sweepApprovals } from './approvals/repo.ts';
 import * as runStore from './runs/runStore.ts';
 import type { RouteEntry, RouteHandler } from './routes/types.ts';
 
@@ -106,6 +108,18 @@ const ROUTES: RouteEntry[] = [
 		pattern: /^\/api\/ai\/runs\/([^/]+)\/cancel$/,
 		label: '/api/ai/runs/:id/cancel',
 		handle: handleRunCancel,
+	},
+	{
+		methods: ['GET'],
+		pattern: /^\/api\/ai\/approvals\/([^/]+)$/,
+		label: '/api/ai/approvals/:id',
+		handle: handleApprovalGet,
+	},
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/approvals\/([^/]+)$/,
+		label: '/api/ai/approvals/:id',
+		handle: handleApprovalDecision,
 	},
 ];
 
@@ -230,15 +244,22 @@ export function createAiServer(): AiServer {
 	void runStore.listenForCancels(subscriber).catch((error: Error) => {
 		console.warn(JSON.stringify({ event: 'cancel_listener_failed', code: error.name }));
 	});
-	// The sweep of the stale runs: at boot, and then every minute.
+	// The sweep of the stale runs and of the approvals nobody finished: at
+	// boot, and then every minute.
 	const sweep = setInterval(() => {
 		void sweepStaleRuns(db).catch((error: Error) => {
 			console.warn(JSON.stringify({ event: 'sweep_failed', code: error.name }));
+		});
+		void sweepApprovals(db).catch((error: Error) => {
+			console.warn(JSON.stringify({ event: 'approval_sweep_failed', code: error.name }));
 		});
 	}, SWEEP_INTERVAL_MS);
 	sweep.unref();
 	void sweepStaleRuns(db).catch((error: Error) => {
 		console.warn(JSON.stringify({ event: 'sweep_failed', code: error.name }));
+	});
+	void sweepApprovals(db).catch((error: Error) => {
+		console.warn(JSON.stringify({ event: 'approval_sweep_failed', code: error.name }));
 	});
 	const server = createServer((request, response) => {
 		void handleRequest(request, response, { db, redis, blockingRedis });

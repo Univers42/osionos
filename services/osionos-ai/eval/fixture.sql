@@ -26,6 +26,17 @@ create table if not exists public.osionos_workspace_members (
 	primary key (workspace_id, user_id)
 );
 
+-- TEST-ONLY FIXTURE: the columns of osionos_workspaces that the approval card
+-- reads (the name of the workspace a write lands in). The production table
+-- (models/osionos-bridge-migration.sql) carries more; this fixture holds the
+-- same column types and nothing more.
+create table if not exists public.osionos_workspaces (
+	id uuid primary key default gen_random_uuid(),
+	owner_id uuid not null,
+	name text not null default 'Workspace',
+	slug text
+);
+
 -- TEST-ONLY FIXTURE: the columns of osionos_pages that the page context of a
 -- run reads (src/pageContext.ts), the columns the RAG triggers read (the
 -- enqueue trigger, the ACL sync trigger and the delete trigger of
