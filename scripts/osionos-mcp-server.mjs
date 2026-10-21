@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import * as z from 'zod/v4';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { createMcpApiClient, fetchJson } from './osionos-mcp-api.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -53,7 +54,6 @@ const TEXT_LIMIT = 60_000;
 // The append route takes at most 100 blocks per call, so a longer text is appended
 // in batches (each one its own atomic append).
 const APPEND_BLOCK_BATCH = 100;
-const FETCH_TIMEOUT_MS = 8_000;
 const BLOCK_TYPES = [
   'paragraph',
   'heading_1',
@@ -146,7 +146,6 @@ const RICH_BLOCK_EXAMPLE = [
 ];
 
 let cachedApiUrl = '';
-let cachedSession = null;
 
 function cleanUrl(value) {
   return String(value ?? '').trim().replace(/\/$/, '');
@@ -211,41 +210,9 @@ function bridgeSecrets() {
   ]);
 }
 
-async function fetchText(url, options = {}) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? FETCH_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    const text = await response.text().catch(() => '');
-    return { response, text };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function fetchJson(url, options = {}) {
-  const { response, text } = await fetchText(url, options);
-  let body = null;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = text;
-  }
-  if (!response.ok) {
-    let message = `HTTP ${response.status}`;
-    if (typeof body === 'object' && body && 'error' in body) message = body.error;
-    else if (typeof body === 'object' && body && 'message' in body) message = body.message;
-    const error = new Error(String(message));
-    error.status = response.status;
-    error.body = body;
-    throw error;
-  }
-  return body;
-}
-
 async function probeJson(url) {
   try {
-    const body = await fetchJson(url, { timeoutMs: 1_500 });
+    const body = await fetchJson(fetch, url, { timeoutMs: 1_500 });
     return { ok: true, body };
   } catch (error) {
     return { ok: false, status: error.status, message: error instanceof Error ? error.message : 'unreachable' };
@@ -306,7 +273,7 @@ async function consumeBridgeHandoff(apiUrl, payload) {
   if (payload?.session?.accessToken) return payload.session;
   const token = handoffTokenFromPayload(payload);
   if (!token) return payload;
-  const consumed = await fetchJson(`${apiUrl}/api/auth/bridge/consume`, {
+  const consumed = await fetchJson(fetch, `${apiUrl}/api/auth/bridge/consume`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -317,10 +284,13 @@ async function consumeBridgeHandoff(apiUrl, payload) {
   return consumed?.session ?? consumed;
 }
 
-async function apiSession() {
-  const envJwt = String(process.env.OSIONOS_MCP_JWT ?? '').trim();
-  if (envJwt) return envJwt;
-  if (cachedSession?.accessToken && cachedSession.expiresAt > Date.now() + 30_000) return cachedSession.accessToken;
+/**
+ * Mints a new app session: the bridge signs one for the shared secret.
+ *
+ * The cache of the session is the client's (scripts/osionos-mcp-api.mjs): this only
+ * knows how to ask for one.
+ */
+async function mintApiSession() {
   const secrets = bridgeSecrets();
   if (secrets.length === 0) {
     throw new Error('OSIONOS_BRIDGE_SHARED_SECRET or JWT_SECRET is required for local MCP API sessions.');
@@ -333,7 +303,7 @@ async function apiSession() {
     const timestamp = String(Date.now());
     const signature = createHmac('sha256', secret).update(`${timestamp}.${stableStringify(body)}`).digest('hex');
     try {
-      const sessionPayload = await fetchJson(`${apiUrl}/api/auth/bridge/session`, {
+      const sessionPayload = await fetchJson(fetch, `${apiUrl}/api/auth/bridge/session`, {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -353,38 +323,24 @@ async function apiSession() {
   if (!payload) throw lastAuthError ?? new Error('Unable to create an osionos MCP API session.');
   const accessToken = String(payload?.accessToken ?? '').trim();
   if (!accessToken) throw new Error('The osionos API bridge session did not return an access token.');
-  cachedSession = {
+  return {
     accessToken,
     refreshToken: String(payload?.refreshToken ?? ''),
     user: payload?.user ?? null,
     workspaces: Array.isArray(payload?.workspaces) ? payload.workspaces : [],
     expiresAt: tokenExpiresAt(accessToken) || Date.now() + 10 * 60 * 1000,
   };
-  return accessToken;
 }
 
+/**
+ * The API client: the session it keeps, and the one retry a revoked session earns
+ * (scripts/osionos-mcp-api.mjs). A call refused with `session_revoked` drops the
+ * session, mints a new one and is made again -- once (C128).
+ */
+const api = createMcpApiClient({ fetchImpl: fetch, mintSession: mintApiSession, resolveApiUrl });
+
 async function apiRequest(path, { method = 'GET', body, auth = true } = {}) {
-  const apiUrl = await resolveApiUrl();
-  const doOnce = async () => {
-    const headers = { Accept: 'application/json' };
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
-    if (auth) headers.Authorization = `Bearer ${await apiSession()}`;
-    return fetchJson(`${apiUrl}${path}`, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-  };
-  try {
-    return await doOnce();
-  } catch (error) {
-    const code = error?.body?.code ?? error?.body?.error?.code;
-    if (auth && error?.status === 401 && code === 'session_revoked') {
-      cachedSession = null;
-      return await doOnce();
-    }
-    throw error;
-  }
+  return api.request(path, { method, body, auth });
 }
 
 function compact(value) {
