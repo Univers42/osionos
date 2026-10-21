@@ -263,12 +263,14 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
 	} catch (error) {
 		let code = abortCode(controller.signal) ?? 'upstream_error';
-		const text = String(error ?? '');
-		const errStatus = (error as { statusCode?: number; status?: number } | null)?.statusCode ?? (error as { status?: number } | null)?.status;
-		if (
-			(errStatus === 404 || /404/.test(text)) &&
-			(/data.policy/i.test(text) || /data_collection/i.test(text) || /No endpoints found/i.test(text) || /Free model training/i.test(text))
-		) {
+		const failure = error as { statusCode?: number; status?: number; responseBody?: string } | null;
+		const status = failure?.statusCode ?? failure?.status;
+		// The body of the answer says as much as its message: OpenRouter puts
+		// the reason of a refusal in the body.
+		const text = `${String(error ?? '')} ${failure?.responseBody ?? ''}`;
+		// A 404 that talks about the data policy is not a missing model: it
+		// is the refusal of the provider, and the caller must be told.
+		if (status === 404 && /data[ _-]?policy|data_collection|no endpoints found|free model training/i.test(text)) {
 			code = 'vision_unavailable';
 		}
 		// A cancelled or failed run settles what the upstream reported, or
