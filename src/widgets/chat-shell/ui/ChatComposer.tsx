@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ArrowUp, FileText, Layers, Plug, Square, X } from "lucide-react";
 
 import { AiConnectionPicker } from "./AiConnectionPicker";
@@ -42,8 +42,6 @@ interface Props {
   streaming?: boolean;
   /** Stops the answer in flight. */
   onStop?: () => void;
-  /** Whether the selected model can see images. */
-  vision?: boolean;
   /** The attached image paths. */
   attachments?: string[];
   /** Replaces the attached image list. */
@@ -63,13 +61,22 @@ export const ChatComposer: React.FC<Props> = ({
   autoFocus,
   streaming,
   onStop,
-  vision,
   attachments = [],
   onAttachmentsChange,
 }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
+  // Whether the chosen model sees images. The picker is the one that holds the
+  // models, so it is the one that says.
+  const [vision, setVision] = useState(false);
   const grow = (el: HTMLTextAreaElement) => { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 240)}px`; };
   useEffect(() => { if (ref.current) grow(ref.current); }, [value]);
+
+  // A model that cannot see must never receive the images: when the choice
+  // moves to a model that cannot see them, the attachments go.
+  useEffect(() => {
+    if (vision || attachments.length === 0) return;
+    onAttachmentsChange?.([]);
+  }, [attachments.length, onAttachmentsChange, vision]);
 
   // The dictation: the transcript lands where the caret is, as typed input.
   // It never submits: the user still presses the key.
@@ -152,7 +159,11 @@ export const ChatComposer: React.FC<Props> = ({
         >
           <Plug size={16} /> Connect
         </button>
-        <AiConnectionPicker value={selection} onChange={onSelectionChange} />
+        <AiConnectionPicker
+          value={selection}
+          onChange={onSelectionChange}
+          onVisionChange={setVision}
+        />
         <DictationButton onText={applyTranscript} language={dictationLanguage(voice)} />
         {streaming ? (
           <button
