@@ -27,6 +27,8 @@
 import type { ChatMessage, ChatMessagePart } from "./chatTypes";
 import { resolveConversationTitle } from "./conversationTitle";
 import { withToolCall, withToolResult, withToolSource } from "./toolActivity";
+import { withPermission } from "./approvalParts";
+import type { PermissionPart } from "./approvalParts";
 import type { RunEventActions } from "./runEventDispatch";
 
 /** What a turn needs from the store. */
@@ -115,6 +117,10 @@ export function assistantTurn(
       const title = resolveConversationTitle(current, serverTitle);
       if (title === current) return;
       store.writeTitle(conversationId, title);
+    },
+
+    askPermission(permission: PermissionPart) {
+      patchParts((current) => withPermission(current, permission));
     },
 
     finish() {

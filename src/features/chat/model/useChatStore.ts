@@ -77,6 +77,14 @@ export interface ChatStoreState extends ChatData {
   setConversationModel: (id: string, connectorId: string, model: string) => void;
   send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; context?: RunContext }) => Promise<void>;
   stop: (conversationId: string) => void;
+  /**
+   * The follow-up of a write the user just approved.
+   *
+   * The service continued the run on its own: the answer of the assistant
+   * after the write is a run of its own, and the client attaches to its
+   * stream — the way it resumes a run whose connection dropped.
+   */
+  followUp: (conversationId: string, runId: string) => Promise<void>;
   attachContext: (scope: SharedContextItem["scope"], scopeId: string, item: Pick<SharedContextItem, "kind" | "label" | "ref">) => void;
   detachContext: (id: string) => void;
   messagesFor: (conversationId: string) => ChatMessage[];
@@ -253,6 +261,25 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     stop: (conversationId) => {
       // The abort reaches the port, which cancels the run on the service.
       activeRuns.get(conversationId)?.abort();
+    },
+
+    followUp: async (conversationId, runId) => {
+      const port = getInferencePort();
+      // A port without a stream has no run to attach to.
+      if (!port.attach) return;
+      // A conversation speaks one at a time.
+      if (activeRuns.has(conversationId)) return;
+      const conversation = get().conversations.find((c) => c.id === conversationId);
+      if (!conversation) return;
+      // The follow-up belongs to the turn that asked for the write: it is paid
+      // for the same way.
+      const last = [...get().messagesFor(conversationId)].reverse().find((m) => m.role === "assistant");
+      const connectorId = last?.connectorId ?? conversation.connectorId ?? "anthropic";
+      const model = last?.model ?? conversation.model ?? "auto";
+      const connectionId = last?.connectionId ?? PLATFORM_CONNECTION_ID;
+      await runTurn(conversationId, { connectorId, model, connectionId }, (turn, signal) =>
+        port.attach!(runId, (event, data) => dispatchRunEvent(event, data, turn), signal),
+      );
     },
 
     attachContext: (scope, scopeId, item) => {
