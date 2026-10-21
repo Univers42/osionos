@@ -69,9 +69,10 @@ function isRunExpired(error: unknown): boolean {
  *
  * The rules, in order: relay every frame exactly once; when the stream ends
  * before a terminal frame, resume after the last frame seen (up to three
- * times, waiting 500 / 1000 / 2000 ms); a 410 on resume ends the run with
- * `run_expired`; three failed resumes end the run with an error too. An abort
- * ends everything quietly — that is a stop, not a failure.
+ * times, waiting 500 / 1000 / 2000 ms); a 4xx on the first request is a
+ * refusal: it is thrown to the caller, never resumed; a 410 on resume ends
+ * the run with `run_expired`; three failed resumes end the run with an error
+ * too. An abort ends everything quietly — that is a stop, not a failure.
  */
 export async function streamRun(options: StreamRunOptions): Promise<void> {
   const { start, resume, onEvent, signal } = options;
@@ -103,6 +104,12 @@ export async function streamRun(options: StreamRunOptions): Promise<void> {
       await relay(response);
     } catch (error) {
       if (signal?.aborted) return;
+      // A 4xx on the first request is a refusal: the run was never created,
+      // so there is nothing to resume. The caller is told why.
+      if (attempt === 0) {
+        const { status } = failureOf(error);
+        if (status !== undefined && status >= 400 && status < 500) throw error;
+      }
       failure = error;
       // A run whose stream is gone cannot be picked up again — say so, once.
       if (attempt > 0 && isRunExpired(error)) {
