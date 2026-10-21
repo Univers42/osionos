@@ -40,18 +40,22 @@ interface Props {
 export const AttachImageButton: React.FC<Props> = ({ vision, attachments, onChange, max = 4 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   if (!vision) return null;
 
   const onPick = async (file: File | null) => {
     if (!file || attachments.length >= max) return;
     setBusy(true);
+    setFailed(false);
     try {
       const absolute = await uploadPageMedia(file);
       const relative = API_BASE && absolute.startsWith(API_BASE) ? absolute.slice(API_BASE.length) : absolute;
       onChange([...attachments, relative]);
     } catch {
-      // Upload failed: nothing is added.
+      // Nothing is attached, and the reader is told: a picker that closes on
+      // nothing looks like a click that did not register.
+      setFailed(true);
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -98,10 +102,18 @@ export const AttachImageButton: React.FC<Props> = ({ vision, attachments, onChan
     React.createElement("input", {
       ref: inputRef,
       type: "file",
-      accept: "image/*",
+      // The service reads these three formats only (vision/imageHeader.ts).
+      accept: "image/png,image/jpeg,image/webp",
       className: "hidden",
       onChange: (event: React.ChangeEvent<HTMLInputElement>) => void onPick(event.target.files?.[0] ?? null),
     }),
+    failed
+      ? React.createElement(
+          "span",
+          { role: "alert", className: "text-xs text-[var(--osio-danger)]" },
+          "The image could not be uploaded. Try again.",
+        )
+      : null,
     attachments.length > 0
       ? React.createElement(
           "span",
