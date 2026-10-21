@@ -26,6 +26,7 @@ import { isSlashCommandAvailable } from "@/features/slash-commands/model/slashAv
 import { isBuiltInAppReady } from "@/features/whiteboard/model/whiteboardAvailability";
 import { usePageStore } from "@/store/usePageStore";
 import type {
+  SlashAiCommand,
   SlashCreatePageCommand,
   SlashDatabaseViewCommand,
   SlashBlockCommand,
@@ -54,7 +55,7 @@ interface SlashCommandMenuProps {
   position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (
-    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand,
+    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand | SlashAiCommand,
   ) => void;
   onMediaSelect: (kind: MediaBlockType, value: string) => void;
   onClose: () => void;

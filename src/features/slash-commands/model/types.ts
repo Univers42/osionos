@@ -79,6 +79,13 @@ export interface SlashWhiteboardCommand extends SlashCommandBase {
   kind: "whiteboard";
 }
 
+/** An AI action: the service's command, run on the block the menu was opened on. */
+export interface SlashAiCommand extends SlashCommandBase {
+  kind: "ai";
+  /** The name of the command the service knows (`ask`, `summarize`, …). */
+  command: string;
+}
+
 export type SlashCommand =
   | SlashBlockCommand
   | SlashTurnIntoCommand
@@ -86,7 +93,8 @@ export type SlashCommand =
   | SlashInlineCommand
   | SlashDatabaseViewCommand
   | SlashMediaPickerCommand
-  | SlashWhiteboardCommand;
+  | SlashWhiteboardCommand
+  | SlashAiCommand;
 
 export interface SlashCommandSection {
   id: string;

@@ -39,6 +39,7 @@ import {
 } from "./blockColors";
 import { copyBlocks } from "./blockClipboard";
 import { getBlockDraftContent } from "./blockDraftStore";
+import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
 import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
 import { BLOCK_TRANSFORM_OPTIONS } from "./blockTransformOptions";
 import {
@@ -384,6 +385,14 @@ export function useBlockContextMenu({
     closeContextMenu();
   }, [closeContextMenu]);
 
+  /** "Ask AI" (Ctrl+J) — the AI panel opens under this block, with its input
+   *  focused: the user asks, the answer streams, nothing is written yet. */
+  const handleAskAI = useCallback(() => {
+    if (!contextMenu) return;
+    useInlineAiStore.getState().open({ pageId, blockId: contextMenu.blockId });
+    closeContextMenu();
+  }, [closeContextMenu, contextMenu, pageId]);
+
   const handleComment = useCallback(() => {
     if (!contextMenu) return;
     globalThis.dispatchEvent(
@@ -681,7 +690,7 @@ export function useBlockContextMenu({
             icon: <Sparkles size={16} />,
             label: "Ask AI",
             shortcut: "Ctrl+J",
-            onClick: handleUnavailable,
+            onClick: handleAskAI,
           },
         ],
       },
@@ -704,6 +713,7 @@ export function useBlockContextMenu({
     handleSetTableConfig,
     handleToggleHeading,
     handleUnavailable,
+    handleAskAI,
   ]);
 
   return {
