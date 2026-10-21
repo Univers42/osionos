@@ -202,12 +202,14 @@ export function configFromEnv(env = process.env) {
 			privateKey: env.OSIONOS_VAPID_PRIVATE_KEY ?? '',
 			subject: env.OSIONOS_VAPID_SUBJECT ?? 'mailto:admin@osionos.local',
 		},
-		// Account-level administrators. These emails are promoted to is_admin at
-		// login (sticky in the DB, so the flag survives later env changes).
 		// Off unless explicitly set: the Claude CLI route runs a child with
 		// bypassPermissions. Caveat: never set this on a public deployment.
 		agentClaudeEnabled: env.OSIONOS_AGENT_CLAUDE === '1',
-		adminEmails: (env.OSIONOS_ADMIN_EMAILS ?? 'dev.pro.photo@gmail.com')
+		// Account-level administrators. These emails are promoted to is_admin at
+		// login (sticky in the DB, so the flag survives later env changes).
+		// Opt-in: no variable, no administrator — a deployment that forgets it
+		// promotes nobody, whoever signs in.
+		adminEmails: (env.OSIONOS_ADMIN_EMAILS ?? '')
 			.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean),
 	};
 }
@@ -4191,6 +4193,9 @@ export function createBridgeServer(options = {}) {
 export function startBridgeServer(config = configFromEnv()) {
 	const server = createBridgeServer({ config });
 	console[server.sessionCutoffs.enforced ? 'info' : 'warn'](server.sessionCutoffs.bootLine());
+	// No administrator configured: nobody is promoted to is_admin at login, so
+	// an account-admin workspace has no admin until the operator sets one.
+	if (!config.adminEmails.length) console.warn('[bridge] no account administrators configured (OSIONOS_ADMIN_EMAILS unset)');
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
 	});
