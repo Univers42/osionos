@@ -1,5 +1,6 @@
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { AuthUser } from '../auth.ts';
+import type { QueryRunner } from '../db.ts';
 import { readLinkEdgesFromDb } from '../../../../scripts/bridge-graph-edges.mjs';
 import { liveMemberWorkspaces } from './acl.ts';
 import { readablePages } from './search.ts';
@@ -57,8 +58,20 @@ interface NeighbourRow extends QueryResultRow {
 	distance: number;
 }
 
-/** The number of vectors of a workspace: the size of the candidate set. */
-const COUNT_SQL = `select count(*)::int as count from public.ai_page_vectors where workspace_id = $1`;
+/**
+ * The number of vectors of a workspace: the size of the candidate set.
+ *
+ * The count is BOUNDED: it stops at `EXACT_SCAN_MAX_PAGES + 1`, because the
+ * only question the count answers is "is the workspace above the threshold of
+ * the exact scan?". Counting every vector of a big workspace on every call is
+ * a scan of the partition for nothing.
+ */
+const COUNT_SQL = `select count(*)::int as count from (
+	select 1
+	from public.ai_page_vectors
+	where workspace_id = $1
+	limit ${EXACT_SCAN_MAX_PAGES + 1}
+) as bounded`;
 
 /**
  * The exact kNN: the whole candidate set, sorted by distance.
@@ -66,6 +79,11 @@ const COUNT_SQL = `select count(*)::int as count from public.ai_page_vectors whe
  * The candidates are MATERIALIZED, so the planner reads the workspace's rows
  * through the btree of the primary key and sorts them: the HNSW index cannot
  * answer this, and the answer is the exact top-k of the readable candidates.
+ *
+ * The page of a vector must be in the workspace of the vector (C105): a page
+ * that moved to another workspace keeps its vector in the old partition until
+ * the indexer rewrites it, and it is not a neighbour of a page of the old
+ * workspace any more.
  */
 export const EXACT_SQL = `
 with candidates as materialized (
@@ -73,6 +91,7 @@ with candidates as materialized (
 	from public.ai_page_vectors v
 	join public.osionos_pages p on p.id = v.page_id
 	where v.workspace_id = $2::uuid
+	  and p.workspace_id = v.workspace_id
 	  and p.workspace_id = any($3::uuid[])
 	  and p.archived_at is null
 	  and (p.visibility in ('shared', 'public')
@@ -92,20 +111,40 @@ limit $6`;
  * question; the iterative scan keeps the order of the distances while it skips
  * the rows the filter refuses, so the result cannot be starved by a workspace
  * that holds few of the neighbours.
+ *
+ * The rows are re-sorted by their distance, as pgvector documents for the
+ * iterative scan: `relaxed_order` returns the rows it found in the order of
+ * the index, which is only ALMOST the order of the distances.
+ *
+ * Caveat: the scan visits `hnsw.max_scan_tuples` candidates at most (a
+ * thousand by default). When many near neighbours are HIDDEN (a page the
+ * caller may not read), the scan can run out of tuples before it found k
+ * readable ones, and the answer is then SHORTER than k. That is the residual
+ * count channel of C102 — the length of the answer says that hidden near
+ * neighbours exist — and it is the price of the index. The escape hatch: below
+ * `EXACT_SCAN_MAX_PAGES` vectors of the workspace the answer is the exact
+ * top-k, and above it `SET LOCAL hnsw.max_scan_tuples` (and `hnsw.ef_search`)
+ * buys the scan a bigger budget.
  */
 export const HNSW_SQL = `
-select v.page_id, v.embedding <=> $1::halfvec as distance
-from public.ai_page_vectors v
-join public.osionos_pages p on p.id = v.page_id
-where v.workspace_id = $2::uuid
-  and p.workspace_id = any($3::uuid[])
-  and p.archived_at is null
-  and (p.visibility in ('shared', 'public')
-       or p.owner_id = $4::uuid
-       or $4::uuid = any(public.ai_collaborator_ids(p.collaborators)))
-  and v.page_id <> $5::uuid
-order by v.embedding <=> $1::halfvec
-limit $6`;
+with scanned as materialized (
+	select v.page_id, v.embedding <=> $1::halfvec as distance
+	from public.ai_page_vectors v
+	join public.osionos_pages p on p.id = v.page_id
+	where v.workspace_id = $2::uuid
+	  and p.workspace_id = v.workspace_id
+	  and p.workspace_id = any($3::uuid[])
+	  and p.archived_at is null
+	  and (p.visibility in ('shared', 'public')
+	       or p.owner_id = $4::uuid
+	       or $4::uuid = any(public.ai_collaborator_ids(p.collaborators)))
+	  and v.page_id <> $5::uuid
+	order by v.embedding <=> $1::halfvec
+	limit $6
+)
+select page_id, distance
+from scanned
+order by distance`;
 
 /** The embedding of the source page, as the indexer wrote it. */
 const VECTOR_SQL = `select embedding::text as embedding from public.ai_page_vectors where workspace_id = $1 and page_id = $2`;
@@ -153,6 +192,12 @@ async function neighbours(
  *
  * `null` when the caller may not read the source page: the caller answers the
  * same 404 as for a page that does not exist (C101), byte for byte.
+ *
+ * The whole answer rides ONE connection of the pool. The kNN and the links it
+ * answers with are two sets of reads, and asking the pool for a second
+ * connection while the first one is held DEADLOCKS the route: the pool hands
+ * out ten connections, ten requests take them, and every one of them waits for
+ * the eleventh for ever.
  */
 export async function relatedPages(
 	db: Pool,
@@ -200,7 +245,9 @@ export async function relatedPages(
 			relatedFetch(limit),
 		);
 		await client.query('COMMIT');
-		return await withLinks(db, user, pageId, workspaces, rows, limit);
+		// The links ride the SAME connection: the pool is never asked for a
+		// second one while this one is held.
+		return await withLinks(client, user, pageId, workspaces, rows, limit);
 	} catch (error) {
 		await client.query('ROLLBACK').catch(() => undefined);
 		throw error;
@@ -218,7 +265,7 @@ export async function relatedPages(
  * read is not a link at all.
  */
 async function withLinks(
-	db: Pool,
+	db: QueryRunner,
 	user: AuthUser,
 	pageId: string,
 	workspaces: readonly string[],

@@ -104,6 +104,15 @@ async function clear(): Promise<void> {
 	await db.query('delete from public.osionos_workspace_members');
 }
 
+/** A reads B too (a live members row): only the SOURCE's workspace can hide a neighbour (C105). */
+async function memberOfBoth(): Promise<void> {
+	await db.query(
+		`insert into public.osionos_workspace_members (workspace_id, user_id, role, permissions)
+		 values ($1, $2, 'member', array['read'])`,
+		[WORKSPACE_B, USER_A],
+	);
+}
+
 /**
  * Whether the graph migration is applied: the related read needs the page
  * vectors, and a run with the AI migration alone skips the suite.
@@ -155,9 +164,21 @@ describe('the related pages', { skip: hasVectors ? false : 'the graph migration 
 	it('a page of another workspace is never a neighbour, even with the same text', async () => {
 		const topic = vectorOf('the topic');
 		const source = await seedPage({ vector: topic });
+		await memberOfBoth();
 		const other = await seedPage({ vector: near(topic, 0.0001), workspaceId: WORKSPACE_B });
 		const ids = idsOf((await related(source, tokenFor(USER_A, WORKSPACE_A))).text);
 		assert.ok(!ids.includes(other), 'the kNN stays in the workspace of the source');
+	});
+
+	it('a page that moved to another workspace is never a neighbour', async () => {
+		const topic = vectorOf('the topic');
+		const source = await seedPage({ vector: topic });
+		await memberOfBoth();
+		// Re-indexed from a read taken before a move A → B: the vector says A, the page says B.
+		const moved = await seedPage({ vector: near(topic, 0.0001), workspaceId: WORKSPACE_B });
+		await db.query('update public.ai_page_vectors set workspace_id = $2 where page_id = $1', [moved, WORKSPACE_A]);
+		const ids = idsOf((await related(source, tokenFor(USER_A, WORKSPACE_A))).text);
+		assert.ok(!ids.includes(moved), 'the page that left the workspace is not a neighbour');
 	});
 
 	it('a page the source already links to is marked, and it is not a suggestion', async () => {

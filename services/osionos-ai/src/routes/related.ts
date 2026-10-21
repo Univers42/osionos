@@ -1,4 +1,6 @@
+import { config } from '../config.ts';
 import { sendError, sendJson } from '../http.ts';
+import { checkRelatedRateLimit } from '../rateLimit.ts';
 import { relatedLimit, relatedPages } from '../retrieval/related.ts';
 import { requireUser, UUID } from './support.ts';
 import type { RouteContext } from './types.ts';
@@ -21,6 +23,15 @@ export async function handleRelated(ctx: RouteContext): Promise<number> {
 		// the same, byte for byte (C101).
 		sendError(ctx.response, 404, 'not_found');
 		return 404;
+	}
+	// The related read is a kNN over the vectors of a workspace: the most
+	// expensive read of the service. It has its OWN window (its own counter,
+	// the same limiter), so a client that hammers it cannot spend the budget
+	// of the runs.
+	const rate = await checkRelatedRateLimit(ctx.deps.redis, user.userId, config.relatedPerMinute);
+	if (!rate.allowed) {
+		sendError(ctx.response, 429, 'rate_limited');
+		return 429;
 	}
 	const limit = relatedLimit(ctx.url.searchParams.get('k'));
 	const related = await relatedPages(ctx.deps.db, user, pageId, limit);
