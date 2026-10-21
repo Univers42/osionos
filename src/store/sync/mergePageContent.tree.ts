@@ -157,40 +157,74 @@ export function collectIds(blocks: Block[]): string[] {
 
 /** Where a side's ids line up with the base's: the longest common subsequence, as base index ->
  *  side index. */
-interface Alignment {
+export interface Alignment {
   pos: Map<number, number>;
 }
 
-/** The LCS of two id sequences. O(base x side) — the table is the page's blocks squared, which
- *  a page of a few hundred blocks pays for in milliseconds. */
-function align(base: string[], side: string[]): Alignment {
+/** The LCS of two id sequences, as base index -> side index.
+ *  The ids of one container are unique (a block id is in a tree once), so the LCS of the two
+ *  sequences is the longest increasing subsequence of the side's base indices: map every base
+ *  id to its index, keep the side's ids the base holds, and take the LIS of those indices.
+ *  O(n log n) time, O(n) memory — the old table was the page's blocks squared. */
+export function align(base: string[], side: string[]): Alignment {
   const pos = new Map<number, number>();
-  const rows = base.length + 1;
-  const cols = side.length + 1;
   if (base.length === 0 || side.length === 0) return { pos };
-  const table = new Uint32Array(rows * cols);
-  for (let i = 1; i < rows; i += 1) {
-    for (let j = 1; j < cols; j += 1) {
-      table[i * cols + j] =
-        base[i - 1] === side[j - 1]
-          ? table[(i - 1) * cols + (j - 1)] + 1
-          : Math.max(table[(i - 1) * cols + j], table[i * cols + (j - 1)]);
-    }
+  // A corrupt input (an id twice) is read as "the later copy is absent": a tree holds an id
+  // once, and the first occurrence is the block. Never a throw, never a quadratic table.
+  const baseIndex = new Map<string, number>();
+  for (let index = 0; index < base.length; index += 1) {
+    if (!baseIndex.has(base[index])) baseIndex.set(base[index], index);
   }
-  let i = base.length;
-  let j = side.length;
-  while (i > 0 && j > 0) {
-    if (base[i - 1] === side[j - 1]) {
-      pos.set(i - 1, j - 1);
-      i -= 1;
-      j -= 1;
-    } else if (table[(i - 1) * cols + j] >= table[i * cols + (j - 1)]) {
-      i -= 1;
-    } else {
-      j -= 1;
-    }
+  const values: number[] = [];
+  const sideAt: number[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < side.length; index += 1) {
+    const id = side[index];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const at = baseIndex.get(id);
+    if (at === undefined) continue;
+    values.push(at);
+    sideAt.push(index);
   }
+  for (const at of lisIndices(values)) pos.set(values[at], sideAt[at]);
   return { pos };
+}
+
+/** The longest increasing subsequence of a sequence of numbers, as the indices of its
+ *  elements. Patience sorting: O(k log k) time, O(k) memory. */
+function lisIndices(values: number[]): number[] {
+  if (values.length === 0) return [];
+  // tails[length - 1] is the smallest last value of an increasing subsequence of that
+  // length; tailAt is where it sits in `values`, pred the element before it.
+  const tails: number[] = [];
+  const tailAt: number[] = [];
+  const pred: number[] = new Array(values.length).fill(-1);
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    let low = 0;
+    let high = tails.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (tails[mid] < value) low = mid + 1;
+      else high = mid;
+    }
+    if (low > 0) pred[index] = tailAt[low - 1];
+    if (low === tails.length) {
+      tails.push(value);
+      tailAt.push(index);
+    } else {
+      tails[low] = value;
+      tailAt[low] = index;
+    }
+  }
+  const out: number[] = [];
+  let at = tailAt[tailAt.length - 1];
+  while (at >= 0) {
+    out.push(at);
+    at = pred[at];
+  }
+  return out.reverse();
 }
 
 /** The side's ids between two base positions: what the side put there instead of the base. */
@@ -213,7 +247,7 @@ function gapOf(
  * deviation is compared with the base's. A side that did not move wins the gap alone, a side
  * that did move wins when the other one did not, and when both moved the gap is kept whole
  * (the local's wins; the caller puts the server's blocks back next to their server siblings).
- * O(base x local + base x server).
+ * O(n log n) per container — the alignment is an LIS, not a table of the blocks squared.
  */
 export function mergeOrder(base: string[], local: string[], server: string[]): string[] {
   const localAlign = align(base, local);
