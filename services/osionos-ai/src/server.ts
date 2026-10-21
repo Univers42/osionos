@@ -7,9 +7,13 @@ import { z } from 'zod';
 import { authenticate, cutoffPoller } from './auth.ts';
 import { config } from './config.ts';
 import { createPool } from './db.ts';
-import { readJson, sendError, sendJson, sendPreflight } from './http.ts';
+import { readJson, sendError, sendJson, sendPreflight, sendSseHeaders, writeSseFrame, writeSsePing } from './http.ts';
 import { canAccessWorkspace } from './workspaceAccess.ts';
 import { createConversation, getOwnedConversation, listConversations, listMessages } from './conversations/repo.ts';
+import { platformModels, resolveModel } from './gateway/platform.ts';
+import { getOwnedRun } from './runs/repo.ts';
+import { startRun, sweepStaleRuns } from './runs/runner.ts';
+import * as runStore from './runs/runStore.ts';
 
 /** The UUID shape the bridge's tokens carry (scripts/bridge-session-token.mjs:10). */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -19,19 +23,32 @@ const createConversationSchema = z.object({
 	title: z.string().max(200).optional(),
 });
 
+const startRunSchema = z.object({
+	runId: z.string().regex(UUID, 'runId must be a uuid'),
+	conversationId: z.string().regex(UUID, 'conversationId must be a uuid'),
+	text: z.string().min(1).max(32_000),
+	model: z.string().min(1).optional(),
+});
+
+/** A quiet stream is kept alive with a comment every fifteen seconds. */
+const SSE_PING_MS = 15_000;
+/** The sweep of the stale runs: once a minute. */
+const SWEEP_INTERVAL_MS = 60_000;
+
 export interface AiServer {
 	server: ReturnType<typeof createServer>;
 	db: Pool;
 	redis: Redis;
+	blockingRedis: Redis;
 	close(): Promise<void>;
 }
 
 /** The Redis client of the service: it connects on demand and gives up in a second. */
-function createRedisClient(redisUrl: string): Redis {
+function createRedisClient(redisUrl: string, commandTimeoutMs = 1_000): Redis {
 	const client = new Redis(redisUrl, {
 		lazyConnect: true,
 		connectTimeout: 1_000,
-		commandTimeout: 1_000,
+		commandTimeout: commandTimeoutMs,
 		maxRetriesPerRequest: 1,
 	});
 	// The client retries on its own; the log carries the failure's name, never the URL.
@@ -86,12 +103,60 @@ function logRequest(request: IncomingMessage, route: string, status: number, ms:
 	console.info(JSON.stringify({ event: 'request', method: request.method ?? '', route, status, ms }));
 }
 
+/** The dependencies of a request: the database, the cache, and the blocking reader. */
+interface RequestDeps {
+	db: Pool;
+	redis: Redis;
+	blockingRedis: Redis;
+}
+
+/** The ping of a stream, and the way to stop it. */
+function startPing(response: ServerResponse): () => void {
+	const timer = setInterval(() => writeSsePing(response), SSE_PING_MS);
+	const stop = () => clearInterval(timer);
+	response.on('close', stop);
+	return stop;
+}
+
+/**
+ * The events of a run, after the id the client last saw: the replay first, then
+ * the live ones, each event exactly once.
+ *
+ * The client closing the connection stops the reading, never the run: the run
+ * keeps going and stays resumable.
+ */
+async function streamRunEvents(
+	deps: RequestDeps,
+	runId: string,
+	afterId: string,
+	response: ServerResponse,
+): Promise<void> {
+	const controller = new AbortController();
+	const stop = () => controller.abort();
+	response.on('close', stop);
+	try {
+		const entries = await runStore.readAfter(deps.redis, runId, afterId);
+		for (const entry of entries) writeSseFrame(response, entry);
+		const last = entries.length > 0 ? entries[entries.length - 1] : undefined;
+		if (last && runStore.TERMINAL_TYPES.has(last.type)) return;
+		await runStore.follow(
+			deps.blockingRedis,
+			runId,
+			last?.id ?? afterId,
+			(entry) => writeSseFrame(response, entry),
+			controller.signal,
+		);
+	} finally {
+		response.off('close', stop);
+	}
+}
+
 async function handleRequest(
 	request: IncomingMessage,
 	response: ServerResponse,
-	db: Pool,
-	redis: Redis,
+	deps: RequestDeps,
 ): Promise<void> {
+	const { db, redis } = deps;
 	const startedAt = Date.now();
 	let status = 500;
 	let route = 'unknown';
@@ -190,6 +255,155 @@ async function handleRequest(
 			return;
 		}
 
+		if (request.method === 'GET' && pathname === '/api/ai/models') {
+			route = '/api/ai/models';
+			const user = authenticate(request);
+			if (!user) {
+				status = 401;
+				sendError(response, status, 'unauthorized');
+				return;
+			}
+			// The prices stay on the server: the client only needs to show a name.
+			status = 200;
+			sendJson(response, status, {
+				models: platformModels().map((model) => ({ id: model.id, label: model.label, default: model.default })),
+			});
+			return;
+		}
+
+		if (request.method === 'POST' && pathname === '/api/ai/runs') {
+			route = '/api/ai/runs';
+			const user = authenticate(request);
+			if (!user) {
+				status = 401;
+				sendError(response, status, 'unauthorized');
+				return;
+			}
+			const body = await readJson(request, startRunSchema);
+			const model = resolveModel(body.model);
+			if (!model) {
+				status = 400;
+				sendError(response, status, 'model_not_allowed');
+				return;
+			}
+			const conversation = await getOwnedConversation(db, { id: body.conversationId, ownerId: user.userId });
+			if (!conversation) {
+				status = 404;
+				sendError(response, status, 'not_found');
+				return;
+			}
+			const outcome = await startRun({
+				db,
+				redis,
+				runId: body.runId,
+				conversationId: body.conversationId,
+				ownerId: user.userId,
+				text: body.text,
+				model,
+				emit: (event) => writeSseFrame(response, event),
+			});
+			if (outcome.kind === 'refused') {
+				status = outcome.status;
+				sendError(response, status, outcome.code);
+				return;
+			}
+			if (outcome.kind === 'reattach') {
+				// The same run, asked again: the stream is replayed, and no model is
+				// called a second time.
+				if (!(await runStore.exists(redis, body.runId))) {
+					status = 410;
+					sendError(response, status, 'run_expired');
+					return;
+				}
+				status = 200;
+				sendSseHeaders(response);
+				const stopPing = startPing(response);
+				await streamRunEvents(deps, body.runId, '', response);
+				stopPing();
+				if (!response.writableEnded && !response.destroyed) response.end();
+				return;
+			}
+			status = 200;
+			sendSseHeaders(response);
+			const stopPing = startPing(response);
+			try {
+				await outcome.execute();
+			} finally {
+				stopPing();
+				if (!response.writableEnded && !response.destroyed) response.end();
+			}
+			return;
+		}
+
+		const runEvents = /^\/api\/ai\/runs\/([^/]+)\/events$/.exec(pathname);
+		if (request.method === 'GET' && runEvents) {
+			route = '/api/ai/runs/:id/events';
+			const user = authenticate(request);
+			if (!user) {
+				status = 401;
+				sendError(response, status, 'unauthorized');
+				return;
+			}
+			const runId = runEvents[1];
+			if (!UUID.test(runId)) {
+				status = 404;
+				sendError(response, status, 'not_found');
+				return;
+			}
+			// The owner check is the gate: a run of somebody else does not exist
+			// for this caller.
+			const run = await getOwnedRun(db, { id: runId, ownerId: user.userId });
+			if (!run) {
+				status = 404;
+				sendError(response, status, 'not_found');
+				return;
+			}
+			if (!(await runStore.exists(redis, runId))) {
+				status = 410;
+				sendError(response, status, 'run_expired');
+				return;
+			}
+			const header = request.headers['last-event-id'];
+			const afterId =
+				(typeof header === 'string' && header.length > 0 ? header : url.searchParams.get('after')) ?? '';
+			status = 200;
+			sendSseHeaders(response);
+			const stopPing = startPing(response);
+			await streamRunEvents(deps, runId, afterId, response);
+			stopPing();
+			if (!response.writableEnded && !response.destroyed) response.end();
+			return;
+		}
+
+		const runCancel = /^\/api\/ai\/runs\/([^/]+)\/cancel$/.exec(pathname);
+		if (request.method === 'POST' && runCancel) {
+			route = '/api/ai/runs/:id/cancel';
+			const user = authenticate(request);
+			if (!user) {
+				status = 401;
+				sendError(response, status, 'unauthorized');
+				return;
+			}
+			const runId = runCancel[1];
+			if (!UUID.test(runId)) {
+				status = 404;
+				sendError(response, status, 'not_found');
+				return;
+			}
+			const run = await getOwnedRun(db, { id: runId, ownerId: user.userId });
+			if (!run) {
+				status = 404;
+				sendError(response, status, 'not_found');
+				return;
+			}
+			// The cancellation travels on the channel: the replica that runs the
+			// model is the one that stops it.
+			await runStore.publishCancel(redis, runId);
+			status = 202;
+			sendJson(response, status, { ok: true, runId });
+			return;
+		}
+
 		status = 404;
 		sendError(response, status, 'not_found');
 	} catch (error) {
@@ -210,24 +424,46 @@ async function handleRequest(
 export function createAiServer(): AiServer {
 	const db = createPool(config.databaseUrl);
 	const redis = createRedisClient(config.redisUrl);
+	// The blocking read needs a connection of its own: a blocked Redis client
+	// answers nobody else. The subscriber needs one too: a subscribed client
+	// only speaks subscriptions.
+	const blockingRedis = createRedisClient(config.redisUrl, 30_000);
+	const subscriber = createRedisClient(config.redisUrl, 30_000);
+	void runStore.listenForCancels(subscriber).catch((error: Error) => {
+		console.warn(JSON.stringify({ event: 'cancel_listener_failed', code: error.name }));
+	});
+	// The sweep of the stale runs: at boot, and then every minute.
+	const sweep = setInterval(() => {
+		void sweepStaleRuns(db).catch((error: Error) => {
+			console.warn(JSON.stringify({ event: 'sweep_failed', code: error.name }));
+		});
+	}, SWEEP_INTERVAL_MS);
+	sweep.unref();
+	void sweepStaleRuns(db).catch((error: Error) => {
+		console.warn(JSON.stringify({ event: 'sweep_failed', code: error.name }));
+	});
 	const server = createServer((request, response) => {
-		void handleRequest(request, response, db, redis);
+		void handleRequest(request, response, { db, redis, blockingRedis });
 	});
 	return {
 		server,
 		db,
 		redis,
+		blockingRedis,
 		async close(): Promise<void> {
+			clearInterval(sweep);
 			cutoffPoller.stop();
 			await new Promise<void>((resolve) => {
 				server.close(() => resolve());
 				server.closeIdleConnections();
 			});
 			await db.end();
-			try {
-				await redis.quit();
-			} catch {
-				redis.disconnect();
+			for (const client of [redis, blockingRedis, subscriber]) {
+				try {
+					await client.quit();
+				} catch {
+					client.disconnect();
+				}
 			}
 		},
 	};
