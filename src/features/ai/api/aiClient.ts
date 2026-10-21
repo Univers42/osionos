@@ -158,6 +158,24 @@ export interface CompleteInput {
   connectionId?: string;
 }
 
+/**
+ * One page related to another, for the caller who asks.
+ *
+ * The neighbours are computed for the caller at the moment of the read: a page
+ * the caller may not read is not a neighbour, and it is not a "missing" one
+ * either.
+ */
+export interface AiRelatedPage {
+  /** The id of the page. */
+  pageId: string;
+  /** Its title. */
+  title: string;
+  /** The cosine similarity of the two pages, from 0 to 1. */
+  score: number;
+  /** Whether the page already links to it. */
+  linked: boolean;
+}
+
 /* -------------------------------------------------------------------------- */
 /* The errors                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -338,6 +356,20 @@ export async function cancelRun(runId: string): Promise<void> {
 /** `POST /complete` — a short-lived completion, never persisted. */
 export async function complete(input: CompleteInput, signal?: AbortSignal): Promise<Response> {
   return requestStream("POST", "/complete", input, { signal });
+}
+
+/**
+ * `GET /pages/:id/related?k=` — the pages related to a page, for the caller.
+ *
+ * The list is computed by the service for this caller: a page the caller may
+ * not read is never in it.
+ */
+export async function listRelatedPages(pageId: string, k = 8): Promise<AiRelatedPage[]> {
+  const body = await requestJson<{ related?: AiRelatedPage[] }>(
+    "GET",
+    `/pages/${encodeURIComponent(pageId)}/related?k=${k}`,
+  );
+  return body.related ?? [];
 }
 
 /* -------------------------------------------------------------------------- */

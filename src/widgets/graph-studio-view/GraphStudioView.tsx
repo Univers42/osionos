@@ -11,15 +11,22 @@ import type { PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
 import {
   type Dropped,
+  type EdgeKind,
+  type IngestDoc,
   type GraphScope,
+  EDGE_KINDS,
+  EDGE_KIND_LABELS,
   GRAPH_SCOPES,
   GRAPH_STUDIO_TAG,
   HOST_API,
   fetchBridgeGraph,
+  filterEdges,
+  loadEdgeKinds,
   loadGraphScope,
   loadStudio,
   pageIdOf,
   recordRefOf,
+  saveEdgeKinds,
   saveGraphScope,
   takeGraphFocus,
   toIngestDoc,
@@ -59,7 +66,7 @@ interface LoadBook {
 }
 
 const SCOPE_LABELS: Record<GraphScope, string> = { workspace: "Workspace", all: "All pages", "all-data": "Everything" };
-const EMPTY_DOC = { version: 1, nodes: [], edges: [] };
+const EMPTY_DOC: IngestDoc = { version: 1, nodes: [], edges: [] };
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -133,6 +140,7 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
   const [element, setElement] = useState<StudioElement | null>(null);
   const [view, setView] = useState<ViewState>({ phase: "loading" });
   const [chosenScope, setChosenScope] = useState<GraphScope>(loadGraphScope);
+  const [chosenKinds, setChosenKinds] = useState<EdgeKind[]>(loadEdgeKinds);
   const [attempt, setAttempt] = useState(0);
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const scope = fixedScope ?? chosenScope;
@@ -213,12 +221,14 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
       if (droppedTotal(dropped) > 0) {
         console.info(`[graph-studio] dropped ${dropped.dupNodes} duplicate node(s), ${dropped.dupEdges} duplicate edge(s), ${dropped.dangling} dangling edge(s)`);
       }
+      // The kinds the user chose: a VIEW choice, the store keeps every edge.
+      const chosen = filterEdges(doc, chosenKinds);
       // A refusal's twin graph-error from an earlier load is no longer expected.
       ledger.refused = null;
       ledger.inFlight += 1;
       let refusal: string | null = null;
       try {
-        const result = await element.loadGraph(doc);
+        const result = await element.loadGraph(chosen);
         if (import.meta.env.DEV && result.notes.length > 0) {
           console.error("[graph-studio] the element filled in our document", result.notes);
         }
@@ -246,13 +256,25 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
     return () => {
       ledger.token += 1;
     };
-  }, [element, scope, workspaceId, attempt, fixedScope]);
+  }, [element, scope, workspaceId, attempt, fixedScope, chosenKinds]);
 
   const pickScope = useCallback((next: GraphScope) => {
     saveGraphScope(next);
     setChosenScope(next);
     setView({ phase: "loading" });
   }, []);
+
+  /** The kinds of edge the graph shows: a view choice, the store keeps them all. */
+  const pickKind = useCallback(
+    (kind: EdgeKind) => {
+      const next = chosenKinds.includes(kind) ? chosenKinds.filter((other) => other !== kind) : [...chosenKinds, kind];
+      // One kind stays: a graph with no edge at all is not a choice, it is a bug.
+      const kept = next.length > 0 ? next : [...EDGE_KINDS];
+      saveEdgeKinds(kept);
+      setChosenKinds(kept);
+    },
+    [chosenKinds],
+  );
 
   const retry = useCallback(() => {
     setView({ phase: "loading" });
@@ -276,9 +298,22 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
                 type="button"
                 aria-pressed={scope === option}
                 onClick={() => pickScope(option)}
-                className={`rounded-xs px-1.5 py-0.5 transition-colors ${scope === option ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "hover:bg-[var(--osio-bg-hover)]"}`}
+                className={`rounded-xs px-1.5 py-0.5 transition-colors motion-reduce:transition-none ${scope === option ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "hover:bg-[var(--osio-bg-hover)]"}`}
               >
                 {SCOPE_LABELS[option]}
+              </button>
+            ))}
+          </div>
+          <div role="group" aria-label="Edge kinds" className="flex gap-1">
+            {EDGE_KINDS.map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                aria-pressed={chosenKinds.includes(kind)}
+                onClick={() => pickKind(kind)}
+                className={`rounded-xs px-1.5 py-0.5 transition-colors motion-reduce:transition-none ${chosenKinds.includes(kind) ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"}`}
+              >
+                {EDGE_KIND_LABELS[kind]}
               </button>
             ))}
           </div>
