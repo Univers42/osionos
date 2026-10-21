@@ -16,6 +16,7 @@ import type { ChatMessage } from "@/features/chat/model/chatTypes";
 import { ReadAloudButton } from "@/features/voice/ui/ReadAloudButton";
 import { citationsFromParts } from "@/features/chat/model/citations";
 import { renderCitationSources, renderCitedAnswer } from "@/features/chat/model/citedAnswer";
+import { ANSWER_TABLE_CLASS } from "@/features/chat/model/assistantMarkdown";
 import { openCitation } from "@/features/chat/model/openCitation";
 import { toolActivitiesFromParts } from "@/features/chat/model/toolActivity";
 import { ToolActivity } from "@/features/chat/model/toolActivityView";
@@ -61,7 +62,7 @@ const AssistantAnswer: React.FC<{
   return (
     <>
       <ToolActivity activities={activities} />
-      <div className="min-w-0 [&_a]:text-[var(--osio-accent)] [&_h1]:my-2 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:my-2 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:font-semibold [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-xs [&_pre]:bg-[var(--osio-bg-muted)] [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-xs [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5">
+      <div className={`min-w-0 ${ANSWER_TABLE_CLASS} [&_a]:text-[var(--osio-accent)] [&_h1]:my-2 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:my-2 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:font-semibold [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-xs [&_pre]:bg-[var(--osio-bg-muted)] [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-xs [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5`}>
         {elements}
       </div>
       {renderCitationSources(citations, openCitation)}

@@ -27,7 +27,7 @@ import { Send, Sparkles, X } from 'lucide-react';
 
 import { isAiConfigured } from '@/features/ai/api/aiClient';
 import { PLATFORM_CONNECTION_ID, readAiSelection } from '@/features/ai/model/aiSelection';
-import { renderAssistantMarkdown } from '@/features/chat/model/assistantMarkdown';
+import { ANSWER_TABLE_CLASS, renderAssistantMarkdown } from '@/features/chat/model/assistantMarkdown';
 import { IconButton } from '@/shared/ui';
 import { errorWords } from '@/widgets/chat-shell/ui/errorWords';
 
@@ -51,7 +51,7 @@ function newId(prefix: string): string {
 const DockAnswer: React.FC<{ body: string }> = ({ body }) => {
   const elements = useMemo(() => renderAssistantMarkdown(body), [body]);
   return (
-    <div className="[&_a]:text-[var(--osio-accent)] [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:my-1 [&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-xs [&_pre]:bg-[var(--osio-bg-muted)] [&_pre]:p-1.5 [&_pre]:font-mono [&_pre]:text-2xs [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4">
+    <div className={`${ANSWER_TABLE_CLASS} [&_a]:text-[var(--osio-accent)] [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:my-1 [&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-xs [&_pre]:bg-[var(--osio-bg-muted)] [&_pre]:p-1.5 [&_pre]:font-mono [&_pre]:text-2xs [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4`}>
       {elements}
     </div>
   );
