@@ -285,3 +285,11 @@ test("an untagged citation goes to the last running search", async () => {
   assert.equal(first?.count ?? 0, 0, "the first search gets nothing");
   assert.equal(second?.count, 1, "the untagged citation goes to the last running search");
 });
+
+test("a search that found only passages cited before counts what it found", async () => {
+  const activities = await activitiesOf([
+    ["tool.called", { toolCallId: "_1", toolName: "search_workspace", input: { query: "a" } }],
+    ["tool.result", { toolCallId: "_1", toolName: "search_workspace", ok: true, found: 8 }],
+  ]);
+  assert.equal(activities[0]?.count, 8, "8 passages, not \"no passages\"");
+});

@@ -109,6 +109,14 @@ describe('the citations of two searches of one step', () => {
 			assert.ok(events.indexOf(event) < result, 'the citation precedes the result of its call');
 		}
 
+		// A search reports what it found, the passages cited before included:
+		// the second search found the same passages and cites none of them.
+		for (const event of events.filter((candidate) => candidate.event === 'tool.result')) {
+			const { toolCallId, found } = event.data as { toolCallId: string; found?: number };
+			const cited = citations.filter((citation) => citation.toolCallId === toolCallId).length;
+			assert.equal(found, keys.length, `the search ${toolCallId} found every passage (it cited ${cited})`);
+		}
+
 		// The stored answer holds each passage once, and the part of [n] says n.
 		const stored = await call(`/api/ai/conversations/${conversationId}/messages`, { token });
 		assert.equal(stored.status, 200);
