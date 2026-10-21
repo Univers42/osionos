@@ -22,6 +22,7 @@ import { pagesToGraph } from './bridge-graph.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
+import { liveReadableWorkspaces, privateWorkspaceOf } from './bridge-live-workspaces.mjs';
 import { publishRealtime } from './bridge-social-core.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller } from './bridge-session-cutoff.mjs';
@@ -2761,13 +2762,14 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const scope = url.searchParams.get('scope') === 'account' ? 'account' : 'workspace';
 	const requested = url.searchParams.get('workspaceId');
-	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
-	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
+	// The workspaces the caller may read, LIVE (C98): the private workspace of the
+	// token and the members table read now — never the token's member list.
+	const accessible = await callerWorkspaces(authContext, config, fetchImpl);
 	const workspaceIds = scope === 'account'
 		? accessible
 		: requested
 			? (accessible.includes(requested) ? [requested] : [])
-			: authContext.workspaceIds;
+			: accessible;
 	const noteGraph = await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl);
 	const recordGraph = await workspaceRecordGraph(workspaceIds, config, fetchImpl);
 	json(response, 200, mergeGraphs(noteGraph, recordGraph), config);
@@ -3145,13 +3147,15 @@ async function handleGraphPages(url, request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const requested = url.searchParams.get('workspaceId');
 	const scopeAll = url.searchParams.get('scope') === 'all';
-	// Default = the requested workspace only (workspace-scoped); `scope=all` = every
-	// workspace the session owns; a workspace the session can't access yields none.
+	// The workspaces the caller may read, LIVE (C98). Default = the requested
+	// workspace only (workspace-scoped); `scope=all` = every workspace the
+	// session may read now; a workspace the session can't access yields none.
+	const accessible = await callerWorkspaces(authContext, config, fetchImpl);
 	const workspaceIds = scopeAll
-		? authContext.workspaceIds
+		? accessible
 		: requested
-			? (authContext.workspaceIds.includes(requested) ? [requested] : [])
-			: authContext.workspaceIds;
+			? (accessible.includes(requested) ? [requested] : [])
+			: accessible;
 	json(response, 200, await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl), config);
 	return true;
 }
@@ -3217,7 +3221,8 @@ async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	const pageId = pageSubresourceIdFromPath(url.pathname, 'backlinks');
 	if (!pageId) return false;
 	const { authContext, row } = await readablePageAccess(request, pageId, 'read', config, fetchImpl);
-	const accessible = [...new Set([...authContext.workspaceIds, ...await memberWorkspaceIds(authContext.userId, config, fetchImpl)])].filter((id) => UUID_REGEX.test(id));
+	// The workspaces the caller may read, LIVE (C98).
+	const accessible = await callerWorkspaces(authContext, config, fetchImpl);
 	if (accessible.length === 0) { json(response, 200, { ok: true, linked: [], mentions: [] }, config); return true; }
 	const inWorkspace = `workspace_id=in.(${accessible.join(',')})`;
 	const linkRows = await baasRest(config, fetchImpl, `osionos_page_links?target_page_id=eq.${pageId}&${inWorkspace}&select=source_page_id`);
@@ -3273,6 +3278,23 @@ async function memberWorkspaceIds(userId, config, fetchImpl) {
 	} catch {
 		return [];
 	}
+}
+
+/**
+ * The workspaces the caller may read, LIVE (C98).
+ *
+ * The caller's own private workspace — the one the token signs with the role
+ * 'owner' — and the workspaces the members table holds for them RIGHT NOW. The
+ * token's member list is never trusted: it was minted at login and lives for
+ * an hour, so a removed member kept reading the workspace's private pages
+ * until it expired. The rule is the shared one
+ * (scripts/bridge-live-workspaces.mjs), the same the AI service uses.
+ */
+async function callerWorkspaces(authContext, config, fetchImpl) {
+	return liveReadableWorkspaces({
+		privateWorkspaceId: privateWorkspaceOf(authContext),
+		memberWorkspaces: await memberWorkspaceIds(authContext.userId, config, fetchImpl),
+	});
 }
 
 async function handleWorkspaceGet(url, request, response, config, fetchImpl) {
