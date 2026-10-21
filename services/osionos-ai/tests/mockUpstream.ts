@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import { chunkTexts, streamAnswer, streamToolCall } from './mockStream.ts';
 import type { StreamOptions } from './mockStream.ts';
+import { lastUserText, readBody } from './mockRequest.ts';
 
 /**
  * A mock OpenAI-compatible upstream: the SSE of the P0a spike, with the knobs
@@ -128,39 +129,6 @@ export function askedForNoTool(body: unknown): boolean {
 	if (!request || typeof request !== 'object') return false;
 	if (request.tool_choice === 'none') return true;
 	return !Array.isArray(request.tools) || request.tools.length === 0;
-}
-
-/** The body of a request, read to the end. */
-function readBody(request: IncomingMessage): Promise<string> {
-	return new Promise((resolve) => {
-		const chunks: Buffer[] = [];
-		request.on('data', (chunk: Buffer) => chunks.push(chunk));
-		request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-		request.on('error', () => resolve(''));
-	});
-}
-
-/**
- * The text of the last turn of the user in a request.
- *
- * The content of a turn is a string or a list of parts: the mock reads both.
- */
-function lastUserText(body: unknown): string {
-	const messages = (body as { messages?: unknown } | null)?.messages;
-	if (!Array.isArray(messages)) return '';
-	for (let index = messages.length - 1; index >= 0; index -= 1) {
-		const message = messages[index] as { role?: unknown; content?: unknown } | null;
-		if (message?.role !== 'user') continue;
-		if (typeof message.content === 'string') return message.content;
-		if (!Array.isArray(message.content)) return '';
-		return message.content
-			.map((part) => {
-				const candidate = part as { text?: unknown } | null;
-				return typeof candidate?.text === 'string' ? candidate.text : '';
-			})
-			.join(' ');
-	}
-	return '';
 }
 
 /** The mock upstream, on a random port of the loopback. */
