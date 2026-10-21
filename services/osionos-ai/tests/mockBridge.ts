@@ -19,6 +19,22 @@ export interface BridgeCall {
 	authorization: string;
 }
 
+/**
+ * A file the mock bridge serves: the bytes, the type, and the status.
+ *
+ * The status is how a test refuses an attachment the way the bridge does: a
+ * 403 for a channel the caller left, a 404 for an attachment that is not
+ * there.
+ */
+export interface BridgeFile {
+	bytes: Uint8Array;
+	contentType: string;
+	/** The status of the answer: 200 for the real one. */
+	status?: number;
+	/** The `location` of a redirect answer. */
+	location?: string;
+}
+
 export interface MockBridge {
 	/** The base URL of the mock: the service talks to it directly. */
 	baseUrl: string;
@@ -30,6 +46,10 @@ export interface MockBridge {
 	readonly count: number;
 	/** The status the next answers carry: 0 for the real one. */
 	failWith: number;
+	/** Serves a file at a path: the bytes of an attachment. */
+	serve(path: string, file: BridgeFile): void;
+	/** The files the mock serves, by path. */
+	readonly files: ReadonlyMap<string, BridgeFile>;
 	/** Forget the calls. */
 	reset(): void;
 	close(): Promise<void>;
@@ -48,6 +68,7 @@ function readBody(request: IncomingMessage): Promise<string> {
 /** The mock bridge, on a random port of the loopback. */
 export async function startMockBridge(): Promise<MockBridge> {
 	const calls: BridgeCall[] = [];
+	const files = new Map<string, BridgeFile>();
 	const mock: MockBridge = {
 		baseUrl: '',
 		calls,
@@ -58,6 +79,12 @@ export async function startMockBridge(): Promise<MockBridge> {
 			return calls.length;
 		},
 		failWith: 0,
+		serve(path: string, file: BridgeFile): void {
+			files.set(path, file);
+		},
+		get files(): ReadonlyMap<string, BridgeFile> {
+			return files;
+		},
 		reset(): void {
 			calls.length = 0;
 		},
@@ -89,6 +116,25 @@ export async function startMockBridge(): Promise<MockBridge> {
 				return;
 			}
 			const path = request.url ?? '';
+			// A file the mock serves: the bytes of an attachment, with the type
+			// the bridge announces — and the status it refuses with.
+			const file = files.get(path);
+			if (file) {
+				if (file.status && file.status !== 200) {
+					response.writeHead(file.status, {
+						'content-type': 'application/json',
+						...(file.location ? { location: file.location } : {}),
+					});
+					response.end(JSON.stringify({ error: { message: 'refused' } }));
+					return;
+				}
+				response.writeHead(200, {
+					'content-type': file.contentType,
+					'content-length': String(file.bytes.length),
+				});
+				response.end(Buffer.from(file.bytes));
+				return;
+			}
 			if (request.method === 'POST' && path === '/api/pages') {
 				const title = (body as { title?: unknown } | null)?.title;
 				response.writeHead(201, { 'content-type': 'application/json' });

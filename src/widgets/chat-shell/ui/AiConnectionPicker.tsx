@@ -105,7 +105,7 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange }) => {
   }));
   const modelOptions = (modelsByConnection[value.connectionId] ?? []).map((model) => ({
     value: model.id,
-    label: model.label,
+    label: model.vision ? `${model.label} (sees images)` : model.label,
   }));
 
   const onConnectionChange = (nextId: string) => {
