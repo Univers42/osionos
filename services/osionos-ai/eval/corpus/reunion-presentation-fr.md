@@ -14,7 +14,7 @@ La direction d'un groupe hôtelier danois nous a demandé de présenter notre ap
 un programme de rénovation de trois établissements à Hambourg, qui s'appelle Nordhavn. La
 réunion s'est tenue à distance, en anglais, avec une interprétation pour le client.
 
-Le programme Nordhavn est budgété à six cent mille euros sur dix-huit mois. <!-- answer:q39 -->
+Le programme Nordhavn est budgété à six cent mille euros sur dix-huit mois. <!-- answer:q39,q63 -->
 
 ## Participants
 
@@ -34,7 +34,7 @@ Le programme Nordhavn est budgété à six cent mille euros sur dix-huit mois. <
 
 Elle a demandé par écrit, avant la réunion, la composition exacte du contreplaqué de nos
 caissons, l'épaisseur des chants et la tolérance de planéité du support. Nous avons
-répondu avec la fiche technique du système Rive Nord et le cahier des charges.
+répondu avec la fiche technique du système Rive Nord et le cahier des charges. <!-- answer:q67 -->
 
 Elle a aussi demandé ce qui se passait si le sol n'était pas plan. La réponse a été claire :
 nous relevons le sol à la visite et la pose ne se fait pas sans relevé écrit.

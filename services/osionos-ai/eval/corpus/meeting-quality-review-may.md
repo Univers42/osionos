@@ -34,7 +34,7 @@ problem that the clinic specification makes worse.
 ## The rules we agreed
 
 A chair that squeaks after six months is a manufacturing fault, not a care issue, and we
-replace it. <!-- answer:q23 -->
+replace it. <!-- answer:q23,q54 -->
 
 - Anything that moves or squeaks inside the first year is replaced, not repaired.
 - A seam that opens on a table top is a batch fault, and the batch is reviewed.

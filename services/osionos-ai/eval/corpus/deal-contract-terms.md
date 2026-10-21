@@ -21,7 +21,7 @@ not by moving all three.
 
 The production window is given in working weeks and starts on the date the order is
 confirmed, not on the date the deposit lands. Standard delivery is ten weeks for catalogue
-furniture and between fourteen and twenty-two weeks for custom work.
+furniture and between fourteen and twenty-two weeks for custom work. <!-- answer:q51 -->
 
 Installation is a separate line. We do not include it in the furniture price, because the
 site decides how long it takes and the site is not ours.
