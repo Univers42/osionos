@@ -3237,13 +3237,14 @@ const BACKLINK_SELECT = 'id,title,icon,owner_id,visibility,collaborators';
 async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	const pageId = pageSubresourceIdFromPath(url.pathname, 'backlinks');
 	if (!pageId) return false;
-	const { authContext, row } = await readablePageAccess(request, pageId, 'read', config, fetchImpl);
-	// An archived page has no connections: it is not in the graph either, and its
-	// backlinks would tell a reader what the archive took out.
-	if (row.archived_at) throw pageNotFound();
+	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	// The workspaces the caller may read, LIVE (C98).
 	const accessible = await callerWorkspaces(authContext, config, fetchImpl);
-	if (accessible.length === 0) { json(response, 200, { ok: true, linked: [], mentions: [] }, config); return true; }
+	const row = await fetchPageRow(pageId, config, fetchImpl);
+	// Every refusal is the 404 of a missing id (C101): a 403 for a workspace the caller
+	// left would tell them the page exists. An archived page has no connections: it is
+	// not in the graph either, and its backlinks would tell what the archive took out.
+	if (!row || row.archived_at || !canReadPageRowAsMember(row, authContext.userId, accessible)) throw pageNotFound();
 	const inWorkspace = `workspace_id=in.(${accessible.join(',')})`;
 	// The links, read live through the ONE edge-read module (C99): both ends are
 	// checked against their live page row, and the workspace of an edge row is
