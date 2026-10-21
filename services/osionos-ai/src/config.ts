@@ -138,6 +138,18 @@ function parsePlatformModels(raw: string): PlatformModelEntry[] {
 }
 
 /**
+ * Whether the service runs in production.
+ *
+ * The image sets NODE_ENV=production. The development escape hatches of the
+ * SSRF guard (the hosts of the tests, the base URLs of the tests) point the
+ * API keys of the users at other hosts or open the private addresses of the
+ * network: they are for the tests, never for a deployment.
+ */
+function isProduction(): boolean {
+	return process.env.NODE_ENV === 'production';
+}
+
+/**
  * The hosts of the development escape hatch of the SSRF guard: the ones that
  * may speak http and may live on a private address.
  *
@@ -146,6 +158,12 @@ function parsePlatformModels(raw: string): PlatformModelEntry[] {
  */
 function parseDevHosts(raw: string | undefined): readonly string[] {
 	if (!raw) return Object.freeze([]);
+	if (isProduction()) {
+		console.warn(
+			'[osionos-ai] ignoring OSIONOS_AI_DEV_ENDPOINT_HOSTS: it is a development escape hatch and this is production',
+		);
+		return Object.freeze([]);
+	}
 	return Object.freeze(
 		raw
 			.split(',')
@@ -162,6 +180,12 @@ function parseDevHosts(raw: string | undefined): readonly string[] {
  */
 function parseDevProviderUrls(raw: string | undefined): Readonly<Record<string, string>> {
 	if (!raw) return Object.freeze({});
+	if (isProduction()) {
+		console.warn(
+			'[osionos-ai] ignoring OSIONOS_AI_DEV_PROVIDER_BASE_URLS: it is a development escape hatch and this is production',
+		);
+		return Object.freeze({});
+	}
 	try {
 		const decoded = JSON.parse(raw) as unknown;
 		if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) throw new Error('not an object');

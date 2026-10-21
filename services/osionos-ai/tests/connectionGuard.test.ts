@@ -15,7 +15,9 @@ const USER_A = '11111111-1111-4111-8111-111111111111';
 const USER_B = '22222222-2222-4222-8222-222222222222';
 
 const { connectionAad, openSecret, sealSecret } = await import('../src/connections/crypto.ts');
-const { checkEndpointUrl, guardedLookup } = await import('../src/connections/endpointGuard.ts');
+const { checkEndpointUrl, guardedLookup, guardedShortFetch } = await import(
+	'../src/connections/endpointGuard.ts'
+);
 
 /** The result of a lookup of the guard. */
 function lookupWith(
@@ -30,6 +32,17 @@ function lookupWith(
 			});
 		});
 	});
+}
+
+/** The messages of an error and of everything it was caused by. */
+function causeMessages(error: unknown): string[] {
+	const messages: string[] = [];
+	let current: unknown = error;
+	for (let depth = 0; current && depth < 10; depth += 1) {
+		messages.push(current instanceof Error ? current.message : String(current));
+		current = current instanceof Error ? current.cause : undefined;
+	}
+	return messages;
 }
 
 describe('osionos-ai envelope and guard', () => {
@@ -59,6 +72,12 @@ describe('osionos-ai envelope and guard', () => {
 			'https://169.254.169.254',
 			'https://[::1]',
 			'https://[::ffff:127.0.0.1]',
+			// The prefixes that carry an IPv4 address: ::/96, NAT64, 6to4
+			// and the discard-only one.
+			'https://[::7f00:1]',
+			'https://[64:ff9b::a00:1]',
+			'https://[2002:7f00:1::]',
+			'https://[100::1]',
 			'https://u:p@x.example',
 			'ftp://x.example',
 		];
@@ -67,6 +86,32 @@ describe('osionos-ai envelope and guard', () => {
 		}
 		// A public host is fine, and the path is kept.
 		assert.equal(checkEndpointUrl('https://api.example/v1').pathname, '/v1');
+	});
+
+	it('the agent of the guard refuses a private host when it connects', async () => {
+		// A hostname, so a lookup happens: localhost is not a development
+		// host, and it answers with the loopback. The port is 9999 and not 9:
+		// undici's fetch refuses the bad ports of the Fetch spec (9 is one of
+		// them) before it ever resolves the name, so the guard would never
+		// be reached. Nothing listens on 9999, so without the guard the
+		// connection is refused instead.
+		let failure: unknown;
+		try {
+			await guardedShortFetch('https://localhost:9999/');
+		} catch (error) {
+			failure = error;
+		}
+		assert.ok(failure, 'the fetch must not succeed');
+		const messages = causeMessages(failure);
+		// The guard refused, and it refused before the connection was tried.
+		assert.ok(
+			messages.some((message) => message.includes('the address is not allowed')),
+			`the guard must be the one that refuses: ${messages.join(' | ')}`,
+		);
+		assert.ok(
+			!messages.some((message) => message.includes('ECONNREFUSED')),
+			`the guard must refuse before the connection is tried: ${messages.join(' | ')}`,
+		);
 	});
 
 	it('a host that answers with a private address is refused', async () => {

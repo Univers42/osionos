@@ -24,7 +24,9 @@ import { httpError } from '../http.ts';
  *
  * IPv4: 0.0.0.0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12,
  * 192.0.0/24, 192.168/16, 198.18/15, 224/4, 240/4.
- * IPv6: ::/128, ::1/128, fc00::/7, fe80::/10, ff00::/8.
+ * IPv6: ::/128, ::1/128, fc00::/7, fe80::/10, ff00::/8, 100::/64 and the
+ * prefixes that carry an IPv4 address: ::/96, 64:ff9b::/96, 64:ff9b:1::/48,
+ * 2002::/16.
  * The IPv4-mapped range ::ffff:0:0/96 is not a range of its own: an address
  * in it is judged by the IPv4 address it carries.
  */
@@ -45,6 +47,13 @@ const BLOCKED_V4_SUBNETS: readonly (readonly [string, number])[] = [
 const BLOCKED_V6_SUBNETS: readonly (readonly [string, number])[] = [
 	['::', 128],
 	['::1', 128],
+	// The prefixes that carry an IPv4 address: each either embeds one the
+	// IPv4 list above would refuse, or reaches a gateway that translates to one.
+	['::', 96], // the deprecated IPv4-compatible addresses
+	['64:ff9b::', 96], // NAT64, the well-known prefix
+	['64:ff9b:1::', 48], // NAT64, the local-use prefix
+	['2002::', 16], // 6to4, the relay of an IPv4 address
+	['100::', 64], // the discard-only prefix
 	['fc00::', 7],
 	['fe80::', 10],
 	['ff00::', 8],
