@@ -136,7 +136,15 @@ export async function clearPages(pool: Pool, pageIds: readonly string[]): Promis
  * something to find; the rest are the corpus around it.
  */
 export async function seedBulk(pool: Pool, workspaceId: string, count: number): Promise<string[]> {
-	const result = await pool.query<{ id: string }>(
+	// The service's pool caps a statement at 5 s (src/db.ts). This insert also
+	// feeds the HNSW index of the partition, and on a host at load ~9.5 it ran
+	// past 5 s in 3 of 4 runs (2026-10-21) — the timeout belongs to the service,
+	// not to the fixture, so the fixture lifts it for its own transaction.
+	const client = await pool.connect();
+	try {
+		await client.query('begin');
+		await client.query("set local statement_timeout = '120s'");
+		const result = await client.query<{ id: string }>(
 		`insert into public.ai_chunks (
 			workspace_id, source_kind, source_id, block_id, ord, title, heading_path, content,
 			content_hash, owner_id, visibility, collaborator_ids, embedding, embedding_model
@@ -148,8 +156,15 @@ export async function seedBulk(pool: Pool, workspaceId: string, count: number): 
 		 from generate_series(1, $3) as n
 		 returning id`,
 		[workspaceId, USER_A, count],
-	);
-	return result.rows.map((row) => String(row.id));
+		);
+		await client.query('commit');
+		return result.rows.map((row) => String(row.id));
+	} catch (error) {
+		await client.query('rollback');
+		throw error;
+	} finally {
+		client.release();
+	}
 }
 
 /** The chunks of a test, gone. */
