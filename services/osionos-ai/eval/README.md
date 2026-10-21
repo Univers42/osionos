@@ -5,7 +5,9 @@ demo workspace. There was no text corpus yet, so this directory writes one: 40 p
 prose about a fictional company, 50 questions about it, a seed generator and a gate that
 proves the corpus and the questions agree with each other.
 
-Everything here is DATA. The eval runner, the embeddings and the retrieval come later.
+Everything here is DATA, and the runner that measures the retrieval on it. The corpus is the golden
+set; the runner is the report card of the retrieval (`src/retrieval/search.ts`), of the indexer
+(`src/indexer/*`) and of the real embedder.
 
 ## What is in here
 
@@ -16,6 +18,11 @@ Everything here is DATA. The eval runner, the embeddings and the retrieval come 
 | `seed.mjs` | reads the corpus, writes idempotent SQL for `osionos_pages` on stdout |
 | `check.mjs` | the gate: the corpus and the questions must agree, or it exits non-zero |
 | `lib.mjs` | the parsing both of the above share |
+| `fixture.sql` | the fixture of the throwaway stack (the roles, the two tables, the two functions) |
+| `harness.sh` | the shared parts of the throwaway stacks: the network, the fixture, the migrations |
+| `run.sh` | the runner: a throwaway Postgres, a throwaway TEI, and node:22 that measures |
+| `run.ts` | the measurement: recall@5, MRR, leaks, the negative scores, the latency |
+| `RESULTS.md` | the last measurement, written by `run.ts` |
 
 ## The corpus
 
@@ -90,6 +97,54 @@ rows. Apply it with:
 
 ```sh
 node services/osionos-ai/eval/seed.mjs | psql "$DATABASE_URL"
+```
+
+## The runner
+
+```sh
+sh services/osionos-ai/eval/run.sh <osionos-ai-migration.sql> <osionos-ai-rag-migration.sql>
+```
+
+`run.sh` builds a throwaway stack and nothing else: a private Docker network (with the
+same explicit-subnet fallback as `scripts/test.sh`, because Docker's default address pool
+is exhausted on a busy host), a throwaway `pgvector/pgvector:0.8.0-pg16` named `ai-eval-db`
+with the fixture of the test harness (`fixture.sql`, shared with `scripts/test.sh` — the
+SQL is written once) and the two migrations, and a throwaway
+`ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4` named `ai-eval-tei` with the real
+embedder (`intfloat/multilingual-e5-small`, the model is cached in the volume
+`osionos_ai_models_tei`, so it is not downloaded again). The service is not published: it
+is reachable only from the network of the run. Every container and the network are removed
+when the script exits, whatever happens.
+
+`run.ts` then measures, on that stack:
+
+- the seed is applied and the three users are made members of the one workspace;
+- the real indexer runs until `ai_index_queue` is empty (the report holds the chunk count
+  and the indexing time);
+- every question is asked through `retrieve()` — the retrieval of the service, unchanged —
+  as its asker, with `limit: 5`;
+- recall@5 and MRR per kind and overall, over the questions that have a non-empty
+  `expected`;
+- the leaks: a returned page the asker may not read (under the bridge's own rule,
+  `canReadPageRowAsMember`), or an archived one. They must be ZERO, and a leak ends the
+  run with exit 1;
+- the top fused score of the negative questions, so a reader can see whether a threshold
+  could separate them (no threshold is added);
+- the latency of `retrieve()`, p50 and p95, the embedding included.
+
+The report is written to `RESULTS.md`. The runner measures: it never tunes the retrieval,
+and the numbers are what they are.
+
+### The bite of the leak check
+
+The leak check is worth nothing if it cannot fail. `AI_EVAL_SKIP_ACL_FILTER=1` makes the
+acl questions whose answer the asker may **not** read run as the OWNER of the page that
+answers them, and scores them as the asker: the private pages come back, and the leak
+check must catch them. The run then ends with exit 1.
+
+```sh
+AI_EVAL_SKIP_ACL_FILTER=1 AI_EVAL_RESULTS_FILE=RESULTS-bite.md \
+	sh services/osionos-ai/eval/run.sh <migration> <rag-migration>
 ```
 
 ## The caveat
