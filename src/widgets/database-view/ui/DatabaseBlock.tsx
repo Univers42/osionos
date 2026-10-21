@@ -22,7 +22,7 @@ import '@/app/styles/database-bridge.generated.css';
 import '@/app/styles/database-overrides.css';
 
 import type { Block } from '@/entities/block';
-import type { PageEntry } from '@/entities/page';
+import type { PageEntry, PagePropertyEntry } from '@/entities/page';
 import {
   normalizeMediaSource,
   resolveCollectionMediaAsset,
@@ -41,7 +41,11 @@ import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseVie
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getLiveDatabaseAdapter, isLiveDatabaseId } from '../model/liveDatabaseAdapter';
 import { toRecordPageId } from '../model/recordPageId';
-import { toOsionosPageProperties } from '../model/recordPageProperties';
+import {
+  projectRecordProperties,
+  recordPropertyEdits,
+  type RecordValueResolver,
+} from '../model/recordPageProperties';
 import { useHealedLiveDatabaseId } from '../model/useHealedLiveDatabaseId';
 // Side effect: registers the account-wide data-source catalog with NDS (the
 // Source picker). Lives here (not only the barrel) because lazyViews imports
@@ -318,6 +322,18 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
 
   React.useEffect(() => {
     if (!databasePage || !workspaceId) return;
+    const resolver: RecordValueResolver = {
+      formula: (property) => state.resolveFormula(
+        databasePage.databaseId,
+        databasePage,
+        property.formulaConfig?.expression ?? '',
+      ),
+      rollup: (property) => state.resolveRollup(
+        databasePage.databaseId,
+        databasePage,
+        property.id,
+      ),
+    };
     const nextEntry: PageEntry = {
       _id: recordPageId,
       title,
@@ -331,7 +347,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
       parentPageId: activePage?.id ?? '__database_rows__',
       databaseId: databasePage.databaseId,
       archivedAt: null,
-      properties: database ? toOsionosPageProperties(database, databasePage) : [],
+      properties: database ? projectRecordProperties(database, databasePage, resolver) : [],
       content: toOsionosBlocks(databasePage.content),
     };
 
@@ -339,7 +355,30 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
       upsertOsionosDatabasePage(current.pages, workspaceId, nextEntry),
       current.pageIdsByWorkspace,
     ));
-  }, [activePage?.id, activeUserId, database, databasePage, recordPageId, title, workspaceId]);
+  }, [activePage?.id, activeUserId, database, databasePage, recordPageId, state, title, workspaceId]);
+
+  // The engine row can change while this page is open (a board drag): the
+  // projection effect's setState lands a render later, so reading the row from
+  // deps would compare NEW raw values with OLD osionos ones and revert the drag.
+  // Fire only when the osionos properties themselves change; read the row from refs.
+  const engineRef = React.useRef({ database, databasePage });
+  // Keep the ref current AFTER commit: lint forbids writing it during render,
+  // and that ordering still guarantees the write-back below sees this render's row.
+  React.useEffect(() => {
+    engineRef.current = { database, databasePage };
+  });
+  const osionosPropertiesKey = JSON.stringify(osionosPage?.properties ?? null);
+  const updatePageProperty = state.updatePageProperty;
+
+  React.useEffect(() => {
+    const { database: engineDatabase, databasePage: enginePage } = engineRef.current;
+    if (!engineDatabase || !enginePage) return;
+    const entries = JSON.parse(osionosPropertiesKey) as PagePropertyEntry[] | null;
+    if (!entries) return;
+    for (const edit of recordPropertyEdits(engineDatabase, enginePage, entries)) {
+      updatePageProperty(pageId, edit.propertyId, edit.value);
+    }
+  }, [osionosPropertiesKey, pageId, updatePageProperty]);
 
   React.useEffect(() => {
     if (!databasePage || !database || !osionosPage) return;
