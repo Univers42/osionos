@@ -80,16 +80,17 @@ describe('osionos-ai spend and titles', () => {
 		);
 	});
 
-	it('the ledger books the reservation, and never more than it', async () => {
+	it('the ledger books the real spend, even above the reservation', async () => {
 		const day = '2026-02-02';
 		const user = '44444444-4444-4444-8444-444444444444';
 
 		assert.equal(await reserve(app.db, { userId: user, day, amount: 5, userLimit: 100, platformLimit: 100 }), true);
 
-		// The run cost more than it reserved: the reservation is the ceiling of
-		// the run, and the cap was checked against it. The ledger books the
-		// ceiling, and the cost the upstream really charged stays in the row
-		// of the run.
+		// The run cost more than it reserved. The money is spent whatever the
+		// ledger says, so the ledger books what the upstream really charged:
+		// a ledger that books the reservation would let the platform key run
+		// over its daily cap while the ledger says it did not. The ceiling of
+		// the run is kept by the loop stopping itself, not by the ledger.
 		await settle(app.db, { userId: user, day, reserved: 5, actual: 100 });
 		const settled = await app.db.query(
 			'select subject, spent_microusd, reserved_microusd from public.ai_usage_daily where day = $1 order by subject',
@@ -98,8 +99,8 @@ describe('osionos-ai spend and titles', () => {
 		assert.deepEqual(
 			settled.rows.map((row) => [row.subject, Number(row.spent_microusd), Number(row.reserved_microusd)]),
 			[
-				['44444444-4444-4444-8444-444444444444', 5, 0],
-				['platform', 5, 0],
+				['44444444-4444-4444-8444-444444444444', 100, 0],
+				['platform', 100, 0],
 			],
 		);
 	});
