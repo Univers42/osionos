@@ -15,7 +15,7 @@ import { notifyCreateFailure } from "./pageCreateFeedback";
 import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { planDuplicate } from "./duplicatePlan";
-import { evictPageFromState } from "./evictLocalPage";
+import { settleMissingPage } from "./evictLocalPage";
 import {
   canDeletePage,
   canDuplicatePage,
@@ -42,7 +42,7 @@ import {
 import { replacePage } from "./replacePage";
 import { loadLedger } from "@osionos/outbox-ledger";
 import { applyServerPages } from "./sync/applyServerPages";
-import { resolveFetchedPage } from "./sync/mergeServerPages";
+import { isPageClean, resolveFetchedPage } from "./sync/mergeServerPages";
 import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./sync/pageStamp";
 import { setBase } from "./sync/pageBase";
 import { forgetAppRemovals, recordAppRemovals } from "./appRemovals";
@@ -226,14 +226,20 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        // The page is gone server-side — a stale localStorage ghost the additive
-        // hydrate (sync/applyServerPages) never prunes. Evict it from the
+        // The page is gone server-side or no longer readable (the bridge answers
+        // both 404) — e.g. a stale localStorage ghost the additive hydrate
+        // (sync/applyServerPages) never prunes. A clean copy is evicted from the
         // store + cache so it stops being re-fetched in a loop and drops out of
-        // the sidebar/tree instead of flooding the console with 404s. The rule
-        // itself lives in ./evictLocalPage (shared with the refused-edit
-        // recovery): actions cannot import the store, usePageStore imports them.
-        set((s) => evictPageFromState(s, page.workspaceId, pageId));
+        // the sidebar/tree; an unpublished edit stays for the outbox. The rule
+        // lives in ./evictLocalPage: actions cannot import the store, usePageStore imports them.
+        const current = get().pageById(pageId);
+        if (!current) return;
+        const isClean = isPageClean(current, loadLedger(PAGE_OUTBOX_KEY), context !== null && canEditPage(current, context));
+        const settled = settleMissingPage(get(), page.workspaceId, pageId, isClean);
+        if (!settled) return;
+        set(settled.state);
         savePagesCache(get().pages, page.workspaceId);
+        if (settled.toast) useToastStore.getState().push(settled.toast);
         return;
       }
       console.warn("[pageStore] fetchPageContent failed:", pageId, err);

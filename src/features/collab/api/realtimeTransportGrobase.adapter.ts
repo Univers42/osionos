@@ -20,7 +20,16 @@
  * + token come from resolveLiveRealtimeToken()/liveRealtimeUrl() in the app
  * factory (see grobaseTransport.factory).
  *
- * PRESENCE is NATIVE (TRACK/UNTRACK → PRESENCE snapshots) — not synthesized.
+ * PRESENCE is NATIVE (TRACK/UNTRACK → presence snapshots) — not synthesized.
+ * On the wire it arrives in TWO shapes: the top-level PRESENCE frame
+ * (older gateway) and, on the realtime-agnostic gateway, as an EVENT with
+ * `event_type === 'presence'` whose payload is `{topic, members}`
+ * (realtime-gateway/src/ws_handler/connection.rs publish_presence_snapshot).
+ * Both funnel through one boundary validation (R-P1): a member is trusted
+ * only when `meta.memberId` is a string AND its server-stamped `user_id`
+ * (gateway, from the token `sub`) is absent (older gateway) or equals
+ * `meta.memberId` case-insensitively — a disagreeing `user_id` means the
+ * client TRACKed someone else's identity, so that member is DROPPED.
  * REQUEST/REPLY is NOT native: it is synthesized over BROADCAST with a
  * correlationId convention + a client-side timeout (AOC §7). Durable writes do
  * NOT ride this transport — they go HTTP→bridge (AOC §4 ephemeral/durable split).
@@ -48,10 +57,35 @@ export interface GrobaseTransportConfig {
 }
 
 interface GatewayEvent { event_type: string; payload: unknown; }
+/** One member of a presence snapshot as published by the gateway. */
+interface PresenceWireMember { user_id?: unknown; meta?: unknown; }
 interface ReqEnvelope { cid: string; from: string; target: string; req: SummonReq; }
 interface ResEnvelope { cid: string; res: SummonRes; }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+/**
+ * Boundary validation (R-P1) for presence members, shared by the PRESENCE
+ * frame and the EVENT/presence shape. Keeps only record members carrying a
+ * string `meta.memberId`, and drops any whose server-stamped `user_id`
+ * disagrees with that memberId (case-insensitive): `user_id` is what the
+ * gateway stamps from the authenticated token, `meta.memberId` is whatever
+ * the client claimed — when they conflict the claim is a spoof, never a fact.
+ * A missing `user_id` (older gateway) is accepted as-is.
+ */
+const validatePresenceMembers = (members: unknown): PresenceState[] => {
+  if (!Array.isArray(members)) return []; // malformed payload: ignore, never throw
+  const states: PresenceState[] = [];
+  for (const member of members) {
+    if (!isRecord(member)) continue;
+    const meta = (member as PresenceWireMember).meta;
+    if (!isRecord(meta) || typeof meta.memberId !== 'string') continue;
+    const userId = (member as PresenceWireMember).user_id;
+    if (typeof userId === 'string' && userId.toLowerCase() !== meta.memberId.toLowerCase()) continue;
+    states.push(meta as unknown as PresenceState);
+  }
+  return states;
+};
 
 export class GrobaseRealtimeTransport implements RealtimeTransport {
   private readonly config: GrobaseTransportConfig;
@@ -126,12 +160,12 @@ class GrobaseChannel implements RealtimeChannel {
   }
 
   private handleFrame(data: unknown): void {
-    let frame: { type?: string; event?: GatewayEvent; members?: Array<{ meta?: unknown }>; code?: string };
+    let frame: { type?: string; event?: GatewayEvent; members?: unknown; code?: string };
     try { frame = JSON.parse(String(data)); } catch { return; }
     if (frame.type === 'AUTH_OK') this.frame({ type: 'SUBSCRIBE', sub_id: 'collab', topic: this.topic });
     else if (frame.type === 'SUBSCRIBED') this.onSubscribed();
     else if (frame.type === 'EVENT' && frame.event) this.onGatewayEvent(frame.event);
-    else if (frame.type === 'PRESENCE') this.onPresenceFrame(frame.members ?? []);
+    else if (frame.type === 'PRESENCE') this.deliverPresence(validatePresenceMembers(frame.members));
     else if (frame.type === 'ERROR') this.onFail(new Error(`realtime ${frame.code ?? 'error'}`));
   }
 
@@ -147,7 +181,16 @@ class GrobaseChannel implements RealtimeChannel {
   }
 
   private onGatewayEvent(event: GatewayEvent): void {
-    if (event.event_type !== 'broadcast' || !isRecord(event.payload)) return;
+    if (!isRecord(event.payload)) return;
+    // The realtime-agnostic gateway delivers presence as an EVENT, not as a
+    // top-level PRESENCE frame — the snapshot that every roster missed until
+    // this branch existed. Same handlers, same validation, as the frame path.
+    if (event.event_type === 'presence') {
+      const { members } = event.payload as { members?: unknown };
+      if (Array.isArray(members)) this.deliverPresence(validatePresenceMembers(members));
+      return; // malformed payload: ignored (R-P1), never throws
+    }
+    if (event.event_type !== 'broadcast') return;
     const env = event.payload as { event?: unknown; payload?: unknown };
     if (env.event === COLLAB_EVENT) {
       const valid = validateCollabEvent(env.payload); // R-P1: validate at the boundary, drop malformed
@@ -159,10 +202,7 @@ class GrobaseChannel implements RealtimeChannel {
     }
   }
 
-  private onPresenceFrame(members: Array<{ meta?: unknown }>): void {
-    const states = members
-      .map((member) => member.meta)
-      .filter((meta): meta is PresenceState => isRecord(meta) && typeof meta.memberId === 'string');
+  private deliverPresence(states: PresenceState[]): void {
     for (const handler of this.presenceHandlers) handler(states);
   }
 

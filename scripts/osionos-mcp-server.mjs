@@ -902,13 +902,13 @@ server.registerTool('osionos_append_to_page', {
 
 server.registerTool('osionos_archive_page', {
   title: 'Archive osionos Page',
-  description: 'Soft-delete/archive a page in osionos.',
+  description: 'Archive a page and its sub-pages in osionos. Archived pages and their sub-pages can be restored.',
   inputSchema: {
     pageId: z.string().min(1),
   },
   annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
 }, async ({ pageId }) => {
-  const result = await apiRequest(`/api/pages/${encodeURIComponent(pageId)}`, { method: 'DELETE' });
+  const result = await apiRequest(`/api/pages/${encodeURIComponent(pageId)}`, { method: 'PATCH', body: { archivedAt: new Date().toISOString() } });
   return textResult({ archived: pageId, result });
 });
 

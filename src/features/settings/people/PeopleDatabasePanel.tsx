@@ -19,7 +19,9 @@ import { ObjectDatabase, type ObjectDatabaseProps } from "@notion-db/object-data
 import "@/app/styles/database-bridge.generated.css";
 import "@/app/styles/database-overrides.css";
 import { Button, Modal } from "@/shared/ui";
-import type { WorkspaceMemberRole } from "@/store/settings";
+import { useToastStore } from "@osionos/ui/primitives";
+import { useUserStore } from "@/features/auth";
+import { useWorkspaceInvitesStore, type WorkspaceMemberRole } from "@/store/settings";
 import { PeopleSourceAdapter } from "./peopleSourceAdapter";
 import { PEOPLE_SOURCES } from "./peopleSources";
 import { PeoplePeek } from "./PeoplePeek";
@@ -36,48 +38,71 @@ interface PanelProps {
   onCountsChange?: () => void;
 }
 
-/** Create-flow modal — a group (chat/community) or a guest invite by email. */
+/** Create-flow modal — a group (chat/community) or an email invite. */
 const CreatePeopleModal: React.FC<{
   kind: "group" | "guest"; workspaceId: string; invitedBy: string; onClose: () => void; onDone: () => void;
 }> = ({ kind, workspaceId, invitedBy, onClose, onDone }) => {
   const [value, setValue] = useState("");
   const [groupKind, setGroupKind] = useState<"chat" | "community">("chat");
-  const [role, setRole] = useState<Exclude<WorkspaceMemberRole, "owner">>("guest");
+  const [role, setRole] = useState<Exclude<WorkspaceMemberRole, "owner">>("member");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const submit = async () => {
-    if (!value.trim()) return;
+  const submit = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    const email = value.trim();
+    if (!email || busy) return;
+    setError(null);
     setBusy(true);
     try {
-      if (kind === "group") await createGroup(workspaceId, value.trim(), groupKind);
-      else await inviteGuest(workspaceId, value.trim(), role, invitedBy);
+      if (kind === "group") {
+        await createGroup(workspaceId, email, groupKind);
+      } else {
+        const created = await inviteGuest(workspaceId, email, role, invitedBy);
+        if (!created) {
+          // The store reverted its optimistic row: show why instead of closing as if it worked.
+          setError(useWorkspaceInvitesStore.getState().error[workspaceId] ?? "Could not send the invite.");
+          return;
+        }
+        const workspaceName = useUserStore.getState().activeWorkspace()?.name ?? "your workspace";
+        useToastStore.getState().push({ kind: "success", title: `Added ${email} to ${workspaceName}` });
+      }
       onDone();
       onClose();
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : "Could not send the invite.");
     } finally { setBusy(false); }
   };
 
   return (
-    <Modal open onClose={onClose} size="sm" title={kind === "group" ? "New group" : "Invite guest"}>
-      <div className="space-y-3 p-6">
+    <Modal open onClose={onClose} size="sm" title={kind === "group" ? "New group" : "Invite people"}>
+      <form className="space-y-3 p-6" onSubmit={submit}>
         <input autoFocus value={value} onChange={(event) => setValue(event.target.value)}
-          placeholder={kind === "group" ? "Group name" : "guest@email.com"} className={INPUT_CLASS} />
+          placeholder={kind === "group" ? "Group name" : "guest@email.com"} className={INPUT_CLASS}
+          aria-label={kind === "group" ? "Group name" : "Email address"} />
         {kind === "group" ? (
           <select value={groupKind} onChange={(event) => setGroupKind(event.target.value as "chat" | "community")} className={INPUT_CLASS}>
             <option value="chat">Group chat</option>
             <option value="community">Community</option>
           </select>
         ) : (
-          <select value={role} onChange={(event) => setRole(event.target.value as Exclude<WorkspaceMemberRole, "owner">)} className={INPUT_CLASS}>
-            <option value="guest">Guest</option>
-            <option value="member">Member</option>
+          <select value={role} onChange={(event) => setRole(event.target.value as Exclude<WorkspaceMemberRole, "owner">)} className={INPUT_CLASS}
+            aria-label="Role">
+            <option value="member">Member — can edit</option>
+            <option value="guest">Guest — can view</option>
             <option value="admin">Admin</option>
           </select>
         )}
+        {error && kind !== "group" && (
+          <p role="alert" className="rounded-md bg-[color-mix(in_srgb,var(--osio-danger)_12%,transparent)] px-3 py-2 text-sm text-[var(--osio-danger)]">
+            {error}
+          </p>
+        )}
         <div className="flex justify-end gap-2">
           <Button onClick={onClose}>Cancel</Button>
-          <Button tone="primary" disabled={busy} onClick={submit}>{busy ? "…" : kind === "group" ? "Create" : "Invite"}</Button>
+          <Button type="submit" tone="primary" disabled={busy}>{busy ? "…" : kind === "group" ? "Create" : "Invite"}</Button>
         </div>
-      </div>
+      </form>
     </Modal>
   );
 };
@@ -87,7 +112,24 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
   const [viewId, setViewId] = useState(descriptor.views[0].id);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState<"group" | "guest" | null>(null);
+  const inviteRequested = useWorkspaceInvitesStore((state) => state.inviteRequested);
+  // The sidebar's "Invite members" card opens Settings on People and asks this
+  // panel to open the invite flow, whatever source tab is showing. Not in the
+  // first commit: Modal portals into <body> and React places the deeper portal
+  // first, so an invite modal mounted together with Settings sat UNDER it,
+  // invisible and unclickable (public build, 2026-10-21). One frame later it
+  // is appended after Settings and stacks on top.
+  const [mountedFrame, setMountedFrame] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setMountedFrame(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const activeCreating = creating ?? (inviteRequested && mountedFrame ? "guest" : null);
+  const closeCreate = () => {
+    if (inviteRequested) useWorkspaceInvitesStore.getState().consumeInviteRequest();
+    setCreating(null);
+  };
 
   // The parent remounts this panel (key=source) when the tab changes, so view
   // and query reset via the useState initializers — no reset effect needed.
@@ -135,7 +177,7 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
         )}
         {descriptor.create && (
           <div className="ml-auto">
-            <Button tone="primary" onClick={() => setCreating(true)}>{descriptor.create.label}</Button>
+            <Button tone="primary" onClick={() => setCreating(descriptor.create!.kind)}>{descriptor.create.label}</Button>
           </div>
         )}
       </div>
@@ -143,9 +185,9 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
       <ObjectDatabase key={`${viewId}:${debouncedQuery}`} adapter={adapter} databaseId={descriptor.databaseId}
         initialView={viewId} mode="inline" chrome="single-view" renderPage={renderPage} />
 
-      {creating && descriptor.create && (
-        <CreatePeopleModal kind={descriptor.create.kind} workspaceId={ctx.workspaceId} invitedBy={ctx.activeUserId}
-          onClose={() => setCreating(false)} onDone={handleChanged} />
+      {activeCreating && (
+        <CreatePeopleModal kind={activeCreating} workspaceId={ctx.workspaceId} invitedBy={ctx.activeUserId}
+          onClose={closeCreate} onDone={handleChanged} />
       )}
     </div>
   );
