@@ -20,6 +20,7 @@ interface ListedModel {
 	id: string;
 	label: string;
 	default: boolean;
+	vision?: boolean;
 	contextWindow?: number;
 	inputMicroUsdPerMTok?: number;
 	outputMicroUsdPerMTok?: number;
@@ -40,6 +41,7 @@ async function modelsOf(redis: Redis, row: ConnectionRow): Promise<ListedModel[]
 				id: model.id,
 				label: model.label,
 				default: index === 0,
+				vision: model.vision === true,
 				...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
 				...(model.inputMicroUsdPerMTok === undefined ? {} : { inputMicroUsdPerMTok: model.inputMicroUsdPerMTok }),
 				...(model.outputMicroUsdPerMTok === undefined ? {} : { outputMicroUsdPerMTok: model.outputMicroUsdPerMTok }),
@@ -57,7 +59,7 @@ export async function handleModels(ctx: RouteContext): Promise<number> {
 	if (!connectionId || connectionId === PLATFORM_CONNECTION_ID) {
 		const status = 200;
 		sendJson(ctx.response, status, {
-			models: platformModels().map((model) => ({ id: model.id, label: model.label, default: model.default })),
+			models: platformModels().map((model) => ({ id: model.id, label: model.label, default: model.default, vision: model.vision === true })),
 		});
 		return status;
 	}

@@ -12,7 +12,8 @@
 
 import { useEffect, useState } from "react";
 
-import { isAiConfigured, listRelatedPages } from "@/features/ai/api/aiClient";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
+import { listRelatedPages } from "@/features/ai/api/relatedPages";
 import { isUuidId } from "@/store/pageStore.helpers";
 
 /** One page related to the one that is open. */

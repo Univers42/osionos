@@ -22,197 +22,43 @@
  * Nothing here knows about providers: the browser never talks to one.
  */
 
+import { AiError, toAiError } from "./aiContract";
+import type {
+  AiCommand,
+  AiConnection,
+  AiConversation,
+  AiMessage,
+  AiModel,
+  AiPart,
+  AiProvider,
+  AiUsage,
+  CompleteInput,
+  CreateConnectionInput,
+  StartRunInput,
+} from "./aiContract";
 import { bearerFetch } from "@/shared/agent/bearerFetch";
-import { getActivePageJwt } from "@/shared/api/client";
+import { getActivePageJwt, reportRevokedSession } from "@/shared/api/client";
+import { revocationAwareFetch } from "@/shared/api/sessionRevocation";
 
 /** The minimal fetch shape, so a test can inject a stub without a network. */
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
-/* -------------------------------------------------------------------------- */
-/* The wire shapes                                                            */
-/* -------------------------------------------------------------------------- */
-
-/** A command the service offers (`ask`, `summarize`, …). */
-export interface AiCommand {
-  name: string;
-  description: string;
-  template: string;
-  surface: "editor" | "chat" | "both";
-  model?: string;
-}
-
-/** A model on the service's allowlist. */
-export interface AiModel {
-  id: string;
-  label: string;
-  default: boolean;
-  /** The context window, in tokens, when the service knows it. */
-  contextWindow?: number;
-  /** The price of a million input tokens, in micro dollars. */
-  inputMicroUsdPerMTok?: number;
-  /** The price of a million output tokens, in micro dollars. */
-  outputMicroUsdPerMTok?: number;
-}
-
-/* -------------------------------------------------------------------------- */
-/* The connections (the v2 additions of the wire contract)                    */
-/* -------------------------------------------------------------------------- */
-
-/**
- * A provider of models the service knows. `supported` says whether the server
- * has an adapter for the provider's wire format — an unsupported one can be
- * seen, but not connected.
- */
-export interface AiProvider {
-  id: string;
-  name: string;
-  kind: "api_key" | "oauth" | "endpoint";
-  supported: boolean;
-  docUrl?: string;
-  modelCount: number;
-}
-
-/**
- * How a user brings their own model access. The platform connection (our key,
- * our daily budget) always exists, with the id `platform`.
- *
- * A secret NEVER reaches the browser: the service answers with `last4` only.
- */
-export interface AiConnection {
-  id: string;
-  kind: "platform" | "api_key" | "oauth" | "endpoint";
-  provider: string;
-  label: string;
-  baseUrl?: string;
-  /** The last four characters of the key — the only part of it we ever see. */
-  last4?: string;
-  status: "ok" | "error" | "untested";
-  statusMessage?: string;
-  createdAt: string;
-}
-
-/** The body of `POST /connections` — an API key, or an endpoint of the user's. */
-export type CreateConnectionInput =
-  | { kind: "api_key"; provider: string; apiKey: string; label?: string }
-  | { kind: "endpoint"; label: string; baseUrl: string; apiKey?: string };
-
-/** The platform's usage for the day — ours only, never the user's own spend. */
-export interface AiUsage {
-  /** The day the usage is about (YYYY-MM-DD). */
-  day: string;
-  spentMicroUsd: number;
-  limitMicroUsd: number;
-}
-
-/** A conversation, as the service stores it. */
-export interface AiConversation {
-  id: string;
-  workspaceId: string;
-  title: string;
-  model?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** One part of a message, in the service's shape. */
-export type AiPart =
-  | { type: "text"; text: string }
-  | { type: "reasoning"; text: string }
-  | { type: "tool-call"; toolCallId: string; toolName: string; input: unknown }
-  | { type: "tool-result"; toolCallId: string; output: unknown }
-  | { type: "citation"; pageId: string; blockId?: string; title: string; snippet: string };
-
-/** A message, as the service stores it. */
-export interface AiMessage {
-  id: string;
-  conversationId: string;
-  runId: string;
-  role: "user" | "assistant" | "system" | "tool";
-  parts: AiPart[];
-  model?: string;
-  createdAt: string;
-}
-
-/** The body of `POST /runs`. `runId` is the client's idempotency key. */
-export interface StartRunInput {
-  runId: string;
-  conversationId: string;
-  text: string;
-  model?: string;
-  /** The connection the run spends — `platform` when the caller does not say. */
-  connectionId?: string;
-  /**
-   * What the answer is read from: the pages it may use (at most three), and
-   * whether the caller's whole workspace is searched.
-   */
-  context?: { pageIds?: string[]; workspace?: boolean };
-}
-
-/** The body of `POST /complete` — an inline editor action, never persisted. */
-export interface CompleteInput {
-  runId: string;
-  command: string;
-  input: { text: string };
-  model?: string;
-  /** The connection the completion spends — `platform` when the caller does not say. */
-  connectionId?: string;
-}
-
-/**
- * One page related to another, for the caller who asks.
- *
- * The neighbours are computed for the caller at the moment of the read: a page
- * the caller may not read is not a neighbour, and it is not a "missing" one
- * either.
- */
-export interface AiRelatedPage {
-  /** The id of the page. */
-  pageId: string;
-  /** Its title. */
-  title: string;
-  /** The cosine similarity of the two pages, from 0 to 1. */
-  score: number;
-  /** Whether the page already links to it. */
-  linked: boolean;
-}
-
-/* -------------------------------------------------------------------------- */
-/* The errors                                                                 */
-/* -------------------------------------------------------------------------- */
-
-/** A refusal from the service: the status and the contract's code. */
-export class AiError extends Error {
-  readonly status: number;
-  readonly code: string;
-
-  constructor(status: number, code: string, message?: string) {
-    super(message || code);
-    this.name = "AiError";
-    this.status = status;
-    this.code = code;
-  }
-}
-
-/**
- * Reads the refusal out of an error response. The contract's envelope is
- * `{ "error": { "code" } }`; a flat `{ "code" }` is read too, so a service that
- * answers the older shape still reaches the user with a code.
- */
-async function toAiError(response: Response): Promise<AiError> {
-  let code = "unknown";
-  let message = "";
-  try {
-    const body = (await response.clone().json()) as
-      | { error?: { code?: string; message?: string }; code?: string; message?: string }
-      | null;
-    code = body?.error?.code ?? body?.code ?? code;
-    message = body?.error?.message ?? body?.message ?? "";
-  } catch {
-    // A refusal that is not JSON still has a status.
-  }
-  return new AiError(response.status, code, message);
-}
-
+/* The shapes of the contract and its refusal are re-exported here: the
+   callers of the client read them from one place. */
+export { AiError };
+export type {
+  AiCommand,
+  AiConnection,
+  AiConversation,
+  AiMessage,
+  AiModel,
+  AiPart,
+  AiProvider,
+  AiUsage,
+  CompleteInput,
+  CreateConnectionInput,
+  StartRunInput,
+};
 /* -------------------------------------------------------------------------- */
 /* The transport                                                              */
 /* -------------------------------------------------------------------------- */
@@ -243,15 +89,36 @@ export function isAiConfigured(): boolean {
   return serviceBase().length > 0;
 }
 
-/** The transport every route uses: the session bearer, like the agent stream. */
-let transport: FetchLike = bearerFetch((input, init) => fetch(input, init), getActivePageJwt);
+/**
+ * The transport every route uses: the session bearer, like the agent stream.
+ *
+ * The revocation check is inside it, so the run stream reports a `session_revoked`
+ * 401 like every other AI route: `startRun` and `resumeRun` go through
+ * `requestStream`, which goes through this transport -- they do not fetch on their
+ * own, the way the bridge's own agent stream does (packages/http-gate/src/sse.ts).
+ */
+let transport: FetchLike = bearerFetch(
+  revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
+  getActivePageJwt,
+);
 
 /** Swaps the transport. The tests use it; the app never calls it. */
 export function setAiTransport(impl: FetchLike): void {
   transport = impl;
 }
 
-async function requestJson<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
+/**
+ * The JSON transport of the service.
+ *
+ * It is exported so a route that lives in its own module (relatedPages.ts)
+ * rides the SAME transport — the session bearer, the base URL, the refusal
+ * envelope — instead of copying it.
+ */
+export async function requestJson<T>(
+  method: "GET" | "POST" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const response = await transport(`${aiBaseUrl()}${path}`, {
     method,
     headers: { Accept: "application/json", "Content-Type": "application/json" },
@@ -356,20 +223,6 @@ export async function cancelRun(runId: string): Promise<void> {
 /** `POST /complete` — a short-lived completion, never persisted. */
 export async function complete(input: CompleteInput, signal?: AbortSignal): Promise<Response> {
   return requestStream("POST", "/complete", input, { signal });
-}
-
-/**
- * `GET /pages/:id/related?k=` — the pages related to a page, for the caller.
- *
- * The list is computed by the service for this caller: a page the caller may
- * not read is never in it.
- */
-export async function listRelatedPages(pageId: string, k = 8): Promise<AiRelatedPage[]> {
-  const body = await requestJson<{ related?: AiRelatedPage[] }>(
-    "GET",
-    `/pages/${encodeURIComponent(pageId)}/related?k=${k}`,
-  );
-  return body.related ?? [];
 }
 
 /* -------------------------------------------------------------------------- */

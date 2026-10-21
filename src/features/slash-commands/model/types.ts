@@ -86,6 +86,11 @@ export interface SlashAiCommand extends SlashCommandBase {
   command: string;
 }
 
+/** The dictation: the voice of the user, written at the caret. */
+export interface SlashDictateCommand extends SlashCommandBase {
+  kind: "dictate";
+}
+
 export type SlashCommand =
   | SlashBlockCommand
   | SlashTurnIntoCommand
@@ -94,7 +99,8 @@ export type SlashCommand =
   | SlashDatabaseViewCommand
   | SlashMediaPickerCommand
   | SlashWhiteboardCommand
-  | SlashAiCommand;
+  | SlashAiCommand
+  | SlashDictateCommand;
 
 export interface SlashCommandSection {
   id: string;

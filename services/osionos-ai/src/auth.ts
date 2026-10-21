@@ -3,6 +3,7 @@ import { verifyAppSessionToken } from '../../../scripts/bridge-session-token.mjs
 import type { VerifiedAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import { privateWorkspaceOf } from '../../../scripts/bridge-live-workspaces.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller } from '../../../scripts/bridge-session-cutoff.mjs';
+import type { SessionCutoffTracker } from '../../../scripts/bridge-session-cutoff.mjs';
 import { config } from './config.ts';
 
 export interface AuthUser {
@@ -17,7 +18,7 @@ export interface AuthUser {
  * off its config (scripts/bridge-api.mjs:4126-4131). The same object goes into the
  * token config, so a token issued before its user's sign-out is refused.
  */
-const sessionCutoffs = sessionCutoffsFromConfig(config);
+const sessionCutoffs: SessionCutoffTracker = sessionCutoffsFromConfig(config);
 const tokenConfig = { ...config, sessionCutoffs };
 
 /**
@@ -60,18 +61,37 @@ function failureCode(error: unknown): { status: number; code: string } {
 }
 
 /**
- * The caller of a request, or null when the request carries no valid app-session
- * token. Any verification failure is a refusal: the caller sees a 401, the log sees
- * the failure's code.
+ * The caller of a request, and the code of its refusal.
+ *
+ * Any verification failure is a refusal: the caller sees a 401 with the code (a
+ * session the cut-off refuses says `session_revoked`, every other failure says
+ * `unauthorized`), and the log sees the code too.
  */
-export function authenticate(request: IncomingMessage): AuthUser | null {
+export function verifyRequest(request: IncomingMessage): { user: AuthUser | null; code: string | null } {
 	const token = bearerToken(request);
-	if (!token) return null;
+	if (!token) return { user: null, code: null };
 	try {
-		return toAuthUser(verifyAppSessionToken(token, tokenConfig));
+		return { user: toAuthUser(verifyAppSessionToken(token, tokenConfig)), code: null };
 	} catch (error) {
 		const failure = failureCode(error);
 		console.warn(JSON.stringify({ event: 'auth_failed', status: failure.status, code: failure.code }));
-		return null;
+		return { user: null, code: failure.code };
 	}
+}
+
+/** The caller of a request, or null when the request carries no valid app-session token. */
+export function authenticate(request: IncomingMessage): AuthUser | null {
+	return verifyRequest(request).user;
+}
+
+/**
+ * Puts another cut-off tracker in place of the one the poller fills.
+ *
+ * The suite runs with OSIONOS_SESSION_CUTOFFS=off, so the tracker of this
+ * process never enforces anything and no test could see a revoked token. A
+ * test that needs one hands a tracker here, loaded with the cut-off it wants.
+ * The service itself never calls this: the poller above owns the tracker.
+ */
+export function setSessionCutoffs(tracker: SessionCutoffTracker): void {
+	tokenConfig.sessionCutoffs = tracker;
 }
