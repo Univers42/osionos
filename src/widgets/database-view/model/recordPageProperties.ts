@@ -16,7 +16,8 @@
  * The engine stores option IDS, full ISO dates and computes formula/rollup
  * values on demand; the page editor renders LABELS, needs `YYYY-MM-DD` for its
  * date input and shows computed values as text. Projecting and editing go
- * through the same table so a projection can always be read back unchanged.
+ * through the same table, so projecting a row is write-free for any stored
+ * shape, not only clean data.
  */
 
 import type { PagePropertyEntry, PagePropertyType } from "@/entities/page";
@@ -135,8 +136,9 @@ const multiSelectCodec: Codec = {
   },
   edit(value, property, current) {
     const idsByLabel = optionsByLabel(property);
+    const currentIds = new Set(toStringArray(current));
     const next = toStringArray(value)
-      .map((label) => idsByLabel.get(label)?.id)
+      .map((label) => idsByLabel.get(label)?.id ?? (currentIds.has(label) ? label : undefined))
       .filter((id): id is string => Boolean(id));
     return { changed: !sameStrings(next, toStringArray(current)), value: next };
   },
@@ -259,6 +261,11 @@ export function projectRecordProperties(
   });
 }
 
+const NO_RESOLVE: RecordValueResolver = {
+  formula: () => undefined,
+  rollup: () => undefined,
+};
+
 /** Page edits -> engine writes, using each property's CURRENT raw value. */
 export function recordPropertyEdits(
   database: DatabaseSchema,
@@ -269,12 +276,24 @@ export function recordPropertyEdits(
   for (const entry of entries) {
     const property = database.properties[entry.key];
     if (!property) continue;
-    const edit = codecFor(property).edit;
-    if (!edit) continue;
-    const result = edit(entry.value, property, page.properties[property.id]);
+    const codec = codecFor(property);
+    if (!codec.edit) continue;
+    const raw = page.properties[property.id];
+    // Equal to the stored value's projection: not an edit (legacy/unknown safe).
+    if (samePropertyValue(entry.value, codec.project(raw, property, page, NO_RESOLVE))) continue;
+    const result = codec.edit(entry.value, property, raw);
     if (result.changed) edits.push({ propertyId: property.id, value: result.value });
   }
   return edits;
+}
+
+function samePropertyValue(
+  left: PagePropertyEntry["value"],
+  right: PagePropertyEntry["value"],
+): boolean {
+  if ((left == null || left === "") && (right == null || right === "")) return true;
+  if (Array.isArray(left) && Array.isArray(right)) return sameStrings(left, right);
+  return left === right;
 }
 
 function toNumber(value: unknown): number {
