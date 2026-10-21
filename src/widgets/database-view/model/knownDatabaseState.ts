@@ -34,6 +34,11 @@ import {
 } from "./objectDatabaseBridgeSync";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import { createKnownStateWriter, KNOWN_DATABASE_STATE_STORAGE_KEY } from "./knownDatabaseStorage";
+import {
+  deletedPageIdsBetween,
+  loadPersistedKnownDatabaseState,
+  serializeKnownDatabaseState,
+} from "./knownDatabasePersistedState";
 
 export { KNOWN_DATABASE_STATE_STORAGE_KEY };
 const KNOWN_DATABASE_STATE_FLUSH_DELAY_MS = 1000;
@@ -59,6 +64,10 @@ export interface PersistableObjectDatabaseAdapter extends ObjectDatabaseAdapter 
 }
 
 const knownDatabaseAdapterCache = new Map<string, PersistableObjectDatabaseAdapter>();
+/** Pages the user deleted, persisted with the snapshot. Hydration and the
+ *  server union must never resurrect them (a lone snapshot cannot tell a
+ *  deletion from a fresh browser's not-yet-filled placeholder). */
+let deletedPageIds = new Set<string>();
 let pendingKnownDatabaseState: NotionState | null = null;
 let pendingKnownDatabaseStateMicrotask = false;
 let pendingKnownDatabaseStateDebounceHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
@@ -74,7 +83,10 @@ type KnownDatabaseCancelIdleCallback = (handle: number) => void;
 export const useKnownDatabaseStateStore = create<KnownDatabaseStoreState>((set) => ({
   state: loadKnownDatabaseState(),
   replaceState: (state) => set({ state: persistKnownDatabaseState(state) }),
-  resetState: () => set({ state: persistKnownDatabaseState(seedSnapshot()) }),
+  resetState: () => {
+    deletedPageIds = new Set();
+    set({ state: persistKnownDatabaseState(seedSnapshot()) });
+  },
   updatePageProperty: (pageId, propertyId, value) => set((current) => {
     const page = current.state.pages[pageId];
     if (!page) return current;
@@ -141,11 +153,22 @@ export function loadKnownDatabaseState(): NotionState {
 
   try {
     const raw = globalThis.localStorage.getItem(KNOWN_DATABASE_STATE_STORAGE_KEY);
-    if (!raw) return seeded;
-    return withStatusDefaults(mergeWithSeedState(JSON.parse(raw) as Partial<NotionState>, seeded));
+    if (!raw) {
+      deletedPageIds = new Set();
+      return seeded;
+    }
+    const loaded = loadPersistedKnownDatabaseState(raw, seeded);
+    deletedPageIds = loaded.deletedPageIds;
+    return withStatusDefaults(loaded.state);
   } catch {
+    deletedPageIds = new Set();
     return seeded;
   }
+}
+
+/** Tombstones to honour in the server sync (hydration union / replacement). */
+export function getDeletedPageIds(): ReadonlySet<string> {
+  return deletedPageIds;
 }
 
 export function persistKnownDatabaseState(state: NotionState): NotionState {
@@ -170,10 +193,10 @@ export function flushKnownDatabaseStatePersist() {
     // server push below, which holds slices past this tick) must not alias
     // the live store state the pending ref now points at.
     const nextState = cloneState(pendingState);
-    timed("persistKnownDatabaseState", () => writeKnownState(JSON.stringify(nextState)));
+    timed("persistKnownDatabaseState", () => writeKnownState(serializeKnownDatabaseState(nextState, deletedPageIds)));
     // Write-through: mirror every user-created database to the server (bridge →
     // Postgres, owner-isolated). No-ops offline / without a session — see module.
-    pushDirtyObjectDatabases(nextState, seedDatabaseIds());
+    pushDirtyObjectDatabases(nextState, seedDatabaseIds(), deletedPageIds);
   }
 }
 
@@ -320,6 +343,7 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
 
   async deletePage(id: string): Promise<void> {
     const databaseId = useKnownDatabaseStateStore.getState().state.pages[id]?.databaseId;
+    deletedPageIds.add(id);
     this.updateState((state) => {
       const pages = { ...state.pages };
       delete pages[id];
@@ -402,6 +426,10 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
       useKnownDatabaseStateStore.getState().replaceState(state);
       return;
     }
+    // The host diffs its store against the pre-edit baseline: a page in the
+    // baseline that is gone from `state` is a user deletion. Remember it so a
+    // reload (or the server union) cannot bring it back.
+    for (const pageId of deletedPageIdsBetween(previousState, state)) deletedPageIds.add(pageId);
     const current = useKnownDatabaseStateStore.getState().state;
     useKnownDatabaseStateStore.getState().replaceState({
       databases: mergeChangedRecords(current.databases, state.databases, previousState.databases),
@@ -432,17 +460,6 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   }
 }
 
-function mergeWithSeedState(stored: Partial<NotionState>, seeded: NotionState): NotionState {
-  const storedDatabases = isRecord(stored.databases) ? stored.databases : {};
-  const storedPages = isRecord(stored.pages) ? stored.pages : {};
-  const storedViews = isRecord(stored.views) ? stored.views : {};
-  return {
-    databases: mergeDatabases(seeded.databases, storedDatabases),
-    pages: { ...seeded.pages, ...storedPages },
-    views: { ...seeded.views, ...storedViews },
-  };
-}
-
 function applyAdapterOptions(state: NotionState, options: KnownDatabaseAdapterOptions): NotionState {
   const fill = options.defaultLoadLimit && options.defaultLoadLimit > 0 ? Math.max(1, Math.round(options.defaultLoadLimit)) : undefined;
   const cap = options.recordCap && options.recordCap > 0 ? Math.max(1, Math.round(options.recordCap)) : undefined;
@@ -462,17 +479,6 @@ function applyAdapterOptions(state: NotionState, options: KnownDatabaseAdapterOp
       return [viewId, { ...view, settings: { ...view.settings, loadLimit: next } }];
     })),
   };
-}
-
-function mergeDatabases(seedDatabases: NotionState["databases"], storedDatabases: NotionState["databases"]): NotionState["databases"] {
-  const merged: NotionState["databases"] = { ...seedDatabases };
-  for (const [databaseId, database] of Object.entries(storedDatabases)) {
-    const seedDatabase = seedDatabases[databaseId];
-    merged[databaseId] = seedDatabase
-      ? { ...seedDatabase, ...database, properties: { ...seedDatabase.properties, ...database.properties } }
-      : database;
-  }
-  return merged;
 }
 
 function mergeChangedRecords<TRecord>(
@@ -625,6 +631,7 @@ function reconcileObjectDatabaseRegistry(userDbKeys: string[]): void {
 const objectDatabaseSyncHooks: ObjectDatabaseSyncHooks = {
   getSeedIds: seedDatabaseIds,
   getLiveState: () => useKnownDatabaseStateStore.getState().state,
+  getDeletedPageIds: () => deletedPageIds,
   applyMerged: (state) => useKnownDatabaseStateStore.getState().replaceState(state),
   notifyReloaded: notifyObjectDatabaseAdaptersReloaded,
   reconcileRegistry: reconcileObjectDatabaseRegistry,
@@ -642,10 +649,6 @@ export { resetObjectDatabaseSync } from "./objectDatabaseBridgeSync";
 function createId(prefix: string): string {
   if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`;
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function cloneState(state: NotionState): NotionState {

@@ -22,6 +22,7 @@ import type { NotionState } from "@notion-db/object-database";
 import { api, getActivePageJwt, API_BASE } from "@/shared/api/client";
 import { isObjectDatabaseServerSyncEnabled } from "@/shared/config/featureFlags";
 import { hashSlice, sliceDatabase, userDatabaseIds, withMergedSlice, withServerSlice } from "./objectDatabaseSlice";
+import { withoutDeletedPages } from "./knownDatabasePersistedState";
 import { startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objectDatabaseRealtime";
 
 const PUSHED_HASHES_KEY = "osionos.objectDb.pushed.v1";
@@ -34,6 +35,9 @@ type ServerListResponse = { databases?: ServerObjectDatabase[] };
 export type ObjectDatabaseSyncHooks = {
   getSeedIds: () => ReadonlySet<string>;
   getLiveState: () => NotionState;
+  /** Pages the user deleted. Never pulled back from the server (the push that
+   *  removes them may have been aborted by a reload). Optional: tests/no-store. */
+  getDeletedPageIds?: () => ReadonlySet<string>;
   applyMerged: (state: NotionState) => void;
   notifyReloaded?: () => void;
   reconcileRegistry?: (userDbKeys: string[]) => void;
@@ -95,10 +99,17 @@ async function deleteDatabaseRemote(jwt: string, dbKey: string): Promise<void> {
  *  could overwrite real server data before it ever saw it. Once hydration has run
  *  the store is reconciled, so pushing is safe.
  *  Fire-and-forget — a failed item simply stays dirty and retries next flush. */
-export function pushDirtyObjectDatabases(state: NotionState, seedIds: ReadonlySet<string>): void {
+export function pushDirtyObjectDatabases(
+  state: NotionState,
+  seedIds: ReadonlySet<string>,
+  deletedPageIds?: ReadonlySet<string>,
+): void {
   if (!objectDatabaseServerSyncReady() || pushInFlight || !hydrationCompleted) return;
   const jwt = getActivePageJwt();
   if (!jwt) return;
+  // A tombstoned page must not be written back to the server (that would undo
+  // the delete for every other client).
+  if (deletedPageIds?.size) state = withoutDeletedPages(state, deletedPageIds);
 
   const pushed = loadPushedHashes();
   const userIds = new Set(userDatabaseIds(state, seedIds));
@@ -152,8 +163,10 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
   const seedIds = hooks.getSeedIds();
   const pushed = loadPushedHashes();
   const nextPushed: Record<string, string> = { ...pushed };
-  let merged = hooks.getLiveState();
-  let changed = false;
+  const deletedPageIds = hooks.getDeletedPageIds?.() ?? new Set<string>();
+  const liveState = hooks.getLiveState();
+  let merged = withoutDeletedPages(liveState, deletedPageIds);
+  let changed = merged !== liveState;
 
   for (const [dbKey, row] of serverMap) {
     const serverState = row.state ?? ({ databases: {}, pages: {}, views: {} } as NotionState);
@@ -163,7 +176,7 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
       // auto-created before this pull landed. Union with the server so neither
       // side loses a record (a placeholder can no longer erase real data), then
       // re-push the union (drop the baseline so it counts as dirty next flush).
-      const unionCandidate = withMergedSlice(merged, dbKey, serverState);
+      const unionCandidate = withMergedSlice(merged, dbKey, serverState, deletedPageIds);
       delete nextPushed[dbKey];
       if (hashSlice(sliceDatabase(unionCandidate, dbKey)) !== localHash) {
         merged = unionCandidate;
@@ -171,7 +184,7 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
       }
       continue;
     }
-    const candidate = withServerSlice(merged, dbKey, serverState);
+    const candidate = withServerSlice(merged, dbKey, serverState, deletedPageIds);
     const serverHash = hashSlice(sliceDatabase(candidate, dbKey));
     nextPushed[dbKey] = serverHash; // baseline: local now equals server
     if (serverHash !== localHash) {
@@ -191,7 +204,7 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
     hooks.notifyReloaded?.(); // mounted views reload from the merged store immediately
   }
   hooks.reconcileRegistry?.(userDatabaseIds(merged, seedIds)); // list every synced db in the sidebar
-  pushDirtyObjectDatabases(merged, seedIds); // upload dirty + repaired now, not only on next edit
+  pushDirtyObjectDatabases(merged, seedIds, deletedPageIds); // upload dirty + repaired now, not only on next edit
 }
 
 /** Kick hydration once the session token exists. Waits briefly for it, then
