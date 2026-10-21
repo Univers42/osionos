@@ -1,41 +1,22 @@
 /**
- * The chunker: a page's block tree in, the chunks of the page out.
+ * The chunker: a page's sections in, the chunks of the page out.
  *
  * Pure: no database, no clock, no network. The worker reads the page row,
  * hands it to the chunker, and writes back what comes out. Everything that
  * decides WHAT is indexed lives here, so it can be tested without a server.
  *
- * The shape of the input is the shape the app stores: a JSONB array of blocks
- * (src/entities/block/model/types.ts), each one `{ id, type, content, children }`.
- * A block's text is its `content` string; nothing else is read.
+ * The sections come from sections.ts (the blocks of the page, and the headings
+ * that open them); this module cuts them.
  *
  * The rules:
- *   - the blocks are walked depth-first, in document order: a parent, then its
- *     children;
- *   - a heading of level 1, 2 or 3 opens a SECTION; the text under it belongs
- *     to that section;
- *   - the path of a section is the title of the page and the OPEN headings:
- *     "<title> › <h1> › <h2>";
  *   - a section becomes chunks of about 300 to 500 tokens, cut on the block
  *     boundaries; a block that is too long on its own is cut on its sentence
  *     ends, then hard at 2000 characters.
  */
 
 import { createHash } from 'node:crypto';
-
-/** The block of a page, as the JSONB of osionos_pages.content holds it. */
-export interface PageBlock {
-	id?: unknown;
-	type?: unknown;
-	content?: unknown;
-	children?: unknown;
-}
-
-/** The page the chunker reads: its title and its block tree. */
-export interface PageDocument {
-	title: string;
-	content: unknown;
-}
+import { pageSections } from './sections.ts';
+import type { PageDocument, Section, TextBlock } from './sections.ts';
 
 /** One chunk of a page: its place in the page, and its text. */
 export interface PageChunk {
@@ -71,65 +52,6 @@ export const MAX_CHUNK_TOKENS = 500;
 
 /** The hard cut of a block that is too long on its own. */
 export const HARD_SPLIT_CHARS = 2000;
-
-/** The separator of the heading path: the page title, then the headings. */
-export const HEADING_SEPARATOR = ' › ';
-
-/**
- * The heading types that open a section: heading_1, heading_2 and heading_3.
- * heading_4 to heading_6 are text like any other block: they are small, and
- * a section per small heading would make the chunks meaningless.
- */
-const HEADING_LEVELS: Readonly<Record<string, number>> = Object.freeze({
-	heading_1: 1,
-	heading_2: 2,
-	heading_3: 3,
-});
-
-/** A block of a section: its id and its text. */
-interface TextBlock {
-	id: string;
-	text: string;
-}
-
-/** A section of a page: its path, and the blocks under it. */
-interface Section {
-	headingPath: string;
-	blocks: TextBlock[];
-}
-
-/** The id of a block: a string, or nothing. */
-function blockId(block: PageBlock): string {
-	return typeof block.id === 'string' ? block.id : '';
-}
-
-/**
- * The blocks of a page, in document order: a parent, then its children.
- *
- * The tree is walked depth-first, so the children of a block come right after
- * it. A block that is not an object is skipped: the tree is data, and data
- * from an old version of the app may hold things the chunker does not know.
- */
-export function pageBlocks(content: unknown): PageBlock[] {
-	const blocks: PageBlock[] = [];
-	const walk = (nodes: unknown): void => {
-		if (!Array.isArray(nodes)) return;
-		for (const node of nodes) {
-			if (!node || typeof node !== 'object' || Array.isArray(node)) continue;
-			const block = node as PageBlock;
-			blocks.push(block);
-			walk(block.children);
-		}
-	};
-	walk(content);
-	return blocks;
-}
-
-/** The path of a section: the title of the page and the open headings. */
-function headingPath(title: string, stack: readonly { level: number; text: string }[]): string {
-	const parts = [title.trim(), ...stack.map((entry) => entry.text)].filter((part) => part.length > 0);
-	return parts.join(HEADING_SEPARATOR);
-}
 
 /**
  * The hash of a chunk: its heading path and its text.
@@ -272,36 +194,9 @@ export function chunkPage(page: PageDocument): PageChunk[] {
 		throw new Error('page_content_is_not_a_block_array');
 	}
 
-	const title = typeof page.title === 'string' ? page.title : '';
-	const sections: Section[] = [];
-	const stack: { level: number; text: string }[] = [];
-	let current: Section | null = null;
-
-	for (const block of pageBlocks(page.content)) {
-		const text = typeof block.content === 'string' ? block.content.trim() : '';
-		const type = typeof block.type === 'string' ? block.type : '';
-		const level = HEADING_LEVELS[type];
-		if (level !== undefined) {
-			// A heading opens a section. The headings it closes are the ones of
-			// its level and of the levels below: only the open ancestors stay.
-			while (stack.length > 0 && stack[stack.length - 1].level >= level) stack.pop();
-			if (text.length > 0) stack.push({ level, text });
-			current = { headingPath: headingPath(title, stack), blocks: [] };
-			sections.push(current);
-			if (text.length > 0) current.blocks.push({ id: blockId(block), text });
-			continue;
-		}
-		if (text.length === 0) continue;
-		if (current === null) {
-			current = { headingPath: headingPath(title, stack), blocks: [] };
-			sections.push(current);
-		}
-		current.blocks.push({ id: blockId(block), text });
-	}
-
 	const chunks: PageChunk[] = [];
 	let ord = 0;
-	for (const section of sections) {
+	for (const section of pageSections(page)) {
 		for (const chunk of chunkSection(section)) {
 			chunks.push({ ...chunk, ord: ord++ });
 		}

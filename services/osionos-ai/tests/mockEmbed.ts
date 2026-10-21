@@ -9,6 +9,10 @@ import { createHash } from 'node:crypto';
  * The vectors are DETERMINISTIC: the same input always gives the same vector,
  * so a test can tell a chunk that was embedded again from a chunk that was
  * kept. The mock counts its calls and keeps every input it received.
+ *
+ * The mock has a GATE: the requests wait at it, and the test opens it when it
+ * wants. It is what makes an interleaving deterministic: the worker is held
+ * inside the embedding, and everything else happens while it is held.
  */
 
 export interface MockEmbedOptions {
@@ -25,11 +29,17 @@ export interface MockEmbedder {
 	baseUrl: string;
 	/** The number of calls the mock received. */
 	readonly calls: number;
+	/** The number of requests the mock received, answered or not. */
+	readonly arrived: number;
 	/** Every input of every call, in the order of the calls. */
 	readonly inputs: string[];
 	/** The body of every call, in the order of the calls. */
 	readonly bodies: unknown[];
 	setOptions(next: Partial<MockEmbedOptions>): void;
+	/** The gate is closed: the requests wait for it to open. */
+	closeGate(): void;
+	/** The gate opens: the requests that wait go on. */
+	openGate(): void;
 	close(): Promise<void>;
 }
 
@@ -66,8 +76,20 @@ function readBody(request: IncomingMessage): Promise<string> {
 export async function startMockEmbedder(initial?: Partial<MockEmbedOptions>): Promise<MockEmbedder> {
 	let options: MockEmbedOptions = { ...DEFAULT_OPTIONS, ...initial };
 	let calls = 0;
+	let arrived = 0;
 	const inputs: string[] = [];
 	const bodies: unknown[] = [];
+	// The gate: closed, the requests wait; open, they go on.
+	let gateClosed = false;
+	const waiting: (() => void)[] = [];
+
+	/** The wait at the gate: it returns when the gate is open. */
+	const waitAtGate = async (): Promise<void> => {
+		if (!gateClosed) return;
+		await new Promise<void>((resolve) => {
+			waiting.push(resolve);
+		});
+	};
 
 	const server = createServer((request, response) => {
 		if (!request.url?.endsWith('/embed')) {
@@ -75,7 +97,11 @@ export async function startMockEmbedder(initial?: Partial<MockEmbedOptions>): Pr
 			response.end(JSON.stringify({ error: 'not found' }));
 			return;
 		}
-		void readBody(request).then((raw) => {
+		// The request is received: the test waits for this to know that the
+		// worker reached the service.
+		arrived += 1;
+		void readBody(request).then(async (raw) => {
+			await waitAtGate();
 			calls += 1;
 			let parsed: { inputs?: unknown } = {};
 			try {
@@ -114,6 +140,9 @@ export async function startMockEmbedder(initial?: Partial<MockEmbedOptions>): Pr
 		get calls(): number {
 			return calls;
 		},
+		get arrived(): number {
+			return arrived;
+		},
 		get inputs(): string[] {
 			return inputs;
 		},
@@ -122,6 +151,13 @@ export async function startMockEmbedder(initial?: Partial<MockEmbedOptions>): Pr
 		},
 		setOptions(next: Partial<MockEmbedOptions>): void {
 			options = { ...options, ...next };
+		},
+		closeGate(): void {
+			gateClosed = true;
+		},
+		openGate(): void {
+			gateClosed = false;
+			for (const resolve of waiting.splice(0)) resolve();
 		},
 		async close(): Promise<void> {
 			await new Promise<void>((resolve) => {
