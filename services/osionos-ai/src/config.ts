@@ -71,6 +71,16 @@ const envSchema = z.object({
 	OSIONOS_AI_USER_DAILY_MICROUSD: z.coerce.number().int().nonnegative().default(200_000),
 	OSIONOS_AI_PLATFORM_DAILY_MICROUSD: z.coerce.number().int().nonnegative().default(20_000_000),
 	OSIONOS_AI_RUNS_PER_MINUTE: z.coerce.number().int().positive().default(20),
+	// The KEK of the users' own connections: the base64 of exactly 32 bytes.
+	// Without it the service serves the platform connection only, and the
+	// creation of a connection answers 503 connections_unavailable.
+	OSIONOS_AI_KEK: z.string().optional(),
+	OSIONOS_AI_KEK_ID: z.string().min(1).default('k1'),
+	// The development escape hatch of the SSRF guard: the hosts that may
+	// speak http and may live on a private address. Empty in production.
+	OSIONOS_AI_DEV_ENDPOINT_HOSTS: z.string().optional(),
+	// The base URLs of the built-in providers, overridden for the tests.
+	OSIONOS_AI_DEV_PROVIDER_BASE_URLS: z.string().optional(),
 });
 
 const rawEnv = {
@@ -91,6 +101,10 @@ const rawEnv = {
 	OSIONOS_AI_USER_DAILY_MICROUSD: process.env.OSIONOS_AI_USER_DAILY_MICROUSD,
 	OSIONOS_AI_PLATFORM_DAILY_MICROUSD: process.env.OSIONOS_AI_PLATFORM_DAILY_MICROUSD,
 	OSIONOS_AI_RUNS_PER_MINUTE: process.env.OSIONOS_AI_RUNS_PER_MINUTE,
+	OSIONOS_AI_KEK: firstEnv('OSIONOS_AI_KEK'),
+	OSIONOS_AI_KEK_ID: process.env.OSIONOS_AI_KEK_ID,
+	OSIONOS_AI_DEV_ENDPOINT_HOSTS: process.env.OSIONOS_AI_DEV_ENDPOINT_HOSTS,
+	OSIONOS_AI_DEV_PROVIDER_BASE_URLS: process.env.OSIONOS_AI_DEV_PROVIDER_BASE_URLS,
 };
 
 const parsed = envSchema.safeParse(rawEnv);
@@ -123,6 +137,69 @@ function parsePlatformModels(raw: string): PlatformModelEntry[] {
 	return result.data.map((model) => ({ ...model, default: model.default === true }));
 }
 
+/**
+ * Whether the service runs in production.
+ *
+ * The image sets NODE_ENV=production. The development escape hatches of the
+ * SSRF guard (the hosts of the tests, the base URLs of the tests) point the
+ * API keys of the users at other hosts or open the private addresses of the
+ * network: they are for the tests, never for a deployment.
+ */
+function isProduction(): boolean {
+	return process.env.NODE_ENV === 'production';
+}
+
+/**
+ * The hosts of the development escape hatch of the SSRF guard: the ones that
+ * may speak http and may live on a private address.
+ *
+ * PRODUCTION LEAVES THIS EMPTY. The list exists for the tests, which reach a
+ * mock upstream on the loopback; it is never a deployment setting.
+ */
+function parseDevHosts(raw: string | undefined): readonly string[] {
+	if (!raw) return Object.freeze([]);
+	if (isProduction()) {
+		console.warn(
+			'[osionos-ai] ignoring OSIONOS_AI_DEV_ENDPOINT_HOSTS: it is a development escape hatch and this is production',
+		);
+		return Object.freeze([]);
+	}
+	return Object.freeze(
+		raw
+			.split(',')
+			.map((host) => host.trim().toLowerCase())
+			.filter((host) => host.length > 0),
+	);
+}
+
+/**
+ * The base URLs of the built-in providers, overridden for the tests.
+ *
+ * A broken JSON is ignored with a warning: the variable is a test
+ * convenience, and a typo in it must not stop the service.
+ */
+function parseDevProviderUrls(raw: string | undefined): Readonly<Record<string, string>> {
+	if (!raw) return Object.freeze({});
+	if (isProduction()) {
+		console.warn(
+			'[osionos-ai] ignoring OSIONOS_AI_DEV_PROVIDER_BASE_URLS: it is a development escape hatch and this is production',
+		);
+		return Object.freeze({});
+	}
+	try {
+		const decoded = JSON.parse(raw) as unknown;
+		if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) throw new Error('not an object');
+		const urls: Record<string, string> = {};
+		for (const [id, url] of Object.entries(decoded as Record<string, unknown>)) {
+			if (typeof url === 'string' && url.length > 0) urls[id] = url;
+		}
+		return Object.freeze(urls);
+	} catch {
+		console.warn('[osionos-ai] ignoring OSIONOS_AI_DEV_PROVIDER_BASE_URLS: it is not a JSON object of URLs');
+		return Object.freeze({});
+	}
+}
+
 export interface AiServiceConfig {
 	port: number;
 	databaseUrl: string;
@@ -140,6 +217,14 @@ export interface AiServiceConfig {
 	userDailyMicroUsd: number;
 	platformDailyMicroUsd: number;
 	runsPerMinute: number;
+	/** The base64 of the 32 bytes of the KEK, or nothing when it is not set. */
+	kek?: string;
+	/** The name of the KEK: the rows carry it, so a rotation is possible. */
+	kekId: string;
+	/** The hosts of the development escape hatch of the SSRF guard. */
+	devEndpointHosts: readonly string[];
+	/** The base URLs of the built-in providers, overridden for the tests. */
+	devProviderBaseUrls: Readonly<Record<string, string>>;
 }
 
 export const config: AiServiceConfig = Object.freeze({
@@ -160,4 +245,8 @@ export const config: AiServiceConfig = Object.freeze({
 	userDailyMicroUsd: parsed.data.OSIONOS_AI_USER_DAILY_MICROUSD,
 	platformDailyMicroUsd: parsed.data.OSIONOS_AI_PLATFORM_DAILY_MICROUSD,
 	runsPerMinute: parsed.data.OSIONOS_AI_RUNS_PER_MINUTE,
+	kek: parsed.data.OSIONOS_AI_KEK,
+	kekId: parsed.data.OSIONOS_AI_KEK_ID,
+	devEndpointHosts: parseDevHosts(parsed.data.OSIONOS_AI_DEV_ENDPOINT_HOSTS),
+	devProviderBaseUrls: parseDevProviderUrls(parsed.data.OSIONOS_AI_DEV_PROVIDER_BASE_URLS),
 });
