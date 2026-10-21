@@ -320,7 +320,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
     const nextEntry: PageEntry = {
       _id: recordPageId,
       title,
-      icon: databasePage.icon ?? database?.icon ?? '📄',
+      icon: databasePage.icon,
       cover: databasePage.cover,
       updatedAt: databasePage.updatedAt,
       workspaceId,
