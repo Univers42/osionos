@@ -6,7 +6,7 @@ import { reserveTarget, settleTarget, targetCost } from '../gateway/resolve.ts';
 import { checkRunRateLimit } from '../rateLimit.ts';
 import { findCommand, renderTemplate } from '../commands/builtins.ts';
 import type { Command } from '../commands/builtins.ts';
-import { estimateMicroUsd, promptCharCount } from '../runs/prompt.ts';
+import { estimateMicroUsd, promptCharCount } from '../runs/estimate.ts';
 import { today } from '../runs/runner.ts';
 import { abortCode, failureMessage, pumpUpstream } from '../runs/streamPump.ts';
 import { usageForSettlement } from '../gateway/usage.ts';
