@@ -210,7 +210,11 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		}
 		const written = writeRows(table(name), method, parsed.searchParams, body, prefer);
 		if (!written) return jsonResponse({ code: '23505', message: 'duplicate key' }, 409);
-		return prefer.includes('return=representation') ? jsonResponse(written, method === 'POST' ? 201 : 200) : new Response(null, { status: 204 });
+		// A PATCH answers with the columns its select names (PostgREST projects the
+		// written rows), so `select=version` really answers [{"version":n}] — and a
+		// write that matched no row answers [].
+		const answered = method === 'PATCH' ? written.map((row) => project(row, parsed.searchParams.get('select'))) : written;
+		return prefer.includes('return=representation') ? jsonResponse(answered, method === 'POST' ? 201 : 200) : new Response(null, { status: 204 });
 	}
 	return { fetchImpl, calls, outbound, stubErrors, rows: table, page: (id) => table('osionos_pages').find((row) => row.id === id) };
 }

@@ -3447,17 +3447,31 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	// Strict mode (OSIONOS_PAGE_STRICT_VERSION=1): a content-bearing PATCH without a
 	// baseVersion is compared against the stored content and refused when the two
 	// differ. Off until every client sends a version.
+	// The version this read saw is the write's precondition: the comparison alone
+	// leaves a window open — a write that lands between the read and the PATCH would
+	// be overwritten with the caller's (older) content.
+	let strictVersion = null;
 	if (baseVersion === null && config.strictPageVersion && hasOwn(payload, 'content')) {
 		const current = await fetchPageVersionRow(pageId, config, fetchImpl);
 		const stored = Array.isArray(current?.content) ? current.content : [];
 		if (stableStringify(stored) !== stableStringify(safeJsonArray(payload.content))) throw versionConflict(current);
+		strictVersion = pageVersionOf(current);
 	}
 	const updateRow = pageUpdateRowFromPayload(payload);
-	// return=representation: the conflict branch has to tell "0 rows" from "1 row" —
-	// under return=minimal PostgREST answers 204 for both (C16) — and the answer
-	// carries the row's new version (C18). The cascade guard must NOT depend on a
-	// returned row: gate the cascade on the payload's archived_at, which is what
-	// we're applying.
+	// The version the write lands on: the caller's baseVersion, or the version the
+	// strict path just read. Without one the write is the legacy request.
+	const precondition = baseVersion ?? strictVersion;
+	// A preconditioned write has to tell "0 rows" from "1 row" — under return=minimal
+	// PostgREST answers 204 for both (C16) — so it asks for the representation, and
+	// the answer carries the row's new version (C18). The select keeps that
+	// representation to the one column the answer needs: without it PostgREST echoes
+	// the whole row (the content JSONB and the search_doc tsvector) on every editor
+	// flush — one PATCH per page every ~800 ms — to read one number.
+	// A write with no precondition stays the legacy request — return=minimal, no
+	// select — so it still works against a database that has no version column yet
+	// (the migration ships separately): that request must never name the column.
+	// The cascade guard must NOT depend on a returned row: gate the cascade on the
+	// payload's archived_at, which is what we're applying.
 	// An archive lands descendants before the root so a prefix is always a
 	// consistent tree; a restore lands the root first for the same reason. With a
 	// version precondition the row goes first: it is the atomic gate, and a stale
@@ -3469,21 +3483,21 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 		await handlePageArchiveCascade(existing, deepestFirst ? [...descendantIds].reverse() : descendantIds, archivedAt, config, fetchImpl);
 		cascadedIds = descendantIds;
 	};
-	if (carriesArchive && updateRow.archived_at !== null && baseVersion === null) await cascade(updateRow.archived_at, true);
-	const filter = baseVersion === null ? `id=eq.${pageId}` : `id=eq.${pageId}&version=eq.${baseVersion}`;
+	if (carriesArchive && updateRow.archived_at !== null && precondition === null) await cascade(updateRow.archived_at, true);
+	const filter = precondition === null ? `id=eq.${pageId}` : `id=eq.${pageId}&version=eq.${precondition}&select=version`;
 	const updatedRows = await baasRest(config, fetchImpl, `osionos_pages?${filter}`, {
 		method: 'PATCH',
 		body: updateRow,
-		prefer: 'return=representation',
+		prefer: precondition === null ? 'return=minimal' : 'return=representation',
 	});
 	const updated = Array.isArray(updatedRows) ? updatedRows[0] ?? null : null;
-	if (baseVersion !== null && !updated) {
-		// The row moved on: the version the caller held is stale. The server's copy
-		// comes with the 409 so the caller can merge without a second read.
+	if (precondition !== null && !updated) {
+		// The row moved on: the version the write was pinned to is stale. The server's
+		// copy comes with the 409 so the caller can merge without a second read.
 		throw versionConflict(await fetchPageVersionRow(pageId, config, fetchImpl));
 	}
 	if (carriesArchive && updateRow.archived_at === null) await cascade(updateRow.archived_at, false);
-	if (carriesArchive && updateRow.archived_at !== null && baseVersion !== null) await cascade(updateRow.archived_at, true);
+	if (carriesArchive && updateRow.archived_at !== null && precondition !== null) await cascade(updateRow.archived_at, true);
 	// updated_at is stamped by pageUpdateRowFromPayload (no BEFORE-UPDATE trigger on
 	// osionos_pages), so the value we wrote IS the stored value — authoritative.
 	json(response, 200, { ok: true, updatedAt: updateRow.updated_at, version: pageVersionOf(updated), ...(ignored.length > 0 ? { ignored } : {}), ...(carriesArchive ? { cascadedIds } : {}) }, config);
