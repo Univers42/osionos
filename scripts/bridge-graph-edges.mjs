@@ -39,6 +39,15 @@ export const LINK_EDGES_RPC = 'osionos_bridge_graph_links';
 /** The RPC that reads the live rows of a set of pages. */
 export const PAGE_ROWS_RPC = 'osionos_bridge_pages_by_ids';
 
+/**
+ * The most ids one call of the two RPCs takes. The Postgres functions answer
+ * nothing above it (models/osionos-ai-graph-migration.sql), and this module
+ * cuts a bigger set into calls of this size, so the graph of a big workspace
+ * loses no edge. The graph view has no node limit of its own: the bound is per
+ * call, not per graph.
+ */
+export const MAX_IDS_PER_CALL = 1000;
+
 /** The same read, straight from the database: the AI service has a pool, not a BaaS. */
 export const LINK_EDGES_SQL = `
 	select source_page_id, target_page_id
@@ -109,22 +118,49 @@ export function readableLinkEdges(links, pageRows, userId, workspaces, allowed =
  *   title reads it here, never from a second query)
  */
 export async function readLinkEdges(read, { sourceIds = null, targetIds = null, userId, workspaces, allowed = null }) {
-	const links = linkEdgeIds(await read(LINK_EDGES_RPC, { p_source_ids: sourceIds, p_target_ids: targetIds }));
+	// Both null would read every link of the database: refused here and in SQL.
+	if (sourceIds === null && targetIds === null) throw new Error('readLinkEdges needs sourceIds or targetIds');
+	if (sourceIds !== null && targetIds !== null && targetIds.length > MAX_IDS_PER_CALL) {
+		throw new Error(`readLinkEdges batches one set: targetIds holds more than ${MAX_IDS_PER_CALL} ids`);
+	}
+	const linkRows = sourceIds !== null
+		? await readInBatches(sourceIds, (batch) => read(LINK_EDGES_RPC, { p_source_ids: batch, p_target_ids: targetIds }))
+		: await readInBatches(targetIds, (batch) => read(LINK_EDGES_RPC, { p_source_ids: null, p_target_ids: batch }));
+	const links = linkEdgeIds(linkRows);
 	if (links.length === 0) return { links: [], rows: new Map() };
 	const ids = [...new Set(links.flatMap((link) => [link.source, link.target]))];
-	const rows = await read(PAGE_ROWS_RPC, { p_ids: ids });
+	const rows = await readInBatches(ids, (batch) => read(PAGE_ROWS_RPC, { p_ids: batch }));
+	const readable = readableLinkEdges(links, rows, userId, workspaces, allowed);
+	// Only the rows of a readable edge's endpoints leave the module: a caller
+	// that shows a title is never handed the row of a page it may not read.
+	const kept = new Set(readable.flatMap((link) => [link.source.toLowerCase(), link.target.toLowerCase()]));
 	const byId = new Map();
-	for (const row of Array.isArray(rows) ? rows : []) {
-		if (row && row.id) byId.set(String(row.id).toLowerCase(), row);
+	for (const row of rows) {
+		const id = row && row.id ? String(row.id).toLowerCase() : '';
+		if (kept.has(id)) byId.set(id, row);
 	}
-	return { links: readableLinkEdges(links, rows, userId, workspaces, allowed), rows: byId };
+	return { links: readable, rows: byId };
+}
+
+/** The rows of `read` over `ids`, in calls of at most MAX_IDS_PER_CALL ids. */
+async function readInBatches(ids, read) {
+	const rows = [];
+	for (let start = 0; start < ids.length; start += MAX_IDS_PER_CALL) {
+		const batch = await read(ids.slice(start, start + MAX_IDS_PER_CALL));
+		if (Array.isArray(batch)) rows.push(...batch);
+	}
+	return rows;
 }
 
 /**
  * The same read, straight from the database: the AI service has a pool, not a
  * BaaS, and asks the very same function.
  *
- * @param {import('pg').Pool} db the pool
+ * The reader is a RUNNER, not a pool: the AI service runs this read on the
+ * connection it already holds (a request that holds a connection while asking
+ * the pool for a second one deadlocks the pool).
+ *
+ * @param {{ query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }> }} db the pool, or one of its clients
  * @param {object} options the options of readLinkEdges
  * @returns {Promise<{ links: { source: string, target: string }[], rows: Map<string, unknown> }>}
  */
