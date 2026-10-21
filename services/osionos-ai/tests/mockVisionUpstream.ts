@@ -85,7 +85,7 @@ export async function startVisionUpstream(): Promise<VisionUpstream> {
 				response.end(mock.body);
 				return;
 			}
-			const options = { preDelayMs: 0, chunkGapMs: 0, usage: null, parallelToolCalls: 1 };
+			const options = { preDelayMs: 0, chunkGapMs: 0, usage: null, parallelToolCalls: 1, chunkCount: mock.chunkCount };
 			streamAnswer(response, chunkTexts(mock.chunkCount), options, askedForUsage(body), null, () => {
 				// The client went away: the answer is cut, and the run is not.
 			});

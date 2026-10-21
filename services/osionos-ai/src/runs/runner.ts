@@ -87,13 +87,7 @@ export interface StartRunInput {
 export type StartRunOutcome =
 	| { kind: 'started'; run: RunRow; execute: () => Promise<void> }
 	| { kind: 'reattach'; run: RunRow }
-	| {
-			kind: 'refused';
-			status: number;
-			code: string;
-			/** The seconds a rate limit asks the client to wait. */
-			retryAfterSeconds?: number;
-	  };
+	| { kind: 'refused'; status: number; code: string; retryAfterSeconds?: number };
 
 /** The day of the ledger: UTC, so every replica books on the same day. */
 export function today(now: Date = new Date()): string {
@@ -206,13 +200,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const rate = await checkRunRateLimit(redis, ownerId, config.runsPerMinute);
 	if (!rate.allowed) {
 		await markRun(db, runId, 'failed', 'rate_limited');
-		return {
-			kind: 'refused',
-			status: 429,
-			code: 'rate_limited',
-			// The client counts the seconds down before it offers the retry.
-			retryAfterSeconds: rate.retryAfterSeconds,
-		};
+		// The client counts the seconds down before it offers the retry.
+		return { kind: 'refused', status: 429, code: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
 	}
 	// The pages are read before the money moves: the reservation estimates the
 	// size of the prompt, and the pages are part of it. A page the caller may

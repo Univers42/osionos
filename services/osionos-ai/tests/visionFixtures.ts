@@ -106,7 +106,7 @@ export function pngBytes(options: PngOptions = {}): Uint8Array {
  *
  * The `Exif\0\0` header is not here: the segment of the JPEG adds it.
  */
-export function gpsApp1(): number[] {
+export function gpsApp1(): Uint8Array {
 	return join(
 		ascii('II*\0'), // the little-endian TIFF header
 		be16(0x2a), // the magic of TIFF
@@ -123,9 +123,9 @@ export interface JpegOptions {
 	width?: number;
 	height?: number;
 	/** The payload of an APP1 segment (Exif, XMP). */
-	app1?: number[];
+	app1?: number[] | Uint8Array;
 	/** The payload of an APP13 segment (IPTC). */
-	app13?: number[];
+	app13?: number[] | Uint8Array;
 	/** The file is broken: it carries no frame. */
 	corrupt?: boolean;
 }
