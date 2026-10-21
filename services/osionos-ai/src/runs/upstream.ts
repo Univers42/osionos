@@ -237,8 +237,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 					: [{ type: 'text', text: answer }]),
 				// The sources of the answer, in the order they were given to the
 				// model: the part of a source is its number minus one.
-				...runTools.cited.map((source) => ({
+				...runTools.cited.map((source, index) => ({
 					type: 'citation',
+					n: index + 1,
 					pageId: source.pageId,
 					...(source.blockId ? { blockId: source.blockId } : {}),
 					title: source.title,
