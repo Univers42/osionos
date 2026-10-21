@@ -194,4 +194,23 @@ describe('unreadable is non-existent (C101)', () => {
 			}
 		});
 	});
+
+	// The backlinks of a shared page of a workspace the viewer is not a member of:
+	// a token minted before the removal, and one that never listed the workspace.
+	for (const [name, tokenWorkspaces] of [['a stale token', [IDS.team]], ['a token that never listed it', []]]) {
+		it(`the backlinks of a page of a workspace left, with ${name}, answer like a random uuid`, async () => {
+			const world = truthWorld();
+			world.osionos_workspace_members = world.osionos_workspace_members.filter(
+				(member) => !(member.workspace_id === IDS.team && member.user_id === IDS.userB),
+			);
+			const mock = createPostgrestMock(world);
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const headers = sessionHeaders(config, IDS.userB, IDS.homeB, tokenWorkspaces);
+				const hidden = await send(base, `/api/pages/${PAGES.probe}/backlinks`, headers);
+				const missing = await send(base, '/api/pages/99999999-9999-4999-8999-999999999999/backlinks', headers);
+				assert.equal(hidden.status, missing.status, 'the same status');
+				assert.equal(hidden.text, missing.text, 'the same bytes');
+			});
+		});
+	}
 });
