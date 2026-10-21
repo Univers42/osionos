@@ -81,6 +81,27 @@ export async function readJson<T>(request: IncomingMessage, schema: ZodType<T>, 
 }
 
 /**
+ * The body of a request, as bytes — the sibling of `readJson` for the routes
+ * that take a file (the dictation's WAV).
+ *
+ * The cap is hard: the read stops at the byte that passes it, and the caller
+ * answers 413. `readJson` keeps its own 64 KB cap — this one never changes it.
+ */
+export async function readRaw(request: IncomingMessage, maxBytes: number): Promise<Buffer> {
+	const declared = Number(request.headers['content-length'] ?? 0);
+	if (Number.isFinite(declared) && declared > maxBytes) throw httpError(413, 'payload_too_large');
+	const chunks: Buffer[] = [];
+	let size = 0;
+	for await (const chunk of request) {
+		const buffer = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : Buffer.from(chunk as Buffer);
+		size += buffer.length;
+		if (size > maxBytes) throw httpError(413, 'payload_too_large');
+		chunks.push(buffer);
+	}
+	return Buffer.concat(chunks);
+}
+
+/**
  * The headers of an event stream: the framing of the wire contract, plus the
  * CORS headers of the service.
  */

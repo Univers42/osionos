@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { decodePlatformModels, type PlatformModelEntry } from './platformModels.ts';
 
 /**
  * The configuration is parsed once, at import time, and frozen.
@@ -18,46 +19,7 @@ function firstEnv(...names: string[]): string | undefined {
 	return undefined;
 }
 
-/**
- * One model of the platform allowlist: what the client sees (the id, the label)
- * and what the budget is charged with (the prices per million tokens).
- *
- * The prices never leave the server: GET /api/ai/models answers with the id, the
- * label and the default flag only.
- */
-export interface PlatformModelEntry {
-	id: string;
-	label: string;
-	/** The modalities the model accepts as input. Defaults to ["text"]. */
-	input?: string[];
-	inputMicroUsdPerMTok: number;
-	outputMicroUsdPerMTok: number;
-	default: boolean;
-	/** Whether the model accepts image input: `input` contains "image". */
-	vision?: boolean;
-}
-
-const platformModelSchema = z.object({
-	id: z.string().min(1),
-	label: z.string().min(1),
-	input: z.array(z.string().min(1)).optional(),
-	inputMicroUsdPerMTok: z.number().int().nonnegative(),
-	outputMicroUsdPerMTok: z.number().int().nonnegative(),
-	default: z.boolean().optional(),
-});
-
-/** The allowlist: at least one model, exactly one of them the default. */
-const platformModelsSchema = z
-	.array(platformModelSchema)
-	.min(1)
-	.superRefine((models, ctx) => {
-		if (models.filter((model) => model.default === true).length !== 1) {
-			ctx.addIssue({ code: 'custom', message: 'exactly one model must carry the default flag' });
-		}
-		if (new Set(models.map((model) => model.id)).size !== models.length) {
-			ctx.addIssue({ code: 'custom', message: 'model ids must be unique' });
-		}
-	});
+export type { PlatformModelEntry } from './platformModels.ts';
 
 const envSchema = z.object({
 	OSIONOS_AI_PORT: z.coerce.number().int().min(0).max(65_535).default(4300),
@@ -95,6 +57,17 @@ const envSchema = z.object({
 	// move it. Without it the write tools are NOT registered, and the reads
 	// keep working.
 	OSIONOS_AI_BRIDGE_URL: z.string().min(1).optional(),
+	// The speech-to-text server of the dictation. It is INTERNAL: the URL is a
+	// deployment setting (the compose service name), never a caller's, so it is
+	// not an endpoint of the users' own. Unset = the service answers 503
+	// voice_unavailable: the assistant works, the dictation does not.
+	OSIONOS_AI_STT_URL: z.string().optional(),
+	// The model the speech-to-text server loads.
+	OSIONOS_AI_STT_MODEL: z.string().min(1).default('Systran/faster-whisper-small'),
+	// The deadline of one transcription: the call never waits for ever.
+	OSIONOS_AI_STT_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+	// The seconds of audio a user may dictate in a day.
+	OSIONOS_AI_STT_SECONDS_PER_DAY: z.coerce.number().int().nonnegative().default(600),
 });
 
 const rawEnv = {
@@ -122,6 +95,10 @@ const rawEnv = {
 	OSIONOS_AI_DEV_PROVIDER_BASE_URLS: process.env.OSIONOS_AI_DEV_PROVIDER_BASE_URLS,
 	OSIONOS_AI_CATALOG_URL: process.env.OSIONOS_AI_CATALOG_URL,
 	OSIONOS_AI_BRIDGE_URL: process.env.OSIONOS_AI_BRIDGE_URL,
+	OSIONOS_AI_STT_URL: process.env.OSIONOS_AI_STT_URL,
+	OSIONOS_AI_STT_MODEL: process.env.OSIONOS_AI_STT_MODEL,
+	OSIONOS_AI_STT_TIMEOUT_MS: process.env.OSIONOS_AI_STT_TIMEOUT_MS,
+	OSIONOS_AI_STT_SECONDS_PER_DAY: process.env.OSIONOS_AI_STT_SECONDS_PER_DAY,
 };
 
 const parsed = envSchema.safeParse(rawEnv);
@@ -143,19 +120,7 @@ function refuse(name: string): never {
  * stops the service the same way a missing variable does.
  */
 function parsePlatformModels(raw: string): PlatformModelEntry[] {
-	let decoded: unknown;
-	try {
-		decoded = JSON.parse(raw);
-	} catch {
-		refuse('OSIONOS_AI_PLATFORM_MODELS');
-	}
-	const result = platformModelsSchema.safeParse(decoded);
-	if (!result.success) refuse('OSIONOS_AI_PLATFORM_MODELS');
-	return result.data.map((model) => ({
-		...model,
-		default: model.default === true,
-		vision: Array.isArray(model.input) && model.input.includes('image'),
-	}));
+	return decodePlatformModels(raw) ?? refuse('OSIONOS_AI_PLATFORM_MODELS');
 }
 
 /**
@@ -258,6 +223,14 @@ export interface AiServiceConfig {
 	 * write tools are not registered at all.
 	 */
 	bridgeUrl?: string;
+	/** The URL of the internal speech-to-text server, when there is one. */
+	sttUrl?: string;
+	/** The model the speech-to-text server loads. */
+	sttModel: string;
+	/** The deadline of one transcription, in milliseconds. */
+	sttTimeoutMs: number;
+	/** The seconds of audio a user may dictate in a day. */
+	sttSecondsPerDay: number;
 }
 
 export const config: AiServiceConfig = Object.freeze({
@@ -285,6 +258,10 @@ export const config: AiServiceConfig = Object.freeze({
 	devProviderBaseUrls: parseDevProviderUrls(parsed.data.OSIONOS_AI_DEV_PROVIDER_BASE_URLS),
 	catalogUrl: parsed.data.OSIONOS_AI_CATALOG_URL,
 	bridgeUrl: parsed.data.OSIONOS_AI_BRIDGE_URL,
+	sttUrl: parsed.data.OSIONOS_AI_STT_URL,
+	sttModel: parsed.data.OSIONOS_AI_STT_MODEL,
+	sttTimeoutMs: parsed.data.OSIONOS_AI_STT_TIMEOUT_MS,
+	sttSecondsPerDay: parsed.data.OSIONOS_AI_STT_SECONDS_PER_DAY,
 });
 
 // A deployment that runs the write tools needs the bridge: the URL is

@@ -3,6 +3,7 @@ import { handleConversationMessages, handleConversations } from './conversations
 import { handleModels } from './models.ts';
 import { handleCommands } from './commands.ts';
 import { handleComplete } from './complete.ts';
+import { handleVoiceTranscribe } from './voice.ts';
 import { handleRunCancel, handleRunEvents, handleRuns } from './runs.ts';
 import {
 	handleConnectionDelete,
@@ -74,6 +75,12 @@ export const ROUTES: RouteEntry[] = [
 		handle: handleConnectionDelete,
 	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/complete$/, label: '/api/ai/complete', handle: handleComplete },
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/voice\/transcribe$/,
+		label: '/api/ai/voice/transcribe',
+		handle: handleVoiceTranscribe,
+	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/runs$/, label: '/api/ai/runs', handle: handleRuns },
 	{
 		methods: ['GET'],

@@ -13,6 +13,7 @@
 import React, { useEffect, useMemo, useRef } from "react";
 
 import type { ChatMessage } from "@/features/chat/model/chatTypes";
+import { ReadAloudButton } from "@/features/voice/ui/ReadAloudButton";
 import { citationsFromParts } from "@/features/chat/model/citations";
 import { renderCitationSources, renderCitedAnswer } from "@/features/chat/model/citedAnswer";
 import { openCitation } from "@/features/chat/model/openCitation";
@@ -117,6 +118,11 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                 <span className="ml-0.5 animate-pulse text-[var(--osio-fg-muted)]" data-testid="chat-streaming">
                   …
                 </span>
+              ) : null}
+              {m.role === "assistant" && m.status !== "streaming" && m.content ? (
+                <div className="mt-1 flex justify-end">
+                  <ReadAloudButton text={m.content} />
+                </div>
               ) : null}
               {m.status === "error" ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[var(--osio-border-default)] pt-2 text-xs text-[var(--osio-fg-muted)]">
