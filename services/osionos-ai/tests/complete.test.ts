@@ -1,89 +1,22 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
-import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
-import { startMockUpstream } from './mockUpstream.ts';
+import { startHarness, USER_A, WORKSPACE_A } from './harness.ts';
+import type { JsonBody } from './harness.ts';
+import { estimatedLogs, promptCharsOf, spentOf, textOf, usageOf, withLogs } from './ledger.ts';
 import { SseStream, collect } from './sse.ts';
+import type { SseEvent } from './sse.ts';
 import { builtinCommands, findCommand, renderTemplate } from '../src/commands/builtins.ts';
 
-const APP_SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
-const USER_A = '11111111-1111-4111-8111-111111111111';
-const WORKSPACE_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-
-type JsonBody = Record<string, unknown>;
-
-/** A token the way the bridge signs one: the same module, the test's secret. */
-function tokenFor(userId: string, workspaceId: string, secret = APP_SECRET): string {
-	return signAppSessionToken({
-		payload: { subject: userId, provider: 'test' },
-		workspace: { _id: workspaceId },
-		config: { appSessionSecret: secret, sessionTtlSeconds: 3600 },
-	}).token;
-}
-
 /**
- * The mock upstream comes first, and the environment points at it: the service
- * reads its configuration when it is imported.
+ * The inline completions: the answer of a command, and what they cost.
  */
-const mock = await startMockUpstream();
-process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${mock.baseUrl}/v1`;
-process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([
-	// The free model costs nothing: the other cases are not bounded by the
-	// daily budget.
-	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true },
-	// The priced model reserves more than the daily limit of one micro-USD.
-	{ id: 'mock-priced', label: 'Mock priced', inputMicroUsdPerMTok: 1000, outputMicroUsdPerMTok: 2000 },
-]);
-// The daily budget of a user: one micro-USD.
-process.env.OSIONOS_AI_USER_DAILY_MICROUSD = '1';
-process.env.OSIONOS_AI_PLATFORM_DAILY_MICROUSD = '20000000';
-process.env.OSIONOS_AI_RUNS_PER_MINUTE = '100';
-
-const { createAiServer } = await import('../src/server.ts');
-
-const app = createAiServer();
-await new Promise<void>((resolve) => {
-	app.server.listen(0, '127.0.0.1', () => resolve());
-});
-const address = app.server.address();
-const base = `http://127.0.0.1:${address && typeof address === 'object' ? address.port : 0}`;
+const { app, mock, call, postComplete, tokenFor } = await startHarness();
 
 after(async () => {
 	await app.close();
 	await mock.close();
 });
-
-/** A JSON answer of the service. */
-async function call(
-	path: string,
-	options: { method?: string; token?: string; body?: unknown } = {},
-): Promise<{ status: number; body: JsonBody | null }> {
-	const response = await fetch(`${base}${path}`, {
-		method: options.method ?? 'GET',
-		headers: {
-			...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
-			...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
-		},
-		body: options.body === undefined ? undefined : JSON.stringify(options.body),
-	});
-	const text = await response.text();
-	let body: JsonBody | null = null;
-	try {
-		body = text ? (JSON.parse(text) as JsonBody) : null;
-	} catch {
-		body = null;
-	}
-	return { status: response.status, body };
-}
-
-/** The POST of a completion: the answer is a stream. */
-function postComplete(body: Record<string, unknown>, token = tokenFor(USER_A, WORKSPACE_A)): Promise<Response> {
-	return fetch(`${base}/api/ai/complete`, {
-		method: 'POST',
-		headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-		body: JSON.stringify(body),
-	});
-}
 
 /** The commands of an answer of the registry. */
 function commandsOf(body: JsonBody | null): { name: string; surface: string }[] {
@@ -161,7 +94,7 @@ describe('osionos-ai completions', () => {
 			runId: randomUUID(),
 			command: 'summarize',
 			input: { text: 'words' },
-			model: 'mock-priced',
+			model: 'mock-dear',
 		});
 		assert.equal(response.status, 402);
 		const body = (await response.json()) as JsonBody;
@@ -200,5 +133,74 @@ describe('osionos-ai completions', () => {
 		assert.equal(findCommand('summarize')?.surface, 'both');
 		assert.equal(findCommand('continue')?.surface, 'editor');
 		assert.equal(findCommand('nope'), null);
+	});
+
+	it('a completion is asked for the usage, and costs the real one', async () => {
+		const runId = randomUUID();
+		const before = await spentOf(app.db, USER_A);
+		const response = await postComplete({
+			runId,
+			command: 'summarize',
+			input: { text: 'the selected words' },
+			model: 'mock-metered',
+		});
+		assert.equal(response.status, 200);
+		const events = await collect(new SseStream(response));
+
+		// The request asks for the usage: stream_options.include_usage.
+		const body = mock.lastBody() as { stream_options?: { include_usage?: boolean } };
+		assert.equal(body.stream_options?.include_usage, true);
+
+		// The usage the upstream reported, and the price of it.
+		const usage = usageOf(events);
+		assert.equal(usage.inputTokens, 11);
+		assert.equal(usage.outputTokens, 7);
+
+		// The ledger moves by exactly that.
+		const spent = (await spentOf(app.db, USER_A)) - before;
+		assert.ok(spent > 0);
+		assert.equal(spent, usage.costMicroUsd);
+	});
+
+	it('a completion whose upstream reports no usage still costs the estimate', async () => {
+		const runId = randomUUID();
+		const before = await spentOf(app.db, USER_A);
+		mock.setOptions({ neverSendUsage: true });
+		let events: SseEvent[] = [];
+		let logs: string[] = [];
+		try {
+			const captured = await withLogs(async () => {
+				const response = await postComplete({
+					runId,
+					command: 'summarize',
+					input: { text: 'the selected words' },
+					model: 'mock-metered',
+				});
+				events = await collect(new SseStream(response));
+			});
+			logs = captured.logs;
+		} finally {
+			mock.setOptions({ neverSendUsage: false });
+		}
+
+		// The estimate: the characters of the prompt and of the answer, a token
+		// every four characters.
+		const promptChars = promptCharsOf(mock.lastBody());
+		const answerChars = textOf(events).length;
+		const estimated = {
+			inputTokens: Math.ceil(promptChars / 4),
+			outputTokens: Math.ceil(answerChars / 4),
+		};
+		const usage = usageOf(events);
+		assert.equal(usage.inputTokens, estimated.inputTokens);
+		assert.equal(usage.outputTokens, estimated.outputTokens);
+
+		// The spend is the estimate, and it is not zero.
+		const spent = (await spentOf(app.db, USER_A)) - before;
+		assert.ok(spent > 0);
+		assert.equal(spent, usage.costMicroUsd);
+
+		// One line says the usage was estimated.
+		assert.deepEqual(estimatedLogs(logs), [runId]);
 	});
 });

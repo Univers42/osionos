@@ -18,6 +18,10 @@ export interface ModelUsage {
  *
  * The two extra headers are the ones OpenRouter asks for, and they name the
  * allowed origin of this deployment, never a secret.
+ *
+ * includeUsage sends `stream_options: { include_usage: true }` with the call:
+ * an OpenAI-compatible upstream reports the tokens of a stream only when it
+ * is asked to, and without the answer the budget settles nothing.
  */
 let provider: ReturnType<typeof createOpenAICompatible> | undefined;
 
@@ -28,6 +32,7 @@ function platformProvider(): ReturnType<typeof createOpenAICompatible> {
 			baseURL: config.upstreamBaseUrl,
 			...(config.upstreamApiKey ? { apiKey: config.upstreamApiKey } : {}),
 			headers: { 'HTTP-Referer': config.allowedOrigin, 'X-Title': 'osionos' },
+			includeUsage: true,
 		});
 	}
 	return provider;

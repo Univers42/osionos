@@ -1,4 +1,4 @@
-import type { Pool, QueryResultRow } from 'pg';
+import type { Pool, PoolClient, QueryResultRow } from 'pg';
 
 export interface ConversationRow extends QueryResultRow {
 	id: string;
@@ -139,4 +139,112 @@ export async function appendMessage(
 /** A conversation touched now: the inbox lists the most recently touched first. */
 export async function touchConversation(db: Pool, conversationId: string): Promise<void> {
 	await db.query('update public.ai_conversations set updated_at = now() where id = $1', [conversationId]);
+}
+
+/**
+ * The titles that mean "the user did not name this conversation": the empty
+ * one the service writes, and the default the app shows.
+ */
+const UNTITLED_TITLES = ['', 'New conversation'];
+
+/** The longest title a conversation takes, the ellipsis aside. */
+const TITLE_MAX_CHARS = 60;
+
+/**
+ * The title of a conversation that has none: the first question, on one line.
+ *
+ * The text is cut at a word boundary, so the title ends on a word and not in
+ * the middle of one, and the ellipsis says that there was more.
+ */
+export function titleFromQuestion(text: string): string {
+	const collapsed = text.replace(/\s+/g, ' ').trim();
+	if (collapsed.length <= TITLE_MAX_CHARS) return collapsed;
+	const cut = collapsed.slice(0, TITLE_MAX_CHARS);
+	const boundary = cut.lastIndexOf(' ');
+	// A word longer than the title: there is no boundary to cut on.
+	const head = boundary > 0 ? cut.slice(0, boundary) : cut;
+	return `${head.trimEnd()}…`;
+}
+
+/**
+ * The title of a conversation, when it has none: the first question.
+ *
+ * A title the user set stays: only the empty title and the default one are
+ * replaced, and only by the first run.
+ */
+async function setTitleIfUntitled(
+	client: PoolClient,
+	{ conversationId, ownerId, title }: { conversationId: string; ownerId: string; title: string },
+): Promise<string> {
+	const current = await client.query<ConversationRow>(
+		`select ${CONVERSATION_COLUMNS} from public.ai_conversations where id = $1 and owner_id = $2 limit 1`,
+		[conversationId, ownerId],
+	);
+	const row = current.rows[0];
+	if (!row) return '';
+	if (!title || !UNTITLED_TITLES.includes(row.title)) return row.title;
+	const updated = await client.query<ConversationRow>(
+		`update public.ai_conversations set title = $2, updated_at = now()
+		 where id = $1 and owner_id = $3
+		 returning ${CONVERSATION_COLUMNS}`,
+		[conversationId, title, ownerId],
+	);
+	return updated.rows[0]?.title ?? title;
+}
+
+/**
+ * A user's turn, and the title of the conversation when it has none.
+ *
+ * The message and the title are written in ONE transaction: a conversation
+ * that keeps its first question but stays untitled would read "New
+ * conversation" in the inbox forever.
+ *
+ * A foreign conversation gets no row at all: the call is refused instead of
+ * writing into somebody else's thread.
+ */
+export async function appendUserTurn(
+	db: Pool,
+	{
+		conversationId,
+		ownerId,
+		parts,
+		runId,
+		text,
+	}: {
+		conversationId: string;
+		ownerId: string;
+		parts: unknown[];
+		runId?: string;
+		text: string;
+	},
+): Promise<{ message: MessageRow | null; title: string }> {
+	const client = await db.connect();
+	try {
+		await client.query('begin');
+		const inserted = await client.query<MessageRow>(
+			`insert into public.ai_messages (conversation_id, run_id, role, parts)
+			 select c.id, $3, 'user', $4::jsonb
+			 from public.ai_conversations c
+			 where c.id = $1 and c.owner_id = $2
+			 returning ${MESSAGE_COLUMNS}`,
+			[conversationId, ownerId, runId ?? null, JSON.stringify(parts)],
+		);
+		const message = inserted.rows[0] ?? null;
+		if (!message) {
+			await client.query('rollback');
+			return { message: null, title: '' };
+		}
+		const title = await setTitleIfUntitled(client, {
+			conversationId,
+			ownerId,
+			title: titleFromQuestion(text),
+		});
+		await client.query('commit');
+		return { message, title };
+	} catch (error) {
+		await client.query('rollback').catch(() => undefined);
+		throw error;
+	} finally {
+		client.release();
+	}
 }

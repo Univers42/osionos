@@ -1,26 +1,23 @@
-import type { LanguageModelUsage, ModelMessage } from 'ai';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { config } from '../config.ts';
-import { costMicroUsd } from '../gateway/platform.ts';
 import { reserveTarget, settleTarget } from '../gateway/resolve.ts';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
 import { checkRunRateLimit } from '../rateLimit.ts';
-import { appendMessage, touchConversation } from '../conversations/repo.ts';
+import { appendUserTurn, touchConversation } from '../conversations/repo.ts';
 import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
-import type { RunRow, RunStatus } from './repo.ts';
-import * as runStore from './runStore.ts';
+import type { RunRow } from './repo.ts';
+import { runUpstream } from './upstream.ts';
+import type { RunEvent } from './upstream.ts';
 import {
-	buildUserTurn,
 	estimateMicroUsd,
 	historyChars,
-	historyMessages,
 	loadHistory,
 	loadPageContext,
 	quotedPageChars,
 } from './prompt.ts';
-import type { HistoryMessage, PageContext } from './prompt.ts';
-import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
+
+export type { RunEvent };
 
 /**
  * The runner of a run: the row, the money, the model call, the events.
@@ -35,13 +32,6 @@ import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
 
 /** A run that runs longer than this is stale: the sweep gives it up. */
 export const STALE_RUN_MS = 10 * 60_000;
-
-/** One event of a run, as the client sees it. */
-export interface RunEvent {
-	id: string;
-	type: string;
-	data: unknown;
-}
 
 export interface StartRunInput {
 	db: Pool;
@@ -139,13 +129,14 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	}
 	await db.query('update public.ai_runs set reserved_microusd = $2::bigint where id = $1', [runId, amount]);
 
-	// (c) The user's message joins the transcript.
-	const userMessage = await appendMessage(db, {
+	// (c) The user's message joins the transcript, and the conversation takes
+	// its title when it has none: one transaction, one question.
+	const { message: userMessage, title } = await appendUserTurn(db, {
 		conversationId,
 		ownerId,
-		role: 'user',
 		parts: [{ type: 'text', text }],
 		runId,
+		text,
 	});
 	if (!userMessage) {
 		await settleTarget(db, target, { userId: ownerId, day, reserved: amount, actual: 0 });
@@ -156,137 +147,24 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 
 	const execute = async (): Promise<void> => {
 		await runUpstream({
-			...input,
+			db,
+			redis,
+			runId,
+			conversationId,
+			ownerId,
+			text,
+			target,
+			emit: input.emit,
 			day,
 			reserved: amount,
 			history,
 			pages: context.pages,
 			skippedPageIds: context.skippedPageIds,
 			userMessageId: userMessage.id,
+			title,
 		});
 	};
 	return { kind: 'started', run: (await getRun(db, runId)) as RunRow, execute };
-}
-
-/**
- * The run itself: the model call, the events, the settlement.
- *
- * Every event goes through the stream first, so a client that reconnects sees
- * exactly what the first client saw, and then to the live response.
- */
-async function runUpstream(
-	input: StartRunInput & {
-		day: string;
-		reserved: number;
-		history: HistoryMessage[];
-		pages: readonly PageContext[];
-		skippedPageIds: readonly string[];
-		userMessageId: string;
-	},
-): Promise<void> {
-	const {
-		db,
-		redis,
-		runId,
-		conversationId,
-		ownerId,
-		text,
-		target,
-		day,
-		reserved,
-		history,
-		pages,
-		skippedPageIds,
-		userMessageId,
-	} = input;
-
-	const controller = new AbortController();
-	runStore.trackRun(runId, controller);
-
-	/** The event, in the stream and in the live response. */
-	const emit = async (type: string, data: unknown): Promise<void> => {
-		const id = await runStore.append(redis, runId, type, data);
-		input.emit({ id, type, data });
-	};
-
-	let answer = '';
-	let reasoning = '';
-	let usage: LanguageModelUsage | undefined;
-	let finishReason = 'stop';
-
-	try {
-		await emit('run.started', {
-			runId,
-			conversationId,
-			model: target.modelId,
-			userMessageId,
-			skippedPageIds: [...skippedPageIds],
-		});
-
-		const messages: ModelMessage[] = [
-			...historyMessages(history),
-			{ role: 'user', content: buildUserTurn(text, pages) },
-		];
-
-		const outcome = await pumpUpstream({
-			model: target.model,
-			messages,
-			controller,
-			onText: async (delta) => {
-				await emit('text.delta', { text: delta });
-			},
-			onReasoning: async (delta) => {
-				await emit('reasoning.delta', { text: delta });
-			},
-		});
-		answer = outcome.answer;
-		reasoning = outcome.reasoning;
-		usage = outcome.usage;
-		finishReason = outcome.finishReason;
-		if (outcome.error !== undefined) throw outcome.error;
-
-		const inputTokens = usage?.inputTokens ?? 0;
-		const outputTokens = usage?.outputTokens ?? 0;
-		const cost = costMicroUsd(target.pricing, { inputTokens, outputTokens });
-		await emit('usage', { inputTokens, outputTokens, costMicroUsd: cost });
-
-		const assistant = await appendMessage(db, {
-			conversationId,
-			ownerId,
-			role: 'assistant',
-			parts: reasoning
-				? [{ type: 'text', text: answer }, { type: 'reasoning', text: reasoning }]
-				: [{ type: 'text', text: answer }],
-			model: target.modelId,
-			runId,
-			usage: { inputTokens, outputTokens, costMicroUsd: cost },
-		});
-
-		const changed = await markRun(db, runId, 'succeeded', null, {
-			inputTokens,
-			outputTokens,
-			costMicroUsd: cost,
-		});
-		if (changed) {
-			await settleTarget(db, target, { userId: ownerId, day, reserved, actual: cost });
-		}
-
-		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
-	} catch (error) {
-		const code = abortCode(controller.signal) ?? 'upstream_error';
-		const cost = costMicroUsd(target.pricing, {
-			inputTokens: usage?.inputTokens ?? 0,
-			outputTokens: usage?.outputTokens ?? 0,
-		});
-		await emit('error', { code, message: failureMessage(code, error) });
-		const status: RunStatus = code === 'cancelled' ? 'cancelled' : 'failed';
-		const changed = await markRun(db, runId, status, code);
-		if (changed) {
-			await settleTarget(db, target, { userId: ownerId, day, reserved, actual: cost });
-		}
-	} finally {
-		runStore.releaseRun(runId);
-	}
 }
 
 /**
