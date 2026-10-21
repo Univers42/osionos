@@ -10,7 +10,7 @@
 # usage: sh fetch.sh [--source parquet|dump] [--force]
 set -eu
 
-WIKI_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+WIKI_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 LOCK="$WIKI_DIR/wiki.lock"
 
 if [ ! -f "$LOCK" ]; then
