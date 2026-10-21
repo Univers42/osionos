@@ -159,6 +159,12 @@ The event `permission.asked` is the DATA of the card:
 `GET /api/ai/approvals/:id` answers the same thing, rebuilt from the row: the
 card survives the fifteen minutes of the event stream.
 
+The assistant message of the run keeps the approval id of every write it asked
+for, as a `permission` part (`{ type: 'permission', approvalId, tool }`). The
+transcript is what carries the card when the stream is gone: a client that
+comes back later reads the parts, finds the id, and asks the approval row for
+the rest.
+
 A run is a loop: the model may call a tool, and the answer comes after the tool.
 The loop is bounded at five steps. The events of a tool are `tool.called` (the
 call of the model, with its arguments) and `tool.result` (the outcome of the
