@@ -159,6 +159,24 @@ update public.ai_index_queue
  returning attempts`;
 
 /**
+ * The page's graph vector, written next to its chunks.
+ *
+ * The function (models/osionos-ai-rag-migration.sql) is the guard: a database
+ * without the graph migration has no ai_page_vectors, and the write is then a
+ * no-op instead of a failure.
+ */
+export const INSERT_PAGE_VECTOR_SQL = `
+select public.ai_write_page_vector($1::uuid, $2::uuid, $3::halfvec, $4)`;
+
+/**
+ * The page's graph vector, gone with the page.
+ *
+ * Same guard: the vector of an archived or deleted page must not answer a
+ * related read.
+ */
+export const DELETE_PAGE_VECTOR_SQL = `select public.ai_drop_page_vector($1::uuid)`;
+
+/**
  * The lock of a page, between the replicas.
  *
  * It is an advisory lock and not the row of the queue: a row lock would block
