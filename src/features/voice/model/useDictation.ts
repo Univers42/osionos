@@ -83,6 +83,8 @@ export interface DictationState {
   secondsLeft: number;
   /** The sentence the user reads. */
   error: string | null;
+  /** Where the failure comes from: the microphone, or the service. */
+  errorKind: "microphone" | "service" | null;
   /** The last transcript: the live region reads it, and nothing else. */
   transcript: string;
 }
@@ -121,6 +123,7 @@ class DictationSession {
     status: "idle",
     secondsLeft: DICTATION_MAX_MS / 1000,
     error: null,
+    errorKind: null,
     transcript: "",
   };
   private sink: ((text: string) => void) | null = null;
@@ -172,11 +175,12 @@ class DictationSession {
     if (this.state.status === "recording" || this.state.status === "working") return;
     this.sink = sink;
     this.language = language;
-    this.publish({ status: "recording", error: null, transcript: "" });
+    this.publish({ status: "recording", error: null, errorKind: null, transcript: "" });
     try {
       await startDictation(this.core().deps);
     } catch (error) {
-      this.publish({ status: "error", error: dictationErrorMessage(error) });
+      // The microphone refused: the toast is the one of the voice note.
+      this.publish({ status: "error", error: dictationErrorMessage(error), errorKind: "microphone" });
     }
   }
 
@@ -188,20 +192,20 @@ class DictationSession {
 
   /** The recording → the transcript. */
   private async finish(): Promise<void> {
-    this.publish({ status: "working", error: null });
+    this.publish({ status: "working", error: null, errorKind: null });
     try {
       const text = await finishDictation(this.core().deps, this.language);
       this.publish({ status: "idle", transcript: text });
       this.sink?.(text);
     } catch (error) {
-      this.publish({ status: "error", error: dictationErrorMessage(error) });
+      this.publish({ status: "error", error: dictationErrorMessage(error), errorKind: "service" });
     }
   }
 
   /** Abandons the recording. */
   cancel(): void {
     this.recorder?.cancel();
-    this.publish({ status: "idle", error: null });
+    this.publish({ status: "idle", error: null, errorKind: null });
   }
 }
 
