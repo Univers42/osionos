@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **AI Budget**: The reservation of a run is the cost of the WHOLE loop (five steps), not of its first call: a run that reserves for one call and spends five books a spend the cap never allowed. The ledger books the real cost, and never more than the reservation, so a settlement can never push the daily cap over.
+- **AI Run Row**: The row of a run is closed before the terminal frame (`error`), the way the success path already does it: a client that reads the row when it sees the frame reads the truth.
 - **Mobile TopBar Overflow**: Fixed an issue where the TopBar exceeded the mobile viewport width (375px) by hiding non-essential elements (`TopBarMenu`, `SharedSpacePresenceBar`, `QuickCaptureButton`, `UpdateButton`, and the brand name) using Tailwind responsive classes (`hidden md:block`, `hidden sm:flex`).
 - **Responsive Tests Stability**: Improved the robustness of the responsive layout tests by creating an `overflowDetector` that safely ignores expected overflow from the fixed-width toggleable sidebar panel.
 
