@@ -23,6 +23,10 @@ import React, { useRef } from 'react';
 import { Send, X } from 'lucide-react';
 
 import type { Attachment } from '@/shared/chat/messageApi';
+import { DictationButton } from '@/features/voice/ui/DictationButton';
+import { insertTranscript } from '@/features/voice/model/insertTranscript';
+import { dictationLanguage } from '@/features/voice/model/language';
+import { useVoiceSettingsStore } from '@/store/settings';
 import { useAttachmentUpload } from '../../model/useAttachmentUpload';
 import { useComposerDraft } from '../../model/useComposerDraft';
 import { ChatComposerMenu, type ChatCommandId } from './ChatComposerMenu';
@@ -60,6 +64,19 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
   const actions = useComposerActions({ draft, upload, textareaRef });
   const canSend = Boolean(draft.text.trim() || draft.attachments.length);
+  const voice = useVoiceSettingsStore((state) => state.data);
+
+  // The dictation: the transcript lands where the caret is, as typed input.
+  // It never sends the message: the user still presses the key.
+  const applyDictation = (text: string) => {
+    const element = textareaRef.current;
+    const caret = element?.selectionStart ?? draft.text.length;
+    draft.setText(insertTranscript(draft.text, text, caret));
+    requestAnimationFrame(() => {
+      element?.focus();
+      element?.setSelectionRange(caret + text.length, caret + text.length);
+    });
+  };
 
   // "/" launcher commands map to the real composer actions (the file picker is a
   // hidden input clicked here so /image and /file reuse the upload pipeline).
@@ -117,7 +134,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         ) : (
           <div className="relative">
           {mention !== null && <MentionAutocomplete query={mention} onPick={pickMention} />}
-          <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 focus-within:border-[var(--osio-accent)]">
+          <div
+            data-dictation-composer="channel"
+            className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 focus-within:border-[var(--osio-accent)]"
+          >
             <textarea
               ref={textareaRef}
               value={draft.text}
@@ -139,6 +159,13 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 onInsertEmoji={(emoji) => actions.insertText(emoji)}
                 onPickGif={(gif) => actions.addGif(gif)}
                 onStartVoice={() => setRecording(true)}
+              />
+              {/* The dictation, next to the voice note, and told apart by its accent ring. */}
+              <DictationButton
+                onText={applyDictation}
+                language={dictationLanguage(voice)}
+                label="Dictate a message"
+                className="ring-1 ring-[var(--osio-accent)]"
               />
               <button
                 type="button"
