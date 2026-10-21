@@ -67,6 +67,7 @@ import {
   normalizeInlineColorToken,
   type InlineColorOption,
 } from "@/shared/ui/assets/inlineTextStyles";
+import { IconValueView } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
 import { queueInputFlush } from "@/shared/lib/editor-input/queuedInput";
 import {
@@ -1717,7 +1718,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                           }
                         >
                           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--osio-bg-subtle)] text-xs text-[var(--osio-fg-muted)]">
-                            {workspacePage.icon ?? "□"}
+                            {workspacePage.icon ? <IconValueView value={workspacePage.icon} size={12} /> : "□"}
                           </span>
                           <span className="min-w-0 flex-1 truncate">
                             {workspacePage.title || "Untitled"}
