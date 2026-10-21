@@ -1,0 +1,50 @@
+{"id":"q01","q":"What is the lead time in weeks for the NW-LARK-77 frame kit?","lang":"en","kind":"lexical","asker":"u_chloe","expected":["spec-lark-task-chair"]}
+{"id":"q02","q":"Which timber and finish does the NW-HALDEN-03 top use?","lang":"en","kind":"lexical","asker":"u_ben","expected":["spec-halden-conference-table"]}
+{"id":"q03","q":"How many modules are in the NW-VESPER-12 configuration?","lang":"en","kind":"lexical","asker":"u_ana","expected":["spec-vesper-modular-sofa"]}
+{"id":"q04","q":"What is the maximum load rating of the NW-MARLOW-21 frame?","lang":"en","kind":"lexical","asker":"u_ben","expected":["spec-marlow-standing-desk"]}
+{"id":"q05","q":"Which upholstery options are approved for the NW-BRINDLE-08 shell?","lang":"en","kind":"lexical","asker":"u_chloe","expected":["spec-brindle-lounge-chair"]}
+{"id":"q06","q":"How long does it take to assemble the NW-FJORD-15 bench sections?","lang":"en","kind":"lexical","asker":"u_ben","expected":["spec-fjord-bench-system"]}
+{"id":"q07","q":"What does error ERR-4712 mean when a node joins the pool?","lang":"en","kind":"lexical","asker":"u_chloe","expected":["runbook-node-provisioning"]}
+{"id":"q08","q":"What causes error ERR-6083 during the nightly invoice run?","lang":"en","kind":"lexical","asker":"u_ben","expected":["runbook-invoice-sync"]}
+{"id":"q09","q":"When does the project codenamed ATELIER-BRIDGE start and how long does it run?","lang":"en","kind":"lexical","asker":"u_chloe","expected":["meeting-supply-chain-workshop"]}
+{"id":"q10","q":"What reduction is being asked for in the negotiation tracked as PEREGRINE-LOOM?","lang":"en","kind":"lexical","asker":"u_ana","expected":["deal-competitive-pricing"]}
+{"id":"q11","q":"What surcharge applies to the NW-FERROLLE smoked oak line?","lang":"en","kind":"lexical","asker":"u_ben","expected":["deal-pricing-discounts"]}
+{"id":"q12","q":"What was recorded under the audit reference AUDIT-77?","lang":"en","kind":"lexical","asker":"u_ana","expected":["meeting-quality-review-may"]}
+{"id":"q13","q":"How are a newcomer's opening days organised, and who validates the checklist afterwards?","lang":"en","kind":"paraphrase","asker":"u_ana","expected":["hr-onboarding-guide"]}
+{"id":"q14","q":"How often may a colleague stay out of the office after settling in?","lang":"en","kind":"paraphrase","asker":"u_chloe","expected":["hr-remote-work-policy"]}
+{"id":"q15","q":"How far ahead must time off be entered, and what is the longest unbroken stretch someone may take?","lang":"en","kind":"paraphrase","asker":"u_ben","expected":["hr-leave-policy"]}
+{"id":"q16","q":"What must an outside party do before entering the production area, and who accompanies them inside?","lang":"en","kind":"paraphrase","asker":"u_ana","expected":["hr-code-of-conduct"]}
+{"id":"q17","q":"What must be worn where the timber is smoothed, and which machine has to be working at the same time?","lang":"en","kind":"paraphrase","asker":"u_ben","expected":["hr-workshop-safety"]}
+{"id":"q18","q":"What actually limits what we can promise to a client?","lang":"en","kind":"paraphrase","asker":"u_ana","expected":["sales-playbook-overview"]}
+{"id":"q19","q":"How do we respond to a client who asks for a large reduction?","lang":"en","kind":"paraphrase","asker":"u_chloe","expected":["deal-pricing-discounts"]}
+{"id":"q20","q":"Which storage line is used in the collection room, and why is it the only one that can be raised off the ground?","lang":"en","kind":"paraphrase","asker":"u_chloe","expected":["deal-brightwater-museum"]}
+{"id":"q21","q":"After how long does an entry disappear from the forecast?","lang":"en","kind":"paraphrase","asker":"u_ben","expected":["meeting-sales-kickoff-q1"]}
+{"id":"q22","q":"Why do we leave the existing desk frame alone for a year?","lang":"en","kind":"paraphrase","asker":"u_chloe","expected":["meeting-product-council-march"]}
+{"id":"q23","q":"What happens when a seat starts making noise after half a year?","lang":"en","kind":"paraphrase","asker":"u_ben","expected":["meeting-quality-review-may"]}
+{"id":"q24","q":"In what quantity should we buy the hardware that disappears fastest?","lang":"en","kind":"paraphrase","asker":"u_chloe","expected":["runbook-ordering-spares"]}
+{"id":"q25","q":"What happens to a request that arrives after the cover has run out?","lang":"en","kind":"paraphrase","asker":"u_ana","expected":["runbook-warranty-claims"]}
+{"id":"q26","q":"Who does the head of the Lyon office answer to for workload and for prices?","lang":"en","kind":"paraphrase","asker":"u_chloe","expected":["meeting-staff-allhands-april"]}
+{"id":"q27","q":"What is the committed value of the museum wing and of the hotel room programme?","lang":"en","kind":"multi","asker":"u_ana","expected":["deal-brightwater-museum","deal-northlake-hotels"]}
+{"id":"q28","q":"What are the three payment milestones, and when does the hotel programme expect the first one?","lang":"en","kind":"multi","asker":"u_ben","expected":["deal-northlake-hotels","deal-contract-terms"]}
+{"id":"q29","q":"How much is the café programme worth, and what is the total open pipeline for the quarter?","lang":"en","kind":"multi","asker":"u_ana","expected":["deal-verdant-coffees","deal-forecast-q3"]}
+{"id":"q30","q":"What is the value of the harbour property programme, and what discount limit applies to a project of that size?","lang":"en","kind":"multi","asker":"u_ana","expected":["deal-lumen-hotels","deal-pricing-discounts"]}
+{"id":"q31","q":"How many rooms does the clinic programme cover, and what did the leadership meeting decide about it?","lang":"en","kind":"multi","asker":"u_ben","expected":["deal-arc-hospitals","meeting-leadership-retreat"]}
+{"id":"q32","q":"Which parts do we keep in stock, and what did the workshop meeting decide about the paint line?","lang":"en","kind":"multi","asker":"u_ben","expected":["runbook-ordering-spares","meeting-supply-chain-workshop"]}
+{"id":"q33","q":"How many days may a colleague work from home, and how much annual leave must be booked ahead?","lang":"en","kind":"multi","asker":"u_chloe","expected":["hr-remote-work-policy","hr-leave-policy"]}
+{"id":"q34","q":"Which timber does the conference table keep, and what did the product council decide to drop from the range?","lang":"en","kind":"multi","asker":"u_chloe","expected":["meeting-product-council-march","spec-halden-conference-table"]}
+{"id":"q35","q":"Quelle valeur commerciale a été arrêtée avec le groupe hôtelier, et pour combien de chambres ?","lang":"fr","kind":"fr","asker":"u_chloe","expected":["deal-northlake-hotels"]}
+{"id":"q36","q":"Quels justificatifs faut-il joindre pour faire ouvrir un dossier de garantie ?","lang":"fr","kind":"fr","asker":"u_ben","expected":["runbook-warranty-claims"]}
+{"id":"q37","q":"Que vérifie-t-on chaque semaine sur les engins de livraison ?","lang":"fr","kind":"fr","asker":"u_ben","expected":["entretien-flotte-fr"]}
+{"id":"q38","q":"Qui prépare les propositions destinées au marché local ?","lang":"fr","kind":"fr","asker":"u_ana","expected":["playbook-commercial-fr"]}
+{"id":"q39","q":"Quel est le budget du programme Nordhavn et quel paiement est prévu pour la première tranche ?","lang":"fr","kind":"fr","asker":"u_ana","expected":["reunion-presentation-fr","playbook-commercial-fr"]}
+{"id":"q40","q":"Quel délai de livraison est garanti pour le système d'étagères NW-CEDAR-40 ?","lang":"fr","kind":"fr","asker":"u_ben","expected":["cahier-des-charges-rive-nord-fr"]}
+{"id":"q41","q":"What is the delivery lead time for the Kestrel teak outdoor line?","lang":"en","kind":"negative","asker":"u_ana","expected":[]}
+{"id":"q42","q":"Who signs off discounts above fifty thousand on the Orenda programme?","lang":"en","kind":"negative","asker":"u_ben","expected":[]}
+{"id":"q43","q":"How does the Tessin assembly cell recover after a spindle jam?","lang":"en","kind":"negative","asker":"u_chloe","expected":[]}
+{"id":"q44","q":"What is the escalation path for a Bramble line warranty claim?","lang":"en","kind":"negative","asker":"u_ana","expected":[]}
+{"id":"q45","q":"What is the total fit-out value of the Quadrum project and when did the site survey happen?","lang":"en","kind":"acl","asker":"u_ana","expected":[]}
+{"id":"q46","q":"What is the total fit-out value of the Quadrum project and when did the site survey happen?","lang":"en","kind":"acl","asker":"u_chloe","expected":["deal-quadrum-fitout"]}
+{"id":"q47","q":"How many examination rooms does the Arcway programme cover and what is its total value?","lang":"en","kind":"acl","asker":"u_chloe","expected":[]}
+{"id":"q48","q":"How many examination rooms does the Arcway programme cover and what is its total value?","lang":"en","kind":"acl","asker":"u_ben","expected":["deal-arc-hospitals"]}
+{"id":"q49","q":"What are the salary bands for the workshop team in 2026?","lang":"en","kind":"acl","asker":"u_ben","expected":[]}
+{"id":"q50","q":"What are the salary bands for the workshop team in 2026?","lang":"en","kind":"acl","asker":"u_chloe","expected":[]}
