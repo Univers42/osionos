@@ -19,6 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
+import { LINK_EDGES_RPC, PAGE_ROWS_RPC, readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
@@ -2736,7 +2737,19 @@ async function readablePageGraph(workspaceIds, userId, config, fetchImpl) {
 		const wsRows = await listPageRows(workspaceId, config, fetchImpl, { archivedAt: null }, PAGE_LIST_SELECT);
 		rows.push(...wsRows.filter((row) => canReadPageRowAsMember(row, userId, workspaceIds)));
 	}
-	return pagesToGraph(rows);
+	// The inline [[page:]] edges, read live through the ONE edge-read module
+	// (C99): both endpoints are checked against their live page row, and an
+	// endpoint that is not a node of this graph takes the edge with it.
+	const { links } = await readLinkEdges(
+		(rpc, body) => baasRest(config, fetchImpl, `rpc/${rpc}`, { method: 'POST', body }),
+		{
+			sourceIds: rows.map((row) => String(row.id)),
+			userId,
+			workspaces: workspaceIds,
+			allowed: new Set(rows.map((row) => String(row.id))),
+		},
+	).catch(() => ({ links: [] }));
+	return pagesToGraph(rows, links);
 }
 
 /** Record graph from the workspaces' authorized mounts (empty when none / on error). */
@@ -3221,15 +3234,22 @@ async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	const pageId = pageSubresourceIdFromPath(url.pathname, 'backlinks');
 	if (!pageId) return false;
 	const { authContext, row } = await readablePageAccess(request, pageId, 'read', config, fetchImpl);
+	// An archived page has no connections: it is not in the graph either, and its
+	// backlinks would tell a reader what the archive took out.
+	if (row.archived_at) throw pageNotFound();
 	// The workspaces the caller may read, LIVE (C98).
 	const accessible = await callerWorkspaces(authContext, config, fetchImpl);
 	if (accessible.length === 0) { json(response, 200, { ok: true, linked: [], mentions: [] }, config); return true; }
 	const inWorkspace = `workspace_id=in.(${accessible.join(',')})`;
-	const linkRows = await baasRest(config, fetchImpl, `osionos_page_links?target_page_id=eq.${pageId}&${inWorkspace}&select=source_page_id`);
-	const sourceIds = [...new Set((Array.isArray(linkRows) ? linkRows : []).map((r) => r.source_page_id).filter((id) => id && id !== pageId))];
-	const linked = sourceIds.length
-		? backlinkRefsFromRows(readablePageRows(await baasRest(config, fetchImpl, `osionos_pages?id=in.(${sourceIds.join(',')})&${inWorkspace}&archived_at=is.null&select=${BACKLINK_SELECT}`), authContext.userId))
-		: [];
+	// The links, read live through the ONE edge-read module (C99): both ends are
+	// checked against their live page row, and the workspace of an edge row is
+	// never the workspace of the ACL.
+	const { links, rows: linkRows } = await readLinkEdges(
+		(rpc, body) => baasRest(config, fetchImpl, `rpc/${rpc}`, { method: 'POST', body }),
+		{ targetIds: [pageId], userId: authContext.userId, workspaces: accessible },
+	).catch(() => ({ links: [], rows: new Map() }));
+	const sourceIds = [...new Set(links.map((link) => link.source).filter((id) => id && id !== pageId))];
+	const linked = backlinkRefsFromRows(sourceIds.map((id) => linkRows.get(String(id).toLowerCase())).filter(Boolean));
 	const title = String(row.title || '').trim();
 	let mentions = [];
 	if (title) {
