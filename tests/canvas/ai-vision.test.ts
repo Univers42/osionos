@@ -200,6 +200,13 @@ test("the attach button is hidden for a model that cannot see images", () => {
   assert.match(shown, /aria-label="Attach image"/);
 });
 
+test("the picker offers only the formats the service reads", () => {
+  const shown = renderToStaticMarkup(
+    React.createElement(AttachImageButton, { vision: true, attachments: [], onChange: () => {} }),
+  );
+  assert.match(shown, /accept="image\/png,image\/jpeg,image\/webp"/);
+});
+
 /* -------------------------------------------------------------------------- */
 /* The notice of a rate limit                                                 */
 /* -------------------------------------------------------------------------- */
