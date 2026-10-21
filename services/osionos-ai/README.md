@@ -167,6 +167,22 @@ variable, never its value.
 The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_URL` and
 `OSIONOS_AI_EMBED_MODEL` (`intfloat/multilingual-e5-small`).
 
+## The type check
+
+The service imports the bridge's own modules — `scripts/bridge-session-token.mjs`,
+`scripts/bridge-session-cutoff.mjs`, `scripts/bridge-page-read.mjs` — so the type
+check has to see the whole repository, not the service alone:
+
+    docker run --rm -v "$PWD":/app -w /app/services/osionos-ai node:22-bookworm-slim node_modules/.bin/tsc --noEmit -p tsconfig.json
+
+Mounting only `services/osionos-ai` hides those three modules from `tsc`: the
+imports fall back to ambient declarations that nothing checks, and the gate
+passes whatever the bridge does. That file is gone; each bridge module now
+carries the JSDoc types of what it exports, in the module that owns the
+behaviour, and this command checks the service against the real ones.
+
+`allowJs` stays on: `eval/*.ts` imports `./lib.mjs` and `./text.mjs`.
+
 ## Tests
 
     sh services/osionos-ai/scripts/test.sh /path/to/osionos-ai-migration.sql [/path/to/osionos-ai-rag-migration.sql]
