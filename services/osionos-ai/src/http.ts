@@ -68,3 +68,31 @@ export async function readJson<T>(request: IncomingMessage, schema: ZodType<T>, 
 	if (!result.success) throw httpError(400, 'invalid_request');
 	return result.data;
 }
+
+/**
+ * The headers of an event stream: the framing of the wire contract, plus the
+ * CORS headers of the service.
+ */
+export function sendSseHeaders(response: ServerResponse): void {
+	response.writeHead(200, {
+		'content-type': 'text/event-stream',
+		'cache-control': 'no-cache',
+		'x-accel-buffering': 'no',
+		...CORS_HEADERS,
+	});
+}
+
+/** One event of a stream: the id of the frame, its type, its data. */
+export function writeSseFrame(
+	response: ServerResponse,
+	{ id, type, data }: { id: string; type: string; data: unknown },
+): void {
+	if (response.writableEnded || response.destroyed) return;
+	response.write(`id: ${id}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+/** The comment that keeps a quiet stream alive. */
+export function writeSsePing(response: ServerResponse): void {
+	if (response.writableEnded || response.destroyed) return;
+	response.write(': ping\n\n');
+}
