@@ -22,12 +22,21 @@ import type { LiveSocketOptions } from "../../src/shared/notion-database-sys/src
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
 
-test("only chat and user topics map to a token request", () => {
+test("only the grantable topic shapes map to a token request", () => {
   assert.deepEqual(tokenRequestForTopic("chat:ws-1:chan-1"), { kind: "chat", channelId: "chan-1" });
   assert.deepEqual(tokenRequestForTopic("user:abc"), { kind: "user", subject: "abc" });
   for (const topic of ["feed:ws-1", "presence:ws-1", "collab:x", "table:db:t", "chat:*", "chat:a:b:c", "user:", ""]) {
     assert.equal(tokenRequestForTopic(topic), null, topic);
   }
+});
+
+test("a live database topic asks for a table token, an object database for its own", () => {
+  const dbId = "b1b1b1b1-1111-4111-8111-b1b1b1b1b1b1";
+  assert.deepEqual(tokenRequestForTopic(`table:${dbId}:transactions`), { kind: "table", dbId, table: "transactions" });
+  assert.deepEqual(tokenRequestForTopic("objectdb:owner-1"), { kind: "objectdb" });
+  assert.equal(tokenRequestForTopic("table:not-a-uuid:x"), null);
+  assert.equal(tokenRequestForTopic(`table:${dbId}`), null);
+  assert.equal(tokenRequestForTopic("objectdb:"), null);
 });
 
 test("the fetcher posts the request with the session jwt and returns the token", async () => {
@@ -74,6 +83,29 @@ test("the socket starts with the minted token and re-mints on every drop", async
   created[0].onDown?.();
   await tick();
   assert.equal(created[0].token, "t2", "the next AUTH reads the fresh token");
+});
+
+test("the caller's onUp and onDown are called after the socket's own bookkeeping", async () => {
+  const events: string[] = [];
+  const created: LiveSocketOptions[] = [];
+  const handle = openMintedSocket({
+    url: "ws://x",
+    topic: "chat:w:c",
+    onEvent: () => undefined,
+    onUp: () => { events.push("up"); },
+    onDown: () => { events.push("down"); },
+    fetchToken: async () => "t1",
+    createSocket: (options) => {
+      created.push(options);
+      return { start: () => undefined, stop: () => undefined };
+    },
+  });
+  await tick();
+  assert.equal(created.length, 1);
+  created[0].onUp?.();
+  created[0].onDown?.();
+  assert.deepEqual(events, ["up", "down"]);
+  handle.stop();
 });
 
 test("no socket opens when the first mint fails", async () => {

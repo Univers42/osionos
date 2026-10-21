@@ -21,7 +21,7 @@ import { pagesToGraph } from './bridge-graph.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
-import { publishRealtime } from './bridge-social-core.mjs';
+import { QUERY_ROUTER_TABLE, publishRealtime } from './bridge-social-core.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { assertSessionNotCutOff, sessionCutoffsFromConfig, startSessionCutoffPoller, tokenIssuedAtMs } from './bridge-session-cutoff.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
@@ -2857,6 +2857,19 @@ async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
 }
 
 /**
+ * The realtime-token grant's mount check — the SAME rule as resolveAccessibleMount:
+ * the session's own workspaces ∪ the workspaces the user is a member of, then the
+ * dbId must appear in one of those workspaces' mounts. Kept here (not in the token
+ * module) because that module must not import bridge-api.mjs: it would be a cycle.
+ */
+async function hasAccessibleMount(session, dbId, config, fetchImpl) {
+	const memberIds = await memberWorkspaceIds(session.userId, config, fetchImpl);
+	const accessible = [...new Set([...session.workspaceIds, ...memberIds])];
+	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
+	return mounts.some((row) => row && row.db_id === dbId);
+}
+
+/**
  * Set of db_ids the caller may see — every mount linked to a workspace the user
  * owns or is a member of (the user→workspace→database M2M relation). Verifies the
  * app session (401 on a missing/invalid token). Used to membership-scope the
@@ -2871,7 +2884,8 @@ async function accessibleMountIds(request, config, fetchImpl) {
 }
 
 // Hyphens and dots stay (Mongo-style names: og-notes, a.b); `.`, `..` and a leading dot do not.
-const QUERY_ROUTER_TABLE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}$/;
+// The pattern itself lives in bridge-social-core.mjs (QUERY_ROUTER_TABLE): the query-router
+// path builder and the realtime token grant must accept the same table names.
 
 /**
  * G6 F3: `table` comes from the URL but the mount ACL only vouches for `dbId`, so a segment
@@ -4250,7 +4264,14 @@ export function createBridgeServer(options = {}) {
 		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		realtimeToken: createRealtimeTokenHandler({
+			config,
+			verifySession: verifyAppSessionToken,
+			fetchImpl,
+			// The live-database grant: only a workspace the caller owns or is a member
+			// of may mount the dbId the token names.
+			mountAccess: (session, dbId) => hasAccessibleMount(session, dbId, config, fetchImpl),
+		}),
 	};
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
