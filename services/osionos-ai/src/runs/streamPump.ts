@@ -1,6 +1,7 @@
-import { streamText } from 'ai';
-import type { LanguageModel, LanguageModelUsage, ModelMessage } from 'ai';
+import { stepCountIs, streamText } from 'ai';
+import type { LanguageModel, LanguageModelUsage, ModelMessage, ToolSet } from 'ai';
 import { config } from '../config.ts';
+import { MAX_STEPS } from '../tools/loop.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
 
 /**
@@ -61,6 +62,18 @@ export interface PumpInput {
 	onText: (text: string) => Promise<void>;
 	/** A piece of the reasoning, when the model streams one. */
 	onReasoning: (text: string) => Promise<void>;
+	/**
+	 * The tools the model may call.
+	 *
+	 * Without them the loop is one step: the model answers, and the run is
+	 * over. With them the model may call a tool, and the answer comes after
+	 * the tool: that is the loop, and it is bounded by MAX_STEPS.
+	 */
+	tools?: ToolSet;
+	/** The model called a tool. */
+	onToolCall?: (call: { toolCallId: string; toolName: string; input: unknown }) => Promise<void>;
+	/** A tool failed before it ran: the model never gets an answer of it. */
+	onToolError?: (failure: { toolCallId: string; toolName: string }) => Promise<void>;
 }
 
 export interface PumpOutcome {
@@ -79,7 +92,7 @@ export interface PumpOutcome {
  * the upstream reported before it broke — that is what the settlement needs.
  */
 export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
-	const { model, messages, controller, onText, onReasoning } = input;
+	const { model, messages, controller, onText, onReasoning, tools, onToolCall, onToolError } = input;
 	let answer = '';
 	let reasoning = '';
 	let usage: LanguageModelUsage | undefined;
@@ -107,6 +120,10 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			messages,
 			maxOutputTokens: config.maxOutputTokens,
 			abortSignal: controller.signal,
+			// The tools, and the ceiling of the loop: the model may call a
+			// tool, and the answer comes after the tool.
+			...(tools ? { tools } : {}),
+			stopWhen: stepCountIs(MAX_STEPS),
 		});
 
 		for await (const part of result.fullStream) {
@@ -117,6 +134,10 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			} else if (part.type === 'reasoning-delta') {
 				reasoning += part.text;
 				await onReasoning(part.text);
+			} else if (part.type === 'tool-call') {
+				await onToolCall?.({ toolCallId: part.toolCallId, toolName: part.toolName, input: part.input });
+			} else if (part.type === 'tool-error') {
+				await onToolError?.({ toolCallId: part.toolCallId, toolName: part.toolName });
 			} else if (part.type === 'finish-step') {
 				usage = part.usage;
 			} else if (part.type === 'finish') {

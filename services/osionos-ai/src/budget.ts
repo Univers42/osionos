@@ -99,10 +99,14 @@ async function settleOn(
 	reserved: number,
 	actual: number,
 ): Promise<void> {
+	// The ledger books the real spend, or the reservation when the real spend
+	// is above it: the reservation IS the ceiling of the run, and a run that
+	// books more than it reserved would spend money the cap never allowed.
+	// The cost the upstream really charged stays in the row of the run.
 	await client.query(
 		`update public.ai_usage_daily
 		 set reserved_microusd = greatest(reserved_microusd - $3::bigint, 0),
-		     spent_microusd = spent_microusd + $4::bigint
+		     spent_microusd = spent_microusd + least($4::bigint, $3::bigint)
 		 where subject = $1 and day = $2`,
 		[subject, day, reserved, actual],
 	);
@@ -112,6 +116,12 @@ async function settleOn(
  * The settlement of a run: the reservation becomes the real spend. The actual
  * cost may differ from the reservation, in both directions: the reservation was
  * an estimate and the upstream is the one that knows.
+ *
+ * The ledger books the actual cost, and never more than the reservation: the
+ * reservation is the ceiling of the run, and the cap was checked against it.
+ * A run that costs more than it reserved (the estimate counts four characters
+ * per token, and it under-counts) is booked at its reservation; the cost the
+ * upstream really charged is in the row of the run.
  */
 export async function settle(db: Pool, request: SettleRequest): Promise<void> {
 	const client = await db.connect();

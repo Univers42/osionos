@@ -10,7 +10,7 @@ import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
 import type { RunEvent } from './upstream.ts';
 import {
-	estimateMicroUsd,
+	estimateLoopMicroUsd,
 	historyChars,
 	loadHistory,
 	loadPageContext,
@@ -161,7 +161,9 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// goes on without sources, and the failure is logged once.
 	const sources = await findSources(db, input, text);
 	const day = today();
-	const amount = estimateMicroUsd(target.pricing, {
+	// The reservation is the ceiling of the whole loop: the model may call a
+	// tool, and the answer comes after the tool.
+	const amount = estimateLoopMicroUsd(target.pricing, {
 		text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(context.pages),
@@ -207,6 +209,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			history,
 			pages: context.pages,
 			sources,
+			user: input.user,
 			skippedPageIds: context.skippedPageIds,
 			userMessageId: userMessage.id,
 			title,

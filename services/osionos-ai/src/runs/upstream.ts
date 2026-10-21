@@ -12,8 +12,10 @@ import type { RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
 import { buildUserTurn, historyChars, historyMessages, promptCharCount, quotedPageChars } from './prompt.ts';
 import { sourceChars } from './sources.ts';
+import { readToolSet } from '../tools/index.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
+import type { AuthUser } from '../auth.ts';
 import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
 
 /**
@@ -48,6 +50,13 @@ export interface UpstreamRunInput {
 	pages: readonly PageContext[];
 	/** The sources of the answer: the chunks the retrieval found. */
 	sources: readonly RetrievedChunk[];
+	/**
+	 * The caller, when the run has one.
+	 *
+	 * The tools of the assistant read the workspace of the caller, so a run
+	 * without a caller has no tools: it answers with what it was given.
+	 */
+	user?: AuthUser;
 	skippedPageIds: readonly string[];
 	userMessageId: string;
 	/** The title of the conversation: the first frame carries it. */
@@ -71,6 +80,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		history,
 		pages,
 		sources,
+		user,
 		skippedPageIds,
 		userMessageId,
 		title,
@@ -123,6 +133,38 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			});
 		}
 
+		// The sources of the whole run: the ones of the prompt first, then
+		// the ones the tools found. The number of a source is its rank among
+		// them, and the answer cites them the same way.
+		const cited: RetrievedChunk[] = [...sources];
+
+		// The tools of the assistant: the search of a workspace, and the read
+		// of a page. They read the workspace of the caller, and they carry no
+		// token: a read tool has no use for one.
+		const tools = user
+			? readToolSet(
+					{ db, user },
+					{
+						firstSourceNumber: sources.length,
+						onSources: async (found) => {
+							for (const { n, source } of found) {
+								cited.push(source);
+								await emit('citation', {
+									n,
+									pageId: source.pageId,
+									...(source.blockId ? { blockId: source.blockId } : {}),
+									title: source.title,
+									snippet: source.snippet,
+								});
+							}
+						},
+						onResult: async (outcome) => {
+							await emit('tool.result', outcome);
+						},
+					},
+				)
+			: undefined;
+
 		const messages: ModelMessage[] = [
 			...historyMessages(history),
 			{ role: 'user', content: buildUserTurn(text, pages, sources) },
@@ -132,6 +174,13 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			model: target.model,
 			messages,
 			controller,
+			...(tools ? { tools } : {}),
+			onToolCall: async ({ toolCallId, toolName, input }) => {
+				await emit('tool.called', { toolCallId, toolName, input });
+			},
+			onToolError: async ({ toolCallId, toolName }) => {
+				await emit('tool.result', { toolCallId, toolName, ok: false, error: 'the tool failed' });
+			},
 			onText: async (delta) => {
 				await emit('text.delta', { text: delta });
 			},
@@ -165,7 +214,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 					: [{ type: 'text', text: answer }]),
 				// The sources of the answer, in the order they were given to the
 				// model: the part of a source is its number minus one.
-				...sources.map((source) => ({
+				...cited.map((source) => ({
 					type: 'citation',
 					pageId: source.pageId,
 					...(source.blockId ? { blockId: source.blockId } : {}),
