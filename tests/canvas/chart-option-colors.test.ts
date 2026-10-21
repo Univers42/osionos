@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { optionColorToCss } from "../../src/shared/notion-database-sys/src/utils/color.ts";
+import { optionColorToCss, getDotColor } from "../../src/shared/notion-database-sys/src/utils/color.ts";
 import { buildChartData } from "../../src/shared/notion-database-sys/src/lib/chart/chartEngine.ts";
 import type { ChartPageLike } from "../../src/shared/notion-database-sys/src/lib/chart/chartTypes.ts";
 import type { SchemaProperty } from "../../src/shared/notion-database-sys/packages/contract-types/src/index.ts";
@@ -78,4 +78,19 @@ test("chart-option-colors: values that only look like colours are refused", () =
     '#12345',            // 5 hex digits is not a colour
     'var(--a) var(--b)',
   ]) assert.equal(optionColorToCss(hostile), '', hostile);
+});
+
+test("status dots: tag-family classes map to their dot colour", () => {
+  const cases: ReadonlyArray<[string, string]> = [
+    ["bg-success-surface-muted text-success-text-tag", "bg-success"],
+    ["bg-accent-muted text-accent-text-bold", "bg-accent"],
+    ["bg-danger-surface-muted text-danger-text-tag", "bg-danger"],
+    ["bg-warning-surface-muted text-warning-text-tag", "bg-warning"],
+    ["bg-indigo-surface-muted text-indigo-text-tag", "bg-purple"],
+    ["green-500", "bg-success"],        // legacy keyword string
+    ["bg-brand-500", "bg-surface-strong"], // unknown family
+  ];
+  for (const [optionClass, expected] of cases) {
+    assert.equal(getDotColor(optionClass), expected, optionClass);
+  }
 });
