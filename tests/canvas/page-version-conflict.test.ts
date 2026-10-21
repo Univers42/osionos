@@ -21,13 +21,17 @@
 // replay does not overwrite the server's copy.
 // Plus the two-client case: A and B edit one page concurrently, and after both flushes
 // the server holds BOTH edits.
+// Plus the read-only rule: a REFUSAL closes the page for the session, a CONFLICT copy
+// does not — the server never said the reader may not write it.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { ApiError } from "@osionos/http-gate";
 import type { Block } from "@/entities/block";
 import type { PageEntry } from "@/entities/page";
-import { publishPage, publishPageKeepalive } from "@/store/sync/pageOutbox";
+import { canWritePage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
+import { publishPage, publishPageKeepalive, type OutboxDeps } from "@/store/sync/pageOutbox";
 import { clearBase, setBase } from "@/store/sync/pageBase";
 import { publishOutboxPage, type FlushDeps } from "@/store/sync/pageFlush";
 import { keepPendingPages, withPendingPages } from "@/store/sync/pendingPages";
@@ -68,6 +72,25 @@ function job(page: PageEntry, id: string) {
     forgotten: new Set<string>(),
     budget: { left: 5 },
   };
+}
+
+/**
+ * The live access context the flush marks: a session on the user-store seam the page
+ * access layer reads. The session object stays the SAME one across the reads — the
+ * context is memoized on it, so a fresh object per read would lose every mark.
+ */
+function installSession(userId = "owner"): void {
+  const session = {
+    userId,
+    accessToken: "tok",
+    refreshToken: "rtok",
+    privateWorkspaces: [{ _id: "ws" }],
+    sharedWorkspaces: [],
+  };
+  Reflect.set(globalThis, "__playgroundUserStore", {
+    getState: () => ({ activeSession: () => session }),
+    subscribe: () => () => undefined,
+  });
 }
 
 test("C19: the conflict's version reaches the merge, and the re-send is pinned to it", async () => {
@@ -197,4 +220,47 @@ test("two clients editing one page: after both flushes the server holds both edi
   assert.ok(texts.includes("A's edit"), "A's edit is gone");
   assert.ok(texts.includes("B's block"), "B's block is gone");
   clearBase("p1");
+});
+
+test("a conflict copy keeps the page writable: a 409 is not a refusal", async () => {
+  installSession();
+  const bridge = createBridge({ p1: { version: 9, content: [para("b1", "theirs")] } });
+  bridge.refuses.add("p1"); // the server answers 409 to every write
+  const recovery = fakeRecovery(pageEntry("p1", [para("b1", "theirs")]), pageEntry("c1", []));
+  const { deps } = flushDepsFor(bridge, recovery);
+  setBase("p1", 4, [para("b1", "base")]);
+  const page = pageEntry("p1", [para("b1", "mine")]);
+  const step = await publishOutboxPage(job(page, "p1"), deps);
+  assert.equal(step, "continue");
+  // The local edit is safe: it went to a copy.
+  const copy = recovery.calls.find(([name]) => name === "createCopy")?.[1] as { content: Block[] };
+  const copyTexts = copy.content.map((block) => block.content);
+  assert.ok(copyTexts.includes("mine"), "the copy does not hold the local edit");
+  // The page is still writable: the server never refused this reader.
+  const context = getCurrentPageAccessContext();
+  assert.ok(context, "no access context");
+  assert.equal(context.refusedPageIds?.has("p1"), false, "a conflict must not refuse the page");
+  assert.equal(canWritePage(page, context, "update"), true, "the page went read-only for nothing");
+  clearBase("p1");
+});
+
+test("a refusal still closes the page: a 403 on the PATCH marks it refused", async () => {
+  installSession();
+  const forbidden: OutboxDeps = {
+    token: () => "jwt",
+    base: () => "http://bridge.test",
+    patch: async () => { throw new ApiError("You may not write this page.", 403, "FORBIDDEN"); },
+    keepalive: () => undefined,
+  };
+  const recovery = fakeRecovery(pageEntry("p1", []), pageEntry("c1", []));
+  const { deps } = flushDepsFor(createBridge({ p1: { version: 1, content: [] } }), recovery);
+  deps.publish = (page) => publishPage(page, forbidden);
+  const page = pageEntry("p1", [para("b1", "mine")]);
+  const step = await publishOutboxPage(job(page, "p1"), deps);
+  assert.equal(step, "continue");
+  // The server's verdict is "you may not write": the page is read-only for the session.
+  const context = getCurrentPageAccessContext();
+  assert.ok(context, "no access context");
+  assert.equal(context.refusedPageIds?.has("p1"), true, "a refusal must mark the page");
+  assert.equal(canWritePage(page, context, "update"), false, "a refused page stays read-only");
 });
