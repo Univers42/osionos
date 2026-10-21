@@ -12,6 +12,13 @@ export interface QueueRow extends QueryResultRow {
 	page_id: string;
 	workspace_id: string;
 	/**
+	 * The lane of the row: 0 is an edit a person just made, 1 is bulk work.
+	 *
+	 * The lane is the priority of the page in the queue: the edits are
+	 * claimed first, so a person never waits behind a backfill.
+	 */
+	priority: number;
+	/**
 	 * The moment the page was dirtied, in seconds since the epoch.
 	 *
 	 * It is NOT a date: Postgres keeps the microseconds of a timestamp, and
@@ -42,21 +49,25 @@ export interface ExistingChunk extends QueryResultRow {
 }
 
 /**
- * The claim: the pages that need indexing, the oldest first.
+ * The claim: the pages that need indexing, the lane first, then the oldest.
  *
  * The ten seconds of the debounce are a parameter, so the tests do not have to
  * wait for them; the default is the ten seconds of the migration.
+ *
+ * The lane comes first: priority 0 is an edit a person just made, priority 1
+ * is bulk work (the initial backfill, a re-embed after a model swap). An edit
+ * is never stuck behind a whole workspace.
  *
  * FOR UPDATE SKIP LOCKED keeps two replicas from waiting for each other: the
  * second one takes the next rows. The lock is released as soon as the claim
  * is over — the page is taken by its own advisory lock instead.
  */
 export const CLAIM_SQL = `
-select page_id, workspace_id, extract(epoch from dirty_at) as dirty_epoch
+select page_id, workspace_id, priority, extract(epoch from dirty_at) as dirty_epoch
   from public.ai_index_queue
  where dirty_at < now() - make_interval(secs => $1)
    and attempts < $2
- order by dirty_at
+ order by priority, dirty_at
  limit $3
  for update skip locked`;
 
