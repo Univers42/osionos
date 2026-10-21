@@ -46,6 +46,8 @@ export interface AiModel {
   id: string;
   label: string;
   default: boolean;
+  /** Whether the model can see images. */
+  vision?: boolean;
   /** The context window, in tokens, when the service knows it. */
   contextWindow?: number;
   /** The price of a million input tokens, in micro dollars. */
@@ -141,6 +143,7 @@ export interface StartRunInput {
   model?: string;
   /** The connection the run spends — `platform` when the caller does not say. */
   connectionId?: string;
+  attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }>;
   /**
    * What the answer is read from: the pages it may use (at most three), and
    * whether the caller's whole workspace is searched.

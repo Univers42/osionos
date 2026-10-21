@@ -14,6 +14,7 @@ import React, { useEffect, useRef } from "react";
 import { ArrowUp, FileText, Layers, Plug, Square, X } from "lucide-react";
 
 import { AiConnectionPicker } from "./AiConnectionPicker";
+import { AttachImageButton } from "./AttachImageButton";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import { WORKSPACE_CHIP, type ContextChip } from "@/features/ai/model/aiContext";
 import { PageSelectorMenu } from "@/features/block-editor/ui/PageSelectorMenu";
@@ -37,6 +38,12 @@ interface Props {
   streaming?: boolean;
   /** Stops the answer in flight. */
   onStop?: () => void;
+  /** Whether the selected model can see images. */
+  vision?: boolean;
+  /** The attached image paths. */
+  attachments?: string[];
+  /** Replaces the attached image list. */
+  onAttachmentsChange?: (paths: string[]) => void;
 }
 
 /** Controlled composer (parent owns the text so it survives a connect prompt). */
@@ -52,6 +59,9 @@ export const ChatComposer: React.FC<Props> = ({
   autoFocus,
   streaming,
   onStop,
+  vision,
+  attachments = [],
+  onAttachmentsChange,
 }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
   const grow = (el: HTMLTextAreaElement) => { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 240)}px`; };
@@ -108,6 +118,11 @@ export const ChatComposer: React.FC<Props> = ({
         className="block w-full resize-none bg-transparent px-4 pt-3 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
       />
       <div className="flex items-center gap-2 px-2 pb-2 pt-1">
+        <AttachImageButton
+          vision={vision}
+          attachments={attachments}
+          onChange={(paths) => onAttachmentsChange?.(paths)}
+        />
         <button
           type="button"
           onClick={onConnect}

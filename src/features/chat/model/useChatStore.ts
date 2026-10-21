@@ -76,7 +76,7 @@ export interface ChatStoreState extends ChatData {
   deleteConversation: (id: string) => void;
   setActive: (id: string | null) => void;
   setConversationModel: (id: string, connectorId: string, model: string) => void;
-  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; context?: RunContext }) => Promise<void>;
+  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; context?: RunContext; attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }> }) => Promise<void>;
   stop: (conversationId: string) => void;
   attachContext: (scope: SharedContextItem["scope"], scopeId: string, item: Pick<SharedContextItem, "kind" | "label" | "ref">) => void;
   detachContext: (id: string) => void;
@@ -243,7 +243,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
             connectionId,
             title: conversation.title,
             serverConversationId: conversation.serverConversationId,
-            // What the answer is read from: the pages the reader pointed at.
+            attachments: sel?.attachments,
+            // What the answer may read: the pages the reader pointed at.
             context: sel?.context,
             onServerConversationId: rememberServerConversation,
           },
