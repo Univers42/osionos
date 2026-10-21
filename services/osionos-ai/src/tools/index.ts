@@ -5,7 +5,7 @@ import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { PermissionAsked } from '../approvals/types.ts';
 import { READ_TOOLS } from './readTools.ts';
 import { WRITE_TOOLS } from './writeTools.ts';
-import type { AnyReadTool, ReadToolContext } from './types.ts';
+import type { ReadToolContext } from './types.ts';
 import { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS } from './loop.ts';
 
 export { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS };

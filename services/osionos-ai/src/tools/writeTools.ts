@@ -5,7 +5,7 @@ import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import { canAccessWorkspace } from '../workspaceAccess.ts';
 import { BLOCK_TYPES } from './blockTypes.ts';
 import type { ApprovalTarget } from '../approvals/types.ts';
-import type { AnyWriteTool, ToolResult, WriteTool, WriteToolContext } from './types.ts';
+import type { AnyWriteTool, WriteTool, WriteToolContext } from './types.ts';
 
 /**
  * The write tools of the assistant: the three writes it may ask for.
