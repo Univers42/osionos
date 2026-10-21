@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { streamRun } from "@/features/ai/model/runStream";
+import { retryAfterOf } from "@/features/chat/model/runErrors";
 
 /** One SSE frame, numbered the way the service numbers them. */
 function frame(id: string, event: string, data: unknown): string {
@@ -68,6 +69,46 @@ interface Calls {
 
 function calls(): Calls {
   return { resumed: [], waits: [] };
+}
+
+/** A run whose first request failed: what the caller caught, and what was tried. */
+interface Refused {
+  /** The error the caller caught, when the run threw one. */
+  thrown: unknown;
+  /** The resumes the run tried. */
+  tracker: Calls;
+  /** The frames the sink saw. */
+  sink: Seen;
+}
+
+/**
+ * Runs a run whose first request fails with `error`.
+ *
+ * The refusal is caught, so the caller can be looked at: a run that threw
+ * is a refusal, a run that resumed is a connection that dropped.
+ */
+async function refused(error: unknown): Promise<Refused> {
+  const sink = seen();
+  const tracker = calls();
+  let thrown: unknown = null;
+  try {
+    await streamRun({
+      start: async () => {
+        throw error;
+      },
+      resume: async (lastEventId) => {
+        tracker.resumed.push(lastEventId);
+        return streamResponse([]);
+      },
+      onEvent: sink.sink,
+      sleep: async (ms) => {
+        tracker.waits.push(ms);
+      },
+    });
+  } catch (caught) {
+    thrown = caught;
+  }
+  return { thrown, tracker, sink };
 }
 
 test("the run relays its frames in order and stops at done", async () => {
@@ -195,4 +236,46 @@ test("an abort stops the run quietly", async () => {
 
   assert.deepEqual(tracker.resumed, [], "an aborted run is not resumed");
   assert.ok(!sink.events.includes("error"), "a stop is not a failure");
+});
+
+test("a refusal on the first request is thrown to the caller, never resumed", async () => {
+  const error = Object.assign(new Error("the budget is used up"), {
+    status: 402,
+    code: "budget_exhausted",
+  });
+  const { thrown, tracker, sink } = await refused(error);
+
+  assert.equal(thrown, error, "the refusal reaches the caller as it is");
+  assert.deepEqual(tracker.resumed, [], "a refused run is never resumed");
+  assert.ok(!sink.events.includes("error"), "a refusal is not an error frame");
+});
+
+test("a rate limit on the first request keeps the seconds of its countdown", async () => {
+  const error = Object.assign(new Error("too many requests"), {
+    status: 429,
+    code: "rate_limited",
+    headers: new Headers({ "retry-after": "17" }),
+  });
+  const { thrown, tracker } = await refused(error);
+
+  assert.equal(thrown, error, "the refusal reaches the caller as it is");
+  assert.deepEqual(tracker.resumed, [], "a refused run is never resumed");
+  assert.equal(retryAfterOf(thrown), 17, "the seconds of the countdown are kept");
+});
+
+test("a network failure on the first request is resumed, not thrown", async () => {
+  const { thrown, tracker, sink } = await refused(new TypeError("fetch failed"));
+
+  assert.equal(thrown, null, "the run keeps going");
+  assert.equal(tracker.resumed.length, 3, "the run is resumed three times");
+  assert.equal(sink.events.at(-1), "error", "the run ends with an error");
+});
+
+test("a 503 on the first request is resumed, not thrown", async () => {
+  const error = Object.assign(new Error("the service is busy"), { status: 503 });
+  const { thrown, tracker, sink } = await refused(error);
+
+  assert.equal(thrown, null, "the run keeps going");
+  assert.equal(tracker.resumed.length, 3, "the run is resumed three times");
+  assert.equal(sink.events.at(-1), "error", "the run ends with an error");
 });
