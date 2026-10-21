@@ -18,6 +18,7 @@ import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiS
 import type { RunContext } from "@/features/ai/model/aiContext";
 import { citationFromEvent } from "./citations";
 import { resolveConversationTitle } from "./conversationTitle";
+import { withToolCall, withToolResult, withToolSource } from "./toolActivity";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -185,6 +186,35 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
         const current = get().messages.find((m) => m.id === assistantId)?.parts ?? [];
         patchAssistant({ parts: [...current, citation] });
       };
+      /** The parts of the answer, as they stand. */
+      const assistantParts = (): NonNullable<ChatMessage["parts"]> =>
+        get().messages.find((m) => m.id === assistantId)?.parts ?? [];
+      /**
+       * The parts of the answer, with what the tools said put in them.
+       *
+       * A frame that changes nothing leaves the parts as they are: the
+       * answer is not written again for nothing.
+       */
+      const patchToolParts = (
+        change: (parts: NonNullable<ChatMessage["parts"]>) => NonNullable<ChatMessage["parts"]>,
+      ) => {
+        const current = assistantParts();
+        const next = change(current);
+        if (next === current) return;
+        patchAssistant({ parts: next });
+      };
+      /** A call of a tool: the assistant shows what it is doing. */
+      const appendToolCall = (data: Record<string, unknown>) => {
+        patchToolParts((parts) => withToolCall(parts, data));
+      };
+      /** The outcome of a call: the line of the call says it is over. */
+      const appendToolResult = (data: Record<string, unknown>) => {
+        patchToolParts((parts) => withToolResult(parts, data));
+      };
+      /** A source a call found: it is one of the results of the call. */
+      const appendToolSource = (data: Record<string, unknown>) => {
+        patchToolParts((parts) => withToolSource(parts, data));
+      };
       /** The service named the conversation: the default title gives way to it. */
       const applyServerTitle = (serverTitle: string) => {
         set((s) => ({
@@ -229,7 +259,14 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
                   title: citation.title,
                   snippet: citation.snippet,
                 });
+                // The sources a tool found are its result: they arrive between
+                // the call and its outcome.
+                appendToolSource(data);
               }
+            } else if (event === "tool.called") {
+              appendToolCall(data);
+            } else if (event === "tool.result") {
+              appendToolResult(data);
             } else if (event === "run.started") {
               if (typeof data.runId === "string") patchAssistant({ runId: data.runId });
               if (typeof data.conversationTitle === "string") applyServerTitle(data.conversationTitle);

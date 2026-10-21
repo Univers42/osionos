@@ -14,6 +14,14 @@
 
 import type { AiPart } from "@/features/ai/api/aiClient";
 
+import type { ToolActivityPart } from "./toolActivity";
+
+/**
+ * The parts of a message: the service's own (the sources of the answer), and
+ * the calls the assistant made to its tools.
+ */
+export type ChatMessagePart = AiPart | ToolActivityPart;
+
 export type MessageRole = "user" | "assistant" | "system";
 
 export interface ChatMessage {
@@ -26,8 +34,8 @@ export interface ChatMessage {
   model?: string;
   /** The connection the answer was paid for — the user's own, or the platform's. */
   connectionId?: string;
-  /** The message parts, in the service's shape. */
-  parts?: AiPart[];
+  /** The message parts, in the service's shape, and the calls of the tools. */
+  parts?: ChatMessagePart[];
   /** The run that produced this message, once the service answered. */
   runId?: string;
   /** Where the answer stands: streaming, done, or failed. */

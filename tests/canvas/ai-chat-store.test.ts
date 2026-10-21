@@ -12,12 +12,16 @@
 /**
  * The chat store with a streaming port: the assistant turn grows as the frames
  * arrive, ends on done, fails with a code, and a conversation speaks once.
+ *
+ * The store also keeps what the service says about the answer: its sources,
+ * and the title of the conversation.
  */
 
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { InferencePort, InferenceEventData } from "@/features/chat/model/inferencePort";
+import { citationsFromParts } from "@/features/chat/model/citations";
 
 function shimLocalStorage() {
   const store = new Map<string, string>();
@@ -136,4 +140,65 @@ test("a second send while a run is streaming is refused", async () => {
   assert.equal(users.length, 1, "the second send is refused");
   assert.equal(users[0].content, "one");
   assert.equal(messages.length, 2, "one user turn, one assistant turn");
+});
+
+test("the store keeps the sources of the answer", async () => {
+  shimLocalStorage();
+  const { useChatStore, setInferencePort } = await import("@/features/chat/model/useChatStore");
+  const s = () => useChatStore.getState();
+
+  setInferencePort(
+    fakePort([
+      ["run.started", { runId: "run-1" }],
+      ["citation", { n: 1, pageId: "page-a", blockId: "block-1", title: "Alpha", snippet: "the first source" }],
+      ["citation", { n: 2, pageId: "page-b", title: "Beta", snippet: "the second source" }],
+      ["text.delta", { text: "A [1] and [2]." }],
+      ["done", {}],
+    ]),
+  );
+
+  const conversation = s().createConversation(null);
+  await s().send(conversation.id, "hello");
+
+  const assistant = s().messagesFor(conversation.id)[1];
+  assert.deepEqual(citationsFromParts(assistant.parts), [
+    { n: 1, pageId: "page-a", blockId: "block-1", title: "Alpha", snippet: "the first source" },
+    { n: 2, pageId: "page-b", title: "Beta", snippet: "the second source" },
+  ]);
+});
+
+test("the store takes the title of the service, unless the reader renamed it", async () => {
+  shimLocalStorage();
+  const { useChatStore, setInferencePort } = await import("@/features/chat/model/useChatStore");
+  const s = () => useChatStore.getState();
+
+  setInferencePort(
+    fakePort([
+      ["run.started", { runId: "run-1", conversationTitle: "What is the plan?" }],
+      ["done", {}],
+    ]),
+  );
+
+  const fresh = s().createConversation(null);
+  await s().send(fresh.id, "what is the plan");
+  assert.equal(
+    s().conversations.find((c) => c.id === fresh.id)?.title,
+    "What is the plan?",
+    "the default title gives way to the service's",
+  );
+
+  setInferencePort(
+    fakePort([
+      ["run.started", { runId: "run-2", conversationTitle: "What is the plan?" }],
+      ["done", {}],
+    ]),
+  );
+
+  const renamed = s().createConversation(null, { title: "My own title" });
+  await s().send(renamed.id, "what is the plan");
+  assert.equal(
+    s().conversations.find((c) => c.id === renamed.id)?.title,
+    "My own title",
+    "a title the reader renamed is kept",
+  );
 });
