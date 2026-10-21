@@ -297,7 +297,7 @@ near-term goal, run the two experiments above on this corpus — the embedder fi
 the one that touches the misses that no fusion can), the fusion variant right after it (it
 is cheap and it is the one that gives back the paraphrase).
 
-## Caveat
+## Caveat: the corpus, the questions and the machine
 
 The corpus is synthetic, written by a model: the recall measured on it is a regression gate, not
 a quality claim about real workspaces. Sixty-eight questions over forty pages: one question is
