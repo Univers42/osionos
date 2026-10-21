@@ -196,6 +196,8 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 
 // Revocation enforcement is off unless a test asks for it ({ sessionCutoffs: 'on' }): with it on, every
 // request answers 503 until the poller's first load, which unrelated route tests must not wait for.
+// The administrator list is set explicitly: with it unset the bridge has no account administrator
+// and says so at start-up, which the boot-line test counts.
 export function harnessConfig({ sessionCutoffs = 'off' } = {}) {
 	return configFromEnv({
 		OSIONOS_SESSION_CUTOFFS: sessionCutoffs,
@@ -206,6 +208,7 @@ export function harnessConfig({ sessionCutoffs = 'off' } = {}) {
 		KONG_SERVICE_API_KEY: 'service-role-test-key',
 		OSIONOS_QUERY_ROUTER_URL: QUERY_ROUTER_URL,
 		OSIONOS_BAAS_API_KEY: 'tenant-test-key',
+		OSIONOS_ADMIN_EMAILS: 'admin@example.test',
 	});
 }
 
