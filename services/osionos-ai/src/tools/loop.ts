@@ -23,3 +23,17 @@ export const MAX_STEPS = 5;
  * ceiling of what the tools put in the prompt of a step.
  */
 export const TOOL_OUTPUT_CHARS = 20_000;
+
+/**
+ * The characters the tools of a run may put in its context, all together.
+ *
+ * The outputs of the tools accumulate: the prompt of the last step holds
+ * every one of them, and a step may call several tools at once. The pool is
+ * the ceiling of what they may hold, and it is what the reservation counts:
+ * every step of the loop holds the prompt, the pool and the definitions of
+ * the tools, and nothing more.
+ *
+ * The pool holds the outputs of the steps before the last one: the output of
+ * the last step is the answer, and the answer never enters a prompt.
+ */
+export const TOOL_POOL_CHARS = (MAX_STEPS - 1) * TOOL_OUTPUT_CHARS;

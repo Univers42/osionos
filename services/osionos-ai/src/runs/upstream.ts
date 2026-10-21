@@ -11,7 +11,7 @@ import { markRun } from './repo.ts';
 import type { RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
 import { buildUserTurn, historyChars, historyMessages, quotedPageChars } from './prompt.ts';
-import { promptCharCount } from './estimate.ts';
+import { promptCharCount, stepCeilingChars } from './estimate.ts';
 import { sourceChars } from './sources.ts';
 import { readToolSet } from '../tools/index.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
@@ -176,6 +176,15 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			messages,
 			controller,
 			...(tools ? { tools } : {}),
+			// The ceiling of the loop: the money the run holds, and the cost of
+			// one more step. The loop stops itself when the next step would
+			// cost more than the reservation.
+			budget: {
+				reserved,
+				pricing: target.pricing,
+				stepChars: stepCeilingChars(promptChars),
+				runId,
+			},
 			onToolCall: async ({ toolCallId, toolName, input }) => {
 				await emit('tool.called', { toolCallId, toolName, input });
 			},

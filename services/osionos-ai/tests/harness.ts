@@ -28,14 +28,23 @@ export const METERED = {
 	default: false,
 };
 
-/** The dear model: its reservation is more than the daily limit of a user. */
+/** The dear model: one call of it costs more than the daily limit of a user. */
 export const DEAR = {
 	id: 'mock-dear',
 	label: 'Mock dear',
-	inputMicroUsdPerMTok: 1_000_000,
-	outputMicroUsdPerMTok: 1_000_000,
+	inputMicroUsdPerMTok: 200_000_000,
+	outputMicroUsdPerMTok: 200_000_000,
 	default: false,
 };
+
+/**
+ * The daily budget of a user, in micro-USD.
+ *
+ * It is the one of the deployment: the reservation of a run covers the whole
+ * loop of five steps, and the pool of the tools is counted in every one of
+ * them, so a run reserves thousands of micro-USD before it starts.
+ */
+export const USER_DAILY_MICROUSD = 200_000;
 
 /** The free model: the runs of the other cases are not bounded by the budget. */
 export const FREE = {
@@ -91,9 +100,9 @@ export async function startHarness(): Promise<Harness> {
 	const mock = await startMockUpstream();
 	process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${mock.baseUrl}/v1`;
 	process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([FREE, METERED, DEAR]);
-	// The daily budget of a user: a thousand micro-USD, and the dear model asks
-	// for more than that.
-	process.env.OSIONOS_AI_USER_DAILY_MICROUSD = '1000';
+	// The daily budget of a user: the same as the deployment's, and the dear
+	// model asks for more than that.
+	process.env.OSIONOS_AI_USER_DAILY_MICROUSD = String(USER_DAILY_MICROUSD);
 	process.env.OSIONOS_AI_PLATFORM_DAILY_MICROUSD = '20000000';
 	process.env.OSIONOS_AI_RUNS_PER_MINUTE = '100';
 
