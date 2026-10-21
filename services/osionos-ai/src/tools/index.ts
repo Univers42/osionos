@@ -7,6 +7,7 @@ import { READ_TOOLS } from './readTools.ts';
 import { WRITE_TOOLS } from './writeTools.ts';
 import type { ReadToolContext } from './types.ts';
 import { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS } from './loop.ts';
+import { numberSources, sourceKey, type ToolSource } from '../runs/sources.ts';
 
 export { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS };
 
@@ -33,25 +34,24 @@ export interface ToolOutcome {
 	error?: string;
 }
 
-/** A source the tools found, and the number the answer cites it by. */
-export interface ToolSource {
-	/** The number of the source: the answer cites it as [n]. */
-	n: number;
-	/** The source itself. */
-	source: RetrievedChunk;
-}
+export type { ToolSource };
 
 /** What the tool set tells the run while it runs. */
 export interface ToolHooks {
 	/**
-	 * The number the first source of the run got.
+	 * The sources the prompt already quoted.
 	 *
-	 * The sources of the prompt are quoted before the model speaks, so they
-	 * are [1], [2], [3]… The sources a tool finds continue the numbering.
+	 * They are [1], [2], [3]… in that order, and a source a tool finds that
+	 * is one of them keeps the number it was given.
 	 */
-	firstSourceNumber: number;
-	/** A source the tools found: the run emits it as a citation. */
-	onSources?(sources: readonly ToolSource[]): void | Promise<void>;
+	citedSources: readonly RetrievedChunk[];
+	/**
+	 * A source the tools found: the run emits it as a citation.
+	 *
+	 * The call that found it is named: the client credits the passage to
+	 * the call it came from.
+	 */
+	onSources?(sources: readonly ToolSource[], toolCallId: string): void | Promise<void>;
 	/** The outcome of a tool: the run emits it as an event. */
 	onResult?(outcome: ToolOutcome): void | Promise<void>;
 	/**
@@ -194,9 +194,12 @@ function toolDefinitionChars(tools: readonly ToolDefinition[]): number {
  * steps of the loop (the share of a step is given back at every step).
  */
 export function readToolSet(ctx: ReadToolContext, hooks: ToolHooks, pool: ToolPool = createToolPool()): ToolSet {
-	// The sources of the run are numbered once: the ones of the prompt first,
-	// then the ones the tools find, in the order the tools found them.
-	let quoted = hooks.firstSourceNumber;
+	// The sources of the run are numbered once: the ones of the prompt
+	// first, then the ones the tools find, in the order the tools found
+	// them. A passage the run already quoted keeps its number.
+	const numbers = new Map<string, number>();
+	hooks.citedSources.forEach((source, index) => numbers.set(sourceKey(source), index + 1));
+	let quoted = hooks.citedSources.length;
 	const set: ToolSet = {};
 	for (const tool of READ_TOOLS) {
 		set[tool.name] = {
@@ -241,9 +244,11 @@ export function readToolSet(ctx: ReadToolContext, hooks: ToolHooks, pool: ToolPo
 					});
 					return pool.draw(result.error);
 				}
-				const sources = tool.sources(result.data);
-				const first = quoted + 1;
-				const output = pool.draw(tool.render(result.data, first));
+				// The numbering and the commit of it are ONE stretch with no
+				// await: the calls of a step interleave at the awaits only, so
+				// two calls never give one number twice.
+				const { cites, fresh } = numberSources(tool.sources(result.data), numbers, quoted);
+				const output = pool.draw(tool.render(result.data, cites));
 				// The pool ran out while the tool worked: the model reads the
 				// notice, and the sources the tool found are not cited — the
 				// model never read them.
@@ -256,9 +261,11 @@ export function readToolSet(ctx: ReadToolContext, hooks: ToolHooks, pool: ToolPo
 					});
 					return output;
 				}
-				quoted += sources.length;
-				if (sources.length > 0) {
-					await hooks.onSources?.(sources.map((source, index) => ({ n: first + index, source })));
+				// The numbers are committed: these passages keep them.
+				for (const { n, source } of fresh) numbers.set(sourceKey(source), n);
+				quoted += fresh.length;
+				if (fresh.length > 0) {
+					await hooks.onSources?.(fresh, options.toolCallId);
 				}
 				await hooks.onResult?.({ toolCallId: options.toolCallId, toolName: tool.name, ok: true });
 				return output;

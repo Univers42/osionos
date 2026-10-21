@@ -167,6 +167,39 @@ test("the store keeps the sources of the answer", async () => {
   ]);
 });
 
+test("a source keeps the number the service gave it, whatever order the frames come in", async () => {
+  shimLocalStorage();
+  const { useChatStore, setInferencePort } = await import("@/features/chat/model/useChatStore");
+  const s = () => useChatStore.getState();
+
+  // Two searches of one step cite side by side: [1] and [2] come from one,
+  // [3] from the other, and the frames interleave.
+  setInferencePort(
+    fakePort([
+      ["run.started", { runId: "run-1" }],
+      ["citation", { n: 1, pageId: "page-a", title: "Alpha", snippet: "one", toolCallId: "call-1" }],
+      ["citation", { n: 3, pageId: "page-c", title: "Gamma", snippet: "three", toolCallId: "call-2" }],
+      ["citation", { n: 2, pageId: "page-b", title: "Beta", snippet: "two", toolCallId: "call-1" }],
+      ["text.delta", { text: "Gamma says so [3]." }],
+      ["done", {}],
+    ]),
+  );
+
+  const conversation = s().createConversation(null);
+  await s().send(conversation.id, "hello");
+
+  const assistant = s().messagesFor(conversation.id)[1];
+  assert.deepEqual(
+    citationsFromParts(assistant.parts).map(({ n, title }) => [n, title]),
+    [
+      [1, "Alpha"],
+      [2, "Beta"],
+      [3, "Gamma"],
+    ],
+    "[3] is the source the service numbered 3, not the third frame",
+  );
+});
+
 test("the store takes the title of the service, unless the reader renamed it", async () => {
   shimLocalStorage();
   const { useChatStore, setInferencePort } = await import("@/features/chat/model/useChatStore");

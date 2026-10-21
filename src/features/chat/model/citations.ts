@@ -54,12 +54,17 @@ export type AnswerSegment =
 /* Reading the sources                                                        */
 /* -------------------------------------------------------------------------- */
 
+/** The number a source is cited by: a positive integer, or nothing. */
+function citationNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+}
+
 /**
  * A source out of a `citation` frame. A frame that does not carry a number and
  * a page is not a source: it is dropped, and the answer shows no marker for it.
  */
 export function citationFromEvent(data: Record<string, unknown>): Citation | null {
-  const n = typeof data.n === "number" && Number.isInteger(data.n) && data.n > 0 ? data.n : null;
+  const n = citationNumber(data.n);
   const pageId = typeof data.pageId === "string" ? data.pageId : "";
   if (n === null || !pageId) return null;
   const blockId = typeof data.blockId === "string" && data.blockId ? data.blockId : undefined;
@@ -73,11 +78,15 @@ export function citationFromEvent(data: Record<string, unknown>): Citation | nul
 }
 
 /**
- * The sources of a STORED message: its `citation` parts, in order.
+ * The sources of a message: its `citation` parts, in the order of their numbers.
  *
- * The number of a source is its rank among the citation parts (1, 2, 3…), so
- * the markers of a loaded answer line up with the markers of the answer that
- * was streamed — the frames and the stored parts are the same list.
+ * A part carries the number the service gave it. The searches of one step run
+ * side by side, so the frames do not arrive in that order: the number is never
+ * the rank of the part. A part stored without a number takes its rank (1, 2, 3…).
+ *
+ * Caveat: an answer stored before the parts carried numbers, whose searches ran
+ * side by side, has its parts in arrival order, so its markers point at the
+ * wrong sources; there is no number left to recover them from.
  */
 export function citationsFromParts(parts: ChatMessagePart[] | undefined): Citation[] {
   if (!parts) return [];
@@ -85,14 +94,14 @@ export function citationsFromParts(parts: ChatMessagePart[] | undefined): Citati
   for (const part of parts) {
     if (!part || part.type !== "citation") continue;
     citations.push({
-      n: citations.length + 1,
+      n: citationNumber(part.n) ?? citations.length + 1,
       pageId: part.pageId,
       ...(part.blockId ? { blockId: part.blockId } : {}),
       title: part.title,
       snippet: part.snippet,
     });
   }
-  return citations;
+  return citations.sort((left, right) => left.n - right.n);
 }
 
 /**
