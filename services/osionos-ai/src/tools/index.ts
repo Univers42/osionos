@@ -32,6 +32,11 @@ export interface ToolOutcome {
 	ok: boolean;
 	/** Why it did not, when it did not. */
 	error?: string;
+	/**
+	 * How many passages a read tool found, the ones the run had already cited
+	 * included: those are not cited again, so the citations alone undercount.
+	 */
+	found?: number;
 }
 
 export type { ToolSource };
@@ -267,7 +272,12 @@ export function readToolSet(ctx: ReadToolContext, hooks: ToolHooks, pool: ToolPo
 				if (fresh.length > 0) {
 					await hooks.onSources?.(fresh, options.toolCallId);
 				}
-				await hooks.onResult?.({ toolCallId: options.toolCallId, toolName: tool.name, ok: true });
+				await hooks.onResult?.({
+					toolCallId: options.toolCallId,
+					toolName: tool.name,
+					ok: true,
+					found: cites.length,
+				});
 				return output;
 			},
 		};
