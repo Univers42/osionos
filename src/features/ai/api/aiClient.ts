@@ -226,7 +226,15 @@ export function isAiConfigured(): boolean {
   return serviceBase().length > 0;
 }
 
-/** The transport every route uses: the session bearer, like the agent stream. */
+/**
+ * The transport every route uses: the session bearer, like the agent stream.
+ *
+ * The revocation check is inside it, so the run stream reports a `session_revoked`
+ * 401 like every other AI route: `startRun` and `resumeRun` go through
+ * `requestStream`, which goes through this transport — they do not fetch on their
+ * own, the way the agent stream does (packages/http-gate/src/sse.ts, used by
+ * src/shared/agent/useAgentStream.ts for the BRIDGE's own stream).
+ */
 let transport: FetchLike = bearerFetch(
   revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
   getActivePageJwt,
