@@ -6,7 +6,8 @@ import { after, before, describe, it } from 'node:test';
 // is refused, and the refusal says when to come back.
 process.env.OSIONOS_AI_RUNS_PER_MINUTE = '1';
 
-import { startHarness, USER_A, WORKSPACE_A } from './harness.ts';
+import { startHarness, USER_A, VISION, WORKSPACE_A } from './harness.ts';
+import { pngBytes } from './visionFixtures.ts';
 import { SseStream, collect } from './sse.ts';
 
 /**
@@ -16,7 +17,7 @@ import { SseStream, collect } from './sse.ts';
  * refusal must carry them: a `Retry-After` the reader can trust.
  */
 
-const { app, base, mock, tokenFor, createConversation } = await startHarness();
+const { app, base, bridge, mock, tokenFor, createConversation } = await startHarness();
 
 after(async () => {
 	await app.close();
@@ -61,5 +62,20 @@ describe('the rate limit of the runs', () => {
 		const seconds = Number(retryAfter);
 		assert.equal(Number.isFinite(seconds), true);
 		assert.equal(seconds > 0 && seconds <= 60, true);
+
+		// A refused run makes the service fetch nothing: the limit comes
+		// before the attachments.
+		const id = randomUUID();
+		bridge.serve(`/api/chat/uploads/${id}`, { bytes: pngBytes(), contentType: 'image/png' });
+		bridge.reset();
+		const third = await postRun(token, {
+			runId: randomUUID(),
+			conversationId: await createConversation(),
+			text: 'what is in this picture?',
+			model: VISION.id,
+			attachments: [{ kind: 'chat', id }],
+		});
+		assert.equal(third.status, 429);
+		assert.equal(bridge.calls.length, 0);
 	});
 });
