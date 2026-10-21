@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import type { AuthUser } from '../auth.ts';
+import { liveReadableWorkspaces } from '../../../../scripts/bridge-live-workspaces.mjs';
 
 /**
  * The ACL of the retrieval: the SQL pre-filter of the chunks, and the twin of
@@ -50,22 +51,19 @@ export const ROW_ALLOWED_SQL = `(
 export const WORKSPACE_ALLOWED_SQL = `c.workspace_id = any($1::uuid[])`;
 
 /**
- * The workspaces of the caller: the ones their token carries, and the ones the
- * members table holds for them.
+ * The workspaces of the caller: the ones the LIVE members table holds for them.
  *
  * The members table is read here, in the query that needs it, and never
- * cached: a membership that ends must end at once. The union is what the
- * bridge's memberWorkspaceIds gives the caller.
+ * cached: a membership that ends must end at once. The token's own member
+ * list is NOT unioned in: it was minted at login and lives for an hour, so a
+ * removed member would keep reading the workspace's private pages until it
+ * expired (C98). Only the token's PRIVATE workspace comes from the token; the
+ * rest comes from the table, at query time.
  */
 export const MEMBER_WORKSPACES_SQL = `
-	select workspace_id
-	from (
-		select unnest($1::uuid[]) as workspace_id
-		union
-		select m.workspace_id
-		from public.osionos_workspace_members m
-		where m.user_id = $2::uuid
-	) as caller_workspaces`;
+	select m.workspace_id
+	from public.osionos_workspace_members m
+	where m.user_id = $1::uuid`;
 
 /** The shape of a uuid: the ids that are not uuids can never be one. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -73,13 +71,22 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /**
  * The workspaces of the caller, live.
  *
- * The token's workspaces come first: the bridge signs the private workspace
- * with the role 'owner' and the member workspaces with theirs.
+ * The rule is the shared one (scripts/bridge-live-workspaces.mjs): the token's
+ * own private workspace, and the live member rows. The scope, when the token
+ * carries one, is intersected (C115).
  */
-export async function liveMemberWorkspaces(db: Pool, user: AuthUser): Promise<string[]> {
-	const token = [user.workspaceId, ...user.memberWorkspaces.map((member) => member.id)].filter((id) =>
-		UUID.test(id),
-	);
-	const result = await db.query<{ workspace_id: string }>(MEMBER_WORKSPACES_SQL, [token, user.userId]);
-	return result.rows.map((row) => String(row.workspace_id));
+export async function liveMemberWorkspaces(
+	db: Pool,
+	user: AuthUser,
+	scope?: readonly string[] | null,
+): Promise<string[]> {
+	const result = await db.query<{ workspace_id: string }>(MEMBER_WORKSPACES_SQL, [user.userId]);
+	const memberWorkspaces = result.rows
+		.map((row) => String(row.workspace_id))
+		.filter((id) => UUID.test(id));
+	return liveReadableWorkspaces({
+		privateWorkspaceId: user.workspaceId,
+		memberWorkspaces,
+		scope: scope ?? null,
+	});
 }
