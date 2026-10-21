@@ -62,14 +62,18 @@ function failureCode(error: unknown): { status: number; code: string } {
  * token. Any verification failure is a refusal: the caller sees a 401, the log sees
  * the failure's code.
  */
-export function authenticate(request: IncomingMessage): AuthUser | null {
+export function verifyRequest(request: IncomingMessage): { user: AuthUser | null; code: string | null } {
 	const token = bearerToken(request);
-	if (!token) return null;
+	if (!token) return { user: null, code: null };
 	try {
-		return toAuthUser(verifyAppSessionToken(token, tokenConfig));
+		return { user: toAuthUser(verifyAppSessionToken(token, tokenConfig)), code: null };
 	} catch (error) {
 		const failure = failureCode(error);
 		console.warn(JSON.stringify({ event: 'auth_failed', status: failure.status, code: failure.code }));
-		return null;
+		return { user: null, code: failure.code };
 	}
+}
+
+export function authenticate(request: IncomingMessage): AuthUser | null {
+	return verifyRequest(request).user;
 }

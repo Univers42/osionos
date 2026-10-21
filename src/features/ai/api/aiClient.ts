@@ -23,7 +23,8 @@
  */
 
 import { bearerFetch } from "@/shared/agent/bearerFetch";
-import { getActivePageJwt } from "@/shared/api/client";
+import { getActivePageJwt, reportRevokedSession } from "@/shared/api/client";
+import { revocationAwareFetch } from "@/shared/api/sessionRevocation";
 
 /** The minimal fetch shape, so a test can inject a stub without a network. */
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -226,7 +227,10 @@ export function isAiConfigured(): boolean {
 }
 
 /** The transport every route uses: the session bearer, like the agent stream. */
-let transport: FetchLike = bearerFetch((input, init) => fetch(input, init), getActivePageJwt);
+let transport: FetchLike = bearerFetch(
+  revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
+  getActivePageJwt,
+);
 
 /** Swaps the transport. The tests use it; the app never calls it. */
 export function setAiTransport(impl: FetchLike): void {
