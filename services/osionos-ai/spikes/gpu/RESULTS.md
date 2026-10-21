@@ -148,3 +148,11 @@ are SKIP, not PASS: config 6 (q8_0 KV) exceeded the 7.4 GiB VRAM rule, config 5 
 and produced errors at higher λ, and configs 7/8 were not measured in this run. SKIP ≠ PASS. The conversion of
 the embedder GGUF depends on patched tokenizer files (see `convert-e5.sh`); a re-conversion must repeat those
 patches or the agreement drops to ~0.85.
+## Review note (2026-10-21, orchestrator)
+
+The Part C VRAM peak (4.74 GiB for the LLM and the embedder together) contradicts Part A, where config 3 alone
+peaked at 7.33–7.35 GiB of the same card. `results/part-c.sample` holds 120 one-second samples (2 minutes, max
+5 089 849 344 B), shorter than the Part C runs, so it does not cover the whole co-location. Until it is re-measured
+with the sampler running for the full duration, **the VRAM of the co-location is UNKNOWN**, and with Part A's
+numbers it most likely exceeds the 7.4 GiB rule. The throughput and latency rows of Part C stand; the
+"co-location fits" recommendation does not.
