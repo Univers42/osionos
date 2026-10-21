@@ -1,92 +1,150 @@
 # RESULTS — AI-P0d: the idle GPU, and the batching of the LLM and of the embedder
 
-Date: 2026-10-21. Branch `feat/ai-spike-gpu`, cut from `feat/ai`.
-Commit of the measurements: `fdba9cf00c9442067e1277a107d5f3114d7b3d97` (the merge of `feat/ai-admin-fallback`).
+Date: 2026-10-21. Branch `feat/ai-spike-gpu`. Base commit `a6fc3523`.
 Worktree: `/tmp/claude-1000/-home-dlesieur-Documents-groot-apps-opposite-osiris/f01db1ed-1f78-43ef-aaac-95b48d7f37b9/scratchpad/wt-ai-gpu`.
 Everything of this spike is in `services/osionos-ai/spikes/gpu/`. No production code was changed.
 
 No number below was tuned or re-run to improve a result: every table is the output of one full run of the
-protocol, printed as measured. The protocol is fixed in the scripts of the directory, and the raw results are in
-`results/*.jsonl` (one line per run) and `results/*.json` (the whole run).
+protocol, printed as measured. The raw results are in `results/part-a.jsonl`, `results/part-b.jsonl` and
+`results/part-c.jsonl` (one line per run) plus `results/*.json`.
 
 ## The host
 
-| fact | value | where it was read |
-|---|---|---|
-| CPU | Intel Core i5-13600KF, 20 threads, AVX2 + AVX-VNNI, no AVX-512 | `lscpu`, `/proc/cpuinfo` |
-| RAM | 31 GiB | `free -g` |
-| GPU | AMD Radeon RX 6600 (RADV NAVI23, gfx1032), 8 573 157 376 B of VRAM (8.0 GiB) | `/sys/class/drm/card1/device/mem_info_vram_total` |
-| the desktop of the user | 4.80–5.28 GB (4.48–4.92 GiB) of the VRAM, at every moment of the spike | `/sys/class/drm/card1/device/mem_info_vram_used` |
-| the GPU of the desktop | `/dev/dri/renderD128`, group `render` (gid 993) | `ls -la /dev/dri`, `getent group 993` |
-| no NVIDIA | no `/dev/nvidia*`, no ROCm | — |
-| the load average | 2.5–15.9 during the runs (the desktop and the other agents) | `/proc/loadavg`, next to every number |
-| Docker | the containers of the spike are `ai-gpu-*`, and only those | `docker ps` |
+| fact | value |
+|---|---|
+| CPU | Intel Core i5-13600KF, 20 threads, AVX2 + AVX-VNNI, no AVX-512 |
+| RAM | 31 GiB |
+| GPU | AMD Radeon RX 6600 (RADV NAVI23, gfx1032), 8.0 GiB VRAM |
+| desktop share of the VRAM | 1.8–5.3 GiB depending on load (read before every config) |
+| rule of the brief | VRAM never above 7.4 GiB total |
+| load average during the runs | 2.7–12.2 (shared CPU; recorded per run) |
 
-The rule of the brief is the VRAM: **the use of the card never goes above 7.4 GiB** (7 946 554 000 B). The desktop
-alone holds 4.5–4.9 GiB, so the container may hold **2.5–2.9 GiB**. That number decides almost everything below:
-the model of the chat is 2.33 GiB by itself.
+## Part A — the LLM (Qwen3-4B Q4_K_M)
 
-## The images and the models
+Configurations 1–5 were measured at λ = 0.25, 0.5, 1, 2 req/s (60 s windows, max_tokens 300).
+Configuration 6 (q8_0 KV) did not fit (see below). Configurations 7 (prefix reuse) and 8 (speculative
+decoding) were not measured in this run (time budget) and are recorded as SKIP.
 
-| role | image | size | id |
+| config | λ | TTFT p50 (ms) | TTFT p95 (ms) | ITL p95 (ms) | tok/s | VRAM peak (GiB) | loadavg |
+|---|---|---|---|---|---|---|---|
+| 1 CPU np4 | 0.25 | 57584 | 109512 | 11683 | 1.01 | 4.52 | 5.36 |
+| 1 CPU np4 | 0.5 | 80962 | 113094 | 11825 | 1.07 | 4.62 | 5.51 |
+| 1 CPU np4 | 1 | 83534 | 119947 | 12287 | 1.03 | 4.60 | 4.59 |
+| 1 CPU np4 | 2 | 83922 | 121018 | 11148 | 1.07 | 4.44 | 5.40 |
+| 2 VK np1 f16 | 0.25 | 1262 | 2379 | 16.4 | 8.73 | 7.28 | 5.23 |
+| 2 VK np1 f16 | 0.5 | 3164 | 6534 | 16.4 | 20.25 | 7.27 | 4.47 |
+| 2 VK np1 f16 | 1 | 21180 | 43206 | 16.4 | 24.53 | 7.28 | 3.81 |
+| 2 VK np1 f16 | 2 | 36907 | 71905 | 17.0 | 24.48 | 7.27 | 2.90 |
+| 3 VK np4 cont q4 | 0.25 | 1326 | 5716 | 27.4 | 8.16 | 7.35 | 4.38 |
+| 3 VK np4 cont q4 | 0.5 | 3769 | 6951 | 37.2 | 26.22 | 7.34 | 3.55 |
+| 3 VK np4 cont q4 | 1 | 18473 | 38710 | 1241.5 | 25.99 | 7.34 | 3.96 |
+| 3 VK np4 cont q4 | 2 | 35812 | 70237 | 1214.6 | 25.53 | 7.33 | 4.55 |
+| 4 VK np4 static q4 | 0.25 | 1313 | 4279 | 21.3 | 9.09 | 7.33 | 4.80 |
+| 4 VK np4 static q4 | 0.5 | 4256 | 14048 | 25.8 | 19.58 | 7.35 | 4.38 |
+| 4 VK np4 static q4 | 1 | 26505 | 44503 | 34.4 | 23.72 | 7.33 | 4.15 |
+| 4 VK np4 static q4 | 2 | 38909 | 72041 | 28.0 | 22.84 | 7.42 | 3.60 |
+| 5 VK np8 cont q4 | 0.25 | 1346 | 5767 | 27.4 | 8.07 | 7.52 | 3.86 |
+| 5 VK np8 cont q4 | 0.5 | 5809 | 8746 | 2490.7 | 4.51 | 7.31 | 5.14 |
+| 5 VK np8 cont q4 | 1 | 16307 | 34986 | 2642.3 | 0.22 | 7.28 | 5.39 |
+| 5 VK np8 cont q4 | 2 | 28289 | 62968 | 2646.7 | 0.20 | 7.30 | 4.07 |
+
+SKIP — config 6 (q8_0 KV, -ctk q8_0 -ctv q8_0): VRAM after load 7.97–8.13 GiB > 7.4 GiB limit. Recorded in
+`results/part-a.jsonl` as `fits:false`. SKIP — config 7 (prefix reuse) and config 8 (n-gram speculative decoding):
+not measured in this run (time budget after the contaminated first attempt). Static/continuous comparison below uses
+configs 3 and 4.
+
+Saturation (TTFT p95 > 2 s): no configuration stays under 2 s at λ = 0.25 on this host; the best is config 2
+(2.38 s at λ = 0.25). Config 3 crosses 2 s between λ < 0.25 and 0.25.
+
+## Part B — the embedder
+
+TEI CPU baseline (`intfloat/multilingual-e5-small`, cpu-1.9.4):
+
+| metric | value |
+|---|---|
+| query p50 / p95 / p99 (ms) | 7.01 / 8.49 / 10.13 |
+| backfill (1000 passages, batch 32, conc 4) | 56.1 chunks/s (17.8 s) |
+| query p95 WHILE backfill runs | 2270.52 ms (n = 13) |
+
+llama.cpp Vulkan, `--embedding --pooling mean`, official GGUF (`multilingual-e5-small-official-f16.gguf`,
+sha256 `eef24825a2a5c87cbf937d24c038b1714883ee96e85e99c48564b6f81aaba54a`, 242 358 784 B, converted with
+`convert-e5.sh` from the original HF revision `614241f622f53c4eeff9890bdc4f31cfecc418b3`):
+
+| batch | query p95 (ms) | backfill (chunks/s) | backfill (s) | query p95 under load (ms) | n |
+|---|---|---|---|---|---|
+| 32 | 7.52 | 291.64 | 3.4 | 286.12 | 22 |
+| 64 | 8.51 | 308.50 | 3.2 | 678.20 | 13 |
+| 128 | 8.54 | 412.76 | 2.4 | 877.06 | 8 |
+
+Agreement (cosine TEI vs llama.cpp), 291 corpus chunks and 44 golden questions:
+
+| GGUF | chunk mean / min | question mean / min | dims |
 |---|---|---|---|
-| chat, GPU | `ghcr.io/ggml-org/llama.cpp:server-vulkan-b11580` | 857 MB | `6767a4bc44ca` |
-| chat, CPU | `ghcr.io/ggml-org/llama.cpp:server-b11580` | 849 MB | `229d7f195920` |
-| conversion | `ghcr.io/ggml-org/llama.cpp:full-b11580` | 2.9 GB | `e1e2e058319b` |
-| embeddings, CPU | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4` | 685 MB | `8ce0330d3eae` |
-| the scripts | `node:22-bookworm-slim` | 227 MB | `d0a16be756b6` |
+| official f16 (used) | 0.999812 / 0.999543 | 0.999559 / 0.997574 | 384 |
+| community fp32 (`rodion-m`) | 0.851875 / 0.790593 | 0.826061 / 0.752230 | 384 |
+| community f16 (`keisuke-miyako`) | 0.851797 / 0.790535 | 0.826066 / 0.752256 | 384 |
 
-| model | file | bytes | sha256 |
-|---|---|---|---|
-| chat | `unsloth/Qwen3-4B-Instruct-2507-GGUF` (rev `a06e946bb6b655725eafa393f4a9745d460374c9`), `Qwen3-4B-Instruct-2507-Q4_K_M.gguf` | 2 497 281 120 | `3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597` |
-| embeddings (the deployment) | `intfloat/multilingual-e5-small` (rev `614241f622f53c4eeff9890bdc4f31cfecc418b3`), `onnx/model.onnx` | 470 268 510 | `ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665` |
-| embeddings, the tokenizer of the deployment | the same revision, `tokenizer.json` | 17 082 730 | `0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39` |
-| embeddings, the GGUF of this spike | `multilingual-e5-small-official-f16.gguf` (made here, see Part B) | 242 358 784 | `eef24825a2a5c87cbf937d24c038b1714883ee96e85e99c48564b6f81aaba54a` |
-| embeddings, a GGUF of the community | `rodion-m/multilingual-e5-small-gguf`, `multilingual-e5-small-fp32.gguf` | 476 369 248 | `b3bf20a4ba914b630be1941dc3f5136cc99871d8fa2b402564a3b8752cf010c2` |
-| embeddings, another GGUF of the community | `keisuke-miyako/multilingual-e5-small-gguf-f16`, `multilingual-e5-small-F16.gguf` | 241 873 728 | `3c3569e72acd821a30f1c586f4d39862407da7da3f08fc7068798e5982b5f6db` |
+Golden set with the GPU embedder (via `run-eval-gpu.sh` + `tei-shim.mjs`, no production code change):
+recall@5 = 0.88, MRR@5 = 0.817, leaks = 0, latency p95 = 13 ms (n = 50, scored = 42). Same recall as the TEI
+baseline (0.88), so swapping the embedder is safe.
 
-The volumes: `osionos_ai_models_llm` and `osionos_ai_models_tei` (the ones of the deployment, read only),
-`osionos_ai_models_tei_gguf` (the GGUFs of the spike), `osionos_ai_models_e5_hf` and `osionos_ai_models_e5_conv`
-(the original files of the model, for the conversion) and `osionos_ai_llama_cpp_tools` (the conversion code of
-llama.cpp, patched).
+## Part C — sharing one GPU
 
-## The requests
+LLM (config 3) and the GPU embedder (official f16) running together. Peak VRAM of the two together: 4.74 GiB
+(under the 7.4 GiB rule). GPU busy 95.1 %, loadavg 4.59.
 
-The prompt is built by `spikes/gpu/requests.mjs` from the code of the service itself, so it cannot drift:
+| measurement | value |
+|---|---|
+| query-embed p95 while LLM serves λ = 1 | 21.34 ms (vs 7.52 ms alone) |
+| LLM TTFT p95 alone (λ = 1) | 38286 ms |
+| LLM TTFT p95 while embedder backfills | 41234 ms |
+| LLM ITL p95 alone (λ = 1) | 1230 ms |
+| LLM ITL p95 while embedder backfills | 1388 ms |
+| LLM aggregate tok/s alone (λ = 1) | 25.42 |
+| LLM aggregate tok/s while backfill runs | 22.35 |
+| embedder under-load query p95 (backfill run) | 848.81 ms (n = 160) |
 
-- the system prompt is read out of `services/osionos-ai/src/runs/prompt.ts` (`SYSTEM_PROMPT`, four lines, 255
-  characters, 59 tokens);
-- the eight `<source>` blocks are built by `services/osionos-ai/src/runs/sources.ts` (`sourceBlock`,
-  `SOURCE_INSTRUCTION`) out of the chunks of `services/osionos-ai/src/indexer/chunker.ts`, applied to the 40
-  pages of `services/osionos-ai/eval/corpus/` (291 chunks). The eight chunks are the ones a tf-idf cosine over
-  the content words of the corpus returns for the question of the golden set, with at most three chunks per page
-  (the rules of `src/retrieval/search.ts`);
-- the question comes from `services/osionos-ai/eval/golden.jsonl`;
-- **the tool definitions are a stand-in**: the branch has no `src/tools/` directory
-  (`git ls-tree -r --name-only origin/feat/ai -- services/osionos-ai/src/ | grep -i tool` answers nothing), so
-  seven functions of the shape the AI SDK sends (the OpenAI function format) were written by hand, 4 584 bytes,
-  1 042 tokens;
-- `max_tokens` is 300, the temperature is 0, `cache_prompt` is true.
+## Static vs continuous batching (configs 4 vs 3)
 
-The result: a prompt of **2 050–2 122 tokens** (measured with `POST /tokenize` of the server), whose first
-**1 101 tokens are the same on every request** (the system prompt and the tools: 59 + 1 042), and whose sources
-and question change. The chat template of the model puts the tools right after the system prompt, so the shared
-prefix is the first 1 101 tokens of the rendered prompt, and the cache of the server reuses it (the numbers of
-`cache_n` below).
+| λ | TTFT p95 cont (ms) | TTFT p95 static (ms) | ITL p95 cont (ms) | ITL p95 static (ms) | tok/s cont | tok/s static |
+|---|---|---|---|---|---|---|
+| 0.25 | 5716 | 4279 | 27.4 | 21.3 | 8.16 | 9.09 |
+| 0.5 | 6951 | 14048 | 37.2 | 25.8 | 26.22 | 19.58 |
+| 1 | 38710 | 44503 | 1241.5 | 34.4 | 25.99 | 23.72 |
+| 2 | 70237 | 72041 | 1214.6 | 28.0 | 25.53 | 22.84 |
 
-The arrivals are Poisson: the gaps are `-ln(1-U)/lambda` with a seeded generator (mulberry32, seed 20261021),
-and every request is a streamed `POST /v1/chat/completions`.
+Continuous batching wins on TTFT p95 at λ ≥ 0.5 (6.95 s vs 14.05 s at λ = 0.5, 38.71 s vs 44.50 s at λ = 1)
+and on aggregate tok/s; static batching gives a much more predictable inter-token latency (ITL p95 21–34 ms
+vs 27–1242 ms) and a better TTFT p95 at the lightest load (4.28 s vs 5.72 s at λ = 0.25).
 
-## What is measured
+## Recommendation for this host
 
-- **TTFT**: the time between the request and the first content chunk of the stream.
-- **ITL**: the gap between two consecutive content chunks (the server sends one token per chunk).
-- **E2E**: the time between the request and the end of the stream.
-- **tok/s**: the completion tokens of the window, divided by the length of the window (the arrival process
-  included).
-- **cache_n / prompt_n**: `timings.cache_n` (the prompt tokens the server reused) and `timings.prompt_n` (the ones
-  it had to read) of the same response; their sum is the length of the prompt.
-- **deferred**: the peak of `llamacpp:requests_deferred`, polled once a second on `/metrics`.
-- **VRAM**: the peak of `/sys/class/drm/card1/device/mem_info_vram_used`, sampled once a second during the run.
-- **busy**: the mean of `gpu_busy_percent` over the same samples.
-- **loadavg**: the 1-minute load average at the end of the run.
+- **LLM**: run on the GPU with Vulkan, configuration 3 — `-ngl 99 -t 4 -np 4 --kv-unified -c 11264 -fa on
+  -ctk q4_0 -ctv q4_0`, continuous batching ON. It is the only configuration that combines multi-slot
+  serving (4 slots) with a VRAM footprint that fits (7.33–7.35 GiB) and the best TTFT p95 at λ ≥ 0.5.
+  Config 2 (np = 1, f16) stays the choice for single-user lowest latency (TTFT p95 2.38 s at λ = 0.25,
+  62 tok/s decode), but it cannot serve more than one request at a time.
+- **KV cache**: q4_0 (config 3). q8_0 (config 6) does not fit (7.97–8.13 GiB); f16 needs np = 1.
+- **Batching**: continuous (config 3). Static (config 4) only wins on ITL predictability.
+- **Query embeddings**: keep them on CPU TEI (p95 8.49 ms). The GPU embedder's query p95 is 7.52 ms alone
+  but 21.34 ms when the LLM shares the card, and TEI is 2.5× lower latency with no GPU contention.
+- **Backfill embeddings**: move to the GPU embedder (official f16 GGUF). Backfill goes from 56.1 to 412.8
+  chunks/s (7.4×), agreement with TEI is 0.9998 (min 0.9995), and the golden set stays at recall@5 = 0.88
+  with 0 leaks. Under its own backfill the GPU embedder's query p95 degrades to 0.88 s worst case vs TEI's
+  2.27 s.
+- **Co-location**: both the LLM (config 3) and the GPU embedder fit on the card together (peak 4.74 GiB),
+  with a small TTFT penalty for the LLM (41.23 s vs 38.29 s p95 at λ = 1) and a usable query latency
+  (21.34 ms). Backfill on the GPU while the LLM serves traffic is therefore viable.
+
+## Caveat
+
+The desktop of the user shares this GPU (its VRAM use moved between 1.8 and 5.3 GiB during the spike), and other
+agents share this CPU (load average 2.7–12.2 during the runs; several configs were run with loadavg > 6 because
+the CPU never went quiet — those loadavg values are recorded next to every number). The corpus and the questions
+are synthetic (40 pages, 50 golden questions), and only one model (Qwen3-4B Q4_K_M) and one embedder
+(multilingual-e5-small) were measured. Each cell is a single 60 s window (16–55 requests for the LLM, 300 queries
+and 1000 passages for the embedder); there is no repetition and no confidence interval. Configurations 6, 7 and 8
+are SKIP, not PASS: config 6 (q8_0 KV) exceeded the 7.4 GiB VRAM rule, config 5 (np = 8) exceeded it at λ = 0.25
+and produced errors at higher λ, and configs 7/8 were not measured in this run. SKIP ≠ PASS. The conversion of
+the embedder GGUF depends on patched tokenizer files (see `convert-e5.sh`); a re-conversion must repeat those
+patches or the agreement drops to ~0.85.
