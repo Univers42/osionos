@@ -8,6 +8,7 @@ import test from "node:test";
 import {
   getChartTypeDef, chartTypesByFamily, FALLBACK_CHART_TYPE,
 } from "../../src/shared/notion-database-sys/src/lib/chart/chartTypeRegistry.ts";
+import { wrapAxisLabel } from "../../src/shared/notion-database-sys/src/components/views/chart/echarts/echartsBuildersCore.ts";
 import { CHART_TYPE_PRESETS } from "../../src/shared/notion-database-sys/src/lib/chart/chartTypePresets.ts";
 import {
   matrixGrid, percentGrid, heatmapCells, hierarchyData, sankeyData,
@@ -137,4 +138,65 @@ test("echarts-builders: the funnel keeps option colours and drops empty stages",
   assert.equal(won?.itemStyle?.color, "var(--color-success)");
   const lead = funnel[0].data.find((item) => item.name === "Lead");
   assert.equal(lead?.itemStyle, undefined, "colourless Lead keeps the palette");
+});
+
+test("echarts-builders: long category names wrap onto two lines at the middle space", () => {
+  assert.equal(wrapAxisLabel("Won"), "Won");
+  assert.equal(wrapAxisLabel("Kenji Watanabe"), "Kenji\nWatanabe");
+  assert.equal(wrapAxisLabel("Middle East & Africa"), "Middle East\n& Africa");
+  assert.equal(wrapAxisLabel("Supercalifragilistic"), "Supercalifragilistic", "no space to split on");
+  assert.equal(wrapAxisLabel("Amara Diallo"), "Amara\nDiallo");
+});
+
+test("echarts-builders: a bar chart shows every one of a few category names", () => {
+  const owners = ["Amara Diallo", "Lucas Martin", "Sofia Rossi", "Kenji Watanabe", "Priya Nair"];
+  const workload: ChartResult = {
+    categories: owners.map((name, index) => ({
+      key: `owner-${index}`, label: name, color: "",
+      values: { a: index + 1, b: 5 - index }, pageIds: {}, total: 6,
+    })),
+    series: [
+      { key: "a", label: "Alpha", color: "" },
+      { key: "b", label: "Beta", color: "" },
+    ],
+    total: 30,
+    truncatedGroups: false,
+    truncatedSeries: false,
+  };
+  const vertical = buildEChartsOption({
+    result: workload, settings: {}, def: getChartTypeDef("stacked_bar"),
+    colors: ["#111111"],
+  }) as {
+    xAxis: { axisLabel: { interval: number | string; formatter: (label: string) => string } };
+    grid: { bottom: number };
+  };
+  assert.equal(vertical.xAxis.axisLabel.interval, 0, "few categories: show every label");
+  assert.equal(vertical.xAxis.axisLabel.formatter("Kenji Watanabe"), "Kenji\nWatanabe");
+  assert.equal(vertical.grid.bottom, 62, "one extra 14px label line over the legend");
+
+  const horizontal = buildEChartsOption({
+    result: workload, settings: {}, def: getChartTypeDef("stacked_bar_h"),
+    colors: ["#111111"],
+  }) as { yAxis: { axisLabel: { formatter?: unknown } } };
+  assert.equal(horizontal.yAxis.axisLabel.formatter, undefined, "horizontal case stays as today");
+
+  const thirteen: ChartResult = {
+    categories: Array.from({ length: 13 }, (_, index) => ({
+      key: `c${index}`, label: `C${index + 1}`, color: "",
+      values: { a: 1, b: 2 }, pageIds: {}, total: 3,
+    })),
+    series: [
+      { key: "a", label: "Alpha", color: "" },
+      { key: "b", label: "Beta", color: "" },
+    ],
+    total: 39,
+    truncatedGroups: false,
+    truncatedSeries: false,
+  };
+  const grouped = buildEChartsOption({
+    result: thirteen, settings: {}, def: getChartTypeDef("grouped_bar"),
+    colors: ["#111111"],
+  }) as { xAxis: { axisLabel: { interval: number | string } }; grid: { bottom: number } };
+  assert.equal(grouped.xAxis.axisLabel.interval, "auto", "13+ categories keep ECharts spacing");
+  assert.equal(grouped.grid.bottom, 48, "short labels never wrap: no extra bottom slot");
 });
