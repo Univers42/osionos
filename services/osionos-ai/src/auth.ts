@@ -1,6 +1,7 @@
 import type { IncomingMessage } from 'node:http';
 import { verifyAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import type { VerifiedAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
+import { privateWorkspaceOf } from '../../../scripts/bridge-live-workspaces.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller } from '../../../scripts/bridge-session-cutoff.mjs';
 import { config } from './config.ts';
 
@@ -40,8 +41,9 @@ export function bearerToken(request: IncomingMessage): string | null {
 /** The verified token as the service's user: the owner workspace, the rest, the flag. */
 function toAuthUser(verified: VerifiedAppSessionToken): AuthUser {
 	// The bridge signs the private workspace with the role "owner" and the member
-	// workspaces with theirs (scripts/bridge-session-token.mjs:37-45).
-	const workspaceId = verified.workspaceIds.find((id) => verified.roles[id] === 'owner') ?? verified.workspaceIds[0] ?? '';
+	// workspaces with theirs (scripts/bridge-session-token.mjs:37-45). The private
+	// workspace is the one the shared rule counts (scripts/bridge-live-workspaces.mjs).
+	const workspaceId = privateWorkspaceOf(verified);
 	const memberWorkspaces = verified.workspaceIds
 		.filter((id) => id !== workspaceId)
 		.map((id) => ({ id, role: verified.roles[id] ?? 'member' }));
