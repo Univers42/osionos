@@ -169,12 +169,18 @@ export interface CompleteInput {
 export class AiError extends Error {
   readonly status: number;
   readonly code: string;
+  /**
+   * The headers of the refusal: the `Retry-After` of a rate limit is read
+   * from them, and the seconds it says are what the notice counts down.
+   */
+  readonly headers?: Headers;
 
-  constructor(status: number, code: string, message?: string) {
+  constructor(status: number, code: string, message?: string, headers?: Headers) {
     super(message || code);
     this.name = "AiError";
     this.status = status;
     this.code = code;
+    this.headers = headers;
   }
 }
 
@@ -195,7 +201,7 @@ async function toAiError(response: Response): Promise<AiError> {
   } catch {
     // A refusal that is not JSON still has a status.
   }
-  return new AiError(response.status, code, message);
+  return new AiError(response.status, code, message, response.headers);
 }
 
 /* -------------------------------------------------------------------------- */

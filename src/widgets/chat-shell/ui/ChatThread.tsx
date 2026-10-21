@@ -11,7 +11,6 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useMemo, useRef } from "react";
-import { RotateCcw } from "lucide-react";
 
 import type { ChatMessage } from "@/features/chat/model/chatTypes";
 import { citationsFromParts } from "@/features/chat/model/citations";
@@ -19,7 +18,7 @@ import { renderCitationSources, renderCitedAnswer } from "@/features/chat/model/
 import { openCitation } from "@/features/chat/model/openCitation";
 import { toolActivitiesFromParts } from "@/features/chat/model/toolActivity";
 import { ToolActivity } from "@/features/chat/model/toolActivityView";
-import { errorWords } from "./errorWords";
+import { RunErrorNotice } from "@/features/chat/model/runErrorNotice";
 
 interface Props {
   messages: ChatMessage[];
@@ -98,16 +97,11 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
               ) : null}
               {m.status === "error" ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[var(--osio-border-default)] pt-2 text-xs text-[var(--osio-fg-muted)]">
-                  <span data-testid="chat-error">{errorWords(m.errorCode)}</span>
-                  {onRetry && retryText !== null ? (
-                    <button
-                      type="button"
-                      onClick={() => onRetry(retryText)}
-                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]"
-                    >
-                      <RotateCcw size={12} /> Retry
-                    </button>
-                  ) : null}
+                  <RunErrorNotice
+                    code={m.errorCode ?? "internal"}
+                    retryAfter={m.retryAfterSeconds}
+                    onRetry={onRetry && retryText !== null ? () => onRetry(retryText) : undefined}
+                  />
                 </div>
               ) : null}
             </div>

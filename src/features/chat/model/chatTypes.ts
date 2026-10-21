@@ -42,6 +42,8 @@ export interface ChatMessage {
   status?: "streaming" | "done" | "error";
   /** The service's code when the answer failed. */
   errorCode?: string;
+  /** The seconds the service asked the client to wait, when it did. */
+  retryAfterSeconds?: number | null;
 }
 
 export interface Conversation {
