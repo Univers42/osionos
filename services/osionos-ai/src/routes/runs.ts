@@ -4,6 +4,7 @@ import { readJson, sendError, sendJson, sendSseHeaders, writeSseFrame, writeSseP
 import { resolveTarget } from '../gateway/resolve.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
 import { getOwnedRun } from '../runs/repo.ts';
+import { bearerToken } from '../auth.ts';
 import { startRun } from '../runs/runner.ts';
 import { memberWorkspaceIds } from '../runs/prompt.ts';
 import * as runStore from '../runs/runStore.ts';
@@ -24,6 +25,10 @@ const startRunSchema = z.object({
 	model: z.string().min(1).optional(),
 	// The connection the run spends: the platform one, or one of the caller's.
 	connectionId: z.string().min(1).max(64).optional(),
+	attachments: z.array(z.discriminatedUnion('kind', [
+		z.object({ kind: z.literal('chat'), id: z.string().regex(UUID, 'id must be a uuid') }).strict(),
+		z.object({ kind: z.literal('media'), path: z.string().regex(/^\/api\/media\/uploads\/([0-9a-f-]{36})\/([0-9a-f]{64}\.[a-z0-9]{1,8})$/i, 'path must match SERVE_RE') }).strict(),
+	])).max(4).optional(),
 	context: z
 		.object({
 			// At most three pages: the prompt carries them, and the prompt has a size.
@@ -34,7 +39,7 @@ const startRunSchema = z.object({
 			workspace: z.boolean().optional(),
 		})
 		.optional(),
-});
+}).strict();
 
 /** A quiet stream is kept alive with a comment every fifteen seconds. */
 const SSE_PING_MS = 15_000;
@@ -93,6 +98,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		return 404;
 	}
 	const pageIds = body.context?.pageIds ?? [];
+	const sessionToken = bearerToken(ctx.request) ?? '';
 	// The whole workspace of the caller is searched: the run quotes what it
 	// finds, and every page it quotes is checked again with the bridge's rule.
 	const searchWorkspace = body.context?.workspace === true;
@@ -112,6 +118,8 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		memberWorkspaceIds: workspaces,
 		user,
 		searchWorkspace,
+		attachments: body.attachments,
+		sessionToken,
 		emit: (event) => writeSseFrame(ctx.response, event),
 	});
 	if (outcome.kind === 'refused') {
