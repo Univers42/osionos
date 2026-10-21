@@ -211,7 +211,8 @@ all_configs() {
 3-vk-np4-cont-q4|$VULKAN|-t 4 -ngl 99 -np 4 --kv-unified -c 11264 -fa on -ctk q4_0 -ctv q4_0|0|
 4-vk-np4-static-q4|$VULKAN|-t 4 -ngl 99 -np 4 --kv-unified -c 11264 -fa on -ctk q4_0 -ctv q4_0 --no-cont-batching|0|
 5-vk-np8-cont-q4|$VULKAN|-t 4 -ngl 99 -np 8 --kv-unified -c 11264 -fa on -ctk q4_0 -ctv q4_0|0|
-6-vk-np4-cont-q8|$VULKAN|-t 4 -ngl 99 -np 4 --kv-unified -c 4096 -fa on -ctk q8_0 -ctv q8_0|0|
+6-vk-np4-cont-q8|$VULKAN|-t 4 -ngl 99 -np 4 --kv-unified -c 10448 -fa on -ctk q8_0 -ctv q8_0|0|
+6b-vk-np4-cont-q8-c8192|$VULKAN|-t 4 -ngl 99 -np 4 --kv-unified -c 8192 -fa on -ctk q8_0 -ctv q8_0|0|0.25 0.5
 7a-vk-np4-cache-defeated|$VULKAN|-t 4 -ngl 99 -np 4 --kv-unified -c 11264 -fa on -ctk q4_0 -ctv q4_0|1|
 7b-vk-np4-cache-reuse256|$VULKAN|-t 4 -ngl 99 -np 4 --kv-unified -c 11264 -fa on -ctk q4_0 -ctv q4_0 --cache-reuse 256|0|
 7c-vk-np4-slot-similarity|$VULKAN|-t 4 -ngl 99 -np 4 --kv-unified -c 11264 -fa on -ctk q4_0 -ctv q4_0 --slot-prompt-similarity 0.5|0|
