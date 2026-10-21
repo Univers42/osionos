@@ -19,6 +19,10 @@ import { renderCitationSources, renderCitedAnswer } from "@/features/chat/model/
 import { openCitation } from "@/features/chat/model/openCitation";
 import { toolActivitiesFromParts } from "@/features/chat/model/toolActivity";
 import { ToolActivity } from "@/features/chat/model/toolActivityView";
+import { permissionsFromParts } from "@/features/chat/model/approvalParts";
+import { provenanceTitles } from "@/features/chat/model/approvalCard";
+import { ApprovalCard } from "@/features/chat/ui/ApprovalCard";
+import { useChatStore } from "@/features/chat/model/useChatStore";
 import { errorWords } from "./errorWords";
 
 interface Props {
@@ -41,10 +45,18 @@ interface Props {
  *
  * The calls the assistant made to its tools are above the answer: one line
  * per call, so the reader sees it work instead of waiting in silence.
+ *
+ * The cards of the writes it asked for are under the answer: the user sees
+ * what the assistant wants to write, and decides.
  */
-const AssistantAnswer: React.FC<{ content: string; parts?: ChatMessage["parts"] }> = ({ content, parts }) => {
+const AssistantAnswer: React.FC<{
+  content: string;
+  parts?: ChatMessage["parts"];
+  conversationId: string;
+}> = ({ content, parts, conversationId }) => {
   const citations = useMemo(() => citationsFromParts(parts), [parts]);
   const activities = useMemo(() => toolActivitiesFromParts(parts), [parts]);
+  const permissions = useMemo(() => permissionsFromParts(parts), [parts]);
   const elements = useMemo(() => renderCitedAnswer(content, citations, openCitation), [content, citations]);
   return (
     <>
@@ -53,6 +65,17 @@ const AssistantAnswer: React.FC<{ content: string; parts?: ChatMessage["parts"] 
         {elements}
       </div>
       {renderCitationSources(citations, openCitation)}
+      {permissions.map((permission) => (
+        <ApprovalCard
+          key={permission.approvalId}
+          approvalId={permission.approvalId}
+          provenanceTitles={provenanceTitles(permission.provenancePageIds, citations)}
+          onOpenPage={(pageId) => openCitation({ n: 0, pageId, title: "", snippet: "" })}
+          onContinuation={(runId) => {
+            void useChatStore.getState().followUp(conversationId, runId);
+          }}
+        />
+      ))}
     </>
   );
 };
@@ -89,7 +112,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
               {m.role === "user" ? (
                 <span className="whitespace-pre-wrap">{m.content}</span>
               ) : (
-                <AssistantAnswer content={m.content} parts={m.parts} />
+                <AssistantAnswer content={m.content} parts={m.parts} conversationId={m.conversationId} />
               )}
               {m.status === "streaming" ? (
                 <span className="ml-0.5 animate-pulse text-[var(--osio-fg-muted)]" data-testid="chat-streaming">
