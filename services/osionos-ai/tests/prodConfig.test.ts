@@ -19,6 +19,9 @@ describe('osionos-ai in production', () => {
 			NODE_ENV: 'production',
 			OSIONOS_AI_DEV_ENDPOINT_HOSTS: 'localhost,127.0.0.1',
 			OSIONOS_AI_DEV_PROVIDER_BASE_URLS: '{"openrouter":"https://elsewhere.example/v1"}',
+			// A deployment in production has the bridge: the write tools need
+			// it, and the URL is operator configuration.
+			OSIONOS_AI_BRIDGE_URL: 'http://bridge.invalid:4000',
 		};
 		const output = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
 			const child_ = spawn(process.execPath, ['--experimental-strip-types', child], {
@@ -46,5 +49,31 @@ describe('osionos-ai in production', () => {
 		assert.match(output.stderr, /OSIONOS_AI_DEV_PROVIDER_BASE_URLS/);
 		assert.ok(!output.stderr.includes('elsewhere.example'), 'the value must not be printed');
 		assert.ok(!output.stderr.includes('127.0.0.1'), 'the value must not be printed');
+	});
+
+	it('a production without the bridge refuses to start (C12)', async () => {
+		const child = fileURLToPath(new URL('./prodConfigChild.ts', import.meta.url));
+		const env: Record<string, string> = { ...process.env, NODE_ENV: 'production' };
+		// The bridge is the operator configuration of the write tools: a
+		// deployment without it has no write path at all.
+		delete env.OSIONOS_AI_BRIDGE_URL;
+		const output = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+			const child_ = spawn(process.execPath, ['--experimental-strip-types', child], {
+				env,
+				stdio: ['ignore', 'pipe', 'pipe'],
+			});
+			let stdout = '';
+			let stderr = '';
+			child_.stdout.on('data', (chunk: Buffer) => {
+				stdout += chunk.toString('utf8');
+			});
+			child_.stderr.on('data', (chunk: Buffer) => {
+				stderr += chunk.toString('utf8');
+			});
+			child_.on('close', () => resolve({ stdout, stderr }));
+			child_.on('error', reject);
+		});
+		assert.ok(!output.stdout.includes('RESULT '), 'the service did not start');
+		assert.match(output.stderr, /OSIONOS_AI_BRIDGE_URL/);
 	});
 });
