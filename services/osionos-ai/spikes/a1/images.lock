@@ -1,0 +1,9 @@
+# The container images of the spike AI-A1, pinned by digest.
+#
+# name	digest
+# The digest of the manifest of the platform linux/amd64.
+llama-cpp-cpu	sha256:ba384e66b3f3b6474dc0285ed44466b6f025c7106865d915f1fe5ae2a2da7411
+llama-cpp-vulkan	sha256:b7204e52c07de71ce75059b710b8a8573f8026ffeef72936c27132f7bbd33d5a
+whisper-cpp-vulkan	sha256:187f62917db92ad5ac299b61a9e545238f8c108e3e5c90f5adb20d2c44d70745
+speaches-cpu	sha256:1d4f852ff5b148d675bcd751f414835c0bcef2541c1df8ffdeb43714968aafe6
+ubuntu-24.04	sha256:a2d43bffc46670d7108bb3c0468c67c5557c4c92e83e1e34cbff1322ad1b94dc
