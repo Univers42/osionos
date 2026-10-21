@@ -2,7 +2,7 @@ import { costMicroUsd } from '../gateway/platform.ts';
 import type { PlatformModelEntry } from '../gateway/platform.ts';
 import { usageForSettlement } from '../gateway/usage.ts';
 import { MAX_STEPS } from '../tools/loop.ts';
-import { stepCeilingMicroUsd, stepPromptChars } from './estimate.ts';
+import { stepCeilingsMicroUsd, stepPromptChars } from './estimate.ts';
 
 /**
  * The budget of the loop: the money a run holds, and the ceiling of a step.
@@ -12,16 +12,23 @@ import { stepCeilingMicroUsd, stepPromptChars } from './estimate.ts';
  * step, and the answer that must follow it), and every step after that asks
  * the ledger for what it needs — ONE atomic extension, refused or not.
  *
- * Two rules make it a ceiling.
+ * Three rules make it a ceiling.
  *
  * **No step starts without the money of the step AND of the answer.** The
  * money the run still holds (reserved − accrued) must cover the ceiling of
  * the step and the ceiling of the answer that follows it; when it does not,
  * the run asks the ledger for the missing money, once.
  *
+ * **The answer is paid for with what the tools add.** The answer reads the
+ * output of the tools of the step before it, so its ceiling is the ceiling of
+ * a step whose prompt holds the pool of the run AND the share of a step
+ * (`stepCeilingsMicroUsd`).
+ *
  * **The step that is going to be the last one runs without tools.** The
  * model answers with what it has, and the run ends with an answer instead of
- * a tool call nobody reads.
+ * a tool call nobody reads. The money is decided HERE and nowhere else: a
+ * step the run cannot pay for becomes the answer, so the money never cuts a
+ * run after a tool call.
  */
 
 /** What the loop reads of a finished step. */
@@ -85,8 +92,6 @@ export interface StepsLedger {
 	accrued: number;
 	/** The characters the tools put in the context of the next step. */
 	pool: number;
-	/** The ceiling of the last step that ran. */
-	lastCeiling: number;
 }
 
 /**
@@ -99,10 +104,8 @@ export interface StepsLedger {
 export function stepsLedger(budget: LoopBudget, steps: readonly StepUsage[]): StepsLedger {
 	let accrued = 0;
 	let pool = 0;
-	let lastCeiling = 0;
 	for (const step of steps) {
 		const promptChars = stepPromptChars(budget.baseChars, pool);
-		lastCeiling = stepCeilingMicroUsd(budget.pricing, promptChars);
 		const usage = usageForSettlement(
 			budget.runId,
 			step.usage,
@@ -115,22 +118,7 @@ export function stepsLedger(budget: LoopBudget, steps: readonly StepUsage[]): St
 		accrued += costMicroUsd(budget.pricing, usage);
 		pool += toolOutputChars(step);
 	}
-	return { accrued, pool, lastCeiling };
-}
-
-/**
- * The stop condition of the money: the loop stops when the money the run
- * holds cannot cover one more step.
- *
- * The ceiling of the comparison is the ceiling of the step that just ran:
- * the loop paid for that one, and the money that is left has to cover one
- * like it. The answer that follows a step is a step like it.
- */
-export function budgetReached(budget: LoopBudget) {
-	return ({ steps }: { steps: readonly StepUsage[] }): boolean => {
-		const { accrued, lastCeiling } = stepsLedger(budget, steps);
-		return accrued + lastCeiling > budget.reserved;
-	};
+	return { accrued, pool };
 }
 
 /**
@@ -140,6 +128,10 @@ export function budgetReached(budget: LoopBudget) {
  * the model must answer with what it has. It is the last one when the loop
  * stops (the cap of the steps), or when the money of the run cannot cover
  * this step AND the answer that follows it.
+ *
+ * This is the ONLY place where the money may end the loop: a step that may
+ * not be paid for becomes the answer, so a run never ends with a tool call
+ * nobody reads.
  */
 export async function stepHasTools(
 	budget: LoopBudget,
@@ -151,9 +143,10 @@ export async function stepHasTools(
 	const { accrued, pool } = stepsLedger(budget, steps);
 	// The money the run still holds.
 	const held = budget.reserved - accrued;
-	// The ceiling of this step, and of the answer that follows it.
-	const ceiling = stepCeilingMicroUsd(budget.pricing, stepPromptChars(budget.baseChars, pool));
-	const needed = ceiling * 2;
+	// The ceiling of this step, and of the answer that follows it: the
+	// answer reads what the tools of this step add, so its ceiling is the
+	// one of a step whose prompt holds the pool AND the share of a step.
+	const { needed } = stepCeilingsMicroUsd(budget.pricing, { baseChars: budget.baseChars, pool });
 	if (held >= needed) return true;
 
 	// The money is missing: the run asks the ledger for it, ONCE. The

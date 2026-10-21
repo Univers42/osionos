@@ -127,13 +127,16 @@ the same way.
 A call with the wrong arguments never kills a run: the schema of a tool is
 loose on purpose, and the tool answers the model with what it needs.
 
-The reservation of a run is TWO step ceilings: its first step, and the answer
-that must follow it. The steps after that ask the ledger for what they need,
-one extension at a time, and the extension is atomic: two runs never share
-it. The last step of the loop runs WITHOUT tools, so a run always ends with
-an answer and never with a tool call nobody reads. The ledger books the real
-cost, even when it is more than the reservation: the money is spent whatever
-the ledger says.
+The reservation of a run is its first step, and the answer that must follow
+it: the answer reads what the tools of the step add, so its ceiling holds the
+pool of the run and the share of the step that follows it. The steps after
+that ask the ledger for what they need, one extension at a time, and the
+extension is atomic: two runs never share it, and the money of the day and
+the row of the run move together. The last step of the loop runs WITHOUT
+tools, so a run always ends with an answer and never with a tool call nobody
+reads — and the money never cuts a run in the middle: a step the run cannot
+pay for becomes the answer. The ledger books the real cost, even when it is
+more than the reservation: the money is spent whatever the ledger says.
 
 ## The keys of Redis
 
@@ -160,7 +163,9 @@ A run of the assistant is a loop, so it reserves as it goes: the run holds the
 money of its first step and of the answer that follows it, and every step
 after that asks the ledger for one atomic extension — refused when the cap of
 the day is reached. A step that cannot be paid for runs without tools: the
-model answers with what it has.
+model answers with what it has. One step may not add more than a share
+(20 000 characters) to the context of a run, whatever the number of the tools
+it calls at once.
 
 ## The indexer
 

@@ -39,6 +39,14 @@ export interface MockOptions extends StreamOptions {
 	 * A model that keeps calling a tool is a loop that keeps spending.
 	 */
 	toolCallEveryStep: boolean;
+	/**
+	 * The usage the upstream reports is the one of the FIRST step only.
+	 *
+	 * A test that needs one expensive step (and cheap ones after it) says so
+	 * here: the run pays for what the upstream really charged, and the
+	 * ledger reads the usage of every step.
+	 */
+	usageOnFirstStepOnly: boolean;
 }
 
 const DEFAULT_OPTIONS: MockOptions = {
@@ -55,6 +63,7 @@ const DEFAULT_OPTIONS: MockOptions = {
 	usage: null,
 	toolCallEveryStep: false,
 	parallelToolCalls: 1,
+	usageOnFirstStepOnly: false,
 };
 
 export interface MockUpstream {
@@ -182,6 +191,7 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			return;
 		}
 		calls += 1;
+		const step = calls;
 		authorizations.push(String(request.headers.authorization ?? ''));
 		void readBody(request).then((raw) => {
 			let body: unknown = raw;
@@ -199,6 +209,9 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			const chunks = chunkTexts(options.chunkCount);
 			// The usage comes only when the request asks for it.
 			const sendUsage = !options.neverSendUsage && askedForUsage(body);
+			// The usage of this step: the one of the test, or the default one
+			// when the test wants the expensive step alone.
+			const usage = options.usageOnFirstStepOnly && step > 1 ? null : options.usage;
 			// The tool call is answered once: the answer after it is the text.
 			// A model that calls a tool on every step keeps the loop going.
 			const toolCall = options.toolCallEveryStep ? options.toolCall : pendingToolCall;
@@ -206,13 +219,13 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			// A step that runs without tools is a step that answers: the
 			// model obeys the request and writes text.
 			if (toolCall && !askedForNoTool(body)) {
-				streamToolCall(response, toolCall, options, sendUsage, () => {
+				streamToolCall(response, toolCall, options, sendUsage, usage, () => {
 					aborted += 1;
 				});
 				return;
 			}
 			texts.push(chunks.join(''));
-			streamAnswer(response, chunks, options, sendUsage, () => {
+			streamAnswer(response, chunks, options, sendUsage, usage, () => {
 				aborted += 1;
 			});
 		});
