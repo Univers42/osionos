@@ -30,6 +30,9 @@ import { readGolden } from "../../eval/lib.mjs";
 
 const databaseUrl = process.env.AI_IDX_DATABASE_URL ?? "";
 const embedUrl = process.env.AI_IDX_EMBED_URL ?? "";
+// The embedder of the BULK work: its own service when the deployment runs
+// one, the query service otherwise (the same fallback as the indexer's).
+const bulkUrl = process.env.AI_IDX_EMBED_BULK_URL || embedUrl;
 const workerModule = process.env.AI_IDX_WORKER ?? "../../src/indexer/worker.ts";
 const label = process.env.AI_IDX_LABEL ?? "run";
 const queriesWanted = Number(process.env.AI_IDX_QUERIES ?? 200);
@@ -65,7 +68,10 @@ function percentile(values, fraction) {
 }
 
 const pool = new Pool({ connectionString: databaseUrl, max: 16 });
-const embedder = new Embedder({ baseUrl: embedUrl, model: "intfloat/multilingual-e5-small" });
+const MODEL = "intfloat/multilingual-e5-small";
+// The queries go to the query service, the indexer to the bulk one.
+const embedder = new Embedder({ baseUrl: embedUrl, model: MODEL });
+const bulkEmbedder = new Embedder({ baseUrl: bulkUrl, model: MODEL });
 
 // The questions of the golden set: the queries of the load.
 const questions = readGolden().map((question) => String(question.question ?? ""));
@@ -145,7 +151,7 @@ const loadBaseline = loadavg();
 const indexed = { pages: 0, chunks: 0, embedded: 0, writeMs: 0 };
 const worker = new IndexerWorker({
 	pool,
-	embedder,
+	embedder: bulkEmbedder,
 	databaseUrl,
 	// The debounce is off: the measurement is about the throughput, not about
 	// the ten seconds a page waits after its last edit.
@@ -185,6 +191,8 @@ const loadAfter = loadavg();
 const report = {
 	label,
 	worker: workerModule,
+	queryEmbedUrl: embedUrl,
+	bulkEmbedUrl: bulkUrl,
 	queueBefore: { ...queued.rows[0], ...(lanes ?? {}) },
 	pagesBefore: pages.rows[0]?.rows ?? 0,
 	indexedPages: indexed.pages,
