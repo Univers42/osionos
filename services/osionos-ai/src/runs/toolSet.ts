@@ -34,6 +34,13 @@ export interface RunTools {
 	readonly cited: RetrievedChunk[];
 	/** Whether the run asked the user for the right to write. */
 	awaitingApproval: boolean;
+	/**
+	 * The writes the run asked for: one card each.
+	 *
+	 * The approval id is what a client keeps: the card is drawn again from it
+	 * when the stream of the run is gone.
+	 */
+	readonly permissions: readonly PermissionAsked[];
 }
 
 /** The tools of a run, and what they know of it. */
@@ -53,7 +60,8 @@ export function buildRunTools(input: {
 }): RunTools {
 	const { db, user, pool, runId, conversationId, ownerId, pages, sources, emit } = input;
 	const cited: RetrievedChunk[] = [...sources];
-	const run: RunTools = { tools: undefined, cited, awaitingApproval: false };
+	const permissions: PermissionAsked[] = [];
+	const run: RunTools = { tools: undefined, cited, awaitingApproval: false, permissions };
 
 	const hooks = {
 		firstSourceNumber: sources.length,
@@ -74,6 +82,7 @@ export function buildRunTools(input: {
 		},
 		onApproval: async (asked: PermissionAsked) => {
 			run.awaitingApproval = true;
+			permissions.push(asked);
 			await emit('permission.asked', asked);
 		},
 	};

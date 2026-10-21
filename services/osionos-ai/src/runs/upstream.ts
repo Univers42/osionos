@@ -231,6 +231,14 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 					title: source.title,
 					snippet: source.snippet,
 				})),
+				// The writes the run asked for: the card of each one. The
+				// approval id is what the client needs to draw the card again
+				// after a reload — the stream of the run is gone by then.
+				...runTools.permissions.map((permission) => ({
+					type: 'permission',
+					approvalId: permission.approvalId,
+					tool: permission.tool,
+				})),
 			],
 			model: target.modelId,
 			runId,
