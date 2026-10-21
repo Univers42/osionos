@@ -22,8 +22,28 @@
 /** What a call did: it was fast, it was slow, the service pushed it back. */
 export type EmbedOutcome = 'fast' | 'slow' | 'throttled' | 'timeout';
 
-/** The latency a call must answer under to count as fast. */
-export const EMBED_TARGET_MS = 1500;
+/**
+ * The latency a call must answer under to count as fast.
+ *
+ * It is the target of the AIMD controller: a call under it buys one more call
+ * in flight, a call over it halves the number.
+ *
+ * The default is the answer of the BULK embedder of the deployment (the one
+ * the indexer asks when the deployment runs a second one): a full call of
+ * thirty-two chunks answers in 223 – 280 ms on it (measured, five CPUs, the
+ * chunks of the eval corpus — services/osionos-ai/spikes/indexer/RESULTS.md),
+ * and 800 ms is about three times that. A normal call therefore counts as
+ * fast, and a service that degrades (another tenant, a model swap, a host
+ * that is busy) halves the concurrency.
+ *
+ * Caveat: the old default was 1500 ms, which was too loose for a service
+ * that answers a call in well under it — the controller then never protected
+ * anything. The measurement also shows that the target is NOT the lever of
+ * the backfill: 1500, 800 and 400 ms give the same throughput (the ROUND
+ * bounds the backfill, not the controller), so this number only decides how
+ * fast the controller reacts to a service that slows down.
+ */
+export const EMBED_TARGET_MS = 800;
 
 /** The most calls in flight at once. */
 export const EMBED_MAX_CONCURRENCY = 8;
