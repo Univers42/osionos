@@ -40,6 +40,7 @@ import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getLiveDatabaseAdapter, isLiveDatabaseId } from '../model/liveDatabaseAdapter';
+import { toRecordPageId } from '../model/recordPageId';
 import { useHealedLiveDatabaseId } from '../model/useHealedLiveDatabaseId';
 // Side effect: registers the account-wide data-source catalog with NDS (the
 // Source picker). Lives here (not only the barrel) because lazyViews imports
@@ -303,11 +304,13 @@ const OPEN_IN_LAYOUT = {
 } as const;
 
 const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, onClose, openIn }) => {
+  // Engine row ids are UUIDs; a UUID-shaped projection id is published to /api/pages and 404s.
+  const recordPageId = toRecordPageId(pageId);
   const databasePage = state.pages[pageId];
   const database = databasePage ? state.databases[databasePage.databaseId] : null;
   const title = databasePage ? String(state.getPageTitle(databasePage) || 'Untitled') : 'Page unavailable';
   const activePage = usePageStore(s => s.activePage);
-  const osionosPage = usePageStore(s => s.pageById(pageId));
+  const osionosPage = usePageStore(s => s.pageById(recordPageId));
   const activeUserId = useUserStore(s => s.activeUserId);
   const activeWorkspace = useUserStore(s => s.activeWorkspace());
   const workspaceId = activePage?.workspaceId ?? activeWorkspace?._id;
@@ -315,7 +318,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
   React.useEffect(() => {
     if (!databasePage || !workspaceId) return;
     const nextEntry: PageEntry = {
-      _id: pageId,
+      _id: recordPageId,
       title,
       icon: databasePage.icon ?? database?.icon ?? '📄',
       cover: databasePage.cover,
@@ -335,7 +338,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
       upsertOsionosDatabasePage(current.pages, workspaceId, nextEntry),
       current.pageIdsByWorkspace,
     ));
-  }, [activePage?.id, activeUserId, database, databasePage, pageId, title, workspaceId]);
+  }, [activePage?.id, activeUserId, database, databasePage, recordPageId, title, workspaceId]);
 
   React.useEffect(() => {
     if (!databasePage || !database || !osionosPage) return;
@@ -420,7 +423,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
               </div>
             )}
           >
-            <OsionosPage pageId={pageId} chrome="bar" />
+            <OsionosPage pageId={recordPageId} chrome="bar" />
           </React.Suspense>
         ) : (
           <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--osio-fg-muted)]">
