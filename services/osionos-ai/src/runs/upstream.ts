@@ -185,11 +185,6 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			messages,
 			controller,
 			...(tools ? { tools } : {}),
-			// The SDK must never download a URL: images are bytes we fetched.
-			experimentalDownload: (options: unknown) => {
-				if (Array.isArray(options) && options.length === 0) return [];
-				throw new Error('url_download_disabled');
-			},
 			// Platform vision requests to OpenRouter carry the data-collection deny.
 			...(target.platformBudget && images.length > 0
 				? { providerOptions: { platform: { provider: { data_collection: 'deny' } } } }
