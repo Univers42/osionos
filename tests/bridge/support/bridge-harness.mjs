@@ -16,15 +16,12 @@
 // Ponytail: eq/in/gt compare case-insensitively (right for uuid columns, wrong for text
 // columns differing only by case); `order` is honoured only as `id.asc`, every other value
 // is ignored (insertion order); wfts is a substring match over title+content, not stemming.
-// Unknown operators throw, so a new query shape fails the test instead of silently
-// matching every row.
 // Ponytail: every GET whose `select` contains an embed goes to the strict embed stub
 // (embed-postgrest.mjs), which honours `updated_at.desc` and throws on any other order.
-// Every mock world gets a synthesized `osionos_workspaces {id}` row, so a "workspace row
-// missing" case cannot be written through this harness.
 
 import { randomUUID } from 'node:crypto';
 import { isEmbedRead, readEmbed } from './embed-postgrest.mjs';
+import { EDGE_RPCS } from './bridge-harness-rpcs.mjs';
 import { configFromEnv, createBridgeServer, createUserSession, validateBridgePayload } from '../../../scripts/bridge-api.mjs';
 
 const BAAS_URL = 'http://baas.local';
@@ -188,8 +185,11 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		}
 		// A registered RPC answers with its own body (the append function returns
 		// table(version bigint, content jsonb)); an unregistered one keeps the row path.
-		if (method === 'POST' && Object.hasOwn(rpc, name.slice(4))) {
-			return jsonResponse(rpc[name.slice(4)](body, { table }), 200);
+		// The two edge reads are always registered: a test that seeds no link must
+		// still get an empty answer, not a table named after the RPC.
+		const rpcs = { ...EDGE_RPCS, ...rpc };
+		if (method === 'POST' && Object.hasOwn(rpcs, name.slice(4))) {
+			return jsonResponse(rpcs[name.slice(4)](body, { table }), 200);
 		}
 		if (method === 'GET' && isEmbedRead(parsed.searchParams)) {
 			try {

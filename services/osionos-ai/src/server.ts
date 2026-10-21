@@ -5,7 +5,7 @@ import { Redis } from 'ioredis';
 import type { Pool } from 'pg';
 import { cutoffPoller } from './auth.ts';
 import { config } from './config.ts';
-import { createPool } from './db.ts';
+import { createPool, isPoolTimeout } from './db.ts';
 import { sendError, sendPreflight } from './http.ts';
 import { sweepStaleRuns } from './runs/runner.ts';
 import { sweepApprovals } from './approvals/repo.ts';
@@ -46,8 +46,13 @@ function createRedisClient(redisUrl: string, commandTimeoutMs = 1_000): Redis {
 	return client;
 }
 
-/** The status and the code of a failure; the internals stay in the process. */
+/**
+ * The status and the code of a failure; the internals stay in the process.
+ * A pool that had no connection to hand out in time is a 503 on every route:
+ * the service is busy, and the client may come back.
+ */
 function failureCode(error: unknown): { status: number; code: string } {
+	if (isPoolTimeout(error)) return { status: 503, code: 'service_unavailable' };
 	const candidate = error as { status?: unknown; code?: unknown } | null;
 	return {
 		status: typeof candidate?.status === 'number' ? candidate.status : 500,

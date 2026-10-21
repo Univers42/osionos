@@ -25,11 +25,14 @@ import { estimateTokens } from './chunker.ts';
 import type { PageChunk } from './chunker.ts';
 import type { EmbedItem } from './batches.ts';
 import type { EmbedClient } from './embedder.ts';
+import { pageVector, parseVector } from './pageVector.ts';
 import {
 	ADVISORY_LOCK_SQL,
 	DELETE_CHUNKS_SQL,
+	DELETE_PAGE_VECTOR_SQL,
 	DELETE_QUEUE_SQL,
 	EXISTING_SQL,
+	INSERT_PAGE_VECTOR_SQL,
 	INSERT_SQL,
 	PAGE_ACL_SQL,
 	PAGE_SQL,
@@ -50,6 +53,14 @@ export interface PreparedPage {
 	stored: Map<string, string>;
 	/** The chunks that must be embedded: the ones whose hash changed. */
 	wanted: EmbedItem[];
+	/**
+	 * The number of tokens of every chunk, by the hash of the chunk.
+	 *
+	 * The page vector is the token-length-weighted mean of the chunk vectors
+	 * (C104), and the weight of a chunk that was NOT embedded again is still
+	 * needed: the vector is written on every index, not only on the first one.
+	 */
+	tokens: Map<string, number>;
 }
 
 /** What the reading of a page did. */
@@ -76,6 +87,7 @@ export interface IndexPageResult {
  */
 export async function dropChunks(client: PoolClient, candidate: QueueRow): Promise<void> {
 	await client.query(DELETE_CHUNKS_SQL, [candidate.page_id]);
+	await client.query(DELETE_PAGE_VECTOR_SQL, [candidate.page_id]);
 	await client.query(DELETE_QUEUE_SQL, [candidate.page_id, candidate.dirty_epoch]);
 }
 
@@ -112,17 +124,20 @@ export async function preparePage(
 	for (const entry of existing.rows) stored.set(entry.content_hash, entry.embedding);
 
 	const wanted: EmbedItem[] = [];
+	const tokens = new Map<string, number>();
 	for (const chunk of chunks) {
-		if (stored.has(chunk.contentHash)) continue;
 		const input = embedder.passageInput(chunk.headingPath, chunk.content);
+		const weight = estimateTokens(input);
+		tokens.set(chunk.contentHash, weight);
+		if (stored.has(chunk.contentHash)) continue;
 		wanted.push({
 			pageId: candidate.page_id,
 			hash: chunk.contentHash,
 			input,
-			tokens: estimateTokens(input),
+			tokens: weight,
 		});
 	}
-	return { kind: 'ready', page: { candidate, client, row, chunks, stored, wanted } };
+	return { kind: 'ready', page: { candidate, client, row, chunks, stored, wanted, tokens } };
 }
 
 /** What the write of a page needs. */
@@ -146,7 +161,7 @@ export interface WritePageOptions {
  */
 export async function writePage(options: WritePageOptions): Promise<IndexPageResult> {
 	const { page, vectors, model, log } = options;
-	const { client, candidate, chunks, stored } = page;
+	const { client, candidate, chunks, stored, tokens } = page;
 	const started = Date.now();
 
 	// The ACL is read AGAIN, under a row lock, just before the write: a page
@@ -164,10 +179,12 @@ export async function writePage(options: WritePageOptions): Promise<IndexPageRes
 
 	await client.query(DELETE_CHUNKS_SQL, [candidate.page_id]);
 	let embedded = 0;
+	const chunkVectors: { vector: number[] | null; tokens: number }[] = [];
 	for (const chunk of chunks) {
 		const vector = vectors.get(chunk.contentHash) ?? stored.get(chunk.contentHash);
 		if (vector === undefined) throw new Error('chunk_without_vector');
 		if (!stored.has(chunk.contentHash)) embedded += 1;
+		chunkVectors.push({ vector: parseVector(vector), tokens: tokens.get(chunk.contentHash) ?? 1 });
 		await client.query(INSERT_SQL, [
 			fresh.workspace_id,
 			candidate.page_id,
@@ -183,6 +200,15 @@ export async function writePage(options: WritePageOptions): Promise<IndexPageRes
 			vector,
 			model,
 		]);
+	}
+	// The page's own vector: the token-length-weighted mean of its chunks, in
+	// the SAME transaction as the chunks (C104). A page with no usable vector
+	// simply has none: the related read then says it has no neighbours.
+	const mean = pageVector(
+		chunkVectors.map((entry) => ({ vector: entry.vector ?? [], tokens: entry.tokens })),
+	);
+	if (mean) {
+		await client.query(INSERT_PAGE_VECTOR_SQL, [fresh.workspace_id, candidate.page_id, JSON.stringify(mean), model]);
 	}
 	await client.query(DELETE_QUEUE_SQL, [candidate.page_id, candidate.dirty_epoch]);
 	const ms = Date.now() - started;

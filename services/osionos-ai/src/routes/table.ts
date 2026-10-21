@@ -14,6 +14,7 @@ import {
 	handleProviders,
 } from './connections.ts';
 import { handleUsage } from './usage.ts';
+import { handleRelated } from './related.ts';
 import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
 import type { RouteEntry } from './types.ts';
 
@@ -43,6 +44,12 @@ export const ROUTES: RouteEntry[] = [
 	{ methods: ['GET'], pattern: /^\/api\/ai\/commands$/, label: '/api/ai/commands', handle: handleCommands },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/providers$/, label: '/api/ai/providers', handle: handleProviders },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/usage$/, label: '/api/ai/usage', handle: handleUsage },
+	{
+		methods: ['GET'],
+		pattern: /^\/api\/ai\/pages\/([^/]+)\/related$/,
+		label: '/api/ai/pages/:id/related',
+		handle: handleRelated,
+	},
 	{
 		methods: [],
 		pattern: /^\/api\/ai\/connections$/,
