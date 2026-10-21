@@ -186,12 +186,9 @@ export const createPage: WriteTool<z.infer<typeof createPageArgs>> = {
 		return {
 			ok: true,
 			data: {
-				args: {
-					workspaceId: args.workspaceId,
-					title: args.title,
-					...(args.parentPageId ? { parentPageId: args.parentPageId } : {}),
-					...(args.content ? { content: args.content } : {}),
-				},
+				// The arguments are the parsed ones: the schema is the
+				// whitelist, so what is stored is what the schema knows.
+				args: { ...args },
 				target,
 				preview: { unit: 'blocks', count: args.content?.length ?? 0 },
 			},
@@ -224,7 +221,10 @@ export const renamePage: WriteTool<z.infer<typeof renamePageArgs>> = {
 		return {
 			ok: true,
 			data: {
-				args: { pageId: args.pageId, title: args.title },
+				// The arguments are the parsed ones: the schema is the
+				// whitelist, so a rename carries a title and a page, and
+				// never a content nor a property.
+				args: { ...args },
 				target,
 				preview: { unit: 'none', count: 0 },
 			},
@@ -258,7 +258,9 @@ export const archivePage: WriteTool<z.infer<typeof archivePageArgs>> = {
 		return {
 			ok: true,
 			data: {
-				args: { pageId: args.pageId },
+				// The arguments are the parsed ones: the schema is the
+				// whitelist, so an archive carries a page and nothing else.
+				args: { ...args },
 				target,
 				preview: { unit: 'sub_pages', count: await subPageCount(ctx.db, String(page.id)) },
 			},
