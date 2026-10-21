@@ -1,7 +1,6 @@
 import type { Pool, QueryResultRow } from 'pg';
 import type { ModelMessage } from 'ai';
 import { listMessages } from '../conversations/repo.ts';
-import type { AuthUser } from '../auth.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import { attributeText, quotedData, sourceBlock, SOURCE_INSTRUCTION } from './sources.ts';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
@@ -117,11 +116,6 @@ const PAGES_SQL = `
 	where id = any($1::uuid[]) and archived_at is null`;
 
 /** The workspaces of a user: the members table, one row each. */
-const MEMBER_WORKSPACES_SQL = `
-	select workspace_id
-	from public.osionos_workspace_members
-	where user_id = $1`;
-
 /** The row of a page, as the read rule reads it. */
 interface PageRow extends QueryResultRow {
 	id: string;
@@ -131,19 +125,6 @@ interface PageRow extends QueryResultRow {
 	collaborators: unknown;
 	title: string | null;
 	text: string | null;
-}
-
-/**
- * The workspaces the caller is a member of: the ones their token carries, plus
- * the ones the members table holds for them.
- */
-export async function memberWorkspaceIds(db: Pool, user: AuthUser): Promise<string[]> {
-	const ids = new Set<string>();
-	if (user.workspaceId) ids.add(user.workspaceId);
-	for (const member of user.memberWorkspaces) ids.add(member.id);
-	const result = await db.query<{ workspace_id: string }>(MEMBER_WORKSPACES_SQL, [user.userId]);
-	for (const row of result.rows) ids.add(String(row.workspace_id));
-	return [...ids];
 }
 
 /**
