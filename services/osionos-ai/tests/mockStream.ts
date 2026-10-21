@@ -30,6 +30,8 @@ export interface StreamOptions {
 	usage: { promptTokens: number; completionTokens: number } | null;
 	/** The number of tool calls the model makes at once in one step. */
 	parallelToolCalls: number;
+	/** The words the tool-calling step writes before its call: one step, two parts. */
+	toolCallText?: string | null;
 }
 
 /** The text of the chunks: "part-0 part-1 …". */
@@ -173,7 +175,6 @@ export function streamToolCall(
 	sendUsage: boolean,
 	usage: StreamOptions['usage'],
 	onAbort: () => void,
-	before: string = '',
 ): void {
 	response.writeHead(200, {
 		'content-type': 'text/event-stream',
@@ -189,7 +190,7 @@ export function streamToolCall(
 		if (response.writableEnded || response.destroyed) return;
 		// The words of the step come before the call: the step says what it
 		// is about to do, and then does it.
-		if (before) response.write(serializeChunk(before, false, false, usage));
+		if (options.toolCallText) response.write(serializeChunk(options.toolCallText, false, false, usage));
 		response.write(serializeToolCallChunk(calls, false, sendUsage, usage));
 		response.write(serializeToolCallChunk(calls, true, sendUsage, usage));
 		response.end('data: [DONE]\n\n');

@@ -33,19 +33,7 @@ export interface MockOptions extends StreamOptions {
 	 * of the model ends.
 	 */
 	toolCall: { name: string; arguments: Record<string, unknown> } | null;
-	/**
-	 * The text the step writes before it calls the tool.
-	 *
-	 * A model that says what it is about to do, and then does it: the words
-	 * and the call are ONE step, and the answer comes after the tool.
-	 */
-	toolCallText: string | null;
-	/**
-	 * The text the answer writes, instead of the chunks of the mock.
-	 *
-	 * A test that needs the answer of the run to be an exact string says so
-	 * here: the chunks of the mock are "part-0 part-1 …".
-	 */
+	/** The exact answer text, instead of the mock's "part-0 part-1 …" chunks. */
 	answerText: string | null;
 	/**
 	 * The word that arms the tool call.
@@ -243,17 +231,9 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			// A step that runs without tools is a step that answers: the
 			// model obeys the request and writes text.
 			if (toolCall && !askedForNoTool(body)) {
-				streamToolCall(
-					response,
-					toolCall,
-					options,
-					sendUsage,
-					usage,
-					() => {
-						aborted += 1;
-					},
-					options.toolCallText ?? '',
-				);
+				streamToolCall(response, toolCall, options, sendUsage, usage, () => {
+					aborted += 1;
+				});
 				return;
 			}
 			texts.push(chunks.join(''));
