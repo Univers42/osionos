@@ -24,6 +24,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  failureCode,
   noticeText,
   parseRetryAfter,
   retryAfterOf,
@@ -77,6 +78,11 @@ test("a code nobody knows is not a sentence of the table", () => {
   const info = runError("no_such_code");
   assert.equal(info.known, false);
   assert.equal(info.retry, false);
+});
+
+test("the code of a failure is the service's own", () => {
+  assert.equal(failureCode({ code: "rate_limited" }), "rate_limited");
+  assert.equal(failureCode({}), "internal");
 });
 
 test("the failures of the vision slice have their own sentence", () => {

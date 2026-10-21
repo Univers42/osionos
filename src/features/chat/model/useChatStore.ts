@@ -19,7 +19,7 @@ import type { RunContext } from "@/features/ai/model/aiContext";
 import { citationFromEvent } from "./citations";
 import { resolveConversationTitle } from "./conversationTitle";
 import { withToolCall, withToolResult, withToolSource } from "./toolActivity";
-import { retryAfterOf } from "./runErrors";
+import { failureCode, retryAfterOf } from "./runErrors";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -44,12 +44,6 @@ export function getInferencePort(): InferencePort {
 
 /** The runs in flight, per conversation. A conversation speaks one at a time. */
 const activeRuns = new Map<string, AbortController>();
-
-/** The code of a failure — the service's own, when it carries one. */
-function failureCode(error: unknown): string {
-  const code = (error as { code?: unknown } | null)?.code;
-  return typeof code === "string" ? code : "internal";
-}
 
 interface ChatData {
   projects: Project[];

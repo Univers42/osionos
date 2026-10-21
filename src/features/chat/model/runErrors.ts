@@ -63,6 +63,12 @@ export function retryAfterOf(error: unknown): number | null {
   return Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds) : null;
 }
 
+/** The code of a failure — the service's own, when it carries one. */
+export function failureCode(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? code : "internal";
+}
+
 /** Every code the service sends, and the sentence the pane says for it. */
 const MESSAGES: Record<string, (retryAfter: number | null) => string> = {
   rate_limited: (retryAfter) => `Too many requests — try again in ${retryAfter ?? 60} s`,
