@@ -162,6 +162,38 @@ export default [
     },
   },
   {
+    // The bridge's server-side modules are node tooling too: they run under plain
+    // node, in the container of the bridge, never in the browser bundle. The
+    // repo's lint command does not reach the root scripts/ folder, so a gate
+    // that lints one of these files on its own needs node's globals declared.
+    files: ["scripts/bridge-*.mjs"],
+    languageOptions: {
+      globals: {
+        AbortController: "readonly",
+        AbortSignal: "readonly",
+        Buffer: "readonly",
+        Headers: "readonly",
+        Request: "readonly",
+        Response: "readonly",
+        TextDecoder: "readonly",
+        TextEncoder: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        clearInterval: "readonly",
+        clearTimeout: "readonly",
+        console: "readonly",
+        crypto: "readonly",
+        fetch: "readonly",
+        performance: "readonly",
+        process: "readonly",
+        queueMicrotask: "readonly",
+        setInterval: "readonly",
+        setTimeout: "readonly",
+        structuredClone: "readonly",
+      },
+    },
+  },
+  {
     // Import firewall: @osionos/ui is a standalone repo consumed by alias. An
     // "@/..." import resolves fine HERE and breaks the moment the package is
     // built on its own, so it must fail in this repo, where it is introduced.

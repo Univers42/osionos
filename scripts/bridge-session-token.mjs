@@ -10,6 +10,52 @@ import { assertSessionNotCutOff, tokenIssuedAtMs } from './bridge-session-cutoff
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
 
+/**
+ * The config the token code reads: the secret the signature is made with, the
+ * TTL of a token, and the cut-off tracker of the process (the bridge and the
+ * osionos-ai service both pass theirs).
+ *
+ * @typedef {object} AppSessionConfig
+ * @property {string} appSessionSecret
+ * @property {number} sessionTtlSeconds
+ * @property {import('./bridge-session-cutoff.mjs').SessionCutoffTracker} [sessionCutoffs]
+ */
+
+/**
+ * The private workspace of the user: the one the token is minted for.
+ *
+ * @typedef {object} AppSessionWorkspace
+ * @property {string} _id
+ */
+
+/**
+ * A workspace the user is a member of: its id, and the role of the member.
+ *
+ * @typedef {object} AppSessionMemberWorkspace
+ * @property {string} _id
+ * @property {string} role
+ */
+
+/**
+ * A minted token, and the moment it expires.
+ *
+ * @typedef {object} SignedAppSessionToken
+ * @property {string} token
+ * @property {string} expiresAt
+ */
+
+/**
+ * A verified token, as its consumers read it: the user, the workspaces, the
+ * role of each of them, the admin flag, and the raw payload.
+ *
+ * @typedef {object} VerifiedAppSessionToken
+ * @property {string} userId
+ * @property {string[]} workspaceIds
+ * @property {Record<string, string>} roles
+ * @property {boolean} isAdmin
+ * @property {Record<string, unknown>} raw
+ */
+
 /** Constant-time comparison of two texts; the app-session signature is base64url, not hex. */
 export function safeCompareText(left, right) {
 	const leftBuffer = Buffer.from(String(left ?? ''), 'utf8');
@@ -30,6 +76,20 @@ function base64url(input) {
 	return Buffer.from(input).toString('base64url');
 }
 
+/**
+ * Mints the token the bridge hands to the app: the subject, the provider, the
+ * private workspace, and the workspaces the user is a member of.
+ *
+ * @param {object} options
+ * @param {{ subject: string, provider: string }} options.payload who the token is for
+ * @param {AppSessionWorkspace} options.workspace the private workspace of the user
+ * @param {AppSessionConfig} options.config the secret, the TTL, the cut-off tracker
+ * @param {number} [options.now] the moment the token is minted, in milliseconds
+ * @param {string} [options.jti] the id of the token
+ * @param {AppSessionMemberWorkspace[]} [options.memberWorkspaces] the other workspaces of the user
+ * @param {boolean} [options.isAdmin] whether the user is an administrator
+ * @returns {SignedAppSessionToken}
+ */
 export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], isAdmin = false }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const iat = Math.floor(now / 1000);
@@ -54,6 +114,15 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 	return { token: `osionos_v1.${encodedPayload}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
 }
 
+/**
+ * Checks the signature, the audience and the expiry of a token, and refuses
+ * the ones minted before their user's sign-out.
+ *
+ * @param {string} token the token of the request
+ * @param {AppSessionConfig} config the secret, the TTL, the cut-off tracker
+ * @param {number} [now] the moment of the check, in milliseconds
+ * @returns {VerifiedAppSessionToken}
+ */
 export function verifyAppSessionToken(token, config, now = Date.now()) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const [version, encodedPayload, signature, extra] = safeText(token, 4096).split('.');
