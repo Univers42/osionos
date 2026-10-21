@@ -20,7 +20,7 @@
  * read it, and node strips the types of a file — it does not read JSX.
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 
 import { errorWords } from "@/widgets/chat-shell/ui/errorWords";
@@ -42,7 +42,7 @@ interface Props {
 export const RunErrorNotice: React.FC<Props> = ({ code, retryAfter, since, now, onRetry }) => {
   const [tick, setTick] = useState<number>(() => now ?? Date.now());
   // The countdown starts when the answer failed, and the clock only moves.
-  const started = useRef<number>(since ?? Date.now());
+  const [started] = useState<number>(() => since ?? Date.now());
 
   useEffect(() => {
     if (retryAfter === undefined || retryAfter === null) return;
@@ -51,7 +51,7 @@ export const RunErrorNotice: React.FC<Props> = ({ code, retryAfter, since, now, 
   }, [retryAfter]);
 
   const info = runError(code, retryAfter == null ? undefined : { "retry-after": String(retryAfter) });
-  const deadline = retryDeadline(info.retryAfter, started.current);
+  const deadline = retryDeadline(info.retryAfter, started);
   const left = secondsLeft(deadline, tick);
   const text = info.known ? noticeText(info, left) : errorWords(code);
   // A rate limit waits for its seconds; every other failure may be retried at
