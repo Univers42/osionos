@@ -2200,6 +2200,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     source,
     sourceKey,
     updateBlock,
+    insertBlock,
     deleteBlock,
     updateContent: replaceContent,
     commitContent,

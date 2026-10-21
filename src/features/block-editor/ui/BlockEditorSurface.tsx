@@ -16,7 +16,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
 
 import type { Block } from "@/entities/block";
-import { flattenColumns, isParentable, selfRendersChildren } from "@/entities/block";
+import { flattenColumns, findBlockInTree, isParentable, selfRendersChildren } from "@/entities/block";
 import {
 	estimateBlockHeight,
 	measureScrollMargin,
@@ -26,6 +26,9 @@ import {
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
+import { complete as completeRoute } from "@/features/ai/api/aiClient";
+import { registerInlineAiDeps, useInlineAiStore } from "@/features/ai/model/inlineAiStore";
+import { parseMarkdownClipboard } from "@/services/page-actions/blockClipboardSerialize";
 import { resolveColorName } from "@osionos/ui/molecules/IconPicker/ColorSwatches";
 import {
 	usePlaygroundBlockEditor,
@@ -39,7 +42,7 @@ import { getBlockSurfaceStyle } from "../model/blockColors";
 import { appendBlockToColumn, insertColumnForTarget } from "../model/columnLayout";
 import { insertBlockRelative } from "../model/blockContextMenu.helpers";
 import { VIRTUAL_BLOCK_FOCUS_EVENT } from "../model/blockDomFocus";
-import { commitBlockDraft, useBlockDraftContent } from "../model/blockDraftStore";
+import { commitBlockDraft, getBlockDraftContent, useBlockDraftContent } from "../model/blockDraftStore";
 import { useSurfaceMarquee } from "../model/useSurfaceMarquee";
 import { useCrossTextSelection } from "../model/useCrossTextSelection";
 import { useBlockSelection, selectIdsForSurface } from "../model/blockSelectionStore";
@@ -388,6 +391,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		source: resolvedSource,
 		sourceKey,
 		updateBlock,
+		insertBlock,
 		deleteBlock,
 		updateContent,
 		commitContent,
@@ -503,6 +507,26 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 			if (surfaceRegistry.get(sourceKey) === entry) surfaceRegistry.delete(sourceKey);
 		};
 	}, [flushPendingDrafts, sourceKey, updateContent]);
+
+	// The inline AI writes through THIS editor: its tree, its drafts. The
+	// bundle is keyed by page, so a second editor on another page never
+	// answers for this one.
+	useEffect(() => {
+		return registerInlineAiDeps(pageId, {
+			complete: completeRoute,
+			updateBlock,
+			insertBlock,
+			flushPendingDrafts,
+			markdownToBlocks: parseMarkdownClipboard,
+			getBlockSource: (_pid, blockId) => {
+				const block = findBlockInTree(blocksRef.current, blockId);
+				// null: this editor does not hold that block (another editor of
+				// the same page does).
+				if (!block) return null;
+				return getBlockDraftContent(sourceKey, blockId, block.content);
+			},
+		});
+	}, [flushPendingDrafts, insertBlock, pageId, sourceKey, updateBlock]);
 
 	useEffect(() => {
 		const syncFocusedBlock = () => {
@@ -793,6 +817,21 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 						}
 						if (item.kind === "create-page") {
 							runEditorAction(handleSlashCreatePageSelect(currentBlocks));
+							return;
+						}
+						if (item.kind === "ai") {
+							const trigger = slashMenu;
+							// The "/summarize" the user just typed is text in the block:
+							// take it out before the AI reads the block.
+							handleSlashInlineSelect("", currentBlocks);
+							if (trigger) {
+								useInlineAiStore.getState().open({ pageId, blockId: trigger.blockId }, item.command);
+								// "ask" opens the panel with its input focused; every other
+								// command runs at once.
+								if (item.command !== "ask") {
+									void useInlineAiStore.getState().run(item.command);
+								}
+							}
 							return;
 						}
 						if (item.kind === "inline") {

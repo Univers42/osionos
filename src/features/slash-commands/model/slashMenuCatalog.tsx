@@ -16,7 +16,9 @@ import {
   COLLECTION_SLASH_ITEMS,
   COLLECTION_SLASH_SECTION_LABELS,
 } from "@/shared/ui/assets/collectionSlashItems";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
 import type { BlockType, MediaBlockType } from "@/entities/block";
+import { aiSlashCommands } from "./aiSlashCommands";
 import type {
   SlashCreatePageCommand,
   SlashCommand,
@@ -87,10 +89,12 @@ const TURN_INTO_BLOCK_TYPES = new Set<BlockType>([
 
 const EXTRA_SECTION_LABELS: Record<string, string> = {
   "turn-into": "Turn into",
+  ai: "AI",
 };
 
 const SECTION_ORDER = [
   "basic",
+  "ai",
   "media",
   "turn-into",
   "database",
@@ -356,6 +360,17 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   ...TURN_INTO_COMMANDS,
 ];
 
+/**
+ * The whole catalog — the AI group only when an AI base URL is configured.
+ *
+ * `isAiConfigured()` is the SAME rule the chat port uses to choose itself
+ * (`selectInferencePort`): with no service, the app must not offer an AI
+ * action it cannot serve.
+ */
+export function slashCatalog(): SlashCommand[] {
+  return [...SLASH_COMMANDS, ...aiSlashCommands(isAiConfigured())];
+}
+
 export interface SlashQuery {
   /** The block/command token — the first whitespace-delimited word after "/". */
   command: string;
@@ -401,10 +416,11 @@ function scoreCommand(item: SlashCommand, token: string): number {
 /** Filter + rank the catalog by the command token (the arg after a space is ignored
  *  here — it is consumed by the selected command). Empty token → the full catalog. */
 export function filterSlashCommands(filter: string): SlashCommand[] {
+  const catalog = slashCatalog();
   const token = parseSlashQuery(filter).command.toLowerCase();
-  if (!token) return SLASH_COMMANDS;
+  if (!token) return catalog;
 
-  return SLASH_COMMANDS
+  return catalog
     .map((item) => ({ item, score: scoreCommand(item, token) }))
     .filter((entry) => entry.score > 0)
     .sort((left, right) => right.score - left.score || left.item.label.localeCompare(right.item.label))
