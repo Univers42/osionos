@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { EDGE_KINDS, filterEdges } from "@/features/graph-studio";
+import { EDGE_KINDS, filterEdges, toggleEdgeKind } from "@/features/graph-studio";
 import { toIngestDoc } from "@/features/graph-studio/model/toIngestDoc";
 import { pageMention, withPageMention } from "@/entities/page/ui/pageConnections.helpers";
 
@@ -49,6 +49,12 @@ test("the toggle keeps the kinds the user chose, and the nodes are never touched
   const none = filterEdges(doc, []);
   assert.deepEqual(none.edges, []);
   assert.deepEqual([...EDGE_KINDS], ["note_link", "relation", "tag", "hierarchy"]);
+});
+
+test("a pick turns one kind on or off, and the last kind off turns them all back on", () => {
+  assert.deepEqual(toggleEdgeKind(["note_link", "tag"], "tag"), ["note_link"]);
+  assert.deepEqual(toggleEdgeKind(["note_link"], "tag"), ["note_link", "tag"]);
+  assert.deepEqual(toggleEdgeKind(["note_link"], "note_link"), [...EDGE_KINDS], "a graph with no edge is not a choice");
 });
 
 test("the mention of a page is the shape the editor and the link store agree on", () => {

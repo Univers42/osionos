@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useCallback, useState } from "react";
 
-import { EDGE_KINDS, EDGE_KIND_LABELS, type EdgeKind } from "../model/edgeKinds";
+import { EDGE_KINDS, EDGE_KIND_LABELS, type EdgeKind, loadEdgeKinds, saveEdgeKinds, toggleEdgeKind } from "../model/edgeKinds";
 
 /**
  * The kinds of edge the graph shows.
@@ -31,3 +31,17 @@ export const EdgeKindToggles: React.FC<Props> = ({ kinds, onPick }) => (
     ))}
   </div>
 );
+
+/** The kinds the user chose, remembered across visits, and the pick that changes them. */
+export function useEdgeKinds(): [EdgeKind[], (kind: EdgeKind) => void] {
+  const [kinds, setKinds] = useState<EdgeKind[]>(loadEdgeKinds);
+  const pick = useCallback(
+    (kind: EdgeKind) => {
+      const next = toggleEdgeKind(kinds, kind);
+      saveEdgeKinds(next);
+      setKinds(next);
+    },
+    [kinds],
+  );
+  return [kinds, pick];
+}

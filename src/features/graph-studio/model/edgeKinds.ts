@@ -55,6 +55,13 @@ export function saveEdgeKinds(kinds: readonly EdgeKind[]): void {
 	}
 }
 
+/** One kind turned on or off; the last kind turned off turns them all back on. */
+export function toggleEdgeKind(kinds: readonly EdgeKind[], kind: EdgeKind): EdgeKind[] {
+	const next = kinds.includes(kind) ? kinds.filter((other) => other !== kind) : [...kinds, kind];
+	// A graph with no edge at all is not a choice, it is a bug.
+	return next.length > 0 ? next : [...EDGE_KINDS];
+}
+
 /** The edges of the kinds the user chose; the nodes are never touched. */
 export function filterEdges(doc: IngestDoc, kinds: readonly string[]): IngestDoc {
 	const kept = new Set<string>(kinds);

@@ -9,5 +9,6 @@ export {
   filterEdges,
   loadEdgeKinds,
   saveEdgeKinds,
+  toggleEdgeKind,
   type EdgeKind,
 } from "./model/edgeKinds";
