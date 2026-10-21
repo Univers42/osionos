@@ -146,12 +146,11 @@ function stripWebp(bytes: Uint8Array): Uint8Array {
 		rebuilt.push(sizeBuf);
 		rebuilt.push(chunk.data);
 		if (chunk.data.byteLength & 1) rebuilt.push(new Uint8Array(1));
-		// clear VP8X exif/xmp flags
+		// The flags of the VP8X must not announce the chunks that are gone:
+		// EXIF is 0x08 and XMP is 0x04 (the spec of the container).
 		if (chunk.fourcc === 'VP8X' && chunk.data.byteLength >= 1) {
 			const data = chunk.data;
-			// flags byte at 0: bit3 XMP, bit4 Exif
-			data[0] = data[0] & ~(0x08 | 0x10);
-			// mutate in rebuilt? we pushed original data slice (copy? slice is copy) yes data is slice copy
+			data[0] = data[0] & ~(0x08 | 0x04);
 		}
 	}
 	const body = concat(rebuilt);
