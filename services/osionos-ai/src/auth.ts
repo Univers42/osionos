@@ -2,6 +2,7 @@ import type { IncomingMessage } from 'node:http';
 import { verifyAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import type { VerifiedAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller } from '../../../scripts/bridge-session-cutoff.mjs';
+import type { SessionCutoffTracker } from '../../../scripts/bridge-session-cutoff.mjs';
 import { config } from './config.ts';
 
 export interface AuthUser {
@@ -16,7 +17,7 @@ export interface AuthUser {
  * off its config (scripts/bridge-api.mjs:4126-4131). The same object goes into the
  * token config, so a token issued before its user's sign-out is refused.
  */
-const sessionCutoffs = sessionCutoffsFromConfig(config);
+const sessionCutoffs: SessionCutoffTracker = sessionCutoffsFromConfig(config);
 const tokenConfig = { ...config, sessionCutoffs };
 
 /**
@@ -76,4 +77,16 @@ export function verifyRequest(request: IncomingMessage): { user: AuthUser | null
 
 export function authenticate(request: IncomingMessage): AuthUser | null {
 	return verifyRequest(request).user;
+}
+
+/**
+ * Puts another cut-off tracker in place of the one the poller fills.
+ *
+ * The suite runs with OSIONOS_SESSION_CUTOFFS=off, so the tracker of this
+ * process never enforces anything and no test could see a revoked token. A
+ * test that needs one hands a tracker here, loaded with the cut-off it wants.
+ * The service itself never calls this: the poller above owns the tracker.
+ */
+export function setSessionCutoffs(tracker: SessionCutoffTracker): void {
+	tokenConfig.sessionCutoffs = tracker;
 }
