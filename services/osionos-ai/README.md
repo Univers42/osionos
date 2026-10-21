@@ -71,6 +71,38 @@ CJK and code-heavy text; the settlement corrects it with the usage the upstream
 reports. A refused reservation is a 402 `budget_exhausted`, and the run is
 failed, so the next one may start.
 
+## The indexer
+
+The RAG index has its own process: the same image, another entrypoint.
+
+    pnpm --filter @osionos/ai-service indexer
+
+It listens on `ai_index` and takes the dirty pages of `ai_index_queue` every
+five seconds. A page is cut into sections at its headings (`heading_1` to
+`heading_3`), and every section into chunks of about 300 to 500 tokens
+(`ceil(chars / 4)`; the real limit of the model is enforced by the embedding
+service, which truncates). The chunks are embedded by the LOCAL service
+(`OSIONOS_AI_EMBED_URL`, a text-embeddings-inference) and written to
+`ai_chunks` with the ACL of the page.
+
+Only the chunks whose hash changed are embedded again: a chunk that kept its
+hash keeps its vector, even when it moved in the page. A renamed heading
+gives another hash — the heading path is in it — so its chunks are embedded
+again.
+
+Several replicas may run it at the same time: the queue is claimed with
+`FOR UPDATE SKIP LOCKED`, and every page is taken with an advisory lock. The
+queue ROW is not held while a page is indexed, so an edit that lands in the
+meantime bumps `dirty_at`, the last delete leaves the row alone, and the page
+is indexed again.
+
+A failure (the embedding service is down, a page is broken) counts an attempt
+and pushes the next try: 2, 4, 8… seconds, ten minutes at most. After ten
+attempts the page is left alone, and logged once.
+
+`OSIONOS_AI_EMBED_URL` and `OSIONOS_AI_EMBED_MODEL`
+(`intfloat/multilingual-e5-small`) are the only variables of the indexer.
+
 ## Environment
 
 Required: `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_REDIS_URL`,
@@ -87,8 +119,14 @@ needs none), `OSIONOS_AI_MAX_OUTPUT_TOKENS` (1024), `OSIONOS_AI_USER_DAILY_MICRO
 (20). A missing or broken variable stops the service and names the variable, never
 its value.
 
+The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_URL` and
+`OSIONOS_AI_EMBED_MODEL` (`intfloat/multilingual-e5-small`).
+
 ## Tests
 
-    sh services/osionos-ai/scripts/test.sh /path/to/osionos-ai-migration.sql
+    sh services/osionos-ai/scripts/test.sh /path/to/osionos-ai-migration.sql [/path/to/osionos-ai-rag-migration.sql]
 
-Throwaway `pgvector/pgvector:0.8.0-pg16` and `redis:7.4-alpine` containers on a private network; both are removed when the script exits. The suite runs a mock upstream (`tests/mockUpstream.ts`) and points the service at it.
+The migrations are applied in the order they are given; the RAG migration (the
+chunks and the queue) is a second one.
+
+Throwaway `pgvector/pgvector:0.8.0-pg16` and `redis:7.4-alpine` containers on a private network; both are removed when the script exits. The suite runs a mock upstream (`tests/mockUpstream.ts`) and points the service at it, and a mock embedding service (`tests/mockEmbed.ts`) for the indexer.
