@@ -28,14 +28,19 @@ function firstEnv(...names: string[]): string | undefined {
 export interface PlatformModelEntry {
 	id: string;
 	label: string;
+	/** The modalities the model accepts as input. Defaults to ["text"]. */
+	input?: string[];
 	inputMicroUsdPerMTok: number;
 	outputMicroUsdPerMTok: number;
 	default: boolean;
+	/** Whether the model accepts image input: `input` contains "image". */
+	vision?: boolean;
 }
 
 const platformModelSchema = z.object({
 	id: z.string().min(1),
 	label: z.string().min(1),
+	input: z.array(z.string().min(1)).optional(),
 	inputMicroUsdPerMTok: z.number().int().nonnegative(),
 	outputMicroUsdPerMTok: z.number().int().nonnegative(),
 	default: z.boolean().optional(),
@@ -68,6 +73,7 @@ const envSchema = z.object({
 	OSIONOS_AI_UPSTREAM_API_KEY: z.string().optional(),
 	OSIONOS_AI_PLATFORM_MODELS: z.string().min(1),
 	OSIONOS_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().default(1024),
+	OSIONOS_AI_VISION_TOKENS_PER_IMAGE: z.coerce.number().int().positive().default(1600),
 	OSIONOS_AI_USER_DAILY_MICROUSD: z.coerce.number().int().nonnegative().default(200_000),
 	OSIONOS_AI_PLATFORM_DAILY_MICROUSD: z.coerce.number().int().nonnegative().default(20_000_000),
 	OSIONOS_AI_RUNS_PER_MINUTE: z.coerce.number().int().positive().default(20),
@@ -106,6 +112,7 @@ const rawEnv = {
 	OSIONOS_AI_UPSTREAM_API_KEY: firstEnv('OSIONOS_AI_UPSTREAM_API_KEY'),
 	OSIONOS_AI_PLATFORM_MODELS: process.env.OSIONOS_AI_PLATFORM_MODELS,
 	OSIONOS_AI_MAX_OUTPUT_TOKENS: process.env.OSIONOS_AI_MAX_OUTPUT_TOKENS,
+	OSIONOS_AI_VISION_TOKENS_PER_IMAGE: process.env.OSIONOS_AI_VISION_TOKENS_PER_IMAGE,
 	OSIONOS_AI_USER_DAILY_MICROUSD: process.env.OSIONOS_AI_USER_DAILY_MICROUSD,
 	OSIONOS_AI_PLATFORM_DAILY_MICROUSD: process.env.OSIONOS_AI_PLATFORM_DAILY_MICROUSD,
 	OSIONOS_AI_RUNS_PER_MINUTE: process.env.OSIONOS_AI_RUNS_PER_MINUTE,
@@ -144,7 +151,11 @@ function parsePlatformModels(raw: string): PlatformModelEntry[] {
 	}
 	const result = platformModelsSchema.safeParse(decoded);
 	if (!result.success) refuse('OSIONOS_AI_PLATFORM_MODELS');
-	return result.data.map((model) => ({ ...model, default: model.default === true }));
+	return result.data.map((model) => ({
+		...model,
+		default: model.default === true,
+		vision: Array.isArray(model.input) && model.input.includes('image'),
+	}));
 }
 
 /**
@@ -224,6 +235,8 @@ export interface AiServiceConfig {
 	upstreamApiKey?: string;
 	platformModels: readonly PlatformModelEntry[];
 	maxOutputTokens: number;
+	/** The per-image input-token ceiling added to the reservation of a vision run. */
+	visionTokensPerImage: number;
 	userDailyMicroUsd: number;
 	platformDailyMicroUsd: number;
 	runsPerMinute: number;
@@ -262,6 +275,7 @@ export const config: AiServiceConfig = Object.freeze({
 	upstreamApiKey: parsed.data.OSIONOS_AI_UPSTREAM_API_KEY,
 	platformModels: Object.freeze(parsePlatformModels(parsed.data.OSIONOS_AI_PLATFORM_MODELS)),
 	maxOutputTokens: parsed.data.OSIONOS_AI_MAX_OUTPUT_TOKENS,
+	visionTokensPerImage: parsed.data.OSIONOS_AI_VISION_TOKENS_PER_IMAGE,
 	userDailyMicroUsd: parsed.data.OSIONOS_AI_USER_DAILY_MICROUSD,
 	platformDailyMicroUsd: parsed.data.OSIONOS_AI_PLATFORM_DAILY_MICROUSD,
 	runsPerMinute: parsed.data.OSIONOS_AI_RUNS_PER_MINUTE,

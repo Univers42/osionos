@@ -73,6 +73,10 @@ export interface PumpInput {
 	/** The handle of the model: the platform's, or the one of a connection. */
 	model: LanguageModel;
 	messages: ModelMessage[];
+	/** Override the SDK's URL download: throw, so no URL is ever fetched. */
+	experimentalDownload?: (options: unknown) => unknown;
+	/** Extra body fields forwarded to the upstream. */
+	providerOptions?: Record<string, unknown>;
 	/** The signal of the call: the caller owns it, so it can cancel the run. */
 	controller: AbortController;
 	/** A piece of the answer. */
@@ -182,6 +186,9 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			messages,
 			maxOutputTokens: config.maxOutputTokens,
 			abortSignal: controller.signal,
+			// The SDK must never fetch a URL: images are bytes we fetched.
+			...(input.experimentalDownload ? { experimental_download: input.experimentalDownload as never } : {}),
+			...(input.providerOptions ? { providerOptions: input.providerOptions } : {}),
 			// The tools, and the ceiling of the loop: the model may call a
 			// tool, and the answer comes after the tool.
 			...(tools ? { tools } : {}),

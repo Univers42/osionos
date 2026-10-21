@@ -260,6 +260,6 @@ describe('osionos-ai runs', () => {
 		const models = answer.body?.models as { id: string; label: string; default: boolean }[];
 		assert.equal(models.length, 4);
 		assert.equal(models.filter((model) => model.default).length, 1);
-		assert.deepEqual(Object.keys(models[0]).sort(), ['default', 'id', 'label']);
+		assert.deepEqual(Object.keys(models[0]).sort(), ['default', 'id', 'label', 'vision']);
 	});
 });

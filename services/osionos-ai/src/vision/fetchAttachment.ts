@@ -1,0 +1,122 @@
+/**
+ * Fetch an attachment through the bridge, the way the service reads a page
+ * the user attached: by id or by capability path, never by URL.
+ *
+ * The caller's token of THIS run request is read, used here, and nowhere
+ * else: it is never stored and never logged (the C10 rule of P4a). The
+ * guard of the endpoints (`guardedFetch`) is NOT used: its guard stays
+ * unchanged, and the bridge is operator configuration.
+ */
+
+import { config } from '../config.ts';
+
+/** The cap of an attachment: ten megabytes. */
+export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+/** The timeout of a fetch of an attachment. */
+export const ATTACHMENT_TIMEOUT_MS = 30_000;
+
+export interface FetchedAttachment {
+	bytes: Uint8Array;
+	mediaType: string;
+}
+
+interface FetchAttachmentOptions {
+	path?: string;
+	bridgeUrl?: string;
+	token?: string;
+	sessionToken?: string;
+	timeoutMs?: number;
+}
+
+function normalize(args: unknown[]): { path: string; bridgeUrl?: string; token: string; timeoutMs: number } {
+	if (typeof args[0] === 'string') {
+		return {
+			path: args[0],
+			token: (typeof args[1] === 'string' ? args[1] : '') as string,
+			timeoutMs: typeof args[2] === 'number' ? args[2] : ATTACHMENT_TIMEOUT_MS,
+		};
+	}
+	const options = (args[0] ?? {}) as FetchAttachmentOptions;
+	return {
+		path: String(options.path ?? ''),
+		bridgeUrl: options.bridgeUrl,
+		token: String(options.token ?? options.sessionToken ?? ''),
+		timeoutMs: options.timeoutMs ?? ATTACHMENT_TIMEOUT_MS,
+	};
+}
+
+/** An error that carries the status and the code of an attachment failure. */
+function attachmentError(status: number, code: string): Error {
+	return Object.assign(new Error(code), { status, code });
+}
+
+/**
+ * GET an attachment through the bridge.
+ *
+ * A 403 or a 404 of the bridge becomes a 404 `attachment_not_found`: the
+ * caller may not read it, or it does not exist, and the two are the same
+ * answer. The body is read with a ten-megabyte cap, and the read is aborted
+ * when it is crossed.
+ */
+export async function fetchAttachment(...args: unknown[]): Promise<FetchedAttachment> {
+	const { path, bridgeUrl: override, token, timeoutMs } = normalize(args);
+	const base = (override ?? config.bridgeUrl ?? '').replace(/\/+$/, '');
+	if (!base) throw attachmentError(500, 'bridge_unavailable');
+	if (!path.startsWith('/')) throw attachmentError(400, 'invalid_attachment');
+
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	let response: Response;
+	try {
+		response = await fetch(`${base}${path}`, {
+			method: 'GET',
+			headers: token ? { authorization: `Bearer ${token}` } : {},
+			signal: controller.signal,
+		});
+	} catch {
+		clearTimeout(timer);
+		throw attachmentError(504, 'attachment_timeout');
+	}
+	clearTimeout(timer);
+
+	if (response.status === 403 || response.status === 404) {
+		throw attachmentError(404, 'attachment_not_found');
+	}
+	if (!response.ok) {
+		throw attachmentError(response.status, 'attachment_fetch_failed');
+	}
+
+	const reader = response.body?.getReader();
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	if (reader) {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			if (value) {
+				total += value.byteLength;
+				if (total > MAX_ATTACHMENT_BYTES) {
+					controller.abort();
+					throw attachmentError(413, 'attachment_too_large');
+				}
+				chunks.push(value);
+			}
+		}
+	} else {
+		const buffer = new Uint8Array(await response.arrayBuffer());
+		if (buffer.byteLength > MAX_ATTACHMENT_BYTES) throw attachmentError(413, 'attachment_too_large');
+		chunks.push(buffer);
+		total = buffer.byteLength;
+	}
+	const bytes = new Uint8Array(total);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	const mediaType = (response.headers.get('content-type') ?? 'application/octet-stream').split(';')[0].trim();
+	return { bytes, mediaType };
+}
+
+export default fetchAttachment;

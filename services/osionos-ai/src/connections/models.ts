@@ -16,6 +16,8 @@ export interface ConnectionModel {
 	id: string;
 	label: string;
 	default: boolean;
+	/** Whether the model accepts image input. */
+	vision?: boolean;
 }
 
 /** The key of the cache of the models of a connection. */
@@ -67,7 +69,7 @@ export async function connectionModels(
 		);
 		if (!response.ok) return [];
 		const ids = idsOf(await response.json());
-		const models = ids.map((id, index) => ({ id, label: id, default: index === 0 }));
+		const models = ids.map((id, index) => ({ id, label: id, default: index === 0, vision: false }));
 		if (models.length > 0) await redis.set(key, JSON.stringify(models), 'EX', 600);
 		return models;
 	} catch {
