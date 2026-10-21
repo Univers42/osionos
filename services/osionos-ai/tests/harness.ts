@@ -161,6 +161,12 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
 
 	const { createAiServer } = await import('../src/server.ts');
 	const app = createAiServer();
+	// Every file starts with empty run windows. The whole suite runs in under a
+	// minute and the Redis is shared, so the files otherwise share one window
+	// per user and the late ones get 429 (2026-10-21: started at :01 → 3
+	// failures in visionUpstream; started mid-minute → green).
+	const windows = await app.redis.keys('ai:rl:*');
+	if (windows.length > 0) await app.redis.del(...windows);
 	await new Promise<void>((resolve) => {
 		app.server.listen(0, '127.0.0.1', () => resolve());
 	});
