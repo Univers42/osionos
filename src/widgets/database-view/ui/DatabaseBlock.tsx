@@ -22,7 +22,7 @@ import '@/app/styles/database-bridge.generated.css';
 import '@/app/styles/database-overrides.css';
 
 import type { Block } from '@/entities/block';
-import type { PageEntry, PagePropertyEntry } from '@/entities/page';
+import type { PageEntry } from '@/entities/page';
 import {
   normalizeMediaSource,
   resolveCollectionMediaAsset,
@@ -41,6 +41,7 @@ import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseVie
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getLiveDatabaseAdapter, isLiveDatabaseId } from '../model/liveDatabaseAdapter';
 import { toRecordPageId } from '../model/recordPageId';
+import { toOsionosPageProperties } from '../model/recordPageProperties';
 import { useHealedLiveDatabaseId } from '../model/useHealedLiveDatabaseId';
 // Side effect: registers the account-wide data-source catalog with NDS (the
 // Source picker). Lives here (not only the barrel) because lazyViews imports
@@ -438,8 +439,6 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
 };
 
 type DatabasePageContent = DatabaseObjectPageProps['state']['pages'][string]['content'];
-type DatabaseSchema = DatabaseObjectPageProps['state']['databases'][string];
-type DatabasePage = DatabaseObjectPageProps['state']['pages'][string];
 
 function toOsionosBlocks(blocks: DatabasePageContent | undefined): Block[] {
   return (blocks ?? []).map((block) => ({
@@ -492,65 +491,4 @@ function resolveCoverForEngine(cover: string): string {
   if (cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient')) return cover;
   const resolved = resolveCollectionMediaAsset(cover);
   return normalizeMediaSource(resolved?.url ?? cover) ?? cover;
-}
-
-function toOsionosPageProperties(database: DatabaseSchema, page: DatabasePage): PagePropertyEntry[] {
-  return Object.values(database.properties).map((property) => ({
-    key: property.id,
-    label: property.name,
-    type: toOsionosPropertyType(property.type),
-    value: toOsionosPropertyValue(page.properties[property.id], property.type),
-    options: property.options?.map((option) => option.value),
-    relationTarget: property.type === 'relation' ? 'page' : undefined,
-  }));
-}
-
-function toOsionosPropertyType(type: DatabaseSchema['properties'][string]['type']): PagePropertyEntry['type'] {
-  if (type === 'number') return 'number';
-  if (type === 'checkbox') return 'checkbox';
-  if (type === 'date' || type === 'created_time' || type === 'last_edited_time' || type === 'due_date') return 'date';
-  if (type === 'select' || type === 'status') return 'select';
-  if (type === 'url') return 'url';
-  if (type === 'relation') return 'relation';
-  return 'text';
-}
-
-function toOsionosPropertyValue(value: unknown, type: DatabaseSchema['properties'][string]['type']): PagePropertyEntry['value'] {
-  if (type === 'relation') return toStringArray(value);
-  // A place value is `{address, lat?, lng?}` — show the address name, not the raw
-  // object (otherwise the opened record's property reads `{"address":"Reims"}`).
-  if (type === 'place') {
-    if (value && typeof value === 'object' && 'address' in value) {
-      const addr = (value as { address?: unknown }).address;
-      return typeof addr === 'string' ? addr : '';
-    }
-    return typeof value === 'string' ? value : '';
-  }
-  if (type === 'checkbox') return Boolean(value);
-  if (type === 'number') return toNumber(value);
-  if (Array.isArray(value)) return value.map(toSafeString).filter(Boolean).join(', ');
-  if (value == null) return null;
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return JSON.stringify(value);
-}
-
-function toNumber(value: unknown): number {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
-
-function toStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(toSafeString).filter(Boolean);
-  const item = toSafeString(value);
-  return item ? [item] : [];
-}
-
-function toSafeString(value: unknown): string {
-  if (value == null) return '';
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return JSON.stringify(value);
 }
