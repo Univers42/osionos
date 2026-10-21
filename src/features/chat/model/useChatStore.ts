@@ -16,9 +16,8 @@ import type { ChatMessage, Conversation, Project, SharedContextItem } from "./ch
 import { stubInferencePort, type InferencePort } from "./inferencePort";
 import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiSelection";
 import type { RunContext } from "@/features/ai/model/aiContext";
-import { citationFromEvent } from "./citations";
-import { resolveConversationTitle } from "./conversationTitle";
-import { withToolCall, withToolResult, withToolSource } from "./toolActivity";
+import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTurn";
+import { dispatchRunEvent } from "./runEventDispatch";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -97,6 +96,65 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     persist();
   };
 
+  /** What a turn of the assistant needs from the store. */
+  const turnStore: TurnStore = {
+    messages: () => get().messages,
+    addMessage: (message) => {
+      set((s) => ({
+        messages: [...s.messages, message],
+        conversations: s.conversations.map((c) => (c.id === message.conversationId ? { ...c, updatedAt: now() } : c)),
+      }));
+      persist();
+    },
+    patchMessage: (id, patch) => {
+      set((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
+      persist();
+    },
+    conversationTitle: (conversationId) =>
+      get().conversations.find((c) => c.id === conversationId)?.title ?? "",
+    writeTitle: (conversationId, title) => {
+      set((s) => ({ conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, title } : c)) }));
+      persist();
+    },
+  };
+
+  /**
+   * Runs a turn of the assistant: the message of the turn, and the frames
+   * that fill it.
+   *
+   * The run is the port's: the port opens the stream, the frames come here,
+   * and the message of the turn ends with them.
+   */
+  const runTurn = async (
+    conversationId: string,
+    options: { connectorId: string; model: string; connectionId: string },
+    open: (turn: AssistantTurn, signal: AbortSignal) => Promise<void>,
+  ): Promise<void> => {
+    const assistantId = uid();
+    turnStore.addMessage({
+      id: assistantId,
+      conversationId,
+      role: "assistant",
+      content: "",
+      createdAt: now(),
+      ...options,
+      status: "streaming",
+    });
+    const turn = assistantTurn(turnStore, assistantId, conversationId);
+    const controller = new AbortController();
+    activeRuns.set(conversationId, controller);
+    try {
+      await open(turn, controller.signal);
+      // The stream ended without a terminal frame (a stop, or a run that gave
+      // up): what arrived stays, and the answer is not marked as failed.
+      turn.finish();
+    } catch (error) {
+      turn.patchAssistant({ status: "error", errorCode: failureCode(error) });
+    } finally {
+      activeRuns.delete(conversationId);
+    }
+  };
+
   return {
     ...load(),
     activeConversationId: null,
@@ -149,9 +207,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       // the one they remembered, or the platform's.
       const connectionId = sel?.connectionId ?? readAiSelection()?.connectionId ?? PLATFORM_CONNECTION_ID;
       const port = getInferencePort();
+      const stream = port.stream;
 
       // No streaming port: the offline path — one complete answer, no frames.
-      if (!port.stream) {
+      if (!stream) {
         addMessage(conversationId, { role: "user", content: text.trim(), connectorId, model, connectionId });
         const history = get().messagesFor(conversationId).map((m) => ({ role: m.role, content: m.content }));
         const result = await port.complete({ connectorId, model, connectionId, messages: history });
@@ -166,75 +225,13 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       const body = text.trim();
       addMessage(conversationId, { role: "user", content: body, connectorId, model, connectionId });
 
-      const assistantId = uid();
-      set((s) => ({
-        messages: [...s.messages, { id: assistantId, conversationId, role: "assistant", content: "", createdAt: now(), connectorId, model, connectionId, status: "streaming" }],
-        conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, updatedAt: now() } : c)),
-      }));
-      persist();
-
-      const patchAssistant = (patch: Partial<ChatMessage>) => {
-        set((s) => ({ messages: s.messages.map((m) => (m.id === assistantId ? { ...m, ...patch } : m)) }));
-        persist();
-      };
-      const appendText = (chunk: string) => {
-        const current = get().messages.find((m) => m.id === assistantId)?.content ?? "";
-        patchAssistant({ content: current + chunk });
-      };
-      /** A source of the answer: kept as a part, in the order it arrived. */
-      const appendCitation = (citation: NonNullable<ChatMessage["parts"]>[number]) => {
-        const current = get().messages.find((m) => m.id === assistantId)?.parts ?? [];
-        patchAssistant({ parts: [...current, citation] });
-      };
-      /** The parts of the answer, as they stand. */
-      const assistantParts = (): NonNullable<ChatMessage["parts"]> =>
-        get().messages.find((m) => m.id === assistantId)?.parts ?? [];
-      /**
-       * The parts of the answer, with what the tools said put in them.
-       *
-       * A frame that changes nothing leaves the parts as they are: the
-       * answer is not written again for nothing.
-       */
-      const patchToolParts = (
-        change: (parts: NonNullable<ChatMessage["parts"]>) => NonNullable<ChatMessage["parts"]>,
-      ) => {
-        const current = assistantParts();
-        const next = change(current);
-        if (next === current) return;
-        patchAssistant({ parts: next });
-      };
-      /** A call of a tool: the assistant shows what it is doing. */
-      const appendToolCall = (data: Record<string, unknown>) => {
-        patchToolParts((parts) => withToolCall(parts, data));
-      };
-      /** The outcome of a call: the line of the call says it is over. */
-      const appendToolResult = (data: Record<string, unknown>) => {
-        patchToolParts((parts) => withToolResult(parts, data));
-      };
-      /** A source a call found: it is one of the results of the call. */
-      const appendToolSource = (data: Record<string, unknown>) => {
-        patchToolParts((parts) => withToolSource(parts, data));
-      };
-      /** The service named the conversation: the default title gives way to it. */
-      const applyServerTitle = (serverTitle: string) => {
-        set((s) => ({
-          conversations: s.conversations.map((c) => {
-            if (c.id !== conversationId) return c;
-            const title = resolveConversationTitle(c.title, serverTitle);
-            return title === c.title ? c : { ...c, title };
-          }),
-        }));
-        persist();
-      };
       const rememberServerConversation = (serverConversationId: string) => {
         set((s) => ({ conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, serverConversationId } : c)) }));
         persist();
       };
 
-      const controller = new AbortController();
-      activeRuns.set(conversationId, controller);
-      try {
-        await port.stream(
+      await runTurn(conversationId, { connectorId, model, connectionId }, (turn, signal) =>
+        stream(
           {
             conversationId,
             text: body,
@@ -247,43 +244,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
             context: sel?.context,
             onServerConversationId: rememberServerConversation,
           },
-          (event, data) => {
-            if (event === "text.delta" && typeof data.text === "string") appendText(data.text);
-            else if (event === "citation") {
-              const citation = citationFromEvent(data);
-              if (citation) {
-                appendCitation({
-                  type: "citation",
-                  pageId: citation.pageId,
-                  ...(citation.blockId ? { blockId: citation.blockId } : {}),
-                  title: citation.title,
-                  snippet: citation.snippet,
-                });
-                // The sources a tool found are its result: they arrive between
-                // the call and its outcome.
-                appendToolSource(data);
-              }
-            } else if (event === "tool.called") {
-              appendToolCall(data);
-            } else if (event === "tool.result") {
-              appendToolResult(data);
-            } else if (event === "run.started") {
-              if (typeof data.runId === "string") patchAssistant({ runId: data.runId });
-              if (typeof data.conversationTitle === "string") applyServerTitle(data.conversationTitle);
-            } else if (event === "done") patchAssistant({ status: "done" });
-            else if (event === "error") patchAssistant({ status: "error", errorCode: typeof data.code === "string" ? data.code : "internal" });
-          },
-          controller.signal,
-        );
-        // The stream ended without a terminal frame (a stop, or a run that gave
-        // up): what arrived stays, and the answer is not marked as failed.
-        const assistant = get().messages.find((m) => m.id === assistantId);
-        if (assistant?.status === "streaming") patchAssistant({ status: "done" });
-      } catch (error) {
-        patchAssistant({ status: "error", errorCode: failureCode(error) });
-      } finally {
-        activeRuns.delete(conversationId);
-      }
+          (event, data) => dispatchRunEvent(event, data, turn),
+          signal,
+        ),
+      );
     },
 
     stop: (conversationId) => {
