@@ -102,12 +102,16 @@ create table if not exists public.osionos_workspace_members (
 -- visibility, collaborators, content, archived_at. The production table
 -- (models/osionos-bridge-migration.sql) carries many more; this fixture holds
 -- the same column types and nothing more.
+--
+-- The visibility is nullable here, while the production column is NOT NULL:
+-- the read rule handles a NULL visibility (it is 'private'), and the table of
+-- the ACL agreement has to cover it.
 create table if not exists public.osionos_pages (
 	id uuid primary key default gen_random_uuid(),
 	workspace_id uuid not null,
 	owner_id uuid,
 	title text not null default 'Untitled',
-	visibility text not null default 'private',
+	visibility text default 'private',
 	collaborators jsonb not null default '[]'::jsonb,
 	content jsonb not null default '[]'::jsonb,
 	archived_at timestamptz
