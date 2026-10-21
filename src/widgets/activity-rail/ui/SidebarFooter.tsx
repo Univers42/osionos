@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
+import React, { useState } from "react";
 import {
   Settings,
   LayoutGrid,
@@ -20,6 +20,8 @@ import {
   X,
 } from "lucide-react";
 
+import { useWorkspaceInvitesStore } from "@/store/settings";
+import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
 import { SidebarNavItem } from "./SidebarNavItem";
 
 // Parity gate: the BaaS console nav item only exists when a project is
@@ -42,6 +44,16 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   showInviteCTA,
   onDismissInvite,
 }) => {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Same pattern as UserSwitcherPanel: open the real SettingsCenter on the
+  // People tab, and let the People panel consume this request to open its
+  // invite modal.
+  const openInviteSettings = () => {
+    useWorkspaceInvitesStore.getState().requestInvite();
+    setSettingsOpen(true);
+  };
+
   return (
     <>
       <div
@@ -82,7 +94,17 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
       {showInviteCTA && (
         <div className="mx-2 mb-2 mt-1.5 relative">
           <div
-            className="relative p-2 rounded-lg overflow-hidden cursor-pointer hover:bg-[var(--osio-bg-hover)] transition-colors duration-(--osio-dur-fast)"
+            role="button"
+            tabIndex={0}
+            aria-label="Invite members"
+            onClick={openInviteSettings}
+            onKeyDown={(event) => {
+              if (event.target !== event.currentTarget) return;
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              openInviteSettings();
+            }}
+            className="relative p-2 rounded-lg overflow-hidden cursor-pointer hover:bg-[var(--osio-bg-hover)] transition-colors duration-(--osio-dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
             style={{ boxShadow: "var(--osio-border-default) 0 0 0 1px" }}
           >
             <div className="flex items-start gap-2">
@@ -107,12 +129,16 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
                 e.stopPropagation();
                 onDismissInvite();
               }}
+              onKeyDown={(e) => e.stopPropagation()}
               className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-md text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)]"
             >
               <X size={14} />
             </button>
           </div>
         </div>
+      )}
+      {settingsOpen && (
+        <LazySettingsCenter initialTab="people" onClose={() => setSettingsOpen(false)} />
       )}
     </>
   );

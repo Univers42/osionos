@@ -13,6 +13,7 @@
 import React from "react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
+import { IconValueView } from "@/shared/ui";
 // Deep paths, NOT the `@/widgets/database-view` barrel: this file is reached
 // WARM (ExplorerPanel → FolderRail) and the barrel statically pulls DatabaseBlock +
 // WorkspaceDatabaseBlock (→ the editor) + dataSourceProvider (→ the ~458KB seed
@@ -71,7 +72,7 @@ export const FolderRail: React.FC = () => {
           data-active={activeFolderId === folder._id}
           onClick={() => setActiveFolder(folder._id)}
         >
-          <span aria-hidden="true">{folder.icon ?? "📁"}</span>
+          <span aria-hidden="true">{folder.icon ? <IconValueView value={folder.icon} size={14} /> : "📁"}</span>
           <span className="flex-1 truncate">{folder.title}</span>
           <span className="text-xs text-[var(--osio-fg-muted)]">{counts.get(folder._id) ?? 0}</span>
         </button>
