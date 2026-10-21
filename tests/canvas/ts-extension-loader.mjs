@@ -10,6 +10,11 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+// The repo lints src/ and packages/ only, so this file was never linted and its
+// `no-undef` errors (URL) were invisible. The globals it uses are declared here,
+// so the file is lint-clean on its own.
+/* global URL */
+
 // Mirrors the Vite "@/*" -> "src/*" tsconfig path so tests can import modules
 // that use the alias for value imports (type-only "@/" imports are erased).
 const SRC_BASE = new URL("../../src/", import.meta.url);
@@ -85,7 +90,10 @@ export async function resolve(specifier, context, nextResolve) {
 }
 
 function hasKnownExtension(specifier) {
-  return [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".json"].some((extension) => specifier.endsWith(extension));
+  // The query of a specifier is not part of the file name: `a.ts?env=…` is a
+  // .ts file (see the AI client below).
+  const path = specifier.split("?")[0];
+  return [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".json"].some((extension) => path.endsWith(extension));
 }
 
 // Node has no `import.meta.env`, so appUrls.ts would resolve every embedded-app URL to ""
@@ -93,8 +101,25 @@ function hasKnownExtension(specifier) {
 // Give that one module the env object Vite's dev server would: DEV on, nothing set.
 const APP_URLS_MODULE = new URL("../../src/shared/config/appUrls.ts", import.meta.url).href;
 
+// The AI client reads `import.meta.env` (VITE_AI_URL) when it is asked whether the
+// assistant is configured. Node has no env object, so this module is given one too —
+// taken from the `env` query of the import specifier, which makes every environment a
+// module of its own:
+//   await import("../../src/features/ai/api/aiClient.ts?env=" + encodeURIComponent(JSON.stringify({ VITE_AI_URL: "…" })))
+// Without the query the module gets an empty env, like a build that never set the
+// variable.
+const AI_CLIENT_MODULE = new URL("../../src/features/ai/api/aiClient.ts", import.meta.url).href;
+
 export async function load(url, context, nextLoad) {
   const loaded = await nextLoad(url, context);
-  if (url !== APP_URLS_MODULE || loaded.source == null) return loaded;
-  return { ...loaded, source: `import.meta.env ??= { DEV: true };\n${loaded.source}` };
+  if (loaded.source == null) return loaded;
+  if (url === APP_URLS_MODULE) {
+    return { ...loaded, source: `import.meta.env ??= { DEV: true };\n${loaded.source}` };
+  }
+  const [path] = url.split("?");
+  if (path === AI_CLIENT_MODULE) {
+    const env = new URL(url).searchParams.get("env") ?? "{}";
+    return { ...loaded, source: `import.meta.env ??= ${env};\n${loaded.source}` };
+  }
+  return loaded;
 }

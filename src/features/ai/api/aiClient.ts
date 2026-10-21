@@ -14,9 +14,10 @@
  * The client of `osionos-ai` — the service that owns the providers.
  *
  * The wire contract (scratchpad/design/ai-wire-contract.md) is the law: one
- * function per route, the base URL is `${VITE_AI_URL ?? VITE_OSIONOS_BRIDGE_URL
- * ?? VITE_API_URL}/api/ai`, and every route but `/health` carries the session
- * bearer — the same one the agent stream already sends.
+ * function per route, the base URL is `${VITE_AI_URL}/api/ai` — the assistant
+ * is OPT-IN and `VITE_AI_URL` is the only switch — and every route but
+ * `/health` carries the session bearer — the same one the agent stream
+ * already sends.
  *
  * Nothing here knows about providers: the browser never talks to one.
  */
@@ -194,10 +195,19 @@ async function toAiError(response: Response): Promise<AiError> {
 /* The transport                                                              */
 /* -------------------------------------------------------------------------- */
 
-/** The base URL of the service, without a trailing slash. */
+/**
+ * The base URL of the service, without a trailing slash.
+ *
+ * `VITE_AI_URL` is the ONLY switch, and it is empty unless a build asks for
+ * the assistant. There is NO fallback to the bridge's URL: `VITE_API_URL` and
+ * `VITE_OSIONOS_BRIDGE_URL` are set in EVERY build, so a fallback would make
+ * `isAiConfigured()` true everywhere — every build would show the AI actions
+ * of the slash menu and swap the chat port to the AI service even where none
+ * runs, and every AI action would fail.
+ */
 function serviceBase(): string {
   const env = (import.meta.env ?? {}) as Record<string, string>;
-  const base = (env["VITE_AI_URL"] ?? env["VITE_OSIONOS_BRIDGE_URL"] ?? env["VITE_API_URL"] ?? "").trim();
+  const base = (env["VITE_AI_URL"] ?? "").trim();
   return base.replace(/\/$/, "");
 }
 
