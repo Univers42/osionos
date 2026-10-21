@@ -7,7 +7,12 @@
  *
  * The environment:
  *   OSIONOS_AI_DATABASE_URL  the database of the service (the queue is there)
- *   OSIONOS_AI_EMBED_URL     the embedding service (the local TEI)
+ *   OSIONOS_AI_EMBED_BULK_URL the embedding service of the BULK work (the
+ *                            second TEI, the one the CPU is split for); when it
+ *                            is not set the indexer asks OSIONOS_AI_EMBED_URL
+ *   OSIONOS_AI_EMBED_URL     the embedding service of the QUERY (the local
+ *                            TEI the retrieval asks), and the fallback of the
+ *                            indexer
  *   OSIONOS_AI_EMBED_MODEL   the model the service loads; it is written on
  *                            every chunk, so a change of model is visible
  *   OSIONOS_AI_EMBED_TARGET_MS          the latency an embed call must answer
@@ -21,17 +26,22 @@ import { createPool } from '../db.ts';
 import { EMBED_MAX_INPUTS, EMBED_TOKEN_BUDGET } from './batches.ts';
 import { EMBED_MAX_CONCURRENCY, EMBED_TARGET_MS } from './concurrency.ts';
 import { Embedder } from './embedder.ts';
+import { bulkEmbedUrl } from './embedUrl.ts';
 import { IndexerWorker } from './worker.ts';
 
 const databaseUrl = process.env.OSIONOS_AI_DATABASE_URL ?? '';
-const embedUrl = process.env.OSIONOS_AI_EMBED_URL ?? '';
+// The bulk service when the deployment runs one, the query service otherwise:
+// the indexer never asks the query service of a deployment that has a bulk one.
+const embedUrl = bulkEmbedUrl();
 const embedModel = process.env.OSIONOS_AI_EMBED_MODEL ?? 'intfloat/multilingual-e5-small';
 
 if (databaseUrl.length === 0 || embedUrl.length === 0) {
 	// The names only: a URL may hold a password.
 	console.error(
 		`[osionos-ai-indexer] refusing to start: invalid environment variables: ${
-			databaseUrl.length === 0 ? 'OSIONOS_AI_DATABASE_URL' : 'OSIONOS_AI_EMBED_URL'
+			databaseUrl.length === 0
+				? 'OSIONOS_AI_DATABASE_URL'
+				: 'OSIONOS_AI_EMBED_BULK_URL (or OSIONOS_AI_EMBED_URL)'
 		}`,
 	);
 	process.exit(1);

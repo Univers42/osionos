@@ -10,6 +10,10 @@
  * The client is the ENGINE ADAPTER: it is the only place that knows what the
  * service accepts (how many inputs per request). The indexer above it only
  * knows the interface below.
+ *
+ * The indexer points it at the BULK service when the deployment runs one
+ * (embedUrl.ts): the query service answers the queries of the people, the bulk
+ * service answers the backfill, and neither waits for the other.
  */
 
 /** The configuration of the client. */
@@ -97,7 +101,14 @@ export interface EmbedClient {
  * message of a failure ends up in the queue, and the queue is read by humans.
  */
 export class Embedder implements EmbedClient {
-	private readonly baseUrl: string;
+	/**
+	 * The URL of the service this client talks to.
+	 *
+	 * It is public because it is the answer to "which service does this talk
+	 * to?": the indexer asks the bulk one when the deployment has one, and the
+	 * query one otherwise (embedUrl.ts).
+	 */
+	readonly baseUrl: string;
 
 	/** The name of the model: the chunks carry it, so a change is visible. */
 	readonly model: string;

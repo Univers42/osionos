@@ -116,8 +116,20 @@ five seconds. A page is cut into sections at its headings (`heading_1` to
 `heading_3`), and every section into chunks of about 300 to 500 tokens
 (`ceil(chars / 4)`; the real limit of the model is enforced by the embedding
 service, which truncates). The chunks are embedded by the LOCAL service
-(`OSIONOS_AI_EMBED_URL`, a text-embeddings-inference) and written to
+(`OSIONOS_AI_EMBED_BULK_URL`, a text-embeddings-inference of its own; it
+falls back to `OSIONOS_AI_EMBED_URL`, the one the search asks) and written to
 `ai_chunks` with the ACL of the page.
+
+The bulk work and the queries of the people want two different things from an
+embedding service: a backfill fills it with calls of thirty-two inputs, and a
+query that lands during one waits for the whole call (the p95 of an
+interactive query embedding goes from 147 ms to 864 ms during a backfill —
+`services/osionos-ai/spikes/indexer/RESULTS.md`). So the deployment may run
+TWO instances of the same model, one for the queries
+(`OSIONOS_AI_EMBED_URL`) and one for the bulk (`OSIONOS_AI_EMBED_BULK_URL`),
+and the CPU is split between them. The indexer asks the bulk one when it is
+set, and the query one otherwise: an operator who sets nothing keeps the
+service it had.
 
 Only the chunks whose hash changed are embedded again: a chunk that kept its
 hash keeps its vector, even when it moved in the page. A renamed heading
@@ -142,8 +154,10 @@ A failure (the embedding service is down, a page is broken) counts an attempt
 and pushes the next try: 2, 4, 8… seconds, ten minutes at most. After ten
 attempts the page is left alone, and logged once.
 
-`OSIONOS_AI_EMBED_URL` and `OSIONOS_AI_EMBED_MODEL`
-(`intfloat/multilingual-e5-small`) are the only variables of the indexer.
+`OSIONOS_AI_EMBED_BULK_URL` (the embedding service of the bulk work; it
+falls back to `OSIONOS_AI_EMBED_URL`) and `OSIONOS_AI_EMBED_MODEL`
+(`intfloat/multilingual-e5-small`) are the variables of the indexer that name
+its embedding service.
 
 ## Environment
 
@@ -160,11 +174,12 @@ needs none), `OSIONOS_AI_MAX_OUTPUT_TOKENS` (1024), `OSIONOS_AI_USER_DAILY_MICRO
 (200000), `OSIONOS_AI_PLATFORM_DAILY_MICROUSD` (20000000), `OSIONOS_AI_RUNS_PER_MINUTE`
 (20), `OSIONOS_AI_EMBED_URL` and `OSIONOS_AI_EMBED_MODEL`
 (`intfloat/multilingual-e5-small`) — the embedding service of the search of a
-workspace, the same one the indexer writes its vectors with; without it the
-service has no search. A missing or broken variable stops the service and names the
-variable, never its value.
+workspace, the one the indexer writes its vectors with too when it has no
+bulk service of its own; without it the service has no search. A missing or
+broken variable stops the service and names the variable, never its value.
 
-The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_URL` and
+The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_BULK_URL`
+(`OSIONOS_AI_EMBED_URL` when the bulk one is not set) and
 `OSIONOS_AI_EMBED_MODEL` (`intfloat/multilingual-e5-small`).
 
 ## The type check
