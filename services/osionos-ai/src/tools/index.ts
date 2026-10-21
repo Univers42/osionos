@@ -1,8 +1,11 @@
 import { asSchema } from 'ai';
 import type { ToolSet } from 'ai';
+import type { z } from 'zod';
 import type { RetrievedChunk } from '../retrieval/search.ts';
+import type { PermissionAsked } from '../approvals/types.ts';
 import { READ_TOOLS } from './readTools.ts';
-import type { AnyReadTool, ReadToolContext } from './types.ts';
+import { WRITE_TOOLS } from './writeTools.ts';
+import type { ReadToolContext } from './types.ts';
 import { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS } from './loop.ts';
 
 export { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS };
@@ -51,6 +54,13 @@ export interface ToolHooks {
 	onSources?(sources: readonly ToolSource[]): void | Promise<void>;
 	/** The outcome of a tool: the run emits it as an event. */
 	onResult?(outcome: ToolOutcome): void | Promise<void>;
+	/**
+	 * The run asked the user for the right to write.
+	 *
+	 * The run emits it as `permission.asked`, and it ends with the reason
+	 * `awaiting_approval`: the approval row is what waits, not the run.
+	 */
+	onApproval?(asked: PermissionAsked): void | Promise<void>;
 }
 
 /**
@@ -146,11 +156,22 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
  * description and their schema of arguments are input, and the reservation
  * has to count them. The number is computed once, from the tool set, and it
  * never changes: the registry is frozen.
+ *
+ * The write tools are counted even when they are not registered (a
+ * deployment without a bridge URL): the count is a ceiling, and a ceiling
+ * that depends on the deployment is a ceiling that is wrong somewhere.
  */
-export const TOOL_DEFINITION_CHARS = toolDefinitionChars(READ_TOOLS);
+export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...WRITE_TOOLS]);
+
+/** The shape the count of the definitions reads. */
+interface ToolDefinition {
+	name: string;
+	description: string;
+	input: z.ZodType<unknown>;
+}
 
 /** The length of the JSON the tools are sent as. */
-function toolDefinitionChars(tools: readonly AnyReadTool[]): number {
+function toolDefinitionChars(tools: readonly ToolDefinition[]): number {
 	const definitions = tools.map((tool) => ({
 		type: 'function',
 		function: {
