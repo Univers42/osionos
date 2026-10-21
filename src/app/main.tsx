@@ -14,6 +14,8 @@ import { lazy, Profiler, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
 import App from "./App.tsx";
+import { setInferencePort } from "@/features/chat/model/useChatStore";
+import { selectInferencePort } from "@/features/ai/model/aiInferencePort";
 
 // Public published-page view (/p/:token) — a standalone read-only render mounted
 // BEFORE the app + its auth so an unauthenticated visitor never boots the editor.
@@ -47,6 +49,10 @@ globalThis.addEventListener("vite:preloadError", () => {
     globalThis.location.reload();
   }
 });
+
+// The Assistant pane talks to a port, chosen once and for all here: the AI
+// service when a base URL is configured, the offline stub otherwise.
+setInferencePort(selectInferencePort());
 
 const root = document.getElementById("root");
 if (root) {

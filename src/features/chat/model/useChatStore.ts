@@ -6,18 +6,44 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/21 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { create } from "zustand";
 
 import type { ChatMessage, Conversation, Project, SharedContextItem } from "./chatTypes";
-import { stubInferencePort } from "./inferencePort";
+import { stubInferencePort, type InferencePort } from "./inferencePort";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
 const uid = () => globalThis.crypto.randomUUID();
+
+/**
+ * The port the Assistant pane talks to. It is injected at app start: the AI
+ * service when one is configured, the offline stub otherwise. The default is
+ * the stub, so the pane keeps answering (visibly fakely) with no service.
+ */
+let inferencePort: InferencePort = stubInferencePort;
+
+/** Injects the port the pane talks to. Called once, at app start. */
+export function setInferencePort(port: InferencePort): void {
+  inferencePort = port;
+}
+
+/** The port in use right now. */
+export function getInferencePort(): InferencePort {
+  return inferencePort;
+}
+
+/** The runs in flight, per conversation. A conversation speaks one at a time. */
+const activeRuns = new Map<string, AbortController>();
+
+/** The code of a failure — the service's own, when it carries one. */
+function failureCode(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" ? code : "internal";
+}
 
 interface ChatData {
   projects: Project[];
@@ -46,6 +72,7 @@ export interface ChatStoreState extends ChatData {
   setActive: (id: string | null) => void;
   setConversationModel: (id: string, connectorId: string, model: string) => void;
   send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string }) => Promise<void>;
+  stop: (conversationId: string) => void;
   attachContext: (scope: SharedContextItem["scope"], scopeId: string, item: Pick<SharedContextItem, "kind" | "label" | "ref">) => void;
   detachContext: (id: string) => void;
   messagesFor: (conversationId: string) => ChatMessage[];
@@ -113,10 +140,79 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       if (!conversation || !text.trim()) return;
       const connectorId = sel?.connectorId ?? conversation.connectorId ?? "anthropic";
       const model = sel?.model ?? conversation.model ?? "auto";
-      addMessage(conversationId, { role: "user", content: text.trim(), connectorId, model });
-      const history = get().messagesFor(conversationId).map((m) => ({ role: m.role, content: m.content }));
-      const result = await stubInferencePort.complete({ connectorId, model, messages: history });
-      addMessage(conversationId, { role: "assistant", content: result.content, connectorId, model });
+      const port = getInferencePort();
+
+      // No streaming port: the offline path — one complete answer, no frames.
+      if (!port.stream) {
+        addMessage(conversationId, { role: "user", content: text.trim(), connectorId, model });
+        const history = get().messagesFor(conversationId).map((m) => ({ role: m.role, content: m.content }));
+        const result = await port.complete({ connectorId, model, messages: history });
+        addMessage(conversationId, { role: "assistant", content: result.content, connectorId, model });
+        return;
+      }
+
+      // A conversation speaks one at a time — the service refuses the second
+      // run of a conversation with a 409, so the pane refuses it too.
+      if (activeRuns.has(conversationId)) return;
+
+      const body = text.trim();
+      addMessage(conversationId, { role: "user", content: body, connectorId, model });
+
+      const assistantId = uid();
+      set((s) => ({
+        messages: [...s.messages, { id: assistantId, conversationId, role: "assistant", content: "", createdAt: now(), connectorId, model, status: "streaming" }],
+        conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, updatedAt: now() } : c)),
+      }));
+      persist();
+
+      const patchAssistant = (patch: Partial<ChatMessage>) => {
+        set((s) => ({ messages: s.messages.map((m) => (m.id === assistantId ? { ...m, ...patch } : m)) }));
+        persist();
+      };
+      const appendText = (chunk: string) => {
+        const current = get().messages.find((m) => m.id === assistantId)?.content ?? "";
+        patchAssistant({ content: current + chunk });
+      };
+      const rememberServerConversation = (serverConversationId: string) => {
+        set((s) => ({ conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, serverConversationId } : c)) }));
+        persist();
+      };
+
+      const controller = new AbortController();
+      activeRuns.set(conversationId, controller);
+      try {
+        await port.stream(
+          {
+            conversationId,
+            text: body,
+            model,
+            connectorId,
+            title: conversation.title,
+            serverConversationId: conversation.serverConversationId,
+            onServerConversationId: rememberServerConversation,
+          },
+          (event, data) => {
+            if (event === "text.delta" && typeof data.text === "string") appendText(data.text);
+            else if (event === "run.started" && typeof data.runId === "string") patchAssistant({ runId: data.runId });
+            else if (event === "done") patchAssistant({ status: "done" });
+            else if (event === "error") patchAssistant({ status: "error", errorCode: typeof data.code === "string" ? data.code : "internal" });
+          },
+          controller.signal,
+        );
+        // The stream ended without a terminal frame (a stop, or a run that gave
+        // up): what arrived stays, and the answer is not marked as failed.
+        const assistant = get().messages.find((m) => m.id === assistantId);
+        if (assistant?.status === "streaming") patchAssistant({ status: "done" });
+      } catch (error) {
+        patchAssistant({ status: "error", errorCode: failureCode(error) });
+      } finally {
+        activeRuns.delete(conversationId);
+      }
+    },
+
+    stop: (conversationId) => {
+      // The abort reaches the port, which cancels the run on the service.
+      activeRuns.get(conversationId)?.abort();
     },
 
     attachContext: (scope, scopeId, item) => {

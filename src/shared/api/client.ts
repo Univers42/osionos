@@ -66,6 +66,14 @@ export function getActivePageJwt(): string | null {
   });
 }
 
+/** The id of the workspace in use, when a session has one. */
+export function getActiveWorkspaceId(): string | null {
+  return userStore((state) => {
+    const workspace = (state.activeWorkspace as (() => { _id?: string } | null) | undefined)?.();
+    return workspace?._id ?? null;
+  });
+}
+
 /** Tells the user store a bridge call came back 401 session_revoked, so it drops the session that owned the token. */
 function reportRevokedSession(token: string): void {
   userStore((state) => (state.handleSessionRevoked as ((token: string) => void) | undefined)?.(token));

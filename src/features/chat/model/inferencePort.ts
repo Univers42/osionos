@@ -12,9 +12,8 @@
 
 /**
  * THE INFERENCE BOUNDARY (§6.5). The Chat Shell's "send" path terminates here.
- * Phase 1 ships ONLY a stub that returns a visibly-fake assistant message echoing
- * the resolved {connector, model}. NO provider completion/streaming API is imported
- * (the inference fence test asserts this). Phase 2 = swap in a real adapter behind
+ * Phase 1 shipped ONLY a stub that returns a visibly-fake assistant message echoing
+ * the resolved {connector, model}. Phase 2 = swap in a real adapter behind
  * this single port — e.g. the existing agent streaming / bridge-agent path.
  */
 
@@ -33,8 +32,49 @@ export interface InferenceResult {
   content: string;
 }
 
+/** The payload of a stream frame. The pane reads `text`, `code` and `message`. */
+export interface InferenceEventData {
+  text?: string;
+  code?: string;
+  message?: string;
+  runId?: string;
+  [key: string]: unknown;
+}
+
+/** What a streamed answer is asked for. */
+export interface StreamInferenceRequest {
+  /** The local conversation — the key the port maps to its server-side one. */
+  conversationId: string;
+  /** The user's text for this turn. */
+  text: string;
+  /** The model the app has selected, if any. */
+  model?: string;
+  /** The provider the app has selected, if any. */
+  connectorId?: string;
+  /** The server-side conversation, when the local one already has one. */
+  serverConversationId?: string;
+  /** The title the server-side conversation gets when it is created. */
+  title?: string;
+  /** The workspace that owns the conversation, when the caller knows it. */
+  workspaceId?: string;
+  /** Called once the server-side conversation exists (created on the first send). */
+  onServerConversationId?: (id: string) => void;
+}
+
 export interface InferencePort {
   complete(request: InferenceRequest): Promise<InferenceResult>;
+  /**
+   * A streamed answer. OPTIONAL: a port without it answers with `complete`
+   * only — that is the offline path, and it keeps working.
+   *
+   * The port owns the run: it must relay every frame to `onEvent`, and a stop
+   * (the abort of `signal`) must cancel the run on the service too.
+   */
+  stream?(
+    request: StreamInferenceRequest,
+    onEvent: (event: string, data: InferenceEventData) => void,
+    signal?: AbortSignal,
+  ): Promise<void>;
 }
 
 /** Phase-1 stub: a fixed, obviously-fake assistant turn. Crosses no inference fence. */

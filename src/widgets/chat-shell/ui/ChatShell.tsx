@@ -13,7 +13,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 
-import { useChatStore } from "@/features/chat/model/useChatStore";
+import { useChatStore, getInferencePort } from "@/features/chat/model/useChatStore";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
@@ -34,6 +34,7 @@ export const ChatShell: React.FC = () => {
   const setActive = useChatStore((s) => s.setActive);
   const setConversationModel = useChatStore((s) => s.setConversationModel);
   const send = useChatStore((s) => s.send);
+  const stop = useChatStore((s) => s.stop);
 
   const [text, setText] = useState("");
   const [onboarding, setOnboarding] = useState<null | "ask" | "choose">(null);
@@ -43,14 +44,18 @@ export const ChatShell: React.FC = () => {
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
   const messages = allMessages.filter((m) => m.conversationId === activeId);
+  const streaming = messages.some((m) => m.status === "streaming");
   const hasConnection = connectedSnaps.length > 0;
+  // The AI service owns the providers, so a streaming port needs no connector
+  // of the app's own. The offline stub does: it stands in for a provider.
+  const needsConnection = !getInferencePort().stream;
   const fallbackConnector = connectedSnaps[0]?.providerKey ?? "anthropic";
   const modelValue = active?.model && active.model !== "auto" && active.connectorId ? `${active.connectorId}:${active.model}` : "auto";
 
   const submit = (explicit?: string) => {
     const value = (explicit ?? text).trim();
     if (!active || !value) return;
-    if (!hasConnection) { setText(value); setOnboarding("ask"); return; } // ask to connect, keep the message
+    if (needsConnection && !hasConnection) { setText(value); setOnboarding("ask"); return; } // ask to connect, keep the message
     const { connectorId, model } = resolveModel(modelValue, fallbackConnector);
     void send(active.id, value, { connectorId, model });
     setText("");
@@ -81,6 +86,8 @@ export const ChatShell: React.FC = () => {
     onConnect: () => setOnboarding("choose"),
     model: modelValue,
     onModelChange,
+    streaming,
+    onStop: () => { if (active) stop(active.id); },
   };
 
   return (
@@ -115,7 +122,9 @@ export const ChatShell: React.FC = () => {
           <EmptyStateHero {...composerProps} onPick={(s) => submit(s)} />
         ) : (
           <>
-            <div className="flex-1 overflow-y-auto"><ChatThread messages={messages} /></div>
+            <div className="flex-1 overflow-y-auto">
+              <ChatThread messages={messages} onRetry={(retryText) => { if (active) void send(active.id, retryText); }} />
+            </div>
             <div className="mx-auto w-full max-w-3xl px-4 pb-4"><ChatComposer {...composerProps} /></div>
           </>
         )}
