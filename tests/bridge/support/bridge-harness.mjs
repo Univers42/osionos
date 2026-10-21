@@ -76,6 +76,13 @@ function project(row, select) {
 	return Object.fromEntries(select.split(',').filter((key) => Object.hasOwn(row, key)).map((key) => [key, row[key]]));
 }
 
+/** JSON with every object's keys sorted: two contents that differ only in key order are the same content. */
+function canonical(value) {
+	if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+	if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+	return JSON.stringify(value ?? null);
+}
+
 function readRows(rows, params) {
 	const found = matchingRows(rows, params).map((row) => project(row, params.get('select')));
 	// `id.asc` (a keyset scan) sorts by id before the limit; the comparison is the raw
@@ -106,7 +113,16 @@ function upsertRows(rows, body, params, prefer) {
 function writeRows(rows, method, params, body, prefer) {
 	if (method === 'POST') return upsertRows(rows, body, params, prefer);
 	const hits = matchingRows(rows, params);
-	if (method === 'PATCH') hits.forEach((row) => Object.assign(row, body));
+	if (method === 'PATCH') {
+		hits.forEach((row) => {
+			const before = row.content;
+			Object.assign(row, body);
+			// The content-scoped version bump the migration's trigger does: a row that
+			// carries a version and whose content changed moves one step forward. A row
+			// without the column is left alone (the column may not be there yet).
+			if (Object.hasOwn(row, 'version') && canonical(before) !== canonical(row.content)) row.version = Number(row.version) + 1;
+		});
+	}
 	if (method === 'DELETE') hits.forEach((row) => rows.splice(rows.indexOf(row), 1));
 	return hits;
 }
@@ -135,7 +151,7 @@ function workspaceMemberRpc(body, table) {
 }
 
 /** seed: { table: rows[] }, records: { 'dbId/table': rows[] }, failWhen(call) → { status, body } | null. */
-export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null, realWorkspaceRpc = false } = {}) {
+export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null, realWorkspaceRpc = false, rpc = {} } = {}) {
 	const tables = new Map(Object.entries(seed).map(([name, rows]) => [name, rows.map((row) => structuredClone(row))]));
 	const table = (name) => tables.get(name) ?? tables.set(name, []).get(name);
 	// The FKs of osionos_workspace_members / osionos_pages guarantee their workspace exists, so a
@@ -163,12 +179,17 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		}
 		const name = parsed.pathname.replace('/rest/v1/', '');
 		const prefer = String(init.headers?.Prefer ?? '');
-		const call = { method, table: name, params: parsed.searchParams, body };
+		const call = { method, table: name, params: parsed.searchParams, body, prefer };
 		calls.push(call);
 		const failure = failWhen(call);
 		if (failure) return jsonResponse(failure.body, failure.status);
 		if (name === 'rpc/osionos_bridge_list_workspaces') {
 			return jsonResponse(realWorkspaceRpc ? workspaceMemberRpc(body, table) : workspaceRpc(body));
+		}
+		// A registered RPC answers with its own body (the append function returns
+		// table(version bigint, content jsonb)); an unregistered one keeps the row path.
+		if (method === 'POST' && Object.hasOwn(rpc, name.slice(4))) {
+			return jsonResponse(rpc[name.slice(4)](body, { table }), 200);
 		}
 		if (method === 'GET' && isEmbedRead(parsed.searchParams)) {
 			try {
@@ -189,7 +210,11 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		}
 		const written = writeRows(table(name), method, parsed.searchParams, body, prefer);
 		if (!written) return jsonResponse({ code: '23505', message: 'duplicate key' }, 409);
-		return prefer.includes('return=representation') ? jsonResponse(written, method === 'POST' ? 201 : 200) : new Response(null, { status: 204 });
+		// A PATCH answers with the columns its select names (PostgREST projects the
+		// written rows), so `select=version` really answers [{"version":n}] — and a
+		// write that matched no row answers [].
+		const answered = method === 'PATCH' ? written.map((row) => project(row, parsed.searchParams.get('select'))) : written;
+		return prefer.includes('return=representation') ? jsonResponse(answered, method === 'POST' ? 201 : 200) : new Response(null, { status: 204 });
 	}
 	return { fetchImpl, calls, outbound, stubErrors, rows: table, page: (id) => table('osionos_pages').find((row) => row.id === id) };
 }
@@ -198,7 +223,7 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 // request answers 503 until the poller's first load, which unrelated route tests must not wait for.
 // The administrator list is set explicitly: with it unset the bridge has no account administrator
 // and says so at start-up, which the boot-line test counts.
-export function harnessConfig({ sessionCutoffs = 'off' } = {}) {
+export function harnessConfig({ sessionCutoffs = 'off', env = {} } = {}) {
 	return configFromEnv({
 		OSIONOS_SESSION_CUTOFFS: sessionCutoffs,
 		OSIONOS_APP_URL: 'http://localhost:3001',
@@ -209,6 +234,7 @@ export function harnessConfig({ sessionCutoffs = 'off' } = {}) {
 		OSIONOS_QUERY_ROUTER_URL: QUERY_ROUTER_URL,
 		OSIONOS_BAAS_API_KEY: 'tenant-test-key',
 		OSIONOS_ADMIN_EMAILS: 'admin@example.test',
+		...env,
 	});
 }
 

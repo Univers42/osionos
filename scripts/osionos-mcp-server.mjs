@@ -50,6 +50,9 @@ const DEFAULT_API_URL = DEFAULT_BRIDGE_URL;
 const SERVER_NAME = 'osionos-mcp';
 const SERVER_VERSION = '0.1.0';
 const TEXT_LIMIT = 60_000;
+// The append route takes at most 100 blocks per call, so a longer text is appended
+// in batches (each one its own atomic append).
+const APPEND_BLOCK_BATCH = 100;
 const FETCH_TIMEOUT_MS = 8_000;
 const BLOCK_TYPES = [
   'paragraph',
@@ -912,14 +915,21 @@ server.registerTool('osionos_append_to_page', {
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
 }, async ({ pageId, text, blockType }) => {
-  const current = await apiRequest(`/api/pages/${encodeURIComponent(pageId)}`);
-  const existing = Array.isArray(current?.content) ? current.content : [];
   const appendedBlocks = textToBlocks(text, blockType);
-  const page = await apiRequest(`/api/pages/${encodeURIComponent(pageId)}`, {
-    method: 'PATCH',
-    body: { content: [...existing, ...appendedBlocks] },
-  });
-  return textResult({ appendedBlocks: appendedBlocks.length, page: compactPage(page) });
+  // The atomic append route: the GET-then-PATCH this replaces read the page and wrote
+  // the whole array back, which loses whatever landed in between. A fresh idempotency
+  // key per call keeps a retried append from landing twice.
+  let page = null;
+  for (let at = 0; at < appendedBlocks.length; at += APPEND_BLOCK_BATCH) {
+    page = await apiRequest(`/api/pages/${encodeURIComponent(pageId)}/blocks`, {
+      method: 'POST',
+      body: {
+        blocks: appendedBlocks.slice(at, at + APPEND_BLOCK_BATCH),
+        idempotencyKey: randomUUID(),
+      },
+    });
+  }
+  return textResult({ appendedBlocks: appendedBlocks.length, version: page?.version ?? null, content: page?.content ?? [] });
 });
 
 server.registerTool('osionos_archive_page', {
