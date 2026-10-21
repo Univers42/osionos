@@ -27,7 +27,11 @@ const startRunSchema = z.object({
 	context: z
 		.object({
 			// At most three pages: the prompt carries them, and the prompt has a size.
-			pageIds: z.array(z.string().regex(UUID, 'pageIds must be uuids')).max(3),
+			pageIds: z.array(z.string().regex(UUID, 'pageIds must be uuids')).max(3).optional(),
+			// The whole workspace of the caller is searched: the run quotes the
+			// pages that answer the question, and the client gets them as
+			// `citation` events.
+			workspace: z.boolean().optional(),
 		})
 		.optional(),
 });
@@ -89,8 +93,12 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		return 404;
 	}
 	const pageIds = body.context?.pageIds ?? [];
+	// The whole workspace of the caller is searched: the run quotes what it
+	// finds, and every page it quotes is checked again with the bridge's rule.
+	const searchWorkspace = body.context?.workspace === true;
 	// The workspaces of the caller are the gate of the pages: they are read
-	// only when the client quotes something.
+	// only when the client quotes something. The search reads them again, on
+	// its own, when it needs them.
 	const workspaces = pageIds.length > 0 ? await memberWorkspaceIds(ctx.deps.db, user) : [];
 	const outcome = await startRun({
 		db: ctx.deps.db,
@@ -102,6 +110,8 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		target: resolved.target,
 		pageIds,
 		memberWorkspaceIds: workspaces,
+		user,
+		searchWorkspace,
 		emit: (event) => writeSseFrame(ctx.response, event),
 	});
 	if (outcome.kind === 'refused') {

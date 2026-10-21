@@ -11,7 +11,9 @@ import { markRun } from './repo.ts';
 import type { RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
 import { buildUserTurn, historyChars, historyMessages, promptCharCount, quotedPageChars } from './prompt.ts';
+import { sourceChars } from './sources.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
+import type { RetrievedChunk } from '../retrieval/search.ts';
 import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
 
 /**
@@ -44,6 +46,8 @@ export interface UpstreamRunInput {
 	reserved: number;
 	history: HistoryMessage[];
 	pages: readonly PageContext[];
+	/** The sources of the answer: the chunks the retrieval found. */
+	sources: readonly RetrievedChunk[];
 	skippedPageIds: readonly string[];
 	userMessageId: string;
 	/** The title of the conversation: the first frame carries it. */
@@ -66,6 +70,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		reserved,
 		history,
 		pages,
+		sources,
 		skippedPageIds,
 		userMessageId,
 		title,
@@ -91,6 +96,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(pages),
+		sourceChars: sourceChars(sources),
 	});
 
 	try {
@@ -101,11 +107,25 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			userMessageId,
 			skippedPageIds: [...skippedPageIds],
 			conversationTitle: title,
+			retrievedCount: sources.length,
 		});
+
+		// The sources of the answer: one frame each, in the order the model
+		// sees them, before the first word of the answer. The number of a
+		// source is its rank: the first is [1], the second [2].
+		for (const [index, source] of sources.entries()) {
+			await emit('citation', {
+				n: index + 1,
+				pageId: source.pageId,
+				...(source.blockId ? { blockId: source.blockId } : {}),
+				title: source.title,
+				snippet: source.snippet,
+			});
+		}
 
 		const messages: ModelMessage[] = [
 			...historyMessages(history),
-			{ role: 'user', content: buildUserTurn(text, pages) },
+			{ role: 'user', content: buildUserTurn(text, pages, sources) },
 		];
 
 		const outcome = await pumpUpstream({
@@ -139,9 +159,20 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			conversationId,
 			ownerId,
 			role: 'assistant',
-			parts: reasoning
-				? [{ type: 'text', text: answer }, { type: 'reasoning', text: reasoning }]
-				: [{ type: 'text', text: answer }],
+			parts: [
+				...(reasoning
+					? [{ type: 'text', text: answer }, { type: 'reasoning', text: reasoning }]
+					: [{ type: 'text', text: answer }]),
+				// The sources of the answer, in the order they were given to the
+				// model: the part of a source is its number minus one.
+				...sources.map((source) => ({
+					type: 'citation',
+					pageId: source.pageId,
+					...(source.blockId ? { blockId: source.blockId } : {}),
+					title: source.title,
+					snippet: source.snippet,
+				})),
+			],
 			model: target.modelId,
 			runId,
 			usage: { inputTokens, outputTokens, costMicroUsd: cost },
