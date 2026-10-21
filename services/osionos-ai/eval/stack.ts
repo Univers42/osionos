@@ -52,6 +52,8 @@ export interface IndexReport {
 	chunks: number;
 	embedded: number;
 	withVector: number;
+	/** The bytes the chunks and their vectors take in the database. */
+	bytes: number;
 }
 
 /** The stack a run measures on. */
@@ -130,7 +132,7 @@ async function addMembers(db: Pool): Promise<void> {
 }
 
 /** The indexer, until the queue is empty. */
-async function indexCorpus(db: Pool, options: StackOptions): Promise<Omit<IndexReport, 'withVector'>> {
+async function indexCorpus(db: Pool, options: StackOptions): Promise<Omit<IndexReport, 'withVector' | 'bytes'>> {
 	const embedder = new Embedder({ baseUrl: options.embedUrl, model: options.embedModel });
 	const done: { chunks: number; embedded: number; ms: number }[] = [];
 	const worker = new IndexerWorker({
@@ -199,9 +201,20 @@ export async function startStack(options: StackOptions): Promise<{ stack: EvalSt
 		'select count(*)::int as n from public.ai_chunks where embedding is not null',
 	);
 	const withVector = vectors.rows[0]?.n ?? 0;
+	// The size of the index: the cost of a model with wider vectors is read
+	// against this number. The table is partitioned, so the size is the sum
+	// of the partitions.
+	const size = await db.query<{ bytes: string }>(
+		`select coalesce(sum(pg_total_relation_size(child.oid)), 0) as bytes
+		 from pg_class child
+		 join pg_inherits inherited on inherited.inhrelid = child.oid
+		 where inherited.inhparent = 'public.ai_chunks'::regclass`,
+	);
+	const bytes = Number(size.rows[0]?.bytes ?? 0);
 	console.log(
 		`[eval] the index: ${indexed.pages} pages, ${indexed.chunks} chunks, ${withVector} of them with a vector, ` +
-			`${(indexed.ms / 1000).toFixed(1)} s (${(indexed.workMs / 1000).toFixed(1)} s of page work)`,
+			`${(indexed.ms / 1000).toFixed(1)} s (${(indexed.workMs / 1000).toFixed(1)} s of page work), ` +
+			`${(bytes / 1024 / 1024).toFixed(2)} MB`,
 	);
 
 	const { titleBySlug, slugByPageId, ownerByQuestion } = readCorpusIndex();
@@ -228,6 +241,6 @@ export async function startStack(options: StackOptions): Promise<{ stack: EvalSt
 
 	return {
 		stack: { db, pages, workspaces, titleBySlug, slugByPageId, authUser, retrievalUser },
-		index: { ...indexed, withVector },
+		index: { ...indexed, withVector, bytes },
 	};
 }
