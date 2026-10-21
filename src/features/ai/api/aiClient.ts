@@ -141,7 +141,11 @@ export interface StartRunInput {
   model?: string;
   /** The connection the run spends — `platform` when the caller does not say. */
   connectionId?: string;
-  context?: { pageIds: string[] };
+  /**
+   * What the answer is read from: the pages it may use (at most three), and
+   * whether the caller's whole workspace is searched.
+   */
+  context?: { pageIds?: string[]; workspace?: boolean };
 }
 
 /** The body of `POST /complete` — an inline editor action, never persisted. */

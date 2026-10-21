@@ -1,20 +1,24 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   ChatComposer.tsx                                   :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   ChatComposer.tsx                                     :+:      :::    :+:   */
+/*                                                    elements  Histories        */
+/*   By: dlesieur <dlesieur@student.42.fr>          #+#    #+#             */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/21 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useEffect, useRef } from "react";
-import { ArrowUp, Plug, Square } from "lucide-react";
+import { ArrowUp, FileText, Layers, Plug, Square, X } from "lucide-react";
 
 import { AiConnectionPicker } from "./AiConnectionPicker";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
+import { WORKSPACE_CHIP, type ContextChip } from "@/features/ai/model/aiContext";
+import { PageSelectorMenu } from "@/features/block-editor/ui/PageSelectorMenu";
+import { usePageStore } from "@/store/usePageStore";
+import { useContextPicker } from "../model/useContextPicker";
 
 interface Props {
   value: string;
@@ -25,6 +29,9 @@ interface Props {
   /** The connection and the model every run is sent with. */
   selection: AiSelection;
   onSelectionChange: (selection: AiSelection) => void;
+  /** The pages (and the workspace) the answer is read from. */
+  chips: ContextChip[];
+  onChipsChange: (chips: ContextChip[]) => void;
   autoFocus?: boolean;
   /** True while an answer is streaming: the send button becomes a stop. */
   streaming?: boolean;
@@ -33,22 +40,67 @@ interface Props {
 }
 
 /** Controlled composer (parent owns the text so it survives a connect prompt). */
-export const ChatComposer: React.FC<Props> = ({ value, onChange, onSubmit, onConnect, selection, onSelectionChange, autoFocus, streaming, onStop }) => {
+export const ChatComposer: React.FC<Props> = ({
+  value,
+  onChange,
+  onSubmit,
+  onConnect,
+  selection,
+  onSelectionChange,
+  chips,
+  onChipsChange,
+  autoFocus,
+  streaming,
+  onStop,
+}) => {
   const ref = useRef<HTMLTextAreaElement>(null);
   const grow = (el: HTMLTextAreaElement) => { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 240)}px`; };
   useEffect(() => { if (ref.current) grow(ref.current); }, [value]);
 
+  // What the assistant is pointed at: the "@" picker and the chips.
+  const picker = useContextPicker({ value, onChange, chips, onChipsChange });
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // The picker has the keyboard while it is open: Enter picks, Escape closes.
+    if (picker.trigger) {
+      if (e.key === "Escape") picker.cancel();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(); }
   };
 
   return (
-    <div className="rounded-2xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-sm)] focus-within:border-[var(--osio-accent)]">
+    <div className="relative rounded-2xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-sm)] focus-within:border-[var(--osio-accent)]">
+      {chips.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5 px-3 pt-2" data-testid="ai-context-chips">
+          {chips.map((chip) => (
+            <span
+              key={chip.id}
+              className="inline-flex max-w-56 items-center gap-1 rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-0.5 text-2xs text-[var(--osio-fg-default)]"
+            >
+              {chip.kind === "workspace" ? <Layers size={12} /> : <FileText size={12} />}
+              <span className="truncate">{chip.label}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${chip.label}`}
+                onClick={() => picker.remove(chip.id)}
+                className="text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {picker.hint ? (
+        <p className="px-3 pt-1.5 text-2xs text-[var(--osio-fg-muted)]" data-testid="ai-context-hint">{picker.hint}</p>
+      ) : null}
       <textarea
         ref={ref}
         autoFocus={autoFocus}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => { onChange(e.target.value); picker.sync(e.target, e.target.value); }}
+        onSelect={(e) => picker.sync(e.currentTarget, value)}
         onKeyDown={onKeyDown}
         rows={1}
         placeholder="Do anything with AI…"
@@ -87,6 +139,19 @@ export const ChatComposer: React.FC<Props> = ({ value, onChange, onSubmit, onCon
           </button>
         )}
       </div>
+      {picker.trigger && picker.position ? (
+        <PageSelectorMenu
+          position={picker.position}
+          filter={picker.trigger.query}
+          heading="Pages the answer may read"
+          onSelect={(pageId) => {
+            const page = usePageStore.getState().pageById(pageId);
+            picker.pick({ id: pageId, kind: "page", label: page?.title || "Untitled", pageId });
+          }}
+          leading={{ label: WORKSPACE_CHIP.label, onSelect: () => picker.pick(WORKSPACE_CHIP) }}
+          onClose={() => picker.close()}
+        />
+      ) : null}
     </div>
   );
 };

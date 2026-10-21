@@ -16,6 +16,7 @@ import { AppMark } from "./AppMark";
 import { ChatComposer } from "./ChatComposer";
 import { ConnectorsStrip } from "./ConnectorsStrip";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
+import type { ContextChip } from "@/features/ai/model/aiContext";
 
 const SUGGESTIONS = ["Write a meeting agenda", "Summarize my notes", "Draft an email", "Brainstorm ideas"];
 
@@ -27,10 +28,13 @@ interface Props {
   onPick: (text: string) => void;
   selection: AiSelection;
   onSelectionChange: (selection: AiSelection) => void;
+  /** The pages (and the workspace) the answer is read from. */
+  chips: ContextChip[];
+  onChipsChange: (chips: ContextChip[]) => void;
 }
 
 /** The launcher empty state (per ai_prompt_chat.png): mark + heading + composer + connectors + cards. */
-export const EmptyStateHero: React.FC<Props> = ({ value, onChange, onSubmit, onConnect, onPick, selection, onSelectionChange }) => (
+export const EmptyStateHero: React.FC<Props> = ({ value, onChange, onSubmit, onConnect, onPick, selection, onSelectionChange, chips, onChipsChange }) => (
   <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-6 px-4 py-10">
     <AppMark size={56} />
     <h1 className="text-2xl font-semibold tracking-tight text-[var(--osio-fg-default)]">How can I help you today?</h1>
@@ -42,6 +46,8 @@ export const EmptyStateHero: React.FC<Props> = ({ value, onChange, onSubmit, onC
         onConnect={onConnect}
         selection={selection}
         onSelectionChange={onSelectionChange}
+        chips={chips}
+        onChipsChange={onChipsChange}
         autoFocus
       />
     </div>

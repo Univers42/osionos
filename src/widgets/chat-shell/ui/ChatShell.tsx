@@ -17,6 +17,7 @@ import { useChatStore, getInferencePort } from "@/features/chat/model/useChatSto
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/features/ai/model/aiSelection";
+import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
 import { openAiConnections } from "@/features/settings/settingsOpener";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
@@ -39,6 +40,9 @@ export const ChatShell: React.FC = () => {
 
   const [text, setText] = useState("");
   const [onboarding, setOnboarding] = useState<null | "ask" | "choose">(null);
+  // What the answer is read from: the pages the reader pointed at, and whether
+  // the whole workspace is searched.
+  const [chips, setChips] = useState<ContextChip[]>([]);
 
   useEffect(() => { initConnectors(); }, [initConnectors]);
   useEffect(() => { if (!activeId) createConversation(); }, [activeId, createConversation]);
@@ -65,6 +69,8 @@ export const ChatShell: React.FC = () => {
       connectorId: fallbackConnector,
       model: selection.model || "auto",
       connectionId: selection.connectionId,
+      // What the answer may read: the pages the reader pointed at.
+      ...(chips.length > 0 ? { context: buildRunContext(chips) } : {}),
     });
     setText("");
   };
@@ -102,6 +108,8 @@ export const ChatShell: React.FC = () => {
     onConnect,
     selection,
     onSelectionChange: setSelection,
+    chips,
+    onChipsChange: setChips,
     streaming,
     onStop: () => { if (active) stop(active.id); },
   };
