@@ -30,6 +30,8 @@ export interface StreamOptions {
 	usage: { promptTokens: number; completionTokens: number } | null;
 	/** The number of tool calls the model makes at once in one step. */
 	parallelToolCalls: number;
+	/** The words the tool-calling step writes before its call: one step, two parts. */
+	toolCallText?: string | null;
 }
 
 /** The text of the chunks: "part-0 part-1 …". */
@@ -162,6 +164,9 @@ export function streamAnswer(
  * The step ends with `tool_calls`: the model asked for a tool, and the
  * answer comes after the tool has run. A step may ask for several tools at
  * once: they travel in the same chunk, one index each.
+ *
+ * The text of the step comes first, when there is one: a model that says
+ * what it is about to do, and then does it, is one step with two parts.
  */
 export function streamToolCall(
 	response: ServerResponse,
@@ -183,6 +188,9 @@ export function streamToolCall(
 	}));
 	const send = () => {
 		if (response.writableEnded || response.destroyed) return;
+		// The words of the step come before the call: the step says what it
+		// is about to do, and then does it.
+		if (options.toolCallText) response.write(serializeChunk(options.toolCallText, false, false, usage));
 		response.write(serializeToolCallChunk(calls, false, sendUsage, usage));
 		response.write(serializeToolCallChunk(calls, true, sendUsage, usage));
 		response.end('data: [DONE]\n\n');

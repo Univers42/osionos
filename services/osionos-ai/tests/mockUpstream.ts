@@ -33,6 +33,8 @@ export interface MockOptions extends StreamOptions {
 	 * of the model ends.
 	 */
 	toolCall: { name: string; arguments: Record<string, unknown> } | null;
+	/** The exact answer text, instead of the mock's "part-0 part-1 …" chunks. */
+	answerText: string | null;
 	/**
 	 * The word that arms the tool call.
 	 *
@@ -68,6 +70,8 @@ const DEFAULT_OPTIONS: MockOptions = {
 	authFail: false,
 	neverSendUsage: false,
 	toolCall: null,
+	toolCallText: null,
+	answerText: null,
 	toolCallTrigger: null,
 	usage: null,
 	toolCallEveryStep: false,
@@ -205,7 +209,7 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 				response.end(JSON.stringify({ error: { message: 'the upstream is down' } }));
 				return;
 			}
-			const chunks = chunkTexts(options.chunkCount);
+			const chunks = options.answerText ? [options.answerText] : chunkTexts(options.chunkCount);
 			// The usage comes only when the request asks for it.
 			const sendUsage = !options.neverSendUsage && askedForUsage(body);
 			// The usage of this step: the one of the test, or the default one
