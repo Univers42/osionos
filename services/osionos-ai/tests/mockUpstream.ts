@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
-import type { IncomingMessage } from 'node:http';
 import { chunkTexts, streamAnswer, streamToolCall } from './mockStream.ts';
 import type { StreamOptions } from './mockStream.ts';
+import { lastUserText, readBody } from './mockRequest.ts';
 
 /**
  * A mock OpenAI-compatible upstream: the SSE of the P0a spike, with the knobs
@@ -34,6 +34,14 @@ export interface MockOptions extends StreamOptions {
 	 */
 	toolCall: { name: string; arguments: Record<string, unknown> } | null;
 	/**
+	 * The word that arms the tool call.
+	 *
+	 * The mock answers with the tool call only when the request carries the
+	 * word: the CONTINUATION of a decision is a run of its own, and it must
+	 * not steal the tool call of the next test. Null arms every request.
+	 */
+	toolCallTrigger: string | null;
+	/**
 	 * The model calls the tool on EVERY step, not only on the first one.
 	 *
 	 * A model that keeps calling a tool is a loop that keeps spending.
@@ -60,6 +68,7 @@ const DEFAULT_OPTIONS: MockOptions = {
 	authFail: false,
 	neverSendUsage: false,
 	toolCall: null,
+	toolCallTrigger: null,
 	usage: null,
 	toolCallEveryStep: false,
 	parallelToolCalls: 1,
@@ -119,16 +128,6 @@ export function askedForNoTool(body: unknown): boolean {
 	if (!request || typeof request !== 'object') return false;
 	if (request.tool_choice === 'none') return true;
 	return !Array.isArray(request.tools) || request.tools.length === 0;
-}
-
-/** The body of a request, read to the end. */
-function readBody(request: IncomingMessage): Promise<string> {
-	return new Promise((resolve) => {
-		const chunks: Buffer[] = [];
-		request.on('data', (chunk: Buffer) => chunks.push(chunk));
-		request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-		request.on('error', () => resolve(''));
-	});
 }
 
 /** The mock upstream, on a random port of the loopback. */
@@ -214,8 +213,17 @@ export async function startMockUpstream(initial?: Partial<MockOptions>): Promise
 			const usage = options.usageOnFirstStepOnly && step > 1 ? null : options.usage;
 			// The tool call is answered once: the answer after it is the text.
 			// A model that calls a tool on every step keeps the loop going.
-			const toolCall = options.toolCallEveryStep ? options.toolCall : pendingToolCall;
-			pendingToolCall = null;
+			// The trigger arms the call: a request that does not carry it gets
+			// the text, and the call waits for the next one.
+			const armed =
+				options.toolCallTrigger === null ||
+				lastUserText(body).includes(options.toolCallTrigger);
+			const toolCall = armed
+				? options.toolCallEveryStep
+					? options.toolCall
+					: pendingToolCall
+				: null;
+			if (armed) pendingToolCall = null;
 			// A step that runs without tools is a step that answers: the
 			// model obeys the request and writes text.
 			if (toolCall && !askedForNoTool(body)) {

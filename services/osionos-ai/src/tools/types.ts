@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import type { z } from 'zod';
 import type { AuthUser } from '../auth.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
+import type { ApprovalPlan } from '../approvals/types.ts';
 
 /**
  * The tools of the assistant: what the model may call, and what it may not.
@@ -42,14 +43,16 @@ export interface ReadToolContext {
 }
 
 /**
- * What a write tool gets: the read context, and the token of the caller.
+ * What a write tool gets: the read context, and NOTHING else.
  *
- * The token is the one of the request that decided, and it is never stored.
+ * The write tool does not write: it validates the arguments, describes what it
+ * is about to do, and stops. The write happens in the request that decides
+ * the approval, and that request carries the token of the caller.
+ *
+ * So the token never reaches a tool — not a write one either. It is used by
+ * the decision, and by nothing else.
  */
-export interface WriteToolContext extends ReadToolContext {
-	/** The app session token of the caller. It never leaves the write path. */
-	sessionToken: string;
-}
+export type WriteToolContext = ReadToolContext;
 
 /** The answer of a tool: the data, or the reason there is none. */
 export type ToolResult<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -98,8 +101,33 @@ export interface ReadTool<TArgs, TData> extends AssistantTool<TArgs, TData> {
  */
 export type AnyReadTool = ReadTool<unknown, unknown>;
 
-/** A tool that writes. It waits for a human before it does. */
-export interface WriteTool<TArgs, TData> extends AssistantTool<TArgs, TData> {
+/**
+ * A tool that asks the user for the right to write.
+ *
+ * It never writes: it validates the arguments, describes the write, and stops.
+ * The arguments are a strict whitelist — the schema drops what it does not
+ * know, whatever the model sends.
+ */
+export interface WriteTool<TArgs> {
+	/** The name the model calls it by. */
+	name: string;
+	/** What the tool does, in one line: the model decides with this. */
+	description: string;
+	/** What the tool does to the workspace. */
 	kind: 'write';
-	run(ctx: WriteToolContext, args: TArgs): Promise<ToolResult<TData>>;
+	/** The schema of the arguments: the model may not call it with anything else. */
+	input: z.ZodType<TArgs>;
+	/** The verb of the card, in plain words. */
+	verb: string;
+	/** The plan of the write: the arguments, the target, and the preview. */
+	run(ctx: WriteToolContext, args: TArgs): Promise<ToolResult<ApprovalPlan>>;
 }
+
+/**
+ * A write tool of the registry, whatever its arguments are.
+ *
+ * The registry erases the shapes: the arguments of one tool are not the
+ * arguments of another, and the schema of the tool parses them again before
+ * the work.
+ */
+export type AnyWriteTool = WriteTool<unknown>;

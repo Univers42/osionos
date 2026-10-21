@@ -15,7 +15,8 @@ import { promptCharCount } from './estimate.ts';
 import { extendRunReservation } from './extend.ts';
 import type { LoopBudget } from './loopBudget.ts';
 import { sourceChars } from './sources.ts';
-import { readToolSet, createToolPool } from '../tools/index.ts';
+import { createToolPool } from '../tools/index.ts';
+import { buildRunTools } from './toolSet.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
@@ -150,38 +151,21 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			});
 		}
 
-		// The sources of the whole run: the ones of the prompt first, then
-		// the ones the tools found. The number of a source is its rank among
-		// them, and the answer cites them the same way.
-		const cited: RetrievedChunk[] = [...sources];
-
-		// The tools of the assistant: the search of a workspace, and the read
-		// of a page. They read the workspace of the caller, and they carry no
-		// token: a read tool has no use for one.
-		const tools = user
-			? readToolSet(
-					{ db, user },
-					{
-						firstSourceNumber: sources.length,
-						onSources: async (found) => {
-							for (const { n, source } of found) {
-								cited.push(source);
-								await emit('citation', {
-									n,
-									pageId: source.pageId,
-									...(source.blockId ? { blockId: source.blockId } : {}),
-									title: source.title,
-									snippet: source.snippet,
-								});
-							}
-						},
-						onResult: async (outcome) => {
-							await emit('tool.result', outcome);
-						},
-					},
-					pool,
-				)
-			: undefined;
+		// The tools of the assistant: the search of a workspace, the read of
+		// a page, and — when the bridge is configured — the writes that ask
+		// the user for the right to write.
+		const runTools = buildRunTools({
+			db,
+			user,
+			pool,
+			runId,
+			conversationId,
+			ownerId,
+			pages,
+			sources,
+			emit: (type, data) => emit(type, data),
+		});
+		const tools = runTools.tools;
 
 		const messages: ModelMessage[] = [
 			...historyMessages(history),
@@ -216,6 +200,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		usage = outcome.usage;
 		finishReason = outcome.finishReason;
 		if (outcome.error !== undefined) throw outcome.error;
+		// The run asked the user for the right to write: it ends with that
+		// reason, and the approval row is what waits for the answer.
+		if (runTools.awaitingApproval) finishReason = 'awaiting_approval';
 
 		// The usage the upstream reported, or the estimate of what it did not.
 		settled = usageForSettlement(runId, usage, {
@@ -237,7 +224,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 					: [{ type: 'text', text: answer }]),
 				// The sources of the answer, in the order they were given to the
 				// model: the part of a source is its number minus one.
-				...cited.map((source) => ({
+				...runTools.cited.map((source) => ({
 					type: 'citation',
 					pageId: source.pageId,
 					...(source.blockId ? { blockId: source.blockId } : {}),
@@ -254,7 +241,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			inputTokens,
 			outputTokens,
 			costMicroUsd: cost,
-		});
+		}, finishReason);
 		if (changed) {
 			// The settlement gives back everything the run holds: the
 			// reservation up front and the extensions of the loop.
