@@ -20,9 +20,16 @@
  *   OSIONOS_AI_EMBED_MAX_CONCURRENCY    the most embed calls in flight
  *   OSIONOS_AI_EMBED_MAX_INPUTS         the most inputs of one embed call
  *   OSIONOS_AI_EMBED_TOKEN_BUDGET       the tokens of one embed call
+ *   OSIONOS_AI_MAINTENANCE_FIRST_MS     the delay of the first maintenance run,
+ *                            in milliseconds (default 60000 — not at the boot,
+ *                            so a crash loop does not hammer the database)
+ *   OSIONOS_AI_MAINTENANCE_INTERVAL_MS  the interval between two maintenance
+ *                            runs, in milliseconds (default 21600000 = 6 h);
+ *                            0 disables the maintenance
  */
 
 import { createPool } from '../db.ts';
+import { MAINTENANCE_FIRST_MS, MAINTENANCE_INTERVAL_MS, MaintenanceRunner } from '../maintenance/runner.ts';
 import { EMBED_MAX_INPUTS, EMBED_TOKEN_BUDGET } from './batches.ts';
 import { EMBED_MAX_CONCURRENCY, EMBED_TARGET_MS } from './concurrency.ts';
 import { Embedder } from './embedder.ts';
@@ -55,6 +62,17 @@ function numberEnv(name: string, fallback: number): number {
 	return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
+/**
+ * A number of the environment, and zero is a value: a zero interval is what
+ * disables the maintenance, and numberEnv() would throw it away.
+ */
+function intervalEnv(name: string, fallback: number): number {
+	const raw = process.env[name];
+	if (raw === undefined || raw.trim().length === 0) return fallback;
+	const value = Number(raw);
+	return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
 const pool = createPool(databaseUrl);
 const embedder = new Embedder({ baseUrl: embedUrl, model: embedModel });
 const worker = new IndexerWorker({
@@ -66,13 +84,24 @@ const worker = new IndexerWorker({
 	embedMaxInputs: numberEnv('OSIONOS_AI_EMBED_MAX_INPUTS', EMBED_MAX_INPUTS),
 	embedTokenBudget: numberEnv('OSIONOS_AI_EMBED_TOKEN_BUDGET', EMBED_TOKEN_BUDGET),
 });
+// The maintenance of the database — the partitions of ai_events, the health of
+// the DEFAULT partition, the pruning of the moderation audit. It runs HERE and
+// not in the HTTP service: the service is scaled by the requests, the indexer
+// is the one that is always there.
+const maintenance = new MaintenanceRunner({
+	pool,
+	intervalMs: intervalEnv('OSIONOS_AI_MAINTENANCE_INTERVAL_MS', MAINTENANCE_INTERVAL_MS),
+	firstDelayMs: intervalEnv('OSIONOS_AI_MAINTENANCE_FIRST_MS', MAINTENANCE_FIRST_MS),
+});
 
 await worker.start();
+maintenance.start();
 console.log(JSON.stringify({ event: 'indexer_started', model: embedModel }));
 
 /** The stop: the page that is being indexed is finished, then the process ends. */
 async function shutdown(): Promise<void> {
 	await worker.stop();
+	await maintenance.stop();
 	await pool.end();
 	process.exit(0);
 }
