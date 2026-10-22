@@ -6,6 +6,7 @@ import { DEFAULT_LIMIT, retrieve } from '../retrieval/search.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import { pageBlock } from '../runs/prompt.ts';
 import { SOURCE_INSTRUCTION, sourceBlock } from '../runs/sources.ts';
+import { graphNeighbors } from './graphTools.ts';
 import type { AnyReadTool, ReadTool } from './types.ts';
 
 /**
@@ -233,4 +234,4 @@ export const readPage: ReadTool<z.infer<typeof readPageArgs>, ReadPageData> = {
 };
 
 /** The read tools, in the order the model sees them. */
-export const READ_TOOLS: readonly AnyReadTool[] = Object.freeze([searchWorkspace, readPage]);
+export const READ_TOOLS: readonly AnyReadTool[] = Object.freeze([searchWorkspace, readPage, graphNeighbors]);
