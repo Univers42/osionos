@@ -22,7 +22,8 @@ Later the same night 3-4 concurrent sessions ran without a refusal when started 
 | P0-7 | fix round 1 (p95<p50 bug, whole-ms rounding, budgets tuned to pass, non-exact queries, 443-line script) | (root repo) feat/acct-P0-7 (eb5b7f2e) | nemotron-3-ultra, 1 attempt | my baseline run: seed 9 s, 7/7 PASS with impossible percentiles | — |
 | P0-6 | spec written; dispatch after P0-4 + P1-1 merge (needs the mount seam and `osionos_profiles.avatar_url`) | — | — | research: R-P0-6 | — |
 | P1-1 | spec written (root repo; 4d2cb22b); devil spec review running; dispatch after P0-1 + P0-7 merge | — | — | — | — |
-| P0-4 | spec written (4d2cb22b); devil spec review running; dispatch after P0-3 merges | — | — | — | — |
+| P0-4 | spec takes the devil's 10 conditions (expiry from the token, one off state, capability probe not INFO, ADR 0003, local revoke from PATCH rows, per-session tests, replay claim after HMAC, seal tests, allowed test edits, ship gate); dispatch after P0-3 merges | — | — | — | spec: devil PwC (10) |
+| P0-4r | spec written (root: desktop after-GoTrue step + compose Redis/IP env); dispatch after P0-1 merges | — | — | — | — |
 | P1-4 | spec written, waits for P1-3b | — | — | — | no devil gate |
 
 Open follow-ups
