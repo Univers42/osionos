@@ -15,6 +15,10 @@
  * PostgREST behind it and the app session of a caller. Two mounts live here — the whole
  * bridge (which proves the route reaches this module and not the generic 404) and the
  * account handler alone (which is where a route is exercised in isolation).
+ *
+ * The OTP service (grobase's login-OTP and GoTrue's admin route) is a third transport:
+ * it is NOT the PostgREST, so it has its own fetch, and the account modules take it
+ * apart from the database one.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -23,6 +27,7 @@ import { configFromEnv, createBridgeServer, createUserSession, validateBridgePay
 import { createAccountHandler } from '../../../scripts/bridge-account-mounts.mjs';
 import { createPg } from '../../../scripts/bridge-pg.mjs';
 import { createAccountStore } from './account-postgrest.mjs';
+import { createOtpService } from './account-otp.mjs';
 import { kvStub } from './kv-stub.mjs';
 
 export const ACCOUNT_JWT_SECRET = 'account-jwt-test-secret';
@@ -46,8 +51,21 @@ export function accountConfig() {
 
 /** A real app session token, signed the way the bridge signs one. */
 export function sessionToken(config, userId = USER_A) {
-	const payload = validateBridgePayload({ provider: 'prismatica', subject: userId, email: 'member@example.com', name: 'Member', jti: randomUUID() });
-	const created = createUserSession(payload, config, { workspaceId: HOME_WORKSPACE, workspaceName: 'Home', workspaceSlug: 'home' }, Date.now(), []);
+	return createUserSession(payloadFor(userId), config, { workspaceId: HOME_WORKSPACE, workspaceName: 'Home', workspaceSlug: 'home' }, Date.now(), []).session.accessToken;
+}
+
+function payloadFor(userId) {
+	return validateBridgePayload({ provider: 'prismatica', subject: userId, email: 'member@example.com', name: 'Member', jti: randomUUID() });
+}
+
+/**
+ * A session token whose jti already carries a sudo grant in the shared store. The
+ * session id is the one the bridge minted (the payload's jti is not the token's), so
+ * the grant is keyed by the same id the bridge will read.
+ */
+export async function sudoToken(config, kv, userId = USER_A) {
+	const created = createUserSession(payloadFor(userId), config, { workspaceId: HOME_WORKSPACE, workspaceName: 'Home', workspaceSlug: 'home' }, Date.now(), []);
+	await kv.set(`sudo:${created.sessionId}`, userId, 600_000);
 	return created.session.accessToken;
 }
 
@@ -57,10 +75,10 @@ function accountPg(config, store) {
 }
 
 /** The account handler alone, on its own server: the routes without the rest of the bridge. */
-export async function startAccountWorld(t, { rows = {}, kv, config = accountConfig(), fail = null } = {}) {
+export async function startAccountWorld(t, { rows = {}, kv, config = accountConfig(), fail = null, otp = createOtpService(), env = { JWT_SECRET: ACCOUNT_JWT_SECRET }, now = null } = {}) {
 	const store = createAccountStore({ ...rows, fail });
 	const pg = accountPg(config, store);
-	const handler = createAccountHandler({ config, pg, kv: kv ?? kvStub(), verifySession: verifyAppSessionToken });
+	const handler = createAccountHandler({ config, pg, kv: kv ?? kvStub(), verifySession: verifyAppSessionToken, env, fetchImpl: otp.fetchImpl, now });
 	const server = createServer(async (request, response) => {
 		const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
 		try {
@@ -77,12 +95,33 @@ export async function startAccountWorld(t, { rows = {}, kv, config = accountConf
 	});
 	await new Promise((done) => server.listen(0, '127.0.0.1', done));
 	t?.after(() => new Promise((done) => server.close(done)));
-	return { base: `http://127.0.0.1:${server.address().port}`, store, config, pg };
+	return { base: `http://127.0.0.1:${server.address().port}`, store, config, pg, otp };
 }
 
 /** The whole bridge, with the account modules mounted: the route has to reach them. */
-export async function startBridgeWorld(t, { rows = {}, kv, config = accountConfig(), fail = null } = {}) {
+export async function startBridgeWorld(t, { rows = {}, kv, config = accountConfig(), fail = null, otp = null, env = null } = {}) {
 	const store = createAccountStore({ ...rows, fail });
+	// The whole bridge builds its own account handler, so the OTP transport and the
+	// secret have to reach it the only way they can: the process environment and the
+	// global fetch.
+	if (env) {
+		const before = process.env.JWT_SECRET;
+		if (env.JWT_SECRET === undefined) delete process.env.JWT_SECRET;
+		else process.env.JWT_SECRET = env.JWT_SECRET;
+		t?.after(() => {
+			if (before === undefined) delete process.env.JWT_SECRET;
+			else process.env.JWT_SECRET = before;
+		});
+	}
+	if (otp) {
+		const original = globalThis.fetch;
+		globalThis.fetch = (url, init) => {
+			const path = String(url);
+			if (path.includes('/v1/auth/otp/') || path.includes('/auth/v1/admin/users/')) return otp.fetchImpl(url, init);
+			return original(url, init);
+		};
+		t?.after(() => { globalThis.fetch = original; });
+	}
 	const server = createBridgeServer({
 		config,
 		fetchImpl: store.fetchImpl,

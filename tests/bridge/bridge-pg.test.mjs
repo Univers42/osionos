@@ -135,6 +135,13 @@ describe('createPg asUser', () => {
 		await assert.rejects(pgFor(fetchImpl, {}).asUser(SESSION).get('osionos_profiles'), predicate(503, 'account_plane_unavailable'));
 		assert.equal(calls.length, 0);
 	});
+
+	it('refuses a blank secret without a configured env (non-flaky)', async () => {
+		const { calls, fetchImpl } = recorded(() => jsonResponse(200, []));
+		const pg = createPg({ config: CONFIG, env: {}, fetchImpl });
+		await assert.rejects(pg.asUser(SESSION).get('osionos_profiles'), predicate(503, 'account_plane_unavailable'));
+		assert.equal(calls.length, 0);
+	});
 });
 
 describe('createPg asService', () => {

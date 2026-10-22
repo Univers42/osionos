@@ -17,9 +17,15 @@
  *
  * Each module answers true when it handled the request and false when the path is not
  * its own, so the order is the order of the paths.
+ *
+ * The sudo module also takes the environment and the OTP transport: it reads the
+ * JWT_SECRET the proof is signed with, and it calls grobase's login-OTP service and
+ * GoTrue's admin route — neither of which is the PostgREST the other modules speak.
  */
 
+import { createAccountIdentityRoutes } from './bridge-account-identity.mjs';
 import { createAccountProfileRoutes } from './bridge-account-profile.mjs';
+import { createAccountSudoRoutes } from './bridge-account-sudo.mjs';
 import { createPreferencesRoutes } from './bridge-preferences.mjs';
 import { createSessionsRoutes } from './bridge-sessions.mjs';
 import { createPublishedPagesRoutes } from './bridge-account-published-pages.mjs';
@@ -32,6 +38,8 @@ export function createAccountHandler(deps) {
 		createPreferencesRoutes(deps),
 		createPublishedPagesRoutes(deps),
 		createAvatarRoutes(deps),
+		createAccountSudoRoutes({ ...deps, env: deps.env ?? process.env }),
+		createAccountIdentityRoutes(deps),
 	];
 	return async function handleAccountRequest(url, request, response) {
 		for (const module of modules) {
