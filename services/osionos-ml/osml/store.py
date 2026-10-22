@@ -16,7 +16,8 @@ from typing import Any
 
 import psycopg
 
-from .events import EXCLUDED_EVENTS
+from .events import EVENT_WEIGHTS, EXCLUDED_EVENTS
+from .foldin import item_gram
 
 # The dimension every stored vector has: the registry's column is vector(64)
 # and a model with fewer factors is stored zero-padded. The padding changes
@@ -131,7 +132,9 @@ def write_model(
     the matrix's row order, `items` the items in its column order as
     (`item_kind`, `item_id`, `workspace_id`) tuples, and the two factor lists
     the vectors, in the same order. The row starts as a `candidate`: the job
-    promotes it only when it is not worse.
+    promotes it only when it is not worse. The row also carries the item Gram
+    matrix and the event weights the model was trained with: what serving
+    folds a user in with.
     """
     # One transaction: a failed write takes the row and the factors with it.
     with conn.transaction():
@@ -140,8 +143,8 @@ def write_model(
                 """
                 INSERT INTO public.ai_rec_models
                     (algo, factors, regularization, alpha, iterations, events_used, trained_until,
-                     metrics, is_synthetic, code_sha, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, 'candidate')
+                     metrics, is_synthetic, code_sha, status, item_gram, event_weights)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, 'candidate', %s, %s::jsonb)
                 RETURNING id
                 """,
                 (
@@ -155,6 +158,8 @@ def write_model(
                     json.dumps(metrics, default=_iso),
                     synthetic,
                     code_sha(),
+                    item_gram(item_factors),
+                    json.dumps(EVENT_WEIGHTS),
                 ),
             )
             model_id = int(cur.fetchone()[0])
