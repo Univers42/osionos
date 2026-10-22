@@ -3504,29 +3504,73 @@ export function favoritePageIdFromPath(pathname) {
 	return requireUuid(decodeURIComponent(match[1]), 'pageId');
 }
 
+// Most-recent first; a list longer than this is truncated, not paginated.
+const FAVORITES_LIST_LIMIT = 200;
+
+/** The favorites' auth rows keyed by lower-cased id, read idChunks at a time; a failed chunk or a bad id leaves its pages absent. */
+async function favoriteAuthRows(favoriteIds, config, fetchImpl) {
+	const ids = [];
+	for (const pageId of favoriteIds) {
+		try { ids.push(requireUuid(pageId, 'pageId').toLowerCase()); } catch { /* not a page id */ }
+	}
+	const byId = new Map();
+	for (const chunk of idChunks([...new Set(ids)])) {
+		try {
+			const rows = await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(chunk)}&select=${PAGE_AUTH_SELECT}`);
+			for (const row of Array.isArray(rows) ? rows : []) byId.set(String(row.id).toLowerCase(), row);
+		} catch { /* fail closed: this chunk's pages stay absent */ }
+	}
+	return byId;
+}
+
+/** workspace_id → { role, exempt, rules } for the workspaces the caller is a member of; a throwing read omits the workspace (fail closed). */
+async function favoriteWorkspaceAccess(rowsToCheck, authContext, config, fetchImpl) {
+	const idsByWorkspace = new Map();
+	for (const row of rowsToCheck) {
+		if (!idsByWorkspace.has(row.workspace_id)) idsByWorkspace.set(row.workspace_id, []);
+		idsByWorkspace.get(row.workspace_id).push(String(row.id).toLowerCase());
+	}
+	const store = createShareRuleStore({ fetchImpl });
+	const access = new Map();
+	await Promise.all([...idsByWorkspace].map(async ([workspaceId, pageIds]) => {
+		try {
+			const member = await callerWorkspaceMember(authContext, workspaceId, config, fetchImpl);
+			if (!member) return;
+			const role = safeText(member.role, 16);
+			const exempt = role === 'owner' || role === 'admin';
+			const rules = new Map();
+			if (!exempt) {
+				for (const chunk of idChunks(pageIds)) for (const [id, list] of await store.listForPages(config, workspaceId, chunk)) rules.set(id, list);
+			}
+			access.set(workspaceId, { role, exempt, rules });
+		} catch { /* fail closed: every page of this workspace stays absent */ }
+	}));
+	return access;
+}
+
 /** GET /api/favorites — the session user's starred page ids (most-recent first). */
 async function handleFavoritesList(request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	const query = postgrestQuery({ user_id: `eq.${authContext.userId}`, select: 'page_id', order: 'created_at.desc' });
+	const query = postgrestQuery({ user_id: `eq.${authContext.userId}`, select: 'page_id', order: 'created_at.desc', limit: String(FAVORITES_LIST_LIMIT) });
 	const rows = await baasRest(config, fetchImpl, `osionos_page_favorites?${query}`);
 	const favoriteIds = (Array.isArray(rows) ? rows : []).map((row) => row.page_id);
 	// A page hidden by a no_access rule is a missing id, so it never shows in the
 	// caller's favorites even if it was starred before the rule landed.
+	const authRows = await favoriteAuthRows(favoriteIds, config, fetchImpl);
+	const notOwned = [...authRows.values()].filter((row) => !sameId(row.owner_id, authContext.userId));
+	const access = await favoriteWorkspaceAccess(notOwned, authContext, config, fetchImpl);
 	const readableIds = [];
 	for (const pageId of favoriteIds) {
-		let row;
-		try { row = await fetchPageAuthRow(pageId, config, fetchImpl); } catch { row = null; }
+		const row = authRows.get(String(pageId).toLowerCase());
 		if (!row) continue;
 		let level = null;
 		if (!sameId(row.owner_id, authContext.userId)) {
-			let member = null;
-			try { member = await callerWorkspaceMember(authContext, row.workspace_id, config, fetchImpl); } catch { member = null; }
-			const role = safeText(member?.role, 16);
-			const exempt = role === 'owner' || role === 'admin';
-			if (!member) continue;
-			if (!exempt) {
-				try { level = await shareLevelForPage(config, row.workspace_id, pageId, authContext.userId, role, fetchImpl); }
-				catch { continue; }
+			const workspace = access.get(row.workspace_id);
+			if (!workspace) continue;
+			if (!workspace.exempt) {
+				const rules = workspace.rules.get(String(row.id).toLowerCase());
+				if (!rules) continue;
+				level = bestShareLevel(rules, { userId: authContext.userId, role: workspace.role, workspaceId: row.workspace_id }, pageId);
 			}
 		}
 		try { requireReadablePage(row, authContext.userId, level); readableIds.push(pageId); } catch { /* hidden or unreadable */ }
