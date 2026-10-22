@@ -331,6 +331,34 @@ The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_BULK_URL`
 (`OSIONOS_AI_EMBED_URL` when the bulk one is not set) and
 `OSIONOS_AI_EMBED_MODEL` (`intfloat/multilingual-e5-small`).
 
+## L1 moderation worker
+
+    pnpm --filter @osionos/ai-service jobs
+
+Drains the `moderate` jobs that the database triggers queue for comments on
+PUBLIC pages (or public workspaces), scores each comment with a toxicity
+classifier served by TEI (`POST /predict`; the pinned model is
+`textdetox/xlmr-large-toxicity-classifier-v2`, label `toxic`), and writes one
+append-only row to `ai_moderation_events` per decision.
+
+| `OSIONOS_MODERATION_ACTIONS` | The worker does |
+| --- | --- |
+| `off` | nothing (the process idles) |
+| `log` (default) | scores and audits the would-be action; changes no comment |
+| `hold` | as `log`, and moves a comment with toxic score >= `OSIONOS_MODERATION_L1_HOLD` (0.9) to `held` |
+| `on` | runs as `hold`: auto-removal is refused, no language has the per-language precision evidence (C83) |
+
+Other variables: `OSIONOS_MODERATION_L1_URL` (required unless `off`),
+`OSIONOS_MODERATION_L1_MODEL`, `OSIONOS_MODERATION_L1_REVISION`, and
+`OSIONOS_MODERATION_CALIBRATED_POLICY`. `hold` only holds while the
+policy hash (sha256 of `{model, revision, hold}`, printed at boot) equals the
+calibrated one; any other hash runs as `log` until recalibrated (C85).
+
+It never: removes or erases a comment (the only state it writes is `held`),
+scans a private page or a DM, applies a verdict to content other than the one
+it scored (the sha256 must match, under a row lock), or hides a comment when
+the classifier is down (the job retries with backoff).
+
 ## The type check
 
 The service imports the bridge's own modules — `scripts/bridge-session-token.mjs`,
