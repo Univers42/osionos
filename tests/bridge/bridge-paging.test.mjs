@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// Paging primitives stay pure so the account routes can share them without pulling in a
-// PostgREST client: chunking, quoted filters, signed-less cursors and keyset pages.
+// Paging primitives stay pure so the account routes can share them; the module imports only
+// pgError from bridge-pg.mjs for the shared 422 cursor error, never a PostgREST client.
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,6 +29,7 @@ describe('idChunks', () => {
 		const fiftyOne = idChunks(idsOf(51));
 		assert.deepEqual(fiftyOne.map((chunk) => chunk.length), [50, 1]);
 		assert.equal(idChunks(idsOf(500)).length, 10);
+		assert.equal(idChunks(idsOf(160), 80).length, 2);
 	});
 
 	it('drops nulls, empties and duplicates keeping first-seen order', () => {
@@ -36,7 +37,7 @@ describe('idChunks', () => {
 	});
 
 	it('rejects an out-of-range size', () => {
-		for (const size of [0, 501, 1.5]) assert.throws(() => idChunks(['a'], size), RangeError);
+		for (const size of [0, 81, 501, 1.5]) assert.throws(() => idChunks(['a'], size), RangeError);
 	});
 });
 
@@ -69,6 +70,11 @@ describe('cursors', () => {
 		assert.throws(() => decodeCursor(encoded('not json'), 1), invalidCursor);
 		assert.throws(() => decodeCursor(encoded('{"a":1}'), 1), invalidCursor);
 		assert.throws(() => decodeCursor(encodeCursor(['a']), 2), invalidCursor);
+		assert.throws(() => decodeCursor(encodeCursor(['\ud800']), 1), invalidCursor);
+		assert.throws(() => decodeCursor('not*base64url', 1), (error) => {
+			assert.equal(error.message, 'The paging cursor is invalid.');
+			return true;
+		});
 		for (const value of ['[true]', '[null]', '[{}]']) assert.throws(() => decodeCursor(encoded(value), 1), invalidCursor);
 	});
 });

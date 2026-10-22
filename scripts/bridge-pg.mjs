@@ -36,6 +36,8 @@ const ERROR_MESSAGES = {
 	conflict: 'The account data request conflicts with the current state.',
 	rate_limited: 'Account data requests are rate limited.',
 	account_plane_unavailable: 'The account plane is unavailable.',
+	invalid_subject: 'The account subject is invalid.',
+	invalid_cursor: 'The paging cursor is invalid.',
 	baas_failed: 'Account data request failed.',
 	baas_unreachable: 'The account plane could not be reached.',
 	baas_unconfigured: 'The account plane is not configured.',
@@ -80,7 +82,7 @@ function buildUrl(base, path) {
 	try { baseUrl = new URL(base); } catch { throw pgError(503, 'baas_unconfigured'); }
 	const queryAt = path.indexOf('?');
 	const pathOnly = queryAt === -1 ? path : path.slice(0, queryAt);
-	if (UNSAFE_PATH.test(pathOnly) || CONTROL_CHAR.test(path)) throw new TypeError('PostgREST path is not allowed.');
+	if (pathOnly === '' || UNSAFE_PATH.test(pathOnly) || CONTROL_CHAR.test(path)) throw new TypeError('PostgREST path is not allowed.');
 	const url = new URL(`${base}/${path}`);
 	const prefix = baseUrl.pathname.endsWith('/') ? baseUrl.pathname : `${baseUrl.pathname}/`;
 	if (url.origin !== baseUrl.origin || !url.pathname.startsWith(prefix)) throw new TypeError('PostgREST path escapes the configured base.');
@@ -98,12 +100,15 @@ function codeFromBody(text) {
 
 async function upstreamFailure(kind, response) {
 	const text = await response.text().catch(() => '');
+	const upstreamCode = codeFromBody(text);
 	const table = kind === 'user' ? USER_STATUS : SERVICE_STATUS;
-	const [status, code] = table[response.status] ?? [502, 'baas_failed'];
+	// A missing osionos_account_user role is setup, not the caller's bad input (SQLSTATE 22023).
+	const roleMissing = kind === 'user' && String(upstreamCode) === '22023';
+	const [status, code] = roleMissing ? [503, 'account_plane_unavailable'] : table[response.status] ?? [502, 'baas_failed'];
 	return pgError(status, code, {
 		upstreamStatus: response.status,
 		upstreamText: text.slice(0, 160),
-		upstreamCode: codeFromBody(text),
+		upstreamCode,
 	});
 }
 
