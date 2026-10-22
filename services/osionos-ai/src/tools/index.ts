@@ -41,6 +41,8 @@ export interface ToolOutcome {
 	found?: number;
 	/** The memory a `remember` call proposed: the run emits `memory.proposed` for it (C42). */
 	memoryId?: string;
+	/** The trimmed text the proposal stored; it travels with `memoryId`. */
+	memoryBody?: string;
 	/** The skill a `load_skill` call loaded: pinned in the history of the run (devil C40). */
 	skill?: { id: string; version: number; source: 'builtin' | 'workspace' };
 }
@@ -289,7 +291,9 @@ export function readToolSet(
 					ok: true,
 					found: cites.length,
 					...(tool.pin ? { skill: tool.pin(result.data) } : {}),
-					...('proposed' in tool && tool.proposed ? { memoryId: tool.proposed(result.data).id } : {}),
+					...('proposed' in tool && tool.proposed
+						? { memoryId: tool.proposed(result.data).id, memoryBody: tool.proposed(result.data).body }
+						: {}),
 				});
 				return output;
 			},

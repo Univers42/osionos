@@ -114,7 +114,9 @@ export function buildRunTools(input: {
 		onResult: async (outcome: ToolOutcome) => {
 			await emit('tool.result', outcome);
 			// C42: a proposal is announced so a client can show the chip.
-			if (outcome.memoryId) await emit('memory.proposed', { type: 'memory.proposed', id: outcome.memoryId });
+			if (outcome.memoryId && outcome.memoryBody) {
+				await emit('memory.proposed', { type: 'memory.proposed', id: outcome.memoryId, body: outcome.memoryBody });
+			}
 			// The skill a load returned is pinned on the row of the run (C40):
 			// the stream expires, the row does not.
 			if (outcome.skill) await recordSkillPin(db, runId, outcome.skill);

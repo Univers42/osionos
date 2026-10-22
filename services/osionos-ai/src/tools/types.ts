@@ -114,7 +114,7 @@ export interface ProposalTool<TArgs, TData> extends AssistantTool<TArgs, TData> 
 	/** A proposal quotes no page. */
 	sources(data: TData): readonly RetrievedChunk[];
 	/** The memory a result proposed: the run emits `memory.proposed` for it. */
-	proposed?(data: TData): { id: string };
+	proposed?(data: TData): { id: string; body: string };
 	pin?: undefined;
 }
 

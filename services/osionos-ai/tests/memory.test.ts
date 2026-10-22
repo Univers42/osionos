@@ -77,14 +77,15 @@ async function rememberFor() {
 	pool.startStep();
 	const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
 	const events: string[] = [];
+	const frames: { name: string; data: unknown }[] = [];
 	const built = buildRunTools({
 		db: app.db as Pool, user, pool, runId, conversationId, ownerId: USER_A, pages: [], sources: [],
-		workspaceId: WORKSPACE_A, emit: async (name: string) => { events.push(name); },
+		workspaceId: WORKSPACE_A, emit: async (name: string, data: unknown) => { events.push(name); frames.push({ name, data }); },
 	} as never);
 	const tool = (built.tools ?? {}).remember as { execute: (i: unknown, o: unknown) => Promise<unknown> } | undefined;
 	assert.ok(tool, 'remember is registered');
 	const remember = (text: string) => tool.execute({ text }, { toolCallId: randomUUID(), messages: [], context: {} });
-	return { remember, events };
+	return { remember, events, frames };
 }
 
 describe('ai memory', () => {
@@ -106,6 +107,18 @@ describe('ai memory', () => {
 		await run();
 		assert.ok(!textOf('user').includes('prefers short answers'));
 		assert.ok(!textOf('system').includes('prefers short answers'));
+	});
+
+	it('C42 the run announces a proposal', async () => {
+		const { remember, frames } = await rememberFor();
+		await remember('  prefers short answers  ');
+		const id = (await app.db.query('select id from public.ai_memories')).rows[0].id;
+		const announced = frames.filter((f) => f.name === 'memory.proposed');
+		assert.deepEqual(announced.map((f) => f.data), [{ type: 'memory.proposed', id, body: 'prefers short answers' }]);
+		for (const n of [2, 3]) await remember(`fact ${n}`);
+		const before = frames.filter((f) => f.name === 'memory.proposed').length;
+		await remember('fact 4');
+		assert.equal(frames.filter((f) => f.name === 'memory.proposed').length, before, 'a refused call emits none');
 	});
 
 	it('C42: at most three proposals per run', async () => {
