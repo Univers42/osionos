@@ -201,6 +201,8 @@ const BLOCK_CATEGORIES: Record<BlockType, BlockCategory> = {
   draw: { ...LEAF_BASE },
   whiteboard: { ...LEAF_BASE },
   diagram: { ...LEAF_BASE },
+  embed: { ...LEAF_BASE },
+  bookmark: { ...LEAF_BASE },
   database_inline: { ...LEAF_BASE },
   database_full_page: { ...LEAF_BASE },
   graph_view: { ...LEAF_BASE },

@@ -36,6 +36,8 @@ export interface ChatMessage {
   model?: string;
   /** The connection the answer was paid for — the user's own, or the platform's. */
   connectionId?: string;
+  /** The agent that shaped the answer — the built-in the reader picked. */
+  agentId?: string;
   /** The message parts, in the service's shape, and the calls of the tools. */
   parts?: ChatMessagePart[];
   /** The run that produced this message, once the service answered. */

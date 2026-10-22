@@ -19,7 +19,7 @@ import { useConnectorStore } from "@/features/connectors/model/useConnectorStore
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/features/ai/model/aiSelection";
 import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
-import { openAiConnections } from "@/features/settings/settingsOpener";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import { MAX_ATTACHMENTS } from "./AttachImageButton";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
@@ -39,6 +39,9 @@ export const ChatShell: React.FC = () => {
   const setActive = useChatStore((s) => s.setActive);
   const send = useChatStore((s) => s.send);
   const stop = useChatStore((s) => s.stop);
+  // The built-in agents the service offers: the shapes a run can take.
+  const agents = useChatStore((s) => s.agents);
+  const loadAgents = useChatStore((s) => s.loadAgents);
 
   const [text, setText] = useState("");
   const [onboarding, setOnboarding] = useState<null | "ask" | "choose">(null);
@@ -46,9 +49,13 @@ export const ChatShell: React.FC = () => {
   // the whole workspace is searched.
   const [chips, setChips] = useState<ContextChip[]>([]);
   const [attachments, setAttachments] = useState<string[]>([]);
+  // The agent of the next run: none is the general assistant.
+  const [agentId, setAgentId] = useState<string | null>(null);
 
   useEffect(() => { initConnectors(); }, [initConnectors]);
   useEffect(() => { if (!activeId) createConversation(); }, [activeId, createConversation]);
+  // The list of the agents, once: the service owns it.
+  useEffect(() => { void loadAgents(); }, [loadAgents]);
 
   /**
    * The hand-off from a block: the image the user pointed at, waiting for the
@@ -86,6 +93,8 @@ export const ChatShell: React.FC = () => {
       connectorId: fallbackConnector,
       model: selection.model || "auto",
       connectionId: selection.connectionId,
+      // The agent of this run: the one the reader picked, or none.
+      ...(agentId ? { agentId } : {}),
       attachments: attachments
         .map((path) => {
           if (path.startsWith("/api/media/")) return { kind: "media" as const, path };
@@ -118,7 +127,7 @@ export const ChatShell: React.FC = () => {
   // the only way to talk to a model at all.
   const onConnect = () => {
     if (isAiConfigured()) {
-      openAiConnections();
+      openSettings("ai_connections");
       return;
     }
     setOnboarding("choose");
@@ -133,6 +142,9 @@ export const ChatShell: React.FC = () => {
     onSelectionChange: setSelection,
     chips,
     onChipsChange: setChips,
+    agents,
+    agentId,
+    onAgentChange: setAgentId,
     attachments,
     onAttachmentsChange: setAttachments,
     streaming,

@@ -6,6 +6,8 @@
 import { Buffer } from 'node:buffer';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { assertSessionNotCutOff, tokenIssuedAtMs } from './bridge-session-cutoff.mjs';
+import { assertSessionNotRevoked } from './bridge-session-revocations.mjs';
+import { isPlatformRole } from './bridge-roles.mjs';
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
@@ -19,6 +21,7 @@ export const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
  * @property {string} appSessionSecret
  * @property {number} sessionTtlSeconds
  * @property {import('./bridge-session-cutoff.mjs').SessionCutoffTracker} [sessionCutoffs]
+ * @property {{ status: () => string, isRevoked: (sessionId: string) => boolean }} [sessionRevocations] the per-session revocation tracker; absent means not enforced in this process
  */
 
 /**
@@ -52,6 +55,7 @@ export const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
  * @property {string} userId
  * @property {string[]} workspaceIds
  * @property {Record<string, string>} roles
+ * @property {string | null} platformRole admin | moderator | user | guest, or null for a token minted before the claim
  * @property {boolean} isAdmin
  * @property {Record<string, unknown>} raw
  */
@@ -87,14 +91,17 @@ function base64url(input) {
  * @param {number} [options.now] the moment the token is minted, in milliseconds
  * @param {string} [options.jti] the id of the token
  * @param {AppSessionMemberWorkspace[]} [options.memberWorkspaces] the other workspaces of the user
- * @param {boolean} [options.isAdmin] whether the user is an administrator
+ * @param {string | null} [options.platformRole] the platform role; it decides is_admin
+ * @param {boolean} [options.isAdmin] whether the user is an administrator, for callers that pass no role
  * @returns {SignedAppSessionToken}
  */
-export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], isAdmin = false }) {
+export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], platformRole = null, isAdmin = false }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const iat = Math.floor(now / 1000);
 	const exp = iat + config.sessionTtlSeconds;
 	const memberRoles = Object.fromEntries(memberWorkspaces.map((entry) => [entry._id, safeText(entry.role, 16) || 'member']));
+	// One source: the role names the admin, so the two claims can never disagree.
+	const role = isPlatformRole(platformRole) ? platformRole : (isAdmin === true ? 'admin' : null);
 	const tokenPayload = {
 		iss: 'osionos-bridge',
 		aud: 'osionos-app',
@@ -102,7 +109,8 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 		provider: payload.provider,
 		workspace_ids: [workspace._id, ...memberWorkspaces.map((entry) => entry._id)],
 		roles: { ...memberRoles, [workspace._id]: 'owner' },
-		is_admin: isAdmin === true,
+		platform_role: role,
+		is_admin: role === 'admin',
 		jti,
 		iat,
 		// Milliseconds: a cut-off and a token minted in the same second must still be ordered.
@@ -116,7 +124,8 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 
 /**
  * Checks the signature, the audience and the expiry of a token, and refuses
- * the ones minted before their user's sign-out.
+ * the ones minted before their user's sign-out and the sessions revoked one by one
+ * (when the process holds a revocation tracker).
  *
  * @param {string} token the token of the request
  * @param {AppSessionConfig} config the secret, the TTL, the cut-off tracker
@@ -127,8 +136,9 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 export function verifyAppSessionToken(token, config, now = undefined) {
 	const resolvedNow = now ?? config?.sessionCutoffs?.now?.() ?? Date.now();
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
-	const [version, encodedPayload, signature, extra] = safeText(token, 4096).split('.');
-	if (version !== APP_SESSION_TOKEN_VERSION || !encodedPayload || !signature || extra !== undefined) {
+	const parts = safeText(token, 4096).split('.');
+	const [version, encodedPayload, signature] = parts;
+	if (parts.length !== 3 || version !== APP_SESSION_TOKEN_VERSION || !encodedPayload || !signature) {
 		throw Object.assign(new Error('App session token is invalid.'), { status: 401 });
 	}
 	const expectedSignature = createHmac('sha256', config.appSessionSecret).update(encodedPayload).digest('base64url');
@@ -157,17 +167,24 @@ export function verifyAppSessionToken(token, config, now = undefined) {
 		throw Object.assign(new Error('App session token has expired.'), { status: 401 });
 	}
 	assertSessionNotCutOff(config.sessionCutoffs, String(payload.sub).toLowerCase(), tokenIssuedAtMs(payload));
+	assertSessionNotRevoked(config.sessionRevocations, String(payload.jti ?? '').toLowerCase());
 	const workspaceIds = Array.isArray(payload.workspace_ids)
 		? payload.workspace_ids.map(String).filter((workspaceId) => UUID_REGEX.test(workspaceId))
 		: [];
 	if (workspaceIds.length === 0) {
 		throw Object.assign(new Error('App session token has no workspace access.'), { status: 401 });
 	}
+	// is_admin applies only to tokens with no platform_role (rolling deploy); a valid claim wins. (C2, C6)
+	const isAdmin = isPlatformRole(payload.platform_role)
+		? payload.platform_role === 'admin'
+		: payload.is_admin === true;
 	return {
 		userId: String(payload.sub).toLowerCase(),
 		workspaceIds,
 		roles: payload.roles && typeof payload.roles === 'object' && !Array.isArray(payload.roles) ? payload.roles : {},
-		isAdmin: payload.is_admin === true,
+		// A token minted before the claim existed answers no role, not the admin bit.
+		platformRole: isPlatformRole(payload.platform_role) ? payload.platform_role : null,
+		isAdmin,
 		raw: payload,
 	};
 }

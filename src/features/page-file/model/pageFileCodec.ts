@@ -11,13 +11,14 @@
 /* ************************************************************************** */
 
 import type { Block } from "@/entities/block";
+import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import type { PageEntry } from "@/entities/page";
 import { codeBlockOf } from "@/features/ide/model/codeFile";
 import { serializeBlocksToMarkdown } from "@/services/page-actions/pageMarkdownSerialize";
 import { parseMarkdownToBlocks } from "@osionos/markdown-engine/markdown/shortcuts";
 import { reconcileBlocks } from "@/features/raw-mode/model/reconcileBlocks";
 
-import { EXTRA_BLOCK_KEYS, applyOverlay, collectOverlay } from "./blockOverlay";
+import { EXTRA_BLOCK_KEYS, SCOPED_OVERLAY_KEYS, applyOverlay, collectOverlay } from "./blockOverlay";
 import { joinFrontMatter, splitFrontMatter } from "./frontMatter";
 import { metaFromPage, patchFromMeta } from "./pageFileMeta";
 import { kindOfPage } from "./pagePaths";
@@ -41,7 +42,7 @@ import {
  *
  *   MARKDOWN (parsed back from the body)     id/type/content/children structural
  *     checked  language  asset  mediaAlt  widthRatio  color (callout icon)
- *     drawHeight  boardSlug  whiteboardHeight  buttonLabel/Href/Variant  tableData
+ *     drawHeight  boardSlug  whiteboardHeight  embed  embedHeight  buttonLabel/Href/Variant  tableData
  *     databaseId  viewId  recordLimit
  *     layoutMode  layoutRole  layoutConfig  layoutCells  schemaVersion
  *   OVERLAY (front-matter `blocks`)          everything else in EXTRA_BLOCK_KEYS
@@ -51,6 +52,7 @@ import {
  *     headingLevel (markdown keeps it on a toggle only; quote/callout lose it)
  *     tableConfig (markdown keeps only the column alignments)
  *     conflictOf (the merge's marker: the block a conflict copy belongs to)
+ *     embed on a video/audio/file block (its tag cannot hold it; see SCOPED_BLOCK_KEYS)
  *
  * Ponytail: `fileName`, `headingLevel` and `tableConfig` are partly in Markdown
  * too (`<object title>`, `##>`, the table separator row), and the overlay wins,
@@ -60,7 +62,7 @@ import {
 export const MARKDOWN_KEYS: readonly string[] = Object.freeze([
   "id", "type", "content", "children",
   "checked", "language", "asset", "mediaAlt", "widthRatio",
-  "color", "drawHeight", "boardSlug", "whiteboardHeight", "buttonLabel", "buttonHref", "buttonVariant",
+  "color", "drawHeight", "boardSlug", "whiteboardHeight", "embed", "embedHeight", "buttonLabel", "buttonHref", "buttonVariant",
   "tableData", "databaseId", "viewId", "recordLimit",
   "layoutMode", "layoutRole", "layoutConfig", "layoutCells", "schemaVersion",
 ]);
@@ -109,7 +111,7 @@ export function pageToFile(page: PageEntry): string {
   const content = page.content ?? [];
   if (content.length === 0) return joinFrontMatter({ ...meta }, "");
   return joinFrontMatter(
-    { ...meta, blocks: collectOverlay(content, OVERLAY_KEYS) },
+    { ...meta, blocks: collectOverlay(content, [...OVERLAY_KEYS, ...SCOPED_OVERLAY_KEYS]) },
     serializeBlocksToMarkdown(content, { keepEmptyParagraphs: true }),
   );
 }
@@ -147,7 +149,7 @@ function blocksOf(body: string, overlay: BlockOverlay | undefined, existing?: Pa
 /** A parser crash must not eat a hand-edited file: one paragraph holds the body. */
 function parseBody(body: string): Block[] {
   try {
-    return parseMarkdownToBlocks(body, { keepEmptyParagraphs: true });
+    return sanitizeLinkBlockFields(parseMarkdownToBlocks(body, { keepEmptyParagraphs: true }));
   } catch {
     return [{ id: crypto.randomUUID(), type: "paragraph", content: body }];
   }

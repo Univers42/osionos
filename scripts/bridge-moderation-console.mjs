@@ -21,6 +21,8 @@
  *       to an hour, so a demoted admin keeps it. Every call RE-READS
  *       osionos_bridge_identities and refuses unless the row says `is_admin` is
  *       exactly true. A failed read is a 503 — fail closed, never "allowed".
+ *       The rule itself now lives in bridge-admin-check.mjs, shared with the
+ *       recs health: this console's answers do not change.
  * C92 — an admin reading a user's words is audited: the item route records one
  *       'view' row (layer 'admin', the admin as the actor) BEFORE it answers.
  *
@@ -39,6 +41,7 @@
  *   POST /api/admin/moderation/decision  { kind, id, decision, reason? }
  */
 
+import { requireAdmin } from './bridge-admin-check.mjs';
 import { recordDecision } from './bridge-moderation-gate.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { reportEntry } from './bridge-reports.mjs';
@@ -71,23 +74,6 @@ const AUDIT_LIMIT = 20;
 
 /** An error the console answers itself: a status and a code the client reads. */
 const consoleError = (message, status, code) => Object.assign(new Error(message), { status, code });
-
-/**
- * C91: the DATABASE decides whether this caller is an administrator. The row is
- * read on every call, because the token's claim outlives a demotion. A read that
- * FAILS is a 503: a broken read is not a permission. The answer is `is_admin ===
- * true` and nothing else — anything else is a refusal.
- */
-async function assertAdmin(deps, config, session) {
-	let rows;
-	try {
-		rows = await rest(config, deps.fetchImpl, `osionos_bridge_identities?user_id=eq.${session.userId}&select=is_admin&limit=1`);
-	} catch {
-		throw consoleError('The administrator flag could not be read.', 503, 'admin_check_failed');
-	}
-	const row = Array.isArray(rows) ? rows[0] : null;
-	if (row?.is_admin !== true) throw consoleError('Administrator access required.', 403, 'admin_required');
-}
 
 /** The audit rows of a subject, the last ones first. */
 async function readAudit(deps, config, query, limit = AUDIT_LIMIT) {
@@ -207,14 +193,11 @@ export function createModerationConsoleHandler({ config, verifySession, fetchImp
 		const method = (request.method || 'GET').toUpperCase();
 		try {
 			const session = verifySession(bearerToken(request), requestConfig);
-			// C91: a caller with no claim never reaches the database at all.
-			if (session?.isAdmin !== true) {
-				return sendJson(response, 403, { ok: false, code: 'admin_required', message: 'Administrator access required.' }, requestConfig);
-			}
+			// C91: the claim first (a caller with no claim never reaches the
+			// database at all), then the row: the database decides, every call.
+			await requireAdmin(deps, requestConfig, session);
 			// The limit is charged before ANY read: a burst must not be free.
 			takeToken(`modconsole:${session.userId}`, RATE);
-			// C91: and the database answers the question again, on every call.
-			await assertAdmin(deps, requestConfig, session);
 			const { stateEnabled } = moderationSettings(deps.env);
 			if (method !== expected) {
 				return sendJson(response, 405, { ok: false, code: 'method_not_allowed', message: `Method ${method} is not supported here.` }, requestConfig);

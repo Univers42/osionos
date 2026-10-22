@@ -23,6 +23,11 @@
  * The bridge decides whose row it is: the body of the write carries the switch
  * and nothing else, and the server names the user.
  *
+ * TWO switches live in that row: `captureExplicit` (the explicit actions) and
+ * `beaconConsent` (the pages the user saw and opened — the recommender's
+ * beacon, C48). The beacon is OFF when there is no row: a write carries only
+ * the switch it changes, so the other one keeps what it had.
+ *
  * The download carries the log AND the vectors the recommender derived from
  * it — the data derived from the user is the user's data too (C54).
  */
@@ -78,6 +83,20 @@ export type PersonalizationResult<T> =
   | { ok: true; value: T }
   | { ok: false; code: 'unavailable' | 'failed'; message: string };
 
+/** The switches of the user: what is collected, and what the beacon may see. */
+export interface PersonalizationSettings {
+  /** The explicit actions (likes, comments, shares, favorites) are collected. */
+  captureExplicit: boolean;
+  /** The beacon may report the pages the user saw and opened (OFF by default). */
+  beaconConsent: boolean;
+}
+
+/** The switches a write may carry: only what is given is written. */
+export interface PersonalizationWrite {
+  captureExplicit?: boolean;
+  beaconConsent?: boolean;
+}
+
 /**
  * The bridge the calls ride. The default is the app's own helper; the tests
  * replace it whole, so a request can be read before it is sent.
@@ -132,20 +151,42 @@ async function request<T>(
   }
 }
 
-/** The switch, as the server has it. A user with no row collects by default. */
-export async function readPersonalization(): Promise<PersonalizationResult<{ captureExplicit: boolean }>> {
-  const result = await request<{ captureExplicit?: boolean }>('GET', '/api/personalization');
+/**
+ * The switches, as the server has them. A user with no row collects by
+ * default and beacons nothing: the beacon is opt-in (C48).
+ */
+export async function readPersonalization(): Promise<PersonalizationResult<PersonalizationSettings>> {
+  const result = await request<{ captureExplicit?: boolean; beaconConsent?: boolean }>('GET', '/api/personalization');
   if (!result.ok) return result;
-  return { ok: true, value: { captureExplicit: result.value?.captureExplicit !== false } };
+  return {
+    ok: true,
+    value: {
+      captureExplicit: result.value?.captureExplicit !== false,
+      beaconConsent: result.value?.beaconConsent === true,
+    },
+  };
 }
 
-/** The switch, saved. The server decides whose row it is, not the body. */
-export async function writePersonalization(capture: boolean): Promise<PersonalizationResult<{ captureExplicit: boolean }>> {
-  const result = await request<{ captureExplicit?: boolean }>('PUT', '/api/personalization', {
-    captureExplicit: capture,
-  });
+/**
+ * The switches, saved. The server decides whose row it is, not the body, and
+ * only the switches the body carries are written: the other one keeps what it
+ * had.
+ */
+export async function writePersonalization(
+  settings: PersonalizationWrite,
+): Promise<PersonalizationResult<PersonalizationSettings>> {
+  const body: PersonalizationWrite = {};
+  if (typeof settings.captureExplicit === 'boolean') body.captureExplicit = settings.captureExplicit;
+  if (typeof settings.beaconConsent === 'boolean') body.beaconConsent = settings.beaconConsent;
+  const result = await request<{ captureExplicit?: boolean; beaconConsent?: boolean }>('PUT', '/api/personalization', body);
   if (!result.ok) return result;
-  return { ok: true, value: { captureExplicit: result.value?.captureExplicit !== false } };
+  return {
+    ok: true,
+    value: {
+      captureExplicit: result.value?.captureExplicit !== false,
+      beaconConsent: result.value?.beaconConsent === true,
+    },
+  };
 }
 
 /**

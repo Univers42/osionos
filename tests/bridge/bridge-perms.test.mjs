@@ -61,7 +61,7 @@ function memoryRuleStore(seed) {
 function setup({
   isAdmin = false, access = {}, rules = [], people = "missing", secretUnset = false,
   upstreamDown = false, upstreamStatus = 200, serviceApikey = "svc-key", members = [USER],
-  roster = [USER],
+  roster = [USER], pageRows = [],
 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "perms-"));
   const ruleStore = memoryRuleStore(rules);
@@ -85,6 +85,13 @@ function setup({
     },
     fetchImpl: async (url, init) => {
       if (String(url).includes("osionos_workspace_members")) return Response.json(members.map((user_id) => ({ user_id })));
+      if (String(url).includes("osionos_pages")) {
+        const parsed = new URL(String(url));
+        const idParam = parsed.searchParams.get("id");
+        const wanted = idParam ? String(idParam).replace(/^eq\./, "") : "";
+        const found = pageRows.filter((row) => !wanted || String(row.id).toLowerCase() === wanted.toLowerCase());
+        return Response.json(found);
+      }
       upstream.push({ url, init });
       if (upstreamDown) throw new Error("connect ECONNREFUSED 10.0.0.7:8002");
       return new Response(JSON.stringify({ ok: upstreamStatus < 400, message: "Unauthorized", request_id: "kong-1" }), { status: upstreamStatus });
@@ -331,4 +338,31 @@ test("G6 F6: an admin may decide about any user", async () => {
   const res = await call("POST", `/api/perms/decide?workspaceId=${WS_A}`, { body: { user: { id: OTHER }, op: "get" } });
   assert.equal(res.status, 200);
   assert.equal(JSON.parse(upstream[0].init.body).user.id, OTHER);
+});
+
+test('page owner who is only a viewer may post a page-scoped rule', async () => {
+  const PAGE = '77777777-7777-4777-8777-777777777777';
+  const { call } = setup({
+    isAdmin: false,
+    access: { [WS_A]: ['read'] },
+    pageRows: [{ id: PAGE, owner_id: USER }],
+  });
+  const res = await call('POST', '/api/perms/rules', {
+    body: { workspaceId: WS_A, resourceType: 'page', resourceId: PAGE, permission: 'no_access', target: { type: 'user', userId: '99999999-9999-4999-8999-999999999999' } },
+  });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.ok(res.body?.rule);
+});
+
+test('a non-owner viewer is refused a page-scoped rule', async () => {
+  const PAGE = '88888888-8888-4888-8888-888888888888';
+  const { call } = setup({
+    isAdmin: false,
+    access: { [WS_A]: ['read'] },
+    pageRows: [{ id: PAGE, owner_id: '99999999-9999-4999-8999-999999999999' }],
+  });
+  const res = await call('POST', '/api/perms/rules', {
+    body: { workspaceId: WS_A, resourceType: 'page', resourceId: PAGE, permission: 'no_access', target: { type: 'user', userId: '11111111-2222-3333-4444-555555555555' } },
+  });
+  assert.equal(res.status, 403, JSON.stringify(res.body));
 });

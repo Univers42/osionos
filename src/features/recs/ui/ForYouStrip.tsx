@@ -24,12 +24,20 @@
  * answer "not recorded", and the user is told rather than left guessing).
  *
  * NO other user is ever named: the "why" is a page of the USER's own (C55).
+ *
+ * THE BEACON (C48, C49)
+ *   The strip says what the user actually saw: an IMPRESSION when half of a
+ *   card is on the screen (one observer for the whole strip), and a CLICK when
+ *   the card opens its page. Both carry the SLATE, so the server can prove
+ *   the page was really served to this user; the rank is the server's, never
+ *   the client's. Nothing is sent when the strip shows nothing.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { usePageStore } from "@/store/usePageStore";
 import { IconValueView, useToastStore } from "@/shared/ui";
+import { reportClick, reportImpression } from "../api/beacon";
 import { fetchForYou, markNotInterested, type ForYouItem } from "../api/forYou";
 import { whyText } from "../model/whyText";
 
@@ -62,6 +70,11 @@ export const ForYouStrip: React.FC = () => {
   const [slate, setSlate] = useState("");
   const [hidden, setHidden] = useState<string[]>([]);
   const [whyOpen, setWhyOpen] = useState<string | null>(null);
+  // The cards of the strip: the observer watches them all at once.
+  const listRef = useRef<HTMLUListElement | null>(null);
+  // The cards already reported: a card is an impression ONCE, not once per
+  // re-render of the strip.
+  const reported = useRef(new Set<string>());
 
   // The slate is fetched ONCE, on mount: it is a snapshot of what the
   // recommender serves now, and the dashboard must not ask again on every
@@ -79,7 +92,34 @@ export const ForYouStrip: React.FC = () => {
     };
   }, []);
 
-  const visible = items.filter((item) => !hidden.includes(item.pageId));
+  const visible = useMemo(
+    () => items.filter((item) => !hidden.includes(item.pageId)),
+    [items, hidden],
+  );
+
+  // An IMPRESSION is a card the user really saw: half of it on the screen.
+  // ONE observer for the whole strip, and a card is reported once — the
+  // beacon counts what was shown, not how often it was scrolled past.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || !slate || visible.length === 0) return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting || entry.intersectionRatio < 0.5) continue;
+          const pageId = (entry.target as HTMLElement).dataset.pageId ?? "";
+          if (!pageId || reported.current.has(pageId)) continue;
+          reported.current.add(pageId);
+          observer.unobserve(entry.target);
+          reportImpression(slate, pageId);
+        }
+      },
+      { threshold: [0, 0.5] },
+    );
+    for (const card of Array.from(list.children)) observer.observe(card);
+    return () => observer.disconnect();
+  }, [slate, visible]);
 
   /** The refusal: the card goes at once, and comes back if it was not saved. */
   const onNotInterested = useCallback(
@@ -104,12 +144,13 @@ export const ForYouStrip: React.FC = () => {
       <h2 id={HEADING_ID} className="mb-1.5 text-xs font-medium text-[var(--osio-fg-muted)]">
         For you
       </h2>
-      <ul className="flex flex-wrap gap-2">
+      <ul ref={listRef} className="flex flex-wrap gap-2">
         {visible.map((item) => {
           const open = whyOpen === item.pageId;
           return (
             <li
               key={item.pageId}
+              data-page-id={item.pageId}
               className={CARD}
               onKeyDown={(event) => {
                 if (event.key === "Escape") setWhyOpen(null);
@@ -118,14 +159,17 @@ export const ForYouStrip: React.FC = () => {
               <button
                 type="button"
                 className={TITLE_BUTTON}
-                onClick={() =>
+                onClick={() => {
+                  // A CLICK: the card opened its page. The slate rides along, so
+                  // the server can prove the page was served to this user.
+                  if (slate) reportClick(slate, item.pageId);
                   openPage({
                     id: item.pageId,
                     workspaceId: item.workspaceId ?? "",
                     kind: "page",
                     title: item.title ?? "",
-                  })
-                }
+                  });
+                }}
               >
                 <span aria-hidden="true">
                   {item.icon ? <IconValueView value={item.icon} size={16} /> : "📄"}

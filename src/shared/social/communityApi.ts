@@ -31,12 +31,22 @@ function jwt(): string | undefined {
   return getActivePageJwt() ?? undefined;
 }
 
-export async function createCommunity(input: {
-  name: string;
-  description?: string;
-  avatar?: string;
-}): Promise<Community> {
-  const reply = await api.post<{ community: Community }>('/api/communities', input, jwt());
+/**
+ * Create a community.
+ *
+ * `acknowledgeWarning` is the author saying "create it anyway": without it the
+ * bridge answers 409 (L0 asked first) and no community is written.
+ */
+export async function createCommunity(
+  input: {
+    name: string;
+    description?: string;
+    avatar?: string;
+  },
+  { acknowledgeWarning }: { acknowledgeWarning?: boolean } = {},
+): Promise<Community> {
+  const body = acknowledgeWarning ? { ...input, acknowledgeWarning: true } : { ...input };
+  const reply = await api.post<{ community: Community }>('/api/communities', body, jwt());
   return reply.community;
 }
 

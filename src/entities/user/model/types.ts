@@ -48,6 +48,10 @@ export interface UserSession {
   sharedWorkspaces: Workspace[];   // workspaces where user is member but not owner
 }
 
+/** The platform role of a signed-in user — the session claim's vocabulary (ADR 0005).
+ *  The bridge is the authority: this only decides which surfaces the app offers. */
+export type PlatformRole = 'admin' | 'moderator' | 'user' | 'guest';
+
 export interface UserStore {
   personas: StaticPersona[];
   sessions: Record<string, UserSession>;
@@ -84,5 +88,7 @@ export interface UserStore {
   activeJwt: () => string | null;
   activePageJwt: () => string | null;
   isAdmin: () => boolean;
+  /** The platform role the active session claims; null when the session claims none. */
+  platformRole: () => PlatformRole | null;
   personaById: (id: string) => StaticPersona | undefined;
 }

@@ -28,10 +28,16 @@ const TABLE = 'osionos_share_rules';
 const MIGRATION = 'models/osionos-share-rules-migration.sql';
 const LEVELS = new Set(['no_access', 'can_view', 'can_comment', 'can_edit', 'full_access']);
 const RESOURCE_TYPES = new Set(['workspace', 'page', 'database', 'block']);
+const PAGE_RESOURCE_TYPE = 'page';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LIST_LIMIT = 500;
 const TIMEOUT_MS = 5000;
 const SELECT = 'id,workspace_id,resource_type,resource_id,target,permission,explicit,created_at,updated_at';
+
+/** The 503 a rules read that cannot be trusted answers — never a silent "no rules". */
+function shareRulesUnavailable() {
+	return Object.assign(new Error('Share rules are not available right now.'), { status: 503, code: 'share_rules_unavailable' });
+}
 
 /** A bounded string field, or a 400. */
 function boundedText(value, limit, field) {
@@ -65,11 +71,16 @@ export function normalizeShareRule(input) {
 	if (!LEVELS.has(permission)) throw httpError('permission is invalid', 400);
 	const resourceType = String(input?.resourceType ?? 'page');
 	if (!RESOURCE_TYPES.has(resourceType)) throw httpError('resourceType is invalid', 400);
+	// A page id is a UUID stored lower-case (osionos_pages.id is UUID); the rule stores it
+	// as TEXT, so normalise here so a rule written with an upper- or mixed-case id still
+	// matches the page it is about. Workspace-wide rules ('') are untouched.
+	let resourceId = boundedText(input?.resourceId, 256, 'resourceId');
+	if (resourceType === 'page' && resourceId) resourceId = resourceId.toLowerCase();
 	const target = normalizeTarget(input?.target ?? { type: 'workspace' });
 	return {
 		workspace_id: workspaceId,
 		resource_type: resourceType,
-		resource_id: boundedText(input?.resourceId, 256, 'resourceId'),
+		resource_id: resourceId,
 		target,
 		target_key: `${target.type}:${target.userId ?? ''}:${target.role ?? ''}`,
 		permission,
@@ -94,7 +105,7 @@ export function toApiRule(row) {
 
 /** PostgREST-backed rule store; every method takes the per-request bridge config. */
 export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = console.error } = {}) {
-	async function call(config, query, { method = 'GET', body, prefer } = {}) {
+	async function call(config, query, { method = 'GET', body, prefer, empty = [] } = {}) {
 		if (!config?.baasUrl || !config?.serviceKey) throw httpError('rule storage is not configured', 503);
 		const headers = { Accept: 'application/json', apikey: config.serviceKey, Authorization: `Bearer ${config.serviceKey}` };
 		if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -109,27 +120,109 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		if (!response.ok) throw storeFailure(response.status, await response.text().catch(() => ''));
 		// An empty answer means "no rules", which is an access decision — so a body that
 		// stops mid-stream, or one that is not JSON, is reported as the broken read it is.
-		return readBaasJson(response, { service: 'share rules', empty: [], fail: (message) => httpError(message, 502) });
+		return readBaasJson(response, { service: 'share rules', empty, fail: (message) => httpError(message, 502) });
 	}
 
 	function storeFailure(status, text) {
 		let code = '';
 		try { code = JSON.parse(text)?.code ?? ''; } catch { /* non-JSON error body */ }
-		if (status === 404 || code === '42P01' || code === 'PGRST205') {
+		// Only PGRST205/42P01 mean the table is gone. Any other 404 is a broken read, and
+		// answering [] for it would drop every deny the caller is under.
+		if (code === '42P01' || code === 'PGRST205') {
 			log(`[bridge-perms] table public.${table} is missing — apply ${MIGRATION} (psql -v ON_ERROR_STOP=1 -1 -f ${MIGRATION})`);
-			return httpError('rule storage is not available', 503);
+			return Object.assign(httpError('rule storage is not available', 503), { code: 'share_rules_table_missing' });
+		}
+		if (status === 404) {
+			log(`[bridge-perms] rule storage answered 404 (${code || 'no code'}) — not a missing table`);
+			return Object.assign(httpError('rule storage is not available', 503), { code: 'share_rules_unavailable' });
 		}
 		if (status === 401 || status === 403) {
 			log(`[bridge-perms] PostgREST refused the bridge's service identity for ${table} (${status})`);
-			return httpError('rule storage is not available', 503);
+			return Object.assign(httpError('rule storage is not available', 503), { code: 'share_rules_unavailable' });
 		}
 		log(`[bridge-perms] rule storage failed (${status} ${code})`);
-		return httpError('rule storage failed', 502);
+		return Object.assign(httpError('rule storage failed', 502), { code: 'share_rules_failed' });
 	}
 
 	const query = (params) => new URLSearchParams(params).toString();
 
+	/**
+	 * The rules that decide ONE page's access: the page's own rules and the workspace-wide
+	 * ones (resource_id = ''). Two reads, so a workspace with hundreds of rules about OTHER
+	 * pages cannot truncate the page's own rule — the reviewer's seed (500 other page rules
+	 * plus one no_access on P) still denies P.
+	 *
+	 * A missing table answers [] — no rule can exist, so that is exact rather than
+	 * fail-open. Every other failure (refused identity, upstream 5xx, timeout) is a 503,
+	 * never []: a silent "no rules" would drop the deny the caller is under and hand the
+	 * page to somebody who must not have it.
+	 * Caveat: a server whose table vanished drops every deny; the server applies every
+	 * models/*.sql (scripts/apply-models-migrations.sh), so the table is only missing on a
+	 * desktop restored from an older snapshot.
+	 */
+	const listForPage = async (config, workspaceId, pageId) => {
+		// A page id may arrive in any case (the request path does not lower-case it, and
+		// Postgres UUID comparison is case-insensitive), but osionos_share_rules.resource_id
+		// is TEXT and compared byte-exactly — normalise once here so the rule is found.
+		const normalizedPageId = String(pageId ?? '').trim().toLowerCase();
+		const params = {
+			select: SELECT, workspace_id: `eq.${workspaceId}`, resource_type: `eq.${PAGE_RESOURCE_TYPE}`,
+			order: 'created_at.asc', limit: String(LIST_LIMIT),
+		};
+		try {
+			const [pageRules, wideRules] = await Promise.all([
+				call(config, query({ ...params, resource_id: `eq.${normalizedPageId}` }), { empty: null }),
+				call(config, query({ ...params, resource_id: 'eq.' }), { empty: null }),
+			]);
+			// An empty body is not an empty rule set: the read was broken, and deciding on
+			// it would drop every deny the caller is under.
+			if (pageRules === null || wideRules === null) throw shareRulesUnavailable();
+			// A full page of rules may be a truncated set: a deny beyond the cap would be
+			// dropped, so the read fails closed instead of deciding on half the rules.
+			if (pageRules.length >= LIST_LIMIT || wideRules.length >= LIST_LIMIT) throw shareRulesUnavailable();
+			return [...pageRules, ...wideRules].filter((row) => {
+				const resourceId = row?.resource_id;
+				return resourceId === '' || resourceId === null || String(resourceId).toLowerCase() === normalizedPageId;
+			});
+		} catch (error) {
+			if (error?.code === 'share_rules_table_missing') return [];
+			throw shareRulesUnavailable();
+		}
+	};
+
+	/**
+	 * listForPage for many pages of ONE workspace in two reads: pageId (lower-case) → that
+	 * page's rules plus the workspace-wide ones. Fails closed exactly like listForPage.
+	 * Caveat: a full LIST_LIMIT page of rules may be truncated, so it throws; keep the
+	 * id list short (the caller sends at most 50 ids per call — Kong's header buffer).
+	 */
+	const listForPages = async (config, workspaceId, pageIds) => {
+		const ids = [...new Set(pageIds.map((id) => String(id ?? '').trim().toLowerCase()))];
+		const params = {
+			select: SELECT, workspace_id: `eq.${workspaceId}`, resource_type: `eq.${PAGE_RESOURCE_TYPE}`,
+			order: 'created_at.asc', limit: String(LIST_LIMIT),
+		};
+		try {
+			const [pageRules, wideRules] = await Promise.all([
+				call(config, query({ ...params, resource_id: `in.(${ids.join(',')})` }), { empty: null }),
+				call(config, query({ ...params, resource_id: 'eq.' }), { empty: null }),
+			]);
+			if (pageRules === null || wideRules === null) throw shareRulesUnavailable();
+			if (pageRules.length >= LIST_LIMIT || wideRules.length >= LIST_LIMIT) throw shareRulesUnavailable();
+			const wide = wideRules.filter((row) => row?.resource_id === '' || row?.resource_id === null);
+			return new Map(ids.map((id) => [id, [
+				...pageRules.filter((row) => String(row?.resource_id ?? '').toLowerCase() === id),
+				...wide,
+			]]));
+		} catch (error) {
+			if (error?.code === 'share_rules_table_missing') return new Map(ids.map((id) => [id, []]));
+			throw shareRulesUnavailable();
+		}
+	};
+
 	return {
+		listForPage,
+		listForPages,
 		async list(config, workspaceId, resourceId) {
 			const params = { select: SELECT, workspace_id: `eq.${workspaceId}`, order: 'created_at.asc', limit: String(LIST_LIMIT) };
 			if (resourceId != null) params.resource_id = `eq.${resourceId}`;

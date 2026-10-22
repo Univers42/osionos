@@ -19,10 +19,13 @@ export interface RunRow extends QueryResultRow {
 	ended_at: Date | null;
 	/** Why the run ended the way it did: 'awaiting_approval' when it asked. */
 	finish_reason: string | null;
+	/** The agent that shaped the run, and its version — pinned (devil C40). */
+	agent_id: string | null;
+	agent_version: number | null;
 }
 
 const RUN_COLUMNS =
-	'id, conversation_id, owner_id, kind, status, model, error, usage, reserved_microusd, created_at, ended_at, finish_reason';
+	'id, conversation_id, owner_id, kind, status, model, error, usage, reserved_microusd, created_at, ended_at, finish_reason, agent_id, agent_version';
 
 /** One run, whatever its owner. */
 export async function getRun(db: Pool, id: string): Promise<RunRow | null> {
@@ -48,6 +51,10 @@ export async function getOwnedRun(
 /**
  * The row of the run. The id is the client's, so a repeated id finds the row
  * that is already there instead of starting a second run.
+ *
+ * The agent of the run is pinned on the row: its id AND its version, so the
+ * answer can be explained later with the exact instructions it ran under
+ * (devil C40). A run without an agent has NULL for both.
  */
 export async function insertRun(
 	db: Pool,
@@ -57,15 +64,26 @@ export async function insertRun(
 		ownerId,
 		model,
 		kind = 'text',
-	}: { runId: string; conversationId: string | null; ownerId: string; model: string; kind?: RunKind },
+		agentId = null,
+		agentVersion = null,
+	}: {
+		runId: string;
+		conversationId: string | null;
+		ownerId: string;
+		model: string;
+		kind?: RunKind;
+		/** The agent that shaped the run, and its version. */
+		agentId?: string | null;
+		agentVersion?: number | null;
+	},
 ): Promise<{ kind: 'inserted' | 'exists' | 'conflict' | 'missing' }> {
 	try {
 		const result = await db.query(
-			`insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind)
-			 values ($1, $2, $3, 'running', $4, $5)
+			`insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind, agent_id, agent_version)
+			 values ($1, $2, $3, 'running', $4, $5, $6, $7)
 			 on conflict (id) do nothing
 			 returning id`,
-			[runId, conversationId, ownerId, model, kind],
+			[runId, conversationId, ownerId, model, kind, agentId, agentVersion],
 		);
 		return result.rowCount === 1 ? { kind: 'inserted' } : { kind: 'exists' };
 	} catch (error) {

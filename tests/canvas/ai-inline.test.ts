@@ -197,6 +197,59 @@ test("inserting below turns a multi-paragraph answer into blocks", async (t) => 
   assert.equal(recorded.updates.length, 0, "inserting does not rewrite the target");
 });
 
+test("the diagram command inserts a diagram block, and the server wrote nothing", async (t) => {
+  const { recorded } = useDeps(t, {
+    frames: [
+      frame("text.delta", { text: "```mermaid\nflowchart LR\n  A --> B\n```" }),
+      frame("done", {}),
+    ],
+  });
+  useInlineAiStore.getState().open({ pageId: PAGE, blockId: BLOCK });
+  await useInlineAiStore.getState().run("diagram");
+  await waitFor(() => useInlineAiStore.getState().status === "done");
+
+  assert.equal(useInlineAiStore.getState().accept("insert-below"), true);
+  assert.equal(recorded.inserts.length, 1, "the diagram is ONE block");
+  assert.equal(recorded.inserts[0].afterBlockId, BLOCK, "it lands under the target");
+  assert.equal(recorded.inserts[0].block.type, "diagram");
+  assert.deepEqual(recorded.inserts[0].block.diagramSpec, {
+    kind: "mermaid",
+    source: "flowchart LR\n  A --> B",
+  });
+  assert.equal(recorded.updates.length, 0, "the answer never rewrites the block it was asked about");
+});
+
+test("C8: the mermaid source is sanitized at insert time, so the spec never carries a directive", async (t) => {
+  const { recorded } = useDeps(t, {
+    frames: [
+      frame("text.delta", { text: "```mermaid\n%%{init: {\"securityLevel\": \"loose\"}}%%\nflowchart LR\n  A --> B\n```" }),
+      frame("done", {}),
+    ],
+  });
+  useInlineAiStore.getState().open({ pageId: PAGE, blockId: BLOCK });
+  await useInlineAiStore.getState().run("diagram");
+  await waitFor(() => useInlineAiStore.getState().status === "done");
+
+  assert.equal(useInlineAiStore.getState().accept("insert-below"), true);
+  const source = (recorded.inserts[0].block.diagramSpec as { source: string }).source;
+  assert.equal(source.includes("%%{"), false, "a directive reached the stored spec");
+  assert.ok(source.includes("flowchart LR"));
+});
+
+test("an answer that holds no diagram is inserted as text, not as a broken diagram", async (t) => {
+  const { recorded } = useDeps(t, {
+    frames: [frame("text.delta", { text: "I cannot draw that." }), frame("done", {})],
+  });
+  useInlineAiStore.getState().open({ pageId: PAGE, blockId: BLOCK });
+  await useInlineAiStore.getState().run("diagram");
+  await waitFor(() => useInlineAiStore.getState().status === "done");
+
+  assert.equal(useInlineAiStore.getState().accept("insert-below"), true);
+  assert.equal(recorded.inserts.length, 1);
+  assert.equal(recorded.inserts[0].block.type, "paragraph");
+  assert.equal(recorded.inserts[0].block.content, "I cannot draw that.");
+});
+
 test("an answer that is still streaming cannot be accepted, and discarding writes nothing", async (t) => {
   const { recorded } = useDeps(t, { hold: true });
   useInlineAiStore.getState().open({ pageId: PAGE, blockId: BLOCK });
@@ -266,11 +319,23 @@ test("the AI group of the slash menu appears only when the service is configured
   assert.deepEqual(aiSlashCommands(false), [], "no service, no AI action");
 
   const withAi = aiSlashCommands(true);
-  assert.equal(withAi.length, 11, "one entry per editor command of the service, and the dictation");
+  assert.equal(withAi.length, 12, "one entry per editor command of the service, and the dictation");
   const commands = withAi.filter((entry) => entry.kind === "ai");
   assert.deepEqual(
     commands.map((entry) => entry.command),
-    ["ask", "summarize", "continue", "improve", "fix", "shorter", "longer", "translate", "action-items", "explain"],
+    [
+      "ask",
+      "summarize",
+      "continue",
+      "improve",
+      "fix",
+      "shorter",
+      "longer",
+      "translate",
+      "action-items",
+      "explain",
+      "diagram",
+    ],
   );
   // The dictation is NOT a command of the service: it writes at the caret.
   const dictate = withAi.find((entry) => entry.kind === "dictate");
@@ -291,6 +356,7 @@ test("the AI group of the slash menu appears only when the service is configured
       "Action items",
       "Dictate",
       "Explain",
+      "Draw a diagram",
     ],
   );
 });

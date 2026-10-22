@@ -25,10 +25,13 @@ import { create } from "zustand";
 import { pumpSseStream } from "@osionos/http-gate";
 
 import type { Block } from "@/entities/block";
+import { createDiagramBlock } from "@/entities/block/model/diagramBlocks";
+import { sanitizeMermaidSource } from "@osionos/ui/molecules/MermaidDiagram/lockedMermaid";
 import {
   plainTextOfInlineSource,
   sliceInlineSource,
 } from "@/shared/lib/text/inlineSource";
+import { mermaidFromAnswer } from "@/features/diagram/model/mermaidAnswer";
 import type { BlockDraftCommitReason } from "@/features/block-editor/model/blockDraftStore";
 import type { CompleteInput } from "../api/aiClient";
 import { readAiSelection, type AiSelection } from "./aiSelection";
@@ -293,11 +296,23 @@ export const useInlineAiStore = create<InlineAiState>((set, get) => {
           content: answerOverSelection(source, target.selectionText, answer),
         });
       } else {
-        const blocks = deps.markdownToBlocks(answer);
-        let anchor = target.blockId;
-        for (const block of blocks) {
-          deps.insertBlock(target.pageId, anchor, block);
-          anchor = block.id;
+        // The `diagram` command answers with a mermaid SPEC: it becomes a
+        // diagram block, inserted where the user asked for it. The server
+        // wrote nothing, and the click is what inserts it.
+        const mermaid = state.command === "diagram" ? mermaidFromAnswer(answer) : null;
+        if (mermaid !== null) {
+          deps.insertBlock(
+            target.pageId,
+            target.blockId,
+            createDiagramBlock({ kind: "mermaid", source: sanitizeMermaidSource(mermaid) }),
+          );
+        } else {
+          const blocks = deps.markdownToBlocks(answer);
+          let anchor = target.blockId;
+          for (const block of blocks) {
+            deps.insertBlock(target.pageId, anchor, block);
+            anchor = block.id;
+          }
         }
       }
 
