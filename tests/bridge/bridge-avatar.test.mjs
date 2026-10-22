@@ -21,7 +21,16 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 
 import { IDS, createPostgrestMock, harnessConfig, send, sessionHeaders, withBridge } from './support/bridge-harness.mjs';
-import { htmlFixture, jpegFixture, pngFixture, webpFixture } from './support/image-fixtures.mjs';
+import {
+	htmlFixture,
+	hugePngFixture,
+	jpegFixture,
+	jpegSegment,
+	pngFixture,
+	webpChunk,
+	webpFixture,
+} from './support/image-fixtures.mjs';
+import { imageInfo } from '../../scripts/bridge-image-meta.mjs';
 
 const config = harnessConfig();
 const asA = sessionHeaders(config, IDS.userA, IDS.homeA);
@@ -58,6 +67,12 @@ async function storageRouter() {
 			response.end('missing');
 			return;
 		}
+		if (request.method === 'DELETE') {
+			objects.delete(key);
+			response.writeHead(200, { 'content-type': 'application/json' });
+			response.end('{"ok":true}');
+			return;
+		}
 		response.writeHead(200, { 'content-type': stored.contentType });
 		response.end(stored.body);
 	});
@@ -73,11 +88,11 @@ async function storageRouter() {
 }
 
 /** A bridge whose BaaS is the PostgREST mock and whose storage is the router above. */
-async function avatarBridge(run, { identities = [] } = {}) {
+async function avatarBridge(run, { identities = [], profiles = [{ user_id: IDS.userA, display_name: 'Alice', avatar_url: null }] } = {}) {
 	const storage = await storageRouter();
 	const mock = createPostgrestMock({
 		osionos_bridge_identities: identities,
-		osionos_profiles: [{ user_id: IDS.userA, display_name: 'Alice', avatar_url: null }],
+		osionos_profiles: profiles,
 	});
 	try {
 		return await withBridge(config, mock.fetchImpl, (base) => run({ base, storage, mock }));
@@ -206,6 +221,65 @@ describe('POST /api/profile/avatar', () => {
 			assert.equal(last.status, 429, last.text);
 		});
 	});
+
+	it('stores the bytes without their metadata', async () => {
+		const exif = jpegSegment(0xe1, Buffer.concat([Buffer.from('Exif\0\0', 'latin1'), Buffer.from('GPSLatitude 51/1 30/1 0/1', 'latin1')]));
+		const variants = Object.fromEntries(SIZES.map((size) => [size, base64(jpegFixture({ width: size, height: size, extra: [exif] }))]));
+		await avatarBridge(async ({ base, storage }) => {
+			const result = await send(base, '/api/profile/avatar', asA, { method: 'POST', body: JSON.stringify({ variants }) });
+			assert.equal(result.status, 201, result.text);
+			for (const object of storage.objects.values()) {
+				assert.equal(object.body.includes(Buffer.from('Exif', 'latin1')), false, 'the EXIF block is gone');
+				assert.equal(object.body.includes(Buffer.from('GPSLatitude', 'latin1')), false, 'the GPS payload is gone');
+				assert.equal(imageInfo(object.body).type, 'image/jpeg', 'the image is still the image');
+			}
+		});
+	});
+
+	it('stores the WebP without its EXIF and XMP chunks', async () => {
+		const variants = Object.fromEntries(SIZES.map((size) => [size, base64(webpFixture({
+			width: size,
+			height: size,
+			kind: 'VP8X',
+			flags: 0x08 | 0x04,
+			extra: [webpChunk('EXIF', Buffer.from('Exif data', 'latin1')), webpChunk('XMP ', Buffer.from('<x:xmpmeta/>', 'latin1'))],
+		}))]));
+		await avatarBridge(async ({ base, storage }) => {
+			const result = await send(base, '/api/profile/avatar', asA, { method: 'POST', body: JSON.stringify({ variants }) });
+			assert.equal(result.status, 201, result.text);
+			for (const object of storage.objects.values()) {
+				assert.equal(object.body.includes(Buffer.from('Exif data', 'latin1')), false, 'the EXIF chunk is gone');
+				assert.equal(object.body.includes(Buffer.from('xmpmeta', 'latin1')), false, 'the XMP chunk is gone');
+				assert.equal(imageInfo(object.body).type, 'image/webp');
+			}
+		});
+	});
+
+	it('refuses a legacy avatar whose canvas is bigger than an avatar may be', async () => {
+		for (const [name, bytes] of [
+			['a PNG of 4294967295 pixels', hugePngFixture()],
+			['a WebP of 16384 pixels', webpFixture({ width: 16384, height: 16384, kind: 'VP8X' })],
+		]) {
+			await avatarBridge(async ({ base, storage, mock }) => {
+				const result = await send(base, '/api/profile/avatar', asA, {
+					method: 'POST',
+					body: JSON.stringify({ dataUrl: `data:image/png;base64,${base64(bytes)}` }),
+				});
+				assert.equal(result.status, 422, `${name}: ${result.text}`);
+				assert.equal(result.body.code, 'invalid_image', name);
+				assert.equal(storage.stats().puts, 0, name);
+				assert.equal(writesTo(mock, 'osionos_profiles').length, 0, name);
+			});
+		}
+	});
+
+	it('answers 404 when the account has no profile row to hold the avatar', async () => {
+		await avatarBridge(async ({ base }) => {
+			const result = await send(base, '/api/profile/avatar', asA, { method: 'POST', body: JSON.stringify(variantBody()) });
+			assert.equal(result.status, 404, result.text);
+			assert.equal(result.body.code, 'profile_missing', result.text);
+		}, { profiles: [] });
+	});
 });
 
 describe('DELETE /api/profile/avatar', () => {
@@ -228,6 +302,23 @@ describe('DELETE /api/profile/avatar', () => {
 			assert.equal('avatar' in identityPatches[0].body.profile, false);
 			assert.equal(identityPatches[0].body.profile.headline, 'CTO', 'the rest of the blob stays');
 		}, { identities });
+	});
+
+	it('removes the stored objects: the old URL answers 404', async () => {
+		await avatarBridge(async ({ base, storage }) => {
+			const uploaded = await send(base, '/api/profile/avatar', asA, { method: 'POST', body: JSON.stringify(variantBody()) });
+			assert.equal(uploaded.status, 201, uploaded.text);
+			const key = uploaded.body.avatarPath.split('/').pop();
+			assert.equal(storage.objects.size, 3, 'the three variants are stored');
+
+			const deleted = await send(base, '/api/profile/avatar', asA, { method: 'DELETE' });
+			assert.equal(deleted.status, 204, deleted.text);
+			assert.equal(storage.objects.size, 0, 'the stored objects are gone');
+
+			const res = await fetch(`${base}${uploaded.body.avatarPath}`);
+			assert.equal(res.status, 404);
+			assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+		});
 	});
 });
 
@@ -266,6 +357,7 @@ describe('GET /api/media/avatars/:userId/:key', () => {
 		await avatarBridge(async ({ base, storage }) => {
 			const res = await fetch(`${base}/api/media/avatars/${IDS.userA}/${sha}-160.webp`);
 			assert.equal(res.status, 404);
+			assert.equal(res.headers.get('x-content-type-options'), 'nosniff', 'the error body is not sniffed');
 			assert.equal(storage.stats().gets, 1, 'the router was asked once');
 		});
 	});
@@ -275,8 +367,19 @@ describe('GET /api/media/avatars/:userId/:key', () => {
 			for (const key of ['not-a-key', `${sha}.exe`, `${sha}-12.webp`, `${sha}-160.webp/../x`]) {
 				const res = await fetch(`${base}/api/media/avatars/${IDS.userA}/${key}`);
 				assert.equal(res.status, 404, key);
+				assert.equal(res.headers.get('x-content-type-options'), 'nosniff', key);
 			}
 			assert.equal(storage.stats().gets, 0, 'no storage call for a key that cannot exist');
+		});
+	});
+
+	it('answers 404 for a user id that is not a uuid, without asking the router', async () => {
+		await avatarBridge(async ({ base, storage }) => {
+			for (const userId of ['not-a-uuid', '%2e%2e', '..%2f..', `${IDS.userA}%2f..`, '-'.repeat(36)]) {
+				const res = await fetch(`${base}/api/media/avatars/${userId}/${sha}-160.webp`);
+				assert.equal(res.status, 404, userId);
+			}
+			assert.equal(storage.stats().gets, 0, 'no storage call for a user id that cannot exist');
 		});
 	});
 });

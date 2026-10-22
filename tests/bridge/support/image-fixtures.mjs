@@ -56,6 +56,23 @@ export function pngFixture({ width = 1, height = 1, extra = [] } = {}) {
 	return Buffer.concat(parts);
 }
 
+/**
+ * A PNG whose header declares a huge canvas and carries no pixels: the size a
+ * decode bomb would claim, in a file that stays small.
+ */
+export function hugePngFixture({ width = 0xffffffff, height = 0xffffffff } = {}) {
+	const header = Buffer.alloc(13);
+	header.writeUInt32BE(width, 0);
+	header.writeUInt32BE(height, 4);
+	header[8] = 8;
+	header[9] = 6;
+	return Buffer.concat([
+		Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+		pngChunk('IHDR', header),
+		pngChunk('IEND', Buffer.alloc(0)),
+	]);
+}
+
 /** A JPEG with an APP0 (JFIF) and a frame header; `extra` segments sit before SOF0. */
 export function jpegFixture({ width = 1, height = 1, extra = [] } = {}) {
 	const jfif = Buffer.concat([Buffer.from([0xff, 0xe0, 0x00, 0x10]), Buffer.from('JFIF\0', 'latin1'), Buffer.from([0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00])]);
@@ -85,8 +102,11 @@ export function jpegSegment(marker, payload) {
 	return Buffer.concat([Buffer.from([0xff, marker]), length, payload]);
 }
 
-/** A GIF; `comment` becomes a comment extension (the polyglot carrier). */
-export function gifFixture({ width = 1, height = 1, comment = null } = {}) {
+/**
+ * A GIF; `comment` becomes a comment extension and `application` an application
+ * extension (the polyglot carriers — the mime sniffer only reads the comment).
+ */
+export function gifFixture({ width = 1, height = 1, comment = null, application = null } = {}) {
 	const screen = Buffer.alloc(7);
 	screen.writeUInt16LE(width, 0);
 	screen.writeUInt16LE(height, 2);
@@ -94,6 +114,11 @@ export function gifFixture({ width = 1, height = 1, comment = null } = {}) {
 	if (comment !== null) {
 		const data = Buffer.from(comment, 'latin1');
 		parts.push(Buffer.from([0x21, 0xfe, data.length]), data, Buffer.from([0x00]));
+	}
+	if (application !== null) {
+		// 0x21 0xFF: an 11-byte application block, then the sub-blocks.
+		const data = Buffer.from(application, 'latin1');
+		parts.push(Buffer.from([0x21, 0xff, 0x0b]), Buffer.from('NETSCAPE2.0', 'latin1'), Buffer.from([data.length]), data, Buffer.from([0x00]));
 	}
 	parts.push(Buffer.from([0x3b]));
 	return Buffer.concat(parts);

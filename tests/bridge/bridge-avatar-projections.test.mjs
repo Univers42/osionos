@@ -23,11 +23,13 @@ import { createSocialHandler } from '../../scripts/bridge-social.mjs';
 import { identitySummaries } from '../../scripts/bridge-social-core.mjs';
 import { createChatHandler } from '../../scripts/bridge-chat.mjs';
 import { createCollabHandler } from '../../scripts/bridge-collab.mjs';
+import { createCommunityHandler } from '../../scripts/bridge-communities.mjs';
 import { createWorkspaceInvitesHandler } from '../../scripts/bridge-workspace-invites.mjs';
 import { createFeedHandler } from '../../scripts/bridge-feed.mjs';
 
 const config = { ...harnessConfig(), publicUrl: 'https://bridge.test' };
 const CHANNEL = 'c1c1c1c1-1111-4111-8111-c1c1c1c1c1c1';
+const COMMUNITY = 'd1d1d1d1-1111-4111-8111-d1d1d1d1d1d1';
 const PAGE = 'd1d1d1d1-1111-4111-8111-d1d1d1d1d1d1';
 const DATA_AVATAR = 'data:image/png;base64,AAAA';
 const STORED_AVATAR = '/api/media/avatars/aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa/abc.webp';
@@ -58,9 +60,13 @@ function stubFetch(avatar) {
 			return json([{ id: IDS.team, owner_id: IDS.userA, name: 'Team', slug: 'team', visibility: 'private' }]);
 		}
 		if (text.includes('osionos_channels')) {
-			return json([{ id: CHANNEL, workspace_id: IDS.team, kind: 'text', name: 'General', is_private: false }]);
+			return json([{ id: CHANNEL, workspace_id: IDS.team, kind: 'text', name: 'General', is_private: false, avatar }]);
 		}
 		if (text.includes('osionos_channel_members')) return json([{ channel_id: CHANNEL, user_id: IDS.userA, role: 'owner' }]);
+		if (text.includes('osionos_community_members')) return json([{ community_id: COMMUNITY, user_id: IDS.userA, role: 'owner' }]);
+		if (text.includes('osionos_communities')) {
+			return json([{ id: COMMUNITY, name: 'Crew', creator_id: IDS.userA, avatar }]);
+		}
 		if (text.includes('osionos_messages')) {
 			return json([{ id: 'e1e1e1e1-1111-4111-8111-e1e1e1e1e1e1', channel_id: CHANNEL, author_id: IDS.userA, content: 'hello', created_at: '2026-10-01T00:00:00.000Z' }]);
 		}
@@ -152,6 +158,24 @@ const MODULES = [
 			return response.written.body?.comments?.[0]?.authorAvatar ?? null;
 		},
 	},
+	{
+		name: 'bridge-chat channel',
+		read: async (avatar) => {
+			const response = fakeResponse();
+			const handler = createChatHandler({ config, verifySession: () => SESSION, fetchImpl: stubFetch(avatar) });
+			await handler(new URL('http://h/api/chat/channels'), request(), response, config);
+			return response.written.body?.channels?.[0]?.avatar ?? null;
+		},
+	},
+	{
+		name: 'bridge-communities',
+		read: async (avatar) => {
+			const response = fakeResponse();
+			const handler = createCommunityHandler({ config, verifySession: () => SESSION, fetchImpl: stubFetch(avatar) });
+			await handler(new URL('http://h/api/communities'), request(), response, config);
+			return response.written.body?.communities?.[0]?.avatar ?? null;
+		},
+	},
 ];
 
 describe('every user-avatar projection goes through the one helper', () => {
@@ -160,8 +184,28 @@ describe('every user-avatar projection goes through the one helper', () => {
 			assert.equal(await module.read(DATA_AVATAR), null);
 		});
 
+		it(`${module.name}: a javascript: avatar is no avatar`, async () => {
+			assert.equal(await module.read('javascript:alert(1)'), null);
+		});
+
+		it(`${module.name}: an http: avatar is no avatar`, async () => {
+			assert.equal(await module.read('http://example.com/a.png'), null);
+		});
+
 		it(`${module.name}: a stored avatar is an absolute URL`, async () => {
 			assert.equal(await module.read(STORED_AVATAR), ABSOLUTE_AVATAR);
+		});
+	}
+});
+
+describe('the channel and community avatar keeps the icon value', () => {
+	for (const module of MODULES.filter((entry) => entry.name === 'bridge-chat channel' || entry.name === 'bridge-communities')) {
+		it(`${module.name}: an emoji avatar is kept`, async () => {
+			assert.equal(await module.read('🎉'), '🎉');
+		});
+
+		it(`${module.name}: a lucide icon is kept`, async () => {
+			assert.equal(await module.read('icon:rocket'), 'icon:rocket');
 		});
 	}
 });
