@@ -48,6 +48,7 @@ export const EMBED_BLOCK_TYPES = [
   'graph_view',
   'draw',
   'whiteboard',
+  'diagram',
   'embed',
   'bookmark',
   'home_views',

@@ -21,6 +21,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Pause, Square, Trash2 } from 'lucide-react';
 
 import { useToastStore } from '@osionos/ui/primitives/useToastStore';
+import { micErrorMessage } from '@/features/voice/model/micError';
 import { useVoiceRecorder, type VoiceResult } from '../../model/useVoiceRecorder';
 import { VoicePreview } from './VoicePreview';
 import { WaveBars } from './WaveBars';
@@ -31,17 +32,6 @@ interface VoiceRecorderProps {
 }
 
 const MAX_MS = 60_000; // voice notes are capped at one minute
-
-/** Map a getUserMedia rejection to actionable guidance (usually a blocked permission). */
-function micErrorMessage(err: unknown): string {
-  const name = err instanceof Error ? err.name : '';
-  if (name === 'NotAllowedError' || name === 'SecurityError') {
-    return 'Microphone access is blocked — allow it via the camera/mic icon in your browser’s address bar, then retry.';
-  }
-  if (name === 'NotFoundError') return 'No microphone was found. Connect one and try again.';
-  if (name === 'NotReadableError') return 'Your microphone is in use by another app. Close it and retry.';
-  return 'Could not start recording. Check your browser’s microphone permission for this site.';
-}
 
 function formatClock(ms: number): string {
   const total = Math.floor(ms / 1000);

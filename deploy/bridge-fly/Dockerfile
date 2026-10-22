@@ -20,15 +20,26 @@ WORKDIR /app
 # The bridge server + every runtime module it imports (transitive closure of
 # bridge-api.mjs): graph projection, in-chat AI agent, LiveKit rtc tokens,
 # permission UX proxy, and the social plane (chat/profile/feed/social/collab/
-# notify/communities + their shared core/storage/ratelimit/BaaS-body helpers).
-COPY scripts/bridge-api.mjs scripts/bridge-page-read.mjs scripts/bridge-graph.mjs scripts/bridge-graph-data.mjs scripts/bridge-records.mjs scripts/bridge-agent.mjs scripts/bridge-runner.mjs \
+# notify/communities/recs + their shared core/storage/ratelimit/BaaS-body
+# helpers).
+COPY scripts/bridge-api.mjs scripts/bridge-page-read.mjs scripts/bridge-live-workspaces.mjs scripts/bridge-graph.mjs scripts/bridge-graph-data.mjs scripts/bridge-graph-edges.mjs scripts/bridge-records.mjs scripts/bridge-agent.mjs scripts/bridge-runner.mjs \
 	scripts/bridge-connector.mjs scripts/bridge-oauth.mjs \
 	scripts/bridge-rtc.mjs scripts/bridge-perms.mjs scripts/bridge-perms-rules.mjs scripts/bridge-chat.mjs \
 	scripts/bridge-chat-media.mjs scripts/bridge-url-guard.mjs scripts/bridge-url-fetch.mjs scripts/bridge-automations-webhook.mjs scripts/bridge-storage-core.mjs scripts/bridge-ratelimit.mjs scripts/bridge-chat-search.mjs scripts/bridge-chat-threads.mjs \
 	scripts/bridge-communities.mjs \
-	scripts/bridge-profile.mjs scripts/bridge-feed.mjs scripts/bridge-social.mjs scripts/bridge-notify.mjs scripts/bridge-push.mjs scripts/bridge-media.mjs scripts/bridge-tasks.mjs scripts/bridge-comments.mjs scripts/bridge-public.mjs scripts/bridge-embed.mjs scripts/bridge-unfurl-core.mjs scripts/bridge-unfurl-net.mjs scripts/bridge-unfurl-addr.mjs scripts/bridge-unfurl-dns.mjs scripts/bridge-unfurl-errors.mjs scripts/bridge-unfurl-scan.mjs scripts/bridge-unfurl-oembed.mjs scripts/bridge-unfurl-parse.mjs \
-	scripts/bridge-collab.mjs scripts/bridge-realtime-token.mjs scripts/bridge-social-core.mjs scripts/bridge-realtime-socket.mjs scripts/bridge-baas-body.mjs scripts/bridge-session-cutoff.mjs scripts/bridge-workspace-invites.mjs \
+	scripts/bridge-profile.mjs scripts/bridge-feed.mjs scripts/bridge-personalization.mjs scripts/bridge-recs.mjs scripts/bridge-recs-model.mjs scripts/bridge-recs-not-interested.mjs scripts/bridge-recs-pages.mjs scripts/bridge-recs-slate.mjs scripts/bridge-events.mjs scripts/bridge-social.mjs scripts/bridge-reports.mjs scripts/bridge-notify.mjs scripts/bridge-push.mjs scripts/bridge-media.mjs scripts/bridge-tasks.mjs scripts/bridge-comments.mjs scripts/bridge-public.mjs scripts/bridge-embed.mjs scripts/bridge-unfurl-core.mjs scripts/bridge-unfurl-net.mjs scripts/bridge-unfurl-addr.mjs scripts/bridge-unfurl-dns.mjs scripts/bridge-unfurl-errors.mjs scripts/bridge-unfurl-scan.mjs scripts/bridge-unfurl-oembed.mjs scripts/bridge-unfurl-parse.mjs \
+	scripts/bridge-collab.mjs scripts/bridge-realtime-token.mjs scripts/bridge-social-core.mjs scripts/bridge-realtime-socket.mjs scripts/bridge-baas-body.mjs scripts/bridge-session-cutoff.mjs scripts/bridge-session-token.mjs scripts/bridge-workspace-invites.mjs \
 	scripts/bridge-perf.mjs scripts/bridge-baas-transport.mjs scripts/bridge-ide-sandbox.mjs scripts/ide-term-sessions.mjs scripts/ide-docker.mjs scripts/ide-sandbox-spec.mjs scripts/bridge-ide-ops.mjs scripts/bridge-ide-exec.mjs scripts/ide-ws.mjs scripts/bridge-ide-token.mjs scripts/ide-token.mjs scripts/ide-username.mjs scripts/ide-volume-init.mjs scripts/ide-access.mjs ./scripts/
+
+# The L0 moderation rules, the gate that runs them before a comment is written,
+# the console an admin reviews the held comments and the open reports in, the
+# admin gate both admin routes share, the recs health an admin reads the
+# recommender's quality in, and the page-text helper the publish and
+# marketplace gates read a page's words with.
+# The module reads its blocklists at boot, so the LISTS are runtime
+# files: without them the image starts and then dies on the first import.
+COPY scripts/bridge-moderation.mjs scripts/bridge-moderation-gate.mjs scripts/bridge-moderation-console.mjs scripts/bridge-admin-check.mjs scripts/bridge-recs-health.mjs scripts/bridge-page-text.mjs ./scripts/
+COPY scripts/moderation-lists/ ./scripts/moderation-lists/
 
 ENV OSIONOS_BRIDGE_PORT=4000
 ENV HOME=/tmp

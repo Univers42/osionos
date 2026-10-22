@@ -60,7 +60,9 @@ function fakeReq(method, { body, auth } = {}) {
 }
 async function mint(hostEnv, user, stub) {
   const env = { OSIONOS_IDE_TOKEN_SECRET: IDE_SECRET, OSIONOS_APP_SESSION_SECRET: APP_SECRET, ...hostEnv };
-  const handler = createIdeTokenHandler({ config: CONFIG, verifySession: verifyAppSessionToken, env, fetchImpl: stub.fetchImpl });
+  // The live members check the mint runs before it signs (C129): injected, and a fake
+  // that resolves is the "the member is still there" answer.
+  const handler = createIdeTokenHandler({ config: CONFIG, verifySession: verifyAppSessionToken, env, fetchImpl: stub.fetchImpl, requireWorkspaceAccess: async () => ({ role: 'owner', permissions: ['read'] }) });
   const res = fakeRes();
   await handler(new URL("http://x/api/ide/token"), fakeReq("POST", { auth: appToken(user), body: { workspaceId: WS } }), res);
   return { status: res.statusCode, json: JSON.parse(res.body) };

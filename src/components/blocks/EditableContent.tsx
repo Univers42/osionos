@@ -30,6 +30,7 @@ import {
   Radical,
   RemoveFormatting,
   Slash,
+  Sparkles,
   Strikethrough,
   Underline,
 } from "lucide-react";
@@ -77,6 +78,10 @@ import {
 } from "@/shared/lib/auth/pageAccess";
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 import { findLinks, removeLink, replaceLink } from "./linkSourceEdit";
+import {
+  plainTextOfInlineSource,
+  sliceInlineSource,
+} from "@/shared/lib/text/inlineSource";
 import { LinkEditorPanel, type LinkEditorAnchor } from "./LinkEditorPanel";
 import { TurnIntoMenu } from "./TurnIntoMenu";
 
@@ -96,6 +101,8 @@ interface EditableContentProps {
   blockType?: string;
   /** Convert this block to another type (from the "Turn into" dropdown). */
   onTurnInto?: (type: string) => void;
+  /** Open the AI panel on the current selection (the selection toolbar). */
+  onAskAI?: (selectionText: string) => void;
 }
 
 type PaletteKind = "text" | "background" | null;
@@ -383,7 +390,7 @@ function buildInlineColorPresets(
 }
 
 const TOOLBAR_BUTTON_BASE =
-  "grid h-8 min-w-8 place-items-center rounded-md border border-transparent px-2 text-xs font-semibold text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]";
+  "grid h-8 min-w-8 place-items-center rounded-md border border-transparent px-2 text-xs font-semibold text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)] disabled:pointer-events-none disabled:opacity-40";
 
 const TOOLBAR_ACTIVE_BUTTON =
   "border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]";
@@ -409,6 +416,10 @@ interface InlineSelectionToolbarProps {
   onToggleMath: () => void;
   blockType?: string;
   onTurnInto?: (type: string) => void;
+  /** The text the user had selected — the AI works on THAT, not on the block. */
+  selectionText?: string;
+  /** Opens the AI panel on the selection. */
+  onAskAI?: (selectionText: string) => void;
 }
 
 const ToolbarDivider = () => (
@@ -423,13 +434,15 @@ const ToolbarIconButton: React.FC<{
   label: string;
   onClick: () => void;
   active?: boolean;
+  disabled?: boolean;
   children: React.ReactNode;
-}> = ({ label, onClick, active, children }) => (
+}> = ({ label, onClick, active, disabled, children }) => (
   <button
     type="button"
     title={label}
     aria-label={label}
     aria-pressed={active}
+    disabled={disabled}
     className={[TOOLBAR_BUTTON_BASE, active ? TOOLBAR_ACTIVE_BUTTON : ""].join(" ")}
     onMouseDown={(event) => event.preventDefault()}
     onClick={onClick}
@@ -459,6 +472,8 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
   onToggleMath,
   blockType,
   onTurnInto,
+  selectionText,
+  onAskAI,
 }) => (
   <div
     data-testid="inline-selection-toolbar"
@@ -532,6 +547,18 @@ const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
         <ToolbarIconButton label="Open slash menu" onClick={onOpenSlashMenu}>
           <Slash className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
         </ToolbarIconButton>
+        {onAskAI ? (
+          <>
+            <ToolbarDivider />
+            <ToolbarIconButton
+              label="Ask AI"
+              disabled={!selectionText}
+              onClick={() => onAskAI(selectionText ?? "")}
+            >
+              <Sparkles className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
+            </ToolbarIconButton>
+          </>
+        ) : null}
       </div>
 
       {palette && (
@@ -679,6 +706,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   onBlur,
   blockType,
   onTurnInto,
+  onAskAI,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
@@ -944,6 +972,17 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       setShowShortcuts(false);
     }
   }, [linkPicker, openPalette]);
+
+  // The selected text, in plain words: the AI works on the SELECTION, not on
+  // the whole block. The offsets are plain-text ones, the currency of the
+  // inline editor.
+  const selectedText = useMemo(() => {
+    const snapshot = selectionSnapshot ?? lastSelectionSnapshotRef.current;
+    if (!snapshot) return "";
+    return plainTextOfInlineSource(
+      sliceInlineSource(canonicalSourceRef.current, snapshot.start, snapshot.end),
+    );
+  }, [selectionSnapshot]);
 
   // Only the FOCUSED block listens for selectionchange. Previously every mounted
   // block attached its own document-level listener, so each caret move (i.e. every
@@ -1590,6 +1629,8 @@ export const EditableContent: React.FC<EditableContentProps> = ({
               onToggleMath={handleToggleMath}
               blockType={blockType}
               onTurnInto={onTurnInto}
+              selectionText={selectedText}
+              onAskAI={onAskAI}
             />,
             document.body,
           )
