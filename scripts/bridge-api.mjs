@@ -23,8 +23,9 @@ import { LINK_EDGES_RPC, PAGE_ROWS_RPC, readLinkEdges } from './bridge-graph-edg
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
+import { pageContentText, pagePublishText } from './bridge-page-text.mjs';
 import { liveReadableWorkspaces, privateWorkspaceOf } from './bridge-live-workspaces.mjs';
-import { publishRealtime } from './bridge-social-core.mjs';
+import { moderationWarningBody, publishRealtime } from './bridge-social-core.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller } from './bridge-session-cutoff.mjs';
 import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
@@ -58,6 +59,7 @@ import { createSocialHandler } from './bridge-social.mjs';
 import { handleAutomationWebhook } from './bridge-automations-webhook.mjs';
 import { createRequestMeter } from './bridge-perf.mjs';
 import { createBaasTransport } from './bridge-baas-transport.mjs';
+import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -2342,19 +2344,12 @@ export function pageTitleScore(row, query) {
 	return 0;
 }
 
-/** Flatten a page's JSONB block tree to plain text (snippet source). */
-export function pageContentText(content) {
-	const parts = [];
-	const walk = (blocks) => {
-		if (!Array.isArray(blocks)) return;
-		for (const block of blocks) {
-			if (block && typeof block.content === 'string') parts.push(block.content);
-			if (block && Array.isArray(block.children)) walk(block.children);
-		}
-	};
-	walk(content);
-	return parts.join(' ');
-}
+/** Flatten a page's JSONB block tree to plain text (snippet source).
+ *  The function lives in bridge-page-text.mjs now — the publish gate and the
+ *  marketplace gate read a page's words, and bridge-public.mjs (which
+ *  bridge-api.mjs imports) needs it too, so it cannot live here. It is
+ *  RE-EXPORTED here: every existing caller keeps importing it from here. */
+export { pageContentText };
 
 /** ~80-char window around the first query token (best-effort highlight source). */
 export function pageSnippet(text, query) {
@@ -2544,7 +2539,7 @@ async function handleMarketplaceInstalledWrite(request, response, config, fetchI
  * Publish an app record the caller owns into the marketplace (public + published-locked).
  * An app the caller cannot read answers like a missing one; a readable one they do not own is a 403.
  */
-async function handleMarketplacePublish(request, response, config, fetchImpl) {
+async function handleMarketplacePublish(request, response, config, fetchImpl, env = process.env) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const pageId = requireUuid(payload.pageId, 'pageId');
@@ -2552,6 +2547,14 @@ async function handleMarketplacePublish(request, response, config, fetchImpl) {
 	if (!isReadableMarketplaceRow(row, authContext.userId)) throw Object.assign(new Error('Page not found.'), { status: 404 });
 	if (!canChangePageSharing(row, authContext.userId)) {
 		throw Object.assign(new Error('Only the owner can publish this app.'), { status: 403 });
+	}
+	// L0 asks BEFORE the app goes public: its title and its text are the words
+	// that are checked, and a warning is the author's question (409) — the app
+	// stays private until they answer it.
+	const decision = askBeforeWrite({ text: pagePublishText(row), surface: 'marketplace', env, payload });
+	if (decision.outcome === 'needs_ack') {
+		json(response, 409, moderationWarningBody(decision), config);
+		return true;
 	}
 	const props = (Array.isArray(row.properties) ? row.properties : []).filter((p) => p && p.key !== 'published' && p.key !== 'publishedAt');
 	props.push({ key: 'published', label: 'Published', type: 'checkbox', value: true });
@@ -2708,10 +2711,10 @@ async function handleMarketplaceGet(url, request, response, config, fetchImpl) {
 	return false;
 }
 
-async function handleMarketplacePost(url, request, response, config, fetchImpl) {
+async function handleMarketplacePost(url, request, response, config, fetchImpl, env = process.env) {
 	if (url.pathname === '/api/marketplace/apps') return handleMarketplaceCreate(request, response, config, fetchImpl);
 	if (url.pathname === '/api/marketplace/installed') return handleMarketplaceInstalledWrite(request, response, config, fetchImpl);
-	if (url.pathname === '/api/marketplace/publish') return handleMarketplacePublish(request, response, config, fetchImpl);
+	if (url.pathname === '/api/marketplace/publish') return handleMarketplacePublish(request, response, config, fetchImpl, env);
 	if (url.pathname === '/api/marketplace/header-template') return handleMarketplaceTemplateWrite(request, response, config, fetchImpl);
 	return false;
 }
@@ -4086,9 +4089,9 @@ async function handleWorkspaceCreate(request, response, config, fetchImpl) {
 	return true;
 }
 
-async function handlePagesPost(url, request, response, config, fetchImpl) {
+async function handlePagesPost(url, request, response, config, fetchImpl, env = process.env) {
 	if (url.pathname === '/api/workspaces') return handleWorkspaceCreate(request, response, config, fetchImpl);
-	if (await handleMarketplacePost(url, request, response, config, fetchImpl)) return true;
+	if (await handleMarketplacePost(url, request, response, config, fetchImpl, env)) return true;
 	if (await handleObjectDatabasesUpsert(url, request, response, config, fetchImpl)) return true;
 	if (await handleAppConnectionsUpsert(url, request, response, config, fetchImpl)) return true;
 	if (await handleAppConnectionsOAuthStart(url, request, response, config, fetchImpl)) return true;
@@ -4272,7 +4275,7 @@ async function handleBridgeLogout(request, response, config, fetchImpl) {
 	response.end();
 }
 
-async function handleBridgePost(url, request, response, config, handoffStore, replayStore, fetchImpl) {
+async function handleBridgePost(url, request, response, config, handoffStore, replayStore, fetchImpl, env = process.env) {
 	if (url.pathname === '/api/auth/bridge/logout') {
 		await handleBridgeLogout(request, response, config, fetchImpl);
 		return true;
@@ -4296,7 +4299,7 @@ async function handleBridgePost(url, request, response, config, handoffStore, re
 		json(response, 200, await trackUnsplashDownload(body?.downloadLocation, config, fetchImpl), config);
 		return true;
 	}
-	if (await handlePagesPost(url, request, response, config, fetchImpl)) return true;
+	if (await handlePagesPost(url, request, response, config, fetchImpl, env)) return true;
 	if (url.pathname === '/api/auth/bridge/session') {
 		await handleBridgeSession(request, response, config, handoffStore, replayStore, fetchImpl);
 		return true;
@@ -4353,6 +4356,7 @@ async function handleBridgeRequest(request, response, context) {
 		context.handoffStore,
 		context.replayStore,
 		context.fetchImpl,
+		context.env,
 	)) return;
 	if (request.method === 'PATCH' && await handleMarketplacePatch(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'PATCH' && await handlePageConfigPatch(url, request, response, context.config, context.fetchImpl)) return;
@@ -4395,15 +4399,15 @@ export function createBridgeServer(options = {}) {
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		chat: createChatHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		chat: createChatHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		notify: createNotifyHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
-			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
-			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
+			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
+		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		personalization: createPersonalizationHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		moderationConsole: createModerationConsoleHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
@@ -4416,7 +4420,7 @@ export function createBridgeServer(options = {}) {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);
 			try {
-				await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, spawnImpl, social });
+				await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, spawnImpl, social, env });
 			} catch (error) {
 				if (!response.headersSent) errorJson(response, error, responseConfig);
 			}

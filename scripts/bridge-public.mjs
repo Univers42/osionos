@@ -16,10 +16,18 @@
  * unauthenticated public GET reads ONLY that snapshot table (never live pages),
  * rate-limited per IP. Owner-only publish/unpublish. The whole feature 404s unless
  * OSIONOS_PUBLISH_ENABLED=1, so it is inert by default (unauthenticated surface).
+ *
+ * L0 runs BEFORE a page is published (bridge-moderation-gate.mjs): the page's
+ * title and its text are checked, and a warning is the author's question (409)
+ * — the page stays private until they answer it with acknowledgeWarning: true.
+ * WARN-ONLY: osionos_published_pages has no moderation_state column, so
+ * nothing is ever written held and no audit row is ever written.
  */
 
-import { bearerToken, rest, sendJson } from './bridge-social-core.mjs';
+import { bearerToken, moderationWarningBody, readJsonBody, rest, sendJson } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { pagePublishText } from './bridge-page-text.mjs';
+import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 
 const PUBLISH_PATH = /^\/api\/pages\/([0-9a-fA-F-]{36})\/publish$/;
 const PUBLIC_PATH = /^\/api\/public\/pages\/([0-9a-f]{32})$/;
@@ -32,6 +40,12 @@ function clientIp(request) {
 async function publish(deps, session, request, pageId, response, config) {
 	const { row } = await deps.verifyPageAccess(request, pageId, 'update');
 	if (row.owner_id !== session.userId) return sendJson(response, 403, { ok: false, message: 'Only the owner can publish.' }, config);
+	// L0 asks BEFORE the page goes public: its title and its text are the words
+	// that are checked, and a warning is the author's question (409) — the page
+	// stays private until they answer it.
+	const payload = await readJsonBody(request).catch(() => ({}));
+	const decision = askBeforeWrite({ text: pagePublishText(row), surface: 'publish', env: deps.env, payload });
+	if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
 	const rows = await rest(config, deps.fetchImpl, 'osionos_published_pages?on_conflict=page_id', {
 		method: 'POST',
 		body: {
@@ -63,9 +77,9 @@ async function publicRead(deps, request, token, response, config) {
 	}, config);
 }
 
-/** Build the publish/public dispatcher. deps: { config, verifySession, verifyPageAccess, fetchImpl? }. */
+/** Build the publish/public dispatcher. deps: { config, verifySession, verifyPageAccess, fetchImpl?, env? }. */
 export function createPublicHandler({ config, verifySession, verifyPageAccess, fetchImpl = fetch, env = process.env }) {
-	const deps = { fetchImpl, verifyPageAccess };
+	const deps = { fetchImpl, verifyPageAccess, env };
 	return async function handlePublicRoute(url, request, response, requestConfig = config) {
 		const publicMatch = PUBLIC_PATH.exec(url.pathname);
 		const publishMatch = PUBLISH_PATH.exec(url.pathname);
