@@ -12,6 +12,7 @@ The numbers are about the SIMULATION. Nothing here has read a real user.
 
 import argparse
 import json
+import os
 import platform
 import sys
 from pathlib import Path
@@ -253,6 +254,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=Path("results/sim"))
     args = parser.parse_args(argv)
 
+    # Bounded so a CLI argument cannot write outside the results directory.
+    results_root = os.path.realpath(Path.cwd() / "results")
+    real_out = os.path.realpath(args.out)
+    if real_out != results_root and not real_out.startswith(results_root + os.sep):
+        parser.error(f"--out must stay under {results_root}")
+    out = Path(real_out)
+
     report = evaluate(
         users=args.users,
         items=args.items,
@@ -260,11 +268,11 @@ def main(argv: list[str] | None = None) -> int:
         events=args.events,
         seed=args.seed,
     )
-    write_results(report, args.out)
+    write_results(report, out)
 
     metrics = report["metrics"]
     difference = report["difference_ials_minus_popularity"]
-    print(f"SYNTHETIC run -> {args.out}")
+    print(f"SYNTHETIC run -> {out}")
     for name, label in (("ials", "iALS"), ("popularity", "popularity"), ("random", "random")):
         print(f"  {label:<12} nDCG@10 {metrics[name]['ndcg@10']:.4f}  recall@20 {metrics[name]['recall@20']:.4f}")
     interval = f"[{difference['ci95_low']:.4f}, {difference['ci95_high']:.4f}]"

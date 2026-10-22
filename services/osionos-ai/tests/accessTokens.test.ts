@@ -52,6 +52,7 @@ function patRequest(token: string, url = '/api/ai/mcp'): IncomingMessage {
 // The mock upstream is not needed here: the PAT routes never call a model.
 // The environment is set before the service is imported, because the service
 // reads its configuration when it is imported.
+process.env.OSIONOS_AI_PAT = 'on';
 process.env.OSIONOS_AI_PLATFORM_MODELS ??= JSON.stringify([
 	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true },
 ]);

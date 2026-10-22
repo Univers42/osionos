@@ -120,7 +120,7 @@ export function buildTree(tree: FlatTree): Block[] {
       block.children = containerOf(tree, node.id, null).map(build);
     }
     if (node.type === "layout") {
-      block.layoutCells = node.cells.slice().sort().map((cellId): LayoutCell => ({
+      block.layoutCells = node.cells.slice().sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).map((cellId): LayoutCell => ({
         id: cellId,
         colStart: 0,
         colSpan: 1,

@@ -76,6 +76,10 @@ const envSchema = z.object({
 	// leaves it empty until the prompt gate (devil C72) and the output gate
 	// (C73) exist. Off, the route does not exist.
 	OSIONOS_AI_IMAGES: z.string().optional(),
+	// The personal access tokens. OFF unless exactly "on": the public overlay
+	// leaves it empty until the G4 conditions C112-C120 are merged (devil
+	// verdict g-graph-diagrams-mcp-verdict.md). Off, the routes do not exist.
+	OSIONOS_AI_PAT: z.string().optional(),
 	// The image engine: INTERNAL, the OpenAI-compatible base URL of sd-server
 	// (`…/v1`), a deployment setting and never a caller's. Required when on.
 	OSIONOS_AI_IMAGE_URL: z.string().optional(),
@@ -139,6 +143,7 @@ const rawEnv = {
 	OSIONOS_AI_STT_TIMEOUT_MS: process.env.OSIONOS_AI_STT_TIMEOUT_MS,
 	OSIONOS_AI_STT_SECONDS_PER_DAY: process.env.OSIONOS_AI_STT_SECONDS_PER_DAY,
 	OSIONOS_AI_IMAGES: process.env.OSIONOS_AI_IMAGES,
+	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
 	OSIONOS_AI_IMAGE_URL: firstEnv('OSIONOS_AI_IMAGE_URL'),
 	OSIONOS_AI_IMAGE_MODEL: process.env.OSIONOS_AI_IMAGE_MODEL,
 	OSIONOS_AI_IMAGE_MICROUSD: process.env.OSIONOS_AI_IMAGE_MICROUSD,
@@ -154,7 +159,7 @@ const rawEnv = {
 const parsed = envSchema.safeParse(rawEnv);
 if (!parsed.success) {
 	// Names only: an environment value can hold the app-session secret.
-	const names = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? 'environment')))].sort();
+	const names = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? 'environment')))].sort((a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0));
 	console.error(`[osionos-ai] refusing to start: invalid environment variables: ${names.join(', ')}`);
 	process.exit(1);
 }
@@ -285,6 +290,7 @@ export interface AiServiceConfig {
 	sttSecondsPerDay: number;
 	/** The image generation is on: without it the route does not exist. */
 	imagesEnabled: boolean;
+	patEnabled: boolean;
 	/** The OpenAI-compatible base URL of the internal image engine. */
 	imageUrl?: string;
 	/** The model of the engine, as the provenance of an image names it. */
@@ -338,6 +344,7 @@ export const config: AiServiceConfig = Object.freeze({
 	sttTimeoutMs: parsed.data.OSIONOS_AI_STT_TIMEOUT_MS,
 	sttSecondsPerDay: parsed.data.OSIONOS_AI_STT_SECONDS_PER_DAY,
 	imagesEnabled: parsed.data.OSIONOS_AI_IMAGES?.trim().toLowerCase() === 'on',
+	patEnabled: parsed.data.OSIONOS_AI_PAT?.trim().toLowerCase() === 'on',
 	imageUrl: parsed.data.OSIONOS_AI_IMAGE_URL,
 	imageModel: parsed.data.OSIONOS_AI_IMAGE_MODEL,
 	imageMicroUsd: parsed.data.OSIONOS_AI_IMAGE_MICROUSD,

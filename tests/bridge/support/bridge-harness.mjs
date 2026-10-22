@@ -99,7 +99,7 @@ function project(row, select) {
 /** JSON with every object's keys sorted: two contents that differ only in key order are the same content. */
 function canonical(value) {
 	if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-	if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+	if (value && typeof value === 'object') return `{${Object.keys(value).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
 	return JSON.stringify(value ?? null);
 }
 

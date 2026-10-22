@@ -28,8 +28,10 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { AiError } from "@/features/ai/api/aiContract";
 import {
   AGENT_COPY,
+  isAccessTokensOff,
   PAT_ENV_VAR,
   REAUTH_MESSAGE,
   RevokeControl,
@@ -118,4 +120,11 @@ test("the revoke asks first, and the question is inline", () => {
 test("the panel never asks the browser to confirm", () => {
   assert.equal(/\b(?:window|globalThis)\s*\.\s*confirm\b/.test(PANEL_SOURCE), false);
   assert.equal(/[^.\w]confirm\s*\(/.test(PANEL_SOURCE), false);
+});
+
+test("a 404 from the list means the feature is off; any other failure is not", () => {
+  assert.equal(isAccessTokensOff(new AiError(404, "not_found", "no")), true);
+  assert.equal(isAccessTokensOff(new AiError(403, "forbidden", "no")), false);
+  assert.equal(isAccessTokensOff(new AiError(500, "boom", "no")), false);
+  assert.equal(isAccessTokensOff(new Error("network")), false);
 });
