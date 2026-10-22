@@ -20,21 +20,18 @@
  * `in.(…)` under Kong's header buffer, and `keyset`/`pageOf` page by an ordered tuple
  * without an offset scan.
  */
-
 import { signRealtimeJwt } from './bridge-realtime-socket.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 
 export const ACCOUNT_JWT_AUDIENCE = 'osionos-account';
 export const ACCOUNT_DB_ROLE = 'osionos_account_user';
 export const ACCOUNT_JWT_TTL_SECONDS = 120;
-
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const IDENTIFIER_PATTERN = /^[a-z_][a-z0-9_]*$/;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
 const MAX_CURSOR_LENGTH = 512;
 const DEFAULT_PAGE_SIZE = 20;
 const DEFAULT_MAX_LIMIT = 100;
-
 // Every message is fixed: a PostgREST 409 detail can quote another row's values, and route
 // handlers return `error.message` to the browser (bridge-realtime-token.mjs:96).
 const ERROR_MESSAGES = {
@@ -54,7 +51,6 @@ const USER_STATUS = { 400: [422, 'invalid_request'], 401: [503, 'account_plane_u
 function pgError(status, code, extra) {
 	return Object.assign(new Error(ERROR_MESSAGES[code] ?? 'Account data request failed.'), { status, code }, extra);
 }
-
 const has = (value) => value !== undefined && value !== null && value !== '';
 
 /** HS256 account token; `role` is the boundary PostgREST switches on. */
@@ -62,28 +58,31 @@ export function mintAccountJwt({ userId, sessionId, secret, nowMs = Date.now(), 
 	if (typeof secret !== 'string' || secret.trim() === '') throw pgError(503, 'account_plane_unavailable');
 	if (typeof userId !== 'string' || !UUID_PATTERN.test(userId)) throw pgError(400, 'invalid_subject');
 	const iat = Math.floor(nowMs / 1000);
-	const claims = { iss: 'supabase', aud: ACCOUNT_JWT_AUDIENCE, role: ACCOUNT_DB_ROLE, sub: userId };
+	const claims = { iss: 'supabase', aud: ACCOUNT_JWT_AUDIENCE, role: ACCOUNT_DB_ROLE, sub: userId.toLowerCase() };
 	if (has(sessionId)) claims.sid = sessionId;
 	claims.iat = iat;
 	claims.exp = iat + ttlSeconds;
 	return signRealtimeJwt(claims, secret);
 }
-
 function resolveBase(config, env) {
 	const override = String(env.OSIONOS_POSTGREST_URL ?? '').trim();
 	if (override) return override.replace(/\/$/, '');
 	return `${String(config.baasUrl ?? '').replace(/\/$/, '')}/rest/v1`;
 }
-
-// Layer one rejects the shapes that must never reach `new URL`; layer two proves the
-// resolved path still lives under the configured base, because URL normalisation decodes
-// `%2E%2e` and a crafted segment would otherwise land on GoTrue's admin API.
-const UNSAFE_PATH = /^\/|\.\.|:\/\/|\\|%2e|%2f|%5c|[\x00-\x1f\x7f]/i;
+// Layer one guards the path part only: a query value may legitimately carry encoded `/`,
+// `\` or `..`, and the parser never normalises a query into the path. Layer two proves the
+// resolved path still lives under the configured base (a crafted `%2E%2e` would not).
+const UNSAFE_PATH = /^\/|\.\.|:\/\/|\\|%2e|%2f|%5c/i;
+const CONTROL_CHAR = /[\x00-\x1f\x7f]/;
 
 function buildUrl(base, path) {
-	if (typeof path !== 'string' || UNSAFE_PATH.test(path)) throw new TypeError('PostgREST path is not allowed.');
+	if (typeof path !== 'string') throw new TypeError('PostgREST path is not allowed.');
+	let baseUrl;
+	try { baseUrl = new URL(base); } catch { throw pgError(503, 'baas_unconfigured'); }
+	const queryAt = path.indexOf('?');
+	const pathOnly = queryAt === -1 ? path : path.slice(0, queryAt);
+	if (UNSAFE_PATH.test(pathOnly) || CONTROL_CHAR.test(path)) throw new TypeError('PostgREST path is not allowed.');
 	const url = new URL(`${base}/${path}`);
-	const baseUrl = new URL(base);
 	const prefix = baseUrl.pathname.endsWith('/') ? baseUrl.pathname : `${baseUrl.pathname}/`;
 	if (url.origin !== baseUrl.origin || !url.pathname.startsWith(prefix)) throw new TypeError('PostgREST path escapes the configured base.');
 	return url.toString();
@@ -257,7 +256,7 @@ function keysetFilter(order, cursor) {
 
 function resolveTake(limit, maxLimit) {
 	const cap = Number.isFinite(Number(maxLimit)) ? Math.max(1, Math.trunc(Number(maxLimit))) : DEFAULT_MAX_LIMIT;
-	const parsed = limit === undefined || limit === null ? NaN : Number(limit);
+	const parsed = has(limit) ? Number(limit) : NaN;
 	const value = Number.isFinite(parsed) ? Math.trunc(parsed) : DEFAULT_PAGE_SIZE;
 	return Math.min(Math.max(value, 1), cap);
 }
@@ -265,7 +264,8 @@ function resolveTake(limit, maxLimit) {
 /**
  * Lexicographic `or=(…)` page filter. Every order column must be NOT NULL in the table:
  * a null in the tuple makes the comparison skip the row, so the next page would drop it.
- * The last entry is the unique tie-breaker.
+ * The last entry is the unique tie-breaker. `cursor` is the DECODED array:
+ * `decodeCursor(token, order.length)`.
  */
 export function keyset({ order, cursor, limit, maxLimit = DEFAULT_MAX_LIMIT } = {}) {
 	const normalized = normalizeOrder(order);
@@ -290,7 +290,10 @@ export function pageOf(rows, order, take) {
 	const edge = rows[take - 1];
 	const values = order.map(([column]) => {
 		const value = edge?.[column];
-		if (value === null || value === undefined) throw new TypeError(`order column ${column} is null on the cursor row.`);
+		// decodeCursor would refuse any other type, turning page two into a permanent 422.
+		if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) {
+			throw new TypeError(`order column ${column} is not a cursor value.`);
+		}
 		return value;
 	});
 	return { items, nextCursor: encodeCursor(values) };
