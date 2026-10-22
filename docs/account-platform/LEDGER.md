@@ -25,7 +25,7 @@ Later the same night 3-4 concurrent sessions ran without a refusal when started 
 | P0-5b | spec written (bridge: presence in kv, ≤1 PG write/user/10 min, GET /api/connections read-only, chunked `in.()`, counts in one request); D-P0-5 conditions 8-14 folded (server clock, TTL constant home, kv in handler deps, `restCount`, RPC 404 → 503, fail-fast chunk reads); #15 (deploy order) is the existing ship gate; dispatch after P0-4 merges | — | — | research: R-P0-5 | — |
 | P1-1 | spec + D-P1-1 (big-pickle) PwC folded: settings grants incl. arbiter/version columns, EXECUTE on CHECK functions, two-pass backfill, k4 expression/unique-aware, NOTIFY pgrst, view REVOKE, check_standalone applies the file, GIN plan required for a rare term, ADR 0029 owed; dispatch after P0-7 merges | — | — | reviewer proved conditions 1-4 in a throwaway PG (prototype + 10K users) | spec: PwC (5 blocking) |
 | P0-4 | **dispatched** (minimax) | feat/acct-P0-4 from 9f15755d | minimax | — | spec: devil PwC (10) |
-| P0-4r | dispatched (deepseek): desktop after-GoTrue step + compose Redis/IP env; may guard the one feed_shares index the foundation header names | (root repo) feat/acct-P0-4r | — | — | — |
+| P0-4r | **merged** into root `feat/account-platform` (`198112e3`, --no-ff, local) | (root repo) feat/acct-P0-4r (3c1b3265) | minimax (deepseek/glm refused on quota) | my runs: desktop tests 34/0 (node:22, --network none); compose config base `redis://mini-baas-redis:6379` + `x-real-ip`, overlay `""`; desktop-shaped PG16 (bootstrap + 13 MIGRATIONS + auth stand-in) post-GoTrue step twice → ok/ok, sessions table present, feed_shares index absent; models-grants on the merge 82/0 | — |
 | P1-4 | spec written, waits for P1-3b | — | — | — | no devil gate |
 
 Open follow-ups
