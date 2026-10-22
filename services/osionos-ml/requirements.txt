@@ -1,0 +1,30 @@
+# osionos-ml — the recommender's model (M3c-1). EXACT pins, binary wheels only.
+#
+# Every version below was released at least 14 days before this slice was cut
+# (2026-10-22) and installs as a binary wheel on python:3.12-slim (linux/amd64).
+# Transitive dependencies are pinned too, so the image is the same image a year
+# from now: an unpinned dependency is an unpinned supply chain.
+#
+# Resolved by: pip install --only-binary=:all: -r requirements.txt
+
+# The recommender itself: implicit-feedback ALS on the CPU.
+implicit==0.7.3
+# The maths: dense arrays for the factor maths, sparse matrices for the log.
+numpy==2.5.3
+scipy==1.18.1
+# The metrics: sklearn's utilities the evaluation leans on.
+scikit-learn==1.9.1
+# The gates: pytest runs the suite, ruff lints and formats it.
+pytest==9.1.1
+ruff==0.16.10
+
+# Transitive, pinned so the build stays reproducible.
+joblib==1.6.0
+threadpoolctl==3.7.0
+tqdm==4.70.1
+iniconfig==2.3.1
+packaging==26.3
+pluggy==1.6.0
+pygments==2.21.0
+cloudpickle==3.1.2
+narwhals==2.26.0
