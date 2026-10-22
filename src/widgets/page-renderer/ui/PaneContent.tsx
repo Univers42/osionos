@@ -32,6 +32,7 @@ import {
   LazyCodeFileView,
   LazyOsionosPage,
   LazyProfilePageView,
+  LazySettingsView,
   LazyTrashView,
   LazyWorkspaceDatabaseBlock,
 } from "./lazyViews";
@@ -140,6 +141,18 @@ const PaneContentImpl: React.FC<PaneContentProps> = ({ tab, paneId, chrome }) =>
         <Suspense fallback={<LoadingPane />}>
           <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
             <LazyAdminSpaceView />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "settings") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
+            <LazySettingsView />
           </div>
         </Suspense>
       </ErrorBoundary>

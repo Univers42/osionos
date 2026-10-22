@@ -11,6 +11,8 @@ import { markRun } from './repo.ts';
 import type { RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
 import { buildUserTurn, historyChars, historyMessages, quotedPageChars } from './prompt.ts';
+import { systemPromptFor } from '../agents/prompt.ts';
+import type { BuiltinAgent } from '../agents/builtins.ts';
 import { promptCharCount } from './estimate.ts';
 import { extendRunReservation } from './extend.ts';
 import type { LoopBudget } from './loopBudget.ts';
@@ -68,6 +70,13 @@ export interface UpstreamRunInput {
 	userMessageId: string;
 	/** The title of the conversation: the first frame carries it. */
 	title: string;
+	/**
+	 * The agent that shapes this run, or none.
+	 *
+	 * None is the general assistant: the base prompt, byte for byte. An agent
+	 * adds its block to the prompt and narrows the tools to its own list.
+	 */
+	agent?: BuiltinAgent | null;
 }
 
 /**
@@ -93,6 +102,11 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		title,
 	} = input;
 	const images = input.images ?? [];
+	// The agent of the run: none is the general assistant.
+	const agent = input.agent ?? null;
+	// The system prompt of THIS run: the base one, or the one of the agent,
+	// whose data-boundary line comes last (devil C38).
+	const system = systemPromptFor(agent);
 
 	const controller = new AbortController();
 	runStore.trackRun(runId, controller);
@@ -115,6 +129,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(pages),
 		sourceChars: sourceChars(sources),
+		systemChars: system.length,
 	});
 	// The budget of the loop: the money the run holds, and the ceiling of a
 	// step. The loop asks the ledger for what it needs, one extension at a
@@ -167,6 +182,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			ownerId,
 			pages,
 			sources,
+			agent,
 			emit: (type, data) => emit(type, data),
 		});
 		const tools = runTools.tools;
@@ -183,6 +199,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 
 		const outcome = await pumpUpstream({
 			model: target.model,
+			system,
 			messages,
 			controller,
 			...(tools ? { tools } : {}),

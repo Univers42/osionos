@@ -18,8 +18,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir --only-binary=:all: -r requirements.txt
+COPY requirements.lock ./
+RUN pip install --no-cache-dir --only-binary=:all: --require-hashes -r requirements.lock
 
 COPY osml/ ./osml/
 
@@ -30,5 +30,5 @@ RUN useradd --create-home --uid 10001 osml \
 USER osml
 
 # The training job. The offline evaluation is one command away:
-#   docker run --rm <image> python -m osml.evaluate --out /app/results/sim
+#   docker run --rm <image> python -m osml.evaluate   (writes /app/results/sim)
 CMD ["python", "-m", "osml.job"]

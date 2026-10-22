@@ -289,14 +289,18 @@ export const AiInlinePanel: React.FC = () => {
           </button>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={() => accept("replace")}
-              disabled={!text}
-              className={PANEL_BUTTON}
-            >
-              Replace
-            </button>
+            {/* The `diagram` command answers with a SPEC, not with text: it is
+                inserted as a diagram block, so there is nothing to replace. */}
+            {command !== "diagram" ? (
+              <button
+                type="button"
+                onClick={() => accept("replace")}
+                disabled={!text}
+                className={PANEL_BUTTON}
+              >
+                Replace
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => accept("insert-below")}

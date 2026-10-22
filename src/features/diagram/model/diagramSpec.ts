@@ -32,6 +32,9 @@ const direction = z.enum(["LR", "TB"]);
 /** The most databases a schema diagram may hold: the ceiling of the spec. */
 export const MAX_SCHEMA_DATABASES = 12;
 
+/** The most characters a hand-written mermaid source may hold. */
+export const MAX_MERMAID_SOURCE = 20_000;
+
 /**
  * The title of a diagram. It is NOT front matter: the locked renderer strips a
  * front-matter block, so the block shows the title as TEXT next to the diagram.
@@ -41,7 +44,7 @@ const title = z.string().max(120).optional();
 /** Hand-written mermaid. It goes through the locked path like everything else. */
 const mermaidSpec = z.strictObject({
   kind: z.literal("mermaid"),
-  source: z.string().max(20_000),
+  source: z.string().max(MAX_MERMAID_SOURCE),
   direction: direction.optional(),
   title,
 });
@@ -74,12 +77,36 @@ const schemaSpec = z.strictObject({
   title,
 });
 
-/** The neighbourhood of one page: the links, mentions and relations around it. */
+/**
+ * The kinds of edge a neighbourhood may hold.
+ *
+ * They are the kinds the graph knows: a page mentions another, a page points
+ * at another through a relation, a page hangs under a parent, a page carries a
+ * tag. The list is CLOSED: an unknown kind is refused, like every other key.
+ */
+export const GRAPH_KINDS = [
+  "link",
+  "mention",
+  "relation",
+  "parent",
+  "tag",
+  "semantic",
+] as const;
+
+/** One kind of edge of the closed spec. */
+export type GraphKind = (typeof GRAPH_KINDS)[number];
+
+/**
+ * The neighbourhood of one page: the links, mentions and relations around it.
+ *
+ * The `kinds` are the ones to DRAW: an empty list draws EVERY kind (the
+ * default — a spec that names no filter names no exclusion).
+ */
 const graphSpec = z.strictObject({
   kind: z.literal("graph"),
   pageId,
   depth: z.union([z.literal(1), z.literal(2)]),
-  kinds: z.array(z.enum(["link", "mention", "relation", "parent", "tag", "semantic"])),
+  kinds: z.array(z.enum(GRAPH_KINDS)),
   direction: direction.optional(),
   title,
 });
@@ -114,8 +141,8 @@ export const diagramSpecSchema = z.discriminatedUnion("kind", [
 export type DiagramSpec = z.infer<typeof diagramSpecSchema>;
 export type MermaidDirection = z.infer<typeof direction>;
 
-/** The kinds the editor offers: the four a diagram can be drawn as. */
-export type DiagramKind = "mermaid" | "hierarchy" | "schema" | "pipeline";
+/** The kinds the editor offers: the five a diagram can be drawn as. */
+export type DiagramKind = "mermaid" | "hierarchy" | "schema" | "pipeline" | "graph";
 
 export type DiagramSpecResult =
   | { ok: true; spec: DiagramSpec }
@@ -141,14 +168,10 @@ export function parseDiagramSpec(input: unknown): DiagramSpecResult {
  * It reads the RAW spec, not the parsed one: a schema whose database list is
  * empty does not parse, and the editor must still show that it is a schema —
  * otherwise the author cannot go back and pick a database.
- *
- * The `graph` kind has no control yet — it needs a server read, and it is
- * the next slice — so the editor shows the mermaid kind for it. The block
- * itself still says that the kind is not available yet.
  */
 export function diagramKind(spec: unknown): DiagramKind {
   const kind = (spec as { kind?: unknown } | null | undefined)?.kind;
-  if (kind === "hierarchy" || kind === "schema" || kind === "pipeline") {
+  if (kind === "hierarchy" || kind === "schema" || kind === "pipeline" || kind === "graph") {
     return kind;
   }
   return "mermaid";

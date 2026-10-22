@@ -86,9 +86,16 @@ describe('the quoted workspace', () => {
 
 	it('a title cannot break out of its attribute', () => {
 		const block = sourceBlock(chunk({ title: 'A" onload="evil', headingPath: 'B" path="evil' }), 1);
-		// The three attributes of the block, and nothing else, hold a quote.
-		assert.equal(countOf(block, '"'), 6, 'the quotes of the attributes, and only those');
+		// The four attributes of the block, and nothing else, hold a quote.
+		assert.equal(countOf(block, '"'), 8, 'the quotes of the attributes, and only those');
 		assert.ok(block.includes('&quot;'), 'the quote of the title is an entity');
+	});
+
+	it('a source names its page, so the model can read the page it came from', () => {
+		// read_page takes a page id: a source without one left the model passing the
+		// title (release R6, run beeb647b), and every read after a search failed.
+		const block = sourceBlock(chunk(), 1);
+		assert.ok(block.includes('page="11111111-1111-4111-8111-111111111111"'), 'the block carries the page id');
 	});
 
 	it('the text of a page keeps its meaning, and loses its power to be markup', () => {

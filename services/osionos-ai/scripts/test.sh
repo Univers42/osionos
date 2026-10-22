@@ -8,7 +8,9 @@
 # given: the single-file call still works, the RAG migration (ai_chunks,
 # ai_index_queue) is a second one, and the graph migration (ai_page_vectors) a
 # third one. A migration given twice is applied twice — that is how the
-# idempotence of a migration is proved.
+# idempotence of a migration is proved. AI_TEST_FILES (paths relative to the
+# service, default tests/*.test.ts) runs only those files: the review harness
+# runs one test file per mutant.
 set -eu
 
 MIGRATIONS=""
@@ -77,21 +79,22 @@ harness_apply_migrations "$PG_CONTAINER" osionos_ai_test postgres $MIGRATIONS
 echo "[test] running the suite"
 # --test-concurrency=1: the files share one database, and the conversations of
 # one file must not disappear under the feet of another one.
+
 docker run --rm --network "$NETWORK" \
 	-v "$REPO_ROOT:/app" -w /app/services/osionos-ai \
 	-e OSIONOS_AI_PORT=0 \
 	-e OSIONOS_AI_DATABASE_URL="postgres://postgres:ai_test_password@pg:5432/osionos_ai_test" \
 	-e OSIONOS_AI_REDIS_URL="redis://redis:6379" \
-	-e OSIONOS_ALLOWED_ORIGIN="http://localhost:3001" \
 	-e OSIONOS_APP_SESSION_SECRET="test-app-session-secret" \
 	-e OSIONOS_APP_SESSION_TTL_SECONDS=3600 \
 	-e OSIONOS_SESSION_CUTOFFS=off \
-	-e OSIONOS_BAAS_URL="http://baas.invalid" \
+	-e OSIONOS_BAAS_URL="https://baas.invalid" \
 	-e SERVICE_ROLE_KEY="test-service-role-key" \
-	-e OSIONOS_AI_UPSTREAM_BASE_URL="http://127.0.0.1:1/v1" \
+	-e OSIONOS_AI_UPSTREAM_BASE_URL="https://127.0.0.1:1/v1" \
 	-e OSIONOS_AI_PLATFORM_MODELS='[{"id":"placeholder","label":"Placeholder","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true}]' \
 	-e OSIONOS_AI_MAX_OUTPUT_TOKENS=1024 \
 	-e OSIONOS_AI_USER_DAILY_MICROUSD=200000 \
 	-e OSIONOS_AI_PLATFORM_DAILY_MICROUSD=20000000 \
 	-e OSIONOS_AI_RUNS_PER_MINUTE=100 \
-	node:22-bookworm-slim sh -c 'node --experimental-strip-types --test --test-concurrency=1 tests/*.test.ts'
+	-e AI_TEST_FILES="${AI_TEST_FILES:-tests/*.test.ts}" \
+	node:22-bookworm-slim sh -c 'node --experimental-strip-types --test --test-concurrency=1 $AI_TEST_FILES'

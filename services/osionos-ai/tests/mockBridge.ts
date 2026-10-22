@@ -162,7 +162,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 					media: {
 						url: `/api/media/uploads/${MOCK_MEDIA_OWNER}/${sha256}.${ext}`,
 						type: 'image',
-						name: new URL(path, 'http://bridge').searchParams.get('name') ?? '',
+						name: new URL(path, 'https://bridge').searchParams.get('name') ?? '',
 						mimeType,
 						size: bytes.length,
 						sha256,

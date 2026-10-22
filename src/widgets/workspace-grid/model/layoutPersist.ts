@@ -27,6 +27,7 @@ export const MAIL_TAB_ID = "__mail__";
 export const CALENDAR_TAB_ID = "__calendar__";
 export const CHAT_TAB_ID = "__chat__";
 export const WHITEBOARD_TAB_ID = "__whiteboard__";
+export const SETTINGS_TAB_ID = "__settings__";
 
 const STORAGE_KEY = "osionos.workspace.layout.v2";
 const LEGACY_PREFIX = "osionos.workspace.layout.v1";
@@ -127,6 +128,12 @@ export function chatTab(): WorkspaceTab {
 /** The Communities tab — browse communities and their channels. */
 export function communityTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: COMMUNITY_TAB_ID, workspaceId: "", kind: "community", title: "Communities", icon: "icon:users" };
+}
+
+/** The settings tab — the retired modal rendered as a pane. Stable pageId, so a
+ *  second call to openTab focuses the existing tab instead of duplicating it. */
+export function settingsTab(): WorkspaceTab {
+  return { tabId: genId("tab"), pageId: SETTINGS_TAB_ID, workspaceId: "", kind: "settings", title: "Settings", icon: "icon:settings" };
 }
 
 /** One pane with no tab: what is left after the user closes everything. The

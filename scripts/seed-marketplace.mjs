@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -151,10 +151,13 @@ for (const m of APPS) {
   if (!m.builtIn) installed[m.id] = { identifier: m.id, title: m.title, icon: m.icon, launchKind: m.launchKind ?? "embed", launchUrl: m.launchUrl, autoUpdate: true, active: true, installedAt: "2026-06-01T00:00:00Z" };
 }
 
-// 3) install Mail + Calendar for dev.pro.photo only (per-user simulation)
+// 3) install Mail + Calendar for dev.pro.photo only (per-user simulation). Written once:
+// the seed now runs on every `make datacenter`, and DO UPDATE reset whatever that user had
+// installed or removed since. The stored launchUrl is not what opens: the build's
+// VITE_*_APP_URL wins (launchPolicy.ts), so an old record needs no refresh.
 out.push(`INSERT INTO public.osionos_page_configurations (page_id, workspace_id, user_id, config, created_at, updated_at)
 VALUES (${q(DB)}, ${q(WS)}, ${q(DEV)}, ${jb({ installed })}, now(), now())
-ON CONFLICT (user_id, page_id) DO UPDATE SET config=EXCLUDED.config, updated_at=now();`);
+ON CONFLICT (user_id, page_id) DO NOTHING;`);
 out.push("COMMIT;");
 
 process.stdout.write(out.join("\n\n") + "\n");

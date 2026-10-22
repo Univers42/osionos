@@ -14,6 +14,7 @@ export * from './useAccountSettingsStore';
 export * from './useAccountDevicesStore';
 export * from './useAccountPasskeysStore';
 export * from './useAccountEmailsStore';
+export * from './useAccountProfileStore';
 export * from './useUserPreferencesStore';
 export * from './useNotificationSettingsStore';
 export * from './useConnectionsStore';

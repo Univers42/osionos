@@ -1,11 +1,11 @@
 """Measure the model on a SYNTHETIC log, and write the numbers down.
 
     python -m osml.evaluate --users 2000 --items 3000 --topics 20 \
-        --events 60000 --seed 42 --out results/sim/
+        --events 60000 --seed 42
 
 The run simulates a log, splits it by time, tunes the model on the VALIDATION
 split, trains it on the TRAINING split and scores it on the TEST split. It
-writes `metrics.json` and `RESULTS.md` under `--out`.
+writes `metrics.json` and `RESULTS.md` under `results/sim/`.
 
 The numbers are about the SIMULATION. Nothing here has read a real user.
 """
@@ -36,6 +36,9 @@ from .metrics import (
 from .simulate import simulate
 from .split import ground_truth, split_events
 from .train import train_ials, tune
+
+# Where a run writes its numbers, relative to the working directory.
+RESULTS_DIR = Path("results/sim")
 
 # The depth of the ranking the report is about.
 K_NDCG = 10
@@ -250,8 +253,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--topics", type=int, default=20)
     parser.add_argument("--events", type=int, default=60000)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--out", type=Path, default=Path("results/sim"))
     args = parser.parse_args(argv)
+    # A fixed directory, not a CLI path: nothing on the command line names where files are written.
+    out = RESULTS_DIR
 
     report = evaluate(
         users=args.users,
@@ -260,11 +264,11 @@ def main(argv: list[str] | None = None) -> int:
         events=args.events,
         seed=args.seed,
     )
-    write_results(report, args.out)
+    write_results(report, out)
 
     metrics = report["metrics"]
     difference = report["difference_ials_minus_popularity"]
-    print(f"SYNTHETIC run -> {args.out}")
+    print(f"SYNTHETIC run -> {out}")
     for name, label in (("ials", "iALS"), ("popularity", "popularity"), ("random", "random")):
         print(f"  {label:<12} nDCG@10 {metrics[name]['ndcg@10']:.4f}  recall@20 {metrics[name]['recall@20']:.4f}")
     interval = f"[{difference['ci95_low']:.4f}, {difference['ci95_high']:.4f}]"

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 15:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,6 +14,10 @@
  * Channel write actions. Bridge mode persists through /api/chat and applies
  * the server's representation locally (the WS event then de-dupes by id);
  * local mode falls back to the legacy BroadcastChannel store (same-tab echo).
+ *
+ * Every write answers a TYPED outcome (model/channelWrites): a warning from
+ * L0 is not a failure — the author is asked first and the message is written
+ * only when they say so.
  */
 
 import { useCallback } from 'react';
@@ -21,13 +25,19 @@ import { useCallback } from 'react';
 import { useRealtimeMessagesStore } from '@/services/realtime-messages';
 import {
   deleteMessage,
-  editMessage,
-  sendMessage,
   toggleReaction,
   type Attachment,
   type ChatMessage,
+  type WriteOptions,
 } from '@/shared/chat/messageApi';
+import {
+  editChannelMessage,
+  sendChannelMessage,
+  type SendOutcome,
+} from './channelWrites';
 import type { ChannelMode } from './useChannelHistory';
+
+export type { SendOutcome };
 
 interface ActionDeps {
   mode: ChannelMode;
@@ -40,38 +50,32 @@ interface ActionDeps {
 export function useChannelActions({ mode, channelId, userId, userName, setMessages }: ActionDeps) {
   const sendLocal = useRealtimeMessagesStore((s) => s.sendMessage);
 
-  const send = useCallback(async (body: string, attachments?: Attachment[], replyTo?: string) => {
+  const send = useCallback(async (
+    body: string,
+    attachments?: Attachment[],
+    replyTo?: string,
+    options?: WriteOptions,
+  ): Promise<SendOutcome> => {
     const content = body.trim();
-    if (!content && !(attachments && attachments.length)) return false;
-    if (mode !== 'bridge') return Boolean(sendLocal(`channel:${channelId}`, userId, userName, content));
-    // Optimistic: show the message instantly under a temp id, then reconcile with
-    // the server row on await (the WS echo de-dupes by id, so a double never
-    // sticks); roll the temp back on failure. Removes the round-trip from the
-    // sender's perceived latency.
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const optimistic: ChatMessage = {
-      id: tempId, channelId, authorId: userId, authorName: userName, authorAvatar: null,
-      content, createdAt: new Date().toISOString(), reactions: [],
-      attachments: attachments ?? [], mentions: [], threadRootId: null, replyCount: 0, replyTo: null,
-    };
-    setMessages((messages) => [...messages, optimistic]);
-    try {
-      const message = await sendMessage(channelId, content, attachments, replyTo);
-      setMessages((messages) => {
-        const withoutTemp = messages.filter((m) => m.id !== tempId);
-        return withoutTemp.some((m) => m.id === message.id) ? withoutTemp : [...withoutTemp, message];
-      });
-      return true;
-    } catch {
-      setMessages((messages) => messages.filter((m) => m.id !== tempId)); // send failed → drop the temp
-      return false;
+    if (!content && !(attachments && attachments.length)) return { ok: false };
+    // Local mode (no bridge): the legacy store, which is never asked by L0.
+    if (mode !== 'bridge') {
+      return sendLocal(`channel:${channelId}`, userId, userName, content) ? { ok: true } : { ok: false };
     }
+    return sendChannelMessage({ channelId, userId, userName, setMessages }, content, attachments, replyTo, options);
   }, [mode, channelId, userId, userName, sendLocal, setMessages]);
 
-  const edit = useCallback(async (messageId: string, content: string) => {
-    if (mode !== 'bridge' || !content.trim()) return;
-    const updated = await editMessage(messageId, content.trim());
-    setMessages((messages) => messages.map((m) => (m.id === messageId ? { ...m, ...updated } : m)));
+  const edit = useCallback(async (
+    messageId: string,
+    content: string,
+    options?: WriteOptions,
+  ): Promise<SendOutcome> => {
+    // Local mode never edits: the legacy store has no edit, and nothing was
+    // written — the answer says so instead of pretending it worked.
+    if (mode !== 'bridge') return { ok: false };
+    const trimmed = content.trim();
+    if (!trimmed) return { ok: false };
+    return editChannelMessage(setMessages, messageId, trimmed, options);
   }, [mode, setMessages]);
 
   const remove = useCallback(async (messageId: string) => {

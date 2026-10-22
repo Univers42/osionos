@@ -22,8 +22,9 @@ import { openFreshPage } from "../../browser/core/app.mjs";
 async function openMcpSettings(page, baseURL) {
   await openFreshPage(page, baseURL);
   await page.getByRole("button", { name: "Settings", exact: true }).first().click();
-  // Settings nav items are role="tab", not buttons.
-  await page.getByRole("tab", { name: "osionos MCP" }).click();
+  // Section rows are navigation buttons inside the settings tab's region.
+  await page.getByRole("region", { name: "Settings", exact: true }).waitFor();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "osionos MCP" }).click();
   // The panel must actually mount (it used to blank on an unpersisted workspace).
   await expect(page.getByTestId("mcp-panel")).toBeVisible();
 }

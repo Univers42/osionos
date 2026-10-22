@@ -76,12 +76,14 @@ test("readPersonalization reads the default when the server has no row", async (
   const result = await readPersonalization();
   assert.equal(result.ok, true);
   assert.equal(result.ok && result.value.captureExplicit, true);
+  // The beacon is opt-in: no row, no beacon (C48).
+  assert.equal(result.ok && result.value.beaconConsent, false);
 });
 
 test("writePersonalization sends the switch, and nothing but the switch", async () => {
   const { calls, bridge } = recorder({ ok: true, captureExplicit: false });
   setPersonalizationBridge(bridge);
-  const result = await writePersonalization(false);
+  const result = await writePersonalization({ captureExplicit: false });
   assert.deepEqual(calls, [
     { method: "PUT", path: "/api/personalization", body: { captureExplicit: false } },
   ]);
@@ -133,7 +135,7 @@ test("with no API base every function answers 'not available', and sends nothing
   setPersonalizationBridge(bridge);
   const answers = [
     await readPersonalization(),
-    await writePersonalization(false),
+    await writePersonalization({ captureExplicit: false }),
     await downloadActivity(),
     await clearActivity(),
   ];
@@ -153,7 +155,7 @@ test("a call that fails is a failure, never a fake success", async () => {
     },
   };
   setPersonalizationBridge(bridge);
-  const result = await writePersonalization(false);
+  const result = await writePersonalization({ captureExplicit: false });
   assert.equal(result.ok, false);
   assert.equal(!result.ok && result.code, "failed");
   assert.match(!result.ok ? result.message : "", /captureExplicit/);

@@ -5,7 +5,7 @@ lands in the composer **as typed input**, and an answer can be read aloud on the
 device.
 
 Everything here is bound to the conditions **C58–C65** of
-`~/.cache/osionos-ai-records/a2-events-voice-verdict.md` (§4). The out-of-scope
+`/home/dlesieur/osionos-ai-records/a2-events-voice-verdict.md` (§4). The out-of-scope
 of this slice is written at the bottom.
 
 ---

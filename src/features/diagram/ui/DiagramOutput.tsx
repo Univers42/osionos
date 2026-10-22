@@ -24,8 +24,6 @@ import React from "react";
 
 import { MermaidDiagram } from "@/shared/ui";
 
-import { MAX_NODES } from "../model/diagramIR";
-
 /** The text of a diagram that cannot be drawn. */
 const NOTE = "px-3 py-2 text-sm text-[var(--osio-fg-subtle)]";
 
@@ -42,7 +40,12 @@ export interface DiagramOutputProps {
   error: string | null;
   /** True for a kind of the spec whose adapter does not exist yet. */
   unsupported?: boolean;
+  /** What the diagram holds less of, when the kind knows. */
+  truncatedNote?: string;
 }
+
+/** The note a kind that does not name its cap falls back to. */
+const TRUNCATED_NOTE = "The diagram holds less than the data";
 
 /**
  * The output of a diagram: the diagram, or the reason there is none.
@@ -56,6 +59,7 @@ export const DiagramOutput: React.FC<DiagramOutputProps> = ({
   truncated,
   error,
   unsupported,
+  truncatedNote,
 }) => {
   if (error) {
     return (
@@ -71,7 +75,7 @@ export const DiagramOutput: React.FC<DiagramOutputProps> = ({
   return (
     <>
       <MermaidDiagram chart={source} />
-      {truncated ? <p className={TRUNCATED}>Showing the first {MAX_NODES} nodes</p> : null}
+      {truncated ? <p className={TRUNCATED}>{truncatedNote ?? TRUNCATED_NOTE}</p> : null}
     </>
   );
 };

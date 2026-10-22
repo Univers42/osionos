@@ -48,7 +48,7 @@ test("VITE_AI_URL configures the assistant, and the catalog gets its group", asy
   const { isAiConfigured, aiBaseUrl } = await aiClient({ VITE_AI_URL: "https://localhost:4000" });
   assert.equal(isAiConfigured(), true);
   assert.equal(aiBaseUrl(), "https://localhost:4000/api/ai");
-  assert.equal(aiSlashCommands(isAiConfigured()).length, 11, "one entry per editor command, and the dictation");
+  assert.equal(aiSlashCommands(isAiConfigured()).length, 12, "one entry per editor command, and the dictation");
 });
 
 test("an empty VITE_AI_URL is no configuration", async () => {
