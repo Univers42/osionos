@@ -57,6 +57,12 @@ import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
 
+// embed/bookmark are void blocks (their content is a URL, not text), so they never reach
+// EditableContent. Lazy, like the whiteboard: the frame and card code stays off the warm chunk.
+const LinkBlockEditor = lazy(() =>
+  import("./LinkBlockEditor").then((m) => ({ default: m.LinkBlockEditor })),
+);
+
 // The inline whiteboard (iframe of the drawnosaurus board) — lazy, same boundary.
 const WhiteboardBlock = lazy(() =>
   import("@/features/whiteboard/ui/WhiteboardBlock").then((m) => ({ default: m.WhiteboardBlock })),
@@ -1117,6 +1123,18 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             />
           </Suspense>
         </div>
+      );
+
+    case "embed":
+    case "bookmark":
+      return (
+        <Suspense fallback={null}>
+          <LinkBlockEditor
+            block={block}
+            onKeyDown={onKeyDown}
+            onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+          />
+        </Suspense>
       );
 
     case "home_views":

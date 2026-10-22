@@ -28,6 +28,8 @@ import type { SerializeOptions } from "./pageMarkdownEscape";
 //   draw     -> ```osidraw h=<px> fence (legacy, kept so no scene is lost)
 //   whiteboard -> ```osiwhiteboard JSON fence     app embeds -> ```osi* JSON fences
 //   diagram  -> ```mermaid fence (the SANITIZED source) or an osionos:diagram comment
+//   embed / bookmark -> ```osiembed / ```osibookmark JSON {content: url, embedHeight?, embed?}
+//                       (an older client shows the fence as a code block, URL included)
 //   columns  -> ":::columns" / ":::column <ratio>" containers
 // Paragraph text that would parse as another block gets a backslash escape.
 // Pure view state (collapsed) has no markdown form and is not emitted.
@@ -109,6 +111,10 @@ export function blockToMarkdown(block: Block, depth = 0, options?: SerializeOpti
         whiteboardHeight: block.whiteboardHeight,
         content: content || undefined,
       });
+    case "embed":
+      return appFence("osiembed", { content, embedHeight: block.embedHeight, embed: block.embed });
+    case "bookmark":
+      return appFence("osibookmark", { content, embed: block.embed });
     case "image": case "video": case "audio": case "file":
       line = mediaBlockToMarkdown(block);
       break;

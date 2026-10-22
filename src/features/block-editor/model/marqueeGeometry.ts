@@ -49,6 +49,8 @@ export const EMBED_BLOCK_TYPES = [
   'draw',
   'whiteboard',
   'diagram',
+  'embed',
+  'bookmark',
   'home_views',
   'table_block',
   'image',

@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { FileText, ImageIcon, Music, Play } from "lucide-react";
 
@@ -25,6 +25,13 @@ import {
   type ResolvedCollectionMediaAsset,
   resolveCollectionMediaAsset,
 } from "@/shared/ui/assets/collectionMedia";
+
+import { mayBeProviderLink } from "../model/mediaProviderLinks";
+
+// Lazy: the provider table and embed views load only for a link that may need them.
+const ProviderMediaEmbed = lazy(() =>
+  import("./ProviderMediaEmbed").then((m) => ({ default: m.ProviderMediaEmbed })),
+);
 
 interface MediaBlockPreviewProps {
   block: Block;
@@ -67,7 +74,7 @@ function mediaWidthStyle(block: Block): React.CSSProperties {
   return { width: `${width}%`, maxWidth: "100%" };
 }
 
-export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
+const DirectMediaPreview: React.FC<MediaBlockPreviewProps> = ({
   block,
 }) => {
   if (!isMediaBlockType(block.type)) {
@@ -191,5 +198,18 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
         Open
       </span>
     </a>
+  );
+};
+
+/** The block's media. A video/audio/file link that is a provider page (YouTube, Spotify,
+ *  Drive, a PDF) becomes an embed; the direct-file preview shows until that is known. */
+export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({ block }) => {
+  const direct = <DirectMediaPreview block={block} />;
+  const url = resolveMediaBlockAsset(block)?.url;
+  if (url === undefined || !mayBeProviderLink(block.type, url)) return direct;
+  return (
+    <Suspense fallback={direct}>
+      <ProviderMediaEmbed block={block} url={url} fallback={direct} />
+    </Suspense>
   );
 };
