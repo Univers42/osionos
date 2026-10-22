@@ -71,8 +71,8 @@ if (initialSurfaceUsesEditor()) {
 
 // A ?settings=<section>#<anchor> link opens the settings tab at that anchor.
 // Read next to the ?home= link above: both are one-shot boot deep links. The
-// dynamic import keeps the settings registry (and its icons) out of the entry
-// chunk; the link drops itself from the URL, so a reload does not reopen it.
+// dynamic import keeps the settings registry out of the entry chunk; the link
+// drops itself from the URL, so a reload does not reopen it.
 if (globalThis.window !== undefined) {
   void import("@/features/settings/model/settingsDeepLink").then((module) => module.applySettingsDeepLink());
 }
