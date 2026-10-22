@@ -28,4 +28,10 @@ export interface DiagramSource {
   error: string | null;
   /** True for a kind of the spec whose adapter does not exist yet. */
   unsupported: boolean;
+  /**
+   * What the diagram holds less of, when the kind knows: the cap that dropped
+   * the nodes is named, so the note is not a guess. Absent when the kind does
+   * not know, and the note stays generic.
+   */
+  truncatedNote?: string;
 }

@@ -36,3 +36,19 @@ export function isPublicPagePath(pathname: string): boolean {
 export function isPublicPage(): boolean {
   return isPublicPagePath(globalThis.location?.pathname ?? "");
 }
+
+/**
+ * May a diagram read another page?
+ *
+ * A published page may NOT (devil C110): it is a snapshot of what the author
+ * saw, and the tree of a shared workspace is not part of it. Every kind of the
+ * closed spec is a placeholder there — the hand-written mermaid, the page tree,
+ * the two database kinds, and the GRAPH kind, the one that would read the
+ * bridge to draw the links of a page.
+ *
+ * The rule is here, in the file that owns the signal, so the adapters ask it
+ * before they read anything.
+ */
+export function mayReadOtherPages(isPublic: boolean): boolean {
+  return !isPublic;
+}
