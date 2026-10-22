@@ -15,7 +15,9 @@
 # of the run in results/encoders/<model>/run.log. A run that is cut keeps its
 # scores: the next run asks again only the rows that have no score yet.
 #
-# usage: sh encoders.sh [toxicity|sentiment|rerank|all]
+# usage: sh encoders.sh [toxicity|sentiment|sentiment2|rerank|all]
+# sentiment2 = the second round of sentiment candidates (XLM-R cardiffnlp,
+# tabularisai), measured with the confidence interval against the baseline.
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -166,6 +168,14 @@ if [ "$WHAT" = 'sentiment' ] || [ "$WHAT" = 'all' ]; then
 	run_model sent-nlptown sent-nlptown sent latency
 	wait_slot 'the sentiment of modernbert' || exit 1
 	run_model sent-modernbert sent-modernbert sent latency
+fi
+
+# --- the second round of sentiment candidates -------------------------------
+if [ "$WHAT" = 'sentiment2' ] || [ "$WHAT" = 'all' ]; then
+	wait_slot 'the sentiment of xlmr-cardiff' || exit 1
+	run_model sent-xlmr-cardiff sent-xlmr-cardiff sent latency
+	wait_slot 'the sentiment of tabularis' || exit 1
+	run_model sent-tabularis sent-tabularis sent latency
 fi
 
 # --- the reranker -----------------------------------------------------------
