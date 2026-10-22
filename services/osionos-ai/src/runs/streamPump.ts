@@ -85,6 +85,13 @@ export function refuseDownload(options: readonly unknown[]): Promise<never[]> {
 export interface PumpInput {
 	/** The handle of the model: the platform's, or the one of a connection. */
 	model: LanguageModel;
+	/**
+	 * The system prompt of the run.
+	 *
+	 * It is the base one, or the one of an agent: the agent's block comes
+	 * before the data-boundary line, which is always last (devil C38).
+	 */
+	system?: string;
 	messages: ModelMessage[];
 	/** Extra body fields forwarded to the upstream. */
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -158,6 +165,8 @@ export function stepSeparator(answer: string): string {
  */
 export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 	const { model, messages, controller, onText, onReasoning, tools, budget, pool, onToolCall, onToolError } = input;
+	// The system prompt of the run: the base one, or the one of the agent.
+	const system = input.system ?? SYSTEM_PROMPT;
 	let answer = '';
 	let reasoning = '';
 	let usage: LanguageModelUsage | undefined;
@@ -211,7 +220,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 
 		const result = streamText({
 			model,
-			system: SYSTEM_PROMPT,
+			system,
 			messages,
 			maxOutputTokens: config.maxOutputTokens,
 			abortSignal: controller.signal,

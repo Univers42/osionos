@@ -6,6 +6,7 @@ import { getOwnedConversation } from '../conversations/repo.ts';
 import { getOwnedRun } from '../runs/repo.ts';
 import { bearerToken } from '../auth.ts';
 import { startRun } from '../runs/runner.ts';
+import { BUILTIN_AGENT_IDS, findBuiltinAgent } from '../agents/builtins.ts';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import * as runStore from '../runs/runStore.ts';
 import { UUID, requireUser } from './support.ts';
@@ -23,6 +24,9 @@ const startRunSchema = z.object({
 	conversationId: z.string().regex(UUID, 'conversationId must be a uuid'),
 	text: z.string().min(1).max(32_000),
 	model: z.string().min(1).optional(),
+	// The agent that shapes the run: one of the built-ins, or none. An id the
+	// service does not know is a bad request — the client never guesses.
+	agentId: z.enum(BUILTIN_AGENT_IDS).optional(),
 	// The connection the run spends: the platform one, or one of the caller's.
 	connectionId: z.string().min(1).max(64).optional(),
 	attachments: z.array(z.discriminatedUnion('kind', [
@@ -124,6 +128,10 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 	// hour. They are read only when the client quotes something; the search
 	// reads them again, on its own, when it needs them.
 	const workspaces = pageIds.length > 0 ? await liveMemberWorkspaces(ctx.deps.db, user) : [];
+	// The agent of the run: the built-in the client named, or none. The id
+	// came through the schema, so it is one of ours; the agent itself is read
+	// from the registry, never taken from the request.
+	const agent = body.agentId ? findBuiltinAgent(body.agentId) : null;
 	const outcome = await startRun({
 		db: ctx.deps.db,
 		redis: ctx.deps.redis,
@@ -138,6 +146,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		searchWorkspace,
 		attachments: body.attachments,
 		sessionToken,
+		agent,
 		emit: (event) => writeSseFrame(ctx.response, event),
 	});
 	if (outcome.kind === 'refused') {
