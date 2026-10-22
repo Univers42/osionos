@@ -98,9 +98,11 @@ export class MaintenanceRunner {
 	/** One run: the lock, the three steps, the report — ONE JSON line. */
 	async runOnce(): Promise<MaintenanceReport> {
 		const client = await this.pool.connect();
+		let locked = false;
 		try {
-			const locked = await client.query<{ locked: boolean }>(LOCK_SQL, [MAINTENANCE_LOCK_KEY.toString()]);
-			if (locked.rows[0]?.locked !== true) {
+			const answer = await client.query<{ locked: boolean }>(LOCK_SQL, [MAINTENANCE_LOCK_KEY.toString()]);
+			locked = answer.rows[0]?.locked === true;
+			if (!locked) {
 				this.log({ event: 'maintenance', skipped: 'locked' });
 				return { skipped: 'locked' };
 			}
@@ -111,7 +113,9 @@ export class MaintenanceRunner {
 			this.log({ event: 'maintenance', ...report });
 			return report;
 		} finally {
-			await client.query(UNLOCK_SQL, [MAINTENANCE_LOCK_KEY.toString()]).catch(() => undefined);
+			// Only the owner unlocks: a replica that lost the race would get a
+			// "you don't own a lock" WARNING in the server log every run.
+			if (locked) await client.query(UNLOCK_SQL, [MAINTENANCE_LOCK_KEY.toString()]).catch(() => undefined);
 			client.release();
 		}
 	}
@@ -124,6 +128,10 @@ export class MaintenanceRunner {
 			await client.query('BEGIN');
 			begun = true;
 			await client.query("set local statement_timeout = '60s'");
+			// Dropping a partition takes ACCESS EXCLUSIVE on ai_events: queued behind a
+			// long transaction it would block every writer behind it. Give up after
+			// 5 s instead; the step reports 55P03 and the next run tries again.
+			await client.query("set local lock_timeout = '5s'");
 			const answer = await client.query(step.call);
 			await client.query('COMMIT');
 			return readStep(step.name, answer.rows[0]);

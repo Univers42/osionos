@@ -257,4 +257,18 @@ describe('the maintenance runner', () => {
 			await closePool(pool);
 		}
 	});
+
+	it('runs each step under a lock timeout, so a partition drop never queues the writers', async () => {
+		await installStubs();
+		await admin.query(
+			`create or replace function public.ai_moderation_events_prune(p_keep interval default '365 days')
+			 returns bigint language sql as $body$
+			   select extract(epoch from current_setting('lock_timeout')::interval)::bigint
+			 $body$`,
+		);
+		const report = await withPools(1, async ([pool]) =>
+			await new MaintenanceRunner({ pool, intervalMs: 0, log: () => undefined }).runOnce(),
+		);
+		assert.equal(stepsOf(report).ai_moderation_events_prune?.deleted, 5);
+	});
 });
