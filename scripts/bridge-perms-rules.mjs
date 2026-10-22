@@ -71,11 +71,16 @@ export function normalizeShareRule(input) {
 	if (!LEVELS.has(permission)) throw httpError('permission is invalid', 400);
 	const resourceType = String(input?.resourceType ?? 'page');
 	if (!RESOURCE_TYPES.has(resourceType)) throw httpError('resourceType is invalid', 400);
+	// A page id is a UUID stored lower-case (osionos_pages.id is UUID); the rule stores it
+	// as TEXT, so normalise here so a rule written with an upper- or mixed-case id still
+	// matches the page it is about. Workspace-wide rules ('') are untouched.
+	let resourceId = boundedText(input?.resourceId, 256, 'resourceId');
+	if (resourceType === 'page' && resourceId) resourceId = resourceId.toLowerCase();
 	const target = normalizeTarget(input?.target ?? { type: 'workspace' });
 	return {
 		workspace_id: workspaceId,
 		resource_type: resourceType,
-		resource_id: boundedText(input?.resourceId, 256, 'resourceId'),
+		resource_id: resourceId,
 		target,
 		target_key: `${target.type}:${target.userId ?? ''}:${target.role ?? ''}`,
 		permission,
@@ -156,13 +161,17 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 	 * desktop restored from an older snapshot.
 	 */
 	const listForPage = async (config, workspaceId, pageId) => {
+		// A page id may arrive in any case (the request path does not lower-case it, and
+		// Postgres UUID comparison is case-insensitive), but osionos_share_rules.resource_id
+		// is TEXT and compared byte-exactly — normalise once here so the rule is found.
+		const normalizedPageId = String(pageId ?? '').trim().toLowerCase();
 		const params = {
 			select: SELECT, workspace_id: `eq.${workspaceId}`, resource_type: `eq.${PAGE_RESOURCE_TYPE}`,
 			order: 'created_at.asc', limit: String(LIST_LIMIT),
 		};
 		try {
 			const [pageRules, wideRules] = await Promise.all([
-				call(config, query({ ...params, resource_id: `eq.${pageId}` }), { empty: null }),
+				call(config, query({ ...params, resource_id: `eq.${normalizedPageId}` }), { empty: null }),
 				call(config, query({ ...params, resource_id: 'eq.' }), { empty: null }),
 			]);
 			// An empty body is not an empty rule set: the read was broken, and deciding on
@@ -173,7 +182,7 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 			if (pageRules.length >= LIST_LIMIT || wideRules.length >= LIST_LIMIT) throw shareRulesUnavailable();
 			return [...pageRules, ...wideRules].filter((row) => {
 				const resourceId = row?.resource_id;
-				return resourceId === '' || resourceId === null || String(resourceId) === String(pageId);
+				return resourceId === '' || resourceId === null || String(resourceId).toLowerCase() === normalizedPageId;
 			});
 		} catch (error) {
 			if (error?.code === 'share_rules_table_missing') return [];
