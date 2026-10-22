@@ -244,7 +244,12 @@ async function verifySudo({ config, kv, fetchImpl, now, pg, secret }, session, r
 	const checked = checkProof(proof, { secret, address, now });
 	// The proof is spent before the grant: a replay is refused even if the grant failed.
 	const marker = `otp-proof:${createHash('sha256').update(proof).digest('hex')}`;
-	const fresh = checked ? await kv.setNx(marker, '1', Math.max(1, Math.floor(checked.exp * 1000 - now))) : false;
+	let fresh;
+	try {
+		fresh = checked ? await kv.setNx(marker, '1', Math.max(1, Math.floor(checked.exp * 1000 - now))) : false;
+	} catch {
+		throw accountError(503, 'sudo_unavailable', UNAVAILABLE);
+	}
 	await auditSudo(pg, session, request, config, fresh ? 'sudo.granted' : 'sudo.proof_rejected');
 	if (!fresh) throw accountError(502, 'sudo_proof_invalid', BAD_PROOF);
 	try {
