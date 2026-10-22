@@ -14,7 +14,7 @@ Later the same night 3-4 concurrent sessions ran without a refusal when started 
 
 | WP | Status | Branch | Model(s) | Gates (my re-run) | Verdict |
 |---|---|---|---|---|---|
-| P0-2 | fix round 3 (devil PwC on the diff: 2 test blockers + 22023 mapping + 7 follow-ups) | feat/acct-bake-deepseek (25a14dc8, d259e0c9) | deepseek-v4.1-flash (+rotation on refusal) | — | spec: devil PwC, 11 conditions applied |
+| P0-2 | **merged** | feat/acct-bake-deepseek (25a14dc8 → 5e1f8a33, 4 commits) | deepseek-v4.1-flash, 4 rounds in one session | test-bridge 1477/0/1 · quality 0 · 2 mutants (timeout signal, jti seam) caught by the intended tests | devil PwC on spec (11) and diff (10); all met |
 | P1-3a | **merged** 86a66750 | feat/acct-P1-3a (f5e8b41c) | glm-5.3-flash, 1 attempt | quality 0 · canvas 2564/0/2 · settings e2e 22/22 · visual vs local system baseline 8/8 · browser: 19 panels render, 4 profile modals open/close, 1440 matches before, 375 no page overflow | accepted; deviations: dead `memberRows` dropped (verified unused), `downloadInvoicePdf` moved to Billing |
 | P0-1 | running | (root repo) feat/acct-P0-1 | big-pickle (+rotation) | harness baseline 44/0 | spec: devil PwC, 12 conditions applied; root ADR 0028 |
 | P1-3b | running | feat/acct-P1-3b | glm-5.3-flash (+rotation) | — | — |
