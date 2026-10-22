@@ -118,13 +118,6 @@ export function dedupeEdgesByPeer(rows, userId) {
 	return kept.sort((left, right) => connectionCreatedAtMs(right) - connectionCreatedAtMs(left));
 }
 
-// Aliases: the same collapse under the names a caller might reach for.
-export const dedupeConnectionsByPeer = dedupeEdgesByPeer;
-export const dedupeConnectionEdges = dedupeEdgesByPeer;
-export const dedupeEdges = dedupeEdgesByPeer;
-export const dedupeBidirectionalEdges = dedupeEdgesByPeer;
-export const oneRowPerPerson = dedupeEdgesByPeer;
-
 export const SELF_SOURCES = [
 	{
 		id: 'my-pages',
