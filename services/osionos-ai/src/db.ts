@@ -38,13 +38,21 @@ export function isPoolTimeout(error: unknown): boolean {
 }
 
 /**
+ * The client's own bound on an answer. Above the longest server bound (the
+ * maintenance runner's 60 s statement_timeout), so the server's error wins
+ * whenever the server is still there to send it.
+ */
+const QUERY_READ_TIMEOUT_MS = 90_000;
+
+/**
  * One pool for the service: ten connections, every statement capped at five
  * seconds, and the wait for a connection capped too.
  *
  * @param databaseUrl the database of the service
  * @param max the number of connections the pool hands out
+ * @param queryTimeoutMs how long the client waits for an answer
  */
-export function createPool(databaseUrl: string, max = 10): Pool {
+export function createPool(databaseUrl: string, max = 10, queryTimeoutMs = QUERY_READ_TIMEOUT_MS): Pool {
 	const pool = new Pool({
 		connectionString: databaseUrl,
 		max,
@@ -53,6 +61,13 @@ export function createPool(databaseUrl: string, max = 10): Pool {
 		// queue of the pool.
 		connectionTimeoutMillis: 5_000,
 		statement_timeout: 5_000,
+		// The wait for an answer is bounded too. statement_timeout runs on the
+		// server and cannot fire for an answer the network lost: in release R5
+		// a tailnet drop left every indexer worker waiting for ever, its queue
+		// rows locked (tests/poolReadTimeout.test.ts).
+		query_timeout: queryTimeoutMs,
+		keepAlive: true,
+		keepAliveInitialDelayMillis: 10_000,
 		application_name: 'osionos-ai',
 	});
 	// An idle client that dies must not take the process down with it.
