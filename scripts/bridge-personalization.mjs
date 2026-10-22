@@ -24,12 +24,19 @@
  * the caller's bucket BEFORE any read or write):
  *   GET    /api/personalization            { ok, captureExplicit }  (no row → true)
  *   PUT    /api/personalization            { captureExplicit: boolean } → upsert
- *   GET    /api/personalization/activity   { ok, events }   — the user's own log
+ *   GET    /api/personalization/activity   { ok, events, derived } — the log + what was made of it
  *   DELETE /api/personalization/activity   { ok, erased }   — the user's own log, gone
  *
- * The log itself is read and erased by the DATABASE, through two functions the
+ * The log itself is read and erased by the DATABASE, through functions the
  * migration creates: ai_export_user(p_user) and ai_erase_user(p_user). The
  * bridge names the user, never the caller: `p_user` is the session's user.
+ *
+ * A THIRD function reads what was DERIVED from the user: ai_rec_export_user
+ * (p_user) answers the vectors the recommender computed out of that log — a
+ * download that leaves out the data derived from the user is not the user's
+ * data. The groot slice adds it, so it may not be there yet: a 404
+ * (PostgREST's PGRST202 for an RPC that does not exist) is an empty answer,
+ * never a broken download.
  *
  * There is NO view beacon here, and no consent toggle for one: the capture
  * covers the explicit actions only.
@@ -101,6 +108,27 @@ async function exportActivity(deps, config, userId) {
 	return Array.isArray(rows) ? rows : [];
 }
 
+/**
+ * The vectors DERIVED from the user: one per model, and the ones where the
+ * user is a suggested person. The database answers them as one JSONB object.
+ *
+ * A 404 is the function not being deployed yet — the bridge ships before the
+ * migration does, and the download must survive that — so it answers null.
+ * Every other failure is a real one and propagates, exactly as the log's own
+ * read does: a broken vectors read is a broken download, not a silent one.
+ */
+async function exportDerived(deps, config, userId) {
+	try {
+		return await rest(config, deps.fetchImpl, 'rpc/ai_rec_export_user', {
+			method: 'POST',
+			body: { p_user: userId },
+		});
+	} catch (error) {
+		if (error?.status === 404) return null;
+		throw error;
+	}
+}
+
 /** The erasure: the database drops the rows and answers how many it dropped. */
 async function eraseActivity(deps, config, userId) {
 	const count = await rest(config, deps.fetchImpl, 'rpc/ai_erase_user', {
@@ -130,8 +158,13 @@ export function createPersonalizationHandler({ config, verifySession, fetchImpl 
 			takeToken(`personalization:${session.userId}`, RATE);
 			if (isActivity) {
 				if (method === 'GET') {
-					const events = await exportActivity(deps, requestConfig, session.userId);
-					return sendJson(response, 200, { ok: true, events }, requestConfig);
+					// One token, two reads, in parallel: the log itself and the
+					// vectors derived from it. Both name the SESSION user.
+					const [events, derived] = await Promise.all([
+						exportActivity(deps, requestConfig, session.userId),
+						exportDerived(deps, requestConfig, session.userId),
+					]);
+					return sendJson(response, 200, { ok: true, events, derived: { factors: derived } }, requestConfig);
 				}
 				if (method === 'DELETE') {
 					const erased = await eraseActivity(deps, requestConfig, session.userId);

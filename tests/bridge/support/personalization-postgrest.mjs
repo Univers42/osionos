@@ -17,7 +17,8 @@
  * exact parameter names, and the exact value of each fixed parameter).
  * Anything else is recorded in `violations` AND thrown, so a query nobody
  * declared cannot pass unnoticed. The stub answers only the declared shapes;
- * a failing shape answers a fixed 500.
+ * a failing shape answers a fixed 500, and a missing one a fixed 404 — the
+ * RPC that is not deployed yet.
  *
  * Caveat: a faithful evaluator of only the declared shapes. It does not model
  * RLS, column types or PostgREST's error bodies.
@@ -70,6 +71,12 @@ const SHAPES = [
 		run: (world, _p, body) => world.events.filter((row) => row.user_id === body.p_user),
 	},
 	{
+		// The vectors derived from the user: the JSONB object the database answers.
+		logical: 'rec_export', method: 'POST', table: 'rpc/ai_rec_export_user',
+		keys: [], fixed: {},
+		run: (world) => world.derived,
+	},
+	{
 		logical: 'erase', method: 'POST', table: 'rpc/ai_erase_user',
 		keys: [], fixed: {},
 		run: (world, _p, body) => eraseEvents(world, body.p_user),
@@ -84,12 +91,14 @@ function matches(shape, method, table, params, prefer) {
 	return Object.entries(shape.fixed).every(([name, value]) => params.get(name) === value);
 }
 
-/** `world`: { settings, events }. `failing`: logical names that answer 500. */
-export function createPersonalizationStub(world = {}, { failing = [] } = {}) {
-	const store = { settings: [], events: [], ...world };
+/** `world`: { settings, events, derived }. `failing`: logical names that answer 500. */
+export function createPersonalizationStub(world = {}, { failing = [], missing = [] } = {}) {
+	const store = { settings: [], events: [], derived: { user_vectors: [], as_item: [] }, ...world };
 	const calls = [];
 	const violations = [];
 	const failures = new Set(failing);
+	// `missing`: the function is NOT deployed yet — PostgREST answers 404 (PGRST202).
+	const absent = new Set(missing);
 	const fetchImpl = async (url, init = {}) => {
 		const parsed = new URL(url);
 		const method = init.method ?? 'GET';
@@ -108,6 +117,7 @@ export function createPersonalizationStub(world = {}, { failing = [] } = {}) {
 			violations.push(message);
 			throw new Error(message);
 		}
+		if (absent.has(shape.logical)) return reply({ message: 'stub: function not found' }, 404);
 		if (failures.has(shape.logical)) return reply({ message: 'stub failure' }, 500);
 		const params = Object.fromEntries(parsed.searchParams);
 		const rows = shape.run(store, params, record.body, record.prefer);
