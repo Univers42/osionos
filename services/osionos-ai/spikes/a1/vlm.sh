@@ -98,7 +98,7 @@ summary)
 	LABEL="$2"
 	mkdir -p "$HERE/results/vlm" "$LOGS"
 	container ai-a1-vlm-sum "$LOGS/summary-$LABEL.log" \
-		-v "$VOL:/mnt/storage:ro" -v "$HERE:/spike:ro" \
+		-v "$VOL:/mnt/storage" -v "$HERE:/spike:ro" \
 		python:3.12-slim python3 /spike/vlm-summarize.py \
 		--run "/mnt/storage/out/vlm/$LABEL.jsonl" \
 		--set "$SMALL/manifest.json" \

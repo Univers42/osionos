@@ -64,15 +64,54 @@ string of digits (the model runs away on the OCR of a picture without text).
 
 ## The numbers
 
-TABLE_PLACEHOLDER
+Both runs on the CPU, the same 300 pictures, the same prompt and the same schema. `vlm-summarize.py`
+reads `run-<label>.jsonl`; the summaries are `summary-<label>.json`. The confidence intervals are a
+bootstrap over the pictures (seed 42).
+
+| | SmolVLM2-2.2B Q4_K_M | Qwen2.5-VL-3B Q4_K_M |
+|---|---|---|
+| valid JSON (the schema held) | 299 / 300 (0.997) | **300 / 300 (1.000)** |
+| precision@5, tags + objects (macro) | 0.279 [0.263, 0.298] | **0.296 [0.280, 0.315]** |
+| recall, tags + objects (macro) | 0.610 [0.569, 0.648] | **0.649 [0.612, 0.685]** |
+| precision@5, tags only | 0.257 | **0.284** |
+| recall, tags only | 0.546 | **0.601** |
+| latency per picture p50 / p95 | 11.7 s / 29.8 s | 12.2 s / **20.6 s** |
+| the longest answer (tokens) | 640 (the cap: a runaway OCR) | **187** |
+| safety hint on benign pictures: flagged | 17 / 297 (5.7 %, all `unknown`) | **2 / 299 (0.7 %)** |
+| pictures with an OCR string | 296 (it writes OCR on every picture) | 33 |
+| the load average of the host during the run | **5.5–32.1** | 1.8–6.5 |
+
+- The precision@5 has a ceiling far below 1: a picture carries 2.98 COCO categories on average, so
+  five tags can be right on three of them at best (≈ 0.6). Recall is the more telling column.
+- gemma-3-4b was not measured: its run was started and stopped at the session clear of 2026-10-22
+  before its first answer (`gemma3-cpu/stats.tsv` holds only the memory samples of the warm-up).
+  It is the biggest and slowest of the three, and the middle model already meets the bar below.
 
 ## Findings
 
-FINDINGS_PLACEHOLDER
+- **Qwen2.5-VL-3B wins on every quality column**, inside or at the edge of non-overlapping
+  intervals for recall and precision, and it never broke the schema.
+- **SmolVLM2 runs away on OCR.** It writes an OCR string for 296 of 297 pictures, most of them
+  photographs without text, and one answer hit the 640-token cap. Qwen writes OCR for 33 — close to
+  the 20 pictures that hold text (by their captions).
+- **The safety hint of SmolVLM2 is noise**: 17 `unknown` on benign pictures. A hint that holds 5.7 %
+  of benign uploads for review (C97) would flood the console; Qwen's 0.7 % would not.
+- **The latencies are not a fair race.** SmolVLM2 ran with the host at load 5–32, Qwen at 2–7. Both
+  p50 are ≈ 12 s on 6 threads, so a background tag lands within ~15–30 s of an upload on this CPU.
+- **Memory.** Both containers sat at their 7 GiB cap in `docker stats` (page cache counted); the
+  first sample of Qwen, after the model load, was 2.9 GiB. The working set of a production limit
+  below 7 GiB is NOT measured here.
 
 ## Recommendation
 
-RECOMMENDATION_PLACEHOLDER
+**Qwen2.5-VL-3B-Instruct Q4_K_M** (`ggml-org/Qwen2.5-VL-3B-Instruct-GGUF@5037fcf1`, Apache-2.0) on
+llama.cpp `server-b11580`, CPU, 6 threads, one slot, `-c 4096`, the JSON schema of `vlm-schema.json`
+as the grammar. It runs in the background of M7 through `ai_jobs` (kind `image_tag`), never on a
+request path.
+
+- Keep the 640-token answer budget: Qwen's longest answer was 187, so the cap is a guard, not a cut.
+- The safety hint holds for review on public surfaces only (C97) and is never a removal.
+- Before production, measure the working set under a 4 GiB limit (the unknown above).
 
 ## Caveats
 
@@ -101,4 +140,11 @@ RECOMMENDATION_PLACEHOLDER
 | the summary | `sh vlm.sh summary <label>` | the numbers of the run in `results/vlm/summary-<label>.json` |
 | the answers | the same run | `results/vlm/run-<label>.jsonl`, one line per picture |
 
-RUNS_PLACEHOLDER
+| label | started | pictures answered | answers | summary |
+|---|---|---|---|---|
+| `smolvlm2-cpu` | 2026-10-22 16:26 | 297 (+3 warm-up) | `run-smolvlm2-cpu.jsonl` | `summary-smolvlm2-cpu.json` |
+| `qwen25vl-cpu` | 2026-10-22 19:51 | 299 (+1 warm-up) | `run-qwen25vl-cpu.jsonl` | `summary-qwen25vl-cpu.json` |
+| `gemma3-cpu` | 2026-10-22 | 0 (stopped during warm-up) | — | — |
+
+The summaries were produced on 2026-10-23 with `sh vlm.sh summary <label>` (the summary step had
+mounted the volume read-only while writing its output; fixed in this commit).
