@@ -27,7 +27,13 @@ export interface Command {
 /** The last line of every template: the answer, and nothing else. */
 const REPLY_ONLY = 'Reply with the result only.';
 
-/** The ten built-ins, in the order of the wire contract. */
+/**
+ * The eleven built-ins, in the order of the wire contract.
+ *
+ * The `diagram` one asks for a mermaid SPEC and nothing else: the editor
+ * turns the fenced block into a diagram block, and the user's click is what
+ * inserts it. The server writes nothing.
+ */
 const BUILTINS: readonly Command[] = Object.freeze([
 	{
 		name: 'ask',
@@ -88,6 +94,12 @@ const BUILTINS: readonly Command[] = Object.freeze([
 		description: 'Explain the selection simply',
 		template: `Explain the following text simply.\n\n$ARGUMENTS\n\n${REPLY_ONLY}`,
 		surface: 'both',
+	},
+	{
+		name: 'diagram',
+		description: 'Draw a mermaid diagram of the text',
+		template: `Draw a diagram of the following text, as a mermaid diagram.\n\n$ARGUMENTS\n\nReply with one \`\`\`mermaid fenced block and nothing else.\n\n${REPLY_ONLY}`,
+		surface: 'editor',
 	},
 ]);
 

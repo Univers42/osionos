@@ -28,7 +28,7 @@
  * store: the controls of the two kinds borrow it (see `DatabaseControls`).
  */
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 
 import { useKnownDatabaseStateStore } from "@/widgets/database-view/model/knownDatabaseState";
 
@@ -73,6 +73,8 @@ export function useDatabaseCatalog(): CatalogEntry[] {
 interface DatabaseDiagramProps {
   /** The stored spec: a schema or a pipeline. */
   spec: unknown;
+  /** Report the compiled mermaid, for the export of the block. */
+  onSource?: (source: string | null) => void;
 }
 
 /**
@@ -81,12 +83,16 @@ interface DatabaseDiagramProps {
  * The source is computed from the spec and the client's own state: a renamed
  * database redraws, and a database the viewer may not read is not drawn.
  */
-export const DatabaseDiagram: React.FC<DatabaseDiagramProps> = ({ spec }) => {
+export const DatabaseDiagram: React.FC<DatabaseDiagramProps> = ({ spec, onSource }) => {
   const databases = useKnownDatabaseStateStore((store) => store.state.databases);
   const pages = useKnownDatabaseStateStore((store) => store.state.pages);
   const output = useMemo<DiagramSource>(
     () => databaseSource(spec, databases, pages),
     [spec, databases, pages],
   );
+  // The compiled text goes up to the block: it is what the export copies.
+  useEffect(() => {
+    onSource?.(output.source);
+  }, [output, onSource]);
   return <DiagramOutput {...output} />;
 };

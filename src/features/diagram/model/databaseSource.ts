@@ -25,6 +25,7 @@
  */
 
 import { compilePipeline, compileSchema } from "./compile";
+import { MAX_NODES } from "./diagramIR";
 import {
   pipelineInput,
   schemaInput,
@@ -51,6 +52,7 @@ export function databaseSource(
     return {
       source: irToMermaid(ir, { direction: diagramSpec.direction }),
       truncated: ir.truncated,
+      truncatedNote: ir.truncated ? `Showing the first ${MAX_NODES} nodes` : undefined,
       error: null,
       unsupported: false,
     };
@@ -74,6 +76,7 @@ export function databaseSource(
     return {
       source: irToMermaid(ir, { direction: diagramSpec.direction }),
       truncated: ir.truncated,
+      truncatedNote: ir.truncated ? `Showing the first ${MAX_NODES} nodes` : undefined,
       error: null,
       unsupported: false,
     };
