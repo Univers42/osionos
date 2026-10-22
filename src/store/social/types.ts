@@ -41,7 +41,14 @@ export interface BlockedUser {
   createdAt?: string;
 }
 
-export type ReportSubjectKind = 'user' | 'message' | 'page' | 'workspace' | 'channel';
+export type ReportSubjectKind =
+  | 'user'
+  | 'message'
+  | 'page'
+  | 'workspace'
+  | 'channel'
+  | 'feed_comment'
+  | 'page_comment';
 
 export interface ReportPayload {
   subjectUserId?: string;
