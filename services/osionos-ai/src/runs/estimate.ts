@@ -15,19 +15,25 @@ import { SYSTEM_PROMPT } from './prompt.ts';
 /**
  * The characters of the prompt of a call: the question, the history, the pages
  * the run quotes, the sources it found, and the system prompt.
+ *
+ * `systemChars` is the size of the system prompt the run really sends: the
+ * base one, or the one of an agent, which is longer. The reservation counts
+ * what the call costs, not what it costs without an agent.
  */
 export function promptCharCount({
 	text,
 	historyChars,
 	pageChars = 0,
 	sourceChars = 0,
+	systemChars = SYSTEM_PROMPT.length,
 }: {
 	text: string;
 	historyChars: number;
 	pageChars?: number;
 	sourceChars?: number;
+	systemChars?: number;
 }): number {
-	return text.length + historyChars + pageChars + sourceChars + SYSTEM_PROMPT.length;
+	return text.length + historyChars + pageChars + sourceChars + systemChars;
 }
 
 /**
@@ -55,14 +61,16 @@ export function estimateMicroUsd(
 		historyChars,
 		pageChars = 0,
 		sourceChars = 0,
+		systemChars = SYSTEM_PROMPT.length,
 	}: {
 		text: string;
 		historyChars: number;
 		pageChars?: number;
 		sourceChars?: number;
+		systemChars?: number;
 	},
 ): number {
-	const estimatedInputTokens = estimateTokens(promptCharCount({ text, historyChars, pageChars, sourceChars }));
+	const estimatedInputTokens = estimateTokens(promptCharCount({ text, historyChars, pageChars, sourceChars, systemChars }));
 	return costMicroUsd(model, { inputTokens: estimatedInputTokens, outputTokens: config.maxOutputTokens });
 }
 
@@ -136,13 +144,15 @@ export function estimateRunMicroUsd(
 		historyChars,
 		pageChars = 0,
 		sourceChars = 0,
+		systemChars = SYSTEM_PROMPT.length,
 	}: {
 		text: string;
 		historyChars: number;
 		pageChars?: number;
 		sourceChars?: number;
+		systemChars?: number;
 	},
 ): number {
-	const base = promptCharCount({ text, historyChars, pageChars, sourceChars });
+	const base = promptCharCount({ text, historyChars, pageChars, sourceChars, systemChars });
 	return stepCeilingsMicroUsd(model, { baseChars: base }).needed;
 }

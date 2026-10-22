@@ -2,6 +2,7 @@ import { handleHealth } from './health.ts';
 import { handleConversationMessages, handleConversations } from './conversations.ts';
 import { handleModels } from './models.ts';
 import { handleCommands } from './commands.ts';
+import { handleAgents } from './agents.ts';
 import { handleComplete } from './complete.ts';
 import { handleVoiceTranscribe } from './voice.ts';
 import { handleImages } from './images.ts';
@@ -43,6 +44,7 @@ export const ROUTES: RouteEntry[] = [
 	},
 	{ methods: ['GET'], pattern: /^\/api\/ai\/models$/, label: '/api/ai/models', handle: handleModels },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/commands$/, label: '/api/ai/commands', handle: handleCommands },
+	{ methods: ['GET'], pattern: /^\/api\/ai\/agents$/, label: '/api/ai/agents', handle: handleAgents },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/providers$/, label: '/api/ai/providers', handle: handleProviders },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/usage$/, label: '/api/ai/usage', handle: handleUsage },
 	{
