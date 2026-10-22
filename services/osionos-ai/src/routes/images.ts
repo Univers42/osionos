@@ -191,12 +191,10 @@ export async function handleImages(ctx: RouteContext): Promise<number> {
 		console.info(JSON.stringify({ event: 'prompt_refused', runId, layer: 'l0', codes: l0Codes(body.prompt) }));
 		return refuse(422, 'prompt_refused');
 	}
-	// The call to the guard is bounded by the timeout of the configuration;
-	// this signal is the one of the caller, and nothing aborts it here.
-	const gate = new AbortController();
+	// The call to the guard is bounded by the timeout of the configuration.
 	let verdict: ParsedGuard;
 	try {
-		verdict = parseGuard(await askGuard(body.prompt, gate.signal));
+		verdict = parseGuard(await askGuard(body.prompt));
 	} catch {
 		return refuse(503, 'moderation_unavailable');
 	}

@@ -65,9 +65,9 @@ function unavailable(): Error {
  * The body is exactly the one of the spike: the model, ONE user message
  * (the prompt), no temperature, 32 tokens, no stream. The deadline is the
  * timeout of the configuration (8 s: A1's p95 with four clients was 5389 ms),
- * and the caller's signal may cut it short.
+ * and a caller's signal, when given, may cut it short.
  */
-export async function askGuard(prompt: string, signal: AbortSignal): Promise<string> {
+export async function askGuard(prompt: string, signal?: AbortSignal): Promise<string> {
 	const body = {
 		model: config.promptGuardModel,
 		messages: [{ role: 'user', content: prompt }],
@@ -81,7 +81,9 @@ export async function askGuard(prompt: string, signal: AbortSignal): Promise<str
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify(body),
-			signal: AbortSignal.any([signal, AbortSignal.timeout(config.promptGuardTimeoutMs)]),
+			signal: signal
+				? AbortSignal.any([signal, AbortSignal.timeout(config.promptGuardTimeoutMs)])
+				: AbortSignal.timeout(config.promptGuardTimeoutMs),
 		});
 	} catch {
 		throw unavailable();
