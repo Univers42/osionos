@@ -22,6 +22,7 @@ import { useNotifyLive } from "@/store/chat/useNotifyLive";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { QuickCaptureModal } from "@/features/quick-capture/ui/QuickCaptureModal";
 import { WorkspaceIntentModal } from "@/features/workspace-onboarding/ui/WorkspaceIntentModal";
+import { ProfessionPickerModal } from "@/features/professions/ui/ProfessionPickerModal";
 import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { useZenMode } from "@/shared/config/useZenMode";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
@@ -344,6 +345,9 @@ const App: React.FC = () => {
       <ContactDock />
       <QuickCaptureModal />
       <WorkspaceIntentModal />
+      {/* The profession picker: the Modal primitive returns null until the store's
+          `open` flag is set, so the warm path renders nothing. */}
+      <ProfessionPickerModal />
     </div>
   );
 };
