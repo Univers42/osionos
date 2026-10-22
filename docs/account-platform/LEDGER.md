@@ -16,10 +16,13 @@ Later the same night 3-4 concurrent sessions ran without a refusal when started 
 |---|---|---|---|---|---|
 | P0-2 | **merged** | feat/acct-bake-deepseek (25a14dc8 → 5e1f8a33, 4 commits) | deepseek-v4.1-flash, 4 rounds in one session | test-bridge 1477/0/1 · quality 0 · 2 mutants (timeout signal, jti seam) caught by the intended tests | devil PwC on spec (11) and diff (10); all met |
 | P1-3a | **merged** 86a66750 | feat/acct-P1-3a (f5e8b41c) | glm-5.3-flash, 1 attempt | quality 0 · canvas 2564/0/2 · settings e2e 22/22 · visual vs local system baseline 8/8 · browser: 19 panels render, 4 profile modals open/close, 1440 matches before, 375 no page overflow | accepted; deviations: dead `memberRows` dropped (verified unused), `downloadInvoicePdf` moved to Billing |
-| P0-1 | fix round 1 after devil BLOCK on the diff (lock order reversed → reproduced 40P01; k1 per-relation; membership revoke by non-postgres grantor) + 6 follow-ups | (root repo) feat/acct-P0-1 (83fb93f0) | big-pickle, 1 attempt | my re-run: models-grants 78/0, shellcheck 0 | spec: devil PwC (12); diff: BLOCK |
+| P0-1 | fix round 1 done (f50daa5b): lock order, per-privilege k1, revoke GRANTED BY, + 6 follow-ups; devil re-review running | (root repo) feat/acct-P0-1 (f50daa5b) | big-pickle, 2 rounds | my re-run: models-grants 82/0, shellcheck 0; worker: first-run pass1 24 / pass2 0, race 40P01 → clean | spec: devil PwC (12); diff: BLOCK → re-review |
 | P1-3b | running | feat/acct-P1-3b | glm-5.3-flash (+rotation) | — | — |
-| P0-3 | fix round 1 (IPv6 rate-limit keys, in-order fake redis, split redis client) | feat/acct-P0-3 (84d4251b) | deepseek-v4.1-flash, 1 attempt | — | spec: devil PwC, 11 conditions applied; ADR 0002 |
+| P0-3 | fix round 2 (devil PwC on diff: parser hang on `$-7`/`$abc`, 13/18 mutants survived; + 9 follow-ups) | feat/acct-P0-3 (51860dae) | minimax (fix2) | my re-run of 51860dae: test-bridge 1463/0/1, quality 0 | spec: devil PwC (11); diff: PwC (2 blockers) |
 | P0-7 | fix round 1 (p95<p50 bug, whole-ms rounding, budgets tuned to pass, non-exact queries, 443-line script) | (root repo) feat/acct-P0-7 (eb5b7f2e) | nemotron-3-ultra, 1 attempt | my baseline run: seed 9 s, 7/7 PASS with impossible percentiles | — |
+| P0-6 | spec written; dispatch after P0-4 + P1-1 merge (needs the mount seam and `osionos_profiles.avatar_url`) | — | — | research: R-P0-6 | — |
+| P1-1 | spec written (root repo; 4d2cb22b); devil spec review running; dispatch after P0-1 + P0-7 merge | — | — | — | — |
+| P0-4 | spec written (4d2cb22b); devil spec review running; dispatch after P0-3 merges | — | — | — | — |
 | P1-4 | spec written, waits for P1-3b | — | — | — | no devil gate |
 
 Open follow-ups
