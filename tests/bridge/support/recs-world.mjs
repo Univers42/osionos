@@ -94,6 +94,19 @@ export function world(extra = {}, me = user()) {
 		],
 		members: [{ user_id: me, workspace_id: WS }],
 		blocks: [{ blocker_id: me, blocked_id: BLOCKER }],
+		settings: [{ user_id: me, capture_explicit: true }],
+		...extra,
+	};
+}
+
+/**
+ * The world of a refusal: the caller's switch and nothing else. The refusal
+ * route reads the switch, checks the slate it is given, and writes the log —
+ * it reads no page, no context and no membership.
+ */
+export function refusalWorld(extra = {}, me = user()) {
+	return {
+		settings: [{ user_id: me, capture_explicit: true }],
 		...extra,
 	};
 }
