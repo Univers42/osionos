@@ -27,7 +27,7 @@ COPY scripts/bridge-api.mjs scripts/bridge-page-read.mjs scripts/bridge-graph.mj
 	scripts/bridge-chat-media.mjs scripts/bridge-url-guard.mjs scripts/bridge-url-fetch.mjs scripts/bridge-automations-webhook.mjs scripts/bridge-storage-core.mjs scripts/bridge-ratelimit.mjs scripts/bridge-chat-search.mjs scripts/bridge-chat-threads.mjs \
 	scripts/bridge-communities.mjs \
 	scripts/bridge-profile.mjs scripts/bridge-feed.mjs scripts/bridge-social.mjs scripts/bridge-notify.mjs scripts/bridge-push.mjs scripts/bridge-media.mjs scripts/bridge-tasks.mjs scripts/bridge-comments.mjs scripts/bridge-public.mjs \
-	scripts/bridge-collab.mjs scripts/bridge-realtime-token.mjs scripts/bridge-social-core.mjs scripts/bridge-realtime-socket.mjs scripts/bridge-baas-body.mjs scripts/bridge-session-cutoff.mjs scripts/bridge-workspace-invites.mjs \
+	scripts/bridge-collab.mjs scripts/bridge-realtime-token.mjs scripts/bridge-social-core.mjs scripts/bridge-realtime-socket.mjs scripts/bridge-baas-body.mjs scripts/bridge-session-cutoff.mjs scripts/bridge-workspace-invites.mjs scripts/bridge-workspace-settings.mjs \
 	scripts/bridge-session-tracker.mjs scripts/bridge-session-revocations.mjs scripts/bridge-sessions.mjs scripts/bridge-account-mounts.mjs scripts/bridge-account-profile.mjs scripts/bridge-preferences.mjs scripts/bridge-account-published-pages.mjs scripts/bridge-shared-store.mjs \
 	scripts/bridge-pg.mjs scripts/bridge-paging.mjs scripts/bridge-kv.mjs scripts/bridge-redis.mjs scripts/bridge-resp.mjs scripts/bridge-guard.mjs \
 	scripts/bridge-mime.mjs scripts/bridge-image-meta.mjs scripts/bridge-avatar.mjs scripts/bridge-migrate-legacy-avatars.mjs \

@@ -33,17 +33,18 @@ import { noopHandledAction, runAsync } from '../model/settingsCalls';
 const EMPTY_PAGES: PageEntry[] = [];
 const EMPTY_WORKSPACE_MEMBERS: WorkspaceMember[] = [];
 
-type SettingsModalName = 'page-selector' | 'delete-workspace';
+type SettingsModalName = 'page-selector' | 'delete-workspace' | 'reset-workspace';
 
 interface ActiveSettingsModal {
   name: SettingsModalName;
   payload?: Record<string, unknown>;
 }
 
-export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspaceId?: string; membersCount: number }> = ({ userId, workspaceName = '42 school', workspaceId = '1edd3106-e5a4-4068-92a1-6b6e55a61ee6', membersCount }) => {
+export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspaceId?: string; membersCount: number }> = ({ userId, workspaceName = '42 school', workspaceId: workspaceIdProp, membersCount }) => {
   const resolvedUserId = userId || 'anonymous';
+  const activeWorkspaceId = useUserStore((state) => state.activeWorkspace())?._id;
+  const workspaceId = workspaceIdProp || activeWorkspaceId || '';
   const toast = useToastStore((state) => state.push);
-  const renameWorkspace = useUserStore((state) => state.renameWorkspace);
   const deleteWorkspace = useUserStore((state) => state.deleteWorkspace);
   const activeSession = useUserStore((state) => state.activeSession());
   const sessionWorkspaces = useMemo(
@@ -53,6 +54,8 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
   const pages = usePageStore((state) => state.pages[workspaceId] ?? EMPTY_PAGES);
   const workspaceMembers = useWorkspaceMembersStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS);
   const storedSettings = useWorkspaceSettingsStore((state) => state.data[workspaceId]);
+  const loading = useWorkspaceSettingsStore((state) => state.loading[workspaceId] ?? false);
+  const storeError = useWorkspaceSettingsStore((state) => state.error[workspaceId] ?? null);
   const hydrate = useWorkspaceSettingsStore((state) => state.hydrate);
   const update = useWorkspaceSettingsStore((state) => state.update);
   const reset = useWorkspaceSettingsStore((state) => state.reset);
@@ -66,11 +69,10 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
   useEffect(() => {
     if (!workspaceNameDraft.trim() || workspaceNameDraft === settings.name) return;
     const timer = globalThis.setTimeout(() => {
-      renameWorkspace(workspaceId, workspaceNameDraft.trim(), settings.icon ?? undefined);
       update(resolvedUserId, workspaceId, { name: workspaceNameDraft.trim() });
     }, 300);
     return () => globalThis.clearTimeout(timer);
-  }, [renameWorkspace, resolvedUserId, settings.icon, settings.name, update, workspaceId, workspaceNameDraft]);
+  }, [resolvedUserId, settings.name, update, workspaceId, workspaceNameDraft]);
 
   useEffect(() => {
     runAsync(hydrate(resolvedUserId, workspaceId, workspaceName));
@@ -112,10 +114,13 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
 
   return (
     <>
+      {loading && <div role="status">Loading workspace settings…</div>}
+      {storeError && <div role="alert">{storeError}</div>}
       <Section title="Workspace settings">
         <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input aria-label="Workspace name" className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={workspaceNameDraft} maxLength={65} onChange={(event) => setWorkspaceNameDraft(event.target.value)} />} />
-        <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="relative"><button type="button" aria-label="Change workspace icon" className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl" onClick={() => setIconPickerOpen((open) => !open)}><IconValueView value={settings.icon ?? '🌏'} size={44} /></button>{iconPickerOpen && <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2"><EmojiPicker current={settings.icon ?? '🌏'} onSelect={(value) => { update(resolvedUserId, workspaceId, { icon: value }); renameWorkspace(workspaceId, settings.name, value); setIconPickerOpen(false); }} onRemove={() => { update(resolvedUserId, workspaceId, { icon: undefined }); setIconPickerOpen(false); }} onClose={() => setIconPickerOpen(false)} /></div>}</div>} />
+        <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="relative"><button type="button" aria-label="Change workspace icon" className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl" onClick={() => setIconPickerOpen((open) => !open)}><IconValueView value={settings.icon ?? '🌏'} size={44} /></button>{iconPickerOpen && <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2"><EmojiPicker current={settings.icon ?? '🌏'} onSelect={(value) => { update(resolvedUserId, workspaceId, { icon: value }); setIconPickerOpen(false); }} onRemove={() => { update(resolvedUserId, workspaceId, { icon: null }); setIconPickerOpen(false); }} onClose={() => setIconPickerOpen(false)} /></div>}</div>} />
         <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<Button onClick={() => setModal({ name: 'page-selector' })}>{settings.landingPageId ? 'Change page' : 'Select page'}</Button>} />
+        <SettingRow title="Reset to defaults" description="Restore the default workspace name, icon, landing page, sidebar and analytics." action={<Button tone="ghost" onClick={() => setModal({ name: 'reset-workspace' })}>Reset to defaults</Button>} />
       </Section>
       <Section title="Export">
         <SettingRow title="Workspace content" description={`Export all pages in ${settings.name}. This can take longer depending on the size of the workspace.`} action={<Button onClick={() => runAsync(exportWorkspaceContent())}>Export</Button>} />
@@ -127,12 +132,12 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
       </Section>
       <Section title="Danger zone">
         <SettingRow danger title="Delete workspace" description="Permanently delete this workspace, including all pages and files." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-workspace' })}>Delete workspace</Button>} />
-        <Button tone="ghost" className="-ml-2" onClick={() => { runAsync(reset(resolvedUserId, workspaceId, workspaceName)); }}>Reset to defaults</Button>
       </Section>
       <Section title="Workspace ID">
         <SettingRow title="Workspace ID" description={workspaceId} action={<IconButton label="Copy workspace ID" onClick={() => { runAsync(navigator.clipboard.writeText(workspaceId).then(() => toast({ kind: 'success', title: 'Workspace ID copied' }))); }}><Copy size={16} /></IconButton>} />
       </Section>
       {modal?.name === 'page-selector' && <PageSelectorModal pages={pages} selectedId={settings.landingPageId ?? null} onSelect={(pageId) => { update(resolvedUserId, workspaceId, { landingPageId: pageId }); setModal(null); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'reset-workspace' && <TypedConfirmModal title="Reset to defaults" message={`Type ${settings.name} to reset this workspace's settings.`} confirmText={settings.name} actionLabel="Reset to defaults" onConfirm={() => { runAsync(reset(resolvedUserId, workspaceId, workspaceName)); setModal(null); }} onClose={() => setModal(null)} />}
       {modal?.name === 'delete-workspace' && <TypedConfirmModal title="Delete workspace" message={`Type ${settings.name} to permanently delete this workspace.`} confirmText={settings.name} danger actionLabel="Delete workspace" onConfirm={() => runAsync(handleDeleteWorkspace())} onClose={() => setModal(null)} />}
     </>
   );
