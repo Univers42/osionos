@@ -40,6 +40,7 @@ export const SETTINGS_PANELS: Record<SettingsSectionId, LazyExoticComponent<Comp
     ),
   }))),
   contacts: lazy(() => import("@/features/settings/social/LazySocialSettings").then((m) => ({ default: m.LazySocialSettings }))),
+  moderation: lazy(() => import("@/features/settings/moderation/ModerationPanel").then((m) => ({ default: m.ModerationPanel }))),
   mail_calendar: lazy(() => import("@/features/settings/mail-calendar/MailCalendarPanel").then((m) => ({
     default: (props: SettingsPanelProps) => (
       <m.MailCalendarPanel activeUserId={props.activeUserId} personaEmail={props.persona?.email} />
