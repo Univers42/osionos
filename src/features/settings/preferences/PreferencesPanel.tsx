@@ -21,6 +21,7 @@ import { useUserPreferencesStore, recordSettingsAction } from '@/store/settings'
 import { ConfirmModal } from '../ui/ConfirmModals';
 import { Section, SettingRow } from '../ui/settingsKit';
 import { runAsync } from '../model/settingsCalls';
+import { AccessibilitySettings } from './AccessibilitySettings';
 
 const FALLBACK_TIMEZONES = ['UTC', 'Europe/Madrid', 'Europe/Paris', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo'];
 
@@ -81,6 +82,7 @@ export const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUse
           <WorkspaceThemeControls compact />
         </div>
       </Section>
+      <AccessibilitySettings />
       <Section title="Input options">
         <SettingRow title="Use Enter to add a new line" description="Applies to chat, comments, and other input fields. Press Cmd/Ctrl + Enter to send." action={<Toggle checked={Boolean(preferences?.enterAddsNewline)} onChange={(checked) => update({ enterAddsNewline: checked })} label="Use Enter to add a new line" />} />
       </Section>

@@ -30,6 +30,7 @@ import { useSlashSelect, useSlashWhiteboardSelect } from "@/features/slash-comma
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";
 import { useUserStore } from "@/features/auth";
+import { useUrlPasteMode } from "@/shared/config/useAppearance";
 import {
   isIndentable,
   isParentable,
@@ -650,6 +651,8 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const [colorMenu, setColorMenu] = useState<ColorMenuState | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
   const contentRef = useRef<Block[]>(content);
+  // What a pasted bare URL becomes: a link, or the text exactly as it was.
+  const urlPaste = useUrlPasteMode();
 
   /** Focus a block element after a short delay. `placement`: true = end, false =
    * start, or an explicit edge/goal-X placement carried from arrow navigation. */
@@ -1618,14 +1621,16 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         return;
       }
 
-      // A pasted bare URL becomes a blue `[hostname](url)` link, not pure URL text.
+      // A pasted bare URL becomes a blue `[hostname](url)` link, not pure URL
+      // text — unless the person chose "plain", which keeps the URL as it was.
       if (isSingleBareUrl(raw)) {
         e.preventDefault();
         const content = currentBlock.content ?? "";
         const offsets = resolvePasteSelectionOffsets(e, content);
         const lo = Math.max(0, Math.min(offsets.start, offsets.end, content.length));
         const hi = Math.max(lo, Math.min(Math.max(offsets.start, offsets.end), content.length));
-        const next = content.slice(0, lo) + bareUrlToLinkSource(raw) + content.slice(hi);
+        const pasted = urlPaste === "plain" ? raw : bareUrlToLinkSource(raw);
+        const next = content.slice(0, lo) + pasted + content.slice(hi);
         updateBlock(pageId, blockId, { content: next });
         focusBlock(blockId, true);
         return;
@@ -1644,7 +1649,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       updatePageContent(pageId, replaceBlockInEditorTree(contentRef.current, blockId, replacement));
       focusBlock(parsed.at(-1)?.id ?? replacement.at(-1)?.id ?? blockId, true);
     },
-    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock],
+    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock, urlPaste],
   );
 
   const handleContainerEnter = useCallback(
