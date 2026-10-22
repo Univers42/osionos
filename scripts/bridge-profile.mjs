@@ -245,11 +245,7 @@ async function listProfileShares(deps, session, userId, response, config) {
 			const part = await rest(config, deps.fetchImpl, `osionos_pages?${inFilter('id', chunk)}&select=id,title,icon,cover,workspace_id,owner_id,visibility,collaborators`);
 			return Array.isArray(part) ? part : [];
 		});
-		// The merged rows keep the order of the shares they belong to (newest share first).
-		const rank = new Map(pageIds.map((id, index) => [id, index]));
-		for (const page of pages.sort((left, right) => (rank.get(left.id) ?? 0) - (rank.get(right.id) ?? 0))) {
-			pagesById.set(page.id, page);
-		}
+		for (const page of pages) pagesById.set(page.id, page);
 	}
 	const members = await memberWorkspacesAmong(config, deps.fetchImpl, session, [...pagesById.values()].map((page) => page.workspace_id));
 	const seen = new Set();
