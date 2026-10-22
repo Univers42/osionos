@@ -7,4 +7,4 @@ Baseline on 14e519ca (2026-10-22): `quality` rc=0 · `test-bridge` 1430 pass / 1
 
 | WP | Status | Branch | Model | Session | Gates (my re-run) | Verdict |
 |---|---|---|---|---|---|---|
-| P0-2 | bake-off running | feat/acct-bake-{deepseek,glm,nemotron} | 3 free models | — | — | — |
+| P0-2 | spec revised (devil PwC, 11 conditions) → bake-off | feat/acct-bake-{deepseek,glm,nemotron} | 3 free models | — | — | — |
