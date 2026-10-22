@@ -190,8 +190,39 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		}
 	};
 
+	/**
+	 * listForPage for many pages of ONE workspace in two reads: pageId (lower-case) → that
+	 * page's rules plus the workspace-wide ones. Fails closed exactly like listForPage.
+	 * Caveat: a full LIST_LIMIT page of rules may be truncated, so it throws; keep the
+	 * id list short (the caller sends at most 50 ids per call — Kong's header buffer).
+	 */
+	const listForPages = async (config, workspaceId, pageIds) => {
+		const ids = [...new Set(pageIds.map((id) => String(id ?? '').trim().toLowerCase()))];
+		const params = {
+			select: SELECT, workspace_id: `eq.${workspaceId}`, resource_type: `eq.${PAGE_RESOURCE_TYPE}`,
+			order: 'created_at.asc', limit: String(LIST_LIMIT),
+		};
+		try {
+			const [pageRules, wideRules] = await Promise.all([
+				call(config, query({ ...params, resource_id: `in.(${ids.join(',')})` }), { empty: null }),
+				call(config, query({ ...params, resource_id: 'eq.' }), { empty: null }),
+			]);
+			if (pageRules === null || wideRules === null) throw shareRulesUnavailable();
+			if (pageRules.length >= LIST_LIMIT || wideRules.length >= LIST_LIMIT) throw shareRulesUnavailable();
+			const wide = wideRules.filter((row) => row?.resource_id === '' || row?.resource_id === null);
+			return new Map(ids.map((id) => [id, [
+				...pageRules.filter((row) => String(row?.resource_id ?? '').toLowerCase() === id),
+				...wide,
+			]]));
+		} catch (error) {
+			if (error?.code === 'share_rules_table_missing') return new Map(ids.map((id) => [id, []]));
+			throw shareRulesUnavailable();
+		}
+	};
+
 	return {
 		listForPage,
+		listForPages,
 		async list(config, workspaceId, resourceId) {
 			const params = { select: SELECT, workspace_id: `eq.${workspaceId}`, order: 'created_at.asc', limit: String(LIST_LIMIT) };
 			if (resourceId != null) params.resource_id = `eq.${resourceId}`;

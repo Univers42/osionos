@@ -365,4 +365,79 @@ describe('favorites honour no_access rules', () => {
 			assert.deepEqual(res.body.pageIds, [ACCESSIBLE]);
 		});
 	});
+
+	it('the favorites list reads in batches: 120 favorites across 2 workspaces cost at most 12 PostgREST reads', async () => {
+		const WS2 = 'c1c1c1c1-3333-4333-8333-c1c1c1c1c1c1';
+		const uuid = (n) => `f${String(n).padStart(7, '0')}-1111-4111-8111-f00000000000`;
+		const page = (n, workspace, owner) => ({ id: uuid(n), workspace_id: workspace, owner_id: owner, visibility: 'public', title: `P${n}`, collaborators: [], properties: [], parent_page_id: null, archived_at: null, content: [], created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z' });
+		const all = [
+			...Array.from({ length: 50 }, (_, n) => page(n, WSID, OWNER)),
+			...Array.from({ length: 50 }, (_, n) => page(100 + n, WS2, OWNER)),
+			...Array.from({ length: 20 }, (_, n) => page(200 + n, WSID, CALLER)),
+		];
+		const memberRows = [...members(), { workspace_id: WS2, user_id: CALLER, role: 'viewer', permissions: ['read'] }, { workspace_id: WS2, user_id: OWNER, role: 'owner', permissions: ['read'] }];
+		const denied = [{ id: 'r1', workspace_id: WSID, resource_type: 'page', resource_id: uuid(7), target: { type: 'user', userId: CALLER }, permission: 'no_access', explicit: true }];
+		const favorites = all.map((p) => ({ user_id: CALLER, page_id: p.id }));
+		const mock = createPostgrestMock({ osionos_workspace_members: memberRows, osionos_pages: all, osionos_share_rules: denied, osionos_page_favorites: favorites }, { realWorkspaceRpc: true });
+		const headers = sessionHeaders(config, CALLER, HOME, [WSID, WS2]);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const before = mock.calls.length;
+			const res = await send(base, '/api/favorites', headers);
+			assert.equal(res.status, 200, res.text);
+			assert.equal(res.body.pageIds.includes(uuid(7)), false);
+			assert.deepEqual(res.body.pageIds, all.map((p) => p.id).filter((id) => id !== uuid(7)));
+			assert.ok(mock.calls.length - before <= 12, `${mock.calls.length - before} reads`);
+		});
+	});
+
+	it('a favorites list longer than 200 answers the 200 most recent', async () => {
+		const mock = createPostgrestMock({ osionos_workspace_members: members(), osionos_pages: pages() }, { realWorkspaceRpc: true });
+		const headers = sessionHeaders(config, CALLER, HOME, [WSID]);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			assert.equal((await send(base, '/api/favorites', headers)).status, 200);
+			const read = mock.calls.find((call) => call.table === 'osionos_page_favorites');
+			assert.equal(read.params.get('limit'), '200');
+		});
+	});
+});
+
+describe('listForPages answers many pages in two reads', () => {
+	const PAGE_B = '66666666-6666-4666-8666-666666666666';
+	/** Like fakeFetch, but understands resource_id=in.(a,b). */
+	function fakeInFetch(rows, { status = 200 } = {}) {
+		const calls = [];
+		const fetchImpl = async (url) => {
+			const parsed = new URL(String(url));
+			calls.push(parsed);
+			if (status !== 200) return new Response(JSON.stringify({ code: 'XX' }), { status });
+			const wanted = parsed.searchParams.get('resource_id');
+			const matches = (value) => (wanted.startsWith('in.(') ? wanted.slice(4, -1).split(',').includes(value) : value === wanted.slice(3));
+			return new Response(JSON.stringify(rows.filter((candidate) => matches(candidate.resource_id))), { status: 200, headers: { 'content-type': 'application/json' } });
+		};
+		return { calls, fetchImpl };
+	}
+
+	it('listForPages answers each page its own rules plus the wide ones in two reads', async () => {
+		const rows = [
+			row({ id: 'a', resource_id: PAGE }),
+			row({ id: 'b', resource_id: PAGE_B }),
+			row({ id: 'w', resource_id: '', permission: 'no_access' }),
+			row({ id: 'c', resource_id: OTHER_PAGE }),
+		];
+		const { calls, fetchImpl } = fakeInFetch(rows);
+		const result = await createShareRuleStore({ fetchImpl }).listForPages(CONFIG, WS, [PAGE, PAGE_B.toUpperCase()]);
+		assert.equal(calls.length, 2);
+		assert.deepEqual(result.get(PAGE).map((rule) => rule.id).sort(), ['a', 'w']);
+		assert.deepEqual(result.get(PAGE_B).map((rule) => rule.id).sort(), ['b', 'w']);
+		assert.equal(result.has(OTHER_PAGE), false);
+	});
+
+	it('listForPages fails closed like listForPage when a read fails', async () => {
+		const { fetchImpl } = fakeInFetch([], { status: 500 });
+		await assert.rejects(createShareRuleStore({ fetchImpl, log: () => {} }).listForPages(CONFIG, WS, [PAGE]), (error) => {
+			assert.equal(error.status, 503);
+			assert.equal(error.code, 'share_rules_unavailable');
+			return true;
+		});
+	});
 });
