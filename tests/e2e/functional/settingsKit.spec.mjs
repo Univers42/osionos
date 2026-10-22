@@ -5,37 +5,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
-
-/** The settings tab's region; the tab strip owns the closing. exact: the pane's
- *  own "Title bar: Settings" <section> is also role=region by substring. */
-function region(page) {
-  return page.getByRole("region", { name: "Settings", exact: true });
-}
-
-function nav(page) {
-  return page.getByRole("navigation", { name: "Settings sections" });
-}
-
-/** The selected panel settled: its own marker subtree is on screen, so later
- *  count()/evaluateAll calls never catch a stale panel or the skeleton. */
-async function openSettingsSection(page, sectionName, sectionId = null) {
-  const row = nav(page).getByRole("button", { name: sectionName, exact: true });
-  await row.click();
-  const id = sectionId ?? (await row.getAttribute("data-settings-section"));
-  await expect(page.getByRole("heading", { level: 1, name: sectionName, exact: true })).toBeVisible();
-  await expect(region(page).locator(`[data-settings-panel="${id}"]`)).toBeVisible();
-}
-
-async function openSettings(page, sectionName) {
-  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
-  await region(page).waitFor();
-  await openSettingsSection(page, sectionName);
-}
-
-async function closeSettings(page) {
-  await page.getByRole("button", { name: "Close Settings" }).click();
-  await expect(region(page)).toHaveCount(0);
-}
+import { closeSettings, nav, openSection as openSettingsSection, openSettings, region } from "../support/settingsHelpers.mjs";
 
 /** What a token resolves to on this page, so a test compares computed values, not names. */
 function resolvedToken(page, property, token) {
@@ -196,5 +166,34 @@ test.describe("settings use the kit", () => {
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     }
   });
-});
 
+  test("a search with no hit shows the status line", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await openSettings(page, "Preferences");
+    await page.getByRole("searchbox", { name: "Search settings" }).fill("zzzz-no-match");
+    await expect(page.getByRole("search").getByRole("status")).toContainText('No settings match “zzzz-no-match”');
+  });
+
+  test("the typed-confirm input has an accessible name", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await openSettings(page, "Profile");
+    await region(page).getByRole("button", { name: "Delete my account", exact: true }).click();
+    await expect(page.getByLabel("Type DELETE to confirm")).toBeVisible();
+  });
+
+  test("an async confirm disables both buttons while pending", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await openSettings(page, "General");
+    await region(page).getByRole("button", { name: "Delete workspace", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Delete workspace" });
+    await expect(dialog).toBeVisible();
+    const typedInput = dialog.getByRole("textbox");
+    const confirmText = await typedInput.getAttribute("placeholder");
+    await typedInput.fill(confirmText ?? "");
+    const confirmButton = dialog.getByRole("button", { name: /Delete workspace/ }).first();
+    await confirmButton.click();
+    await expect(confirmButton).toBeDisabled();
+    await expect(confirmButton).toHaveText(/Delete workspace…/);
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
+  });
+});

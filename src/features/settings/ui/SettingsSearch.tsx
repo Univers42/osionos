@@ -68,6 +68,12 @@ export const SettingsSearch: React.FC = () => {
             </button>
           ))}
         </div>
+      ) : query.trim() ? (
+        // No hit is an answer too: the search says so instead of dropping the
+        // list silently.
+        <div className="absolute left-0 right-0 top-full z-[var(--osio-z-popover)] mt-2 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] py-1 shadow-[var(--osio-shadow-menu)]">
+          <p role="status" className="px-3 py-2 text-sm text-[var(--osio-fg-muted)]">No settings match “{query.trim()}”</p>
+        </div>
       ) : null}
     </div>
   );
