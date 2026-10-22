@@ -1205,9 +1205,8 @@ export async function readablePageAccess(request, pageId, permission, config, fe
 	const level = role === 'owner' || role === 'admin'
 		? null
 		: await shareLevelForPage(config, workspaceId, pageId, token.userId, role, fetchImpl);
-	if (shareDenies(level)) throw pageNotFound();
-	if (!canReadPageRow(found, token.userId) && !shareGrantsRead(level)) throw pageNotFound();
-	return { authContext: workspaceAccessContext(token, workspaceId, member, permission), row: found };
+	const row = requireReadablePage(found, token.userId, level);
+	return { authContext: workspaceAccessContext(token, workspaceId, member, permission), row };
 }
 
 /** The one answer for every parent a page may not be nested under, whatever the reason. */
@@ -1272,11 +1271,13 @@ function pageNotFound() {
 /**
  * `row` when the caller may read it; otherwise the SAME 404 a missing id gets.
  * `level` is the share level the rules give the caller: a can_view rule makes a page the
- * base rule refuses readable. A no_access rule is NOT applied here — on the write path it
- * refuses the write (403), and the read path answers it as a missing id.
+ * base rule refuses readable, and a no_access rule hides the page — from the read path
+ * AND from the write path, so a denied page answers exactly like a missing id and never
+ * confirms that it exists.
  */
 function requireReadablePage(row, userId, level = null) {
 	if (!row) throw pageNotFound();
+	if (shareDenies(level)) throw pageNotFound();
 	if (!canReadPageRow(row, userId) && !shareGrantsRead(level)) throw pageNotFound();
 	return row;
 }
@@ -1303,14 +1304,14 @@ async function pageWriteContext(request, pageId, config, fetchImpl) {
 }
 
 /**
- * The write decision for one page: the page owner keeps their access, a no_access rule
- * refuses the write even when the base rule would grant it, a can_edit rule grants the
- * write the membership did not carry, and the base rule (the route's permission plus the
- * page rule) decides the rest.
+ * The write decision for one page: the page owner keeps their access, a can_edit rule
+ * grants the write the membership did not carry, and the base rule (the route's
+ * permission plus the page rule) decides the rest. A no_access rule never reaches here:
+ * the read gate answers it as a missing id, so a denied page is a 404 on the write path
+ * too — it must not confirm that the page exists.
  */
 function requirePageWrite(context, permission) {
 	if (context.owner) return;
-	if (shareDenies(context.level)) throw pageWriteDenied();
 	if (shareGrantsWrite(context.level)) return;
 	const access = workspaceAccessContext(context.token, context.workspaceId, context.member, permission);
 	if (!mayModifyPage(context.row, { ...access, userId: context.token.userId }, context.level)) throw pageWriteDenied();

@@ -53,9 +53,9 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { bearerToken, httpError, rest, UUID_REGEX } from './bridge-social-core.mjs';
+import { bearerToken, httpError, rest } from './bridge-social-core.mjs';
 import { createShareRuleStore, normalizeShareRule } from './bridge-perms-rules.mjs';
-import { canChangePageSharing } from './bridge-page-read.mjs';
+import { mayChangeRule } from './bridge-perms-rule-owners.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -254,20 +254,12 @@ function createEngineProxy(settings, fetchImpl, reply, fail) {
 	};
 }
 
-/** The page a rule is about, or null when the rule is not about a page that exists. */
-async function rulePage(ctx, rule, fetchImpl) {
-	const type = rule?.resourceType ?? rule?.resource_type ?? '';
-	const id = rule?.resourceId ?? rule?.resource_id ?? '';
-	if (type !== 'page' || !id || !UUID_REGEX.test(String(id))) return null;
-	const rows = await rest(ctx.requestConfig, fetchImpl, `osionos_pages?id=eq.${encodeURIComponent(id)}&select=id,owner_id&limit=1`);
-	return Array.isArray(rows) ? rows[0] ?? null : null;
-}
-
 /** Share-rule routes; resolves undefined when `tail` is not a rules route. A rule is validated
  *  and rebuilt before any query; DELETE touches a rule only after its workspace passes
- *  `update` (a rule the caller may not change reads as not found). A rule ABOUT a page is
- *  the page owner's to change: the workspace gate alone would let any member carrying
- *  `update` rewrite who may read somebody else's page. */
+ *  `update` (a rule the caller may not change reads as not found). Who may change a rule
+ *  ABOUT a page is decided in bridge-perms-rule-owners.mjs: a rule is an access grant, so
+ *  the workspace gate alone would let any member carrying `update` rewrite who may read
+ *  somebody else's page. */
 function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply, fail }) {
 	const access = (ctx, workspaceId, permission) =>
 		requireWorkspaceAccess(ctx.request, workspaceId, permission, ctx.requestConfig, fetchImpl);
@@ -282,12 +274,8 @@ function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply,
 		if (method === 'POST' && tail === 'rules') {
 			const rule = normalizeShareRule(await readJsonBody(ctx.request));
 			const workspace = await access(ctx, rule.workspace_id, 'update');
-			const page = await rulePage(ctx, rule, fetchImpl);
-			// A rule about a page the caller does not own is refused; the workspace
-			// owner/admin may change any rule. A rule about a page that does not exist
-			// governs nothing, so the workspace gate alone decides it.
-			if (page && !canChangePageSharing(page, ctx.session.userId)
-				&& workspace?.role !== 'owner' && workspace?.role !== 'admin') return fail(response, 403);
+			const allowed = await mayChangeRule(ctx, rule, { fetchImpl, workspaceRole: workspace?.role, gated: true });
+			if (!allowed) return fail(response, 403);
 			return reply(response, 200, { rule: await ruleStore.upsert(requestConfig, rule) });
 		}
 		if (method === 'DELETE' && tail.startsWith('rules/')) return deleteRule(ctx, decodeURIComponent(tail.slice('rules/'.length)));
@@ -297,13 +285,11 @@ function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply,
 	async function deleteRule(ctx, id) {
 		const rule = await ruleStore.byId(ctx.requestConfig, id);
 		if (!rule) return fail(ctx.response, 404);
-		const page = await rulePage(ctx, rule, fetchImpl);
 		// The page owner may change the rules about their page even when the workspace
 		// membership alone would not (an owner who is only a viewer there).
-		if (!page || !canChangePageSharing(page, ctx.session.userId)) {
-			const allowed = await access(ctx, rule.workspaceId, 'update').then(() => true, () => false);
-			if (!allowed) return fail(ctx.response, 404);
-		}
+		const workspace = await access(ctx, rule.workspaceId, 'update').then((w) => w, () => null);
+		const allowed = await mayChangeRule(ctx, rule, { fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace) });
+		if (!allowed) return fail(ctx.response, 404);
 		if (!(await ruleStore.remove(ctx.requestConfig, id, rule.workspaceId))) return fail(ctx.response, 404);
 		return reply(ctx.response, 200, { deleted: true });
 	}

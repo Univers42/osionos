@@ -34,6 +34,11 @@ const LIST_LIMIT = 500;
 const TIMEOUT_MS = 5000;
 const SELECT = 'id,workspace_id,resource_type,resource_id,target,permission,explicit,created_at,updated_at';
 
+/** The 503 a rules read that cannot be trusted answers — never a silent "no rules". */
+function shareRulesUnavailable() {
+	return Object.assign(new Error('Share rules are not available right now.'), { status: 503, code: 'share_rules_unavailable' });
+}
+
 /** A bounded string field, or a 400. */
 function boundedText(value, limit, field) {
 	const text = value == null ? '' : String(value);
@@ -95,7 +100,7 @@ export function toApiRule(row) {
 
 /** PostgREST-backed rule store; every method takes the per-request bridge config. */
 export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = console.error } = {}) {
-	async function call(config, query, { method = 'GET', body, prefer } = {}) {
+	async function call(config, query, { method = 'GET', body, prefer, empty = [] } = {}) {
 		if (!config?.baasUrl || !config?.serviceKey) throw httpError('rule storage is not configured', 503);
 		const headers = { Accept: 'application/json', apikey: config.serviceKey, Authorization: `Bearer ${config.serviceKey}` };
 		if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -110,15 +115,21 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		if (!response.ok) throw storeFailure(response.status, await response.text().catch(() => ''));
 		// An empty answer means "no rules", which is an access decision — so a body that
 		// stops mid-stream, or one that is not JSON, is reported as the broken read it is.
-		return readBaasJson(response, { service: 'share rules', empty: [], fail: (message) => httpError(message, 502) });
+		return readBaasJson(response, { service: 'share rules', empty, fail: (message) => httpError(message, 502) });
 	}
 
 	function storeFailure(status, text) {
 		let code = '';
 		try { code = JSON.parse(text)?.code ?? ''; } catch { /* non-JSON error body */ }
-		if (status === 404 || code === '42P01' || code === 'PGRST205') {
+		// Only PGRST205/42P01 mean the table is gone. Any other 404 is a broken read, and
+		// answering [] for it would drop every deny the caller is under.
+		if (code === '42P01' || code === 'PGRST205') {
 			log(`[bridge-perms] table public.${table} is missing — apply ${MIGRATION} (psql -v ON_ERROR_STOP=1 -1 -f ${MIGRATION})`);
 			return Object.assign(httpError('rule storage is not available', 503), { code: 'share_rules_table_missing' });
+		}
+		if (status === 404) {
+			log(`[bridge-perms] rule storage answered 404 (${code || 'no code'}) — not a missing table`);
+			return Object.assign(httpError('rule storage is not available', 503), { code: 'share_rules_unavailable' });
 		}
 		if (status === 401 || status === 403) {
 			log(`[bridge-perms] PostgREST refused the bridge's service identity for ${table} (${status})`);
@@ -151,16 +162,22 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		};
 		try {
 			const [pageRules, wideRules] = await Promise.all([
-				call(config, query({ ...params, resource_id: `eq.${pageId}` })),
-				call(config, query({ ...params, resource_id: 'eq.' })),
+				call(config, query({ ...params, resource_id: `eq.${pageId}` }), { empty: null }),
+				call(config, query({ ...params, resource_id: 'eq.' }), { empty: null }),
 			]);
+			// An empty body is not an empty rule set: the read was broken, and deciding on
+			// it would drop every deny the caller is under.
+			if (pageRules === null || wideRules === null) throw shareRulesUnavailable();
+			// A full page of rules may be a truncated set: a deny beyond the cap would be
+			// dropped, so the read fails closed instead of deciding on half the rules.
+			if (pageRules.length >= LIST_LIMIT || wideRules.length >= LIST_LIMIT) throw shareRulesUnavailable();
 			return [...pageRules, ...wideRules].filter((row) => {
 				const resourceId = row?.resource_id;
 				return resourceId === '' || resourceId === null || String(resourceId) === String(pageId);
 			});
 		} catch (error) {
 			if (error?.code === 'share_rules_table_missing') return [];
-			throw Object.assign(new Error('Share rules are not available right now.'), { status: 503, code: 'share_rules_unavailable' });
+			throw shareRulesUnavailable();
 		}
 	};
 
