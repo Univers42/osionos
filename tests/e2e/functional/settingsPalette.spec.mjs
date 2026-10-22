@@ -64,6 +64,22 @@ test.describe("settings from the palette, the chord and the link", () => {
     await expect.poll(() => page.url()).not.toContain("settings=");
   });
 
+  test("at a phone width the Notifications anchors are told apart, none truncated", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    // Narrow AFTER the page is arranged: at a phone width the rail drops out
+    // of the a11y tree, and the page must be opened first.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await paletteInput(page).fill(">notif");
+
+    const anchors = ["In-app notifications", "Slack notifications", "Discord notifications", "Email notifications"];
+    for (const label of anchors) {
+      const title = page.getByRole("option").getByText(label, { exact: true });
+      await expect(title).toBeVisible();
+      const fit = await title.evaluate((element) => ({ scroll: element.scrollWidth, client: element.clientWidth }));
+      expect(fit.scroll, `${label} is not truncated`).toBeLessThanOrEqual(fit.client);
+    }
+  });
+
   test("an unknown ?settings= section opens no tab and logs no error", async ({ page, baseURL }) => {
     const consoleErrors = [];
     page.on("console", (message) => {
