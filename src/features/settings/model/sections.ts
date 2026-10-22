@@ -203,9 +203,9 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     anchors: [{ id: "osionos-mcp", label: "osionos MCP", keywords: ["mcp", "tools", "developer", "ai clients"] }],
   },
   {
-    id: "public_pages", group: "features", label: "Public pages", title: "Public pages",
-    subtitle: "Manage public content from your workspace", icon: Globe,
-    anchors: [{ id: "public-pages", label: "Public pages", keywords: ["sites", "forms", "domains", "public", "live"] }],
+    id: "public_pages", group: "features", label: "Published pages", title: "Published pages",
+    subtitle: "The pages you published to the web", icon: Globe,
+    anchors: [{ id: "public-pages", label: "Published pages", keywords: ["publish", "published", "web", "public", "live", "republish", "unpublish", "snapshot", "link"] }],
   },
   {
     id: "library", group: "features", label: "Emoji & Library", title: "Emoji & Library",
