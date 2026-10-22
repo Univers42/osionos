@@ -125,7 +125,7 @@ async function handleRequest(
 		if (request.method === 'OPTIONS') {
 			route = 'preflight';
 			// The MCP endpoint grants no CORS to anybody (C118): its preflight is a 405.
-			if (config.patEnabled && new URL(request.url ?? '/', 'http://x').pathname === '/api/ai/mcp') {
+			if (config.patEnabled && new URL(request.url ?? '/', 'https://localhost').pathname === '/api/ai/mcp') {
 				sendMcpError(response, 405, 'method_not_allowed');
 				status = 405;
 				return;
