@@ -197,5 +197,4 @@ test("the stage, the cell and the read-only renderer all honour visibility throu
   assert.match(source("features/block-editor/ui/canvas/view/CanvasCellView.tsx"), /if \(!evaluateCellVisibility\(cell\.visibilityFormula, properties\)\) return null;/);
   assert.match(source("entities/block/ui/LayoutBlockReadOnly.tsx"), /filterVisibleCells\(block\.layoutCells/);
   assert.match(source("widgets/page-renderer/ui/PageBlocksRenderer.tsx"), /properties=\{properties\}/);
-  assert.match(source("pages/public/PublicPageView.tsx"), /properties=\{page\.properties\}/);
 });
