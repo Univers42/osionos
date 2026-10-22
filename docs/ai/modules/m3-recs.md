@@ -204,7 +204,7 @@ which resolves `ai_rec_erase_user` (`rec-factors-migration.sql:380`) at call tim
 | **C49** | Beacon accepts only what the server vouches for | bridge route, signed slate, ACL read, rank from the slate (`bridge-events.mjs:176-190`); at most 50 events (`:64`, `parseBody:92`) |
 | **C50** | One account cannot move a global aggregate | one row per user, item, event, surface, UTC day (`rec-beacon-migration.sql:11`); proved by `rec-beacon.sh` |
 | **C51** | Triggers never fail or over-capture | statement-level triggers, `user-events-migration.sql:298-534`; proved by `ai-events.sh` |
-| **C52** | Partitions and retention have a runner | `ai_events_maintain` (`:205`) and `ai_events_default_rows()` (`:274`). Whether a daily caller of `ai_events_maintain` exists: UNKNOWN, the migration comment (`:201`) says it is a later slice |
+| **C52** | Partitions and retention have a runner | `ai_events_maintain` (`:205`) and `ai_events_default_rows()` (`:274`), called by the indexer's `MaintenanceRunner` every 6 h under an advisory lock (`services/osionos-ai/src/indexer/main.ts:91`, `src/maintenance/runner.ts:16-20`) |
 | **C53** | The log is minimal and locked down | columns are ids, enums, numbers, a timestamp (`:108`); service-role-only RLS (`:174-176`) |
 | **C54** | Erasure and export cover derived state | `ai_rec_erase_user`, `ai_rec_export_user`; Settings buttons |
 | **C55** | A slate never exposes another person's signal | ACL and block filter (`bridge-recs.mjs:35-41`, `bridge-recs-pages.mjs`) |
@@ -223,9 +223,9 @@ which resolves `ai_rec_erase_user` (`rec-factors-migration.sql:380`) at call tim
   on today's events, not scored with its stored weights (which saw part of the
   holdout). A quiet week gives few holdout users and a noisy comparison;
   `holdout_users` is stored with the metrics.
-- **Caveat: no non-personalised fallback.** The verdict (C48) asks that "For
-  you" serve a non-personalised ranking when consent is off. The code does
-  not: the route answers `personalized: false` with a reason (`no_model`,
+- **Open condition: no non-personalised fallback (C48 not met yet).** The
+  verdict asks that "For you" serve a non-personalised ranking when consent
+  is off. The code does not, and plan slice `m3-fallback` fixes it: the route answers `personalized: false` with a reason (`no_model`,
   `cold_start`, `opted_out`) and the strip stays empty (`ForYouStrip.tsx:86`).
 - **Caveat: comments and code disagree on the beacon bucket.** The bridge
   header and a comment say "hour"; the migration and `rec-beacon.sh` say UTC
