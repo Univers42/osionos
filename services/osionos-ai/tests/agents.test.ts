@@ -127,6 +127,14 @@ describe('the built-in agents', () => {
 		}
 	});
 
+	it('an agent over the cap never reaches a prompt (devil C47)', () => {
+		const [first] = BUILTIN_AGENTS;
+		const oversized = { ...first, instructions: 'x'.repeat(AGENT_INSTRUCTIONS_MAX + 1) };
+		assert.throws(() => systemPromptFor(oversized), /over the cap/);
+		const atCap = { ...first, instructions: 'x'.repeat(AGENT_INSTRUCTIONS_MAX) };
+		assert.ok(systemPromptFor(atCap).includes(atCap.instructions), 'an agent at the cap is accepted');
+	});
+
 	it('the read agents carry no write tool', () => {
 		for (const id of ['db-architect', 'analyst']) {
 			const agent = findBuiltinAgent(id);
