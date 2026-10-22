@@ -136,7 +136,8 @@ export class PolledSessionSet {
 	}
 
 	failLoad(error) {
-		const message = error instanceof Error ? error.message : String(error);
+		// The message may carry upstream text: control characters (a forged log line) go.
+		const message = (error instanceof Error ? error.message : String(error)).replace(/[\x00-\x1f\x7f]+/g, ' ');
 		if (this.failureStreak !== message) this.log.warn(`[osionos-bridge] ${this.label}: load failed (${message}); ${this.hint}.`);
 		this.failureStreak = message;
 		this.status();
@@ -234,6 +235,6 @@ export function startPolledSessionPoller(tracker, load, { intervalMs = POLL_INTE
 		timer = setTimeout(run, intervalMs);
 		timer.unref();
 	}
-	if (tracker.enforced) run();
+	if (tracker.enforced) void run();
 	return { tick, stop() { stopped = true; clearTimeout(timer); } };
 }
