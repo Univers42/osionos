@@ -14,11 +14,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 
 import { useChatStore, getInferencePort } from "@/features/chat/model/useChatStore";
+import { mergeAttachments, subscribeAssistantHandoff } from "@/features/chat/model/assistantHandoff";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/features/ai/model/aiSelection";
 import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
 import { openAiConnections } from "@/features/settings/settingsOpener";
+import { MAX_ATTACHMENTS } from "./AttachImageButton";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
 import { EmptyStateHero } from "./EmptyStateHero";
@@ -47,6 +49,20 @@ export const ChatShell: React.FC = () => {
 
   useEffect(() => { initConnectors(); }, [initConnectors]);
   useEffect(() => { if (!activeId) createConversation(); }, [activeId, createConversation]);
+
+  /**
+   * The hand-off from a block: the image the user pointed at, waiting for the
+   * composer. It is taken on mount and whenever it changes — and the image
+   * stays in the composer until the user presses Send (devil C79).
+   */
+  useEffect(
+    () =>
+      subscribeAssistantHandoff((pending) => {
+        setAttachments((current) => mergeAttachments(current, pending.attachments, MAX_ATTACHMENTS));
+        if (pending.text) setText((current) => (current.trim() ? current : pending.text));
+      }),
+    [],
+  );
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
   const messages = allMessages.filter((m) => m.conversationId === activeId);
@@ -152,7 +168,12 @@ export const ChatShell: React.FC = () => {
 
       <section className="flex min-w-0 flex-1 flex-col">
         {messages.length === 0 ? (
-          <EmptyStateHero {...composerProps} onPick={(s) => submit(s)} />
+          <EmptyStateHero
+            {...composerProps}
+            onPick={(s) => submit(s)}
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
+          />
         ) : (
           <>
             <div className="flex-1 overflow-y-auto">
