@@ -15,6 +15,8 @@ import { ArrowUp, FileText, Layers, Plug, Square, X } from "lucide-react";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 
 import { AiConnectionPicker } from "./AiConnectionPicker";
+import { OfflineModelPicker } from "./OfflineModelPicker";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { AttachImageButton } from "./AttachImageButton";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
@@ -175,11 +177,15 @@ export const ChatComposer: React.FC<Props> = ({
         >
           <Plug size={16} /> Connect
         </button>
-        <AiConnectionPicker
-          value={selection}
-          onChange={onSelectionChange}
-          onVisionChange={setVision}
-        />
+        {isAiConfigured() ? (
+          <AiConnectionPicker
+            value={selection}
+            onChange={onSelectionChange}
+            onVisionChange={setVision}
+          />
+        ) : (
+          <OfflineModelPicker value={selection} onChange={onSelectionChange} />
+        )}
         {/* The agent of the run: the general assistant, or one of the built-ins
             the service offers. A native <select> is keyboard-driven for free,
             and the label says what it is. */}
