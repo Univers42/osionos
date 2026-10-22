@@ -5,7 +5,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
-import { closeSettings, nav, openSection as openSettingsSection, openSettings, region } from "../support/settingsHelpers.mjs";
+import { closeSettings, nav, openSection as openSettingsSection, openSettings, region, searchSettings } from "../support/settingsHelpers.mjs";
 
 /** What a token resolves to on this page, so a test compares computed values, not names. */
 function resolvedToken(page, property, token) {
@@ -112,8 +112,12 @@ test.describe("settings use the kit", () => {
   test("a reversible action is outlined danger text; an irreversible one keeps the solid fill", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     // A fresh workspace has no active page, so the candidate reversible action
-    // is Disconnect (reconnecting undoes it), not the page Move-to-Trash.
+    // is Disconnect (reconnecting undoes it), not the page Move-to-Trash. Part
+    // b removed the fake default connection, so arrange one first.
     await openSettings(page, "Mail & Calendar");
+    await region(page).getByRole("button", { name: "Add address" }).click();
+    await page.getByRole("dialog", { name: "Mail provider" }).getByRole("button", { name: "osionos Mail" }).click();
+
     const danger = await resolvedToken(page, "background-color", "--osio-danger");
     const dangerText = await resolvedToken(page, "color", "--osio-danger");
     const disconnect = region(page).getByRole("button", { name: "Disconnect" }).first();
@@ -176,8 +180,9 @@ test.describe("settings use the kit", () => {
 
   test("the typed-confirm input has an accessible name", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await openSettings(page, "Profile");
-    await region(page).getByRole("button", { name: "Delete my account", exact: true }).click();
+    await openSettings(page);
+    await searchSettings(page, "delete account");
+    await page.getByRole("button", { name: "Delete my account", exact: true }).click();
     await expect(page.getByLabel("Type DELETE to confirm")).toBeVisible();
   });
 
@@ -190,10 +195,21 @@ test.describe("settings use the kit", () => {
     const typedInput = dialog.getByRole("textbox");
     const confirmText = await typedInput.getAttribute("placeholder");
     await typedInput.fill(confirmText ?? "");
-    const confirmButton = dialog.getByRole("button", { name: /Delete workspace/ }).first();
-    await confirmButton.click();
-    await expect(confirmButton).toBeDisabled();
-    await expect(confirmButton).toHaveText(/Delete workspace…/);
-    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeDisabled();
+    // Click and read the pending state in one round trip, so the short pending
+    // window is not lost to a round trip.
+    const states = await page.evaluate(() => new Promise((resolve) => {
+      const dialog = document.querySelector('[role="dialog"]');
+      const button = [...dialog.querySelectorAll('button')].find((b) => /Delete workspace/.test(b.textContent || ''));
+      button.click();
+      requestAnimationFrame(() => {
+        const buttons = [...dialog.querySelectorAll('button')];
+        resolve(buttons.map((b) => ({ text: b.textContent, disabled: b.disabled })));
+      });
+    }));
+    const confirmState = states.find((b) => /Delete workspace/.test(b.text));
+    expect(confirmState?.disabled).toBe(true);
+    expect(confirmState?.text).toMatch(/Delete workspace…/);
+    const cancelState = states.find((b) => b.text === 'Cancel');
+    expect(cancelState?.disabled).toBe(true);
   });
 });

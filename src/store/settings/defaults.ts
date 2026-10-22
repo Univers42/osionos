@@ -102,13 +102,9 @@ export function defaultNotifications(userId: string): NotificationSettings {
   };
 }
 
-export function defaultConnections(userId: string, email?: string): ConnectionRecord[] {
-  const timestamp = nowIso();
-  const address = email ?? 'account@example.com';
-  return [
-    { _id: `conn-mail-${userId}`, userId, provider: 'mail', label: `osionos Mail · ${address}`, scopes: ['mail.read'], status: 'connected', connectedAt: timestamp, lastSyncAt: null, error: null, createdAt: timestamp, updatedAt: timestamp, removedAt: null },
-    { _id: `conn-calendar-${userId}`, userId, provider: 'calendar', label: `osionos Calendar · ${address}`, scopes: ['calendar.read'], status: 'connected', connectedAt: timestamp, lastSyncAt: null, error: null, createdAt: timestamp, updatedAt: timestamp, removedAt: null },
-  ];
+export function defaultConnections(_userId: string, _email?: string): ConnectionRecord[] {
+  // User with no bridge sees nothing connected.
+  return [];
 }
 
 export function defaultWorkspaceSettings(workspaceId: string, name?: string): WorkspaceSettings {
@@ -145,7 +141,7 @@ export function defaultBillingState(workspaceId: string): BillingState {
   const timestamp = nowIso();
   return {
     workspaceId,
-    plan: 'Education Plus',
+    plan: 'Free',
     paymentMethod: null,
     billedTo: null,
     billingEmail: null,

@@ -16,8 +16,23 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { registerHooks } from "node:module";
 
-import { defaultBillingState, defaultConnections } from "@/store/settings/defaults";
+const UI_STUB = `export const useToastStore = { getState: () => ({ push() {} }) };`;
+const CLIENT_STUB = `export const API_BASE = ''; export const api = {}; export class ApiError extends Error {}; export const getActivePageJwt = () => null;`;
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "@/shared/ui") return { url: `data:text/javascript,${encodeURIComponent(UI_STUB)}`, shortCircuit: true };
+    if (specifier === "@/shared/api/client") return { url: `data:text/javascript,${encodeURIComponent(CLIENT_STUB)}`, shortCircuit: true };
+    const resolved = nextResolve(specifier, context);
+    if (resolved.url.endsWith("/src/shared/ui/index.ts")) return { url: `data:text/javascript,${encodeURIComponent(UI_STUB)}`, shortCircuit: true };
+    if (resolved.url.endsWith("/src/shared/api/client.ts")) return { url: `data:text/javascript,${encodeURIComponent(CLIENT_STUB)}`, shortCircuit: true };
+    return resolved;
+  },
+});
+
+const { defaultBillingState, defaultConnections } = await import("@/store/settings/defaults");
 
 test("defaultConnections returns no invented connections", () => {
   assert.deepEqual(defaultConnections("user-1", "user@example.com"), []);
