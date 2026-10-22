@@ -51,9 +51,51 @@ export function storageBase(env = process.env) {
 	return (env.STORAGE_ROUTER_URL ?? 'http://mini-baas-storage-router:3040/storage/v1').replace(/\/$/, '');
 }
 
+/** The type without its parameters, lowercased: `Text/HTML; charset=x` → `text/html`. */
+function baseMime(contentType) {
+	return String(contentType ?? '').split(';')[0].trim().toLowerCase();
+}
+
+/**
+ * Types a browser opens as a page that can run script. The app rewrites /api/* to
+ * the bridge, so a stored object is served on the app's own origin, behind a
+ * capability URL that needs no session: one such upload and one click ran script
+ * as the victim (devil C76). A refused image upload falls back to a data: URL in
+ * the editor, and <img> never runs an SVG's script.
+ */
+const PAGE_TYPES = new Set(['text/html', 'application/xhtml+xml', 'image/svg+xml']);
+
+/**
+ * Types served inline: an <img>, <video> or <audio> source, or plain text. Anything
+ * else downloads as opaque bytes. SVG stays inline for the objects stored before
+ * PAGE_TYPES existed; the sandbox below keeps its script from running.
+ */
+const INLINE_TYPES = new Set([
+	'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif', 'image/svg+xml',
+	'video/mp4', 'video/webm', 'video/quicktime',
+	'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav',
+	'text/plain',
+]);
+
+/**
+ * The headers every stored object is served with. The policy is the one GitHub
+ * puts on raw user content: no script, no fetch, an opaque origin; inline styles
+ * only, for SVG.
+ */
+export function servedObjectHeaders(contentType) {
+	const mime = baseMime(contentType);
+	const inline = INLINE_TYPES.has(mime);
+	return {
+		'content-type': inline ? mime : 'application/octet-stream',
+		...(inline ? {} : { 'content-disposition': 'attachment' }),
+		'x-content-type-options': 'nosniff',
+		'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+	};
+}
+
 /** Pick a safe lowercase extension from a content type (fallback 'bin'). */
 export function extFromMime(contentType) {
-	const mime = String(contentType ?? '').split(';')[0].trim().toLowerCase();
+	const mime = baseMime(contentType);
 	if (EXT_BY_MIME[mime]) return EXT_BY_MIME[mime];
 	const tail = mime.split('/')[1] ?? '';
 	const safe = tail.replace(/[^a-z0-9]/g, '');
@@ -62,7 +104,7 @@ export function extFromMime(contentType) {
 
 /** Coarse media type bucket from a content type (image|video|audio|file). */
 export function typeFromMime(contentType) {
-	const mime = String(contentType ?? '').split(';')[0].trim().toLowerCase();
+	const mime = baseMime(contentType);
 	if (mime.startsWith('image/')) return 'image';
 	if (mime.startsWith('video/')) return 'video';
 	if (mime.startsWith('audio/')) return 'audio';
@@ -88,8 +130,13 @@ export async function ensureChatBucket(ownerId, fetchImpl = fetch, env = process
 	}
 }
 
-/** PUT raw bytes under bucket 'chat' as the owner. Returns the router JSON. */
+/**
+ * PUT raw bytes under bucket 'chat' as the owner. Returns the router JSON. Every
+ * writer (page media, chat, collab seeds) comes through here, so a page type is
+ * refused here, before a byte is sent.
+ */
 export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImpl = fetch, env = process.env) {
+	if (PAGE_TYPES.has(baseMime(contentType))) throw httpError('This file type cannot be uploaded.', 415);
 	const response = await fetchImpl(`${storageBase(env)}/object/${BUCKET}/${encodeURIComponent(key)}`, {
 		method: 'PUT',
 		headers: { 'x-user-id': ownerId, 'content-type': contentType || 'application/octet-stream' },

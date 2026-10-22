@@ -18,6 +18,7 @@ import type { Block } from "@/entities/block";
 import type { ExportDatabase, ExportOptions } from "./exportTypes";
 import { isDatabaseBlock } from "./databaseExportSource";
 import { stripInlineTags } from "./inlineDialect";
+import { LINK_EXPORT_TYPES, linkBlockPlainText } from "./linkBlockExport";
 
 export interface PdfLine {
   text: string;
@@ -111,6 +112,10 @@ export function flattenBlocksToPdfLines(
           if (!excludeFiles && block.content) {
             push(lines, { text: `[${block.type}] ${pdfText(block.content)}`, size: 9.5, indent, gapBefore: 4 });
           }
+          break;
+        }
+        if (LINK_EXPORT_TYPES.has(block.type)) {
+          push(lines, { text: `[${block.type}] ${pdfText(linkBlockPlainText(block))}`, size: 9.5, indent, gapBefore: 4 });
           break;
         }
         if (isDatabaseBlock(block)) {

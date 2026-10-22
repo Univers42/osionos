@@ -79,6 +79,14 @@ export interface SlashWhiteboardCommand extends SlashCommandBase {
   kind: "whiteboard";
 }
 
+/** `/embed`, `/bookmark` and the provider shortcuts: an empty embed or bookmark block
+ *  whose link dialog opens at once, with `hintId` naming the provider it waits for. */
+export interface SlashLinkBlockCommand extends SlashCommandBase {
+  kind: "link-block";
+  blockType: "embed" | "bookmark";
+  hintId?: string;
+}
+
 export type SlashCommand =
   | SlashBlockCommand
   | SlashTurnIntoCommand
@@ -86,7 +94,8 @@ export type SlashCommand =
   | SlashInlineCommand
   | SlashDatabaseViewCommand
   | SlashMediaPickerCommand
-  | SlashWhiteboardCommand;
+  | SlashWhiteboardCommand
+  | SlashLinkBlockCommand;
 
 export interface SlashCommandSection {
   id: string;

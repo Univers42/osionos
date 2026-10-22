@@ -46,9 +46,10 @@ import { createPermsHandler } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
-import { assertPublicHttpUrl } from './bridge-chat-media.mjs';
+import { handleAutomationWebhook } from './bridge-automations-webhook.mjs';
 import { createRequestMeter } from './bridge-perf.mjs';
 import { createBaasTransport } from './bridge-baas-transport.mjs';
+import { createEmbedHandler } from './bridge-embed.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -444,7 +445,8 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 	return { token: `osionos_v1.${encodedPayload}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
 }
 
-export function verifyAppSessionToken(token, config, now = Date.now()) {
+export function verifyAppSessionToken(token, config, now = undefined) {
+	const resolvedNow = now ?? config?.sessionCutoffs?.now?.() ?? Date.now();
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const [version, encodedPayload, signature, extra] = safeText(token, 4096).split('.');
 	if (version !== APP_SESSION_TOKEN_VERSION || !encodedPayload || !signature || extra !== undefined) {
@@ -472,7 +474,7 @@ export function verifyAppSessionToken(token, config, now = Date.now()) {
 		throw Object.assign(new Error('App session token subject is invalid.'), { status: 401 });
 	}
 	const exp = Number(payload.exp);
-	if (!Number.isFinite(exp) || exp <= Math.floor(now / 1000)) {
+	if (!Number.isFinite(exp) || exp <= Math.floor(resolvedNow / 1000)) {
 		throw Object.assign(new Error('App session token has expired.'), { status: 401 });
 	}
 	assertSessionNotCutOff(config.sessionCutoffs, String(payload.sub).toLowerCase(), tokenIssuedAtMs(payload));
@@ -942,16 +944,22 @@ function workspaceAccessContext(authContext, workspaceId, member, permission) {
 	};
 }
 
+/**
+ * The caller's members row in `workspaceId`, or null. A workspace the token lists is asked of
+ * the RPC (an unreadable answer is a 503); any other is asked of the members table (an
+ * unreadable answer is a miss: deny on any miss). Org/teamspace membership lives in
+ * osionos_workspace_members — the app token only carries the user's PRIVATE workspace.
+ */
+async function callerWorkspaceMember(authContext, workspaceId, config, fetchImpl) {
+	return authContext.workspaceIds.includes(workspaceId)
+		? sessionWorkspaceMember(authContext.userId, workspaceId, config, fetchImpl)
+		: workspaceMemberRow(authContext.userId, workspaceId, config, fetchImpl).catch(() => null);
+}
+
 export async function requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl = fetch) {
 	const normalizedWorkspaceId = requireUuid(workspaceId, 'workspaceId');
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	// A workspace the token lists is asked of the RPC (an unreadable answer is a 503); any
-	// other is asked of the members table (an unreadable answer is a miss: deny on any miss).
-	// Org/teamspace membership lives in osionos_workspace_members — the app token only
-	// carries the user's PRIVATE workspace.
-	const member = authContext.workspaceIds.includes(normalizedWorkspaceId)
-		? await sessionWorkspaceMember(authContext.userId, normalizedWorkspaceId, config, fetchImpl)
-		: await workspaceMemberRow(authContext.userId, normalizedWorkspaceId, config, fetchImpl).catch(() => null);
+	const member = await callerWorkspaceMember(authContext, normalizedWorkspaceId, config, fetchImpl);
 	return workspaceAccessContext(authContext, normalizedWorkspaceId, member, permission);
 }
 
@@ -1024,14 +1032,20 @@ function pageOwnerContext(token, row) {
 /**
  * A page's OWNER may always access it, even when the workspace-membership gate
  * would deny — e.g. a record-note that landed in a read-only seed workspace the
- * user reaches via the MOUNT but not via that workspace's page role. Non-owners
- * still go through requireWorkspaceAccess. `owner_id` is server-stamped, so this
- * never widens cross-user access.
+ * user reaches via the MOUNT but not via that workspace's page role. `owner_id` is
+ * server-stamped, so this never widens cross-user access. A non-owner outside the
+ * page's workspace gets the 404 of a missing id (C101/C136): a 403 would confirm the
+ * page exists. A member lacking `permission` is told 403.
+ * Caveat: a hidden page costs one BaaS call more than a missing id (the members
+ * lookup), so the two differ in timing, not in status or body.
  */
 async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl = fetch) {
 	const token = verifyAppSessionToken(bearerToken(request), config);
 	if (row && sameId(row.owner_id, token.userId)) return pageOwnerContext(token, row);
-	return requireWorkspaceAccess(request, row.workspace_id, permission, config, fetchImpl);
+	const workspaceId = requireUuid(row.workspace_id, 'workspaceId');
+	const member = await callerWorkspaceMember(token, workspaceId, config, fetchImpl);
+	if (!member) throw pageNotFound();
+	return workspaceAccessContext(token, workspaceId, member, permission);
 }
 
 /** The caller's own membership context in `workspaceId` holding `permission`, or null when they lack it. */
@@ -1065,15 +1079,18 @@ export function canWritePageRow(row, userId, member, permission) {
 
 /**
  * A page the caller may READ, with their access context — or the SAME 404 a missing id
- * gets, so another member's private page is indistinguishable from a nonexistent one.
- * Readability is decided before the permission gate for that reason: a viewer asking
- * for 'update' on a private page must not get a 403 confirming that it exists.
+ * gets, so another member's private page, or any page of a workspace the caller is not
+ * in (C134), is indistinguishable from a nonexistent one. Readability and membership
+ * are decided before the permission gate for that reason: a viewer asking for 'update'
+ * on a private page must not get a 403 confirming that it exists. A member lacking
+ * `permission` is told 403.
  */
 export async function readablePageAccess(request, pageId, permission, config, fetchImpl) {
 	const token = verifyAppSessionToken(bearerToken(request), config);
 	const { row: found, member } = await fetchPageRowWithMember(pageId, token.userId, config, fetchImpl);
 	const row = requireReadablePage(found, token.userId);
 	if (sameId(row.owner_id, token.userId)) return { authContext: pageOwnerContext(token, row), row };
+	if (!member) throw pageNotFound();
 	return { authContext: workspaceAccessContext(token, requireUuid(row.workspace_id, 'workspaceId'), member, permission), row };
 }
 
@@ -1131,26 +1148,33 @@ async function withoutUnreachableParent({ payload, ignored }, existing, authCont
 	return { payload: kept, ignored: [...ignored, 'parentPageId'] };
 }
 
+/** The one answer for a page id the caller may not know exists, whatever the reason. */
+function pageNotFound() {
+	return Object.assign(new Error('Page not found.'), { status: 404 });
+}
+
 /** `row` when the caller may read it; otherwise the SAME 404 a missing id gets. */
 function requireReadablePage(row, userId) {
-	if (!row || !canReadPageRow(row, userId)) throw Object.assign(new Error('Page not found.'), { status: 404 });
+	if (!row || !canReadPageRow(row, userId)) throw pageNotFound();
 	return row;
 }
 
 /**
  * Access for a page-scoped side route (config, actions, translate). A page the caller
- * cannot read takes the missing-page path: the same answer as a random id, scoped to
- * the caller's own workspace, so nothing is written under the page's workspace.
+ * cannot read, or reaches only from outside its workspace, takes the missing-page path:
+ * the same answer as a random id, scoped to the caller's own workspace, so nothing is
+ * written under the page's workspace.
  */
 async function requirePageScopeAccess(request, pageId, payload, permission, config, fetchImpl = fetch) {
 	const normalizedPageId = requirePageReference(pageId);
 	const tokenContext = verifyAppSessionToken(bearerToken(request), config);
 	const found = await fetchPageRowIfUuid(normalizedPageId, config, fetchImpl);
 	const row = found && canReadPageRow(found, tokenContext.userId) ? found : null;
-	if (row) {
-		const authContext = await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl);
-		return { pageId: normalizedPageId, workspaceId: row.workspace_id, authContext, row };
-	}
+	const pageAccess = row && await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl).catch((error) => {
+		if (error?.status === 404) return null;
+		throw error;
+	});
+	if (pageAccess) return { pageId: normalizedPageId, workspaceId: row.workspace_id, authContext: pageAccess, row };
 
 	const requestedWorkspaceId = UUID_REGEX.test(String(payload?.workspaceId ?? '')) ? String(payload.workspaceId) : '';
 	const workspaceId = requestedWorkspaceId && tokenContext.workspaceIds.includes(requestedWorkspaceId)
@@ -4058,32 +4082,6 @@ async function handleAuthProxy(url, request, response, config, handoffStore, fet
 	}, config);
 }
 
-// Database automations deliver webhooks server-side: the browser can't reach
-// arbitrary hosts (CORS) and the bridge must not become an SSRF proxy — HTTPS
-// only, public hosts only, 5s cap, response body discarded.
-async function handleAutomationWebhook(request, response, config, fetchImpl) {
-	verifyAppSessionToken(bearerToken(request), config);
-	const payload = await readJson(request);
-	const rawUrl = safeText(payload.url, 2048);
-	const parsed = await assertPublicHttpUrl(rawUrl);
-	if (parsed.protocol !== 'https:') {
-		throw Object.assign(new Error('Automation webhooks must use https.'), { status: 422 });
-	}
-	let status = 0;
-	try {
-		const res = await fetchWithTimeout(fetchImpl, parsed.href, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(payload.payload ?? {}),
-		}, 5000);
-		status = res.status;
-	} catch {
-		json(response, 502, { ok: false, message: 'Webhook endpoint did not respond.' }, config);
-		return;
-	}
-	json(response, 200, { ok: status >= 200 && status < 300, status }, config);
-}
-
 /** Reads the request to its end and refuses any byte: logout names its subject only through the token. */
 async function requireEmptyBody(request) {
 	let bytes = 0;
@@ -4136,8 +4134,13 @@ async function handleBridgePost(url, request, response, config, handoffStore, re
 		await handleAuthProxy(url, request, response, config, handoffStore, fetchImpl);
 		return true;
 	}
+	// Database automations deliver webhooks server-side: the browser can't reach
+	// arbitrary hosts (CORS) and the bridge must not become an SSRF proxy — HTTPS
+	// only, public hosts only, 5s cap, response body discarded, no redirect
+	// followed. The handler (bridge-automations-webhook.mjs) goes through the
+	// same SSRF guard as the chat link preview.
 	if (url.pathname === '/api/automations/webhook') {
-		await handleAutomationWebhook(request, response, config, fetchImpl);
+		await handleAutomationWebhook({ verifySession: verifyAppSessionToken }, request, response, config);
 		return true;
 	}
 	if (url.pathname === '/api/media/unsplash/download') {
@@ -4176,6 +4179,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.notify(url, request, response, context.config)) return;
 	if (await context.social.push(url, request, response, context.config)) return;
 	if (await context.social.media(url, request, response, context.config)) return;
+	if (await context.social.embed(url, request, response, context.config)) return;
 	if (await context.social.tasks(url, request, response, context.config)) return;
 	if (await context.social.comments(url, request, response, context.config)) return;
 	if (await context.social.publicPages(url, request, response, context.config)) return;
@@ -4244,6 +4248,7 @@ export function createBridgeServer(options = {}) {
 		notify: createNotifyHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
 			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
