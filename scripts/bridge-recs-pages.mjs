@@ -69,3 +69,14 @@ export async function readablePages(deps, config, session, rows) {
 	}
 	return readable;
 }
+
+/** The default and the maximum number of pages a slate carries. */
+const DEFAULT_LIMIT = 10;
+const MAX_LIMIT = 20;
+
+/** The limit of the request, clamped into 1..20. */
+export function limitFrom(url) {
+	const raw = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
+	if (!Number.isFinite(raw)) return DEFAULT_LIMIT;
+	return Math.min(Math.max(raw, 1), MAX_LIMIT);
+}
