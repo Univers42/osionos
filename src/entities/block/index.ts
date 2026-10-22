@@ -18,5 +18,6 @@ export * from './model/constants';
 export * from './model/calloutTypes';
 export * from './model/blockTreeUtils';
 export * from './model/whiteboardBlocks';
+export * from './model/linkBlocks';
 export * from './ui';
 export * from './model/blockCategories';

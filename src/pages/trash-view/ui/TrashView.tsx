@@ -14,6 +14,7 @@ import React, { useState, useMemo } from "react";
 import { Archive, Redo2, Trash, AlertTriangle } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
+import { IconValueView } from "@/shared/ui";
 import {
   canReadPage,
   getCurrentPageAccessContext,
@@ -176,7 +177,7 @@ export const TrashView: React.FC = () => {
                 <div className="trash-page-info">
                   <div className="flex items-center gap-2 mb-1">
                     {page.icon && (
-                      <span className="text-lg flex-shrink-0">{page.icon}</span>
+                      <span className="text-lg flex-shrink-0"><IconValueView value={page.icon} size={18} /></span>
                     )}
                     <h3 className="text-sm font-medium text-[var(--osio-fg-default)] truncate">
                       {page.title}

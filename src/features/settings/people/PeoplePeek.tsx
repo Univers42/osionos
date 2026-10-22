@@ -15,7 +15,7 @@
  *  refreshes the view. Destructive actions arm a one-click confirm first. */
 
 import React, { useState } from "react";
-import { Button, Modal } from "@/shared/ui";
+import { Button, IconValueView, Modal } from "@/shared/ui";
 import { isVideoCoverSource } from "@/entities/page/ui/coverMedia";
 import type { Page } from "@notion-db/object-database";
 import type { WorkspaceMemberRole } from "@/store/settings";
@@ -63,7 +63,7 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
         <div className="flex items-center gap-3">
           {page.cover && !isVideoCoverSource(page.cover)
             ? <img src={page.cover} alt="" className="h-12 w-12 rounded-full object-cover" />
-            : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--osio-bg-subtle)] text-lg">{page.icon ?? title.charAt(0).toUpperCase()}</div>}
+            : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--osio-bg-subtle)] text-lg">{page.icon ? <IconValueView value={page.icon} size={18} /> : title.charAt(0).toUpperCase()}</div>}
           <div className="min-w-0">
             <div className="truncate text-base font-semibold text-[var(--osio-fg-default)]">{title}</div>
             {subtitle && <div className="truncate text-sm text-[var(--osio-fg-muted)]">{subtitle}</div>}
