@@ -315,3 +315,24 @@
   background: color-mix(in srgb, var(--osio-bg-elevated) 58%, transparent);
   border-style: dashed;
 }
+
+/* Recovery path for cells hidden by their visibility formula: the stage draws */
+/* nothing for them, so each one is a focusable entry that opens its inspector. */
+.osio-canvas-hidden-cells {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  color: var(--osio-fg-muted);
+}
+.osio-canvas-hidden-cells__entry {
+  padding: 2px 8px;
+  border: 1px solid var(--osio-border-default);
+  border-radius: var(--osio-radius-sm, 6px);
+  background: var(--osio-bg-elevated);
+  color: var(--osio-fg-default);
+  cursor: pointer;
+}
+.osio-canvas-hidden-cells__entry:hover { background: var(--osio-accent-subtle); }
+.osio-canvas-hidden-cells__entry:focus-visible { outline: 2px solid var(--osio-accent); outline-offset: 1px; }

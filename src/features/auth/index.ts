@@ -12,5 +12,6 @@
 
 export * from './model/useUserStore';
 export * from './model/useIsAdmin';
+export * from './model/usePlatformRole';
 export * from './ui/UserSwitcherPanel';
 export * from './ui/WorkspaceSwitcher';

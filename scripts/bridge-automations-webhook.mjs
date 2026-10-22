@@ -26,6 +26,10 @@
  * default `redirect: 'follow'` would walk a 30x straight into the private
  * network. A 3xx is the answer: the caller is told the status.
  *
+ * Each caller has a webhook:<userId> bucket, charged before the address is
+ * even looked up: a burst of 10 covers a rule firing on a bulk edit, 0.2/s
+ * (12/min) stops a loop from using the bridge as a relay.
+ *
  * `deps.webhookTransport` and `deps.resolveHost` are the injection seams the
  * tests drive; `deps.verifySession` is the caller's session check.
  */
@@ -33,14 +37,17 @@
 import { bearerToken, httpError, readJsonBody, safeText, sendJson } from './bridge-social-core.mjs';
 import { assertPublicHttpUrl, PRIVATE_ADDRESS_MESSAGE } from './bridge-url-guard.mjs';
 import { guardedRequest } from './bridge-url-fetch.mjs';
+import { takeToken } from './bridge-ratelimit.mjs';
 
 const WEBHOOK_TIMEOUT_MS = 5_000;
+const WEBHOOK_BUCKET = { capacity: 10, refillPerSec: 0.2 };
 /** The answer is dropped: read a little of it, so the socket does not stall. */
 const WEBHOOK_RESPONSE_BYTES = 4 * 1024;
 
 export async function handleAutomationWebhook(deps, request, response, config) {
-	deps.verifySession(bearerToken(request), config);
+	const session = deps.verifySession(bearerToken(request), config);
 	const payload = await readJsonBody(request);
+	takeToken(`webhook:${session.userId}`, WEBHOOK_BUCKET);
 	const parsed = await assertPublicHttpUrl(safeText(payload.url, 2048), { resolve: deps.resolveHost });
 	if (parsed.protocol !== 'https:') throw httpError('Automation webhooks must use https.', 422);
 	let status = 0;

@@ -55,11 +55,13 @@ for (const mode of ["light", "dark"]) {
       await expect(page).toHaveScreenshot(`split-panes-${mode}.png`);
     });
 
-    test("the settings modal", async ({ page, baseURL }) => {
+    test("the settings tab", async ({ page, baseURL }) => {
       await openFreshPage(page, baseURL);
       await page.getByRole("button", { name: "Settings", exact: true }).first().click();
-      // The shell's own tab strip is made of tabs too: wait for one only settings has.
-      await expect(page.getByRole("tab", { name: "osionos MCP" })).toBeVisible();
+      // The section strip is made of buttons; the workspace tab strip's close
+      // button is the one only the settings tab has.
+      await expect(page.getByRole("region", { name: "Settings", exact: true })).toBeVisible();
+      await expect(page.getByRole("navigation", { name: "Settings sections" })).toBeVisible();
       await settle(page);
       await expect(page).toHaveScreenshot(`settings-${mode}.png`);
     });

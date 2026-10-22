@@ -16,16 +16,14 @@
 
 import type { Block } from "@/entities/block";
 import { isDatabaseBlock } from "./databaseExportSource";
+import { escapeHtml } from "./htmlEscape";
 import { inlineTagsToHtml } from "./inlineDialect";
+import { LINK_EXPORT_TYPES, linkBlockHtml } from "./linkBlockExport";
 import type { ExportOptions, ExportTheme } from "./exportTypes";
 
 const MEDIA_TYPES = new Set(["image", "video", "audio", "file"]);
 
-export function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
+export { escapeHtml };
 
 /**
  * Minimal inline markdown → HTML for the export dialect (code, links, bold,
@@ -122,6 +120,7 @@ export function renderBlocksHtml(
       case "table_block": parts.push(renderTable(block)); break;
       default: {
         if (MEDIA_TYPES.has(block.type)) { parts.push(mediaHtml(block, excludeFiles)); break; }
+        if (LINK_EXPORT_TYPES.has(block.type)) { parts.push(linkBlockHtml(block)); break; }
         if (isDatabaseBlock(block)) { parts.push(databaseHtml(block) ?? ""); break; }
         parts.push(`<p>${inline}</p>${children(block)}`);
       }
@@ -139,6 +138,7 @@ const DOC_CSS = [
   "blockquote{border-left:3px solid #d6d3d1;margin:0;padding-left:14px;color:#555}",
   "aside.callout{background:#f5f5f4;border-radius:8px;padding:12px 14px}",
   "table{border-collapse:collapse;width:100%}td,th{border:1px solid #d6d3d1;padding:6px 10px;text-align:left}",
+  "p.bookmark a{display:block;border:1px solid #d6d3d1;border-radius:8px;padding:10px 14px;text-decoration:none}",
   "img{max-width:100%;border-radius:6px}hr{border:0;border-top:1px solid #d6d3d1}",
 ].join("");
 

@@ -8,6 +8,7 @@ import type { ApprovalContext, PermissionAsked } from '../approvals/types.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import type { PageContext } from './prompt.ts';
+import type { BuiltinAgent } from '../agents/builtins.ts';
 
 /**
  * The tools of a run.
@@ -55,10 +56,19 @@ export function buildRunTools(input: {
 	pages: readonly PageContext[];
 	/** The sources of the prompt: they are cited before the first word. */
 	sources: readonly RetrievedChunk[];
+	/**
+	 * The agent of the run, or none.
+	 *
+	 * None is the general assistant: every tool of the runtime, as today. An
+	 * agent narrows them to its own list — it never gains one, and the write
+	 * tools it keeps stay behind the approval of the user.
+	 */
+	agent?: BuiltinAgent | null;
 	/** The event of the run. */
 	emit: (type: string, data: unknown) => Promise<void>;
 }): RunTools {
 	const { db, user, pool, runId, conversationId, ownerId, pages, sources, emit } = input;
+	const agent = input.agent ?? null;
 	const cited: RetrievedChunk[] = [...sources];
 	const permissions: PermissionAsked[] = [];
 	const run: RunTools = { tools: undefined, cited, awaitingApproval: false, permissions };
@@ -113,5 +123,17 @@ export function buildRunTools(input: {
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
 		: undefined;
+	// The agent narrows the tools: the set of the run is the intersection of
+	// what the runtime offers and what the agent may call. An agent never
+	// gains a tool, and a tool the agent does not list is not even sent to
+	// the model — it is not in the request.
+	if (run.tools && agent) {
+		const allowed = new Set(agent.tools);
+		const kept: ToolSet = {};
+		for (const [name, tool] of Object.entries(run.tools)) {
+			if (allowed.has(name)) kept[name] = tool;
+		}
+		run.tools = kept;
+	}
 	return run;
 }

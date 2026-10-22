@@ -96,6 +96,14 @@ export interface SlashAiImageCommand extends SlashCommandBase {
   kind: "ai-image";
 }
 
+/** `/embed`, `/bookmark` and the provider shortcuts: an empty embed or bookmark block
+ *  whose link dialog opens at once, with `hintId` naming the provider it waits for. */
+export interface SlashLinkBlockCommand extends SlashCommandBase {
+  kind: "link-block";
+  blockType: "embed" | "bookmark";
+  hintId?: string;
+}
+
 export type SlashCommand =
   | SlashBlockCommand
   | SlashTurnIntoCommand
@@ -106,7 +114,8 @@ export type SlashCommand =
   | SlashWhiteboardCommand
   | SlashAiCommand
   | SlashDictateCommand
-  | SlashAiImageCommand;
+  | SlashAiImageCommand
+  | SlashLinkBlockCommand;
 
 export interface SlashCommandSection {
   id: string;

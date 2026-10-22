@@ -17,14 +17,14 @@
  * turns an IR into mermaid. Between them sits the CAP: a shared page can hold
  * ten thousand pages, and a diagram that holds ten thousand nodes is a denial
  * of service in a picture. The IR keeps the FIRST nodes of the stable order and
- * says `truncated: true` — the renderer shows "showing 300 of N".
+ * says `truncated: true` — the renderer shows "showing 150 of N".
  */
 
 /** The most nodes a diagram may hold. */
-export const MAX_NODES = 300;
+export const MAX_NODES = 150;
 
 /** The most edges a diagram may hold. */
-export const MAX_EDGES = 600;
+export const MAX_EDGES = 400;
 
 /** One box of the diagram. The id is the DATA id (a uuid); the emitter renames it. */
 export interface DiagramNode {
@@ -68,7 +68,7 @@ export interface DiagramIRInput {
  * Build the IR and apply the caps.
  *
  * The order the compilers produced is STABLE (the text first, then the id), so
- * the first 300 nodes are always the same 300 for the same data. An edge whose
+ * the first 150 nodes are always the same 150 for the same data. An edge whose
  * end was dropped is dropped too: mermaid would draw a node that does not
  * exist. A group whose nodes were all dropped goes with them.
  */

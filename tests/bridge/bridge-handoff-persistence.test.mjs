@@ -2,6 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { configFromEnv, consumeHandoffToken, createBridgeHandoff, validateBridgePayload } from '../../scripts/bridge-api.mjs';
+import { handoffKeys, kvStub } from './support/kv-stub.mjs';
 
 const subject = '3f6d2a70-5b3f-4c92-8f06-8f4644fd1209';
 const payload = validateBridgePayload({ provider: 'prismatica', subject, email: 'owner@example.com', name: 'Owner', jti: '1c76c7f0-f07e-442d-96fd-77d601764c3b' });
@@ -29,10 +30,10 @@ function fetchWith(upserts) {
 }
 
 async function handoff(config, fetchImpl) {
-	const handoffStore = new Map();
-	await createBridgeHandoff({ payload, config, handoffStore, now, fetchImpl });
-	const [token] = handoffStore.keys();
-	return { store: handoffStore, session: consumeHandoffToken(token, handoffStore, now + 1000).session };
+	const kv = kvStub();
+	const minted = await createBridgeHandoff({ payload, config, kv, now, fetchImpl });
+	const token = new URL(minted.redirectUrl).hash.replace('#bridge_token=', '');
+	return { kv, session: (await consumeHandoffToken(decodeURIComponent(token), kv, now + 1000, config.appSessionSecret)).session };
 }
 
 describe('bridge handoff with BaaS persistence', () => {
@@ -46,14 +47,14 @@ describe('bridge handoff with BaaS persistence', () => {
 	for (const requireBaas of [false, true]) {
 		it(`rejects with 503 and no session when the upsert fails twice (requireBaas=${requireBaas})`, async () => {
 			const { fetchImpl, calls } = fetchWith([new Response('x', { status: 502 }), new Response('x', { status: 502 })]);
-			const handoffStore = new Map();
+			const kv = kvStub();
 			const config = baasConfig(requireBaas ? { OSIONOS_BRIDGE_REQUIRE_BAAS: 'true' } : {});
 			await assert.rejects(
-				() => createBridgeHandoff({ payload, config, handoffStore, now, fetchImpl }),
+				() => createBridgeHandoff({ payload, config, kv, now, fetchImpl }),
 				(error) => error.status === 503 && /try again/.test(error.message),
 			);
 			assert.equal(calls.upsert, 2);
-			assert.equal(handoffStore.size, 0);
+			assert.deepEqual(handoffKeys(kv), [], 'a failed mint stores nothing');
 		});
 	}
 
