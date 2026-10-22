@@ -35,6 +35,8 @@ export function messagePerson(peerId: string, workspaceId?: string): Promise<unk
 
 /** Create a new group — a group chat channel or a community. */
 export function createGroup(workspaceId: string, name: string, kind: "chat" | "community"): Promise<unknown> {
+  // A moderation warning on a community rejects like any error here: this
+  // action has no room for a notice, so the author answers it in the modal.
   if (kind === "community") return createCommunity({ name });
   return createChannel({ workspaceId, name, kind: "group" });
 }

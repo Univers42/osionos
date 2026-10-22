@@ -1,0 +1,66 @@
+{
+  "config": {
+    "events": 60000,
+    "items": 3000,
+    "seed": 42,
+    "topics": 20,
+    "users": 2000
+  },
+  "difference_ials_minus_popularity": {
+    "ci95_high": 0.0432867429161406,
+    "ci95_low": 0.032172923979786563,
+    "ndcg@10": 0.03787221503745536,
+    "resamples": 1000,
+    "seed": 42,
+    "users": 2000
+  },
+  "gate": {
+    "ci_low_above_zero": true,
+    "ials_beats_popularity": true
+  },
+  "log": {
+    "events": 60000,
+    "matrix_nnz": 29680,
+    "test_events": 12800,
+    "train_events": 37016,
+    "users_with_test": 2000,
+    "valid_events": 10184
+  },
+  "metrics": {
+    "ials": {
+      "coverage@20": 0.07968413496051686,
+      "evaluated_users": 2000,
+      "ndcg@10": 0.11537364611976073,
+      "novelty@10": 6.94428296706841,
+      "recall@20": 0.12472857142857142
+    },
+    "popularity": {
+      "coverage@20": 0.0068198133524766695,
+      "evaluated_users": 2000,
+      "ndcg@10": 0.07750143108230535,
+      "novelty@10": 5.481957348435509,
+      "recall@20": 0.09285238095238095
+    },
+    "random": {
+      "coverage@20": 0.9992821249102656,
+      "evaluated_users": 2000,
+      "ndcg@10": 0.002005848392950037,
+      "novelty@10": 13.2716881594008,
+      "recall@20": 0.0025805555555555556
+    }
+  },
+  "synthetic": true,
+  "tuned": {
+    "alpha": 10.0,
+    "factors": 16,
+    "iterations": 15,
+    "ndcg@10": 0.10821229665056237,
+    "regularization": 0.05
+  },
+  "versions": {
+    "numpy": "2.5.3",
+    "osml": "0.1.0",
+    "python": "3.12.15",
+    "scipy": "1.18.1"
+  }
+}

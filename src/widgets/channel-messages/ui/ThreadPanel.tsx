@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 10:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 10:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 15:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,10 +19,12 @@
 import React from 'react';
 import { X } from 'lucide-react';
 
-import type { Attachment, ChatMessage } from '@/shared/chat/messageApi';
+import type { ChatMessage } from '@/shared/chat/messageApi';
 import { MessageRow } from './MessageRow';
 import { MessageComposer } from './composer/MessageComposer';
 import { useThread } from '../model/useThread';
+import type { SendOutcome } from '../model/channelWrites';
+import type { ComposerSend } from './composer/useComposerWarning';
 
 interface ThreadPanelProps {
   root: ChatMessage;
@@ -31,10 +33,15 @@ interface ThreadPanelProps {
   userId: string;
   canInteract: boolean;
   onReply: (message: ChatMessage) => void;
-  onEdit: (id: string, content: string) => void;
+  /** Saves an edit. The answer is typed: a warning is not a failure. */
+  onEdit: (
+    id: string,
+    content: string,
+    options?: { acknowledgeWarning?: boolean },
+  ) => Promise<SendOutcome> | SendOutcome;
   onDelete: (id: string) => void;
   onReact: (id: string, emoji: string, add: boolean) => void;
-  onSend: (text: string, attachments?: Attachment[]) => Promise<unknown> | unknown;
+  onSend: ComposerSend;
   onClose: () => void;
 }
 

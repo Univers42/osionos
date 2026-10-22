@@ -90,6 +90,11 @@ export const OVERLAY_PROBES: Record<string, Probe> = {
     mk({ type: "table_block", tableData: [["A", "B", "C"], ["1", "2", "3"]], tableConfig: { columnWidths: [120, 80, 80] } }),
     "tableConfig",
   ),
+  conflictOf: probe(mk({ type: "paragraph", content: "p", conflictOf: "b1" }), "conflictOf"),
+  aiGenerated: probe(
+    mk({ type: "image", asset: "a", aiGenerated: { model: "sd", runId: "r1", createdAt: "2026-10-22T00:00:00.000Z" } }),
+    "aiGenerated",
+  ),
 };
 
 /** Everything Markdown or the overlay carries, on the types that own it. */

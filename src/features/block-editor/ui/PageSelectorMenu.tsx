@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { FilePlus2, FileText, Database } from "lucide-react";
+import { FilePlus2, FileText, Database, Layers } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import {
   canReadPage,
@@ -28,11 +28,20 @@ interface PageSelectorMenuProps {
   position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (pageId: string) => void;
-  onCreate: (title: string) => void;
+  /** When it is not given, the menu never offers to create a page. */
+  onCreate?: (title: string) => void;
   onClose: () => void;
+  /** An extra first item — the AI composer puts "Whole workspace" there. */
+  leading?: { label: string; onSelect: () => void };
+  /** The label above the list. */
+  heading?: string;
 }
 
 type SelectorOption =
+  | {
+      kind: "leading";
+      label: string;
+    }
   | {
       kind: "page";
       pageId: string;
@@ -51,6 +60,8 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
   onSelect,
   onCreate,
   onClose,
+  leading,
+  heading = "Link to page",
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -72,6 +83,10 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
     const query = filter.trim();
     const loweredQuery = query.toLowerCase();
 
+    const leadingOptions: SelectorOption[] = leading
+      ? [{ kind: "leading", label: leading.label }]
+      : [];
+
     const pageOptions: SelectorOption[] = filteredPages.map((page) => ({
       kind: "page",
       pageId: page._id,
@@ -80,8 +95,8 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
       isDatabase: Boolean(page.databaseId),
     }));
 
-    if (!query) {
-      return pageOptions;
+    if (!query || !onCreate) {
+      return [...leadingOptions, ...pageOptions];
     }
 
     const hasExactMatch = pages.some((page) => {
@@ -91,17 +106,18 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
     });
 
     if (hasExactMatch) {
-      return pageOptions;
+      return [...leadingOptions, ...pageOptions];
     }
 
     return [
+      ...leadingOptions,
       ...pageOptions,
       {
         kind: "create",
         title: query,
       },
     ];
-  }, [filter, filteredPages, pages]);
+  }, [filter, filteredPages, pages, leading, onCreate]);
 
   const effectiveActiveIdx = Math.min(
     activeIdx,
@@ -145,18 +161,23 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
         const option = selectorOptions[effectiveActiveIdx];
         if (!option) return;
 
+        if (option.kind === "leading") {
+          leading?.onSelect();
+          return;
+        }
+
         if (option.kind === "page") {
           onSelect(option.pageId);
           return;
         }
 
-        onCreate(option.title);
+        onCreate?.(option.title);
       }
     };
 
     document.addEventListener("keydown", handler, true);
     return () => document.removeEventListener("keydown", handler, true);
-  }, [effectiveActiveIdx, selectorOptions, onSelect, onCreate, onClose]);
+  }, [effectiveActiveIdx, selectorOptions, onSelect, onCreate, onClose, leading]);
 
   const menuStyle = useMemo<React.CSSProperties>(() => {
     const vw = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1024;
@@ -195,26 +216,32 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
       style={menuStyle}
     >
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <p className="osio-menu-label">Link to page</p>
+        <p className="osio-menu-label">{heading}</p>
         {selectorOptions.map((option, idx) => {
           const isActive = idx === effectiveActiveIdx;
           let Icon = FileText;
           if (option.kind === "create") {
             Icon = FilePlus2;
+          } else if (option.kind === "leading") {
+            Icon = Layers;
           } else if (option.isDatabase) {
             Icon = Database;
           }
           const label =
             option.kind === "create"
               ? `Create page "${option.title}"`
-              : option.title;
+              : option.kind === "leading"
+                ? option.label
+                : option.title;
 
           return (
             <button
               key={
                 option.kind === "create"
                   ? `create:${option.title}`
-                  : option.pageId
+                  : option.kind === "leading"
+                    ? "leading"
+                    : option.pageId
               }
               type="button"
               className="osio-menu-item"
@@ -222,7 +249,12 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
               onMouseEnter={() => setActiveIdx(idx)}
               onClick={() => {
                 if (option.kind === "create") {
-                  onCreate(option.title);
+                  onCreate?.(option.title);
+                  return;
+                }
+
+                if (option.kind === "leading") {
+                  leading?.onSelect();
                   return;
                 }
 
