@@ -30,6 +30,10 @@ interface NotificationSettingsStore {
 
 const STORE_NAME = 'osionos:settings:notifications';
 
+// `/api/notifications` is the bridge's chat inbox (scripts/bridge-notify.mjs), so
+// the account settings route lives under `/api/account` instead.
+const NOTIFICATION_SETTINGS_PATH = '/api/account/notification-settings';
+
 export const useNotificationSettingsStore = create<NotificationSettingsStore>()(
   persist(
     (set, get) => ({
@@ -40,7 +44,7 @@ export const useNotificationSettingsStore = create<NotificationSettingsStore>()(
         if (!userId) return;
         set({ loading: true, error: null });
         try {
-          const remote = await trySettingsGet<NotificationSettings>('/api/notifications');
+          const remote = await trySettingsGet<NotificationSettings>(NOTIFICATION_SETTINGS_PATH);
           set({ data: remote ?? get().data ?? defaultNotifications(userId), loading: false, error: null });
         } catch (error) {
           set({ data: get().data ?? defaultNotifications(userId), loading: false, error: errorMessage(error) });
@@ -54,7 +58,7 @@ export const useNotificationSettingsStore = create<NotificationSettingsStore>()(
         set({ data: next, error: null });
         scheduleSettingsWrite(`${STORE_NAME}:${previous.userId}`, async () => {
           try {
-            const remote = await trySettingsPatch<NotificationSettings>('/api/notifications', patch);
+            const remote = await trySettingsPatch<NotificationSettings>(NOTIFICATION_SETTINGS_PATH, patch);
             if (remote) set({ data: remote, error: null });
           } catch (error) {
             set({ data: previous, error: errorMessage(error) });
