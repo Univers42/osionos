@@ -45,7 +45,7 @@ const startRunSchema = z.object({
 const SSE_PING_MS = 15_000;
 
 /** The ping of a stream, and the way to stop it. */
-function startPing(response: ServerResponse): () => void {
+export function startPing(response: ServerResponse): () => void {
 	const timer = setInterval(() => writeSsePing(response), SSE_PING_MS);
 	const stop = () => clearInterval(timer);
 	response.on('close', stop);
@@ -79,6 +79,23 @@ async function streamRunEvents(ctx: RouteContext, runId: string, afterId: string
 	} finally {
 		response.off('close', stop);
 	}
+}
+
+/**
+ * The same run, asked again: its stream is replayed, and no model is called a
+ * second time.
+ */
+export async function replayRun(ctx: RouteContext, runId: string): Promise<number> {
+	if (!(await runStore.exists(ctx.deps.redis, runId))) {
+		sendError(ctx.response, 410, 'run_expired');
+		return 410;
+	}
+	sendSseHeaders(ctx.response);
+	const stopPing = startPing(ctx.response);
+	await streamRunEvents(ctx, runId, '');
+	stopPing();
+	if (!ctx.response.writableEnded && !ctx.response.destroyed) ctx.response.end();
+	return 200;
 }
 
 /** POST /api/ai/runs */
@@ -132,20 +149,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		sendError(ctx.response, outcome.status, outcome.code);
 		return outcome.status;
 	}
-	if (outcome.kind === 'reattach') {
-		// The same run, asked again: the stream is replayed, and no model is
-		// called a second time.
-		if (!(await runStore.exists(ctx.deps.redis, body.runId))) {
-			sendError(ctx.response, 410, 'run_expired');
-			return 410;
-		}
-		sendSseHeaders(ctx.response);
-		const stopPing = startPing(ctx.response);
-		await streamRunEvents(ctx, body.runId, '');
-		stopPing();
-		if (!ctx.response.writableEnded && !ctx.response.destroyed) ctx.response.end();
-		return 200;
-	}
+	if (outcome.kind === 'reattach') return replayRun(ctx, body.runId);
 	sendSseHeaders(ctx.response);
 	const stopPing = startPing(ctx.response);
 	try {
