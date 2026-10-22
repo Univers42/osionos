@@ -16,10 +16,10 @@ Later the same night 3-4 concurrent sessions ran without a refusal when started 
 |---|---|---|---|---|---|
 | P0-2 | **merged** | feat/acct-bake-deepseek (25a14dc8 → 5e1f8a33, 4 commits) | deepseek-v4.1-flash, 4 rounds in one session | test-bridge 1477/0/1 · quality 0 · 2 mutants (timeout signal, jti seam) caught by the intended tests | devil PwC on spec (11) and diff (10); all met |
 | P1-3a | **merged** 86a66750 | feat/acct-P1-3a (f5e8b41c) | glm-5.3-flash, 1 attempt | quality 0 · canvas 2564/0/2 · settings e2e 22/22 · visual vs local system baseline 8/8 · browser: 19 panels render, 4 profile modals open/close, 1440 matches before, 375 no page overflow | accepted; deviations: dead `memberRows` dropped (verified unused), `downloadInvoicePdf` moved to Billing |
-| P0-1 | running | (root repo) feat/acct-P0-1 | big-pickle (+rotation) | harness baseline 44/0 | spec: devil PwC, 12 conditions applied; root ADR 0028 |
+| P0-1 | fix round 1 after devil BLOCK on the diff (lock order reversed → reproduced 40P01; k1 per-relation; membership revoke by non-postgres grantor) + 6 follow-ups | (root repo) feat/acct-P0-1 (83fb93f0) | big-pickle, 1 attempt | my re-run: models-grants 78/0, shellcheck 0 | spec: devil PwC (12); diff: BLOCK |
 | P1-3b | running | feat/acct-P1-3b | glm-5.3-flash (+rotation) | — | — |
 | P0-3 | fix round 1 (IPv6 rate-limit keys, in-order fake redis, split redis client) | feat/acct-P0-3 (84d4251b) | deepseek-v4.1-flash, 1 attempt | — | spec: devil PwC, 11 conditions applied; ADR 0002 |
-| P0-7 | running (root repo; DB query budgets, no HTTP driver until P0-5) | feat/acct-P0-7 | nemotron-3-ultra (+rotation) | — | no devil gate |
+| P0-7 | fix round 1 (p95<p50 bug, whole-ms rounding, budgets tuned to pass, non-exact queries, 443-line script) | (root repo) feat/acct-P0-7 (eb5b7f2e) | nemotron-3-ultra, 1 attempt | my baseline run: seed 9 s, 7/7 PASS with impossible percentiles | — |
 | P1-4 | spec written, waits for P1-3b | — | — | — | no devil gate |
 
 Open follow-ups
