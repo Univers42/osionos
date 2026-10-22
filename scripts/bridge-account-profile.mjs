@@ -209,7 +209,7 @@ async function patchOwnProfile({ pg, kv }, session, request, response, config) {
  * through `pg.asService()`: the bridge's injected transport answers it, and the block
  * semantics stay in the one place that owns them.
  */
-function serviceFetch(pg) {
+export function serviceFetch(pg) {
 	return async (url) => {
 		const raw = String(url);
 		const at = raw.indexOf('/rest/v1/');

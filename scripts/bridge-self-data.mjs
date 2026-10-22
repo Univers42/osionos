@@ -35,7 +35,8 @@
 import { rateLimit } from './bridge-guard.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
 import { bearerToken, blockedViewerBy, sendJson } from './bridge-social-core.mjs';
-import { connectionPeerId, peerCard, selfSourceById } from './bridge-self-sources.mjs';
+import { connectionPeerId, peerCard, selfSourceById, dedupeEdgesByPeer } from './bridge-self-sources.mjs';
+import { serviceFetch } from './bridge-account-profile.mjs';
 
 const SELF_DATA_PREFIX = '/api/account/self-data/';
 const ROW_LIMIT = 200;
@@ -113,7 +114,8 @@ async function readFlatRows({ pg, session, now }, source) {
 		filters: sourceFilters(source, now),
 		order: source.order,
 	}));
-	return Array.isArray(rows) ? rows : [];
+	if (!Array.isArray(rows)) throw new Error('self data store answered a non-array');
+	return rows;
 }
 
 /** The peers of the edges: the other party of each edge, once each. */
@@ -132,7 +134,8 @@ async function readDirectory(pg, source, ids) {
 	const related = source.related;
 	for (const chunk of idChunks(ids, related.chunk)) {
 		const found = await pg.asService().get(`${related.table}?${inFilter(related.idColumn, chunk)}&select=${related.columns.join(',')}`);
-		for (const row of Array.isArray(found) ? found : []) {
+		if (!Array.isArray(found)) throw new Error('self data store answered a non-array');
+		for (const row of found) {
 			rows.set(String(row?.[related.idColumn] ?? '').toLowerCase(), row);
 		}
 	}
@@ -142,7 +145,8 @@ async function readDirectory(pg, source, ids) {
 /** The edges of the caller, each with the public card of its peer. */
 async function readEdgeRows({ pg, config, session, now }, source) {
 	const edges = await readFlatRows({ pg, session, now }, source);
-	const ids = peerIds(edges, session.userId);
+	const deduped = dedupeEdgesByPeer(edges, session.userId);
+	const ids = peerIds(deduped, session.userId);
 	const directory = await readDirectory(pg, source, ids);
 	// The block set is the one thing that hides a person from a viewer: the helper owns
 	// the rule (a block in either direction), so it is used and never copied.
@@ -152,7 +156,7 @@ async function readEdgeRows({ pg, config, session, now }, source) {
 		userId: session.userId,
 		peerOf: (row) => cards.get(String(connectionPeerId(row, session.userId) ?? '').toLowerCase()) ?? null,
 	};
-	return edges.map((row) => sourceRow(source, row, context));
+	return deduped.map((row) => sourceRow(source, row, context));
 }
 
 /**
@@ -169,9 +173,10 @@ async function readMembershipRows({ pg, session, now }, source) {
 		scope: `${related.ownerColumn}=eq.${session.userId}`,
 		order: source.order,
 	}));
+	if (!Array.isArray(owned)) throw new Error('self data store answered a non-array');
 	const workspaces = new Map();
 	const remember = (row) => workspaces.set(String(row?.[related.idColumn] ?? '').toLowerCase(), row);
-	for (const row of Array.isArray(owned) ? owned : []) remember(row);
+	for (const row of owned) remember(row);
 	const missing = [];
 	for (const member of members) {
 		const id = String(member?.workspace_id ?? '').toLowerCase();
@@ -179,7 +184,8 @@ async function readMembershipRows({ pg, session, now }, source) {
 	}
 	for (const chunk of idChunks(missing, related.chunk)) {
 		const found = await pg.asService().get(`${related.table}?${inFilter(related.idColumn, chunk)}&select=${related.columns.join(',')}`);
-		for (const row of Array.isArray(found) ? found : []) remember(row);
+		if (!Array.isArray(found)) throw new Error('self data store answered a non-array');
+		for (const row of found) remember(row);
 	}
 	return members.map((member) => {
 		const row = {};
@@ -199,25 +205,6 @@ async function readSourceRows(context, source) {
 		userId: context.session.userId,
 		session: context.session,
 	}));
-}
-
-/**
- * The service-role fetch the shared helpers expect, backed by the account plane's client.
- * `blockedViewerBy` builds its own URL and headers, so this replays that request through
- * `pg.asService()`: the block rule stays in the one place that owns it.
- */
-function serviceFetch(pg) {
-	return async (url) => {
-		const raw = String(url);
-		const at = raw.indexOf('/rest/v1/');
-		const path = at === -1 ? raw : raw.slice(at + '/rest/v1/'.length);
-		try {
-			const data = await pg.asService().get(path);
-			return new Response(data === null ? '' : JSON.stringify(data), { status: 200, headers: { 'content-type': 'application/json' } });
-		} catch (error) {
-			return new Response(String(error?.upstreamText ?? ''), { status: Number(error?.upstreamStatus ?? 502) });
-		}
-	};
 }
 
 /** The bridge's clock: the one that stamped the session rows. */
@@ -250,12 +237,12 @@ export function createSelfDataRoutes({ config, pg, kv, verifySession }) {
 		if (method !== 'GET') {
 			return respondWithError(response, selfDataError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`), config);
 		}
-		const source = selfSourceById(segment);
-		if (!source) {
-			return respondWithError(response, selfDataError(404, 'unknown_self_source', 'This data source does not exist.'), config);
-		}
 		try {
 			const session = verifySession(bearerToken(request), config);
+			const source = selfSourceById(segment);
+			if (!source) {
+				return respondWithError(response, selfDataError(404, 'unknown_self_source', 'This data source does not exist.'), config);
+			}
 			await rateLimit(kv, ['self-data', session.userId], { limit: RATE_LIMIT, windowMs: RATE_WINDOW_MS });
 			let rows;
 			try {
@@ -279,3 +266,12 @@ export function createSelfDataRoutes({ config, pg, kv, verifySession }) {
 		}
 	};
 }
+
+export {
+	dedupeEdgesByPeer,
+	dedupeConnectionsByPeer,
+	dedupeConnectionEdges,
+	dedupeEdges,
+	dedupeBidirectionalEdges,
+	oneRowPerPerson,
+} from './bridge-self-sources.mjs';

@@ -87,11 +87,43 @@ export function peerCard(userId, directoryRow, hidden) {
 		userId: id,
 		name,
 		username: directoryRow.username ?? null,
-		headline: directoryRow.headline || directoryRow.profile?.headline || null,
+		headline: directoryRow.headline || null, // directory view (root-integration/models/...people-directory) has a headline column, so no profile JSONB fallback
 		avatar,
 		lastSeenAt: directoryRow.last_seen_at ?? null,
 	};
 }
+
+/** Milliseconds of a row's created_at, for ordering; missing values sort last. */
+function connectionCreatedAtMs(row) {
+	const ms = Date.parse(row?.created_at);
+	return Number.isFinite(ms) ? ms : Number.NEGATIVE_INFINITY;
+}
+
+/** One row per person: collapse bidirectional edges between the same peer, keeping the most recent edge's status and date. */
+export function dedupeEdgesByPeer(rows, userId) {
+	const input = Array.isArray(rows) ? rows : [];
+	const kept = [];
+	const indexByPeer = new Map();
+	for (const row of input) {
+		const peer = String(connectionPeerId(row, userId) ?? '').toLowerCase();
+		if (peer === '') continue;
+		const existing = indexByPeer.get(peer);
+		if (existing === undefined) {
+			indexByPeer.set(peer, kept.length);
+			kept.push(row);
+		} else if (connectionCreatedAtMs(row) > connectionCreatedAtMs(kept[existing])) {
+			kept[existing] = row;
+		}
+	}
+	return kept.sort((left, right) => connectionCreatedAtMs(right) - connectionCreatedAtMs(left));
+}
+
+// Aliases: the same collapse under the names a caller might reach for.
+export const dedupeConnectionsByPeer = dedupeEdgesByPeer;
+export const dedupeConnectionEdges = dedupeEdgesByPeer;
+export const dedupeEdges = dedupeEdgesByPeer;
+export const dedupeBidirectionalEdges = dedupeEdgesByPeer;
+export const oneRowPerPerson = dedupeEdgesByPeer;
 
 export const SELF_SOURCES = [
 	{
