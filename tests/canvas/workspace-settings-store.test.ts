@@ -82,7 +82,7 @@ test("icon removal sends icon: null and clears the local icon", async () => {
   useSession();
   useWorkspaceSettingsStore.getState().update("u", WS, { icon: "x" });
   const calls = await recordCalls(async () => {
-    useWorkspaceSettingsStore.getState().update("u", WS, { icon: null });
+    useWorkspaceSettingsStore.getState().removeIcon("u", WS);
     assert.equal(useWorkspaceSettingsStore.getState().data[WS]?.icon, undefined);
     await sleep(700);
   });
