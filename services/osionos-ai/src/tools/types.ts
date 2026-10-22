@@ -91,6 +91,11 @@ export interface ReadTool<TArgs, TData> extends AssistantTool<TArgs, TData> {
 	kind: 'read';
 	/** The sources the data holds: the pages the answer may cite. */
 	sources(data: TData): readonly RetrievedChunk[];
+	/**
+	 * The skill a result loaded, when it loaded one: the tool result event
+	 * carries it, so the history of a run pins what was loaded (devil C40).
+	 */
+	pin?(data: TData): { id: string; version: number };
 }
 
 /**

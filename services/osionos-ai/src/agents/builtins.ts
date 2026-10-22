@@ -1,3 +1,4 @@
+import { findBuiltinSkill } from '../skills/builtins.ts';
 import { READ_TOOLS } from '../tools/readTools.ts';
 import { WRITE_TOOLS } from '../tools/writeTools.ts';
 
@@ -30,6 +31,8 @@ export interface BuiltinAgent {
 	instructions: string;
 	/** The tools the agent may call: a subset of what the runtime offers. */
 	tools: readonly string[];
+	/** The ids of the built-in skills the agent may load with `load_skill`. */
+	skills: readonly string[];
 }
 
 /**
@@ -120,6 +123,7 @@ export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 		description: 'Schema design, keys, isolation and indexes — answers with tables and DDL.',
 		instructions: DB_ARCHITECT,
 		tools: READ_TOOL_NAMES,
+		skills: Object.freeze(['schema-design', 'acid-review']),
 	}),
 	Object.freeze({
 		id: 'doc-writer',
@@ -128,6 +132,7 @@ export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 		description: 'Concise documentation for humans: task-first headings, short sentences, examples.',
 		instructions: DOC_WRITER,
 		tools: Object.freeze([...READ_TOOL_NAMES, ...WRITE_TOOL_NAMES]),
+		skills: Object.freeze(['concise-docs']),
 	}),
 	Object.freeze({
 		id: 'analyst',
@@ -136,8 +141,17 @@ export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 		description: 'Answers from the pages and the databases of the workspace, with the numbers and their source.',
 		instructions: ANALYST,
 		tools: READ_TOOL_NAMES,
+		skills: Object.freeze(['data-summary']),
 	}),
 ]);
+
+// An agent that names a skill the code does not have would index a skill
+// `load_skill` cannot load: fail at import, not in a run.
+for (const agent of BUILTIN_AGENTS) {
+	for (const id of agent.skills) {
+		if (!findBuiltinSkill(id)) throw new Error(`agent ${agent.id} names an unknown skill: ${id}`);
+	}
+}
 
 /** The agent of that id, or null when there is none. */
 export function findBuiltinAgent(id: string): BuiltinAgent | null {
