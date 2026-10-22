@@ -31,6 +31,7 @@ import { createAccountHandler } from './bridge-account-mounts.mjs';
 import { handoffLookupKey, openHandoffRecord, sealHandoffRecord } from './bridge-shared-store.mjs';
 import { createKv } from './bridge-kv.mjs';
 import { createPg } from './bridge-pg.mjs';
+import { claimPlatformRole, isPlatformRole, platformRoleReader, readPlatformRole } from './bridge-roles.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -435,11 +436,13 @@ export async function claimBridgeReplay(kv, jti, ttlMs) {
 	return true;
 }
 
-export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], isAdmin = false }) {
+export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], platformRole = null }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const iat = Math.floor(now / 1000);
 	const exp = iat + config.sessionTtlSeconds;
 	const memberRoles = Object.fromEntries(memberWorkspaces.map((entry) => [entry._id, safeText(entry.role, 16) || 'member']));
+	// One source: the role names the admin, so the two claims can never disagree.
+	const role = isPlatformRole(platformRole) ? platformRole : null;
 	const tokenPayload = {
 		iss: 'osionos-bridge',
 		aud: 'osionos-app',
@@ -447,7 +450,8 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 		provider: payload.provider,
 		workspace_ids: [workspace._id, ...memberWorkspaces.map((entry) => entry._id)],
 		roles: { ...memberRoles, [workspace._id]: 'owner' },
-		is_admin: isAdmin === true,
+		platform_role: role,
+		is_admin: role === 'admin',
 		jti,
 		iat,
 		// Milliseconds: a cut-off and a token minted in the same second must still be ordered.
@@ -499,11 +503,17 @@ export function verifyAppSessionToken(token, config, now = undefined) {
 	if (workspaceIds.length === 0) {
 		throw Object.assign(new Error('App session token has no workspace access.'), { status: 401 });
 	}
+	// is_admin applies only to tokens with no platform_role (rolling deploy); a valid claim wins. (C2, C6)
+	const isAdmin = isPlatformRole(payload.platform_role)
+		? payload.platform_role === 'admin'
+		: payload.is_admin === true;
 	return {
 		userId: String(payload.sub).toLowerCase(),
 		workspaceIds,
 		roles: payload.roles && typeof payload.roles === 'object' && !Array.isArray(payload.roles) ? payload.roles : {},
-		isAdmin: payload.is_admin === true,
+		// A token minted before the claim existed answers no role, not the admin bit.
+		platformRole: isPlatformRole(payload.platform_role) ? payload.platform_role : null,
+		isAdmin,
 		raw: payload,
 	};
 }
@@ -1486,7 +1496,7 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 	};
 }
 
-export function createUserSession(payload, config, persisted = null, now = Date.now(), memberWorkspaces = [], isAdmin = false) {
+export function createUserSession(payload, config, persisted = null, now = Date.now(), memberWorkspaces = [], isAdmin = false, platformRole = null) {
 	const userId = payload.subject;
 	// The session id is minted here, not inside the signer: it is the primary key of the
 	// session row and the single-use guard of the delivered token.
@@ -1510,7 +1520,10 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 	// Org/teamspace workspaces (osionos_workspace_members) ride along so the
 	// app can hydrate + switch to them; owned ones stay private, rest shared.
 	const extras = memberWorkspaces.filter((entry) => entry?._id && !sameId(entry._id, workspace._id));
-	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, jti: sessionId, memberWorkspaces: extras, isAdmin });
+	// The identity flag is the root of trust: it names the admin role, so the claim's two
+	// role facts can never disagree.
+	const role = claimPlatformRole(platformRole, isAdmin);
+	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, jti: sessionId, memberWorkspaces: extras, platformRole: role });
 	return {
 		expiresAt,
 		sessionId,
@@ -1655,12 +1668,15 @@ function privateWorkspaceIdOf(payload, persisted) {
 }
 
 /** Today's order: persist, admin flag, admin membership, member workspaces. Env admins keep it. */
-async function readClaimsInOrder(payload, config, fetchImpl) {
+async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
 	if (isAdmin) await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
 	const memberWorkspaces = await memberWorkspaceEntries(payload.subject, [privateWorkspaceIdOf(payload, persisted)], config, fetchImpl);
-	return { persisted, isAdmin, memberWorkspaces };
+	// The env admin is the root of trust (ADR 0005): the flag names the admin role, so the
+	// catalogue is not read for an admin at all.
+	const platformRole = isAdmin ? 'admin' : (await readPlatformRole(roleReader, payload.subject)).role;
+	return { persisted, isAdmin, platformRole, memberWorkspaces };
 }
 
 /**
@@ -1675,29 +1691,33 @@ async function readClaimsInOrder(payload, config, fetchImpl) {
  * email changed signs in with is_admin false for one session. That fails closed; the next sign-in
  * corrects it. Nothing here can widen a claim.
  */
-async function readClaimsConcurrently(payload, config, fetchImpl) {
-	const [persistence, adminRead, memberRead] = await Promise.allSettled([
+async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
+	const [persistence, adminRead, memberRead, roleRead] = await Promise.allSettled([
 		persistIdentityForHandoff(payload, config, fetchImpl),
 		resolveAdminFlag(payload, config, fetchImpl),
 		memberWorkspaceEntries(payload.subject, [], config, fetchImpl),
+		readPlatformRole(roleReader, payload.subject),
 	]);
 	if (persistence.status === 'rejected') throw persistence.reason;
 	const persisted = persistence.value;
 	const isAdmin = adminRead.status === 'fulfilled' && adminRead.value === true;
+	// The role read runs with the others, so a sign-in pays one round trip and not two. An
+	// admin's read is discarded: the flag is the root of trust and names the role.
+	const platformRole = isAdmin ? 'admin' : (roleRead.status === 'fulfilled' ? roleRead.value.role : null);
 	if (isAdmin) {
 		await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
 		const excludeIds = [privateWorkspaceIdOf(payload, persisted)];
-		return { persisted, isAdmin, memberWorkspaces: await memberWorkspaceEntries(payload.subject, excludeIds, config, fetchImpl) };
+		return { persisted, isAdmin, platformRole, memberWorkspaces: await memberWorkspaceEntries(payload.subject, excludeIds, config, fetchImpl) };
 	}
 	// The private workspace is still in this read; createUserSession drops it from the extras.
-	return { persisted, isAdmin, memberWorkspaces: memberRead.status === 'fulfilled' ? memberRead.value : [] };
+	return { persisted, isAdmin, platformRole, memberWorkspaces: memberRead.status === 'fulfilled' ? memberRead.value : [] };
 }
 
-export async function createBridgeHandoff({ payload, config, kv, now = Date.now(), fetchImpl = fetch }) {
+export async function createBridgeHandoff({ payload, config, kv, pg, now = Date.now(), fetchImpl = fetch }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const readClaims = isEnvAdminEmail(payload, config) ? readClaimsInOrder : readClaimsConcurrently;
-	const { persisted, isAdmin, memberWorkspaces } = await readClaims(payload, config, fetchImpl);
-	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces, isAdmin);
+	const { persisted, isAdmin, platformRole, memberWorkspaces } = await readClaims(payload, config, fetchImpl, platformRoleReader(pg));
+	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces, isAdmin, platformRole);
 	const token = randomToken();
 	const expiresAt = now + config.handoffTtlMs;
 	// The store keeps the record sealed and under a key derived from the token: a shared
@@ -4137,7 +4157,7 @@ async function handleBridgeGet(url, request, response, config, fetchImpl) {
 	return true;
 }
 
-async function handleBridgeSession(request, response, config, kv, fetchImpl) {
+async function handleBridgeSession(request, response, config, kv, pg, fetchImpl) {
 	const rawPayload = await readJson(request);
 	const payload = verifyBridgeRequest({
 		headers: request.headers,
@@ -4147,7 +4167,7 @@ async function handleBridgeSession(request, response, config, kv, fetchImpl) {
 	});
 	// The jti is claimed only now: a bad signature never burns one.
 	await claimBridgeReplay(kv, payload.jti, 2 * config.timestampSkewMs);
-	json(response, 200, await createBridgeHandoff({ payload, config, kv, fetchImpl }), config);
+	json(response, 200, await createBridgeHandoff({ payload, config, kv, pg, fetchImpl }), config);
 }
 
 async function handleBridgeConsume(request, response, config, kv, pg) {
@@ -4310,7 +4330,7 @@ async function handleBridgePost(url, request, response, config, kv, pg, fetchImp
 	}
 	if (await handlePagesPost(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/auth/bridge/session') {
-		await handleBridgeSession(request, response, config, kv, fetchImpl);
+		await handleBridgeSession(request, response, config, kv, pg, fetchImpl);
 		return true;
 	}
 	if (url.pathname !== '/api/auth/bridge/consume') return false;
