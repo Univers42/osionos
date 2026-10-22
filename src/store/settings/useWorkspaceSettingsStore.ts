@@ -28,6 +28,7 @@ interface WorkspaceSettingsStore {
   getData: (workspaceId: string, name?: string) => WorkspaceSettings;
   hydrate: (userId: string, workspaceId: string, name?: string) => Promise<void>;
   update: (userId: string, workspaceId: string, patch: WorkspaceSettingsPatch) => void;
+  removeIcon: (userId: string, workspaceId: string) => void;
   reset: (userId: string, workspaceId: string, name?: string) => Promise<void>;
 }
 
@@ -135,6 +136,7 @@ export const useWorkspaceSettingsStore = create<WorkspaceSettingsStore>()(
           }
         });
       },
+      removeIcon: (userId, workspaceId) => get().update(userId, workspaceId, { icon: null }),
       reset: async (userId, workspaceId, name) => {
         if (!workspaceId) return;
         const previous = get().data[workspaceId];
