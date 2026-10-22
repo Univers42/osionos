@@ -25,6 +25,7 @@ import { pageRowToEntry } from '../../scripts/bridge-api.mjs';
 import {
 	PAT_PERMISSIONS,
 	PAT_RESOURCES,
+	attributesOutsideMask,
 	evaluatePat,
 	isPatGrant,
 	isPatScope,
@@ -57,6 +58,14 @@ function functionBody(source, name) {
  * to edit, so the list is read out of its source rather than imported. The two shapes the update
  * path takes are both counted: assignPayloadValue names the payload key explicitly, and
  * templateSurface and updatedAt are read straight off the payload.
+ *
+ * Caveat: this is a text parser over JavaScript, so it misses a key read through destructuring
+ * (`const { x } = payload`), through bracket access (`payload['x']`) or through a helper that
+ * receives the payload. The direction is UNDER-reporting: a writable key the parser cannot see
+ * slips past the vocabulary check, so the vocabulary can end up narrower than the update path
+ * and a token would be refused a field the page route accepts. The escape hatch: export
+ * pageUpdateRowFromPayload from scripts/bridge-api.mjs when a package next owns that file, and
+ * read the keys off the function itself instead of off its text.
  */
 function pageUpdatePayloadKeys() {
 	const keys = new Set();
@@ -109,8 +118,20 @@ test('the vocabulary declares one resource and the two permissions', () => {
 	assert.deepEqual(PAT_PERMISSIONS, ['read', 'write']);
 });
 
-test('a classic scope grants the pair with no attribute restriction', () => {
-	assert.deepEqual(evaluatePat({ scopes: ['pages:read'], grants: [] }, READ), { allowed: true, mask: null });
+test('a classic scope grants the pair the whole pinned vocabulary of its resource', () => {
+	const decision = evaluatePat({ scopes: ['pages:read'], grants: [] }, READ);
+	assert.equal(decision.allowed, true);
+	assert.deepEqual(decision.mask, PAT_RESOURCES.pages.attributes);
+	assert.notEqual(decision.mask, PAT_RESOURCES.pages.attributes, 'the mask is a copy, not the constant');
+});
+
+test('a classic token reads every pinned key and no field the vocabulary does not name', () => {
+	const decision = evaluatePat({ scopes: ['pages:read'], grants: [] }, READ);
+	const entry = Object.fromEntries(PAT_RESOURCES.pages.attributes.map((attribute) => [attribute, `${attribute}-value`]));
+	entry.futureField = 'a field the vocabulary does not name';
+	const masked = maskAttributes(entry, decision.mask);
+	assert.equal('futureField' in masked, false);
+	assert.deepEqual(Object.keys(masked).sort(), [...PAT_RESOURCES.pages.attributes].sort());
 });
 
 test('a classic read scope does not grant a write', () => {
@@ -296,4 +317,24 @@ test('maskRequestPayload returns a payload that is not an object unchanged', () 
 test('a null mask leaves the request payload alone', () => {
 	const payload = { title: 'New title', visibility: 'public' };
 	assert.deepEqual(maskRequestPayload(payload, null), payload);
+});
+
+test('attributesOutsideMask names the payload keys the mask does not cover', () => {
+	assert.deepEqual(attributesOutsideMask({ title: 'New title', content: [] }, ['title']), ['content']);
+});
+
+test('attributesOutsideMask is empty when every payload key is in the mask', () => {
+	assert.deepEqual(attributesOutsideMask({ title: 'New title' }, ['title', 'content']), []);
+});
+
+test('attributesOutsideMask is empty for a payload that is not an object', () => {
+	for (const payload of ['nope', 42, null, undefined, ['title']]) {
+		assert.deepEqual(attributesOutsideMask(payload, ['title']), []);
+	}
+});
+
+test('a mask that is not an array leaves every payload key outside it', () => {
+	assert.deepEqual(attributesOutsideMask({ title: 'New title', content: [] }, null), ['content', 'title']);
+	assert.deepEqual(attributesOutsideMask({ title: 'New title', content: [] }, undefined), ['content', 'title']);
+	assert.deepEqual(attributesOutsideMask({ title: 'New title', content: [] }, 'title'), ['content', 'title']);
 });
