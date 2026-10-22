@@ -15,3 +15,12 @@ one session alone then ran 40+ requests in ~12 min unrefused — a burst/concurr
 | P0-2 | running | feat/acct-bake-deepseek | deepseek-v4.1-flash (+rotation on refusal) | — | spec: devil PwC, 11 conditions applied |
 | P1-3a | running | feat/acct-P1-3a | glm-5.3-flash (+rotation) | — | no devil gate (pure move) |
 | P0-1 | spec under devil review | (root repo) feat/account-platform | — | harness baseline 44/0 | — |
+| P1-3b | spec written, waits for P1-3a | — | — | — | — |
+
+Open follow-ups
+- `tests/e2e/visual/surfaces.spec.mjs-snapshots/settings-{light,dark}-linux.png` show the modal; after
+  P1-3b they must be regenerated on a host that can download Playwright's Chromium (this one gets 403;
+  the `system` Chromium renders differently, 8/8 visual diffs on 14e519ca).
+- Desktop edition (`apps/osionos-electron/native/firstrun.mjs`) applies an explicit migration list before
+  GoTrue exists; the account-plane tables (FK to auth.users) must be applied in its after-GoTrue step
+  before P0-4 makes the bridge write sessions.
