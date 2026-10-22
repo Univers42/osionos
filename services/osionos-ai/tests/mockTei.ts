@@ -17,6 +17,8 @@ export interface MockTeiOptions {
 	onRequest?: () => Promise<void>;
 	/** The name of the toxic label (the model's id2label says 'toxic'). */
 	toxicLabel: string;
+	/** The whole prediction of a text, when a test needs labels other than toxic/neutral. */
+	labels?: (text: string) => { label: string; score: number }[];
 }
 
 export interface MockTei {
@@ -55,6 +57,7 @@ export async function startMockTei(initial?: Partial<MockTeiOptions>): Promise<M
 			}
 			const inputs = Array.isArray(parsed.inputs) ? parsed.inputs.map(String) : [];
 			const answer = inputs.map((text) => {
+				if (options.labels) return options.labels(text);
 				const toxic = options.score(text);
 				const pair = [
 					{ score: toxic, label: options.toxicLabel },

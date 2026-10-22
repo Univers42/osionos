@@ -19,6 +19,7 @@ import {
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
 import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
+import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
 import type { RouteEntry } from './types.ts';
 
@@ -118,6 +119,13 @@ export const ROUTES: RouteEntry[] = [
 		pattern: /^\/api\/ai\/approvals\/([^/]+)$/,
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalDecision,
+	},
+	{
+		methods: [],
+		pattern: /^\/api\/ai\/workspaces\/([^/]+)\/sentiment\/settings$/,
+		label: '/api/ai/workspaces/:workspaceId/sentiment/settings',
+		handle: handleSentimentSettings,
+		anyMethod: true,
 	},
 	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
 	...(config.patEnabled
