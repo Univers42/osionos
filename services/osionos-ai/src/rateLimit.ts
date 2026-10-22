@@ -23,6 +23,7 @@ const KEY_TTL_SECONDS = 70;
 export const RUN_LIMIT_PREFIX = 'ai:rl';
 export const RELATED_LIMIT_PREFIX = 'ai:rl:related';
 export const IMAGE_LIMIT_PREFIX = 'ai:rl:image';
+export const DESCRIBE_LIMIT_PREFIX = 'ai:rl:describe';
 /** The window of the mints: a PAT is minted from a fresh session, and rarely. */
 export const PAT_LIMIT_PREFIX = 'ai:rl:pat';
 

@@ -50,6 +50,19 @@ const HEADING_LEVELS: Readonly<Record<string, number>> = Object.freeze({
 	heading_3: 3,
 });
 
+/**
+ * The text of a block. An image block's `content` is a capability path, not
+ * prose, so it is never indexed; its alt text is, as `Image: <alt>`.
+ */
+function blockText(block: PageBlock, type: string): string {
+	if (type === 'image') {
+		const alt = (block as { mediaAlt?: unknown }).mediaAlt;
+		const clean = typeof alt === 'string' ? alt.trim() : '';
+		return clean ? `Image: ${clean}` : '';
+	}
+	return typeof block.content === 'string' ? block.content.trim() : '';
+}
+
 /** The id of a block: a string, or nothing. */
 function blockId(block: PageBlock): string {
 	return typeof block.id === 'string' ? block.id : '';
@@ -98,8 +111,8 @@ export function pageSections(page: PageDocument): Section[] {
 	let current: Section | null = null;
 
 	for (const block of pageBlocks(page.content)) {
-		const text = typeof block.content === 'string' ? block.content.trim() : '';
 		const type = typeof block.type === 'string' ? block.type : '';
+		const text = blockText(block, type);
 		const level = HEADING_LEVELS[type];
 		if (level !== undefined) {
 			// A heading opens a section. The headings it closes are the ones of
