@@ -25,7 +25,8 @@ function anchorFromTitle(value: string): string {
 
 export const Section: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className = '' }) => (
   <section className={`space-y-4 ${className}`} data-settings-anchor={anchorFromTitle(title)}>
-    <h3 className="text-base font-medium text-[var(--osio-fg-default)]">{title}</h3>
+    {/* h2 (not h3): the tab view's heading is the h1, so the document outline keeps no gap. */}
+    <h2 className="text-base font-medium text-[var(--osio-fg-default)]">{title}</h2>
     <div>{children}</div>
   </section>
 );
