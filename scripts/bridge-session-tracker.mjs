@@ -31,6 +31,8 @@
  * delays a load by one tick.
  */
 
+import { BAAS_FETCH_TIMEOUT_MS } from './bridge-baas-body.mjs';
+
 export const POLL_INTERVAL_MS = 10_000;
 export const STALE_AFTER_MS = 60_000;
 export const RETRY_AFTER_SECONDS = 5;
@@ -194,7 +196,10 @@ async function readPage({ fetchImpl, baasUrl, serviceKey }, { table, select, ord
  * counted arrived. The cursor is the row's own value, lower-cased: both tables are keyed by
  * a uuid, and a uuid never depends on the case.
  */
-export async function readPagedRows(source, { table, select, orderColumn, filters = {}, pageSize = PAGE_SIZE, timeoutMs }) {
+// The deadline defaults here, not per poller: the revocation poller passed none in production
+// (bridge-api.mjs starts it without options), setTimeout(…, undefined) fired at once, every load
+// "timed out after undefined ms" and every token answered 503 (public release, 2026-10-23).
+export async function readPagedRows(source, { table, select, orderColumn, filters = {}, pageSize = PAGE_SIZE, timeoutMs = BAAS_FETCH_TIMEOUT_MS }) {
 	const rows = [];
 	let received = 0;
 	let total = null;
