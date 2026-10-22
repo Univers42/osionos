@@ -91,6 +91,11 @@ export interface SlashDictateCommand extends SlashCommandBase {
   kind: "dictate";
 }
 
+/** An AI image: `/imagine <prompt>` inserts an image block the engine fills. */
+export interface SlashAiImageCommand extends SlashCommandBase {
+  kind: "ai-image";
+}
+
 export type SlashCommand =
   | SlashBlockCommand
   | SlashTurnIntoCommand
@@ -100,7 +105,8 @@ export type SlashCommand =
   | SlashMediaPickerCommand
   | SlashWhiteboardCommand
   | SlashAiCommand
-  | SlashDictateCommand;
+  | SlashDictateCommand
+  | SlashAiImageCommand;
 
 export interface SlashCommandSection {
   id: string;

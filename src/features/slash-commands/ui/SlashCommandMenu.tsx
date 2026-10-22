@@ -27,6 +27,7 @@ import { isBuiltInAppReady } from "@/features/whiteboard/model/whiteboardAvailab
 import { usePageStore } from "@/store/usePageStore";
 import type {
   SlashAiCommand,
+  SlashAiImageCommand,
   SlashCreatePageCommand,
   SlashDatabaseViewCommand,
   SlashBlockCommand,
@@ -56,7 +57,7 @@ interface SlashCommandMenuProps {
   position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (
-    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand | SlashAiCommand | SlashDictateCommand,
+    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand | SlashAiCommand | SlashDictateCommand | SlashAiImageCommand,
   ) => void;
   onMediaSelect: (kind: MediaBlockType, value: string) => void;
   onClose: () => void;

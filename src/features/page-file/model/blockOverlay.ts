@@ -54,6 +54,13 @@ const isLayoutCells: ExtraKeyCheck = (value) =>
   Array.isArray(value) &&
   value.every((cell) => isPlainRecord(cell) && typeof cell.id === "string");
 
+/** The provenance of an image the AI made: the model, the run and the date. */
+const isAiGenerated: ExtraKeyCheck = (value) =>
+  isPlainRecord(value) &&
+  typeof value.model === "string" &&
+  typeof value.runId === "string" &&
+  typeof value.createdAt === "string";
+
 /** The allowlist of block attributes Markdown cannot carry; frozen, checks included. */
 export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.freeze({
   collapsed: isBoolean,
@@ -90,6 +97,9 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   tableConfig: isPlainRecord,
   // The merge's marker on a conflict copy: the id of the block it is a copy of.
   conflictOf: isBoundedText,
+  // The provenance of an image the AI made (never the prompt): it rides the
+  // overlay, so the "AI-generated" label survives a file round trip.
+  aiGenerated: isAiGenerated,
 });
 
 /** Is `key` one of the overlay's extra keys? Object.hasOwn: no inherited names. */

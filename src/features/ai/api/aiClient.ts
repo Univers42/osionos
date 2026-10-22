@@ -220,6 +220,17 @@ export async function cancelRun(runId: string): Promise<void> {
   await requestJson<unknown>("POST", `/runs/${encodeURIComponent(runId)}/cancel`);
 }
 
+/**
+ * `POST /images` — the stream of one image run: `image.queued`, `image.started`,
+ * `image.done`, then `done` or `error`.
+ *
+ * The runId is the client's own: a re-POST with the SAME id replays the old run
+ * (refusal included), so a retry must carry a NEW one.
+ */
+export async function startImage(input: { runId: string; prompt: string }, signal?: AbortSignal): Promise<Response> {
+  return requestStream("POST", "/images", input, { signal });
+}
+
 /** `POST /complete` — a short-lived completion, never persisted. */
 export async function complete(input: CompleteInput, signal?: AbortSignal): Promise<Response> {
   return requestStream("POST", "/complete", input, { signal });

@@ -26,7 +26,7 @@ import {
   type InlineEditorSelectionOffsets,
 } from "@osionos/markdown-engine/dom";
 import { getCalloutIconForKind } from "@osionos/markdown-engine/terminal";
-import { useSlashSelect, useSlashWhiteboardSelect } from "@/features/slash-commands";
+import { useSlashAiImageSelect, useSlashSelect, useSlashWhiteboardSelect } from "@/features/slash-commands";
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";
 import { useUserStore } from "@/features/auth";
@@ -2035,6 +2035,14 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     insertBlock,
     getBlocks: () => contentRef.current,
   });
+  const handleSlashAiImageSelect = useSlashAiImageSelect({
+    pageId,
+    slashMenu,
+    setSlashMenu,
+    updateBlock,
+    insertBlock,
+    getBlocks: () => contentRef.current,
+  });
 
   const handlePageSelectorSelect = useCallback(
     (targetPageId: string) => {
@@ -2189,6 +2197,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     handleSlashCreatePageSelect,
     handleSlashInlineSelect,
     handleSlashWhiteboardSelect,
+    handleSlashAiImageSelect,
     handlePageSelectorSelect,
     handlePageSelectorCreate,
     handleAddBlock,
