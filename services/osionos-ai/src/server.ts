@@ -11,7 +11,9 @@ import { sweepStaleRuns } from './runs/runner.ts';
 import { sweepApprovals } from './approvals/repo.ts';
 import * as runStore from './runs/runStore.ts';
 import { ROUTES } from './routes/table.ts';
-import type { RouteEntry, RouteHandler } from './routes/types.ts';
+import type { RouteDeps, RouteEntry, RouteHandler } from './routes/types.ts';
+import { loadOutputCheck } from './images/outputCheck.ts';
+import type { OutputCheck } from './images/outputCheck.ts';
 
 /**
  * The service: the bootstrap, the dispatch table, and the shutdown.
@@ -29,6 +31,18 @@ export interface AiServer {
 	redis: Redis;
 	blockingRedis: Redis;
 	close(): Promise<void>;
+}
+
+/** What the caller may bring to the service: the check of the images (C73). */
+export interface AiServerOptions {
+	/**
+	 * The output check of the generated images (devil C73).
+	 *
+	 * The tests bring a stub — no model is loaded in the suite. When it is not
+	 * given, the service loads the check itself, and only when the images are
+	 * on: a service without images has nothing to check.
+	 */
+	outputCheck?: OutputCheck | null;
 }
 
 /** The Redis client of the service: it connects on demand and gives up in a second. */
@@ -65,13 +79,6 @@ function logRequest(request: IncomingMessage, route: string, status: number, ms:
 	console.info(JSON.stringify({ event: 'request', method: request.method ?? '', route, status, ms }));
 }
 
-/** The dependencies of a request: the database, the cache, and the blocking reader. */
-interface RequestDeps {
-	db: Pool;
-	redis: Redis;
-	blockingRedis: Redis;
-}
-
 /**
  * The route that answers the request, and the groups of its path.
  *
@@ -92,7 +99,7 @@ function matchRoute(pathname: string, method: string): { entry: RouteEntry; para
 async function dispatch(
 	request: IncomingMessage,
 	response: ServerResponse,
-	deps: RequestDeps,
+	deps: RouteDeps,
 ): Promise<{ status: number; route: string }> {
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
 	const found = matchRoute(url.pathname, request.method ?? '');
@@ -108,7 +115,7 @@ async function dispatch(
 async function handleRequest(
 	request: IncomingMessage,
 	response: ServerResponse,
-	deps: RequestDeps,
+	deps: RouteDeps,
 ): Promise<void> {
 	const startedAt = Date.now();
 	let status = 500;
@@ -138,7 +145,7 @@ async function handleRequest(
  * The service, in this process: one pool, one Redis client, one HTTP server.
  * The tests drive it in-process; the boot path listens on the configured port.
  */
-export function createAiServer(): AiServer {
+export function createAiServer(options: AiServerOptions = {}): AiServer {
 	const db = createPool(config.databaseUrl);
 	const redis = createRedisClient(config.redisUrl);
 	// The blocking read needs a connection of its own: a blocked Redis client
@@ -146,6 +153,25 @@ export function createAiServer(): AiServer {
 	// only speaks subscriptions.
 	const blockingRedis = createRedisClient(config.redisUrl, 30_000);
 	const subscriber = createRedisClient(config.redisUrl, 30_000);
+	const deps: RouteDeps = { db, redis, blockingRedis };
+	// C73: the check of the generated images is loaded once, at the start of
+	// the service, and only when the images are on. A load that fails is
+	// logged once and the check is held as UNAVAILABLE: the service still
+	// starts (the other routes are not hostage) and the image route refuses
+	// every image until the models are on the disk.
+	if (options.outputCheck !== undefined) {
+		deps.outputCheck = options.outputCheck;
+	} else if (config.imagesEnabled) {
+		void loadOutputCheck(config.imageCheckDir ?? '').then(
+			(check) => {
+				deps.outputCheck = check;
+			},
+			(error: Error) => {
+				deps.outputCheck = null;
+				console.warn(JSON.stringify({ event: 'image_check_unavailable', code: error.name }));
+			},
+		);
+	}
 	void runStore.listenForCancels(subscriber).catch((error: Error) => {
 		console.warn(JSON.stringify({ event: 'cancel_listener_failed', code: error.name }));
 	});
@@ -167,7 +193,7 @@ export function createAiServer(): AiServer {
 		console.warn(JSON.stringify({ event: 'approval_sweep_failed', code: error.name }));
 	});
 	const server = createServer((request, response) => {
-		void handleRequest(request, response, { db, redis, blockingRedis });
+		void handleRequest(request, response, deps);
 	});
 	return {
 		server,
