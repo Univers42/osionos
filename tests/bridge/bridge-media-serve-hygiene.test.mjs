@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import { configFromEnv, createBridgeServer, createUserSession, validateBridgePayload } from '../../scripts/bridge-api.mjs';
 import { storagePut } from '../../scripts/bridge-storage-core.mjs';
 import { handleServe } from '../../scripts/bridge-chat-media.mjs';
+import { pngFixture } from './support/image-fixtures.mjs';
 
 const owner = '3f6d2a70-5b3f-4c92-8f06-8f4644fd1209';
 const SHA = 'a'.repeat(64);
@@ -134,7 +135,7 @@ describe('stored media cannot run as a page on the app origin', () => {
 		const upload = await fetch(`${base}/api/media/uploads?name=p.png`, {
 			method: 'POST',
 			headers: { 'content-type': 'image/png', authorization: `Bearer ${token(config)}` },
-			body: Buffer.from('png-bytes'),
+			body: pngFixture({ width: 2, height: 2 }),
 		});
 		assert.equal(upload.status, 201);
 		const res = await fetch(`${base}${(await upload.json()).media.url}`);
