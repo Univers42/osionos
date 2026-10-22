@@ -187,6 +187,16 @@ async function searchPeople(deps, session, url, response, config) {
 
 async function patchMe(deps, session, request, response, config) {
 	const payload = await readJsonBody(request);
+	// P1-2b: the username moved behind the step-up proof, and this route is the one
+	// path that would write it without it. The whole body is refused, so no other
+	// field of it is applied either.
+	if (Object.hasOwn(payload, 'username')) {
+		return sendJson(response, 422, {
+			ok: false,
+			code: 'username_moved',
+			message: 'The username is changed through POST /api/account/username, behind a step-up proof.',
+		}, config);
+	}
 	const row = await identityRow(config, deps.fetchImpl, session.userId);
 	if (!row) throw httpError('Profile not found.', 404);
 	const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
@@ -196,7 +206,6 @@ async function patchMe(deps, session, request, response, config) {
 		if (Object.hasOwn(payload, key)) nextProfile[key] = safeText(payload[key], limit) || null;
 	}
 	update.profile = nextProfile;
-	if (Object.hasOwn(payload, 'username')) update.username = safeText(payload.username, 48) || null;
 	if (Object.hasOwn(payload, 'directoryOptOut')) update.directory_opt_out = payload.directoryOptOut === true;
 	try {
 		await rest(config, deps.fetchImpl, `osionos_bridge_identities?user_id=eq.${session.userId}`, {
