@@ -20,6 +20,7 @@
  */
 
 import { createAccountProfileRoutes } from './bridge-account-profile.mjs';
+import { createPatRoutes } from './bridge-account-tokens.mjs';
 import { createPreferencesRoutes } from './bridge-preferences.mjs';
 import { createSessionsRoutes } from './bridge-sessions.mjs';
 import { createPublishedPagesRoutes } from './bridge-account-published-pages.mjs';
@@ -30,6 +31,7 @@ export function createAccountHandler(deps) {
 		createAccountProfileRoutes(deps),
 		createPreferencesRoutes(deps),
 		createPublishedPagesRoutes(deps),
+		createPatRoutes(deps),
 	];
 	return async function handleAccountRequest(url, request, response) {
 		for (const module of modules) {
