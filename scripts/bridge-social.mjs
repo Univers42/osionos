@@ -263,18 +263,35 @@ async function handleSocialOps(deps, session, request, url, response, config) {
 			body: { blocker_id: session.userId, blocked_id: blockedId, reason: safeText(payload.reason, 300) || null },
 			prefer: 'resolution=merge-duplicates,return=minimal',
 		});
+		// Read the row back so the panel gets the real name/date instead of the id.
+		const blockRows = await rest(config, deps.fetchImpl, `osionos_user_blocks?blocker_id=eq.${session.userId}&blocked_id=eq.${blockedId}&select=blocked_id,reason,created_at`);
+		const blockRow = Array.isArray(blockRows) && blockRows.length > 0 ? blockRows[0] : null;
+		const identities = await identitySummaries(config, deps.fetchImpl, [blockedId]);
+		const summary = identities.get(blockedId);
 		const pair = [session.userId, blockedId].sort((a, b) => a.localeCompare(b)).join(':');
 		await rest(config, deps.fetchImpl, `osionos_connections?pair_key=eq.${encodeURIComponent(pair)}`, {
 			method: 'PATCH',
 			body: { status: 'blocked', responded_at: new Date().toISOString() },
-			prefer: 'return=minimal',
+			prefer: 'resolution=merge-duplicates,return=minimal',
 		});
-		return sendJson(response, 201, { ok: true, userId: blockedId, blocked: true }, config);
+		return sendJson(response, 201, { ok: true, userId: blockedId, blocked: true, block: { userId: blockedId, name: summary?.name ?? 'Member', avatar: summary?.avatar ?? null, reason: blockRow?.reason ?? null, createdAt: blockRow?.created_at ?? null } }, config);
 	}
 	const blockMatch = /^\/api\/social\/blocks\/([0-9a-f-]{36})$/i.exec(pathname);
 	if (blockMatch && method === 'DELETE') {
 		const blockedId = requireUuid(blockMatch[1], 'userId');
 		await rest(config, deps.fetchImpl, `osionos_user_blocks?blocker_id=eq.${session.userId}&blocked_id=eq.${blockedId}`, { method: 'DELETE', prefer: 'return=minimal' });
+		const pair = [session.userId, blockedId].sort((a, b) => a.localeCompare(b)).join(':');
+		const edges = await rest(config, deps.fetchImpl, `osionos_connections?pair_key=eq.${encodeURIComponent(pair)}&select=id,status`);
+		const edge = Array.isArray(edges) && edges.length > 0 ? edges[0] : null;
+		if (edge && edge.status === 'blocked') {
+			const updated = await rest(config, deps.fetchImpl, `osionos_connections?id=eq.${edge.id}`, {
+				method: 'PATCH',
+				body: { status: 'declined', responded_at: new Date().toISOString() },
+				// return=representation: PostgREST answers 204 with no body for minimal, which would make a 0-row PATCH undetectable.
+				prefer: 'return=representation',
+			});
+			if (!Array.isArray(updated) || updated.length !== 1) throw httpError('Unblock failed.', 502);
+		}
 		return sendJson(response, 200, { ok: true, userId: blockedId, unblocked: true }, config);
 	}
 	if (pathname === '/api/social/reports' && method === 'GET') {
