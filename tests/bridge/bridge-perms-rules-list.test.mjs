@@ -390,6 +390,17 @@ describe('favorites honour no_access rules', () => {
 		});
 	});
 
+	it('a workspace whose membership read fails hides all of its pages from the favorites list', async () => {
+		const failWhen = (call) => (call.table === 'rpc/osionos_bridge_list_workspaces' ? { status: 500, body: { code: 'XX' } } : null);
+		const mock = createPostgrestMock({ osionos_workspace_members: members(), osionos_pages: pages(), osionos_page_favorites: [{ user_id: CALLER, page_id: ACCESSIBLE }] }, { realWorkspaceRpc: true, failWhen });
+		const headers = sessionHeaders(config, CALLER, HOME, [WSID]);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const res = await send(base, '/api/favorites', headers);
+			assert.equal(res.status, 200, res.text);
+			assert.deepEqual(res.body.pageIds, []);
+		});
+	});
+
 	it('a favorites list longer than 200 answers the 200 most recent', async () => {
 		const mock = createPostgrestMock({ osionos_workspace_members: members(), osionos_pages: pages() }, { realWorkspaceRpc: true });
 		const headers = sessionHeaders(config, CALLER, HOME, [WSID]);
