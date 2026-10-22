@@ -72,6 +72,25 @@ const envSchema = z.object({
 	OSIONOS_AI_STT_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
 	// The seconds of audio a user may dictate in a day.
 	OSIONOS_AI_STT_SECONDS_PER_DAY: z.coerce.number().int().nonnegative().default(600),
+	// The image generation (M1). OFF unless exactly "on": the public overlay
+	// leaves it empty until the prompt gate (devil C72) and the output gate
+	// (C73) exist. Off, the route does not exist.
+	OSIONOS_AI_IMAGES: z.string().optional(),
+	// The image engine: INTERNAL, the OpenAI-compatible base URL of sd-server
+	// (`…/v1`), a deployment setting and never a caller's. Required when on.
+	OSIONOS_AI_IMAGE_URL: z.string().optional(),
+	// The name the engine is called with, and the one the image's provenance carries.
+	OSIONOS_AI_IMAGE_MODEL: z.string().min(1).default('z-image-turbo'),
+	// The price of one image on the ledger, in micro-USD: required and above
+	// zero when on (C74). The local engine costs no money, but an image that
+	// books 0 would never reach the cap of a day.
+	OSIONOS_AI_IMAGE_MICROUSD: z.coerce.number().int().nonnegative().default(0),
+	// The images of a user in a UTC day, and of the whole platform (C75).
+	OSIONOS_AI_IMAGES_PER_USER_DAY: z.coerce.number().int().positive().default(20),
+	OSIONOS_AI_IMAGES_PER_DAY: z.coerce.number().int().positive().default(200),
+	// The deadline of one generation, from the call to the engine. A1 measured
+	// 19–23 s warm and up to 44 s from a cold page cache.
+	OSIONOS_AI_IMAGE_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
 });
 
 const rawEnv = {
@@ -104,6 +123,13 @@ const rawEnv = {
 	OSIONOS_AI_STT_MODEL: process.env.OSIONOS_AI_STT_MODEL,
 	OSIONOS_AI_STT_TIMEOUT_MS: process.env.OSIONOS_AI_STT_TIMEOUT_MS,
 	OSIONOS_AI_STT_SECONDS_PER_DAY: process.env.OSIONOS_AI_STT_SECONDS_PER_DAY,
+	OSIONOS_AI_IMAGES: process.env.OSIONOS_AI_IMAGES,
+	OSIONOS_AI_IMAGE_URL: firstEnv('OSIONOS_AI_IMAGE_URL'),
+	OSIONOS_AI_IMAGE_MODEL: process.env.OSIONOS_AI_IMAGE_MODEL,
+	OSIONOS_AI_IMAGE_MICROUSD: process.env.OSIONOS_AI_IMAGE_MICROUSD,
+	OSIONOS_AI_IMAGES_PER_USER_DAY: process.env.OSIONOS_AI_IMAGES_PER_USER_DAY,
+	OSIONOS_AI_IMAGES_PER_DAY: process.env.OSIONOS_AI_IMAGES_PER_DAY,
+	OSIONOS_AI_IMAGE_TIMEOUT_MS: process.env.OSIONOS_AI_IMAGE_TIMEOUT_MS,
 };
 
 const parsed = envSchema.safeParse(rawEnv);
@@ -238,6 +264,20 @@ export interface AiServiceConfig {
 	sttTimeoutMs: number;
 	/** The seconds of audio a user may dictate in a day. */
 	sttSecondsPerDay: number;
+	/** The image generation is on: without it the route does not exist. */
+	imagesEnabled: boolean;
+	/** The OpenAI-compatible base URL of the internal image engine. */
+	imageUrl?: string;
+	/** The model of the engine, as the provenance of an image names it. */
+	imageModel: string;
+	/** The price of one image on the ledger, in micro-USD. */
+	imageMicroUsd: number;
+	/** The images of a user in a UTC day. */
+	imagesPerUserDay: number;
+	/** The images of the platform in a UTC day. */
+	imagesPerDay: number;
+	/** The deadline of one generation, in milliseconds. */
+	imageTimeoutMs: number;
 }
 
 export const config: AiServiceConfig = Object.freeze({
@@ -270,7 +310,22 @@ export const config: AiServiceConfig = Object.freeze({
 	sttModel: parsed.data.OSIONOS_AI_STT_MODEL,
 	sttTimeoutMs: parsed.data.OSIONOS_AI_STT_TIMEOUT_MS,
 	sttSecondsPerDay: parsed.data.OSIONOS_AI_STT_SECONDS_PER_DAY,
+	imagesEnabled: parsed.data.OSIONOS_AI_IMAGES?.trim().toLowerCase() === 'on',
+	imageUrl: parsed.data.OSIONOS_AI_IMAGE_URL,
+	imageModel: parsed.data.OSIONOS_AI_IMAGE_MODEL,
+	imageMicroUsd: parsed.data.OSIONOS_AI_IMAGE_MICROUSD,
+	imagesPerUserDay: parsed.data.OSIONOS_AI_IMAGES_PER_USER_DAY,
+	imagesPerDay: parsed.data.OSIONOS_AI_IMAGES_PER_DAY,
+	imageTimeoutMs: parsed.data.OSIONOS_AI_IMAGE_TIMEOUT_MS,
 });
+
+// The image generation, turned on, needs its engine, a price (an image is
+// never free on the ledger, C74) and the bridge it stores through (C76).
+if (config.imagesEnabled) {
+	if (!config.imageUrl) refuse('OSIONOS_AI_IMAGE_URL');
+	if (config.imageMicroUsd <= 0) refuse('OSIONOS_AI_IMAGE_MICROUSD');
+	if (!config.bridgeUrl) refuse('OSIONOS_AI_BRIDGE_URL');
+}
 
 // A deployment that runs the write tools needs the bridge: the URL is
 // operator configuration, and a deployment without it has no write path at

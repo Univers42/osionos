@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 /**
  * The mock bridge: the HTTP API of the bridge, without the bridge.
@@ -17,6 +17,10 @@ export interface BridgeCall {
 	body: unknown;
 	/** The Authorization header of the call: the token, and where it went. */
 	authorization: string;
+	/** The bytes of the body, untouched: an upload is not text. */
+	bytes: Buffer;
+	/** The Content-Type header of the call. */
+	contentType: string;
 }
 
 /**
@@ -56,14 +60,17 @@ export interface MockBridge {
 }
 
 /** The body of a request, read to the end. */
-function readBody(request: IncomingMessage): Promise<string> {
+function readBody(request: IncomingMessage): Promise<Buffer> {
 	return new Promise((resolve) => {
 		const chunks: Buffer[] = [];
 		request.on('data', (chunk: Buffer) => chunks.push(chunk));
-		request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-		request.on('error', () => resolve(''));
+		request.on('end', () => resolve(Buffer.concat(chunks)));
+		request.on('error', () => resolve(Buffer.alloc(0)));
 	});
 }
+
+/** The owner of the media the mock stores: the bridge puts the uploader's id there. */
+export const MOCK_MEDIA_OWNER = '00000000-0000-4000-8000-0000000000aa';
 
 /** The mock bridge, on a random port of the loopback. */
 export async function startMockBridge(): Promise<MockBridge> {
@@ -97,7 +104,8 @@ export async function startMockBridge(): Promise<MockBridge> {
 	};
 
 	const server = createServer((request, response) => {
-		void readBody(request).then((raw) => {
+		void readBody(request).then((bytes) => {
+			const raw = bytes.toString('utf8');
 			let body: unknown = raw;
 			try {
 				body = JSON.parse(raw);
@@ -109,6 +117,8 @@ export async function startMockBridge(): Promise<MockBridge> {
 				path: request.url ?? '',
 				body,
 				authorization: String(request.headers.authorization ?? ''),
+				bytes,
+				contentType: String(request.headers['content-type'] ?? ''),
 			});
 			if (mock.failWith) {
 				response.writeHead(mock.failWith, { 'content-type': 'application/json' });
@@ -139,6 +149,25 @@ export async function startMockBridge(): Promise<MockBridge> {
 				const title = (body as { title?: unknown } | null)?.title;
 				response.writeHead(201, { 'content-type': 'application/json' });
 				response.end(JSON.stringify({ _id: randomUUID(), title: typeof title === 'string' ? title : 'Untitled' }));
+				return;
+			}
+			// The page-media upload: content-addressed, the way the bridge stores it.
+			if (request.method === 'POST' && path.startsWith('/api/media/uploads?')) {
+				const sha256 = createHash('sha256').update(bytes).digest('hex');
+				const mimeType = String(request.headers['content-type'] ?? '');
+				const ext = mimeType.split('/')[1] ?? 'bin';
+				response.writeHead(201, { 'content-type': 'application/json' });
+				response.end(JSON.stringify({
+					ok: true,
+					media: {
+						url: `/api/media/uploads/${MOCK_MEDIA_OWNER}/${sha256}.${ext}`,
+						type: 'image',
+						name: new URL(path, 'http://bridge').searchParams.get('name') ?? '',
+						mimeType,
+						size: bytes.length,
+						sha256,
+					},
+				}));
 				return;
 			}
 			if (request.method === 'PATCH' && /^\/api\/pages\/[^/]+$/.test(path)) {

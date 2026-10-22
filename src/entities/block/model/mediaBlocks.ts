@@ -47,3 +47,21 @@ export function createMediaBlock(type: MediaBlockType, asset: string): Block {
     asset,
   };
 }
+
+/**
+ * Is this block's image one the AI made?
+ *
+ * The label only shows for a block that carries a complete provenance (the
+ * model, the run and the date). A half-written one — a block hand-edited, or
+ * one from an older version — is a normal image.
+ */
+export function isAiGenerated(block: Block): boolean {
+  const provenance: unknown = block.aiGenerated;
+  if (typeof provenance !== "object" || provenance === null) return false;
+  const candidate = provenance as { model?: unknown; runId?: unknown; createdAt?: unknown };
+  return (
+    typeof candidate.model === "string" &&
+    typeof candidate.runId === "string" &&
+    typeof candidate.createdAt === "string"
+  );
+}
