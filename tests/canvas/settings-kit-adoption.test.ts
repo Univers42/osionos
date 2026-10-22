@@ -66,7 +66,7 @@ test("SettingsView and every panel module stay within the 300-line file-size rul
   for (const folder of ["ui", "model"] as const) {
     for (const path of filesUnderPanelFolder(folder)) assert.ok(lines(read(path)) <= 300, `${path} exceeds 300 lines`);
   }
-  for (const folder of ["profile", "preferences", "general", "notifications", "mail-calendar", "import", "page-settings", "ai", "public-pages", "library", "teamspaces", "billing", "plans"] as const) {
+  for (const folder of ["profile", "preferences", "general", "notifications", "mail-calendar", "import", "page-settings", "ai", "voice", "public-pages", "library", "teamspaces", "billing", "plans"] as const) {
     for (const path of filesUnderPanelFolder(folder)) assert.ok(lines(read(path)) <= 300, `${path} exceeds 300 lines`);
   }
   assert.ok(lines(read(`${SETTINGS_ROOT}/${PEOPLE_PANEL_FILE}`)) <= 300);
@@ -78,7 +78,7 @@ test("SettingsView and every panel module stay within the 300-line file-size rul
 // PeoplePanel is a panel) are shared or pre-existing and carry no such rule.
 const PANEL_MODULES = [
   "profile", "preferences", "general", "notifications", "mail-calendar", "import",
-  "page-settings", "ai", "public-pages", "library", "teamspaces", "billing", "plans",
+  "page-settings", "ai", "voice", "public-pages", "library", "teamspaces", "billing", "plans",
 ];
 
 test("no panel module imports another panel module", () => {
