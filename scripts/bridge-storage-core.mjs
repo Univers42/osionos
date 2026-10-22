@@ -24,6 +24,7 @@
  */
 
 import { httpError } from './bridge-social-core.mjs';
+import { INLINE_TYPES, PAGE_TYPES, assertBytesMatch, baseMime } from './bridge-mime.mjs';
 
 const STORAGE_TIMEOUT_MS = 15_000;
 const BUCKET = 'chat';
@@ -50,32 +51,6 @@ const EXT_BY_MIME = {
 export function storageBase(env = process.env) {
 	return (env.STORAGE_ROUTER_URL ?? 'http://mini-baas-storage-router:3040/storage/v1').replace(/\/$/, '');
 }
-
-/** The type without its parameters, lowercased: `Text/HTML; charset=x` → `text/html`. */
-function baseMime(contentType) {
-	return String(contentType ?? '').split(';')[0].trim().toLowerCase();
-}
-
-/**
- * Types a browser opens as a page that can run script. The app rewrites /api/* to
- * the bridge, so a stored object is served on the app's own origin, behind a
- * capability URL that needs no session: one such upload and one click ran script
- * as the victim (devil C76). A refused image upload falls back to a data: URL in
- * the editor, and <img> never runs an SVG's script.
- */
-const PAGE_TYPES = new Set(['text/html', 'application/xhtml+xml', 'image/svg+xml']);
-
-/**
- * Types served inline: an <img>, <video> or <audio> source, or plain text. Anything
- * else downloads as opaque bytes. SVG stays inline for the objects stored before
- * PAGE_TYPES existed; the sandbox below keeps its script from running.
- */
-const INLINE_TYPES = new Set([
-	'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif', 'image/svg+xml',
-	'video/mp4', 'video/webm', 'video/quicktime',
-	'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav',
-	'text/plain',
-]);
 
 /**
  * The headers every stored object is served with. The policy is the one GitHub
@@ -116,10 +91,10 @@ export function storageObjectKey(sha256, ext) {
 	return `${sha256}.${ext}`;
 }
 
-/** Ensure the private 'chat' bucket exists (idempotent — 'created:false' is OK). */
-export async function ensureChatBucket(ownerId, fetchImpl = fetch, env = process.env) {
+/** Ensure a bucket exists (idempotent — 'created:false' is OK). */
+export async function ensureBucket(ownerId, bucket, fetchImpl = fetch, env = process.env) {
 	try {
-		await fetchImpl(`${storageBase(env)}/bucket/${BUCKET}`, {
+		await fetchImpl(`${storageBase(env)}/bucket/${bucket}`, {
 			method: 'POST',
 			headers: { 'x-user-id': ownerId, 'content-type': 'application/json' },
 			body: JSON.stringify({ public: false }),
@@ -130,14 +105,21 @@ export async function ensureChatBucket(ownerId, fetchImpl = fetch, env = process
 	}
 }
 
+/** Ensure the private 'chat' bucket exists (idempotent — 'created:false' is OK). */
+export function ensureChatBucket(ownerId, fetchImpl = fetch, env = process.env) {
+	return ensureBucket(ownerId, BUCKET, fetchImpl, env);
+}
+
 /**
- * PUT raw bytes under bucket 'chat' as the owner. Returns the router JSON. Every
- * writer (page media, chat, collab seeds) comes through here, so a page type is
- * refused here, before a byte is sent.
+ * PUT raw bytes under a bucket as the owner. Returns the router JSON. Every
+ * writer (page media, chat, collab seeds, avatars) comes through here, so the
+ * type of the bytes is checked here, before a byte is sent: a page type and an
+ * inline type whose bytes do not match it are both refused.
  */
-export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImpl = fetch, env = process.env) {
+export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
 	if (PAGE_TYPES.has(baseMime(contentType))) throw httpError('This file type cannot be uploaded.', 415);
-	const response = await fetchImpl(`${storageBase(env)}/object/${BUCKET}/${encodeURIComponent(key)}`, {
+	assertBytesMatch(contentType, bodyBuffer);
+	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
 		method: 'PUT',
 		headers: { 'x-user-id': ownerId, 'content-type': contentType || 'application/octet-stream' },
 		body: bodyBuffer,
@@ -150,13 +132,13 @@ export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImp
 	try {
 		return JSON.parse(text);
 	} catch {
-		return { bucket: BUCKET, key };
+		return { bucket, key };
 	}
 }
 
 /** GET bytes for an object as the owner. Returns {status, buffer, contentType}. */
-export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.env) {
-	const response = await fetchImpl(`${storageBase(env)}/object/${BUCKET}/${encodeURIComponent(key)}`, {
+export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
+	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
 		method: 'GET',
 		headers: { 'x-user-id': ownerId },
 		signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),

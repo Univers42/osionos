@@ -20,9 +20,10 @@
  */
 
 import { createSessionsRoutes } from './bridge-sessions.mjs';
+import { createAvatarRoutes } from './bridge-avatar.mjs';
 
 export function createAccountHandler(deps) {
-	const modules = [createSessionsRoutes(deps)];
+	const modules = [createSessionsRoutes(deps), createAvatarRoutes(deps)];
 	return async function handleAccountRequest(url, request, response) {
 		for (const module of modules) {
 			if (await module(url, request, response)) return true;
