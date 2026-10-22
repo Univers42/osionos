@@ -58,6 +58,7 @@ function flushDepsFor(bridge: FakeBridge, recovery = fakeRecovery(pageEntry("cop
     privateWorkspaceId: () => "private",
     notify: (notice) => { notices.push(notice); },
     applyContent: (_pageId, content) => { applied.push(content); return null; },
+    recordVersion: () => undefined,
   };
   return { deps, notices, applied, recovery };
 }

@@ -240,6 +240,8 @@ export interface PageStore {
     newType: BlockType,
   ) => void;
   updatePageContent: (pageId: string, blocks: Block[]) => void;
+  /** The content version a write landed at — kept on the page, never an edit (no revision, no updatedAt). */
+  setPageContentVersion: (pageId: string, version: number) => void;
   patchPage: (
     pageId: string,
     patch: Partial<PageEntry> | ((page: PageEntry) => Partial<PageEntry>),
