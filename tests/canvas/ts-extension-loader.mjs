@@ -113,15 +113,110 @@ const APP_URLS_MODULE = new URL("../../src/shared/config/appUrls.ts", import.met
 // variable.
 const AI_CLIENT_MODULE = new URL("../../src/features/ai/api/aiClient.ts", import.meta.url).href;
 
+/* -------------------------------------------------------------------------- */
+/* The three differences between Vite and node                                  */
+/* -------------------------------------------------------------------------- */
+/*
+ * Node runs the app's files; Vite runs them too, but it understands three
+ * things node does not. Each of the three rules below closes one of them, and
+ * together they are what lets a test render a component that holds JSX — the
+ * read-only page's media block, for one.
+ *
+ * They touch the app's own files only: a library in node_modules is left
+ * exactly as node read it.
+ */
+
+/** The root of this repo: the rules below are the app's, not the libraries'. */
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+
+/** Is this file one of the app's? (A library in node_modules is not.) */
+function isAppFile(path) {
+  return path.startsWith(REPO_ROOT) && !path.includes("/node_modules/");
+}
+
+/**
+ * A JSON import needs its attribute in node ("with { type: "json" }"); Vite
+ * reads the file itself and never asks for one.
+ */
+const JSON_IMPORT = /(from\s+["'][^"']+\.json["'])/g;
+
+/** Adds the import attribute node asks for. */
+function withJsonAttributes(source) {
+  return source.replace(JSON_IMPORT, '$1 with { type: "json" }');
+}
+
+/**
+ * Node has no `import.meta.env`: a module that reads it throws. The app reads
+ * it for the API URL, the auth mode, the media keys — so a test that renders
+ * a component of the app would load a module that cannot even be read. The
+ * env object Vite's dev server would give it is given here instead: DEV on,
+ * nothing set (the same answer the two modules above already get).
+ */
+const ENV_OBJECT = "import.meta.env ??= { DEV: true };\n";
+
+/**
+ * The env object, in the place where it may be read: after a shebang, which
+ * has to stay the first line, and never in a file that has one already.
+ */
+function withEnv(source) {
+  if (source.includes("import.meta.env ??")) return source;
+  if (!source.startsWith("#!")) return ENV_OBJECT + source;
+  const end = source.indexOf("\n");
+  if (end === -1) return source;
+  return source.slice(0, end + 1) + ENV_OBJECT + source.slice(end + 1);
+}
+
+/**
+ * A .tsx file may hold JSX, and node's type stripping cannot parse it — the
+ * TypeScript compiler is the one that can. It turns the file into plain
+ * JavaScript, the react-jsx runtime included.
+ *
+ * The compiler is loaded LAZILY: a suite that reads no .tsx file never pays
+ * for it, and the files that hold no JSX (the markdown engine's renderers)
+ * come out of the compiler exactly as they went in.
+ */
+let typescript = null;
+
+async function compiler() {
+  if (!typescript) typescript = (await import("typescript")).default;
+  return typescript;
+}
+
+/** The JavaScript of a .tsx file, JSX and types gone. */
+async function compileTsx(path, source) {
+  const ts = await compiler();
+  const { outputText } = ts.transpileModule(source, {
+    fileName: path,
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+      jsx: ts.JsxEmit.ReactJSX,
+      // Node's own type stripping keeps every import it cannot prove is a
+      // type: the compiler must not elide one the runtime still needs.
+      verbatimModuleSyntax: true,
+    },
+  });
+  return outputText;
+}
+
 export async function load(url, context, nextLoad) {
   const [path] = url.split("?");
+  // A module that is not a file of the disk (a data: URL, a node: builtin)
+  // is none of the app's business.
+  const isFile = path.startsWith("file:");
 
-  // A .tsx file: the markdown engine's React renderer is one (it calls
-  // React.createElement, so it holds NO JSX syntax) and node refuses the
-  // extension outright. Node's own type stripping reads it as TypeScript.
-  if (path.endsWith(".tsx")) {
-    const source = await readFile(fileURLToPath(path), "utf8");
-    return { format: "module-typescript", source, shortCircuit: true };
+  // A .tsx file: node refuses the extension outright, so the source is
+  // compiled here — the markdown engine's React renderer is one (it calls
+  // React.createElement, so it holds no JSX) and a component of the app is
+  // another (it holds JSX, and node's type stripping cannot read that).
+  if (isFile && path.endsWith(".tsx")) {
+    const file = fileURLToPath(path);
+    const source = await readFile(file, "utf8");
+    return {
+      format: "module",
+      source: withJsonAttributes(await compileTsx(file, source)),
+      shortCircuit: true,
+    };
   }
 
   const loaded = await nextLoad(url, context);
@@ -133,5 +228,10 @@ export async function load(url, context, nextLoad) {
     const env = new URL(url).searchParams.get("env") ?? "{}";
     return { ...loaded, source: `import.meta.env ??= ${env};\n${loaded.source}` };
   }
-  return loaded;
+
+  // The app's own files: the JSON attribute node asks for, and the env object
+  // Vite would have given them. A library is left as node read it.
+  if (!isFile || !isAppFile(fileURLToPath(path))) return loaded;
+  if (loaded.format !== "module" && loaded.format !== "module-typescript") return loaded;
+  return { ...loaded, source: withEnv(withJsonAttributes(String(loaded.source))) };
 }
