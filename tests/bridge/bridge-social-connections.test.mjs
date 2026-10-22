@@ -23,9 +23,10 @@ const ME = uid(1);
 const [A, B, C, D, E, F] = [uid(11), uid(12), uid(13), uid(14), uid(15), uid(16)];
 const NOW = '2026-10-19T12:00:00.000Z';
 const PEERS = {
-	[A]: { name: 'Ada', avatar: 'ada.png' },
+	// A stored avatar is a path under /api/media (P0-6): it is shown as it is.
+	[A]: { name: 'Ada', avatar: `/api/media/avatars/${uid(11)}/aaa-160.webp` },
 	[B]: { name: 'Bo', avatar: null },
-	[C]: { name: 'Cy', avatar: 'cy.png' },
+	[C]: { name: 'Cy', avatar: `/api/media/avatars/${uid(13)}/ccc-160.webp` },
 	[D]: { name: 'Di', avatar: null },
 };
 const edge = (n, requester, addressee, status, source = 'manual') => ({
