@@ -68,8 +68,12 @@ const MAX_LIMIT = 20;
 const RECENT_LIMIT = 200;
 const NEAREST_LIMIT = 200;
 
-/** The flag: the route does not exist until the flag is on. */
-function recsEnabled(env) {
+/**
+ * The flag: the route does not exist until the flag is on. It is exported so
+ * the beacon of the recommender (bridge-events.mjs) answers the same 404 —
+ * one flag, one meaning, for both routes.
+ */
+export function recsEnabled(env) {
 	return env?.OSIONOS_RECS_FOR_YOU === '1';
 }
 

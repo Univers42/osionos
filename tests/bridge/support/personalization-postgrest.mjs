@@ -56,7 +56,7 @@ const SHAPES = [
 	{
 		logical: 'setting', method: 'GET', table: 'ai_personalization_settings',
 		keys: ['user_id', 'select', 'limit'],
-		fixed: { select: 'capture_explicit', limit: '1' },
+		fixed: { select: 'capture_explicit,beacon_consent', limit: '1' },
 		run: (world, p) => world.settings.filter((row) => row.user_id === p.user_id.slice(3)),
 	},
 	{
