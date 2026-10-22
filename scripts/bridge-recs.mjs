@@ -42,17 +42,16 @@
  *   is never named.
  *
  * THE SIGNED SLATE
- *   The token is HMAC-SHA256 under a key derived from the app secret with
- *   HKDF, so a slate can never verify as a session token and the other way
- *   round. The beacon of the next slice checks it; this slice only issues it.
+ *   bridge-recs-slate.mjs seals it. The beacon of the next slice checks it;
+ *   this slice only issues it.
  */
 
 import { randomUUID } from 'node:crypto';
 import { takeToken } from './bridge-ratelimit.mjs';
-import { canReadPageRowAsMember } from './bridge-page-read.mjs';
-import { blockedViewerBy, memberWorkspacesAmong } from './bridge-social-core.mjs';
 import { bearerToken, rest, sendJson } from './bridge-social-core.mjs';
-import { confidences, explain, foldIn, itemWeights, mmr, signSlate } from './bridge-recs-model.mjs';
+import { confidences, explain, foldIn, itemWeights, mmr } from './bridge-recs-model.mjs';
+import { readablePages, readPages } from './bridge-recs-pages.mjs';
+import { signSlate } from './bridge-recs-slate.mjs';
 
 /** The one route of this module. */
 const RECS_PATH = '/api/recs/for-you';
@@ -67,9 +66,6 @@ const MAX_LIMIT = 20;
 /** How many recent items the context gives, and how many nearest items are asked for. */
 const RECENT_LIMIT = 200;
 const NEAREST_LIMIT = 200;
-
-/** The columns of the page rows the slate needs. */
-const PAGE_SELECT = 'id,title,icon,workspace_id,owner_id,visibility,collaborators';
 
 /** The flag: the route does not exist until the flag is on. */
 function recsEnabled(env) {
@@ -141,45 +137,6 @@ async function readNearest(deps, config, model, vector) {
 		},
 	});
 	return Array.isArray(rows) ? rows : [];
-}
-
-/** The page rows of a set of ids: ONE query, live rows only. */
-async function readPages(deps, config, ids) {
-	const list = [...new Set(ids.filter((id) => typeof id === 'string' && id !== ''))];
-	if (list.length === 0) return [];
-	const rows = await rest(
-		config,
-		deps.fetchImpl,
-		`osionos_pages?id=in.(${list.join(',')})&archived_at=is.null&select=${PAGE_SELECT}`,
-	);
-	return Array.isArray(rows) ? rows : [];
-}
-
-/**
- * The page rows the caller may read NOW: a member of the page's workspace,
- * the page readable, not the caller's own page, and no owner the caller has
- * a block with. Two reads: the memberships (ONE call over every workspace the
- * rows name) and the blocks.
- */
-async function readablePages(deps, config, session, rows) {
-	const workspaces = rows.map((row) => row?.workspace_id).filter((id) => typeof id === 'string' && id !== '');
-	const members = await memberWorkspacesAmong(config, deps.fetchImpl, session, workspaces);
-	// The blocks are compared lower-cased on BOTH sides: Postgres writes the uuids
-	// in lower case, but a token may carry an upper-case one (sameId's rule).
-	const blocked = new Set([...await blockedViewerBy(config, deps.fetchImpl, session.userId)]
-		.map((id) => String(id).toLowerCase()));
-	const self = String(session.userId ?? '').toLowerCase();
-	const readable = new Map();
-	for (const row of rows) {
-		const id = String(row?.id ?? '');
-		if (id === '' || readable.has(id)) continue;
-		const owner = String(row?.owner_id ?? '').toLowerCase();
-		if (owner !== '' && owner === self) continue;
-		if (owner !== '' && blocked.has(owner)) continue;
-		if (!canReadPageRowAsMember(row, session.userId, members)) continue;
-		readable.set(id, row);
-	}
-	return readable;
 }
 
 /** The strongest own event of an item, and its label. */
@@ -301,14 +258,16 @@ export function createRecsHandler({ config, verifySession, fetchImpl = fetch, en
 	return async function handleRecsRoute(url, request, response, requestConfig = config) {
 		if (url.pathname !== RECS_PATH) return false;
 		const method = (request.method || 'GET').toUpperCase();
+		// The flag off: the route does not exist, exactly like an unknown path —
+		// checked BEFORE the session, so a caller without a token cannot tell a
+		// disabled recommender (401) from a missing one.
+		if (!recsEnabled(deps.env)) return sendJson(response, 404, { ok: false }, requestConfig);
 		try {
 			const session = verifySession(bearerToken(request), requestConfig);
 			// The limit is charged BEFORE any read: a caller must not be able to
 			// read the recommender for free, and a burst is the one thing this
 			// route must not be.
 			takeToken(`recs:${session.userId}`, RATE);
-			// The flag off: the route does not exist, exactly like an unknown path.
-			if (!recsEnabled(deps.env)) return sendJson(response, 404, { ok: false }, requestConfig);
 			if (method !== 'GET') {
 				return sendJson(response, 405, { ok: false, message: `Method ${method} is not supported here.` }, requestConfig);
 			}

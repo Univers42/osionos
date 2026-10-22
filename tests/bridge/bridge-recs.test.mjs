@@ -25,8 +25,8 @@
  *     are all out (C55);
  *   * the "why" names a page of the user's own ONLY while that page is still
  *     readable — and never names another user;
- *   * a broken backend is a 503 with no slate, never a half of one;
- *   * a burst is a 429.
+ *   * the answer itself (one read per table, the limit, the signature, a 503,
+ *     a 429) is bridge-recs-answer.test.mjs.
  *
  * A strict PostgREST stub (support/recs-postgrest.mjs) answers only the
  * declared queries: a query nobody declared fails the test.
@@ -34,101 +34,24 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { verifySlate } from '../../scripts/bridge-recs-model.mjs';
-import { CONFIG, MODEL, callRecs, createRecsStub, uid } from './support/recs-postgrest.mjs';
-
-/** Every test uses its own caller: the rate limit is per user, and it is shared. */
-let counter = 900;
-const user = () => uid(++counter);
-
-const OTHER = uid(12);
-const BLOCKER = uid(13);
-const WS = 'aaaaaaaa-0000-4000-8000-000000000001';
-const WS_OTHER = 'aaaaaaaa-0000-4000-8000-000000000002';
-const LIKED = uid(21);
-const COMMENTED = uid(22);
-const TOUCHED = uid(23);
-const NEAR = uid(31);
-const PRIVATE = uid(32);
-const ARCHIVED = uid(33);
-const BLOCKED = uid(34);
-const REFUSED = uid(35);
-const MINE = uid(36);
-
-function page(id, { workspace = WS, owner = OTHER, visibility = 'shared', title = 'A page', archived = null } = {}) {
-	return {
-		id,
-		title,
-		icon: null,
-		workspace_id: workspace,
-		owner_id: owner,
-		visibility,
-		collaborators: [],
-		archived_at: archived,
-	};
-}
-
-/** The context of the caller: the champion, the items they touched, the one they refused. */
-function context(extra = {}) {
-	return {
-		model: MODEL,
-		user_vector: null,
-		recent: [
-			{ item_kind: 'page', item_id: LIKED, events: { like: 2 }, vector: [1, 0] },
-			{ item_kind: 'page', item_id: COMMENTED, events: { comment: 1 }, vector: [0, 1] },
-			{ item_kind: 'page', item_id: TOUCHED, events: { like: 1 }, vector: [0.2, 0.1] },
-		],
-		not_interested: [{ item_kind: 'page', item_id: REFUSED }],
-		...extra,
-	};
-}
-
-/** The nearest pages of the champion, best inner product first. */
-function nearestRow(id, score) {
-	return { item_kind: 'page', item_id: id, workspace_id: WS, score, vector: [1, score / 100] };
-}
-
-/** The world of the caller: nine pages, one of them each for a reason. */
-function world(extra = {}, me = user()) {
-	return {
-		context: context(),
-		nearest: [
-			nearestRow(NEAR, 10),
-			nearestRow(PRIVATE, 9),
-			nearestRow(ARCHIVED, 8),
-			nearestRow(BLOCKED, 7),
-			nearestRow(REFUSED, 6),
-			nearestRow(MINE, 5),
-			nearestRow(TOUCHED, 4),
-		],
-		pages: [
-			page(LIKED, { title: 'The liked page' }),
-			page(COMMENTED, { title: 'The commented page' }),
-			page(TOUCHED, { title: 'The touched page' }),
-			page(NEAR, { title: 'The near page' }),
-			page(PRIVATE, { workspace: WS_OTHER, visibility: 'private', title: 'The private page' }),
-			page(ARCHIVED, { archived: '2026-01-01T00:00:00.000Z', title: 'The archived page' }),
-			page(BLOCKED, { owner: BLOCKER, title: 'The blocked page' }),
-			page(REFUSED, { title: 'The refused page' }),
-			page(MINE, { owner: me, title: 'My own page' }),
-		],
-		members: [{ user_id: me, workspace_id: WS }],
-		blocks: [{ blocker_id: me, blocked_id: BLOCKER }],
-		...extra,
-	};
-}
-
-/** The page ids of an answer. */
-const pageIds = (answer) => answer.body.items.map((item) => item.pageId);
-
-/** A world with many readable pages, each of its own author, so the limit shows. */
-function wideWorld(count, me = user()) {
-	const ids = Array.from({ length: count }, (_unused, index) => uid(400 + index));
-	return world({
-		nearest: ids.map((id, index) => nearestRow(id, 100 - index)),
-		pages: ids.map((id, index) => page(id, { title: `Page ${index}`, owner: uid(500 + index) })),
-	}, me);
-}
+import { MODEL, callRecs, createRecsStub } from './support/recs-postgrest.mjs';
+import {
+	user,
+	OTHER,
+	BLOCKER,
+	LIKED,
+	TOUCHED,
+	NEAR,
+	PRIVATE,
+	ARCHIVED,
+	BLOCKED,
+	REFUSED,
+	MINE,
+	page,
+	context,
+	world,
+	pageIds,
+} from './support/recs-world.mjs';
 
 describe('GET /api/recs/for-you', () => {
 	it('answers the 404 of a route that does not exist when the flag is off', async () => {
@@ -146,6 +69,14 @@ describe('GET /api/recs/for-you', () => {
 		const answer = await callRecs(stub, { userId: me, token: null });
 		assert.equal(answer.status, 401);
 		assert.equal(answer.body.ok, false);
+		assert.deepEqual(stub.calls, []);
+	});
+
+	it('answers the 404, not a 401, to a caller without a token when the flag is off', async () => {
+		const me = user();
+		const stub = createRecsStub(world({}, me));
+		const answer = await callRecs(stub, { userId: me, token: null, env: {} });
+		assert.equal(answer.status, 404);
 		assert.deepEqual(stub.calls, []);
 	});
 
@@ -286,60 +217,5 @@ describe('the why, and the names in the answer', () => {
 		const text = JSON.stringify(answer.body);
 		assert.ok(!text.includes(OTHER), 'the owner of a page is never in the answer');
 		assert.ok(!text.includes(BLOCKER), 'a blocked user is never in the answer');
-	});
-});
-
-describe('the answer itself', () => {
-	it('reads the pages in ONE query, and the blocks in one', async () => {
-		const me = user();
-		const stub = createRecsStub(world({}, me));
-		await callRecs(stub, { userId: me });
-		assert.deepEqual(stub.tables(), [
-			'rpc/ai_rec_user_context',
-			'rpc/ai_rec_nearest',
-			'osionos_pages',
-			'osionos_workspace_members',
-			'osionos_user_blocks',
-		]);
-	});
-
-	it('clamps the limit into 1..20', async () => {
-		const me = user();
-		const wide = await callRecs(createRecsStub(wideWorld(25, me)), { userId: me, query: '?limit=99' });
-		assert.equal(wide.body.items.length, 20);
-		const plain = await callRecs(createRecsStub(wideWorld(25, me)), { userId: me, query: '?limit=nonsense' });
-		assert.equal(plain.body.items.length, 10);
-		const one = await callRecs(createRecsStub(wideWorld(25, me)), { userId: me, query: '?limit=0' });
-		assert.equal(one.body.items.length, 1);
-	});
-
-	it('signs the slate for the caller and the pages in rank order', async () => {
-		const me = user();
-		const stub = createRecsStub(world({}, me));
-		const answer = await callRecs(stub, { userId: me });
-		const verified = verifySlate(CONFIG.appSessionSecret, answer.body.slate, me, Date.now());
-		assert.equal(verified.recId, answer.body.recId);
-		assert.equal(verified.surface, 'home');
-		assert.deepEqual(verified.items, [NEAR]);
-	});
-
-	it('answers a 503 and no slate when the backend fails', async () => {
-		const me = user();
-		const stub = createRecsStub(world({}, me), { failing: ['nearest'] });
-		const answer = await callRecs(stub, { userId: me });
-		assert.equal(answer.status, 503);
-		assert.equal(answer.body.ok, false);
-		assert.equal(answer.body.items, undefined);
-	});
-
-	it('answers a 429 on the twenty-first call of a burst', async () => {
-		const me = user();
-		const stub = createRecsStub(world({}, me));
-		const answers = [];
-		for (let call = 0; call < 21; call += 1) {
-			answers.push(await callRecs(stub, { userId: me }));
-		}
-		assert.deepEqual(answers.map((answer) => answer.status), [...Array(20).fill(200), 429]);
-		assert.equal(answers[20].body.ok, false);
 	});
 });

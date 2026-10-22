@@ -50,7 +50,7 @@ const reply = (rows, status = 200) => ({
 });
 
 /** The ids of an `in.(a,b)` filter, or [] when the filter says nothing. */
-function idsOf(value) {
+export function idsOf(value) {
 	const inner = String(value ?? '').replace(/^in\.\((.*)\)$/, '$1');
 	return inner.split(',').map((entry) => entry.trim()).filter(Boolean);
 }

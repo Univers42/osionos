@@ -12,11 +12,10 @@
 
 /**
  * The recommender's maths, in the bridge: the fold-in of a user, the diversity
- * of the slate, the explanation of a recommendation and the signature that
- * seals it.
+ * of the slate and the explanation of a recommendation. The signature that
+ * seals a slate is bridge-recs-slate.mjs.
  *
- * PURE: no I/O, no clock of its own, no randomness of its own — `node:crypto`
- * for the slate's signature, and nothing else. Every function here is a pure
+ * PURE: no I/O, no clock, no randomness, no import. Every function here is a pure
  * function of its arguments, so the numbers can be checked against the Python
  * reference (services/osionos-ml/osml/foldin.py) without a server and without
  * a database.
@@ -35,20 +34,6 @@
  *   with the SAME factor L, so the "why" is the very quantity the ranking
  *   used — not a story told after the fact.
  */
-
-import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
-
-/** The key of the slate's signature: HKDF over the app secret, one purpose. */
-const SLATE_KEY_INFO = 'osionos-rec-slate-v1';
-
-/** A slate is good for an hour; after that it is not a slate any more. */
-const SLATE_TTL_MS = 3_600_000;
-
-/** The HKDF key of the slate: never the app secret itself. */
-function slateKey(secret) {
-	const ikm = Buffer.isBuffer(secret) ? secret : Buffer.from(String(secret ?? ''), 'utf8');
-	return Buffer.from(hkdfSync('sha256', ikm, '', SLATE_KEY_INFO, 32));
-}
 
 /** The summed weight of one item's events, with the CHAMPION's weights. */
 function eventWeightSum(events, weights) {
@@ -301,63 +286,4 @@ export function mmr(candidates, { limit, lambda = 0.7, authorCap = 2 } = {}) {
 		perOwner.set(owner, (perOwner.get(owner) ?? 0) + 1);
 	}
 	return chosen;
-}
-
-/**
- * The signed slate: base64url(JSON) + '.' + HMAC-SHA256, under a key derived
- * from the app secret with HKDF. The derivation is why a slate can never
- * verify as a session token, and a session token never as a slate.
- *
- * @param {string} secret the app session secret
- * @param {{ recId: string, userId: string, surface: string, items: string[], issuedAt: number }} slate
- * @returns {string} the token
- */
-export function signSlate(secret, { recId, userId, surface, items, issuedAt } = {}) {
-	const payload = {
-		recId: String(recId ?? ''),
-		userId: String(userId ?? ''),
-		surface: String(surface ?? ''),
-		items: (Array.isArray(items) ? items : []).map(String),
-		issuedAt: Number(issuedAt ?? Date.now()),
-	};
-	const encoded = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
-	const signature = createHmac('sha256', slateKey(secret)).update(encoded).digest('base64url');
-	return `${encoded}.${signature}`;
-}
-
-/**
- * The verification of a slate: the signature, the user and the age. Anything
- * else is null — a token of another shape (a session token), a flipped
- * character, another user's slate or a slate of an hour ago.
- *
- * @param {string} secret the app session secret
- * @param {string} token the token to verify
- * @param {string} userId the user the slate must belong to
- * @param {number} nowMs the moment of the check, in milliseconds
- * @returns {{ recId: string, surface: string, items: string[] } | null}
- */
-export function verifySlate(secret, token, userId, nowMs = Date.now()) {
-	const parts = String(token ?? '').split('.');
-	if (parts.length !== 2) return null;
-	const [encoded, signature] = parts;
-	let payload;
-	try {
-		payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
-	} catch {
-		return null;
-	}
-	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
-	const expected = createHmac('sha256', slateKey(secret)).update(encoded).digest('base64url');
-	const given = Buffer.from(String(signature), 'utf8');
-	const wanted = Buffer.from(expected, 'utf8');
-	if (given.length !== wanted.length || !timingSafeEqual(given, wanted)) return null;
-	if (String(payload.userId ?? '') !== String(userId ?? '')) return null;
-	const issuedAt = Number(payload.issuedAt);
-	if (!Number.isFinite(issuedAt)) return null;
-	if (Number(nowMs) - issuedAt > SLATE_TTL_MS) return null;
-	return {
-		recId: String(payload.recId ?? ''),
-		surface: String(payload.surface ?? ''),
-		items: Array.isArray(payload.items) ? payload.items.map(String) : [],
-	};
 }
