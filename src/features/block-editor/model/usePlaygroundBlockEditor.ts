@@ -30,6 +30,7 @@ import { useSlashAiImageSelect, useSlashSelect, useSlashWhiteboardSelect } from 
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";
 import { useUserStore } from "@/features/auth";
+import { useUrlPasteMode } from "@/shared/config/useAppearance";
 import {
   isIndentable,
   isParentable,
@@ -660,6 +661,8 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   const [colorMenu, setColorMenu] = useState<ColorMenuState | null>(null);
   const blockRefs = useRef<Map<string, HTMLElement>>(new Map());
   const contentRef = useRef<Block[]>(content);
+  // What a pasted bare URL becomes: a link, or the text exactly as it was.
+  const urlPaste = useUrlPasteMode();
 
   /** Focus a block element after a short delay. `placement`: true = end, false =
    * start, or an explicit edge/goal-X placement carried from arrow navigation. */
@@ -1653,11 +1656,20 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       }
 
       // A pasted bare URL becomes a blue `[hostname](url)` link, not pure URL text, and
-      // the paste menu offers Mention / Bookmark / Embed (no network until a pick).
+      // the paste menu offers Mention / Bookmark / Embed (no network until a pick) —
+      // unless the person chose "plain", which keeps the URL as it was and offers no menu.
       if (isSingleBareUrl(raw)) {
         e.preventDefault();
         const content = currentBlock.content ?? "";
-        const pasted = insertPastedLink(content, raw, resolvePasteSelectionOffsets(e, content));
+        const offsets = resolvePasteSelectionOffsets(e, content);
+        if (urlPaste === "plain") {
+          const lo = Math.max(0, Math.min(offsets.start, offsets.end, content.length));
+          const hi = Math.max(lo, Math.min(Math.max(offsets.start, offsets.end), content.length));
+          updateBlock(pageId, blockId, { content: content.slice(0, lo) + raw + content.slice(hi) });
+          focusBlock(blockId, true);
+          return;
+        }
+        const pasted = insertPastedLink(content, raw, offsets);
         updateBlock(pageId, blockId, { content: pasted.content });
         focusBlock(blockId, true);
         if (isPasteMenuBlock(currentBlock)) offerPasteMenu(blockId, pasted.context, pastedBlockElement(e));
@@ -1677,7 +1689,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       updatePageContent(pageId, replaceBlockInEditorTree(contentRef.current, blockId, replacement));
       focusBlock(parsed.at(-1)?.id ?? replacement.at(-1)?.id ?? blockId, true);
     },
-    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock, offerPasteMenu],
+    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock, urlPaste, offerPasteMenu],
   );
 
   const handleContainerEnter = useCallback(

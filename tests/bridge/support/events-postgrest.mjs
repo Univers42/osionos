@@ -25,6 +25,7 @@
 
 import assert from 'node:assert/strict';
 import { createEventsHandler } from '../../../scripts/bridge-events.mjs';
+import { idsOf } from './recs-postgrest.mjs';
 
 export const uid = (n) => `${String(n).padStart(8, '0')}-0000-4000-8000-000000000000`;
 export const CONFIG = {
@@ -39,12 +40,6 @@ const reply = (rows, status = 200) => ({
 	status,
 	text: async () => (rows === '' ? '' : JSON.stringify(rows)),
 });
-
-/** The ids of an `in.(a,b)` filter, or [] when the filter says nothing. */
-export function idsOf(value) {
-	const inner = String(value ?? '').replace(/^in\.\((.*)\)$/, '$1');
-	return inner.split(',').map((entry) => entry.trim()).filter(Boolean);
-}
 
 /** The value of an `eq.x` filter. */
 function eqOf(value) {

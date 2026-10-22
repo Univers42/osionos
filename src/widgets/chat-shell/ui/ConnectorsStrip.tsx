@@ -30,7 +30,7 @@ import { useConnectorStore } from "@/features/connectors/model/useConnectorStore
 import { FUNCTIONAL_CONNECTORS, PLACEHOLDER_CONNECTORS } from "@/features/connectors/model/connectorRegistry";
 import type { ConnectorDescriptor } from "@/features/connectors/model/connectorTypes";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
-import { openAiConnections } from "@/features/settings/settingsOpener";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import { ConnectorConsentModal } from "./ConnectorConsentModal";
 
 /** "Get better answers from your apps" — connect/disconnect connectors that feed the picker. */
@@ -57,7 +57,7 @@ export const ConnectorsStrip: React.FC = () => {
       {serviceOwnsModels ? (
         <button
           type="button"
-          onClick={openAiConnections}
+          onClick={() => openSettings("ai_connections")}
           title="Settings › AI connections"
           className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         >

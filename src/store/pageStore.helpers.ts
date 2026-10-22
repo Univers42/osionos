@@ -520,9 +520,7 @@ export function seedToEntry(sp: SeedPage): PageEntry {
     archivedAt: sp.archivedAt ?? null,
     isTemplate: sp.isTemplate ?? false,
     isDefaultTemplate: sp.isDefaultTemplate ?? false,
-    // SeedPage carries these as open strings (e.g. "student-dashboard"); the
-    // PageEntry unions are narrower, so cast — the value round-trips verbatim.
-    templateSurface: sp.templateSurface as PageEntry["templateSurface"],
+    templateSurface: sp.templateSurface,
     surface: sp.surface as PageEntry["surface"],
     cover: sp.cover,
     content: sp.content,

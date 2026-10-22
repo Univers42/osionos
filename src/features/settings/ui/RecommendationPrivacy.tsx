@@ -28,7 +28,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button, Toggle, useToastStore } from '@/shared/ui';
 import { clearActivity, downloadActivity, readPersonalization, writePersonalization } from '../api/personalization';
-import { SettingRow } from './SettingsRows';
+import { SettingRow } from './settingsKit';
 
 const NOTICE = 'Your likes, reactions, comments, shares and favorites shape the pages and people osionos suggests to you. Turn this off and nothing more is collected.';
 const BEACON_TITLE = 'Use the pages I see and open to improve recommendations';
