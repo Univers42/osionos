@@ -63,7 +63,7 @@ describe('GET /api/personalization', () => {
 		const stub = createPersonalizationStub();
 		const answer = await callPersonalization(stub, { userId: me });
 		assert.equal(answer.status, 200);
-		assert.deepEqual(answer.body, { ok: true, captureExplicit: true });
+		assert.deepEqual(answer.body, { ok: true, captureExplicit: true, beaconConsent: false });
 	});
 
 	it('answers the switch the row holds', async () => {
@@ -71,7 +71,15 @@ describe('GET /api/personalization', () => {
 		const stub = createPersonalizationStub({ settings: [{ user_id: me, capture_explicit: false }] });
 		const answer = await callPersonalization(stub, { userId: me });
 		assert.equal(answer.status, 200);
-		assert.deepEqual(answer.body, { ok: true, captureExplicit: false });
+		assert.deepEqual(answer.body, { ok: true, captureExplicit: false, beaconConsent: false });
+	});
+
+	it('answers the beacon switch the row holds', async () => {
+		const me = user();
+		const stub = createPersonalizationStub({ settings: [{ user_id: me, capture_explicit: true, beacon_consent: true }] });
+		const answer = await callPersonalization(stub, { userId: me });
+		assert.equal(answer.status, 200);
+		assert.deepEqual(answer.body, { ok: true, captureExplicit: true, beaconConsent: true });
 	});
 
 	it('reads the row of the session user only', async () => {
@@ -79,7 +87,7 @@ describe('GET /api/personalization', () => {
 		const other = user();
 		const stub = createPersonalizationStub({ settings: [{ user_id: other, capture_explicit: false }] });
 		const answer = await callPersonalization(stub, { userId: me });
-		assert.deepEqual(answer.body, { ok: true, captureExplicit: true });
+		assert.deepEqual(answer.body, { ok: true, captureExplicit: true, beaconConsent: false });
 		assert.match(stub.calls[0].query, new RegExp(`user_id=eq\\.${me}`));
 	});
 });
@@ -95,7 +103,7 @@ describe('PUT /api/personalization', () => {
 			body: { captureExplicit: false, userId: other },
 		});
 		assert.equal(answer.status, 200);
-		assert.deepEqual(answer.body, { ok: true, captureExplicit: false });
+		assert.deepEqual(answer.body, { ok: true, captureExplicit: false, beaconConsent: false });
 		const writes = stub.writes();
 		assert.equal(writes.length, 1);
 		assert.equal(writes[0].body.user_id, me);
@@ -149,6 +157,49 @@ describe('PUT /api/personalization', () => {
 		});
 		assert.equal(answer.status, 422);
 		assert.deepEqual(answer.body, { ok: false, message: 'captureExplicit must be a boolean.' });
+		assert.deepEqual(stub.writes(), []);
+	});
+
+	it('upserts ONLY the beacon column when the body carries only the beacon', async () => {
+		const me = user();
+		const stub = createPersonalizationStub();
+		const answer = await callPersonalization(stub, {
+			method: 'PUT',
+			userId: me,
+			body: { beaconConsent: true },
+		});
+		assert.equal(answer.status, 200);
+		assert.deepEqual(answer.body, { ok: true, captureExplicit: true, beaconConsent: true });
+		const write = stub.writes()[0];
+		assert.equal(write.body.beacon_consent, true);
+		// The other switch keeps what it had: it is not written at all.
+		assert.equal('capture_explicit' in write.body, false);
+	});
+
+	it('upserts both switches when the body carries both', async () => {
+		const me = user();
+		const stub = createPersonalizationStub();
+		const answer = await callPersonalization(stub, {
+			method: 'PUT',
+			userId: me,
+			body: { captureExplicit: false, beaconConsent: true },
+		});
+		assert.equal(answer.status, 200);
+		assert.deepEqual(answer.body, { ok: true, captureExplicit: false, beaconConsent: true });
+		const write = stub.writes()[0];
+		assert.equal(write.body.capture_explicit, false);
+		assert.equal(write.body.beacon_consent, true);
+	});
+
+	it('refuses a beacon switch that is not a boolean, and writes nothing', async () => {
+		const me = user();
+		const stub = createPersonalizationStub();
+		const answer = await callPersonalization(stub, {
+			method: 'PUT',
+			userId: me,
+			body: { beaconConsent: 'yes' },
+		});
+		assert.equal(answer.status, 422);
 		assert.deepEqual(stub.writes(), []);
 	});
 });
