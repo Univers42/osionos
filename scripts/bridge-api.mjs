@@ -883,6 +883,64 @@ function memberHasPermission(member, permission) {
 	return permissions.includes('admin') || permissions.includes(permission);
 }
 
+/**
+ * The caller's membership may READ a mounted database. A role in the app's vocabulary
+ * (owner / admin / editor / viewer, osionos_workspace_members) decides it; a
+ * membership that carries no role of its own is decided by its permission list.
+ * Caveat: a membership whose list carries 'read' but not 'update' reads and cannot
+ * write — the roles the app writes always carry both, so the two never diverge.
+ */
+export function canReadDatabase(member) {
+	if (!member) return false;
+	const role = safeText(member.role, 16);
+	if (role === 'owner' || role === 'admin' || role === 'editor') return true;
+	return memberHasPermission(member, 'read');
+}
+
+/**
+ * The caller's membership may WRITE rows of a mounted database. It mirrors
+ * memberHasPermission('update') on purpose: the workspace permission that opens a page
+ * write opens a row write, and nothing else does.
+ */
+export function canWriteDatabase(member) {
+	return memberHasPermission(member, 'update');
+}
+
+/**
+ * The caller's membership may run DDL — an op that changes the SHAPE of the database
+ * other members' rows live in (create_table, drop_table, add_column, drop_column,
+ * alter_column_type). It stays with the workspace owner/admin, and with a membership
+ * that carries the admin permission.
+ * Caveat: a viewer whose permission list carries 'admin' administers the database —
+ * the list is the authority for a role the list itself contradicts.
+ */
+export function canRunDdl(member) {
+	return memberHasPermission(member, 'admin');
+}
+
+/**
+ * How much of a mounted database ONE membership opens, as a comparable number: a bit
+ * per capability (read 1, write 2, DDL 4). It is what makes "the most permissive of
+ * the caller's own memberships" decidable when a database is mounted in two of the
+ * workspaces the caller belongs to.
+ */
+function memberDatabaseStrength(member) {
+	return (canReadDatabase(member) ? 1 : 0) + (canWriteDatabase(member) ? 2 : 0) + (canRunDdl(member) ? 4 : 0);
+}
+
+/**
+ * The 403 a database gate answers. The code names the CAPABILITY the caller lacks, not
+ * their role: a role in the body would tell a caller what the bridge knows about them,
+ * and the client renders one message per capability.
+ */
+function databasePermissionError(capability) {
+	const write = capability !== 'read';
+	return Object.assign(
+		new Error(write ? 'You do not have permission to modify this database.' : 'You do not have permission to read this database.'),
+		{ status: 403, code: write ? 'database_permission_denied' : 'database_read_denied' },
+	);
+}
+
 /** Page-level part of canWritePageRow; the client mirrors the whole rule as canWritePage (tests/canvas/bridge-page-write-agreement.test.ts). */
 function mayModifyPage(existing, access) {
 	const ownProps = Array.isArray(existing.properties) ? existing.properties : [];
@@ -2845,10 +2903,17 @@ async function readablePageGraph(workspaceIds, userId, config, fetchImpl) {
 	return pagesToGraph(rows);
 }
 
-/** Record graph from the workspaces' authorized mounts (empty when none / on error). */
-async function workspaceRecordGraph(workspaceIds, config, fetchImpl) {
+/**
+ * Record graph from the workspaces' authorized mounts (empty when none / on error).
+ * The record graph READS the mounted databases, so it takes the same gate as the
+ * database routes: a mount whose membership may not read contributes no record node.
+ * A membership that cannot be read is a miss, so the graph degrades to fewer nodes
+ * rather than to a failure.
+ */
+async function workspaceRecordGraph(authContext, workspaceIds, config, fetchImpl) {
 	const wsdb = await listWorkspaceDatabases(workspaceIds, config, fetchImpl);
-	const request = overviewRequest(wsdb);
+	const members = await workspaceMembers(authContext, [...new Set(wsdb.map((row) => row && row.workspace_id).filter(Boolean))], config, fetchImpl).catch(() => new Map());
+	const request = overviewRequest(wsdb.filter((row) => row && canReadDatabase(members.get(row.workspace_id) ?? null)));
 	if (!request) return { nodes: [], edges: [] };
 	try {
 		return (await baasQueryPost(config, fetchImpl, '/graph/overview', request, GRAPH_FETCH_TIMEOUT_MS)) ?? { nodes: [], edges: [] };
@@ -2876,7 +2941,7 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 			? (accessible.includes(requested) ? [requested] : [])
 			: authContext.workspaceIds;
 	const noteGraph = await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl);
-	const recordGraph = await workspaceRecordGraph(workspaceIds, config, fetchImpl);
+	const recordGraph = await workspaceRecordGraph(authContext, workspaceIds, config, fetchImpl);
 	json(response, 200, mergeGraphs(noteGraph, recordGraph), config);
 	return true;
 }
@@ -2888,31 +2953,75 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 // workspaces, then the dbId must appear in one of those workspaces' mounts.
 
 /**
+ * The caller's membership in a mount's workspace. `callerWorkspaceMember` reads it
+ * LIVE (the members row), because the token's role map is frozen at mint time and a
+ * demotion must not survive it.
+ * A miss on the caller's OWN private workspace is not a miss: that workspace was
+ * created for them and they own it, so a members row that cannot be read there must
+ * not lock them out of their own databases. Every other miss is a miss (deny).
+ * Caveat: a team workspace the token merely LISTS but whose members row is gone reads
+ * as no membership — the caller is refused the database, which is the safe direction.
+ */
+async function mountWorkspaceMember(authContext, workspaceId, config, fetchImpl) {
+	const member = await callerWorkspaceMember(authContext, workspaceId, config, fetchImpl);
+	if (member) return member;
+	if (!sameId(authContext.workspaceIds[0], workspaceId)) return null;
+	return { role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] };
+}
+
+/** The caller's membership in each of the given workspaces — one read per workspace. */
+async function workspaceMembers(authContext, workspaceIds, config, fetchImpl) {
+	const members = new Map();
+	for (const workspaceId of workspaceIds) {
+		if (members.has(workspaceId)) continue;
+		members.set(workspaceId, await mountWorkspaceMember(authContext, workspaceId, config, fetchImpl));
+	}
+	return members;
+}
+
+/**
  * Resolve `{dbId}` to the wsdb mount the session may read, or 403. Returns the
- * matching osionos_workspace_databases row (engine + linking workspace_id).
+ * matching osionos_workspace_databases row (engine + linking workspace_id) and the
+ * caller's membership in that workspace — the role the database gates read.
  */
 async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
 	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
 	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
-	const mount = mounts.find((row) => row && row.db_id === dbId);
-	if (!mount) throw Object.assign(new Error('Database is not linked to an accessible workspace.'), { status: 403 });
-	return { authContext, mount };
+	const candidates = mounts.filter((row) => row && row.db_id === dbId);
+	if (candidates.length === 0) throw Object.assign(new Error('Database is not linked to an accessible workspace.'), { status: 403 });
+	// A database mounted in two of the caller's OWN workspaces takes the most permissive
+	// of their roles there: both mounts are the caller's, so this grants nothing they did
+	// not already have — it only keeps the gate from answering on the weaker membership.
+	const members = await workspaceMembers(authContext, candidates.map((row) => row.workspace_id), config, fetchImpl);
+	let best = null;
+	for (const mount of candidates) {
+		const member = members.get(mount.workspace_id) ?? null;
+		if (!best || memberDatabaseStrength(member) > memberDatabaseStrength(best.member)) best = { mount, member };
+	}
+	return { authContext, mount: best.mount, member: best.member };
 }
 
 /**
- * Set of db_ids the caller may see — every mount linked to a workspace the user
- * owns or is a member of (the user→workspace→database M2M relation). Verifies the
- * app session (401 on a missing/invalid token). Used to membership-scope the
- * Databases navigator listing the same way `resolveAccessibleMount` scopes reads.
+ * Set of db_ids the caller may READ — every mount linked to a workspace the user owns
+ * or is a member of (the user→workspace→database M2M relation), narrowed to the mounts
+ * whose membership may read a database. Verifies the app session (401 on a
+ * missing/invalid token). Used to membership-scope the Databases navigator listing the
+ * same way `resolveAccessibleMount` scopes reads.
  */
 async function accessibleMountIds(request, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
 	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
 	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
-	return new Set(mounts.map((row) => row && row.db_id).filter(Boolean));
+	const members = await workspaceMembers(authContext, [...new Set(mounts.map((row) => row && row.workspace_id).filter(Boolean))], config, fetchImpl);
+	const readable = new Set();
+	for (const mount of mounts) {
+		if (!mount || !mount.db_id) continue;
+		if (canReadDatabase(members.get(mount.workspace_id) ?? null)) readable.add(mount.db_id);
+	}
+	return readable;
 }
 
 // Hyphens and dots stay (Mongo-style names: og-notes, a.b); `.`, `..` and a leading dot do not.
@@ -2951,7 +3060,8 @@ async function handleRecordRead(match, request, response, config, fetchImpl) {
 	const table = safeText(decodeURIComponent(match[2]), 120);
 	const pk = safeText(decodeURIComponent(match[3]), 220);
 	if (!table || !pk) throw Object.assign(new Error('table and pk are required.'), { status: 422 });
-	const { mount } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const { mount, member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	if (!canReadDatabase(member)) throw databasePermissionError('read');
 	const row = await fetchRecordRow(dbId, table, pk, mount.engine, config, fetchImpl);
 	if (!row) throw Object.assign(new Error('Record not found.'), { status: 404 });
 	json(response, 200, { dbId, table, pk, row, noteId: recordNoteId(dbId, table, pk) }, config);
@@ -2965,7 +3075,11 @@ async function handleRecordRead(match, request, response, config, fetchImpl) {
  * + the mount/auth context the caller needs to keep going.
  */
 async function ensureRecordNote(dbId, table, pk, request, config, fetchImpl) {
-	const { authContext, mount } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const { authContext, mount, member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	// The RECORD read is gated like every other read of a mounted database. The note
+	// MIRROR row written below is the caller's own page, so it stays allowed for a
+	// viewer: that write is on their own note, not on the database.
+	if (!canReadDatabase(member)) throw databasePermissionError('read');
 	const row = await fetchRecordRow(dbId, table, pk, mount.engine, config, fetchImpl);
 	if (!row) throw Object.assign(new Error('Record not found.'), { status: 404 });
 	const body = recordNotePageBody({
@@ -3028,7 +3142,8 @@ async function handleRecordSubitemsList(match, request, response, config, fetchI
 	const table = safeText(decodeURIComponent(match[2]), 120);
 	const pk = safeText(decodeURIComponent(match[3]), 220);
 	if (!table || !pk) throw Object.assign(new Error('table and pk are required.'), { status: 422 });
-	const { authContext } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const { authContext, member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	if (!canReadDatabase(member)) throw databasePermissionError('read');
 	const parentNoteId = recordNoteId(dbId, table, pk);
 	const childRows = await baasRest(config, fetchImpl, `osionos_pages?${postgrestQuery({
 		parent_page_id: `eq.${parentNoteId}`,
@@ -3119,12 +3234,15 @@ const DB_SQLRO_PATH = /^\/api\/databases\/([^/]+)\/sql-ro$/;
 // database linked to a workspace they own or belong to — databases are personal
 // to a user unless invited via osionos_workspace_members.
 const DB_OPS = new Set(['list', 'get', 'aggregate', 'insert', 'update', 'delete', 'upsert', 'batch']);
+// The read half of DB_OPS — the ops that answer from the table without changing it.
+// Everything else in DB_OPS writes, and a write is gated on the write capability.
+const DB_READ_OPS = new Set(['list', 'get', 'aggregate']);
 
 /** GET /api/databases?tenant= — databases linked to a workspace the caller belongs to. */
 async function handleDatabaseList(url, request, response, config, fetchImpl) {
-	// Membership scope: a caller only sees mounts linked to a workspace they own
-	// or are a member of — NOT every database the tenant owns. (Also verifies the
-	// app session.)
+	// Membership AND role scope: a caller only sees mounts linked to a workspace they
+	// own or are a member of — NOT every database the tenant owns — and only the ones
+	// whose membership may READ a database. (Also verifies the app session.)
 	const allowed = await accessibleMountIds(request, config, fetchImpl);
 	// Tenant id: the bridge's own env wins (secure); else the client hint
 	// (`?tenant=`, from VITE_BAAS_TENANT_ID — single-tenant dev). The registry
@@ -3148,7 +3266,9 @@ async function handleDatabaseList(url, request, response, config, fetchImpl) {
 /** GET /api/databases/:dbId/schema — engine-agnostic schema via the query-router. */
 async function handleDatabaseSchema(match, request, response, config, fetchImpl) {
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
-	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	// The schema is a READ of the database: it takes the read capability.
+	if (!canReadDatabase(member)) throw databasePermissionError('read');
 	let schema;
 	try {
 		schema = await baasQueryGet(config, fetchImpl, `/${dbId}/schema`);
@@ -3173,7 +3293,7 @@ async function handleDatabaseSchema(match, request, response, config, fetchImpl)
  *  update/delete/upsert/batch) via the query-router, status passed through. */
 async function handleDatabaseRows(match, request, response, config, fetchImpl) {
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
-	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
 	const table = safeText(decodeURIComponent(match[2]), 120);
 	if (!table) throw Object.assign(new Error('table is required.'), { status: 422 });
 	const payload = await readJson(request).catch(() => ({}));
@@ -3181,6 +3301,10 @@ async function handleDatabaseRows(match, request, response, config, fetchImpl) {
 	// Reads AND writes. An unknown op falls back to a safe list; the status is
 	// passed through so the write client can classify ok / conflict / rejected.
 	const op = typeof safe.op === 'string' && DB_OPS.has(safe.op) ? safe.op : 'list';
+	// The op is resolved BEFORE the gate, so the gate and the forwarded op can never
+	// disagree: an unknown op falls back to a list and is gated (and forwarded) as one.
+	const read = DB_READ_OPS.has(op);
+	if (read ? !canReadDatabase(member) : !canWriteDatabase(member)) throw databasePermissionError(read ? 'read' : 'write');
 	// The table is in the URL path; the query-router's strict validator rejects a
 	// redundant `resource` (and legacy `values`) the live-DB write client tags onto
 	// update/delete/upsert ops — strip them so writes don't silently 400 and vanish.
@@ -3199,7 +3323,9 @@ async function handleDatabaseRows(match, request, response, config, fetchImpl) {
 async function handleDatabaseSqlRo(match, request, response, config, fetchImpl) {
 	if (process.env.OSIONOS_SQL_RO !== '1') throw Object.assign(new Error('Not found.'), { status: 404 });
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
-	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	// A read-only SQL query is a READ: it takes the read capability.
+	if (!canReadDatabase(member)) throw databasePermissionError('read');
 	const payload = await readJson(request).catch(() => ({}));
 	const sql = payload && typeof payload.sql === 'string' ? payload.sql : '';
 	if (!sql.trim()) throw Object.assign(new Error('sql is required.'), { status: 422 });
@@ -3213,7 +3339,9 @@ async function handleDatabaseTxn(request, response, config, fetchImpl) {
 	const payload = await readJson(request).catch(() => ({}));
 	const safe = payload && typeof payload === 'object' ? payload : {};
 	const dbId = requireUuid(typeof safe.mount === 'string' ? safe.mount : '', 'mount');
-	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	// A transaction may carry writes, so it takes the WRITE capability.
+	if (!canWriteDatabase(member)) throw databasePermissionError('write');
 	const { status, body } = await baasQueryPassthrough(config, fetchImpl, '/txn', safe);
 	json(response, status || 502, body ?? {}, config);
 	return true;
@@ -3222,7 +3350,12 @@ async function handleDatabaseTxn(request, response, config, fetchImpl) {
 /** POST /api/databases/:dbId/schema/ddl — add/drop/alter a column (DDL). */
 async function handleDatabaseDdl(match, request, response, config, fetchImpl) {
 	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
-	await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	// DDL changes the SHAPE of the database other members' rows live in, so it stays
+	// with the workspace owner/admin. The bridge does not parse the op — the
+	// query-router validates it (create_table, drop_table, add_column, drop_column,
+	// alter_column_type).
+	if (!canRunDdl(member)) throw databasePermissionError('write');
 	const payload = await readJson(request).catch(() => ({}));
 	const safe = payload && typeof payload === 'object' ? payload : {};
 	const { status, body } = await baasQueryPassthrough(config, fetchImpl, `/${dbId}/schema/ddl`, safe);
