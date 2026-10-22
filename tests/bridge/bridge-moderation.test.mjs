@@ -248,7 +248,10 @@ describe('speed', () => {
 	});
 
 	// The check runs on the bridge's one event loop before a write: an input built to make a
-	// regex backtrack must not stall every other request.
+	// regex backtrack must not stall every other request. Each input keeps its FASTEST of five
+	// runs: a backtracking regex is slow on every run (quadratic on 20,000 characters is
+	// hundreds of ms), while one run measured 21.6 ms under a host load of 38 (2026-10-22).
+	// Caveat: a regression that stays under 20 ms on its best run (a mild super-linearity) passes.
 	it('stays linear on 20,000-character inputs built to make a regex backtrack', () => {
 		const hostile = {
 			'local part with no domain': `${'a'.repeat(10_000)}@${'a'.repeat(10_000)}`,
@@ -258,9 +261,12 @@ describe('speed', () => {
 		};
 		for (const [name, text] of Object.entries(hostile)) {
 			checkText(text, { surface: 'chat' });
-			const started = process.hrtime.bigint();
-			checkText(text, { surface: 'chat' });
-			const ms = Number(process.hrtime.bigint() - started) / 1e6;
+			let ms = Infinity;
+			for (let run = 0; run < 5; run += 1) {
+				const started = process.hrtime.bigint();
+				checkText(text, { surface: 'chat' });
+				ms = Math.min(ms, Number(process.hrtime.bigint() - started) / 1e6);
+			}
 			assert.ok(ms < 20, `${name}: ${ms.toFixed(1)} ms`);
 		}
 	});
