@@ -11,13 +11,13 @@
 /* ************************************************************************** */
 
 /**
- * Settings → Privacy: the switch over the recommender's log, and the activity
- * to download or clear (C48, C54).
+ * Settings → Privacy: the switch over the recommender's log, the switch over
+ * the beacon of "For you", and the activity to download or clear (C48, C54).
  *
- * The switch is the SERVER's state, not a local one: it is read on mount and
- * saved on every change, and a save that fails puts the switch back where the
- * server has it and says why. There is NO view beacon here — the capture
- * covers the explicit actions only.
+ * The switches are the SERVER's state, not local ones: they are read on mount
+ * and saved on every change, and a save that fails puts the switch back where
+ * the server has it and says why. The beacon is OFF by default: the pages the
+ * user sees and opens are not collected unless they say yes.
  *
  * Clearing the activity is a two-step act, in the page: the first click turns
  * the button into the confirmation, the second one erases. The confirmation is
@@ -31,6 +31,8 @@ import { clearActivity, downloadActivity, readPersonalization, writePersonalizat
 import { SettingRow } from './SettingsRows';
 
 const NOTICE = 'Your likes, reactions, comments, shares and favorites shape the pages and people osionos suggests to you. Turn this off and nothing more is collected.';
+const BEACON_TITLE = 'Use the pages I see and open to improve recommendations';
+const BEACON_NOTICE = 'We keep which page was shown to you or that you opened, and when — never what you typed.';
 const ACTIVITY_NOTE = 'Download everything osionos has recorded about what you do, or erase it. The erasure cannot be undone.';
 const DERIVED_NOTE = 'The file includes the recommendation vectors computed from your activity.';
 const CONFIRM_LABEL = 'Confirm — this cannot be undone';
@@ -40,12 +42,14 @@ const FILE_NAME = 'osionos-activity.json';
 export const RecommendationPrivacy: React.FC = () => {
   const toast = useToastStore((state) => state.push);
   const [capture, setCapture] = useState(true);
+  const [beacon, setBeacon] = useState(false);
   const [available, setAvailable] = useState(false);
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   // The value the server confirmed: what the switch falls back to.
   const serverValue = useRef(true);
+  const beaconValue = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -55,6 +59,8 @@ export const RecommendationPrivacy: React.FC = () => {
       if (result.ok) {
         serverValue.current = result.value.captureExplicit;
         setCapture(result.value.captureExplicit);
+        beaconValue.current = result.value.beaconConsent;
+        setBeacon(result.value.beaconConsent);
         setAvailable(true);
         return;
       }
@@ -68,7 +74,7 @@ export const RecommendationPrivacy: React.FC = () => {
   const onChange = useCallback(async (next: boolean) => {
     setCapture(next);
     setSaving(true);
-    const result = await writePersonalization(next);
+    const result = await writePersonalization({ captureExplicit: next });
     setSaving(false);
     if (!result.ok) {
       setCapture(serverValue.current);
@@ -77,6 +83,21 @@ export const RecommendationPrivacy: React.FC = () => {
     }
     serverValue.current = result.value.captureExplicit;
     setCapture(result.value.captureExplicit);
+  }, [toast]);
+
+  /** The beacon: only its own switch is written, the other one keeps its value. */
+  const onBeaconChange = useCallback(async (next: boolean) => {
+    setBeacon(next);
+    setSaving(true);
+    const result = await writePersonalization({ beaconConsent: next });
+    setSaving(false);
+    if (!result.ok) {
+      setBeacon(beaconValue.current);
+      toast({ kind: 'error', title: 'The switch did not change', description: result.message });
+      return;
+    }
+    beaconValue.current = result.value.beaconConsent;
+    setBeacon(result.value.beaconConsent);
   }, [toast]);
 
   const onDownload = useCallback(async () => {
@@ -128,6 +149,11 @@ export const RecommendationPrivacy: React.FC = () => {
         title="Use my activity for suggestions"
         description={NOTICE}
         action={<Toggle checked={capture} disabled={!available || saving} onChange={(next) => void onChange(next)} label="Use my activity for suggestions" />}
+      />
+      <SettingRow
+        title={BEACON_TITLE}
+        description={BEACON_NOTICE}
+        action={<Toggle checked={beacon} disabled={!available || saving} onChange={(next) => void onBeaconChange(next)} label={BEACON_TITLE} />}
       />
       <SettingRow
         title="Your activity"
