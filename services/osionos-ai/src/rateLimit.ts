@@ -22,6 +22,7 @@ const KEY_TTL_SECONDS = 70;
  */
 export const RUN_LIMIT_PREFIX = 'ai:rl';
 export const RELATED_LIMIT_PREFIX = 'ai:rl:related';
+export const IMAGE_LIMIT_PREFIX = 'ai:rl:image';
 
 export interface RateLimitResult {
 	allowed: boolean;
