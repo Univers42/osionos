@@ -14,12 +14,12 @@ Later the same night 3-4 concurrent sessions ran without a refusal when started 
 
 | WP | Status | Branch | Model(s) | Gates (my re-run) | Verdict |
 |---|---|---|---|---|---|
-| P0-2 | fix round 2 (split paging module) | feat/acct-bake-deepseek (25a14dc8, d259e0c9) | deepseek-v4.1-flash (+rotation on refusal) | — | spec: devil PwC, 11 conditions applied |
+| P0-2 | fix round 3 (devil PwC on the diff: 2 test blockers + 22023 mapping + 7 follow-ups) | feat/acct-bake-deepseek (25a14dc8, d259e0c9) | deepseek-v4.1-flash (+rotation on refusal) | — | spec: devil PwC, 11 conditions applied |
 | P1-3a | **merged** 86a66750 | feat/acct-P1-3a (f5e8b41c) | glm-5.3-flash, 1 attempt | quality 0 · canvas 2564/0/2 · settings e2e 22/22 · visual vs local system baseline 8/8 · browser: 19 panels render, 4 profile modals open/close, 1440 matches before, 375 no page overflow | accepted; deviations: dead `memberRows` dropped (verified unused), `downloadInvoicePdf` moved to Billing |
 | P0-1 | running | (root repo) feat/acct-P0-1 | big-pickle (+rotation) | harness baseline 44/0 | spec: devil PwC, 12 conditions applied; root ADR 0028 |
 | P1-3b | running | feat/acct-P1-3b | glm-5.3-flash (+rotation) | — | — |
-| P0-3 | running | feat/acct-P0-3 | deepseek-v4.1-flash (+rotation) | — | spec: devil PwC, 11 conditions applied; ADR 0002 |
-| P0-7 | spec written (root repo; DB query budgets, no HTTP driver until P0-5) | — | — | — | no devil gate |
+| P0-3 | fix round 1 (IPv6 rate-limit keys, in-order fake redis, split redis client) | feat/acct-P0-3 (84d4251b) | deepseek-v4.1-flash, 1 attempt | — | spec: devil PwC, 11 conditions applied; ADR 0002 |
+| P0-7 | running (root repo; DB query budgets, no HTTP driver until P0-5) | feat/acct-P0-7 | nemotron-3-ultra (+rotation) | — | no devil gate |
 | P1-4 | spec written, waits for P1-3b | — | — | — | no devil gate |
 
 Open follow-ups
@@ -32,8 +32,13 @@ Open follow-ups
 - Before P0-4 is specced: run plan preflight #1 (orphan `osionos_bridge_identities` rows without an
   `auth.users` row) on live — read-only, needs the owner's go-ahead. The handoff subject is GoTrue's
   `user.id` (`opposite-osiris/scripts/auth-gateway.mjs:960-971`); other sign-in paths are unverified.
-- P0-4 must add `bridge-pg.mjs`, `bridge-kv.mjs`, `bridge-guard.mjs` to the explicit COPY list of
-  `deploy/bridge-fly/Dockerfile` (the root `bridge.Dockerfile` uses globs).
+- P0-4 must add `bridge-pg.mjs`, `bridge-paging.mjs`, `bridge-kv.mjs`, `bridge-redis.mjs`, `bridge-guard.mjs`
+  to the explicit COPY list of `deploy/bridge-fly/Dockerfile` (the root `bridge.Dockerfile` uses globs;
+  `tests/bridge/bridge-dockerfile-closure.test.mjs` fails on a missing transitive import).
+- P0-4: the 22023 → 503 mapping (ADR 0001) rests on PostgREST v12 answering a failed role switch with
+  400/22023 — unverified live; check it against the pinned image before wiring `asUser`.
+- When P0-4/P1-2 add the first `writeAudit` callers: event types become one exported list (the
+  principle of root ADR 0023, which governs `auth_audit_events`).
 - After P0-1 merges: lift the throwaway-Postgres bring-up shared by `models-grants.sh` and
   `account-load.sh` (P0-7) into `scripts/verify/lib/`.
 - Separate defect, to file on its own (devil, 2026-10-22): `anon` can execute `auth_record_audit_event`
