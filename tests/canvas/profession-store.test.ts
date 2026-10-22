@@ -193,3 +193,26 @@ test("a pick on a server that does not serve the route stays local and says noth
   assert.equal(useProfessionStore.getState().profession, "teacher", "the offline build keeps the pick");
   assert.equal(toasts().length, 0, "an offline server is not an error");
 });
+
+test("a pick whose profile read fails keeps the previous value and says so once", async () => {
+  reset("designer");
+  const { calls } = await withBridge(
+    (call) => (call.init?.method === "GET" ? json(500, { ok: false, message: "boom" }) : json(200, PROFILE_ROW)),
+    () => useProfessionStore.getState().pick("teacher"),
+  );
+  assert.equal(useProfessionStore.getState().profession, "designer");
+  assert.equal(toasts().length, 1);
+  assert.equal(patches(calls).length, 0, "a failed read is not a write: nothing is PATCHed");
+});
+
+test("a pick whose save is unavailable after a version is held stays local with no toast", async () => {
+  reset("designer");
+  useAccountProfileStore.setState({ status: "ready", profile: PROFILE_ROW, version: 7, error: null });
+  const { calls } = await withBridge(
+    (call) => (call.init?.method === "PATCH" ? json(404, { ok: false, code: "user_not_found" }) : json(200, PROFILE_ROW)),
+    () => useProfessionStore.getState().pick("teacher"),
+  );
+  assert.equal(useProfessionStore.getState().profession, "teacher", "the offline server keeps the pick");
+  assert.equal(toasts().length, 0, "an unavailable save is not an error");
+  assert.equal(patches(calls).length, 1);
+});
