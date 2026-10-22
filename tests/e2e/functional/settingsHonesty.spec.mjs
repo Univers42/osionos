@@ -17,30 +17,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
-
-function region(page) {
-  return page.getByRole("region", { name: "Settings", exact: true });
-}
-
-function nav(page) {
-  return page.getByRole("navigation", { name: "Settings sections" });
-}
-
-async function openSettings(page) {
-  await page.getByRole("button", { name: "Settings", exact: true }).first().click();
-  await region(page).waitFor();
-}
-
-async function searchSettings(page, query) {
-  const search = page.getByRole("searchbox", { name: "Search settings" });
-  await search.fill(query);
-  await search.press("Enter");
-}
-
-async function closeSettings(page) {
-  await page.getByRole("button", { name: "Close Settings" }).click();
-  await expect(region(page)).toHaveCount(0);
-}
+import { closeSettings, openSettings, region, searchSettings } from "../support/settingsHelpers.mjs";
 
 test.describe("settings honesty (offline build)", () => {
   test("Profile → Delete account shows honest notice, keeps user signed in", async ({ page, baseURL }) => {
