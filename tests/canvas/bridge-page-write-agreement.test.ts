@@ -197,9 +197,14 @@ test("the page owner writes whatever their membership says", () => {
   assert.deepEqual(writeAnswer(spot), { update: true, delete: true });
 });
 
-test("an admin permission alone carries both writes on an unpublished page", () => {
+test("an admin permission alone writes an ownerless page no more", () => {
   const spot: Spot = { member: "admin-perm-only", owner: "null", visibility: "shared", collaborators: "none", published: false };
-  assert.deepEqual(writeAnswer(spot), { update: true, delete: true });
+  assert.deepEqual(writeAnswer(spot), { update: false, delete: false });
+});
+
+test("a membership carrying update still writes an ownerless page", () => {
+  const spot: Spot = { member: "editor", owner: "null", visibility: "shared", collaborators: "none", published: false };
+  assert.deepEqual(writeAnswer(spot), { update: true, delete: false });
 });
 
 test("a published app page is closed even to an admin permission", () => {

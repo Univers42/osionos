@@ -38,12 +38,13 @@ import {
 } from './bridge-social-core.mjs';
 import { inFilter } from './bridge-paging.mjs';
 import { requireChannelAccess } from './bridge-chat.mjs';
+import { publicIconAvatar } from './bridge-avatar.mjs';
 
-function communityEntry(row, role = null) {
+function communityEntry(row, role = null, config = null) {
 	return {
 		id: row.id,
 		name: row.name,
-		avatar: row.avatar ?? null,
+		avatar: publicIconAvatar(row.avatar ?? null, config),
 		description: row.description ?? null,
 		creatorId: row.creator_id ?? null,
 		role,
@@ -66,7 +67,7 @@ async function createCommunity(deps, session, request, response, config) {
 		body: {
 			name,
 			description: safeText(payload.description, 500) || null,
-			avatar: safeText(payload.avatar, 1024) || null,
+			avatar: publicIconAvatar(safeText(payload.avatar, 1024), config),
 			creator_id: session.userId,
 		},
 		prefer: 'return=representation',
@@ -78,7 +79,7 @@ async function createCommunity(deps, session, request, response, config) {
 		body: { community_id: row.id, user_id: session.userId, role: 'owner' },
 		prefer: 'resolution=ignore-duplicates,return=minimal',
 	});
-	return sendJson(response, 201, { ok: true, community: communityEntry(row, 'owner') }, config);
+	return sendJson(response, 201, { ok: true, community: communityEntry(row, 'owner', config) }, config);
 }
 
 async function listCommunities(deps, session, response, config) {
@@ -93,7 +94,7 @@ async function listCommunities(deps, session, response, config) {
 	// The merged rows keep the order the read asked for: newest community first.
 	const communities = rows
 		.sort((left, right) => String(right.created_at ?? '').localeCompare(String(left.created_at ?? '')))
-		.map((row) => communityEntry(row, roleById.get(row.id) ?? null));
+		.map((row) => communityEntry(row, roleById.get(row.id) ?? null, config));
 	return sendJson(response, 200, { ok: true, communities }, config);
 }
 
@@ -116,7 +117,7 @@ async function getCommunity(deps, session, communityId, response, config) {
 			.sort((left, right) => String(left.created_at ?? '').localeCompare(String(right.created_at ?? '')))
 			.map((c) => ({ id: c.id, workspaceId: c.workspace_id, kind: c.kind, name: c.name, topic: c.topic ?? null }));
 	}
-	return sendJson(response, 200, { ok: true, community: communityEntry(row, member.role), channels }, config);
+	return sendJson(response, 200, { ok: true, community: communityEntry(row, member.role, config), channels }, config);
 }
 
 async function addCommunityChannel(deps, session, request, communityId, response, config) {

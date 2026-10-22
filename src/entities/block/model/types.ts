@@ -116,6 +116,15 @@ export interface LayoutCell {
   fontSize?: LayoutCellFontSize;
   /** Named section key (e.g. "header"/"about") — drives per-section template write-grants. */
   section?: string;
+  /**
+   * Height pinned on a hug cell, in whole px (see the canvas "Save measured
+   * height" action). The cell renders at that height until "Auto height"
+   * clears it again.
+   * Caveat: a pinned height is a snapshot of the width the cell was measured
+   * at — a wider or narrower pane re-measures the content and the pinned
+   * value goes stale.
+   */
+  measuredHeight?: number;
 }
 
 /** A single content block in a page. */

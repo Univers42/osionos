@@ -16,11 +16,12 @@ import { Check, Copy, FileDown, KeyRound } from 'lucide-react';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
 import { useAccountDevicesStore, useAccountEmailsStore, useAccountPasskeysStore, useAccountSettingsStore, recordSettingsAction } from '@/store/settings';
+import { defaultDevice } from '@/store/settings/defaults';
 import { Button, EmojiPicker, IconButton, Toggle, useToastStore } from '@/shared/ui';
 import { ImageAvatarUpload } from './ImageAvatarUpload';
 import { ConfirmModal, TypedConfirmModal } from '../ui/ConfirmModals';
 import { Avatar, DataTable, Section, SettingRow } from '../ui/settingsKit';
-import { noopHandledAction, postAccountAction, runAsync } from '../model/settingsCalls';
+import { accountActionNotice, noopHandledAction, runAccountAction, runAsync } from '../model/settingsCalls';
 import { EmailManagerModal, PasskeyManagerModal, PasswordModal, SupportDurationModal, TwoFactorModal } from './ProfileSecurityModals';
 
 type SettingsModalName =
@@ -30,7 +31,7 @@ type SettingsModalName =
   | 'passkeys'
   | 'support-duration'
   | 'delete-account'
-  | 'revoke-devices';
+  | 'sign-out-all';
 
 interface ActiveSettingsModal {
   name: SettingsModalName;
@@ -40,6 +41,39 @@ interface ActiveSettingsModal {
 function flashSavedIndicator(setSaved: React.Dispatch<React.SetStateAction<boolean>>) {
   setSaved(true);
   globalThis.setTimeout(() => setSaved(false), 1400);
+}
+
+/**
+ * A device name read from the user agent, e.g. "Chrome on Linux".
+ *
+ * Caveat: this matches on token patterns, so an unrecognised browser shows
+ * "Browser on unknown OS" instead of the raw agent string.
+ */
+function deviceName(userAgent?: string | null): string {
+  const agent = userAgent ?? '';
+  if (!agent) return 'This device';
+  const browser = /Edg\//.test(agent) ? 'Edge'
+    : /OPR\//.test(agent) ? 'Opera'
+    : /Firefox\//.test(agent) ? 'Firefox'
+    : /Chrome\//.test(agent) ? 'Chrome'
+    : /Safari\//.test(agent) ? 'Safari'
+    : 'Browser';
+  const os = /Windows/.test(agent) ? 'Windows'
+    : /Android/.test(agent) ? 'Android'
+    : /Mac OS X|Macintosh/.test(agent) ? 'macOS'
+    : /CrOS/.test(agent) ? 'ChromeOS'
+    : /Linux/.test(agent) ? 'Linux'
+    : 'unknown OS';
+  return `${browser} on ${os}`;
+}
+
+/**
+ * IconValueView draws an image only for an `img:` value, so a stored avatar URL
+ * is prefixed here — the caller, not the package.
+ */
+function avatarIconValue(value?: string): string | undefined {
+  if (!value) return value;
+  return /^(https:\/\/|\/)/.test(value) ? `img:${value}` : value;
 }
 
 export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) => {
@@ -52,7 +86,6 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   const devices = useAccountDevicesStore((state) => state.data);
   const hydrateDevices = useAccountDevicesStore((state) => state.hydrate);
   const revokeDevice = useAccountDevicesStore((state) => state.revoke);
-  const revokeAllExceptCurrent = useAccountDevicesStore((state) => state.revokeAllExceptCurrent);
   const passkeys = useAccountPasskeysStore((state) => state.data);
   const hydratePasskeys = useAccountPasskeysStore((state) => state.hydrate);
   const registerPasskeyOptions = useAccountPasskeysStore((state) => state.registerOptions);
@@ -86,10 +119,17 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   const preferredName = account?.profile.preferredName ?? persona?.name ?? '';
   const primaryEmail = emails.find((email) => email.isPrimary)?.email ?? persona?.email ?? 'dev.pro.photo@gmail.com';
   const security = account?.security ?? {};
-  const visibleDevices = devices.filter((device) => !device.revokedAt);
+  const avatarValue = account?.profile.avatar ?? persona?.emoji;
   const activePasskeys = passkeys.filter((passkey) => !passkey.removedAt);
-  const deviceRows = visibleDevices.map((device, index) => [
-    <span key={`${device._id}-name`}>{index === 0 ? 'Ubuntu · This Device' : device.userAgent?.split(')')[0]?.replace('(', '') || 'Linux'}{device._id === 'current-device' ? <span className="ml-2 rounded-xs bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">Current</span> : null}</span>,
+  // Only the rows the server sent. With none (offline, or a server without the
+  // route) this browser is the one device that certainly exists.
+  const serverDevices = devices.filter((device) => !device.revokedAt);
+  const visibleDevices = serverDevices.length ? serverDevices : [defaultDevice(userId)];
+  const deviceRows = visibleDevices.map((device) => [
+    <span key={`${device._id}-name`}>
+      {deviceName(device.userAgent)}
+      {device._id === 'current-device' ? <span className="ml-2 rounded-xs bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">Current</span> : null}
+    </span>,
     device._id === 'current-device' ? 'Now' : new Date(device.lastActiveAt).toLocaleString(),
     device.location ?? 'Unknown location',
     device._id === 'current-device' ? '' : <Button key={`${device._id}-logout`} onClick={() => { runAsync(revokeDevice(device._id)); }}>Log out</Button>,
@@ -105,10 +145,15 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   }
 
   async function handleDeleteAccount() {
-    await postAccountAction('/api/account/request-deletion', {});
+    const outcome = await runAccountAction('/api/account/request-deletion', {});
+    if (!outcome.ok) {
+      const notice = accountActionNotice(outcome, 'Account deletion');
+      if (notice) toast(notice);
+      return;
+    }
     recordSettingsAction('account_request_deletion', { userId });
     await logoutUser(userId);
-    toast({ kind: 'success', title: 'Account scheduled for deletion in 30 days. Cancel anytime in Settings.' });
+    toast({ kind: 'success', title: 'Account scheduled for deletion in 14 days. Cancel anytime in Settings.' });
     globalThis.location.assign('/');
   }
 
@@ -118,12 +163,12 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
         <div className="flex items-center gap-5 pb-3">
           <div className="relative">
             <button type="button" className="rounded-full focus:outline-none focus:ring-2 focus:ring-[var(--osio-accent)]" onClick={() => setAvatarPickerOpen((open) => !open)} aria-label="Change avatar">
-              <Avatar value={account?.profile.avatar ?? persona?.emoji} label={preferredName} size={60} />
+              <Avatar value={avatarIconValue(avatarValue)} label={preferredName} size={60} />
             </button>
             {avatarPickerOpen && (
               <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2">
                 <EmojiPicker
-                  current={account?.profile.avatar ?? persona?.emoji}
+                  current={avatarValue}
                   onSelect={(value) => { updateAccount({ profile: { ...account?.profile, avatar: value } }); setAvatarPickerOpen(false); }}
                   onRemove={() => { updateAccount({ profile: { ...account?.profile, avatar: undefined } }); setAvatarPickerOpen(false); }}
                   onClose={() => setAvatarPickerOpen(false)}
@@ -142,7 +187,7 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
               {nameSaved && <Check size={16} className="absolute right-2 top-2.5 text-[var(--osio-success)]" />}
             </span>
           </label>
-          <ImageAvatarUpload onUploaded={(dataUrl) => updateAccount({ profile: { ...account?.profile, avatar: dataUrl } })} />
+          <ImageAvatarUpload onUploaded={(avatarUrl) => updateAccount({ profile: { ...account?.profile, avatar: avatarUrl } })} />
         </div>
         <p className="text-sm text-[var(--osio-fg-muted)]"><span className="text-[var(--osio-accent-text)]">Create a custom self-portrait</span> with osionos Faces</p>
       </Section>
@@ -157,12 +202,16 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
         <SettingRow danger title="Delete my account" description="Permanently delete your account and remove access to your pages and workspaces." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-account' })}>Delete my account</Button>} />
       </Section>
       <Section title="Devices">
-        <SettingRow danger title="Log out of all devices" description="Log out of active sessions on all your devices, other than this one" action={<Button tone="danger" onClick={() => setModal({ name: 'revoke-devices' })}>Log out of all devices</Button>} />
-        <DataTable headers={['Device Name', 'Last Active', 'Location', '']} rows={deviceRows.length ? deviceRows : [['Ubuntu · This Device', 'Now', 'This device', '']]} />
+        <SettingRow danger title="Log out of all devices" description="Sign out of every session on all your devices, including this one." action={<Button tone="danger" onClick={() => setModal({ name: 'sign-out-all' })}>Log out of all devices</Button>} />
+        <DataTable headers={['Device Name', 'Last Active', 'Location', '']} rows={deviceRows} />
         <Button tone="ghost" className="mt-2" onClick={() => noopHandledAction('settings_button_click', { label: 'Load more devices' })}><FileDown size={14} /> Load more devices</Button>
       </Section>
       <Section title="User ID">
-        <SettingRow title="User ID" description={persona?.id ?? 'b0181a89-4ad8-476c-9657-352d6eadf49e'} action={<IconButton label="Copy user ID" onClick={() => { runAsync(navigator.clipboard.writeText(persona?.id ?? userId).then(() => toast({ kind: 'success', title: 'User ID copied' }))); }}><Copy size={16} /></IconButton>} />
+        <SettingRow
+          title="User ID"
+          description={persona?.id}
+          action={persona?.id ? <IconButton label="Copy user ID" onClick={() => { runAsync(navigator.clipboard.writeText(persona.id).then(() => toast({ kind: 'success', title: 'User ID copied' }))); }}><Copy size={16} /></IconButton> : undefined}
+        />
       </Section>
 
       {modal?.name === 'email-manager' && <EmailManagerModal userId={userId} fallbackEmail={persona?.email} onClose={() => setModal(null)} />}
@@ -170,8 +219,8 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
       {modal?.name === 'two-factor' && <TwoFactorModal enabled={Boolean(security.twoStepEnabled)} onEnabled={(enabled) => updateAccount({ security: { ...security, twoStepEnabled: enabled } })} onClose={() => setModal(null)} />}
       {modal?.name === 'passkeys' && <PasskeyManagerModal passkeys={activePasskeys} onAdd={() => runAsync(handleRegisterPasskey())} onRename={renamePasskey} onRemove={(id) => runAsync(removePasskey(id))} onClose={() => setModal(null)} />}
       {modal?.name === 'support-duration' && <SupportDurationModal onSelect={(days) => { updateAccount({ supportAccessGrantedUntil: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() }); setModal(null); }} onClose={() => setModal(null)} />}
-      {modal?.name === 'delete-account' && <TypedConfirmModal title="Delete account" message="Type DELETE to schedule this account for deletion." confirmText="DELETE" danger actionLabel="Schedule deletion" onConfirm={() => runAsync(handleDeleteAccount())} onClose={() => setModal(null)} />}
-      {modal?.name === 'revoke-devices' && <ConfirmModal title="Log out all devices" message="This logs out every active session except your current device." danger actionLabel="Log out all devices" onConfirm={() => { runAsync(revokeAllExceptCurrent(userId)); setModal(null); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'delete-account' && <TypedConfirmModal title="Delete account" message="Type DELETE to schedule this account for deletion. The account is removed 14 days later." confirmText="DELETE" danger actionLabel="Schedule deletion" onConfirm={() => { setModal(null); runAsync(handleDeleteAccount()); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'sign-out-all' && <ConfirmModal title="Log out all devices" message="This signs you out on every device, including this one." danger actionLabel="Log out of all devices" onConfirm={() => { setModal(null); runAsync(logoutUser(userId)); }} onClose={() => setModal(null)} />}
     </>
   );
 };

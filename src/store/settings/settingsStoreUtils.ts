@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { API_BASE, api, getActiveJwt } from '@/shared/api/client';
+import { API_BASE, api, ApiError, getActivePageJwt } from '@/shared/api/client';
 import { useToastStore } from '@/shared/ui';
 
 export const SETTINGS_WRITE_DEBOUNCE_MS = 400;
@@ -48,7 +48,35 @@ export function createLocalId(prefix: string): string {
 }
 
 export function settingsJwt(): string | null {
-  return getActiveJwt();
+  return getActivePageJwt();
+}
+
+/**
+ * What a failed settings call means:
+ * - `unavailable`: this server does not serve the route yet (404, 501, or a 503
+ *   whose code names the feature unavailable or off) — the store keeps working
+ *   locally, with no error toast.
+ * - `sudo_required`: the server wants a fresh sign-in; the shared fetch path
+ *   raises the prompt, so the caller says nothing extra.
+ * - `failed`: everything else — the caller shows the message.
+ *
+ * Pure, so it can be unit-tested without importing the env-bound api client.
+ *
+ * Caveat: a genuine 404 on a route that DOES exist (a mistyped path) is also
+ * read as `unavailable`; acceptance 2 proves the classification, and P1-2's e2e
+ * proves the routes.
+ */
+export function classifySettingsError(status: number, code?: string | null): 'unavailable' | 'sudo_required' | 'failed' {
+  if (status === 404 || status === 501) return 'unavailable';
+  if (status === 503 && code && (code.endsWith('_unavailable') || code.endsWith('_off'))) return 'unavailable';
+  if (status === 403 && code === 'sudo_required') return 'sudo_required';
+  return 'failed';
+}
+
+/** Whether an error means "this account route is not served by this bridge yet". */
+export function isSettingsEndpointUnavailable(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  return classifySettingsError(error.status, error.code) === 'unavailable';
 }
 
 export function settingsApiAvailable(): boolean {
@@ -67,35 +95,49 @@ export function pushSettingsError(title: string, error: unknown) {
   });
 }
 
-// jwt defaults to settingsJwt() (the gotrue-path token). A caller whose bridge
-// route verifies the `osionos_v1.` app-session token — e.g. connections, which
-// hits the same verifyAppSessionToken() gate as object databases — passes
-// getActivePageJwt() explicitly; settingsJwt() blanks for a bridge session, so
-// the default would silently no-op to localStorage. Default keeps every other
-// store byte-identical.
+const UNAVAILABLE_LOGGED = new Set<string>();
+
+function logUnavailableOnce(path: string): void {
+  if (UNAVAILABLE_LOGGED.has(path)) return;
+  UNAVAILABLE_LOGGED.add(path);
+  console.info(`[settings] ${path} is not available on this server yet; staying local.`);
+}
+
+async function withSettingsFallback<T>(path: string, run: () => Promise<T>): Promise<T | null> {
+  try {
+    return await run();
+  } catch (error) {
+    if (isSettingsEndpointUnavailable(error)) {
+      logUnavailableOnce(path);
+      return null;
+    }
+    throw error;
+  }
+}
+
 export async function trySettingsGet<T>(path: string, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
-  return api.get<T>(path, jwt);
+  return withSettingsFallback(path, () => api.get<T>(path, jwt));
 }
 
 export async function trySettingsPost<T>(path: string, body: unknown, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
-  return api.post<T>(path, body, jwt);
+  return withSettingsFallback(path, () => api.post<T>(path, body, jwt));
 }
 
 export async function trySettingsPut<T>(path: string, body: unknown, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
-  return api.put<T>(path, body, jwt);
+  return withSettingsFallback(path, () => api.put<T>(path, body, jwt));
 }
 
 export async function trySettingsPatch<T>(path: string, body: unknown, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
-  return api.patch<T>(path, body, jwt);
+  return withSettingsFallback(path, () => api.patch<T>(path, body, jwt));
 }
 
 export async function trySettingsDelete<T>(path: string, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
-  return api.delete<T>(path, jwt);
+  return withSettingsFallback(path, () => api.delete<T>(path, jwt));
 }
 
 export async function trySettingsUpload<T>(path: string, formData: FormData): Promise<T | null> {
@@ -106,7 +148,22 @@ export async function trySettingsUpload<T>(path: string, formData: FormData): Pr
     headers: { Authorization: `Bearer ${jwt}` },
     body: formData,
   });
-  if (!response.ok) throw new Error(`POST ${path} -> ${response.status} ${response.statusText}`);
+  if (!response.ok) {
+    // The body carries the server's stable error code, so the same
+    // "not offered here" classification applies to an upload.
+    const body = (await response.clone().json().catch(() => null)) as { code?: unknown; error?: string; message?: string } | null;
+    const code = typeof body?.code === 'string' ? body.code : 'API_ERROR';
+    const error = new ApiError(
+      body?.error ?? body?.message ?? `POST ${path} -> ${response.status} ${response.statusText}`,
+      response.status,
+      code,
+    );
+    if (isSettingsEndpointUnavailable(error)) {
+      logUnavailableOnce(path);
+      return null;
+    }
+    throw error;
+  }
   return response.json() as Promise<T>;
 }
 

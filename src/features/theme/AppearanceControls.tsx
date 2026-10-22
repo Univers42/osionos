@@ -4,16 +4,16 @@
  * change is written to <html> and to storage at once (theme.ts).
  */
 
-import React, { useId, useState } from 'react';
+import React, { useId, useSyncExternalStore } from 'react';
 
 import { MiniTabs } from '@/shared/ui';
 import {
   ACCENT_PRESETS,
-  applyAppearance,
   CUSTOM_ACCENT,
   FIXED_ACCENT_PALETTES,
-  persistAppearance,
-  readStoredAppearance,
+  readCurrentAppearance,
+  subscribeAppearance,
+  updateAppearance,
   type Appearance,
   type Density,
   type Roundness,
@@ -24,13 +24,17 @@ const LABEL = 'mb-2 text-xs font-medium uppercase tracking-wide text-[var(--osio
 const SWATCH =
   'h-6 w-6 shrink-0 rounded-full border border-[var(--osio-border-default)] transition-shadow duration-[var(--osio-dur-fast)]';
 
+/**
+ * The live appearance and the way to change it. The value comes from the
+ * Appearance store (theme.ts), not from a copy taken at mount: such a copy is
+ * older than the last change, and merging a patch into it would roll that
+ * change back — the theme controls and the accessibility controls write to
+ * the same object.
+ */
 export function useAppearance(): [Appearance, (patch: Partial<Appearance>) => void] {
-  const [appearance, setAppearance] = useState<Appearance>(() => readStoredAppearance());
+  const appearance = useSyncExternalStore(subscribeAppearance, readCurrentAppearance, readCurrentAppearance);
   const change = (patch: Partial<Appearance>) => {
-    const next = { ...appearance, ...patch };
-    applyAppearance(next);
-    persistAppearance(next);
-    setAppearance(next);
+    updateAppearance(patch);
   };
   return [appearance, change];
 }

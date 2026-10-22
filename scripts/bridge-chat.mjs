@@ -63,6 +63,7 @@ import {
 	sanitizeAttachmentMetadata,
 } from './bridge-chat-media.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { publicIconAvatar } from './bridge-avatar.mjs';
 import { searchMessages } from './bridge-chat-search.mjs';
 import { getThread } from './bridge-chat-threads.mjs';
 
@@ -71,14 +72,14 @@ const DEFAULT_PAGE = 50;
 const MAX_PAGE = 100;
 const MEMBER_ROLES = new Set(['owner', 'admin', 'member']);
 
-function channelEntry(row, memberRole = null) {
+function channelEntry(row, memberRole = null, config = null) {
 	return {
 		id: row.id,
 		workspaceId: row.workspace_id,
 		kind: row.kind,
 		name: row.name,
 		topic: row.topic ?? null,
-		avatar: row.avatar ?? null,
+		avatar: publicIconAvatar(row.avatar ?? null, config),
 		description: row.description ?? null,
 		createdBy: row.created_by ?? null,
 		isPrivate: row.is_private === true,
@@ -202,7 +203,7 @@ async function listChannels(deps, session, url, response, config) {
 	for (const row of listed) if (!byId.has(row.id)) byId.set(row.id, row);
 	const channels = [...byId.values()]
 		.sort((left, right) => String(left.created_at ?? '').localeCompare(String(right.created_at ?? '')))
-		.map((row) => channelEntry(row, roleByChannel.get(row.id) ?? null));
+		.map((row) => channelEntry(row, roleByChannel.get(row.id) ?? null, config));
 	return sendJson(response, 200, { ok: true, channels }, config);
 }
 
@@ -233,7 +234,7 @@ async function createChannel(deps, session, request, response, config) {
 		body: { channel_id: row.id, user_id: session.userId, role: 'owner' },
 		prefer: 'resolution=ignore-duplicates,return=minimal',
 	});
-	return sendJson(response, 201, { ok: true, channel: channelEntry(row, 'owner') }, config);
+	return sendJson(response, 201, { ok: true, channel: channelEntry(row, 'owner', config) }, config);
 }
 
 async function listMessages(deps, session, url, channelId, response, config) {
@@ -526,7 +527,7 @@ async function openDm(deps, session, request, response, config) {
 	const payload = await readJsonBody(request);
 	const peerUserId = requireUuid(payload.peerUserId, 'peerUserId');
 	const row = await ensureDmChannel(deps, session, config, peerUserId, safeText(payload.workspaceId, 80));
-	return sendJson(response, 200, { ok: true, channel: channelEntry(row, 'member'), peerUserId }, config);
+	return sendJson(response, 200, { ok: true, channel: channelEntry(row, 'member', config), peerUserId }, config);
 }
 
 /**
@@ -576,7 +577,7 @@ async function createGroup(deps, session, request, response, config) {
 			name,
 			created_by: session.userId,
 			is_private: true,
-			avatar: safeText(payload.avatar, 1024) || null,
+			avatar: publicIconAvatar(safeText(payload.avatar, 1024), config),
 			description: safeText(payload.description, 500) || null,
 		},
 		prefer: 'return=representation',
@@ -590,7 +591,7 @@ async function createGroup(deps, session, request, response, config) {
 		body: memberRows,
 		prefer: 'resolution=ignore-duplicates,return=minimal',
 	});
-	return sendJson(response, 201, { ok: true, channel: channelEntry(row, 'owner') }, config);
+	return sendJson(response, 201, { ok: true, channel: channelEntry(row, 'owner', config) }, config);
 }
 
 /** PATCH /api/chat/channels/:id — owner/admin metadata edit. */
@@ -599,12 +600,12 @@ async function patchChannel(deps, session, request, channelId, response, config)
 	const payload = await readJsonBody(request);
 	const update = { updated_at: new Date().toISOString() };
 	if (Object.hasOwn(payload, 'name')) update.name = safeText(payload.name, 80) || 'Channel';
-	if (Object.hasOwn(payload, 'avatar')) update.avatar = safeText(payload.avatar, 1024) || null;
+	if (Object.hasOwn(payload, 'avatar')) update.avatar = publicIconAvatar(safeText(payload.avatar, 1024), config);
 	if (Object.hasOwn(payload, 'description')) update.description = safeText(payload.description, 500) || null;
 	if (Object.hasOwn(payload, 'topic')) update.topic = safeText(payload.topic, 200) || null;
 	const rows = await rest(config, deps.fetchImpl, `osionos_channels?id=eq.${channelId}`, { method: 'PATCH', body: update, prefer: 'return=representation' });
 	const row = Array.isArray(rows) ? rows[0] : rows;
-	return sendJson(response, 200, { ok: true, channel: channelEntry(row ?? { id: channelId }) }, config);
+	return sendJson(response, 200, { ok: true, channel: channelEntry(row ?? { id: channelId }, null, config) }, config);
 }
 
 /** POST /api/chat/channels/:id/members — owner/admin adds members. */

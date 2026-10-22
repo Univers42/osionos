@@ -20,8 +20,11 @@
  *                                    (emails are HMAC-hashed at rest — raw
  *                                    email search is impossible by design)
  *   GET  /api/profile/:userId        display name, avatar, org role, presence
- *   POST /api/profile/avatar         {dataUrl} ≤200KB → identities.profile.avatar
  *   POST /api/profile/heartbeat      presence: the beat, nothing else
+ *
+ * The avatar routes live in bridge-avatar.mjs (the account seam): the bytes go
+ * to storage and the profile column holds the path. This module only projects
+ * an avatar, and never a `data:` URL.
  *
  * PRESENCE MODEL: the realtime gateway's WS PUBLISH frame exists, but presence through
  * it would tie liveness to a browser socket the bridge cannot see. The simpler reliable
@@ -46,12 +49,11 @@ import {
 	sendJson,
 } from './bridge-social-core.mjs';
 import { inFilter } from './bridge-paging.mjs';
+import { publicAvatar } from './bridge-avatar.mjs';
 import { canReadPageRowAsMember } from './bridge-page-read.mjs';
 import { onlineAmong, recordHeartbeat } from './bridge-presence.mjs';
 
-const AVATAR_MAX_BYTES = 200 * 1024;
-const AVATAR_BODY_LIMIT = 320 * 1024;
-const DATA_URL_PATTERN = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+
 
 /** G6 F5: ids are compared as strings (block set, self check), so a UUID is lower-cased at the
  *  boundary; otherwise `/api/profile/<UPPERCASE>` walks past the block list. */
@@ -77,6 +79,19 @@ async function workspaceRole(config, fetchImpl, userId, env) {
 	return { role: (orgRow ?? memberships[0])?.role ?? null, workspaceId: (orgRow ?? memberships[0])?.workspace_id ?? null };
 }
 
+/**
+ * The avatar of a user, as the rest of the plane shows it: the stored path
+ * first (the profile column owns it since P0-6), the legacy blob after, and
+ * never a `data:` URL.
+ */
+async function avatarOf(config, fetchImpl, userId, profile) {
+	const rows = await rest(config, fetchImpl, `osionos_profiles?user_id=eq.${userId}&select=avatar_url&limit=1`);
+	const row = Array.isArray(rows) ? rows[0] ?? null : null;
+	const stored = typeof row?.avatar_url === 'string' && row.avatar_url ? row.avatar_url : null;
+	const legacy = typeof profile?.avatar === 'string' ? profile.avatar : null;
+	return publicAvatar(stored ?? legacy, config);
+}
+
 async function getProfile(deps, session, userId, response, config) {
 	const row = await identityRow(config, deps.fetchImpl, userId);
 	if (!row) throw httpError('Profile not found.', 404);
@@ -88,7 +103,7 @@ async function getProfile(deps, session, userId, response, config) {
 			ok: true,
 			userId,
 			name: row.display_name ?? 'Member',
-			avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
+			avatar: await avatarOf(config, deps.fetchImpl, userId, profile),
 		}, config);
 	}
 	const { role, workspaceId } = await workspaceRole(config, deps.fetchImpl, userId, deps.env);
@@ -98,7 +113,7 @@ async function getProfile(deps, session, userId, response, config) {
 		ok: true,
 		userId,
 		name: row.display_name ?? 'Member',
-		avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
+		avatar: await avatarOf(config, deps.fetchImpl, userId, profile),
 		role,
 		workspaceId,
 		// Caveat: the column is refreshed at most once every ten minutes, so this value is
@@ -114,23 +129,6 @@ async function getProfile(deps, session, userId, response, config) {
 		directoryOptOut: row.directory_opt_out === true,
 		customFields: fields,
 	}, config);
-}
-
-async function postAvatar(deps, session, request, response, config) {
-	const payload = await readJsonBody(request, AVATAR_BODY_LIMIT);
-	const dataUrl = String(payload.dataUrl ?? '');
-	if (!DATA_URL_PATTERN.test(dataUrl)) throw httpError('dataUrl must be a base64 image data URL.', 422);
-	if (Buffer.byteLength(dataUrl, 'utf8') > AVATAR_MAX_BYTES) throw httpError('Avatar exceeds the 200KB limit.', 413);
-	const row = await identityRow(config, deps.fetchImpl, session.userId);
-	if (!row) throw httpError('Profile not found.', 404);
-	const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
-	const nextProfile = { ...profile, avatar: dataUrl, avatarUpdatedAt: new Date().toISOString() };
-	await rest(config, deps.fetchImpl, `osionos_bridge_identities?user_id=eq.${session.userId}`, {
-		method: 'PATCH',
-		body: { profile: nextProfile, updated_at: new Date().toISOString() },
-		prefer: 'return=minimal',
-	});
-	return sendJson(response, 200, { ok: true, userId: session.userId, avatar: dataUrl }, config);
 }
 
 async function heartbeat(deps, session, response, config) {
@@ -178,7 +176,7 @@ async function searchPeople(deps, session, url, response, config) {
 				id: row.user_id,
 				name: row.display_name ?? 'Member',
 				username: row.username ?? null,
-				avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
+				avatar: publicAvatar(typeof profile.avatar === 'string' ? profile.avatar : null, config),
 				headline: typeof profile.headline === 'string' ? profile.headline : null,
 				wsRole: memberRoleByUser?.get(row.user_id) ?? null,
 				online: online.has(row.user_id),
@@ -266,6 +264,10 @@ export function createProfileHandler({ config, verifySession, fetchImpl = fetch,
 		const pathname = url.pathname;
 		const isPeople = pathname === '/api/people';
 		const isEmbed = pathname === '/api/directory/embed';
+		// The avatar routes belong to the account seam (bridge-avatar.mjs). This
+		// handler is dispatched first, so it must not even claim the path: the
+		// dispatch order must not decide who answers.
+		if (pathname === '/api/profile/avatar') return false;
 		if (!pathname.startsWith('/api/profile/') && !isPeople && !isEmbed) return false;
 		const method = (request.method || 'GET').toUpperCase();
 		try {
@@ -273,7 +275,6 @@ export function createProfileHandler({ config, verifySession, fetchImpl = fetch,
 			if (isPeople && method === 'GET') return await searchPeople(deps, session, url, response, requestConfig);
 			if (isEmbed && method === 'POST') return await embedDirectory(deps, session, response, requestConfig);
 			if (pathname === '/api/profile/me' && method === 'PATCH') return await patchMe(deps, session, request, response, requestConfig);
-			if (pathname === '/api/profile/avatar' && method === 'POST') return await postAvatar(deps, session, request, response, requestConfig);
 			if (pathname === '/api/profile/heartbeat' && method === 'POST') return await heartbeat(deps, session, response, requestConfig);
 			const sharesMatch = /^\/api\/profile\/([0-9a-f-]{36})\/shares$/i.exec(pathname);
 			if (sharesMatch && method === 'GET') {

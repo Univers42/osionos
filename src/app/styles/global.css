@@ -892,19 +892,36 @@ body {
   opacity: 1;
 }
 
-/* Accessibility baseline: honor the OS "reduce motion" preference. Defensive-only —
-   it activates solely when the user has asked for reduced motion, collapsing CSS
-   transitions/animations to near-instant so the UI never induces motion sickness.
+/* Accessibility baseline: honor the OS "reduce motion" preference — or the
+   person's own choice, which wins over the OS in both directions.
+   data-motion="reduce" collapses the motion whatever the OS says;
+   data-motion="full" keeps it whatever the OS says. One reset, two triggers:
+   the media query carries the OS, the attribute carries the choice.
+   Defensive-only — it collapses CSS transitions/animations to near-instant so
+   the UI never induces motion sickness.
    (The Canvas graph/aurora loops throttle themselves separately.) */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  :root:not([data-motion="full"]) *,
+  :root:not([data-motion="full"])::before,
+  :root:not([data-motion="full"])::after,
+  :root:not([data-motion="full"]) *::before,
+  :root:not([data-motion="full"]) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"]::before,
+:root[data-motion="reduce"]::after,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 /* ==========================================================================

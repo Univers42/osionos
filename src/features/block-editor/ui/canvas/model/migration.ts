@@ -58,8 +58,13 @@ export function layoutConfigFromLegacy(config: Partial<LayoutConfig> | undefined
 }
 
 export function migrate(legacyCell: LayoutCell, gridConfig: CanvasGridConfig, index = 0): CanvasCell {
-  const frame = frameFromGridCell(legacyCell, gridConfig);
-  return {
+  const gridFrame = frameFromGridCell(legacyCell, gridConfig);
+  const measuredHeight = normalizeMeasuredHeight(legacyCell.measuredHeight);
+  // A pinned height wins over the grid-derived one so the first paint is
+  // already the authored size. The pin outlives the hug flag it was made from
+  // (pinning freezes the cell), so the restore never depends on that flag.
+  const frame = measuredHeight === undefined ? gridFrame : { ...gridFrame, height: measuredHeight };
+  const cell: CanvasCell = {
     id: legacyCell.id,
     frame,
     constraints: {
@@ -83,6 +88,17 @@ export function migrate(legacyCell: LayoutCell, gridConfig: CanvasGridConfig, in
     wrap: legacyCell.wrap,
     section: legacyCell.section,
   };
+  return measuredHeight === undefined ? cell : { ...cell, measuredHeight };
+}
+
+/**
+ * Accepted saved heights: a finite number of px, rounded to whole pixels.
+ * Anything else (a string, NaN, a negative value) is dropped so the cell
+ * falls back to "no saved height" and keeps its grid-derived size.
+ */
+export function normalizeMeasuredHeight(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+  return Math.round(value);
 }
 
 export function unmigrate(canvasCell: CanvasCell, gridConfig: CanvasGridConfig): LayoutCell {
@@ -105,6 +121,7 @@ export function unmigrate(canvasCell: CanvasCell, gridConfig: CanvasGridConfig):
     padding: canvasCell.visuals.padding,
     fontSize: canvasCell.visuals.fontSize,
     section: canvasCell.section,
+    measuredHeight: normalizeMeasuredHeight(canvasCell.measuredHeight),
   });
 }
 

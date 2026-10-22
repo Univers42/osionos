@@ -22,7 +22,6 @@ export const studentDashboard: SeedPage = {
   workspaceId: 'mock-ws-private-0',
   ownerId: 'mock-user-0',
   isTemplate: true,
-  templateSurface: 'student-dashboard',
   content: [
     layoutGrid(1, [
       cell({ colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 1 }, 'Greeting', [

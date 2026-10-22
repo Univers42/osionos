@@ -39,14 +39,15 @@ import {
 	sendJson,
 } from './bridge-social-core.mjs';
 import { onlineAmong } from './bridge-presence.mjs';
+import { publicAvatar } from './bridge-avatar.mjs';
 
-function personEntry(row, online) {
+function personEntry(row, online, config) {
 	const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
 	return {
 		id: row.user_id,
 		name: typeof row.display_name === 'string' && row.display_name ? row.display_name : 'Member',
 		username: row.username ?? null,
-		avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
+		avatar: publicAvatar(typeof profile.avatar === 'string' ? profile.avatar : null, config),
 		headline: typeof profile.headline === 'string' ? profile.headline : null,
 		online: online.has(row.user_id),
 	};
@@ -73,7 +74,7 @@ async function directorySearch(deps, session, url, response, config) {
 		if (people.length >= limit) break;
 	}
 	const online = await onlineAmong(deps.kv, people.map((row) => row.user_id), { now: deps.now() });
-	return sendJson(response, 200, { ok: true, people: people.map((row) => personEntry(row, online)) }, config);
+	return sendJson(response, 200, { ok: true, people: people.map((row) => personEntry(row, online, config)) }, config);
 }
 
 const peerOf = (row, userId) => (row.requester_id === userId ? row.addressee_id : row.requester_id);
