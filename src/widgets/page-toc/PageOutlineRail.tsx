@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useRef, useState } from "react";
+import { prefersReducedMotion } from "@/entities/page/ui/coverMedia";
 import styles from "./PageOutlineRail.module.css";
 
 interface Heading {
@@ -95,7 +96,7 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
     const scroller = rootRef.current?.closest(".osionos-page");
     const target = scroller?.querySelector(`[data-block-id="${CSS.escape(id)}"]`);
     if (!target) return;
-    const reduce = globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const reduce = prefersReducedMotion();
     target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   };
 

@@ -121,6 +121,22 @@ export interface LayoutCell {
   fontSize?: LayoutCellFontSize;
   /** Named section key (e.g. "header"/"about") — drives per-section template write-grants. */
   section?: string;
+  /**
+   * Height pinned on a hug cell, in whole px (see the canvas "Save measured
+   * height" action). The cell renders at that height until "Auto height"
+   * clears it again.
+   * Caveat: a pinned height is a snapshot of the width the cell was measured
+   * at — a wider or narrower pane re-measures the content and the pinned
+   * value goes stale.
+   */
+  measuredHeight?: number;
+  /**
+   * A formula that decides whether the cell is rendered at all, evaluated
+   * against the page's own properties. Empty (or absent) means always visible.
+   * Caveat: it runs in every reader's browser, so a formula that branches on a
+   * value leaks that value's existence to every reader of the page.
+   */
+  visibilityFormula?: string;
 }
 
 /** A single content block in a page. */

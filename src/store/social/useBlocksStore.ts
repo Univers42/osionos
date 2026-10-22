@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,6 +21,7 @@ interface BlocksStore {
   data: BlockedUser[];
   loading: boolean;
   error: string | null;
+  rowErrors: Record<string, string>;
   hydrate: () => Promise<void>;
   block: (userId: string, reason?: string) => Promise<void>;
   unblock: (userId: string) => Promise<void>;
@@ -34,6 +35,7 @@ export const useBlocksStore = create<BlocksStore>()(
       data: [],
       loading: false,
       error: null,
+      rowErrors: {},
       hydrate: async () => {
         set({ loading: true, error: null });
         try {
@@ -60,8 +62,12 @@ export const useBlocksStore = create<BlocksStore>()(
         set({ data: previous.filter((item) => item.userId !== userId) });
         try {
           await unblockUser(userId);
+          const next = { ...get().rowErrors };
+          delete next[userId];
+          set({ rowErrors: next });
         } catch (error) {
-          set({ data: previous, error: errorMessage(error) });
+          const message = errorMessage(error);
+          set({ data: previous, rowErrors: { ...get().rowErrors, [userId]: message } });
           pushSettingsError('Could not unblock user', error);
         }
       },

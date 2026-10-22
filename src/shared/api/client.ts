@@ -26,6 +26,7 @@
 
 import { ApiError, createHttpClient } from '@osionos/http-gate';
 import { revocationAwareFetch } from './sessionRevocation';
+import { sudoRequiredAwareFetch } from './sudoRequired';
 
 export { ApiError };
 export type { ApiErrorBody } from '@osionos/http-gate';
@@ -85,6 +86,6 @@ export function reportRevokedSession(token: string): void {
 export const api = createHttpClient({
   baseUrl: API_BASE,
   maxConcurrent: 6,
-  fetchImpl: revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
+  fetchImpl: sudoRequiredAwareFetch(revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession)),
   missingBaseUrlMessage: 'VITE_API_URL is not configured.',
 });

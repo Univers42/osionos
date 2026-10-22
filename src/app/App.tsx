@@ -22,6 +22,7 @@ import { useNotifyLive } from "@/store/chat/useNotifyLive";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { QuickCaptureModal } from "@/features/quick-capture/ui/QuickCaptureModal";
 import { WorkspaceIntentModal } from "@/features/workspace-onboarding/ui/WorkspaceIntentModal";
+import { ProfessionPickerModal } from "@/features/professions/ui/ProfessionPickerModal";
 import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { useZenMode } from "@/shared/config/useZenMode";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
@@ -36,9 +37,7 @@ import { LazyCanvasDebugRoute, LazyStyleGuideRoute, LazyWorkbench } from "./lazy
 import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
-import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
-import { registerSettingsOpener } from "@/features/settings/settingsOpener";
-import { AI_CONNECTIONS_TAB, type AppSettingsTab } from "@/features/settings/appSettingsTab";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
@@ -157,27 +156,10 @@ const App: React.FC = () => {
   const initialized = useUserStore((s) => s.initialized);
   const error = useUserStore((s) => s.error);
   const activeUserId = useUserStore((s) => s.activeUserId);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<AppSettingsTab>("general");
-  const openSettings = (tab?: AppSettingsTab) => {
-    setSettingsTab(tab ?? "general");
-    setSettingsOpen(true);
-  };
-
-  // The widgets that live far from the app shell (the chat's connector strip)
-  // ask for a tab through this door instead of threading props down the tree.
+  // The way back from OpenRouter: the app comes back with ?code&state, and the
+  // panel that finishes the sign-in opens right away.
   useEffect(() => {
-    // The way back from OpenRouter: the app comes back with ?code&state, and
-    // the panel that finishes the sign-in opens right away.
-    const href = globalThis.location?.href ?? "";
-    if (readOAuthReturn(href)) {
-      setSettingsTab(AI_CONNECTIONS_TAB);
-      setSettingsOpen(true);
-    }
-    return registerSettingsOpener((tab) => {
-      setSettingsTab(tab);
-      setSettingsOpen(true);
-    });
+    if (readOAuthReturn(globalThis.location?.href ?? "")) openSettings("ai_connections");
   }, []);
   // Captured once at first render, before init effects can reset activePage,
   // so a refresh can reopen the page the user was last on.
@@ -364,7 +346,6 @@ const App: React.FC = () => {
       </div>
 
       <WorkspaceThemePanel />
-      {settingsOpen && <LazySettingsCenter initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />}
       <ToastViewport />
       <ShareHost />
       <ExportHost />
@@ -372,6 +353,9 @@ const App: React.FC = () => {
       <ContactDock />
       <QuickCaptureModal />
       <WorkspaceIntentModal />
+      {/* The profession picker: the Modal primitive returns null until the store's
+          `open` flag is set, so the warm path renders nothing. */}
+      <ProfessionPickerModal />
     </div>
   );
 };
