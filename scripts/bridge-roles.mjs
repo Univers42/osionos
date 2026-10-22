@@ -35,6 +35,8 @@ const NO_ROLE = { role: null, names: [] };
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // A role read that never answers must not hold a sign-in open forever: it degrades to no role.
+// Caveat: a read that is slow but alive (> 2 s) also degrades, so an admin signs in with no
+// role until the next token mint; raise timeoutMs if PostgREST is slow under load.
 const ROLE_READ_TIMEOUT_MS = 2000;
 
 /** True when the value is one of the four names the platform knows. */
