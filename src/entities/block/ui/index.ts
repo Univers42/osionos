@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 export * from './ReadOnlyBlock';
+export * from './readOnlyEmbedMode';
 export * from './CalloutBlockReadOnly';
 export * from './CodeBlockReadOnly';
 export * from './MediaBlockReadOnly';
