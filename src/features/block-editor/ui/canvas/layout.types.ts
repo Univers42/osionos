@@ -56,6 +56,13 @@ export interface LayoutCell {
   wrap?: boolean;
   padding?: LayoutCellPadding;
   fontSize?: LayoutCellFontSize;
+  /**
+   * Height pinned on a hug cell, in whole px — carried over from the canvas
+   * model so a legacy save keeps the pinned size.
+   * Caveat: a snapshot of the width the cell was measured at; a different
+   * pane width re-measures the content and the pinned value goes stale.
+   */
+  measuredHeight?: number;
 }
 
 export interface LayoutCellOffset {
