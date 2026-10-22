@@ -885,9 +885,11 @@ function memberHasPermission(member, permission) {
 
 /** Page-level part of canWritePageRow; the client mirrors the whole rule as canWritePage (tests/canvas/bridge-page-write-agreement.test.ts). */
 function mayModifyPage(existing, access) {
-	const ownProps = Array.isArray(existing.properties) ? existing.properties : [];
-	const isPublished = ownProps.some((p) => p && p.key === 'published' && (p.value === true || p.value === 'true'));
-	if (!isPublished && existing.owner_id == null) return true; // legacy / unowned page — the workspace gate suffices (NOT for published apps)
+	// An ownerless page follows the ordinary rule: nobody owns it, so only the
+	// workspace's owner/admin, a membership carrying 'update' or an explicit
+	// editor/owner collaborator may write it. The legacy "owner_id IS NULL is
+	// writable by whoever cleared the workspace gate" branch is gone — it made an
+	// admin-only membership the writer of a page nobody could re-share or take back.
 	if (sameId(existing.owner_id, access.userId)) return true; // the page owner
 	if (access.role === 'owner' || access.role === 'admin') return true; // workspace owner/admin
 	if (Array.isArray(access.permissions) && access.permissions.includes('update')) return true; // shared-workspace editor
