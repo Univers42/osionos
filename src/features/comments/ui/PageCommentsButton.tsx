@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/12 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/12 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 14:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -48,7 +48,14 @@ export const PageCommentsButton: React.FC<{ pageId: string }> = ({ pageId }) => 
       </button>
       {open && (
         <div className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-menu)]">
-          <CommentsPanel comments={comments} loading={loading} meId={meId} onAdd={add} onResolve={resolve} onRemove={remove} />
+          <CommentsPanel
+            comments={comments}
+            loading={loading}
+            meId={meId}
+            onAdd={(content, acknowledgeWarning) => add(content, null, acknowledgeWarning)}
+            onResolve={resolve}
+            onRemove={remove}
+          />
         </div>
       )}
     </div>

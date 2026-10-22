@@ -195,7 +195,7 @@ test("every Block field is markdown, overlay or known-lossy (self-check)", () =>
     assert.equal(lists.length, 1, `unclassified Block field: ${name}`);
   }
   assert.ok(names.includes("placeholderText"), "the known-lossy key is in Block");
-  assert.deepEqual(KNOWN_LOSSY_KEYS, ["placeholderText"]);
+  assert.deepEqual(KNOWN_LOSSY_KEYS, ["placeholderText", "diagramSpec"]);
 });
 
 test("a snapshot over the 64 KB cap is dropped on decode and the URL stays", () => {

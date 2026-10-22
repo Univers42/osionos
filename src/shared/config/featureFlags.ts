@@ -31,7 +31,8 @@ export type FeatureFlagName =
   | "osio.sqlrun"
   | "osio.publish"
   | "osio.whiteboard"
-  | "osio.panezoom";
+  | "osio.panezoom"
+  | "osio.ai.images";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -187,4 +188,14 @@ export function isWhiteboardEnabled(): boolean {
  *  `VITE_OSIO_PANEZOOM=0`. */
 export function isPaneZoomEnabled(): boolean {
   return supportsCssZoom() && isFeatureFlagEnabled("osio.panezoom", true);
+}
+
+/** AI image generation: `/imagine <prompt>` drops an image block the engine
+ *  fills, and the block carries the "AI-generated" label. Default OFF: the
+ *  service refuses images when ITS own flag is off (it answers 404
+ *  `not_found`), so a stack without the engine must not offer the entry.
+ *  Enable client via `?osio.ai.images=1`, the `osio.ai.images` localStorage
+ *  key, or `VITE_OSIO_AI_IMAGES=1`. */
+export function isAiImagesEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.ai.images", false);
 }

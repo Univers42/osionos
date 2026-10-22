@@ -79,6 +79,23 @@ export interface SlashWhiteboardCommand extends SlashCommandBase {
   kind: "whiteboard";
 }
 
+/** An AI action: the service's command, run on the block the menu was opened on. */
+export interface SlashAiCommand extends SlashCommandBase {
+  kind: "ai";
+  /** The name of the command the service knows (`ask`, `summarize`, …). */
+  command: string;
+}
+
+/** The dictation: the voice of the user, written at the caret. */
+export interface SlashDictateCommand extends SlashCommandBase {
+  kind: "dictate";
+}
+
+/** An AI image: `/imagine <prompt>` inserts an image block the engine fills. */
+export interface SlashAiImageCommand extends SlashCommandBase {
+  kind: "ai-image";
+}
+
 /** `/embed`, `/bookmark` and the provider shortcuts: an empty embed or bookmark block
  *  whose link dialog opens at once, with `hintId` naming the provider it waits for. */
 export interface SlashLinkBlockCommand extends SlashCommandBase {
@@ -95,6 +112,9 @@ export type SlashCommand =
   | SlashDatabaseViewCommand
   | SlashMediaPickerCommand
   | SlashWhiteboardCommand
+  | SlashAiCommand
+  | SlashDictateCommand
+  | SlashAiImageCommand
   | SlashLinkBlockCommand;
 
 export interface SlashCommandSection {

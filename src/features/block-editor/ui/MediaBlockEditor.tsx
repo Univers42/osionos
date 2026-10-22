@@ -27,6 +27,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { Block } from "@/entities/block";
 import { MEDIA_BLOCK_LABELS, isMediaBlockType } from "@/entities/block";
 import { MediaBlockPreview, resolveMediaBlockAsset } from "@/entities/block/ui/MediaBlockPreview";
+import { useAiImageStore } from "@/features/ai/model/aiImageStore";
+import { AiImageJobView } from "@/features/ai/ui/AiImageJobView";
 import type { EmbedSnapshot } from "@/shared/lib/embed/embedInfo";
 import { usePageStore } from "@/store/usePageStore";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
@@ -53,6 +55,9 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   onPaste,
 }) => {
   const updateBlock = usePageStore((state) => state.updateBlock);
+  // The image job of this block, when one is running (the state is in memory:
+  // a job that died with the tab leaves the plain placeholder).
+  const imageJob = useAiImageStore((state) => state.jobs[block.id]);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showEmbed, setShowEmbed] = useState(false);
@@ -75,7 +80,9 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
 
   const handleSelect = useCallback(
     (value: string, embed?: EmbedSnapshot) => {
-      updateBlock(pageId, block.id, { asset: value, embed });
+      // A user who replaces the image with their own file loses the
+      // "AI-generated" label: the block is theirs now.
+      updateBlock(pageId, block.id, { asset: value, aiGenerated: undefined, embed });
       setShowSettings(false);
     },
     [updateBlock, pageId, block.id],
@@ -146,15 +153,20 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
       onFocusCapture={() => { if (hasAsset) setShowSettings(true); }}
     >
       {!hasAsset ? (
-        // Empty: the Notion-style void row opens the embed dialog on click.
-        <button
-          type="button"
-          className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40"
-          aria-label={`Add ${label.toLowerCase()}`}
-          onClick={() => setShowEmbed(true)}
-        >
-          <MediaBlockPreview block={block} />
-        </button>
+        imageJob ? (
+          // An image is being made: the job speaks instead of the placeholder.
+          <AiImageJobView blockId={block.id} job={imageJob} />
+        ) : (
+          // Empty: the Notion-style void row opens the embed dialog on click.
+          <button
+            type="button"
+            className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40"
+            aria-label={`Add ${label.toLowerCase()}`}
+            onClick={() => setShowEmbed(true)}
+          >
+            <MediaBlockPreview block={block} />
+          </button>
+        )
       ) : isImage ? (
         <button
           type="button"
@@ -175,6 +187,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           blockId={block.id}
           url={imageUrl}
           altText={altText}
+          asset={block.asset}
           onCaption={() => setCaptionOpen(true)}
           onFullScreen={() => setFullscreen(true)}
           onReplace={() => setShowEmbed(true)}

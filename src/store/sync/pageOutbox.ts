@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   pageOutbox.ts                                       :+:      :+:    :+:   */
+/*   pageOutbox.ts                                      :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/03 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/21 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,18 +15,63 @@
  * (PATCH /api/pages/:id → osionos_pages). The bridge applies fields per-key, so we send
  * the full editable record (title, parent, workspace, visibility, icon, cover, properties)
  * and OMIT `content` only when it is not loaded (never wiping server content). Never
- * throws — it returns a result the orchestrator uses to advance / forget / retry; the four
- * results ("ok" / "refused" / "gone" / "failed") are defined in ./publishResult.
+ * throws — it returns a result the orchestrator uses to advance / forget / retry; the
+ * five results ("ok" / "refused" / "gone" / "conflict" / "failed") are defined in
+ * ./publishResult.
+ *
+ * The PATCH carries the BASE VERSION: the version of the page's content the client last
+ * saw (./pageBase). The bridge refuses a stale one with a 409 that carries the server's
+ * own copy, so two writers merge instead of erasing each other. The version travels ONLY
+ * with content: a metadata-only write says nothing about the content, so it must not
+ * claim a version (and must not be refused for one).
  */
 
 import { api, ApiError, API_BASE, getActivePageJwt } from "@/shared/api/client";
 import type { PageEntry } from "@/entities/page";
-import { ignoredFrom, publishResultFor, type PublishResult } from "./publishResult";
+import { baseFor, setBase } from "./pageBase";
+import {
+  conflictFrom,
+  ignoredFrom,
+  publishResultFor,
+  versionFrom,
+  type PublishOutcome,
+  type PublishResult,
+  type VersionConflict,
+} from "./publishResult";
 
-export type { PublishResult };
+export type { PublishOutcome, PublishResult, VersionConflict };
+
+/**
+ * The bridge calls the outbox makes. Injected so the canvas runner can drive a whole
+ * flush without a network (the real ones read the session and the api client).
+ */
+export interface OutboxDeps {
+  /** The page-audience JWT, or null when there is no session yet. */
+  token(): string | null;
+  /** PATCH one page through the bridge; the parsed answer comes back. */
+  patch(path: string, body: Record<string, unknown>, jwt: string): Promise<unknown>;
+  /** The bridge origin ("" when the app runs without a bridge). */
+  base(): string;
+  /** The unload keepalive: a raw PATCH the browser completes after the document is gone. */
+  keepalive(path: string, body: Record<string, unknown>, jwt: string): void;
+}
+
+const realDeps: OutboxDeps = {
+  token: getActivePageJwt,
+  patch: (path, body, jwt) => api.patch(path, body, jwt),
+  base: () => API_BASE,
+  keepalive: (path, body, jwt) => {
+    void fetch(`${API_BASE}${path}`, {
+      method: "PATCH",
+      keepalive: true,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+      body: JSON.stringify(body),
+    }).catch(() => undefined);
+  },
+};
 
 /** The editable fields the bridge persists; `content` only when it is actually loaded. */
-function pageToPatchBody(page: PageEntry): Record<string, unknown> {
+function pageToPatchBody(page: PageEntry, baseVersion: number | null): Record<string, unknown> {
   const body: Record<string, unknown> = {
     title: page.title,
     parentPageId: page.parentPageId ?? null,
@@ -55,18 +100,45 @@ function pageToPatchBody(page: PageEntry): Record<string, unknown> {
   // browser-clock; without it the server stamped ITS clock and any host/VM
   // skew let a stale server copy clobber fresher local edits on reload.
   if (typeof page.updatedAt === "string" && page.updatedAt) body.updatedAt = page.updatedAt;
-  if (page.content !== undefined) body.content = page.content;
+  const carriesContent = page.content !== undefined;
+  if (carriesContent) body.content = page.content;
+  // The version this edit was made against — with the content, and only with it: the
+  // bridge refuses a stale one (a 409 with the server's copy), so a metadata-only
+  // write must never claim a version it does not depend on.
+  if (carriesContent && baseVersion !== null) body.baseVersion = baseVersion;
   return body;
 }
 
-export async function publishPage(page: PageEntry): Promise<{ result: PublishResult; ignored: string[] }> {
-  const jwt = getActivePageJwt();
-  if (!jwt) return { result: "failed", ignored: [] }; // not signed in yet → stay pending, retry on the timer
+/**
+ * Publish one page. A 200 advances the base: the server now holds exactly what was
+ * sent, at the version it answered. A 409 leaves the base alone — the merge needs it —
+ * and hands the server's copy to the caller.
+ */
+export async function publishPage(
+  page: PageEntry,
+  deps: OutboxDeps = realDeps,
+): Promise<PublishOutcome> {
+  const jwt = deps.token();
+  if (!jwt) return { result: "failed", ignored: [], version: null, conflict: null }; // not signed in yet → stay pending, retry on the timer
+  const base = baseFor(page);
   try {
-    const body = await api.patch<unknown>(`/api/pages/${encodeURIComponent(page._id)}`, pageToPatchBody(page), jwt);
-    return { result: "ok", ignored: ignoredFrom(body) };
+    const answer = await deps.patch(
+      `/api/pages/${encodeURIComponent(page._id)}`,
+      pageToPatchBody(page, base.version),
+      jwt,
+    );
+    const version = versionFrom(answer);
+    setBase(page._id, version ?? base.version, page.content ?? null);
+    return { result: "ok", ignored: ignoredFrom(answer), version, conflict: null };
   } catch (error) {
-    return { result: error instanceof ApiError ? publishResultFor(error.status) : "failed", ignored: [] };
+    const conflict = conflictFrom(error);
+    if (conflict) return { result: "conflict", ignored: [], version: conflict.version, conflict };
+    return {
+      result: error instanceof ApiError ? publishResultFor(error.status) : "failed",
+      ignored: [],
+      version: null,
+      conflict: null,
+    };
   }
 }
 
@@ -77,24 +149,23 @@ export async function publishPage(page: PageEntry): Promise<{ result: PublishRes
  * design — the ledger is NOT advanced (nothing can confirm during unload), so
  * the next session's outbox publishes again from the unconfirmed pages kept
  * under their own key (pendingPages), not from the page cache, which a full
- * origin refuses silently. Not idempotent: the bridge takes the client's
- * updatedAt with no precondition, so when a request did land and another
- * device edited the page next, the second publish overwrites that edit. A
- * request dropped here (offline, a 5xx, or a body over keepalive's ~64KB cap,
- * which throws synchronously and is skipped)
- * therefore loses nothing unless that key was refused too — and then the
- * beforeunload guard asked the user to stay first.
+ * origin refuses silently.
+ *
+ * It carries the base version like every other write: a stale one is refused by
+ * the bridge, so the keepalive never overwrites a copy that moved — the edit
+ * stays pending and the next load replays it through the conflict path (C29).
+ * The answer is ignored (nothing can confirm during unload), so a 409 is
+ * invisible here: the pending copy is what carries the edit to the next load.
  */
-export function publishPageKeepalive(page: PageEntry): void {
-  const jwt = getActivePageJwt();
-  if (!jwt || !API_BASE) return;
+export function publishPageKeepalive(page: PageEntry, deps: OutboxDeps = realDeps): void {
+  const jwt = deps.token();
+  if (!jwt || !deps.base()) return;
   try {
-    void fetch(`${API_BASE}/api/pages/${encodeURIComponent(page._id)}`, {
-      method: "PATCH",
-      keepalive: true,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
-      body: JSON.stringify(pageToPatchBody(page)),
-    }).catch(() => undefined);
+    deps.keepalive(
+      `/api/pages/${encodeURIComponent(page._id)}`,
+      pageToPatchBody(page, baseFor(page).version),
+      jwt,
+    );
   } catch {
     // oversized keepalive body or unavailable fetch — the outbox replays next load
   }

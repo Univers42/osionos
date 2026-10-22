@@ -22,6 +22,8 @@ interface ImageHoverToolbarProps {
   blockId: string;
   url: string | undefined;
   altText: string;
+  /** The block's own asset — what "Ask AI" hands over to the Assistant. */
+  asset?: string;
   onCaption: () => void;
   onFullScreen: () => void;
   onReplace: () => void;
@@ -36,13 +38,14 @@ export const ImageHoverToolbar: React.FC<ImageHoverToolbarProps> = ({
   blockId,
   url,
   altText,
+  asset,
   onCaption,
   onFullScreen,
   onReplace,
   onAltText,
 }) => {
   const [menu, setMenu] = useState<BlockContextMenuState | null>(null);
-  const actions = useImageBlockActions(pageId, blockId, url, altText);
+  const actions = useImageBlockActions(pageId, blockId, url, altText, asset);
 
   const openMenu = useCallback(
     (event: React.MouseEvent) => {

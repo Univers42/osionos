@@ -13,13 +13,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 
-import { useChatStore } from "@/features/chat/model/useChatStore";
+import { useChatStore, getInferencePort } from "@/features/chat/model/useChatStore";
+import { mergeAttachments, subscribeAssistantHandoff } from "@/features/chat/model/assistantHandoff";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
+import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/features/ai/model/aiSelection";
+import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
+import { openAiConnections } from "@/features/settings/settingsOpener";
+import { MAX_ATTACHMENTS } from "./AttachImageButton";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
 import { EmptyStateHero } from "./EmptyStateHero";
 import { ConnectionOnboarding } from "./ConnectionOnboarding";
-import { resolveModel } from "./ModelPicker";
 
 /** The multi-model AI Chat Shell. Talking without a connection triggers a guided
  *  setup; once connected, the pending message is sent automatically. */
@@ -32,28 +37,74 @@ export const ChatShell: React.FC = () => {
   const allMessages = useChatStore((s) => s.messages);
   const createConversation = useChatStore((s) => s.createConversation);
   const setActive = useChatStore((s) => s.setActive);
-  const setConversationModel = useChatStore((s) => s.setConversationModel);
   const send = useChatStore((s) => s.send);
+  const stop = useChatStore((s) => s.stop);
+  // The built-in agents the service offers: the shapes a run can take.
+  const agents = useChatStore((s) => s.agents);
+  const loadAgents = useChatStore((s) => s.loadAgents);
 
   const [text, setText] = useState("");
   const [onboarding, setOnboarding] = useState<null | "ask" | "choose">(null);
+  // What the answer is read from: the pages the reader pointed at, and whether
+  // the whole workspace is searched.
+  const [chips, setChips] = useState<ContextChip[]>([]);
+  const [attachments, setAttachments] = useState<string[]>([]);
+  // The agent of the next run: none is the general assistant.
+  const [agentId, setAgentId] = useState<string | null>(null);
 
   useEffect(() => { initConnectors(); }, [initConnectors]);
   useEffect(() => { if (!activeId) createConversation(); }, [activeId, createConversation]);
+  // The list of the agents, once: the service owns it.
+  useEffect(() => { void loadAgents(); }, [loadAgents]);
+
+  /**
+   * The hand-off from a block: the image the user pointed at, waiting for the
+   * composer. It is taken on mount and whenever it changes — and the image
+   * stays in the composer until the user presses Send (devil C79).
+   */
+  useEffect(
+    () =>
+      subscribeAssistantHandoff((pending) => {
+        setAttachments((current) => mergeAttachments(current, pending.attachments, MAX_ATTACHMENTS));
+        if (pending.text) setText((current) => (current.trim() ? current : pending.text));
+      }),
+    [],
+  );
 
   const active = conversations.find((c) => c.id === activeId) ?? null;
   const messages = allMessages.filter((m) => m.conversationId === activeId);
+  const streaming = messages.some((m) => m.status === "streaming");
   const hasConnection = connectedSnaps.length > 0;
+  // The AI service owns the providers, so a streaming port needs no connector
+  // of the app's own. The offline stub does: it stands in for a provider.
+  const needsConnection = !getInferencePort().stream;
   const fallbackConnector = connectedSnaps[0]?.providerKey ?? "anthropic";
-  const modelValue = active?.model && active.model !== "auto" && active.connectorId ? `${active.connectorId}:${active.model}` : "auto";
+  // The choice the user made — a connection and a model — is remembered on the
+  // device and sent with every run.
+  const [selection, setSelection] = useState<AiSelection>(
+    () => readAiSelection() ?? { connectionId: PLATFORM_CONNECTION_ID, model: "" },
+  );
 
   const submit = (explicit?: string) => {
     const value = (explicit ?? text).trim();
     if (!active || !value) return;
-    if (!hasConnection) { setText(value); setOnboarding("ask"); return; } // ask to connect, keep the message
-    const { connectorId, model } = resolveModel(modelValue, fallbackConnector);
-    void send(active.id, value, { connectorId, model });
+    if (needsConnection && !hasConnection) { setText(value); setOnboarding("ask"); return; } // ask to connect, keep the message
+    void send(active.id, value, {
+      connectorId: fallbackConnector,
+      model: selection.model || "auto",
+      connectionId: selection.connectionId,
+      // The agent of this run: the one the reader picked, or none.
+      ...(agentId ? { agentId } : {}),
+      attachments: attachments
+        .map((path) => {
+          if (path.startsWith("/api/media/")) return { kind: "media" as const, path };
+          return { kind: "chat" as const, id: path.split("/").pop() ?? "" };
+        }),
+      // What the answer may read: the pages the reader pointed at.
+      ...(chips.length > 0 ? { context: buildRunContext(chips) } : {}),
+    });
     setText("");
+    setAttachments([]);
   };
 
   // Connecting through the onboarding modal flushes the pending message (read the
@@ -63,24 +114,41 @@ export const ChatShell: React.FC = () => {
     const value = text.trim();
     if (!active || !value) return;
     const connected = Object.values(useConnectorStore.getState().snapshots).find((x) => x.state === "connected");
-    const { connectorId, model } = resolveModel(modelValue, connected?.providerKey ?? fallbackConnector);
-    void send(active.id, value, { connectorId, model });
+    void send(active.id, value, {
+      connectorId: connected?.providerKey ?? fallbackConnector,
+      model: selection.model || "auto",
+      connectionId: selection.connectionId,
+    });
     setText("");
   };
 
-  const onModelChange = (next: string) => {
-    if (!active) return;
-    const { connectorId, model } = resolveModel(next, fallbackConnector);
-    setConversationModel(active.id, connectorId, model);
+  // With a service, the app's own connectors do not connect a model: the panel
+  // in Settings does. Without one (the offline stub), the local connectors are
+  // the only way to talk to a model at all.
+  const onConnect = () => {
+    if (isAiConfigured()) {
+      openAiConnections();
+      return;
+    }
+    setOnboarding("choose");
   };
 
   const composerProps = {
     value: text,
     onChange: setText,
     onSubmit: () => submit(),
-    onConnect: () => setOnboarding("choose"),
-    model: modelValue,
-    onModelChange,
+    onConnect,
+    selection,
+    onSelectionChange: setSelection,
+    chips,
+    onChipsChange: setChips,
+    agents,
+    agentId,
+    onAgentChange: setAgentId,
+    attachments,
+    onAttachmentsChange: setAttachments,
+    streaming,
+    onStop: () => { if (active) stop(active.id); },
   };
 
   return (
@@ -112,10 +180,17 @@ export const ChatShell: React.FC = () => {
 
       <section className="flex min-w-0 flex-1 flex-col">
         {messages.length === 0 ? (
-          <EmptyStateHero {...composerProps} onPick={(s) => submit(s)} />
+          <EmptyStateHero
+            {...composerProps}
+            onPick={(s) => submit(s)}
+            attachments={attachments}
+            onAttachmentsChange={setAttachments}
+          />
         ) : (
           <>
-            <div className="flex-1 overflow-y-auto"><ChatThread messages={messages} /></div>
+            <div className="flex-1 overflow-y-auto">
+              <ChatThread messages={messages} onRetry={(retryText) => { if (active) void send(active.id, retryText); }} />
+            </div>
             <div className="mx-auto w-full max-w-3xl px-4 pb-4"><ChatComposer {...composerProps} /></div>
           </>
         )}

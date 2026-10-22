@@ -6,24 +6,33 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/14 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/14 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 // Mermaid diagrams come from shared pages. Any `securityLevel` but "strict" runs their
 // `click … call` callbacks and HTML labels in the app origin (devil C17, 2026-10-14), and
 // the nested notion-database-sys preview shipped "loose" while the app's own was strict.
-// Ponytail: a text scan — it reads only `initialize(` calls in files that import mermaid
-// and an inline `securityLevel` literal; a config object built in another file and passed
-// by name is counted as a call without "strict", so it fails loudly rather than passing.
+// Devil C108 (2026-10-22): "strict" alone is not a sandbox — strict still lets DOMPurify
+// keep an <img> inside a label, so every viewer's browser fetches a third-party URL, and a
+// `%%{init:…}%%` directive rewrites the config. The app therefore renders through the
+// LOCKED renderer of @osionos/ui (`lockedMermaidConfig`), and the kit's own preview now
+// draws through that same host renderer (C108) — no inline literal is left anywhere.
+// Ponytail: a text scan — it reads the argument of each `initialize(` call; a config
+// object built in another file and passed by name is counted as a call without "strict",
+// so it fails loudly rather than passing. A dynamic `import(name)` whose module name is a
+// VARIABLE is not seen either: the scan matches the literal "mermaid" only.
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import test from "node:test";
 
 const SKIP = new Set(["node_modules", "dist", "build", ".git", "coverage"]);
 const SOURCE = /\.(ts|tsx|js|jsx|mjs)$/;
+
+/** The one renderer that may touch mermaid — the locked one. */
+const LOCKED_RENDERER = "packages/osionos-ui/src/molecules/MermaidDiagram/MermaidDiagram.tsx";
 
 /** Every source file under `dir`, depth-first. O(files). */
 function sourceFiles(dir: string): string[] {
@@ -37,18 +46,62 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-test("every mermaid.initialize in src/ and packages/ uses securityLevel strict", () => {
+/** The argument of every `.initialize(` call, the parens balanced. */
+function initializeArgs(text: string): string[] {
+  const args: string[] = [];
+  const call = /\.initialize\s*\(/g;
+  let match: RegExpExecArray | null;
+  while ((match = call.exec(text)) !== null) {
+    const start = match.index + match[0].length;
+    let depth = 1;
+    let i = start;
+    while (i < text.length && depth > 0) {
+      const char = text[i];
+      if (char === "(") depth += 1;
+      else if (char === ")") depth -= 1;
+      i += 1;
+    }
+    args.push(depth === 0 ? text.slice(start, i - 1) : text.slice(start));
+  }
+  return args;
+}
+
+/** The scan's paths are relative; compare them the same way on every platform. */
+function posix(file: string): string {
+  return file.split(sep).join("/");
+}
+
+test("every mermaid.initialize in src/ and packages/ is locked", () => {
   const sites: string[] = [];
   for (const file of [...sourceFiles("src"), ...sourceFiles("packages")]) {
     const text = readFileSync(file, "utf8");
     if (!/["']mermaid["']/.test(text)) continue;
-    const calls = text.match(/\.initialize\s*\(/g)?.length ?? 0;
-    if (calls === 0) continue;
+    const args = initializeArgs(text);
+    if (args.length === 0) continue;
     sites.push(file);
     const levels = [...text.matchAll(/securityLevel\s*:\s*["'`]?([\w-]+)/g)].map((m) => m[1]);
     assert.ok(levels.every((level) => level === "strict"), `${file}: securityLevel ${levels.join(",")}`);
-    assert.ok(levels.length >= calls, `${file}: ${String(calls)} initialize call(s), ${String(levels.length)} strict literal(s)`);
+    for (const arg of args) {
+      const locked = /lockedMermaidConfig\s*\(/.test(arg);
+      const strict = /securityLevel\s*:\s*["'`]strict["'`]/.test(arg);
+      assert.ok(
+        locked || strict,
+        `${file}: initialize() without lockedMermaidConfig() nor an inline strict literal`,
+      );
+    }
   }
-  // The two known renderers; fewer means the scan stopped seeing them.
-  assert.ok(sites.length >= 2, `found only: ${sites.join(", ")}`);
+  // ONE renderer left: the locked one. A second site means a renderer came back
+  // (devil C108) — the kit's preview now draws through the host's renderer.
+  assert.deepEqual(sites.map(posix), [LOCKED_RENDERER]);
+});
+
+test("only the locked renderer imports mermaid", () => {
+  const importers: string[] = [];
+  for (const file of [...sourceFiles("src"), ...sourceFiles("packages")]) {
+    const text = readFileSync(file, "utf8");
+    if (!/import\(\s*["']mermaid["']\s*\)|from\s+["']mermaid["']/.test(text)) continue;
+    importers.push(file);
+  }
+  // The kit included: src/shared/notion-database-sys is under src/.
+  assert.deepEqual(importers.map(posix), [LOCKED_RENDERER]);
 });

@@ -24,7 +24,9 @@ import { PeoplePickerList } from '@/shared/people/PeoplePickerList';
 import { IconButton } from '@/shared/ui';
 import { useUnreadStore } from '@/store/chat/useUnreadStore';
 import { useDmChannels } from '@/widgets/dm-list/useDmChannels';
+import { isAiConfigured } from '@/features/ai/api/aiClient';
 import { useDockStore, type DockTab } from '../model/useDockStore';
+import { aiDockTabVisible } from '../model/aiDockModel';
 import { DockContactRow } from './DockContactRow';
 
 interface DockPanelProps {
@@ -38,6 +40,10 @@ export const DockPanel: React.FC<DockPanelProps> = ({ onCollapse }) => {
   const aiOpen = useDockStore((s) => s.aiOpen);
   const toggleAi = useDockStore((s) => s.toggleAi);
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // The AI row shows only when the app can answer: with no AI service
+  // configured there is nothing behind the tab.
+  const aiVisible = aiDockTabVisible(isAiConfigured());
 
   const open = (tab: DockTab) => openTab(tab);
 
@@ -67,15 +73,17 @@ export const DockPanel: React.FC<DockPanelProps> = ({ onCollapse }) => {
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-[var(--osio-space-2)]">
-        <button
-          type="button"
-          onClick={toggleAi}
-          aria-pressed={aiOpen}
-          className="flex w-full min-h-11 items-center gap-[var(--osio-space-3)] rounded-md border-l-2 border-l-[var(--osio-accent)] bg-[var(--osio-accent-subtle)] px-[var(--osio-space-3)] py-[var(--osio-space-2)] text-left transition-colors duration-(--osio-dur-fast) ease-out hover:opacity-90"
-        >
-          <Sparkles size={18} className="text-[var(--osio-accent)]" aria-hidden="true" />
-          <span className="flex-1 truncate text-sm font-medium text-[var(--osio-accent-text)]">Ask the assistant</span>
-        </button>
+        {aiVisible ? (
+          <button
+            type="button"
+            onClick={toggleAi}
+            aria-pressed={aiOpen}
+            className="flex w-full min-h-11 items-center gap-[var(--osio-space-3)] rounded-md border-l-2 border-l-[var(--osio-accent)] bg-[var(--osio-accent-subtle)] px-[var(--osio-space-3)] py-[var(--osio-space-2)] text-left transition-colors duration-(--osio-dur-fast) ease-out hover:opacity-90"
+          >
+            <Sparkles size={18} className="text-[var(--osio-accent)]" aria-hidden="true" />
+            <span className="flex-1 truncate text-sm font-medium text-[var(--osio-accent-text)]">Ask the assistant</span>
+          </button>
+        ) : null}
 
         {pickerOpen && (
           <div className="mt-[var(--osio-space-2)]">
