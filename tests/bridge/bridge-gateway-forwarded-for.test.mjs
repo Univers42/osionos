@@ -14,6 +14,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { configFromEnv, createBridgeHandoff, createBridgeServer, validateBridgePayload } from '../../scripts/bridge-api.mjs';
+import { kvStub } from './support/kv-stub.mjs';
 
 const GATEWAY = 'http://gateway.local';
 
@@ -34,10 +35,10 @@ function reply(body, status = 200) {
 // A gateway stub that records each call, and answers the sign-in flow end to end.
 async function signIn(path, forwardedHeader) {
 	const cfg = config();
-	const handoffStore = new Map();
+	const kv = kvStub();
 	const handoff = await createBridgeHandoff({
 		payload: validateBridgePayload({ provider: 'prismatica', subject: randomUUID(), email: 'a@example.com', name: 'A', jti: randomUUID() }),
-		config: cfg, handoffStore,
+		config: cfg, kv,
 	});
 	const seen = [];
 	const fetchImpl = async (url, init = {}) => {
@@ -47,7 +48,7 @@ async function signIn(path, forwardedHeader) {
 		if (route === '/api/auth/login') return reply({ access_token: 'gw-token', refresh_token: 'r', user: { id: randomUUID() } });
 		return reply({ redirectUrl: handoff.redirectUrl });
 	};
-	const server = createBridgeServer({ config: cfg, handoffStore, fetchImpl });
+	const server = createBridgeServer({ config: cfg, kv, fetchImpl });
 	await new Promise((done) => server.listen(0, '127.0.0.1', done));
 	try {
 		const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, {

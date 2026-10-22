@@ -17,6 +17,7 @@
 
 import net from 'node:net';
 import tls from 'node:tls';
+import { randomUUID } from 'node:crypto';
 import { encodeCommand, parseReply } from './bridge-resp.mjs';
 
 /**
@@ -118,12 +119,35 @@ export class RedisKv {
 			}
 			const database = this.parsed.pathname.replace(/^\//, '');
 			if (database) await this.#send(['SELECT', database], socket);
-			if (!this.closed && socket === this.socket) this.#markReady();
 		} catch {
 			// The credentials or the database were refused: say it once, never the URL.
 			this.#warn('handshake', 'Redis handshake failed (check the credentials and the database).');
 			socket.destroy();
+			return;
 		}
+		try {
+			await this.#probe(socket);
+		} catch {
+			this.#warn('probe', 'Redis refuses the commands the shared store needs (SET NX, PEXPIRE NX, GETDEL); the store stays unavailable.');
+			socket.destroy();
+			return;
+		}
+		if (!this.closed && socket === this.socket) this.#markReady();
+	}
+
+	/**
+	 * The three commands the store needs, run before the client is ever used. A
+	 * least-privilege ACL user may read and write its own keys and still be refused
+	 * PEXPIRE NX (Redis 7.0) or GETDEL (6.2), and INFO is no help: it answers NOPERM for
+	 * the same user. So the probe asks for the commands themselves.
+	 * Caveat: the probe writes one key with a 5 s TTL, so a Redis that forbids writes
+	 * fails the connection even when it would have served reads.
+	 */
+	async #probe(socket) {
+		const key = `osb:probe:${randomUUID()}`;
+		await this.#send(['SET', key, '1', 'PX', '5000', 'NX'], socket);
+		await this.#send(['PEXPIRE', key, '5000', 'NX'], socket);
+		await this.#send(['GETDEL', key], socket);
 	}
 
 	#onData(chunk, socket) {
