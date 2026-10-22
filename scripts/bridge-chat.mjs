@@ -35,6 +35,13 @@
  *
  * After every persisted message/reaction the module publishes (best-effort)
  * to the Rust realtime gateway on `chat:<workspaceId>:<channelId>`.
+ *
+ * L0 runs BEFORE a message is written (bridge-moderation-gate.mjs): a message
+ * whose words trip the rules is the author's question (409) and NOTHING is
+ * written until they answer it with acknowledgeWarning: true. WARN-ONLY:
+ * osionos_messages has no moderation_state column, so nothing is ever written
+ * held and no audit row is ever written. A DM is NEVER checked: a direct
+ * message is moderated by report only (C94).
  */
 
 import {
@@ -43,6 +50,7 @@ import {
 	emitNotifications,
 	httpError,
 	identitySummaries,
+	moderationWarningBody,
 	parseMentions,
 	publishRealtime,
 	readJsonBody,
@@ -63,6 +71,7 @@ import {
 import { takeToken } from './bridge-ratelimit.mjs';
 import { searchMessages } from './bridge-chat-search.mjs';
 import { getThread } from './bridge-chat-threads.mjs';
+import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 
 const CHANNEL_KINDS = new Set(['text', 'dm', 'voice', 'video', 'group']);
 const DEFAULT_PAGE = 50;
@@ -305,6 +314,12 @@ async function postMessage(deps, session, request, channelId, response, config) 
 	const content = safeText(payload.content, 8000);
 	const drafts = Array.isArray(payload.attachments) ? payload.attachments : [];
 	if (!content && drafts.length === 0) throw httpError('Message content or an attachment is required.', 422);
+	// L0 asks BEFORE the message is written — but NOT in a DM: a direct message
+	// is moderated by REPORT only (C94), and its words are the two authors'.
+	if (channel.kind !== 'dm') {
+		const decision = askBeforeWrite({ text: content, surface: 'channel', env: deps.env, payload });
+		if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
+	}
 	const replyToId = payload.replyTo && UUID_REGEX.test(String(payload.replyTo)) ? String(payload.replyTo) : null;
 	let replyTo = null;
 	let replyAuthorId = null;
@@ -385,13 +400,20 @@ async function patchMessage(deps, session, request, messageId, response, config)
 	const payload = await readJsonBody(request, 64 * 1024);
 	const content = safeText(payload.content, 8000);
 	if (!content) throw httpError('Message content is required.', 422);
+	// The channel is read BEFORE the write: the check must know whether the
+	// message is a DM (moderated by report only, C94). It was read after the
+	// write before; the read is the same one, only earlier.
+	const channel = await fetchChannel(config, deps.fetchImpl, existing.channel_id);
+	if (channel.kind !== 'dm') {
+		const decision = askBeforeWrite({ text: content, surface: 'channel', env: deps.env, payload });
+		if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
+	}
 	const rows = await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${messageId}`, {
 		method: 'PATCH',
 		body: { content, edited_at: new Date().toISOString() },
 		prefer: 'return=representation',
 	});
 	const row = Array.isArray(rows) ? rows[0] : rows;
-	const channel = await fetchChannel(config, deps.fetchImpl, existing.channel_id);
 	await publishRealtime({
 		topic: chatTopic(channel),
 		eventType: 'message_updated',
