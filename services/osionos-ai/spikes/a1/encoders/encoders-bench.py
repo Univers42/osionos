@@ -94,6 +94,42 @@ def macro_f1(matrix):
     return sum(scores) / len(scores)
 
 
+def accuracy(matrix):
+    """The share of the rows on the diagonal of a confusion matrix."""
+    total = sum(sum(line) for line in matrix)
+    return sum(matrix[index][index] for index in range(len(CLASSES))) / total
+
+
+def bootstrap_diff(gold, model, base, resamples=1000, seed=42):
+    """The 95 % interval of macro-F1(model) - macro-F1(baseline), by a paired
+    bootstrap: the same resampled rows score both.
+
+    Caveat: the percentile interval of 1000 resamples is rough at the tails
+    (a few hundredths of a point of jitter), and it ignores that the baseline
+    was fitted on a split of the same dataset."""
+    import numpy
+
+    gold = numpy.array(gold)
+    model = numpy.array(model)
+    base = numpy.array(base)
+    rng = numpy.random.default_rng(seed)
+    count = len(CLASSES)
+
+    def matrix_of(truth, guess):
+        flat = numpy.bincount(truth * count + guess, minlength=count * count)
+        return flat.reshape(count, count).tolist()
+
+    diffs = []
+    for _ in range(resamples):
+        pick = rng.integers(0, len(gold), len(gold))
+        diffs.append(
+            macro_f1(matrix_of(gold[pick], model[pick]))
+            - macro_f1(matrix_of(gold[pick], base[pick]))
+        )
+    low, high = numpy.percentile(diffs, [2.5, 97.5])
+    return float(low), float(high)
+
+
 # --- the datasets -----------------------------------------------------------
 
 
@@ -152,7 +188,15 @@ def toxic_label(labels):
 
 
 def sentiment_map(labels):
-    """The map of the labels of the model to the three classes of the slice."""
+    """The map of the labels of the model to the three classes of the slice.
+
+    The names are the ones of the id2label of the model, never guessed. A
+    five-class model (tabularisai: "Very Negative", "Negative", "Neutral",
+    "Positive", "Very Positive") is folded: very negative + negative ->
+    negative, neutral -> neutral, positive + very positive -> positive.
+    A three-class one (cardiffnlp: negative, neutral, positive) maps as is.
+    "neg" / "neu" / "pos" are substrings of those names; nlptown's "N stars"
+    is 1-2 negative, 3 neutral, 4-5 positive."""
     mapping = {}
     for index, name in sorted(labels.items()):
         low = name.lower().strip()
@@ -506,6 +550,7 @@ def job_sent(args, labels):
             rows = random.Random(args.seed).sample(rows, args.cap)
         rows.sort(key=lambda row: int(row[0]))
         matrix = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+        predicted = {}
         chunks = [
             rows[start : start + args.batch]
             for start in range(0, len(rows), args.batch)
@@ -526,18 +571,28 @@ def job_sent(args, labels):
                         position = int(best[0]) if best[0].isdigit() else 0
                         name = CLASSES[position]
                     matrix[gold_class(row[2])][CLASSES.index(name)] += 1
+                    predicted[row[0]] = CLASSES.index(name)
                     out.write(
                         f"{args.model}\tsentiments\t{lang[:2]}\t{row[0]}\t{row[2]}"
                         f"\t{name}\t{best[1]:.6f}\n"
                     )
         out.flush()
         print(f"== sentiment: {lang} rows {len(rows)}")
-        print(f"sent {args.model} {lang} rows {len(rows)} macro_f1 {macro_f1(matrix):.4f}")
+        print(f"sent {args.model} {lang} rows {len(rows)} macro_f1 {macro_f1(matrix):.4f}"
+              f" accuracy {accuracy(matrix):.4f}")
         print("  the confusion matrix (the rows are the truth, the columns the prediction)")
         for index, name in enumerate(CLASSES):
             print(f"    {name:9s} {matrix[index][0]:5d} {matrix[index][1]:5d} {matrix[index][2]:5d}")
-        base_matrix, base_f1 = baseline(train, path, args)
-        print(f"sent {args.model} {lang} baseline macro_f1 {base_f1:.4f}")
+        base_matrix, base_f1, base_predicted = baseline(train, path, args)
+        print(f"sent {args.model} {lang} baseline macro_f1 {base_f1:.4f}"
+              f" accuracy {accuracy(base_matrix):.4f}")
+        ids = [row[0] for row in rows]
+        gold = [gold_class(row[2]) for row in rows]
+        low, high = bootstrap_diff(
+            gold, [predicted[i] for i in ids], [base_predicted[i] for i in ids]
+        )
+        print(f"sent {args.model} {lang} diff_vs_baseline {macro_f1(matrix) - base_f1:+.4f}"
+              f" ci95 [{low:+.4f}, {high:+.4f}] (paired bootstrap, 1000 resamples of rows, seed 42)")
         print("  the confusion matrix of the baseline")
         for index, name in enumerate(CLASSES):
             print(f"    {name:9s} {base_matrix[index][0]:5d} {base_matrix[index][1]:5d} {base_matrix[index][2]:5d}")
@@ -563,9 +618,11 @@ def baseline(train_path, test_path, args):
     test.sort(key=lambda row: int(row[0]))
     predictions = model.predict(vectorizer.transform([row[1] for row in test]))
     matrix = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+    predicted = {}
     for row, prediction in zip(test, predictions):
         matrix[gold_class(row[2])][int(prediction)] += 1
-    return matrix, macro_f1(matrix)
+        predicted[row[0]] = int(prediction)
+    return matrix, macro_f1(matrix), predicted
 
 
 def job_latency(args, labels):
