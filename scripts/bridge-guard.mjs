@@ -146,24 +146,23 @@ export function clientMeta(request, { ipHeader, hashSecret } = {}) {
 	};
 }
 
-function checkedKey(key) {
-	if (typeof key !== 'string' || key === '') throw new TypeError('rate-limit key must be a non-empty string.');
-	const segments = key.split(':');
-	if (segments.some((segment) => segment === '' || segment === 'null' || segment === 'undefined')) {
-		throw new TypeError('rate-limit key has an empty or missing segment.');
+function checkedParts(parts) {
+	if (!Array.isArray(parts) || parts.length === 0) throw new TypeError('rate-limit parts must be a non-empty array.');
+	if (parts.some((part) => typeof part !== 'string' || part === '')) {
+		throw new TypeError('every rate-limit part must be a non-empty string.');
 	}
-	return key;
+	return `rl:${parts.map(encodeURIComponent).join(':')}`;
 }
 
 // Caveat: a fixed window lets 2 × limit through across a boundary, and retryAfterSeconds
 // is the whole window, not the time actually left. Inside one process the counter is
 // serialized by the kv store, so concurrent requests cannot both see the same count.
-export async function rateLimit(kv, key, { limit, windowMs } = {}) {
-	const safeKey = checkedKey(key);
+export async function rateLimit(kv, parts, { limit, windowMs } = {}) {
+	const key = checkedParts(parts);
 	if (!Number.isInteger(limit) || limit < 1 || !Number.isInteger(windowMs) || windowMs < 1) {
 		throw new TypeError('rate limit needs a positive integer limit and windowMs.');
 	}
-	const count = await kv.incrWithTtl(`rl:${safeKey}`, windowMs);
+	const count = await kv.incrWithTtl(key, windowMs);
 	if (count > limit) {
 		throw Object.assign(guardError(429, 'rate_limited', 'Too many requests.'), {
 			retryAfterSeconds: Math.ceil(windowMs / 1_000),
@@ -234,7 +233,7 @@ export async function writeAudit(pg, { session, meta, eventType, details = {} } 
 		// asService throws synchronously when the account plane is unconfigured.
 		const client = pg.asService();
 		await client.post('osionos_bridge_audit_events', row, { prefer: 'return=minimal' });
-	} catch {
-		throw guardError(503, 'audit_unavailable', AUDIT_MESSAGE);
+	} catch (error) {
+		throw Object.assign(guardError(503, 'audit_unavailable', AUDIT_MESSAGE), { cause: error });
 	}
 }

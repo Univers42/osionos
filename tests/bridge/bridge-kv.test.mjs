@@ -50,22 +50,39 @@ function decode(buffer) {
 
 async function respServer(handle) {
 	const commands = [];
+	const connectionIds = [];
 	const sockets = new Set();
+	const state = { connections: 0 };
 	const server = net.createServer((socket) => {
+		state.connections += 1;
+		const connectionId = state.connections;
 		sockets.add(socket);
 		socket.on('error', () => {});
 		socket.on('close', () => sockets.delete(socket));
 		let buffer = Buffer.alloc(0);
+		// Real Redis answers strictly in order per connection: a delayed reply holds back
+		// every later reply written to the same socket.
+		let chain = Promise.resolve();
 		socket.on('data', (chunk) => {
 			buffer = Buffer.concat([buffer, chunk]);
 			const parsed = decode(buffer);
 			buffer = parsed.rest;
 			for (const command of parsed.commands) {
 				commands.push(command);
+				connectionIds.push(connectionId);
 				const reply = handle(command, commands.length - 1);
 				if (!reply) continue;
-				const write = () => { if (!socket.destroyed) socket.write(reply.data); };
-				if (reply.delay) setTimeout(write, reply.delay); else write();
+				chain = chain.then(() => new Promise((resolve) => {
+					const chunks = reply.chunks ?? [reply.data];
+					const gap = reply.gap ?? 0;
+					const send = (index) => {
+						if (!socket.destroyed) socket.write(chunks[index]);
+						if (index + 1 < chunks.length) setTimeout(() => send(index + 1), gap);
+						else resolve();
+					};
+					if (reply.delay) setTimeout(() => send(0), reply.delay);
+					else send(0);
+				}));
 			}
 		});
 	});
@@ -73,6 +90,8 @@ async function respServer(handle) {
 	const { port } = server.address();
 	return {
 		commands,
+		connectionIds,
+		get connections() { return state.connections; },
 		url: `redis://127.0.0.1:${port}`,
 		close: async () => {
 			for (const socket of sockets) socket.destroy();
@@ -200,12 +219,39 @@ describe('createKv redis backend', () => {
 			return { data: bulk('first'), delay: 150 };
 		});
 		const kv = createKv({ redisUrl: server.url, required: true, commandTimeoutMs: 40 });
-		await kv.ready();
-		await assert.rejects(kv.get('k'), unavailable);
-		await kv.ready();
-		assert.equal(await kv.get('k'), 'second');
+		try {
+			await kv.ready({ timeoutMs: 500 });
+			await assert.rejects(kv.get('k'), unavailable);
+			await kv.ready({ timeoutMs: 500 });
+			assert.equal(await kv.get('k'), 'second');
+			assert.equal(server.connections, 2, 'the timed-out connection was replaced');
+			assert.deepEqual(server.connectionIds, [1, 2]);
+		} finally {
+			kv.close();
+			await server.close();
+		}
+	});
+
+	it('assembles one bulk reply split across two chunks', async () => {
+		const server = await respServer(() => ({ chunks: ['$5\r\nhe', 'llo\r\n'], gap: 20 }));
+		const kv = createKv({ redisUrl: server.url });
+		await kv.ready({ timeoutMs: 500 });
+		assert.equal(await kv.get('k'), 'hello');
 		kv.close();
 		await server.close();
+	});
+
+	it('resolves ready on connect and rejects it after the timeout', async () => {
+		const server = await respServer(storeHandler());
+		const up = createKv({ redisUrl: server.url, required: true });
+		await up.ready({ timeoutMs: 500 });
+		assert.equal(up.backend(), 'redis');
+		up.close();
+		const url = server.url;
+		await server.close();
+		const down = createKv({ redisUrl: url, required: true, commandTimeoutMs: 100 });
+		await assert.rejects(down.ready({ timeoutMs: 100 }), unavailable);
+		down.close();
 	});
 
 	it('rejects every method when a required Redis is down', async () => {
