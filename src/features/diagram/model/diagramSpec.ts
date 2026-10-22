@@ -43,6 +43,14 @@ const mermaidSpec = z.strictObject({
   title,
 });
 
+/**
+ * A page id: a server uuid, or the id a page carries before it is synced
+ * (`local-page-<n>-<base36 time>`, src/store/pageStore.helpers.ts `localId`) —
+ * the offline app has only those. Either way the id is a lookup key into the
+ * reader's own store and is never emitted (the compiler generates node ids).
+ */
+const pageId = z.union([z.uuid(), z.string().regex(/^local-page-\d{1,9}-[0-9a-z]{1,12}$/)]);
+
 /** The schema of one to twelve databases the reader may see. */
 const schemaSpec = z.strictObject({
   kind: z.literal("schema"),
@@ -54,7 +62,7 @@ const schemaSpec = z.strictObject({
 /** The neighbourhood of one page: the links, mentions and relations around it. */
 const graphSpec = z.strictObject({
   kind: z.literal("graph"),
-  pageId: z.uuid(),
+  pageId,
   depth: z.union([z.literal(1), z.literal(2)]),
   kinds: z.array(z.enum(["link", "mention", "relation", "parent", "tag", "semantic"])),
   direction: direction.optional(),
@@ -64,7 +72,7 @@ const graphSpec = z.strictObject({
 /** The tree under one page, one to four levels deep. */
 const hierarchySpec = z.strictObject({
   kind: z.literal("hierarchy"),
-  rootPageId: z.uuid(),
+  rootPageId: pageId,
   depth: z.number().int().min(1).max(4),
   direction: direction.optional(),
   title,
