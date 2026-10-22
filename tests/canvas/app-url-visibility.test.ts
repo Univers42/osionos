@@ -37,6 +37,18 @@ test("marketplace launch policy: Desktop loopback hidden publicly, shown locally
   assert.equal(isListableApp("osionos.desktop", "https://desktop.example.net", PUBLIC_HOST), true);
 });
 
+test("marketplace launch policy: a launch URL on the page's own origin is refused (C28)", () => {
+  const url = "https://localhost:3001";
+  assert.equal(effectiveLaunchUrl("osionos.desktop", url, "localhost", "https://localhost:3001"), "");
+  assert.equal(isListableApp("osionos.desktop", url, "localhost", "https://localhost:3001"), false);
+  assert.equal(effectiveLaunchUrl("osionos.desktop", url, "localhost", "https://localhost:3002"), url);
+  assert.equal(effectiveLaunchUrl("osionos.desktop", "https://localhost:3001/./x", "localhost", "https://localhost:3001"), "");
+  assert.equal(effectiveLaunchUrl("osionos.desktop", "https://localhost.:3001", "localhost", "https://localhost:3001"), "");
+  assert.equal(effectiveLaunchUrl("osionos.desktop", "http://localhost:3001", "localhost", "https://localhost:3001"), "http://localhost:3001");
+  assert.equal(effectiveLaunchUrl("osionos.desktop", url, "localhost", ""), url);
+  assert.equal(effectiveLaunchUrl("osionos.draw", url, "localhost", "https://localhost:3001"), url);
+});
+
 test("marketplace launch policy: native Draw keeps working with its catalogue URL", () => {
   assert.equal(isListableApp("osionos.draw", "https://localhost:3001", PUBLIC_HOST), true);
 });
@@ -58,6 +70,14 @@ test("marketplace launch policy: the build's configured URL wins over the catalo
   assert.equal(listableFor("acme.notes", dev, null, PUBLIC_HOST), false);
   assert.equal(launchUrlFor("acme.notes", dev, null, "localhost"), dev);
   assert.equal(launchUrlFor("osionos.mail", dev, "http://localhost:3002", PUBLIC_HOST), "");
+});
+
+test("marketplace launch policy: an app on the page's own origin is never launched", () => {
+  const site = "https://site.example.net";
+  assert.equal(launchUrlFor("osionos.mail", "https://localhost:3002", `${site}/mail`, PUBLIC_HOST, site), "");
+  assert.equal(listableFor("acme.notes", `${site}/notes`, null, PUBLIC_HOST, site), false);
+  assert.equal(launchUrlFor("acme.notes", `${site}/notes`, null, PUBLIC_HOST, "https://other.example.net"), `${site}/notes`);
+  assert.equal(launchUrlFor("osionos.draw", site, null, PUBLIC_HOST, site), site);
 });
 
 test("configuredUrlFor: gated surfaces report their URL, others have no gate", () => {

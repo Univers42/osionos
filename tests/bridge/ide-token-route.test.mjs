@@ -58,8 +58,13 @@ function fakeReq(method, { body, auth } = {}) {
 	return req;
 }
 
-async function call(env, { method = 'POST', body, auth, path = '/api/ide/token', fetchImpl, cfg = config } = {}) {
-	const handler = createIdeTokenHandler({ config: cfg, verifySession: verifyAppSessionToken, env, ...(fetchImpl ? { fetchImpl } : {}) });
+// The live members check the mint runs before it signs (C129). It is injected: the real
+// one lives in bridge-api.mjs, and a test that wanted the whole bridge would import a
+// cycle. A fake that resolves is the "the member is still there" answer.
+const memberStillThere = async () => ({ role: 'owner', permissions: ['read'] });
+
+async function call(env, { method = 'POST', body, auth, path = '/api/ide/token', fetchImpl, cfg = config, requireWorkspaceAccess = memberStillThere } = {}) {
+	const handler = createIdeTokenHandler({ config: cfg, verifySession: verifyAppSessionToken, env, requireWorkspaceAccess, ...(fetchImpl ? { fetchImpl } : {}) });
 	const res = fakeRes();
 	const handled = await handler(new URL(`http://x${path}`), fakeReq(method, { body, auth }), res);
 	return { handled, res, json: res.body ? JSON.parse(res.body) : null };
@@ -208,11 +213,32 @@ test('an error without an HTTP status answers 500 and keeps its message on the s
 		config,
 		verifySession: () => { throw new TypeError('internal detail'); },
 		env: envFor(user),
+		requireWorkspaceAccess: memberStillThere,
 	});
 	const res = fakeRes();
 	await handler(new URL('http://x/api/ide/token'), fakeReq('POST', { body: { workspaceId: WS }, auth: appToken(user) }), res);
 	assert.equal(res.statusCode, 500);
 	assert.doesNotMatch(res.body, /internal detail/);
+});
+
+// C129: the app token still lists the workspace after the member was removed, so the mint
+// asks the LIVE members row. The check refuses: 403, and no token in the body.
+test('a removed member is refused at once: the live check answers 403 and no token is minted', async () => {
+	const user = freshUser();
+	const refuse = async () => { throw Object.assign(new Error('Workspace permission denied.'), { status: 403 }); };
+	const { res, json } = await call(envFor(user), { auth: appToken(user), body: { workspaceId: WS }, requireWorkspaceAccess: refuse });
+	assert.equal(res.statusCode, 403);
+	assert.equal(json.ok, false);
+	assert.equal(json.token, undefined, 'no IDE token for a member who lost the workspace');
+});
+
+// The check is REQUIRED: a handler without one would mint for anybody, which is the
+// defect the check exists for. It refuses to be created at all.
+test('a handler without the live check refuses to be created', () => {
+	assert.throws(
+		() => createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: envFor(freshUser()) }),
+		/requireWorkspaceAccess/,
+	);
 });
 
 test('createBridgeServer routes POST /api/ide/token to the handler', async () => {

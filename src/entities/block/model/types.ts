@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import type { EmbedSnapshot } from '@/shared/lib/embed/embedInfo';
+
 /**
  * Standalone Block types for the playground application.
  * This replaces the external @src/types/database dependency.
@@ -47,6 +49,9 @@ export type BlockType =
   | 'graph_view'
   | 'draw'
   | 'whiteboard'
+  | 'diagram'
+  | 'embed'
+  | 'bookmark'
   | 'home_views'
   | 'placeholder';
 
@@ -156,6 +161,8 @@ export interface Block {
   widthRatio?: number;      /** Relative width for column blocks */
   collapsed?: boolean;		/** Whether a toggle is collapsed */
   asset?: string;           /** Serialized ui-collection asset value for media blocks */
+  /** Image made by the AI: its provenance (never the prompt). Shown as an "AI-generated" label. */
+  aiGenerated?: { model: string; runId: string; createdAt: string };
   mediaWidth?: number;      /** Display width percentage for media blocks */
   mediaShape?: 'rounded' | 'circle'; /** Image crop shape (circle = avatar; default rounded) */
   mediaAspect?: string;     /** CSS aspect-ratio for image blocks (e.g. "16 / 9"); "original"/unset = natural */
@@ -164,6 +171,9 @@ export interface Block {
   drawHeight?: number;      /** LEGACY 'draw' block canvas height in px. The retired Draw tool; its scene JSON still lives in `content`. */
   boardSlug?: string;       /** 'whiteboard' block: slug of the drawnosaurus board it embeds. Unset until the board is created. */
   whiteboardHeight?: number; /** 'whiteboard' block frame height in px (default 520). `content` holds the board title. */
+  diagramSpec?: unknown;    /** 'diagram' block: the stored SPEC (never the rendered output). Validated at use by parseDiagramSpec, never trusted as typed. */
+  embed?: EmbedSnapshot;    /** Resolved link metadata for 'embed'/'bookmark' (and later media blocks). UNTRUSTED: parseEmbedSnapshot before use. `content` keeps the URL. */
+  embedHeight?: number;     /** 'embed' block frame height in px for a generic page; clampEmbedHeight at use. */
   buttonLabel?: string;     /** Visible label for a 'button' block (falls back to content) */
   buttonHref?: string;      /** Button target: internal page link `page://<id>`, a `/...` path, else presentational */
   buttonVariant?: 'primary' | 'secondary'; /** Button style for a 'button' block (default: primary) */
@@ -181,5 +191,6 @@ export interface Block {
   layoutConfig?: Partial<LayoutConfig>;
   layoutCells?: LayoutCell[];
   schemaVersion?: number;
+  conflictOf?: string;		/** The id of the block this one is a conflict copy of — the merge kept both variants */
   [key: string]: unknown;	/** Arbitrary metadata */
 }

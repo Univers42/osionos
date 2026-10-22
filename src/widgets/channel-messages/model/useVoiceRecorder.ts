@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/21 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,140 +17,65 @@
  * scrolling window), so the bars track tonality like a hardware recorder, not a
  * decorative animation. The timer is pause-aware (paused time is excluded). stop()
  * resolves the blob + active durationMs + decode-time peaks for the preview/upload.
+ *
+ * The recorder itself lives in `voiceRecorderCore.ts` — plain, without React, and
+ * shared with the dictation. This hook is its React face.
+ *
+ * `maxMs` is the cap: the recorder stops itself at it. The voice note passes
+ * nothing (its own UI caps the minute); the dictation passes 30 000.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { computePeaks } from './computePeaks';
+import { createVoiceRecorder } from './voiceRecorderCore';
+import type { VoiceRecorderCore, VoiceRecorderState } from './voiceRecorderCore';
 
-export interface VoiceResult {
-  blob: Blob;
-  durationMs: number;
-  peaks: number[];
+export type { RecorderStatus, VoiceResult } from './voiceRecorderCore';
+
+export interface VoiceRecorderOptions {
+  /** The cap of the recording, in milliseconds. The recorder stops itself at it. */
+  maxMs?: number;
+  /** The peaks of the preview are computed. The dictation does not need them. */
+  peaks?: boolean;
 }
 
-export type RecorderStatus = 'idle' | 'recording' | 'paused';
+const IDLE: VoiceRecorderState = { status: 'idle', elapsedMs: 0, samples: [], capped: false };
 
-const MIME = 'audio/webm;codecs=opus';
-const SAMPLE_EVERY_MS = 90;
-const MAX_BARS = 56;
+export function useVoiceRecorder(options: VoiceRecorderOptions = {}) {
+  const [state, setState] = useState<VoiceRecorderState>(IDLE);
+  const core = useRef<VoiceRecorderCore | null>(null);
+  const maxMs = options.maxMs ?? 0;
+  const peaks = options.peaks ?? true;
 
-export function useVoiceRecorder() {
-  const [status, setStatus] = useState<RecorderStatus>('idle');
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [samples, setSamples] = useState<number[]>([]);
-
-  const recorder = useRef<MediaRecorder | null>(null);
-  const chunks = useRef<Blob[]>([]);
-  const stream = useRef<MediaStream | null>(null);
-  const raf = useRef(0);
-  const analyser = useRef<AnalyserNode | null>(null);
-  const audioCtx = useRef<AudioContext | null>(null);
-  const baseMs = useRef(0);      // active ms accumulated before the current segment
-  const segStart = useRef(0);    // Date.now() of the current active segment (0 = paused)
-  const lastSample = useRef(0);
-
-  const teardown = useCallback(() => {
-    cancelAnimationFrame(raf.current);
-    stream.current?.getTracks().forEach((t) => t.stop());
-    void audioCtx.current?.close().catch(() => undefined);
-    stream.current = null;
-    analyser.current = null;
-    audioCtx.current = null;
-    setStatus('idle');
-  }, []);
-
-  // Self-scheduling RAF loop (declared so it is never referenced before declaration):
-  // advances the pause-aware clock and pushes the real mic amplitude into `samples`.
-  const tick = useCallback(function tick() {
-    setElapsedMs(baseMs.current + (Date.now() - segStart.current));
-    const node = analyser.current;
-    let peak = 0;
-    if (node) {
-      const buf = new Uint8Array(node.fftSize); // time-domain data is fftSize samples, not frequencyBinCount (fftSize/2)
-      node.getByteTimeDomainData(buf);
-      for (const v of buf) peak = Math.max(peak, Math.abs(v - 128) / 128);
-    }
-    const now = Date.now();
-    if (now - lastSample.current >= SAMPLE_EVERY_MS) {
-      lastSample.current = now;
-      setSamples((prev) => (prev.length >= MAX_BARS ? [...prev.slice(1), peak] : [...prev, peak]));
-    }
-    raf.current = requestAnimationFrame(tick);
+  // The recorder is created once: a new one on every render would lose the
+  // recording in flight.
+  if (core.current == null) {
+    core.current = createVoiceRecorder({ maxMs, peaks, onState: setState });
+  }
+  useEffect(() => {
+    const recorder = core.current;
+    return () => {
+      recorder?.cancel();
+    };
   }, []);
 
   const start = useCallback(async () => {
-    const media = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.current = media;
-    const ctx = new AudioContext();
-    audioCtx.current = ctx;
-    // Browsers create an AudioContext in the 'suspended' state under the autoplay
-    // policy. We reach here only AFTER `await getUserMedia`, so the click's
-    // user-gesture window is already gone and the context stays suspended — its
-    // graph clock never advances, the analyser only ever reads the silent midline
-    // (128), and the live meter looks dead even though the mic is granted. Resume
-    // it (best-effort: MediaRecorder captures audio regardless of the meter).
-    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch { /* meter stays flat; recording still works */ } }
-    const node = ctx.createAnalyser();
-    node.fftSize = 256;
-    ctx.createMediaStreamSource(media).connect(node);
-    analyser.current = node;
-    chunks.current = [];
-    const mime = MediaRecorder.isTypeSupported(MIME) ? MIME : '';
-    const rec = new MediaRecorder(media, mime ? { mimeType: mime } : undefined);
-    rec.ondataavailable = (e) => { if (e.data.size) chunks.current.push(e.data); };
-    recorder.current = rec;
-    rec.start();
-    baseMs.current = 0;
-    segStart.current = Date.now();
-    lastSample.current = 0;
-    setSamples([]);
-    setElapsedMs(0);
-    setStatus('recording');
-    raf.current = requestAnimationFrame(tick);
-  }, [tick]);
+    await core.current?.start();
+  }, []);
 
   const pause = useCallback(() => {
-    const rec = recorder.current;
-    if (rec?.state !== 'recording') return;
-    rec.pause();
-    baseMs.current += Date.now() - segStart.current;
-    segStart.current = 0;
-    cancelAnimationFrame(raf.current);
-    setStatus('paused');
+    core.current?.pause();
   }, []);
 
   const resume = useCallback(() => {
-    const rec = recorder.current;
-    if (rec?.state !== 'paused') return;
-    rec.resume();
-    segStart.current = Date.now();
-    setStatus('recording');
-    raf.current = requestAnimationFrame(tick);
-  }, [tick]);
+    core.current?.resume();
+  }, []);
 
-  const stop = useCallback(
-    () =>
-      new Promise<VoiceResult | null>((resolve) => {
-        const rec = recorder.current;
-        if (!rec || rec.state === 'inactive') { teardown(); resolve(null); return; }
-        const durationMs = baseMs.current + (segStart.current ? Date.now() - segStart.current : 0);
-        rec.onstop = async () => {
-          const blob = new Blob(chunks.current, { type: rec.mimeType || 'audio/webm' });
-          teardown();
-          const peaks = await computePeaks(blob);
-          resolve({ blob, durationMs, peaks });
-        };
-        rec.stop();
-      }),
-    [teardown],
-  );
+  const stop = useCallback(() => core.current?.stop() ?? Promise.resolve(null), []);
 
   const cancel = useCallback(() => {
-    const rec = recorder.current;
-    if (rec && rec.state !== 'inactive') { rec.onstop = null; rec.stop(); }
-    teardown();
-  }, [teardown]);
+    core.current?.cancel();
+  }, []);
 
-  return { status, elapsedMs, samples, start, pause, resume, stop, cancel };
+  return { status: state.status, elapsedMs: state.elapsedMs, samples: state.samples, start, pause, resume, stop, cancel };
 }

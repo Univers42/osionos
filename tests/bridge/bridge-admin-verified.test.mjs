@@ -17,11 +17,13 @@ import {
 	configFromEnv,
 	consumeHandoffToken,
 	createBridgeHandoff,
+	startBridgeServer,
 	validateBridgePayload,
 	verifyAppSessionToken,
 	verifyBridgeRequest,
 } from '../../scripts/bridge-api.mjs';
 import { kvStub } from './support/kv-stub.mjs';
+import { PRIVATE_ID, SUBJECT, createSigninStub, hashOf, signIn, signinConfig } from './support/signin-world.mjs';
 
 const secret = 'test-bridge-secret-that-is-long-enough';
 const now = 1_768_000_000_000;
@@ -107,3 +109,53 @@ describe('emailVerified on the signed payload', () => {
 		}
 	});
 });
+
+// The administrator list is opt-in: an unset variable leaves nobody to promote, so a deployment
+// that forgets it cannot hand is_admin to whoever signs in with the forgotten address.
+describe('account administrators are opt-in', () => {
+	it('configures no administrator when the variable is unset', () => {
+		assert.deepEqual(configFromEnv({}).adminEmails, []);
+	});
+
+	it('configures no administrator when the variable is empty', () => {
+		assert.deepEqual(configFromEnv({ OSIONOS_ADMIN_EMAILS: '' }).adminEmails, []);
+	});
+
+	it('parses the list: trimmed, lowercased, blanks dropped', () => {
+		assert.deepEqual(configFromEnv({ OSIONOS_ADMIN_EMAILS: ' A@x.test , b@x.test ' }).adminEmails, ['a@x.test', 'b@x.test']);
+	});
+
+	it('promotes nobody at login when no administrator is configured', async () => {
+		const stub = createSigninStub({});
+		const { claims } = await signIn(stub, { email: 'anyone@example.test', emailVerified: true, config: signinConfig({ OSIONOS_ADMIN_EMAILS: '' }) });
+		assert.equal(claims.isAdmin, false);
+		assert.ok(!stub.kinds().includes('patch-admin'), 'no promotion write');
+	});
+
+	it('keeps a database-recorded administrator admin when the list is empty', async () => {
+		const stub = createSigninStub({ identities: [{ provider: 'prismatica', subject: SUBJECT, email_hash: hashOf('owner@example.com'), is_admin: true, workspace_id: PRIVATE_ID }] });
+		const { claims } = await signIn(stub, { email: 'owner@example.com', emailVerified: true, config: signinConfig({ OSIONOS_ADMIN_EMAILS: '' }) });
+		assert.equal(claims.isAdmin, true);
+	});
+
+	it('warns once at start-up when no administrator is configured', async (t) => {
+		assert.deepEqual(await bootWarnings(t, {}), ['[bridge] no account administrators configured (OSIONOS_ADMIN_EMAILS unset)']);
+	});
+
+	it('says nothing at start-up when an administrator is configured', async (t) => {
+		assert.deepEqual(await bootWarnings(t, { OSIONOS_ADMIN_EMAILS: 'admin@example.test' }), []);
+	});
+});
+
+/** Starts the bridge on a random port and returns the account-administrator lines it logged. */
+async function bootWarnings(t, env) {
+	const warn = t.mock.method(console, 'warn', () => {});
+	try {
+		const server = startBridgeServer({ ...configFromEnv(env), port: 0 });
+		await new Promise((done) => (server.listening ? done() : server.once('listening', done)));
+		await new Promise((done) => server.close(() => done()));
+		return warn.mock.calls.map((call) => call.arguments.join(' ')).filter((line) => line.includes('account administrators'));
+	} finally {
+		warn.mock.restore();
+	}
+}

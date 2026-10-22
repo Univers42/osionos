@@ -1,0 +1,98 @@
+ggml_vulkan: Found 1 Vulkan devices:
+ggml_vulkan: 0 = AMD Radeon RX 6600 (RADV NAVI23) (radv) | uma: 0 | fp16: 1 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 65536 | int dot: 0 | matrix cores: none
+load_backend: loaded Vulkan backend from /sd.cpp/bin/libggml-vulkan.so
+load_backend: loaded CPU backend from /sd.cpp/bin/libggml-cpu-alderlake.so
+[I] loading diffusion model from '/models/z_image_turbo-Q4_0.gguf' --- diffusion_engine.cpp:739
+[I] load /models/z_image_turbo-Q4_0.gguf using gguf format --- model_loader.cpp:216
+[I] loading llm from '/llm/models--unsloth--Qwen3-4B-Instruct-2507-GGUF/blobs/3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597' --- diffusion_engine.cpp:796
+[I] load /llm/models--unsloth--Qwen3-4B-Instruct-2507-GGUF/blobs/3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597 using gguf format --- model_loader.cpp:216
+[I] loading vae from '/models/ae-f16.gguf' --- diffusion_engine.cpp:810
+[I] load /models/ae-f16.gguf using gguf format --- model_loader.cpp:216
+[I] Version: Z-Image  --- diffusion_engine.cpp:1017
+[I] auto-fit plan: --- backend_fit.cpp:323
+[I]   devices: --- backend_fit.cpp:324
+[I]     Vulkan0      AMD Radeon RX 6600 (RADV NAVI23) free   6204 MiB, budget   5692 MiB --- backend_fit.cpp:326
+[I]     RAM          free  13095 MiB, params budget  11047 MiB --- backend_fit.cpp:333
+[I]   compute-device weight cache priority: diffusion > te > vae --- backend_fit.cpp:336
+[I]   components (params: compute device -> RAM -> other GPU -> disk): --- backend_fit.cpp:337
+[I]     DiT          params   3309 MiB, compute reserve  2048 MiB -> compute Vulkan0, params Vulkan0 --- backend_fit.cpp:346
+[I]     Conditioner  params   2375 MiB, compute reserve  2048 MiB -> compute CPU, params cpu --- backend_fit.cpp:346
+[I]     VAE          params    159 MiB, compute reserve  1024 MiB -> compute Vulkan0, params Vulkan0 --- backend_fit.cpp:346
+[I] auto-fit: --backend "te=cpu,diffusion=Vulkan0,vae=Vulkan0" --params-backend "te=cpu" --- backend_fit.cpp:474
+[I] Weight type stat:                      f32: 188  |     f16: 244  |    q4_0: 410  |    q4_K: 216  |    q6_K: 37    --- diffusion_engine.cpp:1650
+[I] Conditioner weight type stat:          f32: 145  |    q4_K: 216  |    q6_K: 37    --- diffusion_engine.cpp:1651
+[I] Diffusion model weight type stat:      f32: 43   |    q4_0: 410   --- diffusion_engine.cpp:1652
+[I] VAE weight type stat:                  f16: 244   --- diffusion_engine.cpp:1653
+[I] using VAE for encoding / decoding --- model_builders.cpp:664
+[I] vae decoder: ch = 128 --- auto_encoder_kl.hpp:529
+[I] flash attention auto: CPU -> on (CPU) --- flash_attn.cpp:66
+[I] flash attention auto: Vulkan0 -> off (probe: normal 1.445 ms, flash 1.576 ms) --- flash_attn.cpp:94
+[W] conv2d direct auto: Vulkan0 -> off (probe output check failed) --- conv_direct.cpp:79
+[W] conv3d direct auto: Vulkan0 -> off (probe output check failed) --- conv_direct.cpp:79
+[I] total params memory size = 5847.64MB (VRAM 3471.73MB, RAM 2375.91MB): text_encoders 2375.91MB(RAM), diffusion_model 3311.73MB(VRAM), vae 160.00MB(VRAM), controlnet 0.00MB(N/A), extensions 0.00MB(N/A) --- diffusion_engine.cpp:1444
+[I] running in FLOW mode --- diffusion_engine.cpp:1590
+[I] listening on: http://0.0.0.0:1234 --- main.cpp:170
+[I] generate_image 512x512 --- image.cpp:822
+[I] Using 'z_image_omni' preset for reference images --- diffusion_engine.cpp:3261
+[I] get_sigmas with discrete scheduler --- denoiser.hpp:1129
+[I] sampling using Euler method --- request.cpp:422
+[I] qwen3 build cached graph cut plan done (taking 1 ms) --- ggml_graph_cut.cpp:1032
+  |##                                                |  12/386 -  20.51MB/s[K  |###################################               | 265/386 -   7.55GB/s[K  |##################################################| 386/386 -   5.41GB/s[K
+[I] loading tensors completed, taking 0.42s (read: 0.40s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.00s) --- model_loader.cpp:1400
+[I] get_learned_condition completed, taking 0.66s --- image.cpp:537
+[I] generating image: 1/1 - seed 100 --- image.cpp:874
+[I] z_image build cached graph cut plan done (taking 1 ms) --- ggml_graph_cut.cpp:1032
+  |##                                                |  13/452 -   0.00MB/s[K  |####                                              |  36/452 - 140.00MB/s[K  |#####                                             |  43/452 - 307.31MB/s[K  |#############                                     | 109/452 -   1.10GB/s[K  |####################                              | 177/452 -   1.33GB/s[K  |#######################                           | 205/452 -   1.27GB/s[K  |#########################                         | 219/452 -   1.20GB/s[K  |###############################                   | 275/452 -   1.35GB/s[K  |#####################################             | 333/452 -   1.38GB/s[K  |######################################            | 335/452 -   1.23GB/s[K  |######################################            | 338/452 -   1.11GB/s[K  |######################################            | 339/452 -   1.02GB/s[K  |#######################################           | 346/452 - 972.36MB/s[K  |##########################################        | 372/452 - 1013.99MB/s[K  |##################################################| 452/452 -   1.15GB/s[K
+[I] loading tensors completed, taking 2.80s (read: 2.11s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.64s) --- model_loader.cpp:1400
+  |======>                                           | 1/8 -   5.26s/it - ETA 00:36[K  |============>                                     | 2/8 -   2.30s/it - ETA 00:22[K  |==================>                               | 3/8 -   2.29s/it - ETA 00:16[K  |=========================>                        | 4/8 -   2.29s/it - ETA 00:12[K  |===============================>                  | 5/8 -   2.29s/it - ETA 00:08[K  |=====================================>            | 6/8 -   2.29s/it - ETA 00:05[K  |===========================================>      | 7/8 -   2.28s/it - ETA 00:02[K  |==================================================| 8/8 -   2.29s/it[K
+[I] sampling completed, taking 21.27s --- image.cpp:907
+[I] generating 1 latent images completed, taking 21.27s --- image.cpp:919
+[I] decoding 1 latents --- image.cpp:562
+[I] vae build cached graph cut plan done (taking 0 ms) --- ggml_graph_cut.cpp:1032
+  |#####                                             |  13/138 -   0.00MB/s[K  |##################################################| 138/138 - 470.15MB/s[K
+[I] loading tensors completed, taking 0.20s (read: 0.00s, memcpy: 0.00s, convert: 0.00s, copy_to_backend: 0.02s) --- model_loader.cpp:1400
+[I] latent 1 decoded, taking 1.13s --- image.cpp:628
+[I] decode_first_stage completed, taking 1.13s --- image.cpp:632
+[I] generate_image completed in 23.07s --- image.cpp:1058
+[I] generate_image 512x512 --- image.cpp:822
+[I] Using 'z_image_omni' preset for reference images --- diffusion_engine.cpp:3261
+[I] get_sigmas with discrete scheduler --- denoiser.hpp:1129
+[I] sampling using Euler method --- request.cpp:422
+[I] conditioning cache hit --- conditioning_cache.h:91
+[I] get_learned_condition completed, taking 0.00s --- image.cpp:537
+[I] generating image: 1/1 - seed 101 --- image.cpp:874
+  |======>                                           | 1/8 -   2.28s/it - ETA 00:15[K  |============>                                     | 2/8 -   2.28s/it - ETA 00:13[K  |==================>                               | 3/8 -   2.29s/it - ETA 00:11[K  |=========================>                        | 4/8 -   2.29s/it - ETA 00:09[K  |===============================>                  | 5/8 -   2.30s/it - ETA 00:06[K  |=====================================>            | 6/8 -   2.30s/it - ETA 00:04[K  |===========================================>      | 7/8 -   2.30s/it - ETA 00:02[K  |==================================================| 8/8 -   2.29s/it[K
+[I] sampling completed, taking 18.34s --- image.cpp:907
+[I] generating 1 latent images completed, taking 18.34s --- image.cpp:919
+[I] decoding 1 latents --- image.cpp:562
+[I] latent 1 decoded, taking 0.92s --- image.cpp:628
+[I] decode_first_stage completed, taking 0.92s --- image.cpp:632
+[I] generate_image completed in 19.26s --- image.cpp:1058
+[I] generate_image 512x512 --- image.cpp:822
+[I] Using 'z_image_omni' preset for reference images --- diffusion_engine.cpp:3261
+[I] get_sigmas with discrete scheduler --- denoiser.hpp:1129
+[I] sampling using Euler method --- request.cpp:422
+[I] conditioning cache hit --- conditioning_cache.h:91
+[I] get_learned_condition completed, taking 0.00s --- image.cpp:537
+[I] generating image: 1/1 - seed 102 --- image.cpp:874
+  |======>                                           | 1/8 -   2.30s/it - ETA 00:16[K  |============>                                     | 2/8 -   2.30s/it - ETA 00:13[K  |==================>                               | 3/8 -   2.30s/it - ETA 00:11[K  |=========================>                        | 4/8 -   2.30s/it - ETA 00:09[K  |===============================>                  | 5/8 -   2.29s/it - ETA 00:06[K  |=====================================>            | 6/8 -   2.29s/it - ETA 00:04[K  |===========================================>      | 7/8 -   2.29s/it - ETA 00:02[K  |==================================================| 8/8 -   2.30s/it[K
+[I] sampling completed, taking 18.38s --- image.cpp:907
+[I] generating 1 latent images completed, taking 18.38s --- image.cpp:919
+[I] decoding 1 latents --- image.cpp:562
+[I] latent 1 decoded, taking 0.92s --- image.cpp:628
+[I] decode_first_stage completed, taking 0.92s --- image.cpp:632
+[I] generate_image completed in 19.30s --- image.cpp:1058
+[I] generate_image 512x512 --- image.cpp:822
+[I] Using 'z_image_omni' preset for reference images --- diffusion_engine.cpp:3261
+[I] get_sigmas with discrete scheduler --- denoiser.hpp:1129
+[I] sampling using Euler method --- request.cpp:422
+[I] conditioning cache hit --- conditioning_cache.h:91
+[I] get_learned_condition completed, taking 0.00s --- image.cpp:537
+[I] generating image: 1/1 - seed 103 --- image.cpp:874
+  |======>                                           | 1/8 -   2.30s/it - ETA 00:16[K  |============>                                     | 2/8 -   2.30s/it - ETA 00:13[K  |==================>                               | 3/8 -   2.30s/it - ETA 00:11[K  |=========================>                        | 4/8 -   2.30s/it - ETA 00:09[K  |===============================>                  | 5/8 -   2.30s/it - ETA 00:06[K  |=====================================>            | 6/8 -   2.29s/it - ETA 00:04[K  |===========================================>      | 7/8 -   2.29s/it - ETA 00:02[K  |==================================================| 8/8 -   2.30s/it[K
+[I] sampling completed, taking 18.38s --- image.cpp:907
+[I] generating 1 latent images completed, taking 18.38s --- image.cpp:919
+[I] decoding 1 latents --- image.cpp:562
+[I] latent 1 decoded, taking 0.92s --- image.cpp:628
+[I] decode_first_stage completed, taking 0.92s --- image.cpp:632
+[I] generate_image completed in 19.30s --- image.cpp:1058

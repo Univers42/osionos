@@ -839,6 +839,29 @@ body {
   outline-offset: 1px;
 }
 
+/* External link mention: favicon + title chip. Stays an `a.editor-link` so Ctrl-click
+   link editing still maps the Nth anchor to the Nth link in the block source. */
+.editor-link.editor-link-mention {
+  color: var(--osio-fg-strong) !important;
+  text-decoration: none !important;
+  background-color: var(--osio-accent-subtle);
+  font-weight: 500;
+  padding: 0 var(--osio-space-1);
+  border-radius: var(--osio-radius-sm);
+}
+
+.editor-link-favicon {
+  width: 1em;
+  height: 1em;
+  margin-right: 0.3em;
+  vertical-align: -0.125em;
+  border-radius: var(--osio-radius-xs);
+}
+
+.editor-link-favicon[hidden] {
+  display: none;
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;

@@ -38,11 +38,13 @@ import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
 import { openSettings } from "@/features/settings/model/settingsNav";
+import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
 import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
 import { ExportHost } from "@/features/page-export/ui/ExportHost";
+import { AiInlinePanel } from "@/features/ai/ui/AiInlinePanel";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
 
@@ -154,6 +156,11 @@ const App: React.FC = () => {
   const initialized = useUserStore((s) => s.initialized);
   const error = useUserStore((s) => s.error);
   const activeUserId = useUserStore((s) => s.activeUserId);
+  // The way back from OpenRouter: the app comes back with ?code&state, and the
+  // panel that finishes the sign-in opens right away.
+  useEffect(() => {
+    if (readOAuthReturn(globalThis.location?.href ?? "")) openSettings("ai_connections");
+  }, []);
   // Captured once at first render, before init effects can reset activePage,
   // so a refresh can reopen the page the user was last on.
   const [persistedActivePage] = useState(() => loadActivePage());
@@ -342,6 +349,7 @@ const App: React.FC = () => {
       <ToastViewport />
       <ShareHost />
       <ExportHost />
+      <AiInlinePanel />
       <ContactDock />
       <QuickCaptureModal />
       <WorkspaceIntentModal />

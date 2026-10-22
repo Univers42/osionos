@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block } from "@/entities/block";
+import { diagramBlockToMarkdown } from "@/features/diagram/model/diagramMarkdown";
 import { appFence, escapeParagraphContent, mediaBlockToMarkdown, tableBlockToMarkdown } from "./pageMarkdownEscape";
 import { indentLines, isListItem, joinTight, joinWithEmpties } from "./pageMarkdownJoin";
 import type { SerializeOptions } from "./pageMarkdownEscape";
@@ -26,6 +27,9 @@ import type { SerializeOptions } from "./pageMarkdownEscape";
 //   file     -> <object data="…" title="name"></object>
 //   draw     -> ```osidraw h=<px> fence (legacy, kept so no scene is lost)
 //   whiteboard -> ```osiwhiteboard JSON fence     app embeds -> ```osi* JSON fences
+//   diagram  -> ```mermaid fence (the SANITIZED source) or an osionos:diagram comment
+//   embed / bookmark -> ```osiembed / ```osibookmark JSON {content: url, embedHeight?, embed?}
+//                       (an older client shows the fence as a code block, URL included)
 //   columns  -> ":::columns" / ":::column <ratio>" containers
 // Paragraph text that would parse as another block gets a backslash escape.
 // Pure view state (collapsed) has no markdown form and is not emitted.
@@ -107,6 +111,10 @@ export function blockToMarkdown(block: Block, depth = 0, options?: SerializeOpti
         whiteboardHeight: block.whiteboardHeight,
         content: content || undefined,
       });
+    case "embed":
+      return appFence("osiembed", { content, embedHeight: block.embedHeight, embed: block.embed });
+    case "bookmark":
+      return appFence("osibookmark", { content, embed: block.embed });
     case "image": case "video": case "audio": case "file":
       line = mediaBlockToMarkdown(block);
       break;
@@ -130,6 +138,11 @@ export function blockToMarkdown(block: Block, depth = 0, options?: SerializeOpti
       });
     case "graph_view":
       return appFence("osigraph", {});
+    case "diagram":
+      // A mermaid diagram exports as a sanitized ```mermaid fence; the other
+      // kinds export as their SPEC, never as a picture of data the reader may
+      // not have (devil C110).
+      return diagramBlockToMarkdown(block.diagramSpec);
     case "home_views":
       return appFence("osihome", {});
     case "layout":
