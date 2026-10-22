@@ -17,7 +17,7 @@ import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture"
 import { toggleThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
-import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
+import type { SettingsSectionId } from "@/features/settings/model/sections";
 import { usePageStore } from "@/store/usePageStore";
 import { whiteboardAppUrl } from "@/shared/config/appUrls";
 import { createBoardInNewTab } from "@/features/whiteboard/model/newBoardTab";
@@ -46,7 +46,7 @@ export interface MenuGroup {
 
 /** App-level callbacks the menubar needs that live in React state (not a store). */
 export interface MenuContext {
-  openSettings: (tab?: SettingsTab) => void;
+  openSettings: (section?: SettingsSectionId) => void;
 }
 
 const DOCS_URL = "https://github.com/Univers42/osionos";
