@@ -21,7 +21,8 @@ import { pagesToGraph } from './bridge-graph.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
-import { publishRealtime } from './bridge-social-core.mjs';
+import { publishRealtime, readInChunks } from './bridge-social-core.mjs';
+import { idChunks, inFilter } from './bridge-paging.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { assertSessionNotCutOff, sessionCutoffsFromConfig, startSessionCutoffPoller, tokenIssuedAtMs } from './bridge-session-cutoff.mjs';
 import { assertSessionNotRevoked, sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
@@ -1443,22 +1444,6 @@ function descendantPageIds(rows, parentId, keep = () => true) {
 	return result;
 }
 
-function idsFilter(ids) {
-	return `id=in.(${ids.map((id) => encodeURIComponent(id)).join(',')})`;
-}
-
-// PostgREST echoes a read's path and query in Content-Location, and Kong reads the upstream
-// header block into a 4 KB buffer: 100 ids answered 502 "upstream sent too big header", 90
-// answered 200 (live Kong, 2026-10-14). 50 ids ≈ 2.1 KB echoed, ~1.8 KB left for the rest.
-// Caveat: sized for 36-character uuids and PAGE_AUTH_SELECT; a longer select or id eats the margin.
-const CASCADE_CHUNK_IDS = 50;
-
-function idChunks(ids) {
-	const chunks = [];
-	for (let at = 0; at < ids.length; at += CASCADE_CHUNK_IDS) chunks.push(ids.slice(at, at + CASCADE_CHUNK_IDS));
-	return chunks;
-}
-
 /**
  * The 2xx body of the bridge-identity upsert is read with the shared BaaS-body rule;
  * this call keeps its own failure shape — a non-2xx is answered above, and
@@ -2722,7 +2707,7 @@ async function publishAppChildren(appId, userId, config, fetchImpl) {
 		.filter((child) => child.workspace_id === MARKETPLACE_WORKSPACE_ID && canChangePageSharing(child, userId))
 		.map((child) => child.id);
 	if (ids.length === 0) return;
-	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(ids)}`, {
+	await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', ids)}`, {
 		method: 'PATCH',
 		body: { visibility: 'public', updated_at: new Date().toISOString() },
 		prefer: 'return=minimal',
@@ -2874,12 +2859,11 @@ async function handleMarketplacePost(url, request, response, config, fetchImpl) 
  *  client latches for the whole SPA lifetime (see livePoll.isPermanentDenial). */
 async function fetchWorkspaceDatabases(workspaceIds, config, fetchImpl) {
 	if (workspaceIds.length === 0) return [];
-	const query = postgrestQuery({
-		workspace_id: `in.(${workspaceIds.join(',')})`,
-		select: 'workspace_id,db_id,engine,tables,edges_table,label',
+	const rows = await readInChunks(workspaceIds, async (chunk) => {
+		const part = await baasRest(config, fetchImpl, `osionos_workspace_databases?${inFilter('workspace_id', chunk)}&select=workspace_id,db_id,engine,tables,edges_table,label`);
+		return Array.isArray(part) ? part : [];
 	});
-	const rows = await baasRest(config, fetchImpl, `osionos_workspace_databases?${query}`);
-	return Array.isArray(rows) ? rows : [];
+	return rows;
 }
 
 /** Graceful variant — [] on any failure. For the data graph, which degrades to
@@ -3461,19 +3445,32 @@ async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	const { authContext, row } = await readablePageAccess(request, pageId, 'read', config, fetchImpl);
 	const accessible = [...new Set([...authContext.workspaceIds, ...await memberWorkspaceIds(authContext.userId, config, fetchImpl)])].filter((id) => UUID_REGEX.test(id));
 	if (accessible.length === 0) { json(response, 200, { ok: true, linked: [], mentions: [] }, config); return true; }
-	const inWorkspace = `workspace_id=in.(${accessible.join(',')})`;
-	const linkRows = await baasRest(config, fetchImpl, `osionos_page_links?target_page_id=eq.${pageId}&${inWorkspace}&select=source_page_id`);
-	const sourceIds = [...new Set((Array.isArray(linkRows) ? linkRows : []).map((r) => r.source_page_id).filter((id) => id && id !== pageId))];
-	const linked = sourceIds.length
-		? backlinkRefsFromRows(readablePageRows(await baasRest(config, fetchImpl, `osionos_pages?id=in.(${sourceIds.join(',')})&${inWorkspace}&archived_at=is.null&select=${BACKLINK_SELECT}`), authContext.userId))
-		: [];
+	// The workspace list and the page list are both read in chunks: a page with a thousand
+	// backlinks must not put a thousand ids in one query string.
+	const linkRows = await readInChunks(accessible, async (chunk) => {
+		const rows = await baasRest(config, fetchImpl, `osionos_page_links?target_page_id=eq.${pageId}&${inFilter('workspace_id', chunk)}&select=source_page_id`);
+		return Array.isArray(rows) ? rows : [];
+	});
+	const sourceIds = [...new Set(linkRows.map((r) => r.source_page_id).filter((id) => id && id !== pageId))];
+	const pageRows = [];
+	for (const workspaceChunk of idChunks(accessible)) {
+		pageRows.push(...await readInChunks(sourceIds, async (chunk) => {
+			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&${inFilter('workspace_id', workspaceChunk)}&archived_at=is.null&select=${BACKLINK_SELECT}`);
+			return Array.isArray(rows) ? rows : [];
+		}));
+	}
+	const linked = sourceIds.length ? backlinkRefsFromRows(readablePageRows(pageRows, authContext.userId)) : [];
 	const title = String(row.title || '').trim();
 	let mentions = [];
 	if (title) {
 		const excluded = new Set([pageId, ...sourceIds]);
-		// Ponytail: limit=20 applies before the read filter, so mentions can under-report.
-		const hits = await baasRest(config, fetchImpl, `osionos_pages?${inWorkspace}&archived_at=is.null&search_doc=wfts(english).${encodeURIComponent(`"${title}"`)}&select=${BACKLINK_SELECT}&limit=20`).catch(() => []);
-		mentions = backlinkRefsFromRows(readablePageRows(hits, authContext.userId).filter((hit) => !excluded.has(hit.id)));
+		// Ponytail: limit=20 applies before the read filter, so mentions can under-report;
+		// every workspace chunk answers its own 20 and the list is cut back to 20 readable ones.
+		const hits = (await readInChunks(accessible, async (chunk) => {
+			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('workspace_id', chunk)}&archived_at=is.null&search_doc=wfts(english).${encodeURIComponent(`"${title}"`)}&select=${BACKLINK_SELECT}&limit=20`).catch(() => []);
+			return Array.isArray(rows) ? rows : [];
+		})).flat();
+		mentions = backlinkRefsFromRows(readablePageRows(hits, authContext.userId).filter((hit) => !excluded.has(hit.id)).slice(0, 20));
 	}
 	json(response, 200, { ok: true, linked, mentions }, config);
 	return true;
@@ -3587,7 +3584,7 @@ async function cascadeDescendantIds(request, row, permission, config, fetchImpl)
 	if (descendantIds.length === 0) return [];
 	const byId = new Map();
 	for (const chunk of idChunks(descendantIds)) {
-		const authRows = await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(chunk)}&select=${PAGE_AUTH_SELECT}`);
+		const authRows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&select=${PAGE_AUTH_SELECT}`);
 		for (const descendant of Array.isArray(authRows) ? authRows : []) byId.set(descendant.id, descendant);
 	}
 	const needsMembership = [...byId.values()].some((descendant) => !sameId(descendant.owner_id, userId));
@@ -3601,7 +3598,7 @@ async function handlePageArchiveCascade(row, ids, archivedAt, config, fetchImpl)
 	if (ids.length === 0) return;
 	const updatedAt = new Date().toISOString();
 	for (const chunk of idChunks(ids)) {
-		await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(chunk)}&workspace_id=eq.${row.workspace_id}`, {
+		await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&workspace_id=eq.${row.workspace_id}`, {
 			method: 'PATCH',
 			body: { archived_at: archivedAt, updated_at: updatedAt },
 			prefer: 'return=minimal',
@@ -4054,12 +4051,12 @@ async function handlePageDelete(url, request, response, config, fetchImpl) {
 	// The root write carries the same workspace scope so a page that left the workspace between the read and the write is left alone.
 	const descendantIds = await cascadeDescendantIds(request, row, 'delete', config, fetchImpl);
 	for (const chunk of idChunks([...descendantIds].reverse())) {
-		await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(chunk)}&workspace_id=eq.${row.workspace_id}`, {
+		await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&workspace_id=eq.${row.workspace_id}`, {
 			method: 'DELETE',
 			prefer: 'return=minimal',
 		});
 	}
-	await baasRest(config, fetchImpl, `osionos_pages?${idsFilter([pageId])}&workspace_id=eq.${row.workspace_id}`, {
+	await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', [pageId])}&workspace_id=eq.${row.workspace_id}`, {
 		method: 'DELETE',
 		prefer: 'return=minimal',
 	});
@@ -4419,9 +4416,9 @@ export function createBridgeServer(options = {}) {
 			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
 			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
 			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv }),
 		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),

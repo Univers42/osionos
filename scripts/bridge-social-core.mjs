@@ -29,6 +29,7 @@
 
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { realtimeSocketPublisher } from './bridge-realtime-socket.mjs';
+import { CHUNK_SIZE, idChunks, inFilter, runChunks } from './bridge-paging.mjs';
 // bridge-avatar.mjs imports this module back (for the error shape and the JSON
 // body), so the two modules form a cycle. It is safe: publicAvatar is a hoisted
 // function declaration and every call into it happens at request time.
@@ -118,6 +119,53 @@ function readFailure(message) {
 	return httpError(message, 502);
 }
 
+/**
+ * The number of rows a filtered read matches, without the rows: one request with
+ * `Prefer: count=exact`, the total read from the `Content-Range` header.
+ * A missing or malformed header is a 502 — a count that cannot be read is not a zero.
+ */
+export async function restCount(config, fetchImpl, path) {
+	if (!config.baasUrl || !config.serviceKey) {
+		throw httpError('osionos BaaS service-role access is not configured.', 503);
+	}
+	const response = await fetchImpl(`${config.baasUrl}/rest/v1/${path}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			apikey: config.serviceKey,
+			Authorization: `Bearer ${config.serviceKey}`,
+			Prefer: 'count=exact',
+			Range: '0-0',
+		},
+		signal: AbortSignal.timeout(BAAS_FETCH_TIMEOUT_MS),
+	});
+	if (!response.ok) {
+		const status = response.status === 401 || response.status === 403 ? 403 : (response.status === 404 ? 404 : 502);
+		const text = await response.text().catch(() => '');
+		throw httpError(`BaaS request failed with ${response.status}: ${text.slice(0, 160)}`, status);
+	}
+	const total = countFromRange(response.headers?.get?.('content-range'));
+	if (total === null) throw httpError('The BaaS count header is missing or malformed.', 502);
+	return total;
+}
+
+/** The total after the `/` of a `Content-Range` header; null when it is not a count. */
+export function countFromRange(header) {
+	if (typeof header !== 'string') return null;
+	const match = /^(?:\*|\d+-\d+)\/(\d+)$/.exec(header.trim());
+	return match ? Number(match[1]) : null;
+}
+
+/**
+ * The rows of a read over `ids`, read in chunks of at most 50 with at most four requests in
+ * flight. `read` answers the rows of one chunk; a chunk that fails fails the whole read,
+ * unless the caller catches it per chunk (a best-effort read).
+ */
+export async function readInChunks(ids, read, { size = CHUNK_SIZE } = {}) {
+	const parts = await runChunks(idChunks(ids, size), read);
+	return parts.flatMap((part) => (Array.isArray(part) ? part : []));
+}
+
 /** Best-effort publish to the Rust realtime gateway; never throws. */
 export async function publishRealtime({ topic, eventType, payload, fetchImpl = fetch, env = process.env }) {
 	const base = (env.REALTIME_PUBLISH_URL || 'http://mini-baas-realtime:4000').replace(/\/$/, '');
@@ -168,12 +216,12 @@ export async function memberWorkspacesAmong(config, fetchImpl, session, workspac
 	const wanted = [...new Set(workspaceIds.filter((id) => UUID_REGEX.test(String(id))).map((id) => id.toLowerCase()))];
 	const own = new Set((session.workspaceIds ?? []).map((id) => String(id).toLowerCase()));
 	const others = wanted.filter((id) => !own.has(id));
-	const rows = others.length === 0 ? [] : await rest(
+	const rows = others.length === 0 ? [] : await readInChunks(others, (chunk) => rest(
 		config,
 		fetchImpl,
-		`osionos_workspace_members?user_id=eq.${session.userId}&workspace_id=in.(${others.join(',')})&select=workspace_id`,
-	);
-	return [...wanted.filter((id) => own.has(id)), ...(Array.isArray(rows) ? rows : []).map((row) => String(row.workspace_id).toLowerCase())];
+		`osionos_workspace_members?user_id=eq.${session.userId}&${inFilter('workspace_id', chunk)}&select=workspace_id`,
+	));
+	return [...wanted.filter((id) => own.has(id)), ...rows.map((row) => String(row.workspace_id).toLowerCase())];
 }
 
 /**
@@ -227,90 +275,9 @@ export function directoryFuzzyFilter(query) {
 	return `&or=(${clauses.join(',')})`;
 }
 
-const SHARED_WORKSPACES_LIMIT = 200;
-const COMEMBERS_PER_WORKSPACE_LIMIT = 500;
-const COLLEAGUE_INSERT_CAP = 500;
-
-/**
- * The one read that answers "who shares a workspace with `userId`": the caller's member rows
- * (anchor, `user_id=eq.`), each with its workspace's other members. Both limits are the old
- * ones (200 workspaces, 500 co-members); the nested limit is per workspace, so the insert
- * is capped again in insertColleagueEdges.
- */
-export function coMemberPath(userId) {
-	const query = new URLSearchParams({
-		user_id: `eq.${userId}`,
-		select: 'user_id,workspace_id,workspace:osionos_workspaces!workspace_id(members:osionos_workspace_members!workspace_id(user_id))',
-		limit: String(SHARED_WORKSPACES_LIMIT),
-		'workspace.members.user_id': `neq.${userId}`,
-		'workspace.members.limit': String(COMEMBERS_PER_WORKSPACE_LIMIT),
-	});
-	return `osionos_workspace_members?${query}`;
-}
-
 /** Every edge touching `userId`, newest first, whatever its status: the sync and the list share this read. */
 export function connectionEdgesPath(userId) {
 	return `osionos_connections?or=(requester_id.eq.${userId},addressee_id.eq.${userId})&select=*&order=created_at.desc`;
-}
-
-/**
- * Distinct co-member ids from a coMemberPath answer, or null when any anchor row belongs to
- * another user: a dropped `user_id=eq.` anchor would otherwise make everyone a colleague.
- */
-export function coMembersFromRows(rows, userId) {
-	const self = String(userId).toLowerCase();
-	const anchors = Array.isArray(rows) ? rows : [];
-	if (anchors.some((row) => String(row?.user_id).toLowerCase() !== self)) return null;
-	const peers = new Set();
-	for (const row of anchors) {
-		if (!UUID_REGEX.test(String(row.workspace_id))) continue;
-		for (const member of Array.isArray(row.workspace?.members) ? row.workspace.members : []) {
-			if (UUID_REGEX.test(String(member?.user_id)) && String(member.user_id).toLowerCase() !== self) peers.add(member.user_id);
-		}
-	}
-	return [...peers];
-}
-
-/** Co-members of every workspace `userId` belongs to. Best-effort: a failure is a warn and no peers, never a throw. */
-export async function sharedWorkspacePeers(config, fetchImpl, userId) {
-	if (!UUID_REGEX.test(String(userId))) return [];
-	try {
-		const peers = coMembersFromRows(await rest(config, fetchImpl, coMemberPath(userId)), userId);
-		if (peers !== null) return peers;
-		console.warn('[osionos-bridge] colleague sync skipped: the co-member read answered another user\'s rows');
-	} catch (error) {
-		console.warn(`[osionos-bridge] colleague sync skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
-	}
-	return [];
-}
-
-/**
- * Insert an accepted source='colleague' edge to each of `peers` (the caller already removed
- * every peer with an edge, in any status and direction) and return the rows this call
- * inserted. on_conflict=pair_key + ignore-duplicates guards UNIQUE(pair_key) against a
- * concurrent insert or an inverse-direction row, and with return=representation answers
- * only the rows it really inserted. Best-effort: a failure is a warn and no rows.
- */
-export async function insertColleagueEdges(config, fetchImpl, userId, peers) {
-	if (peers.length === 0) return [];
-	try {
-		const respondedAt = new Date().toISOString();
-		const rows = await rest(config, fetchImpl, 'osionos_connections?on_conflict=pair_key', {
-			method: 'POST',
-			body: peers.slice(0, COLLEAGUE_INSERT_CAP).map((peer) => ({
-				requester_id: userId,
-				addressee_id: peer,
-				status: 'accepted',
-				source: 'colleague',
-				responded_at: respondedAt,
-			})),
-			prefer: 'resolution=ignore-duplicates,return=representation',
-		});
-		return Array.isArray(rows) ? rows.filter((row) => row && typeof row === 'object') : [];
-	} catch (error) {
-		console.warn(`[osionos-bridge] colleague insert skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
-		return [];
-	}
 }
 
 const createdAtMs = (row) => {
@@ -318,10 +285,10 @@ const createdAtMs = (row) => {
 	return Number.isFinite(ms) ? ms : Number.NEGATIVE_INFINITY;
 };
 
-/** Edge rows from several reads as one list: one row per id (the first list wins), newest created_at first. */
-export function mergeEdgesNewestFirst(...lists) {
+/** The edge rows of one read: one row per id, newest created_at first. */
+export function edgesNewestFirst(rows) {
 	const byId = new Map();
-	for (const row of lists.flat()) if (!byId.has(row.id ?? row)) byId.set(row.id ?? row, row);
+	for (const row of Array.isArray(rows) ? rows : []) if (!byId.has(row.id ?? row)) byId.set(row.id ?? row, row);
 	return [...byId.values()].sort((left, right) => {
 		const [l, r] = [createdAtMs(left), createdAtMs(right)];
 		return l === r ? 0 : (r > l ? 1 : -1);
@@ -369,8 +336,18 @@ export async function emitNotifications(deps, config, notifs) {
 		prefer: 'return=minimal',
 	});
 	const ids = [...new Set(valid.map((n) => n.recipientId))];
-	const tokenRows = await rest(config, deps.fetchImpl, `osionos_bridge_identities?user_id=in.(${ids.join(',')})&select=user_id,notify_token`);
-	const tokenByUser = new Map((Array.isArray(tokenRows) ? tokenRows : []).map((r) => [r.user_id, r.notify_token]));
+	// The token lookup is best-effort per chunk: a chunk that fails costs its recipients the
+	// live toast, never the notifications that are already stored.
+	const tokenRows = await readInChunks(ids, async (chunk) => {
+		try {
+			const rows = await rest(config, deps.fetchImpl, `osionos_bridge_identities?${inFilter('user_id', chunk)}&select=user_id,notify_token`);
+			return Array.isArray(rows) ? rows : [];
+		} catch (error) {
+			console.warn(`[osionos-bridge] notification token lookup skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
+			return [];
+		}
+	});
+	const tokenByUser = new Map(tokenRows.map((r) => [r.user_id, r.notify_token]));
 	for (const n of valid) {
 		const token = tokenByUser.get(n.recipientId);
 		if (!token) continue;
@@ -388,19 +365,21 @@ export async function emitNotifications(deps, config, notifs) {
 export async function identitySummaries(config, fetchImpl, userIds) {
 	const ids = [...new Set(userIds)].filter((id) => UUID_REGEX.test(String(id)));
 	if (ids.length === 0) return new Map();
-	const rows = await rest(
-		config,
-		fetchImpl,
-		`osionos_people_directory?user_id=in.(${ids.join(',')})&select=user_id,display_name,profile,last_seen_at`,
-	);
+	const rows = await readInChunks(ids, async (chunk) => {
+		const part = await rest(
+			config,
+			fetchImpl,
+			`osionos_people_directory?${inFilter('user_id', chunk)}&select=user_id,display_name,profile`,
+		);
+		return Array.isArray(part) ? part : [];
+	});
 	const map = new Map();
-	for (const row of Array.isArray(rows) ? rows : []) {
+	for (const row of rows) {
 		const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
 		map.set(row.user_id, {
 			name: typeof row.display_name === 'string' && row.display_name ? row.display_name : 'Member',
 			// The ONE projection of a user avatar: a `data:` URL never leaves the bridge.
 			avatar: publicAvatar(typeof profile.avatar === 'string' ? profile.avatar : null, config),
-			lastSeenAt: row.last_seen_at ?? null,
 		});
 	}
 	return map;

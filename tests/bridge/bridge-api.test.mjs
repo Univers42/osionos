@@ -100,7 +100,8 @@ function jsonResponse(value, status = 200) {
 }
 
 function idsFromFilter(idFilter) {
-	if (idFilter.startsWith('in.')) return idFilter.slice(4, -1).split(',').filter(Boolean);
+	// The bridge quotes the ids of its `in` lists (inFilter), so the quotes come off here.
+	if (idFilter.startsWith('in.')) return idFilter.slice(4, -1).split(',').filter(Boolean).map((id) => id.replace(/^"(.*)"$/, '$1'));
 	if (idFilter.startsWith('eq.')) return [idFilter.slice(3)];
 	return [];
 }
