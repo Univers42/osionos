@@ -35,7 +35,7 @@ export const PublicPageView: React.FC = () => {
               {page.icon && <IconValueView value={page.icon} size={32} />}
               <h1 className="text-3xl font-bold leading-tight">{page.title}</h1>
             </header>
-            <PageBlocksRenderer blocks={page.content} />
+            <PageBlocksRenderer blocks={page.content} properties={page.properties} />
             <footer className="mt-16 border-t border-[var(--osio-border-default)] pt-4 text-xs text-[var(--osio-fg-subtle)]">
               Published with osionos
             </footer>

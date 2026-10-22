@@ -226,6 +226,42 @@ test.describe("canvas hug height, dashboard and visibility", () => {
     await expect(page.locator(`[data-layout-cell-id="${firstId}"]`)).toHaveCount(1);
   });
 
+  test("every hidden cell is listed and can be edited, not only the first", async ({ page, baseURL }) => {
+    await createInlineLayout(page, baseURL);
+    const first = await addLayoutCell(page, 1);
+    const second = await addLayoutCell(page, 2);
+    const firstId = await first.getAttribute("data-layout-cell-id");
+    const secondId = await second.getAttribute("data-layout-cell-id");
+    await setStatus(page, "done");
+
+    // Hide the second first and address both cells by id: a hidden cell
+    // leaves the DOM, so a positional locator would shift.
+    for (const id of [secondId, firstId]) {
+      const cell = page.locator(`[data-layout-cell-id="${id}"]`);
+      await selectCell(cell);
+      // The panel may still be open from the previous cell: "More options" toggles it.
+      const open = page.locator(".osionos-layout-cell-inspector");
+      const inspector = (await open.isVisible()) ? open : await openCellInspector(page);
+      const field = inspector.getByLabel("Visibility formula");
+      await field.fill('prop("status") == "active"');
+      await field.press("Enter");
+    }
+    await expect(page.locator(".osionos-layout-cell")).toHaveCount(0);
+
+    const list = page.getByLabel("Hidden cells", { exact: true });
+    await expect(list.getByRole("button")).toHaveCount(2);
+
+    // The second hidden cell is reachable through its own entry.
+    await list.getByRole("button").nth(1).click();
+    const panel = page.locator(".osionos-layout-cell-inspector");
+    await expect(panel).toBeVisible();
+    await panel.getByLabel("Visibility formula").fill("");
+    await panel.getByLabel("Visibility formula").press("Enter");
+    await expect(page.locator(`[data-layout-cell-id="${secondId}"]`)).toHaveCount(1);
+    await expect(page.locator(`[data-layout-cell-id="${firstId}"]`)).toHaveCount(0);
+    await expect(list.getByRole("button")).toHaveCount(1);
+  });
+
   test("an invalid visibility formula keeps the cell visible and says why", async ({ page, baseURL }) => {
     await createInlineLayout(page, baseURL);
     const cell = await addLayoutCell(page, 1);

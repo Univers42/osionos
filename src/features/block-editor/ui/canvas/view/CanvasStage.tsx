@@ -23,7 +23,7 @@ import { useCanvasMarquee } from "../controller/useCanvasMarquee";
 import { useHugHeights } from "../controller/useHugHeights";
 import { resolveHugDisplacements } from "../model/collision";
 import { getCellsOrderedByZ } from "../model/selectors";
-import { evaluateCellVisibility } from "../model/visibility";
+import { filterVisibleCells } from "../model/visibility";
 import type { CanvasStoreApi } from "../store/canvasStore";
 import { CanvasCellView } from "./CanvasCellView";
 import { CanvasEmptyState } from "./CanvasEmptyState";
@@ -65,7 +65,7 @@ export function CanvasStage({ store, interaction, cellOps, stageRef, scaleRef, p
   // the inspector can still select it, its formula can still be edited, and
   // undo still restores it. Every render re-evaluates, so a property edit
   // re-answers every formula (no dependency-narrowed cache in the first cut).
-  const visibleCells = orderedCells.filter((cell) => evaluateCellVisibility(cell.visibilityFormula, propertyMap));
+  const visibleCells = filterVisibleCells(orderedCells, propertyMap);
 
   // Hug cells whose content outgrew their frame push neighbours down at
   // render time only — this never writes back to the store (two panes at

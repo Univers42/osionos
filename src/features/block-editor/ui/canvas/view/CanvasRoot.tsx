@@ -20,7 +20,7 @@ import type { SurfaceBlockEditorProps } from "../../BlockEditorSurface";
 import { createInteractionStore } from "../controller/interactionStore";
 import { useCanvasCellOps } from "../controller/useCanvasCellOps";
 import { useCanvasScale } from "../controller/useCanvasScale";
-import { evaluateCellVisibility, toPropertyMap } from "../model/visibility";
+import { evaluateCellVisibility, filterHiddenCells, toPropertyMap } from "../model/visibility";
 import { useCanvasStoreBridge, type CanvasPersistHandler } from "../store/canvasStore";
 import { CanvasInspector } from "./CanvasInspector";
 import { CanvasSettingsPanel } from "./CanvasSettingsPanel";
@@ -90,6 +90,10 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
   // lets the cell through again, the panel closes with it.
   const hiddenCell = hiddenInspectorId ? cells.find((candidate) => candidate.id === hiddenInspectorId) : undefined;
   const hiddenCellVisible = hiddenCell ? evaluateCellVisibility(hiddenCell.visibilityFormula, propertyMap) : true;
+  // Every cell hidden by its formula is kept in the store, so it can still be
+  // selected and edited. The stage renders nothing for it, so this compact list
+  // is the recovery path for any hidden cell (not only the first one).
+  const hiddenCells = useMemo(() => filterHiddenCells(cells, propertyMap), [cells, propertyMap]);
 
   const rootRef = useRef<HTMLElement | null>(null);
   // Selection-scoped outside-click dismiss: the listener exists only while a
@@ -169,6 +173,27 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
           onApplyTemplate={cellOps.applyTemplate}
           onOpenInspector={openInspector}
         />
+
+        {hiddenCells.length > 0 ? (
+          <div className="osio-canvas-hidden-cells" aria-label="Hidden cells">
+            <span className="osio-canvas-hidden-cells__label">Hidden cells</span>
+            {hiddenCells.map((cell) => (
+              <button
+                key={cell.id}
+                type="button"
+                className="osio-canvas-hidden-cells__entry"
+                aria-label={`Hidden cell ${cell.visuals.label || cell.id}`}
+                onClick={() => {
+                  setSettingsOpen(false);
+                  dispatch({ type: "select", ids: [cell.id] });
+                  setHiddenInspectorId(cell.id);
+                }}
+              >
+                {cell.visuals.label || "Untitled cell"}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         {hiddenCell && !hiddenCellVisible ? (
           <div
