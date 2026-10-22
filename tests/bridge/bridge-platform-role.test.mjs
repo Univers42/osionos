@@ -295,3 +295,97 @@ describe('the sign-in', () => {
 		assert.equal(claims.isAdmin, false);
 	});
 });
+
+describe('P3-4-a round: timeout, validation, warnings, reconciliation', () => {
+	it('C3: a non-UUID subject answers no role and records no call', async () => {
+		const plane = rolePlane({ grants: [grant(ROLE_USER)], roles: [{ id: ROLE_USER, name: 'user' }] });
+		assert.deepEqual(await readPlatformRole(plane.client, 'not-a-uuid'), { role: null, names: [] });
+		assert.equal(plane.calls.length, 0);
+	});
+
+	it('C4: a throwing client produces one warning and still returns no role', async () => {
+		const warnings = [];
+		const original = console.warn;
+		console.warn = (line) => warnings.push(line);
+		let result;
+		try {
+			const client = { async get() { throw new Error('boom'); } };
+			result = await readPlatformRole(client, SUBJECT);
+		} finally {
+			console.warn = original;
+		}
+		assert.deepEqual(result, { role: null, names: [] });
+		assert.equal(warnings.length, 1);
+		assert.match(String(warnings[0]), /user_roles/);
+		assert.match(String(warnings[0]), new RegExp(SUBJECT));
+	});
+
+	it('C1: a hung read times out to no role without throwing', async () => {
+		const warnings = [];
+		const original = console.warn;
+		console.warn = (line) => warnings.push(line);
+		try {
+			const client = { get() { return new Promise(() => {}); } };
+			assert.deepEqual(await readPlatformRole(client, SUBJECT, Date.now(), 20), { role: null, names: [] });
+		} finally {
+			console.warn = original;
+		}
+		assert.equal(warnings.length, 1);
+	});
+
+	it('C1: the catalogue read is bounded too', async () => {
+		const original = console.warn;
+		console.warn = () => {};
+		try {
+			let n = 0;
+			const client = { get() { return ++n === 1 ? Promise.resolve([grant(ROLE_USER)]) : new Promise(() => {}); } };
+			assert.deepEqual(await readPlatformRole(client, SUBJECT, Date.now(), 20), { role: null, names: [] });
+			assert.equal(n, 2);
+		} finally {
+			console.warn = original;
+		}
+	});
+
+	it('C2: a valid non-admin platform_role forces isAdmin false on verify', () => {
+		const claims = verifyAppSessionToken(mintRaw(rawPayload({ platform_role: 'user', is_admin: true })), signinConfig(), NOW);
+		assert.equal(claims.platformRole, 'user');
+		assert.equal(claims.isAdmin, false);
+	});
+});
+
+describe('P3-4-a round: sign-in with a hung role read', () => {
+	it('C1: sign-in still completes when the role read never resolves', async () => {
+		const config = signinConfig();
+		const hang = new Promise(() => {});
+		const fetchImpl = async (url) => {
+			const table = new URL(String(url)).pathname.replace('/rest/v1/', '');
+			if (table === 'user_roles' || table === 'roles') return hang;
+			return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+		};
+		const payload = validateBridgePayload({ provider: 'prismatica', subject: SUBJECT, email: 'owner@example.com', emailVerified: true, name: 'Owner', jti: randomUUID() });
+		const kv = kvStub();
+		const pg = createPg({ config, env: {}, fetchImpl });
+		const original = console.warn;
+		console.warn = () => {};
+		try {
+			const minted = await createBridgeHandoff({ payload, config, kv, pg, now: NOW, fetchImpl });
+			const token = new URL(minted.redirectUrl).hash.replace('#bridge_token=', '');
+			const { session } = await consumeHandoffToken(decodeURIComponent(token), kv, NOW + 1000, config.appSessionSecret);
+			const claims = verifyAppSessionToken(session.accessToken, config, NOW + 1000);
+			assert.equal(claims.platformRole, null);
+			assert.equal(claims.isAdmin, false);
+		} finally {
+			console.warn = original;
+		}
+	});
+});
+
+describe('P3-4-a round: raw admin bit follows the signed role', () => {
+	const workspace = { _id: PRIVATE_WORKSPACE };
+	it('minted is_admin is true only for the admin role', () => {
+		const { token: adminToken } = signAppSessionToken({ payload: { subject: SUBJECT, provider: 'prismatica' }, workspace, config: signinConfig(), platformRole: 'admin' });
+		const { token: modToken } = signAppSessionToken({ payload: { subject: SUBJECT, provider: 'prismatica' }, workspace, config: signinConfig(), platformRole: 'moderator' });
+		assert.equal(verifyAppSessionToken(adminToken, signinConfig(), NOW).raw.is_admin, true);
+		assert.equal(verifyAppSessionToken(modToken, signinConfig(), NOW).raw.is_admin, false);
+	});
+});
