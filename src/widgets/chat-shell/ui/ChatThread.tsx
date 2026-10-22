@@ -23,6 +23,9 @@ import { ToolActivity } from "@/features/chat/model/toolActivityView";
 import { permissionsFromParts } from "@/features/chat/model/approvalParts";
 import { provenanceTitles } from "@/features/chat/model/approvalCard";
 import { ApprovalCard } from "@/features/chat/ui/ApprovalCard";
+import { memoryProposalsFromParts } from "@/features/chat/model/memoryParts";
+import { MemoryProposalChip } from "@/features/chat/ui/MemoryProposalChip";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import { useChatStore } from "@/features/chat/model/useChatStore";
 import { RunErrorNotice } from "@/features/chat/model/runErrorNotice";
 
@@ -48,16 +51,19 @@ interface Props {
  * per call, so the reader sees it work instead of waiting in silence.
  *
  * The cards of the writes it asked for are under the answer: the user sees
- * what the assistant wants to write, and decides.
+ * what the assistant wants to write, and decides. A memory it proposes is a
+ * small chip after them: the user approves it or dismisses it.
  */
 const AssistantAnswer: React.FC<{
   content: string;
   parts?: ChatMessage["parts"];
   conversationId: string;
-}> = ({ content, parts, conversationId }) => {
+  messageId: string;
+}> = ({ content, parts, conversationId, messageId }) => {
   const citations = useMemo(() => citationsFromParts(parts), [parts]);
   const activities = useMemo(() => toolActivitiesFromParts(parts), [parts]);
   const permissions = useMemo(() => permissionsFromParts(parts), [parts]);
+  const proposals = useMemo(() => memoryProposalsFromParts(parts), [parts]);
   const elements = useMemo(() => renderCitedAnswer(content, citations, openCitation), [content, citations]);
   return (
     <>
@@ -75,6 +81,14 @@ const AssistantAnswer: React.FC<{
           onContinuation={(runId) => {
             void useChatStore.getState().followUp(conversationId, runId);
           }}
+        />
+      ))}
+      {proposals.map((proposal) => (
+        <MemoryProposalChip
+          key={proposal.memoryId}
+          proposal={proposal}
+          onDecided={(memoryId, decision) => useChatStore.getState().decideMemoryProposal(messageId, memoryId, decision)}
+          onManage={() => openSettings("ai_connections")}
         />
       ))}
     </>
@@ -122,7 +136,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
               {m.role === "user" ? (
                 <span className="whitespace-pre-wrap">{m.content}</span>
               ) : (
-                <AssistantAnswer content={m.content} parts={m.parts} conversationId={m.conversationId} />
+                <AssistantAnswer content={m.content} parts={m.parts} conversationId={m.conversationId} messageId={m.id} />
               )}
               {m.status === "streaming" ? (
                 <span className="ml-0.5 animate-pulse text-[var(--osio-fg-muted)]" data-testid="chat-streaming">
