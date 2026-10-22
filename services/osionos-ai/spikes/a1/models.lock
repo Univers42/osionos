@@ -63,6 +63,29 @@ guard	model	guard-gen-4b-q4km	mradermacher/Qwen3Guard-Gen-4B-GGUF	b3b010b37c7519
 guard	model	guard-gen-0.6b-tokenizer-config	Qwen/Qwen3Guard-Gen-0.6B	fada3b2f655b89601929198343c94cd2f64d93cc	tokenizer_config.json	9601	934e187433b06c5d28519e0347dd293084cf28621f00a86ae7e24e42f8b53e81	409e51f8f3d4316361001ea16127a4aa7db80903
 guard	model	guard-gen-4b-tokenizer-config	Qwen/Qwen3Guard-Gen-4B	6ec42827da0c1ff11e7a49dc269d2e810d27e108	tokenizer_config.json	9601	934e187433b06c5d28519e0347dd293084cf28621f00a86ae7e24e42f8b53e81	409e51f8f3d4316361001ea16127a4aa7db80903
 
+# --- the output check on the generated images (C73) --------------------------
+# The classifier of the bytes the engine produced: a ViT-base of AdamCodd
+# (Apache-2.0), 384x384, two labels (sfw, nsfw). The revision is the commit
+# of the repository, the sha256 of the two ONNX files is the one of the LFS.
+nsfw	model	nsfw-vit-fp32	AdamCodd/vit-base-nsfw-detector	8587de998f441aac03fdd57a85d2e4cb808c7d64	onnx/model.onnx	344569044	dce8f5af8509fee39c453b78a66076ead5c97321ddcee0ddfa16f67dc8286384	dce8f5af8509fee39c453b78a66076ead5c97321ddcee0ddfa16f67dc8286384
+nsfw	model	nsfw-vit-q8	AdamCodd/vit-base-nsfw-detector	8587de998f441aac03fdd57a85d2e4cb808c7d64	onnx/model_quantized.onnx	88500985	432763a6899ebc418c55f784b98f90565e5fc694c778d2ffcb0294b12f6a7404	432763a6899ebc418c55f784b98f90565e5fc694c778d2ffcb0294b12f6a7404
+# The labels (sfw, nsfw) and the two ONNX configs. The preprocessor of the
+# ONNX folder is the one the graph was exported with.
+nsfw	model	nsfw-vit-config	AdamCodd/vit-base-nsfw-detector	8587de998f441aac03fdd57a85d2e4cb808c7d64	config.json	715	604d1da5e3cc8b6dc3f2768a911ed61a44a331cfcee9ecde2ce2cba9a1e7972b	a0056028b3560268dee912af113b2bb88590fe93
+nsfw	model	nsfw-vit-onnx-config	AdamCodd/vit-base-nsfw-detector	8587de998f441aac03fdd57a85d2e4cb808c7d64	onnx/config.json	691	5f54e0e96c0b5b77caba7e79aebe0b4fa5c154cabf6df65eb1b939ae8b265cfa	bd35e2c741426966204483159e303596aaf12f4e
+nsfw	model	nsfw-vit-preprocessor	AdamCodd/vit-base-nsfw-detector	8587de998f441aac03fdd57a85d2e4cb808c7d64	onnx/preprocessor_config.json	327	d77ca5b19fe076679f60e57a1a684cfcfd39a626d50cfabf06a915d039f794ed	0ee5ed3923d0714f6069c7b517555c5c3fc6ca88
+
+# --- the second candidate of the output check (C73) ---------------------------
+# The same shape as the one above (normal, nsfw), 224x224 instead of 384x384:
+# the weights are the ones of Falconsai/nsfw_image_detection (Apache-2.0),
+# converted to ONNX by the space of onnx-community. The conversion repository
+# declares no licence of its own: the licence that travels with the bytes is
+# the Apache-2.0 of the original, and the conversion adds nothing.
+nsfw2	model	falconsai-vit-fp32	onnx-community/nsfw_image_detection-ONNX	1ceb3c7fe1e9f3f2507e6df577437f23a9149fd5	onnx/model.onnx	343401688	a4316a4fb750169ac4fcabaabee1fcbd982b0ee8c0cc63fe3e944954bb9a7d9c	a4316a4fb750169ac4fcabaabee1fcbd982b0ee8c0cc63fe3e944954bb9a7d9c
+nsfw2	model	falconsai-vit-q8	onnx-community/nsfw_image_detection-ONNX	1ceb3c7fe1e9f3f2507e6df577437f23a9149fd5	onnx/model_quantized.onnx	87333629	d9afb1e057104e6cc8616d174f0f6a8b8b0389c839eea7d5efa4bdf1a77efd27	d9afb1e057104e6cc8616d174f0f6a8b8b0389c839eea7d5efa4bdf1a77efd27
+nsfw2	model	falconsai-vit-config	onnx-community/nsfw_image_detection-ONNX	1ceb3c7fe1e9f3f2507e6df577437f23a9149fd5	config.json	764	0e01783cf842a0acaa6b3b6594b941bee4d39a1918756b27d23f503878889696	1efa6ad75857089d3857461144a947699f23d24f
+nsfw2	model	falconsai-vit-preprocessor	onnx-community/nsfw_image_detection-ONNX	1ceb3c7fe1e9f3f2507e6df577437f23a9149fd5	preprocessor_config.json	353	ae9bb157b9629887cc74913a4e7c12c9308f374f0930e8072320e8f2e1583c5e	e9661b02d9ca27fedbdec7fa9773622c5edc6e81
+
 # --- the datasets ------------------------------------------------------------
 data	dataset	i2p-benchmark	AIML-TUDA/i2p	6594f223b0544fcbf63a6889417a6b9d2e40a77c	i2p_benchmark.csv	1331798	5e78f211b3944d90182ab708ed0bd8af657c24a308153e6ccd5db9d9dbfe50cb	b8c6cd06266d5c09e288001a0e898cd44bc5cc68
 data	dataset	coco-annotations	url	http://images.cocodataset.org/annotations	annotations_trainval2017.zip	241637313	-	-

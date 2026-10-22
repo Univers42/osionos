@@ -19,7 +19,7 @@ set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 VOL='osionos_ai_a1_data'
-SETS='/mnt/storage/sets'
+SETS="${SETS:-/mnt/storage/sets}"
 OUT6="/mnt/storage/out/a1enc-0.6b"
 OUT4="/mnt/storage/out/a1enc-4b"
 MODEL6='/mnt/storage/guard/Qwen3Guard-Gen-0.6B.Q8_0.gguf'
@@ -74,8 +74,8 @@ if [ ! -f "$SETS/i2p.tsv" ]; then
 	docker run --rm -v "$VOL:/mnt/storage" -v "$HERE:/spike:ro" python:3.12-slim \
 		python3 /spike/build-sets.py \
 		--i2p /mnt/storage/data/i2p_benchmark.csv \
-		--captions /mnt/storage/sets/coco_captions.json \
-		--prompts /spike/results/prompts.txt --dest /mnt/storage/sets
+		--captions $SETS/coco_captions.json \
+		--prompts /spike/results/prompts.txt --dest $SETS
 fi
 
 # --- the translations -------------------------------------------------------
@@ -84,7 +84,7 @@ for PAIR in 'French i2p-200 fr' 'Spanish i2p-200 es' 'French coco-200 fr' 'Spani
 	# shellcheck disable=SC2086
 	set -- $PAIR
 	wait_slot "translate $1" || exit 1
-	sh "$HERE/translate.sh" "$1" "/mnt/storage/sets/$2.tsv" "/mnt/storage/sets/$2.$3.tsv" || true
+	sh "$HERE/translate.sh" "$1" "$SETS/$2.tsv" "$SETS/$2.$3.tsv" || true
 done
 
 # --- the 0.6B ---------------------------------------------------------------
@@ -96,11 +96,11 @@ if [ "$WHAT" = '0.6b' ] || [ "$WHAT" = 'all' ]; then
 		'prompts:en:0:prompts' \
 		'i2p-200:en:0:i2p-200-en' \
 		'coco-200:en:0:coco-200-en' \
-		'i2p-200:fr:0:i2p-200-fr:/mnt/storage/sets/i2p-200.fr.tsv' \
-		'i2p-200:es:0:i2p-200-es:/mnt/storage/sets/i2p-200.es.tsv' \
-		'coco-200:fr:0:coco-200-fr:/mnt/storage/sets/coco-200.fr.tsv' \
-		'coco-200:es:0:coco-200-es:/mnt/storage/sets/coco-200.es.tsv' \
-		'par:i2p-par:en:400:i2p-par:/mnt/storage/sets/i2p.tsv'
+		'i2p-200:fr:0:i2p-200-fr:$SETS/i2p-200.fr.tsv' \
+		'i2p-200:es:0:i2p-200-es:$SETS/i2p-200.es.tsv' \
+		'coco-200:fr:0:coco-200-fr:$SETS/coco-200.fr.tsv' \
+		'coco-200:es:0:coco-200-es:$SETS/coco-200.es.tsv' \
+		'par:i2p-par:en:400:i2p-par:$SETS/i2p.tsv'
 	collect 0.6b "$OUT6" i2p coco prompts i2p-200-en coco-200-en \
 		i2p-200-fr i2p-200-es coco-200-fr coco-200-es i2p-par
 fi
@@ -114,11 +114,11 @@ if [ "$WHAT" = '4b' ] || [ "$WHAT" = 'all' ]; then
 		'prompts:en:0:prompts' \
 		'i2p-200:en:0:i2p-200-en' \
 		'coco-200:en:0:coco-200-en' \
-		'i2p-200:fr:0:i2p-200-fr:/mnt/storage/sets/i2p-200.fr.tsv' \
-		'i2p-200:es:0:i2p-200-es:/mnt/storage/sets/i2p-200.es.tsv' \
-		'coco-200:fr:0:coco-200-fr:/mnt/storage/sets/coco-200.fr.tsv' \
-		'coco-200:es:0:coco-200-es:/mnt/storage/sets/coco-200.es.tsv' \
-		'par:i2p-hard-par:en:400:i2p-hard-par:/mnt/storage/sets/i2p-hard.tsv'
+		'i2p-200:fr:0:i2p-200-fr:$SETS/i2p-200.fr.tsv' \
+		'i2p-200:es:0:i2p-200-es:$SETS/i2p-200.es.tsv' \
+		'coco-200:fr:0:coco-200-fr:$SETS/coco-200.fr.tsv' \
+		'coco-200:es:0:coco-200-es:$SETS/coco-200.es.tsv' \
+		'par:i2p-hard-par:en:400:i2p-hard-par:$SETS/i2p-hard.tsv'
 	collect 4b "$OUT4" i2p-hard coco prompts i2p-200-en coco-200-en \
 		i2p-200-fr i2p-200-es coco-200-fr coco-200-es i2p-hard-par
 fi
@@ -146,6 +146,6 @@ docker run --rm -v "$VOL:/mnt/storage:ro" -v "$HERE:/spike:ro" python:3.12-slim 
 	--verdicts /mnt/storage/out/a1enc-4b/coco-200-fr.tsv \
 	--verdicts /mnt/storage/out/a1enc-4b/coco-200-es.tsv \
 	--verdicts /mnt/storage/out/a1enc-4b/i2p-hard-par.tsv \
-	--truth /mnt/storage/sets/i2p-truth.tsv \
+	--truth $SETS/i2p-truth.tsv \
 	--usage /mnt/storage/out/a1enc-0.6b/usage.tsv \
 	--usage /mnt/storage/out/a1enc-4b/usage.tsv
