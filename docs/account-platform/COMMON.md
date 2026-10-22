@@ -13,6 +13,13 @@ the osionos app (your current directory). Read `CLAUDE.md` first: it is the map 
 - There is no Node on the host. Never run `node`, `npm`, `pnpm`, `npx` directly.
 - Run everything through the repo's Docker shim: `bash scripts/docker-run.sh <target>`
   (targets: `quality`, `typecheck`, `lint`, `test-bridge`, `test-canvas`, `test-e2e`, `build`).
+- **Every heavy gate goes through the shared slot wrapper:**
+  `/home/dlesieur/Documents/groot-wt/bin/gate.sh bash scripts/docker-run.sh <target>` for `quality`,
+  `test-bridge`, `test-e2e*`, `build`; `/home/dlesieur/Documents/groot-wt/bin/gate.sh sh
+  scripts/verify/<gate>.sh` for root Postgres gates (models-grants, account-load, lock races). It
+  waits for one of 2 host-wide slots and for free memory; other workers share them. Never bypass it,
+  never run two of your own gates at once (the host OOM-killed every process on 2026-10-22).
+  `typecheck`, `lint` and `test-canvas` are light and may run directly.
 - e2e on this host: always prefix `PW_BROWSER_SOURCE=system` (the Playwright CDN answers 403
   here; the `system` image uses Debian's Chromium). Skip `tests/e2e/visual/` — its PNGs come from
   the other Chromium — and never pass `--update-snapshots`.
