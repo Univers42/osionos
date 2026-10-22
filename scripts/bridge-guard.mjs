@@ -39,13 +39,20 @@ function guardError(status, code, message) {
 	return Object.assign(new Error(message), { status, code });
 }
 
+// A header that arrives as an array is a duplicate: one value is the address, several are
+// not a single address and yield nothing.
+function headerText(value) {
+	if (Array.isArray(value)) return value.length === 1 ? value[0] : null;
+	return value;
+}
+
 function headerValue(headers, name) {
 	const wanted = name.toLowerCase();
 	const direct = headers?.[wanted];
-	if (direct !== undefined) return Array.isArray(direct) && direct.length !== 1 ? null : direct;
+	if (direct !== undefined) return headerText(direct);
 	for (const [key, value] of Object.entries(headers ?? {})) {
 		if (key.toLowerCase() !== wanted) continue;
-		return Array.isArray(value) && value.length !== 1 ? null : value;
+		return headerText(value);
 	}
 	return undefined;
 }

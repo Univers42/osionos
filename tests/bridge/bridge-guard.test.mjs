@@ -44,6 +44,17 @@ describe('clientMeta', () => {
 		}
 	});
 
+	it('masks an ipv6 address to its /48', () => {
+		assert.equal(metaOf({ 'x-real-ip': '2001:db8:1:2::5' }).ipPrefix, '2001:db8:1::/48');
+		assert.equal(metaOf({ 'x-real-ip': '2001:db8:1:2:3:4:5:6' }).ipPrefix, '2001:db8:1::/48');
+	});
+
+	it('reads a one-element header array and refuses a longer one', () => {
+		assert.equal(metaOf({ 'x-real-ip': ['10.1.2.3'] }).ipPrefix, '10.1.2.0/24');
+		const merged = metaOf({ 'x-real-ip': ['10.1.2.3', '10.9.9.9'] });
+		assert.deepEqual([merged.ipPrefix, merged.ipHash], [null, null]);
+	});
+
 	it('returns no IP for garbage, a merged header or an unparseable socket address', () => {
 		for (const address of ['not-an-ip', 'a, b', '2001:db8::1::2']) {
 			const meta = metaOf({ 'x-real-ip': address });
@@ -160,6 +171,7 @@ describe('sudo grants', () => {
 	it('cannot be created through the rate-limit key space', async () => {
 		const kv = createKv({});
 		await rateLimit(kv, ['sudo', JTI_C], { limit: 5, windowMs: 1_000 });
+		assert.equal(await kv.get(`sudo:${JTI_C}`), null, 'the counter never writes a grant');
 		await assert.rejects(requireSudo(kv, SESSION_C), fail(403, 'sudo_required'));
 		kv.close();
 	});

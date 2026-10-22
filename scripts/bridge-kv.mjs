@@ -18,8 +18,11 @@
  * is an unpinned `apk add redis` (grobase infra/docker/services/redis/Dockerfile:9,11),
  * so P0-4 verifies the version. P0-4 sets `required: true` on a multi-replica deploy,
  * where a memory fallback would let two replicas consume the same handoff token.
- * Caveat: non-required mode falls back to memory on a Redis failure, so a set/getDel pair
- * split across the switch can lose the key or consume it twice.
+ * Caveat: a failed command is a 503 in BOTH modes; only a Redis that is not connected
+ * falls back to the per-process memory, so a set/getDel pair split across the switch can
+ * lose the key or consume it twice. One command that times out costs this replica at
+ * least a reconnect and a handshake of 503s. The ready timeout is unref'd, so a process
+ * with nothing else to do exits before it fires.
  */
 
 import { RedisKv } from './bridge-redis.mjs';
@@ -32,12 +35,18 @@ const KV_MESSAGE = 'The shared key/value store is unavailable.';
 const kvError = () => Object.assign(new Error(KV_MESSAGE), { status: 503, code: 'kv_unavailable' });
 
 function parseRedisUrl(value) {
+	let parsed;
 	try {
-		const parsed = new URL(value);
-		return parsed.protocol === 'redis:' || parsed.protocol === 'rediss:' ? parsed : null;
+		parsed = new URL(value);
 	} catch {
 		return null;
 	}
+	if (parsed.protocol !== 'redis:' && parsed.protocol !== 'rediss:') return null;
+	// An empty host would silently become localhost, and a database is always numeric.
+	if (!parsed.hostname) return null;
+	const database = parsed.pathname.replace(/^\//, '');
+	if (database !== '' && !/^\d+$/.test(database)) return null;
+	return parsed;
 }
 
 function checkKey(key) {
@@ -57,7 +66,9 @@ function checkTtl(ttl) {
 
 // Caveat: eviction is oldest-first within each map, so a flood of single-use keys can
 // evict live replay markers and a replay then SUCCEEDS. Counters live in their own map so
-// a counter flood cannot evict a marker; neither map survives a restart.
+// a counter flood cannot evict a marker; cycling through more than maxEntries distinct
+// buckets does evict a victim's counter, which resets that rate limit. Neither map
+// survives a restart.
 class MemoryKv {
 	constructor({ maxEntries = DEFAULT_MAX_ENTRIES, sweepMs = DEFAULT_SWEEP_MS } = {}) {
 		this.values = new Map();
@@ -163,7 +174,10 @@ export function createKv({ redisUrl = '', required = false, commandTimeoutMs = 1
 				noteBackend();
 				return result;
 			} catch {
-				// Redis answered with an error or the socket dropped: required mode fails closed.
+				// A reply error, a timeout or a malformed frame is a failure of the shared
+				// store, never a silent downgrade to this process's memory: a getDel that
+				// answered null would accept a replay.
+				throw kvError();
 			}
 		}
 		noteBackend();
@@ -186,25 +200,16 @@ export function createKv({ redisUrl = '', required = false, commandTimeoutMs = 1
 		if (!redis) return Promise.resolve();
 		if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) return Promise.reject(new TypeError('ready timeoutMs must be a positive integer.'));
 		if (redis.connected) return Promise.resolve();
-		return new Promise((resolve, reject) => {
-			let settled = false;
-			const timer = setTimeout(() => {
-				if (settled) return;
-				settled = true;
-				reject(kvError());
-			}, timeoutMs);
-			redis.whenReady().then(() => {
-				if (settled) return;
-				settled = true;
-				clearTimeout(timer);
-				resolve();
-			});
+		return redis.whenReady({ timeoutMs }).catch(() => {
+			throw kvError();
 		});
 	};
 
 	return {
 		backend: currentBackend,
 		ready,
+		// Diagnostics: the waiters still waiting for a connection (a timed-out one is gone).
+		pendingReadyWaiters: () => redis?.readyWaiters.length ?? 0,
 		get: (key) => route(key, (client, full) => client.get(full), (store, full) => store.get(full)),
 		del: (key) => route(key, (client, full) => client.del(full), (store, full) => store.del(full)).then(() => undefined),
 		set: (key, value, ttlMs) => {
