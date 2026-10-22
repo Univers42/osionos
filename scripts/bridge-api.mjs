@@ -49,6 +49,7 @@ import { createCollabHandler } from './bridge-collab.mjs';
 import { createWorkspaceInvitesHandler } from './bridge-workspace-invites.mjs';
 import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
+import { createPersonalizationHandler } from './bridge-personalization.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
@@ -4330,6 +4331,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.community(url, request, response, context.config)) return;
 	if (await context.social.profile(url, request, response, context.config)) return;
 	if (await context.social.feed(url, request, response, context.config)) return;
+	if (await context.social.personalization(url, request, response, context.config)) return;
 	if (await context.social.social(url, request, response, context.config)) return;
 	if (await context.social.collab(url, request, response, context.config)) return;
 	if (await context.social.workspaceInvites(url, request, response, context.config)) return;
@@ -4398,6 +4400,7 @@ export function createBridgeServer(options = {}) {
 			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		personalization: createPersonalizationHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
