@@ -257,11 +257,13 @@ export function harnessConfig({ sessionCutoffs = 'off', env = {} } = {}) {
 /**
  * JSON request headers carrying an app session for `userId`, whose private workspace is
  * `homeWorkspaceId`; `memberWorkspaceIds` ride along in the token as shared workspaces.
+ * `isAdmin` mints the token WITH the administrator claim — the claim alone is not a
+ * permission (the console re-reads the row), but a console needs a token that claims it.
  */
-export function sessionHeaders(config, userId, homeWorkspaceId, memberWorkspaceIds = []) {
+export function sessionHeaders(config, userId, homeWorkspaceId, memberWorkspaceIds = [], isAdmin = false) {
 	const payload = validateBridgePayload({ provider: 'prismatica', subject: userId, email: 'member@example.com', name: 'Member', jti: randomUUID() });
 	const persisted = { workspaceId: homeWorkspaceId, workspaceName: 'Home', workspaceSlug: 'home' };
-	const session = createUserSession(payload, config, persisted, Date.now(), memberWorkspaceIds.map((id) => ({ _id: id, role: 'member' })));
+	const session = createUserSession(payload, config, persisted, Date.now(), memberWorkspaceIds.map((id) => ({ _id: id, role: 'member' })), isAdmin);
 	return { authorization: `Bearer ${session.session.accessToken}`, 'content-type': 'application/json' };
 }
 
