@@ -18,11 +18,11 @@ Later the same night 3-4 concurrent sessions ran without a refusal when started 
 | P1-3a | **merged** 86a66750 | feat/acct-P1-3a (f5e8b41c) | glm-5.3-flash, 1 attempt | quality 0 · canvas 2564/0/2 · settings e2e 22/22 · visual vs local system baseline 8/8 · browser: 19 panels render, 4 profile modals open/close, 1440 matches before, 375 no page overflow | accepted; deviations: dead `memberRows` dropped (verified unused), `downloadInvoicePdf` moved to Billing |
 | P0-1 | fix round 1 done (f50daa5b): lock order, per-privilege k1, revoke GRANTED BY, + 6 follow-ups; devil re-review running | (root repo) feat/acct-P0-1 (f50daa5b) | big-pickle, 2 rounds | my re-run: models-grants 82/0, shellcheck 0; worker: first-run pass1 24 / pass2 0, race 40P01 → clean | spec: devil PwC (12); diff: BLOCK → re-review |
 | P1-3b | running | feat/acct-P1-3b | glm-5.3-flash (+rotation) | — | — |
-| P0-3 | fix round 2 (devil PwC on diff: parser hang on `$-7`/`$abc`, 13/18 mutants survived; + 9 follow-ups) | feat/acct-P0-3 (51860dae) | minimax (fix2) | my re-run of 51860dae: test-bridge 1463/0/1, quality 0 | spec: devil PwC (11); diff: PwC (2 blockers) |
+| P0-3 | **merged** (9f15755d) | feat/acct-P0-3 (77338c7c) | ses_e9eddf5e…, minimax (3 rounds) | my run: test-bridge 1471/0/1, quality 0; integration after merge: test-bridge 1518/0/1, quality 0; devil's 18 mutants replayed on 77338c7c: 10 killed, 4 no longer apply, 1 equivalent (fallback line now reached only when disconnected), 4 test gaps moved to P0-4 (AUTH sent, memory window, TLS SNI, setNx vs counters) + integer-reply fix | spec: devil PwC (11); diff: PwC (2 blockers) → met |
 | P0-7 | fix round 1 (p95<p50 bug, whole-ms rounding, budgets tuned to pass, non-exact queries, 443-line script) | (root repo) feat/acct-P0-7 (eb5b7f2e) | nemotron-3-ultra, 1 attempt | my baseline run: seed 9 s, 7/7 PASS with impossible percentiles | — |
 | P0-6 | spec written; dispatch after P0-4 + P1-1 merge (needs the mount seam and `osionos_profiles.avatar_url`) | — | — | research: R-P0-6 | — |
 | P1-1 | spec written (root repo; 4d2cb22b); devil spec review running; dispatch after P0-1 + P0-7 merge | — | — | — | — |
-| P0-4 | spec takes the devil's 10 conditions (expiry from the token, one off state, capability probe not INFO, ADR 0003, local revoke from PATCH rows, per-session tests, replay claim after HMAC, seal tests, allowed test edits, ship gate); dispatch after P0-3 merges | — | — | — | spec: devil PwC (10) |
+| P0-4 | **dispatched** (minimax) | feat/acct-P0-4 from 9f15755d | minimax | — | spec: devil PwC (10) |
 | P0-4r | spec written (root: desktop after-GoTrue step + compose Redis/IP env); dispatch after P0-1 merges | — | — | — | — |
 | P1-4 | spec written, waits for P1-3b | — | — | — | no devil gate |
 
@@ -48,3 +48,5 @@ Open follow-ups
 - Separate defect, to file on its own (devil, 2026-10-22): `anon` can execute `auth_record_audit_event`
   — `auth-security-migration.sql:178` revokes from anon/authenticated, but the grant is PUBLIC's
   (`{=X/postgres,…}`); called as anon it returned `{"status":"recorded"}`. Check `h` only scans `osionos_%`.
+
+- 2026-10-22: reviews move to opencode — the devil runs as an opencode session on a model other than the implementer's (prompt: read `.claude/agents/devil.md`, experiments in `oc-review-*` throwaway containers, scratch in `target/review/<label>/`); `git status` before/after proves it edited nothing. Claude subagents only for what opencode cannot do, always Sonnet.
