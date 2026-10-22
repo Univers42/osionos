@@ -69,7 +69,8 @@ function Placeholder({ kind }: Readonly<{ kind: MediaBlockType }>) {
   );
 }
 
-function mediaWidthStyle(block: Block): React.CSSProperties {
+/** The block's width preset (25–100 %), on whatever element frames the media. */
+export function mediaWidthStyle(block: Block): React.CSSProperties {
   const width = typeof block.mediaWidth === "number"
     ? Math.min(100, Math.max(25, block.mediaWidth))
     : 100;
