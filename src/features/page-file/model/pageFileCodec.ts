@@ -82,6 +82,11 @@ export const OVERLAY_KEYS: readonly string[] = Object.freeze(
 export const KNOWN_LOSSY_KEYS: readonly string[] = Object.freeze([
   // Transient UI state: an empty transformed block re-derives it from its type.
   "placeholderText",
+  // The diagram SPEC: the .omd file SHOWS a diagram (the mermaid picture as a
+  // mermaid fence, the other kinds as an osionos:diagram comment a human can
+  // read) but the app reads neither back, so a diagram block comes back as a
+  // code block. The page-file round trip of a diagram block is not done yet.
+  "diagramSpec",
 ]);
 
 /** Any `.omd` name, the folder meta file included. */

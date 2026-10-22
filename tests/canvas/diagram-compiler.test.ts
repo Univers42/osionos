@@ -193,8 +193,8 @@ test("golden: the schema of two databases", () => {
     irToMermaid(ir),
     [
       "flowchart LR",
-      'n0["Authors: Name #40;text#41;"]',
-      'n1["Books: Author #40;relation#41;, Title #40;text#41;"]',
+      'n0["Authors: Name (text)"]',
+      'n1["Books: Author (relation), Title (text)"]',
       'n1 -- "Author" --> n0',
     ].join("\n"),
   );
@@ -460,6 +460,18 @@ test("the trust boundary: a long label is cut, a control character never is", ()
   assert.ok(!control.includes("\u202E"));
   // A newline is a space, never a second line.
   assert.equal(escapeLabel("a\nb"), "a b");
+});
+
+test("a label reads as written: brackets and quotes become their fullwidth forms, never entity codes", () => {
+  // The locked renderer draws labels with htmlLabels off, where mermaid's
+  // entity codes are shown literally ("&#40;") — measured on the offline build.
+  assert.equal(escapeLabel("Q3 (draft) R&D #12"), "Q3 (draft) R&D #12");
+  assert.equal(
+    escapeLabel('say "hi" [x] {y} a;b 50% <b>|`'),
+    "say \uFF02hi\uFF02 \uFF3Bx\uFF3D \uFF5By\uFF5D a\uFF1Bb 50\uFF05 \uFF1Cb\uFF1E\uFF5C\uFF40",
+  );
+  // No entity can form: both need an ASCII ";".
+  assert.ok(!escapeLabel("#35; &amp; &#34;").includes(";"));
 });
 
 test("an empty label is never empty: mermaid's lexer has no empty string", () => {

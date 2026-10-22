@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { MousePointerClick, PenTool } from "lucide-react";
+import { MousePointerClick, PenTool, Workflow } from "lucide-react";
 import { IconPage } from "@univers42/ui-collection";
 import {
   COLLECTION_SLASH_ITEMS,
@@ -231,6 +231,16 @@ const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
     icon: <PenTool className="h-4 w-4" />,
     description: "New whiteboard board — /whiteboard <name>",
     requiresApp: "osionos.whiteboard",
+  },
+  {
+    id: "advanced:diagram",
+    kind: "block",
+    section: "advanced",
+    label: "Diagram",
+    aliases: ["mermaid", "flowchart", "chart", "tree"],
+    icon: <Workflow className="h-4 w-4" />,
+    description: "Draw a diagram from a stored spec",
+    blockType: "diagram",
   },
   {
     // Template-only: gated to template pages in SlashCommandMenu.
