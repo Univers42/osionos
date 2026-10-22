@@ -39,15 +39,15 @@ export function attributeText(value: string): string {
 }
 
 /**
- * The block of a source: its number, its title, where it is in the page, and
- * its text.
+ * The block of a source: its number, its page, its title, where it is in the
+ * page, and its text.
  *
  * The number is the one the answer cites it by: the first source is [1], the
- * second [2].
+ * second [2]. The page is the id read_page takes.
  */
 export function sourceBlock(source: RetrievedChunk, n: number): string {
 	const path = source.headingPath.length > 0 ? source.headingPath : source.title;
-	return `<source n="${n}" title="${attributeText(source.title)}" path="${attributeText(path)}">\n${quotedData(source.snippet)}\n</source>`;
+	return `<source n="${n}" page="${attributeText(source.pageId)}" title="${attributeText(source.title)}" path="${attributeText(path)}">\n${quotedData(source.snippet)}\n</source>`;
 }
 
 /**
