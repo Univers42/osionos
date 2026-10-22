@@ -112,6 +112,13 @@ describe('POST /api/account/username', () => {
 		}
 	});
 
+	it('does not trim the requested name', async (t) => {
+		const { base, token } = await world(t);
+		const response = await changeName(base, token, ' ada2 ');
+		assert.equal(response.status, 422);
+		assert.equal(response.body.code, 'invalid_username');
+	});
+
 	it('answers 429 on the fourth change of the day', async (t) => {
 		const { base, token } = await world(t);
 		for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -226,6 +233,25 @@ describe('the deletion request', () => {
 		assert.equal(response.status, 503);
 		assert.equal(response.body.code, 'audit_unavailable');
 		assert.equal(store.rows('osionos_account_deletion_requests').length, 0);
+	});
+
+	it('reads only the caller deletion request and never another user\'s', async (t) => {
+		const rows = {
+			profiles: [profileOf(USER_A), profileOf(USER_B)],
+			deletions: [
+				{ user_id: USER_A, requested_at: '2026-10-02T00:00:00.000Z', scheduled_for: '2026-10-16T00:00:00.000Z', successor_user_id: null },
+				{ user_id: USER_B, requested_at: '2026-10-03T00:00:00.000Z', scheduled_for: '2026-10-17T00:00:00.000Z', successor_user_id: null },
+			],
+		};
+		const { base, token, store } = await world(t, { rows });
+		const response = await send(base, '/api/account/deletion', { token });
+		assert.equal(response.status, 200);
+		assert.equal(response.body.requestedAt, '2026-10-02T00:00:00.000Z');
+		const call = store.callsTo('osionos_account_deletion_requests').find((entry) => entry.method === 'GET');
+		assert.ok(call, 'the read goes through the deletion table');
+		assert.equal(call.claims?.aud, 'osionos-account');
+		assert.equal(call.claims?.role, 'osionos_account_user');
+		assert.equal(call.claims?.sub, USER_A);
 	});
 
 	it('keeps the request when the audit of the cancellation fails', async (t) => {

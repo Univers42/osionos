@@ -51,7 +51,7 @@ const BAD_SUCCESSOR = 'That successor is not a member of a workspace you own.';
 
 /** The name the caller asked for, or the 422 a name the database would refuse gets. */
 function readUsername(body) {
-	const value = typeof body?.username === 'string' ? body.username.trim() : '';
+	const value = typeof body?.username === 'string' ? body.username : '';
 	if (!USERNAME_SHAPE.test(value)) throw accountError(422, 'invalid_username', INVALID_NAME);
 	return value;
 }

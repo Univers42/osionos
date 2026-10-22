@@ -132,12 +132,13 @@ function project(row, select) {
 function claimsOf(headers) {
 	const raw = String(headers?.Authorization ?? headers?.authorization ?? '');
 	if (!raw.startsWith('Bearer ')) return null;
-	const payload = raw.slice('Bearer '.length).split('.')[1];
-	if (!payload) return null;
+	const token = raw.slice('Bearer '.length);
+	const payload = token.split('.')[1];
+	if (!payload) return token ? { _service: true } : null;
 	try {
 		return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
 	} catch {
-		return null;
+		return token ? { _service: true } : null;
 	}
 }
 
@@ -192,14 +193,21 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 	]);
 	const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 
-	/** The rows the caller may see: the owner role sees its own rows, the service role all. */
-	function visible(store, claims) {
-		const owner = claims?.role === ACCOUNT_ROLE ? String(claims.sub ?? '').toLowerCase() : null;
-		return store.filter((row) => owner === null || sameText(row.user_id, owner));
+	/** The rows the caller may see: a valid account role sees its own rows, the service
+	 *  role sees all of them, and a request with no valid claims sees nothing. Deletion
+	 *  requests are account-private: even the service role does not read them. */
+	function visible(store, claims, table) {
+		if (claims?._service) {
+			if (table === DELETIONS) return [];
+			return store;
+		}
+		if (!claims || claims.aud !== 'osionos-account' || claims.role !== ACCOUNT_ROLE) return [];
+		const owner = String(claims.sub ?? '').toLowerCase();
+		return store.filter((row) => sameText(row.user_id, owner));
 	}
 
-	function selected(store, params, claims) {
-		const found = visible(store, claims).filter((row) => [...params].every(([key, expr]) => RESERVED_PARAMS.has(key) || matches(row, key, expr)));
+	function selected(store, params, claims, table) {
+		const found = visible(store, claims, table).filter((row) => [...params].every(([key, expr]) => RESERVED_PARAMS.has(key) || matches(row, key, expr)));
 		const limit = params.has('limit') ? Number(params.get('limit')) : found.length;
 		return found.slice(0, limit);
 	}
@@ -229,6 +237,9 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 	 * apart either.
 	 */
 	function changeUsername(body, claims) {
+		if (claims?.aud !== 'osionos-account' || claims?.role !== ACCOUNT_ROLE) {
+			return json({ code: '401', message: 'missing or invalid account claims' }, 401);
+		}
 		const uid = String(claims?.sub ?? '').toLowerCase();
 		const name = String(body?.p_username ?? '');
 		if (!USERNAME_SHAPE.test(name)) {
@@ -273,7 +284,10 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 
 	/** The deletion request: the database sets the schedule, and the CHECK holds it. */
 	function insertDeletion(body, claims) {
-		const uid = String(body?.user_id ?? claims?.sub ?? '').toLowerCase();
+		if (claims?.aud !== 'osionos-account' || claims?.role !== ACCOUNT_ROLE) {
+			return json({ code: '401', message: 'missing or invalid account claims' }, 401);
+		}
+		const uid = String(claims?.sub ?? '').toLowerCase();
 		const requestedAt = body?.requested_at ?? new Date().toISOString();
 		const scheduledFor = body?.scheduled_for ?? new Date(Date.parse(requestedAt) + GRACE_MS).toISOString();
 		if (Date.parse(scheduledFor) < Date.parse(requestedAt) + GRACE_MS) {
@@ -313,7 +327,7 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 		const store = tables.get(table);
 		if (!store) return json({ message: `account store: ${table} is not served` }, 404);
 		if (method === 'GET') {
-			const rows = selected(store, params, claims).map((row) => project(row, params.get('select')));
+			const rows = selected(store, params, claims, table).map((row) => project(row, params.get('select')));
 			return json(rows, 200);
 		}
 		if (method === 'POST') {
@@ -329,7 +343,7 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 			return json({ message: `account store: ${method} ${table} is not served` }, 405);
 		}
 		if (method === 'DELETE') {
-			for (const row of selected(store, params, claims)) {
+			for (const row of selected(store, params, claims, table)) {
 				store.splice(store.indexOf(row), 1);
 			}
 			return new Response(null, { status: 204 });

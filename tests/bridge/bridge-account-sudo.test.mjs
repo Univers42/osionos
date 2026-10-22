@@ -22,6 +22,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { maskAddress } from '../../scripts/bridge-account-sudo.mjs';
 import { createOtpService, otpProof } from './support/account-otp.mjs';
 import { createTtlKv } from './support/account-kv.mjs';
@@ -242,6 +243,35 @@ describe('POST /api/account/sudo/verify', () => {
 		const replay = await send(base, '/api/account/sudo/verify', { method: 'POST', token, body: { code: CODE } });
 		assert.equal(replay.status, 502);
 		assert.equal(replay.body.code, 'sudo_proof_invalid');
+	});
+
+	it('answers 503 sudo_unavailable when the shared store fails while spending the proof', async (t) => {
+		const baseKv = createTtlKv({ now: () => Date.now() });
+		const kv = Object.assign({}, baseKv, {
+			async setNx() { throw new Error('kv down'); },
+		});
+		const { base, token } = await world(t, { kv });
+		const response = await send(base, '/api/account/sudo/verify', { method: 'POST', token, body: { code: CODE } });
+		assert.equal(response.status, 503);
+		assert.equal(response.body.code, 'sudo_unavailable');
+		const state = await send(base, '/api/account/sudo', { token });
+		assert.equal(state.body.active, false);
+	});
+
+	it('keeps the proof spent and sudo inactive when the audit storage is down', async (t) => {
+		const proof = otpProof({ email: ADDRESS, secret: ACCOUNT_JWT_SECRET });
+		const otp = createOtpService({ email: ADDRESS, secret: ACCOUNT_JWT_SECRET, proof });
+		const { base, token, kv } = await world(t, {
+			otp,
+			fail: (call) => (call.table === 'osionos_bridge_audit_events' ? { status: 500, body: { message: 'down' } } : null),
+		});
+		const response = await send(base, '/api/account/sudo/verify', { method: 'POST', token, body: { code: CODE } });
+		assert.equal(response.status, 503);
+		assert.equal(response.body.code, 'audit_unavailable');
+		const state = await send(base, '/api/account/sudo', { token });
+		assert.equal(state.body.active, false);
+		const marker = `otp-proof:${createHash('sha256').update(proof).digest('hex')}`;
+		assert.equal(kv.has(marker), true);
 	});
 
 	it('writes the audit row of the grant', async (t) => {
