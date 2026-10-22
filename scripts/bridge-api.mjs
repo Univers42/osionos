@@ -4377,6 +4377,9 @@ export function createBridgeServer(options = {}) {
 		: null;
 	const fetchImpl = meter.wrapFetch(options.fetchImpl ?? transport?.fetch ?? fetch);
 	const spawnImpl = options.spawnImpl ?? spawn;
+	// The env the moderation slice reads: the mode (OSIONOS_MODERATION_ACTIONS)
+	// and the state flag (OSIONOS_MODERATION_STATE). A test injects its own.
+	const env = options.env ?? process.env;
 	// Comments and publish reach a page through the same read rule as GET /api/pages/:id.
 	const verifyPageAccess = (request, pageId, permission) => readablePageAccess(request, pageId, permission, config, fetchImpl);
 	// Standalone workstream handlers, created once. rtc keeps the sibling
@@ -4395,11 +4398,11 @@ export function createBridgeServer(options = {}) {
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
+			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
 			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
 			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		personalization: createPersonalizationHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
