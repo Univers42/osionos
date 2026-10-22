@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 15:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -69,6 +69,19 @@ export interface ChatHistory {
   messages: ChatMessage[];
 }
 
+/**
+ * The author's answer to L0's warning (C85): "post it anyway".
+ *
+ * The bridge asks BEFORE it writes a message whose words may hurt someone:
+ * in mode hold/on it answers 409 `moderation_warning` and writes NOTHING until
+ * the client resends with `acknowledgeWarning: true`. The flag is sent ONLY
+ * when the author answered — a client that always sends it publishes every
+ * message, warning or not. A DM is never asked (C94).
+ */
+export interface WriteOptions {
+  acknowledgeWarning?: boolean;
+}
+
 export async function fetchMessages(channelId: string, before?: string, limit = 50): Promise<ChatHistory> {
   const params = new URLSearchParams({ limit: String(limit) });
   if (before) params.set('before', before);
@@ -83,10 +96,14 @@ export async function sendMessage(
   content: string,
   attachments?: Attachment[],
   replyTo?: string,
+  options?: WriteOptions,
 ): Promise<ChatMessage> {
+  const body = options?.acknowledgeWarning
+    ? { content, attachments, replyTo, acknowledgeWarning: true }
+    : { content, attachments, replyTo };
   const reply = await api.post<{ message: ChatMessage }>(
     `/api/chat/channels/${encodeURIComponent(channelId)}/messages`,
-    { content, attachments, replyTo },
+    body,
     getActivePageJwt() ?? undefined,
   );
   return reply.message;
@@ -101,10 +118,15 @@ export async function fetchThread(rootId: string): Promise<ChatMessage[]> {
   return Array.isArray(res.messages) ? res.messages : [];
 }
 
-export async function editMessage(messageId: string, content: string): Promise<ChatMessage> {
+export async function editMessage(
+  messageId: string,
+  content: string,
+  options?: WriteOptions,
+): Promise<ChatMessage> {
+  const body = options?.acknowledgeWarning ? { content, acknowledgeWarning: true } : { content };
   const reply = await api.patch<{ message: ChatMessage }>(
     `/api/chat/messages/${encodeURIComponent(messageId)}`,
-    { content },
+    body,
     getActivePageJwt() ?? undefined,
   );
   return reply.message;
