@@ -72,6 +72,9 @@ export function mermaidFromAnswer(answer: string): string | null {
     // An unfenced candidate must be a SINGLE diagram: no trailing prose. A
     // blank line followed by more content, or a non-indented line that is not
     // a diagram construct, means prose followed the diagram.
+    // Caveat: shape-based, it under-accepts — an unfenced pie slice (`"Dogs" : 386`),
+    // a class attribute (`Animal : +int age`) or a blank line inside the diagram reads
+    // as prose and the answer gets no diagram. Fenced answers never reach this check.
     const lines = source.split("\n");
     for (let index = 1; index < lines.length; index += 1) {
       const line = lines[index];
