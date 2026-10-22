@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
+import type { OutputCheck } from '../images/outputCheck.ts';
 
 /**
  * The shape every route handler sees: the request, the answer, the path and the
@@ -12,6 +13,14 @@ export interface RouteDeps {
 	db: Pool;
 	redis: Redis;
 	blockingRedis: Redis;
+	/**
+	 * The output check of the generated images (devil C73).
+	 *
+	 * It is absent while it loads and null when it could not be loaded: both
+	 * are the same thing for the route — the check is not there, so no image
+	 * is stored.
+	 */
+	outputCheck?: OutputCheck | null;
 }
 
 /** Everything a route handler needs. */

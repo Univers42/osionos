@@ -91,6 +91,11 @@ const envSchema = z.object({
 	// The deadline of one generation, from the call to the engine. A1 measured
 	// 19–23 s warm and up to 44 s from a cold page cache.
 	OSIONOS_AI_IMAGE_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
+	// The directory of the models of the output check (devil C73): the two
+	// classifiers of the bytes the engine produced, on the disk of the volume.
+	// Required when on: a generation without a check is a generation that
+	// stores whatever the engine said.
+	OSIONOS_AI_IMAGE_CHECK_DIR: z.string().optional(),
 });
 
 const rawEnv = {
@@ -130,6 +135,7 @@ const rawEnv = {
 	OSIONOS_AI_IMAGES_PER_USER_DAY: process.env.OSIONOS_AI_IMAGES_PER_USER_DAY,
 	OSIONOS_AI_IMAGES_PER_DAY: process.env.OSIONOS_AI_IMAGES_PER_DAY,
 	OSIONOS_AI_IMAGE_TIMEOUT_MS: process.env.OSIONOS_AI_IMAGE_TIMEOUT_MS,
+	OSIONOS_AI_IMAGE_CHECK_DIR: process.env.OSIONOS_AI_IMAGE_CHECK_DIR,
 };
 
 const parsed = envSchema.safeParse(rawEnv);
@@ -278,6 +284,8 @@ export interface AiServiceConfig {
 	imagesPerDay: number;
 	/** The deadline of one generation, in milliseconds. */
 	imageTimeoutMs: number;
+	/** The directory of the models of the output check (C73). */
+	imageCheckDir?: string;
 }
 
 export const config: AiServiceConfig = Object.freeze({
@@ -317,14 +325,18 @@ export const config: AiServiceConfig = Object.freeze({
 	imagesPerUserDay: parsed.data.OSIONOS_AI_IMAGES_PER_USER_DAY,
 	imagesPerDay: parsed.data.OSIONOS_AI_IMAGES_PER_DAY,
 	imageTimeoutMs: parsed.data.OSIONOS_AI_IMAGE_TIMEOUT_MS,
+	imageCheckDir: parsed.data.OSIONOS_AI_IMAGE_CHECK_DIR,
 });
 
 // The image generation, turned on, needs its engine, a price (an image is
-// never free on the ledger, C74) and the bridge it stores through (C76).
+// never free on the ledger, C74), the bridge it stores through (C76) and the
+// models of the output check (C73): a generation that stores whatever the
+// engine said is not a generation the product may sell.
 if (config.imagesEnabled) {
 	if (!config.imageUrl) refuse('OSIONOS_AI_IMAGE_URL');
 	if (config.imageMicroUsd <= 0) refuse('OSIONOS_AI_IMAGE_MICROUSD');
 	if (!config.bridgeUrl) refuse('OSIONOS_AI_BRIDGE_URL');
+	if (!config.imageCheckDir) refuse('OSIONOS_AI_IMAGE_CHECK_DIR');
 }
 
 // A deployment that runs the write tools needs the bridge: the URL is

@@ -5,6 +5,7 @@ import type { MockUpstream } from './mockUpstream.ts';
 import { startMockBridge } from './mockBridge.ts';
 import type { MockBridge } from './mockBridge.ts';
 import type { AiServer } from '../src/server.ts';
+import type { OutputCheck } from '../src/images/outputCheck.ts';
 
 /**
  * The harness of the tests: the mock upstream, the service, and the calls
@@ -136,6 +137,13 @@ export interface HarnessOptions {
 	 * it reads, brings its own and says so here.
 	 */
 	upstreamBaseUrl?: string;
+	/**
+	 * The output check of the generated images (devil C73).
+	 *
+	 * The suite never loads a model: a test brings a stub, and a test that
+	 * wants the check to be unavailable brings null.
+	 */
+	outputCheck?: OutputCheck | null;
 }
 
 /**
@@ -160,7 +168,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
 	process.env.OSIONOS_AI_RUNS_PER_MINUTE = process.env.OSIONOS_AI_RUNS_PER_MINUTE ?? '100';
 
 	const { createAiServer } = await import('../src/server.ts');
-	const app = createAiServer();
+	const app = createAiServer({ outputCheck: options.outputCheck });
 	// Every file starts with empty run windows. The whole suite runs in under a
 	// minute and the Redis is shared, so the files otherwise share one window
 	// per user and the late ones get 429 (2026-10-21: started at :01 → 3

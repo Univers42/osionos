@@ -293,6 +293,15 @@ bulk service of its own; without it the service has no search.
 production refuses to start without it). A missing or
 broken variable stops the service and names the variable, never its value.
 
+`OSIONOS_AI_IMAGE_CHECK_DIR` (the directory of the models of the output check
+of the generated images, devil C73 — the two pinned classifiers that decide
+whether an image may be stored; `scripts/fetch-image-check.sh <dir>` fills it
+from the hub and checks every byte against the lock of the spike). The images
+on (`OSIONOS_AI_IMAGES=on`) need it, like the engine URL and the price: a
+missing variable stops the service and names the variable. The models are read
+from the disk only — the service never reaches the hub for them, and a check
+that cannot be loaded refuses every image rather than storing one unchecked.
+
 The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_BULK_URL`
 (`OSIONOS_AI_EMBED_URL` when the bulk one is not set) and
 `OSIONOS_AI_EMBED_MODEL` (`intfloat/multilingual-e5-small`).
