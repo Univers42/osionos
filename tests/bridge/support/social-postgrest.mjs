@@ -171,6 +171,7 @@ const SHAPES = [
 		keys: ['id', 'select', 'limit'],
 		fixed: { select: 'id,author_id,page_id', limit: '1' },
 		run: (world, p) => world.pageComments.filter((row) => row.id === p.id.slice(3)),
+	},
 	// Block management (P5-4-a).
 	{
 		logical: 'blocksList', method: 'GET', table: 'osionos_user_blocks', keys: ['blocker_id', 'select', 'order'],
