@@ -1,8 +1,6 @@
 import { z } from 'zod';
-import type { AuthUser } from '../auth.ts';
 import { readJson, sendError, sendJson } from '../http.ts';
-import { canAccessWorkspace } from '../workspaceAccess.ts';
-import type { WorkspacePermission } from '../workspaceAccess.ts';
+import { canAccessWorkspaceLive } from '../workspaceAccess.ts';
 import { requireUser, UUID } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -15,13 +13,6 @@ import type { RouteContext } from './types.ts';
  */
 
 const putSchema = z.object({ enabled: z.boolean() }).strict();
-
-// The token's own-workspace shortcut of canAccessWorkspace is NOT used: a
-// session token can be an hour stale, and C138 asks for the members table at
-// request time. Blanking the claim leaves only the live row.
-async function liveAccess(ctx: RouteContext, user: AuthUser, workspaceId: string, permission: WorkspacePermission): Promise<boolean> {
-	return canAccessWorkspace(ctx.deps.db, { ...user, workspaceId: '' }, workspaceId, permission);
-}
 
 /** GET|PUT /api/ai/workspaces/:workspaceId/sentiment/settings */
 export async function handleSentimentSettings(ctx: RouteContext): Promise<number> {
@@ -39,7 +30,7 @@ export async function handleSentimentSettings(ctx: RouteContext): Promise<number
 	}
 
 	// Not a reader: 404, so the existence of a workspace does not leak.
-	if (!(await liveAccess(ctx, user, workspaceId, 'read'))) {
+	if (!(await canAccessWorkspaceLive(ctx.deps.db, user, workspaceId, 'read'))) {
 		sendError(ctx.response, 404, 'not_found');
 		return 404;
 	}
@@ -54,7 +45,7 @@ export async function handleSentimentSettings(ctx: RouteContext): Promise<number
 	}
 
 	const body = await readJson(ctx.request, putSchema);
-	if (!(await liveAccess(ctx, user, workspaceId, 'admin'))) {
+	if (!(await canAccessWorkspaceLive(ctx.deps.db, user, workspaceId, 'admin'))) {
 		sendError(ctx.response, 403, 'forbidden');
 		return 403;
 	}
