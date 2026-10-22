@@ -113,6 +113,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     anchors: [
       { id: "appearance", label: "Theme", keywords: ["appearance", "theme", "dark", "light"] },
       { id: "input-options", label: "Input options", keywords: ["enter", "newline", "send"] },
+      { id: "accessibility", label: "Accessibility", keywords: ["motion", "animation", "underline", "links", "hovercard", "gif", "paste", "url"] },
       { id: "language-time", label: "Language and time", keywords: ["language", "number", "date", "timezone", "week"] },
       { id: "desktop-app", label: "Desktop app", keywords: ["startup", "open", "last visited"] },
       { id: "privacy", label: "Privacy", keywords: ["cookies", "view history", "discoverability"] },
