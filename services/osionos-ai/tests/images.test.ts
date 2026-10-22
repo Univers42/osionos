@@ -4,6 +4,7 @@ import { createServer } from 'node:http';
 import { after, before, describe, it } from 'node:test';
 
 import { startMockImageEngine } from './mockImageEngine.ts';
+import { startMockPromptGuard } from './mockPromptGuard.ts';
 import { pngChunkTypes } from './visionFixtures.ts';
 import { collect, SseStream } from './sse.ts';
 import type { SseEvent } from './sse.ts';
@@ -18,6 +19,9 @@ import type { SseEvent } from './sse.ts';
  * Every case uses users of its own: the limits are per user.
  */
 const engine = await startMockImageEngine();
+// The guard of the prompt (C72): a mock that lets every prompt through — the
+// gate itself has its own file.
+const guard = await startMockPromptGuard();
 const PRICE = 40_000;
 process.env.OSIONOS_AI_IMAGES = 'on';
 process.env.OSIONOS_AI_IMAGE_URL = `${engine.baseUrl}/v1`;
@@ -26,6 +30,8 @@ process.env.OSIONOS_AI_IMAGE_TIMEOUT_MS = '5000';
 // The configuration needs the directory of the check (C73); the suite brings
 // its own stub, so nothing is ever loaded from the disk.
 process.env.OSIONOS_AI_IMAGE_CHECK_DIR = '/tmp/osionos-ai-check-stub';
+// The configuration needs the guard of the prompt (C72): the mock above is it.
+process.env.OSIONOS_AI_PROMPT_GUARD_URL = guard.baseUrl;
 
 const { startHarness, USER_DAILY_MICROUSD, WORKSPACE_A } = await import('./harness.ts');
 const { app, mock, bridge, base, call, tokenFor, postRun, createConversation } = await startHarness({
@@ -45,6 +51,7 @@ after(async () => {
 	await mock.close();
 	await bridge.close();
 	await engine.close();
+	await guard.close();
 });
 
 /** The POST of an image: the answer is a stream, or a refusal. */
@@ -183,7 +190,7 @@ describe('osionos-ai images: a prompt becomes a stored image', () => {
 	});
 });
 
-describe('osionos-ai images: the prompt gate (C72 L0)', () => {
+describe('osionos-ai images: the prompt of the request (C72)', () => {
 	it('a prompt that carries engine arguments is refused before anything', async () => {
 		engine.reset();
 		const user = randomUUID();
