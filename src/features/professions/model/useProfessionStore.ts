@@ -50,11 +50,19 @@ export interface ProfessionStore {
   pick: (id: ProfessionId) => Promise<void>;
 }
 
-/** The version the client holds, or null when the account plane is not there. */
+/** The version the client holds, or null when the account plane is not there.
+ *
+ * Only an `unavailable` hydrate (no account plane) resolves to `null`; any other
+ * failure (500, network, ...) is re-thrown so the caller can surface it instead of
+ * silently treating the server as absent. */
 async function ensureVersion(): Promise<number | null> {
   const account = useAccountProfileStore.getState();
   if (account.version !== null) return account.version;
-  await account.hydrate();
+  const outcome = await account.hydrate();
+  if (!outcome.ok) {
+    if (outcome.reason === 'unavailable') return null;
+    throw new Error(outcome.reason === 'failed' ? outcome.message : 'The profile could not be read.');
+  }
   return useAccountProfileStore.getState().version;
 }
 
@@ -79,7 +87,16 @@ export const useProfessionStore = create<ProfessionStore>()(
         if (get().busy) return;
         set({ busy: true, error: null });
         try {
-          if (await ensureVersion() === null) {
+          let version: number | null;
+          try {
+            version = await ensureVersion();
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'The profile could not be read.';
+            set({ error: message });
+            pushSettingsError('Could not save the profession', new Error(message));
+            return;
+          }
+          if (version === null) {
             // No account plane: the pick stays local, and the next hydrate syncs it.
             set({ profession: id });
             return;
