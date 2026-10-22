@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { settingsPaletteCommands } from "@/features/settings/model/settingsCommands";
+
 import { buildMenus, type MenuContext } from "./menus";
 
 export interface PaletteCommand {
@@ -17,6 +19,8 @@ export interface PaletteCommand {
   label: string;
   group: string;
   accelerator?: string;
+  /** Extra words the '>' matcher also matches, ranked below the label. */
+  keywords?: string[];
   run: () => void;
 }
 
@@ -26,17 +30,18 @@ export interface PaletteCommand {
  */
 export function buildCommands(ctx: MenuContext): PaletteCommand[] {
   const seen = new Set<string>();
-  return buildMenus(ctx)
-    .flatMap((group) => group.items.map((item) => ({
+  return [
+    ...buildMenus(ctx).flatMap((group) => group.items.map((item) => ({
       id: item.id,
       label: item.label,
       group: group.label,
       accelerator: item.accelerator,
       run: item.run,
-    })))
-    .filter((command) => {
-      if (seen.has(command.label)) return false;
-      seen.add(command.label);
-      return true;
-    });
+    }))),
+    ...settingsPaletteCommands(),
+  ].filter((command) => {
+    if (seen.has(command.label)) return false;
+    seen.add(command.label);
+    return true;
+  });
 }

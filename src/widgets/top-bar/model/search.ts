@@ -117,13 +117,23 @@ export function withoutArchived(
   return rows.filter((row) => row.kind !== "page" || !archived(row.id));
 }
 
-/** Filter the flattened command registry for '>' command mode. */
+/** Filter the flattened command registry for '>' command mode. A label match
+ *  outranks a keyword match — a keyword is a hint, the label is the name — and
+ *  a command matching both is listed once, in the label group.
+ *  Caveat: the row cap is applied AFTER the ranking, so a label match always
+ *  survives it while a keyword match can be cut off. */
 export function matchCommands(query: string, commands: PaletteCommand[], limit = 12): PaletteResult[] {
   const trimmed = query.trim().toLowerCase();
-  const matched = trimmed
-    ? commands.filter((command) => command.label.toLowerCase().includes(trimmed))
-    : commands;
-  return matched.slice(0, limit).map((command) => ({
+  const byLabel: PaletteCommand[] = [];
+  const byKeyword: PaletteCommand[] = [];
+  for (const command of commands) {
+    if (!trimmed || command.label.toLowerCase().includes(trimmed)) {
+      byLabel.push(command);
+      continue;
+    }
+    if (command.keywords?.some((keyword) => keyword.toLowerCase().includes(trimmed))) byKeyword.push(command);
+  }
+  return [...byLabel, ...byKeyword].slice(0, limit).map((command) => ({
     id: command.id,
     title: command.label,
     subtitle: command.group,
