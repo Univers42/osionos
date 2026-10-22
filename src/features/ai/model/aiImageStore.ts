@@ -23,7 +23,9 @@
  *
  * The PROMPT never leaves this module: it is kept in the Map, in memory, for
  * the retry button only (devil C77). It is never in the state, never in the
- * block, never in the storage.
+ * block, never in the storage — and it lives no longer than it can be used: a
+ * run that was stopped or cancelled has no retry button, so its prompt goes
+ * with it.
  */
 
 import { create } from "zustand";
@@ -63,7 +65,7 @@ export interface AiImageState {
   jobs: Record<string, ImageJob>;
   /** Makes an image for a block: the block is empty until the image is there. */
   generate: (blockId: string, prompt: string, onDone: (image: GeneratedImage) => void) => Promise<void>;
-  /** Stops the run of a block: the abort, the cancel, and the job is gone. */
+  /** Stops the run of a block: the abort, the cancel, the job and the prompt are gone. */
   stop: (blockId: string) => void;
   /** Runs the same prompt again — with a NEW run id (a re-POST would replay). */
   retry: (blockId: string) => void;
@@ -139,8 +141,10 @@ export const useAiImageStore = create<AiImageState>((set, get) => {
         return;
       }
       if (result.code === "cancelled") {
-        // A stop is not a failure: the job is gone, the prompt stays for a retry.
+        // A stop is not a failure: the job is gone — and so is the prompt,
+        // which nothing can use any more: a cancelled run has no retry.
         removeJob(blockId);
+        runs.delete(blockId);
         return;
       }
       setJob(blockId, { status: "error", code: result.code, retryAfterSeconds: result.retryAfterSeconds });
@@ -154,6 +158,9 @@ export const useAiImageStore = create<AiImageState>((set, get) => {
         // failure must not reach the user.
         void cancelRun(run.runId).catch(() => undefined);
       }
+      // The prompt goes with the run: a stopped run has no retry button, so
+      // nothing can use the prompt any more (devil C77).
+      runs.delete(blockId);
       removeJob(blockId);
     },
 
