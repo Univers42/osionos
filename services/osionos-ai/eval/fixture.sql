@@ -34,7 +34,8 @@ create table if not exists public.osionos_workspaces (
 	id uuid primary key default gen_random_uuid(),
 	owner_id uuid not null,
 	name text not null default 'Workspace',
-	slug text
+	slug text,
+	visibility text not null default 'confidential'
 );
 
 -- TEST-ONLY FIXTURE: the columns of osionos_pages that the page context of a
@@ -105,3 +106,25 @@ LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
   FROM public.osionos_page_blocks(doc) AS b
   WHERE b ? 'content'
 $$;
+
+-- TEST-ONLY FIXTURE: the two comment tables the moderation migration adds its
+-- state column to and its enqueue triggers to
+-- (models/osionos-ugc-moderation-migration.sql). The production tables
+-- (osionos-chat-migration.sql, osionos-comments-migration.sql,
+-- osionos-feed-engagement-migration.sql) carry foreign keys and more columns;
+-- this fixture holds the columns the triggers and the L1 handler read.
+create table if not exists public.osionos_feed_comments (
+	id uuid primary key default gen_random_uuid(),
+	page_id uuid not null,
+	author_id uuid not null,
+	content text not null,
+	created_at timestamptz not null default now()
+);
+
+create table if not exists public.osionos_page_comments (
+	id uuid primary key default gen_random_uuid(),
+	page_id uuid not null,
+	author_id uuid not null,
+	content text not null,
+	created_at timestamptz not null default now()
+);
