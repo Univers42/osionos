@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node --experimental-strip-types src/server.ts",
     "indexer": "node --experimental-strip-types src/indexer/main.ts",
+    "jobs": "node --experimental-strip-types src/jobs/main.ts",
     "test": "sh scripts/test.sh"
   },
   "dependencies": {
