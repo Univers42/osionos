@@ -109,6 +109,8 @@ import {
 } from '@/shared/ui';
 import { ConnectionsPanel } from './connections/ConnectionsPanel';
 import { PageSelectorModal } from './PageSelectorModal';
+import { RecommendationPrivacy } from './ui/RecommendationPrivacy';
+import { Section, SettingRow } from './ui/SettingsRows';
 
 interface SettingsCenterProps {
   initialTab?: AppSettingsTab;
@@ -185,7 +187,6 @@ const prompts: Record<AppSettingsTab, { title: string; subtitle: string }> = {
   plans: { title: 'Explore plans', subtitle: 'Compare all osionos plans' },
 };
 
-const rowBorder = 'border-t border-[var(--osio-border-default)]';
 const EMPTY_ASSETS: AccountAsset[] = [];
 const EMPTY_BILLING_INVOICES: BillingInvoice[] = [];
 const EMPTY_IMPORT_HISTORY: ImportHistoryEntry[] = [];
@@ -347,43 +348,12 @@ function providerConnectionInput(userId: string, provider: string, labelSuffix =
   };
 }
 
-function anchorFromTitle(value: string): string {
-  return value
-    .toLowerCase()
-    .replaceAll('&', '')
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-|-$/g, '');
-}
-
 // Options are the label plus two placeholders, as the old SelectButton offered: member access has no backing store yet.
 const MemberAccess: React.FC<{ label: string }> = ({ label }) => {
   const [value, setValue] = useState(label);
   const options = [label, 'Default', 'Off'].map((option) => ({ value: option, label: option }));
   return <Dropdown label={`Member access: ${label}`} value={value} options={options} onChange={(next) => { setValue(next); noopHandledAction('settings_select_change', { label, value: next }); }} align="end" width="auto" />;
 };
-
-const Section: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className = '' }) => (
-  <section className={`space-y-4 ${className}`} data-settings-anchor={anchorFromTitle(title)}>
-    <h3 className="text-base font-medium text-[var(--osio-fg-default)]">{title}</h3>
-    <div>{children}</div>
-  </section>
-);
-
-const SettingRow: React.FC<{
-  title: React.ReactNode;
-  description?: React.ReactNode;
-  action?: React.ReactNode;
-  stack?: boolean;
-  danger?: boolean;
-}> = ({ title, description, action, stack = false, danger = false }) => (
-  <div className={`flex w-full gap-3 py-3 ${rowBorder} ${stack ? 'flex-col items-start' : 'flex-wrap items-center justify-between'}`}>
-    <div className="min-w-[220px] flex-1">
-      <div className={`text-sm font-medium ${danger ? 'text-[var(--osio-danger)]' : 'text-[var(--osio-fg-default)]'}`}>{title}</div>
-      {description && <div className="mt-1 text-sm leading-[18px] text-[var(--osio-fg-muted)]">{description}</div>}
-    </div>
-    {action && <div className="flex shrink-0 items-center justify-end gap-2">{action}</div>}
-  </div>
-);
 
 const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][]; className?: string }> = ({ headers, rows, className = '' }) => (
   <div className={`overflow-x-auto rounded-[var(--osio-radius-panel)] border border-[var(--osio-db-line)] ${className}`}>
@@ -901,6 +871,7 @@ const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }) 
         <SettingRow title="Show my view history" description="People with edit or full access can see when you’ve viewed a page." action={<Toggle checked={privacy?.viewHistory ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, viewHistory: checked } })} label="Show my view history" />} />
         <SettingRow title="Profile discoverability" description="Users who know your email will see your profile when inviting you." action={<Toggle checked={privacy?.profileDiscoverability ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, profileDiscoverability: checked } })} label="Profile discoverability" />} />
         <Button className="mt-3" onClick={() => setModal({ name: 'reset-preferences' })}>Reset to defaults</Button>
+        <RecommendationPrivacy />
       </Section>
 
       {modal?.name === 'cookies' && <CookieSettingsModal mode={cookies?.mode ?? 'customize'} onSave={(mode) => { update({ cookies: { ...preferences?.cookies, mode } }); setModal(null); }} onClose={() => setModal(null)} />}
