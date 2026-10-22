@@ -29,6 +29,21 @@ FACTOR_DIM = 64
 CODE_SHA = re.compile(r"^[0-9a-f]{7,64}$")
 
 
+def act_as_service_role(conn: psycopg.Connection) -> None:
+    """Run the session as service_role, the way PostgREST does (SET ROLE).
+
+    COPY FROM is refused on a table with row-level security unless the CURRENT
+    role bypasses it, and BYPASSRLS is an attribute of service_role that a
+    member does not inherit. SET ROLE makes the login role need nothing but the
+    membership, and drops a superuser login to service_role's privileges.
+    """
+    member = conn.execute(
+        "SELECT pg_has_role(session_user, 'service_role', 'MEMBER') AND current_user <> 'service_role'"
+    ).fetchone()
+    if member and member[0]:
+        conn.execute("SET ROLE service_role")
+
+
 def pad64(vector: Sequence[float]) -> list[float]:
     """The vector, padded with zeros to the dimension the registry stores. A
     16-factor model is stored as a 64-dimensional vector whose last 48

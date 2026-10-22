@@ -27,7 +27,7 @@ import pytest
 
 from osml.events import build_matrix, event_weight, index_items, index_users
 from osml.simulate import simulate
-from osml.store import read_events
+from osml.store import act_as_service_role, read_events
 from osml.train import train_ials
 
 pytestmark = pytest.mark.db
@@ -105,11 +105,12 @@ def _run(until: datetime, extra: list[str] | None = None, env: dict[str, str] | 
 
 @pytest.fixture(scope="module")
 def conn() -> Any:
-    """The database, as the job's own role: service_role's grants, no more."""
+    """The database, as the job's own role: a membership of service_role, no more."""
     dsn = os.environ.get("DATABASE_URL", "").strip()
     if not dsn:
         pytest.skip("DATABASE_URL is not set")
     with psycopg.connect(dsn, autocommit=True) as connection:
+        act_as_service_role(connection)
         yield connection
 
 

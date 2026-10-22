@@ -21,10 +21,10 @@
 # THE ROLE
 #   `osml_job` is a LOGIN role with NO grant of its own: it is a member of
 #   service_role and nothing else, so the job works with service_role's grants
-#   and needs nothing more. It carries service_role's BYPASSRLS attribute too,
-#   because PostgreSQL does NOT inherit that attribute through membership and
-#   COPY FROM is refused on a table with row-level security without it (the
-#   factors are copied, and the registry's tables have RLS on).
+#   and needs nothing more. PostgreSQL does NOT inherit BYPASSRLS through a
+#   membership, and COPY FROM is refused on a table with row-level security
+#   without it, so the job does SET ROLE service_role first (as PostgREST
+#   does): the role stays NOBYPASSRLS here, and the test proves it is enough.
 #
 # THE FIXTURE
 #   The groot migrations, read-only, from the groot worktree: the roles, the
@@ -153,10 +153,10 @@ apply_fixture() {
 	done
 	apply_file "${MODELS}/osionos-user-events-migration.sql" || return 1
 	apply_file "${MODELS}/osionos-rec-factors-migration.sql" || return 1
-	# The job's role: service_role's grants, and nothing else. BYPASSRLS is
-	# service_role's own attribute, and it is not inherited through the
-	# membership: without it, COPY FROM is refused on the RLS tables.
-	apply_sql "CREATE ROLE osml_job LOGIN PASSWORD 'osml_job' BYPASSRLS;" || return 1
+	# The job's role: a membership of service_role and nothing else. The job
+	# does SET ROLE service_role (BYPASSRLS is service_role's own attribute, not
+	# inherited through the membership, and COPY FROM needs it on RLS tables).
+	apply_sql "CREATE ROLE osml_job LOGIN PASSWORD 'osml_job' NOBYPASSRLS;" || return 1
 	apply_sql "GRANT service_role TO osml_job;" || return 1
 	return 0
 }

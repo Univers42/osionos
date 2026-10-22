@@ -26,7 +26,7 @@ import psycopg
 from .evaluate import K_RECALL, ials_ranking, score_system
 from .events import build_matrix, event_weight, index_items, index_users
 from .split import MIN_EVENTS, ground_truth
-from .store import champion, promote, prune, read_events, write_model
+from .store import act_as_service_role, champion, promote, prune, read_events, write_model
 from .train import train_ials
 
 # The seed everywhere: the job is deterministic. The same log gives the same
@@ -62,6 +62,7 @@ def run(args: argparse.Namespace) -> int:
         return 2
 
     with conn:
+        act_as_service_role(conn)
         events = read_events(conn, since, until, args.synthetic)
         training = [e for e in events if e["ts"] < holdout_from and event_weight(str(e["event"])) > 0.0]
         # The holdout holds the positive signals: an event with no weight is not one.
