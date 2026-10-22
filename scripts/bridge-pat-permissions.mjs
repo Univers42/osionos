@@ -13,11 +13,12 @@
 /**
  * The personal access token vocabulary, the grant evaluator and the field mask.
  *
- * A personal access token is either classic — a list of `resource:permission` scopes, granted in
- * full — or fine-grained — a list of grants naming a resource, the attributes it may touch and
- * the permissions it may use. This module is the one place that says what those words mean: the
- * resource vocabulary, the evaluator that turns a stored token into an allow-or-deny plus a mask,
- * and the two functions that apply a mask.
+ * A personal access token is either classic — a list of `resource:permission` scopes, granted
+ * their resource's whole pinned vocabulary — or fine-grained — a list of grants naming a
+ * resource, the attributes it may touch and the permissions it may use. This module is the one
+ * place that says what those words mean: the resource vocabulary, the evaluator that turns a
+ * stored token into an allow-or-deny plus a mask, and the functions that apply a mask and check
+ * a write against one.
  *
  * It is pure: no I/O, no config, no clock, no dependency. The bridge calls it from a request
  * path, the app copies the vocabulary out of it, and a test can pin both without a server.
@@ -26,23 +27,28 @@
  * `{hide, redact}` (scripts/bridge-perms.mjs:31) — but nothing enforced it: the decision was
  * advisory, and the only applier in the tree is the client. A PAT's mask is that same concept
  * made binding. `maskAttributes` and `maskRequestPayload` are the only two functions in the
- * bridge that REMOVE a field from a payload, so a later package that enforces the engine's mask
- * extends this module instead of writing a second applier.
+ * bridge that REMOVE a field from a payload, and `attributesOutsideMask` is the only function
+ * that names the fields a write may not touch. The package that enforces the write set asks
+ * this module, so a second applier never appears.
  *
  * The vocabulary is pinned on purpose: the attribute list is a constant, not a function of the
  * page row, so a page field added later is readable by NO existing token until someone adds it
- * to the list. tests/bridge/bridge-pat-permissions.test.mjs compares the list with the page
- * entry's own keys and fails when they drift.
+ * to the list. A classic token's mask is that whole pinned list, never null: a classic scope
+ * says "this resource", and the fields it may read are the fields the vocabulary knows —
+ * `futureField` is not one of them, so a classic token cannot read it either.
+ * tests/bridge/bridge-pat-permissions.test.mjs compares the list with the page entry's own keys
+ * and fails when they drift.
  *
  * Caveat: the pinned list is only as fresh as the test that compares it — a page field added
- * without touching PAT_RESOURCES is not maskable at all, so a fine-grained token silently stops
- * reading it.
+ * without touching PAT_RESOURCES is not maskable at all, so a token, classic or fine-grained,
+ * silently stops reading it.
  * Caveat: a classic scope and a fine-grained grant cannot both reach the evaluator (the table
  * stores one kind or the other), so the case where both match is resolved here in favour of the
- * classic scope, which is the broader of the two and therefore reads more than the grant
+ * classic scope, whose mask is the whole vocabulary and therefore wider than the grant
  * intended.
  * Caveat: maskAttributes returns the entry itself when the mask is null, so a caller that
- * mutates the result mutates the row it was handed.
+ * mutates the result mutates the row it was handed. A null mask rides only on a DENIED decision:
+ * there is nothing to apply, and the caller must not apply one.
  */
 
 export const PAT_PERMISSIONS = ['read', 'write'];
@@ -129,11 +135,11 @@ function grantedAttributes(grant, resource) {
 }
 
 /**
- * The decision for one request: a classic scope grants the pair with no attribute restriction
- * (mask null), a fine-grained grant grants the pair restricted to its attributes. Deny by
- * default: a grant naming an unknown resource or an unknown permission is ignored entirely, an
- * unknown attribute is dropped from the mask rather than honoured, and a malformed row grants
- * nothing without throwing.
+ * The decision for one request: a classic scope grants the pair their resource's whole pinned
+ * vocabulary — the mask is every attribute of that resource, never null — while a fine-grained
+ * grant grants the pair restricted to its attributes. Deny by default: a grant naming an unknown
+ * resource or an unknown permission is ignored entirely, an unknown attribute is dropped from
+ * the mask rather than honoured, and a malformed row grants nothing without throwing.
  */
 export function evaluatePat(row, request) {
 	const token = isPlainObject(row) ? row : {};
@@ -146,7 +152,8 @@ export function evaluatePat(row, request) {
 	if (!hasResource(resource) || !isKnownPermission(permission)) return { allowed: false, mask: null };
 
 	if (Array.isArray(token.scopes) && token.scopes.includes(`${resource}:${permission}`)) {
-		return { allowed: true, mask: null };
+		// The pinned list, copied: the caller may not edit the vocabulary through the mask.
+		return { allowed: true, mask: [...resourceAttributes(resource)] };
 	}
 
 	const attributes = new Set();
@@ -171,7 +178,8 @@ export function evaluatePat(row, request) {
 
 /**
  * The masked entry: a new object holding only the mask's keys, plus `_id`, which is the
- * resource's identity and survives every mask. The input is never mutated.
+ * resource's identity and survives every mask. The input is never mutated. A null mask rides
+ * on a denied decision — there is nothing to apply, so the entry comes back unchanged.
  */
 export function maskAttributes(entry, mask) {
 	if (!isPlainObject(entry)) return entry;
@@ -183,6 +191,22 @@ export function maskAttributes(entry, mask) {
 		if (Object.hasOwn(entry, key)) masked[key] = entry[key];
 	}
 	return masked;
+}
+
+/**
+ * The payload's own keys the mask does not cover, sorted. This is the write-set check: a write
+ * naming one of these attributes is outside what the token may change, and the caller refuses
+ * it (403 pat_forbidden_attribute) rather than filtering it away silently — a silent drop tells
+ * the client the field was saved when it was not.
+ *
+ * A payload that is not a plain object has no keys, so nothing is outside the mask. A mask that
+ * is not an array covers nothing, so every key of the payload is outside it.
+ */
+export function attributesOutsideMask(payload, mask) {
+	if (!isPlainObject(payload)) return [];
+	const keys = Object.keys(payload);
+	if (!Array.isArray(mask)) return keys.sort();
+	return keys.filter((key) => !mask.includes(key)).sort();
 }
 
 /**
