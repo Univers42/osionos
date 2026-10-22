@@ -20,10 +20,10 @@
  * Block-awareness is enforced everywhere a target is surfaced: rows where the
  * target blocked the viewer are dropped, and directory_opt_out=true rows are
  * hidden from search. Connection state transitions enforce who-may-do-what.
+ * The report routes (`/api/social/reports`) moved to bridge-reports.mjs — one line here delegates them.
  */
 
 import {
-	UUID_REGEX,
 	bearerToken,
 	blockedViewerBy,
 	connectionEdgesPath,
@@ -40,6 +40,7 @@ import {
 	sendJson,
 	sharedWorkspacePeers,
 } from './bridge-social-core.mjs';
+import { handleReportRoutes } from './bridge-reports.mjs';
 
 const PRESENCE_WINDOW_MS = 90 * 1000;
 
@@ -237,21 +238,7 @@ async function deleteConnection(deps, session, connectionId, response, config) {
 	return sendJson(response, 200, { ok: true, connectionId, deleted: true }, config);
 }
 
-/** osionos_user_reports row → the frontend Report shape (store/social/types.ts). */
-function reportEntry(row) {
-	return {
-		id: row.id,
-		subjectUserId: row.subject_user_id ?? undefined,
-		subjectKind: row.subject_kind ?? 'user',
-		subjectId: row.subject_id ?? undefined,
-		category: row.category ?? 'other',
-		details: row.details ?? undefined,
-		status: row.status ?? undefined,
-		createdAt: row.created_at ?? undefined,
-	};
-}
-
-/** GET/POST/DELETE /api/social/blocks + GET/POST /api/social/reports. */
+/** GET/POST/DELETE /api/social/blocks. The report routes live in bridge-reports.mjs. */
 async function handleSocialOps(deps, session, request, url, response, config) {
 	const pathname = url.pathname;
 	const method = (request.method || 'GET').toUpperCase();
@@ -291,30 +278,7 @@ async function handleSocialOps(deps, session, request, url, response, config) {
 		await rest(config, deps.fetchImpl, `osionos_user_blocks?blocker_id=eq.${session.userId}&blocked_id=eq.${blockedId}`, { method: 'DELETE', prefer: 'return=minimal' });
 		return sendJson(response, 200, { ok: true, userId: blockedId, unblocked: true }, config);
 	}
-	if (pathname === '/api/social/reports' && method === 'GET') {
-		const rows = await rest(config, deps.fetchImpl, `osionos_user_reports?reporter_id=eq.${session.userId}&select=*&order=created_at.desc&limit=100`);
-		const reports = (Array.isArray(rows) ? rows : []).map(reportEntry);
-		return sendJson(response, 200, { ok: true, reports }, config);
-	}
-	if (pathname === '/api/social/reports' && method === 'POST') {
-		const payload = await readJsonBody(request);
-		const subjectKind = safeText(payload.subjectKind, 32) || 'user';
-		const rows = await rest(config, deps.fetchImpl, 'osionos_user_reports', {
-			method: 'POST',
-			body: {
-				reporter_id: session.userId,
-				subject_user_id: UUID_REGEX.test(safeText(payload.subjectUserId, 80)) ? payload.subjectUserId : null,
-				subject_kind: subjectKind,
-				subject_id: safeText(payload.subjectId, 220) || null,
-				category: safeText(payload.category, 64) || 'other',
-				details: safeText(payload.details, 2000) || null,
-			},
-			prefer: 'return=representation',
-		});
-		const row = Array.isArray(rows) ? rows[0] : rows;
-		if (!row) throw httpError('Report failed.', 502);
-		return sendJson(response, 201, { ok: true, reportId: row.id, report: reportEntry(row) }, config);
-	}
+	if (pathname === '/api/social/reports') return await handleReportRoutes(deps, session, request, response, config);
 	return sendJson(response, 404, { ok: false, message: 'Social route not found.' }, config);
 }
 
