@@ -6,32 +6,46 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/12 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/12 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 14:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { cx } from "@osionos/ui/shared/classNames";
-import type { Comment } from "../api/commentsClient";
+import type { Comment, CommentWriteResult, ModerationWarning } from "../api/commentsClient";
 
 interface Props {
   comments: Comment[];
   loading: boolean;
   meId: string | null;
-  onAdd: (content: string) => void | Promise<void>;
-  onResolve: (id: string, resolved: boolean) => void | Promise<void>;
-  onRemove: (id: string) => void | Promise<void>;
+  /** Write a comment. The answer is typed: a moderation warning is not an error. */
+  onAdd: (content: string, acknowledgeWarning?: boolean) => Promise<CommentWriteResult>;
+  onResolve: (id: string, resolved: boolean) => void | Promise<unknown>;
+  onRemove: (id: string) => void | Promise<unknown>;
 }
 
 /** Presentational comment thread + composer (⌘↵ to send). */
 export const CommentsPanel: React.FC<Props> = ({ comments, loading, meId, onAdd, onResolve, onRemove }) => {
   const [draft, setDraft] = useState("");
+  const [warning, setWarning] = useState<ModerationWarning | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const submit = () => {
+  const submit = async (acknowledgeWarning = false) => {
     const text = draft.trim();
     if (!text) return;
+    const result = await onAdd(text, acknowledgeWarning);
+    if (!result.ok) {
+      // The text stays in the composer: the author edits it, or posts it anyway.
+      setWarning("warning" in result ? result.warning : null);
+      return;
+    }
+    setWarning(null);
     setDraft("");
-    void onAdd(text);
+  };
+
+  const edit = () => {
+    setWarning(null);
+    composerRef.current?.focus();
   };
 
   return (
@@ -56,20 +70,43 @@ export const CommentsPanel: React.FC<Props> = ({ comments, loading, meId, onAdd,
               )}
             </div>
             <p className="whitespace-pre-wrap break-words text-sm text-[var(--osio-fg-default)]">{comment.content}</p>
+            {comment.moderationState === "held" && comment.authorId === meId && (
+              <p className="mt-0.5 text-3xs text-[var(--osio-fg-subtle)]">Held for review — only you can see it</p>
+            )}
           </div>
         ))}
       </div>
       <div className="border-t border-[var(--osio-border-default)] p-2">
+        {/* The warning is announced, not shouted: the author hears it once. */}
+        <div aria-live="polite">
+          {warning && (
+            <div className="mb-1.5 rounded-md bg-[var(--osio-bg-hover)] px-2 py-1.5">
+              <p className="text-xs text-[var(--osio-fg-default)]">{warning.message}</p>
+              {warning.terms.length > 0 && (
+                <p className="mt-0.5 text-3xs text-[var(--osio-danger)]">Matched: {warning.terms.join(", ")}</p>
+              )}
+              <div className="mt-1 flex gap-3">
+                <button type="button" onClick={edit} className="text-3xs text-[var(--osio-fg-subtle)] hover:text-[var(--osio-accent)]">
+                  Edit
+                </button>
+                <button type="button" onClick={() => void submit(true)} className="text-3xs text-[var(--osio-fg-subtle)] hover:text-[var(--osio-accent)]">
+                  Post anyway
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
         <textarea
+          ref={composerRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); submit(); } }}
+          onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); void submit(); } }}
           rows={2}
           placeholder="Add a comment…"
           className="w-full resize-none rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1.5 text-sm text-[var(--osio-fg-default)] placeholder:text-[var(--osio-fg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]"
         />
         <div className="mt-1 flex justify-end">
-          <button type="button" onClick={submit} disabled={!draft.trim()} className="rounded-md bg-[var(--osio-accent)] px-2.5 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90 disabled:opacity-50">
+          <button type="button" onClick={() => void submit()} disabled={!draft.trim()} className="rounded-md bg-[var(--osio-accent)] px-2.5 py-1 text-xs font-medium text-[var(--osio-accent-fg)] hover:opacity-90 disabled:opacity-50">
             Comment
           </button>
         </div>

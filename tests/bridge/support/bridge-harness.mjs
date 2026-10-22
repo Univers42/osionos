@@ -52,15 +52,31 @@ function sameText(value, text) {
 	return value != null && String(value).toLowerCase() === String(text).toLowerCase();
 }
 
+/**
+ * The value of a column for a filter. moderation_state has DEFAULT 'visible':
+ * a row that does not carry it (written before the migration) is visible.
+ */
+function columnValue(row, key) {
+	if (key === 'moderation_state' && row[key] === undefined) return 'visible';
+	return row[key];
+}
+
 function matchesFilter(row, key, expr) {
 	if (key === 'search_doc' && expr.startsWith('wfts(english).')) {
 		const needle = expr.slice('wfts(english).'.length).replaceAll('"', '').toLowerCase();
 		return `${row.title ?? ''} ${JSON.stringify(row.content ?? [])}`.toLowerCase().includes(needle);
 	}
 	if (expr === 'is.null') return row[key] == null;
-	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));
+	if (expr.startsWith('eq.')) return sameText(columnValue(row, key), expr.slice(3));
 	if (expr.startsWith('gt.')) return String(row[key] ?? '').toLowerCase() > expr.slice(3).toLowerCase();
 	if (expr.startsWith('in.(') && expr.endsWith(')')) return expr.slice(4, -1).split(',').some((item) => sameText(row[key], item));
+	// A PostgREST `or=(a.eq.b,c.eq.d)` group: the row matches when ANY clause does.
+	if (key === 'or' && expr.startsWith('(') && expr.endsWith(')')) {
+		return expr.slice(1, -1).split(',').some((clause) => {
+			const [column, ...rest] = clause.split('.');
+			return matchesFilter(row, column, rest.join('.'));
+		});
+	}
 	throw new Error(`postgrest mock: unsupported filter ${key}=${expr}`);
 }
 
