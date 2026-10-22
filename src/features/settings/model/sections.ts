@@ -35,6 +35,7 @@ import {
   User,
   UserPlus,
   Users,
+  UserX,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,6 +45,7 @@ export type SettingsSectionId =
   | "notifications"
   | "connections"
   | "contacts"
+  | "moderation"
   | "mail_calendar"
   | "general"
   | "people"
@@ -139,9 +141,17 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   },
   {
     id: "contacts", group: "account", label: "Contacts", title: "Contacts",
-    subtitle: "Manage your network, connection requests, blocked users and reports", icon: UserPlus,
+    subtitle: "Manage your connections and the reports you filed", icon: UserPlus,
     // The modal's search index had no Contacts anchors — an exact copy keeps it so.
     anchors: [],
+  },
+  {
+    id: "moderation", group: "account", label: "Moderation", title: "Moderation",
+    subtitle: "Blocked people, and who may reach you", icon: UserX,
+    anchors: [
+      { id: "blocked-users", label: "Blocked users",
+        keywords: ["block", "blocked", "unblock", "hide", "people", "mute"] },
+    ],
   },
   {
     id: "mail_calendar", group: "account", label: "Mail & Calendar", title: "Mail & Calendar",
