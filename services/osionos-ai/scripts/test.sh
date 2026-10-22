@@ -8,7 +8,9 @@
 # given: the single-file call still works, the RAG migration (ai_chunks,
 # ai_index_queue) is a second one, and the graph migration (ai_page_vectors) a
 # third one. A migration given twice is applied twice — that is how the
-# idempotence of a migration is proved.
+# idempotence of a migration is proved. AI_TEST_FILES (paths relative to the
+# service, default tests/*.test.ts) runs only those files: the review harness
+# runs one test file per mutant.
 set -eu
 
 MIGRATIONS=""
@@ -94,4 +96,5 @@ docker run --rm --network "$NETWORK" \
 	-e OSIONOS_AI_USER_DAILY_MICROUSD=200000 \
 	-e OSIONOS_AI_PLATFORM_DAILY_MICROUSD=20000000 \
 	-e OSIONOS_AI_RUNS_PER_MINUTE=100 \
-	node:22-bookworm-slim sh -c 'node --experimental-strip-types --test --test-concurrency=1 tests/*.test.ts'
+	-e AI_TEST_FILES="${AI_TEST_FILES:-tests/*.test.ts}" \
+	node:22-bookworm-slim sh -c 'node --experimental-strip-types --test --test-concurrency=1 $AI_TEST_FILES'
