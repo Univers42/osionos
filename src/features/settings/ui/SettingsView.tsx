@@ -98,18 +98,28 @@ export const SettingsView: React.FC = () => {
   return (
     // The @container wrapper is OUTSIDE the region on purpose: a container query
     // matches against the nearest ANCESTOR container, so the region cannot query
-    // its own width — `@container @min-[520px]:flex-row` on one element stays
+    // its own width — `@container @min-[720px]:flex-row` on one element stays
     // flex-col forever (measured in e2e: the body collapsed to a 72px sliver).
+    //
+    // 720px is where the nav sits BESIDE the body: 240px of nav still leaves a
+    // body that fits the widest panel control (the Preferences Mode control).
+    // Below 720px of pane width the nav stacks above the body instead.
+    // Caveat: Tailwind needs a container variant as a literal class string, so
+    // the 720/719 pair is written out in SettingsSectionsNav.tsx too — the two
+    // files have to change together.
     <div className="@container h-full min-h-0">
       <div
         ref={viewRef}
         role="region"
         aria-label="Settings"
-        className="@min-[520px]:flex-row flex h-full min-h-0 flex-col overflow-hidden bg-[var(--osio-bg-page)]"
+        className="@min-[720px]:flex-row flex h-full min-h-0 flex-col overflow-hidden bg-[var(--osio-bg-page)]"
       >
         <SettingsSectionsNav section={section.id} onSelect={setSection} persona={persona} />
         <div className="min-w-0 flex-1 overflow-hidden">
-          <div className="h-full overflow-y-auto px-[clamp(18px,5vw,60px)] py-9">
+          {/* cqw, not vw: the padding follows the PANE, so a 555px split pane
+              does not keep a 1440px viewport's 60px gutters. The @container
+              wrapper above is the reference container. */}
+          <div className="h-full overflow-y-auto px-[clamp(18px,5cqw,60px)] py-9">
             <div className="mx-auto flex w-full max-w-[800px] flex-col gap-9">
               <header className="space-y-2">
                 <h1 className="text-2xl font-semibold leading-8 text-[var(--osio-fg-default)]">{section.title}</h1>
