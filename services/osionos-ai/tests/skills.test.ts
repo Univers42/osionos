@@ -45,7 +45,7 @@ function toolsFor(agentId: string | null) {
 	const pool = createToolPool();
 	pool.startStep();
 	return buildRunTools({
-		db: {} as Pool,
+		db: { query: async () => ({ rows: [], rowCount: 0 }) } as unknown as Pool,
 		user: USER,
 		pool,
 		runId: 'r',
@@ -148,7 +148,7 @@ describe('load_skill', () => {
 		]);
 		await call(set, 'schema-design');
 		assert.deepEqual(seen.at(-1) && { skill: (seen.at(-1) as { skill: unknown }).skill }, {
-			skill: { id: 'schema-design', version: findBuiltinSkill('schema-design')!.version },
+			skill: { id: 'schema-design', version: findBuiltinSkill('schema-design')!.version, source: 'builtin' },
 		});
 	});
 
