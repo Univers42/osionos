@@ -23,17 +23,18 @@
  * The mermaid text always goes through `MermaidDiagram`, the locked renderer:
  * there is no second way to draw a diagram here.
  *
- * The two kinds drawn from the databases of the viewer (a schema, a pipeline)
- * are LAZY: they read the database store, which ships the seed of the app, and
- * a hand-written mermaid diagram must never pay for that chunk.
+ * The kinds drawn from data the viewer holds (a schema, a pipeline) and the
+ * one drawn from the graph the bridge gives (the links around a page) are
+ * LAZY: they read the database store and the bridge, and a hand-written
+ * mermaid diagram must never pay for those chunks.
  */
 
-import React, { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DEFAULT_DIAGRAM_SPEC } from "@/entities/block/model/diagramBlocks";
 import type { Block } from "@/entities/block";
 
-import { diagramKind, parseDiagramSpec, type DiagramKind } from "../model/diagramSpec";
+import { diagramKind, parseDiagramSpec, type DiagramKind, type GraphKind } from "../model/diagramSpec";
 import { diagramRenderMode } from "../model/diagramRenderMode";
 import { useDiagramSource } from "./useDiagramSource";
 import { useIsPublicPage } from "./useIsPublicPage";
@@ -43,6 +44,11 @@ import { DiagramToolbar } from "./DiagramToolbar";
 /** The two database kinds: drawn from the store, in a chunk of their own. */
 const LazyDatabaseDiagram = lazy(() =>
   import("./DatabaseDiagram").then((module) => ({ default: module.DatabaseDiagram })),
+);
+
+/** The graph kind: drawn from the bridge's graph, in a chunk of its own. */
+const LazyGraphDiagram = lazy(() =>
+  import("./GraphDiagram").then((module) => ({ default: module.GraphDiagram })),
 );
 
 interface DiagramBlockProps {
@@ -65,7 +71,9 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
   const spec = block.diagramSpec;
   const parsed = useMemo(() => parseDiagramSpec(spec), [spec]);
   const mode = useMemo(() => diagramRenderMode({ isPublic, spec }), [isPublic, spec]);
-  const { source, truncated, error, unsupported } = useDiagramSource(spec, { isPublic });
+  const { source, truncated, truncatedNote, error, unsupported } = useDiagramSource(spec, {
+    isPublic,
+  });
 
   const title = parsed.ok ? parsed.spec.title : undefined;
   // The kind of the STORED spec: a spec that does not parse (a schema with no
@@ -88,6 +96,42 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
   const isMermaid = shownKind === "mermaid";
   const depth = treeSpec?.depth ?? 2;
   const rootPageId = treeSpec?.rootPageId ?? pageId;
+
+  const isGraph = kind === "graph";
+  const isDatabase = kind === "schema" || kind === "pipeline";
+  const isLazy = isGraph || isDatabase;
+
+  /**
+   * What the LAZY kinds drew: the compiled text (for the export) and the kinds
+   * of edge the graph holds (for the toggles). The kind is kept with them, so
+   * a text of another kind is never exported under this one.
+   */
+  const [lazy, setLazy] = useState<{
+    kind: DiagramKind;
+    source: string | null;
+    kinds: GraphKind[];
+  }>({ kind: "mermaid", source: null, kinds: [] });
+  const onLazySource = useCallback(
+    (next: string | null) => {
+      setLazy((state) => ({ ...state, kind, source: next }));
+    },
+    [kind],
+  );
+  const onLazyKinds = useCallback(
+    (next: GraphKind[]) => {
+      setLazy((state) => ({ ...state, kind, kinds: next }));
+    },
+    [kind],
+  );
+  // The compiled text of what is on screen: the mermaid the locked renderer
+  // drew, whatever the kind.
+  const compiled = isLazy ? (lazy.kind === kind ? lazy.source : null) : source;
+  const lazyKinds = lazy.kind === kind ? lazy.kinds : [];
+
+  // The SVG the locked renderer drew: the export serialises THAT element, and
+  // never draws one again.
+  const outputRef = useRef<HTMLDivElement>(null);
+  const getSvg = useCallback(() => outputRef.current?.querySelector("svg") ?? null, []);
 
   // The textarea holds a DRAFT: it is written to the block on blur, through
   // the block's normal update path, like every other block's text.
@@ -112,6 +156,14 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
       writeSpec(carry({ kind: "hierarchy", rootPageId, depth }));
       return;
     }
+    if (value === "graph") {
+      // The graph is centred on a PAGE: the one the block is on, unless the
+      // spec already names another.
+      if (!pageId) return;
+      setPendingKind(null);
+      writeSpec(carry({ kind: "graph", pageId, depth: 1, kinds: [] }));
+      return;
+    }
     if (value === "schema" || value === "pipeline") {
       // The default of a database kind names a database of the store: the
       // lazy controls write it, once they have read the store.
@@ -133,13 +185,22 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
     );
   }
 
-  const isDatabase = kind === "schema" || kind === "pipeline";
-  const body = isDatabase ? (
+  const body = isGraph ? (
     <Suspense fallback={null}>
-      <LazyDatabaseDiagram spec={spec} />
+      <LazyGraphDiagram spec={spec} onSource={onLazySource} onKinds={onLazyKinds} />
+    </Suspense>
+  ) : isDatabase ? (
+    <Suspense fallback={null}>
+      <LazyDatabaseDiagram spec={spec} onSource={onLazySource} />
     </Suspense>
   ) : (
-    <DiagramOutput source={source} truncated={truncated} error={error} unsupported={unsupported} />
+    <DiagramOutput
+      source={source}
+      truncated={truncated}
+      truncatedNote={truncatedNote}
+      error={error}
+      unsupported={unsupported}
+    />
   );
 
   return (
@@ -149,6 +210,10 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
           kind={shownKind}
           parsed={parsed.ok ? parsed.spec : null}
           pageId={pageId}
+          isPublic={isPublic}
+          source={compiled}
+          getSvg={getSvg}
+          kinds={lazyKinds}
           onKindChange={onKindChange}
           onWrite={(next) => writeSpec(carry(next))}
         />
@@ -170,7 +235,7 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
           className="mx-3 my-2 w-[calc(100%-1.5rem)] resize-y rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-canvas)] p-2 font-mono text-xs text-[var(--osio-fg-default)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40"
         />
       ) : null}
-      {body}
+      <div ref={outputRef}>{body}</div>
     </div>
   );
 };
