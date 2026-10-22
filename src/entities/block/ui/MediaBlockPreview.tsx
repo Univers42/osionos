@@ -6,13 +6,13 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/14 00:00:00 by rstancu           #+#    #+#             */
-/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useEffect, useRef, useState } from "react";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
-import { FileText, ImageIcon, Music, Play } from "lucide-react";
+import { FileText, ImageIcon, Music, Pause, Play } from "lucide-react";
 
 import {
   MEDIA_BLOCK_LABELS,
@@ -81,26 +81,47 @@ function isAnimatedImageSource(url: string): boolean {
   return /\.gif(?:$|[?#])/.test(source);
 }
 
-interface ImageFrameProps {
-  src: string;
-  alt: string;
-  /** The first frame is painted instead of the animation. */
+/** How an image block's animation stands. */
+export interface ImageAnimation {
+  /** The animation is suppressed: the picture is held on its first frame. */
+  frozen: boolean;
+  /** The picture IS the first frame — the animation is not running. */
   still: boolean;
-  className: string;
-  style?: React.CSSProperties;
+  /** Run the animation, or hold it on its first frame again. */
+  setRunning: (running: boolean) => void;
 }
 
 /**
- * An image block's picture. A frozen animated image is painted on a canvas —
- * drawImage of the decoded image paints its default frame — and a button
- * swaps the live image back in, so the animation is the person's to start.
+ * The animation state of an image block. The editor lifts it out of the
+ * picture so its play control can sit BESIDE the edit button — a button
+ * inside a button is invalid HTML and unreachable for a keyboard — while the
+ * read-only renderer lets the picture own it.
  */
-const ImageFrame: React.FC<ImageFrameProps> = ({ src, alt, still, className, style }) => {
+export function useImageAnimation(block: Block): ImageAnimation {
+  const animatedImages = useAnimatedImagesMode();
+  const reducedMotion = usePrefersReducedMotion();
+  const [running, setRunning] = useState(false);
+  const url = resolveMediaBlockAsset(block)?.url ?? "";
+  const frozen = isAnimatedImageSource(url) && !animatedMediaMayPlay(animatedImages, reducedMotion);
+  return { frozen, still: frozen && !running, setRunning };
+}
+
+/**
+ * An image block's picture, with its shape and its size. A frozen animated
+ * image is painted on a canvas — drawImage of the decoded image paints its
+ * default frame — so the animation only runs when the person asks for it.
+ */
+export const ImageBlockPicture: React.FC<{ block: Block; animation: ImageAnimation }> = ({ block, animation }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [playing, setPlaying] = useState(false);
+  const resolved = resolveMediaBlockAsset(block);
+  const url = resolved?.url;
+  const alt = block.mediaAlt ?? resolved?.label ?? MEDIA_BLOCK_LABELS.image;
+  // An explicit ratio crops to a fixed box; "original"/unset keeps the natural
+  // shape but caps height so a tall image never dominates the page.
+  const aspect = block.mediaAspect && block.mediaAspect !== "original" ? block.mediaAspect : undefined;
 
   useEffect(() => {
-    if (!still || playing) return undefined;
+    if (!url || !animation.still) return undefined;
     const image = new Image();
     image.onload = () => {
       const canvas = canvasRef.current;
@@ -109,16 +130,25 @@ const ImageFrame: React.FC<ImageFrameProps> = ({ src, alt, still, className, sty
       canvas.height = image.naturalHeight || 1;
       canvas.getContext("2d")?.drawImage(image, 0, 0);
     };
-    image.src = src;
+    image.src = url;
     return () => {
       image.onload = null;
     };
-  }, [src, still, playing]);
+  }, [url, animation.still]);
 
-  if (!still || playing) {
+  if (!url) return <Placeholder kind="image" />;
+
+  const className = block.mediaShape === "circle"
+    ? "mx-auto block aspect-square w-full rounded-full border border-[var(--osio-border-soft)] object-cover shadow-[var(--osio-shadow-cell)]"
+    : aspect
+      ? "block h-full w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
+      : "block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover";
+  const style = aspect ? { aspectRatio: aspect } : undefined;
+
+  if (!animation.still) {
     return (
       <img
-        src={src}
+        src={url}
         alt={alt}
         loading="lazy"
         decoding="async"
@@ -130,39 +160,44 @@ const ImageFrame: React.FC<ImageFrameProps> = ({ src, alt, still, className, sty
   }
 
   return (
-    <div className="relative">
-      <canvas
-        ref={canvasRef}
-        role="img"
-        aria-label={alt}
-        style={style}
-        className={className}
-        data-testid="media-block-image-canvas"
-      />
-      {/* The editor wraps an image block in a button (it opens the media
-          settings), so this one stops the click from bubbling to it. */}
-      <button
-        type="button"
-        data-testid="media-block-image-play"
-        aria-label="Play animation"
-        onClick={(event) => {
-          event.stopPropagation();
-          setPlaying(true);
-        }}
-        className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-[var(--osio-radius-control)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs font-medium text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-sm)]"
-      >
-        <Play size={14} aria-hidden />
-        Play
-      </button>
-    </div>
+    <canvas
+      ref={canvasRef}
+      role="img"
+      aria-label={alt}
+      style={style}
+      className={className}
+      data-testid="media-block-image-canvas"
+    />
   );
 };
+
+/**
+ * The control that runs an image block's animation, or holds it on its first
+ * frame. It is a SIBLING of the edit button in the editor: a button inside a
+ * button is invalid HTML, and a keyboard cannot reach the inner one.
+ */
+export const ImagePlayButton: React.FC<{ running: boolean; onToggle: () => void; className?: string }> = ({
+  running,
+  onToggle,
+  className = '',
+}) => (
+  <button
+    type="button"
+    data-testid="media-block-image-play"
+    aria-label={running ? "Pause animation" : "Play animation"}
+    aria-pressed={running}
+    onClick={onToggle}
+    className={`inline-flex items-center gap-1 rounded-[var(--osio-radius-control)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs font-medium text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-sm)] ${className}`}
+  >
+    {running ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}
+    {running ? "Pause" : "Play"}
+  </button>
+);
 
 export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
   block,
 }) => {
-  const animatedImages = useAnimatedImagesMode();
-  const reducedMotion = usePrefersReducedMotion();
+  const animation = useImageAnimation(block);
 
   if (!isMediaBlockType(block.type)) {
     return null;
@@ -176,38 +211,18 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
   }
 
   if (block.type === "image") {
-    const alt = block.mediaAlt ?? label;
-    const still = isAnimatedImageSource(resolved.url)
-      && !animatedMediaMayPlay(animatedImages, reducedMotion);
-    if (block.mediaShape === "circle") {
-      return (
-        <div style={mediaWidthStyle(block)}>
-          <ImageFrame
-            src={resolved.url}
-            alt={alt}
-            still={still}
-            className="mx-auto block aspect-square w-full rounded-full border border-[var(--osio-border-soft)] object-cover shadow-[var(--osio-shadow-cell)]"
-          />
-        </div>
-      );
-    }
-    // An explicit ratio crops to a fixed box; "original"/unset keeps the natural
-    // shape but caps height so a tall image never dominates the page.
-    const aspect =
-      block.mediaAspect && block.mediaAspect !== "original" ? block.mediaAspect : undefined;
     return (
       <div style={mediaWidthStyle(block)}>
-        <ImageFrame
-          src={resolved.url}
-          alt={alt}
-          still={still}
-          style={aspect ? { aspectRatio: aspect } : undefined}
-          className={
-            aspect
-              ? "block h-full w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
-              : "block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
-          }
-        />
+        <div className="relative">
+          <ImageBlockPicture block={block} animation={animation} />
+          {animation.frozen ? (
+            <ImagePlayButton
+              running={!animation.still}
+              onToggle={() => animation.setRunning(animation.still)}
+              className="absolute bottom-2 right-2"
+            />
+          ) : null}
+        </div>
       </div>
     );
   }

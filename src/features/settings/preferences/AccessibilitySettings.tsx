@@ -97,7 +97,7 @@ export const AccessibilitySettings: React.FC = () => {
       />
       <SettingRow
         title="Hovercards"
-        description="Open a preview card on click instead of when the pointer passes over it."
+        description="Show a preview when the pointer rests on an item. When off, previews open on click."
         action={(
           <Toggle
             checked={hovercards === 'on'}

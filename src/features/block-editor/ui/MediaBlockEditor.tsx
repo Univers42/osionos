@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,7 +26,13 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Block } from "@/entities/block";
 import { MEDIA_BLOCK_LABELS, isMediaBlockType } from "@/entities/block";
-import { MediaBlockPreview, resolveMediaBlockAsset } from "@/entities/block/ui/MediaBlockPreview";
+import {
+  ImageBlockPicture,
+  ImagePlayButton,
+  MediaBlockPreview,
+  resolveMediaBlockAsset,
+  useImageAnimation,
+} from "@/entities/block/ui/MediaBlockPreview";
 import { usePageStore } from "@/store/usePageStore";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { MediaEmbedDialog } from "./MediaEmbedDialog";
@@ -43,6 +49,34 @@ interface MediaBlockEditorProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent) => void;
 }
+
+/**
+ * An image block's picture and its play control. The control is a SIBLING of
+ * the edit button, never a descendant: a button inside a button is invalid
+ * HTML (axe `nested-interactive`) and a keyboard cannot reach the inner one.
+ */
+const ImageBlockEditor: React.FC<{ block: Block; label: string; onEdit: () => void }> = ({ block, label, onEdit }) => {
+  const animation = useImageAnimation(block);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className="block w-full rounded-lg p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/30"
+        aria-label={`Edit ${label.toLowerCase()}`}
+        onClick={onEdit}
+      >
+        <ImageBlockPicture block={block} animation={animation} />
+      </button>
+      {animation.frozen ? (
+        <ImagePlayButton
+          running={!animation.still}
+          onToggle={() => animation.setRunning(animation.still)}
+          className="absolute bottom-2 right-2"
+        />
+      ) : null}
+    </div>
+  );
+};
 
 export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   pageId,
@@ -155,14 +189,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           <MediaBlockPreview block={block} />
         </button>
       ) : isImage ? (
-        <button
-          type="button"
-          className="block w-full rounded-lg p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/30"
-          aria-label={`Edit ${label.toLowerCase()}`}
-          onClick={() => setShowSettings(true)}
-        >
-          <MediaBlockPreview block={block} />
-        </button>
+        <ImageBlockEditor block={block} label={label} onEdit={() => setShowSettings(true)} />
       ) : (
         <div className="rounded-lg p-2" onPointerDown={() => setShowSettings(true)}>
           <MediaBlockPreview block={block} />

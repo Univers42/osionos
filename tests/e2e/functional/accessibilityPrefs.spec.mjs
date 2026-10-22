@@ -221,9 +221,51 @@ test.describe("accessibility preferences", () => {
     const block = page.getByTestId("media-block-editor");
     await expect(block.getByTestId("media-block-image-canvas")).toBeVisible();
     await expect(block.getByTestId("media-block-image")).toHaveCount(0);
+    // The play control is a SIBLING of the edit button, never inside it: a
+    // button inside a button is invalid HTML (axe nested-interactive) and a
+    // keyboard cannot reach the inner one.
+    await expect(block.locator("button button, [role=button] button, a button")).toHaveCount(0);
+    // The edit button still opens the media settings from the keyboard.
+    await block.getByRole("button", { name: "Edit image" }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: /^Change image$/i })).toBeVisible();
+    // Play swaps the live image in.
     await block.getByTestId("media-block-image-play").click();
     await expect(block.getByTestId("media-block-image")).toBeVisible();
     await expect(block.getByTestId("media-block-image-canvas")).toHaveCount(0);
+  });
+
+  test("animated images: still holds the read-only picture too, with no nested control", async ({ page, baseURL }) => {
+    await seed(page, { animatedImages: "still" });
+    await openFreshPage(page, baseURL);
+    await createBlockViaSlash(page, "image", "Image");
+    await page.getByTestId("media-block-editor").getByRole("button", { name: /^Add image$/i }).click();
+    await embedMediaViaLink(page, "image", "https://example.com/fixtures/anim-0.gif");
+
+    // The raw-mode preview renders the page with the read-only renderer.
+    await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByRole("button", { name: "Raw / code mode" }).click();
+    const preview = page.locator("[data-raw-mode]");
+    await expect(preview).toBeVisible();
+    await expect(preview.getByTestId("media-block-image-canvas")).toBeVisible();
+    await expect(preview.getByTestId("media-block-image")).toHaveCount(0);
+    await expect(preview.locator("button button, [role=button] button, a button")).toHaveCount(0);
+  });
+
+  test("a theme change keeps the accessibility choice: both panels write one appearance", async ({ page, baseURL }) => {
+    await seed(page);
+    await openFreshPage(page, baseURL);
+    await openPreferences(page);
+    await page.getByRole("group", { name: "Link underlines" }).waitFor();
+
+    await page.getByRole("group", { name: "Link underlines", exact: true }).getByRole("tab", { name: "Always" }).click();
+    await expect(html(page)).toHaveAttribute("data-link-underline", "always");
+
+    // The theme controls write to the same live appearance, so the choice stays.
+    await page.getByRole("group", { name: "Density", exact: true }).getByRole("tab", { name: "Compact" }).click();
+    await expect(html(page)).toHaveAttribute("data-density", "compact");
+    await expect(html(page)).toHaveAttribute("data-link-underline", "always");
+    expect((await storedAppearance(page)).linkUnderline).toBe("always");
   });
 
   test("hovercards: off keeps a card from opening under the pointer; the keyboard opens it", async ({ page, baseURL }) => {

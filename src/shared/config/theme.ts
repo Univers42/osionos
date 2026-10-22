@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:34 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:24:35 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -236,24 +236,18 @@ export function persistAppearance(appearance: Appearance) {
 
 /** The axes that live on <html> as an attribute. urlPaste is not one of them:
  *  it changes what a paste does, not what the document looks like. */
-const ATTRIBUTE_AXES = [
-  "accent",
-  "density",
-  "radius",
-  "uiScale",
-  "linkUnderline",
-  "motion",
-  "animatedImages",
-  "hovercards",
-] as const;
+const ATTRIBUTE_AXES = ["accent", "density", "radius", "uiScale", "linkUnderline", "motion", "animatedImages", "hovercards"] as const;
 
 /** The appearance as it stands. applyAppearance() keeps it up to date, so a
  *  reader that needs a value with no <html> attribute (urlPaste) sees the live
- *  one instead of a second copy that can drift. */
-let currentAppearance: Appearance = DEFAULT_APPEARANCE;
+ *  one instead of a second copy that can drift. It starts from what is
+ *  stored, so a reader that asks before the boot pass still sees the
+ *  person's choice. */
+let currentAppearance: Appearance | null = null;
 const appearanceListeners = new Set<() => void>();
 
 export function readCurrentAppearance(): Appearance {
+  if (!currentAppearance) currentAppearance = readStoredAppearance();
   return currentAppearance;
 }
 
