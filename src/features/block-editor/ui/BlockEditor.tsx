@@ -67,6 +67,12 @@ const HomeViewsBlock = lazy(() =>
   import("@/widgets/database-view/ui/HomeViewsBlock").then((m) => ({ default: m.HomeViewsBlock })),
 );
 
+// The diagram block: a stored SPEC drawn live through the locked renderer —
+// lazy, same boundary (the mermaid renderer is a heavy chunk of its own).
+const DiagramBlock = lazy(() =>
+  import("@/features/diagram/ui/DiagramBlock").then((m) => ({ default: m.DiagramBlock })),
+);
+
 // Database blocks are rare in an edited document. Lazy-boundary them (same
 // discipline as ReadOnlyBlock) so the editor chunk does NOT statically pull the
 // database stack + its ~458KB seed JSON onto the warm path.
@@ -1095,6 +1101,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         >
           <Suspense fallback={null}>
             <WhiteboardBlock block={block} onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)} />
+          </Suspense>
+        </div>
+      );
+
+    case "diagram":
+      return (
+        <div tabIndex={-1} aria-label="Diagram block" className="relative my-0">
+          <Suspense fallback={null}>
+            <DiagramBlock
+              block={block}
+              pageId={pageId}
+              editable
+              onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+            />
           </Suspense>
         </div>
       );

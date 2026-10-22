@@ -14,6 +14,7 @@ import { useCallback } from "react";
 
 import {
   createMediaBlock,
+  DEFAULT_DIAGRAM_SPEC,
   type Block,
   type BlockType,
   type LayoutMode,
@@ -248,6 +249,12 @@ export function useSlashSelect({
 
       if (selectedType === "equation") {
         updateBlock(pageId, blockId, { content: cleanContent || "E = mc^2" });
+      }
+
+      // A diagram block holds a SPEC, never the rendered output: it starts with
+      // the default spec, and the block draws it from there.
+      if (selectedType === "diagram") {
+        updateBlock(pageId, blockId, { content: "", diagramSpec: DEFAULT_DIAGRAM_SPEC });
       }
 
       // A new type re-mounts the editable (a list marker, a toggle wrapper): refocus it on the
