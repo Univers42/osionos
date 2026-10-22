@@ -24,6 +24,9 @@
 
 import { AiError, toAiError } from "./aiContract";
 import type {
+  AiAccessScope,
+  AiAccessToken,
+  AiAccessTokenCreated,
   AiCommand,
   AiConnection,
   AiConversation,
@@ -33,6 +36,7 @@ import type {
   AiProvider,
   AiUsage,
   CompleteInput,
+  CreateAccessTokenInput,
   CreateConnectionInput,
   StartRunInput,
 } from "./aiContract";
@@ -47,6 +51,9 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
    callers of the client read them from one place. */
 export { AiError };
 export type {
+  AiAccessScope,
+  AiAccessToken,
+  AiAccessTokenCreated,
   AiCommand,
   AiConnection,
   AiConversation,
@@ -56,6 +63,7 @@ export type {
   AiProvider,
   AiUsage,
   CompleteInput,
+  CreateAccessTokenInput,
   CreateConnectionInput,
   StartRunInput,
 };
@@ -296,4 +304,42 @@ export async function getUsage(): Promise<AiUsage> {
     spentMicroUsd: body.spentMicroUsd ?? 0,
     limitMicroUsd: body.limitMicroUsd ?? 0,
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* The personal access tokens (G4a)                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * `GET /access-tokens` — the tokens of the user.
+ *
+ * The list carries the last four characters of each token and never the token
+ * itself: the service does not have it any more (C112).
+ */
+export async function listAccessTokens(): Promise<AiAccessToken[]> {
+  const body = await requestJson<{ tokens?: AiAccessToken[] }>("GET", "/access-tokens");
+  return body.tokens ?? [];
+}
+
+/**
+ * `POST /access-tokens` — a new token.
+ *
+ * The answer is the ONLY place the token appears: the browser shows it once
+ * and forgets it. The service needs a FRESH session for this (C113), and
+ * refuses with `reauth_required` when the session is too old.
+ */
+export async function createAccessToken(
+  input: CreateAccessTokenInput,
+): Promise<AiAccessTokenCreated> {
+  return requestJson<AiAccessTokenCreated>("POST", "/access-tokens", {
+    name: input.name,
+    scopes: input.scopes,
+    workspaceIds: input.workspaceIds,
+    expiresInDays: input.expiresInDays,
+  });
+}
+
+/** `DELETE /access-tokens/:id` — the token is revoked. */
+export async function revokeAccessToken(id: string): Promise<void> {
+  await requestNoContent("DELETE", `/access-tokens/${encodeURIComponent(id)}`);
 }

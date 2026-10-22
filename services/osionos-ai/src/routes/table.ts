@@ -17,6 +17,7 @@ import {
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
 import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
+import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
 import type { RouteEntry } from './types.ts';
 
 /**
@@ -114,5 +115,18 @@ export const ROUTES: RouteEntry[] = [
 		pattern: /^\/api\/ai\/approvals\/([^/]+)$/,
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalDecision,
+	},
+	{
+		methods: [],
+		pattern: /^\/api\/ai\/access-tokens$/,
+		label: '/api/ai/access-tokens',
+		handle: handleAccessTokens,
+		anyMethod: true,
+	},
+	{
+		methods: ['DELETE'],
+		pattern: /^\/api\/ai\/access-tokens\/([^/]+)$/,
+		label: '/api/ai/access-tokens/:id',
+		handle: handleAccessTokenDelete,
 	},
 ];

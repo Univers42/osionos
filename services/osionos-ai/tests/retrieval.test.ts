@@ -37,8 +37,8 @@ const db = harness.app.db;
 const QUERY = 'zorblax quux';
 
 /** The two callers: the owner of the workspace, and a member of it. */
-const userA: AuthUser = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false };
-const userB: AuthUser = { userId: USER_B, workspaceId: WORKSPACE_B, memberWorkspaces: [], isAdmin: false };
+const userA: AuthUser = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() };
+const userB: AuthUser = { userId: USER_B, workspaceId: WORKSPACE_B, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() };
 
 /** The seeds of the test that is running: they are gone before the next one. */
 const seeds = new Seeds(db);
