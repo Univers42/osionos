@@ -205,6 +205,17 @@ test("the diagram export of a broken spec keeps the spec it was given", () => {
   assert.ok(markdown.includes('"kind":"mermaid"'), markdown);
 });
 
+test("a title cannot close the export's comment and leave its tail in the markdown", () => {
+  const title = "--> <img src=x onerror=alert(1)> <!--";
+  const markdown = diagramBlockToMarkdown({ kind: "hierarchy", rootPageId: UUID_CHILD, depth: 1, title });
+  const comment = markdown.split("\n")[0];
+  assert.equal(markdown.split("-->").length, 2, "the comment closes exactly once");
+  assert.ok(comment.endsWith(" -->"), comment);
+  assert.ok(!markdown.includes("<img"), markdown);
+  const json = comment.slice("<!-- osionos:diagram ".length, -" -->".length);
+  assert.equal(JSON.parse(json).title, title, "the spec reads back the same");
+});
+
 test("a mermaid source that carries a fence cannot break out of its own", () => {
   const markdown = diagramBlockToMarkdown({
     kind: "mermaid",
