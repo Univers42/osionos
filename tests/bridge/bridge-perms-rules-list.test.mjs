@@ -57,6 +57,7 @@ function fakeFetch(rows, { status = 200, body } = {}) {
 		const parsed = new URL(String(url));
 		calls.push({ url: parsed, method: init.method ?? 'GET' });
 		if (status !== 200) return new Response(body ?? JSON.stringify({ code: 'XX' }), { status });
+		if (body !== undefined) return new Response(body, { status: 200, headers: { 'content-type': 'application/json' } });
 		const wanted = parsed.searchParams.get('resource_id');
 		const value = wanted === null ? null : wanted.slice('eq.'.length);
 		const matched = rows.filter((candidate) => candidate.workspace_id === parsed.searchParams.get('workspace_id').slice('eq.'.length)
@@ -128,5 +129,46 @@ describe('a store failure is never a silent "no rules"', () => {
 				return true;
 			}, `upstream ${status}`);
 		}
+	});
+
+	it('a 404 that is not a missing table is a 503, not an empty rule set', async () => {
+		// Only PGRST205/42P01 mean the table is gone. Any other 404 is a broken read, and
+		// answering [] for it would drop every deny the caller is under.
+		const answers = [
+			JSON.stringify({ code: 'PGRST999', message: 'something else' }),
+			'Not Found',
+			'',
+		];
+		for (const body of answers) {
+			const { fetchImpl } = fakeFetch([], { status: 404, body });
+			const store = createShareRuleStore({ fetchImpl, log: () => {} });
+			await assert.rejects(store.listForPage(CONFIG, WS, PAGE), (error) => {
+				assert.equal(error.status, 503, `body ${JSON.stringify(body)}`);
+				assert.equal(error.code, 'share_rules_unavailable');
+				return true;
+			}, `body ${JSON.stringify(body)}`);
+		}
+	});
+
+	it('a 200 with an empty body is a broken read, not an empty rule set', async () => {
+		const { fetchImpl } = fakeFetch([], { body: '' });
+		const store = createShareRuleStore({ fetchImpl, log: () => {} });
+		await assert.rejects(store.listForPage(CONFIG, WS, PAGE), (error) => {
+			assert.equal(error.status, 503);
+			assert.equal(error.code, 'share_rules_unavailable');
+			return true;
+		});
+	});
+
+	it('a read that hit the cap is a 503, not a truncated rule set', async () => {
+		// The read is limited, so a full page of rules may hide a deny beyond the cap.
+		const rows = Array.from({ length: 500 }, (_, index) => row({ id: `full-${index}`, resource_id: PAGE }));
+		const { fetchImpl } = fakeFetch(rows);
+		const store = createShareRuleStore({ fetchImpl, log: () => {} });
+		await assert.rejects(store.listForPage(CONFIG, WS, PAGE), (error) => {
+			assert.equal(error.status, 503);
+			assert.equal(error.code, 'share_rules_unavailable');
+			return true;
+		});
 	});
 });

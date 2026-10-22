@@ -48,6 +48,7 @@ const PUBLIC_PAGE = 'd4000000-1111-4111-8111-d40000000f04';
 const SHARED_PAGE = 'e5000000-1111-4111-8111-e50000000f05';
 const OWNED_PAGE = 'f6000000-1111-4111-8111-f60000000f06';
 const CALLER_PAGE = 'a8000000-1111-4111-8111-a80000000f08';
+const MISSING = 'c9000000-1111-4111-8111-c90000000f0a';
 const RULE_ID = 'b9000000-1111-4111-8111-b90000000f09';
 
 /** The caller's membership: a viewer by default (read only), an editor when a case needs one. */
@@ -108,7 +109,7 @@ async function ask(route, { as = CALLER, rules = [], caller = VIEWER, pageRows =
 	}, { realWorkspaceRpc: true });
 	const headers = sessionHeaders(config, as, HOME, workspaces);
 	const answer = await withBridge(config, mock.fetchImpl, (base) => route(base, headers));
-	return { ...answer, rows: mock.rows('osionos_pages'), ruleRows: mock.rows('osionos_share_rules') };
+	return { ...answer, calls: mock.calls, rows: mock.rows('osionos_pages'), ruleRows: mock.rows('osionos_share_rules') };
 }
 
 const read = (base, headers, id = PAGE) => send(base, `/api/pages/${id}`, headers);
@@ -177,22 +178,42 @@ describe('a share rule decides the single-page write', () => {
 		assert.equal(rows.find((row) => row.id === PAGE).visibility, 'private');
 	});
 
-	it('a no_access rule beats the base grant', async () => {
+	it('a no_access rule beats the base grant, and the write answers like a missing id', async () => {
 		// The page is shared, so the base rule lets the editor read it: the deny is then the
-		// only thing that refuses, and it refuses the write with a 403.
+		// only thing that refuses, and it refuses the write the way a missing id is refused
+		// — a 403 would confirm that the page exists.
 		const world = { rules: [rule({ resource_id: SHARED_PAGE, permission: 'no_access' })], caller: EDITOR };
 		const { status: readStatus } = await ask((base, headers) => read(base, headers, SHARED_PAGE), world);
 		assert.equal(readStatus, 404);
-		const { status, body } = await ask((base, headers) => send(base, `/api/pages/${SHARED_PAGE}`, headers, patch({ title: 'changed' })), world);
-		assert.equal(status, 403, body && JSON.stringify(body));
+		const { status, body, calls } = await ask((base, headers) => send(base, `/api/pages/${SHARED_PAGE}`, headers, patch({ title: 'changed' })), world);
+		assert.equal(status, 404, body && JSON.stringify(body));
+		assert.equal(body.message, 'Page not found.');
+		assert.deepEqual(calls.filter((call) => call.method !== 'GET' && call.table === 'osionos_pages'), [], 'the denied write reached the database');
+	});
+
+	it('a no_access rule hides the page from a DELETE the base rule would accept', async () => {
+		const world = { rules: [rule({ resource_id: SHARED_PAGE, permission: 'no_access' })], caller: EDITOR };
+		const { status, body, calls } = await ask((base, headers) => send(base, `/api/pages/${SHARED_PAGE}`, headers, { method: 'DELETE' }), world);
+		assert.equal(status, 404, body && JSON.stringify(body));
+		assert.equal(body.message, 'Page not found.');
+		assert.deepEqual(calls.filter((call) => call.method !== 'GET' && call.table === 'osionos_pages'), [], 'the denied delete reached the database');
+	});
+
+	it('a denied page answers exactly like a missing page id', async () => {
+		const world = { rules: [rule({ permission: 'no_access' })], caller: EDITOR };
+		const denied = await ask(write, world);
+		const missing = await ask((base, headers) => send(base, `/api/pages/${MISSING}`, headers, patch({ title: 'changed' })), world);
+		assert.equal(denied.status, missing.status);
+		assert.deepEqual(denied.body, missing.body);
 	});
 
 	it('the caller who is an editor collaborator is refused by a no_access rule too', async () => {
 		const pageRows = pages().map((row) => (row.id === PAGE ? { ...row, collaborators: [{ userId: CALLER, role: 'editor' }] } : row));
 		const { status: readStatus } = await ask(read, { rules: [rule({ permission: 'no_access' })], caller: EDITOR, pageRows });
 		assert.equal(readStatus, 404);
-		const { status, body } = await ask(write, { rules: [rule({ permission: 'no_access' })], caller: EDITOR, pageRows });
-		assert.equal(status, 403, body && JSON.stringify(body));
+		const { status, body, calls } = await ask(write, { rules: [rule({ permission: 'no_access' })], caller: EDITOR, pageRows });
+		assert.equal(status, 404, body && JSON.stringify(body));
+		assert.deepEqual(calls.filter((call) => call.method !== 'GET' && call.table === 'osionos_pages'), [], 'the denied write reached the database');
 	});
 
 	it('without a rule the write of an unreadable page is a missing id, and the row is untouched', async () => {
@@ -260,5 +281,44 @@ describe('the rule routes are owner-scoped', () => {
 		);
 		assert.equal(status, 200, body && JSON.stringify(body));
 		assert.deepEqual(ruleRows, []);
+	});
+
+	it('a member with update cannot write a rule that reaches every page of the workspace', async () => {
+		// A rule with no page id applies to EVERY page of the workspace, so it is the
+		// workspace owner's to write — the workspace gate alone would hand any member
+		// carrying `update` a grant on every private page of the workspace.
+		const { status, body, ruleRows } = await ask(
+			(base, headers) => post(base, headers, '/api/perms/rules', { ...ruleBody, resourceId: '' }),
+			{ caller: EDITOR },
+		);
+		assert.equal(status, 403, body && JSON.stringify(body));
+		assert.deepEqual(ruleRows, []);
+	});
+
+	it('a member with update cannot delete a rule that reaches every page of the workspace', async () => {
+		const { status, body, ruleRows } = await ask(
+			(base, headers) => send(base, `/api/perms/rules/${RULE_ID}`, headers, { method: 'DELETE' }),
+			{ caller: EDITOR, rules: [rule({ resource_id: '' })] },
+		);
+		assert.equal(status, 404, body && JSON.stringify(body));
+		assert.equal(ruleRows.length, 1, 'the rule was deleted');
+	});
+
+	it('a member with update cannot write a rule about a page that does not exist', async () => {
+		const { status, body, ruleRows } = await ask(
+			(base, headers) => post(base, headers, '/api/perms/rules', { ...ruleBody, resourceId: MISSING }),
+			{ caller: EDITOR },
+		);
+		assert.equal(status, 403, body && JSON.stringify(body));
+		assert.deepEqual(ruleRows, []);
+	});
+
+	it('the workspace owner may write a rule that reaches every page of the workspace', async () => {
+		const { status, body, ruleRows } = await ask(
+			(base, headers) => post(base, headers, '/api/perms/rules', { ...ruleBody, resourceId: '' }),
+			{ as: OWNER },
+		);
+		assert.equal(status, 200, body && JSON.stringify(body));
+		assert.equal(ruleRows.length, 1);
 	});
 });
