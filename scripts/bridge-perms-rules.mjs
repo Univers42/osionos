@@ -28,6 +28,7 @@ const TABLE = 'osionos_share_rules';
 const MIGRATION = 'models/osionos-share-rules-migration.sql';
 const LEVELS = new Set(['no_access', 'can_view', 'can_comment', 'can_edit', 'full_access']);
 const RESOURCE_TYPES = new Set(['workspace', 'page', 'database', 'block']);
+const PAGE_RESOURCE_TYPE = 'page';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LIST_LIMIT = 500;
 const TIMEOUT_MS = 5000;
@@ -117,19 +118,54 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		try { code = JSON.parse(text)?.code ?? ''; } catch { /* non-JSON error body */ }
 		if (status === 404 || code === '42P01' || code === 'PGRST205') {
 			log(`[bridge-perms] table public.${table} is missing — apply ${MIGRATION} (psql -v ON_ERROR_STOP=1 -1 -f ${MIGRATION})`);
-			return httpError('rule storage is not available', 503);
+			return Object.assign(httpError('rule storage is not available', 503), { code: 'share_rules_table_missing' });
 		}
 		if (status === 401 || status === 403) {
 			log(`[bridge-perms] PostgREST refused the bridge's service identity for ${table} (${status})`);
-			return httpError('rule storage is not available', 503);
+			return Object.assign(httpError('rule storage is not available', 503), { code: 'share_rules_unavailable' });
 		}
 		log(`[bridge-perms] rule storage failed (${status} ${code})`);
-		return httpError('rule storage failed', 502);
+		return Object.assign(httpError('rule storage failed', 502), { code: 'share_rules_failed' });
 	}
 
 	const query = (params) => new URLSearchParams(params).toString();
 
+	/**
+	 * The rules that decide ONE page's access: the page's own rules and the workspace-wide
+	 * ones (resource_id = ''). Two reads, so a workspace with hundreds of rules about OTHER
+	 * pages cannot truncate the page's own rule — the reviewer's seed (500 other page rules
+	 * plus one no_access on P) still denies P.
+	 *
+	 * A missing table answers [] — no rule can exist, so that is exact rather than
+	 * fail-open. Every other failure (refused identity, upstream 5xx, timeout) is a 503,
+	 * never []: a silent "no rules" would drop the deny the caller is under and hand the
+	 * page to somebody who must not have it.
+	 * Caveat: a server whose table vanished drops every deny; the server applies every
+	 * models/*.sql (scripts/apply-models-migrations.sh), so the table is only missing on a
+	 * desktop restored from an older snapshot.
+	 */
+	const listForPage = async (config, workspaceId, pageId) => {
+		const params = {
+			select: SELECT, workspace_id: `eq.${workspaceId}`, resource_type: `eq.${PAGE_RESOURCE_TYPE}`,
+			order: 'created_at.asc', limit: String(LIST_LIMIT),
+		};
+		try {
+			const [pageRules, wideRules] = await Promise.all([
+				call(config, query({ ...params, resource_id: `eq.${pageId}` })),
+				call(config, query({ ...params, resource_id: 'eq.' })),
+			]);
+			return [...pageRules, ...wideRules].filter((row) => {
+				const resourceId = row?.resource_id;
+				return resourceId === '' || resourceId === null || String(resourceId) === String(pageId);
+			});
+		} catch (error) {
+			if (error?.code === 'share_rules_table_missing') return [];
+			throw Object.assign(new Error('Share rules are not available right now.'), { status: 503, code: 'share_rules_unavailable' });
+		}
+	};
+
 	return {
+		listForPage,
 		async list(config, workspaceId, resourceId) {
 			const params = { select: SELECT, workspace_id: `eq.${workspaceId}`, order: 'created_at.asc', limit: String(LIST_LIMIT) };
 			if (resourceId != null) params.resource_id = `eq.${resourceId}`;
