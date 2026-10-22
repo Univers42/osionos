@@ -69,6 +69,14 @@ if (initialSurfaceUsesEditor()) {
   }
 }
 
+// A ?settings=<section>#<anchor> link opens the settings tab at that anchor.
+// Read next to the ?home= link above: both are one-shot boot deep links. The
+// dynamic import keeps the settings registry out of the entry chunk; the link
+// drops itself from the URL, so a reload does not reopen it.
+if (globalThis.window !== undefined) {
+  void import("@/features/settings/model/settingsDeepLink").then((module) => module.applySettingsDeepLink());
+}
+
 const contentFallback = (
   <div className="flex h-full w-full items-center justify-center">
     <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--osio-accent)] border-t-transparent" />

@@ -20,9 +20,16 @@
 
 export * from "./model/diagramSpec";
 export * from "./model/diagramIR";
+export * from "./model/diagramSource";
 export * from "./model/compile";
 export * from "./model/toMermaid";
 export * from "./model/hierarchyInput";
+export * from "./model/databaseInput";
+export * from "./model/databaseSource";
+export * from "./model/graphInput";
+export * from "./model/graphSource";
+export * from "./model/diagramExport";
+export * from "./model/mermaidAnswer";
 export * from "./model/diagramRenderMode";
 export * from "./model/diagramMarkdown";
 export * from "./model/publicPageSignal";

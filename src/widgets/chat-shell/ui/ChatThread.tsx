@@ -84,6 +84,7 @@ const AssistantAnswer: React.FC<{
 /** The message thread: user turns (accent, right) and assistant turns (subtle, left). */
 export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
   const endRef = useRef<HTMLDivElement>(null);
+  const agents = useChatStore((s) => s.agents);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages.length]);
 
   /** The text a failed answer answers: the user turn right before it. */
@@ -99,6 +100,9 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6" data-testid="chat-thread">
       {messages.map((m, index) => {
         const retryText = m.status === "error" ? textBefore(index) : null;
+        // The agent that shaped the answer: its name, in small letters, above
+        // the answer. The general assistant says nothing.
+        const agent = m.role === "assistant" && m.agentId ? agents.find((one) => one.id === m.agentId) : undefined;
         return (
           <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
             <div
@@ -110,6 +114,11 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                   : "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]"
               }`}
             >
+              {agent ? (
+                <span className="mb-1 block text-2xs text-[var(--osio-fg-muted)]" data-testid="chat-agent-label">
+                  {agent.name}
+                </span>
+              ) : null}
               {m.role === "user" ? (
                 <span className="whitespace-pre-wrap">{m.content}</span>
               ) : (

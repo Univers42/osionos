@@ -47,6 +47,11 @@ const LegacyDrawNotice = lazy(() =>
   import("@/features/whiteboard/ui/LegacyDrawNotice").then((m) => ({ default: m.LegacyDrawNotice })),
 );
 
+// Embeds/bookmarks pull in the iframe and card UI — kept off the warm chunk.
+const ReadOnlyLinkBlock = lazy(() =>
+  import("./ReadOnlyLinkBlock").then((m) => ({ default: m.ReadOnlyLinkBlock })),
+);
+
 // The Home "view launcher" (home_views block) — lazy, same discipline.
 const HomeViewsBlock = lazy(() =>
   import("@/widgets/database-view/ui/HomeViewsBlock").then((m) => ({ default: m.HomeViewsBlock })),
@@ -69,6 +74,7 @@ interface BlockProps {
   index: number;
   bulletDepth?: number;
   numberedDepth?: number;
+  properties?: readonly import("@/entities/page/model/types").PagePropertyEntry[] | Record<string, unknown>;
 }
 
 const INLINE_MARKDOWN_CACHE_LIMIT = 2000;
@@ -173,11 +179,12 @@ function areReadOnlyBlockPropsEqual(previous: BlockProps, next: BlockProps): boo
     previous.block === next.block &&
     previous.index === next.index &&
     (previous.bulletDepth ?? 0) === (next.bulletDepth ?? 0) &&
-    (previous.numberedDepth ?? 0) === (next.numberedDepth ?? 0)
+    (previous.numberedDepth ?? 0) === (next.numberedDepth ?? 0) &&
+    previous.properties === next.properties
   );
 }
 
-const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0 }) => {
+const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0, properties }) => {
   // Per-block text/background colour set via the block colour menu; mirrors the
   // editable BlockEditor (getBlockSurfaceStyle), so read-only matches editing.
   const surface = getBlockSurfaceStyle(block);
@@ -504,11 +511,21 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         </div>
       );
 
+    case "embed":
+    case "bookmark":
+      return (
+        <div className="my-3">
+          <Suspense fallback={databaseLoadingFallback}>
+            <ReadOnlyLinkBlock block={block} />
+          </Suspense>
+        </div>
+      );
+
     case "toggle":
       return <ToggleBlockReadOnly block={block} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />;
 
     case "layout":
-      return <LayoutBlockReadOnly block={block} />;
+      return <LayoutBlockReadOnly block={block} properties={properties} />;
 
     default:
       return (

@@ -131,7 +131,7 @@ pip install --no-cache-dir --only-binary=:all: -r services/osionos-ml/requiremen
 ruff check services/osionos-ml
 ruff format --check services/osionos-ml
 pytest -q services/osionos-ml/tests
-(cd services/osionos-ml && python -m osml.evaluate --out results/sim/)
+(cd services/osionos-ml && python -m osml.evaluate)
 docker build services/osionos-ml
 ```
 

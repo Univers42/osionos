@@ -31,6 +31,7 @@ import {
   isBridgeSession,
   loginPersona,
   partition,
+  platformRoleFromSessionToken,
   seededWorkspaceSession,
   signupPersona,
 } from '@/features/auth/model/userStore.helpers';
@@ -672,6 +673,8 @@ export const useUserStore = create<UserStore>((set, get) => ({
   activePageJwt: () => pageApiJwtFromSessionToken(get().activeSession()?.accessToken) || null,
 
   isAdmin: () => isAdminFromSessionToken(get().activeSession()?.accessToken),
+
+  platformRole: () => platformRoleFromSessionToken(get().activeSession()?.accessToken),
 
   personaById: (id: string) => get().personas.find(p => p.id === id),
 }));

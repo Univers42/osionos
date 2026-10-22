@@ -23,7 +23,7 @@
 
 import { createHash } from 'node:crypto';
 import { httpError, rest, safeText, sendJson } from './bridge-social-core.mjs';
-import { extFromMime, storageGet, storageObjectKey, storagePut, typeFromMime, ensureChatBucket } from './bridge-storage-core.mjs';
+import { extFromMime, servedObjectHeaders, storageGet, storageObjectKey, storagePut, typeFromMime, ensureChatBucket } from './bridge-storage-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { assertPublicHttpUrl } from './bridge-url-guard.mjs';
 import { fetchPublicHtml } from './bridge-url-fetch.mjs';
@@ -147,7 +147,7 @@ export async function handleServe(deps, session, attachmentId, request, response
 	// Build headers without an `etag: undefined` entry — Node's writeHead throws on
 	// an undefined header value, which surfaced as a 500 when sha256 was missing.
 	const headers = {
-		'content-type': row.content_type || object.contentType || 'application/octet-stream',
+		...servedObjectHeaders(row.content_type || object.contentType),
 		'content-length': String(object.buffer.length),
 		'cache-control': 'private, max-age=86400',
 		'access-control-allow-origin': config.allowedOrigin,

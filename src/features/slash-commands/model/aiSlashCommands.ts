@@ -134,6 +134,18 @@ export const AI_SLASH_COMMANDS: (SlashAiCommand | SlashDictateCommand)[] = [
     description: "Explain this block simply",
     command: "explain",
   },
+  {
+    // The answer is a mermaid SPEC, fenced: the editor turns it into a
+    // diagram block, and the user's click is what inserts it.
+    id: "ai:diagram",
+    kind: "ai",
+    section: "ai",
+    label: "Draw a diagram",
+    aliases: ["diagram ai", "mermaid spec", "diagram of this"],
+    icon: "📐",
+    description: "Draw a mermaid diagram of this block — the spec, not a picture",
+    command: "diagram",
+  },
 ];
 
 /**

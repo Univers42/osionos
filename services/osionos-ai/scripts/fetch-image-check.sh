@@ -71,7 +71,7 @@ while IFS="$(printf '\t')" read -r repo revision file bytes sha; do
 		rm -f "$target"
 	fi
 	echo "[fetch] $repo/$file"
-	if ! curl --fail --location --max-time 600 --silent --show-error --output "$target.part" \
+	if ! curl --fail --location --proto "=https" --proto-redir "=https" --max-time 600 --silent --show-error --output "$target.part" \
 		"$HUB/$repo/resolve/$revision/$file"; then
 		rm -f "$target.part"
 		echo "[fetch] the download of $repo/$file failed" >&2

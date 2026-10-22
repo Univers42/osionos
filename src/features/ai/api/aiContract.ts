@@ -44,6 +44,23 @@ export interface AiModel {
   outputMicroUsdPerMTok?: number;
 }
 
+/**
+ * A built-in agent: a shape of the assistant, chosen for one run.
+ *
+ * The list NEVER carries the instructions: they are the text of the server's
+ * prompt, and the browser has no business holding them.
+ */
+export interface AiAgent {
+  /** The id the run carries: `db-architect`, `doc-writer`, `analyst`. */
+  id: string;
+  /** The version of the instructions — pinned on the run. */
+  version: number;
+  /** The name the reader sees. */
+  name: string;
+  /** One line: what the agent is for. */
+  description: string;
+}
+
 /* -------------------------------------------------------------------------- */
 /* The connections (the v2 additions of the wire contract)                    */
 /* -------------------------------------------------------------------------- */
@@ -94,6 +111,51 @@ export interface AiUsage {
   limitMicroUsd: number;
 }
 
+/* -------------------------------------------------------------------------- */
+/* The personal access tokens (G4a)                                           */
+/* -------------------------------------------------------------------------- */
+
+/** What a personal access token may do. */
+export type AiAccessScope = "read" | "write_approval";
+
+/**
+ * A personal access token of the user, as the settings list shows it.
+ *
+ * The token itself is NEVER here: the list carries the last four characters
+ * and the rest of the row, and the token appears in the answer of the mint
+ * only (C112).
+ */
+export interface AiAccessToken {
+  id: string;
+  name: string;
+  /** The last four characters of the token — the only part we ever see again. */
+  last4: string;
+  scopes: AiAccessScope[];
+  workspaceIds: string[];
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
+/** The body of a mint: what the token may do, and where it may reach. */
+export interface CreateAccessTokenInput {
+  name: string;
+  scopes: AiAccessScope[];
+  workspaceIds: string[];
+  expiresInDays: number;
+}
+
+/**
+ * The answer of a mint: the token, ONCE.
+ *
+ * The service never gives it back: the settings page shows it, the user
+ * copies it, and it is gone (C112).
+ */
+export interface AiAccessTokenCreated extends AiAccessToken {
+  token: string;
+}
+
 /** A conversation, as the service stores it. */
 export interface AiConversation {
   id: string;
@@ -131,6 +193,12 @@ export interface StartRunInput {
   model?: string;
   /** The connection the run spends — `platform` when the caller does not say. */
   connectionId?: string;
+  /**
+   * The agent that shapes the run: one of the built-ins.
+   *
+   * Absent is the general assistant — the run of today, byte for byte.
+   */
+  agentId?: string;
   attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }>;
   /**
    * What the answer is read from: the pages it may use (at most three), and

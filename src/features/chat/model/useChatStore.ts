@@ -16,6 +16,8 @@ import type { ChatMessage, Conversation, Project, SharedContextItem } from "./ch
 import { stubInferencePort, type InferencePort } from "./inferencePort";
 import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiSelection";
 import type { RunContext } from "@/features/ai/model/aiContext";
+import { parseAgentPrefix, type AgentSummary } from "@/features/ai/model/aiAgents";
+import { listAgents } from "@/features/ai/api/aiClient";
 import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTurn";
 import { dispatchRunEvent } from "./runEventDispatch";
 import { failureCode, retryAfterOf } from "./runErrors";
@@ -62,6 +64,10 @@ function load(): ChatData {
 
 export interface ChatStoreState extends ChatData {
   activeConversationId: string | null;
+  /** The built-in agents of the service — the shapes a run can take. */
+  agents: AgentSummary[];
+  /** Reads the list of the agents from the service. It never throws. */
+  loadAgents: () => Promise<void>;
   createProject: (name: string) => Project;
   renameProject: (id: string, name: string) => void;
   deleteProject: (id: string) => void;
@@ -70,7 +76,7 @@ export interface ChatStoreState extends ChatData {
   deleteConversation: (id: string) => void;
   setActive: (id: string | null) => void;
   setConversationModel: (id: string, connectorId: string, model: string) => void;
-  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; context?: RunContext; attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }> }) => Promise<void>;
+  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; agentId?: string; context?: RunContext; attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }> }) => Promise<void>;
   stop: (conversationId: string) => void;
   /**
    * The follow-up of a write the user just approved.
@@ -91,7 +97,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     const { projects, conversations, messages, contextItems } = get();
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, conversations, messages, contextItems })); } catch { /* quota */ }
   };
-  const addMessage = (conversationId: string, m: Pick<ChatMessage, "role" | "content" | "connectorId" | "model" | "connectionId">) => {
+  const addMessage = (conversationId: string, m: Pick<ChatMessage, "role" | "content" | "connectorId" | "model" | "connectionId" | "agentId">) => {
     set((s) => ({
       messages: [...s.messages, { id: uid(), conversationId, createdAt: now(), ...m }],
       conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, updatedAt: now() } : c)),
@@ -130,7 +136,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
    */
   const runTurn = async (
     conversationId: string,
-    options: { connectorId: string; model: string; connectionId: string },
+    options: { connectorId: string; model: string; connectionId: string; agentId?: string },
     open: (turn: AssistantTurn, signal: AbortSignal) => Promise<void>,
   ): Promise<void> => {
     const assistantId = uid();
@@ -161,6 +167,19 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
   return {
     ...load(),
     activeConversationId: null,
+    agents: [],
+
+    loadAgents: async () => {
+      // The list of the agents lives on the service. A service that is not
+      // there, or a call that fails, leaves the list empty: the composer then
+      // offers the general assistant, which is the run of today.
+      try {
+        const agents = await listAgents();
+        set({ agents });
+      } catch {
+        set({ agents: [] });
+      }
+    },
 
     createProject: (name) => {
       const project: Project = { id: uid(), name: name.trim() || "Untitled project", createdAt: now() };
@@ -209,15 +228,19 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       // Every run says which connection pays for it: the one the user picked,
       // the one they remembered, or the platform's.
       const connectionId = sel?.connectionId ?? readAiSelection()?.connectionId ?? PLATFORM_CONNECTION_ID;
+      // The agent of this message: the "@id " the message starts with wins
+      // over the picker's choice, and the prefix is stripped from the text.
+      const choice = parseAgentPrefix(text, get().agents);
+      const agentId = choice.agentId ?? sel?.agentId ?? null;
       const port = getInferencePort();
       const stream = port.stream;
 
       // No streaming port: the offline path — one complete answer, no frames.
       if (!stream) {
-        addMessage(conversationId, { role: "user", content: text.trim(), connectorId, model, connectionId });
+        addMessage(conversationId, { role: "user", content: choice.text.trim(), connectorId, model, connectionId, ...(agentId ? { agentId } : {}) });
         const history = get().messagesFor(conversationId).map((m) => ({ role: m.role, content: m.content }));
         const result = await port.complete({ connectorId, model, connectionId, messages: history });
-        addMessage(conversationId, { role: "assistant", content: result.content, connectorId, model, connectionId });
+        addMessage(conversationId, { role: "assistant", content: result.content, connectorId, model, connectionId, ...(agentId ? { agentId } : {}) });
         return;
       }
 
@@ -225,15 +248,15 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       // run of a conversation with a 409, so the pane refuses it too.
       if (activeRuns.has(conversationId)) return;
 
-      const body = text.trim();
-      addMessage(conversationId, { role: "user", content: body, connectorId, model, connectionId });
+      const body = choice.text.trim();
+      addMessage(conversationId, { role: "user", content: body, connectorId, model, connectionId, ...(agentId ? { agentId } : {}) });
 
       const rememberServerConversation = (serverConversationId: string) => {
         set((s) => ({ conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, serverConversationId } : c)) }));
         persist();
       };
 
-      await runTurn(conversationId, { connectorId, model, connectionId }, (turn, signal) =>
+      await runTurn(conversationId, { connectorId, model, connectionId, ...(agentId ? { agentId } : {}) }, (turn, signal) =>
         stream(
           {
             conversationId,
@@ -241,6 +264,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
             model,
             connectorId,
             connectionId,
+            // The agent of this run: the one the reader picked, or none.
+            ...(agentId ? { agentId } : {}),
             title: conversation.title,
             serverConversationId: conversation.serverConversationId,
             attachments: sel?.attachments,

@@ -18,7 +18,8 @@
 // the version, the retry and the copy path (a later brief wires it into the 409 answer).
 //
 // The rules, one by one:
-//   1. No base -> unresolved: the merge never guesses, the server copy stands.
+//   1. No base -> unresolved: the merge never guesses, the server copy stands. Unless both
+//      sides already hold the same tree (a keepalive that landed): then there is nothing to merge.
 //   2. Own fields: the local's if the server did not touch them, the server's if the local did
 //      not, one value if both reached it, a conflict if they reached different ones.
 //   3. Inserts: the server's land next to their server siblings, the local's stay put.
@@ -48,7 +49,8 @@ export interface MergeResult {
  * The merged tree of a page: the base the client last saw, the local copy, the server copy.
  *
  * With no base the merge refuses to guess: the server's copy stands and the status is
- * "unresolved", so the caller routes the local edit to a copy instead (C25). With a base the
+ * "unresolved", so the caller routes the local edit to a copy instead (C25) — unless the two
+ * copies are equal, which needs no guess. With a base the
  * two sides are merged leaf by leaf, and a block they both changed keeps BOTH variants (C26).
  * The result is stable: merging it again changes nothing (C27).
  */
@@ -58,7 +60,7 @@ export function mergePageContent(
   server: Block[],
 ): MergeResult {
   if (base === null) {
-    return { content: server, status: "unresolved", conflictIds: [] };
+    return { content: server, status: deepEqual(local, server) ? "clean" : "unresolved", conflictIds: [] };
   }
   let result = mergeTree(base, local, server);
   const conflictIds = [...result.conflictIds];

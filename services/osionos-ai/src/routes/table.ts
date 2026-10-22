@@ -1,7 +1,9 @@
+import { config } from '../config.ts';
 import { handleHealth } from './health.ts';
 import { handleConversationMessages, handleConversations } from './conversations.ts';
 import { handleModels } from './models.ts';
 import { handleCommands } from './commands.ts';
+import { handleAgents } from './agents.ts';
 import { handleComplete } from './complete.ts';
 import { handleVoiceTranscribe } from './voice.ts';
 import { handleImages } from './images.ts';
@@ -17,6 +19,7 @@ import {
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
 import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
+import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
 import type { RouteEntry } from './types.ts';
 
 /**
@@ -43,6 +46,7 @@ export const ROUTES: RouteEntry[] = [
 	},
 	{ methods: ['GET'], pattern: /^\/api\/ai\/models$/, label: '/api/ai/models', handle: handleModels },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/commands$/, label: '/api/ai/commands', handle: handleCommands },
+	{ methods: ['GET'], pattern: /^\/api\/ai\/agents$/, label: '/api/ai/agents', handle: handleAgents },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/providers$/, label: '/api/ai/providers', handle: handleProviders },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/usage$/, label: '/api/ai/usage', handle: handleUsage },
 	{
@@ -115,4 +119,22 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalDecision,
 	},
+	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
+	...(config.patEnabled
+		? [
+			{
+				methods: [],
+				pattern: /^\/api\/ai\/access-tokens$/,
+				label: '/api/ai/access-tokens',
+				handle: handleAccessTokens,
+				anyMethod: true,
+			},
+			{
+				methods: ['DELETE'],
+				pattern: /^\/api\/ai\/access-tokens\/([^/]+)$/,
+				label: '/api/ai/access-tokens/:id',
+				handle: handleAccessTokenDelete,
+			},
+		]
+		: []),
 ];
