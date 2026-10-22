@@ -102,7 +102,9 @@ test.describe("settings use the kit", () => {
       // buttons predate the kit adoption and live outside this work package's
       // files, so their radius is taken up there, not here.
       const kitOutsourced = sectionId === "shortcuts";
-      if (!(emptyStateInstead || kitOutsourced)) {
+      // Moderation has a button only per blocked user (Unblock); this spec blocks nobody.
+      const nobodyBlocked = sectionId === "moderation" && (await region(page).getByRole("button", { name: "Unblock" }).count()) === 0;
+      if (!(emptyStateInstead || kitOutsourced || nobodyBlocked)) {
         expect(radii.length, `section ${index} shows buttons`).toBeGreaterThan(0);
         const offRadius = radii.filter((entry) => !segmentLabels.includes(entry.name) && entry.radius !== (entry.isPanel ? panelRadius : radius));
         expect(offRadius, `section ${index}: buttons off the control radius`).toEqual([]);

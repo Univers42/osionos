@@ -25,6 +25,8 @@ import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh,
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { pageContentText, pagePublishText } from './bridge-page-text.mjs';
 import { liveReadableWorkspaces, privateWorkspaceOf } from './bridge-live-workspaces.mjs';
+import { bestShareLevel, shareDenies, shareGrantsRead, shareGrantsWrite } from './bridge-share-rules.mjs';
+import { createShareRuleStore } from './bridge-perms-rules.mjs';
 import { moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
@@ -882,7 +884,7 @@ function databasePermissionError(capability) {
 }
 
 /** Page-level part of canWritePageRow; the client mirrors the whole rule as canWritePage (tests/canvas/bridge-page-write-agreement.test.ts). */
-function mayModifyPage(existing, access) {
+function mayModifyPage(existing, access, level = null) {
 	// An ownerless page follows the ordinary rule: nobody owns it, so only the
 	// workspace's owner/admin, a membership carrying 'update' or an explicit
 	// editor/owner collaborator may write it. The legacy "owner_id IS NULL is
@@ -890,14 +892,31 @@ function mayModifyPage(existing, access) {
 	// admin-only membership the writer of a page nobody could re-share or take back.
 	if (sameId(existing.owner_id, access.userId)) return true; // the page owner
 	if (access.role === 'owner' || access.role === 'admin') return true; // workspace owner/admin
+	// A share rule is an explicit decision about this page: a no_access rule refuses
+	// the write even when the base rule would grant it, and a can_edit rule grants
+	// the write the membership did not carry.
+	if (shareDenies(level)) return false;
+	if (shareGrantsWrite(level)) return true;
 	if (Array.isArray(access.permissions) && access.permissions.includes('update')) return true; // shared-workspace editor
 	const collaborators = Array.isArray(existing.collaborators) ? existing.collaborators : [];
 	const role = collaborators.find((entry) => entry && sameId(entry.userId, access.userId))?.role;
 	return role === 'editor' || role === 'owner'; // explicit page collaborator
 }
 
-function requirePageOwnership(existing, access) {
-	if (!mayModifyPage(existing, access)) throw Object.assign(new Error('You do not have permission to modify this page.'), { status: 403 });
+/** The 403 a page write refuses with. The message names the page, never the caller's role. */
+function pageWriteDenied() {
+	return Object.assign(new Error('You do not have permission to modify this page.'), { status: 403 });
+}
+
+/**
+ * The share level the rules give the caller for one page: the best level among the rules
+ * that match them, or null when none does. One listForPage read per request — the store
+ * is created per call because the bridge's fetch is injected per request and the store
+ * itself holds no state.
+ */
+async function shareLevelForPage(config, workspaceId, pageId, userId, role, fetchImpl) {
+	const rules = await createShareRuleStore({ fetchImpl }).listForPage(config, workspaceId, pageId);
+	return bestShareLevel(rules, { userId, role, workspaceId }, pageId);
 }
 
 /** osionos_workspace_members row for (user, workspace) — org/teamspace membership. */
@@ -1013,7 +1032,7 @@ async function fetchPageRowIfUuid(pageId, config, fetchImpl) {
 
 // Auth/cascade-only page row for handlePageUpdate/handlePageDelete — every existing.<col>
 // those paths dereference (the read check, requireReadablePage: owner_id/visibility/
-// collaborators; requirePageOwnership: owner_id/properties/collaborators;
+// collaborators; the write decision: owner_id/properties/collaborators;
 // ownerOrWorkspaceAccess: owner_id/workspace_id; the workspace-change guard:
 // workspace_id; withoutForeignSharingChanges: owner_id/visibility/collaborators/
 // workspace_id; handlePageArchiveCascade: id/workspace_id; withoutUnreachableParent:
@@ -1044,20 +1063,23 @@ function pageOwnerContext(token, row) {
 }
 
 /**
- * A page's OWNER may always access it, even when the workspace-membership gate
+ * A page the caller's OWNER may access, even when the workspace-membership gate
  * would deny — e.g. a record-note that landed in a read-only seed workspace the
  * user reaches via the MOUNT but not via that workspace's page role. `owner_id` is
  * server-stamped, so this never widens cross-user access. A non-owner outside the
  * page's workspace gets the 404 of a missing id (C101/C136): a 403 would confirm the
  * page exists. A member lacking `permission` is told 403.
+ * `knownMember` is the membership the caller already read (undefined: read it here).
  * Caveat: a hidden page costs one BaaS call more than a missing id (the members
  * lookup), so the two differ in timing, not in status or body.
  */
-async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl = fetch) {
+async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl = fetch, knownMember) {
 	const token = verifyAppSessionToken(bearerToken(request), config);
 	if (row && sameId(row.owner_id, token.userId)) return pageOwnerContext(token, row);
 	const workspaceId = requireUuid(row.workspace_id, 'workspaceId');
-	const member = await callerWorkspaceMember(token, workspaceId, config, fetchImpl);
+	const member = knownMember === undefined
+		? await callerWorkspaceMember(token, workspaceId, config, fetchImpl)
+		: knownMember;
 	if (!member) throw pageNotFound();
 	return workspaceAccessContext(token, workspaceId, member, permission);
 }
@@ -1083,12 +1105,19 @@ function mayMutatePage(row, userId, memberAccess) {
 	return memberAccess !== null && mayModifyPage(row, memberAccess);
 }
 
-/** The page write rule (PATCH/DELETE): what the routes enforce, as one predicate. O(c), c = collaborators. */
-export function canWritePageRow(row, userId, member, permission) {
+/**
+ * The page write rule (PATCH/DELETE): what the routes enforce, as one predicate. O(c), c = collaborators.
+ * `rules` are the share rules for the page (scripts/bridge-share-rules.mjs): a can_edit
+ * rule grants the write the membership did not carry, a no_access rule takes it away.
+ */
+export function canWritePageRow(row, userId, member, permission, rules = null) {
 	if (sameId(row?.owner_id, userId)) return true;
-	return canReadPageRow(row, userId)
-		&& memberHasPermission(member, permission)
-		&& mayModifyPage(row, { ...member, userId });
+	const level = bestShareLevel(rules ?? [], { userId, role: member?.role, workspaceId: row?.workspace_id }, row?.id);
+	if (shareDenies(level)) return false;
+	if (!canReadPageRow(row, userId) && !shareGrantsRead(level)) return false;
+	if (shareGrantsWrite(level)) return true;
+	return memberHasPermission(member, permission)
+		&& mayModifyPage(row, { ...member, userId }, level);
 }
 
 /**
@@ -1098,14 +1127,26 @@ export function canWritePageRow(row, userId, member, permission) {
  * are decided before the permission gate for that reason: a viewer asking for 'update'
  * on a private page must not get a 403 confirming that it exists. A member lacking
  * `permission` is told 403.
+ *
+ * The share rules for the page are read here (one listForPage call per request): a
+ * no_access rule hides the page from everyone but its owner and the workspace
+ * owner/admin, and a can_view rule makes a page the base rule refuses readable.
  */
 export async function readablePageAccess(request, pageId, permission, config, fetchImpl) {
 	const token = verifyAppSessionToken(bearerToken(request), config);
 	const { row: found, member } = await fetchPageRowWithMember(pageId, token.userId, config, fetchImpl);
-	const row = requireReadablePage(found, token.userId);
-	if (sameId(row.owner_id, token.userId)) return { authContext: pageOwnerContext(token, row), row };
+	if (!found) throw pageNotFound();
+	if (sameId(found.owner_id, token.userId)) return { authContext: pageOwnerContext(token, found), row: found };
 	if (!member) throw pageNotFound();
-	return { authContext: workspaceAccessContext(token, requireUuid(row.workspace_id, 'workspaceId'), member, permission), row };
+	const workspaceId = requireUuid(found.workspace_id, 'workspaceId');
+	const role = safeText(member.role, 16);
+	// The workspace owner/admin keep their access whatever the rules say, so they never
+	// pay for the rules read.
+	const level = role === 'owner' || role === 'admin'
+		? null
+		: await shareLevelForPage(config, workspaceId, pageId, token.userId, role, fetchImpl);
+	const row = requireReadablePage(found, token.userId, level);
+	return { authContext: workspaceAccessContext(token, workspaceId, member, permission), row };
 }
 
 /** The one answer for every parent a page may not be nested under, whatever the reason. */
@@ -1162,9 +1203,17 @@ async function withoutUnreachableParent({ payload, ignored }, existing, authCont
 	return { payload: kept, ignored: [...ignored, 'parentPageId'] };
 }
 
-/** `row` when the caller may read it; otherwise the SAME 404 a missing id gets. */
-function requireReadablePage(row, userId) {
-	if (!row || !canReadPageRow(row, userId)) throw pageNotFound();
+/**
+ * `row` when the caller may read it; otherwise the SAME 404 a missing id gets.
+ * `level` is the share level the rules give the caller: a can_view rule makes a page the
+ * base rule refuses readable, and a no_access rule hides the page — from the read path
+ * AND from the write path, so a denied page answers exactly like a missing id and never
+ * confirms that it exists.
+ */
+function requireReadablePage(row, userId, level = null) {
+	if (!row) throw pageNotFound();
+	if (shareDenies(level)) throw pageNotFound();
+	if (!canReadPageRow(row, userId) && !shareGrantsRead(level)) throw pageNotFound();
 	return row;
 }
 
@@ -1174,17 +1223,67 @@ function pageNotFound() {
 }
 
 /**
+ * The write context of one page: the row, the caller's membership in its workspace and
+ * the share level the rules give them. The page owner and the workspace owner/admin keep
+ * their access whatever the rules say, so they never pay for the rules read.
+ * A caller who is not a member of the page's workspace gets the 404 of a missing id.
+ */
+async function pageWriteContext(request, pageId, config, fetchImpl) {
+	const token = verifyAppSessionToken(bearerToken(request), config);
+	const row = await fetchPageAuthRow(pageId, config, fetchImpl);
+	if (!row) throw pageNotFound();
+	if (sameId(row.owner_id, token.userId)) return { token, row, member: null, owner: true, level: null };
+	const workspaceId = requireUuid(row.workspace_id, 'workspaceId');
+	const member = await callerWorkspaceMember(token, workspaceId, config, fetchImpl);
+	if (!member) throw pageNotFound();
+	const role = safeText(member.role, 16);
+	const level = role === 'owner' || role === 'admin'
+		? null
+		: await shareLevelForPage(config, workspaceId, row.id, token.userId, role, fetchImpl);
+	return { token, row, member, workspaceId, owner: false, level };
+}
+
+/**
+ * The write decision for one page: the page owner keeps their access, a can_edit rule
+ * grants the write the membership did not carry, and the base rule (the route's
+ * permission plus the page rule) decides the rest. A no_access rule never reaches here:
+ * the read gate answers it as a missing id, so a denied page is a 404 on the write path
+ * too — it must not confirm that the page exists.
+ */
+function requirePageWrite(context, permission) {
+	// Decide through the one shared predicate (canWritePageRow), so the rule logic
+	// lives in a single place. The level already computed for this request is replayed
+	// as a single rule so bestShareLevel reproduces it; null means "no rule".
+	const syntheticRules = context.level
+		? [{ resource_type: 'page', resource_id: context.row?.id, target: { type: 'user', userId: context.token.userId }, permission: context.level }]
+		: [];
+	if (!canWritePageRow(context.row, context.token.userId, context.member, permission, syntheticRules)) throw pageWriteDenied();
+}
+
+/**
  * Access for a page-scoped side route (config, actions, translate). A page the caller
  * cannot read, or reaches only from outside its workspace, takes the missing-page path:
  * the same answer as a random id, scoped to the caller's own workspace, so nothing is
- * written under the page's workspace.
+ * written under the page's workspace. A page a no_access rule hides takes that path too
+ * — and answers the 404 of a missing id, writing nothing.
  */
 async function requirePageScopeAccess(request, pageId, payload, permission, config, fetchImpl = fetch) {
 	const normalizedPageId = requirePageReference(pageId);
 	const tokenContext = verifyAppSessionToken(bearerToken(request), config);
 	const found = await fetchPageRowIfUuid(normalizedPageId, config, fetchImpl);
-	const row = found && canReadPageRow(found, tokenContext.userId) ? found : null;
-	const pageAccess = row && await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl).catch((error) => {
+	const member = found && !sameId(found.owner_id, tokenContext.userId)
+		? await callerWorkspaceMember(tokenContext, found.workspace_id, config, fetchImpl)
+		: null;
+	const role = safeText(member?.role, 16);
+	// The page owner and the workspace owner/admin keep their access whatever the rules
+	// say, so they never pay for the rules read.
+	const exempt = Boolean(found) && (sameId(found.owner_id, tokenContext.userId) || role === 'owner' || role === 'admin');
+	const level = found && !exempt
+		? await shareLevelForPage(config, found.workspace_id, normalizedPageId, tokenContext.userId, role, fetchImpl)
+		: null;
+	if (shareDenies(level)) throw pageNotFound();
+	const row = found && (canReadPageRow(found, tokenContext.userId) || shareGrantsRead(level)) ? found : null;
+	const pageAccess = row && await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl, member).catch((error) => {
 		if (error?.status === 404) return null;
 		throw error;
 	});
@@ -3361,12 +3460,78 @@ export function favoritePageIdFromPath(pathname) {
 	return requireUuid(decodeURIComponent(match[1]), 'pageId');
 }
 
+// Most-recent first; a list longer than this is truncated, not paginated.
+const FAVORITES_LIST_LIMIT = 200;
+
+/** The favorites' auth rows keyed by lower-cased id, read idChunks at a time; a failed chunk or a bad id leaves its pages absent. */
+async function favoriteAuthRows(favoriteIds, config, fetchImpl) {
+	const ids = [];
+	for (const pageId of favoriteIds) {
+		try { ids.push(requireUuid(pageId, 'pageId').toLowerCase()); } catch { /* not a page id */ }
+	}
+	const byId = new Map();
+	for (const chunk of idChunks([...new Set(ids)])) {
+		try {
+			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&select=${PAGE_AUTH_SELECT}`);
+			for (const row of Array.isArray(rows) ? rows : []) byId.set(String(row.id).toLowerCase(), row);
+		} catch { /* fail closed: this chunk's pages stay absent */ }
+	}
+	return byId;
+}
+
+/** workspace_id → { role, exempt, rules } for the workspaces the caller is a member of; a throwing read omits the workspace (fail closed). */
+async function favoriteWorkspaceAccess(rowsToCheck, authContext, config, fetchImpl) {
+	const idsByWorkspace = new Map();
+	for (const row of rowsToCheck) {
+		if (!idsByWorkspace.has(row.workspace_id)) idsByWorkspace.set(row.workspace_id, []);
+		idsByWorkspace.get(row.workspace_id).push(String(row.id).toLowerCase());
+	}
+	const store = createShareRuleStore({ fetchImpl });
+	const access = new Map();
+	await Promise.all([...idsByWorkspace].map(async ([workspaceId, pageIds]) => {
+		try {
+			const member = await callerWorkspaceMember(authContext, workspaceId, config, fetchImpl);
+			if (!member) return;
+			const role = safeText(member.role, 16);
+			const exempt = role === 'owner' || role === 'admin';
+			const rules = new Map();
+			if (!exempt) {
+				for (const chunk of idChunks(pageIds)) for (const [id, list] of await store.listForPages(config, workspaceId, chunk)) rules.set(id, list);
+			}
+			access.set(workspaceId, { role, exempt, rules });
+		} catch { /* fail closed: every page of this workspace stays absent */ }
+	}));
+	return access;
+}
+
 /** GET /api/favorites — the session user's starred page ids (most-recent first). */
 async function handleFavoritesList(request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	const query = postgrestQuery({ user_id: `eq.${authContext.userId}`, select: 'page_id', order: 'created_at.desc' });
+	const query = postgrestQuery({ user_id: `eq.${authContext.userId}`, select: 'page_id', order: 'created_at.desc', limit: String(FAVORITES_LIST_LIMIT) });
 	const rows = await baasRest(config, fetchImpl, `osionos_page_favorites?${query}`);
-	json(response, 200, { ok: true, pageIds: (Array.isArray(rows) ? rows : []).map((row) => row.page_id) }, config);
+	const favoriteIds = (Array.isArray(rows) ? rows : []).map((row) => row.page_id);
+	// A page hidden by a no_access rule is a missing id, so it never shows in the
+	// caller's favorites even if it was starred before the rule landed.
+	const authRows = await favoriteAuthRows(favoriteIds, config, fetchImpl);
+	const notOwned = [...authRows.values()].filter((row) => !sameId(row.owner_id, authContext.userId));
+	const access = await favoriteWorkspaceAccess(notOwned, authContext, config, fetchImpl);
+	const readableIds = [];
+	for (const pageId of favoriteIds) {
+		const row = authRows.get(String(pageId).toLowerCase());
+		if (!row) continue;
+		let level = null;
+		if (!sameId(row.owner_id, authContext.userId)) {
+			const workspace = access.get(row.workspace_id);
+			if (!workspace) continue;
+			if (!workspace.exempt) {
+				const rules = workspace.rules.get(String(row.id).toLowerCase());
+				if (!rules) continue;
+				level = bestShareLevel(rules, { userId: authContext.userId, role: workspace.role, workspaceId: row.workspace_id }, pageId);
+			}
+		}
+		try { requireReadablePage(row, authContext.userId, level); readableIds.push(pageId); } catch { /* hidden or unreadable */ }
+	}
+	json(response, 200, { ok: true, pageIds: readableIds }, config);
 	return true;
 }
 
@@ -3375,7 +3540,19 @@ async function handleFavoriteAdd(request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const pageId = requireUuid(payload.pageId, 'pageId');
-	const row = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), authContext.userId);
+	const row = await fetchPageAuthRow(pageId, config, fetchImpl);
+	if (!row) throw pageNotFound();
+	// A page hidden by a no_access rule is a missing id, so a caller cannot favourite
+	// a page they are not allowed to see. The page owner and the workspace owner/admin
+	// keep their access whatever the rules say.
+	let level = null;
+	if (!sameId(row.owner_id, authContext.userId)) {
+		const member = await callerWorkspaceMember(authContext, row.workspace_id, config, fetchImpl);
+		const role = safeText(member?.role, 16);
+		const exempt = role === 'owner' || role === 'admin';
+		if (!exempt) level = await shareLevelForPage(config, row.workspace_id, pageId, authContext.userId, role, fetchImpl);
+	}
+	requireReadablePage(row, authContext.userId, level);
 	await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
 	await baasRest(config, fetchImpl, 'osionos_page_favorites', {
 		method: 'POST',
@@ -3647,7 +3824,8 @@ async function fetchPageVersionRow(pageId, config, fetchImpl) {
 async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	const pageId = pageIdFromPath(url.pathname);
 	if (!pageId) return false;
-	const { userId } = verifyAppSessionToken(bearerToken(request), config);
+	// A request without a valid session is a 401 before its body is read.
+	verifyAppSessionToken(bearerToken(request), config);
 	// The body is read before the page: a baseVersion that is not a plain non-negative
 	// integer is refused with 400 and NO BaaS call at all (C17).
 	const requested = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
@@ -3661,20 +3839,21 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	// check runs before any role check, so an unreadable page is a 404 for every role.
 	// Ponytail: readability is decided on this row and not re-checked by the PATCH — an
 	// owner who makes the page private between the two still has this one edit go through.
-	const existing = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), userId);
+	const context = await pageWriteContext(request, pageId, config, fetchImpl);
+	requireReadablePage(context.row, context.token.userId, context.level);
 	// The page OWNER may update their own page even when the workspace gate would
 	// deny — e.g. a record-note that landed in a read-only seed workspace (ac3e…)
 	// reached via the live MOUNT, not via that workspace's page role. Matches the
 	// config/action handlers (requirePageScopeAccess → ownerOrWorkspaceAccess).
-	// requirePageOwnership still runs, so a non-owner gains nothing (owner_id is
+	// requirePageWrite still runs, so a non-owner gains nothing (owner_id is
 	// server-stamped — this never widens cross-user access).
-	const access = await ownerOrWorkspaceAccess(request, existing, 'update', config, fetchImpl);
-	requirePageOwnership(existing, access);
+	requirePageWrite(context, 'update');
+	const existing = context.row;
 
 	// Only the owner changes who may read the page; a non-owner's sharing keys are dropped
 	// (listed in `ignored` when they differed) while the rest of the edit is still written.
-	const sharingChecked = withoutForeignSharingChanges(pagePayload, existing, access.userId);
-	const { payload, ignored } = await withoutUnreachableParent(sharingChecked, existing, access, config, fetchImpl);
+	const sharingChecked = withoutForeignSharingChanges(pagePayload, existing, context.token.userId);
+	const { payload, ignored } = await withoutUnreachableParent(sharingChecked, existing, context.token, config, fetchImpl);
 	if (Object.keys(payload).length === 0 && Object.keys(pagePayload).length > 0) {
 		// Nothing left to write — not even updated_at, so the version did not move and
 		// the caller's baseVersion stays valid (that is why no version is answered here).
@@ -3792,16 +3971,17 @@ function requireAppendAfterBlockId(value) {
 async function handlePageBlocksAppend(url, request, response, config, fetchImpl) {
 	const pageId = pageSubresourceIdFromPath(url.pathname, 'blocks');
 	if (!pageId) return false;
-	const { userId } = verifyAppSessionToken(bearerToken(request), config);
+	// A request without a valid session is a 401 before its body is read.
+	verifyAppSessionToken(bearerToken(request), config);
 	// The payload is checked before the page is fetched: an invalid append costs no
 	// BaaS call at all.
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const blocks = requireAppendBlocks(payload.blocks);
 	const idempotencyKey = requireAppendIdempotencyKey(payload.idempotencyKey);
 	const afterBlockId = requireAppendAfterBlockId(payload.afterBlockId);
-	const existing = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), userId);
-	const access = await ownerOrWorkspaceAccess(request, existing, 'update', config, fetchImpl);
-	requirePageOwnership(existing, access);
+	const context = await pageWriteContext(request, pageId, config, fetchImpl);
+	const existing = requireReadablePage(context.row, context.token.userId, context.level);
+	requirePageWrite(context, 'update');
 	if (existing.archived_at) throw pageNotFound();
 	const rows = await baasRest(config, fetchImpl, 'rpc/osionos_page_append', {
 		method: 'POST',
@@ -4197,10 +4377,10 @@ async function handlePageTranslate(url, request, response, config, fetchImpl) {
 async function handlePageDelete(url, request, response, config, fetchImpl) {
 	const pageId = pageIdFromPath(url.pathname);
 	if (!pageId) return false;
-	const { userId } = verifyAppSessionToken(bearerToken(request), config);
-	const row = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), userId);
-	const access = await ownerOrWorkspaceAccess(request, row, 'delete', config, fetchImpl);
-	requirePageOwnership(row, access);
+	const context = await pageWriteContext(request, pageId, config, fetchImpl);
+	requireReadablePage(context.row, context.token.userId, context.level);
+	requirePageWrite(context, 'delete');
+	const row = context.row;
 	// Deepest first so a landed prefix never leaves a live page under a removed parent.
 	// The root write carries the same workspace scope so a page that left the workspace between the read and the write is left alone.
 	const descendantIds = await cascadeDescendantIds(request, row, 'delete', config, fetchImpl);

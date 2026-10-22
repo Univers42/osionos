@@ -29,12 +29,10 @@ import { createSocialHandler } from '../../../scripts/bridge-social.mjs';
 
 export const uid = (n) => `${String(n).padStart(8, '0')}-0000-4000-8000-000000000000`;
 export const CONFIG = { baasUrl: 'http://baas.test', serviceKey: 'svc-key', allowedOrigin: '*' };
-// Derived from the peer, not from insertion order, so a reordered batch yields the same ids.
-export const newEdgeId = (peer) => `0e${peer.slice(2)}`;
-export const NEW_EDGE_CREATED_AT = '2026-10-19T12:00:00.000Z';
 export const NEW_REPORT_CREATED_AT = '2026-10-22T12:00:00.000Z';
-const EMBED_SELECT = 'user_id,workspace_id,workspace:osionos_workspaces!workspace_id(members:osionos_workspace_members!workspace_id(user_id))';
-const UUID_LIST = /^in\.\(([^)]*)\)$/;
+export const BLOCK_CREATED_AT = '2026-10-19T12:00:00.000Z';
+const UUID_LIST = /^in\.\((.*)\)$/;
+const pairKey = (left, right) => [left, right].sort((a, b) => a.localeCompare(b)).join(':');
 const OR_EDGES = /^\(requester_id\.eq\.([^,]+),addressee_id\.eq\.([^,)]+)\)$/;
 const OR_BLOCKS = /^\(blocked_id\.eq\.([^,]+),blocker_id\.eq\.([^,)]+)\)$/;
 const reply = (rows, status = 200) => ({ ok: status < 400, status, text: async () => (rows === '' ? '' : JSON.stringify(rows)) });
@@ -48,18 +46,6 @@ function idsOf(expr) {
 
 function edgesOf(world, userId) {
 	return world.connections.filter((row) => row.requester_id === userId || row.addressee_id === userId);
-}
-
-function insertEdges(world, rows, prefer) {
-	const inserted = [];
-	for (const row of rows) {
-		const key = pairKey(row.requester_id, row.addressee_id);
-		if (world.connections.some((existing) => pairKey(existing.requester_id, existing.addressee_id) === key)) continue;
-		const stored = { id: newEdgeId(row.addressee_id), ...row, intro_message: null, created_at: NEW_EDGE_CREATED_AT };
-		world.connections.push(stored);
-		inserted.push(stored);
-	}
-	return prefer.includes('return=representation') ? inserted : '';
 }
 
 /** The stored osionos_user_reports row an insert creates. */
@@ -96,10 +82,6 @@ const SHAPES = [
 			const wanted = new Set(idsOf(p.user_id));
 			return world.people.filter((row) => wanted.has(row.user_id));
 		},
-	},
-	{
-		logical: 'insert', method: 'POST', table: 'osionos_connections', keys: ['on_conflict'], fixed: { on_conflict: 'pair_key' }, prefer: 'resolution=ignore-duplicates,return=representation',
-		run: (world, _p, body, prefer) => insertEdges(world, body, prefer),
 	},
 	// ── the report route (bridge-reports.mjs) and the subjects it resolves ──
 	{
@@ -189,6 +171,73 @@ const SHAPES = [
 		keys: ['id', 'select', 'limit'],
 		fixed: { select: 'id,author_id,page_id', limit: '1' },
 		run: (world, p) => world.pageComments.filter((row) => row.id === p.id.slice(3)),
+	// Block management (P5-4-a).
+	{
+		logical: 'blocksList', method: 'GET', table: 'osionos_user_blocks', keys: ['blocker_id', 'select', 'order'],
+		fixed: { select: 'blocked_id,reason,created_at', order: 'created_at.desc' },
+		run: (world, p) => world.blocks
+			.filter((row) => row.blocker_id === p.blocker_id.replace('eq.', ''))
+			.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+			.map((row) => ({ blocked_id: row.blocked_id, reason: row.reason ?? null, created_at: row.created_at ?? null })),
+	},
+	{
+		logical: 'blocksInsert', method: 'POST', table: 'osionos_user_blocks', keys: ['on_conflict'], fixed: { on_conflict: 'blocker_id,blocked_id' }, prefer: 'resolution=merge-duplicates,return=minimal',
+		run: (world, _p, body) => {
+			const row = { blocker_id: body.blocker_id, blocked_id: body.blocked_id, reason: body.reason ?? null, created_at: BLOCK_CREATED_AT };
+			const existing = world.blocks.find((r) => r.blocker_id === row.blocker_id && r.blocked_id === row.blocked_id);
+			if (existing) Object.assign(existing, row);
+			else world.blocks.push(row);
+			return '';
+		},
+	},
+	{
+		logical: 'blocksReadback', method: 'GET', table: 'osionos_user_blocks', keys: ['blocker_id', 'blocked_id', 'select'],
+		fixed: { select: 'blocked_id,reason,created_at' },
+		run: (world, p) => {
+			const blocker = p.blocker_id.replace('eq.', '');
+			const blocked = p.blocked_id.replace('eq.', '');
+			return world.blocks
+				.filter((row) => row.blocker_id === blocker && row.blocked_id === blocked)
+				.map((row) => ({ blocked_id: row.blocked_id, reason: row.reason ?? null, created_at: row.created_at ?? null }));
+		},
+	},
+	{
+		logical: 'blocksDelete', method: 'DELETE', table: 'osionos_user_blocks', keys: ['blocker_id', 'blocked_id'], fixed: {}, prefer: 'return=minimal',
+		run: (world, p) => {
+			const blocker = p.blocker_id.replace('eq.', '');
+			const blocked = p.blocked_id.replace('eq.', '');
+			world.blocks = world.blocks.filter((row) => !(row.blocker_id === blocker && row.blocked_id === blocked));
+			return '';
+		},
+	},
+	{
+		logical: 'connectionsByPair', method: 'GET', table: 'osionos_connections', keys: ['pair_key', 'select'],
+		fixed: { select: 'id,status' },
+		run: (world, p) => {
+			const pair = decodeURIComponent(p.pair_key.replace('eq.', ''));
+			return world.connections
+				.filter((row) => pairKey(row.requester_id, row.addressee_id) === pair)
+				.map((row) => ({ id: row.id, status: row.status }));
+		},
+	},
+	{
+		logical: 'connectionsPatchById', method: 'PATCH', table: 'osionos_connections', keys: ['id'], fixed: {}, prefer: 'return=representation',
+		run: (world, p, body) => {
+			const id = p.id.replace('eq.', '');
+			const matching = world.connections.filter((row) => row.id === id);
+			for (const row of matching) Object.assign(row, body);
+			return matching.map((row) => ({ id: row.id, status: row.status }));
+		},
+	},
+	// Block route's edge update (and any pair_key patch).
+	{
+		logical: 'connectionsPatchByPair', method: 'PATCH', table: 'osionos_connections', keys: ['pair_key'], fixed: {}, prefer: 'resolution=merge-duplicates,return=minimal',
+		run: (world, p, body) => {
+			const pair = decodeURIComponent(p.pair_key.replace('eq.', ''));
+			const matching = world.connections.filter((row) => pairKey(row.requester_id, row.addressee_id) === pair);
+			for (const row of matching) Object.assign(row, body);
+			return matching.map((row) => ({ id: row.id, status: row.status }));
+		},
 	},
 ];
 
