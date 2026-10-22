@@ -18,7 +18,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Dropdown, Modal, Toggle } from '@/shared/ui';
 import { WorkspaceThemeControls } from '@/features/theme/WorkspaceThemePanel';
 import { useUserPreferencesStore, recordSettingsAction } from '@/store/settings';
-import { useAccessibilitySnapshotKey } from '@/shared/config/useAppearance';
 import { ConfirmModal } from '../ui/ConfirmModals';
 import { Section, SettingRow } from '../ui/settingsKit';
 import { runAsync } from '../model/settingsCalls';
@@ -72,13 +71,6 @@ export const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUse
   const cookies = preferences?.cookies as { mode?: string } | undefined;
   const cookieButtonLabel = cookieModeLabel(cookies?.mode);
   const timezones = useMemo(() => timezoneOptions().map((timezone) => ({ value: timezone, label: timezone.replaceAll('_', ' ') })), []);
-  // The theme controls keep their own snapshot of the appearance. After an
-  // accessibility change that snapshot is older than the live one, and the
-  // next theme change would roll the accessibility choice back — so they are
-  // remounted when an accessibility choice changes. The key is that choice
-  // alone: a colour or a density change leaves the theme controls (and the
-  // focus on a swatch) alone.
-  const accessibilityKey = useAccessibilitySnapshotKey();
 
   return (
     <>
@@ -87,7 +79,7 @@ export const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUse
           Choose a color theme and light/dark mode for osionos on this device.
         </p>
         <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4">
-          <WorkspaceThemeControls key={accessibilityKey} compact />
+          <WorkspaceThemeControls compact />
         </div>
       </Section>
       <AccessibilitySettings />

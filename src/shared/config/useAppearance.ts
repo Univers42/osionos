@@ -110,16 +110,3 @@ export function useHovercardsChoice(): Hovercards {
     () => "on",
   );
 }
-
-/** The five accessibility choices as one string. A panel that keeps its own
- *  snapshot of the appearance uses it as a key: remounting on a change of the
- *  accessibility choices refreshes that snapshot without touching the focus
- *  of a control that changed something else. */
-export function useAccessibilitySnapshotKey(): string {
-  const linkUnderline = useLinkUnderline();
-  const motion = useMotionPreference();
-  const animatedImages = useAnimatedImagesMode();
-  const hovercards = useHovercardsChoice();
-  const urlPaste = useUrlPasteMode();
-  return `${linkUnderline}|${motion}|${animatedImages}|${hovercards}|${urlPaste}`;
-}
