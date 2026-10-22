@@ -51,7 +51,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { SURFACES, checkText, effectiveVerdict } from './bridge-moderation.mjs';
+import { SURFACES, checkText, effectiveVerdict, moderationMode } from './bridge-moderation.mjs';
 import { rest } from './bridge-social-core.mjs';
 
 /**
@@ -95,6 +95,40 @@ export function decideWrite({
 	if (verdict === 'hold' && recordable) return { outcome: 'write_held', record: 'hold', ...base };
 	if (acknowledged !== true) return { outcome: 'needs_ack', record: null, ...base };
 	return { outcome: 'write', record: recordable && verdict === 'warn' ? 'warn' : null, ...base };
+}
+
+/**
+ * The WARN-ONLY gate: L0 asks the author before FIVE MORE public-facing
+ * writes — a profile, a community, a channel message, a published page, a
+ * marketplace app.
+ *
+ * ONE helper for the five sites, so the rule of this slice lives in one
+ * place: `publicReadable` is false and `stateEnabled` is false, ALWAYS. These
+ * five tables have no `moderation_state` column, so nothing here is ever
+ * written held and no audit row is ever written: a verdict that is a HOLD is
+ * a warning like any other, and the author answers it with
+ * `acknowledgeWarning: true`. The mode still decides whether the question is
+ * asked at all: unset (the default) is `log`, and every outcome is `write`,
+ * so the default configuration changes NOTHING.
+ *
+ * The decision is PURE, like `decideWrite`: the caller asks BEFORE the write
+ * and answers `needs_ack` with a 409 (`moderationWarningBody`) and writes
+ * NOTHING. The matched TERMS belong to the author's own screen and are never
+ * logged (C94).
+ *
+ * @param {{ text: string, surface: string, env?: object, payload?: object }} input
+ * @returns {{ outcome: 'write' | 'needs_ack' | 'write_held', codes: string[], terms: string[], policyHash: string }}
+ */
+export function askBeforeWrite({ text, surface, env = process.env, payload = null } = {}) {
+	return decideWrite({
+		text,
+		surface,
+		mode: moderationMode(env),
+		// No state column on these five tables: nothing is held, nothing is recorded.
+		publicReadable: false,
+		stateEnabled: false,
+		acknowledged: payload?.acknowledgeWarning === true,
+	});
 }
 
 /**
