@@ -367,6 +367,16 @@ export const usePageStore = create<PageStore>((set, get) => ({
     });
   },
 
+  setPageContentVersion: (pageId, version) => {
+    const page = get().pageById(pageId);
+    if (!page || page.contentVersion === version) return;
+    set((s) => {
+      const next = replacePage(s, pageId, (current) => ({ ...current, contentVersion: version }));
+      schedulePagesCachePersist(next.pages, page.workspaceId);
+      return next;
+    });
+  },
+
   patchPage: (pageId, patch) => {
     const page = get().pageById(pageId);
     if (!page || !canEditPage(page, getCurrentPageAccessContext())) return;
