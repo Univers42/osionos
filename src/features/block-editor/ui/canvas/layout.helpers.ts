@@ -137,6 +137,7 @@ export function layoutCellHasHeavyBlocks(blocks: Block[] | undefined): boolean {
     nestedBlock.type === "draw" ||
     nestedBlock.type === "whiteboard" ||
     nestedBlock.type === "diagram" ||
+    nestedBlock.type === "embed" ||
     layoutCellHasHeavyBlocks(nestedBlock.children)
   )));
 }

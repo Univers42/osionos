@@ -1,0 +1,13 @@
+{
+  "url": "https://vimeo.example/76979871",
+  "kind": "video",
+  "provider": "Vimeo",
+  "title": "The New Vimeo Player (You Know, For Videos)",
+  "description": "It may look (mostly) the same on the surface, but under the hood we totally rebuilt our player.",
+  "siteName": "Vimeo",
+  "image": "https://i.vimeocdn.example/video/452001751-640.jpg",
+  "favicon": "https://vimeo.example/favicon.ico",
+  "player": { "src": "https://player.vimeo.example/video/76979871", "aspect": "16/9" },
+  "media": null,
+  "frameable": true
+}

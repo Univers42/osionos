@@ -42,6 +42,9 @@ import { getBlockDraftContent } from "./blockDraftStore";
 import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
 import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
 import { BLOCK_TRANSFORM_OPTIONS } from "./blockTransformOptions";
+import { linkTurnIntoOptions, turnLinkBlockInto, type LinkTurnTarget } from "./linkTurnInto";
+import type { SnapshotRequest } from "./linkSnapshotApply";
+import { updateBlockInTree } from "@/entities/block/model/blockTreeUtils";
 import {
   changeBlockTypeInTree,
   changeBlockToColumnsInTree,
@@ -61,6 +64,7 @@ interface UseBlockContextMenuOptions {
   sourceKey: string;
   updatePageContent: (pageId: string, blocks: Block[]) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
+  attachLinkSnapshot: (request: SnapshotRequest) => void;
 }
 
 interface OperationResult {
@@ -199,6 +203,7 @@ export function useBlockContextMenu({
   sourceKey,
   updatePageContent,
   focusBlock,
+  attachLinkSnapshot,
 }: Readonly<UseBlockContextMenuOptions>) {
   const [contextMenu, setContextMenu] = useState<BlockContextMenuState | null>(
     null,
@@ -300,6 +305,23 @@ export function useBlockContextMenu({
       );
     },
     [applyOperation, content, contextMenu],
+  );
+
+  const handleLinkTurnInto = useCallback(
+    (target: LinkTurnTarget) => {
+      if (!blockLocation) return;
+      const source = { ...blockLocation.block, content: effectiveBlockContent };
+      const turned = turnLinkBlockInto(source, target);
+      if (!turned) return;
+      applyOperation({
+        blocks: updateBlockInTree(content, source.id, () => turned.block),
+        focusBlockId: source.id,
+      });
+      if (turned.needsSnapshot) {
+        attachLinkSnapshot({ kind: "block", blockId: source.id, url: turned.block.content ?? "" });
+      }
+    },
+    [applyOperation, attachLinkSnapshot, blockLocation, content, effectiveBlockContent],
   );
 
   const handleToggleHeading = useCallback(
@@ -457,7 +479,14 @@ export function useBlockContextMenu({
             label: option.label,
             active: option.type === blockLocation.block.type,
             onClick: () => handleChangeType(option.type),
-          })).concat([
+          })).concat(
+            linkTurnIntoOptions({ ...blockLocation.block, content: effectiveBlockContent }).map((option) => ({
+              icon: "🔗",
+              label: option.label,
+              active: option.active,
+              onClick: () => handleLinkTurnInto(option.target),
+            })),
+          ).concat([
             {
               icon: "▸H1",
               label: "Toggle heading 1",
@@ -706,6 +735,7 @@ export function useBlockContextMenu({
     handleDelete,
     handleDuplicate,
     handleInsert,
+    handleLinkTurnInto,
     handleMove,
     handleColumns,
     handleComment,
