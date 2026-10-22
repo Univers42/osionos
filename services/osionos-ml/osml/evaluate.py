@@ -185,8 +185,18 @@ def evaluate(
     }
 
 
-def write_results(report: dict[str, Any], out: Path) -> None:
+def _results_dir(requested: Path) -> Path:
+    """`requested` resolved, or ValueError when it is not under `./results`."""
+    results_root = os.path.realpath(Path.cwd() / "results")
+    real = os.path.realpath(requested)
+    if real != results_root and not real.startswith(results_root + os.sep):
+        raise ValueError(f"--out must stay under {results_root}")
+    return Path(real)
+
+
+def write_results(report: dict[str, Any], requested: Path) -> None:
     """Write the numbers down: `metrics.json` for the machines, `RESULTS.md` for the humans."""
+    out = _results_dir(requested)
     out.mkdir(parents=True, exist_ok=True)
     (out / "metrics.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -255,11 +265,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     # Bounded so a CLI argument cannot write outside the results directory.
-    results_root = os.path.realpath(Path.cwd() / "results")
-    real_out = os.path.realpath(args.out)
-    if real_out != results_root and not real_out.startswith(results_root + os.sep):
-        parser.error(f"--out must stay under {results_root}")
-    out = Path(real_out)
+    try:
+        out = _results_dir(args.out)
+    except ValueError as refused:
+        parser.error(str(refused))
 
     report = evaluate(
         users=args.users,
