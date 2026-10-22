@@ -25,14 +25,14 @@ import { kvStub } from './support/kv-stub.mjs';
 // The columns the account role may select (P1-1's grant), camelCased for the wire.
 const OWNER_KEYS = [
 	'avatarUrl', 'bannerUrl', 'bio', 'company', 'createdAt', 'directoryOptOut', 'displayName', 'headline',
-	'links', 'location', 'orcid', 'patreon', 'pronouns', 'searchDoc', 'timezone', 'updatedAt', 'userId',
-	'username', 'version', 'website',
+	'links', 'location', 'orcid', 'patreon', 'profession', 'pronouns', 'searchDoc', 'timezone', 'updatedAt',
+	'userId', 'username', 'version', 'website',
 ];
 
 // The public card: the allowlist, and nothing else.
 const CARD_KEYS = [
 	'avatarUrl', 'bannerUrl', 'bio', 'company', 'displayName', 'headline', 'links', 'location', 'orcid',
-	'patreon', 'pronouns', 'timezone', 'userId', 'username', 'website',
+	'patreon', 'profession', 'pronouns', 'timezone', 'userId', 'username', 'website',
 ];
 
 const REDUCED_KEYS = ['avatarUrl', 'displayName', 'userId', 'username'];
@@ -48,6 +48,7 @@ function profileOf(userId, overrides = {}) {
 		directory_opt_out: false, version: 1,
 		created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z',
 		search_doc: "'first':3 'programmer':2",
+		profession: 'developer',
 		...overrides,
 	};
 }
@@ -202,6 +203,66 @@ describe('PATCH /api/account/profile', () => {
 			assert.equal(call.claims?.sub, USER_A);
 			assert.notEqual(call.authorization, 'Bearer service-role-test-key');
 		}
+	});
+});
+
+describe('the profession on the account row', () => {
+	it('carries the If-Match into the write filter and moves the version by one', async (t) => {
+		const { base, token, store } = await world(t);
+		const response = await writeProfile(base, token, { profession: 'teacher' }, '1');
+		assert.equal(response.status, 200);
+		assert.equal(response.body.profession, 'teacher');
+		assert.equal(response.body.version, 2);
+		assert.equal(response.headers.get('etag'), '"2"');
+		const write = store.callsTo('osionos_profiles').find((call) => call.method === 'PATCH');
+		assert.equal(write.params.get('version'), 'eq.1', 'the If-Match version filters the write');
+		assert.equal(write.body.profession, 'teacher');
+	});
+
+	it('answers 422 invalid_field naming the profession for a value the CHECK refuses', async (t) => {
+		// The 23514 comes from the database, not from the route: the constraint is named
+		// after its column, so the route can name the field without the SQL.
+		const { base, token } = await world(t, {
+			fail: (call) => (call.method === 'PATCH' && call.table === 'osionos_profiles'
+				? {
+					status: 400,
+					body: {
+						code: '23514',
+						message: 'new row for relation "osionos_profiles" violates check constraint "osionos_profiles_profession_check"',
+						details: 'Failing row contains (profession)',
+						hint: null,
+					},
+				}
+				: null),
+		});
+		const response = await writeProfile(base, token, { profession: 'wizard' });
+		assert.equal(response.status, 422);
+		assert.equal(response.body.code, 'invalid_field');
+		assert.equal(response.body.field, 'profession');
+		assert.doesNotMatch(response.text, /violates|check constraint|SQLSTATE|23514|osionos_profiles/i);
+	});
+
+	it('clears the profession with null', async (t) => {
+		const { base, token, store } = await world(t);
+		const response = await writeProfile(base, token, { profession: null }, '1');
+		assert.equal(response.status, 200);
+		assert.equal(response.body.profession, null);
+		assert.equal(store.rows('osionos_profiles')[0].profession, null);
+	});
+
+	it('answers the profession on the full card', async (t) => {
+		const { base, token } = await world(t);
+		const response = await send(base, '/api/users/ada', { token });
+		assert.equal(response.status, 200);
+		assert.equal(response.body.profession, 'developer');
+	});
+
+	it('never answers the profession on the reduced card', async (t) => {
+		const { base, config } = await world(t, { rows: { profiles: [profileOf(USER_A, { directory_opt_out: true })] } });
+		const response = await send(base, '/api/users/ada', { token: sessionToken(config, USER_B) });
+		assert.equal(response.status, 200);
+		assert.deepEqual(Object.keys(response.body).sort(), REDUCED_KEYS);
+		assert.equal(response.body.profession, undefined);
 	});
 });
 
