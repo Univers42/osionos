@@ -41,6 +41,8 @@ import type { ChatMessagePart } from "./chatTypes";
 export const SEARCH_TOOL = "search_workspace";
 /** The tool that reads one page. */
 export const READ_TOOL = "read_page";
+/** The tool that loads one skill of the agent. */
+export const LOAD_SKILL_TOOL = "load_skill";
 
 /** Where a call stands. */
 export type ToolActivityStatus = "running" | "done" | "failed";
@@ -70,6 +72,11 @@ const LABEL_CHARS = 120;
  * title comes with the source the read found, and it is taken there.
  */
 function toolLabel(toolName: string, input: unknown): string {
+  // The id of a skill is the label: the client holds no list of skill names.
+  if (toolName === LOAD_SKILL_TOOL) {
+    const id = (input as { id?: unknown } | null)?.id;
+    return typeof id === "string" ? id.trim().slice(0, LABEL_CHARS) : "";
+  }
   if (toolName !== SEARCH_TOOL) return "";
   const query = (input as { query?: unknown } | null)?.query;
   if (typeof query !== "string") return "";
