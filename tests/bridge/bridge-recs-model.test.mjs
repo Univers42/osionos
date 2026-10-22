@@ -11,8 +11,8 @@
 /* ************************************************************************** */
 /**
  * The recommender's maths in the bridge: the fold-in of a user, the
- * explanation of a recommendation, the diversity of the slate and its
- * signature.
+ * explanation of a recommendation and the diversity of the slate. The
+ * signature of the slate is bridge-recs-slate.test.mjs.
  *
  * What the model must hold:
  *   * the fold-in agrees with the numpy reference (services/osionos-ml) — the
@@ -21,30 +21,24 @@
  *     definite is refused with a throw, never with a NaN;
  *   * the explanation names the item that really contributes;
  *   * the diversity pushes a near-duplicate below a distinct item, and keeps
- *     the authors apart;
- *   * a slate verifies for its own user, and for nobody else.
+ *     the authors apart.
  */
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { signAppSessionToken } from '../../scripts/bridge-session-token.mjs';
 import {
 	confidences,
 	explain,
 	foldIn,
 	itemWeights,
 	mmr,
-	signSlate,
-	verifySlate,
 } from '../../scripts/bridge-recs-model.mjs';
 
 const FIXTURE = JSON.parse(readFileSync(
 	new URL('../../services/osionos-ml/tests/fixtures/foldin-parity.json', import.meta.url),
 	'utf8',
 ));
-
-const SECRET = 'the-app-session-secret';
 
 /** The vector of an item of the fixture. */
 function vectorOf(itemId) {
@@ -162,46 +156,5 @@ describe('the diversity', () => {
 			{ id: 'y', ownerId: 'u2', score: 1, vector: [0, 1] },
 		];
 		assert.deepEqual(mmr(candidates, { limit: 2 }).map((candidate) => candidate.id), ['x', 'y']);
-	});
-});
-
-describe('the signed slate', () => {
-	const issuedAt = 1_700_000_000_000;
-	const token = signSlate(SECRET, {
-		recId: 'rec-1',
-		userId: 'user-1',
-		surface: 'home',
-		items: ['page-1', 'page-2'],
-		issuedAt,
-	});
-
-	it('verifies for its own user', () => {
-		const verified = verifySlate(SECRET, token, 'user-1', issuedAt);
-		assert.deepEqual(verified, { recId: 'rec-1', surface: 'home', items: ['page-1', 'page-2'] });
-	});
-
-	it('verifies for nobody else', () => {
-		assert.equal(verifySlate(SECRET, token, 'user-2', issuedAt), null);
-	});
-
-	it('refuses a token whose signature was tampered with', () => {
-		const [payload, signature] = token.split('.');
-		const flipped = `${payload}.${signature[0] === 'A' ? 'B' : 'A'}${signature.slice(1)}`;
-		assert.equal(verifySlate(SECRET, flipped, 'user-1', issuedAt), null);
-	});
-
-	it('refuses a slate of an hour and one second ago', () => {
-		assert.ok(verifySlate(SECRET, token, 'user-1', issuedAt + 3_600_000));
-		assert.equal(verifySlate(SECRET, token, 'user-1', issuedAt + 3_601_000), null);
-	});
-
-	it('is not a session token, and a session token is not a slate', () => {
-		const session = signAppSessionToken({
-			payload: { subject: 'user-1', provider: 'test' },
-			workspace: { _id: 'workspace-1' },
-			config: { appSessionSecret: SECRET, sessionTtlSeconds: 3600 },
-		}).token;
-		assert.equal(verifySlate(SECRET, session, 'user-1', issuedAt), null);
-		assert.throws(() => verifyAppSessionToken(token, { appSessionSecret: SECRET, sessionTtlSeconds: 3600 }));
 	});
 });
