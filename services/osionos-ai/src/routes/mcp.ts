@@ -58,15 +58,20 @@ export async function handleMcp(ctx: RouteContext): Promise<number> {
 		sendMcpError(response, httpStatus, typeof code === 'string' ? code : 'invalid_request');
 		return httpStatus;
 	}
+	// MCP 2025-06-18 dropped JSON-RPC batches: one POST is one message, so one
+	// unit of the rate windows above is one call (review F1: an array of 20
+	// calls would have cost one unit).
+	if (Array.isArray(body)) {
+		sendMcpError(response, 400, 'batch_not_supported');
+		return 400;
+	}
 	const server = createMcpServer(ctx.deps.db, principal);
-	// The guard above already decided; the transport checks the same two
-	// headers again, so a later change of one cannot open the other (C118).
+	// The host and origin check is guardRefusal above, and only it: the SDK
+	// compares the raw Host header, port included, which the configured names
+	// do not carry.
 	const transport = new StreamableHTTPServerTransport({
 		sessionIdGenerator: undefined,
 		enableJsonResponse: true,
-		enableDnsRebindingProtection: true,
-		allowedHosts: [String(request.headers.host)],
-		allowedOrigins: [...config.mcpAllowedOrigins],
 	});
 	response.on('close', () => {
 		void transport.close();

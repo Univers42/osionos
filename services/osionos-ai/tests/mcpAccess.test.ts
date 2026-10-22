@@ -30,6 +30,27 @@ describe('the remote MCP endpoint: authentication', () => {
 		assert.equal(inQuery.headers['access-control-allow-origin'], undefined);
 	});
 
+	it('a token in the query is 401 even next to a valid Authorization header (C112)', async () => {
+		const good = await mint(USER_A, [WORKSPACE_A]);
+		const both = await raw('POST', `/api/ai/mcp?token=${good.token}`, {
+			headers: { accept: 'application/json, text/event-stream', authorization: `Bearer ${good.token}` },
+			body: { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+		});
+		assert.equal(both.status, 401);
+	});
+
+	it('a JSON-RPC batch is refused: one POST is one call of the rate window (review F1)', async () => {
+		const { token } = await mint(USER_A, [WORKSPACE_A]);
+		const batch = await raw('POST', '/api/ai/mcp', {
+			headers: { accept: 'application/json, text/event-stream', authorization: `Bearer ${token}` },
+			body: [
+				{ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+				{ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+			],
+		});
+		assert.equal(batch.status, 400);
+	});
+
 	it('a revoked token is refused on the very next call, with no cache (C116)', async () => {
 		const { id, token } = await mint(USER_A, [WORKSPACE_A]);
 		assert.equal((await rpc(token, 'tools/list')).status, 200);
