@@ -266,12 +266,3 @@ export function createSelfDataRoutes({ config, pg, kv, verifySession }) {
 		}
 	};
 }
-
-export {
-	dedupeEdgesByPeer,
-	dedupeConnectionsByPeer,
-	dedupeConnectionEdges,
-	dedupeEdges,
-	dedupeBidirectionalEdges,
-	oneRowPerPerson,
-} from './bridge-self-sources.mjs';
