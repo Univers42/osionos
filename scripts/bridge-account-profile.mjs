@@ -54,14 +54,18 @@ function camelCase(column) {
 const OWNER_COLUMNS = [
 	'user_id', 'display_name', 'username', 'pronouns', 'headline', 'bio', 'location', 'company',
 	'website', 'links', 'timezone', 'orcid', 'patreon', 'avatar_url', 'banner_url', 'directory_opt_out',
-	'version', 'created_at', 'updated_at', 'search_doc',
+	'profession', 'version', 'created_at', 'updated_at', 'search_doc',
 ];
 
 // The public card: the allowlist. The email, the settings, the deletion state, the
 // directory opt-out and the version never leave through it.
+//
+// Deviation from P1-2a contract 3 (docs/account-platform/wp/P1-2a.md:44-49): the full
+// card gains `profession`. It is additive — no field, status or shape changes — and ADR
+// 0004 records it. The reduced card below is unchanged.
 const CARD_COLUMNS = [
 	'user_id', 'username', 'display_name', 'pronouns', 'headline', 'bio', 'location', 'company',
-	'website', 'links', 'timezone', 'orcid', 'patreon', 'avatar_url', 'banner_url',
+	'website', 'links', 'timezone', 'orcid', 'patreon', 'avatar_url', 'banner_url', 'profession',
 ];
 
 // The reduced card: what a viewer who may not see the whole profile gets.
@@ -70,7 +74,7 @@ const REDUCED_CARD_COLUMNS = ['user_id', 'username', 'display_name', 'avatar_url
 // The columns the account role may UPDATE, minus `username` (P1-2b owns the rename).
 const EDITABLE_COLUMNS = [
 	'display_name', 'pronouns', 'headline', 'bio', 'location', 'company', 'website', 'links',
-	'timezone', 'orcid', 'patreon', 'directory_opt_out',
+	'timezone', 'orcid', 'patreon', 'directory_opt_out', 'profession',
 ];
 const EDITABLE = new Map(EDITABLE_COLUMNS.map((column) => [camelCase(column), column]));
 const FIELD_BY_COLUMN = new Map(EDITABLE_COLUMNS.map((column) => [column, camelCase(column)]));
