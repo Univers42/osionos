@@ -236,8 +236,10 @@ export function jsonCanvasToElements(canvas: Canvas): CanvasElementResult {
     if (!box) continue;
     const holding = frames.filter((frame) => !ids.includes(frame.id) && contains(frame.box, box));
     if (holding.length === 0) continue;
-    const inner = holding.reduce((smallest, frame) =>
-      frame.box.width * frame.box.height < smallest.box.width * smallest.box.height ? frame : smallest,
+    const inner = holding.reduce(
+      (smallest, frame) =>
+        frame.box.width * frame.box.height < smallest.box.width * smallest.box.height ? frame : smallest,
+      holding[0],
     );
     for (const id of ids) {
       const element = elementById.get(id);
