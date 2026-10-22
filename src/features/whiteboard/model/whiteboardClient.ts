@@ -26,6 +26,8 @@ export interface ImportedScene {
 export interface WhiteboardClient {
   createBoard: (title: string) => Promise<{ slug: string }>;
   importScene: (slug: string, elements: readonly unknown[]) => Promise<ImportedScene>;
+  /** The elements a board holds, as the service stores them. */
+  readScene: (slug: string) => Promise<unknown[]>;
 }
 
 /** The whiteboard origin without a trailing slash, or "" when the build blanked it. */
@@ -97,6 +99,15 @@ export function createWhiteboardClient(fetchImpl: FetchLike = (url, init) => fet
         body: JSON.stringify({ type: "osidraw", version: 1, elements }),
       });
       return { slug, elementCount: countLiveElements(body) };
+    },
+    async readScene(slug) {
+      if (!isBoardSlug(slug)) throw new WhiteboardApiError(0, "bad_slug", "That is not a valid board.");
+      const body = await send(fetchImpl, `${whiteboardBaseUrl()}/v1/boards/${slug}`, { method: "GET" });
+      const elements = (body as { scene?: { elements?: unknown } } | null)?.scene?.elements;
+      if (!Array.isArray(elements)) {
+        throw new WhiteboardApiError(0, "bad_response", "The whiteboard service returned a board this app cannot read.");
+      }
+      return elements as unknown[];
     },
   };
 }
