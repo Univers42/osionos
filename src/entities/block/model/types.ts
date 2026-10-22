@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import type { EmbedSnapshot } from '@/shared/lib/embed/embedInfo';
+
 /**
  * Standalone Block types for the playground application.
  * This replaces the external @src/types/database dependency.
@@ -47,6 +49,8 @@ export type BlockType =
   | 'graph_view'
   | 'draw'
   | 'whiteboard'
+  | 'embed'
+  | 'bookmark'
   | 'home_views'
   | 'placeholder';
 
@@ -148,6 +152,8 @@ export interface Block {
   drawHeight?: number;      /** LEGACY 'draw' block canvas height in px. The retired Draw tool; its scene JSON still lives in `content`. */
   boardSlug?: string;       /** 'whiteboard' block: slug of the drawnosaurus board it embeds. Unset until the board is created. */
   whiteboardHeight?: number; /** 'whiteboard' block frame height in px (default 520). `content` holds the board title. */
+  embed?: EmbedSnapshot;    /** Resolved link metadata for 'embed'/'bookmark' (and later media blocks). UNTRUSTED: parseEmbedSnapshot before use. `content` keeps the URL. */
+  embedHeight?: number;     /** 'embed' block frame height in px for a generic page; clampEmbedHeight at use. */
   buttonLabel?: string;     /** Visible label for a 'button' block (falls back to content) */
   buttonHref?: string;      /** Button target: internal page link `page://<id>`, a `/...` path, else presentational */
   buttonVariant?: 'primary' | 'secondary'; /** Button style for a 'button' block (default: primary) */

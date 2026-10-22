@@ -49,6 +49,7 @@ import { createSocialHandler } from './bridge-social.mjs';
 import { handleAutomationWebhook } from './bridge-automations-webhook.mjs';
 import { createRequestMeter } from './bridge-perf.mjs';
 import { createBaasTransport } from './bridge-baas-transport.mjs';
+import { createEmbedHandler } from './bridge-embed.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -4178,6 +4179,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.notify(url, request, response, context.config)) return;
 	if (await context.social.push(url, request, response, context.config)) return;
 	if (await context.social.media(url, request, response, context.config)) return;
+	if (await context.social.embed(url, request, response, context.config)) return;
 	if (await context.social.tasks(url, request, response, context.config)) return;
 	if (await context.social.comments(url, request, response, context.config)) return;
 	if (await context.social.publicPages(url, request, response, context.config)) return;
@@ -4246,6 +4248,7 @@ export function createBridgeServer(options = {}) {
 		notify: createNotifyHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
 			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),

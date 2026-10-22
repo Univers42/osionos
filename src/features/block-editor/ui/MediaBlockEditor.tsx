@@ -27,6 +27,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { Block } from "@/entities/block";
 import { MEDIA_BLOCK_LABELS, isMediaBlockType } from "@/entities/block";
 import { MediaBlockPreview, resolveMediaBlockAsset } from "@/entities/block/ui/MediaBlockPreview";
+import type { EmbedSnapshot } from "@/shared/lib/embed/embedInfo";
 import { usePageStore } from "@/store/usePageStore";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { MediaEmbedDialog } from "./MediaEmbedDialog";
@@ -73,8 +74,8 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   const textStyle = getBlockTextStyle(block);
 
   const handleSelect = useCallback(
-    (value: string) => {
-      updateBlock(pageId, block.id, { asset: value });
+    (value: string, embed?: EmbedSnapshot) => {
+      updateBlock(pageId, block.id, { asset: value, embed });
       setShowSettings(false);
     },
     [updateBlock, pageId, block.id],
