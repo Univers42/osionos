@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import type { ToolSet } from 'ai';
 import { config } from '../config.ts';
+import { loadSkillTool } from '../tools/skillTools.ts';
 import { readToolSet } from '../tools/index.ts';
 import type { ToolOutcome, ToolPool } from '../tools/index.ts';
 import { writeToolSet } from '../approvals/toolSet.ts';
@@ -119,7 +120,7 @@ export function buildRunTools(input: {
 
 	run.tools = user
 		? {
-				...readToolSet({ db, user }, hooks, pool),
+				...readToolSet({ db, user }, hooks, pool, agent?.skills.length ? [loadSkillTool(agent.skills)] : []),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
 		: undefined;
@@ -131,7 +132,7 @@ export function buildRunTools(input: {
 		const allowed = new Set(agent.tools);
 		const kept: ToolSet = {};
 		for (const [name, tool] of Object.entries(run.tools)) {
-			if (allowed.has(name)) kept[name] = tool;
+			if (allowed.has(name) || name === 'load_skill') kept[name] = tool;
 		}
 		run.tools = kept;
 	}
