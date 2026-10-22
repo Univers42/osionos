@@ -2,11 +2,14 @@ import type { Pool, QueryResultRow } from 'pg';
 import { settle } from '../budget.ts';
 
 export type RunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled';
+/** What a run makes: a chat turn, or a generated image (which has no conversation). */
+export type RunKind = 'text' | 'image';
 
 export interface RunRow extends QueryResultRow {
 	id: string;
-	conversation_id: string;
+	conversation_id: string | null;
 	owner_id: string;
+	kind: RunKind;
 	status: RunStatus;
 	model: string;
 	error: string | null;
@@ -19,7 +22,7 @@ export interface RunRow extends QueryResultRow {
 }
 
 const RUN_COLUMNS =
-	'id, conversation_id, owner_id, status, model, error, usage, reserved_microusd, created_at, ended_at, finish_reason';
+	'id, conversation_id, owner_id, kind, status, model, error, usage, reserved_microusd, created_at, ended_at, finish_reason';
 
 /** One run, whatever its owner. */
 export async function getRun(db: Pool, id: string): Promise<RunRow | null> {
@@ -48,15 +51,21 @@ export async function getOwnedRun(
  */
 export async function insertRun(
 	db: Pool,
-	{ runId, conversationId, ownerId, model }: { runId: string; conversationId: string; ownerId: string; model: string },
+	{
+		runId,
+		conversationId,
+		ownerId,
+		model,
+		kind = 'text',
+	}: { runId: string; conversationId: string | null; ownerId: string; model: string; kind?: RunKind },
 ): Promise<{ kind: 'inserted' | 'exists' | 'conflict' | 'missing' }> {
 	try {
 		const result = await db.query(
-			`insert into public.ai_runs (id, conversation_id, owner_id, status, model)
-			 values ($1, $2, $3, 'running', $4)
+			`insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind)
+			 values ($1, $2, $3, 'running', $4, $5)
 			 on conflict (id) do nothing
 			 returning id`,
-			[runId, conversationId, ownerId, model],
+			[runId, conversationId, ownerId, model, kind],
 		);
 		return result.rowCount === 1 ? { kind: 'inserted' } : { kind: 'exists' };
 	} catch (error) {
@@ -103,7 +112,8 @@ export async function markRun(
 /**
  * The sweep of the stale runs: a run that says 'running' for ten minutes is
  * not running any more. It is failed, and the reservation it holds is given
- * back.
+ * back — except the price of an image: its engine most likely ran, and an
+ * image never settles at 0 (devil C74).
  */
 export async function sweepStaleRows(
 	db: Pool,
@@ -111,7 +121,7 @@ export async function sweepStaleRows(
 	today: string,
 ): Promise<string[]> {
 	const stale = await db.query(
-		`select id, owner_id, reserved_microusd
+		`select id, owner_id, kind, reserved_microusd
 		 from public.ai_runs
 		 where status = 'running' and created_at < now() - ($1::int * interval '1 millisecond')`,
 		[staleMs],
@@ -122,7 +132,8 @@ export async function sweepStaleRows(
 		if (!changed) continue;
 		const reserved = Number(row.reserved_microusd ?? 0);
 		if (reserved > 0) {
-			await settle(db, { userId: row.owner_id as string, day: today, reserved, actual: 0 });
+			const actual = row.kind === 'image' ? reserved : 0;
+			await settle(db, { userId: row.owner_id as string, day: today, reserved, actual });
 		}
 		swept.push(row.id as string);
 	}

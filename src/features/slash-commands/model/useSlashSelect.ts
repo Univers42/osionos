@@ -319,6 +319,8 @@ export function useSlashSelect({
       updateBlock(pageId, blockId, {
         content: "",
         asset,
+        // The user's own file replaces the image: the "AI-generated" label goes.
+        aiGenerated: undefined,
         placeholderText: undefined,
       });
       focusBlock(blockId);

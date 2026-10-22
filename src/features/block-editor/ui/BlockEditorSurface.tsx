@@ -385,6 +385,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		handleSlashCreatePageSelect,
 		handleSlashInlineSelect,
 		handleSlashWhiteboardSelect,
+		handleSlashAiImageSelect,
 		handlePageSelectorSelect,
 		handlePageSelectorCreate,
 		handleAddBlock,
@@ -897,6 +898,10 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 						}
 						if (item.kind === "whiteboard") {
 							handleSlashWhiteboardSelect(parseSlashQuery(slashMenu.filter).arg, currentBlocks);
+							return;
+						}
+						if (item.kind === "ai-image") {
+							handleSlashAiImageSelect(parseSlashQuery(slashMenu.filter).arg, currentBlocks);
 							return;
 						}
 						if (item.kind === "database-view") {
