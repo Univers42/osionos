@@ -40,6 +40,7 @@ import {
 	sendJson,
 	sharedWorkspacePeers,
 } from './bridge-social-core.mjs';
+import { publicAvatar } from './bridge-avatar.mjs';
 
 const PRESENCE_WINDOW_MS = 90 * 1000;
 
@@ -48,13 +49,13 @@ function isOnline(lastSeenAt, now = Date.now()) {
 	return Number.isFinite(seen) && now - seen < PRESENCE_WINDOW_MS;
 }
 
-function personEntry(row) {
+function personEntry(row, config) {
 	const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
 	return {
 		id: row.user_id,
 		name: typeof row.display_name === 'string' && row.display_name ? row.display_name : 'Member',
 		username: row.username ?? null,
-		avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
+		avatar: publicAvatar(typeof profile.avatar === 'string' ? profile.avatar : null, config),
 		headline: typeof profile.headline === 'string' ? profile.headline : null,
 		online: isOnline(row.last_seen_at),
 	};
@@ -77,7 +78,7 @@ async function directorySearch(deps, session, url, response, config) {
 		if (row.directory_opt_out === true) continue;
 		if (blockers.has(row.user_id)) continue;
 		if (row.user_id === session.userId) continue;
-		people.push(personEntry(row));
+		people.push(personEntry(row, config));
 		if (people.length >= limit) break;
 	}
 	return sendJson(response, 200, { ok: true, people }, config);

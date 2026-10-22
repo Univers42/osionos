@@ -29,6 +29,10 @@
 
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { realtimeSocketPublisher } from './bridge-realtime-socket.mjs';
+// bridge-avatar.mjs imports this module back (for the error shape and the JSON
+// body), so the two modules form a cycle. It is safe: publicAvatar is a hoisted
+// function declaration and every call into it happens at request time.
+import { publicAvatar } from './bridge-avatar.mjs';
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PUBLISH_TIMEOUT_MS = 1_500;
@@ -394,7 +398,8 @@ export async function identitySummaries(config, fetchImpl, userIds) {
 		const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
 		map.set(row.user_id, {
 			name: typeof row.display_name === 'string' && row.display_name ? row.display_name : 'Member',
-			avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
+			// The ONE projection of a user avatar: a `data:` URL never leaves the bridge.
+			avatar: publicAvatar(typeof profile.avatar === 'string' ? profile.avatar : null, config),
 			lastSeenAt: row.last_seen_at ?? null,
 		});
 	}

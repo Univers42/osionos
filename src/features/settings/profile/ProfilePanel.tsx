@@ -67,6 +67,15 @@ function deviceName(userAgent?: string | null): string {
   return `${browser} on ${os}`;
 }
 
+/**
+ * IconValueView draws an image only for an `img:` value, so a stored avatar URL
+ * is prefixed here — the caller, not the package.
+ */
+function avatarIconValue(value?: string): string | undefined {
+  if (!value) return value;
+  return /^(https:\/\/|\/)/.test(value) ? `img:${value}` : value;
+}
+
 export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) => {
   const userId = persona?.id || 'anonymous';
   const toast = useToastStore((state) => state.push);
@@ -110,6 +119,7 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   const preferredName = account?.profile.preferredName ?? persona?.name ?? '';
   const primaryEmail = emails.find((email) => email.isPrimary)?.email ?? persona?.email ?? 'dev.pro.photo@gmail.com';
   const security = account?.security ?? {};
+  const avatarValue = account?.profile.avatar ?? persona?.emoji;
   const activePasskeys = passkeys.filter((passkey) => !passkey.removedAt);
   // Only the rows the server sent. With none (offline, or a server without the
   // route) this browser is the one device that certainly exists.
@@ -153,12 +163,12 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
         <div className="flex items-center gap-5 pb-3">
           <div className="relative">
             <button type="button" className="rounded-full focus:outline-none focus:ring-2 focus:ring-[var(--osio-accent)]" onClick={() => setAvatarPickerOpen((open) => !open)} aria-label="Change avatar">
-              <Avatar value={account?.profile.avatar ?? persona?.emoji} label={preferredName} size={60} />
+              <Avatar value={avatarIconValue(avatarValue)} label={preferredName} size={60} />
             </button>
             {avatarPickerOpen && (
               <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2">
                 <EmojiPicker
-                  current={account?.profile.avatar ?? persona?.emoji}
+                  current={avatarValue}
                   onSelect={(value) => { updateAccount({ profile: { ...account?.profile, avatar: value } }); setAvatarPickerOpen(false); }}
                   onRemove={() => { updateAccount({ profile: { ...account?.profile, avatar: undefined } }); setAvatarPickerOpen(false); }}
                   onClose={() => setAvatarPickerOpen(false)}
@@ -177,7 +187,7 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
               {nameSaved && <Check size={16} className="absolute right-2 top-2.5 text-[var(--osio-success)]" />}
             </span>
           </label>
-          <ImageAvatarUpload onUploaded={(dataUrl) => updateAccount({ profile: { ...account?.profile, avatar: dataUrl } })} />
+          <ImageAvatarUpload onUploaded={(avatarUrl) => updateAccount({ profile: { ...account?.profile, avatar: avatarUrl } })} />
         </div>
         <p className="text-sm text-[var(--osio-fg-muted)]"><span className="text-[var(--osio-accent-text)]">Create a custom self-portrait</span> with osionos Faces</p>
       </Section>
