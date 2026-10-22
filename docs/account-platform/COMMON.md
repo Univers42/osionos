@@ -9,6 +9,19 @@ the osionos app (your current directory). Read `CLAUDE.md` first: it is the map 
 - Never edit: `src/shared/notion-database-sys/**`, `packages/**` (git submodules), generated token
   files (`*.generated.*`), `.env*`, `package.json`, `pnpm-lock.yaml`, git config — unless OWNS says so.
 
+## Extend what exists (the user's rule, 2026-10-22)
+- Much of the account platform already exists, half-finished: 19 settings panels in
+  `src/features/settings/*`, 19 stores in `src/store/settings/*`, the ABAC policy engine behind
+  `/api/perms/` (`scripts/bridge-perms*.mjs`; editors in `src/features/settings/permissions/`),
+  people and invites (`src/features/settings/people/`), and the admin space
+  (`src/widgets/admin-space`).
+- Before you write a component, store, route or helper, search for the existing one
+  (`rg -n '<concept>' src scripts`). Extend it or rewrite it in place. Never add a parallel
+  copy. If the spec names a new file but an existing one covers the concern, stop and report it
+  under `deviations:`.
+- The goal is improvement the user can see: friendlier copy, all four states (loading, empty,
+  error, loaded), keyboard reachable, labelled controls, `--osio-*` tokens only.
+
 ## Environment (Docker-first)
 - There is no Node on the host. Never run `node`, `npm`, `pnpm`, `npx` directly.
 - Run everything through the repo's Docker shim: `bash scripts/docker-run.sh <target>`
