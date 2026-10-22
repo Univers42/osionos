@@ -13,8 +13,10 @@ personal access token (PAT). It is off unless the service runs with
   next call; a revoked or expired token gets 401 on the next call (no cache).
 - Transport: stateless Streamable HTTP, JSON responses, `POST` only (`GET` and
   `DELETE` answer 405). Bearer header only; a token in the URL is refused.
-- Limits: 60 calls a minute per token and 120 per user. Search and graph calls
-  share a small in-process lane (4 running, 16 waiting).
+- Limits: 60 calls a minute per token and 120 per user. A POST carries one
+  JSON-RPC message: a batch (an array) is refused with 400, so a call is one
+  unit of the limit. Every tool call runs in a small in-process lane (4
+  running, 16 waiting).
 - Host and Origin: `OSIONOS_AI_MCP_ALLOWED_HOSTS` (default `localhost,127.0.0.1`,
   extended with your values). Any request with an `Origin` header is refused 403
   and no CORS header is ever sent. Agents are not browsers and send no Origin.
