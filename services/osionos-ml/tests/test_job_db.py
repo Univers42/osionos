@@ -1,8 +1,9 @@
 """The job against a real database: the log in, a candidate out.
 
 The tests need a database with the groot fixture applied (the roles, the
-events migration, the factors migration) and a DATABASE_URL for a role that
-has service_role's grants and nothing more. `scripts/test-db.sh` builds one.
+events migration, the factors migration, the serving migration) and a
+DATABASE_URL for a role that has service_role's grants and nothing more.
+`scripts/test-db.sh` builds one.
 
 The log is a `simulate.py` one — SYNTHETIC, marked `is_synthetic = true` —
 spread over 60 days, with one user who opted out. The job is run three times
@@ -25,7 +26,7 @@ import numpy as np
 import psycopg
 import pytest
 
-from osml.events import build_matrix, event_weight, index_items, index_users
+from osml.events import EVENT_WEIGHTS, build_matrix, event_weight, index_items, index_users
 from osml.simulate import simulate
 from osml.store import act_as_service_role, read_events
 from osml.train import train_ials
@@ -76,6 +77,11 @@ def _models(conn: psycopg.Connection) -> list[dict[str, Any]]:
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM public.ai_rec_models ORDER BY id")
         return _rows(cur)
+
+
+def _champion(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """The champion row of the last run: the model serving reads."""
+    return next(model for model in runs[-1]["models"] if model["status"] == "champion")
 
 
 def _run(until: datetime, extra: list[str] | None = None, env: dict[str, str] | None = None) -> dict[str, Any]:
@@ -247,6 +253,51 @@ def test_the_opted_out_user_has_no_vector(conn: Any, runs: list[dict[str, Any]])
         vectors = int(cur.fetchone()[0])
 
     assert vectors == 0
+
+
+def test_the_champion_carries_the_item_gram(conn: Any, runs: list[dict[str, Any]], until: datetime) -> None:
+    """The Gram is the model's OWN YᵀY: the numbers serving folds a user in with."""
+    model = _champion(runs)
+    factors = int(model["factors"])
+    matrix, _, _ = _matrix(conn, until)
+    served = train_ials(
+        matrix,
+        factors=factors,
+        regularization=float(model["regularization"]),
+        alpha=float(model["alpha"]),
+        iterations=int(model["iterations"]),
+        seed=SEED,
+    )
+    item_factors = np.asarray(served.item_factors, dtype=np.float64)
+    expected = item_factors.T @ item_factors
+    stored = np.asarray(model["item_gram"], dtype=np.float64).reshape(factors, factors)
+
+    assert len(model["item_gram"]) == factors * factors
+    # REAL is a float32: the stored numbers are the float64 ones, rounded.
+    assert np.allclose(stored, expected, rtol=1e-3, atol=1e-6)
+
+
+def test_the_champion_carries_the_event_weights_it_was_trained_with(runs: list[dict[str, Any]]) -> None:
+    """The weights are the model's OWN: a later change never mismatches it."""
+    model = _champion(runs)
+
+    assert model["event_weights"] == EVENT_WEIGHTS
+
+
+def test_the_context_hands_back_the_models_gram_and_weights(conn: Any, runs: list[dict[str, Any]]) -> None:
+    """The context a user with events gets: the champion's own Gram and weights."""
+    model = _champion(runs)
+    user = uuid.UUID(_uuid("user", "u1"))
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT public.ai_rec_user_context(%s)", (user,))
+        context = cur.fetchone()[0]
+
+    assert context["model"]["id"] == model["id"]
+    # REAL is a float32 and JSONB holds its shortest decimal form: the two
+    # paths are the same numbers, not the same bits.
+    assert context["model"]["item_gram"] == pytest.approx(list(model["item_gram"]), rel=1e-6)
+    assert context["model"]["event_weights"] == model["event_weights"]
 
 
 def test_the_metrics_carry_the_protocol_s_keys(runs: list[dict[str, Any]]) -> None:

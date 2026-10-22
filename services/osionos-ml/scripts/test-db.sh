@@ -12,6 +12,10 @@
 #   * the job reads `ai_events`, trains, and writes the registry row and the
 #     factors: one champion, the vectors zero-padded to 64, the inner product
 #     the database computes equal to the model's own score;
+#   * the row carries what serving folds a user in with: the item Gram matrix
+#     (the model's own YᵀY, row-major, factors² numbers) and the event
+#     weights the model was trained with — and the context function hands
+#     both back for a user with events;
 #   * the promotion rule: the first run promotes, the second promotes its own
 #     model (equal is not worse) and retires the first, and a model with
 #     worse hyperparameters stays a CANDIDATE;
@@ -30,6 +34,10 @@
 #   The groot migrations, read-only, from the groot worktree: the roles, the
 #   `auth, public` search_path, the prerequisite models, the events migration
 #   and the factors migration — the fixture of scripts/verify/rec-factors.sh.
+#   Then the serving migration too (the two columns of the registry, the
+#   context function and the nearest search) — the fixture of
+#   scripts/verify/rec-serving.sh, which needs nothing this one does not
+#   already apply.
 #
 # ISOLATION
 #   Throwaway containers only: a pgvector and a pytest container on a
@@ -153,6 +161,12 @@ apply_fixture() {
 	done
 	apply_file "${MODELS}/osionos-user-events-migration.sql" || return 1
 	apply_file "${MODELS}/osionos-rec-factors-migration.sql" || return 1
+	# The serving migration: the two columns of the registry (item_gram,
+	# event_weights), the context function and the nearest search. It needs
+	# the factors migration before it (the registry and the factors must
+	# exist when its SQL is validated) and nothing else this fixture does
+	# not already apply.
+	apply_file "${MODELS}/osionos-rec-serving-migration.sql" || return 1
 	# The job's role: a membership of service_role and nothing else. The job
 	# does SET ROLE service_role (BYPASSRLS is service_role's own attribute, not
 	# inherited through the membership, and COPY FROM needs it on RLS tables).
@@ -199,7 +213,7 @@ main() {
 		note "the fixture failed"
 		exit 1
 	}
-	note "fixture applied (the events migration, the factors migration, the osml_job role)"
+	note "fixture applied (the events migration, the factors migration, the serving migration, the osml_job role)"
 	build_image || exit 1
 	note "the image ${IMAGE} is built"
 	run_tests
