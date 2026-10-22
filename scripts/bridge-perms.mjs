@@ -273,8 +273,13 @@ function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply,
 		}
 		if (method === 'POST' && tail === 'rules') {
 			const rule = normalizeShareRule(await readJsonBody(ctx.request));
-			const workspace = await access(ctx, rule.workspace_id, 'update');
-			const allowed = await mayChangeRule(ctx, rule, { fetchImpl, workspaceRole: workspace?.role, gated: true });
+			// A page owner may change the rules about their own page even when the
+			// workspace membership alone would not (an owner who is only a viewer there);
+			// a workspace-wide rule still needs the workspace owner/admin. The workspace
+			// gate is therefore consulted but never allowed to throw before mayChangeRule
+			// has had its say — mirrors DELETE below.
+			const workspace = await access(ctx, rule.workspace_id, 'update').then((w) => w, () => null);
+			const allowed = await mayChangeRule(ctx, rule, { fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace) });
 			if (!allowed) return fail(response, 403);
 			return reply(response, 200, { rule: await ruleStore.upsert(requestConfig, rule) });
 		}

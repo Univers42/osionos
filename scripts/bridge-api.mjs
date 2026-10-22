@@ -1311,10 +1311,13 @@ async function pageWriteContext(request, pageId, config, fetchImpl) {
  * too — it must not confirm that the page exists.
  */
 function requirePageWrite(context, permission) {
-	if (context.owner) return;
-	if (shareGrantsWrite(context.level)) return;
-	const access = workspaceAccessContext(context.token, context.workspaceId, context.member, permission);
-	if (!mayModifyPage(context.row, { ...access, userId: context.token.userId }, context.level)) throw pageWriteDenied();
+	// Decide through the one shared predicate (canWritePageRow), so the rule logic
+	// lives in a single place. The level already computed for this request is replayed
+	// as a single rule so bestShareLevel reproduces it; null means "no rule".
+	const syntheticRules = context.level
+		? [{ resource_type: 'page', resource_id: context.row?.id, target: { type: 'user', userId: context.token.userId }, permission: context.level }]
+		: [];
+	if (!canWritePageRow(context.row, context.token.userId, context.member, permission, syntheticRules)) throw pageWriteDenied();
 }
 
 /**
@@ -3515,7 +3518,19 @@ async function handleFavoriteAdd(request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const pageId = requireUuid(payload.pageId, 'pageId');
-	const row = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), authContext.userId);
+	const row = await fetchPageAuthRow(pageId, config, fetchImpl);
+	if (!row) throw pageNotFound();
+	// A page hidden by a no_access rule is a missing id, so a caller cannot favourite
+	// a page they are not allowed to see. The page owner and the workspace owner/admin
+	// keep their access whatever the rules say.
+	let level = null;
+	if (!sameId(row.owner_id, authContext.userId)) {
+		const member = await callerWorkspaceMember(authContext, row.workspace_id, config, fetchImpl);
+		const role = safeText(member?.role, 16);
+		const exempt = role === 'owner' || role === 'admin';
+		if (!exempt) level = await shareLevelForPage(config, row.workspace_id, pageId, authContext.userId, role, fetchImpl);
+	}
+	requireReadablePage(row, authContext.userId, level);
 	await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
 	await baasRest(config, fetchImpl, 'osionos_page_favorites', {
 		method: 'POST',
