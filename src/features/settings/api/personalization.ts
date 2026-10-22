@@ -22,6 +22,9 @@
  *
  * The bridge decides whose row it is: the body of the write carries the switch
  * and nothing else, and the server names the user.
+ *
+ * The download carries the log AND the vectors the recommender derived from
+ * it — the data derived from the user is the user's data too (C54).
  */
 
 import { API_BASE, api, getActiveJwt } from '@/shared/api/client';
@@ -41,6 +44,33 @@ export interface PersonalizationEvent {
   rank?: number | null;
   dwell_ms?: number | null;
   is_synthetic?: boolean;
+}
+
+/** One vector the recommender computed: a model's read of the user. */
+export interface RecommendationVector {
+  model_id?: number;
+  status?: string;
+  trained_until?: string | null;
+  factors?: number;
+  vector?: number[];
+}
+
+/**
+ * The vectors derived from the user: the ones the models hold of them, and the
+ * ones where they are a suggested person. The database answers them as one
+ * JSONB object; the fields are optional because the answer is the database's.
+ */
+export interface RecommendationFactors {
+  user_vectors?: RecommendationVector[];
+  as_item?: RecommendationVector[];
+}
+
+/** The download: the log, and what was derived from it. */
+export interface ActivityExport {
+  /** The log itself, oldest first. */
+  events: PersonalizationEvent[];
+  /** The vectors: null when the database function is not deployed yet. */
+  derived: { factors: RecommendationFactors | null };
 }
 
 /** The answer of a personalization call: the value, or why there is none. */
@@ -118,11 +148,27 @@ export async function writePersonalization(capture: boolean): Promise<Personaliz
   return { ok: true, value: { captureExplicit: result.value?.captureExplicit !== false } };
 }
 
-/** The user's own log, oldest first, with the columns the database stores. */
-export async function downloadActivity(): Promise<PersonalizationResult<PersonalizationEvent[]>> {
-  const result = await request<{ events?: PersonalizationEvent[] }>('GET', '/api/personalization/activity');
+/**
+ * The user's own log, oldest first, with the columns the database stores —
+ * and the vectors the recommender derived from that log: a download that
+ * leaves out the data derived from the user is not the user's data.
+ *
+ * An older bridge answers no `derived` at all (the function is not deployed
+ * yet): the download is then the log alone, and the vectors are null.
+ */
+export async function downloadActivity(): Promise<PersonalizationResult<ActivityExport>> {
+  const result = await request<{
+    events?: PersonalizationEvent[];
+    derived?: { factors?: RecommendationFactors | null };
+  }>('GET', '/api/personalization/activity');
   if (!result.ok) return result;
-  return { ok: true, value: Array.isArray(result.value?.events) ? result.value.events : [] };
+  return {
+    ok: true,
+    value: {
+      events: Array.isArray(result.value?.events) ? result.value.events : [],
+      derived: { factors: result.value?.derived?.factors ?? null },
+    },
+  };
 }
 
 /** The user's own log, gone. The answer says how many rows were erased. */
