@@ -30,6 +30,7 @@ import {
   ImageBlockPicture,
   ImagePlayButton,
   MediaBlockPreview,
+  mediaWidthStyle,
   resolveMediaBlockAsset,
   useImageAnimation,
 } from "@/entities/block/ui/MediaBlockPreview";
@@ -60,8 +61,10 @@ interface MediaBlockEditorProps {
  */
 const ImageBlockEditor: React.FC<{ block: Block; label: string; onEdit: () => void }> = ({ block, label, onEdit }) => {
   const animation = useImageAnimation(block);
+  // The width preset lands here: the editor renders the picture without the
+  // preview's <figure>, which is where the read-only path puts it.
   return (
-    <div className="relative">
+    <div className="relative" style={mediaWidthStyle(block)}>
       <button
         type="button"
         className="block w-full rounded-lg p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/30"
