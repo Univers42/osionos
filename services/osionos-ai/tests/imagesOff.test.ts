@@ -93,6 +93,7 @@ describe('osionos-ai images: off by default (C70)', () => {
 			OSIONOS_AI_IMAGES: 'on',
 			OSIONOS_AI_IMAGE_MICROUSD: '2000',
 			OSIONOS_AI_IMAGE_CHECK_DIR: '/tmp/osionos-ai-check-stub',
+			OSIONOS_AI_PROMPT_GUARD_URL: 'http://guard.invalid',
 		});
 		assert.equal(output.started, true, output.stderr);
 	});
@@ -101,5 +102,16 @@ describe('osionos-ai images: off by default (C70)', () => {
 		const output = await boot({ OSIONOS_AI_IMAGES: 'on', OSIONOS_AI_IMAGE_MICROUSD: '2000' });
 		assert.equal(output.started, false);
 		assert.match(output.stderr, /OSIONOS_AI_IMAGE_CHECK_DIR/);
+	});
+
+	it('turned on without the guard of the prompt, the service refuses to start (C72)', async () => {
+		const output = await boot({
+			OSIONOS_AI_IMAGES: 'on',
+			OSIONOS_AI_IMAGE_MICROUSD: '2000',
+			OSIONOS_AI_IMAGE_CHECK_DIR: '/tmp/osionos-ai-check-stub',
+			OSIONOS_AI_PROMPT_GUARD_URL: '',
+		});
+		assert.equal(output.started, false);
+		assert.match(output.stderr, /OSIONOS_AI_PROMPT_GUARD_URL/);
 	});
 });

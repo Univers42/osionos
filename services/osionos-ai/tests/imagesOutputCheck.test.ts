@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
 
 import { startMockImageEngine } from './mockImageEngine.ts';
+import { startMockPromptGuard } from './mockPromptGuard.ts';
 import { collect, SseStream } from './sse.ts';
 import type { SseEvent } from './sse.ts';
 
@@ -18,6 +19,8 @@ import type { SseEvent } from './sse.ts';
  * scores is a pure function of `src/images/outputCheck.ts`.
  */
 const engine = await startMockImageEngine();
+// The guard of the prompt (C72): a mock that lets every prompt through.
+const guard = await startMockPromptGuard();
 const PRICE = 40_000;
 process.env.OSIONOS_AI_IMAGES = 'on';
 process.env.OSIONOS_AI_IMAGE_URL = `${engine.baseUrl}/v1`;
@@ -26,6 +29,8 @@ process.env.OSIONOS_AI_IMAGE_TIMEOUT_MS = '5000';
 // The configuration needs the directory of the check (C73); the suite brings
 // its own stub, so nothing is ever loaded from the disk.
 process.env.OSIONOS_AI_IMAGE_CHECK_DIR = '/tmp/osionos-ai-check-stub';
+// The configuration needs the guard of the prompt (C72): the mock above is it.
+process.env.OSIONOS_AI_PROMPT_GUARD_URL = guard.baseUrl;
 
 /** What the stub of the check answers: the verdict, and the failure it fakes. */
 interface Stub {
@@ -63,6 +68,7 @@ after(async () => {
 	await mock.close();
 	await bridge.close();
 	await engine.close();
+	await guard.close();
 });
 
 /** The POST of an image: the answer is a stream, or a refusal. */

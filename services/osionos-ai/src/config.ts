@@ -96,6 +96,16 @@ const envSchema = z.object({
 	// Required when on: a generation without a check is a generation that
 	// stores whatever the engine said.
 	OSIONOS_AI_IMAGE_CHECK_DIR: z.string().optional(),
+	// The prompt guard of the images (devil C72): the L1 classifier of the
+	// prompt, INTERNAL — the URL is a deployment setting (the compose service
+	// name), never a caller's. Required when on: a prompt that no guard read
+	// is a prompt the world may see.
+	OSIONOS_AI_PROMPT_GUARD_URL: z.string().optional(),
+	// The model the guard is called with.
+	OSIONOS_AI_PROMPT_GUARD_MODEL: z.string().min(1).default('guard'),
+	// The deadline of one call to the guard: A1 measured 5389 ms at p95 with
+	// four clients at once, and 9.5 ms for a server that is not there.
+	OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
 });
 
 const rawEnv = {
@@ -136,6 +146,9 @@ const rawEnv = {
 	OSIONOS_AI_IMAGES_PER_DAY: process.env.OSIONOS_AI_IMAGES_PER_DAY,
 	OSIONOS_AI_IMAGE_TIMEOUT_MS: process.env.OSIONOS_AI_IMAGE_TIMEOUT_MS,
 	OSIONOS_AI_IMAGE_CHECK_DIR: process.env.OSIONOS_AI_IMAGE_CHECK_DIR,
+	OSIONOS_AI_PROMPT_GUARD_URL: process.env.OSIONOS_AI_PROMPT_GUARD_URL,
+	OSIONOS_AI_PROMPT_GUARD_MODEL: process.env.OSIONOS_AI_PROMPT_GUARD_MODEL,
+	OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS: process.env.OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS,
 };
 
 const parsed = envSchema.safeParse(rawEnv);
@@ -286,6 +299,12 @@ export interface AiServiceConfig {
 	imageTimeoutMs: number;
 	/** The directory of the models of the output check (C73). */
 	imageCheckDir?: string;
+	/** The base URL of the internal prompt guard (L1 of the image gate, C72). */
+	promptGuardUrl?: string;
+	/** The model the prompt guard is called with. */
+	promptGuardModel: string;
+	/** The deadline of one call to the prompt guard, in milliseconds. */
+	promptGuardTimeoutMs: number;
 }
 
 export const config: AiServiceConfig = Object.freeze({
@@ -326,17 +345,23 @@ export const config: AiServiceConfig = Object.freeze({
 	imagesPerDay: parsed.data.OSIONOS_AI_IMAGES_PER_DAY,
 	imageTimeoutMs: parsed.data.OSIONOS_AI_IMAGE_TIMEOUT_MS,
 	imageCheckDir: parsed.data.OSIONOS_AI_IMAGE_CHECK_DIR,
+	promptGuardUrl: parsed.data.OSIONOS_AI_PROMPT_GUARD_URL,
+	promptGuardModel: parsed.data.OSIONOS_AI_PROMPT_GUARD_MODEL,
+	promptGuardTimeoutMs: parsed.data.OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS,
 });
 
 // The image generation, turned on, needs its engine, a price (an image is
-// never free on the ledger, C74), the bridge it stores through (C76) and the
-// models of the output check (C73): a generation that stores whatever the
-// engine said is not a generation the product may sell.
+// never free on the ledger, C74), the bridge it stores through (C76), the
+// models of the output check (C73) and the guard of the prompt (C72): a
+// generation that stores whatever the engine said is not a generation the
+// product may sell, and a prompt no guard read is not a prompt the product
+// may show.
 if (config.imagesEnabled) {
 	if (!config.imageUrl) refuse('OSIONOS_AI_IMAGE_URL');
 	if (config.imageMicroUsd <= 0) refuse('OSIONOS_AI_IMAGE_MICROUSD');
 	if (!config.bridgeUrl) refuse('OSIONOS_AI_BRIDGE_URL');
 	if (!config.imageCheckDir) refuse('OSIONOS_AI_IMAGE_CHECK_DIR');
+	if (!config.promptGuardUrl) refuse('OSIONOS_AI_PROMPT_GUARD_URL');
 }
 
 // A deployment that runs the write tools needs the bridge: the URL is

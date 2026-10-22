@@ -11,6 +11,9 @@ import { ENGINE_TAG, generateOnEngine } from '../images/engine.ts';
 import { joinQueue, leaveQueue, QUEUE_WAIT_MS, SECONDS_PER_IMAGE, waitTurn } from '../images/queue.ts';
 import { takeDaySeat } from '../images/quota.ts';
 import { checkImage, uploadImage } from '../images/store.ts';
+import { askGuard, l0Codes, l0Refuses } from '../images/promptGate.ts';
+import { guardRefuses, parseGuard } from '../images/guardPolicy.ts';
+import type { ParsedGuard } from '../images/guardPolicy.ts';
 import type { OutputCheck } from '../images/outputCheck.ts';
 import { replayRun, startPing } from './runs.ts';
 import { UUID, requireUser } from './support.ts';
@@ -29,6 +32,13 @@ import type { RouteContext } from './types.ts';
  * the queue, the price reserved — all before the engine is called. An image
  * refused or cancelled before the engine received the call costs nothing;
  * once received, it costs its price, whatever happens next (C74).
+ *
+ * The prompt is gated before any of it (C72): L0 (the rules of the bridge)
+ * then L1 (the guard of A1), synchronously, right after the rate limit and
+ * before the seat, the queue, the reservation and the engine. A prompt the
+ * gate refuses answers 422 `prompt_refused`; a guard that is down or slow
+ * answers 503 `moderation_unavailable` and nothing is called and nothing is
+ * charged — the gate fails closed.
  *
  * The bytes of the engine are checked before they are stored (C73): the check
  * refuses an image that one of its two classifiers flags, and the refused
@@ -49,6 +59,8 @@ const PREFLIGHT_ERRORS: Record<string, number> = {
 	image_busy: 429,
 	budget_exhausted: 402,
 	image_check_unavailable: 503,
+	prompt_refused: 422,
+	moderation_unavailable: 503,
 };
 /** The failures an image run reports by name; anything else is the engine's. */
 const KNOWN_FAILURES = new Set([
@@ -164,6 +176,35 @@ export async function handleImages(ctx: RouteContext): Promise<number> {
 	const now = new Date();
 	const minute = await checkRateLimit(redis, ownerId, IMAGES_PER_MINUTE, now, IMAGE_LIMIT_PREFIX);
 	if (!minute.allowed) return refuse(429, 'rate_limited', minute.retryAfterSeconds);
+
+	// C72: the prompt gate — L0 (the rules) then L1 (the guard) — runs after
+	// the rate limit, so a flood cannot spend the CPU of the guard, and before
+	// the seat, the queue, the reservation and the engine: a prompt the gate
+	// refuses calls nothing and books nothing.
+	//
+	// L0 first: the rules are in-process and free, and a prompt they refuse
+	// never reaches the guard. Then L1, and a guard that is down or slow
+	// refuses the request: the gate fails closed (C72).
+	if (l0Refuses(body.prompt)) {
+		// The codes of the same check, for the log line: the terms of L0 are
+		// never in it (C94).
+		console.info(JSON.stringify({ event: 'prompt_refused', runId, layer: 'l0', codes: l0Codes(body.prompt) }));
+		return refuse(422, 'prompt_refused');
+	}
+	// The call to the guard is bounded by the timeout of the configuration;
+	// this signal is the one of the caller, and nothing aborts it here.
+	const gate = new AbortController();
+	let verdict: ParsedGuard;
+	try {
+		verdict = parseGuard(await askGuard(body.prompt, gate.signal));
+	} catch {
+		return refuse(503, 'moderation_unavailable');
+	}
+	if (guardRefuses(verdict)) {
+		console.info(JSON.stringify({ event: 'prompt_refused', runId, layer: 'l1', codes: verdict.codes }));
+		return refuse(422, 'prompt_refused');
+	}
+
 	const seat = await takeDaySeat(redis, ownerId, { perUser: config.imagesPerUserDay, global: config.imagesPerDay }, now);
 	if (seat.kind === 'refused') return refuse(429, 'image_quota_exceeded', seat.retryAfterSeconds);
 	const place = await joinQueue(redis, runId, now.getTime(), config.imageTimeoutMs);
