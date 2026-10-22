@@ -74,7 +74,8 @@ async function createComment(deps, session, request, response, config) {
 	// L0 runs BEFORE the write: a warning is the author's question (409), a hold
 	// is a comment written held and seen by nobody but its author (C85, C87).
 	const { mode, stateEnabled } = moderationSettings(deps.env);
-	const publicReadable = await publicReadablePage(config, deps.fetchImpl, row);
+	// Without the state column nothing is held or recorded: no workspace read.
+	const publicReadable = stateEnabled && await publicReadablePage(config, deps.fetchImpl, row);
 	const decision = decideWrite({
 		text: content,
 		surface: 'page_comment',
@@ -143,7 +144,7 @@ async function updateComment(deps, session, commentId, request, response, config
 	if (typeof patch.content === 'string') {
 		const { mode, stateEnabled } = moderationSettings(deps.env);
 		const pageId = typeof comment.page_id === 'string' && comment.page_id ? comment.page_id : null;
-		const pageRows = pageId ? await rest(config, deps.fetchImpl, `osionos_pages?id=eq.${pageId}&select=visibility,workspace_id&limit=1`) : [];
+		const pageRows = pageId && stateEnabled ? await rest(config, deps.fetchImpl, `osionos_pages?id=eq.${pageId}&select=visibility,workspace_id&limit=1`) : [];
 		page = Array.isArray(pageRows) ? pageRows[0] : null;
 		const publicReadable = await publicReadablePage(config, deps.fetchImpl, page);
 		decision = decideWrite({

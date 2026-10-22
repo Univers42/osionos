@@ -330,4 +330,25 @@ describe('a private post is never held and never recorded (C94)', () => {
 			assert.equal(audits(mock).length, 1);
 		}, { env: HOLD_STATE });
 	});
+
+	it('the flag unset: a private post costs no workspace read on either surface', async () => {
+		const mock = createPostgrestMock(world({ workspacePublic: true }));
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const headers = sessionHeaders(config, IDS.userA, IDS.homeA);
+			const feed = await send(base, feedPath(PRIVATE_ID), headers, post({ content: 'a plain comment' }));
+			assert.equal(feed.status, 201, feed.text);
+			const page = await send(base, '/api/comments', headers, post({ pageId: PRIVATE_ID, content: 'a plain comment' }));
+			assert.equal(page.status, 200, page.text);
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_workspaces').length, 0, spoken(mock));
+		}, { env: HOLD });
+	});
+
+	it('an edit of a held feed comment tells nobody', async () => {
+		const mock = createPostgrestMock(world({ comments: [heldComment('feed')] }));
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const answer = await send(base, `/api/feed/${PUBLIC_ID}/comments/${COMMENT_ID}`, sessionHeaders(config, IDS.userA, IDS.homeA), { method: 'PUT', body: JSON.stringify({ content: 'a clean edit' }) });
+			assert.equal(answer.status, 200, answer.text);
+			assert.equal(publishes(mock).length, 0, mock.outbound.join('\n'));
+		}, { env: HOLD_STATE });
+	});
 });

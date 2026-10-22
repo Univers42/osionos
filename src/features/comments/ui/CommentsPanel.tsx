@@ -28,6 +28,7 @@ interface Props {
 export const CommentsPanel: React.FC<Props> = ({ comments, loading, meId, onAdd, onResolve, onRemove }) => {
   const [draft, setDraft] = useState("");
   const [warning, setWarning] = useState<ModerationWarning | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
 
   const submit = async (acknowledgeWarning = false) => {
@@ -37,9 +38,11 @@ export const CommentsPanel: React.FC<Props> = ({ comments, loading, meId, onAdd,
     if (!result.ok) {
       // The text stays in the composer: the author edits it, or posts it anyway.
       setWarning("warning" in result ? result.warning : null);
+      setFailed("message" in result ? result.message : null);
       return;
     }
     setWarning(null);
+    setFailed(null);
     setDraft("");
   };
 
@@ -79,6 +82,7 @@ export const CommentsPanel: React.FC<Props> = ({ comments, loading, meId, onAdd,
       <div className="border-t border-[var(--osio-border-default)] p-2">
         {/* The warning is announced, not shouted: the author hears it once. */}
         <div aria-live="polite">
+          {failed && <p className="mb-1.5 text-xs text-[var(--osio-danger)]">{failed}</p>}
           {warning && (
             <div className="mb-1.5 rounded-md bg-[var(--osio-bg-hover)] px-2 py-1.5">
               <p className="text-xs text-[var(--osio-fg-default)]">{warning.message}</p>

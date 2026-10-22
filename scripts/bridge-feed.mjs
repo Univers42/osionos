@@ -84,9 +84,11 @@ function fallbackFeedWorkspaceId(deps, session) {
  * already read it) and whether the public may read it (C94). The workspace is
  * read only when the page itself is not public.
  */
-async function feedSubject(deps, config, page) {
+async function feedSubject(deps, config, page, stateEnabled) {
 	return {
-		publicReadable: await publicReadablePage(config, deps.fetchImpl, page),
+		// Without the state column nothing is held or recorded, so the workspace
+		// read is skipped: the flag off keeps today's queries.
+		publicReadable: stateEnabled && await publicReadablePage(config, deps.fetchImpl, page),
 		workspaceId: page?.workspace_id ?? null,
 	};
 }
@@ -277,7 +279,7 @@ async function postComment(deps, session, request, pageId, response, config, pag
 	}
 	// L0 runs BEFORE the write: a held comment is written held, and a warning
 	// is the author's question, not a refusal (C85, C87).
-	const { publicReadable, workspaceId } = await feedSubject(deps, config, page);
+	const { publicReadable, workspaceId } = await feedSubject(deps, config, page, stateEnabled);
 	const decision = decideWrite({
 		text: content,
 		surface: 'feed_comment',
@@ -331,7 +333,7 @@ async function updateComment(deps, session, request, pageId, commentId, response
 	const content = safeText(payload.content, 4000);
 	if (!content) throw httpError('Comment content is required.', 422);
 	const { mode, stateEnabled } = moderationSettings(deps.env);
-	const { publicReadable, workspaceId } = await feedSubject(deps, config, page);
+	const { publicReadable, workspaceId } = await feedSubject(deps, config, page, stateEnabled);
 	const decision = decideWrite({
 		text: content,
 		surface: 'feed_comment',
@@ -352,7 +354,9 @@ async function updateComment(deps, session, request, pageId, commentId, response
 		prefer: 'return=representation',
 	});
 	const row = (Array.isArray(rows) ? rows[0] : rows) ?? { ...existing, content, updated_at: new Date().toISOString() };
-	if (!held) await publishFeedEvent(deps, config, session, pageId, 'comment_updated');
+	// An edit of a comment nobody else sees tells nobody (C87): held or removed stays quiet.
+	const hidden = held || (existing.moderation_state ?? 'visible') !== 'visible';
+	if (!hidden) await publishFeedEvent(deps, config, session, pageId, 'comment_updated');
 	if (decision.record) {
 		await recordDecision(config, deps.fetchImpl, {
 			subjectKind: 'feed_comment',
