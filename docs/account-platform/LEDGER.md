@@ -9,14 +9,16 @@ Workers: opencode free models only, one session per WP, rotated across models on
 (`/home/dlesieur/Documents/groot-wt/bin/oc-rotate.sh`; per-attempt model in `target/wf/<WP>.rotate.log`).
 2026-10-22: three simultaneous starts were all refused (`provider.quota`) after 2-3 requests each;
 one session alone then ran 40+ requests in ~12 min unrefused — a burst/concurrency limit, not a volume cap.
+Later the same night 3-4 concurrent sessions ran without a refusal when started minutes apart.
+`opencode run` blocks at "cli starting" when stdin is an open non-TTY (a background shell's socket); `oc-rotate.sh` passes `</dev/null`.
 
 | WP | Status | Branch | Model(s) | Gates (my re-run) | Verdict |
 |---|---|---|---|---|---|
-| P0-2 | running | feat/acct-bake-deepseek | deepseek-v4.1-flash (+rotation on refusal) | — | spec: devil PwC, 11 conditions applied |
-| P1-3a | running | feat/acct-P1-3a | glm-5.3-flash (+rotation) | — | no devil gate (pure move) |
-| P0-1 | spec ready, waits for a worker slot | (root repo) feat/acct-P0-1 | — | harness baseline 44/0 | spec: devil PwC, 12 conditions applied; root ADR 0028 |
-| P1-3b | spec written, waits for P1-3a | — | — | — | — |
-| P0-3 | spec ready, waits for a worker slot | — | — | — | spec: devil PwC, 11 conditions applied; ADR 0002 |
+| P0-2 | fix round 2 (split paging module) | feat/acct-bake-deepseek (25a14dc8, d259e0c9) | deepseek-v4.1-flash (+rotation on refusal) | — | spec: devil PwC, 11 conditions applied |
+| P1-3a | **merged** 86a66750 | feat/acct-P1-3a (f5e8b41c) | glm-5.3-flash, 1 attempt | quality 0 · canvas 2564/0/2 · settings e2e 22/22 · visual vs local system baseline 8/8 · browser: 19 panels render, 4 profile modals open/close, 1440 matches before, 375 no page overflow | accepted; deviations: dead `memberRows` dropped (verified unused), `downloadInvoicePdf` moved to Billing |
+| P0-1 | running | (root repo) feat/acct-P0-1 | big-pickle (+rotation) | harness baseline 44/0 | spec: devil PwC, 12 conditions applied; root ADR 0028 |
+| P1-3b | running | feat/acct-P1-3b | glm-5.3-flash (+rotation) | — | — |
+| P0-3 | running | feat/acct-P0-3 | deepseek-v4.1-flash (+rotation) | — | spec: devil PwC, 11 conditions applied; ADR 0002 |
 | P0-7 | spec written (root repo; DB query budgets, no HTTP driver until P0-5) | — | — | — | no devil gate |
 | P1-4 | spec written, waits for P1-3b | — | — | — | no devil gate |
 
