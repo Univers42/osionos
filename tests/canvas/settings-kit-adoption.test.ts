@@ -1,9 +1,9 @@
 // The settings screen, the BaaS console and the chat message row each carried
 // a private copy of a kit component, so a change to the kit's look skipped
 // them. These checks read the source: a copy that comes back fails here.
-// Since P1-3a splits SettingsCenter into one module per panel, every read
+// Since P1-3a splits the settings surface into one module per panel, every read
 // covers the whole `src/features/settings/` tree — a panel file is just as
-// likely a copy location as the shell was.
+// likely a copy location as the old shell was.
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -61,8 +61,8 @@ function filesUnderPanelFolder(folder: "ui" | "model" | (typeof PANEL_FOLDERS)[n
     .map((entry) => `${base}/${entry}`);
 }
 
-test("SettingsCenter and every panel module stay within the 300-line file-size rule", () => {
-  assert.ok(lines(read("src/features/settings/SettingsCenter.tsx")) <= 300);
+test("SettingsView and every panel module stay within the 300-line file-size rule", () => {
+  assert.ok(lines(read("src/features/settings/ui/SettingsView.tsx")) <= 300);
   for (const folder of ["ui", "model"] as const) {
     for (const path of filesUnderPanelFolder(folder)) assert.ok(lines(read(path)) <= 300, `${path} exceeds 300 lines`);
   }

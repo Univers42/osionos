@@ -1,0 +1,282 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   sections.ts                                        :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/22 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+// The ONE list of settings sections. Navigation, search, the panel loader and
+// the view header all read this registry — nothing else keeps its own copy.
+// The ids and labels are the modal's, verbatim: saved links, menus.ts callers
+// and tests keep pointing at the same things.
+
+import {
+  Bell,
+  Bot,
+  CalendarDays,
+  CreditCard,
+  FileText,
+  Globe,
+  Import,
+  Keyboard,
+  KeyRound,
+  LayoutGrid,
+  Mail,
+  Palette,
+  Settings,
+  Shield,
+  SlidersHorizontal,
+  Sparkles,
+  User,
+  UserPlus,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+
+export type SettingsSectionId =
+  | "profile"
+  | "preferences"
+  | "notifications"
+  | "connections"
+  | "contacts"
+  | "mail_calendar"
+  | "general"
+  | "people"
+  | "import"
+  | "page_settings"
+  | "shortcuts"
+  | "ai"
+  | "mcp"
+  | "public_pages"
+  | "library"
+  | "teamspaces"
+  | "permissions"
+  | "billing"
+  | "plans";
+
+export type SettingsGroupId = "account" | "workspace" | "features" | "access";
+
+export interface SettingsGroup {
+  id: SettingsGroupId;
+  label: string;
+}
+
+export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
+  { id: "account", label: "Account" },
+  { id: "workspace", label: "Workspace" },
+  { id: "features", label: "Features" },
+  { id: "access", label: "Access & billing" },
+];
+
+/** One scroll target inside a panel (`[data-settings-anchor]`); the search index
+ *  of the old modal, moved here so the registry is the only place it lives. */
+export interface SettingsAnchor {
+  id: string;
+  label: string;
+  keywords: string[];
+  description?: string;
+}
+
+export interface SettingsSection {
+  id: SettingsSectionId;
+  group: SettingsGroupId;
+  /** Nav label (the profile entry renders the persona name instead). */
+  label: string;
+  /** Panel heading. */
+  title: string;
+  /** One-line summary under the heading. */
+  subtitle: string;
+  icon: LucideIcon;
+  anchors: readonly SettingsAnchor[];
+}
+
+export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
+  {
+    id: "profile", group: "account", label: "Profile", title: "Profile",
+    subtitle: "Manage your profile, login information, and devices", icon: User,
+    anchors: [
+      { id: "account", label: "Preferred name", keywords: ["profile", "name", "avatar", "face"], description: "Edit your account identity." },
+      { id: "account-security", label: "Account security", keywords: ["email", "password", "verification", "passkey", "two step"] },
+      { id: "support", label: "Support access", keywords: ["support", "access", "delete account"] },
+      { id: "devices", label: "Devices", keywords: ["sessions", "logout", "device"] },
+      { id: "user-id", label: "User ID", keywords: ["copy", "id", "identifier"] },
+    ],
+  },
+  {
+    id: "preferences", group: "account", label: "Preferences", title: "Preferences",
+    subtitle: "Choose how you want osionos to look and behave", icon: SlidersHorizontal,
+    anchors: [
+      { id: "appearance", label: "Theme", keywords: ["appearance", "theme", "dark", "light"] },
+      { id: "input-options", label: "Input options", keywords: ["enter", "newline", "send"] },
+      { id: "language-time", label: "Language and time", keywords: ["language", "number", "date", "timezone", "week"] },
+      { id: "desktop-app", label: "Desktop app", keywords: ["startup", "open", "last visited"] },
+      { id: "privacy", label: "Privacy", keywords: ["cookies", "view history", "discoverability"] },
+    ],
+  },
+  {
+    id: "notifications", group: "account", label: "Notifications", title: "Notifications",
+    subtitle: "Decide when and how you want to be notified", icon: Bell,
+    anchors: [
+      { id: "in-app-notifications", label: "In-app notifications", keywords: ["meeting", "activity", "transcription"] },
+      { id: "slack-notifications", label: "Slack notifications", keywords: ["slack", "notifications"] },
+      { id: "discord-notifications", label: "Discord notifications", keywords: ["discord", "notifications"] },
+      { id: "email-notifications", label: "Email notifications", keywords: ["email", "digest", "announcements", "updates"] },
+    ],
+  },
+  {
+    id: "connections", group: "account", label: "Connections", title: "Connections",
+    subtitle: "Manage and explore connections", icon: LayoutGrid,
+    anchors: [
+      { id: "my-connections", label: "My connections", keywords: ["github", "slack", "chartbase", "whimsical"] },
+      { id: "discover-connections", label: "Discover connections", keywords: ["connectors", "gallery", "install", "mcp"] },
+    ],
+  },
+  {
+    id: "contacts", group: "account", label: "Contacts", title: "Contacts",
+    subtitle: "Manage your network, connection requests, blocked users and reports", icon: UserPlus,
+    // The modal's search index had no Contacts anchors — an exact copy keeps it so.
+    anchors: [],
+  },
+  {
+    id: "mail_calendar", group: "account", label: "Mail & Calendar", title: "Mail & Calendar",
+    subtitle: "Manage emails and calendars connected to your osionos account", icon: Mail,
+    anchors: [
+      { id: "connected-emails", label: "Connected emails", keywords: ["mail", "email", "address"] },
+      { id: "connected-calendars", label: "Connected calendars", keywords: ["calendar", "holidays", "events"] },
+    ],
+  },
+  {
+    id: "general", group: "workspace", label: "General", title: "General",
+    subtitle: "Manage your workspace name, domains, and more", icon: Settings,
+    anchors: [
+      { id: "workspace-settings", label: "Workspace settings", keywords: ["workspace", "name", "icon", "landing page"] },
+      { id: "sidebar", label: "Sidebar", keywords: ["sidebar", "apps", "calendar", "mail"] },
+      { id: "export", label: "Export", keywords: ["export", "members", "workspace content"] },
+      { id: "analytics", label: "Analytics", keywords: ["page views", "analytics", "views"] },
+      { id: "danger-zone", label: "Delete workspace", keywords: ["danger", "delete", "workspace"] },
+      { id: "workspace-id", label: "Workspace ID", keywords: ["copy", "id", "identifier"] },
+    ],
+  },
+  {
+    id: "people", group: "workspace", label: "People", title: "People",
+    subtitle: "Manage people in your workspace and their roles", icon: Users,
+    anchors: [{ id: "people", label: "People", keywords: ["members", "guests", "groups", "contacts", "invite"] }],
+  },
+  {
+    id: "import", group: "workspace", label: "Import", title: "Import",
+    subtitle: "Import data from other apps and files into osionos", icon: Import,
+    anchors: [
+      { id: "import-content", label: "Import content", keywords: ["import", "upload", "csv", "pdf", "markdown", "html", "word"] },
+      { id: "third-party-imports", label: "Third-party imports", keywords: ["asana", "confluence", "trello", "jira", "google docs"] },
+    ],
+  },
+  {
+    id: "page_settings", group: "workspace", label: "Page settings", title: "Page settings",
+    subtitle: "Actions, style switches, analytics and connections from settings_page.md", icon: FileText,
+    anchors: [
+      { id: "style", label: "Page style", keywords: ["font", "default", "serif", "mono"] },
+      { id: "actions", label: "Page actions", keywords: ["copy", "duplicate", "trash", "present", "translate", "export"] },
+      { id: "page-switches", label: "Page switches", keywords: ["small text", "full width", "lock page"] },
+      { id: "history-connections", label: "History and connections", keywords: ["analytics", "version", "comments", "notify"] },
+    ],
+  },
+  {
+    id: "shortcuts", group: "workspace", label: "Keyboard shortcuts", title: "Keyboard shortcuts",
+    subtitle: "Rebind, add, toggle, and export keyboard shortcuts — each is an editable automation",
+    icon: Keyboard,
+    anchors: [{ id: "keyboard-shortcuts", label: "Keyboard shortcuts", keywords: ["shortcut", "shortcuts", "keyboard", "keybinding", "hotkey", "automation", "combo", "vscode"], description: "Rebind, add, and export keyboard shortcuts." }],
+  },
+  {
+    id: "ai", group: "features", label: "osionos AI", title: "osionos AI",
+    subtitle: "Search everywhere, automate meeting notes and configure AI features", icon: Sparkles,
+    anchors: [{ id: "osionos-ai", label: "osionos AI", keywords: ["ai", "agents", "meeting notes", "summaries", "search"] }],
+  },
+  {
+    id: "mcp", group: "features", label: "osionos MCP", title: "osionos MCP",
+    subtitle: "Connect osionos to your AI tools to summarize, search, and move faster", icon: Bot,
+    anchors: [{ id: "osionos-mcp", label: "osionos MCP", keywords: ["mcp", "tools", "developer", "ai clients"] }],
+  },
+  {
+    id: "public_pages", group: "features", label: "Public pages", title: "Public pages",
+    subtitle: "Manage public content from your workspace", icon: Globe,
+    anchors: [{ id: "public-pages", label: "Public pages", keywords: ["sites", "forms", "domains", "public", "live"] }],
+  },
+  {
+    id: "library", group: "features", label: "Emoji & Library", title: "Emoji & Library",
+    subtitle: "Emoji + photo things that we upload", icon: Palette,
+    anchors: [{ id: "library", label: "Emoji and library", keywords: ["emoji", "assets", "photos", "uploads", "library"] }],
+  },
+  {
+    id: "teamspaces", group: "access", label: "Teamspaces", title: "Teamspaces",
+    subtitle: "Manage teamspaces in this workspace", icon: Shield,
+    anchors: [{ id: "teamspaces", label: "Teamspaces", keywords: ["teamspace", "owner", "access", "security"] }],
+  },
+  {
+    id: "permissions", group: "access", label: "Permissions", title: "Permissions",
+    subtitle: "Role × resource access matrix, field masks, and live decision testing", icon: KeyRound,
+    anchors: [
+      { id: "access-matrix", label: "Access matrix", keywords: ["permissions", "abac", "roles", "policies", "chmod", "matrix"], description: "Role × resource permission matrix." },
+      { id: "policy-conditions", label: "Conditions and field masks", keywords: ["mask", "redact", "hide", "clearance", "department", "conditions"] },
+      { id: "view-as", label: "View as", keywords: ["view as", "simulate", "decide", "allow", "deny"] },
+    ],
+  },
+  {
+    id: "billing", group: "access", label: "Billing", title: "Billing",
+    subtitle: "Manage billing information and view your upcoming invoice", icon: CreditCard,
+    anchors: [{ id: "billing", label: "Billing", keywords: ["plan", "payment", "invoice", "vat", "gst"] }],
+  },
+  {
+    id: "plans", group: "access", label: "Explore plans", title: "Explore plans",
+    subtitle: "Compare all osionos plans", icon: CalendarDays,
+    anchors: [{ id: "plans", label: "Explore plans", keywords: ["free", "plus", "business", "enterprise", "upgrade"] }],
+  },
+];
+
+/** Unknown ids find nothing — callers may render a first-registry fallback. */
+export function findSection(id: string): SettingsSection | undefined {
+  return SETTINGS_SECTIONS.find((section) => section.id === id);
+}
+
+export interface SettingsSearchHit {
+  section: SettingsSection;
+  anchor: SettingsAnchor;
+}
+
+/** Registry order — an empty query answers with the same list the nav shows. */
+const ALL_HITS: readonly SettingsSearchHit[] = SETTINGS_SECTIONS.flatMap((section) =>
+  section.anchors.map((anchor) => ({ section, anchor })),
+);
+
+function normalize(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function searchSettings(query: string): SettingsSearchHit[] {
+  const normalized = normalize(query);
+  if (!normalized) return [...ALL_HITS];
+  const terms = normalized.split(/\s+/).filter(Boolean);
+
+  return ALL_HITS.map((hit) => {
+      const haystack = normalize([
+        hit.anchor.label,
+        hit.anchor.description ?? "",
+        hit.section.id,
+        hit.anchor.id,
+        ...hit.anchor.keywords,
+      ].join(" "));
+      const score = terms.reduce((total, term) => {
+        if (normalize(hit.anchor.label).startsWith(term)) return total + 4;
+        if (haystack.includes(term)) return total + 1;
+        return total;
+      }, 0);
+      return { hit, score };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((left, right) => right.score - left.score || left.hit.anchor.label.localeCompare(right.hit.anchor.label))
+    .map(({ hit }) => hit);
+}

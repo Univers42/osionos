@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useMemo } from "react";
-import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
+import type { SettingsSectionId } from "@/features/settings/model/sections";
 import { buildCommands } from "../model/commands";
 import { buildMenus } from "../model/menus";
 import { useTopBarHotkeys } from "../model/usePalette";
@@ -23,7 +23,7 @@ import { WindowControls } from "./WindowControls";
 import { QuickCaptureButton } from "@/features/quick-capture/ui/QuickCaptureButton";
 
 interface TopBarProps {
-  onOpenSettings: (tab?: SettingsTab) => void;
+  onOpenSettings: (section?: SettingsSectionId) => void;
 }
 
 /** Global VSCode-style top bar: menus · command/search · update · window controls.
