@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { AiAccessToken } from "@/features/ai/api/aiClient";
+import { AiError } from "@/features/ai/api/aiContract";
 import { errorWords } from "@/widgets/chat-shell/ui/errorWords";
 
 /** The environment variable the snippet reads the token from (C112). */
@@ -63,4 +64,14 @@ export function lastUsedWords(token: AiAccessToken): string {
   if (token.revokedAt) return "Revoked";
   if (token.lastUsedAt) return `Last used ${new Date(token.lastUsedAt).toLocaleDateString()}`;
   return "Never used";
+}
+
+/**
+ * True when the service answered 404 to the list: the feature is off on this
+ * deployment (R-C4a) and the panel renders nothing. Any other failure stays a
+ * message. Caveat: a 404 from a proxy in front of a service that has the
+ * feature on also hides the panel.
+ */
+export function isAccessTokensOff(failure: unknown): boolean {
+  return failure instanceof AiError && failure.status === 404;
 }

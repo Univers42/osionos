@@ -104,7 +104,7 @@ export function createMatcher(terms) {
 		keys.add(tokens.join(' '));
 		if (tokens.length > maxWords) maxWords = tokens.length;
 	}
-	const hash = createHash('sha256').update([...keys].sort().join('\n'), 'utf8').digest('hex');
+	const hash = createHash('sha256').update([...keys].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).join('\n'), 'utf8').digest('hex');
 	return {
 		size: keys.size,
 		hash,

@@ -126,8 +126,8 @@ const SHAPES = [
 
 function matches(shape, method, table, params, prefer) {
 	if (shape.method !== method || shape.table !== table) return false;
-	const names = [...params.keys()].sort();
-	if (JSON.stringify(names) !== JSON.stringify([...shape.keys].sort())) return false;
+	const names = [...params.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+	if (JSON.stringify(names) !== JSON.stringify([...shape.keys].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)))) return false;
 	if (shape.prefer !== undefined && shape.prefer !== prefer) return false;
 	return Object.entries(shape.fixed).every(([name, value]) => params.get(name) === value);
 }

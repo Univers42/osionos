@@ -136,8 +136,9 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 export function verifyAppSessionToken(token, config, now = undefined) {
 	const resolvedNow = now ?? config?.sessionCutoffs?.now?.() ?? Date.now();
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
-	const [version, encodedPayload, signature, extra] = safeText(token, 4096).split('.');
-	if (version !== APP_SESSION_TOKEN_VERSION || !encodedPayload || !signature || extra !== undefined) {
+	const parts = safeText(token, 4096).split('.');
+	const [version, encodedPayload, signature] = parts;
+	if (parts.length !== 3 || version !== APP_SESSION_TOKEN_VERSION || !encodedPayload || !signature) {
 		throw Object.assign(new Error('App session token is invalid.'), { status: 401 });
 	}
 	const expectedSignature = createHmac('sha256', config.appSessionSecret).update(encodedPayload).digest('base64url');

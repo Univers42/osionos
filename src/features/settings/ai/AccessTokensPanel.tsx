@@ -37,12 +37,13 @@ import {
 } from "@/features/ai/api/aiClient";
 import { CreateTokenForm } from "./accessTokenCreateForm";
 import { RevokeControl, ShowOnceTokenBox } from "./accessTokenRows";
-import { lastUsedWords, tokenFailureMessage } from "./accessTokenWords";
+import { isAccessTokensOff, lastUsedWords, tokenFailureMessage } from "./accessTokenWords";
 import { CHIP } from "./aiPanelClasses";
 
 export { RevokeControl, ShowOnceTokenBox } from "./accessTokenRows";
 export {
   AGENT_COPY,
+  isAccessTokensOff,
   PAT_ENV_VAR,
   REAUTH_MESSAGE,
   TOKEN_REFUSALS,
@@ -64,6 +65,7 @@ export const AccessTokensPanel: React.FC<{ workspaces: AccessTokenWorkspace[] }>
   const [tokens, setTokens] = useState<AiAccessToken[]>([]);
   const [created, setCreated] = useState<AiAccessTokenCreated | null>(null);
   const [error, setError] = useState("");
+  const [off, setOff] = useState(false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -78,7 +80,8 @@ export const AccessTokensPanel: React.FC<{ workspaces: AccessTokenWorkspace[] }>
     try {
       setTokens(await listAccessTokens());
     } catch (failure) {
-      setError(tokenFailureMessage(failure));
+      if (isAccessTokensOff(failure)) setOff(true);
+      else setError(tokenFailureMessage(failure));
     }
   }, []);
 
@@ -155,6 +158,8 @@ export const AccessTokensPanel: React.FC<{ workspaces: AccessTokenWorkspace[] }>
   }
 
   const canSubmit = name.trim().length > 0 && scopes.length > 0 && workspaceIds.length > 0;
+
+  if (off) return null;
 
   return (
     <section className="space-y-5" data-settings-anchor="ai-access-tokens" data-testid="ai-access-tokens-panel">

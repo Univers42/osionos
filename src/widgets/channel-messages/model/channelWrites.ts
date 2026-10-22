@@ -52,7 +52,7 @@ export interface ChannelWriteTarget {
 /** The row the sender sees before the bridge answers. */
 function optimisticRow(target: ChannelWriteTarget, content: string, attachments?: Attachment[]): ChatMessage {
   return {
-    id: `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    id: `temp-${Date.now()}-${crypto.randomUUID()}`,
     channelId: target.channelId,
     authorId: target.userId,
     authorName: target.userName,
