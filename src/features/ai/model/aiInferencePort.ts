@@ -116,6 +116,8 @@ export const aiInferencePort: InferencePort = {
               text: request.text,
               model: serviceModel(request.model),
               connectionId: request.connectionId,
+              // The agent of this run: the one the reader picked, or none.
+              ...(request.agentId ? { agentId: request.agentId } : {}),
               // What the answer is read from — the pages the reader pointed at.
               context: request.context,
               attachments: request.attachments,

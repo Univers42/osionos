@@ -44,6 +44,23 @@ export interface AiModel {
   outputMicroUsdPerMTok?: number;
 }
 
+/**
+ * A built-in agent: a shape of the assistant, chosen for one run.
+ *
+ * The list NEVER carries the instructions: they are the text of the server's
+ * prompt, and the browser has no business holding them.
+ */
+export interface AiAgent {
+  /** The id the run carries: `db-architect`, `doc-writer`, `analyst`. */
+  id: string;
+  /** The version of the instructions — pinned on the run. */
+  version: number;
+  /** The name the reader sees. */
+  name: string;
+  /** One line: what the agent is for. */
+  description: string;
+}
+
 /* -------------------------------------------------------------------------- */
 /* The connections (the v2 additions of the wire contract)                    */
 /* -------------------------------------------------------------------------- */
@@ -131,6 +148,12 @@ export interface StartRunInput {
   model?: string;
   /** The connection the run spends — `platform` when the caller does not say. */
   connectionId?: string;
+  /**
+   * The agent that shapes the run: one of the built-ins.
+   *
+   * Absent is the general assistant — the run of today, byte for byte.
+   */
+  agentId?: string;
   attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }>;
   /**
    * What the answer is read from: the pages it may use (at most three), and

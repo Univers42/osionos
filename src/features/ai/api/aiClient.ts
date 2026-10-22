@@ -24,6 +24,7 @@
 
 import { AiError, toAiError } from "./aiContract";
 import type {
+  AiAgent,
   AiCommand,
   AiConnection,
   AiConversation,
@@ -47,6 +48,7 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
    callers of the client read them from one place. */
 export { AiError };
 export type {
+  AiAgent,
   AiCommand,
   AiConnection,
   AiConversation,
@@ -174,6 +176,17 @@ export async function listModels(connectionId?: string): Promise<AiModel[]> {
   const query = connectionId ? `?connectionId=${encodeURIComponent(connectionId)}` : "";
   const body = await requestJson<{ models?: AiModel[] }>("GET", `/models${query}`);
   return body.models ?? [];
+}
+
+/**
+ * `GET /agents` — the built-in agents: the shapes a run can take.
+ *
+ * The list never carries the instructions of an agent: they are the text of
+ * the server's prompt, and the browser does not hold them.
+ */
+export async function listAgents(): Promise<AiAgent[]> {
+  const body = await requestJson<AiAgent[]>("GET", "/agents");
+  return Array.isArray(body) ? body : [];
 }
 
 /** `POST /conversations` — a conversation of the workspace. */
