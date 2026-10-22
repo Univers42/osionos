@@ -45,13 +45,20 @@ function fenceFor(source: string): string {
   return "`".repeat(Math.max(3, longest + 1));
 }
 
-/** JSON that never throws: a spec that cannot be written is written as null. */
+/**
+ * JSON that never throws and never leaves its HTML comment: a spec that cannot
+ * be written is written as null, and `<`/`>` are written as \u003c/\u003e (the
+ * same JSON once parsed), so a title holding `-->` cannot close the comment
+ * and put its tail into the markdown as content.
+ */
 function safeJson(value: unknown): string {
+  let json: string;
   try {
-    return JSON.stringify(value ?? null) ?? "null";
+    json = JSON.stringify(value ?? null) ?? "null";
   } catch {
     return "null";
   }
+  return json.replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
 }
 
 /** The markdown of a diagram block, from its stored spec. */

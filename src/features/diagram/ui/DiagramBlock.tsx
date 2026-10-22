@@ -66,7 +66,10 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
   const treeSpec = parsed.ok && parsed.spec.kind === "hierarchy" ? parsed.spec : null;
   const mermaidSpec = parsed.ok && parsed.spec.kind === "mermaid" ? parsed.spec : null;
   const kind = treeSpec ? "hierarchy" : "mermaid";
-  const storedSource = mermaidSpec?.source ?? "";
+  // A spec that does not parse (a source over the cap) still shows its text:
+  // the author edits it back under the cap instead of losing it from view.
+  const rawSource = (spec as { source?: unknown } | null | undefined)?.source;
+  const storedSource = mermaidSpec?.source ?? (typeof rawSource === "string" ? rawSource : "");
   const depth = treeSpec?.depth ?? 2;
   const rootPageId = treeSpec?.rootPageId ?? pageId;
 
