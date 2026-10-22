@@ -10,8 +10,6 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { settingsPaletteCommands } from "@/features/settings/model/settingsCommands";
-
 import { buildMenus, type MenuContext } from "./menus";
 
 export interface PaletteCommand {
@@ -27,8 +25,11 @@ export interface PaletteCommand {
 /**
  * Flatten the menubar into a de-duplicated command list for the '>' palette
  * mode, so a single source of truth (the menus) drives both surfaces.
+ * `extra` holds commands that live outside the menubar — the settings entries
+ * are loaded with the palette, not with the entry chunk — and joins the same
+ * list and the same de-duplication.
  */
-export function buildCommands(ctx: MenuContext): PaletteCommand[] {
+export function buildCommands(ctx: MenuContext, extra: PaletteCommand[] = []): PaletteCommand[] {
   const seen = new Set<string>();
   return [
     ...buildMenus(ctx).flatMap((group) => group.items.map((item) => ({
@@ -38,7 +39,7 @@ export function buildCommands(ctx: MenuContext): PaletteCommand[] {
       accelerator: item.accelerator,
       run: item.run,
     }))),
-    ...settingsPaletteCommands(),
+    ...extra,
   ].filter((command) => {
     if (seen.has(command.label)) return false;
     seen.add(command.label);
