@@ -99,11 +99,6 @@ function hasKnownExtension(specifier) {
   return [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".json"].some((extension) => path.endsWith(extension));
 }
 
-// Node has no `import.meta.env`, so appUrls.ts would resolve every embedded-app URL to ""
-// (its production answer) and suites that exercise a configured app would see it hidden.
-// Give that one module the env object Vite's dev server would: DEV on, nothing set.
-const APP_URLS_MODULE = new URL("../../src/shared/config/appUrls.ts", import.meta.url).href;
-
 // The AI client reads `import.meta.env` (VITE_AI_URL) when it is asked whether the
 // assistant is configured. Node has no env object, so this module is given one too —
 // taken from the `env` query of the import specifier, which makes every environment a
@@ -138,7 +133,7 @@ function isAppFile(path) {
  * A JSON import needs its attribute in node ("with { type: "json" }"); Vite
  * reads the file itself and never asks for one.
  */
-const JSON_IMPORT = /(from\s+["'][^"']+\.json["'])/g;
+const JSON_IMPORT = /(from\s+["'][^"']+\.json["'])(?!\s*(?:with|assert)\b)/g;
 
 /** Adds the import attribute node asks for. */
 function withJsonAttributes(source) {
@@ -150,7 +145,7 @@ function withJsonAttributes(source) {
  * it for the API URL, the auth mode, the media keys — so a test that renders
  * a component of the app would load a module that cannot even be read. The
  * env object Vite's dev server would give it is given here instead: DEV on,
- * nothing set (the same answer the two modules above already get).
+ * nothing set (the AI client above gets its own, from its query).
  */
 const ENV_OBJECT = "import.meta.env ??= { DEV: true };\n";
 
@@ -211,19 +206,12 @@ export async function load(url, context, nextLoad) {
   // another (it holds JSX, and node's type stripping cannot read that).
   if (isFile && path.endsWith(".tsx")) {
     const file = fileURLToPath(path);
-    const source = await readFile(file, "utf8");
-    return {
-      format: "module",
-      source: withJsonAttributes(await compileTsx(file, source)),
-      shortCircuit: true,
-    };
+    const compiled = withJsonAttributes(await compileTsx(file, await readFile(file, "utf8")));
+    return { format: "module", source: isAppFile(file) ? withEnv(compiled) : compiled, shortCircuit: true };
   }
 
   const loaded = await nextLoad(url, context);
   if (loaded.source == null) return loaded;
-  if (url === APP_URLS_MODULE) {
-    return { ...loaded, source: `import.meta.env ??= { DEV: true };\n${loaded.source}` };
-  }
   if (path === AI_CLIENT_MODULE) {
     const env = new URL(url).searchParams.get("env") ?? "{}";
     return { ...loaded, source: `import.meta.env ??= ${env};\n${loaded.source}` };
