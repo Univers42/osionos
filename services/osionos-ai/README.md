@@ -90,9 +90,11 @@ service has no search: the runs go on without sources.
 
 ## The tools of the assistant
 
-The model may call tools. Two of them READ: `search_workspace` (the passages
-of the caller's workspaces that answer a question) and `read_page` (the title
-and the text of one page). Three of them WRITE: `create_page`, `rename_page`
+The model may call tools. Three of them READ: `search_workspace` (the passages
+of the caller's workspaces that answer a question), `read_page` (the title
+and the text of one page) and `graph_neighbors` (the pages linked to a page:
+the ones it links to, the ones that link to it, its parent, its sub-pages, and
+the pages most like it). Three of them WRITE: `create_page`, `rename_page`
 and `archive_page` — and a write tool never writes: it asks.
 
 They live in one library (`src/tools/`), and a tool is always the same shape: a
