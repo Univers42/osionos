@@ -10,9 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { lazy, Profiler, StrictMode, Suspense } from "react";
+import { lazy, Profiler, StrictMode, Suspense, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { MotionConfig } from "motion/react";
+import { useMotionConfigMode } from "@/shared/config/useAppearance";
 import App from "./App.tsx";
 
 // Public published-page view (/p/:token) — a standalone read-only render mounted
@@ -48,14 +49,21 @@ globalThis.addEventListener("vite:preloadError", () => {
   }
 });
 
+/** react-doctor/require-reduced-motion: honour the person's motion choice for
+ *  every motion component (WCAG 2.3.3). The Appearance preference maps it —
+ *  "system" is Motion's `reducedMotion="user"` (the OS decides), "reduce" is
+ *  "always" and "full" is "never" — and the bridge re-renders on a change, so
+ *  the choice takes effect without a reload. */
+function AppearanceMotion({ children }: { children: ReactNode }) {
+  const reducedMotion = useMotionConfigMode();
+  return <MotionConfig reducedMotion={reducedMotion}>{children}</MotionConfig>;
+}
+
 const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
     <StrictMode>
-      {/* react-doctor/require-reduced-motion: honour user's OS-level
-          prefers-reduced-motion preference for every motion component (WCAG
-          2.3.3). `reducedMotion="user"` is the recommended default. */}
-      <MotionConfig reducedMotion="user">
+      <AppearanceMotion>
         {/* Profiler only in dev: it wraps the whole tree and fires onRender on
             every commit — pure overhead (TBT) in production builds. */}
         {isPublicRoute ? (
@@ -69,7 +77,7 @@ if (root) {
         ) : (
           <App />
         )}
-      </MotionConfig>
+      </AppearanceMotion>
     </StrictMode>,
   );
 }
