@@ -340,4 +340,74 @@ describe('osionos-ai personal access tokens', () => {
 		assert.equal(refused.body?.code, 'too_many_tokens');
 		assert.equal(await countTokens(USER_C), 20, 'the cap holds');
 	});
+
+	it('a session cutoff newer than the token revokes it (C113)', async () => {
+		const user = randomUUID();
+		const minted = await mint(user, WORKSPACE_A);
+		assert.equal((await authenticatePat(app.db, patRequest(minted.token)))?.userId, user, 'accepted before the cutoff');
+
+		// The migration reads the cutoff table only if it exists; the harness may not have it.
+		const existed = (await app.db.query("select to_regclass('public.auth_session_cutoffs') as t")).rows[0].t !== null;
+		if (!existed) {
+			await app.db.query(
+				'create table public.auth_session_cutoffs (user_id uuid primary key, sessions_valid_after timestamptz not null)',
+			);
+		}
+		try {
+			const present = await app.db.query("select to_regclass('public.auth_session_cutoffs') as t");
+			assert.notEqual(present.rows[0].t, null, 'the cutoff table exists: the refusal below is not vacuous');
+			await app.db.query(
+				`insert into public.auth_session_cutoffs (user_id, sessions_valid_after)
+				 select user_id, created_at + interval '1 second' from public.ai_access_tokens where id = $1::uuid`,
+				[minted.id],
+			);
+			assert.equal(await authenticatePat(app.db, patRequest(minted.token)), null, 'refused after the cutoff');
+		} finally {
+			await app.db.query('delete from public.auth_session_cutoffs where user_id = $1::uuid', [user]);
+			if (!existed) await app.db.query('drop table public.auth_session_cutoffs');
+		}
+	});
+
+	it('an expired token resolves to nothing', async () => {
+		const minted = await mint(randomUUID(), WORKSPACE_A);
+		assert.notEqual(await authenticatePat(app.db, patRequest(minted.token)), null, 'live before the expiry');
+		// The create path refuses a past expiry (expires_at > created_at): age both columns.
+		await app.db.query(
+			`update public.ai_access_tokens
+			    set created_at = now() - interval '2 days', expires_at = now() - interval '1 day'
+			  where id = $1::uuid`,
+			[minted.id],
+		);
+		assert.equal(await authenticatePat(app.db, patRequest(minted.token)), null);
+	});
+
+	it('last_used_at is written once, then throttled to one write a minute', async () => {
+		const minted = await mint(randomUUID(), WORKSPACE_A);
+		const lastUsed = async () =>
+			(await app.db.query('select last_used_at from public.ai_access_tokens where id = $1::uuid', [minted.id]))
+				.rows[0].last_used_at as Date | null;
+		assert.equal(await lastUsed(), null, 'never used yet');
+
+		assert.notEqual(await authenticatePat(app.db, patRequest(minted.token)), null);
+		const first = await lastUsed();
+		assert.ok(first instanceof Date, 'the first use is written');
+
+		assert.notEqual(await authenticatePat(app.db, patRequest(minted.token)), null);
+		assert.equal((await lastUsed())?.getTime(), first.getTime(), 'the second use inside a minute writes nothing');
+	});
+
+	it('erasing a user deletes their tokens and nobody else\'s', async () => {
+		const userA = randomUUID();
+		const userB = randomUUID();
+		await mint(userA, WORKSPACE_A);
+		await mint(userA, WORKSPACE_A);
+		await mint(userB, WORKSPACE_A);
+		assert.equal(await countTokens(userA), 2);
+		assert.equal(await countTokens(userB), 1);
+
+		const erased = await app.db.query<{ n: string }>('select public.ai_access_tokens_erase_user($1::uuid)::text as n', [userA]);
+		assert.equal(erased.rows[0]?.n, '2');
+		assert.equal(await countTokens(userA), 0, 'A has no row left');
+		assert.equal(await countTokens(userB), 1, 'B keeps its row');
+	});
 });
