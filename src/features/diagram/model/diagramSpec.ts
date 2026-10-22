@@ -29,6 +29,9 @@ import { z } from "zod";
 /** The direction of the flowchart. One renderer path, one direction per diagram. */
 const direction = z.enum(["LR", "TB"]);
 
+/** The most databases a schema diagram may hold: the ceiling of the spec. */
+export const MAX_SCHEMA_DATABASES = 12;
+
 /**
  * The title of a diagram. It is NOT front matter: the locked renderer strips a
  * front-matter block, so the block shows the title as TEXT next to the diagram.
@@ -51,10 +54,22 @@ const mermaidSpec = z.strictObject({
  */
 const pageId = z.union([z.uuid(), z.string().regex(/^local-page-\d{1,9}-[0-9a-z]{1,12}$/)]);
 
+/**
+ * A database id: a lookup key into the VIEWER's own store, never emitted (the
+ * compiler generates node ids).
+ *
+ * It is NOT a uuid: the databases the client holds are named by the app
+ * itself — `db-tasks`, `db-crm`, `db-inline-1a2b3c4d` — so a uuid-only rule
+ * refused every real database id. The rule is the same shape as the page id
+ * above: a short, boring, lookup-key string. It reaches the diagram as a KEY
+ * and never as text (the emitter writes `n0`, `n1`, …).
+ */
+const databaseId = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/);
+
 /** The schema of one to twelve databases the reader may see. */
 const schemaSpec = z.strictObject({
   kind: z.literal("schema"),
-  databaseIds: z.array(z.uuid()).min(1).max(12),
+  databaseIds: z.array(databaseId).min(1).max(MAX_SCHEMA_DATABASES),
   direction: direction.optional(),
   title,
 });
@@ -81,8 +96,8 @@ const hierarchySpec = z.strictObject({
 /** The rows of one database, grouped by the value of one status property. */
 const pipelineSpec = z.strictObject({
   kind: z.literal("pipeline"),
-  databaseId: z.uuid(),
-  statusPropertyId: z.string().max(80),
+  databaseId,
+  statusPropertyId: z.string().max(80).regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$/),
   direction: direction.optional(),
   title,
 });
@@ -98,6 +113,9 @@ export const diagramSpecSchema = z.discriminatedUnion("kind", [
 
 export type DiagramSpec = z.infer<typeof diagramSpecSchema>;
 export type MermaidDirection = z.infer<typeof direction>;
+
+/** The kinds the editor offers: the four a diagram can be drawn as. */
+export type DiagramKind = "mermaid" | "hierarchy" | "schema" | "pipeline";
 
 export type DiagramSpecResult =
   | { ok: true; spec: DiagramSpec }
@@ -115,4 +133,23 @@ export function parseDiagramSpec(input: unknown): DiagramSpecResult {
     .map((issue) => `${issue.path.join(".") || "spec"}: ${issue.message}`)
     .join("; ");
   return { ok: false, error };
+}
+
+/**
+ * The kind the editor shows for a spec.
+ *
+ * It reads the RAW spec, not the parsed one: a schema whose database list is
+ * empty does not parse, and the editor must still show that it is a schema —
+ * otherwise the author cannot go back and pick a database.
+ *
+ * The `graph` kind has no control yet — it needs a server read, and it is
+ * the next slice — so the editor shows the mermaid kind for it. The block
+ * itself still says that the kind is not available yet.
+ */
+export function diagramKind(spec: unknown): DiagramKind {
+  const kind = (spec as { kind?: unknown } | null | undefined)?.kind;
+  if (kind === "hierarchy" || kind === "schema" || kind === "pipeline") {
+    return kind;
+  }
+  return "mermaid";
 }

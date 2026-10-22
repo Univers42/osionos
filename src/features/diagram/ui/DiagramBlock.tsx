@@ -1,9 +1,9 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   DiagramBlock.tsx                                      +:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*   DiagramBlock.tsx                                   +:      :+:    :+:   */
+/*                                                    copyrightc        */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  licensed        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/22 00:00:00 by dlesieur          #+#    #+#             */
 /*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
@@ -22,19 +22,28 @@
  *
  * The mermaid text always goes through `MermaidDiagram`, the locked renderer:
  * there is no second way to draw a diagram here.
+ *
+ * The two kinds drawn from the databases of the viewer (a schema, a pipeline)
+ * are LAZY: they read the database store, which ships the seed of the app, and
+ * a hand-written mermaid diagram must never pay for that chunk.
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { Suspense, lazy, useEffect, useMemo, useState } from "react";
 
 import { DEFAULT_DIAGRAM_SPEC } from "@/entities/block/model/diagramBlocks";
 import type { Block } from "@/entities/block";
-import { MermaidDiagram } from "@/shared/ui";
 
-import { MAX_NODES } from "../model/diagramIR";
-import { parseDiagramSpec } from "../model/diagramSpec";
+import { diagramKind, parseDiagramSpec, type DiagramKind } from "../model/diagramSpec";
 import { diagramRenderMode } from "../model/diagramRenderMode";
 import { useDiagramSource } from "./useDiagramSource";
 import { useIsPublicPage } from "./useIsPublicPage";
+import { DiagramOutput } from "./DiagramOutput";
+import { DiagramToolbar } from "./DiagramToolbar";
+
+/** The two database kinds: drawn from the store, in a chunk of their own. */
+const LazyDatabaseDiagram = lazy(() =>
+  import("./DatabaseDiagram").then((module) => ({ default: module.DatabaseDiagram })),
+);
 
 interface DiagramBlockProps {
   block: Block;
@@ -45,10 +54,6 @@ interface DiagramBlockProps {
   /** The block's normal update path. */
   onUpdateBlock?: (updates: Partial<Block>) => void;
 }
-const CONTROL =
-  "rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40";
-
-const DEPTHS = [1, 2, 3, 4];
 
 export const DiagramBlock: React.FC<DiagramBlockProps> = ({
   block,
@@ -63,13 +68,24 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
   const { source, truncated, error, unsupported } = useDiagramSource(spec, { isPublic });
 
   const title = parsed.ok ? parsed.spec.title : undefined;
+  // The kind of the STORED spec: a spec that does not parse (a schema with no
+  // database) still shows its kind, so the author can go back and fix it.
+  const kind = diagramKind(spec);
+  // A kind the toolbar cannot write yet: the database kinds name a database
+  // of the store, so the lazy controls write them once they know it.
+  const [pendingKind, setPendingKind] = useState<DiagramKind | null>(null);
+  const shownKind = pendingKind ?? kind;
+  useEffect(() => {
+    if (pendingKind && kind === pendingKind) setPendingKind(null);
+  }, [pendingKind, kind]);
+
   const treeSpec = parsed.ok && parsed.spec.kind === "hierarchy" ? parsed.spec : null;
   const mermaidSpec = parsed.ok && parsed.spec.kind === "mermaid" ? parsed.spec : null;
-  const kind = treeSpec ? "hierarchy" : "mermaid";
   // A spec that does not parse (a source over the cap) still shows its text:
   // the author edits it back under the cap instead of losing it from view.
   const rawSource = (spec as { source?: unknown } | null | undefined)?.source;
   const storedSource = mermaidSpec?.source ?? (typeof rawSource === "string" ? rawSource : "");
+  const isMermaid = shownKind === "mermaid";
   const depth = treeSpec?.depth ?? 2;
   const rootPageId = treeSpec?.rootPageId ?? pageId;
 
@@ -92,9 +108,17 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
   const onKindChange = (value: string) => {
     if (value === "hierarchy") {
       if (!rootPageId) return;
+      setPendingKind(null);
       writeSpec(carry({ kind: "hierarchy", rootPageId, depth }));
       return;
     }
+    if (value === "schema" || value === "pipeline") {
+      // The default of a database kind names a database of the store: the
+      // lazy controls write it, once they have read the store.
+      setPendingKind(value);
+      return;
+    }
+    setPendingKind(null);
     writeSpec(carry({ kind: "mermaid", source: storedSource || DEFAULT_DIAGRAM_SPEC.source }));
   };
 
@@ -109,71 +133,30 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
     );
   }
 
-  let body: React.ReactNode = null;
-  const NOTE = "px-3 py-2 text-sm text-[var(--osio-fg-subtle)]";
-  if (mode === "error" || error) {
-    body = <p role="alert" className={NOTE}>{error}</p>;
-  } else if (unsupported) {
-    body = <p className={NOTE}>This diagram kind is not available yet</p>;
-  } else if (source) {
-    body = <MermaidDiagram chart={source} />;
-  }
+  const isDatabase = kind === "schema" || kind === "pipeline";
+  const body = isDatabase ? (
+    <Suspense fallback={null}>
+      <LazyDatabaseDiagram spec={spec} />
+    </Suspense>
+  ) : (
+    <DiagramOutput source={source} truncated={truncated} error={error} unsupported={unsupported} />
+  );
 
   return (
     <div className="my-0 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]">
       {editable ? (
-        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-1.5">
-          <label className="flex items-center gap-1.5 text-xs text-[var(--osio-fg-muted)]">
-            <span>Kind</span>
-            <select
-              aria-label="Diagram kind"
-              value={kind}
-              onChange={(event) => onKindChange(event.target.value)}
-              className={CONTROL}
-            >
-              <option value="mermaid">Mermaid</option>
-              <option value="hierarchy">Page tree</option>
-            </select>
-          </label>
-          {kind === "hierarchy" ? (
-            <>
-              <label className="flex items-center gap-1.5 text-xs text-[var(--osio-fg-muted)]">
-                <span>Depth</span>
-                <select
-                  aria-label="Tree depth"
-                  value={depth}
-                  onChange={(event) => {
-                    if (!rootPageId) return;
-                    writeSpec(carry({ kind: "hierarchy", rootPageId, depth: Number(event.target.value) }));
-                  }}
-                  className={CONTROL}
-                >
-                  {DEPTHS.map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!pageId) return;
-                  writeSpec(carry({ kind: "hierarchy", rootPageId: pageId, depth }));
-                }}
-                disabled={!pageId}
-                className={`${CONTROL} disabled:cursor-not-allowed disabled:opacity-50`}
-              >
-                This page
-              </button>
-            </>
-          ) : null}
-        </div>
+        <DiagramToolbar
+          kind={shownKind}
+          parsed={parsed.ok ? parsed.spec : null}
+          pageId={pageId}
+          onKindChange={onKindChange}
+          onWrite={(next) => writeSpec(carry(next))}
+        />
       ) : null}
       {title ? (
         <p className="px-3 pt-2 text-sm font-semibold text-[var(--osio-fg-default)]">{title}</p>
       ) : null}
-      {editable && kind === "mermaid" ? (
+      {editable && isMermaid ? (
         <textarea
           aria-label="Mermaid source"
           value={draft}
@@ -188,11 +171,6 @@ export const DiagramBlock: React.FC<DiagramBlockProps> = ({
         />
       ) : null}
       {body}
-      {truncated ? (
-        <p className="px-3 pb-2 text-xs text-[var(--osio-fg-subtle)]">
-          Showing the first {MAX_NODES} nodes
-        </p>
-      ) : null}
     </div>
   );
 };

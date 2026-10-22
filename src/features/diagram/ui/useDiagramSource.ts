@@ -21,8 +21,10 @@
  *
  * The mermaid kind goes through the locked path (`mermaidSpecToMermaid`), the
  * page-tree kind through the compiler (`compileHierarchy` + `irToMermaid`).
- * The three other kinds of the closed spec have no adapter yet: they say so
- * instead of drawing something else.
+ * The two database kinds are drawn by the LAZY `DatabaseDiagram` module, which
+ * reads the database store — this hook never does, so a mermaid diagram never
+ * loads that chunk. The `graph` kind has no adapter yet: it says so instead
+ * of drawing something else.
  */
 
 import { useMemo } from "react";
@@ -33,20 +35,11 @@ import { usePageStore } from "@/store/usePageStore";
 
 import { compileHierarchy } from "../model/compile";
 import { parseDiagramSpec } from "../model/diagramSpec";
+import type { DiagramSource } from "../model/diagramSource";
 import { hierarchyInput, type HierarchyPage } from "../model/hierarchyInput";
 import { irToMermaid, mermaidSpecToMermaid } from "../model/toMermaid";
 
-/** What the block draws (or why it draws nothing). */
-export interface DiagramSource {
-  /** The mermaid text the locked renderer draws; null when there is none. */
-  source: string | null;
-  /** True when the diagram holds less than the data (the caps dropped nodes). */
-  truncated: boolean;
-  /** Why there is no source; null when there is one. */
-  error: string | null;
-  /** True for a kind of the spec whose adapter does not exist yet. */
-  unsupported: boolean;
-}
+export type { DiagramSource };
 
 const NO_PAGES: Record<string, PageEntry[]> = {};
 const NO_READABLE_PAGES: HierarchyPage[] = [];

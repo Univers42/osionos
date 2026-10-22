@@ -143,10 +143,13 @@ test("the closed spec: everything else is refused", () => {
     { kind: "hierarchy", rootPageId: UUID_A, depth: 1, extra: 1 },
     { kind: "pipeline", databaseId: UUID_A, statusPropertyId: "s", extra: 1 },
     // A wrong uuid.
-    { kind: "schema", databaseIds: ["not-a-uuid"] },
     { kind: "graph", pageId: "1234", depth: 1, kinds: [] },
     { kind: "hierarchy", rootPageId: "1234", depth: 1 },
-    { kind: "pipeline", databaseId: "1234", statusPropertyId: "s" },
+    // A database id is a LOOKUP KEY, not a uuid: the app names its own
+    // databases (`db-tasks`), so the rule is a short boring string — and
+    // what it refuses is a key with a space or a bracket in it.
+    { kind: "schema", databaseIds: ["not a uuid"] },
+    { kind: "pipeline", databaseId: "<database>", statusPropertyId: "s" },
     // A depth out of range.
     { kind: "graph", pageId: UUID_A, depth: 3, kinds: [] },
     { kind: "graph", pageId: UUID_A, depth: 0, kinds: [] },
