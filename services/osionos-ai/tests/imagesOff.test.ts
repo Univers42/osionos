@@ -89,7 +89,17 @@ describe('osionos-ai images: off by default (C70)', () => {
 	});
 
 	it('turned on with an engine and a price, the service starts', async () => {
-		const output = await boot({ OSIONOS_AI_IMAGES: 'on', OSIONOS_AI_IMAGE_MICROUSD: '2000' });
+		const output = await boot({
+			OSIONOS_AI_IMAGES: 'on',
+			OSIONOS_AI_IMAGE_MICROUSD: '2000',
+			OSIONOS_AI_IMAGE_CHECK_DIR: '/tmp/osionos-ai-check-stub',
+		});
 		assert.equal(output.started, true, output.stderr);
+	});
+
+	it('turned on without the models of the safety check, the service refuses to start (C73)', async () => {
+		const output = await boot({ OSIONOS_AI_IMAGES: 'on', OSIONOS_AI_IMAGE_MICROUSD: '2000' });
+		assert.equal(output.started, false);
+		assert.match(output.stderr, /OSIONOS_AI_IMAGE_CHECK_DIR/);
 	});
 });
