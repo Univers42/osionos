@@ -33,6 +33,7 @@ import type {
   SlashBlockCommand,
   SlashCommand,
   SlashInlineCommand,
+  SlashLinkBlockCommand,
   SlashMediaPickerCommand,
   SlashTurnIntoCommand,
   SlashWhiteboardCommand,
@@ -57,7 +58,7 @@ interface SlashCommandMenuProps {
   position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (
-    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand | SlashAiCommand | SlashDictateCommand | SlashAiImageCommand,
+    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand | SlashAiCommand | SlashDictateCommand | SlashAiImageCommand | SlashLinkBlockCommand,
   ) => void;
   onMediaSelect: (kind: MediaBlockType, value: string) => void;
   onClose: () => void;

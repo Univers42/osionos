@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { config } from '../config.ts';
 import { httpError, readRaw, sendError, sendJson } from '../http.ts';
 import type { IncomingMessage } from 'node:http';
@@ -47,7 +48,7 @@ function languageOf(url: URL): string {
 
 /** The lock of the one dictation at a time. `null` when another one holds it. */
 async function takeLock(redis: Redis, userId: string, ttlMs: number): Promise<string | null> {
-	const token = `${userId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+	const token = `${userId}:${Date.now()}:${randomUUID()}`;
 	const taken = await redis.set(voiceLockKey(userId), token, 'PX', ttlMs, 'NX');
 	return taken === 'OK' ? token : null;
 }

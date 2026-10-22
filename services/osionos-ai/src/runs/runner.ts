@@ -15,6 +15,8 @@ import {
 	loadPageContext,
 	quotedPageChars,
 } from './prompt.ts';
+import { systemPromptFor } from '../agents/prompt.ts';
+import type { BuiltinAgent } from '../agents/builtins.ts';
 import { estimateRunMicroUsd } from './estimate.ts';
 import { sourceChars } from './sources.ts';
 import { retrieve } from '../retrieval/search.ts';
@@ -79,6 +81,14 @@ export interface StartRunInput {
 	attachments?: readonly RunAttachment[];
 	/** The caller's token of THIS run request: read, used, never stored. */
 	sessionToken?: string;
+	/**
+	 * The agent that shapes this run, or none.
+	 *
+	 * None is the general assistant: its prompt is the one of today, byte for
+	 * byte. An agent adds its instructions to the prompt and narrows the tools
+	 * to its own list — it never gains one.
+	 */
+	agent?: BuiltinAgent | null;
 	/** Where the model is called, and who pays for it. */
 	target: ResolvedTarget;
 	emit: (event: RunEvent) => void;
@@ -134,8 +144,18 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const { db, redis, runId, conversationId, ownerId, text, target } = input;
 	const attachments = input.attachments ?? [];
 	const sessionToken = input.sessionToken ?? '';
+	// The agent of the run: none is the general assistant. Its id and its
+	// version are pinned on the row (devil C40).
+	const agent = input.agent ?? null;
 
-	const inserted = await insertRun(db, { runId, conversationId, ownerId, model: target.modelId });
+	const inserted = await insertRun(db, {
+		runId,
+		conversationId,
+		ownerId,
+		model: target.modelId,
+		agentId: agent?.id ?? null,
+		agentVersion: agent?.version ?? null,
+	});
 	if (inserted.kind === 'conflict') {
 		// The conversation already has a running run: the partial unique index
 		// (ai_runs_one_running_per_conversation) says so, with no race.
@@ -227,6 +247,9 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(context.pages),
 		sourceChars: sourceChars(sources),
+		// The system prompt of THIS run: the base one, or the longer one of
+		// the agent. The reservation counts what the call really sends.
+		systemChars: systemPromptFor(agent).length,
 	});
 	const imageMicroUsd = Math.ceil(
 		(images.length * config.visionTokensPerImage * target.pricing.inputMicroUsdPerMTok) / 1e6,
@@ -281,6 +304,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			userMessageId: userMessage.id,
 			title,
 			images,
+			agent,
 		});
 	};
 	return { kind: 'started', run: (await getRun(db, runId)) as RunRow, execute };

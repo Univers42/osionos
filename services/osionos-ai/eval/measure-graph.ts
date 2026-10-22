@@ -72,6 +72,7 @@ function callerOf(userKey: string | undefined): AuthUser {
 		workspaceId: WORKSPACE_ID,
 		memberWorkspaces: [],
 		isAdmin: false,
+		issuedAtMs: Date.now(),
 	};
 }
 

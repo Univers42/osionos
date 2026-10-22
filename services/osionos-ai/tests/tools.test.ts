@@ -28,7 +28,7 @@ after(async () => {
 function context(userId: string, workspaceId: string) {
 	return {
 		db: app.db,
-		user: { userId, workspaceId, memberWorkspaces: [], isAdmin: false },
+		user: { userId, workspaceId, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() },
 	};
 }
 

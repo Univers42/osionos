@@ -143,10 +143,13 @@ test("the closed spec: everything else is refused", () => {
     { kind: "hierarchy", rootPageId: UUID_A, depth: 1, extra: 1 },
     { kind: "pipeline", databaseId: UUID_A, statusPropertyId: "s", extra: 1 },
     // A wrong uuid.
-    { kind: "schema", databaseIds: ["not-a-uuid"] },
     { kind: "graph", pageId: "1234", depth: 1, kinds: [] },
     { kind: "hierarchy", rootPageId: "1234", depth: 1 },
-    { kind: "pipeline", databaseId: "1234", statusPropertyId: "s" },
+    // A database id is a LOOKUP KEY, not a uuid: the app names its own
+    // databases (`db-tasks`), so the rule is a short boring string — and
+    // what it refuses is a key with a space or a bracket in it.
+    { kind: "schema", databaseIds: ["not a uuid"] },
+    { kind: "pipeline", databaseId: "<database>", statusPropertyId: "s" },
     // A depth out of range.
     { kind: "graph", pageId: UUID_A, depth: 3, kinds: [] },
     { kind: "graph", pageId: UUID_A, depth: 0, kinds: [] },
@@ -338,7 +341,7 @@ test("the same data gives byte-identical text, whatever the order it arrives in"
 /* The caps                                                                     */
 /* -------------------------------------------------------------------------- */
 
-test("the caps: a thousand nodes become three hundred, and the IR says so", () => {
+test("the caps: a thousand nodes become one hundred and fifty, and the IR says so", () => {
   const databases = Array.from({ length: 1000 }, (_, index) => ({
     id: `db-${String(index).padStart(4, "0")}`,
     name: `Database ${String(index).padStart(4, "0")}`,
@@ -369,7 +372,7 @@ test("the caps: the edges are capped too, and a dropped node takes its edges", (
     })),
   }));
   const ir = compileSchema(databases);
-  assert.equal(ir.nodes.length, 200);
+  assert.equal(ir.nodes.length, MAX_NODES);
   assert.equal(ir.edges.length, MAX_EDGES);
   assert.equal(ir.truncated, true);
   // No edge points at a node that is not there: mermaid would draw it.
@@ -491,4 +494,9 @@ test("the trust boundary: the hand-written mermaid goes through the locked path"
   assert.ok(!out.includes("%%"), "a directive survived");
   assert.ok(!out.includes("click"), "a binding survived");
   assert.ok(out.includes("flowchart LR"));
+});
+
+test("C109: the caps are 150 nodes and 400 edges, below the renderer's 500 edges", () => {
+  assert.equal(MAX_NODES, 150);
+  assert.equal(MAX_EDGES, 400);
 });

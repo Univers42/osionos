@@ -44,6 +44,10 @@ export function currentPageHostname(): string {
   return globalThis.location?.hostname ?? "";
 }
 
+export function currentPageOrigin(): string {
+  return globalThis.location?.origin ?? "";
+}
+
 const MAIL_URL = resolveAppUrl(VITE_ENV["VITE_MAIL_APP_URL"] as string | undefined, IS_DEV ? "http://localhost:3002" : "");
 const CALENDAR_URL = resolveAppUrl(VITE_ENV["VITE_CALENDAR_APP_URL"] as string | undefined, IS_DEV ? "http://localhost:3003" : "");
 const WHITEBOARD_URL = resolveAppUrl(VITE_ENV["VITE_WHITEBOARD_APP_URL"] as string | undefined, IS_DEV ? "https://localhost:3007" : "");

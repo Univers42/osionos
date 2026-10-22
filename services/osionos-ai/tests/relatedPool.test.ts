@@ -26,7 +26,7 @@ const harness = await startHarness();
 const db: Pool = harness.app.db;
 
 /** The caller of the reads: the owner of the workspace A. */
-const user: AuthUser = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false };
+const user: AuthUser = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: Date.now() };
 
 /** The bound of one read: a request that waits for ever is a failure, not a test. */
 const DEADLINE_MS = 20_000;

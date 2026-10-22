@@ -10,6 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import type { EmbedSnapshot } from '@/shared/lib/embed/embedInfo';
+
 /**
  * Standalone Block types for the playground application.
  * This replaces the external @src/types/database dependency.
@@ -48,6 +50,8 @@ export type BlockType =
   | 'draw'
   | 'whiteboard'
   | 'diagram'
+  | 'embed'
+  | 'bookmark'
   | 'home_views'
   | 'placeholder';
 
@@ -117,6 +121,22 @@ export interface LayoutCell {
   fontSize?: LayoutCellFontSize;
   /** Named section key (e.g. "header"/"about") — drives per-section template write-grants. */
   section?: string;
+  /**
+   * Height pinned on a hug cell, in whole px (see the canvas "Save measured
+   * height" action). The cell renders at that height until "Auto height"
+   * clears it again.
+   * Caveat: a pinned height is a snapshot of the width the cell was measured
+   * at — a wider or narrower pane re-measures the content and the pinned
+   * value goes stale.
+   */
+  measuredHeight?: number;
+  /**
+   * A formula that decides whether the cell is rendered at all, evaluated
+   * against the page's own properties. Empty (or absent) means always visible.
+   * Caveat: it runs in every reader's browser, so a formula that branches on a
+   * value leaks that value's existence to every reader of the page.
+   */
+  visibilityFormula?: string;
 }
 
 /** A single content block in a page. */
@@ -152,6 +172,8 @@ export interface Block {
   boardSlug?: string;       /** 'whiteboard' block: slug of the drawnosaurus board it embeds. Unset until the board is created. */
   whiteboardHeight?: number; /** 'whiteboard' block frame height in px (default 520). `content` holds the board title. */
   diagramSpec?: unknown;    /** 'diagram' block: the stored SPEC (never the rendered output). Validated at use by parseDiagramSpec, never trusted as typed. */
+  embed?: EmbedSnapshot;    /** Resolved link metadata for 'embed'/'bookmark' (and later media blocks). UNTRUSTED: parseEmbedSnapshot before use. `content` keeps the URL. */
+  embedHeight?: number;     /** 'embed' block frame height in px for a generic page; clampEmbedHeight at use. */
   buttonLabel?: string;     /** Visible label for a 'button' block (falls back to content) */
   buttonHref?: string;      /** Button target: internal page link `page://<id>`, a `/...` path, else presentational */
   buttonVariant?: 'primary' | 'secondary'; /** Button style for a 'button' block (default: primary) */

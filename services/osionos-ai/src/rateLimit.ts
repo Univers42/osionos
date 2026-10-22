@@ -23,6 +23,8 @@ const KEY_TTL_SECONDS = 70;
 export const RUN_LIMIT_PREFIX = 'ai:rl';
 export const RELATED_LIMIT_PREFIX = 'ai:rl:related';
 export const IMAGE_LIMIT_PREFIX = 'ai:rl:image';
+/** The window of the mints: a PAT is minted from a fresh session, and rarely. */
+export const PAT_LIMIT_PREFIX = 'ai:rl:pat';
 
 export interface RateLimitResult {
 	allowed: boolean;
@@ -83,4 +85,19 @@ export async function checkRelatedRateLimit(
 	now: Date = new Date(),
 ): Promise<RateLimitResult> {
 	return checkRateLimit(redis, userId, limit, now, RELATED_LIMIT_PREFIX);
+}
+
+/**
+ * The window of the mints: the limiter the personal access tokens spend.
+ *
+ * A mint is a credential that outlives the session that made it, so it gets
+ * its own counter: a burst of mints never spends the budget of the runs.
+ */
+export async function checkPatRateLimit(
+	redis: Redis,
+	userId: string,
+	limit: number,
+	now: Date = new Date(),
+): Promise<RateLimitResult> {
+	return checkRateLimit(redis, userId, limit, now, PAT_LIMIT_PREFIX);
 }

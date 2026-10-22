@@ -12,7 +12,9 @@
 
 import React, { useRef, useState } from "react";
 import { cx } from "@osionos/ui/shared/classNames";
-import type { Comment, CommentWriteResult, ModerationWarning } from "../api/commentsClient";
+import { ModerationWarningNotice } from "@/shared/moderation/ModerationWarningNotice";
+import type { ModerationWarning } from "@/shared/moderation/moderationWarning";
+import type { Comment, CommentWriteResult } from "../api/commentsClient";
 
 interface Props {
   comments: Comment[];
@@ -84,20 +86,12 @@ export const CommentsPanel: React.FC<Props> = ({ comments, loading, meId, onAdd,
         <div aria-live="polite">
           {failed && <p className="mb-1.5 text-xs text-[var(--osio-danger)]">{failed}</p>}
           {warning && (
-            <div className="mb-1.5 rounded-md bg-[var(--osio-bg-hover)] px-2 py-1.5">
-              <p className="text-xs text-[var(--osio-fg-default)]">{warning.message}</p>
-              {warning.terms.length > 0 && (
-                <p className="mt-0.5 text-3xs text-[var(--osio-danger)]">Matched: {warning.terms.join(", ")}</p>
-              )}
-              <div className="mt-1 flex gap-3">
-                <button type="button" onClick={edit} className="text-3xs text-[var(--osio-fg-subtle)] hover:text-[var(--osio-accent)]">
-                  Edit
-                </button>
-                <button type="button" onClick={() => void submit(true)} className="text-3xs text-[var(--osio-fg-subtle)] hover:text-[var(--osio-accent)]">
-                  Post anyway
-                </button>
-              </div>
-            </div>
+            <ModerationWarningNotice
+              warning={warning}
+              onEdit={edit}
+              onConfirm={() => void submit(true)}
+              confirmLabel="Post anyway"
+            />
           )}
         </div>
         <textarea

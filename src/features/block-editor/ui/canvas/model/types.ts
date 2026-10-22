@@ -61,6 +61,24 @@ export interface CanvasCell {
   wrap?: boolean;
   /** Named section key — preserved across migrate/unmigrate for per-section grants. */
   section?: string;
+  /**
+   * Height pinned by the author on a hug cell, in whole px. It is the cell's
+   * frozen size: `sizing.height` is "fixed" and `frame.height` carries the
+   * same value.
+   * Caveat: a pinned height is a snapshot of the width the cell was measured
+   * at — in a much wider or narrower pane the content re-measures, the cell
+   * changes size again and the pinned value becomes stale.
+   */
+  measuredHeight?: number;
+  /**
+   * A formula that decides whether the cell is rendered at all. It is evaluated
+   * against the page's own properties; an empty formula (or none) means the
+   * cell is always visible.
+   * Caveat: the formula runs in every reader's browser, so branching on a
+   * value leaks that value's existence to every reader of the page — it may
+   * only reference properties the page already exposes to all of them.
+   */
+  visibilityFormula?: string;
 }
 
 export interface CanvasGridConfig {
@@ -134,6 +152,8 @@ export type CanvasAction =
   | { type: "updateCellFrame"; id: string; frame: CanvasFrame }
   | { type: "updateCellFrames"; frames: Record<string, CanvasFrame>; resolveCollisions?: boolean }
   | { type: "updateCell"; id: string; patch: CanvasCellPatch }
+  /** Pin the height measured for a hug cell (whole px) and freeze the cell. */
+  | { type: "setCellMeasuredHeight"; id: string; height: number }
   | { type: "removeCell"; id: string }
   | { type: "removeCells"; ids: string[] }
   | { type: "duplicateCell"; id: string; newId: string; frame?: CanvasFrame }

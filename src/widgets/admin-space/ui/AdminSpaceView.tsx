@@ -20,6 +20,9 @@
  * Below the templates sits the moderation console: the comments the filter held
  * and the reports users filed, for an admin to decide. It asks the server again
  * — the claim in the session is a hint, never the permission.
+ *
+ * Next to it sits the recs health chart: the quality of every trained model over
+ * time, and the daily click-through of what was served (M3). Aggregates only.
  */
 
 import React, { useEffect, useState } from "react";
@@ -33,6 +36,7 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import type { TemplateSurface } from "@/widgets/page-renderer/model/useTemplateForSurface";
 import { seedTemplateContent } from "../model/templateSeed";
 import { ModerationQueue } from "./ModerationQueue";
+import { RecsHealth } from "./RecsHealth";
 
 const SURFACES: { surface: TemplateSurface; label: string; desc: string }[] = [
   { surface: "profile", label: "Profile", desc: "The page every member sees, bound to their own record." },
@@ -135,6 +139,7 @@ export const AdminSpaceView: React.FC = () => {
           })}
         </div>
         {!ws ? <p className="mt-4 text-xs text-[var(--osio-fg-subtle)]">No active workspace to author templates in.</p> : null}
+        <RecsHealth />
         <ModerationQueue />
       </div>
     </div>

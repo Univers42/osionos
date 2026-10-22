@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/12 23:14:08 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -83,6 +83,9 @@ export interface PageEntry {
   surface?: "page" | "agent" | "home" | "folder" | "wiki" | "app" | "code";
   /** Local version for generated home dashboard content. */
   homeDashboardVersion?: number;
+  /** Fingerprint of every block the Home page was seeded with, so a re-seed can
+   *  tell the user's edits from the seed's own changes. Client-local. */
+  homeSeedFingerprints?: Record<string, string>;
   /** True when this page is a database template (hidden from the normal tree/records). */
   isTemplate?: boolean;
   /** True when this template is the default used by the "New" button (one per workspace). */
@@ -240,6 +243,8 @@ export interface PageStore {
     newType: BlockType,
   ) => void;
   updatePageContent: (pageId: string, blocks: Block[]) => void;
+  /** The content version a write landed at — kept on the page, never an edit (no revision, no updatedAt). */
+  setPageContentVersion: (pageId: string, version: number) => void;
   patchPage: (
     pageId: string,
     patch: Partial<PageEntry> | ((page: PageEntry) => Partial<PageEntry>),
