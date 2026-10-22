@@ -30,10 +30,18 @@ import test from "node:test";
 
 import { parseMarkdownToBlocks } from "../../packages/markdown-engine/markdown/shortcuts.ts";
 import { createDiagramBlock } from "@/entities/block/model/diagramBlocks";
+import { compileSchema } from "@/features/diagram/model/compile";
+import {
+  pipelineInput,
+  schemaInput,
+  type DatabaseLike,
+  type PageLike,
+} from "@/features/diagram/model/databaseInput";
 import { diagramBlockToMarkdown } from "@/features/diagram/model/diagramMarkdown";
 import { diagramRenderMode } from "@/features/diagram/model/diagramRenderMode";
 import { hierarchyInput, type HierarchyPage } from "@/features/diagram/model/hierarchyInput";
 import { parseDiagramSpec } from "@/features/diagram/model/diagramSpec";
+import { irToMermaid } from "@/features/diagram/model/toMermaid";
 import {
   blockToMarkdown,
   serializeBlocksToMarkdown,
@@ -126,6 +134,160 @@ test("an archived root gives an empty input", () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* The databases the client holds                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Two databases, shaped like the seed: tasks with a relation to projects, and
+ * a status column. The ids are the app's own — `db-tasks`, `db-projects` —
+ * and they are NOT uuids.
+ */
+const TASKS: DatabaseLike = {
+  id: "db-tasks",
+  name: "Tasks & Projects",
+  titlePropertyId: "prop-title",
+  properties: {
+    "prop-title": { id: "prop-title", name: "Task Name", type: "title" },
+    "prop-status": {
+      id: "prop-status",
+      name: "Status",
+      type: "status",
+      options: [
+        { id: "opt-todo", value: "To Do" },
+        { id: "opt-done", value: "Done" },
+      ],
+    },
+    "prop-project": {
+      id: "prop-project",
+      name: "Project",
+      type: "relation",
+      relationConfig: { databaseId: "db-projects" },
+    },
+  },
+};
+
+const PROJECTS: DatabaseLike = {
+  id: "db-projects",
+  name: "Projects & Sprints",
+  titlePropertyId: "proj-title",
+  properties: {
+    "proj-title": { id: "proj-title", name: "Project Name", type: "title" },
+  },
+};
+
+const DATABASES: Record<string, DatabaseLike> = {
+  "db-tasks": TASKS,
+  "db-projects": PROJECTS,
+};
+
+/**
+ * The records of those databases: the pages of the client. The status of a
+ * page is the OPTION ID (`opt-done`), not its name.
+ */
+const RECORDS: Record<string, PageLike> = {
+  t1: {
+    id: "t1",
+    databaseId: "db-tasks",
+    properties: { "prop-title": "Design Database Schema", "prop-status": "opt-done" },
+  },
+  t2: {
+    id: "t2",
+    databaseId: "db-tasks",
+    properties: { "prop-title": "Fix Drag-and-Drop Bug" },
+  },
+  c1: {
+    id: "c1",
+    databaseId: "db-crm",
+    properties: { "prop-title": "ACME" },
+  },
+};
+
+test("a database id is a lookup key, not a uuid: the ids the client holds are taken", () => {
+  for (const databaseId of ["db-tasks", "db-inline-1a2b3c4d", UUID_ROOT]) {
+    const schema = parseDiagramSpec({ kind: "schema", databaseIds: [databaseId] });
+    assert.equal(schema.ok, true, databaseId);
+    const pipeline = parseDiagramSpec({
+      kind: "pipeline",
+      databaseId,
+      statusPropertyId: "prop-status",
+    });
+    assert.equal(pipeline.ok, true, databaseId);
+  }
+  for (const databaseId of ["", "a b", "<x>", "d".repeat(121)]) {
+    const schema = parseDiagramSpec({ kind: "schema", databaseIds: [databaseId] });
+    assert.equal(schema.ok, false, `the schema took ${JSON.stringify(databaseId)}`);
+    const pipeline = parseDiagramSpec({
+      kind: "pipeline",
+      databaseId,
+      statusPropertyId: "prop-status",
+    });
+    assert.equal(pipeline.ok, false, `the pipeline took ${JSON.stringify(databaseId)}`);
+  }
+});
+
+test("a database the client does not hold is skipped, never drawn as an unnamed node", () => {
+  const input = schemaInput(DATABASES, ["db-tasks", "db-ghost"]);
+  assert.deepEqual(
+    input.map((database) => database.id),
+    ["db-tasks"],
+  );
+});
+
+test("a relation names the database it points at", () => {
+  const input = schemaInput(DATABASES, ["db-tasks"]);
+  const relation = input[0]?.properties.find((property) => property.id === "prop-project");
+  assert.equal(relation?.relationTo, "db-projects");
+});
+
+test("the order of the ids does not matter: the compiler sorts", () => {
+  const one = irToMermaid(compileSchema(schemaInput(DATABASES, ["db-tasks", "db-projects"])));
+  const two = irToMermaid(compileSchema(schemaInput(DATABASES, ["db-projects", "db-tasks"])));
+  assert.equal(one, two);
+});
+
+test("golden: the schema of two databases, drawn from the client's own", () => {
+  const ir = compileSchema(schemaInput(DATABASES, ["db-tasks", "db-projects"]));
+  assert.equal(
+    irToMermaid(ir),
+    [
+      "flowchart LR",
+      'n0["Projects & Sprints: Project Name (title)"]',
+      'n1["Tasks & Projects: Project (relation), Status (status), Task Name (title)"]',
+      'n1 -- "Project" --> n0',
+    ].join("\n"),
+  );
+});
+
+test("a pipeline draws the rows of its own database only", () => {
+  const input = pipelineInput(DATABASES, RECORDS, "db-tasks", "prop-status");
+  assert.ok(input);
+  assert.deepEqual(
+    input.rows.map((row) => row.id),
+    ["t1", "t2"],
+  );
+  assert.deepEqual(input.options, [
+    { id: "opt-todo", name: "To Do" },
+    { id: "opt-done", name: "Done" },
+  ]);
+});
+
+test("a row without a status has no status", () => {
+  const input = pipelineInput(DATABASES, RECORDS, "db-tasks", "prop-status");
+  assert.ok(input);
+  const row = input.rows.find((entry) => entry.id === "t2");
+  assert.equal(row?.statusId, "");
+  assert.equal(row?.title, "Fix Drag-and-Drop Bug");
+});
+
+test("a column that is not a status gives no pipeline", () => {
+  assert.equal(pipelineInput(DATABASES, RECORDS, "db-tasks", "prop-title"), null);
+});
+
+test("a database the client does not hold gives no pipeline", () => {
+  assert.equal(pipelineInput(DATABASES, RECORDS, "db-ghost", "prop-status"), null);
+});
+
+/* -------------------------------------------------------------------------- */
 /* The public page (C110)                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -133,6 +295,15 @@ test("a public page shows a placeholder, never a diagram", () => {
   const spec = { kind: "mermaid", source: "flowchart LR\n  A --> B" };
   assert.equal(diagramRenderMode({ isPublic: true, spec }), "placeholder");
   assert.equal(diagramRenderMode({ isPublic: false, spec }), "render");
+});
+
+test("a public page shows the placeholder for a schema and for a pipeline too", () => {
+  const schema = { kind: "schema", databaseIds: ["db-tasks"] };
+  assert.equal(diagramRenderMode({ isPublic: true, spec: schema }), "placeholder");
+  assert.equal(diagramRenderMode({ isPublic: false, spec: schema }), "render");
+  const pipeline = { kind: "pipeline", databaseId: "db-tasks", statusPropertyId: "prop-status" };
+  assert.equal(diagramRenderMode({ isPublic: true, spec: pipeline }), "placeholder");
+  assert.equal(diagramRenderMode({ isPublic: false, spec: pipeline }), "render");
 });
 
 test("a public page shows the placeholder even for a broken spec", () => {
