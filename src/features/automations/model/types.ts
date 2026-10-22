@@ -19,6 +19,7 @@ export type CommandId =
   | "heading3"
   | "openPalette"
   | "openSearch"
+  | "openSettings"
   | "newPage"
   | "toggleSidebar"
   | "openSearchPanel"

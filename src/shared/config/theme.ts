@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:34 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/04/28 22:24:35 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -107,12 +107,17 @@ export function persistPalette(id: string) {
   globalThis.localStorage.setItem(PALETTE_STORAGE_KEY, id);
 }
 
-/* ── Appearance — accent, density, corners, text size ───────────────────────
- * Four more <html> attributes and one number, all stored together under one
- * key. Each sits at its default when absent, so a person who never opens the
+/* ── Appearance — accent, density, corners, text size, accessibility ────────
+ * More <html> attributes and one number, all stored together under one key.
+ * Each sits at its default when absent, so a person who never opens the
  * panel carries no attribute and no stored value. Accent colours are in
  * accents.generated.css, the other three axes in appearance.css. index.html
- * mirrors applyAppearance() before first paint. */
+ * mirrors applyAppearance() before first paint.
+ *
+ * The five accessibility axes (link underline, motion, animated images,
+ * hovercards, URL paste) live here too: they are the same kind of choice —
+ * one <html> attribute, one stored value, applied before first paint — so one
+ * panel reads one object instead of five. */
 
 export interface AccentMeta {
   /** matches `[data-accent="<id>"]` in accents.generated.css; "cobalt" is the default and has no block. */
@@ -135,6 +140,16 @@ export const CUSTOM_ACCENT = "custom";
 export type Density = "comfortable" | "compact";
 export type Roundness = "sharp" | "default" | "round";
 export type UiScale = "small" | "default" | "large";
+/** "always" underlines every link at rest; "default" keeps today's rules. */
+export type LinkUnderline = "default" | "always";
+/** "system" follows the OS; "reduce"/"full" override it in either direction. */
+export type MotionPreference = "system" | "reduce" | "full";
+/** "play" always animates; "still" never does; "system" follows the motion choice. */
+export type AnimatedImages = "play" | "system" | "still";
+/** "on" opens a card on hover; "off" opens it on click or keyboard instead. */
+export type Hovercards = "on" | "off";
+/** "link" turns a pasted bare URL into a link; "plain" keeps the text. */
+export type UrlPaste = "link" | "plain";
 
 export interface Appearance {
   /** a preset id, or "custom" to use `hue`. */
@@ -144,6 +159,11 @@ export interface Appearance {
   density: Density;
   radius: Roundness;
   uiScale: UiScale;
+  linkUnderline: LinkUnderline;
+  motion: MotionPreference;
+  animatedImages: AnimatedImages;
+  hovercards: Hovercards;
+  urlPaste: UrlPaste;
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -152,12 +172,19 @@ export const DEFAULT_APPEARANCE: Appearance = {
   density: "comfortable",
   radius: "default",
   uiScale: "default",
+  linkUnderline: "default",
+  motion: "system",
+  animatedImages: "play",
+  hovercards: "on",
+  urlPaste: "link",
 };
 
 const APPEARANCE_STORAGE_KEY = "osionos:appearance";
 
 /** What a MutationObserver on <html> watches to follow an appearance change: the three
- *  attributes, the accent, and `style`, which carries the custom hue. */
+ *  attributes, the accent, and `style`, which carries the custom hue. The
+ *  accessibility axes are not in it: none of them changes a colour, and the
+ *  editor's theme must not be rebuilt because somebody turned motion off. */
 export const APPEARANCE_ATTRIBUTES = ["data-accent", "data-density", "data-radius", "data-ui-scale", "style"] as const;
 
 const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
@@ -185,6 +212,11 @@ export function parseAppearance(raw: string | null): Appearance {
     density: oneOf(stored.density, ["comfortable", "compact"], DEFAULT_APPEARANCE.density),
     radius: oneOf(stored.radius, ["sharp", "default", "round"], DEFAULT_APPEARANCE.radius),
     uiScale: oneOf(stored.uiScale, ["small", "default", "large"], DEFAULT_APPEARANCE.uiScale),
+    linkUnderline: oneOf(stored.linkUnderline, ["default", "always"], DEFAULT_APPEARANCE.linkUnderline),
+    motion: oneOf(stored.motion, ["system", "reduce", "full"], DEFAULT_APPEARANCE.motion),
+    animatedImages: oneOf(stored.animatedImages, ["play", "system", "still"], DEFAULT_APPEARANCE.animatedImages),
+    hovercards: oneOf(stored.hovercards, ["on", "off"], DEFAULT_APPEARANCE.hovercards),
+    urlPaste: oneOf(stored.urlPaste, ["link", "plain"], DEFAULT_APPEARANCE.urlPaste),
   };
 }
 
@@ -202,21 +234,55 @@ export function persistAppearance(appearance: Appearance) {
   globalThis.localStorage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify(appearance));
 }
 
+/** The axes that live on <html> as an attribute. urlPaste is not one of them:
+ *  it changes what a paste does, not what the document looks like. */
+const ATTRIBUTE_AXES = ["accent", "density", "radius", "uiScale", "linkUnderline", "motion", "animatedImages", "hovercards"] as const;
+
+/** The appearance as it stands. applyAppearance() keeps it up to date, so a
+ *  reader that needs a value with no <html> attribute (urlPaste) sees the live
+ *  one instead of a second copy that can drift. It starts from what is
+ *  stored, so a reader that asks before the boot pass still sees the
+ *  person's choice. */
+let currentAppearance: Appearance | null = null;
+const appearanceListeners = new Set<() => void>();
+
+export function readCurrentAppearance(): Appearance {
+  if (!currentAppearance) currentAppearance = readStoredAppearance();
+  return currentAppearance;
+}
+
+/** Notified after every applied appearance. Returns the unsubscribe. */
+export function subscribeAppearance(listener: () => void): () => void {
+  appearanceListeners.add(listener);
+  return () => {
+    appearanceListeners.delete(listener);
+  };
+}
+
 /** Writes the appearance to <html>: an attribute per axis, removed at its default, and the one
  *  inline hue only while the accent is custom. */
 export function applyAppearance(appearance: Appearance) {
   if (typeof document === "undefined") return;
   const { dataset, style } = document.documentElement;
-  const axis = (name: "accent" | "density" | "radius" | "uiScale", value: string) => {
+  for (const name of ATTRIBUTE_AXES) {
+    const value = appearance[name];
     if (value === DEFAULT_APPEARANCE[name]) delete dataset[name];
     else dataset[name] = value;
-  };
-  axis("accent", appearance.accent);
-  axis("density", appearance.density);
-  axis("radius", appearance.radius);
-  axis("uiScale", appearance.uiScale);
+  }
   if (appearance.accent === CUSTOM_ACCENT) style.setProperty("--osio-accent-hue", String(appearance.hue));
   else style.removeProperty("--osio-accent-hue");
+  currentAppearance = appearance;
+  for (const listener of appearanceListeners) listener();
+}
+
+/** Applies one change to the live appearance and stores it. The change is
+ *  merged into what is live, not into a caller's copy: two panels that each
+ *  hold a snapshot of the appearance must not roll the other's choice back. */
+export function updateAppearance(patch: Partial<Appearance>): Appearance {
+  const next = { ...readCurrentAppearance(), ...patch };
+  applyAppearance(next);
+  persistAppearance(next);
+  return next;
 }
 
 /** Apply every axis at boot from storage (call once on app init). */

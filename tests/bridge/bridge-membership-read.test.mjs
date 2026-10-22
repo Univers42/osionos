@@ -39,7 +39,10 @@ afterEach(() => {
 });
 
 describe('read: the member row comes with the page', () => {
-	it('GET /api/pages/:id makes exactly 1 BaaS call, for a page owner and for a member', async () => {
+	it('GET /api/pages/:id makes one BaaS call for the page, plus the share rules for a member', async () => {
+		// ADR 0004: the page and the caller's member row come in ONE statement. The share
+		// rules (P3-6-c) are a second read: the page's own rules and the workspace-wide
+		// ones, so a workspace full of rules about other pages cannot truncate a deny.
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			const owned = await send(base, pageRead(IDS.sharedA), asA());
 			assert.equal(owned.status, 200);
@@ -47,8 +50,11 @@ describe('read: the member row comes with the page', () => {
 			const shared = await send(base, pageRead(IDS.sharedA), asB());
 			assert.equal(shared.status, 200);
 			assert.equal(shared.body._id, IDS.sharedA);
-			assert.equal(mock.calls.length, 2);
-			assert.equal(mock.calls.filter((call) => call.table !== 'osionos_pages').length, 0, 'no rpc and no bare members read');
+			assert.equal(mock.calls.length, 4);
+			assert.deepEqual(mock.calls.map((call) => call.table), [
+				'osionos_pages', 'osionos_pages', 'osionos_share_rules', 'osionos_share_rules',
+			]);
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_workspace_members').length, 0, 'no bare members read');
 		});
 	});
 
@@ -70,11 +76,13 @@ describe('read: the member row comes with the page', () => {
 		});
 	});
 
-	it('comments list makes 2 calls (page and member, then comments)', async () => {
+	it('comments list reads the page, its member and the share rules, then the comments', async () => {
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			const listed = await send(base, `/api/comments?pageId=${IDS.sharedA}`, asB());
 			assert.equal(listed.status, 200);
-			assert.deepEqual(mock.calls.map((call) => call.table), ['osionos_pages', 'osionos_page_comments']);
+			assert.deepEqual(mock.calls.map((call) => call.table), [
+				'osionos_pages', 'osionos_share_rules', 'osionos_share_rules', 'osionos_page_comments',
+			]);
 		});
 	});
 

@@ -19,7 +19,7 @@ import { useConnectorStore } from "@/features/connectors/model/useConnectorStore
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/features/ai/model/aiSelection";
 import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
-import { openAiConnections } from "@/features/settings/settingsOpener";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import { MAX_ATTACHMENTS } from "./AttachImageButton";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
@@ -127,7 +127,7 @@ export const ChatShell: React.FC = () => {
   // the only way to talk to a model at all.
   const onConnect = () => {
     if (isAiConfigured()) {
-      openAiConnections();
+      openSettings("ai_connections");
       return;
     }
     setOnboarding("choose");
