@@ -32,11 +32,13 @@ COPY scripts/bridge-api.mjs scripts/bridge-page-read.mjs scripts/bridge-live-wor
 	scripts/bridge-perf.mjs scripts/bridge-baas-transport.mjs scripts/bridge-ide-sandbox.mjs scripts/ide-term-sessions.mjs scripts/ide-docker.mjs scripts/ide-sandbox-spec.mjs scripts/bridge-ide-ops.mjs scripts/bridge-ide-exec.mjs scripts/ide-ws.mjs scripts/bridge-ide-token.mjs scripts/ide-token.mjs scripts/ide-username.mjs scripts/ide-volume-init.mjs scripts/ide-access.mjs ./scripts/
 
 # The L0 moderation rules, the gate that runs them before a comment is written,
-# the console an admin reviews the held comments and the open reports in, and
-# the page-text helper the publish and marketplace gates read a page's words with.
+# the console an admin reviews the held comments and the open reports in, the
+# admin gate both admin routes share, the recs health an admin reads the
+# recommender's quality in, and the page-text helper the publish and
+# marketplace gates read a page's words with.
 # The module reads its blocklists at boot, so the LISTS are runtime
 # files: without them the image starts and then dies on the first import.
-COPY scripts/bridge-moderation.mjs scripts/bridge-moderation-gate.mjs scripts/bridge-moderation-console.mjs scripts/bridge-page-text.mjs ./scripts/
+COPY scripts/bridge-moderation.mjs scripts/bridge-moderation-gate.mjs scripts/bridge-moderation-console.mjs scripts/bridge-admin-check.mjs scripts/bridge-recs-health.mjs scripts/bridge-page-text.mjs ./scripts/
 COPY scripts/moderation-lists/ ./scripts/moderation-lists/
 
 ENV OSIONOS_BRIDGE_PORT=4000
