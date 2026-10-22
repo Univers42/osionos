@@ -16,6 +16,7 @@ import test from "node:test";
 import type { Block } from "../../src/entities/block/model/types.ts";
 import { serializeBlocksToMarkdown } from "../../src/services/page-actions/pageMarkdownSerialize.ts";
 import { parseMarkdownToBlocks } from "../../packages/markdown-engine/markdown/shortcuts.ts";
+import { PAGE_URL, SNAPSHOT, linkBlock } from "./link-block-fixtures.ts";
 
 let seq = 0;
 const make = (block: Partial<Block> & { type: Block["type"] }): Block => ({
@@ -150,6 +151,40 @@ test("a whiteboard with no board yet survives as a whiteboard", () => {
   assert.equal(out.type, "whiteboard");
   assert.equal(out.content, "Draft");
   assert.equal(out.boardSlug, undefined);
+});
+
+test("an embed keeps its URL, frame height and snapshot", () => {
+  const out = roundTrip(linkBlock("embed", { embedHeight: 640 }));
+  assert.equal(out.type, "embed");
+  assert.equal(out.content, PAGE_URL);
+  assert.equal(out.embedHeight, 640);
+  assert.deepEqual(out.embed, SNAPSHOT);
+});
+
+test("a bookmark keeps its URL and snapshot and carries no frame height", () => {
+  const out = roundTrip(linkBlock("bookmark"));
+  assert.equal(out.type, "bookmark");
+  assert.equal(out.content, PAGE_URL);
+  assert.deepEqual(out.embed, SNAPSHOT);
+  assert.equal(out.embedHeight, undefined);
+});
+
+test("an embed or bookmark with no snapshot survives bare", () => {
+  for (const type of ["embed", "bookmark"] as const) {
+    const out = roundTrip({ id: "x", type, content: PAGE_URL });
+    assert.equal(out.type, type);
+    assert.equal(out.content, PAGE_URL);
+    assert.equal(out.embed, undefined);
+  }
+});
+
+test("a malformed osiembed or osibookmark fence stays a visible code block", () => {
+  for (const lang of ["osiembed", "osibookmark"]) {
+    const parsed = parseMarkdownToBlocks("```" + lang + "\n{not json\n```");
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0].type, "code");
+    assert.equal(parsed[0].language, lang);
+  }
 });
 
 test("button survives with label, href and variant", () => {

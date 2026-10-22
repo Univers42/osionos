@@ -16,6 +16,7 @@ import { MotionConfig } from "motion/react";
 import App from "./App.tsx";
 import { setInferencePort } from "@/features/chat/model/useChatStore";
 import { selectInferencePort } from "@/features/ai/model/aiInferencePort";
+import { installLinkFaviconFallback } from "@/shared/lib/embed/linkFaviconFallback";
 
 // Public published-page view (/p/:token) — a standalone read-only render mounted
 // BEFORE the app + its auth so an unauthenticated visitor never boots the editor.
@@ -53,6 +54,7 @@ globalThis.addEventListener("vite:preloadError", () => {
 // The Assistant pane talks to a port, chosen once and for all here: the AI
 // service when a base URL is configured, the offline stub otherwise.
 setInferencePort(selectInferencePort());
+installLinkFaviconFallback();
 
 const root = document.getElementById("root");
 if (root) {

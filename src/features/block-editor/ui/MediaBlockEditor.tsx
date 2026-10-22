@@ -29,6 +29,7 @@ import { MEDIA_BLOCK_LABELS, isMediaBlockType } from "@/entities/block";
 import { MediaBlockPreview, resolveMediaBlockAsset } from "@/entities/block/ui/MediaBlockPreview";
 import { useAiImageStore } from "@/features/ai/model/aiImageStore";
 import { AiImageJobView } from "@/features/ai/ui/AiImageJobView";
+import type { EmbedSnapshot } from "@/shared/lib/embed/embedInfo";
 import { usePageStore } from "@/store/usePageStore";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { MediaEmbedDialog } from "./MediaEmbedDialog";
@@ -78,10 +79,10 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   const textStyle = getBlockTextStyle(block);
 
   const handleSelect = useCallback(
-    (value: string) => {
+    (value: string, embed?: EmbedSnapshot) => {
       // A user who replaces the image with their own file loses the
       // "AI-generated" label: the block is theirs now.
-      updateBlock(pageId, block.id, { asset: value, aiGenerated: undefined });
+      updateBlock(pageId, block.id, { asset: value, aiGenerated: undefined, embed });
       setShowSettings(false);
     },
     [updateBlock, pageId, block.id],

@@ -118,6 +118,11 @@ test-canvas: ## Run the canvas unit suite inside Docker
 	$(DC) run --rm --no-deps playground pnpm run test:canvas
 	@echo -e "$(GREEN)✔ Canvas tests passed$(RESET)"
 
+test-bridge: ## Run the bridge node:test suite (tests/bridge) inside Docker
+	@echo -e "$(CYAN)Running bridge tests…$(RESET)"
+	$(DC) run --rm --no-deps playground pnpm run test:bridge
+	@echo -e "$(GREEN)✔ Bridge tests passed$(RESET)"
+
 lint-fix: ## Automatically fix linting errors inside Docker where possible
 	@echo -e "$(CYAN)Fixing lint errors…$(RESET)"
 	$(DC) run --rm --no-deps playground pnpm run lint:fix
@@ -295,6 +300,6 @@ update-submodules: ## Update git submodules (if any)
 
 .PHONY: help pnpm-lock install pnpm-install dev dev-docker up up-prod stop down down-prod shell build typecheck image-build \
         db-up db-shell db-reset re clean logs logs-vite logs-mongo \
-        kill-ports status lint lint-fix quality test-canvas audit ci sonar update-submodules \
+        kill-ports status lint lint-fix quality test-canvas test-bridge audit ci sonar update-submodules \
 	test test-serial test-smoke test-setup test-doctor test-ci test-docker \
 	guard-version guard-docker-credentials guard-github-credentials tag
