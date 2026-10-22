@@ -25,7 +25,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { accountConfig, send, sessionToken, startAccountWorld, startBridgeWorld, USER_A, USER_B } from './support/account-world.mjs';
 import { kvStub } from './support/kv-stub.mjs';
-import { SELF_SOURCES, selfSourceById } from '../../scripts/bridge-self-sources.mjs';
+import { SELF_SOURCES, selfSourceById, dedupeEdgesByPeer } from '../../scripts/bridge-self-sources.mjs';
 
 const WORKSPACE = 'cccccccc-3333-4333-8333-cccccccccccc';
 const PAGE_A = '11111111-1111-4111-8111-111111111111';
@@ -245,6 +245,18 @@ describe('GET /api/account/self-data/<source>', () => {
 		assert.match(response.body.rows[0].label, /^Password · \d{2} [A-Z][a-z]{2}, \d{2}:\d{2}$/, 'the row has a readable title');
 	});
 
+	it('reduces a peer whose block row differs only in case', async (t) => {
+		const { base, token } = await world(t, {
+			rows: {
+				blocks: [{ blocker_id: PEER_BLOCKER, blocked_id: USER_A.toUpperCase(), reason: null, created_at: '2026-10-01T00:00:00.000Z' }],
+			},
+		});
+		const response = await read(base, 'my-connections', { token });
+		const row = response.body.rows.find((item) => item.peer.userId === PEER_BLOCKER.toLowerCase());
+		assert.ok(row, 'the blocker peer is still listed');
+		assert.deepEqual(Object.keys(row.peer).sort(), ['avatar', 'name', 'userId'], 'case difference still reduces the card');
+	});
+
 	it('reduces the peer of a connection to its public card', async (t) => {
 		const { base, token } = await world(t);
 		const response = await read(base, 'my-connections', { token });
@@ -280,6 +292,35 @@ describe('GET /api/account/self-data/<source>', () => {
 		assert.equal(one.settings, undefined, 'the settings of the workspace never reach the answer');
 		assert.equal(JSON.stringify(response.body).includes('secret'), false);
 		assert.equal(store.callsTo('osionos_workspace_members').length >= 1, true);
+	});
+
+	it('collapses bidirectional edges into one row per person', () => {
+		const userId = USER_A;
+		const rows = [
+			{ id: 'e1', requester_id: USER_A, addressee_id: PEER_PLAIN, status: 'pending', created_at: '2026-10-01T00:00:00.000Z' },
+			{ id: 'e2', requester_id: PEER_PLAIN, addressee_id: USER_A, status: 'accepted', created_at: '2026-10-02T00:00:00.000Z' },
+		];
+		const deduped = dedupeEdgesByPeer(rows, userId);
+		assert.equal(deduped.length, 1, 'one row per person, not per edge');
+		assert.equal(deduped[0].id, 'e2', 'the most recent edge wins');
+		assert.equal(deduped[0].status, 'accepted');
+	});
+
+	it('answers one row per person for my-connections', async (t) => {
+		const { base, token } = await world(t, {
+			rows: {
+				connections: [
+					{ id: 'd1', requester_id: USER_A, addressee_id: PEER_PLAIN, status: 'pending', source: 'manual', created_at: '2026-10-01T00:00:00.000Z', responded_at: null },
+					{ id: 'd2', requester_id: PEER_PLAIN, addressee_id: USER_A, status: 'accepted', source: 'manual', created_at: '2026-10-02T00:00:00.000Z', responded_at: '2026-10-03T00:00:00.000Z' },
+					{ id: 'c2', requester_id: PEER_QUIET, addressee_id: USER_A, status: 'accepted', source: 'manual', created_at: '2026-10-04T00:00:00.000Z', responded_at: null },
+					{ id: 'c3', requester_id: USER_A, addressee_id: PEER_BLOCKER, status: 'pending', source: 'manual', created_at: '2026-10-05T00:00:00.000Z', responded_at: null },
+				],
+			},
+		});
+		const response = await read(base, 'my-connections', { token });
+		const peers = response.body.rows.map((row) => row.peer.userId);
+		assert.equal(new Set(peers).size, peers.length, 'no person appears twice');
+		assert.equal(response.body.rows.length, 3, 'three people, not four edges');
 	});
 
 	it('caps the answer at 200 rows and says it was truncated', async (t) => {
@@ -322,6 +363,16 @@ describe('GET /api/account/self-data/<source>', () => {
 		assert.equal(response.body.rows, undefined);
 	});
 
+	it('answers 503 when the store answers a non-array, never 200 { rows: [] }', async (t) => {
+		const { base, token } = await world(t, {
+			fail: (call) => (call.table === 'osionos_pages' ? { status: 200, body: {} } : null),
+		});
+		const response = await read(base, 'my-pages', { token });
+		assert.equal(response.status, 503);
+		assert.equal(response.body.code, 'self_data_unavailable');
+		assert.equal(response.body.rows, undefined);
+	});
+
 	it('answers 401 without a session', async (t) => {
 		const { base, store } = await world(t);
 		const response = await read(base, 'my-pages');
@@ -340,11 +391,18 @@ describe('GET /api/account/self-data/<source>', () => {
 	});
 
 	it('answers 404 for a source that does not exist', async (t) => {
-		const { base, store } = await world(t);
-		const response = await read(base, 'my-activity', { token: 'x' });
+		const { base, store, token } = await world(t);
+		const response = await read(base, 'my-activity', { token });
 		assert.equal(response.status, 404);
 		assert.equal(response.body.code, 'unknown_self_source');
 		assert.equal(store.calls.length, 0, 'no table is read for an unknown source');
+	});
+
+	it('answers 401, not 404, for an unknown source without a session', async (t) => {
+		const { base, store } = await world(t);
+		const response = await read(base, 'my-activity');
+		assert.equal(response.status, 401, 'an anonymous caller cannot probe which sources exist');
+		assert.equal(store.calls.length, 0, 'no table is read without a session');
 	});
 
 	it('does not claim a path with two segments', async (t) => {

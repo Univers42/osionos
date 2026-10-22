@@ -196,11 +196,12 @@ describe('the self source registry', () => {
 		}
 	});
 
-	it('matches the root SQL when the root tree is reachable', () => {
+	it('matches the root SQL when the root tree is reachable', (t) => {
 		const dir = modelsDir();
 		if (!dir) {
 			// The root repo is not mounted in the app container: the snapshot above is the
 			// check that runs there, and this one is the one that keeps the snapshot honest.
+			t.skip('root models/ not reachable: ' + (MODELS_CANDIDATES.join(', ') || 'none'));
 			return;
 		}
 		for (const source of SELF_SOURCES) {
