@@ -20,6 +20,7 @@ import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
 import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
+import { handleMcp } from './mcp.ts';
 import type { RouteEntry } from './types.ts';
 
 /**
@@ -135,6 +136,8 @@ export const ROUTES: RouteEntry[] = [
 				label: '/api/ai/access-tokens/:id',
 				handle: handleAccessTokenDelete,
 			},
+			// The remote MCP endpoint: PAT only, read only (G4b-1).
+			{ methods: [], pattern: /^\/api\/ai\/mcp$/, label: '/api/ai/mcp', handle: handleMcp, anyMethod: true },
 		]
 		: []),
 ];
