@@ -34,7 +34,7 @@ import { sanitizeMermaidSource } from "@osionos/ui/molecules/MermaidDiagram/lock
 import type { DiagramIR } from "./diagramIR";
 import type { DiagramSpec } from "./diagramSpec";
 
-/** The longest label the emitter writes, in characters, before the entity codes. */
+/** The longest label the emitter writes, in characters. */
 const MAX_LABEL = 80;
 
 /**
@@ -45,31 +45,27 @@ const MAX_LABEL = 80;
 const EMPTY_LABEL = "Untitled";
 
 /**
- * The characters a label may not carry raw, and the code point of the mermaid
- * entity code each one becomes.
+ * The characters a label may not carry raw. Each one becomes its FULLWIDTH
+ * form (U+FF01–U+FF5E, the ASCII code point + 0xFEE0): the same glyph to a
+ * reader, and no syntax to mermaid.
  *
- * Mermaid 11 reads `#NNN;` (and `#name;`) as an entity code: it encodes them
- * before the parser sees the text and decodes them at render time. The numeric
- * form is used for every one of them, so there is one rule and no table of
- * names to get wrong.
+ * Not mermaid's entity codes (`#34;`): with `htmlLabels: false` — the locked
+ * renderer's setting — they are drawn LITERALLY ("Q3 &#40;draft&#41;"), measured
+ * in the browser on the offline build. `(`, `)`, `&` and `#` stay raw: inside a
+ * quoted label they are text, and with `;` escaped neither `#35;` nor `&amp;` can
+ * form an entity (both need an ASCII `;`).
+ *
+ * Caveat: the fullwidth glyphs come from a CJK-capable fallback font. Windows,
+ * macOS, iOS, Android, ChromeOS and the common Linux desktops ship one; a device
+ * with none draws these characters as empty boxes (seen in a headless Chrome
+ * container with 17 fonts, none covering U+FF00). The label stays safe either way.
  */
-const ENTITY_CODE_POINTS: Record<string, number> = {
-  '"': 34,
-  "#": 35,
-  "%": 37,
-  "&": 38,
-  "(": 40,
-  ")": 41,
-  ";": 59,
-  "<": 60,
-  ">": 62,
-  "[": 91,
-  "]": 93,
-  "`": 96,
-  "{": 123,
-  "|": 124,
-  "}": 125,
-};
+const ESCAPED = /["%;<>[\]`{|}]/g;
+
+/** The fullwidth form of one ASCII character. */
+function fullwidth(char: string): string {
+  return String.fromCodePoint((char.codePointAt(0) ?? 0) + 0xfee0);
+}
 
 /**
  * The characters that may not reach a label: the C0 and C1 controls, the
@@ -99,7 +95,7 @@ export interface MermaidOptions {
 export function escapeLabel(text: string): string {
   const cleaned = text.replace(CONTROL_CHARACTERS, " ").replace(/\s+/g, " ").trim();
   const cut = cleaned.length > MAX_LABEL ? `${cleaned.slice(0, MAX_LABEL - 1)}…` : cleaned;
-  return cut.replace(/["#%&();<>[\]`{|}]/g, (char) => `#${ENTITY_CODE_POINTS[char]};`);
+  return cut.replace(ESCAPED, fullwidth);
 }
 
 /**

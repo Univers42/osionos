@@ -230,6 +230,14 @@ test("a mermaid source that carries a fence cannot break out of its own", () => 
 /* The ids are real ids                                                        */
 /* -------------------------------------------------------------------------- */
 
+test("a page tree works on a page that is not synced yet, and nothing else passes for an id", () => {
+  const local = parseDiagramSpec({ kind: "hierarchy", rootPageId: "local-page-3-mvj3n3mc", depth: 2 });
+  assert.equal(local.ok, true, local.ok ? "" : local.error);
+  for (const rootPageId of ["local-page-x-1", "local-page-3-mvj3n3mc\nclick", "page-3", "", "local-page-3-ABC"]) {
+    assert.equal(parseDiagramSpec({ kind: "hierarchy", rootPageId, depth: 2 }).ok, false, rootPageId);
+  }
+});
+
 test("a hierarchy spec names a page by its uuid", () => {
   const parsed = parseDiagramSpec({ kind: "hierarchy", rootPageId: UUID_CHILD, depth: 1 });
   assert.equal(parsed.ok, true, parsed.ok ? "" : parsed.error);
