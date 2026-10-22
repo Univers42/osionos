@@ -13,6 +13,9 @@ the osionos app (your current directory). Read `CLAUDE.md` first: it is the map 
 - There is no Node on the host. Never run `node`, `npm`, `pnpm`, `npx` directly.
 - Run everything through the repo's Docker shim: `bash scripts/docker-run.sh <target>`
   (targets: `quality`, `typecheck`, `lint`, `test-bridge`, `test-canvas`, `test-e2e`, `build`).
+- e2e on this host: always prefix `PW_BROWSER_SOURCE=system` (the Playwright CDN answers 403
+  here; the `system` image uses Debian's Chromium). Skip `tests/e2e/visual/` — its PNGs come from
+  the other Chromium — and never pass `--update-snapshots`.
 - Never install, add or upgrade a dependency. Never push. Never use `git push`, `--force`,
   `git reset --hard`, or `git checkout` of other branches.
 
