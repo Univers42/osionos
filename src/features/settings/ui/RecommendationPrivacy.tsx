@@ -91,7 +91,9 @@ export const RecommendationPrivacy: React.FC = () => {
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
-    URL.revokeObjectURL(url);
+    // Revoked a tick later: a synchronous revoke right after click() can cancel
+    // the download before the browser has read the Blob (Firefox).
+    setTimeout(() => URL.revokeObjectURL(url), 0);
     toast({ kind: 'success', title: `Your activity was downloaded (${result.value.length} events).` });
   }, [toast]);
 
