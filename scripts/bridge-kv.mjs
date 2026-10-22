@@ -98,6 +98,10 @@ class MemoryKv {
 		return this.#live(this.values, key)?.value ?? this.#live(this.counters, key)?.value ?? null;
 	}
 
+	getMany(keys) {
+		return keys.map((key) => this.get(key));
+	}
+
 	set(key, value, ttlMs) {
 		this.counters.delete(key);
 		this.#put(this.values, key, { value, expiresAt: Date.now() + ttlMs });
@@ -211,6 +215,12 @@ export function createKv({ redisUrl = '', required = false, commandTimeoutMs = 1
 		// Diagnostics: the waiters still waiting for a connection (a timed-out one is gone).
 		pendingReadyWaiters: () => redis?.readyWaiters.length ?? 0,
 		get: (key) => route(key, (client, full) => client.get(full), (store, full) => store.get(full)),
+		getMany: (keys) => {
+			if (!Array.isArray(keys)) throw new TypeError('keys must be an array of key strings.');
+			if (keys.length === 0) return Promise.resolve([]);
+			const fulls = keys.map(checkKey);
+			return viaRedis((client) => client.getMany(fulls), (store) => store.getMany(fulls));
+		},
 		del: (key) => route(key, (client, full) => client.del(full), (store, full) => store.del(full)).then(() => undefined),
 		set: (key, value, ttlMs) => {
 			const text = checkValue(value);

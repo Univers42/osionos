@@ -175,6 +175,10 @@ export function storeHandler() {
 			return { data: simple('OK') };
 		}
 		if (name === 'GET') return { data: bulk(store.get(key) ?? null) };
+		if (name === 'MGET') {
+			const keys = [key, ...rest];
+			return { data: `*${keys.length}\r\n${keys.map((each) => bulk(store.get(each) ?? null)).join('')}` };
+		}
 		if (name === 'GETDEL') {
 			const value = store.get(key) ?? null;
 			store.delete(key);

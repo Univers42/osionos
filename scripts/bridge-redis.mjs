@@ -223,6 +223,10 @@ export class RedisKv {
 		return this.#command(['GET', key]);
 	}
 
+	getMany(keys) {
+		return this.#command(['MGET', ...keys]);
+	}
+
 	set(key, value, ttlMs) {
 		return this.#command(['SET', key, value, 'PX', String(ttlMs)]);
 	}

@@ -45,6 +45,7 @@ import {
 	identitySummaries,
 	parseMentions,
 	publishRealtime,
+	readInChunks,
 	readJsonBody,
 	requireUuid,
 	rest,
@@ -52,6 +53,7 @@ import {
 	sendJson,
 	workspaceMembership,
 } from './bridge-social-core.mjs';
+import { inFilter } from './bridge-paging.mjs';
 import {
 	attachmentEntry,
 	handleGallery,
@@ -166,12 +168,20 @@ async function accessibleChannelIds(deps, config, userId) {
 	const wsRows = await rest(config, deps.fetchImpl, `osionos_workspace_members?user_id=eq.${userId}&select=workspace_id`);
 	const workspaceIds = (Array.isArray(wsRows) ? wsRows : []).map((r) => r.workspace_id).filter((id) => UUID_REGEX.test(String(id)));
 	if (workspaceIds.length > 0) {
-		const publicRows = await rest(config, deps.fetchImpl, `osionos_channels?workspace_id=in.(${workspaceIds.join(',')})&is_private=eq.false&kind=not.in.(dm,group)&select=id`);
-		for (const r of Array.isArray(publicRows) ? publicRows : []) ids.add(r.id);
+		const publicRows = await readInChunks(workspaceIds, async (chunk) => {
+			const rows = await rest(config, deps.fetchImpl, `osionos_channels?${inFilter('workspace_id', chunk)}&is_private=eq.false&kind=not.in.(dm,group)&select=id`);
+			return Array.isArray(rows) ? rows : [];
+		});
+		for (const r of publicRows) ids.add(r.id);
 	}
 	return [...ids];
 }
 
+/**
+ * The channels of the caller: the ones they are a member of, plus the public text channels
+ * of their workspaces. The two lists are read apart (one `in` list per request) and merged,
+ * so neither of them can grow past the chunk size.
+ */
 async function listChannels(deps, session, url, response, config) {
 	const filterWs = safeText(url.searchParams.get('workspaceId'), 80);
 	const memberRows = await rest(config, deps.fetchImpl, `osionos_channel_members?user_id=eq.${session.userId}&select=channel_id,role`);
@@ -179,14 +189,21 @@ async function listChannels(deps, session, url, response, config) {
 	const wsRows = await rest(config, deps.fetchImpl, `osionos_workspace_members?user_id=eq.${session.userId}&select=workspace_id`);
 	const workspaceIds = (Array.isArray(wsRows) ? wsRows : []).map((row) => row.workspace_id).filter((id) => UUID_REGEX.test(String(id)));
 	const channelIds = [...roleByChannel.keys()].filter((id) => UUID_REGEX.test(String(id)));
-	const clauses = [];
-	if (channelIds.length > 0) clauses.push(`id.in.(${channelIds.join(',')})`);
-	if (workspaceIds.length > 0) clauses.push(`and(workspace_id.in.(${workspaceIds.join(',')}),is_private.eq.false,kind.not.in.(dm,group))`);
-	if (clauses.length === 0) return sendJson(response, 200, { ok: true, channels: [] }, config);
-	let path = `osionos_channels?or=(${clauses.join(',')})&select=*&order=created_at.asc`;
-	if (UUID_REGEX.test(filterWs)) path += `&workspace_id=eq.${filterWs}`;
-	const rows = await rest(config, deps.fetchImpl, path);
-	const channels = (Array.isArray(rows) ? rows : []).map((row) => channelEntry(row, roleByChannel.get(row.id) ?? null, config));
+	const wsFilter = UUID_REGEX.test(filterWs) ? `&workspace_id=eq.${filterWs}` : '';
+	const read = async (column, chunk, extra) => {
+		const rows = await rest(config, deps.fetchImpl, `osionos_channels?${inFilter(column, chunk)}${extra}${wsFilter}&select=*&order=created_at.asc`);
+		return Array.isArray(rows) ? rows : [];
+	};
+	const listed = [];
+	if (channelIds.length > 0) listed.push(...await readInChunks(channelIds, (chunk) => read('id', chunk, '')));
+	if (workspaceIds.length > 0) {
+		listed.push(...await readInChunks(workspaceIds, (chunk) => read('workspace_id', chunk, '&is_private=eq.false&kind=not.in.(dm,group)')));
+	}
+	const byId = new Map();
+	for (const row of listed) if (!byId.has(row.id)) byId.set(row.id, row);
+	const channels = [...byId.values()]
+		.sort((left, right) => String(left.created_at ?? '').localeCompare(String(right.created_at ?? '')))
+		.map((row) => channelEntry(row, roleByChannel.get(row.id) ?? null, config));
 	return sendJson(response, 200, { ok: true, channels }, config);
 }
 
@@ -234,20 +251,24 @@ async function listMessages(deps, session, url, channelId, response, config) {
 	let attachmentsByMessage = new Map();
 	let mentionsByMessage = new Map();
 	if (messageIds.length > 0) {
-		const reactionRows = await rest(config, deps.fetchImpl, `osionos_message_reactions?message_id=in.(${messageIds.join(',')})&select=message_id,user_id,emoji`);
-		reactionsByMessage = Map.groupBy(Array.isArray(reactionRows) ? reactionRows : [], (row) => row.message_id);
-		const attachRows = await rest(config, deps.fetchImpl, `osionos_message_attachments?message_id=in.(${messageIds.join(',')})&select=*&order=created_at.asc`);
-		attachmentsByMessage = Map.groupBy(Array.isArray(attachRows) ? attachRows : [], (row) => row.message_id);
-		const mentionRows = await rest(config, deps.fetchImpl, `osionos_message_mentions?message_id=in.(${messageIds.join(',')})&select=message_id,user_id`);
-		mentionsByMessage = Map.groupBy(Array.isArray(mentionRows) ? mentionRows : [], (row) => row.message_id);
+		const byMessage = async (table, select) => readInChunks(messageIds, async (chunk) => {
+			const rows = await rest(config, deps.fetchImpl, `${table}?${inFilter('message_id', chunk)}&${select}`);
+			return Array.isArray(rows) ? rows : [];
+		});
+		reactionsByMessage = Map.groupBy(await byMessage('osionos_message_reactions', 'select=message_id,user_id,emoji'), (row) => row.message_id);
+		attachmentsByMessage = Map.groupBy(await byMessage('osionos_message_attachments', 'select=*&order=created_at.asc'), (row) => row.message_id);
+		mentionsByMessage = Map.groupBy(await byMessage('osionos_message_mentions', 'select=message_id,user_id'), (row) => row.message_id);
 	}
 	const identities = await identitySummaries(config, deps.fetchImpl, ordered.map((row) => row.author_id));
 	const replyIds = [...new Set(ordered.map((row) => row.reply_to_id).filter((id) => id && UUID_REGEX.test(String(id))))];
 	let replyById = new Map();
 	if (replyIds.length > 0) {
-		const replyRows = await rest(config, deps.fetchImpl, `osionos_messages?id=in.(${replyIds.join(',')})&select=id,author_id,content,deleted_at`);
-		const replyIdentities = await identitySummaries(config, deps.fetchImpl, (Array.isArray(replyRows) ? replyRows : []).map((r) => r.author_id));
-		replyById = new Map((Array.isArray(replyRows) ? replyRows : []).map((r) => [r.id, replyExcerpt(r, replyIdentities.get(r.author_id))]));
+		const replyRows = await readInChunks(replyIds, async (chunk) => {
+			const rows = await rest(config, deps.fetchImpl, `osionos_messages?${inFilter('id', chunk)}&select=id,author_id,content,deleted_at`);
+			return Array.isArray(rows) ? rows : [];
+		});
+		const replyIdentities = await identitySummaries(config, deps.fetchImpl, replyRows.map((r) => r.author_id));
+		replyById = new Map(replyRows.map((r) => [r.id, replyExcerpt(r, replyIdentities.get(r.author_id))]));
 	}
 	const messages = ordered.map((row) => messageEntry(
 		row,
@@ -292,6 +313,7 @@ async function fanOutAttachments(deps, config, message, channel, drafts) {
 async function resolveMentions(deps, config, channelId, content, selfId) {
 	const handles = parseMentions(content);
 	if (handles.length === 0) return [];
+	// Both id lists are bounded by construction: 20 handles (parseMentions) and 10 candidates.
 	const idents = await rest(config, deps.fetchImpl, `osionos_bridge_identities?username=in.(${handles.map(encodeURIComponent).join(',')})&select=user_id,username`);
 	const candidates = [...new Set((Array.isArray(idents) ? idents : []).map((r) => r.user_id).filter((id) => UUID_REGEX.test(String(id)) && id !== selfId))];
 	if (candidates.length === 0) return [];
@@ -463,6 +485,7 @@ export async function ensureDmChannel(deps, session, config, peerUserId, workspa
 	const blockRows = await rest(config, deps.fetchImpl, `osionos_user_blocks?or=(and(blocker_id.eq.${session.userId},blocked_id.eq.${peerUserId}),and(blocker_id.eq.${peerUserId},blocked_id.eq.${session.userId}))&select=blocker_id&limit=1`);
 	if (Array.isArray(blockRows) && blockRows.length > 0) throw httpError('You cannot message this person.', 403);
 	let workspaceId = UUID_REGEX.test(safeText(workspaceHint, 80)) ? workspaceHint : '';
+	// The id list is bounded by construction: the caller and one peer.
 	const pairRows = await rest(config, deps.fetchImpl, `osionos_workspace_members?user_id=in.(${session.userId},${peerUserId})&select=user_id,workspace_id`);
 	const mine = new Set();
 	const shared = [];
