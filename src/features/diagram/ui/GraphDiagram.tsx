@@ -37,7 +37,7 @@ import { getActivePageJwt } from "@/shared/api/client";
 import type { GraphKind } from "../model/diagramSpec";
 import { graphSource, type GraphOutput } from "../model/graphSource";
 import { DiagramOutput } from "./DiagramOutput";
-import { useIsPublicPage } from "./useIsPublicPage";
+import { isPublicPage } from "../model/publicPageSignal";
 
 interface GraphDiagramProps {
   /** The stored spec: a graph. */
@@ -56,7 +56,7 @@ interface GraphDiagramProps {
  * even in the graph the bridge gave.
  */
 export const GraphDiagram: React.FC<GraphDiagramProps> = ({ spec, onSource, onKinds }) => {
-  const isPublic = useIsPublicPage();
+  const isPublic = isPublicPage();
   const workspaceId = useUserStore((state) => state.activeWorkspace()?._id ?? "");
   // The identity of a draw: the spec, the workspace and the page. A draw
   // that answers for another one is not the answer to this one, so it is
@@ -65,6 +65,7 @@ export const GraphDiagram: React.FC<GraphDiagramProps> = ({ spec, onSource, onKi
   const [state, setState] = useState<{ key: string; output: GraphOutput } | null>(null);
 
   useEffect(() => {
+    if (!workspaceId) return;
     let alive = true;
     void graphSource(spec, {
       isPublic,
@@ -81,6 +82,9 @@ export const GraphDiagram: React.FC<GraphDiagramProps> = ({ spec, onSource, onKi
     };
   }, [spec, key, isPublic, workspaceId, onSource, onKinds]);
 
+  if (!workspaceId) {
+    return <p className="px-3 py-2 text-sm text-[var(--osio-fg-subtle)]">The links of this page are not available.</p>;
+  }
   const output = state?.key === key ? state.output : null;
   if (!output) {
     return <p className="px-3 py-2 text-sm text-[var(--osio-fg-subtle)]">Drawing the links…</p>;

@@ -33,10 +33,11 @@
 import type { BridgeGraph } from "@/features/graph-studio/model/toIngestDoc";
 
 import { compileGraph } from "./compile";
+import { MAX_NODES } from "./diagramIR";
 import type { DiagramSource } from "./diagramSource";
 import { parseDiagramSpec, type GraphKind } from "./diagramSpec";
 import { graphKinds, neighbourhood, pageGraph } from "./graphInput";
-import { mayReadOtherPages } from "./publicPageSignal";
+import { isPublicPage, mayReadOtherPages } from "./publicPageSignal";
 import { irToMermaid } from "./toMermaid";
 
 /** What the block says when the reader is not signed in. */
@@ -89,8 +90,10 @@ export async function graphSource(spec: unknown, deps: GraphSourceDeps): Promise
   }
   const graphSpec = parsed.spec;
 
-  // A published page draws nothing and reads no other page (devil C110).
-  if (!mayReadOtherPages(deps.isPublic)) {
+  // The refusal is enforced where the read happens, and the signal is
+  // re-derived live — never the cached boolean (devil C110).
+  const isPublic = deps.isPublic || isPublicPage();
+  if (!mayReadOtherPages(isPublic)) {
     return { source: NOTHING, kinds: [] };
   }
   // No session: the offline app. Say so, and ask for nothing.
@@ -114,15 +117,22 @@ export async function graphSource(spec: unknown, deps: GraphSourceDeps): Promise
     return { source: { ...NOTHING, error: NOT_IN_GRAPH_MESSAGE }, kinds };
   }
   const ir = compileGraph(hood.center, hood.neighbors);
+  const truncated = ir.truncated || hood.truncated;
+  // The cap is named: whichever cap bit (the 40-neighbour hood, or the
+  // 150-node IR) bit, the reader knows what the diagram holds less of.
+  let truncatedNote: string | undefined;
+  if (hood.truncated && ir.truncated) {
+    truncatedNote = `Showing ${hood.neighbors.length} of ${hood.neighbors.length + hood.dropped} neighbours (first ${MAX_NODES} nodes)`;
+  } else if (hood.truncated) {
+    truncatedNote = `Showing ${hood.neighbors.length} of ${hood.neighbors.length + hood.dropped} neighbours`;
+  } else if (ir.truncated) {
+    truncatedNote = `Showing the first ${MAX_NODES} nodes`;
+  }
   return {
     source: {
       source: irToMermaid(ir, { direction: graphSpec.direction }),
-      truncated: ir.truncated || hood.truncated,
-      // The cap is named: the reader knows the diagram holds fewer links than
-      // the graph does, and how many fewer.
-      truncatedNote: hood.truncated
-        ? `Showing ${hood.neighbors.length} of ${hood.neighbors.length + hood.dropped} neighbours`
-        : undefined,
+      truncated,
+      truncatedNote,
       error: null,
       unsupported: false,
     },

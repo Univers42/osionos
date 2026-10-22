@@ -219,6 +219,23 @@ test("the diagram command inserts a diagram block, and the server wrote nothing"
   assert.equal(recorded.updates.length, 0, "the answer never rewrites the block it was asked about");
 });
 
+test("C8: the mermaid source is sanitized at insert time, so the spec never carries a directive", async (t) => {
+  const { recorded } = useDeps(t, {
+    frames: [
+      frame("text.delta", { text: "```mermaid\n%%{init: {\"securityLevel\": \"loose\"}}%%\nflowchart LR\n  A --> B\n```" }),
+      frame("done", {}),
+    ],
+  });
+  useInlineAiStore.getState().open({ pageId: PAGE, blockId: BLOCK });
+  await useInlineAiStore.getState().run("diagram");
+  await waitFor(() => useInlineAiStore.getState().status === "done");
+
+  assert.equal(useInlineAiStore.getState().accept("insert-below"), true);
+  const source = (recorded.inserts[0].block.diagramSpec as { source: string }).source;
+  assert.equal(source.includes("%%{"), false, "a directive reached the stored spec");
+  assert.ok(source.includes("flowchart LR"));
+});
+
 test("an answer that holds no diagram is inserted as text, not as a broken diagram", async (t) => {
   const { recorded } = useDeps(t, {
     frames: [frame("text.delta", { text: "I cannot draw that." }), frame("done", {})],

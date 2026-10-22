@@ -26,6 +26,7 @@ import { pumpSseStream } from "@osionos/http-gate";
 
 import type { Block } from "@/entities/block";
 import { createDiagramBlock } from "@/entities/block/model/diagramBlocks";
+import { sanitizeMermaidSource } from "@osionos/ui/molecules/MermaidDiagram/lockedMermaid";
 import {
   plainTextOfInlineSource,
   sliceInlineSource,
@@ -303,7 +304,7 @@ export const useInlineAiStore = create<InlineAiState>((set, get) => {
           deps.insertBlock(
             target.pageId,
             target.blockId,
-            createDiagramBlock({ kind: "mermaid", source: mermaid }),
+            createDiagramBlock({ kind: "mermaid", source: sanitizeMermaidSource(mermaid) }),
           );
         } else {
           const blocks = deps.markdownToBlocks(answer);

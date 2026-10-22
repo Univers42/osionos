@@ -69,6 +69,31 @@ export function mermaidFromAnswer(answer: string): string | null {
   if (!fenced) {
     const first = source.split(/\s+/, 1)[0]?.toLowerCase() ?? "";
     if (!DIAGRAM_WORDS.includes(first)) return null;
+    // An unfenced candidate must be a SINGLE diagram: no trailing prose. A
+    // blank line followed by more content, or a non-indented line that is not
+    // a diagram construct, means prose followed the diagram.
+    const lines = source.split("\n");
+    for (let index = 1; index < lines.length; index += 1) {
+      const line = lines[index];
+      const trimmed = line.trim();
+      if (trimmed === "") {
+        if (lines.slice(index + 1).some((candidate) => candidate.trim() !== "")) {
+          return null;
+        }
+        continue;
+      }
+      const lower = trimmed.toLowerCase();
+      if (DIAGRAM_WORDS.some((word) => lower.startsWith(word))) continue;
+      if (/^(subgraph|end|classdef|class|style|click|linkstyle|direction|title|acctitle|accdescr|participant|actor|box|autonumber|note|activate|deactivate|loop|alt|else|opt|par|and|rect|section)\b/i.test(trimmed)) continue;
+      // A mermaid statement carries special characters; a sentence is plain
+      // words. An indented line is part of a statement; an unindented line
+      // with no mermaid special chars and a sentence shape is prose.
+      const isProse = !/^\s/.test(line)
+        && !/[<>{}()[\]|&;]/.test(trimmed)
+        && !/-->|---|\.\.\.|==>|-.->|==/.test(trimmed)
+        && (/\.$/.test(trimmed) || trimmed.split(/\s+/).length >= 2);
+      if (isProse) return null;
+    }
   }
   return source;
 }
