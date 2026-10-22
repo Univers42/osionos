@@ -102,4 +102,43 @@ test.describe("the settings tab", () => {
     expect((await heading.boundingBox()).y).toBeGreaterThan((await strip.boundingBox()).y);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
+
+  test("in a split pane the nav stacks above the body and the Mode control fits its card", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openFreshPage(page, baseURL);
+    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    await expect(region(page)).toBeVisible();
+
+    // Splitting duplicates the active tab: two settings panes, each 555px wide.
+    await page.locator('button[title="Split right"]').first().click();
+    await expect(region(page)).toHaveCount(2);
+
+    // A pane narrower than 720px cannot hold a 240px nav beside a body that
+    // still fits the widest panel control: the nav stacks above the body.
+    for (let index = 0; index < 2; index += 1) {
+      const pane = region(page).nth(index);
+      const nav = pane.getByRole("navigation", { name: "Settings sections" });
+      const body = pane.locator(":scope > div");
+      await expect(nav).toBeVisible();
+      const navBox = await nav.boundingBox();
+      const bodyBox = await body.boundingBox();
+      expect(navBox.y + navBox.height, `pane ${index}: the nav is above the body`).toBeLessThanOrEqual(bodyBox.y + 1);
+    }
+
+    // The Preferences panel's Mode control stays inside its card.
+    for (let index = 0; index < 2; index += 1) {
+      const pane = region(page).nth(index);
+      await pane.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Preferences", exact: true }).click();
+      await expect(pane.locator('[data-settings-panel="preferences"]')).toBeVisible();
+      const fit = await pane.evaluate((root) => {
+        const system = [...root.querySelectorAll("button")].find((button) => button.textContent?.trim() === "System");
+        const control = system?.parentElement;
+        const card = control?.parentElement?.closest("div.rounded-lg.border");
+        if (!control || !card) return null;
+        return { controlRight: control.getBoundingClientRect().right, cardRight: card.getBoundingClientRect().right };
+      });
+      expect(fit, `pane ${index}: the Mode control is measurable`).not.toBeNull();
+      expect(fit.controlRight, `pane ${index}: the Mode control fits its card`).toBeLessThanOrEqual(fit.cardRight + 1);
+    }
+  });
 });

@@ -14,6 +14,9 @@
 // tabs: the workspace tab strip is the only tabbed control here. Two layout
 // roles from the same markup — a vertical column when the pane has room, and a
 // horizontal strip above the panel when it does not (container-query variants).
+// The 720/719 breakpoints below are the same pair the region uses in
+// SettingsView.tsx: Tailwind needs literal class strings, so the two files
+// carry the same number and have to change together.
 
 import React, { useEffect, useRef } from "react";
 import { Sparkles } from "lucide-react";
@@ -49,14 +52,14 @@ export const SettingsSectionsNav: React.FC<SettingsSectionsNavProps> = ({ sectio
   return (
     <nav
       aria-label="Settings sections"
-      className="shrink-0 border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] @max-[519px]:border-b @min-[520px]:w-[240px] @min-[520px]:overflow-y-auto @min-[520px]:border-r"
+      className="shrink-0 border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] @max-[719px]:border-b @min-[720px]:w-[240px] @min-[720px]:overflow-y-auto @min-[720px]:border-r"
     >
-      <div className="@min-[520px]:flex @min-[520px]:min-h-full @min-[520px]:flex-col @min-[520px]:justify-between">
-        <div ref={listRef} className="flex gap-1 overflow-x-auto p-2 @min-[520px]:block @min-[520px]:space-y-4 @min-[520px]:overflow-visible">
+      <div className="@min-[720px]:flex @min-[720px]:min-h-full @min-[720px]:flex-col @min-[720px]:justify-between">
+        <div ref={listRef} className="flex gap-1 overflow-x-auto p-2 @min-[720px]:block @min-[720px]:space-y-4 @min-[720px]:overflow-visible">
           {SETTINGS_GROUPS.map((group) => (
-            <div key={group.id} className="flex gap-1 @min-[520px]:block">
-              <p className="@min-[520px]:block hidden px-2 py-1.5 text-xs font-medium text-[var(--osio-fg-subtle)]">{group.label}</p>
-              <div className="flex gap-1 @min-[520px]:block @min-[520px]:space-y-0.5">
+            <div key={group.id} className="flex gap-1 @min-[720px]:block">
+              <p className="@min-[720px]:block hidden px-2 py-1.5 text-xs font-medium text-[var(--osio-fg-subtle)]">{group.label}</p>
+              <div className="flex gap-1 @min-[720px]:block @min-[720px]:space-y-0.5">
                 {SETTINGS_SECTIONS.filter((entry) => entry.group === group.id).map((entry) => (
                   <SectionRow
                     key={entry.id}
@@ -70,7 +73,7 @@ export const SettingsSectionsNav: React.FC<SettingsSectionsNavProps> = ({ sectio
             </div>
           ))}
         </div>
-        <div className="hidden border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4 @min-[520px]:sticky @min-[520px]:bottom-0 @min-[520px]:block">
+        <div className="hidden border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4 @min-[720px]:sticky @min-[720px]:bottom-0 @min-[720px]:block">
           <Button className="w-full" onClick={exploreAi}>
             <Sparkles size={16} /> Get osionos AI
           </Button>
@@ -92,7 +95,7 @@ const SectionRow: React.FC<{
     data-settings-section={section.id}
     onClick={() => onSelect(section.id)}
     className={[
-      "flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm @min-[520px]:w-full",
+      "flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm @min-[720px]:w-full",
       "pointer-coarse:h-11",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]",
       active
