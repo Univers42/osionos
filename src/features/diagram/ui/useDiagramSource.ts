@@ -23,8 +23,8 @@
  * page-tree kind through the compiler (`compileHierarchy` + `irToMermaid`).
  * The two database kinds are drawn by the LAZY `DatabaseDiagram` module, which
  * reads the database store — this hook never does, so a mermaid diagram never
- * loads that chunk. The `graph` kind has no adapter yet: it says so instead
- * of drawing something else.
+ * loads that chunk. The `graph` kind is drawn by the LAZY `GraphDiagram`
+ * module, which reads the bridge: this hook never does either.
  */
 
 import { useMemo } from "react";
@@ -34,6 +34,7 @@ import { canReadPage, usePageAccessContext } from "@/shared/lib/auth/pageAccess"
 import { usePageStore } from "@/store/usePageStore";
 
 import { compileHierarchy } from "../model/compile";
+import { MAX_NODES } from "../model/diagramIR";
 import { parseDiagramSpec } from "../model/diagramSpec";
 import type { DiagramSource } from "../model/diagramSource";
 import { hierarchyInput, type HierarchyPage } from "../model/hierarchyInput";
@@ -113,9 +114,15 @@ export function useDiagramSource(
       return {
         source: irToMermaid(ir, { direction: diagramSpec.direction }),
         truncated: ir.truncated,
+        truncatedNote: ir.truncated ? `Showing the first ${MAX_NODES} nodes` : undefined,
         error: null,
         unsupported: false,
       };
+    }
+    if (diagramSpec.kind === "graph") {
+      // The graph kind is drawn by the LAZY adapter (it reads the bridge), so
+      // this hook has nothing to compile: it draws nothing and says nothing.
+      return { source: null, truncated: false, error: null, unsupported: false };
     }
     return { source: null, truncated: false, error: null, unsupported: true };
   }, [parsed, readable]);

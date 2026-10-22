@@ -33,7 +33,7 @@ disconnects does NOT cancel a run: it keeps going and stays resumable. Only
 
 ## The commands
 
-The ten built-ins live in the code (`src/commands/builtins.ts`), frozen: a
+The eleven built-ins live in the code (`src/commands/builtins.ts`), frozen: a
 command is a name, a description, a template with `$ARGUMENTS` in it, and a
 surface (`editor`, `chat`, or `both`). `GET /commands?surface=…` answers the
 commands of that surface.
