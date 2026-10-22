@@ -85,3 +85,52 @@ refused_error URLError: [Errno 111] Connection refused
  05:48:24 up 1 day, 14:15,  1 user,  load average: 11.97, 15.10, 14.87
 
 verdict_rows 1810
+
+# the guard of the image prompt, the model 0.6b, 2026-10-22T05:50:02+02:00
+ 05:50:02 up 1 day, 14:17,  1 user,  load average: 13.10, 14.79, 14.80
+
+model /mnt/storage/guard/Qwen3Guard-Gen-0.6B.Q8_0.gguf
+engine llama-server --jinja -c 4096 -np 4 -t 6
+image ghcr.io/ggml-org/llama.cpp@sha256:ba384e66b3f3b6474dc0285ed44466b6f025c7106865d915f1fe5ae2a2da7411
+sets /mnt/storage/sets-a1enc
+
+server_ready_s 2.9
+
+warn: LLAMA_ARG_HOST environment variable is set, but will be overwritten by command line argument --host
+warn: LLAMA_ARG_PORT environment variable is set, but will be overwritten by command line argument --port
+0.00.000.665 I srv  llama_server: initializing ...
+0.00.025.607 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.099.115 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.101.782 I srv    load_model: loading model '/mnt/storage/guard/Qwen3Guard-Gen-0.6B.Q8_0.gguf'
+0.00.508.369 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.01.168.821 I cmn          init: llama threadpool init, n_threads = 6
+0.01.327.366 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 1024, kv_unified = 'false'
+0.01.331.850 I srv  llama_server: model loaded
+0.01.331.856 I srv  llama_server: listening on http://0.0.0.0:8080
+
+== parallel: coco en 1000 calls, four clients, input /mnt/storage/sets-a1enc/coco.tsv
+parallel_wall_s 0.7
+parallel_calls_per_s 1517.71
+ 05:50:05 up 1 day, 14:17,  1 user,  load average: 13.10, 14.79, 14.80
+== sequential: prompts en 0 calls, input /mnt/storage/sets-a1enc/prompts.tsv
+ 05:50:06 up 1 day, 14:17,  1 user,  load average: 12.85, 14.71, 14.77
+== parallel: i2p-200 en 200 calls, four clients, input /mnt/storage/sets-a1enc/i2p-200.tsv
+parallel_wall_s 0.4
+parallel_calls_per_s 466.31
+ 05:50:06 up 1 day, 14:17,  1 user,  load average: 12.85, 14.71, 14.77
+== parallel: coco-200 en 200 calls, four clients, input /mnt/storage/sets-a1enc/coco-200.tsv
+parallel_wall_s 0.4
+parallel_calls_per_s 451.37
+ 05:50:06 up 1 day, 14:17,  1 user,  load average: 12.85, 14.71, 14.77
+== parallel: i2p-par en 400 calls, four clients, input /mnt/storage/sets-a1enc/i2p.tsv
+parallel_wall_s 0.5
+parallel_calls_per_s 802.43
+ 05:50:07 up 1 day, 14:17,  1 user,  load average: 12.85, 14.71, 14.77
+
+== the server is down: one call to the port that is not there
+refused_ms 9.4
+refused_error URLError: [Errno 111] Connection refused
+
+ 05:50:10 up 1 day, 14:17,  1 user,  load average: 12.85, 14.71, 14.77
+
+verdict_rows 1810

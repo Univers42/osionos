@@ -7,6 +7,9 @@ llama-cpp-vulkan	sha256:b7204e52c07de71ce75059b710b8a8573f8026ffeef72936c27132f7
 whisper-cpp-vulkan	sha256:187f62917db92ad5ac299b61a9e545238f8c108e3e5c90f5adb20d2c44d70745
 speaches-cpu	sha256:1d4f852ff5b148d675bcd751f414835c0bcef2541c1df8ffdeb43714968aafe6
 ubuntu-24.04	sha256:a2d43bffc46670d7108bb3c0468c67c5557c4c92e83e1e34cbff1322ad1b94dc
+# The runtime of the output check on the generated images (C73): Node 22 and
+# transformers.js, in one process, on the CPU.
+node-22	sha256:ea11b74b986d520137cdef9a5346e447a00f275ecc4abc0055b7151226231e09
 # The digest of the pull (docker RepoDigests), built 2026-10-21 16:58 CEST: a master
 # build hours old — the M1 slice pins a release at least 7 days old instead.
 sdcpp-vulkan	sha256:6d75b94d1d4222f9dd8a3b1494a5c8a6a31dc06976d9201dd83b7f9c32ffe343
