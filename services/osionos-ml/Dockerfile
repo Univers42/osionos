@@ -1,7 +1,9 @@
-# osionos-ml — the recommender's model (M3c-1)
+# osionos-ml — the recommender's model (M3c-1) and its training job (M3c-3)
 #
-# The model is implicit-feedback ALS on the CPU (`implicit`, MIT). The image
-# needs no network at runtime: everything the evaluation does is offline.
+# The model is implicit-feedback ALS on the CPU (`implicit`, MIT). The job
+# reads the `ai_events` log, trains the model and writes it to the registry:
+# it needs a database (DATABASE_URL) and nothing else. The image needs no
+# network at runtime: the training is offline.
 FROM python:3.12-slim@sha256:cb33f7f771ecec2ef1225cf39b159591a040391bd73e4c01f00fdfc4c47611d2
 
 # `implicit`'s CPU extension links against OpenMP, which python:3.12-slim does
@@ -27,4 +29,6 @@ RUN useradd --create-home --uid 10001 osml \
 
 USER osml
 
-CMD ["python", "-m", "osml.evaluate", "--out", "/app/results/sim"]
+# The training job. The offline evaluation is one command away:
+#   docker run --rm <image> python -m osml.evaluate --out /app/results/sim
+CMD ["python", "-m", "osml.job"]
