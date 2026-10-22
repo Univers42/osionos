@@ -120,6 +120,34 @@ describe('stripImageMetadata removes what the formats call metadata', () => {
 	});
 });
 
+describe('the bytes after the end of the image are dropped', () => {
+	const TAIL = Buffer.from('<html><script>alert(1)</script></html>', 'latin1');
+
+	it('a PNG stops at its IEND chunk', () => {
+		const stripped = stripImageMetadata(Buffer.concat([pngFixture({ width: 8, height: 8 }), TAIL]));
+		assert.equal(stripped.includes(Buffer.from('<html>', 'latin1')), false, 'the tail is gone');
+		assert.deepEqual(imageInfo(stripped), { type: 'image/png', width: 8, height: 8 });
+	});
+
+	it('a JPEG stops at the EOI that closes the image', () => {
+		const stripped = stripImageMetadata(Buffer.concat([jpegFixture({ width: 8, height: 8 }), TAIL]));
+		assert.equal(stripped.includes(Buffer.from('<html>', 'latin1')), false, 'the tail is gone');
+		assert.deepEqual(imageInfo(stripped), { type: 'image/jpeg', width: 8, height: 8 });
+	});
+
+	it('a GIF stops at its trailer', () => {
+		const stripped = stripImageMetadata(Buffer.concat([gifFixture({ width: 8, height: 8 }), TAIL]));
+		assert.equal(stripped.includes(Buffer.from('<html>', 'latin1')), false, 'the tail is gone');
+		assert.deepEqual(imageInfo(stripped), { type: 'image/gif', width: 8, height: 8 });
+	});
+
+	it('a WebP stops at the size its RIFF header declares', () => {
+		const stripped = stripImageMetadata(Buffer.concat([webpFixture({ width: 8, height: 8 }), TAIL]));
+		assert.equal(stripped.includes(Buffer.from('<html>', 'latin1')), false, 'the tail is gone');
+		assert.deepEqual(imageInfo(stripped), { type: 'image/webp', width: 8, height: 8 });
+	});
+});
+
 describe('a malformed or truncated file throws instead of guessing', () => {
 	const cases = [
 		{ name: 'a PNG cut in half', buffer: pngFixture().subarray(0, 20) },

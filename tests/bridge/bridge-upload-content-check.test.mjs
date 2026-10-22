@@ -47,6 +47,7 @@ function fakeStorage() {
 			: new Response('missing', { status: 404 });
 	};
 	fake.puts = 0;
+	fake.objects = objects;
 	return fake;
 }
 
@@ -104,4 +105,26 @@ describe('an upload is checked against its bytes', () => {
 			assert.equal(puts, 1);
 		});
 	}
+});
+
+describe('a tail after the image is contained by the serve headers', () => {
+	it('page media: a PNG with an HTML tail is served as image/png, sandboxed', async () => {
+		const { fetchImpl, storage } = bridgeWorld();
+		const tailed = Buffer.concat([pngFixture({ width: 4, height: 4 }), Buffer.from('<html><script>alert(1)</script></html>')]);
+		await withBridge(config, fetchImpl, async (base) => {
+			const upload = await send(base, '/api/media/uploads?name=t.png', { ...asA, 'content-type': 'image/png' }, { method: 'POST', body: tailed });
+			assert.equal(upload.status, 201, upload.text);
+
+			// The bytes are kept as they came: a phone appends data to a photo.
+			const stored = [...storage.objects.values()][0];
+			assert.equal(stored.body.includes(Buffer.from('<html>', 'latin1')), true, 'the tail is kept');
+
+			// The capability URL serves it with the type of the PNG and no sniffing.
+			const res = await fetch(`${base}${upload.body.media.url}`);
+			assert.equal(res.status, 200);
+			assert.equal(res.headers.get('content-type'), 'image/png');
+			assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
+			assert.match(res.headers.get('content-security-policy') ?? '', /sandbox/);
+		});
+	});
 });

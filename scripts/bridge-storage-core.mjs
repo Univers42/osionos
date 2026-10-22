@@ -155,3 +155,21 @@ export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.
 		contentType: response.headers.get('content-type') || 'application/octet-stream',
 	};
 }
+
+/**
+ * DELETE an object as the owner. An object that is already gone is not an
+ * error: the caller wanted it gone, and it is.
+ */
+export async function storageDelete(ownerId, key, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
+	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
+		method: 'DELETE',
+		headers: { 'x-user-id': ownerId },
+		signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+	}).catch((error) => {
+		throw httpError(`Storage delete failed: ${error instanceof Error ? error.message : 'unreachable'}`, 502);
+	});
+	if (!response.ok && response.status !== 404) {
+		throw httpError(`Storage delete rejected (${response.status}).`, 502);
+	}
+	return true;
+}

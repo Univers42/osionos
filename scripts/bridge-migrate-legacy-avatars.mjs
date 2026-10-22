@@ -39,6 +39,7 @@ import { ensureBucket, storagePut } from './bridge-storage-core.mjs';
 const AVATAR_BUCKET = 'avatars';
 const PAGE_SIZE = 50;
 const MAX_BYTES = 200 * 1024;
+const MAX_EDGE = 4096;
 const ORDER = [['user_id', 'asc']];
 const LEGACY_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const EXT_BY_TYPE = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
@@ -51,6 +52,7 @@ function emptyCounts() {
 		migrated: 0,
 		alreadySet: 0,
 		wouldMigrate: 0,
+		skipped: 0,
 		invalid: { tooLarge: 0, unsupported: 0, malformed: 0 },
 		failed: 0,
 	};
@@ -72,6 +74,9 @@ function readLegacyAvatar(value) {
 		return { reason: 'malformed' };
 	}
 	if (!LEGACY_TYPES.has(info.type)) return { reason: 'unsupported' };
+	// A canvas no bigger than an avatar may be: the shared parser caps nothing,
+	// and a 200KB file may declare a canvas that would bomb the client.
+	if (info.width > MAX_EDGE || info.height > MAX_EDGE) return { reason: 'tooLargeCanvas' };
 	return { bytes: clean, type: info.type };
 }
 
@@ -97,7 +102,9 @@ export async function migrateLegacyAvatars({ pg, fetchImpl = fetch, env = proces
 			counts.scanned += 1;
 			const legacy = readLegacyAvatar(row?.profile?.avatar);
 			if (legacy.reason) {
-				counts.invalid[legacy.reason] += 1;
+				// A canvas that is too big is not invalid data: it is skipped.
+				if (legacy.reason === 'tooLargeCanvas') counts.skipped += 1;
+				else counts.invalid[legacy.reason] += 1;
 				continue;
 			}
 			const userId = String(row.user_id ?? '').toLowerCase();
@@ -150,6 +157,7 @@ export function formatCounts(counts, apply) {
 		`migrated=${counts.migrated}`,
 		`already-set=${counts.alreadySet}`,
 		`would-migrate=${counts.wouldMigrate}`,
+		`skipped=${counts.skipped}`,
 		`invalid-too-large=${invalid.tooLarge}`,
 		`invalid-unsupported=${invalid.unsupported}`,
 		`invalid-malformed=${invalid.malformed}`,

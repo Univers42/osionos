@@ -22,6 +22,11 @@
  *
  * The inline set and the page set live here, not in the storage client: this
  * module is what decides whether a byte sequence may be served under a type.
+ *
+ * Caveat: the check does not strip or truncate what an upload carries. A phone
+ * appends data after the JPEG EOI (a motion photo), and refusing the tail
+ * would break real uploads. The tail is contained by the serve headers
+ * (nosniff and a CSP sandbox); the avatar paths strip the bytes they store.
  */
 
 import { gifCommentText, imageFormat, imageInfo } from './bridge-image-meta.mjs';

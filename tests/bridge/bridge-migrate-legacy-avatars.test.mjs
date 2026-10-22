@@ -18,7 +18,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { migrateLegacyAvatars } from '../../scripts/bridge-migrate-legacy-avatars.mjs';
-import { htmlFixture, jpegFixture, pngFixture, webpFixture } from './support/image-fixtures.mjs';
+import { htmlFixture, hugePngFixture, jpegFixture, pngFixture, webpFixture } from './support/image-fixtures.mjs';
 
 const USER = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
 const OTHER = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
@@ -181,6 +181,22 @@ describe('the legacy avatar migration', () => {
 		assert.equal(counts.invalid.malformed, 2, 'the three bytes and the HTML are not images');
 		assert.equal(counts.invalid.unsupported, 0);
 		assert.equal(counts.migrated, 0);
+	});
+
+	it('skips an avatar whose canvas is bigger than an avatar may be', async () => {
+		const pg = fakePg({
+			identities: [legacyUser(dataUrl(hugePngFixture()))],
+			profiles: [{ user_id: USER, avatar_url: null }],
+		});
+		const storage = fakeStorage();
+		const counts = await migrateLegacyAvatars({ pg, fetchImpl: storage, env: {}, apply: true });
+
+		assert.equal(counts.scanned, 1);
+		assert.equal(counts.skipped, 1, 'a huge canvas is skipped, not counted as invalid');
+		assert.equal(counts.invalid.tooLarge, 0);
+		assert.equal(counts.migrated, 0);
+		assert.equal(storage.objects.size, 0);
+		assert.equal(pg.state.profiles[0].avatar_url, null);
 	});
 
 	it('leaves a user who deleted their avatar alone', async () => {

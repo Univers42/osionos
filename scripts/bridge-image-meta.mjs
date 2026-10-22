@@ -17,12 +17,14 @@
  * check must never be a guess.
  *
  * Every parser bounds each length field against the buffer BEFORE it reads, so
- * a hostile file cannot walk off the end (the P0-3 RESP parser hung on exactly
- * that). A malformed or truncated file throws `invalid_image`; the caller turns
- * that into a 415. The stripped set is what the formats define as metadata:
- * PNG tEXt/zTXt/iTXt/eXIf/tIME, JPEG APP1-APP13/APP15/COM (APP0 and APP14 stay:
- * the colour profile), WebP EXIF/XMP (the flags and the RIFF size are fixed)
- * and the GIF comment extension.
+ * a hostile file cannot walk off the end (the P0-3 RESP parser hung on that).
+ * A malformed file throws `invalid_image`; the caller turns that into a 415.
+ * The stripped set is what the formats call metadata: PNG tEXt/zTXt/iTXt/eXIf/
+ * tIME, JPEG APP1-APP13/APP15/COM (APP0 and APP14 stay: the colour profile),
+ * WebP EXIF/XMP and the GIF comment extension.
+ *
+ * The parsers cap NO dimension: page media may be legitimately larger, and the
+ * avatar paths apply their own cap (bridge-avatar.mjs) against a decode bomb.
  */
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -41,9 +43,7 @@ function partsFrom(buffer, head, blocks, isMetadata) {
 }
 
 function pngChunks(buffer) {
-	if (buffer.length < PNG_SIGNATURE.length || !buffer.subarray(0, 8).equals(PNG_SIGNATURE)) {
-		throw imageError('PNG has no signature.');
-	}
+	if (buffer.length < PNG_SIGNATURE.length || !buffer.subarray(0, 8).equals(PNG_SIGNATURE)) throw imageError('PNG has no signature.');
 	const chunks = [];
 	let at = PNG_SIGNATURE.length;
 	while (at + 8 <= buffer.length) {
@@ -57,9 +57,7 @@ function pngChunks(buffer) {
 		if (key === 'IEND') break;
 	}
 	if (chunks.length === 0) throw imageError('PNG holds no chunk.');
-	if (chunks[0].key !== 'IHDR' || chunks[0].dataEnd - chunks[0].dataStart < 13) {
-		throw imageError('PNG has no usable IHDR header.');
-	}
+	if (chunks[0].key !== 'IHDR' || chunks[0].dataEnd - chunks[0].dataStart < 13) throw imageError('PNG has no usable IHDR header.');
 	if (chunks[chunks.length - 1].key !== 'IEND') throw imageError('PNG has no IEND chunk.');
 	return chunks;
 }
@@ -73,10 +71,16 @@ function parsePng(buffer) {
 	return { type: 'image/png', width, height, parts };
 }
 
-function jpegSegments(buffer) {
-	if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
-		throw imageError('JPEG has no start-of-image marker.');
+/** The end of the image: the EOI that closes it, or the end of the buffer. */
+function jpegEnd(buffer, from) {
+	for (let at = from; at + 1 < buffer.length; at += 1) {
+		if (buffer[at] === 0xff && buffer[at + 1] === 0xd9) return at + 2;
 	}
+	return buffer.length;
+}
+
+function jpegSegments(buffer) {
+	if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) throw imageError('JPEG has no start-of-image marker.');
 	const segments = [];
 	let at = 2;
 	while (at < buffer.length) {
@@ -85,9 +89,11 @@ function jpegSegments(buffer) {
 		while (markerAt < buffer.length && buffer[markerAt] === 0xff) markerAt += 1;
 		if (markerAt >= buffer.length) throw imageError('JPEG ends inside a marker.');
 		const marker = buffer[markerAt];
-		// SOS carries the entropy-coded data: everything after it is copied verbatim.
+		// SOS carries the entropy-coded data; the image ends at the EOI that
+		// closes it, and everything after that is a tail.
 		if (marker === 0xda || marker === 0xd9) {
-			segments.push({ key: marker, start: at, end: buffer.length, markerAt });
+			const end = marker === 0xd9 ? markerAt + 2 : jpegEnd(buffer, markerAt);
+			segments.push({ key: marker, start: at, end, markerAt });
 			break;
 		}
 		if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
@@ -148,15 +154,11 @@ function gifBlocks(buffer) {
 	let at = headerEnd;
 	while (at < buffer.length) {
 		const marker = buffer[at];
-		if (marker === 0x3b) {
-			blocks.push({ key: 'trailer', start: at, end: at + 1, text: '' });
-			break;
-		}
+		if (marker === 0x3b) { blocks.push({ key: 'trailer', start: at, end: at + 1 }); break; }
 		if (marker === 0x21) {
 			if (at + 2 > buffer.length) throw imageError('GIF extension is truncated.');
-			const label = buffer[at + 1];
 			const { end, parts } = readSubBlocks(buffer, at + 2);
-			blocks.push({ key: label === 0xfe ? GIF_COMMENT : 'extension', start: at, end, text: Buffer.concat(parts).toString('latin1') });
+			blocks.push({ key: buffer[at + 1] === 0xfe ? GIF_COMMENT : 'extension', start: at, end, text: Buffer.concat(parts).toString('latin1') });
 			at = end;
 			continue;
 		}
@@ -166,7 +168,7 @@ function gifBlocks(buffer) {
 			const cursor = at + 10 + (local & 0x80 ? 3 * (2 ** ((local & 0x07) + 1)) : 0);
 			if (cursor > buffer.length) throw imageError('GIF colour table runs past the end of the file.');
 			const { end } = readSubBlocks(buffer, cursor + 1);
-			blocks.push({ key: 'image', start: at, end, text: '' });
+			blocks.push({ key: 'image', start: at, end });
 			at = end;
 			continue;
 		}
@@ -185,19 +187,19 @@ function parseGif(buffer) {
 
 function webpChunks(buffer) {
 	if (buffer.length < 12) throw imageError('WebP is truncated.');
-	if (buffer.toString('latin1', 0, 4) !== 'RIFF' || buffer.toString('latin1', 8, 12) !== 'WEBP') {
-		throw imageError('WebP has no RIFF header.');
-	}
+	if (buffer.toString('latin1', 0, 4) !== 'RIFF' || buffer.toString('latin1', 8, 12) !== 'WEBP') throw imageError('WebP has no RIFF header.');
 	if (buffer.readUInt32LE(4) + 8 > buffer.length) throw imageError('WebP RIFF size runs past the end of the file.');
+	// The RIFF size is the size of the file: the bytes after it are a tail.
+	const limit = buffer.readUInt32LE(4) + 8;
 	const chunks = [];
 	let at = 12;
-	while (at + 8 <= buffer.length) {
+	while (at + 8 <= limit) {
 		const fourcc = buffer.toString('latin1', at, at + 4);
 		const size = buffer.readUInt32LE(at + 4);
 		const dataStart = at + 8;
 		const dataEnd = dataStart + size;
-		if (dataEnd > buffer.length) throw imageError('WebP chunk length runs past the end of the file.');
-		chunks.push({ key: fourcc, start: at, dataStart, dataEnd, end: Math.min(dataEnd + (size % 2), buffer.length) });
+		if (dataEnd > limit) throw imageError('WebP chunk length runs past the RIFF size.');
+		chunks.push({ key: fourcc, start: at, dataStart, dataEnd, end: Math.min(dataEnd + (size % 2), limit) });
 		at = dataEnd + (size % 2);
 	}
 	if (chunks.length === 0) throw imageError('WebP holds no chunk.');
@@ -223,9 +225,7 @@ function webpFrame(chunk, buffer) {
 		return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
 	}
 	if (chunk.dataEnd - chunk.dataStart < 10) throw imageError('WebP frame header is truncated.');
-	if (buffer[chunk.dataStart + 3] !== 0x9d || buffer[chunk.dataStart + 4] !== 0x01 || buffer[chunk.dataStart + 5] !== 0x2a) {
-		throw imageError('WebP frame header is not a VP8 key frame.');
-	}
+	if (buffer[chunk.dataStart + 3] !== 0x9d || buffer[chunk.dataStart + 4] !== 0x01 || buffer[chunk.dataStart + 5] !== 0x2a) throw imageError('WebP frame header is not a VP8 key frame.');
 	return {
 		width: buffer.readUInt16LE(chunk.dataStart + 6) & 0x3fff,
 		height: buffer.readUInt16LE(chunk.dataStart + 8) & 0x3fff,
@@ -261,17 +261,16 @@ export function imageFormat(buffer) {
 	const head = buffer.toString('latin1', 0, 12);
 	if (head.startsWith('GIF87a') || head.startsWith('GIF89a')) return 'gif';
 	if (head.startsWith('RIFF') && head.slice(8, 12) === 'WEBP') return 'webp';
-	if (buffer.subarray(0, 8).equals(PNG_SIGNATURE) && buffer.length >= 8) return 'png';
+	if (buffer.length >= 8 && buffer.subarray(0, 8).equals(PNG_SIGNATURE)) return 'png';
 	return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff ? 'jpeg' : null;
 }
 
+const PARSERS = { png: parsePng, jpeg: parseJpeg, gif: parseGif, webp: parseWebp };
+
 function parseImage(buffer) {
-	const format = imageFormat(buffer);
-	if (format === 'png') return parsePng(buffer);
-	if (format === 'jpeg') return parseJpeg(buffer);
-	if (format === 'gif') return parseGif(buffer);
-	if (format === 'webp') return parseWebp(buffer);
-	throw imageError('The bytes are not a PNG, JPEG, GIF or WebP image.');
+	const parser = PARSERS[imageFormat(buffer)];
+	if (!parser) throw imageError('The bytes are not a PNG, JPEG, GIF or WebP image.');
+	return parser(buffer);
 }
 /** The dimensions of an image: `{ type, width, height }`. Throws `invalid_image`. */
 export function imageInfo(buffer) {
