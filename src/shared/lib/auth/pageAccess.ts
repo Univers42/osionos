@@ -168,16 +168,13 @@ function memberHasPermission(
 }
 
 /**
- * The bridge's mayModifyPage (scripts/bridge-api.mjs), line for line: an unpublished
- * ownerless page is writable by whoever cleared the gates above; past that the page
+ * The bridge's mayModifyPage (scripts/bridge-api.mjs), line for line: the page
  * owner, an owner/admin membership, an 'update' permission or an editor/owner
- * collaborator grants it. O(p + c) over properties + collaborators.
+ * collaborator grants it. An ownerless page follows the same rule — the bridge has
+ * no "nobody owns it, so anybody may write it" branch.
+ * O(c) over collaborators.
  */
 function mayModifyPage(page: PageEntry, member: PageMemberAccess | null, userId: string): boolean {
-  const published = (Array.isArray(page.properties) ? page.properties : []).some(
-    (property) => property?.key === "published" && (property.value === true || property.value === "true"),
-  );
-  if (!published && page.ownerId == null) return true;
   if (sameUserId(page.ownerId, userId)) return true;
   // The RAW role, not normalizeRole: the bridge reads access.role untrimmed here, so a
   // padded role memberHasPermission accepted mayModifyPage still refuses.
@@ -237,10 +234,6 @@ function hasWorkspaceAccess(page: PageEntry, context: PageAccessContext): boolea
   return context.workspaceIds.includes(page.workspaceId);
 }
 
-function isLegacyPage(page: PageEntry): boolean {
-  return page.ownerId == null && page.visibility == null && (page.collaborators?.length ?? 0) === 0;
-}
-
 /** O(c) over collaborators. */
 export function canReadPage(page: PageEntry, context: PageAccessContext | null): boolean {
   if (!context || !hasWorkspaceAccess(page, context)) return false;
@@ -248,7 +241,6 @@ export function canReadPage(page: PageEntry, context: PageAccessContext | null):
   if (visibility === "public") return true;
   if (visibility === "shared") return true;
   if (sameUserId(page.ownerId, context.userId)) return true;
-  if (isLegacyPage(page)) return true;
   return getCollaboratorRole(page, context.userId) !== null;
 }
 

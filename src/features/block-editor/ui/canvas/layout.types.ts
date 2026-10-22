@@ -56,6 +56,20 @@ export interface LayoutCell {
   wrap?: boolean;
   padding?: LayoutCellPadding;
   fontSize?: LayoutCellFontSize;
+  /**
+   * Height pinned on a hug cell, in whole px — carried over from the canvas
+   * model so a legacy save keeps the pinned size.
+   * Caveat: a snapshot of the width the cell was measured at; a different
+   * pane width re-measures the content and the pinned value goes stale.
+   */
+  measuredHeight?: number;
+  /**
+   * A formula that decides whether the cell is rendered at all, evaluated
+   * against the page's own properties. Empty (or absent) means always visible.
+   * Caveat: it runs in every reader's browser, so a formula that branches on a
+   * value leaks that value's existence to every reader of the page.
+   */
+  visibilityFormula?: string;
 }
 
 export interface LayoutCellOffset {

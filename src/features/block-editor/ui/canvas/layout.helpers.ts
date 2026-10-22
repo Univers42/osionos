@@ -457,6 +457,8 @@ export function layoutCellShellEqual(left: LayoutCell, right: LayoutCell): boole
     left.wrap === right.wrap &&
     left.padding === right.padding &&
     left.fontSize === right.fontSize &&
+    left.measuredHeight === right.measuredHeight &&
+    left.visibilityFormula === right.visibilityFormula &&
     layoutOffsetsEqual(left.offset, right.offset);
 }
 

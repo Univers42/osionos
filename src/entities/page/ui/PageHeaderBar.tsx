@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -50,7 +50,9 @@ import {
   usePageActions,
 } from '@/entities/page';
 import type { PageConfig, PageFont, PageVersion } from '@/shared/config/pageConfigStore';
+import { canEditPage, usePageAccessContext } from '@/shared/lib/auth/pageAccess';
 import { Dropdown, IconButton, useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
+import { canTurnIntoDashboard } from '@/services/page-actions';
 import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
@@ -82,6 +84,7 @@ const FONT_OPTIONS: Array<{ id: PageFont; label: string; sample: string }> = [
 
 const ACTION_LABELS = [
   'remove header canvas',
+  'turn into dashboard',
   'copy link',
   'copy page contents',
   'duplicate',
@@ -194,6 +197,13 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
     usePageStore.getState().patchPage(pageId, { surface: pageSurface === 'wiki' ? undefined : 'wiki' });
     setConfigOpen(false);
   }, [pageId, pageSurface]);
+  // "Turn into dashboard": an ordinary page, an agent or Home can become one.
+  // A locked page is read-only and a viewer may not edit the body at all — the
+  // store refuses that write too, the item just is not offered.
+  const accessContext = usePageAccessContext();
+  const canDashboard = actions.page
+    ? canTurnIntoDashboard(actions.page, actions.config.locked) && canEditPage(actions.page, accessContext)
+    : false;
   useClickOutside(menuBoundaryRefs, closeConfig, configOpen);
   useEscapeKey(closeConfig, configOpen);
 
@@ -269,6 +279,13 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                           icon={<LayoutDashboard size={16} />}
                           label="Remove header canvas"
                           onClick={() => runPageAction(actions.removeHeaderCanvas(), showActionError)}
+                        />
+                      )}
+                      {canDashboard && (
+                        <MenuButton
+                          icon={<LayoutDashboard size={16} />}
+                          label="Turn into dashboard"
+                          onClick={() => { runPageAction(actions.turnIntoDashboard(), showActionError); closeConfig(); }}
                         />
                       )}
                       <div className="flex min-h-[var(--osio-control-h-sm)] items-center gap-2 rounded-[var(--osio-radius-sm)] px-2 py-1 text-sm hover:bg-[var(--osio-menu-item-hover-bg)]">
