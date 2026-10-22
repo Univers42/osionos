@@ -8,7 +8,7 @@
  * leaves a board that holds fewer elements than were sent.
  */
 import { MAX_IMPORT_ELEMENTS } from "./boardLimits";
-import { jsonCanvasToElements, parseJsonCanvas } from "./jsonCanvas";
+import { MAX_CANVAS_FILE_BYTES, jsonCanvasToElements, parseJsonCanvas } from "./jsonCanvas";
 import { importLegacyDraw } from "./legacyDrawImport";
 import type { WhiteboardClient } from "./whiteboardClient";
 
@@ -43,6 +43,11 @@ export async function importJsonCanvas({
   existingSlug,
   client,
 }: JsonCanvasImportRequest): Promise<JsonCanvasImportResult> {
+  // The UI checks the file's size too; this is the check a direct caller cannot skip.
+  const bytes = new TextEncoder().encode(content).length;
+  if (bytes > MAX_CANVAS_FILE_BYTES) {
+    return { ok: false, message: `This canvas is ${bytes} bytes; the import reads at most ${MAX_CANVAS_FILE_BYTES}.` };
+  }
   const parsed = parseJsonCanvas(content);
   if (!parsed.ok) return { ok: false, message: parsed.reason };
 

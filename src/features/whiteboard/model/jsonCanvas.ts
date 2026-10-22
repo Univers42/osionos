@@ -19,31 +19,14 @@
  * stays text, an imported file path stays a path. The mapping to and from the
  * board's own element format lives next door, in `jsonCanvasElements.ts`.
  */
-import { z } from "zod";
-
 import { MAX_IMPORT_ELEMENTS, MAX_TEXT_LENGTH } from "./boardLimits";
+import { canvasSchema } from "./jsonCanvasSchema";
 
 export { jsonCanvasToElements } from "./jsonCanvasElements";
 export type { BoardElement, CanvasElementResult } from "./jsonCanvasElements";
 export { elementsToJsonCanvas, exportJsonCanvas } from "./jsonCanvasExport";
 export type { CanvasExportResult } from "./jsonCanvasExport";
-
-/** A `.canvas` file over this is refused before it is read. */
-export const MAX_CANVAS_FILE_BYTES = 5 * 1024 * 1024;
-
-/** How far a node may sit from the origin, and how large it may be. A canvas that
- *  reaches further is refused rather than drawn: the numbers below are the board's
- *  own drawing range, and a node outside it would land nowhere the reader can see. */
-export const MAX_CANVAS_COORDINATE = 1_000_000;
-export const MAX_CANVAS_SIZE = 100_000;
-
-/** The longest id a canvas node may carry. Longer than the board's own limit, so a
- *  canvas written by another tool still reads — the id is derived when it does not
- *  fit the contract. */
-export const MAX_CANVAS_ID_LENGTH = 1_024;
-
-/** The longest path or address a canvas node may carry. */
-export const MAX_CANVAS_PATH_LENGTH = 2_048;
+export * from "./jsonCanvasLimits";
 
 /** The side an edge leaves a node from. */
 export type CanvasSide = "top" | "right" | "bottom" | "left";
@@ -102,45 +85,6 @@ export interface Canvas {
 export const JSON_CANVAS_VISIBILITY_NOTICE =
   "Anyone with the link to this board can open it: the whiteboard service does not check who is asking yet.";
 
-/** A colour is a preset digit or a hex triple. Anything else is not a colour. */
-const colourSchema = z.string().regex(/^#[0-9a-fA-F]{6}$|^[1-6]$/);
-
-const nodeSchema = z.object({
-  id: z.string().min(1).max(MAX_CANVAS_ID_LENGTH),
-  // The type is read as a word, not as an enum: a node of a type this reader does not
-  // know is dropped and counted, never a refusal of the whole canvas.
-  type: z.string().optional(),
-  x: z.number().int().min(-MAX_CANVAS_COORDINATE).max(MAX_CANVAS_COORDINATE),
-  y: z.number().int().min(-MAX_CANVAS_COORDINATE).max(MAX_CANVAS_COORDINATE),
-  width: z.number().int().min(1).max(MAX_CANVAS_SIZE),
-  height: z.number().int().min(1).max(MAX_CANVAS_SIZE),
-  color: colourSchema.optional(),
-  text: z.string().optional(),
-  file: z.string().max(MAX_CANVAS_PATH_LENGTH).optional(),
-  subpath: z.string().max(MAX_CANVAS_PATH_LENGTH).optional(),
-  url: z.string().max(MAX_CANVAS_PATH_LENGTH).optional(),
-  label: z.string().optional(),
-  background: z.string().max(MAX_CANVAS_PATH_LENGTH).optional(),
-  backgroundStyle: z.string().optional(),
-});
-
-const edgeSchema = z.object({
-  id: z.string().min(1).max(MAX_CANVAS_ID_LENGTH),
-  fromNode: z.string().min(1),
-  toNode: z.string().min(1),
-  fromSide: z.enum(["top", "right", "bottom", "left"]).optional(),
-  toSide: z.enum(["top", "right", "bottom", "left"]).optional(),
-  fromEnd: z.enum(["none", "arrow"]).optional(),
-  toEnd: z.enum(["none", "arrow"]).optional(),
-  color: colourSchema.optional(),
-  label: z.string().optional(),
-});
-
-const canvasSchema = z.object({
-  nodes: z.array(nodeSchema).optional(),
-  edges: z.array(edgeSchema).optional(),
-});
-
 export type ParseJsonCanvasResult = { ok: true; canvas: Canvas } | { ok: false; reason: string };
 
 /** What a zod issue says, in words a reader can act on. */
@@ -182,6 +126,10 @@ export function parseJsonCanvas(text: string): ParseJsonCanvasResult {
   for (const node of nodes) {
     if (seen.has(node.id)) return { ok: false, reason: `Two nodes share the id “${node.id}”.` };
     seen.add(node.id);
+  }
+  for (const edge of edges) {
+    if (seen.has(edge.id)) return { ok: false, reason: `Two nodes or edges share the id “${edge.id}”.` };
+    seen.add(edge.id);
   }
   for (const node of nodes) {
     const tooLong = node.text?.length ?? 0;

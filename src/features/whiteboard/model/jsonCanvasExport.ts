@@ -15,10 +15,12 @@
  * other way to say it, so the export leaves the boxes to say it.
  */
 import type { Canvas, CanvasEdge, CanvasNode } from "./jsonCanvas";
+import { isReadable } from "./jsonCanvasSchema";
 import {
   SHAPE_TYPES,
   canvasColourOf,
   finite,
+  whole,
   isFilePath,
   isHttpUrl,
   sideAt,
@@ -80,10 +82,10 @@ function nodeOf(element: Element, byId: Map<string, Element>, kind?: "text"): Ca
   const node: CanvasNode = {
     id: String(element.id),
     type: nodeKind,
-    x: finite(element.x),
-    y: finite(element.y),
-    width: finite(element.width),
-    height: finite(element.height),
+    x: whole(element.x),
+    y: whole(element.y),
+    width: whole(element.width),
+    height: whole(element.height),
   };
   const colour = canvasColourOf(typeof element.strokeColor === "string" ? element.strokeColor : undefined);
   if (colour) node.color = colour;
@@ -104,10 +106,10 @@ function groupOf(element: Element): CanvasNode {
   const node: CanvasNode = {
     id: String(element.id),
     type: "group",
-    x: finite(element.x),
-    y: finite(element.y),
-    width: finite(element.width),
-    height: finite(element.height),
+    x: whole(element.x),
+    y: whole(element.y),
+    width: whole(element.width),
+    height: whole(element.height),
   };
   if (typeof element.name === "string" && element.name !== "") node.label = element.name;
   const colour = canvasColourOf(typeof element.strokeColor === "string" ? element.strokeColor : undefined);
@@ -140,7 +142,7 @@ function edgeOf(element: Element, byId: Map<string, Element>): CanvasEdge | null
     fromSide: sideAt(boxOfElement(from), start),
     toSide: sideAt(boxOfElement(to), end),
     fromEnd: element.startArrowhead === "arrow" ? "arrow" : "none",
-    toEnd: element.endArrowhead === "none" ? "none" : "arrow",
+    toEnd: element.endArrowhead === "arrow" ? "arrow" : "none",
   };
   const label = labelOf(element, byId);
   if (label !== "") edge.label = label;
@@ -202,7 +204,17 @@ export function exportJsonCanvas(elements: readonly unknown[]): CanvasExportResu
     skipped += 1;
   }
 
-  return { canvas: { nodes, edges }, skipped };
+  // An element the importer would refuse (out of range, an oversized id or text) is
+  // skipped rather than written into a file that cannot be read back. An edge whose
+  // end was skipped goes with it.
+  const readableNodes = nodes.filter((node) => isReadable(node, "node"));
+  const nodeIds = new Set(readableNodes.map((node) => node.id));
+  const readableEdges = edges.filter(
+    (edge) => isReadable(edge, "edge") && nodeIds.has(edge.fromNode) && nodeIds.has(edge.toNode),
+  );
+  skipped += nodes.length - readableNodes.length + (edges.length - readableEdges.length);
+
+  return { canvas: { nodes: readableNodes, edges: readableEdges }, skipped };
 }
 
 /** The canvas a board becomes. */

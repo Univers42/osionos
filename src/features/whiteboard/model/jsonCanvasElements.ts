@@ -104,7 +104,7 @@ function fit(id: string): string {
 
 /** Mints the ids the board's elements carry: the canvas ids when they fit the
  *  contract, a derived one when they do not, and never the same id twice. */
-class IdMinter {
+export class IdMinter {
   private readonly used = new Set<string>();
 
   shape(canvasId: string): string {
@@ -116,19 +116,15 @@ class IdMinter {
   }
 
   private take(base: string): string {
-    const candidate = fit(base);
-    if (!this.used.has(candidate)) {
-      this.used.add(candidate);
-      return candidate;
-    }
-    for (let counter = 2; counter < 1000; counter += 1) {
-      const numbered = fit(`${base}-${counter}`);
-      if (!this.used.has(numbered)) {
-        this.used.add(numbered);
-        return numbered;
+    // Every candidate is recorded, so no path hands the same id out twice. The search
+    // ends: `used` is finite and each counter gives a different candidate.
+    for (let counter = 1; ; counter += 1) {
+      const candidate = fit(counter === 1 ? base : `${base}-${counter}`);
+      if (!this.used.has(candidate)) {
+        this.used.add(candidate);
+        return candidate;
       }
     }
-    return fit(`${base}-${hash(base).toString(36)}`);
   }
 }
 

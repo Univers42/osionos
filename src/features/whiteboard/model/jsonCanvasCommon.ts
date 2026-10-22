@@ -36,6 +36,9 @@ export interface Point {
   y: number;
 }
 
+/** A coordinate or size as the format writes it: a whole number. */
+export const whole = (value: unknown): number => Math.round(finite(value));
+
 export const finite = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
 
 export const boxOf = (node: CanvasNode): Box => ({ x: node.x, y: node.y, width: node.width, height: node.height });
