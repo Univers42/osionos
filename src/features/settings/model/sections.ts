@@ -28,6 +28,7 @@ import {
   LayoutGrid,
   Mail,
   Palette,
+  Plug,
   Settings,
   Shield,
   SlidersHorizontal,
@@ -35,12 +36,14 @@ import {
   User,
   UserPlus,
   Users,
+  Volume2,
   type LucideIcon,
 } from "lucide-react";
 
 export type SettingsSectionId =
   | "profile"
   | "preferences"
+  | "accessibility_voice"
   | "notifications"
   | "connections"
   | "contacts"
@@ -51,6 +54,7 @@ export type SettingsSectionId =
   | "page_settings"
   | "shortcuts"
   | "ai"
+  | "ai_connections"
   | "mcp"
   | "public_pages"
   | "library"
@@ -118,6 +122,11 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
       { id: "desktop-app", label: "Desktop app", keywords: ["startup", "open", "last visited"] },
       { id: "privacy", label: "Privacy", keywords: ["cookies", "view history", "discoverability"] },
     ],
+  },
+  {
+    id: "accessibility_voice", group: "account", label: "Accessibility & voice", title: "Accessibility & voice",
+    subtitle: "Dictate what you say, and hear an answer read aloud — on your device by default", icon: Volume2,
+    anchors: [{ id: "accessibility-voice", label: "Accessibility & voice", keywords: ["voice", "dictation", "speech", "read aloud", "microphone", "text to speech"] }],
   },
   {
     id: "notifications", group: "account", label: "Notifications", title: "Notifications",
@@ -196,6 +205,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     id: "ai", group: "features", label: "osionos AI", title: "osionos AI",
     subtitle: "Search everywhere, automate meeting notes and configure AI features", icon: Sparkles,
     anchors: [{ id: "osionos-ai", label: "osionos AI", keywords: ["ai", "agents", "meeting notes", "summaries", "search"] }],
+  },
+  {
+    id: "ai_connections", group: "features", label: "AI connections", title: "AI connections",
+    subtitle: "Bring your own model access — your keys stay on the server", icon: Plug,
+    anchors: [
+      { id: "ai-connections", label: "AI connections", keywords: ["openrouter", "model", "provider", "api key", "byok", "connect"] },
+      { id: "ai-access-tokens", label: "AI access tokens", keywords: ["token", "access token", "pat", "api", "assistant"] },
+    ],
   },
   {
     id: "mcp", group: "features", label: "osionos MCP", title: "osionos MCP",

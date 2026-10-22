@@ -55,6 +55,8 @@ services:
       VITE_BAAS_ANON_KEY: ${VITE_BAAS_ANON_KEY:-}
       # Build-time legacy second brain gate (default OFF); "true" for the gate-on legacy job.
       VITE_LEGACY_SECOND_BRAIN: ${VITE_LEGACY_SECOND_BRAIN:-}
+      # "1" runs only tests/e2e/bridge-stub against a build with a (stubbed) bridge URL set.
+      PLAYWRIGHT_BRIDGE_STUB: ${PLAYWRIGHT_BRIDGE_STUB:-}
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     volumes:

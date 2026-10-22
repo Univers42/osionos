@@ -1,0 +1,10 @@
+{
+  "name": "a1-nsfw-bench",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The bench of the output check on the generated images (AI-A1, devil C73). Throwaway: the app does not depend on it, and the app's package.json does not depend on it either.",
+  "dependencies": {
+    "@huggingface/transformers": "4.3.1"
+  }
+}

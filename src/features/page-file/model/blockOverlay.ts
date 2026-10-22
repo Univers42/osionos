@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block } from "@/entities/block";
+import { parseEmbedSnapshot } from "@/shared/lib/embed/embedInfo";
 
 import type { BlockOverlay, BlockOverlayEntry } from "./types";
 
@@ -54,6 +55,13 @@ const isLayoutCells: ExtraKeyCheck = (value) =>
   Array.isArray(value) &&
   value.every((cell) => isPlainRecord(cell) && typeof cell.id === "string");
 
+/** The provenance of an image the AI made: the model, the run and the date. */
+const isAiGenerated: ExtraKeyCheck = (value) =>
+  isPlainRecord(value) &&
+  typeof value.model === "string" &&
+  typeof value.runId === "string" &&
+  typeof value.createdAt === "string";
+
 /** The allowlist of block attributes Markdown cannot carry; frozen, checks included. */
 export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.freeze({
   collapsed: isBoolean,
@@ -88,7 +96,37 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   // hand-edited overlay can hand the renderer a nonsense width; it cannot reach
   // the prototype. Markdown carries only the column alignments of a table.
   tableConfig: isPlainRecord,
+  // The merge's marker on a conflict copy: the id of the block it is a copy of.
+  conflictOf: isBoundedText,
+  // The provenance of an image the AI made (never the prompt): it rides the
+  // overlay, so the "AI-generated" label survives a file round trip.
+  aiGenerated: isAiGenerated,
 });
+
+/**
+ * Keys that ride the overlay only for some block types. `embed` is carried by the
+ * fence of an embed/bookmark block, but a video/audio/file block is written as a bare
+ * `<video src>` tag that has nowhere to put its snapshot, so it travels here. The check
+ * is the snapshot decoder itself, which enforces the 64 KB cap, and what is kept is
+ * its sanitised output (unsafe URLs blanked), on write and on read alike.
+ */
+const SCOPED_BLOCK_KEYS: Readonly<
+  Record<string, { types: ReadonlySet<string>; decode: (value: unknown) => unknown }>
+> = Object.freeze({
+  embed: { types: new Set(["video", "audio", "file"]), decode: parseEmbedSnapshot },
+});
+
+export const SCOPED_OVERLAY_KEYS: readonly string[] = Object.freeze(Object.keys(SCOPED_BLOCK_KEYS));
+
+function isScopedKeyFor(key: string, type: string): boolean {
+  return Object.hasOwn(SCOPED_BLOCK_KEYS, key) && SCOPED_BLOCK_KEYS[key].types.has(type);
+}
+
+/** The value to keep for `key`, or undefined when it fails its check. */
+function acceptedValue(key: string, value: unknown): unknown {
+  if (isExtraBlockKey(key)) return EXTRA_BLOCK_KEYS[key](value) ? value : undefined;
+  return SCOPED_BLOCK_KEYS[key]?.decode(value) ?? undefined;
+}
 
 /** Is `key` one of the overlay's extra keys? Object.hasOwn: no inherited names. */
 export function isExtraBlockKey(key: string): boolean {
@@ -106,7 +144,7 @@ export function collectOverlay(
   blocks: readonly Block[],
   keys?: readonly string[],
 ): BlockOverlay {
-  const wanted = keys ?? Object.keys(EXTRA_BLOCK_KEYS);
+  const wanted = keys ?? [...Object.keys(EXTRA_BLOCK_KEYS), ...SCOPED_OVERLAY_KEYS];
   const overlay: BlockOverlay = {};
   collectInto(blocks, wanted, "", overlay);
   return overlay;
@@ -123,9 +161,9 @@ function collectInto(
     const block = blocks[index];
     const entry: BlockOverlayEntry = { t: block.type, id: block.id };
     for (const key of keys) {
-      if (!isExtraBlockKey(key)) continue;
-      const value = block[key];
-      if (value !== undefined && EXTRA_BLOCK_KEYS[key](value)) entry[key] = value;
+      if (!isExtraBlockKey(key) && !isScopedKeyFor(key, block.type)) continue;
+      const value = block[key] === undefined ? undefined : acceptedValue(key, block[key]);
+      if (value !== undefined) entry[key] = value;
     }
     out[path] = entry;
     if (block.children !== undefined) collectInto(block.children, keys, `${path}.`, out);
@@ -171,9 +209,10 @@ function applyToBlock(
   if (isPlainRecord(entry) && entry.t === block.type) {
     if (isFreshId(entry.id, usedIds)) copy.id = entry.id;
     for (const key of Object.keys(entry)) {
-      if (key === "t" || key === "id" || !isExtraBlockKey(key)) continue;
-      const value = entry[key];
-      if (value !== undefined && EXTRA_BLOCK_KEYS[key](value)) copy[key] = value;
+      if (key === "t" || key === "id") continue;
+      if (!isExtraBlockKey(key) && !isScopedKeyFor(key, block.type)) continue;
+      const value = entry[key] === undefined ? undefined : acceptedValue(key, entry[key]);
+      if (value !== undefined) copy[key] = value;
     }
   }
   // Kept ids are tracked too, so two blocks can never share an id via the overlay.

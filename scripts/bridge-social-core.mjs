@@ -34,6 +34,7 @@ import { CHUNK_SIZE, idChunks, inFilter, runChunks } from './bridge-paging.mjs';
 // body), so the two modules form a cycle. It is safe: publicAvatar is a hoisted
 // function declaration and every call into it happens at request time.
 import { publicAvatar } from './bridge-avatar.mjs';
+import { moderationMode } from './bridge-moderation.mjs';
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PUBLISH_TIMEOUT_MS = 1_500;
@@ -389,4 +390,66 @@ export async function identitySummaries(config, fetchImpl, userIds) {
 		});
 	}
 	return map;
+}
+
+/**
+ * C94: is this subject PUBLIC-readable? The page is public, or the page's
+ * WORKSPACE is public — the SAME rule the M4b enqueue trigger uses, so the
+ * bridge and the trigger never disagree about what is in scope.
+ *
+ * A private page of a confidential workspace is not: an automated scan of it is
+ * out of scope, and the moderation must not become a way to read it. A row
+ * that is not there (a live-database id) is not public either.
+ *
+ * @param {{ visibility?: unknown, workspace_id?: unknown } | null} page the page row
+ */
+export async function publicReadablePage(config, fetchImpl, page) {
+	if (!page) return false;
+	if (page.visibility === 'public') return true;
+	const workspaceId = page.workspace_id;
+	if (typeof workspaceId !== 'string' || !workspaceId) return false;
+	const rows = await rest(config, fetchImpl, `osionos_workspaces?id=eq.${workspaceId}&select=visibility&limit=1`);
+	const workspace = Array.isArray(rows) ? rows[0] : null;
+	return workspace?.visibility === 'public';
+}
+
+/**
+ * The 409 a write answers when L0 wants the author's answer first (C85). The
+ * CODES and the matched TERMS go back to the AUTHOR, who is the only one who
+ * may see them (C94): the terms are their own words, and the codes are what a
+ * console would later show without them.
+ *
+ * `details` carries the same two lists because the app's HTTP client keeps the
+ * error envelope's known fields only (message, code, details) — a flat
+ * `reasons`/`terms` would be dropped on the way to the author's UI.
+ */
+export function moderationWarningBody(decision) {
+	return {
+		ok: false,
+		code: 'moderation_warning',
+		message: 'This may hurt someone. Edit it, or post it anyway.',
+		reasons: decision.codes,
+		terms: decision.terms,
+		details: { reasons: decision.codes, terms: decision.terms },
+	};
+}
+
+/**
+ * The moderation mode and the state flag, read where a handler reads its
+ * config. The flag OSIONOS_MODERATION_STATE=1 goes on only AFTER the groot
+ * migration that adds moderation_state and ai_moderation_events: the readers'
+ * `or=` filter 400s against a database without the column.
+ */
+export function moderationSettings(env) {
+	return { mode: moderationMode(env), stateEnabled: env?.OSIONOS_MODERATION_STATE === '1' };
+}
+
+/**
+ * The reader filter (C87): a comment nobody held, or the caller's own — so a
+ * held comment is seen by its author and by nobody else. Added ONLY when the
+ * state column exists: the filter names moderation_state, and PostgREST 400s
+ * on a column the database does not have.
+ */
+export function visibleOrOwnFilter(session, stateEnabled) {
+	return stateEnabled ? `&or=(moderation_state.eq.visible,author_id.eq.${session.userId})` : '';
 }

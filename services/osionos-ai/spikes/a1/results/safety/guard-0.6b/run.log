@@ -1,0 +1,136 @@
+
+# the guard of the image prompt, the model 0.6b, 2026-10-22T04:12:57+02:00
+ 04:12:57 up 1 day, 12:40,  1 user,  load average: 7.22, 7.01, 8.24
+
+model /mnt/storage/guard/Qwen3Guard-Gen-0.6B.Q8_0.gguf
+engine llama-server --jinja -c 4096 -np 4 -t 6
+version llama-server 0.6.0-dev (build 11580, commit 4413a1924), built with GNU 14.2.0 for Linux x86_64
+image ghcr.io/ggml-org/llama.cpp@sha256:ba384e66b3f3b6474dc0285ed44466b6f025c7106865d915f1fe5ae2a2da7411
+sets /mnt/storage/sets-a1enc
+
+server_ready_s 4.6
+
+warn: LLAMA_ARG_HOST environment variable is set, but will be overwritten by command line argument --host
+warn: LLAMA_ARG_PORT environment variable is set, but will be overwritten by command line argument --port
+0.00.074.618 I srv  llama_server: initializing ...
+0.00.316.808 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.318.131 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.320.223 I srv    load_model: loading model '/mnt/storage/guard/Qwen3Guard-Gen-0.6B.Q8_0.gguf'
+0.00.619.555 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.03.342.549 I cmn          init: llama threadpool init, n_threads = 6
+0.03.496.711 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 1024, kv_unified = 'false'
+0.03.501.493 I srv  llama_server: model loaded
+0.03.501.498 I srv  llama_server: listening on http://0.0.0.0:8080
+
+== sequential: i2p en 0 calls, input /mnt/storage/sets-a1enc/i2p.tsv
+ 05:10:28 up 1 day, 13:37,  1 user,  load average: 14.35, 14.83, 14.21
+== sequential: coco en 0 calls, input /mnt/storage/sets-a1enc/coco.tsv
+ 05:20:12 up 1 day, 13:47,  1 user,  load average: 13.88, 13.38, 13.66
+== sequential: prompts en 0 calls, input /mnt/storage/sets-a1enc/prompts.tsv
+ 05:20:18 up 1 day, 13:47,  1 user,  load average: 13.65, 13.34, 13.64
+
+== the server is down: one call to the port that is not there
+refused_ms 9.5
+refused_error URLError: [Errno 111] Connection refused
+
+ 05:20:21 up 1 day, 13:47,  1 user,  load average: 14.72, 13.57, 13.71
+
+verdict_rows 5713
+
+# the guard of the image prompt, the model 0.6b, 2026-10-22T05:40:08+02:00
+ 05:40:08 up 1 day, 14:07,  1 user,  load average: 11.48, 12.64, 14.37
+
+model /mnt/storage/guard/Qwen3Guard-Gen-0.6B.Q8_0.gguf
+engine llama-server --jinja -c 4096 -np 4 -t 6
+image ghcr.io/ggml-org/llama.cpp@sha256:ba384e66b3f3b6474dc0285ed44466b6f025c7106865d915f1fe5ae2a2da7411
+sets /mnt/storage/sets-a1enc
+
+server_ready_s 1.8
+
+warn: LLAMA_ARG_HOST environment variable is set, but will be overwritten by command line argument --host
+warn: LLAMA_ARG_PORT environment variable is set, but will be overwritten by command line argument --port
+0.00.000.594 I srv  llama_server: initializing ...
+0.00.025.742 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.027.555 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.029.744 I srv    load_model: loading model '/mnt/storage/guard/Qwen3Guard-Gen-0.6B.Q8_0.gguf'
+0.00.297.774 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.00.980.644 I cmn          init: llama threadpool init, n_threads = 6
+0.01.105.855 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 1024, kv_unified = 'false'
+0.01.109.647 I srv  llama_server: model loaded
+0.01.109.652 I srv  llama_server: listening on http://0.0.0.0:8080
+
+== parallel: coco en 1000 calls, four clients, input /mnt/storage/sets-a1enc/coco.tsv
+parallel_wall_s 0.4
+parallel_calls_per_s 2418.16
+ 05:40:10 up 1 day, 14:07,  1 user,  load average: 10.96, 12.51, 14.32
+== sequential: prompts en 0 calls, input /mnt/storage/sets-a1enc/prompts.tsv
+ 05:40:11 up 1 day, 14:07,  1 user,  load average: 10.96, 12.51, 14.32
+== parallel: i2p-200 en 200 calls, four clients, input /mnt/storage/sets-a1enc/i2p-200.tsv
+parallel_wall_s 114.9
+parallel_calls_per_s 1.74
+ 05:42:06 up 1 day, 14:09,  1 user,  load average: 14.40, 12.86, 14.22
+== parallel: coco-200 en 200 calls, four clients, input /mnt/storage/sets-a1enc/coco-200.tsv
+parallel_wall_s 105.1
+parallel_calls_per_s 1.90
+ 05:43:51 up 1 day, 14:11,  1 user,  load average: 10.75, 12.62, 14.02
+== parallel: i2p-par en 400 calls, four clients, input /mnt/storage/sets-a1enc/i2p.tsv
+parallel_wall_s 269.9
+parallel_calls_per_s 1.48
+ 05:48:21 up 1 day, 14:15,  1 user,  load average: 11.97, 15.10, 14.87
+
+== the server is down: one call to the port that is not there
+refused_ms 9.7
+refused_error URLError: [Errno 111] Connection refused
+
+ 05:48:24 up 1 day, 14:15,  1 user,  load average: 11.97, 15.10, 14.87
+
+verdict_rows 1810
+
+# the guard of the image prompt, the model 0.6b, 2026-10-22T05:50:02+02:00
+ 05:50:02 up 1 day, 14:17,  1 user,  load average: 13.10, 14.79, 14.80
+
+model /mnt/storage/guard/Qwen3Guard-Gen-0.6B.Q8_0.gguf
+engine llama-server --jinja -c 4096 -np 4 -t 6
+image ghcr.io/ggml-org/llama.cpp@sha256:ba384e66b3f3b6474dc0285ed44466b6f025c7106865d915f1fe5ae2a2da7411
+sets /mnt/storage/sets-a1enc
+
+server_ready_s 2.9
+
+warn: LLAMA_ARG_HOST environment variable is set, but will be overwritten by command line argument --host
+warn: LLAMA_ARG_PORT environment variable is set, but will be overwritten by command line argument --port
+0.00.000.665 I srv  llama_server: initializing ...
+0.00.025.607 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.099.115 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.101.782 I srv    load_model: loading model '/mnt/storage/guard/Qwen3Guard-Gen-0.6B.Q8_0.gguf'
+0.00.508.369 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.01.168.821 I cmn          init: llama threadpool init, n_threads = 6
+0.01.327.366 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 1024, kv_unified = 'false'
+0.01.331.850 I srv  llama_server: model loaded
+0.01.331.856 I srv  llama_server: listening on http://0.0.0.0:8080
+
+== parallel: coco en 1000 calls, four clients, input /mnt/storage/sets-a1enc/coco.tsv
+parallel_wall_s 0.7
+parallel_calls_per_s 1517.71
+ 05:50:05 up 1 day, 14:17,  1 user,  load average: 13.10, 14.79, 14.80
+== sequential: prompts en 0 calls, input /mnt/storage/sets-a1enc/prompts.tsv
+ 05:50:06 up 1 day, 14:17,  1 user,  load average: 12.85, 14.71, 14.77
+== parallel: i2p-200 en 200 calls, four clients, input /mnt/storage/sets-a1enc/i2p-200.tsv
+parallel_wall_s 0.4
+parallel_calls_per_s 466.31
+ 05:50:06 up 1 day, 14:17,  1 user,  load average: 12.85, 14.71, 14.77
+== parallel: coco-200 en 200 calls, four clients, input /mnt/storage/sets-a1enc/coco-200.tsv
+parallel_wall_s 0.4
+parallel_calls_per_s 451.37
+ 05:50:06 up 1 day, 14:17,  1 user,  load average: 12.85, 14.71, 14.77
+== parallel: i2p-par en 400 calls, four clients, input /mnt/storage/sets-a1enc/i2p.tsv
+parallel_wall_s 0.5
+parallel_calls_per_s 802.43
+ 05:50:07 up 1 day, 14:17,  1 user,  load average: 12.85, 14.71, 14.77
+
+== the server is down: one call to the port that is not there
+refused_ms 9.4
+refused_error URLError: [Errno 111] Connection refused
+
+ 05:50:10 up 1 day, 14:17,  1 user,  load average: 12.85, 14.71, 14.77
+
+verdict_rows 1810

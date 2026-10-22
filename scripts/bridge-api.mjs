@@ -13,25 +13,33 @@
 
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
+import { Buffer } from 'node:buffer';
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
+import { LINK_EDGES_RPC, PAGE_ROWS_RPC, readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
-import { publishRealtime, readInChunks } from './bridge-social-core.mjs';
+import { pageContentText, pagePublishText } from './bridge-page-text.mjs';
+import { liveReadableWorkspaces, privateWorkspaceOf } from './bridge-live-workspaces.mjs';
+import { moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
-import { assertSessionNotCutOff, sessionCutoffsFromConfig, startSessionCutoffPoller, tokenIssuedAtMs } from './bridge-session-cutoff.mjs';
-import { assertSessionNotRevoked, sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
+import { sessionCutoffsFromConfig, startSessionCutoffPoller } from './bridge-session-cutoff.mjs';
+import { sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
 import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
 import { createAccountHandler } from './bridge-account-mounts.mjs';
 import { handoffLookupKey, openHandoffRecord, sealHandoffRecord } from './bridge-shared-store.mjs';
 import { createKv } from './bridge-kv.mjs';
 import { createPg } from './bridge-pg.mjs';
-import { claimPlatformRole, isPlatformRole, platformRoleReader, readPlatformRole } from './bridge-roles.mjs';
+import { claimPlatformRole, platformRoleReader, readPlatformRole } from './bridge-roles.mjs';
+import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
+// Re-exported so every existing caller (bridge-chat, bridge-rtc, db-isolation-suite, the tests)
+// keeps importing the token helpers from here, as before the move.
+export { signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -50,6 +58,11 @@ import { createCollabHandler } from './bridge-collab.mjs';
 import { createWorkspaceInvitesHandler } from './bridge-workspace-invites.mjs';
 import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
+import { createPersonalizationHandler } from './bridge-personalization.mjs';
+import { createRecsHandler } from './bridge-recs.mjs';
+import { createEventsHandler } from './bridge-events.mjs';
+import { createModerationConsoleHandler } from './bridge-moderation-console.mjs';
+import { createRecsHealthHandler } from './bridge-recs-health.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
@@ -57,6 +70,8 @@ import { createSocialHandler } from './bridge-social.mjs';
 import { handleAutomationWebhook } from './bridge-automations-webhook.mjs';
 import { createRequestMeter } from './bridge-perf.mjs';
 import { createBaasTransport } from './bridge-baas-transport.mjs';
+import { askBeforeWrite } from './bridge-moderation-gate.mjs';
+import { createEmbedHandler } from './bridge-embed.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -98,8 +113,6 @@ const EMAIL_ATEXT = "A-Za-z0-9!#$%&'*+/=?^_`{|}~-";
 const EMAIL_LOCAL_PART = String.raw`(?:[${EMAIL_ATEXT}]+(?:\.[${EMAIL_ATEXT}]+)*|"[^"\r\n]+")`;
 const EMAIL_DOMAIN_LABEL = '(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)';
 const EMAIL_REGEX = new RegExp(String.raw`^${EMAIL_LOCAL_PART}@(?>${EMAIL_DOMAIN_LABEL}\.)+[A-Za-z]{2,63}$`.replace('(?>', '(?:'));
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
 const BRIDGE_FIELDS = new Set(['provider', 'subject', 'email', 'name', 'jti', 'emailVerified']);
 const SENSITIVE_FIELD_PATTERN = /password|pass|secret|service|role|key|jwt|token|cookie|consent|birth|city|address|phone|profile|metadata|database|connection/i;
 const DEFAULT_TIMESTAMP_SKEW_MS = 5 * 60 * 1000;
@@ -202,6 +215,11 @@ export function configFromEnv(env = process.env) {
 		// The one header that names the client address; without it the peer is the proxy.
 		clientIpHeader: String(env.OSIONOS_BRIDGE_CLIENT_IP_HEADER ?? '').trim(),
 		ipHashSecret: String(env.OSIONOS_BRIDGE_IP_HASH_SECRET ?? ''),
+		// The page PATCH's version precondition, staged: off until every client sends a
+		// baseVersion. With it on, a content-bearing PATCH without a baseVersion is
+		// compared against the stored content and refused when they differ. It reads the
+		// page's `version` column, so it only turns on after the migration that adds it.
+		strictPageVersion: ['1', 'true'].includes(String(env.OSIONOS_PAGE_STRICT_VERSION ?? '').trim().toLowerCase()),
 		translationApiUrl: (env.OSIONOS_TRANSLATION_API_URL ?? env.VITE_TRANSLATION_API_URL ?? '').trim(),
 		timestampSkewMs: Number(env.OSIONOS_BRIDGE_TIMESTAMP_SKEW_MS ?? DEFAULT_TIMESTAMP_SKEW_MS),
 		handoffTtlMs: Number(env.OSIONOS_BRIDGE_HANDOFF_TTL_MS ?? DEFAULT_HANDOFF_TTL_MS),
@@ -216,12 +234,14 @@ export function configFromEnv(env = process.env) {
 			privateKey: env.OSIONOS_VAPID_PRIVATE_KEY ?? '',
 			subject: env.OSIONOS_VAPID_SUBJECT ?? 'mailto:admin@osionos.local',
 		},
-		// Account-level administrators. These emails are promoted to is_admin at
-		// login (sticky in the DB, so the flag survives later env changes).
 		// Off unless explicitly set: the Claude CLI route runs a child with
 		// bypassPermissions. Caveat: never set this on a public deployment.
 		agentClaudeEnabled: env.OSIONOS_AGENT_CLAUDE === '1',
-		adminEmails: (env.OSIONOS_ADMIN_EMAILS ?? 'dev.pro.photo@gmail.com')
+		// Account-level administrators. These emails are promoted to is_admin at
+		// login (sticky in the DB, so the flag survives later env changes).
+		// Opt-in: no variable, no administrator — a deployment that forgets it
+		// promotes nobody, whoever signs in.
+		adminEmails: (env.OSIONOS_ADMIN_EMAILS ?? '')
 			.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean),
 	};
 }
@@ -243,10 +263,6 @@ export function bridgeSignature(secret, timestamp, payload) {
 	return createHmac('sha256', secret).update(`${timestamp}.${stableStringify(payload)}`).digest('hex');
 }
 
-function base64url(input) {
-	return Buffer.from(input).toString('base64url');
-}
-
 function randomToken() {
 	return randomBytes(32).toString('base64url');
 }
@@ -256,20 +272,6 @@ function safeCompareHex(left, right) {
 	const leftBuffer = Buffer.from(left, 'hex');
 	const rightBuffer = Buffer.from(right, 'hex');
 	return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function safeCompareText(left, right) {
-	const leftBuffer = Buffer.from(String(left ?? ''), 'utf8');
-	const rightBuffer = Buffer.from(String(right ?? ''), 'utf8');
-	return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
-}
-
-function safeText(value, limit) {
-	return String(value ?? '')
-		.normalize('NFKC')
-		.replaceAll(/[\u0000-\u001f\u007f]/g, '')
-		.trim()
-		.slice(0, limit);
 }
 
 function slugify(value, fallback) {
@@ -434,88 +436,6 @@ export async function claimBridgeReplay(kv, jti, ttlMs) {
 	const claimed = await kv.setNx(`replay:${jti}`, '1', ttlMs);
 	if (!claimed) throw Object.assign(new Error('Bridge assertion replay rejected.'), { status: 409 });
 	return true;
-}
-
-export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], platformRole = null }) {
-	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
-	const iat = Math.floor(now / 1000);
-	const exp = iat + config.sessionTtlSeconds;
-	const memberRoles = Object.fromEntries(memberWorkspaces.map((entry) => [entry._id, safeText(entry.role, 16) || 'member']));
-	// One source: the role names the admin, so the two claims can never disagree.
-	const role = isPlatformRole(platformRole) ? platformRole : null;
-	const tokenPayload = {
-		iss: 'osionos-bridge',
-		aud: 'osionos-app',
-		sub: payload.subject,
-		provider: payload.provider,
-		workspace_ids: [workspace._id, ...memberWorkspaces.map((entry) => entry._id)],
-		roles: { ...memberRoles, [workspace._id]: 'owner' },
-		platform_role: role,
-		is_admin: role === 'admin',
-		jti,
-		iat,
-		// Milliseconds: a cut-off and a token minted in the same second must still be ordered.
-		iat_ms: Math.floor(now),
-		exp,
-	};
-	const encodedPayload = base64url(JSON.stringify(tokenPayload));
-	const signature = createHmac('sha256', config.appSessionSecret).update(encodedPayload).digest('base64url');
-	return { token: `osionos_v1.${encodedPayload}.${signature}`, expiresAt: new Date(exp * 1000).toISOString() };
-}
-
-export function verifyAppSessionToken(token, config, now = undefined) {
-	const resolvedNow = now ?? config?.sessionCutoffs?.now?.() ?? Date.now();
-	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
-	const [version, encodedPayload, signature, extra] = safeText(token, 4096).split('.');
-	if (version !== APP_SESSION_TOKEN_VERSION || !encodedPayload || !signature || extra !== undefined) {
-		throw Object.assign(new Error('App session token is invalid.'), { status: 401 });
-	}
-	const expectedSignature = createHmac('sha256', config.appSessionSecret).update(encodedPayload).digest('base64url');
-	if (!safeCompareText(signature, expectedSignature)) {
-		throw Object.assign(new Error('App session token signature is invalid.'), { status: 401 });
-	}
-
-	let payload;
-	try {
-		payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
-	} catch {
-		throw Object.assign(new Error('App session token payload is invalid.'), { status: 401 });
-	}
-
-	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-		throw Object.assign(new Error('App session token payload is invalid.'), { status: 401 });
-	}
-	if (payload.iss !== 'osionos-bridge' || payload.aud !== 'osionos-app') {
-		throw Object.assign(new Error('App session token audience is invalid.'), { status: 401 });
-	}
-	if (!UUID_REGEX.test(String(payload.sub ?? ''))) {
-		throw Object.assign(new Error('App session token subject is invalid.'), { status: 401 });
-	}
-	const exp = Number(payload.exp);
-	if (!Number.isFinite(exp) || exp <= Math.floor(resolvedNow / 1000)) {
-		throw Object.assign(new Error('App session token has expired.'), { status: 401 });
-	}
-	assertSessionNotCutOff(config.sessionCutoffs, String(payload.sub).toLowerCase(), tokenIssuedAtMs(payload));
-	assertSessionNotRevoked(config.sessionRevocations, String(payload.jti ?? '').toLowerCase());
-	const workspaceIds = Array.isArray(payload.workspace_ids)
-		? payload.workspace_ids.map(String).filter((workspaceId) => UUID_REGEX.test(workspaceId))
-		: [];
-	if (workspaceIds.length === 0) {
-		throw Object.assign(new Error('App session token has no workspace access.'), { status: 401 });
-	}
-	// is_admin applies only to tokens with no platform_role (rolling deploy); a valid claim wins. (C2, C6)
-	const isAdmin = isPlatformRole(payload.platform_role)
-		? payload.platform_role === 'admin'
-		: payload.is_admin === true;
-	return {
-		userId: String(payload.sub).toLowerCase(),
-		workspaceIds,
-		roles: payload.roles && typeof payload.roles === 'object' && !Array.isArray(payload.roles) ? payload.roles : {},
-		// A token minted before the claim existed answers no role, not the admin bit.
-		platformRole: isPlatformRole(payload.platform_role) ? payload.platform_role : null,
-		isAdmin,
-		raw: payload,
-	};
 }
 
 function bearerToken(request) {
@@ -735,6 +655,14 @@ function postgrestQuery(params) {
 }
 
 export function pageRowToEntry(row) {
+	// The version of the page's CONTENT, as the client PATCHes against it. Absent while
+	// the database has no version column (the migration ships separately): every select
+	// that feeds this mapper and carries content reads '*' (fetchPageRow, the search, the
+	// create's representation), so the column comes for free where it exists and is
+	// simply missing where it does not. The only select that names its columns is
+	// PAGE_LIST_SELECT — the metadata-only bulk hydrate, which carries no content and so
+	// has no version to give (a base without content cannot merge).
+	const contentVersion = pageVersionOf(row);
 	return {
 		_id: row.id,
 		title: typeof row.title === 'string' && row.title ? row.title : 'Untitled',
@@ -763,6 +691,7 @@ export function pageRowToEntry(row) {
 		isDefaultTemplate: row.is_default_template === true,
 		templateSurface: row.template_surface === 'profile' || row.template_surface === 'marketplace-app' ? row.template_surface : undefined,
 		recurrence: safeRecurrence(row.recurrence),
+		...(contentVersion === null ? {} : { contentVersion }),
 	};
 }
 
@@ -1088,9 +1017,9 @@ async function fetchPageRowIfUuid(pageId, config, fetchImpl) {
 // ownerOrWorkspaceAccess: owner_id/workspace_id; the workspace-change guard:
 // workspace_id; withoutForeignSharingChanges: owner_id/visibility/collaborators/
 // workspace_id; handlePageArchiveCascade: id/workspace_id; withoutUnreachableParent:
-// parent_page_id), and nothing else. Skips the heavy content JSONB + search_doc
-// tsvector that fetchPageRow's select:'*' pulls.
-const PAGE_AUTH_SELECT = 'id,owner_id,workspace_id,visibility,properties,collaborators,parent_page_id';
+// parent_page_id; the append route: archived_at), and nothing else. Skips the heavy
+// content JSONB + search_doc tsvector that fetchPageRow's select:'*' pulls.
+const PAGE_AUTH_SELECT = 'id,owner_id,workspace_id,visibility,properties,collaborators,parent_page_id,archived_at';
 
 async function fetchPageAuthRow(pageId, config, fetchImpl) {
 	const id = requireUuid(pageId, 'pageId');
@@ -1233,15 +1162,15 @@ async function withoutUnreachableParent({ payload, ignored }, existing, authCont
 	return { payload: kept, ignored: [...ignored, 'parentPageId'] };
 }
 
-/** The one answer for a page id the caller may not know exists, whatever the reason. */
-function pageNotFound() {
-	return Object.assign(new Error('Page not found.'), { status: 404 });
-}
-
 /** `row` when the caller may read it; otherwise the SAME 404 a missing id gets. */
 function requireReadablePage(row, userId) {
 	if (!row || !canReadPageRow(row, userId)) throw pageNotFound();
 	return row;
+}
+
+/** The one answer for a page the caller may not act on: the same 404 a missing id gets. */
+function pageNotFound() {
+	return Object.assign(new Error('Page not found.'), { status: 404 });
 }
 
 /**
@@ -2398,6 +2327,9 @@ const APP_ERROR_CODE = /^[a-z][a-z0-9_]*$/;
 function errorJson(response, error, config) {
 	const body = { ok: false, message: error instanceof Error ? error.message : 'Bridge request failed.' };
 	if (typeof error?.code === 'string' && APP_ERROR_CODE.test(error.code)) body.code = error.code;
+	// The details channel: the app's ApiError reads errorBody.details
+	// (packages/http-gate/src/client.ts), so a 409's server copy travels there.
+	if (error?.details && typeof error.details === 'object') body.details = error.details;
 	const retryAfter = Number.isFinite(error?.retryAfterSeconds) ? { 'retry-after': String(error.retryAfterSeconds) } : {};
 	json(response, error.status ?? 500, body, config, retryAfter);
 }
@@ -2492,19 +2424,12 @@ export function pageTitleScore(row, query) {
 	return 0;
 }
 
-/** Flatten a page's JSONB block tree to plain text (snippet source). */
-export function pageContentText(content) {
-	const parts = [];
-	const walk = (blocks) => {
-		if (!Array.isArray(blocks)) return;
-		for (const block of blocks) {
-			if (block && typeof block.content === 'string') parts.push(block.content);
-			if (block && Array.isArray(block.children)) walk(block.children);
-		}
-	};
-	walk(content);
-	return parts.join(' ');
-}
+/** Flatten a page's JSONB block tree to plain text (snippet source).
+ *  The function lives in bridge-page-text.mjs now — the publish gate and the
+ *  marketplace gate read a page's words, and bridge-public.mjs (which
+ *  bridge-api.mjs imports) needs it too, so it cannot live here. It is
+ *  RE-EXPORTED here: every existing caller keeps importing it from here. */
+export { pageContentText };
 
 /** ~80-char window around the first query token (best-effort highlight source). */
 export function pageSnippet(text, query) {
@@ -2694,7 +2619,7 @@ async function handleMarketplaceInstalledWrite(request, response, config, fetchI
  * Publish an app record the caller owns into the marketplace (public + published-locked).
  * An app the caller cannot read answers like a missing one; a readable one they do not own is a 403.
  */
-async function handleMarketplacePublish(request, response, config, fetchImpl) {
+async function handleMarketplacePublish(request, response, config, fetchImpl, env = process.env) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const pageId = requireUuid(payload.pageId, 'pageId');
@@ -2702,6 +2627,14 @@ async function handleMarketplacePublish(request, response, config, fetchImpl) {
 	if (!isReadableMarketplaceRow(row, authContext.userId)) throw Object.assign(new Error('Page not found.'), { status: 404 });
 	if (!canChangePageSharing(row, authContext.userId)) {
 		throw Object.assign(new Error('Only the owner can publish this app.'), { status: 403 });
+	}
+	// L0 asks BEFORE the app goes public: its title and its text are the words
+	// that are checked, and a warning is the author's question (409) — the app
+	// stays private until they answer it.
+	const decision = askBeforeWrite({ text: pagePublishText(row), surface: 'marketplace', env, payload });
+	if (decision.outcome === 'needs_ack') {
+		json(response, 409, moderationWarningBody(decision), config);
+		return true;
 	}
 	const props = (Array.isArray(row.properties) ? row.properties : []).filter((p) => p && p.key !== 'published' && p.key !== 'publishedAt');
 	props.push({ key: 'published', label: 'Published', type: 'checkbox', value: true });
@@ -2858,10 +2791,10 @@ async function handleMarketplaceGet(url, request, response, config, fetchImpl) {
 	return false;
 }
 
-async function handleMarketplacePost(url, request, response, config, fetchImpl) {
+async function handleMarketplacePost(url, request, response, config, fetchImpl, env = process.env) {
 	if (url.pathname === '/api/marketplace/apps') return handleMarketplaceCreate(request, response, config, fetchImpl);
 	if (url.pathname === '/api/marketplace/installed') return handleMarketplaceInstalledWrite(request, response, config, fetchImpl);
-	if (url.pathname === '/api/marketplace/publish') return handleMarketplacePublish(request, response, config, fetchImpl);
+	if (url.pathname === '/api/marketplace/publish') return handleMarketplacePublish(request, response, config, fetchImpl, env);
 	if (url.pathname === '/api/marketplace/header-template') return handleMarketplaceTemplateWrite(request, response, config, fetchImpl);
 	return false;
 }
@@ -2906,7 +2839,19 @@ async function readablePageGraph(workspaceIds, userId, config, fetchImpl) {
 		const wsRows = await listPageRows(workspaceId, config, fetchImpl, { archivedAt: null }, PAGE_LIST_SELECT);
 		rows.push(...wsRows.filter((row) => canReadPageRowAsMember(row, userId, workspaceIds)));
 	}
-	return pagesToGraph(rows);
+	// The inline [[page:]] edges, read live through the ONE edge-read module
+	// (C99): both endpoints are checked against their live page row, and an
+	// endpoint that is not a node of this graph takes the edge with it.
+	const { links } = await readLinkEdges(
+		(rpc, body) => baasRest(config, fetchImpl, `rpc/${rpc}`, { method: 'POST', body }),
+		{
+			sourceIds: rows.map((row) => String(row.id)),
+			userId,
+			workspaces: workspaceIds,
+			allowed: new Set(rows.map((row) => String(row.id))),
+		},
+	).catch(() => ({ links: [] }));
+	return pagesToGraph(rows, links);
 }
 
 /**
@@ -2939,13 +2884,14 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const scope = url.searchParams.get('scope') === 'account' ? 'account' : 'workspace';
 	const requested = url.searchParams.get('workspaceId');
-	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
-	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
+	// The workspaces the caller may read, LIVE (C98): the private workspace of the
+	// token and the members table read now — never the token's member list.
+	const accessible = await callerWorkspaces(authContext, config, fetchImpl);
 	const workspaceIds = scope === 'account'
 		? accessible
 		: requested
 			? (accessible.includes(requested) ? [requested] : [])
-			: authContext.workspaceIds;
+			: accessible;
 	const noteGraph = await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl);
 	const recordGraph = await workspaceRecordGraph(authContext, workspaceIds, config, fetchImpl);
 	json(response, 200, mergeGraphs(noteGraph, recordGraph), config);
@@ -2955,8 +2901,12 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 // ── Record → note (workstream D) ────────────────────────────────────────────
 // A record in any engine the viewer's workspaces are linked to (via
 // osionos_workspace_databases) can be read or opened as a deterministic note.
-// Access is the SAME union handleGraphData uses: token.workspaceIds ∪ member
-// workspaces, then the dbId must appear in one of those workspaces' mounts.
+// Access is the token's workspaceIds ∪ the live member workspaces, then the
+// dbId must appear in one of those workspaces' mounts. handleGraphData no
+// longer uses this union: it reads the live members only (callerWorkspaces).
+// Caveat: the token's list outlives a removal by up to its TTL (an hour), so a
+// removed member keeps these mounts until the session cut-off the membership
+// trigger writes (auth_session_cutoffs, polled every 10 s) ends the session.
 
 /**
  * The caller's membership in a mount's workspace. `callerWorkspaceMember` reads it
@@ -3391,13 +3341,15 @@ async function handleGraphPages(url, request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const requested = url.searchParams.get('workspaceId');
 	const scopeAll = url.searchParams.get('scope') === 'all';
-	// Default = the requested workspace only (workspace-scoped); `scope=all` = every
-	// workspace the session owns; a workspace the session can't access yields none.
+	// The workspaces the caller may read, LIVE (C98). Default = the requested
+	// workspace only (workspace-scoped); `scope=all` = every workspace the
+	// session may read now; a workspace the session can't access yields none.
+	const accessible = await callerWorkspaces(authContext, config, fetchImpl);
 	const workspaceIds = scopeAll
-		? authContext.workspaceIds
+		? accessible
 		: requested
-			? (authContext.workspaceIds.includes(requested) ? [requested] : [])
-			: authContext.workspaceIds;
+			? (accessible.includes(requested) ? [requested] : [])
+			: accessible;
 	json(response, 200, await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl), config);
 	return true;
 }
@@ -3462,24 +3414,23 @@ const BACKLINK_SELECT = 'id,title,icon,owner_id,visibility,collaborators';
 async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 	const pageId = pageSubresourceIdFromPath(url.pathname, 'backlinks');
 	if (!pageId) return false;
+	// The page itself: every refusal is the 404 of a missing id (C101, C134) — a 403 for a
+	// workspace the caller left would tell them the page exists.
 	const { authContext, row } = await readablePageAccess(request, pageId, 'read', config, fetchImpl);
-	const accessible = [...new Set([...authContext.workspaceIds, ...await memberWorkspaceIds(authContext.userId, config, fetchImpl)])].filter((id) => UUID_REGEX.test(id));
-	if (accessible.length === 0) { json(response, 200, { ok: true, linked: [], mentions: [] }, config); return true; }
-	// The workspace list and the page list are both read in chunks: a page with a thousand
-	// backlinks must not put a thousand ids in one query string.
-	const linkRows = await readInChunks(accessible, async (chunk) => {
-		const rows = await baasRest(config, fetchImpl, `osionos_page_links?target_page_id=eq.${pageId}&${inFilter('workspace_id', chunk)}&select=source_page_id`);
-		return Array.isArray(rows) ? rows : [];
-	});
-	const sourceIds = [...new Set(linkRows.map((r) => r.source_page_id).filter((id) => id && id !== pageId))];
-	const pageRows = [];
-	for (const workspaceChunk of idChunks(accessible)) {
-		pageRows.push(...await readInChunks(sourceIds, async (chunk) => {
-			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&${inFilter('workspace_id', workspaceChunk)}&archived_at=is.null&select=${BACKLINK_SELECT}`);
-			return Array.isArray(rows) ? rows : [];
-		}));
-	}
-	const linked = sourceIds.length ? backlinkRefsFromRows(readablePageRows(pageRows, authContext.userId)) : [];
+	// The workspaces the caller may read, LIVE (C98).
+	const accessible = await callerWorkspaces(authContext, config, fetchImpl);
+	// An archived page has no connections: it is not in the graph either, and its backlinks
+	// would tell what the archive took out.
+	if (row.archived_at || !canReadPageRowAsMember(row, authContext.userId, accessible)) throw pageNotFound();
+	// The links, read live through the ONE edge-read module (C99): both ends are
+	// checked against their live page row, and the workspace of an edge row is
+	// never the workspace of the ACL.
+	const { links, rows: linkRows } = await readLinkEdges(
+		(rpc, body) => baasRest(config, fetchImpl, `rpc/${rpc}`, { method: 'POST', body }),
+		{ targetIds: [pageId], userId: authContext.userId, workspaces: accessible },
+	).catch(() => ({ links: [], rows: new Map() }));
+	const sourceIds = [...new Set(links.map((link) => link.source).filter((id) => id && id !== pageId))];
+	const linked = backlinkRefsFromRows(sourceIds.map((id) => linkRows.get(String(id).toLowerCase())).filter(Boolean));
 	const title = String(row.title || '').trim();
 	let mentions = [];
 	if (title) {
@@ -3532,6 +3483,23 @@ async function memberWorkspaceIds(userId, config, fetchImpl) {
 	} catch {
 		return [];
 	}
+}
+
+/**
+ * The workspaces the caller may read, LIVE (C98).
+ *
+ * The caller's own private workspace — the one the token signs with the role
+ * 'owner' — and the workspaces the members table holds for them RIGHT NOW. The
+ * token's member list is never trusted: it was minted at login and lives for
+ * an hour, so a removed member kept reading the workspace's private pages
+ * until it expired. The rule is the shared one
+ * (scripts/bridge-live-workspaces.mjs), the same the AI service uses.
+ */
+async function callerWorkspaces(authContext, config, fetchImpl) {
+	return liveReadableWorkspaces({
+		privateWorkspaceId: privateWorkspaceOf(authContext),
+		memberWorkspaces: await memberWorkspaceIds(authContext.userId, config, fetchImpl),
+	});
 }
 
 async function handleWorkspaceGet(url, request, response, config, fetchImpl) {
@@ -3626,10 +3594,69 @@ async function handlePageArchiveCascade(row, ids, archivedAt, config, fetchImpl)
 	}
 }
 
+/**
+ * The version precondition of a page PATCH: `baseVersion` is the version the caller
+ * last read. It is parsed as a plain non-negative integer BEFORE it is interpolated
+ * into the PostgREST filter (that filter is string-built), so anything else is refused
+ * with 400 and never reaches the BaaS. `null` = the payload carries none.
+ */
+function parseBaseVersion(payload) {
+	if (!hasOwn(payload, 'baseVersion')) return null;
+	const value = payload.baseVersion;
+	if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+		throw Object.assign(new Error('baseVersion must be a non-negative integer.'), { status: 400 });
+	}
+	return value;
+}
+
+/** The row's version, as the answer carries it (null while the column is not there yet). */
+function pageVersionOf(row) {
+	// A row without the column has no `version` key at all, and a row whose column is
+	// NULL has one — neither is a version: `Number(null)` is 0, and 0 would look like
+	// "the first version" to every caller.
+	if (row?.version === null || row?.version === undefined) return null;
+	const version = Number(row.version);
+	return Number.isSafeInteger(version) && version >= 0 ? version : null;
+}
+
+/**
+ * The 409 a stale baseVersion answers. The server's own copy rides in `details`, the
+ * channel the app's ApiError reads (packages/http-gate/src/client.ts), so the client
+ * can merge without a second read.
+ */
+function versionConflict(current) {
+	return Object.assign(new Error('This page changed since you loaded it. Reload it and try again.'), {
+		status: 409,
+		code: 'version_conflict',
+		details: { version: pageVersionOf(current), content: Array.isArray(current?.content) ? current.content : [] },
+	});
+}
+
+/**
+ * The page's current version + content — the 409's details, and the comparison the
+ * strict flag makes. It reads the `version` column, so it only runs on the paths
+ * that already need it (a baseVersion, or the flag turned on).
+ */
+async function fetchPageVersionRow(pageId, config, fetchImpl) {
+	const id = requireUuid(pageId, 'pageId');
+	const query = postgrestQuery({ id: `eq.${id}`, select: 'version,content', limit: '1' });
+	const rows = await baasRest(config, fetchImpl, `osionos_pages?${query}`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
 async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	const pageId = pageIdFromPath(url.pathname);
 	if (!pageId) return false;
 	const { userId } = verifyAppSessionToken(bearerToken(request), config);
+	// The body is read before the page: a baseVersion that is not a plain non-negative
+	// integer is refused with 400 and NO BaaS call at all (C17).
+	const requested = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const baseVersion = parseBaseVersion(requested);
+	// baseVersion is a control field, not a page field: it never reaches the row
+	// (pageUpdateRowFromPayload stays a whitelist) and never counts as "something to
+	// write" for the sharing/parent checks below.
+	const pagePayload = { ...requested };
+	delete pagePayload.baseVersion;
 	// Auth-only columns — the update path never reads existing.content/title. The read
 	// check runs before any role check, so an unreadable page is a 404 for every role.
 	// Ponytail: readability is decided on this row and not re-checked by the PATCH — an
@@ -3644,46 +3671,153 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	const access = await ownerOrWorkspaceAccess(request, existing, 'update', config, fetchImpl);
 	requirePageOwnership(existing, access);
 
-	const requested = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	// Only the owner changes who may read the page; a non-owner's sharing keys are dropped
 	// (listed in `ignored` when they differed) while the rest of the edit is still written.
-	const sharingChecked = withoutForeignSharingChanges(requested, existing, access.userId);
+	const sharingChecked = withoutForeignSharingChanges(pagePayload, existing, access.userId);
 	const { payload, ignored } = await withoutUnreachableParent(sharingChecked, existing, access, config, fetchImpl);
-	if (Object.keys(payload).length === 0 && Object.keys(requested).length > 0) {
-		json(response, 200, { ok: true, ignored }, config); // nothing left to write — not even updated_at
+	if (Object.keys(payload).length === 0 && Object.keys(pagePayload).length > 0) {
+		// Nothing left to write — not even updated_at, so the version did not move and
+		// the caller's baseVersion stays valid (that is why no version is answered here).
+		json(response, 200, { ok: true, ignored }, config);
 		return true;
 	}
 	if (hasOwn(payload, 'workspaceId') && payload.workspaceId !== existing.workspace_id) {
 		await requireWorkspaceAccess(request, payload.workspaceId, 'create', config, fetchImpl);
 	}
+	// Strict mode (OSIONOS_PAGE_STRICT_VERSION=1): a content-bearing PATCH without a
+	// baseVersion is compared against the stored content and refused when the two
+	// differ. Off until every client sends a version.
+	// The version this read saw is the write's precondition: the comparison alone
+	// leaves a window open — a write that lands between the read and the PATCH would
+	// be overwritten with the caller's (older) content.
+	let strictVersion = null;
+	if (baseVersion === null && config.strictPageVersion && hasOwn(payload, 'content')) {
+		const current = await fetchPageVersionRow(pageId, config, fetchImpl);
+		const stored = Array.isArray(current?.content) ? current.content : [];
+		if (stableStringify(stored) !== stableStringify(safeJsonArray(payload.content))) throw versionConflict(current);
+		strictVersion = pageVersionOf(current);
+	}
 	const updateRow = pageUpdateRowFromPayload(payload);
-	// return=minimal: the outbox (pageOutbox.publishPage) and the archive/restore
-	// callers all ignore the response body, so echoing the full updated row (incl.
-	// the heavy content JSONB) was pure waste. The cascade guard must NOT depend on
-	// a returned row anymore — return=minimal yields no body (baasRest → null), so
-	// gate the cascade on the payload's archived_at, which is what we're applying.
+	// The version the write lands on: the caller's baseVersion, or the version the
+	// strict path just read. Without one the write is the legacy request.
+	const precondition = baseVersion ?? strictVersion;
+	// A preconditioned write has to tell "0 rows" from "1 row" — under return=minimal
+	// PostgREST answers 204 for both (C16) — so it asks for the representation, and
+	// the answer carries the row's new version (C18). The select keeps that
+	// representation to the one column the answer needs: without it PostgREST echoes
+	// the whole row (the content JSONB and the search_doc tsvector) on every editor
+	// flush — one PATCH per page every ~800 ms — to read one number.
+	// A write with no precondition stays the legacy request — return=minimal, no
+	// select — so it still works against a database that has no version column yet
+	// (the migration ships separately): that request must never name the column.
+	// The cascade guard must NOT depend on a returned row: gate the cascade on the
+	// payload's archived_at, which is what we're applying.
 	// An archive lands descendants before the root so a prefix is always a
-	// consistent tree; a restore lands the root first for the same reason.
+	// consistent tree; a restore lands the root first for the same reason. With a
+	// version precondition the row goes first: it is the atomic gate, and a stale
+	// baseVersion must never reach a descendant.
 	const carriesArchive = hasOwn(updateRow, 'archived_at');
 	let cascadedIds = [];
-	if (carriesArchive && updateRow.archived_at !== null) {
+	const cascade = async (archivedAt, deepestFirst) => {
 		const descendantIds = await cascadeDescendantIds(request, existing, 'update', config, fetchImpl);
-		await handlePageArchiveCascade(existing, [...descendantIds].reverse(), updateRow.archived_at, config, fetchImpl);
+		await handlePageArchiveCascade(existing, deepestFirst ? [...descendantIds].reverse() : descendantIds, archivedAt, config, fetchImpl);
 		cascadedIds = descendantIds;
-	}
-	await baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
+	};
+	if (carriesArchive && updateRow.archived_at !== null && precondition === null) await cascade(updateRow.archived_at, true);
+	const filter = precondition === null ? `id=eq.${pageId}` : `id=eq.${pageId}&version=eq.${precondition}&select=version`;
+	const updatedRows = await baasRest(config, fetchImpl, `osionos_pages?${filter}`, {
 		method: 'PATCH',
 		body: updateRow,
-		prefer: 'return=minimal',
+		prefer: precondition === null ? 'return=minimal' : 'return=representation',
 	});
-	if (carriesArchive && updateRow.archived_at === null) {
-		const descendantIds = await cascadeDescendantIds(request, existing, 'update', config, fetchImpl);
-		await handlePageArchiveCascade(existing, descendantIds, updateRow.archived_at, config, fetchImpl);
-		cascadedIds = descendantIds;
+	const updated = Array.isArray(updatedRows) ? updatedRows[0] ?? null : null;
+	if (precondition !== null && !updated) {
+		// The row moved on: the version the write was pinned to is stale. The server's
+		// copy comes with the 409 so the caller can merge without a second read.
+		throw versionConflict(await fetchPageVersionRow(pageId, config, fetchImpl));
 	}
+	if (carriesArchive && updateRow.archived_at === null) await cascade(updateRow.archived_at, false);
+	if (carriesArchive && updateRow.archived_at !== null && precondition !== null) await cascade(updateRow.archived_at, true);
 	// updated_at is stamped by pageUpdateRowFromPayload (no BEFORE-UPDATE trigger on
 	// osionos_pages), so the value we wrote IS the stored value — authoritative.
-	json(response, 200, { ok: true, updatedAt: updateRow.updated_at, ...(ignored.length > 0 ? { ignored } : {}), ...(carriesArchive ? { cascadedIds } : {}) }, config);
+	json(response, 200, { ok: true, updatedAt: updateRow.updated_at, version: pageVersionOf(updated), ...(ignored.length > 0 ? { ignored } : {}), ...(carriesArchive ? { cascadedIds } : {}) }, config);
+	return true;
+}
+
+// The append's shape: a bounded list of blocks, each with an id, and a retry-safe key.
+const APPEND_MAX_BLOCKS = 100;
+const APPEND_MAX_BYTES = 256 * 1024;
+const APPEND_IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,128}$/;
+
+function appendBadRequest(message) {
+	return Object.assign(new Error(message), { status: 400 });
+}
+
+/** The blocks an append carries: a non-empty list, each block an object with a string id. */
+function requireAppendBlocks(value) {
+	if (!Array.isArray(value) || value.length === 0) throw appendBadRequest('blocks must be a non-empty array.');
+	if (value.length > APPEND_MAX_BLOCKS) throw appendBadRequest(`blocks must hold at most ${APPEND_MAX_BLOCKS} blocks.`);
+	for (const block of value) {
+		if (!block || typeof block !== 'object' || Array.isArray(block)) throw appendBadRequest('each block must be an object.');
+		if (typeof block.id !== 'string' || block.id.trim() === '') throw appendBadRequest('each block must carry a string id.');
+	}
+	if (Buffer.byteLength(JSON.stringify(value), 'utf8') > APPEND_MAX_BYTES) throw appendBadRequest('blocks must be at most 256 KB.');
+	return value;
+}
+
+/** The retry key: a retried append must land once, so the key is required and bounded. */
+function requireAppendIdempotencyKey(value) {
+	const key = typeof value === 'string' ? value : '';
+	if (!APPEND_IDEMPOTENCY_KEY.test(key)) throw appendBadRequest('idempotencyKey must be 8-128 characters of [A-Za-z0-9_-].');
+	return key;
+}
+
+/** The block the append lands after, or null for the end of the page. */
+function requireAppendAfterBlockId(value) {
+	if (value === undefined || value === null) return null;
+	const after = safeText(value, 220);
+	if (!after) throw appendBadRequest('afterBlockId must be a non-empty string.');
+	return after;
+}
+
+/**
+ * POST /api/pages/:id/blocks — an atomic server-side append.
+ *
+ * The append is a Postgres function reached by RPC (public.osionos_page_append), never
+ * a PostgREST write of osionos_pages: the read-modify-write the bridge could do is a
+ * lost update (C20). The permission path is the PATCH's own — the same read check, the
+ * same EDIT check, the same 404 for a page the caller cannot read — and an archived
+ * page is a 404 too: there is nothing to append to.
+ */
+async function handlePageBlocksAppend(url, request, response, config, fetchImpl) {
+	const pageId = pageSubresourceIdFromPath(url.pathname, 'blocks');
+	if (!pageId) return false;
+	const { userId } = verifyAppSessionToken(bearerToken(request), config);
+	// The payload is checked before the page is fetched: an invalid append costs no
+	// BaaS call at all.
+	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
+	const blocks = requireAppendBlocks(payload.blocks);
+	const idempotencyKey = requireAppendIdempotencyKey(payload.idempotencyKey);
+	const afterBlockId = requireAppendAfterBlockId(payload.afterBlockId);
+	const existing = requireReadablePage(await fetchPageAuthRow(pageId, config, fetchImpl), userId);
+	const access = await ownerOrWorkspaceAccess(request, existing, 'update', config, fetchImpl);
+	requirePageOwnership(existing, access);
+	if (existing.archived_at) throw pageNotFound();
+	const rows = await baasRest(config, fetchImpl, 'rpc/osionos_page_append', {
+		method: 'POST',
+		body: {
+			p_page_id: pageId,
+			p_blocks: blocks,
+			p_after_block_id: afterBlockId,
+			p_idempotency_key: idempotencyKey,
+		},
+	});
+	const result = Array.isArray(rows) ? rows[0] ?? null : rows;
+	json(response, 200, {
+		ok: true,
+		version: pageVersionOf(result),
+		content: Array.isArray(result?.content) ? result.content : [],
+	}, config);
 	return true;
 }
 
@@ -4112,9 +4246,9 @@ async function handleWorkspaceCreate(request, response, config, fetchImpl) {
 	return true;
 }
 
-async function handlePagesPost(url, request, response, config, fetchImpl) {
+async function handlePagesPost(url, request, response, config, fetchImpl, env = process.env) {
 	if (url.pathname === '/api/workspaces') return handleWorkspaceCreate(request, response, config, fetchImpl);
-	if (await handleMarketplacePost(url, request, response, config, fetchImpl)) return true;
+	if (await handleMarketplacePost(url, request, response, config, fetchImpl, env)) return true;
 	if (await handleObjectDatabasesUpsert(url, request, response, config, fetchImpl)) return true;
 	if (await handleAppConnectionsUpsert(url, request, response, config, fetchImpl)) return true;
 	if (await handleAppConnectionsOAuthStart(url, request, response, config, fetchImpl)) return true;
@@ -4125,6 +4259,7 @@ async function handlePagesPost(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/auth/workspace/validate') return handleWorkspaceValidate(request, response, config, fetchImpl);
 	if (await handlePageActionCreate(url, request, response, config, fetchImpl)) return true;
 	if (await handlePageTranslate(url, request, response, config, fetchImpl)) return true;
+	if (await handlePageBlocksAppend(url, request, response, config, fetchImpl)) return true;
 	return false;
 }
 
@@ -4304,7 +4439,7 @@ async function handleBridgeLogout(request, response, config, fetchImpl) {
 	response.end();
 }
 
-async function handleBridgePost(url, request, response, config, kv, pg, fetchImpl) {
+async function handleBridgePost(url, request, response, config, kv, pg, fetchImpl, env = process.env) {
 	if (url.pathname === '/api/auth/bridge/logout') {
 		await handleBridgeLogout(request, response, config, fetchImpl);
 		return true;
@@ -4328,7 +4463,7 @@ async function handleBridgePost(url, request, response, config, kv, pg, fetchImp
 		json(response, 200, await trackUnsplashDownload(body?.downloadLocation, config, fetchImpl), config);
 		return true;
 	}
-	if (await handlePagesPost(url, request, response, config, fetchImpl)) return true;
+	if (await handlePagesPost(url, request, response, config, fetchImpl, env)) return true;
 	if (url.pathname === '/api/auth/bridge/session') {
 		await handleBridgeSession(request, response, config, kv, pg, fetchImpl);
 		return true;
@@ -4358,12 +4493,18 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.notify(url, request, response, context.config)) return;
 	if (await context.social.push(url, request, response, context.config)) return;
 	if (await context.social.media(url, request, response, context.config)) return;
+	if (await context.social.embed(url, request, response, context.config)) return;
 	if (await context.social.tasks(url, request, response, context.config)) return;
 	if (await context.social.comments(url, request, response, context.config)) return;
 	if (await context.social.publicPages(url, request, response, context.config)) return;
 	if (await context.social.community(url, request, response, context.config)) return;
 	if (await context.social.profile(url, request, response, context.config)) return;
 	if (await context.social.feed(url, request, response, context.config)) return;
+	if (await context.social.personalization(url, request, response, context.config)) return;
+	if (await context.social.recs(url, request, response, context.config)) return;
+	if (await context.social.events(url, request, response, context.config)) return;
+	if (await context.social.moderationConsole(url, request, response, context.config)) return;
+	if (await context.social.recsHealth(url, request, response, context.config)) return;
 	if (await context.social.social(url, request, response, context.config)) return;
 	if (await context.social.collab(url, request, response, context.config)) return;
 	if (await context.social.workspaceInvites(url, request, response, context.config)) return;
@@ -4385,6 +4526,7 @@ async function handleBridgeRequest(request, response, context) {
 		context.kv,
 		context.pg,
 		context.fetchImpl,
+		context.env,
 	)) return;
 	if (request.method === 'PATCH' && await handleMarketplacePatch(url, request, response, context.config, context.fetchImpl)) return;
 	if (request.method === 'PATCH' && await handlePageConfigPatch(url, request, response, context.config, context.fetchImpl)) return;
@@ -4414,7 +4556,10 @@ export function createBridgeServer(options = {}) {
 		: null;
 	const fetchImpl = meter.wrapFetch(options.fetchImpl ?? transport?.fetch ?? fetch);
 	const spawnImpl = options.spawnImpl ?? spawn;
-	const pg = options.pg ?? createPg({ config, env: options.env ?? process.env, fetchImpl, now: options.now });
+	// The env the moderation slice reads: the mode (OSIONOS_MODERATION_ACTIONS)
+	// and the state flag (OSIONOS_MODERATION_STATE). A test injects its own.
+	const env = options.env ?? process.env;
+	const pg = options.pg ?? createPg({ config, env, fetchImpl, now: options.now });
 	// Comments and publish reach a page through the same read rule as GET /api/pages/:id.
 	const verifyPageAccess = (request, pageId, permission) => readablePageAccess(request, pageId, permission, config, fetchImpl);
 	// Standalone workstream handlers, created once. rtc keeps the sibling
@@ -4424,20 +4569,26 @@ export function createBridgeServer(options = {}) {
 		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl }),
-		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl }),
+		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		chat: createChatHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		chat: createChatHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		notify: createNotifyHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		push: createPushHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
-			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess }),
-			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv }),
-		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
+			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
+			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
+		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv, env }),
+		feed: createFeedHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
+		personalization: createPersonalizationHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		recs: createRecsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
+		events: createEventsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
+		moderationConsole: createModerationConsoleHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
+		recsHealth: createRecsHealthHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
@@ -4448,7 +4599,7 @@ export function createBridgeServer(options = {}) {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);
 			try {
-				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social });
+				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env });
 			} catch (error) {
 				if (!response.headersSent) errorJson(response, error, responseConfig);
 			}
@@ -4474,6 +4625,9 @@ export function startBridgeServer(config = configFromEnv()) {
 	const server = createBridgeServer({ config });
 	// One boot line for the three states an operator has to know.
 	console[bridgeBootIsDegraded(server) ? 'warn' : 'info'](bridgeBootLine(server));
+	// No administrator configured: nobody is promoted to is_admin at login, so
+	// an account-admin workspace has no admin until the operator sets one.
+	if (!config.adminEmails.length) console.warn('[bridge] no account administrators configured (OSIONOS_ADMIN_EMAILS unset)');
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
 	});

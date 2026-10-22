@@ -1,0 +1,94 @@
+# The lock of the spike AI-A1: every artifact that the measurements use, pinned.
+#
+# Columns, tab separated:
+#
+#   group  kind  name  source  revision  file  bytes  sha256  blob
+#
+#   kind     model | dataset | url
+#   source   a Hugging Face repo (model or dataset) or, for kind=url, the
+#            prefix of the URL
+#   revision the commit of the repo, or the tag of the release
+#   file     the path inside the repo, or the path of the URL
+#   bytes    the size of the file
+#   sha256   the sha256 of the file
+#   blob     the name of the blob in the cache of Hugging Face: the sha256 of
+#            the file for a file in the LFS, the git blob id otherwise. The
+#            speech-to-text models are put in that cache, so that the server
+#            finds them without downloading them.
+#
+# The container images are pinned in images.lock.
+
+# --- the engine of the image generation -------------------------------------
+sd	release	stable-diffusion.cpp-vulkan	github:leejet/stable-diffusion.cpp	master-982-0518b34	sd-master-0518b34-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip	36790829	8bc413b3e6307fbefdf985cc562f7db1cc4c68e2dc3dca9d69b66ce98b9cbb5a	-
+
+# --- the models of the image generation -------------------------------------
+sd	model	sd-turbo-q8_0	Green-Sky/SD-Turbo-GGUF	19a31586d02d64a73b4419bc193b3ecfaf38e1f0	sd_turbo-f16-q8_0.gguf	2023745376	d50be7655f0a554cf8041c145d88b210bd5f3c545423119dee62ae08cae51580	-
+sd	model	sdxl-turbo-q8_0	OlegSkutte/sdxl-turbo-GGUF	62a28b8b2c3cb4bf76d9aad45a5b798047dc786c	sd_xl_turbo_1.0.q8_0.gguf	4098988672	f5659e6cdad699b1432870cc9fe811359e45c8a331687be505d0ba05c8364720	-
+sd	model	z-image-turbo-q4_0	wbruna/Z-Image-Turbo-sdcpp-GGUF	ea7669b52d27042b4909e3413f58581c0d52d522	z_image_turbo-Q4_0.gguf	3470775264	545c2a06510949e5c62a7154a44729f92dbf1c2006836508aedd72c537c35ba6	545c2a06510949e5c62a7154a44729f92dbf1c2006836508aedd72c537c35ba6
+sd	model	z-image-ae-f16	wbruna/Z-Image-Turbo-sdcpp-GGUF	ea7669b52d27042b4909e3413f58581c0d52d522	ae-f16.gguf	167656704	1bed7b05318709e46a8cb9accc211168fc7f0b61ab594661860bbfe4d785cc46	1bed7b05318709e46a8cb9accc211168fc7f0b61ab594661860bbfe4d785cc46
+sd	model	z-image-taef1	wbruna/Z-Image-Turbo-sdcpp-GGUF	ea7669b52d27042b4909e3413f58581c0d52d522	taef1.safetensors	9848636	927f7de7f11bbd3b2d5ce402e608d97a7649e0921a9601995b044e8efc81e449	927f7de7f11bbd3b2d5ce402e608d97a7649e0921a9601995b044e8efc81e449
+sd	model	z-image-te-qwen3-4b-q4km	unsloth/Qwen3-4B-Instruct-2507-GGUF	a06e946bb6b655725eafa393f4a9745d460374c9	Qwen3-4B-Instruct-2507-Q4_K_M.gguf	2497281120	3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597	3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597
+
+# --- the models of the vision-language models --------------------------------
+vlm	model	smolvlm2-q4km	ggml-org/SmolVLM2-2.2B-Instruct-GGUF	1bc3c9f74ceafd4c8d4411cc9cf188bba3798f91	SmolVLM2-2.2B-Instruct-Q4_K_M.gguf	1112602656	0cf76814555b8665149075b74ab6b5c1d428ea1d3d01c1918c12012e8d7c9f58	-
+vlm	model	smolvlm2-mmproj-q8_0	ggml-org/SmolVLM2-2.2B-Instruct-GGUF	1bc3c9f74ceafd4c8d4411cc9cf188bba3798f91	mmproj-SmolVLM2-2.2B-Instruct-Q8_0.gguf	592523200	ae07ea1facd07dd3230c4483b63e8cda96c6944ad2481f33d531f79e892dd024	-
+vlm	model	qwen25vl-3b-q4km	ggml-org/Qwen2.5-VL-3B-Instruct-GGUF	5037fcf163dd95d1e41d1974465f0898ed108ca2	Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf	1929901056	d02fe9b69ad8cadbbd228e387667af66612c44bed29ffc8eb1e7caf9ac486c12	-
+vlm	model	qwen25vl-3b-mmproj-q8_0	ggml-org/Qwen2.5-VL-3B-Instruct-GGUF	5037fcf163dd95d1e41d1974465f0898ed108ca2	mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf	844757728	980c9b2f78c04e6cff93d277ada09e768394f112d75db3b4e9dea8a69f9fb904	-
+vlm	model	gemma3-4b-q4km	ggml-org/gemma-3-4b-it-GGUF	d0976223747697cb51e056d85c532013931fe52e	gemma-3-4b-it-Q4_K_M.gguf	2489757856	882e8d2db44dc554fb0ea5077cb7e4bc49e7342a1f0da57901c0802ea21a0863	-
+vlm	model	gemma3-4b-mmproj-f16	ggml-org/gemma-3-4b-it-GGUF	d0976223747697cb51e056d85c532013931fe52e	mmproj-model-f16.gguf	851251104	8c0fb064b019a6972856aaae2c7e4792858af3ca4561be2dbf649123ba6c40cb	-
+
+# --- the models of the speech-to-text ----------------------------------------
+stt	model	whisper-large-v3-turbo-q5_0	ggerganov/whisper.cpp	5359861c739e955e79d9a303bcbc70fb988958b1	ggml-large-v3-turbo-q5_0.bin	574041195	394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2	-
+stt	model	faster-whisper-small-gitattributes	Systran/faster-whisper-small	536b0662742c02347bc0e980a01041f333bce120	.gitattributes	1477	db7c0371f46f0840b8f25794c1e3321c9b5820a8cb6ba9694a46fc64b8fae5a6	c7d9f3332a950355d5a77d85000f05e6f45435ea
+stt	model	faster-whisper-small-readme	Systran/faster-whisper-small	536b0662742c02347bc0e980a01041f333bce120	README.md	1998	329373481008c7c38654aff8ecdcf0163c211557cc7ba8e2ef6f2f84b4f75ec8	16511f6106ead2fbc3a1480957a217c2661a5a98
+stt	model	faster-whisper-small-config	Systran/faster-whisper-small	536b0662742c02347bc0e980a01041f333bce120	config.json	2370	b55496ac7940a7ae47d2c01eab40edfd8701feec1229d9cce3b40014383fb828	e5047537059bd8f182d9ca64c470201585015187
+stt	model	faster-whisper-small-vocabulary	Systran/faster-whisper-small	536b0662742c02347bc0e980a01041f333bce120	vocabulary.txt	459861	34ce3fe1c5041027b3f8d42912270993f986dbc4bb34cf27f951e34a1e453913	c9074644d9d1205686f16d411564729461324b75
+stt	model	faster-whisper-small-tokenizer	Systran/faster-whisper-small	536b0662742c02347bc0e980a01041f333bce120	tokenizer.json	2203239	fb7b63191e9bb045082c79fd742a3106a12c99513ab30df4a0d47fa6cb6fd0ab	7818adb6de9fa3064d3ff81226fdd675be1f6344
+stt	model	faster-whisper-small-model	Systran/faster-whisper-small	536b0662742c02347bc0e980a01041f333bce120	model.bin	483546902	3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671	3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671
+stt	model	faster-whisper-lv3turbo-gitattributes	deepdml/faster-whisper-large-v3-turbo-ct2	4df90f75321148c3a29a9e2351b7ddf8f5b115a8	.gitattributes	1519	11ad7efa24975ee4b0c3c3a38ed18737f0658a5f75a0a96787b576a78a023361	a6344aac8c09253b3b630fb776ae94478aa0275b
+stt	model	faster-whisper-lv3turbo-readme	deepdml/faster-whisper-large-v3-turbo-ct2	4df90f75321148c3a29a9e2351b7ddf8f5b115a8	README.md	2454	0b54ba6aa7769ae8d03964d51c3b045d313a92741e248d03c2c258146745249c	fb53844bcca20e84e58c86859351b0af33771b87
+stt	model	faster-whisper-lv3turbo-config	deepdml/faster-whisper-large-v3-turbo-ct2	4df90f75321148c3a29a9e2351b7ddf8f5b115a8	config.json	2263	b0253ea6c0d3bea6b1e19e91a02acfd3b53f4467362efcb5a3e6b16c9b3a9b7e	0351d1d6870005e865747b781b5d7c23ea0459cd
+stt	model	faster-whisper-lv3turbo-preprocessor	deepdml/faster-whisper-large-v3-turbo-ct2	4df90f75321148c3a29a9e2351b7ddf8f5b115a8	preprocessor_config.json	340	7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711	931c77a740890c46365c7ae0c9d350ba3cca908f
+stt	model	faster-whisper-lv3turbo-vocabulary	deepdml/faster-whisper-large-v3-turbo-ct2	4df90f75321148c3a29a9e2351b7ddf8f5b115a8	vocabulary.json	1068114	c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1	0adcd01e7c237205d593b707e66dd5d7bc785d2d
+stt	model	faster-whisper-lv3turbo-tokenizer	deepdml/faster-whisper-large-v3-turbo-ct2	4df90f75321148c3a29a9e2351b7ddf8f5b115a8	tokenizer.json	2710337	297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd	17456db595adc78a973f97d69d8cb50bc87c0b1c
+stt	model	faster-whisper-lv3turbo-model	deepdml/faster-whisper-large-v3-turbo-ct2	4df90f75321148c3a29a9e2351b7ddf8f5b115a8	model.bin	1617884929	e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da	e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da
+
+# --- the guard of the image prompt (C72) ------------------------------------
+# The classifier of the prompt gate: Qwen3Guard-Gen of Qwen (Apache-2.0), in
+# the GGUF of a third party (mradermacher), trusted only through its sha256.
+guard	model	guard-gen-0.6b-q8_0	mradermacher/Qwen3Guard-Gen-0.6B-GGUF	2a59799e089fba3807d534a89c6b95bdf38ee76a	Qwen3Guard-Gen-0.6B.Q8_0.gguf	804753920	127e8833aa16c6839613cd08df5409440302e8c61e90617914b3100f2141411a	127e8833aa16c6839613cd08df5409440302e8c61e90617914b3100f2141411a
+guard	model	guard-gen-4b-q4km	mradermacher/Qwen3Guard-Gen-4B-GGUF	b3b010b37c75197c5e887fa7dce9ff907d0be6ff	Qwen3Guard-Gen-4B.Q4_K_M.gguf	2716068928	c81d88da8e1f90a80d1b892a29fb3deac592fc5f321b35fc964a568398c1dbfb	c81d88da8e1f90a80d1b892a29fb3deac592fc5f321b35fc964a568398c1dbfb
+# The original chat template of the two originals, to compare with the one of
+# the GGUF. The two files are byte-identical (the same git blob).
+guard	model	guard-gen-0.6b-tokenizer-config	Qwen/Qwen3Guard-Gen-0.6B	fada3b2f655b89601929198343c94cd2f64d93cc	tokenizer_config.json	9601	934e187433b06c5d28519e0347dd293084cf28621f00a86ae7e24e42f8b53e81	409e51f8f3d4316361001ea16127a4aa7db80903
+guard	model	guard-gen-4b-tokenizer-config	Qwen/Qwen3Guard-Gen-4B	6ec42827da0c1ff11e7a49dc269d2e810d27e108	tokenizer_config.json	9601	934e187433b06c5d28519e0347dd293084cf28621f00a86ae7e24e42f8b53e81	409e51f8f3d4316361001ea16127a4aa7db80903
+
+# --- the output check on the generated images (C73) --------------------------
+# The classifier of the bytes the engine produced: a ViT-base of AdamCodd
+# (Apache-2.0), 384x384, two labels (sfw, nsfw). The revision is the commit
+# of the repository, the sha256 of the two ONNX files is the one of the LFS.
+nsfw	model	nsfw-vit-fp32	AdamCodd/vit-base-nsfw-detector	8587de998f441aac03fdd57a85d2e4cb808c7d64	onnx/model.onnx	344569044	dce8f5af8509fee39c453b78a66076ead5c97321ddcee0ddfa16f67dc8286384	dce8f5af8509fee39c453b78a66076ead5c97321ddcee0ddfa16f67dc8286384
+nsfw	model	nsfw-vit-q8	AdamCodd/vit-base-nsfw-detector	8587de998f441aac03fdd57a85d2e4cb808c7d64	onnx/model_quantized.onnx	88500985	432763a6899ebc418c55f784b98f90565e5fc694c778d2ffcb0294b12f6a7404	432763a6899ebc418c55f784b98f90565e5fc694c778d2ffcb0294b12f6a7404
+# The labels (sfw, nsfw) and the two ONNX configs. The preprocessor of the
+# ONNX folder is the one the graph was exported with.
+nsfw	model	nsfw-vit-config	AdamCodd/vit-base-nsfw-detector	8587de998f441aac03fdd57a85d2e4cb808c7d64	config.json	715	604d1da5e3cc8b6dc3f2768a911ed61a44a331cfcee9ecde2ce2cba9a1e7972b	a0056028b3560268dee912af113b2bb88590fe93
+nsfw	model	nsfw-vit-onnx-config	AdamCodd/vit-base-nsfw-detector	8587de998f441aac03fdd57a85d2e4cb808c7d64	onnx/config.json	691	5f54e0e96c0b5b77caba7e79aebe0b4fa5c154cabf6df65eb1b939ae8b265cfa	bd35e2c741426966204483159e303596aaf12f4e
+nsfw	model	nsfw-vit-preprocessor	AdamCodd/vit-base-nsfw-detector	8587de998f441aac03fdd57a85d2e4cb808c7d64	onnx/preprocessor_config.json	327	d77ca5b19fe076679f60e57a1a684cfcfd39a626d50cfabf06a915d039f794ed	0ee5ed3923d0714f6069c7b517555c5c3fc6ca88
+
+# --- the second candidate of the output check (C73) ---------------------------
+# The same shape as the one above (normal, nsfw), 224x224 instead of 384x384:
+# the weights are the ones of Falconsai/nsfw_image_detection (Apache-2.0),
+# converted to ONNX by the space of onnx-community. The conversion repository
+# declares no licence of its own: the licence that travels with the bytes is
+# the Apache-2.0 of the original, and the conversion adds nothing.
+nsfw2	model	falconsai-vit-fp32	onnx-community/nsfw_image_detection-ONNX	1ceb3c7fe1e9f3f2507e6df577437f23a9149fd5	onnx/model.onnx	343401688	a4316a4fb750169ac4fcabaabee1fcbd982b0ee8c0cc63fe3e944954bb9a7d9c	a4316a4fb750169ac4fcabaabee1fcbd982b0ee8c0cc63fe3e944954bb9a7d9c
+nsfw2	model	falconsai-vit-q8	onnx-community/nsfw_image_detection-ONNX	1ceb3c7fe1e9f3f2507e6df577437f23a9149fd5	onnx/model_quantized.onnx	87333629	d9afb1e057104e6cc8616d174f0f6a8b8b0389c839eea7d5efa4bdf1a77efd27	d9afb1e057104e6cc8616d174f0f6a8b8b0389c839eea7d5efa4bdf1a77efd27
+nsfw2	model	falconsai-vit-config	onnx-community/nsfw_image_detection-ONNX	1ceb3c7fe1e9f3f2507e6df577437f23a9149fd5	config.json	764	0e01783cf842a0acaa6b3b6594b941bee4d39a1918756b27d23f503878889696	1efa6ad75857089d3857461144a947699f23d24f
+nsfw2	model	falconsai-vit-preprocessor	onnx-community/nsfw_image_detection-ONNX	1ceb3c7fe1e9f3f2507e6df577437f23a9149fd5	preprocessor_config.json	353	ae9bb157b9629887cc74913a4e7c12c9308f374f0930e8072320e8f2e1583c5e	e9661b02d9ca27fedbdec7fa9773622c5edc6e81
+
+# --- the datasets ------------------------------------------------------------
+data	dataset	i2p-benchmark	AIML-TUDA/i2p	6594f223b0544fcbf63a6889417a6b9d2e40a77c	i2p_benchmark.csv	1331798	5e78f211b3944d90182ab708ed0bd8af657c24a308153e6ccd5db9d9dbfe50cb	b8c6cd06266d5c09e288001a0e898cd44bc5cc68
+data	dataset	coco-annotations	url	http://images.cocodataset.org/annotations	annotations_trainval2017.zip	241637313	-	-
+data	dataset	fleurs-en_us-tsv	url	https://huggingface.co/datasets/google/fleurs/resolve/main/data/en_us	test.tsv	367864	-	-
+data	dataset	fleurs-fr_fr-tsv	url	https://huggingface.co/datasets/google/fleurs/resolve/main/data/fr_fr	test.tsv	456972	-	-
+data	dataset	fleurs-es_419-tsv	url	https://huggingface.co/datasets/google/fleurs/resolve/main/data/es_419	test.tsv	599882	-	-

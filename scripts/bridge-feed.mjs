@@ -45,16 +45,21 @@ import {
 	httpError,
 	identitySummaries,
 	memberWorkspacesAmong,
+	moderationSettings,
+	moderationWarningBody,
 	orgWorkspaceId,
+	publicReadablePage,
 	publishRealtime,
 	readJsonBody,
 	requireUuid,
 	rest,
 	safeText,
 	sendJson,
+	visibleOrOwnFilter,
 } from './bridge-social-core.mjs';
 import { shareToDmChannel } from './bridge-chat.mjs';
 import { canReadPageRowAsMember } from './bridge-page-read.mjs';
+import { decideWrite, recordDecision } from './bridge-moderation-gate.mjs';
 
 const MAX_DISTINCT_REACTIONS = 20;
 const SHARE_TARGETS = new Set(['profile', 'link', 'dm']);
@@ -75,18 +80,33 @@ function fallbackFeedWorkspaceId(deps, session) {
 }
 
 /**
- * True when `pageId` is an osionos page the session may not see on the feed (it must be
- * a member of the page's workspace AND allowed to read the page).
+ * The subject a feed comment hangs on: the post's page row (the access check
+ * already read it) and whether the public may read it (C94). The workspace is
+ * read only when the page itself is not public.
+ */
+async function feedSubject(deps, config, page, stateEnabled) {
+	return {
+		// Without the state column nothing is held or recorded, so the workspace
+		// read is skipped: the flag off keeps today's queries.
+		publicReadable: stateEnabled && await publicReadablePage(config, deps.fetchImpl, page),
+		workspaceId: page?.workspace_id ?? null,
+	};
+}
+
+/**
+ * The page of a feed post, and whether the session may see it on the feed (it
+ * must be a member of the page's workspace AND allowed to read the page). One
+ * read answers both: the row carries the visibility the moderation gate needs.
  * Ponytail: an id with no osionos_pages row is taken for a live-database record and stays
  * visible as before — that record's mount access is NOT checked, and a deleted page's id
  * cannot be told apart from such a record.
  */
-async function isFeedPageHidden(deps, config, session, pageId) {
+async function feedPageAccess(deps, config, session, pageId) {
 	const rows = await rest(config, deps.fetchImpl, `osionos_pages?id=eq.${pageId}&select=workspace_id,owner_id,visibility,collaborators&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
-	if (!row) return false;
+	if (!row) return { hidden: false, row: null };
 	const members = await memberWorkspacesAmong(config, deps.fetchImpl, session, [row.workspace_id]);
-	return !canReadPageRowAsMember(row, session.userId, members);
+	return { hidden: !canReadPageRowAsMember(row, session.userId, members), row };
 }
 
 // What each feed GET answers for an id nobody has engaged with — and so for a hidden page.
@@ -139,6 +159,8 @@ function commentEntry(row, identities) {
 		createdAt: row.created_at,
 		updatedAt: row.updated_at ?? row.created_at,
 		parentId: row.parent_id ?? null,
+		// C87: the soft state. A row without the column (the flag is off) is visible.
+		moderationState: row.moderation_state ?? 'visible',
 	};
 }
 
@@ -203,8 +225,15 @@ async function setLike(deps, session, pageId, add, response, config) {
 async function getReactions(deps, session, pageId, response, config) {
 	const rows = await rest(config, deps.fetchImpl, `osionos_feed_reactions?page_id=eq.${pageId}&select=user_id,emoji,created_at&order=created_at.asc`);
 	// The comment count rides along on this one mount probe (no extra frontend request)
-	// so the card shows "💬 N" before the thread is expanded: the counts RPC answers it.
-	const counts = await feedPageCounts(config, deps.fetchImpl, pageId, session.userId);
+	// so the card shows "💬 N" before the thread is expanded. A held comment is nobody's
+	// but its author's, so it is not counted (C87): the counts RPC counts every row, so
+	// with the moderation state on, the count is read through the same visibility filter.
+	// ponytail: select=id + array length on that path; swap to a Prefer:count=exact HEAD if
+	// a single post's comment volume ever gets large enough to matter.
+	const { stateEnabled: commentStateEnabled } = moderationSettings(deps.env);
+	const commentCount = commentStateEnabled
+		? (await rest(config, deps.fetchImpl, `osionos_feed_comments?page_id=eq.${pageId}&select=id${visibleOrOwnFilter(session, true)}`) ?? []).length
+		: (await feedPageCounts(config, deps.fetchImpl, pageId, session.userId)).comments;
 	// rows arrive created_at ascending → a Map keeps first-seen (earliest) order.
 	const byEmoji = new Map();
 	for (const row of Array.isArray(rows) ? rows : []) {
@@ -218,7 +247,7 @@ async function getReactions(deps, session, pageId, response, config) {
 	// demo/live-DB rows fall to the org workspace. The feed socket subscribes to
 	// exactly `feed:<workspaceId>`, so publish and subscribe topics always match.
 	const workspaceId = await feedWorkspaceId(deps, config, session, pageId);
-	return sendJson(response, 200, { ok: true, pageId, reactions: [...byEmoji.values()], commentCount: counts.comments, workspaceId }, config);
+	return sendJson(response, 200, { ok: true, pageId, reactions: [...byEmoji.values()], commentCount, workspaceId }, config);
 }
 
 async function addReaction(deps, session, request, pageId, response, config) {
@@ -253,7 +282,10 @@ async function removeReaction(deps, session, request, pageId, response, config) 
 }
 
 async function listComments(deps, session, pageId, response, config) {
-	const rows = await rest(config, deps.fetchImpl, `osionos_feed_comments?page_id=eq.${pageId}&select=*&order=created_at.asc&limit=500`);
+	// C87: a held comment is the author's alone. The filter is only there when
+	// the state column exists.
+	const filter = visibleOrOwnFilter(session, moderationSettings(deps.env).stateEnabled);
+	const rows = await rest(config, deps.fetchImpl, `osionos_feed_comments?page_id=eq.${pageId}&select=*&order=created_at.asc&limit=500${filter}`);
 	const comments = Array.isArray(rows) ? rows : [];
 	const identities = await identitySummaries(config, deps.fetchImpl, comments.map((row) => row.author_id));
 	return sendJson(response, 200, {
@@ -263,35 +295,68 @@ async function listComments(deps, session, pageId, response, config) {
 	}, config);
 }
 
-async function postComment(deps, session, request, pageId, response, config) {
+async function postComment(deps, session, request, pageId, response, config, page) {
 	const payload = await readJsonBody(request, 32 * 1024);
 	const content = safeText(payload.content, 4000);
 	if (!content) throw httpError('Comment content is required.', 422);
+	const { mode, stateEnabled } = moderationSettings(deps.env);
 	let parentId = null;
 	if (payload.parentId !== undefined && payload.parentId !== null && payload.parentId !== '') {
 		const candidate = safeText(payload.parentId, 80);
 		if (!UUID_REGEX.test(candidate)) throw httpError('parentId must reference an existing comment on this post.', 400);
-		const parent = await rest(config, deps.fetchImpl, `osionos_feed_comments?id=eq.${candidate}&page_id=eq.${pageId}&select=id&limit=1`);
+		// A held comment is nobody's but its author's, so it is not a parent to reply to.
+		const parent = await rest(config, deps.fetchImpl, `osionos_feed_comments?id=eq.${candidate}&page_id=eq.${pageId}&select=id&limit=1${visibleOrOwnFilter(session, stateEnabled)}`);
 		if (!Array.isArray(parent) || parent.length === 0) throw httpError('parentId must reference an existing comment on this post.', 400);
 		parentId = candidate;
 	}
+	// L0 runs BEFORE the write: a held comment is written held, and a warning
+	// is the author's question, not a refusal (C85, C87).
+	const { publicReadable, workspaceId } = await feedSubject(deps, config, page, stateEnabled);
+	const decision = decideWrite({
+		text: content,
+		surface: 'feed_comment',
+		mode,
+		publicReadable,
+		acknowledged: payload.acknowledgeWarning === true,
+		stateEnabled,
+	});
+	if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
+	const held = decision.outcome === 'write_held';
+	const body = { page_id: pageId, author_id: session.userId, content, parent_id: parentId };
+	if (held) body.moderation_state = 'held';
 	const rows = await rest(config, deps.fetchImpl, 'osionos_feed_comments', {
 		method: 'POST',
-		body: { page_id: pageId, author_id: session.userId, content, parent_id: parentId },
+		body,
 		prefer: 'return=representation',
 	});
 	const row = Array.isArray(rows) ? rows[0] : rows;
 	if (!row) throw httpError('Comment persistence failed.', 502);
-	await publishFeedEvent(deps, config, session, pageId, 'comment');
-	void notifyFeedOwner(deps, config, session, pageId, 'feed_comment', content);
+	// A held comment is the author's alone: nobody is told about it (C87).
+	if (!held) {
+		await publishFeedEvent(deps, config, session, pageId, 'comment');
+		void notifyFeedOwner(deps, config, session, pageId, 'feed_comment', content);
+	}
+	if (decision.record) {
+		await recordDecision(config, deps.fetchImpl, {
+			subjectKind: 'feed_comment',
+			subjectId: row.id,
+			workspaceId,
+			authorId: session.userId,
+			action: decision.record,
+			mode,
+			policyHash: decision.policyHash,
+			content,
+		});
+	}
 	const identities = await identitySummaries(config, deps.fetchImpl, [session.userId]);
 	const comment = commentEntry(row, identities);
+	if (held) comment.moderationState = 'held';
 	// Body IS the created comment object (new contract); `comment` mirror keeps
 	// the pre-existing `reply.comment` consumer working — additive, non-breaking.
 	return sendJson(response, 201, { ...comment, ok: true, comment }, config);
 }
 
-async function updateComment(deps, session, request, pageId, commentId, response, config) {
+async function updateComment(deps, session, request, pageId, commentId, response, config, page) {
 	const existingRows = await rest(config, deps.fetchImpl, `osionos_feed_comments?id=eq.${commentId}&page_id=eq.${pageId}&select=*&limit=1`);
 	const existing = Array.isArray(existingRows) ? existingRows[0] : null;
 	if (!existing) throw httpError('Comment not found.', 404);
@@ -299,15 +364,46 @@ async function updateComment(deps, session, request, pageId, commentId, response
 	const payload = await readJsonBody(request, 32 * 1024);
 	const content = safeText(payload.content, 4000);
 	if (!content) throw httpError('Comment content is required.', 422);
+	const { mode, stateEnabled } = moderationSettings(deps.env);
+	const { publicReadable, workspaceId } = await feedSubject(deps, config, page, stateEnabled);
+	const decision = decideWrite({
+		text: content,
+		surface: 'feed_comment',
+		mode,
+		publicReadable,
+		acknowledged: payload.acknowledgeWarning === true,
+		stateEnabled,
+	});
+	if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
+	const held = decision.outcome === 'write_held';
+	const body = { content, updated_at: new Date().toISOString() };
+	// C89: an edit may only HOLD a comment, never un-hold it. A held comment
+	// edited to a clean text stays held: the PATCH says nothing about the state.
+	if (held) body.moderation_state = 'held';
 	const rows = await rest(config, deps.fetchImpl, `osionos_feed_comments?id=eq.${commentId}`, {
 		method: 'PATCH',
-		body: { content, updated_at: new Date().toISOString() },
+		body,
 		prefer: 'return=representation',
 	});
 	const row = (Array.isArray(rows) ? rows[0] : rows) ?? { ...existing, content, updated_at: new Date().toISOString() };
-	await publishFeedEvent(deps, config, session, pageId, 'comment_updated');
+	// An edit of a comment nobody else sees tells nobody (C87): held or removed stays quiet.
+	const hidden = held || (existing.moderation_state ?? 'visible') !== 'visible';
+	if (!hidden) await publishFeedEvent(deps, config, session, pageId, 'comment_updated');
+	if (decision.record) {
+		await recordDecision(config, deps.fetchImpl, {
+			subjectKind: 'feed_comment',
+			subjectId: commentId,
+			workspaceId,
+			authorId: session.userId,
+			action: decision.record,
+			mode,
+			policyHash: decision.policyHash,
+			content,
+		});
+	}
 	const identities = await identitySummaries(config, deps.fetchImpl, [session.userId]);
 	const comment = commentEntry(row, identities);
+	if (held) comment.moderationState = 'held';
 	return sendJson(response, 200, { ...comment, ok: true, comment }, config);
 }
 
@@ -379,13 +475,17 @@ export function createFeedHandler({ config, verifySession, fetchImpl = fetch, en
 			// Ponytail: a write on a hidden page answers 404 and stores nothing, while a write on an
 			// id with no osionos_pages row succeeds (2xx) and is stored like any feed item — so the
 			// write answer tells a caller who already holds an id whether it names a hidden page.
-			if ((FEED_READS.has(route) || FEED_WRITES.has(route)) && await isFeedPageHidden(deps, requestConfig, session, pageId)) {
+			// The access read answers the moderation gate too: it carries the page's
+			// visibility, so the gate costs no extra read of the page.
+			const feedRoute = FEED_READS.has(route) || FEED_WRITES.has(route);
+			const access = feedRoute ? await feedPageAccess(deps, requestConfig, session, pageId) : { hidden: false, row: null };
+			if (feedRoute && access.hidden) {
 				if (FEED_WRITES.has(route)) throw httpError('Page not found.', 404);
 				return sendJson(response, 200, noActivityAnswer(deps, session, pageId, pageResource[2]), requestConfig);
 			}
 			if (commentOne) {
 				const commentId = requireUuid(decodeURIComponent(commentOne[2]), 'commentId');
-				if (method === 'PUT') return await updateComment(deps, session, request, pageId, commentId, response, requestConfig);
+				if (method === 'PUT') return await updateComment(deps, session, request, pageId, commentId, response, requestConfig, access.row);
 				if (method === 'DELETE') return await deleteComment(deps, session, pageId, commentId, response, requestConfig);
 				return sendJson(response, 405, { ok: false, message: `Method ${method} is not supported here.` }, requestConfig);
 			}
@@ -394,7 +494,7 @@ export function createFeedHandler({ config, verifySession, fetchImpl = fetch, en
 			if (resource === 'like' && method === 'POST') return await setLike(deps, session, pageId, true, response, requestConfig);
 			if (resource === 'like' && method === 'DELETE') return await setLike(deps, session, pageId, false, response, requestConfig);
 			if (resource === 'comments' && method === 'GET') return await listComments(deps, session, pageId, response, requestConfig);
-			if (resource === 'comments' && method === 'POST') return await postComment(deps, session, request, pageId, response, requestConfig);
+			if (resource === 'comments' && method === 'POST') return await postComment(deps, session, request, pageId, response, requestConfig, access.row);
 			if (resource === 'reactions' && method === 'GET') return await getReactions(deps, session, pageId, response, requestConfig);
 			if (resource === 'reactions' && method === 'POST') return await addReaction(deps, session, request, pageId, response, requestConfig);
 			if (resource === 'reactions' && method === 'DELETE') return await removeReaction(deps, session, request, pageId, response, requestConfig);

@@ -43,5 +43,7 @@ export function bridgeGraphPath(scope: GraphScope, workspaceId: string): string 
 export async function fetchBridgeGraph(scope: GraphScope, workspaceId: string): Promise<BridgeGraph | null> {
   const jwt = getActivePageJwt();
   if (!jwt) return null;
+  // No active workspace: do not read the unscoped route (C99/C110).
+  if (scope === "workspace" && !workspaceId) return null;
   return (await api.get<BridgeGraph>(bridgeGraphPath(scope, workspaceId), jwt)) ?? { nodes: [], edges: [] };
 }
