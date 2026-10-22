@@ -53,7 +53,18 @@ stt	model	faster-whisper-lv3turbo-vocabulary	deepdml/faster-whisper-large-v3-tur
 stt	model	faster-whisper-lv3turbo-tokenizer	deepdml/faster-whisper-large-v3-turbo-ct2	4df90f75321148c3a29a9e2351b7ddf8f5b115a8	tokenizer.json	2710337	297b13372ac43916285644fb9687add3cc62ee2a1adb60da3dc25cc94c1871fd	17456db595adc78a973f97d69d8cb50bc87c0b1c
 stt	model	faster-whisper-lv3turbo-model	deepdml/faster-whisper-large-v3-turbo-ct2	4df90f75321148c3a29a9e2351b7ddf8f5b115a8	model.bin	1617884929	e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da	e76620f83d5f5b69efd3d87e3dc180c1bd21df9fbebacfd4335e5e1efcc018da
 
+# --- the guard of the image prompt (C72) ------------------------------------
+# The classifier of the prompt gate: Qwen3Guard-Gen of Qwen (Apache-2.0), in
+# the GGUF of a third party (mradermacher), trusted only through its sha256.
+guard	model	guard-gen-0.6b-q8_0	mradermacher/Qwen3Guard-Gen-0.6B-GGUF	2a59799e089fba3807d534a89c6b95bdf38ee76a	Qwen3Guard-Gen-0.6B.Q8_0.gguf	804753920	127e8833aa16c6839613cd08df5409440302e8c61e90617914b3100f2141411a	127e8833aa16c6839613cd08df5409440302e8c61e90617914b3100f2141411a
+guard	model	guard-gen-4b-q4km	mradermacher/Qwen3Guard-Gen-4B-GGUF	b3b010b37c75197c5e887fa7dce9ff907d0be6ff	Qwen3Guard-Gen-4B.Q4_K_M.gguf	2716068928	c81d88da8e1f90a80d1b892a29fb3deac592fc5f321b35fc964a568398c1dbfb	c81d88da8e1f90a80d1b892a29fb3deac592fc5f321b35fc964a568398c1dbfb
+# The original chat template of the two originals, to compare with the one of
+# the GGUF. The two files are byte-identical (the same git blob).
+guard	model	guard-gen-0.6b-tokenizer-config	Qwen/Qwen3Guard-Gen-0.6B	fada3b2f655b89601929198343c94cd2f64d93cc	tokenizer_config.json	9601	934e187433b06c5d28519e0347dd293084cf28621f00a86ae7e24e42f8b53e81	409e51f8f3d4316361001ea16127a4aa7db80903
+guard	model	guard-gen-4b-tokenizer-config	Qwen/Qwen3Guard-Gen-4B	6ec42827da0c1ff11e7a49dc269d2e810d27e108	tokenizer_config.json	9601	934e187433b06c5d28519e0347dd293084cf28621f00a86ae7e24e42f8b53e81	409e51f8f3d4316361001ea16127a4aa7db80903
+
 # --- the datasets ------------------------------------------------------------
+data	dataset	i2p-benchmark	AIML-TUDA/i2p	6594f223b0544fcbf63a6889417a6b9d2e40a77c	i2p_benchmark.csv	1331798	5e78f211b3944d90182ab708ed0bd8af657c24a308153e6ccd5db9d9dbfe50cb	b8c6cd06266d5c09e288001a0e898cd44bc5cc68
 data	dataset	coco-annotations	url	http://images.cocodataset.org/annotations	annotations_trainval2017.zip	241637313	-	-
 data	dataset	fleurs-en_us-tsv	url	https://huggingface.co/datasets/google/fleurs/resolve/main/data/en_us	test.tsv	367864	-	-
 data	dataset	fleurs-fr_fr-tsv	url	https://huggingface.co/datasets/google/fleurs/resolve/main/data/fr_fr	test.tsv	456972	-	-
