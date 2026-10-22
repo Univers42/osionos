@@ -28,27 +28,19 @@ import {
 	blockedViewerBy,
 	connectionEdgesPath,
 	directoryFuzzyFilter,
+	edgesNewestFirst,
 	httpError,
 	identitySummaries,
-	insertColleagueEdges,
-	mergeEdgesNewestFirst,
 	publishRealtime,
 	readJsonBody,
 	requireUuid,
 	rest,
 	safeText,
 	sendJson,
-	sharedWorkspacePeers,
 } from './bridge-social-core.mjs';
+import { onlineAmong } from './bridge-presence.mjs';
 
-const PRESENCE_WINDOW_MS = 90 * 1000;
-
-function isOnline(lastSeenAt, now = Date.now()) {
-	const seen = lastSeenAt ? Date.parse(lastSeenAt) : NaN;
-	return Number.isFinite(seen) && now - seen < PRESENCE_WINDOW_MS;
-}
-
-function personEntry(row) {
+function personEntry(row, online) {
 	const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
 	return {
 		id: row.user_id,
@@ -56,7 +48,7 @@ function personEntry(row) {
 		username: row.username ?? null,
 		avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
 		headline: typeof profile.headline === 'string' ? profile.headline : null,
-		online: isOnline(row.last_seen_at),
+		online: online.has(row.user_id),
 	};
 }
 
@@ -67,7 +59,7 @@ async function directorySearch(deps, session, url, response, config) {
 	const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 50) : 20;
 	// People come from the authoritative public.users (via the safe
 	// osionos_people_directory view), NOT the sparse local identity cache.
-	let path = 'osionos_people_directory?select=user_id,display_name,username,profile,last_seen_at,directory_opt_out&order=display_name.asc&limit=200';
+	let path = 'osionos_people_directory?select=user_id,display_name,username,profile,directory_opt_out&order=display_name.asc&limit=200';
 	path += '&directory_opt_out=not.eq.true';
 	path += directoryFuzzyFilter(query); // fuzzy: name/username/headline ILIKE + stem + FTS
 	const rows = await rest(config, deps.fetchImpl, path);
@@ -77,10 +69,11 @@ async function directorySearch(deps, session, url, response, config) {
 		if (row.directory_opt_out === true) continue;
 		if (blockers.has(row.user_id)) continue;
 		if (row.user_id === session.userId) continue;
-		people.push(personEntry(row));
+		people.push(row);
 		if (people.length >= limit) break;
 	}
-	return sendJson(response, 200, { ok: true, people }, config);
+	const online = await onlineAmong(deps.kv, people.map((row) => row.user_id), { now: deps.now() });
+	return sendJson(response, 200, { ok: true, people: people.map((row) => personEntry(row, online)) }, config);
 }
 
 const peerOf = (row, userId) => (row.requester_id === userId ? row.addressee_id : row.requester_id);
@@ -90,39 +83,31 @@ async function listConnections(deps, session, url, response, config) {
 	const userId = session.userId;
 	const status = safeText(url.searchParams.get('status'), 16);
 	const direction = safeText(url.searchParams.get('direction'), 16) || 'all';
-	// Teammates are connected by default, so the roster is reconciled before the list is built.
-	// The co-member read never rejects; the edges and blocks reads reject by design. Promise.all
-	// handles all three from the start: awaiting them one by one would leave the second
-	// rejection unhandled, and Node 22 exits the process on that.
-	const [coMembers, edges, blockers] = await Promise.all([
-		sharedWorkspacePeers(config, deps.fetchImpl, userId),
+	// A read, never a write: the colleague edges are created by the database when a member
+	// joins a workspace, so this route only lists what is stored.
+	const [edges, blockers] = await Promise.all([
 		rest(config, deps.fetchImpl, connectionEdgesPath(userId)),
 		blockedViewerBy(config, deps.fetchImpl, userId),
 	]);
-	const stored = Array.isArray(edges) ? edges : [];
-	const paired = new Set(stored.map((row) => peerOf(row, userId)));
-	const inserted = await insertColleagueEdges(config, deps.fetchImpl, userId, coMembers.filter((peer) => !paired.has(peer)));
-	// F4: the edges were read concurrently with the co-member read and before the insert, so an
-	// edge a concurrent request (the caller's other tab, or the peer's own sync) creates in that
-	// window is in neither list: the response can be stale by one call and the next GET shows it.
-	// One filter for both lists: a co-member blocked before any edge existed still gets an
-	// accepted row from the insert, and only the blockers check hides it here.
-	const rows = mergeEdgesNewestFirst(inserted, stored).filter((row) => {
+	const rows = edgesNewestFirst(edges).filter((row) => {
 		if (status && row.status !== status) return false;
 		const outgoing = row.requester_id === userId;
 		if (direction === 'incoming' && outgoing) return false;
 		if (direction === 'outgoing' && !outgoing) return false;
 		return !blockers.has(peerOf(row, userId));
 	});
-	const identities = await identitySummaries(config, deps.fetchImpl, rows.map((row) => peerOf(row, userId)));
+	const peers = rows.map((row) => peerOf(row, userId));
+	const [identities, online] = await Promise.all([
+		identitySummaries(config, deps.fetchImpl, peers),
+		onlineAmong(deps.kv, peers, { now: deps.now() }),
+	]);
 	const connections = rows.map((row) => {
 		const peer = peerOf(row, userId);
 		const summary = identities.get(peer);
-		const online = summary?.lastSeenAt ? Date.now() - new Date(summary.lastSeenAt).getTime() < 90_000 : false;
 		return {
 			id: row.id,
 			// nested peer matches the frontend ContactEdge type (store/social/types.ts)
-			peer: { id: peer, name: summary?.name ?? 'Member', avatar: summary?.avatar ?? null, online },
+			peer: { id: peer, name: summary?.name ?? 'Member', avatar: summary?.avatar ?? null, online: online.has(peer) },
 			status: row.status,
 			direction: row.requester_id === userId ? 'outgoing' : 'incoming',
 			introMessage: row.intro_message ?? null,
@@ -172,10 +157,10 @@ async function createConnection(deps, session, request, response, config) {
 	// → the store inserted undefined → "can't access property 'peer'" crash on connect.
 	const identities = await identitySummaries(config, deps.fetchImpl, [addresseeId]);
 	const summary = identities.get(addresseeId);
-	const online = summary?.lastSeenAt ? Date.now() - new Date(summary.lastSeenAt).getTime() < 90_000 : false;
+	const online = await onlineAmong(deps.kv, [addresseeId], { now: deps.now() });
 	const connection = {
 		id: row.id,
-		peer: { id: addresseeId, name: summary?.name ?? 'Member', avatar: summary?.avatar ?? null, online },
+		peer: { id: addresseeId, name: summary?.name ?? 'Member', avatar: summary?.avatar ?? null, online: online.has(addresseeId) },
 		status: row.status,
 		direction: 'outgoing',
 		introMessage: row.intro_message ?? null,
@@ -320,10 +305,10 @@ async function handleSocialOps(deps, session, request, url, response, config) {
 
 /**
  * Build the social-graph dispatcher: `await handler(url, request, response)` →
- * true when handled. deps: { config, verifySession, fetchImpl?, env? }.
+ * true when handled. deps: { config, verifySession, fetchImpl?, env?, kv?, now? }.
  */
-export function createSocialHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
-	const deps = { fetchImpl, env };
+export function createSocialHandler({ config, verifySession, fetchImpl = fetch, env = process.env, kv = null, now = Date.now }) {
+	const deps = { fetchImpl, env, kv, now };
 	return async function handleSocialRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		const isConnections = pathname === '/api/connections';

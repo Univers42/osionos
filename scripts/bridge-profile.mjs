@@ -21,13 +21,13 @@
  *                                    email search is impossible by design)
  *   GET  /api/profile/:userId        display name, avatar, org role, presence
  *   POST /api/profile/avatar         {dataUrl} ≤200KB → identities.profile.avatar
- *   POST /api/profile/heartbeat      presence: bumps identities.last_seen_at
+ *   POST /api/profile/heartbeat      presence: the beat, nothing else
  *
- * PRESENCE MODEL (documented decision): the realtime gateway's WS PUBLISH
- * frame exists, but presence through it would tie liveness to a browser
- * socket the bridge cannot see. The simpler reliable path: clients POST
- * /api/profile/heartbeat every ~45s; anyone with last_seen_at < 90s ago is
- * shown online. Single writer (the bridge), one indexed column, no fanout.
+ * PRESENCE MODEL: the realtime gateway's WS PUBLISH frame exists, but presence through
+ * it would tie liveness to a browser socket the bridge cannot see. The simpler reliable
+ * path: clients POST /api/profile/heartbeat every ~45s and the beat is a key/value
+ * write (bridge-presence.mjs); the database column is refreshed at most once every ten
+ * minutes, and every surface that shows "online" reads the key/value store.
  */
 
 import {
@@ -38,24 +38,20 @@ import {
 	httpError,
 	memberWorkspacesAmong,
 	orgWorkspaceId,
+	readInChunks,
 	readJsonBody,
 	requireUuid,
 	rest,
 	safeText,
 	sendJson,
 } from './bridge-social-core.mjs';
+import { inFilter } from './bridge-paging.mjs';
 import { canReadPageRowAsMember } from './bridge-page-read.mjs';
+import { onlineAmong, recordHeartbeat } from './bridge-presence.mjs';
 
 const AVATAR_MAX_BYTES = 200 * 1024;
 const AVATAR_BODY_LIMIT = 320 * 1024;
-const PRESENCE_WINDOW_MS = 90 * 1000;
 const DATA_URL_PATTERN = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
-
-function isOnline(lastSeenAt, now = Date.now()) {
-	if (!lastSeenAt) return false;
-	const seen = Date.parse(lastSeenAt);
-	return Number.isFinite(seen) && now - seen < PRESENCE_WINDOW_MS;
-}
 
 /** G6 F5: ids are compared as strings (block set, self check), so a UUID is lower-cased at the
  *  boundary; otherwise `/api/profile/<UPPERCASE>` walks past the block list. */
@@ -97,6 +93,7 @@ async function getProfile(deps, session, userId, response, config) {
 	}
 	const { role, workspaceId } = await workspaceRole(config, deps.fetchImpl, userId, deps.env);
 	const fields = profile.fields && typeof profile.fields === 'object' && !Array.isArray(profile.fields) ? profile.fields : {};
+	const online = await onlineAmong(deps.kv, [userId], { now: deps.now() });
 	return sendJson(response, 200, {
 		ok: true,
 		userId,
@@ -104,8 +101,10 @@ async function getProfile(deps, session, userId, response, config) {
 		avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
 		role,
 		workspaceId,
+		// Caveat: the column is refreshed at most once every ten minutes, so this value is
+		// coarse; `online` below is the exact one.
 		lastSeenAt: row.last_seen_at ?? null,
-		online: isOnline(row.last_seen_at),
+		online: online.has(userId),
 		// Widened fields the admin-authored profile template binds to.
 		username: typeof row.username === 'string' ? row.username : null,
 		headline: typeof profile.headline === 'string' ? profile.headline : null,
@@ -135,13 +134,16 @@ async function postAvatar(deps, session, request, response, config) {
 }
 
 async function heartbeat(deps, session, response, config) {
-	const now = new Date().toISOString();
-	await rest(config, deps.fetchImpl, `osionos_bridge_identities?user_id=eq.${session.userId}`, {
-		method: 'PATCH',
-		body: { last_seen_at: now },
-		prefer: 'return=minimal',
+	// The body of the request is never read: the clock is the server's.
+	await recordHeartbeat(deps.kv, { userId: session.userId, config, fetchImpl: deps.fetchImpl, now: deps.now() });
+	response.writeHead(204, {
+		'cache-control': 'no-store',
+		'access-control-allow-origin': config.allowedOrigin,
+		'access-control-allow-credentials': 'true',
+		vary: 'Origin',
 	});
-	return sendJson(response, 200, { ok: true, lastSeenAt: now }, config);
+	response.end();
+	return true;
 }
 
 async function searchPeople(deps, session, url, response, config) {
@@ -154,7 +156,7 @@ async function searchPeople(deps, session, url, response, config) {
 		memberRoleByUser = new Map((Array.isArray(memberRows) ? memberRows : []).map((row) => [row.user_id, row.role]));
 	}
 	// Authoritative people via the safe osionos_people_directory view (public.users).
-	let path = 'osionos_people_directory?select=user_id,display_name,username,profile,last_seen_at,directory_opt_out&order=display_name.asc&limit=200';
+	let path = 'osionos_people_directory?select=user_id,display_name,username,profile,directory_opt_out&order=display_name.asc&limit=200';
 	path += '&directory_opt_out=not.eq.true';
 	path += directoryFuzzyFilter(query); // fuzzy: name/username/headline ILIKE + stem + FTS
 	const rows = await rest(config, deps.fetchImpl, path);
@@ -164,19 +166,25 @@ async function searchPeople(deps, session, url, response, config) {
 		if (row.directory_opt_out === true) continue; // honour opt-out
 		if (memberRoleByUser && !memberRoleByUser.has(row.user_id)) continue; // org members only
 		if (blockers.has(row.user_id)) continue; // target blocked the viewer
-		const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
-		people.push({
-			id: row.user_id,
-			name: row.display_name ?? 'Member',
-			username: row.username ?? null,
-			avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
-			headline: typeof profile.headline === 'string' ? profile.headline : null,
-			wsRole: memberRoleByUser?.get(row.user_id) ?? null,
-			online: isOnline(row.last_seen_at),
-		});
+		people.push(row);
 		if (people.length >= 20) break;
 	}
-	return sendJson(response, 200, { ok: true, people }, config);
+	const online = await onlineAmong(deps.kv, people.map((row) => row.user_id), { now: deps.now() });
+	return sendJson(response, 200, {
+		ok: true,
+		people: people.map((row) => {
+			const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
+			return {
+				id: row.user_id,
+				name: row.display_name ?? 'Member',
+				username: row.username ?? null,
+				avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
+				headline: typeof profile.headline === 'string' ? profile.headline : null,
+				wsRole: memberRoleByUser?.get(row.user_id) ?? null,
+				online: online.has(row.user_id),
+			};
+		}),
+	}, config);
 }
 
 async function patchMe(deps, session, request, response, config) {
@@ -216,7 +224,7 @@ async function embedDirectory(deps, session, response, config) {
 /**
  * Build the /api/profile + /api/people dispatcher: `await handler(url,
  * request, response)` → true when handled. deps: { config, verifySession,
- * fetchImpl?, env? }.
+ * fetchImpl?, env?, kv?, now? }.
  */
 /**
  * GET /api/profile/:userId/shares — the posts this member shared to their profile
@@ -233,8 +241,15 @@ async function listProfileShares(deps, session, userId, response, config) {
 	const pageIds = [...new Set(list.map((row) => row.page_id).filter((id) => UUID_REGEX.test(String(id))))];
 	const pagesById = new Map();
 	if (pageIds.length > 0) {
-		const pages = await rest(config, deps.fetchImpl, `osionos_pages?id=in.(${pageIds.join(',')})&select=id,title,icon,cover,workspace_id,owner_id,visibility,collaborators`);
-		for (const page of Array.isArray(pages) ? pages : []) pagesById.set(page.id, page);
+		const pages = await readInChunks(pageIds, async (chunk) => {
+			const part = await rest(config, deps.fetchImpl, `osionos_pages?${inFilter('id', chunk)}&select=id,title,icon,cover,workspace_id,owner_id,visibility,collaborators`);
+			return Array.isArray(part) ? part : [];
+		});
+		// The merged rows keep the order of the shares they belong to (newest share first).
+		const rank = new Map(pageIds.map((id, index) => [id, index]));
+		for (const page of pages.sort((left, right) => (rank.get(left.id) ?? 0) - (rank.get(right.id) ?? 0))) {
+			pagesById.set(page.id, page);
+		}
 	}
 	const members = await memberWorkspacesAmong(config, deps.fetchImpl, session, [...pagesById.values()].map((page) => page.workspace_id));
 	const seen = new Set();
@@ -249,8 +264,8 @@ async function listProfileShares(deps, session, userId, response, config) {
 	return sendJson(response, 200, { ok: true, shares: items }, config);
 }
 
-export function createProfileHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
-	const deps = { fetchImpl, env };
+export function createProfileHandler({ config, verifySession, fetchImpl = fetch, env = process.env, kv = null, now = Date.now }) {
+	const deps = { fetchImpl, env, kv, now };
 	return async function handleProfileRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		const isPeople = pathname === '/api/people';
@@ -277,7 +292,9 @@ export function createProfileHandler({ config, verifySession, fetchImpl = fetch,
 			}
 			return sendJson(response, 404, { ok: false, message: 'Profile route not found.' }, requestConfig);
 		} catch (error) {
-			return sendJson(response, error?.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'Profile request failed.' }, requestConfig);
+			const body = { ok: false, message: error instanceof Error ? error.message : 'Profile request failed.' };
+			if (error?.code) body.code = error.code;
+			return sendJson(response, error?.status ?? 500, body, requestConfig);
 		}
 	};
 }

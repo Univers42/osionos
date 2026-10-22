@@ -63,7 +63,13 @@ function matchesFilter(row, key, expr) {
 	if (expr === 'is.null') return row[key] == null;
 	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));
 	if (expr.startsWith('gt.')) return String(row[key] ?? '').toLowerCase() > expr.slice(3).toLowerCase();
-	if (expr.startsWith('in.(') && expr.endsWith(')')) return expr.slice(4, -1).split(',').some((item) => sameText(row[key], item));
+	if (expr.startsWith('in.(') && expr.endsWith(')')) {
+		// The bridge quotes the ids of its `in` lists (inFilter), so the quotes come off here.
+		return expr.slice(4, -1).split(',').map((item) => item.replace(/^"(.*)"$/, '$1')).some((item) => sameText(row[key], item));
+	}
+	if (expr.startsWith('not.in.(') && expr.endsWith(')')) {
+		return !expr.slice(8, -1).split(',').map((item) => item.replace(/^"(.*)"$/, '$1')).some((item) => sameText(row[key], item));
+	}
 	throw new Error(`postgrest mock: unsupported filter ${key}=${expr}`);
 }
 
@@ -163,12 +169,24 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		}
 		const name = parsed.pathname.replace('/rest/v1/', '');
 		const prefer = String(init.headers?.Prefer ?? '');
-		const call = { method, table: name, params: parsed.searchParams, body };
+		const call = { method, table: name, params: parsed.searchParams, body, prefer, headers: init.headers ?? {} };
 		calls.push(call);
 		const failure = failWhen(call);
 		if (failure) return jsonResponse(failure.body, failure.status);
 		if (name === 'rpc/osionos_bridge_list_workspaces') {
 			return jsonResponse(realWorkspaceRpc ? workspaceMemberRpc(body, table) : workspaceRpc(body));
+		}
+		// The feed counts function (P0-5a): the four numbers a post card shows.
+		if (name === 'rpc/osionos_feed_page_counts') {
+			const pageId = body?.p_page_id;
+			const viewer = body?.p_viewer;
+			const likes = table('osionos_feed_likes').filter((row) => row.page_id === pageId);
+			return jsonResponse([{
+				likes: likes.length,
+				liked_by_viewer: likes.some((row) => row.user_id === viewer),
+				comments: table('osionos_feed_comments').filter((row) => row.page_id === pageId).length,
+				shares: table('osionos_feed_shares').filter((row) => row.page_id === pageId).length,
+			}]);
 		}
 		if (method === 'GET' && isEmbedRead(parsed.searchParams)) {
 			try {
@@ -181,8 +199,8 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		if (method === 'GET') {
 			const rows = readRows(table(name), parsed.searchParams);
 			// PostgREST answers Content-Range `first-last/total` (or `*/0`) when asked for count=exact; the total
-			// ignores `limit`, so it is counted with the limit and the keyset cursor lifted.
-			const counted = new URLSearchParams([...parsed.searchParams].filter(([key]) => key !== 'limit' && key !== 'user_id'));
+			// ignores `limit`, so it is counted with the limit lifted.
+			const counted = new URLSearchParams([...parsed.searchParams].filter(([key]) => key !== 'limit' && key !== 'offset'));
 			const total = matchingRows(table(name), counted).length;
 			const range = rows.length === 0 ? '*/0' : `0-${rows.length - 1}/${total}`;
 			return jsonResponse(rows, 200, prefer.includes('count=exact') ? { 'content-range': range } : {});

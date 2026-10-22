@@ -142,14 +142,43 @@ function commentEntry(row, identities) {
 	};
 }
 
+const countsUnavailable = () => Object.assign(httpError('The feed counts are unavailable.', 503), { code: 'feed_counts_unavailable' });
+
+/**
+ * The engagement numbers of one post in one call: the RPC counts the likes, the comments
+ * and the shares, and says whether the viewer is one of the likers.
+ * A 404 is a function that is not deployed (P0-5a): the route answers 503 with a stable
+ * code instead of failing with a bare 404 the client cannot act on.
+ */
+async function feedPageCounts(config, fetchImpl, pageId, viewerId) {
+	let rows;
+	try {
+		rows = await rest(config, fetchImpl, 'rpc/osionos_feed_page_counts', {
+			method: 'POST',
+			body: { p_page_id: pageId, p_viewer: viewerId },
+			prefer: 'return=representation',
+		});
+	} catch (error) {
+		if (error?.status === 404) throw countsUnavailable();
+		throw error;
+	}
+	const row = Array.isArray(rows) ? rows[0] : rows;
+	if (!row || typeof row !== 'object') throw countsUnavailable();
+	return {
+		likes: Number(row.likes ?? 0),
+		likedByViewer: row.liked_by_viewer === true,
+		comments: Number(row.comments ?? 0),
+		shares: Number(row.shares ?? 0),
+	};
+}
+
 async function getLikes(deps, session, pageId, response, config) {
-	const rows = await rest(config, deps.fetchImpl, `osionos_feed_likes?page_id=eq.${pageId}&select=user_id`);
-	const likes = Array.isArray(rows) ? rows : [];
+	const counts = await feedPageCounts(config, deps.fetchImpl, pageId, session.userId);
 	return sendJson(response, 200, {
 		ok: true,
 		pageId,
-		count: likes.length,
-		likedByMe: likes.some((row) => row.user_id === session.userId),
+		count: counts.likes,
+		likedByMe: counts.likedByViewer,
 	}, config);
 }
 
@@ -173,11 +202,9 @@ async function setLike(deps, session, pageId, add, response, config) {
 /** GET reactions: aggregate by emoji, ordered first-added (MIN(created_at) asc). */
 async function getReactions(deps, session, pageId, response, config) {
 	const rows = await rest(config, deps.fetchImpl, `osionos_feed_reactions?page_id=eq.${pageId}&select=user_id,emoji,created_at&order=created_at.asc`);
-	// Comment count rides along on this one mount probe (no extra frontend request)
-	// so the card shows "💬 N" before the thread is expanded.
-	// ponytail: select=id + array length; swap to a Prefer:count=exact HEAD if a
-	// single post's comment volume ever gets large enough to matter.
-	const commentRows = await rest(config, deps.fetchImpl, `osionos_feed_comments?page_id=eq.${pageId}&select=id`);
+	// The comment count rides along on this one mount probe (no extra frontend request)
+	// so the card shows "💬 N" before the thread is expanded: the counts RPC answers it.
+	const counts = await feedPageCounts(config, deps.fetchImpl, pageId, session.userId);
 	// rows arrive created_at ascending → a Map keeps first-seen (earliest) order.
 	const byEmoji = new Map();
 	for (const row of Array.isArray(rows) ? rows : []) {
@@ -186,13 +213,12 @@ async function getReactions(deps, session, pageId, response, config) {
 		entry.count += 1;
 		if (row.user_id === session.userId) entry.mine = true;
 	}
-	const commentCount = Array.isArray(commentRows) ? commentRows.length : 0;
 	// The realtime workspace this page's feed events publish to — authoritative,
 	// because the client can't derive it: real pages use their own workspace,
 	// demo/live-DB rows fall to the org workspace. The feed socket subscribes to
 	// exactly `feed:<workspaceId>`, so publish and subscribe topics always match.
 	const workspaceId = await feedWorkspaceId(deps, config, session, pageId);
-	return sendJson(response, 200, { ok: true, pageId, reactions: [...byEmoji.values()], commentCount, workspaceId }, config);
+	return sendJson(response, 200, { ok: true, pageId, reactions: [...byEmoji.values()], commentCount: counts.comments, workspaceId }, config);
 }
 
 async function addReaction(deps, session, request, pageId, response, config) {
@@ -304,13 +330,13 @@ function shareLink(deps, config, pageId) {
 	return `${base}/?view=${pageId}`;
 }
 
-async function shareCount(deps, config, pageId) {
-	const rows = await rest(config, deps.fetchImpl, `osionos_feed_shares?page_id=eq.${pageId}&select=id`);
-	return Array.isArray(rows) ? rows.length : 0;
+async function shareCount(deps, config, session, pageId) {
+	const counts = await feedPageCounts(config, deps.fetchImpl, pageId, session.userId);
+	return counts.shares;
 }
 
 async function getShares(deps, session, pageId, response, config) {
-	return sendJson(response, 200, { count: await shareCount(deps, config, pageId) }, config);
+	return sendJson(response, 200, { count: await shareCount(deps, config, session, pageId) }, config);
 }
 
 async function postShare(deps, session, request, pageId, response, config) {
@@ -330,7 +356,7 @@ async function postShare(deps, session, request, pageId, response, config) {
 	});
 	await publishFeedEvent(deps, config, session, pageId, 'share');
 	void notifyFeedOwner(deps, config, session, pageId, 'feed_share', null);
-	return sendJson(response, 200, { ok: true, count: await shareCount(deps, config, pageId), link: shareLink(deps, config, pageId) }, config);
+	return sendJson(response, 200, { ok: true, count: await shareCount(deps, config, session, pageId), link: shareLink(deps, config, pageId) }, config);
 }
 
 /**
@@ -376,7 +402,9 @@ export function createFeedHandler({ config, verifySession, fetchImpl = fetch, en
 			if (resource === 'share' && method === 'POST') return await postShare(deps, session, request, pageId, response, requestConfig);
 			return sendJson(response, 405, { ok: false, message: `Method ${method} is not supported here.` }, requestConfig);
 		} catch (error) {
-			return sendJson(response, error?.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'Feed request failed.' }, requestConfig);
+			const body = { ok: false, message: error instanceof Error ? error.message : 'Feed request failed.' };
+			if (error?.code) body.code = error.code;
+			return sendJson(response, error?.status ?? 500, body, requestConfig);
 		}
 	};
 }
