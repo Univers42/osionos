@@ -5,6 +5,8 @@ Integration branch: `feat/account-platform` (from `origin/develop` @ 14e519ca). 
 
 Baseline on 14e519ca (2026-10-22): `quality` rc=0 · `test-bridge` 1430 pass / 1 skip · `test-canvas` 2562 pass / 2 skip.
 
+Reviewers (user's decision, 2026-10-22 ~16:00): the devil DIFF review of every 👹 package runs on a Sonnet subagent; spec reviews stay on opencode, and non-👹 diffs are reviewed by the orchestrator. The reason: four opencode reviews in a row had mutant claims that were not run or were contradicted by their own paste (D-P3-6ad, D-P3-6bd, D-P1-2ad), and they missed the P0-6 uuid gap. `oc-rotate.sh` now puts minimax-m3.1-flash first and never gives a review (the plan agent) to nemotron-3.5-lightning or -super-vl. The opencode D-P0-5ad and D-P0-6d runs were stopped and kept as `target/review/*-opencode`.
+
 Workers: opencode free models only, one session per WP, rotated across models on a refusal
 (`/home/dlesieur/Documents/groot-wt/bin/oc-rotate.sh`; per-attempt model in `target/wf/<WP>.rotate.log`).
 2026-10-22: three simultaneous starts were all refused (`provider.quota`) after 2-3 requests each;
