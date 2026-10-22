@@ -27,8 +27,8 @@
  * The caller owns the id and the hash of the row it is about to insert: the audit row that
  * names them is written BEFORE the insert, so a failed insert is still an attempt.
  *
- * Caveat: the list has no paging — a caller with more than 50 tokens sees the newest 50 and
- * the rest are not reachable from the API.
+ * Caveat: the list has no paging, but creation stops at PAT_LIVE_LIMIT live tokens and the list
+ * holds only live ones, so every live token is reachable from the API.
  * Caveat: a table that is not there (the desktop edition has no account plane yet) is an
  * outage, not an empty answer: the store answers 503 account_plane_unavailable.
  */
@@ -41,7 +41,9 @@ export const PAT_PREFIX = 'osio_pat_';
 const PAT_TABLE = 'osionos_personal_access_tokens';
 const PAT_SECRET_PATTERN = /^osio_pat_[A-Za-z0-9_-]{43}$/;
 const LIST_COLUMNS = 'id,name,kind,scopes,grants,created_at,expires_at,revoked_at,revoked_reason';
-const LIST_LIMIT = 50;
+// One number for the list window and the cap: a live token is always inside the window.
+export const PAT_LIVE_LIMIT = 50;
+const LIST_LIMIT = PAT_LIVE_LIMIT;
 
 /** A missing table is an outage, never an empty answer. */
 function unavailable(error) {
@@ -98,19 +100,37 @@ export async function createPat({ pg, userId, name, kind, scopes = [], grants = 
 }
 
 /**
- * The caller's tokens, read through the account role: the owner policy of the table is the
- * scope, so the route adds no user filter of its own and a mistake in it cannot widen the
+ * The caller's live (unrevoked) tokens, newest first. Revoked rows are left out so one can
+ * never push a live credential out of the limited window. Read through the account role: the
+ * owner policy of the table is the scope, so the route adds no user filter of its own and a mistake in it cannot widen the
  * answer. The columns are named, so the hash is never even fetched.
  */
 export async function listPats({ pg, session }) {
 	const params = new URLSearchParams({
 		select: LIST_COLUMNS,
+		revoked_at: 'is.null',
 		order: 'created_at.desc',
 		limit: String(LIST_LIMIT),
 	});
 	try {
 		const rows = await pg.asUser(session).get(`${PAT_TABLE}?${params}`);
 		return Array.isArray(rows) ? rows : [];
+	} catch (error) {
+		throw unavailable(error);
+	}
+}
+
+/** How many unrevoked tokens the user holds, counted up to PAT_LIVE_LIMIT. */
+export async function countLivePats({ pg, userId }) {
+	const params = new URLSearchParams({
+		user_id: `eq.${userId}`,
+		revoked_at: 'is.null',
+		select: 'id',
+		limit: String(PAT_LIVE_LIMIT),
+	});
+	try {
+		const rows = await pg.asService().get(`${PAT_TABLE}?${params}`);
+		return Array.isArray(rows) ? rows.length : 0;
 	} catch (error) {
 		throw unavailable(error);
 	}

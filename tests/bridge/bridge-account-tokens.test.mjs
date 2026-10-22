@@ -195,6 +195,38 @@ describe('GET /api/account/tokens', () => {
 	});
 });
 
+describe('the live token cap', () => {
+	const many = (count, overrides = {}) => Array.from({ length: count }, (_, index) => tokenRow({ name: `t${index}`, hash: String(index).padStart(64, '0'), ...overrides }));
+
+	it('lists only unrevoked tokens, so a revoked row never hides a live one', async (t) => {
+		const revoked = many(50, { createdAt: '2026-10-10T00:00:00.000Z', revokedAt: '2026-10-11T00:00:00.000Z' }).map((row, index) => ({ ...row, token_hash: `r${index}`.padStart(64, '0') }));
+		const live = tokenRow({ name: 'old live', hash: 'b'.repeat(64), createdAt: '2026-01-01T00:00:00.000Z' });
+		const { base } = await world(t, { tokens: [live, ...revoked] });
+		const token = await signIn(base);
+		const listed = await send(base, '/api/account/tokens', { token });
+		assert.deepEqual(listed.body.tokens.map((entry) => entry.name), ['old live']);
+	});
+
+	it('refuses the fifty-first live token with 422 pat_limit_reached and writes nothing', async (t) => {
+		const { base, store, kv } = await world(t, { tokens: many(50) });
+		const token = await signIn(base);
+		openSudo(kv, token);
+		const created = await send(base, '/api/account/tokens', { method: 'POST', token, body: classicBody() });
+		assert.equal(created.status, 422);
+		assert.equal(created.body.code, 'pat_limit_reached');
+		assert.equal(store.rows(PAT_TABLE).length, 50);
+		assert.equal(store.rows(AUDIT_TABLE).some((row) => row.event_type === 'pat_create'), false);
+	});
+
+	it('does not count revoked tokens toward the cap', async (t) => {
+		const { base, kv } = await world(t, { tokens: many(50, { revokedAt: '2026-10-02T00:00:00.000Z' }) });
+		const token = await signIn(base);
+		openSudo(kv, token);
+		const created = await send(base, '/api/account/tokens', { method: 'POST', token, body: classicBody() });
+		assert.equal(created.status, 201);
+	});
+});
+
 describe('POST /api/account/tokens', () => {
 	it('answers 201 with the secret once, and stores only the hash of it', async (t) => {
 		const { base, store, kv } = await world(t);
