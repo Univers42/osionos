@@ -13,7 +13,8 @@
 import { IS_DEV } from '@/shared/config/appUrls';
 import { api } from '@/shared/api/client';
 import seedUsers from '@/data/seedUsers.json';
-import type { StaticPersona, UserSession, Workspace } from '@/entities/user';
+import type { PlatformRole, StaticPersona, UserSession, Workspace } from '@/entities/user';
+import { isPlatformRole } from '@/features/auth/model/platformRole';
 
 type SeedUsersFile = {
   users?: StaticPersona[];
@@ -92,6 +93,18 @@ export function pageApiJwtFromSessionToken(token: string | null | undefined): st
 export function isAdminFromSessionToken(token: string | null | undefined): boolean {
   if (isBridgeAppTokenExpired(token)) return false;
   return decodeBridgeAppTokenPayload(token)?.is_admin === true;
+}
+
+/** The platform role the session claims: the signed `platform_role`, or 'admin' for a token
+ *  minted before the claim existed (the rolling deploy keeps the admin space reachable).
+ *  Null when the token says nothing — the client only offers a surface, the bridge decides. */
+export function platformRoleFromSessionToken(token: string | null | undefined): PlatformRole | null {
+  if (isBridgeAppTokenExpired(token)) return null;
+  const payload = decodeBridgeAppTokenPayload(token);
+  const claim = payload?.platform_role;
+  if (isPlatformRole(claim)) return claim;
+  if ((claim === undefined || claim === null) && payload?.is_admin === true) return 'admin';
+  return null;
 }
 
 export function isBridgeSession(session: UserSession | null | undefined): boolean {
