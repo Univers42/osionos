@@ -9,9 +9,7 @@
 /*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
-// The account plane must never be reached with the service role on behalf of a user, and
-// a PostgREST detail can quote another row, so these tests pin the exact JWT claims, the
-// fixed error messages and the paging boundaries as much as the happy path.
+// Pin the exact claims, fixed messages and paging edges; the service key must never reach a user call.
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
@@ -34,23 +32,14 @@ const SESSION = {
 	raw: { iss: 'osionos-bridge', aud: 'osionos-app', sub: USER_ID, jti: SESSION_ID, iat: 1, exp: 2 },
 };
 const decodeJwt = (token) => {
-	const [header, payload, signature] = token.split('.');
-	return {
-		header: JSON.parse(Buffer.from(header, 'base64url').toString('utf8')),
-		payload: JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')),
-		signature, signingInput: `${header}.${payload}`,
-	};
+	const [h, p, signature] = token.split('.');
+	return { header: JSON.parse(Buffer.from(h, 'base64url').toString('utf8')), payload: JSON.parse(Buffer.from(p, 'base64url').toString('utf8')), signature, signingInput: `${h}.${p}` };
 };
 const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const recorded = (answer) => {
 	const calls = [];
-	return {
-		calls,
-		fetchImpl: async (url, init = {}) => {
-			calls.push({ url: String(url), init });
-			return answer(url, init);
-		},
-	};
+	const fetchImpl = async (url, init = {}) => { calls.push({ url: String(url), init }); return answer(url, init); };
+	return { calls, fetchImpl };
 };
 const pgFor = (fetchImpl, env = ENV) => createPg({ config: CONFIG, env, fetchImpl, now: () => 1_760_000_000_000 });
 const predicate = (status, code) => (error) => error?.status === status && error?.code === code;
@@ -62,21 +51,15 @@ describe('mintAccountJwt', () => {
 		const { header, payload, signature, signingInput } = decodeJwt(token);
 		assert.deepEqual(header, { alg: 'HS256', typ: 'JWT' });
 		assert.deepEqual(Object.keys(payload).sort(), ['aud', 'exp', 'iat', 'iss', 'role', 'sid', 'sub']);
-		assert.equal(payload.iss, 'supabase');
-		assert.equal(payload.aud, ACCOUNT_JWT_AUDIENCE);
-		assert.equal(payload.role, ACCOUNT_DB_ROLE);
-		assert.equal(payload.sub, USER_ID);
-		assert.equal(payload.sid, SESSION_ID);
-		assert.equal(payload.iat, 1_760_000_000);
-		assert.equal(payload.exp, payload.iat + ACCOUNT_JWT_TTL_SECONDS);
+		assert.deepEqual([payload.iss, payload.aud, payload.role, payload.sub, payload.sid], ['supabase', ACCOUNT_JWT_AUDIENCE, ACCOUNT_DB_ROLE, USER_ID, SESSION_ID]);
+		assert.deepEqual([payload.iat, payload.exp], [1_760_000_000, 1_760_000_000 + ACCOUNT_JWT_TTL_SECONDS]);
 		assert.equal(createHmac('sha256', SECRET).update(signingInput).digest('base64url'), signature);
 	});
 	it('omits sid without a session id and honours a shorter ttl', () => {
 		const plain = decodeJwt(mintAccountJwt({ userId: USER_ID, secret: SECRET, nowMs: 1_760_000_000_000 })).payload;
-		assert.equal('sid' in plain, false);
-		assert.equal(plain.exp - plain.iat, 120);
 		const short = decodeJwt(mintAccountJwt({ userId: USER_ID, secret: SECRET, nowMs: 1_760_000_000_000, ttlSeconds: 30 })).payload;
-		assert.equal(short.exp - short.iat, 30);
+		const upper = decodeJwt(mintAccountJwt({ userId: 'ABCDEF01-2345-6789-ABCD-EF0123456789', secret: SECRET, nowMs: 1 })).payload;
+		assert.deepEqual(['sid' in plain, plain.exp - plain.iat, short.exp - short.iat, upper.sub], [false, 120, 30, 'abcdef01-2345-6789-abcd-ef0123456789']);
 	});
 	it('refuses a blank secret and a non-uuid subject', () => {
 		assert.throws(() => mintAccountJwt({ userId: USER_ID, secret: '', nowMs: 1 }), predicate(503, 'account_plane_unavailable'));
@@ -93,9 +76,7 @@ describe('createPg asUser', () => {
 		assert.equal(url, `${BASE}/osionos_profiles?select=*`);
 		assert.equal(init.headers.apikey, CONFIG.publicApiKey);
 		const payload = authPayload(init);
-		assert.equal(payload.sub, USER_ID);
-		assert.equal(payload.sid, SESSION_ID);
-		assert.equal(payload.role, ACCOUNT_DB_ROLE);
+		assert.deepEqual([payload.sub, payload.sid, payload.role], [USER_ID, SESSION_ID, ACCOUNT_DB_ROLE]);
 		assert.equal(JSON.stringify({ url, headers: init.headers, body: init.body }).includes(SERVICE_KEY), false);
 	});
 	it('drops a non-uuid session jti and omits apikey without a public key', async () => {
@@ -128,6 +109,24 @@ describe('createPg asService', () => {
 		const pg = pgFor(fetchImpl, { ...ENV, OSIONOS_POSTGREST_URL: 'http://postgrest:3000/custom/' });
 		await pg.asService().get('osionos_profiles');
 		assert.equal(calls[0].url, 'http://postgrest:3000/custom/osionos_profiles');
+	});
+	it('lets encoded filter values and keyset cursors through the query string', async () => {
+		const values = ['AC/DC', 'c\\d', 'x..y', 'https://e.x'];
+		const { calls, fetchImpl } = recorded(() => jsonResponse(200, []));
+		const pg = pgFor(fetchImpl);
+		await pg.asService().get(`t?${inFilter('name', values)}`);
+		const decoded = new URL(calls[0].url).searchParams.get('name').slice('in.('.length, -1).split(',');
+		assert.deepEqual(decoded.map((value) => value.slice(1, -1).replace(/\\(["\\])/g, '$1')), values);
+		await pg.asService().get(`t?${keyset({ order: [['name', 'asc']], cursor: ['AC/DC'], limit: 5 }).query}`);
+		assert.equal(calls.length, 2);
+		assert.equal(new URL(calls[1].url).searchParams.get('or'), '(name.gt."AC/DC")');
+	});
+	it('rejects a missing base with baas_unconfigured before fetch', async () => {
+		const { calls, fetchImpl } = recorded(() => jsonResponse(200, []));
+		const pg = createPg({ config: { ...CONFIG, baasUrl: '' }, env: ENV, fetchImpl });
+		await assert.rejects(pg.asService().get('x'), predicate(503, 'baas_unconfigured'));
+		await assert.rejects(pg.asUser(SESSION).get('x'), predicate(503, 'baas_unconfigured'));
+		assert.equal(calls.length, 0);
 	});
 });
 describe('postgrest status mapping', () => {
@@ -178,7 +177,7 @@ describe('postgrest status mapping', () => {
 	});
 });
 describe('path guard', () => {
-	const unsafe = ['/x', 'a/../b', 'http://x', 'a\nb', 'a\\b', '%2E%2e/%2e%2e/auth/v1/admin/users', 'x/%2F..', '%5c'];
+	const unsafe = ['/x', 'a/../b', 'http://x', 'a\nb', 'a\\b', '%2E%2e/%2e%2e/auth/v1/admin/users', 'x/%2F..', '%5c', '%2e%2e/x?y=1', 'a/../b?c=d'];
 	for (const path of unsafe) {
 		it(`rejects ${JSON.stringify(path)} without calling fetch`, async () => {
 			const { calls, fetchImpl } = recorded(() => jsonResponse(200, []));
@@ -212,8 +211,6 @@ describe('idChunks', () => {
 		const fiftyOne = idChunks(idsOf(51));
 		assert.deepEqual(fiftyOne.map((chunk) => chunk.length), [50, 1]);
 		assert.equal(idChunks(idsOf(500)).length, 10);
-	});
-	it('drops nulls, empties and duplicates keeping first-seen order', () => {
 		assert.deepEqual(idChunks(['b', null, 'a', '', undefined, 'b', 'c', 'a']), [['b', 'a', 'c']]);
 		for (const size of [0, 501, 1.5]) assert.throws(() => idChunks(['a'], size), RangeError);
 	});
@@ -265,6 +262,7 @@ describe('keyset', () => {
 		assert.equal(keyset({ order, limit: 'abc' }).take, 20);
 		assert.equal(keyset({ order, limit: 1000 }).take, 100);
 		assert.equal(keyset({ order, limit: 1000, maxLimit: 40 }).take, 40);
+		assert.deepEqual([keyset({ order, limit: '' }).take, keyset({ order, limit: null }).take], [20, 20]);
 		assert.equal(keyset({ order, limit: 5 }).query, 'order=a.asc&limit=6');
 	});
 	it('keeps a hostile cursor inside one or parameter', () => {
@@ -295,5 +293,8 @@ describe('pageOf', () => {
 	it('refuses a null order value in the cursor row', () => {
 		const rows = [row('2026-10-22T00:00:03Z', 'a'), row(null, 'b'), row('2026-10-22T00:00:01Z', 'c')];
 		assert.throws(() => pageOf(rows, order, 2), TypeError);
+	});
+	it('refuses non-cursor order value types', () => {
+		for (const bad of [true, {}, ['x']]) assert.throws(() => pageOf([row('2026-10-22T00:00:03Z', bad), row('2026-10-22T00:00:02Z', 'b')], order, 1), TypeError);
 	});
 });
