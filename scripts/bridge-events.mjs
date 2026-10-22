@@ -131,12 +131,12 @@ function sendTooMany(response, config, retryAfterSec) {
 	return true;
 }
 
-/** The SQLSTATE the database refused with, when it names one. */
+/**
+ * The SQLSTATE the database refused with: PostgREST's `"code"` field only, so a
+ * message that merely contains the digits is not a refusal.
+ */
 function sqlStateOf(error) {
-	const text = String(error?.message ?? '');
-	const named = /"code"\s*:\s*"(\w{5})"/.exec(text);
-	if (named) return named[1];
-	return /\b(22023|54000)\b/.exec(text)?.[1] ?? '';
+	return /"code"\s*:\s*"(\w{5})"/.exec(String(error?.message ?? ''))?.[1] ?? '';
 }
 
 /**
@@ -190,7 +190,7 @@ export function createEventsHandler({ config, verifySession, fetchImpl = fetch, 
 				if (rank === 0) continue;
 				kept.push({ ...event, rank });
 			}
-			if (kept.length === 0) return sendJson(response, 200, { ok: true, written: 0 }, requestConfig);
+			if (kept.length === 0) return sendJson(response, 200, { ok: true }, requestConfig);
 			// The ACL in ONE batched read: a page the caller may not read NOW
 			// is dropped — unreadable, archived, a ghost, their own.
 			const rows = await readPages(deps, requestConfig, kept.map((event) => event.pageId));
@@ -208,10 +208,9 @@ export function createEventsHandler({ config, verifySession, fetchImpl = fetch, 
 					rank: event.rank,
 				});
 			}
-			if (events.length === 0) return sendJson(response, 200, { ok: true, written: 0 }, requestConfig);
-			let written;
+			if (events.length === 0) return sendJson(response, 200, { ok: true }, requestConfig);
 			try {
-				written = await rest(requestConfig, deps.fetchImpl, 'rpc/ai_events_beacon', {
+				await rest(requestConfig, deps.fetchImpl, 'rpc/ai_events_beacon', {
 					method: 'POST',
 					body: { p_user: session.userId, p_events: events },
 				});
@@ -222,7 +221,8 @@ export function createEventsHandler({ config, verifySession, fetchImpl = fetch, 
 				console.warn(`[osionos-bridge] the beacon write failed: ${messageOf(error)}`);
 				return sendJson(response, 503, { ok: false }, requestConfig);
 			}
-			return sendJson(response, 200, { ok: true, written: Number(written) || 0 }, requestConfig);
+			// No count: a count would tell which slate pages turned unreadable.
+			return sendJson(response, 200, { ok: true }, requestConfig);
 		} catch (error) {
 			const status = Number(error?.status);
 			if (status === 401) return sendJson(response, 401, { ok: false, message: messageOf(error) }, requestConfig);
