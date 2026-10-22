@@ -11,20 +11,19 @@ DETERMINISTIC: the seed is 7, the generator is numpy's, and the users are
 written by hand — so the file is the same on every machine, and a change in it
 is a change in the contract, not in the noise.
 
-Usage:  python scripts/write_foldin_fixture.py
+Usage, from services/osionos-ml (a module run puts the service on sys.path):
+    python -m scripts.write_foldin_fixture
 """
 
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 
-SERVICE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(SERVICE))
+from osml.events import EVENT_WEIGHTS
+from osml.foldin import fold_in
 
-from osml.events import EVENT_WEIGHTS  # noqa: E402
-from osml.foldin import fold_in  # noqa: E402
+SERVICE = Path(__file__).resolve().parents[1]
 
 SEED = 7
 ITEMS = 12
