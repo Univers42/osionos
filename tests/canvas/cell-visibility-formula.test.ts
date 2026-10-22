@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import test, { before } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -18,7 +19,8 @@ import { fileURLToPath } from "node:url";
 import type { LayoutCell } from "../../src/entities/block/model/types.ts";
 import { buildCanvasBlockPatch } from "../../src/features/block-editor/ui/canvas/controller/persistence.ts";
 import { createCanvasStateFromLegacy, gridConfigFromLegacy, migrate, unmigrateCanvasCells } from "../../src/features/block-editor/ui/canvas/model/migration.ts";
-import { evaluateCellVisibility, toPropertyMap } from "../../src/features/block-editor/ui/canvas/model/visibility.ts";
+import { canvasReducer } from "../../src/features/block-editor/ui/canvas/model/canvasReducer.ts";
+import { evaluateCellVisibility, filterHiddenCells, filterVisibleCells, resolvePropertyMap, toPropertyMap } from "../../src/features/block-editor/ui/canvas/model/visibility.ts";
 import {
   FORMULA_ENGINE_UNAVAILABLE,
   initFormulaEngine,
@@ -99,6 +101,17 @@ test("a falsy result hides the cell even when it is not a boolean", () => {
   assert.equal(evaluateCellVisibility('prop("name")', { name: "" }), false);
 });
 
+test("a missing property yields undefined and hides the cell (m6)", () => {
+  assert.equal(evaluateCellVisibility('prop("missing")', {}), false);
+});
+
+test("a null or undefined result hides the cell", () => {
+  assert.equal(evaluateCellVisibility("x", {}, () => null), false);
+  assert.equal(evaluateCellVisibility("x", {}, () => undefined), false);
+  assert.equal(evaluateCellVisibility('prop("x")', { x: null }), false);
+  assert.equal(evaluateCellVisibility('prop("x")', { x: undefined }), false);
+});
+
 test("the page's own properties are the formula's context", () => {
   const props = toPropertyMap([
     { key: "status", label: "Status", value: "active" },
@@ -136,4 +149,53 @@ test("an empty or malformed visibility formula means always visible", () => {
   const withoutFormula = migrate(legacyCell(), grid);
   assert.equal(Object.hasOwn(withoutFormula, "visibilityFormula"), false);
   assert.equal(evaluateCellVisibility(withoutFormula.visibilityFormula, {}), true);
+});
+
+function stateWithFormulas() {
+  return createCanvasStateFromLegacy("layout", LAYOUT_CONFIG, [
+    legacyCell({ id: "a", visibilityFormula: 'prop("status") == "active"' }),
+    legacyCell({ id: "b", colStart: 5, visibilityFormula: 'prop("status") == "active"' }),
+    legacyCell({ id: "c", colStart: 9 }),
+  ]);
+}
+
+test("the render list keeps visible cells and drops hidden ones, the store keeps all", () => {
+  const state = stateWithFormulas();
+  const done = { status: "done" };
+  assert.deepEqual(filterVisibleCells(state.cells, done).map((cell) => cell.id), ["c"]);
+  assert.deepEqual(filterHiddenCells(state.cells, done).map((cell) => cell.id), ["a", "b"]);
+  assert.equal(state.cells.length, 3);
+  assert.deepEqual(filterVisibleCells(state.cells, { status: "active" }).map((cell) => cell.id), ["a", "b", "c"]);
+  assert.deepEqual(filterHiddenCells(state.cells, { status: "active" }), []);
+});
+
+test("every hidden cell, not only the first, can be selected and have its formula edited", () => {
+  let state = stateWithFormulas();
+  const hidden = filterHiddenCells(state.cells, { status: "done" });
+  assert.equal(hidden.length, 2);
+  state = canvasReducer(state, { type: "select", ids: [hidden[1].id] });
+  assert.deepEqual(state.selectedIds, ["b"]);
+  state = canvasReducer(state, { type: "updateCell", id: "b", patch: { visibilityFormula: "" } });
+  assert.equal(filterHiddenCells(state.cells, { status: "done" }).map((cell) => cell.id).join(), "a");
+});
+
+test("read-only rendering resolves properties from a list, a map or nothing", () => {
+  assert.deepEqual(resolvePropertyMap([{ key: "status", value: "active" }]), { status: "active" });
+  assert.deepEqual(resolvePropertyMap({ status: "done" }), { status: "done" });
+  assert.deepEqual(resolvePropertyMap(undefined), {});
+  const cells = [legacyCell({ id: "x", visibilityFormula: 'prop("status") == "active"' })];
+  assert.equal(filterVisibleCells(cells, resolvePropertyMap(undefined)).length, 0);
+  assert.equal(filterVisibleCells(cells, resolvePropertyMap([{ key: "status", value: "active" }])).length, 1);
+});
+
+// Caveat: source-text guards, not behaviour; they pin that each renderer goes
+// through the shared helper and that a hidden cell draws nothing.
+const source = (path: string) => readFileSync(fileURLToPath(new URL(`../../src/${path}`, import.meta.url)), "utf8");
+
+test("the stage, the cell and the read-only renderer all honour visibility through the shared helper", () => {
+  assert.match(source("features/block-editor/ui/canvas/view/CanvasStage.tsx"), /filterVisibleCells\(orderedCells, propertyMap\)/);
+  assert.match(source("features/block-editor/ui/canvas/view/CanvasCellView.tsx"), /if \(!evaluateCellVisibility\(cell\.visibilityFormula, properties\)\) return null;/);
+  assert.match(source("entities/block/ui/LayoutBlockReadOnly.tsx"), /filterVisibleCells\(block\.layoutCells/);
+  assert.match(source("widgets/page-renderer/ui/PageBlocksRenderer.tsx"), /properties=\{properties\}/);
+  assert.match(source("pages/public/PublicPageView.tsx"), /properties=\{page\.properties\}/);
 });

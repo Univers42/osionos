@@ -76,3 +76,23 @@ export function toPropertyMap(properties?: readonly { key: string; value: unknow
   for (const property of properties ?? []) props[property.key] = property.value;
   return props;
 }
+
+/** Accepts the page's property list or an already-built map; absent → empty map. */
+export function resolvePropertyMap(
+  properties?: readonly { key: string; value: unknown }[] | PropertyMap,
+): PropertyMap {
+  return Array.isArray(properties) ? toPropertyMap(properties) : ((properties ?? {}) as PropertyMap);
+}
+
+/**
+ * The cells a viewer sees. The ONE filter every renderer (editor stage,
+ * read-only, published) goes through, so they cannot disagree.
+ */
+export function filterVisibleCells<T extends { visibilityFormula?: string }>(cells: readonly T[], props: PropertyMap): T[] {
+  return cells.filter((cell) => evaluateCellVisibility(cell.visibilityFormula, props));
+}
+
+/** The complement of {@link filterVisibleCells}: cells the editor must still let the author reach. */
+export function filterHiddenCells<T extends { visibilityFormula?: string }>(cells: readonly T[], props: PropertyMap): T[] {
+  return cells.filter((cell) => !evaluateCellVisibility(cell.visibilityFormula, props));
+}

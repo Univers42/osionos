@@ -19,6 +19,7 @@ export interface PublicPage {
   icon: string | null;
   content: Block[];
   publishedAt: string;
+  properties?: import("@/entities/page/model/types").PagePropertyEntry[];
 }
 
 interface PublicPageState {
@@ -43,7 +44,7 @@ export function usePublicPage(): PublicPageState {
     api.get<{ ok?: boolean; title?: string; icon?: string | null; content?: Block[]; publishedAt?: string }>(`/api/public/pages/${token}`)
       .then((res) => {
         if (!alive) return;
-        if (res.ok) setState({ loading: false, page: { title: res.title ?? "Untitled", icon: res.icon ?? null, content: res.content ?? [], publishedAt: res.publishedAt ?? "" }, error: null });
+        if (res.ok) setState({ loading: false, page: { title: res.title ?? "Untitled", icon: res.icon ?? null, content: res.content ?? [], publishedAt: res.publishedAt ?? "", properties: (res as { properties?: import("@/entities/page/model/types").PagePropertyEntry[] }).properties }, error: null });
         else setState({ loading: false, page: null, error: "This page is not published." });
       })
       .catch(() => { if (alive) setState({ loading: false, page: null, error: "This page is not available." }); });
