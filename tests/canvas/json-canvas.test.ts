@@ -15,6 +15,7 @@ import {
   type Canvas,
 } from "../../src/features/whiteboard/model/jsonCanvas.ts";
 import { MAX_IMPORT_ELEMENTS } from "../../src/features/whiteboard/model/boardLimits.ts";
+import { IdMinter } from "../../src/features/whiteboard/model/jsonCanvasElements.ts";
 import { importJsonCanvas } from "../../src/features/whiteboard/model/jsonCanvasImport.ts";
 import { createWhiteboardClient, WhiteboardApiError } from "../../src/features/whiteboard/model/whiteboardClient.ts";
 import { JsonCanvasImport } from "../../src/features/whiteboard/ui/JsonCanvasImport.tsx";
@@ -426,4 +427,97 @@ test("the export says that a board is reachable by anyone with its link", () => 
 
 test("the file the import reads is capped at 5 MB", () => {
   assert.equal(MAX_CANVAS_FILE_BYTES, 5 * 1024 * 1024);
+});
+
+// --- review conditions (PR #88) ---
+
+const box = { x: 0, y: 0, width: 10, height: 10 };
+const textNode = (id: string, extra: Record<string, unknown> = {}) => ({ id, type: "text", text: "t", ...box, ...extra });
+const doc = (nodes: unknown[], edges: unknown[] = []) => JSON.stringify({ nodes, edges });
+const reasonOf = (text: string) => {
+  const result = parseJsonCanvas(text);
+  return result.ok ? "" : result.reason;
+};
+
+test("C1: fractional coordinates export as integers and the export re-imports", () => {
+  const { canvas: out } = exportJsonCanvas([
+    { id: "a", type: "rectangle", x: 10.6, y: -3.4, width: 99.5, height: 20.2, text: "hi", isDeleted: false },
+  ]);
+  assert.equal(out.nodes[0].x, 11);
+  assert.equal(out.nodes[0].y, -3);
+  assert.equal(out.nodes[0].width, 100);
+  assert.equal(parseJsonCanvas(JSON.stringify(out)).ok, true);
+  const floats = parseJsonCanvas(doc([textNode("f", { x: 1.5, width: 0.6 })]));
+  assert.equal(floats.ok, true);
+  if (floats.ok) assert.deepEqual([floats.canvas.nodes[0].x, floats.canvas.nodes[0].width], [2, 1]);
+});
+
+test("C2: two edges sharing an id, or an edge id equal to a node id, are refused", () => {
+  const edge = (id: string) => ({ id, fromNode: "a", toNode: "b" });
+  const nodes = [textNode("a"), textNode("b")];
+  assert.match(reasonOf(doc(nodes, [edge("e"), edge("e")])), /share the id/);
+  assert.match(reasonOf(doc(nodes, [edge("a")])), /share the id/);
+});
+
+test("C3: edge.label, node.type, node.backgroundStyle, edge.fromNode and edge.toNode are capped", () => {
+  const nodes = [textNode("a"), textNode("b")];
+  const edge = (extra: Record<string, unknown>) => doc(nodes, [{ id: "e", fromNode: "a", toNode: "b", ...extra }]);
+  assert.equal(parseJsonCanvas(edge({ label: "x".repeat(10_001) })).ok, false);
+  assert.equal(parseJsonCanvas(edge({ fromNode: "x".repeat(1_025) })).ok, false);
+  assert.equal(parseJsonCanvas(edge({ toNode: "x".repeat(1_025) })).ok, false);
+  assert.equal(parseJsonCanvas(doc([textNode("a", { type: "x".repeat(65) })])).ok, false);
+  assert.equal(parseJsonCanvas(doc([textNode("a", { backgroundStyle: "x".repeat(65) })])).ok, false);
+  assert.equal(parseJsonCanvas(edge({ label: "x".repeat(10_000) })).ok, true);
+});
+
+test("C3b: a node or edge array over the element cap is refused by the schema", () => {
+  const nodes = Array.from({ length: MAX_IMPORT_ELEMENTS + 1 }, (_, index) => textNode(`n${index}`));
+  assert.equal(parseJsonCanvas(doc(nodes)).ok, false);
+});
+
+test("C4: importJsonCanvas refuses content one byte over the file cap, before parsing", async () => {
+  const client = createWhiteboardClient(async () => {
+    throw new Error("the client must not be reached");
+  });
+  const over = "a".repeat(MAX_CANVAS_FILE_BYTES + 1);
+  const result = await importJsonCanvas({ content: over, title: "t", client });
+  assert.equal(result.ok, false);
+  assert.match(result.ok ? "" : result.message, /at most/);
+  // Multi-byte characters count by bytes, not by length.
+  const wide = await importJsonCanvas({ content: "é".repeat(MAX_CANVAS_FILE_BYTES / 2 + 1), title: "t", client });
+  assert.match(wide.ok ? "" : wide.message, /at most/);
+});
+
+test("C5: every exported node and edge passes the import schema; offenders are skipped and counted", () => {
+  const { canvas: out, skipped } = exportJsonCanvas([
+    { id: "ok", type: "rectangle", ...box, text: "fine", isDeleted: false },
+    { id: "far", type: "rectangle", x: 5e6, y: 0, width: 10, height: 10, isDeleted: false },
+    { id: "flat", type: "rectangle", x: 0, y: 0, width: 0, height: 10, isDeleted: false },
+    { id: "i".repeat(1_025), type: "rectangle", ...box, isDeleted: false },
+    { id: "big", type: "text", ...box, text: "x".repeat(10_001), isDeleted: false },
+    { id: "arrow", type: "arrow", startBinding: "far", endBinding: "ok", x: 0, y: 0, points: [[0, 0], [5, 5]], isDeleted: false },
+  ]);
+  assert.deepEqual(out.nodes.map((node) => node.id), ["ok"]);
+  assert.equal(out.edges.length, 0);
+  assert.equal(skipped, 5);
+  assert.equal(parseJsonCanvas(JSON.stringify(out)).ok, true);
+});
+
+test("C6: toEnd is none unless the arrow has an arrowhead", () => {
+  const shapes = [
+    { id: "a", type: "rectangle", ...box, text: "a", isDeleted: false },
+    { id: "b", type: "rectangle", x: 100, y: 0, width: 10, height: 10, text: "b", isDeleted: false },
+  ];
+  const arrow = (id: string, extra: Record<string, unknown>) => ({
+    id, type: "arrow", startBinding: "a", endBinding: "b", x: 10, y: 5, points: [[0, 0], [90, 0]], isDeleted: false, ...extra,
+  });
+  const { canvas: out } = exportJsonCanvas([...shapes, arrow("none", {}), arrow("head", { endArrowhead: "arrow" })]);
+  assert.equal(out.edges.find((edge) => edge.id === "none")?.toEnd, "none");
+  assert.equal(out.edges.find((edge) => edge.id === "head")?.toEnd, "arrow");
+});
+
+test("C7: IdMinter never returns an id twice, fallback path included", () => {
+  const minter = new IdMinter() as unknown as { take(base: string): string };
+  const ids = Array.from({ length: 2_500 }, () => minter.take("same"));
+  assert.equal(new Set(ids).size, ids.length);
 });
