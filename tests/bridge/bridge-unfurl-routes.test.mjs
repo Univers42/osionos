@@ -98,9 +98,11 @@ describe('unfurl:<userId> bucket', () => {
 });
 
 describe('POST /api/chat/link-preview', () => {
+	// Credentials in the URL are not refused here, unlike /api/embed/resolve: this guard
+	// is also the webhooks', where `https://user:token@host/` is how basic auth is given.
 	it('refuses private targets with 422 through the real default guard', async () => {
 		const post = await serve([createChatHandler({ config, verifySession })]);
-		for (const url of ['http://127.0.0.1/', 'http://169.254.169.254/latest/', 'http://[::ffff:7f00:1]/', 'http://user:pw@example.com/']) {
+		for (const url of ['http://127.0.0.1/', 'http://169.254.169.254/latest/', 'http://[::ffff:7f00:1]/']) {
 			assert.equal((await post('/api/chat/link-preview', 'snapshot-user-3', { url })).status, 422, url);
 		}
 	});
