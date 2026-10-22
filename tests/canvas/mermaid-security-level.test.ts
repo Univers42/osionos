@@ -15,20 +15,24 @@
 // the nested notion-database-sys preview shipped "loose" while the app's own was strict.
 // Devil C108 (2026-10-22): "strict" alone is not a sandbox — strict still lets DOMPurify
 // keep an <img> inside a label, so every viewer's browser fetches a third-party URL, and a
-// `%%{init:…}%%` directive rewrites the config per diagram. The app therefore renders
-// through the LOCKED renderer of @osionos/ui (`lockedMermaidConfig`), and the kit's own
-// preview keeps an inline strict literal until its slice lands.
+// `%%{init:…}%%` directive rewrites the config. The app therefore renders through the
+// LOCKED renderer of @osionos/ui (`lockedMermaidConfig`), and the kit's own preview now
+// draws through that same host renderer (C108) — no inline literal is left anywhere.
 // Ponytail: a text scan — it reads the argument of each `initialize(` call; a config
 // object built in another file and passed by name is counted as a call without "strict",
-// so it fails loudly rather than passing.
+// so it fails loudly rather than passing. A dynamic `import(name)` whose module name is a
+// VARIABLE is not seen either: the scan matches the literal "mermaid" only.
 
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import test from "node:test";
 
 const SKIP = new Set(["node_modules", "dist", "build", ".git", "coverage"]);
 const SOURCE = /\.(ts|tsx|js|jsx|mjs)$/;
+
+/** The one renderer that may touch mermaid — the locked one. */
+const LOCKED_RENDERER = "packages/osionos-ui/src/molecules/MermaidDiagram/MermaidDiagram.tsx";
 
 /** Every source file under `dir`, depth-first. O(files). */
 function sourceFiles(dir: string): string[] {
@@ -62,6 +66,11 @@ function initializeArgs(text: string): string[] {
   return args;
 }
 
+/** The scan's paths are relative; compare them the same way on every platform. */
+function posix(file: string): string {
+  return file.split(sep).join("/");
+}
+
 test("every mermaid.initialize in src/ and packages/ is locked", () => {
   const sites: string[] = [];
   for (const file of [...sourceFiles("src"), ...sourceFiles("packages")]) {
@@ -81,6 +90,18 @@ test("every mermaid.initialize in src/ and packages/ is locked", () => {
       );
     }
   }
-  // The two known renderers; fewer means the scan stopped seeing them.
-  assert.ok(sites.length >= 2, `found only: ${sites.join(", ")}`);
+  // ONE renderer left: the locked one. A second site means a renderer came back
+  // (devil C108) — the kit's preview now draws through the host's renderer.
+  assert.deepEqual(sites.map(posix), [LOCKED_RENDERER]);
+});
+
+test("only the locked renderer imports mermaid", () => {
+  const importers: string[] = [];
+  for (const file of [...sourceFiles("src"), ...sourceFiles("packages")]) {
+    const text = readFileSync(file, "utf8");
+    if (!/import\(\s*["']mermaid["']\s*\)|from\s+["']mermaid["']/.test(text)) continue;
+    importers.push(file);
+  }
+  // The kit included: src/shared/notion-database-sys is under src/.
+  assert.deepEqual(importers.map(posix), [LOCKED_RENDERER]);
 });
