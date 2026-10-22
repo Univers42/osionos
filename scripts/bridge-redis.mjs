@@ -17,47 +17,7 @@
 
 import net from 'node:net';
 import tls from 'node:tls';
-
-// Minimal RESP parser: { value, end } or null while the reply is incomplete.
-function parseReply(buffer, offset = 0) {
-	if (offset >= buffer.length) return null;
-	const type = buffer[offset];
-	const lineEnd = buffer.indexOf('\r\n', offset);
-	if (lineEnd === -1) return null;
-	const line = buffer.toString('utf8', offset + 1, lineEnd);
-	const next = lineEnd + 2;
-	if (type === 0x2b) return { value: line, end: next };
-	if (type === 0x2d) return { value: new Error(line), end: next };
-	if (type === 0x3a) return { value: Number(line), end: next };
-	if (type === 0x24) {
-		const length = Number(line);
-		if (length === -1) return { value: null, end: next };
-		const end = next + length + 2;
-		if (end > buffer.length) return null;
-		return { value: buffer.toString('utf8', next, next + length), end };
-	}
-	if (type !== 0x2a) return null;
-	const count = Number(line);
-	if (count === -1) return { value: null, end: next };
-	const items = [];
-	let cursor = next;
-	for (let index = 0; index < count; index += 1) {
-		const reply = parseReply(buffer, cursor);
-		if (!reply) return null;
-		items.push(reply.value);
-		cursor = reply.end;
-	}
-	return { value: items, end: cursor };
-}
-
-function encodeCommand(args) {
-	let out = `*${args.length}\r\n`;
-	for (const arg of args) {
-		const value = String(arg);
-		out += `$${Buffer.byteLength(value)}\r\n${value}\r\n`;
-	}
-	return out;
-}
+import { encodeCommand, parseReply } from './bridge-resp.mjs';
 
 /**
  * Replies are matched to waiters in order, so a timeout DESTROYS the socket: dropping one
@@ -77,6 +37,7 @@ export class RedisKv {
 		this.closed = false;
 		this.reconnectTimer = null;
 		this.readyWaiters = [];
+		this.warnedState = null;
 		this.#connect();
 	}
 
@@ -84,31 +45,65 @@ export class RedisKv {
 		return this.ready;
 	}
 
-	whenReady() {
+	// One warning per connection state: a dead Redis must not flood the log.
+	#warn(state, message) {
+		if (this.warnedState === state) return;
+		this.warnedState = state;
+		this.logger.warn?.(`[osionos-bridge] ${message}`);
+	}
+
+	// A waiter that gave up leaves the queue: the next successful connection must not
+	// resurrect it, and the timeout timer must not hold the process open.
+	whenReady({ timeoutMs = 5_000 } = {}) {
 		if (this.ready) return Promise.resolve();
-		return new Promise((resolve) => this.readyWaiters.push(resolve));
+		return new Promise((resolve, reject) => {
+			const waiter = { resolve, reject, timer: null };
+			waiter.timer = setTimeout(() => {
+				const index = this.readyWaiters.indexOf(waiter);
+				if (index !== -1) this.readyWaiters.splice(index, 1);
+				reject(new Error('redis connection timed out'));
+			}, timeoutMs);
+			waiter.timer.unref?.();
+			this.readyWaiters.push(waiter);
+		});
 	}
 
 	#markReady() {
 		this.ready = true;
-		for (const resolve of this.readyWaiters.splice(0)) resolve();
+		this.warnedState = null;
+		this.socket?.setTimeout(0);
+		for (const waiter of this.readyWaiters.splice(0)) {
+			clearTimeout(waiter.timer);
+			waiter.resolve();
+		}
 		this.logger.info?.('[osionos-bridge] connected to Redis for shared account state.');
 	}
 
 	#connect() {
 		if (this.closed) return;
 		const useTls = this.parsed.protocol === 'rediss:';
-		const host = this.parsed.hostname;
+		// A bracketed IPv6 host is an address, not a DNS name.
+		const host = this.parsed.hostname.replace(/^\[|\]$/g, '');
 		const port = Number(this.parsed.port || 6379);
 		this.buffer = Buffer.alloc(0);
 		const socket = useTls
 			? tls.connect({ host, port, servername: host }, () => this.#handshake(socket))
 			: net.connect({ host, port }, () => this.#handshake(socket));
 		this.socket = socket;
+		// A black-holed host would wait for the OS connect timeout (~127 s): the socket
+		// timeout bounds the attempt until the handshake completes.
+		// Caveat: the attempt is abandoned after one command timeout, so a Redis that
+		// accepts the TCP connection but stalls the handshake is retried, never waited on.
+		socket.setTimeout(this.timeoutMs);
 		socket.on('data', (chunk) => this.#onData(chunk, socket));
-		// The error can carry a host but not the URL (and its password); log the code only.
+		socket.on('timeout', () => {
+			this.#warn('connect-timeout', 'Redis connection attempt timed out.');
+			this.ready = false;
+			socket.destroy();
+		});
 		socket.on('error', (error) => {
-			this.logger.warn?.(`[osionos-bridge] Redis socket error: ${error?.code ?? 'unknown'}.`);
+			// The error carries a host but not the URL (and its password): log the code only.
+			this.#warn('unreachable', `Redis socket error: ${error?.code ?? 'unknown'}.`);
 		});
 		socket.on('close', () => this.#onClose(socket));
 	}
@@ -121,10 +116,12 @@ export class RedisKv {
 				args.push(decodeURIComponent(this.parsed.password));
 				await this.#send(args, socket);
 			}
-			const db = this.parsed.pathname.replace(/^\//, '');
-			if (db) await this.#send(['SELECT', db], socket);
+			const database = this.parsed.pathname.replace(/^\//, '');
+			if (database) await this.#send(['SELECT', database], socket);
 			if (!this.closed && socket === this.socket) this.#markReady();
 		} catch {
+			// The credentials or the database were refused: say it once, never the URL.
+			this.#warn('handshake', 'Redis handshake failed (check the credentials and the database).');
 			socket.destroy();
 		}
 	}
@@ -132,15 +129,30 @@ export class RedisKv {
 	#onData(chunk, socket) {
 		if (socket !== this.socket) return;
 		this.buffer = Buffer.concat([this.buffer, chunk]);
-		for (;;) {
-			const reply = parseReply(this.buffer, 0);
-			if (!reply) break;
-			this.buffer = this.buffer.subarray(reply.end);
-			const waiter = this.queue.shift();
-			if (!waiter) continue;
+		try {
+			for (;;) {
+				const reply = parseReply(this.buffer, 0);
+				if (!reply) break;
+				this.buffer = this.buffer.subarray(reply.end);
+				const waiter = this.queue.shift();
+				if (!waiter) continue;
+				clearTimeout(waiter.timer);
+				if (reply.value instanceof Error) waiter.reject(reply.value);
+				else waiter.resolve(reply.value);
+			}
+		} catch (error) {
+			// A malformed frame desynchronises the stream: every waiter fails and the
+			// socket goes, because the rest of the reply can no longer be trusted.
+			this.#failQueue(error);
+			this.ready = false;
+			socket.destroy();
+		}
+	}
+
+	#failQueue(error) {
+		for (const waiter of this.queue.splice(0)) {
 			clearTimeout(waiter.timer);
-			if (reply.value instanceof Error) waiter.reject(reply.value);
-			else waiter.resolve(reply.value);
+			waiter.reject(error);
 		}
 	}
 
@@ -149,10 +161,7 @@ export class RedisKv {
 		this.ready = false;
 		this.socket = null;
 		this.buffer = Buffer.alloc(0);
-		for (const waiter of this.queue.splice(0)) {
-			clearTimeout(waiter.timer);
-			waiter.reject(new Error('redis connection closed'));
-		}
+		this.#failQueue(new Error('redis connection closed'));
 		if (this.closed || this.reconnectTimer) return;
 		this.reconnectTimer = setTimeout(() => {
 			this.reconnectTimer = null;
@@ -223,7 +232,8 @@ export class RedisKv {
 		this.ready = false;
 		const socket = this.socket;
 		this.socket = null;
-		for (const waiter of this.queue.splice(0)) {
+		this.#failQueue(new Error('redis closed'));
+		for (const waiter of this.readyWaiters.splice(0)) {
 			clearTimeout(waiter.timer);
 			waiter.reject(new Error('redis closed'));
 		}
