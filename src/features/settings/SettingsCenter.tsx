@@ -57,6 +57,7 @@ import { LazyAutomationManager } from '@/features/automations/ui/LazyAutomationM
 import { PeopleDatabasePanel } from '@/features/settings/people/PeopleDatabasePanel';
 import { McpPanel } from '@/features/settings/mcp/McpPanel';
 import { AiConnectionsPanel } from '@/features/settings/ai/AiConnectionsPanel';
+import { AccessTokensPanel, type AccessTokenWorkspace } from '@/features/settings/ai/AccessTokensPanel';
 import { ACCESSIBILITY_VOICE_TAB, AI_CONNECTIONS_TAB, type AppSettingsTab } from '@/features/settings/appSettingsTab';
 import { VoiceSettingsPanel } from '@/features/settings/voice/VoiceSettingsPanel';
 import { usePeopleCounts } from '@/features/settings/people/usePeopleCounts';
@@ -417,6 +418,16 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
   const persona = useUserStore((s) => s.activePersona());
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const members = useUserStore((s) => s.personas);
+  // The workspaces a token may reach: the ones the user owns and the ones
+  // they are a member of (G4a).
+  const userSession = useUserStore((s) => s.activeSession());
+  const tokenWorkspaces = useMemo<AccessTokenWorkspace[]>(
+    () => [
+      ...(userSession?.privateWorkspaces ?? []),
+      ...(userSession?.sharedWorkspaces ?? []),
+    ].map((workspace) => ({ id: workspace._id, name: workspace.name })),
+    [userSession],
+  );
   const current = prompts[activeTab];
   const searchMatches = useSettingsSearchIndex(settingsQuery);
   const settingsResults = settingsQuery.trim() ? searchMatches.slice(0, 8) : [];
@@ -551,6 +562,9 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
               {activeTab === 'ai' && <AiPanel />}
               {activeTab === ACCESSIBILITY_VOICE_TAB && <VoiceSettingsPanel />}
               {activeTab === AI_CONNECTIONS_TAB && <AiConnectionsPanel />}
+              {activeTab === AI_CONNECTIONS_TAB && (
+                <AccessTokensPanel workspaces={tokenWorkspaces} />
+              )}
               {activeTab === 'mcp' && <McpPanel />}
               {activeTab === 'public_pages' && <PublicPagesPanel />}
               {activeTab === 'library' && <LibraryPanel />}
