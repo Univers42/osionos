@@ -13,3 +13,6 @@ node-22	sha256:ea11b74b986d520137cdef9a5346e447a00f275ecc4abc0055b7151226231e09
 # The digest of the pull (docker RepoDigests), built 2026-10-21 16:58 CEST: a master
 # build hours old — the M1 slice pins a release at least 7 days old instead.
 sdcpp-vulkan	sha256:6d75b94d1d4222f9dd8a3b1494a5c8a6a31dc06976d9201dd83b7f9c32ffe343
+# The server of the encoders (the classifiers of toxicity and of sentiment, the
+# reranker): the same image as the embedder of ai-dev, the CPU build of 1.9.4.
+tei-cpu-1.9.4	sha256:2538ea1c9640d3763b15af668039d24172d063b42337b0c27796fc2be180c78d
