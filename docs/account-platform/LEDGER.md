@@ -16,7 +16,7 @@ one session alone then ran 40+ requests in ~12 min unrefused — a burst/concurr
 | P1-3a | running | feat/acct-P1-3a | glm-5.3-flash (+rotation) | — | no devil gate (pure move) |
 | P0-1 | spec ready, waits for a worker slot | (root repo) feat/acct-P0-1 | — | harness baseline 44/0 | spec: devil PwC, 12 conditions applied; root ADR 0028 |
 | P1-3b | spec written, waits for P1-3a | — | — | — | — |
-| P0-3 | spec under devil review | — | — | — | — |
+| P0-3 | spec ready, waits for a worker slot | — | — | — | spec: devil PwC, 11 conditions applied; ADR 0002 |
 | P0-7 | spec written (root repo; DB query budgets, no HTTP driver until P0-5) | — | — | — | no devil gate |
 | P1-4 | spec written, waits for P1-3b | — | — | — | no devil gate |
 
