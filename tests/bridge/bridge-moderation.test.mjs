@@ -246,4 +246,28 @@ describe('speed', () => {
 		console.log(`[l0 speed] p50=${p50.toFixed(3)} ms p95=${p95.toFixed(3)} ms over ${durations.length} calls`);
 		assert.ok(p95 < 5, `p95 ${p95.toFixed(3)} ms is over the 5 ms budget`);
 	});
+
+	// The check runs on the bridge's one event loop before a write: an input built to make a
+	// regex backtrack must not stall every other request.
+	it('stays linear on 20,000-character inputs built to make a regex backtrack', () => {
+		const hostile = {
+			'local part with no domain': `${'a'.repeat(10_000)}@${'a'.repeat(10_000)}`,
+			'dotted local, dashed domain': `${'a.'.repeat(5_000)}@${'a-'.repeat(5_000)}`,
+			'alternating pair': 'ab'.repeat(10_000),
+			'spaced digits': '1 '.repeat(10_000),
+		};
+		for (const [name, text] of Object.entries(hostile)) {
+			checkText(text, { surface: 'chat' });
+			const started = process.hrtime.bigint();
+			checkText(text, { surface: 'chat' });
+			const ms = Number(process.hrtime.bigint() - started) / 1e6;
+			assert.ok(ms < 20, `${name}: ${ms.toFixed(1)} ms`);
+		}
+	});
+
+	it('still finds an e-mail and a repeated character after the linear rewrite', () => {
+		assert.deepEqual(checkText('write to ana.lopez@mail.example.org', { surface: 'chat' }).reasons, [{ code: 'pii', kinds: ['email'] }]);
+		assert.deepEqual(checkText(`no${'!'.repeat(30)}`, { surface: 'chat' }).reasons, [{ code: 'repeat' }]);
+		assert.deepEqual(checkText(`no${'!'.repeat(29)}`, { surface: 'chat' }).reasons, []);
+	});
 });
