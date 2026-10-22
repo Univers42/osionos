@@ -32,6 +32,7 @@ import { SettingRow } from './SettingsRows';
 
 const NOTICE = 'Your likes, reactions, comments, shares and favorites shape the pages and people osionos suggests to you. Turn this off and nothing more is collected.';
 const ACTIVITY_NOTE = 'Download everything osionos has recorded about what you do, or erase it. The erasure cannot be undone.';
+const DERIVED_NOTE = 'The file includes the recommendation vectors computed from your activity.';
 const CONFIRM_LABEL = 'Confirm — this cannot be undone';
 const CONFIRM_MS = 5000;
 const FILE_NAME = 'osionos-activity.json';
@@ -84,7 +85,11 @@ export const RecommendationPrivacy: React.FC = () => {
       toast({ kind: 'error', title: 'Your activity was not downloaded', description: result.message });
       return;
     }
-    const url = URL.createObjectURL(new Blob([JSON.stringify(result.value, null, 2)], { type: 'application/json' }));
+    const { events, derived } = result.value;
+    // The log AND the vectors derived from it: a download that leaves out the
+    // data derived from the user is not the user's data.
+    const file = { exportedAt: new Date().toISOString(), events, derived };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' }));
     const anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = FILE_NAME;
@@ -94,7 +99,7 @@ export const RecommendationPrivacy: React.FC = () => {
     // Revoked a tick later: a synchronous revoke right after click() can cancel
     // the download before the browser has read the Blob (Firefox).
     setTimeout(() => URL.revokeObjectURL(url), 0);
-    toast({ kind: 'success', title: `Your activity was downloaded (${result.value.length} events).` });
+    toast({ kind: 'success', title: `Your activity was downloaded (${events.length} events).` });
   }, [toast]);
 
   const erase = useCallback(async () => {
@@ -126,7 +131,12 @@ export const RecommendationPrivacy: React.FC = () => {
       />
       <SettingRow
         title="Your activity"
-        description={ACTIVITY_NOTE}
+        description={
+          <>
+            {ACTIVITY_NOTE}
+            <span className="mt-1 block">{DERIVED_NOTE}</span>
+          </>
+        }
         action={
           <>
             <Button disabled={!available} onClick={() => void onDownload()}>Download my activity</Button>

@@ -95,8 +95,28 @@ test("downloadActivity asks for the log of the session user", async () => {
   const result = await downloadActivity();
   assert.deepEqual(calls, [{ method: "GET", path: "/api/personalization/activity", body: undefined }]);
   assert.equal(result.ok, true);
-  assert.equal(result.ok && result.value.length, 1);
-  assert.equal(result.ok && result.value[0].event, "like");
+  assert.equal(result.ok && result.value.events.length, 1);
+  assert.equal(result.ok && result.value.events[0].event, "like");
+});
+
+test("downloadActivity answers the vectors derived from the user", async () => {
+  const factors = {
+    user_vectors: [{ model_id: 3, status: "champion", factors: 16, vector: [0.5, -0.25] }],
+    as_item: [],
+  };
+  const { bridge } = recorder({ ok: true, events: [], derived: { factors } });
+  setPersonalizationBridge(bridge);
+  const result = await downloadActivity();
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.ok && result.value.derived, { factors });
+});
+
+test("downloadActivity answers no vectors when the bridge sends none", async () => {
+  const { bridge } = recorder({ ok: true, events: [] });
+  setPersonalizationBridge(bridge);
+  const result = await downloadActivity();
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.ok && result.value.derived, { factors: null });
 });
 
 test("clearActivity asks for the erasure, with no body", async () => {

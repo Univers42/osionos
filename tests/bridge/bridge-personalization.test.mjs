@@ -47,6 +47,16 @@ const event = (user_id, id) => ({
 	is_synthetic: false,
 });
 
+/** The vectors the recommender derived from a user: one per model, plus as_item. */
+const factors = () => ({
+	user_vectors: [
+		{ model_id: 3, status: 'champion', trained_until: '2026-10-21T00:00:00+00:00', factors: 16, vector: [0.5, -0.25] },
+	],
+	as_item: [
+		{ model_id: 3, status: 'champion', trained_until: '2026-10-21T00:00:00+00:00', factors: 16, vector: [0.5, -0.25] },
+	],
+});
+
 describe('GET /api/personalization', () => {
 	it('answers the default when the user has no row', async () => {
 		const me = user();
@@ -162,7 +172,38 @@ describe('GET /api/personalization/activity', () => {
 		const me = user();
 		const stub = createPersonalizationStub();
 		const answer = await callPersonalization(stub, { path: '/api/personalization/activity', userId: me });
-		assert.deepEqual(answer.body, { ok: true, events: [] });
+		assert.deepEqual(answer.body, { ok: true, events: [], derived: { factors: { user_vectors: [], as_item: [] } } });
+	});
+
+	it('answers the vectors derived from the user, and asks for them as the session user', async () => {
+		const me = user();
+		const derived = factors();
+		const stub = createPersonalizationStub({ derived });
+		const answer = await callPersonalization(stub, { path: '/api/personalization/activity', userId: me });
+		assert.equal(answer.status, 200);
+		assert.deepEqual(answer.body.derived, { factors: derived });
+		const log = stub.calls.find((call) => call.table === 'rpc/ai_export_user');
+		const vectors = stub.calls.find((call) => call.table === 'rpc/ai_rec_export_user');
+		assert.deepEqual(log.body, { p_user: me });
+		assert.deepEqual(vectors.body, { p_user: me });
+	});
+
+	it('answers no vectors when the function is not deployed yet, and still answers the log', async () => {
+		const me = user();
+		const stub = createPersonalizationStub({ events: [event(me, 1)] }, { missing: ['rec_export'] });
+		const answer = await callPersonalization(stub, { path: '/api/personalization/activity', userId: me });
+		assert.equal(answer.status, 200);
+		assert.equal(answer.body.events.length, 1);
+		assert.deepEqual(answer.body.derived, { factors: null });
+	});
+
+	it('fails the whole download when the vectors read fails', async () => {
+		const me = user();
+		const stub = createPersonalizationStub({ events: [event(me, 1)] }, { failing: ['rec_export'] });
+		const answer = await callPersonalization(stub, { path: '/api/personalization/activity', userId: me });
+		assert.notEqual(answer.status, 200);
+		assert.equal(answer.body.ok, false);
+		assert.equal(answer.body.events, undefined);
 	});
 });
 
@@ -200,6 +241,19 @@ describe('the routes and the session', () => {
 		}
 		assert.deepEqual(answers.map((answer) => answer.status), [...Array(20).fill(200), 429]);
 		assert.equal(answers[20].body.ok, false);
+	});
+
+	it('charges one token per request, not per read: the activity burst ends on the twenty-first call', async () => {
+		const me = user();
+		const stub = createPersonalizationStub();
+		const statuses = [];
+		for (let call = 0; call < 21; call += 1) {
+			const answer = await callPersonalization(stub, { path: '/api/personalization/activity', userId: me });
+			statuses.push(answer.status);
+		}
+		// Two reads per request, one token per request: a limit charged per read
+		// would answer 429 on the eleventh call, not the twenty-first.
+		assert.deepEqual(statuses, [...Array(20).fill(200), 429]);
 	});
 
 	it('leaves the routes it does not own to someone else', async () => {
