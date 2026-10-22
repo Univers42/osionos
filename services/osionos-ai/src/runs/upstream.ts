@@ -10,7 +10,8 @@ import { appendMessage } from '../conversations/repo.ts';
 import { markRun } from './repo.ts';
 import type { RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
-import { buildUserTurn, historyChars, historyMessages, quotedPageChars } from './prompt.ts';
+import { buildUserTurn, historyChars, historyMessages, memoryChars, quotedPageChars } from './prompt.ts';
+import type { RunMemory } from '../memory/repo.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
 import type { SkillIndex } from '../skills/runSkills.ts';
@@ -80,6 +81,8 @@ export interface UpstreamRunInput {
 	agent?: BuiltinAgent | null;
 	/** The skills the prompt lists (the agent's built-ins and the workspace's), and their workspace. */
 	skillIndex?: SkillIndex;
+	/** The approved memories of the caller, quoted in the user turn (devil C39). */
+	memories?: readonly RunMemory[];
 	workspaceId?: string;
 }
 
@@ -106,6 +109,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		title,
 	} = input;
 	const images = input.images ?? [];
+	const memories = input.memories ?? [];
 	// The agent of the run: none is the general assistant.
 	const agent = input.agent ?? null;
 	// The system prompt of THIS run: the base one, or the one of the agent,
@@ -131,7 +135,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const promptChars = promptCharCount({
 		text,
 		historyChars: historyChars(history),
-		pageChars: quotedPageChars(pages),
+		pageChars: quotedPageChars(pages) + memoryChars(memories),
 		sourceChars: sourceChars(sources),
 		systemChars: system.length,
 	});
@@ -193,7 +197,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		});
 		const tools = runTools.tools;
 
-		const userText = buildUserTurn(text, pages, sources);
+		const userText = buildUserTurn(text, pages, sources, memories);
 		const userContent = [
 			{ type: 'text' as const, text: userText },
 			...images.map((image) => ({ type: 'image' as const, image: image.data, mediaType: image.mediaType })),
