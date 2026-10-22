@@ -70,6 +70,15 @@ export interface CanvasCell {
    * changes size again and the pinned value becomes stale.
    */
   measuredHeight?: number;
+  /**
+   * A formula that decides whether the cell is rendered at all. It is evaluated
+   * against the page's own properties; an empty formula (or none) means the
+   * cell is always visible.
+   * Caveat: the formula runs in every reader's browser, so branching on a
+   * value leaks that value's existence to every reader of the page — it may
+   * only reference properties the page already exposes to all of them.
+   */
+  visibilityFormula?: string;
 }
 
 export interface CanvasGridConfig {

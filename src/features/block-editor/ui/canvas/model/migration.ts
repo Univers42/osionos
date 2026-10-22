@@ -60,6 +60,7 @@ export function layoutConfigFromLegacy(config: Partial<LayoutConfig> | undefined
 export function migrate(legacyCell: LayoutCell, gridConfig: CanvasGridConfig, index = 0): CanvasCell {
   const gridFrame = frameFromGridCell(legacyCell, gridConfig);
   const measuredHeight = normalizeMeasuredHeight(legacyCell.measuredHeight);
+  const visibilityFormula = normalizeVisibilityFormula(legacyCell.visibilityFormula);
   // A pinned height wins over the grid-derived one so the first paint is
   // already the authored size. The pin outlives the hug flag it was made from
   // (pinning freezes the cell), so the restore never depends on that flag.
@@ -88,7 +89,8 @@ export function migrate(legacyCell: LayoutCell, gridConfig: CanvasGridConfig, in
     wrap: legacyCell.wrap,
     section: legacyCell.section,
   };
-  return measuredHeight === undefined ? cell : { ...cell, measuredHeight };
+  const pinned = measuredHeight === undefined ? cell : { ...cell, measuredHeight };
+  return visibilityFormula === undefined ? pinned : { ...pinned, visibilityFormula };
 }
 
 /**
@@ -99,6 +101,16 @@ export function migrate(legacyCell: LayoutCell, gridConfig: CanvasGridConfig, in
 export function normalizeMeasuredHeight(value: unknown): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
   return Math.round(value);
+}
+
+/**
+ * Accepted saved formulas: a non-empty string. An empty (or blank) formula and
+ * a missing one both mean "always visible", so they are dropped on the way in.
+ */
+export function normalizeVisibilityFormula(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
 }
 
 export function unmigrate(canvasCell: CanvasCell, gridConfig: CanvasGridConfig): LayoutCell {
@@ -122,6 +134,7 @@ export function unmigrate(canvasCell: CanvasCell, gridConfig: CanvasGridConfig):
     fontSize: canvasCell.visuals.fontSize,
     section: canvasCell.section,
     measuredHeight: normalizeMeasuredHeight(canvasCell.measuredHeight),
+    visibilityFormula: normalizeVisibilityFormula(canvasCell.visibilityFormula),
   });
 }
 
