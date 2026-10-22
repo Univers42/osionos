@@ -6,13 +6,13 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/14 00:00:00 by rstancu           #+#    #+#             */
-/*   Updated: 2026/05/08 04:43:11 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
-import { FileText, ImageIcon, Music, Play } from "lucide-react";
+import { FileText, ImageIcon, Music, Pause, Play } from "lucide-react";
 
 import {
   MEDIA_BLOCK_LABELS,
@@ -21,10 +21,19 @@ import {
   type Block,
   type MediaBlockType,
 } from "@/entities/block";
+import { animatedMediaMayPlay, usePrefersReducedMotion } from "@/entities/page/ui/coverMedia";
 import {
   type ResolvedCollectionMediaAsset,
   resolveCollectionMediaAsset,
 } from "@/shared/ui/assets/collectionMedia";
+import { useAnimatedImagesMode } from "@/shared/config/useAppearance";
+
+import { mayBeProviderLink } from "../model/mediaProviderLinks";
+
+// Lazy: the provider table and embed views load only for a link that may need them.
+const ProviderMediaEmbed = lazy(() =>
+  import("./ProviderMediaEmbed").then((m) => ({ default: m.ProviderMediaEmbed })),
+);
 
 interface MediaBlockPreviewProps {
   block: Block;
@@ -60,16 +69,145 @@ function Placeholder({ kind }: Readonly<{ kind: MediaBlockType }>) {
   );
 }
 
-function mediaWidthStyle(block: Block): React.CSSProperties {
+/** The block's width preset (25–100 %), on whatever element frames the media. */
+export function mediaWidthStyle(block: Block): React.CSSProperties {
   const width = typeof block.mediaWidth === "number"
     ? Math.min(100, Math.max(25, block.mediaWidth))
     : 100;
   return { width: `${width}%`, maxWidth: "100%" };
 }
 
-export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
+/**
+ * Whether the source is an animated image the app can freeze.
+ *
+ * Caveat: only GIFs are detected — an animated WebP or APNG keeps animating
+ * whatever the person chose — and chat attachments and avatars are not covered
+ * at all: they have their own renderers, not this one.
+ */
+function isAnimatedImageSource(url: string): boolean {
+  const source = url.toLowerCase();
+  if (source.startsWith("data:image/gif")) return true;
+  return /\.gif(?:$|[?#])/.test(source);
+}
+
+/** How an image block's animation stands. */
+export interface ImageAnimation {
+  /** The animation is suppressed: the picture is held on its first frame. */
+  frozen: boolean;
+  /** The picture IS the first frame — the animation is not running. */
+  still: boolean;
+  /** Run the animation, or hold it on its first frame again. */
+  setRunning: (running: boolean) => void;
+}
+
+/**
+ * The animation state of an image block. The editor lifts it out of the
+ * picture so its play control can sit BESIDE the edit button — a button
+ * inside a button is invalid HTML and unreachable for a keyboard — while the
+ * read-only renderer lets the picture own it.
+ */
+export function useImageAnimation(block: Block): ImageAnimation {
+  const animatedImages = useAnimatedImagesMode();
+  const reducedMotion = usePrefersReducedMotion();
+  const [running, setRunning] = useState(false);
+  const url = resolveMediaBlockAsset(block)?.url ?? "";
+  const frozen = isAnimatedImageSource(url) && !animatedMediaMayPlay(animatedImages, reducedMotion);
+  return { frozen, still: frozen && !running, setRunning };
+}
+
+/**
+ * An image block's picture, with its shape and its size. A frozen animated
+ * image is painted on a canvas — drawImage of the decoded image paints its
+ * default frame — so the animation only runs when the person asks for it.
+ */
+export const ImageBlockPicture: React.FC<{ block: Block; animation: ImageAnimation }> = ({ block, animation }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const resolved = resolveMediaBlockAsset(block);
+  const url = resolved?.url;
+  const alt = block.mediaAlt ?? resolved?.label ?? MEDIA_BLOCK_LABELS.image;
+  // An explicit ratio crops to a fixed box; "original"/unset keeps the natural
+  // shape but caps height so a tall image never dominates the page.
+  const aspect = block.mediaAspect && block.mediaAspect !== "original" ? block.mediaAspect : undefined;
+
+  useEffect(() => {
+    if (!url || !animation.still) return undefined;
+    const image = new Image();
+    image.onload = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      canvas.width = image.naturalWidth || 1;
+      canvas.height = image.naturalHeight || 1;
+      canvas.getContext("2d")?.drawImage(image, 0, 0);
+    };
+    image.src = url;
+    return () => {
+      image.onload = null;
+    };
+  }, [url, animation.still]);
+
+  if (!url) return <Placeholder kind="image" />;
+
+  const className = block.mediaShape === "circle"
+    ? "mx-auto block aspect-square w-full rounded-full border border-[var(--osio-border-soft)] object-cover shadow-[var(--osio-shadow-cell)]"
+    : aspect
+      ? "block h-full w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
+      : "block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover";
+  const style = aspect ? { aspectRatio: aspect } : undefined;
+
+  if (!animation.still) {
+    return (
+      <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        style={style}
+        className={className}
+        data-testid="media-block-image"
+      />
+    );
+  }
+
+  return (
+    <canvas
+      ref={canvasRef}
+      role="img"
+      aria-label={alt}
+      style={style}
+      className={className}
+      data-testid="media-block-image-canvas"
+    />
+  );
+};
+
+/**
+ * The control that runs an image block's animation, or holds it on its first
+ * frame. It is a SIBLING of the edit button in the editor: a button inside a
+ * button is invalid HTML, and a keyboard cannot reach the inner one.
+ */
+export const ImagePlayButton: React.FC<{ running: boolean; onToggle: () => void; className?: string }> = ({
+  running,
+  onToggle,
+  className = '',
+}) => (
+  <button
+    type="button"
+    data-testid="media-block-image-play"
+    aria-label={running ? "Pause animation" : "Play animation"}
+    aria-pressed={running}
+    onClick={onToggle}
+    className={`inline-flex items-center gap-1 rounded-[var(--osio-radius-control)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs font-medium text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-sm)] ${className}`}
+  >
+    {running ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}
+    {running ? "Pause" : "Play"}
+  </button>
+);
+
+const DirectMediaPreview: React.FC<MediaBlockPreviewProps> = ({
   block,
 }) => {
+  const animation = useImageAnimation(block);
+
   if (!isMediaBlockType(block.type)) {
     return null;
   }
@@ -93,37 +231,18 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
         AI-generated
       </figcaption>
     ) : null;
-
-    if (block.mediaShape === "circle") {
-      return (
-        <figure style={mediaWidthStyle(block)}>
-          <img
-            src={resolved.url}
-            alt={block.mediaAlt ?? label}
-            className="mx-auto block aspect-square w-full rounded-full border border-[var(--osio-border-soft)] object-cover shadow-[var(--osio-shadow-cell)]"
-          />
-          {caption}
-        </figure>
-      );
-    }
-    // An explicit ratio crops to a fixed box; "original"/unset keeps the natural
-    // shape but caps height so a tall image never dominates the page.
-    const aspect =
-      block.mediaAspect && block.mediaAspect !== "original" ? block.mediaAspect : undefined;
     return (
       <figure style={mediaWidthStyle(block)}>
-        <img
-          src={resolved.url}
-          alt={block.mediaAlt ?? label}
-          loading="lazy"
-          decoding="async"
-          style={aspect ? { aspectRatio: aspect } : undefined}
-          className={
-            aspect
-              ? "block h-full w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
-              : "block max-h-[24rem] w-full rounded-lg border border-[var(--osio-border-default)] object-cover"
-          }
-        />
+        <div className="relative">
+          <ImageBlockPicture block={block} animation={animation} />
+          {animation.frozen ? (
+            <ImagePlayButton
+              running={!animation.still}
+              onToggle={() => animation.setRunning(animation.still)}
+              className="absolute bottom-2 right-2"
+            />
+          ) : null}
+        </div>
         {caption}
       </figure>
     );
@@ -191,5 +310,18 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
         Open
       </span>
     </a>
+  );
+};
+
+/** The block's media. A video/audio/file link that is a provider page (YouTube, Spotify,
+ *  Drive, a PDF) becomes an embed; the direct-file preview shows until that is known. */
+export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({ block }) => {
+  const direct = <DirectMediaPreview block={block} />;
+  const url = resolveMediaBlockAsset(block)?.url;
+  if (url === undefined || !mayBeProviderLink(block.type, url)) return direct;
+  return (
+    <Suspense fallback={direct}>
+      <ProviderMediaEmbed block={block} url={url} fallback={direct} />
+    </Suspense>
   );
 };

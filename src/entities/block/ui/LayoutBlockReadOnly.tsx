@@ -12,7 +12,9 @@
 
 import React from "react";
 import type { Block, LayoutCell } from "@/entities/block";
+import type { PagePropertyEntry } from "@/entities/page/model/types";
 import { gridConfigFromLegacy } from "@/features/block-editor/ui/canvas/model/migration";
+import { filterVisibleCells, resolvePropertyMap } from "@/features/block-editor/ui/canvas/model/visibility";
 import { ReadOnlyBlock } from "./ReadOnlyBlock";
 
 /**
@@ -22,8 +24,8 @@ import { ReadOnlyBlock } from "./ReadOnlyBlock";
  * editor's tokenized `.osionos-layout-*` classes (which include the narrow-width
  * column-stack media query) so it stays responsive with no new CSS.
  */
-export function LayoutBlockReadOnly({ block }: { block: Block }): React.ReactElement | null {
-  const cells = block.layoutCells ?? [];
+export function LayoutBlockReadOnly({ block, properties }: { block: Block; properties?: readonly PagePropertyEntry[] | Record<string, unknown> }): React.ReactElement | null {
+  const cells = filterVisibleCells(block.layoutCells ?? [], resolvePropertyMap(properties as never));
   if (cells.length === 0) return null;
   const grid = gridConfigFromLegacy(block.layoutConfig);
   const style: React.CSSProperties = {

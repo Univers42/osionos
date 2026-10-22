@@ -15,8 +15,11 @@ import { ArrowUp, FileText, Layers, Plug, Square, X } from "lucide-react";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 
 import { AiConnectionPicker } from "./AiConnectionPicker";
+import { OfflineModelPicker } from "./OfflineModelPicker";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { AttachImageButton } from "./AttachImageButton";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
+import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import { WORKSPACE_CHIP, type ContextChip } from "@/features/ai/model/aiContext";
 import { runError } from "@/features/chat/model/runErrors";
 import { PageSelectorMenu } from "@/features/block-editor/ui/PageSelectorMenu";
@@ -39,6 +42,12 @@ interface Props {
   /** The pages (and the workspace) the answer is read from. */
   chips: ContextChip[];
   onChipsChange: (chips: ContextChip[]) => void;
+  /** The built-in agents the service offers. */
+  agents?: AgentSummary[];
+  /** The agent of the next run, or none (the general assistant). */
+  agentId?: string | null;
+  /** The reader picked another agent. */
+  onAgentChange?: (agentId: string | null) => void;
   autoFocus?: boolean;
   /** True while an answer is streaming: the send button becomes a stop. */
   streaming?: boolean;
@@ -60,6 +69,9 @@ export const ChatComposer: React.FC<Props> = ({
   onSelectionChange,
   chips,
   onChipsChange,
+  agents = [],
+  agentId = null,
+  onAgentChange,
   autoFocus,
   streaming,
   onStop,
@@ -165,11 +177,34 @@ export const ChatComposer: React.FC<Props> = ({
         >
           <Plug size={16} /> Connect
         </button>
-        <AiConnectionPicker
-          value={selection}
-          onChange={onSelectionChange}
-          onVisionChange={setVision}
-        />
+        {isAiConfigured() ? (
+          <AiConnectionPicker
+            value={selection}
+            onChange={onSelectionChange}
+            onVisionChange={setVision}
+          />
+        ) : (
+          <OfflineModelPicker value={selection} onChange={onSelectionChange} />
+        )}
+        {/* The agent of the run: the general assistant, or one of the built-ins
+            the service offers. A native <select> is keyboard-driven for free,
+            and the label says what it is. */}
+        {agents.length > 0 ? (
+          <select
+            aria-label="Agent"
+            data-testid="ai-agent-picker"
+            value={agentId ?? ""}
+            onChange={(event) => onAgentChange?.(event.target.value || null)}
+            className="cursor-pointer rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1.5 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+          >
+            <option value="">Assistant</option>
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <DictationButton onText={applyTranscript} language={dictationLanguage(voice)} />
         {streaming ? (
           <button

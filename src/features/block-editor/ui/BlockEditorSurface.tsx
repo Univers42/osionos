@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
@@ -28,6 +28,7 @@ import {
 	ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
+import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
 import { complete as completeRoute } from "@/features/ai/api/aiClient";
@@ -40,6 +41,7 @@ import {
 } from "@/features/block-editor/model/usePlaygroundBlockEditor";
 import { BlockContextMenu } from "./BlockContextMenu";
 import { PageSelectorMenu } from "./PageSelectorMenu";
+import { PasteLinkMenu } from "./PasteLinkMenu";
 import { EmojiPicker } from "@/shared/ui";
 import { ColorMenu } from "./ColorMenu";
 import { getBlockSurfaceStyle } from "../model/blockColors";
@@ -52,6 +54,8 @@ import { useCrossTextSelection } from "../model/useCrossTextSelection";
 import { useBlockSelection, selectIdsForSurface } from "../model/blockSelectionStore";
 import { useEditorCommandBus, type EditorHandle } from "../model/editorCommandBus";
 import { isTextEntryTarget } from "../model/marqueeGeometry";
+import { EditorSurfaceIdContext } from "../model/editorSurfaceId";
+import { requestLinkDialog } from "../model/linkDialogRequests";
 import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities/block/model/blockTreeUtils";
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
@@ -351,7 +355,7 @@ function getVirtualFocusBlockId(event: Event): string | null {
 	return typeof detail?.blockId === "string" ? detail.blockId : null;
 }
 
-export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
+const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	pageId,
 	source,
 	locked = false,
@@ -360,6 +364,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	emptyPlaceholder = "Click here to start writing...",
 	renderBlockEditor,
 }) => {
+	const surfaceId = useContext(EditorSurfaceIdContext);
 	const {
 		slashMenu,
 		setSlashMenu,
@@ -368,6 +373,9 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		emojiMenu,
 		setEmojiMenu,
 		handleEmojiSelect,
+		pasteMenu,
+		choosePaste,
+		dismissPasteMenu,
 		colorMenu,
 		setColorMenu,
 		handleColorSelect,
@@ -827,6 +835,10 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 					onSelect={(item) => {
 						const currentBlocks = flushPendingDrafts("shortcut");
 						blocksRef.current = currentBlocks;
+						if (item.kind === "link-block") {
+							handleSlashMediaSelect(item.blockType, "", currentBlocks, (id) => requestLinkDialog(surfaceId, id, item.hintId));
+							return;
+						}
 						if (item.kind === "turn-into") {
 							handleSlashTurnIntoSelect(item.blockType, currentBlocks, {
 								calloutIcon: item.calloutIcon,
@@ -968,6 +980,15 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 					position={colorMenu.position}
 					onPick={handleColorSelect}
 					onClose={() => setColorMenu(null)}
+				/>
+			) : null}
+
+			{pasteMenu ? (
+				<PasteLinkMenu
+					position={pasteMenu.position}
+					initialChoice={pasteMenu.initialChoice}
+					onChoose={choosePaste}
+					onDismiss={dismissPasteMenu}
 				/>
 			) : null}
 
@@ -1263,6 +1284,8 @@ function isMediaHandleBlock(type: Block["type"]): boolean {
 		case "draw":
 		case "whiteboard":
 		case "diagram":
+		case "embed":
+		case "bookmark":
 			return true;
 		default:
 			return false;
@@ -1291,7 +1314,9 @@ function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleT
 		case "graph_view":
 		case "draw":
 		case "whiteboard":
-		case "diagram": return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
+		case "diagram":
+		case "embed":
+		case "bookmark":  return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
 		// Boxed blocks: medium.
 		case "callout":
 		case "quote":     return { pt: "pt-2",   pb: "pb-1",   handleTop: "top-3" };
@@ -1464,7 +1489,9 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		block.type === "graph_view" ||
 		block.type === "draw" ||
 		block.type === "whiteboard" ||
-		block.type === "diagram";
+		block.type === "diagram" ||
+		block.type === "embed" ||
+		block.type === "bookmark";
 	const shellChrome = isEmbedBlock ? "" : "rounded-md";
 
 	return (
@@ -1909,3 +1936,14 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
 		</div>
 	);
 };
+
+/** Every block this surface renders, editable or locked, belongs to a page the viewer
+ *  opened on purpose, so embeds play. Hover previews and other `static` surfaces never
+ *  mount this component. */
+export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = (props) => (
+	<EditorSurfaceIdContext.Provider value={useId()}>
+		<ReadOnlyEmbedModeContext.Provider value="live">
+			<BlockEditorSurfaceBody {...props} />
+		</ReadOnlyEmbedModeContext.Provider>
+	</EditorSurfaceIdContext.Provider>
+);

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,8 +28,10 @@ import {
   copyPageLink,
   exportPage as exportPageFile,
   importPageFile,
+  loadDashboardCells,
   syncPageActionEvent,
   translatePage,
+  turnIntoDashboardContent,
   type PageActionName,
 } from '@/services/page-actions';
 
@@ -329,9 +331,22 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     await logAction('remove_header', 'Header removed — content restored');
   }, [logAction, page?.cover, pageId, snapshot]);
 
+  // "Turn this page into a dashboard": a full-page layout band in front of the
+  // page's blocks. The snapshot is the undo point — the version history brings
+  // the previous body back. The store refuses the write for anyone who may not
+  // edit the body, so the menu item is only a shortcut.
+  const turnIntoDashboard = useCallback(async () => {
+    if (!page || !pageId) return;
+    await snapshot('Before turning into dashboard');
+    const cells = await loadDashboardCells(pageId);
+    updatePageContent(pageId, turnIntoDashboardContent(page, cells));
+    await logAction('turn_into_dashboard', 'Page turned into a dashboard');
+  }, [logAction, page, pageId, snapshot, updatePageContent]);
+
   return {
     hasRemovableHeader,
     removeHeaderCanvas,
+    turnIntoDashboard,
     actionMessage,
     config,
     detailPanel,

@@ -24,6 +24,7 @@ after them.
 | `POST /api/ai/approvals/:id` | yes | `{ decision: 'approve' \| 'decline' }`; the write happens once, with the token of the request |
 | `GET /api/ai/models` | yes | `{ models: [{ id, label, default }] }`, never a price |
 | `GET /api/ai/commands?surface=editor\|chat` | yes | `{ commands: Command[] }`, the built-ins of that surface |
+| `GET /api/ai/agents` | yes | `[{ id, version, name, description }]`, the built-in agents — never their instructions |
 | `POST /api/ai/complete` | yes | SSE: `text.delta`, `usage`, `done` or `error`, nothing persisted |
 
 A run that is asked again with the same `runId` re-attaches to its stream: the
@@ -33,7 +34,7 @@ disconnects does NOT cancel a run: it keeps going and stays resumable. Only
 
 ## The commands
 
-The ten built-ins live in the code (`src/commands/builtins.ts`), frozen: a
+The eleven built-ins live in the code (`src/commands/builtins.ts`), frozen: a
 command is a name, a description, a template with `$ARGUMENTS` in it, and a
 surface (`editor`, `chat`, or `both`). `GET /commands?surface=…` answers the
 commands of that surface.
@@ -44,6 +45,30 @@ answer streams straight back. Nothing is persisted — no conversation, no run
 row, no stream in Redis — so `done.assistantMessageId` is always `null`. The
 client that goes away aborts the upstream call, and the budget is settled with
 what the upstream reported.
+
+## The agents of a run
+
+An agent is CONFIGURATION over the one runtime: `{ id, version, name,
+description, instructions, tools[] }` — one loop, one budget, one permission
+model, and three shapes of the assistant. They live in the code
+(`src/agents/builtins.ts`), frozen: the Database architect, the Doc writer and
+the Analyst. There is no `general` agent: no agent means the general
+assistant, and its prompt is the base one, byte for byte.
+
+`POST /api/ai/runs` takes `agentId` — one of the built-ins, or nothing. The
+agent adds its instructions to the system prompt, between the style and the
+data-boundary line, and that line stays LAST: the rule that quoted data is
+data and never an instruction is the last thing the model reads (devil C38).
+The run pins the agent and its version on its row (`ai_runs.agent_id`,
+`ai_runs.agent_version`), so the answer can be explained later with the exact
+instructions it ran under (devil C40). The instructions are capped at 1 500
+characters: the prefix of the prompt is what every step pays for (devil C47).
+
+The tools of the run are the agent's list ∩ what the runtime offers: an agent
+never gains a tool, and the write tools it keeps stay behind the approval of
+the user. `GET /api/ai/agents` answers the list — the id, the version, the name
+and the description, NEVER the instructions: they are the text of the server's
+prompt.
 
 ## The pages of a run
 

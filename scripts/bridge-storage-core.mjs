@@ -24,6 +24,7 @@
  */
 
 import { httpError } from './bridge-social-core.mjs';
+import { INLINE_TYPES, PAGE_TYPES, assertBytesMatch, baseMime } from './bridge-mime.mjs';
 
 const STORAGE_TIMEOUT_MS = 15_000;
 const BUCKET = 'chat';
@@ -51,9 +52,25 @@ export function storageBase(env = process.env) {
 	return (env.STORAGE_ROUTER_URL ?? 'http://mini-baas-storage-router:3040/storage/v1').replace(/\/$/, '');
 }
 
+/**
+ * The headers every stored object is served with. The policy is the one GitHub
+ * puts on raw user content: no script, no fetch, an opaque origin; inline styles
+ * only, for SVG.
+ */
+export function servedObjectHeaders(contentType) {
+	const mime = baseMime(contentType);
+	const inline = INLINE_TYPES.has(mime);
+	return {
+		'content-type': inline ? mime : 'application/octet-stream',
+		...(inline ? {} : { 'content-disposition': 'attachment' }),
+		'x-content-type-options': 'nosniff',
+		'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+	};
+}
+
 /** Pick a safe lowercase extension from a content type (fallback 'bin'). */
 export function extFromMime(contentType) {
-	const mime = String(contentType ?? '').split(';')[0].trim().toLowerCase();
+	const mime = baseMime(contentType);
 	if (EXT_BY_MIME[mime]) return EXT_BY_MIME[mime];
 	const tail = mime.split('/')[1] ?? '';
 	const safe = tail.replace(/[^a-z0-9]/g, '');
@@ -62,7 +79,7 @@ export function extFromMime(contentType) {
 
 /** Coarse media type bucket from a content type (image|video|audio|file). */
 export function typeFromMime(contentType) {
-	const mime = String(contentType ?? '').split(';')[0].trim().toLowerCase();
+	const mime = baseMime(contentType);
 	if (mime.startsWith('image/')) return 'image';
 	if (mime.startsWith('video/')) return 'video';
 	if (mime.startsWith('audio/')) return 'audio';
@@ -74,10 +91,10 @@ export function storageObjectKey(sha256, ext) {
 	return `${sha256}.${ext}`;
 }
 
-/** Ensure the private 'chat' bucket exists (idempotent — 'created:false' is OK). */
-export async function ensureChatBucket(ownerId, fetchImpl = fetch, env = process.env) {
+/** Ensure a bucket exists (idempotent — 'created:false' is OK). */
+export async function ensureBucket(ownerId, bucket, fetchImpl = fetch, env = process.env) {
 	try {
-		await fetchImpl(`${storageBase(env)}/bucket/${BUCKET}`, {
+		await fetchImpl(`${storageBase(env)}/bucket/${bucket}`, {
 			method: 'POST',
 			headers: { 'x-user-id': ownerId, 'content-type': 'application/json' },
 			body: JSON.stringify({ public: false }),
@@ -88,9 +105,21 @@ export async function ensureChatBucket(ownerId, fetchImpl = fetch, env = process
 	}
 }
 
-/** PUT raw bytes under bucket 'chat' as the owner. Returns the router JSON. */
-export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImpl = fetch, env = process.env) {
-	const response = await fetchImpl(`${storageBase(env)}/object/${BUCKET}/${encodeURIComponent(key)}`, {
+/** Ensure the private 'chat' bucket exists (idempotent — 'created:false' is OK). */
+export function ensureChatBucket(ownerId, fetchImpl = fetch, env = process.env) {
+	return ensureBucket(ownerId, BUCKET, fetchImpl, env);
+}
+
+/**
+ * PUT raw bytes under a bucket as the owner. Returns the router JSON. Every
+ * writer (page media, chat, collab seeds, avatars) comes through here, so the
+ * type of the bytes is checked here, before a byte is sent: a page type and an
+ * inline type whose bytes do not match it are both refused.
+ */
+export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
+	if (PAGE_TYPES.has(baseMime(contentType))) throw httpError('This file type cannot be uploaded.', 415);
+	assertBytesMatch(contentType, bodyBuffer);
+	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
 		method: 'PUT',
 		headers: { 'x-user-id': ownerId, 'content-type': contentType || 'application/octet-stream' },
 		body: bodyBuffer,
@@ -103,13 +132,13 @@ export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImp
 	try {
 		return JSON.parse(text);
 	} catch {
-		return { bucket: BUCKET, key };
+		return { bucket, key };
 	}
 }
 
 /** GET bytes for an object as the owner. Returns {status, buffer, contentType}. */
-export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.env) {
-	const response = await fetchImpl(`${storageBase(env)}/object/${BUCKET}/${encodeURIComponent(key)}`, {
+export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
+	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
 		method: 'GET',
 		headers: { 'x-user-id': ownerId },
 		signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
@@ -125,4 +154,22 @@ export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.
 		buffer: Buffer.from(arrayBuffer),
 		contentType: response.headers.get('content-type') || 'application/octet-stream',
 	};
+}
+
+/**
+ * DELETE an object as the owner. An object that is already gone is not an
+ * error: the caller wanted it gone, and it is.
+ */
+export async function storageDelete(ownerId, key, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
+	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
+		method: 'DELETE',
+		headers: { 'x-user-id': ownerId },
+		signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+	}).catch((error) => {
+		throw httpError(`Storage delete failed: ${error instanceof Error ? error.message : 'unreachable'}`, 502);
+	});
+	if (!response.ok && response.status !== 404) {
+		throw httpError(`Storage delete rejected (${response.status}).`, 502);
+	}
+	return true;
 }

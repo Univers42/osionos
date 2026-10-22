@@ -18,7 +18,8 @@
  * WRITTEN by emitNotifications (bridge-social-core) from the chat plane.
  */
 
-import { UUID_REGEX, bearerToken, httpError, notifyTokenFor, readJsonBody, rest, sendJson } from './bridge-social-core.mjs';
+import { UUID_REGEX, bearerToken, notifyTokenFor, readJsonBody, rest, restCount, sendJson } from './bridge-social-core.mjs';
+import { idChunks, inFilter } from './bridge-paging.mjs';
 
 function notificationEntry(row) {
 	return {
@@ -38,17 +39,21 @@ async function listNotifications(deps, session, url, response, config) {
 
 async function notificationsInbox(deps, session, response, config) {
 	const notifyToken = await notifyTokenFor(config, deps.fetchImpl, session.userId);
-	const unreadRows = await rest(config, deps.fetchImpl, `osionos_notifications?user_id=eq.${session.userId}&read_at=is.null&select=id`);
-	return sendJson(response, 200, { ok: true, notifyToken, unread: Array.isArray(unreadRows) ? unreadRows.length : 0 }, config);
+	// The unread count is the total the backend reports, not the rows it sent: one request.
+	const unread = await restCount(config, deps.fetchImpl, `osionos_notifications?user_id=eq.${session.userId}&read_at=is.null&select=id`);
+	return sendJson(response, 200, { ok: true, notifyToken, unread }, config);
 }
 
 async function markRead(deps, session, request, response, config, all) {
-	let path = `osionos_notifications?user_id=eq.${session.userId}&read_at=is.null`;
+	const path = `osionos_notifications?user_id=eq.${session.userId}&read_at=is.null`;
 	if (!all) {
 		const payload = await readJsonBody(request).catch(() => ({}));
 		const valid = (Array.isArray(payload?.ids) ? payload.ids : []).filter((id) => UUID_REGEX.test(String(id)));
 		if (valid.length === 0) return sendJson(response, 200, { ok: true }, config);
-		path += `&id=in.(${valid.join(',')})`;
+		for (const chunk of idChunks(valid)) {
+			await rest(config, deps.fetchImpl, `${path}&${inFilter('id', chunk)}`, { method: 'PATCH', body: { read_at: new Date().toISOString() }, prefer: 'return=minimal' });
+		}
+		return sendJson(response, 200, { ok: true }, config);
 	}
 	await rest(config, deps.fetchImpl, path, { method: 'PATCH', body: { read_at: new Date().toISOString() }, prefer: 'return=minimal' });
 	return sendJson(response, 200, { ok: true }, config);

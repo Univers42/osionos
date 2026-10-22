@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 15:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,8 +17,10 @@ import { renderInlineToReact } from '@osionos/markdown-engine/react';
 import type { ChatMessage } from '@/shared/chat/messageApi';
 import { Button, IconButton } from '@/shared/ui';
 
+import type { SendOutcome } from '../model/channelWrites';
 import { MessageAttachments } from './attachments/MessageAttachments';
 import { LinkPreviewCard } from './attachments/LinkPreviewCard';
+import { MessageEditForm } from './MessageEditForm';
 import { MessageTicks } from './MessageTicks';
 
 const QUICK_EMOJI = ['👍', '❤️', '🔥', '🎉'];
@@ -30,7 +32,12 @@ interface MessageRowProps {
   userId: string;
   /** Consecutive message from the same author — hide the avatar + name header. */
   grouped?: boolean;
-  onEdit: (messageId: string, content: string) => void;
+  /** Saves an edit. The answer is typed: a warning is not a failure. */
+  onEdit: (
+    messageId: string,
+    content: string,
+    options?: { acknowledgeWarning?: boolean },
+  ) => Promise<SendOutcome> | SendOutcome;
   onDelete: (messageId: string) => void;
   onReact: (messageId: string, emoji: string, add: boolean) => void;
   onReply: (message: ChatMessage) => void;
@@ -87,7 +94,6 @@ function renderContent(content: string): React.ReactNode {
 
 const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInteract, userId, grouped, onEdit, onDelete, onReact, onReply, onOpenThread }) => {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(message.content);
   const [pickerOpen, setPickerOpen] = useState(false);
   const isMentioned = Boolean(message.mentions?.includes(userId));
 
@@ -118,19 +124,12 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
           </div>
         )}
         {editing ? (
-          <form
-            onSubmit={(event) => { event.preventDefault(); onEdit(message.id, draft); setEditing(false); }}
-            className="mt-1 flex flex-wrap items-center gap-2"
-          >
-            <input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Escape') setEditing(false); }}
-              className="min-w-0 flex-1 rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
-            />
-            <Button type="submit" tone="primary" size="sm">Save</Button>
-            <Button tone="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
-          </form>
+          <MessageEditForm
+            messageId={message.id}
+            content={message.content}
+            onEdit={onEdit}
+            onClose={() => setEditing(false)}
+          />
         ) : (
           <p className="whitespace-pre-wrap break-words text-sm leading-6">{renderContent(message.content)}</p>
         )}
@@ -170,7 +169,7 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
           <IconButton size="xs" label="Add reaction" onClick={() => setPickerOpen((open) => !open)}><SmilePlus size={14} /></IconButton>
           {isAuthor && (
             <>
-              <IconButton size="xs" label="Edit message" onClick={() => { setDraft(message.content); setEditing(true); }}><Pencil size={14} /></IconButton>
+              <IconButton size="xs" label="Edit message" onClick={() => setEditing(true)}><Pencil size={14} /></IconButton>
               <IconButton size="xs" label="Delete message" onClick={() => onDelete(message.id)}><Trash2 size={14} /></IconButton>
             </>
           )}

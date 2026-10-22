@@ -141,6 +141,7 @@ describe('meter in the bridge server', () => {
 	it('reports the exact number of baas round trips the stub saw', async () => {
 		const config = configFromEnv({
 			OSIONOS_SESSION_CUTOFFS: 'off',
+			OSIONOS_SESSION_RECORDS: 'off',
 			OSIONOS_APP_URL: 'http://localhost:3001',
 			OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
 			OSIONOS_BAAS_URL: BAAS,
@@ -179,6 +180,7 @@ describe('meter in the bridge server', () => {
 	it('logs status 0 when the client aborts before the response', async () => {
 		const config = configFromEnv({
 			OSIONOS_SESSION_CUTOFFS: 'off',
+			OSIONOS_SESSION_RECORDS: 'off',
 			OSIONOS_APP_URL: 'http://localhost:3001',
 			OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
 			OSIONOS_BAAS_URL: BAAS,

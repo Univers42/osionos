@@ -56,7 +56,7 @@ const SHAPES = [
 	{
 		logical: 'setting', method: 'GET', table: 'ai_personalization_settings',
 		keys: ['user_id', 'select', 'limit'],
-		fixed: { select: 'capture_explicit', limit: '1' },
+		fixed: { select: 'capture_explicit,beacon_consent', limit: '1' },
 		run: (world, p) => world.settings.filter((row) => row.user_id === p.user_id.slice(3)),
 	},
 	{
@@ -85,8 +85,8 @@ const SHAPES = [
 
 function matches(shape, method, table, params, prefer) {
 	if (shape.method !== method || shape.table !== table) return false;
-	const names = [...params.keys()].sort();
-	if (JSON.stringify(names) !== JSON.stringify([...shape.keys].sort())) return false;
+	const names = [...params.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+	if (JSON.stringify(names) !== JSON.stringify([...shape.keys].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)))) return false;
 	if (shape.prefer !== undefined && shape.prefer !== prefer) return false;
 	return Object.entries(shape.fixed).every(([name, value]) => params.get(name) === value);
 }

@@ -18,27 +18,35 @@ import { defaultWorkspaceSettings } from './defaults';
 import { errorMessage, nowIso, pushSettingsError, scheduleSettingsWrite, stableDefault, trySettingsGet, trySettingsPatch } from './settingsStoreUtils';
 import type { WorkspaceSettings } from './types';
 
+// icon: null asks the server to remove the stored icon (a missing key is not sent).
+type WorkspaceSettingsPatch = Omit<Partial<WorkspaceSettings>, 'icon'> & { icon?: string | null };
+
 interface WorkspaceSettingsStore {
   data: Record<string, WorkspaceSettings>;
   loading: Record<string, boolean>;
   error: Record<string, string | null>;
   getData: (workspaceId: string, name?: string) => WorkspaceSettings;
   hydrate: (userId: string, workspaceId: string, name?: string) => Promise<void>;
-  update: (userId: string, workspaceId: string, patch: Partial<WorkspaceSettings>) => void;
+  update: (userId: string, workspaceId: string, patch: WorkspaceSettingsPatch) => void;
+  removeIcon: (userId: string, workspaceId: string) => void;
   reset: (userId: string, workspaceId: string, name?: string) => Promise<void>;
 }
 
 const STORE_NAME = 'osionos:settings:workspace';
 
-function mergeSettings(current: WorkspaceSettings, patch: Partial<WorkspaceSettings>): WorkspaceSettings {
-  return {
+function mergeSettings(current: WorkspaceSettings, patch: WorkspaceSettingsPatch): WorkspaceSettings {
+  const { icon, ...rest } = patch;
+  const merged = {
     ...current,
-    ...patch,
+    ...rest,
     sidebar: { ...current.sidebar, ...patch.sidebar },
     analytics: { ...current.analytics, ...patch.analytics },
     publicDomains: patch.publicDomains ?? current.publicDomains ?? [],
     updatedAt: nowIso(),
   };
+  if (icon === null) delete merged.icon;
+  else if (icon !== undefined) merged.icon = icon;
+  return merged;
 }
 
 function sidebarSettings(settings: WorkspaceSettings) {
@@ -111,9 +119,12 @@ export const useWorkspaceSettingsStore = create<WorkspaceSettingsStore>()(
         const next = mergeSettings(previous, patch);
         set((state) => ({ data: { ...state.data, [workspaceId]: next }, error: { ...state.error, [workspaceId]: null } }));
         syncWorkspaceConfig(userId, workspaceId, next);
+        const remotePatch = Object.fromEntries(
+          Object.entries(patch).filter(([key]) => ['name', 'icon', 'landingPageId', 'sidebar', 'analytics'].includes(key)),
+        );
         scheduleSettingsWrite(`${STORE_NAME}:${workspaceId}`, async () => {
           try {
-            const remote = await trySettingsPatch<WorkspaceSettings>(`/api/workspaces/${encodeURIComponent(workspaceId)}/settings`, patch);
+            const remote = await trySettingsPatch<WorkspaceSettings>(`/api/workspaces/${encodeURIComponent(workspaceId)}/settings`, remotePatch);
             if (remote) {
               set((state) => ({ data: { ...state.data, [workspaceId]: remote }, error: { ...state.error, [workspaceId]: null } }));
               syncWorkspaceConfig(userId, workspaceId, remote);
@@ -125,14 +136,22 @@ export const useWorkspaceSettingsStore = create<WorkspaceSettingsStore>()(
           }
         });
       },
+      removeIcon: (userId, workspaceId) => get().update(userId, workspaceId, { icon: null }),
       reset: async (userId, workspaceId, name) => {
         if (!workspaceId) return;
         const previous = get().data[workspaceId];
         const next = defaultWorkspaceSettings(workspaceId, name);
         set((state) => ({ data: { ...state.data, [workspaceId]: next }, error: { ...state.error, [workspaceId]: null } }));
         syncWorkspaceConfig(userId, workspaceId, next);
+        const remoteBody = {
+          name: next.name,
+          icon: next.icon,
+          landingPageId: next.landingPageId,
+          sidebar: next.sidebar,
+          analytics: next.analytics,
+        };
         try {
-          const remote = await trySettingsPatch<WorkspaceSettings>(`/api/workspaces/${encodeURIComponent(workspaceId)}/settings`, next);
+          const remote = await trySettingsPatch<WorkspaceSettings>(`/api/workspaces/${encodeURIComponent(workspaceId)}/settings`, remoteBody);
           if (remote) {
             set((state) => ({ data: { ...state.data, [workspaceId]: remote }, error: { ...state.error, [workspaceId]: null } }));
             syncWorkspaceConfig(userId, workspaceId, remote);

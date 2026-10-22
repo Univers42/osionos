@@ -62,6 +62,12 @@ export interface FlushDeps {
   notify(notice: { kind: "warning" | "error"; title: string; description: string; sticky?: boolean }): void;
   /** Apply the merged content to the store — the store's own page update action. */
   applyContent(pageId: string, content: Block[]): PageEntry | null;
+  /**
+   * Keep the version a 200 answered on the stored page. The base registry is memory only:
+   * without this, a reload PATCHes under the version the page was LOADED at, and the
+   * reader's own last write comes back as a 409.
+   */
+  recordVersion(pageId: string, version: number): void;
 }
 
 /**
@@ -72,7 +78,13 @@ export interface FlushDeps {
  */
 export async function publishOutboxPage(job: FlushJob, deps: FlushDeps): Promise<"continue" | "stop"> {
   const { page, id, stamp, confirmed, budget } = job;
-  const outcome = await deps.publish(page);
+  // The first write and the merged re-send both go through here.
+  const publish = async (target: PageEntry): Promise<PublishOutcome> => {
+    const answered = await deps.publish(target);
+    if (answered.result === "ok" && answered.version !== null) deps.recordVersion(target._id, answered.version);
+    return answered;
+  };
+  const outcome = await publish(page);
   if (outcome.result === "ok") {
     confirmed[id] = stamp; // advance ONLY on confirm
     const warn = ignoredWarning(page.title, outcome.ignored);
@@ -84,7 +96,7 @@ export async function publishOutboxPage(job: FlushJob, deps: FlushDeps): Promise
     // here, and the rest of the batch goes on (C28).
     const resolved = await resolvePageConflict(page, outcome.conflict, {
       applyContent: deps.applyContent,
-      resend: (merged) => deps.publish(merged),
+      resend: publish,
       copyPath: (copied) => recoverToCopy(copied, id, job.forgotten, "conflict", deps),
       notify: deps.notify,
     });

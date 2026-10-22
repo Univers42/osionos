@@ -13,8 +13,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { API_BASE, getActivePageJwt } from '@/shared/api/client';
-import { createLocalId, errorMessage, nowIso, pushSettingsError, removeById, trySettingsDelete, trySettingsGet, trySettingsPost, upsertById } from './settingsStoreUtils';
+import { API_BASE } from '@/shared/api/client';
+import { createLocalId, errorMessage, nowIso, pushSettingsError, removeById, settingsJwt, trySettingsDelete, trySettingsGet, trySettingsPost, upsertById } from './settingsStoreUtils';
 import type { WorkspaceInvite, WorkspaceMemberRole } from './types';
 
 interface WorkspaceInvitesStore {
@@ -79,7 +79,7 @@ export const useWorkspaceInvitesStore = create<WorkspaceInvitesStore>()(
         if (!workspaceId) return;
         set((state) => ({ loading: { ...state.loading, [workspaceId]: true }, error: { ...state.error, [workspaceId]: null } }));
         try {
-          const remote = await trySettingsGet<WorkspaceInvite[]>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites`, getActivePageJwt());
+          const remote = await trySettingsGet<WorkspaceInvite[]>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites`);
           set((state) => ({ data: { ...state.data, [workspaceId]: remote ?? state.data[workspaceId] ?? [] }, loading: { ...state.loading, [workspaceId]: false }, error: { ...state.error, [workspaceId]: null } }));
         } catch (error) {
           set((state) => ({ loading: { ...state.loading, [workspaceId]: false }, error: { ...state.error, [workspaceId]: errorMessage(error) } }));
@@ -89,7 +89,7 @@ export const useWorkspaceInvitesStore = create<WorkspaceInvitesStore>()(
       create: async (workspaceId, input) => {
         const previous = get().data[workspaceId] ?? [];
         try {
-          const jwt = getActivePageJwt();
+          const jwt = settingsJwt();
           const remote = await trySettingsPost<InviteResponse>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites`, input, jwt);
           // A configured bridge must answer; only a build with no bridge at all
           // falls back to a local-only invite (offline/demo).
@@ -109,7 +109,7 @@ export const useWorkspaceInvitesStore = create<WorkspaceInvitesStore>()(
         const timestamp = nowIso();
         set((state) => ({ data: { ...state.data, [workspaceId]: previous.map((invite) => invite._id === inviteId ? { ...invite, updatedAt: timestamp } : invite) } }));
         try {
-          const remote = await trySettingsPost<WorkspaceInvite>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites/${encodeURIComponent(inviteId)}/resend`, {}, getActivePageJwt());
+          const remote = await trySettingsPost<WorkspaceInvite>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites/${encodeURIComponent(inviteId)}/resend`, {});
           if (remote) set((state) => ({ data: { ...state.data, [workspaceId]: upsertById(state.data[workspaceId] ?? [], remote) } }));
         } catch (error) {
           set((state) => ({ data: { ...state.data, [workspaceId]: previous }, error: { ...state.error, [workspaceId]: errorMessage(error) } }));
@@ -120,7 +120,7 @@ export const useWorkspaceInvitesStore = create<WorkspaceInvitesStore>()(
         const previous = get().data[workspaceId] ?? [];
         set((state) => ({ data: { ...state.data, [workspaceId]: removeById(previous, inviteId) } }));
         try {
-          await trySettingsDelete<void>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites/${encodeURIComponent(inviteId)}`, getActivePageJwt());
+          await trySettingsDelete<void>(`/api/workspaces/${encodeURIComponent(workspaceId)}/invites/${encodeURIComponent(inviteId)}`);
         } catch (error) {
           set((state) => ({ data: { ...state.data, [workspaceId]: previous }, error: { ...state.error, [workspaceId]: errorMessage(error) } }));
           pushSettingsError('Could not revoke invite', error);
@@ -128,7 +128,7 @@ export const useWorkspaceInvitesStore = create<WorkspaceInvitesStore>()(
       },
       accept: async (token) => {
         try {
-          const remote = await trySettingsPost<{ workspaceId: string }>('/api/invites/accept', { token }, getActivePageJwt());
+          const remote = await trySettingsPost<{ workspaceId: string }>('/api/invites/accept', { token });
           return remote?.workspaceId ?? null;
         } catch (error) {
           pushSettingsError('Could not accept invite', error);

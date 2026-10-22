@@ -15,11 +15,14 @@ import { useStore } from "zustand";
 
 import type { Block } from "@/entities/block";
 import { usePageStore } from "@/store/usePageStore";
+import { initFormulaEngine } from "@/shared/notion-database-sys/src/lib/engine/bridge";
 import type { SurfaceBlockEditorProps } from "../../BlockEditorSurface";
 import { createInteractionStore } from "../controller/interactionStore";
 import { useCanvasCellOps } from "../controller/useCanvasCellOps";
 import { useCanvasScale } from "../controller/useCanvasScale";
+import { evaluateCellVisibility, filterHiddenCells, toPropertyMap } from "../model/visibility";
 import { useCanvasStoreBridge, type CanvasPersistHandler } from "../store/canvasStore";
+import { CanvasInspector } from "./CanvasInspector";
 import { CanvasSettingsPanel } from "./CanvasSettingsPanel";
 import { CanvasStage } from "./CanvasStage";
 import { CanvasToolbar } from "./CanvasToolbar";
@@ -40,6 +43,25 @@ export interface CanvasRootProps {
  */
 export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateBlock, renderBlockEditor }) => {
   const updateBlock = usePageStore((state) => state.updateBlock);
+  // The formula's context: the page's own properties, the same lookup the
+  // header slots use. A property edit re-renders the canvas, and every cell
+  // formula answers again against the new values.
+  const properties = usePageStore((state) => state.pageById(pageId)?.properties);
+  // The formula engine is a lazy WASM module. Until it boots, every formula
+  // answers "unavailable" and every cell stays visible, so the canvas asks for
+  // it once and re-renders when it is ready.
+  const [formulaEngineReady, setFormulaEngineReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    initFormulaEngine()
+      .catch(() => false)
+      .then((ready) => {
+        if (!cancelled) setFormulaEngineReady(ready);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const persist = useCallback<CanvasPersistHandler>((layoutBlockId, patch) => {
     if (onUpdateBlock) {
       onUpdateBlock(layoutBlockId, patch);
@@ -51,12 +73,27 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
 
   const layoutConfig = useStore(store, (state) => state.layoutConfig);
   const hasSelection = useStore(store, (state) => state.selectedIds.length > 0);
+  const cells = useStore(store, (state) => state.cells);
   const dispatch = useStore(store, (state) => state.dispatch);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // A cell hidden by its formula has no DOM, so the selection toolbar cannot
+  // anchor an inspector to it. The store still keeps the cell, so the canvas
+  // toolbar's "Inspector" button opens the panel here instead: the formula of
+  // a hidden cell stays editable.
+  const [hiddenInspectorId, setHiddenInspectorId] = useState<string | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const scaleRef = useCanvasScale(stageRef, layoutConfig);
   const interaction = useMemo(() => createInteractionStore(), []);
   const cellOps = useCanvasCellOps(store, interaction, scaleRef, stageRef);
+  const propertyMap = useMemo(() => toPropertyMap(properties), [properties]);
+  // The panel shows while the cell is still hidden: as soon as its formula
+  // lets the cell through again, the panel closes with it.
+  const hiddenCell = hiddenInspectorId ? cells.find((candidate) => candidate.id === hiddenInspectorId) : undefined;
+  const hiddenCellVisible = hiddenCell ? evaluateCellVisibility(hiddenCell.visibilityFormula, propertyMap) : true;
+  // Every cell hidden by its formula is kept in the store, so it can still be
+  // selected and edited. The stage renders nothing for it, so this compact list
+  // is the recovery path for any hidden cell (not only the first one).
+  const hiddenCells = useMemo(() => filterHiddenCells(cells, propertyMap), [cells, propertyMap]);
 
   const rootRef = useRef<HTMLElement | null>(null);
   // Selection-scoped outside-click dismiss: the listener exists only while a
@@ -104,8 +141,11 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
     setSettingsOpen(false);
     const { cells, selectedIds } = store.getState();
     const target = selectedIds[0] ?? cells[0]?.id;
-    if (target) dispatch({ type: "select", ids: [target] });
-  }, [dispatch, store]);
+    if (!target) return;
+    dispatch({ type: "select", ids: [target] });
+    const cell = cells.find((candidate) => candidate.id === target);
+    setHiddenInspectorId(cell && !evaluateCellVisibility(cell.visibilityFormula, propertyMap) ? target : null);
+  }, [dispatch, propertyMap, store]);
 
   return (
     <section
@@ -134,6 +174,36 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
           onOpenInspector={openInspector}
         />
 
+        {hiddenCells.length > 0 ? (
+          <div className="osio-canvas-hidden-cells" aria-label="Hidden cells">
+            <span className="osio-canvas-hidden-cells__label">Hidden cells</span>
+            {hiddenCells.map((cell) => (
+              <button
+                key={cell.id}
+                type="button"
+                className="osio-canvas-hidden-cells__entry"
+                aria-label={`Hidden cell ${cell.visuals.label || cell.id}`}
+                onClick={() => {
+                  setSettingsOpen(false);
+                  dispatch({ type: "select", ids: [cell.id] });
+                  setHiddenInspectorId(cell.id);
+                }}
+              >
+                {cell.visuals.label || "Untitled cell"}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {hiddenCell && !hiddenCellVisible ? (
+          <div
+            className="osio-canvas-tb-pop osio-canvas-tb-pop--wide"
+            style={{ position: "absolute", left: 8, top: 48, zIndex: "calc(var(--osio-z-popover) + 30)" }}
+          >
+            <CanvasInspector store={store} cellId={hiddenCell.id} onClose={() => setHiddenInspectorId(null)} />
+          </div>
+        ) : null}
+
         {settingsOpen ? (
           <CanvasSettingsPanel
             store={store}
@@ -151,6 +221,8 @@ export const CanvasRoot: React.FC<CanvasRootProps> = ({ block, pageId, onUpdateB
           scaleRef={scaleRef}
           pageId={pageId}
           layoutBlockId={block.id}
+          propertyMap={propertyMap}
+          formulaEngineReady={formulaEngineReady}
           renderBlockEditor={renderBlockEditor}
         />
       </div>

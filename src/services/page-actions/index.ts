@@ -6,38 +6,62 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/28 22:24:19 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/13 19:18:51 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import { api } from "@/shared/api/client";
 import { parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
 import type { Block } from "@/entities/block";
+import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import type { PageEntry } from "@/entities/page";
 import type { PageConfig } from "@/shared/config/pageConfigStore";
 import { serializeBlocksToMarkdown } from "./pageMarkdownSerialize";
 
 export { serializeBlocksToMarkdown, blockToMarkdown } from "./pageMarkdownSerialize";
+export {
+  canTurnIntoDashboard,
+  loadDashboardCells,
+  turnIntoDashboard,
+  turnIntoDashboardContent,
+} from "./turnIntoDashboard";
 
 const PAGE_ACTION_SYNC_ENABLED = ((import.meta.env as Record<string, string> | undefined)?.["VITE_PAGE_ACTION_SYNC_ENABLED"] ?? "").toLowerCase() === "true";
 
-export type PageActionName =
-  | "copy_link"
-  | "copy_page_contents"
-  | "duplicate"
-  | "move_to_trash"
-  | "present"
-  | "small_text"
-  | "full_width"
-  | "lock_page"
-  | "translate"
-  | "import"
-  | "export"
-  | "updates_analytics"
-  | "version_history"
-  | "notify_me"
-  | "connections"
-  | "remove_header";
+/**
+ * Every page action the service knows. The type is derived from the list so the
+ * runtime vocabulary and the type can never drift.
+ */
+export const PAGE_ACTION_NAMES = [
+  "copy_link",
+  "copy_page_contents",
+  "duplicate",
+  "move_to_trash",
+  "present",
+  "small_text",
+  "full_width",
+  "lock_page",
+  "translate",
+  "import",
+  "export",
+  "updates_analytics",
+  "version_history",
+  "notify_me",
+  "connections",
+  "remove_header",
+  "turn_into_dashboard",
+] as const;
+
+export type PageActionName = (typeof PAGE_ACTION_NAMES)[number];
+
+/**
+ * The bridge client is loaded on demand: this module is imported by the canvas
+ * unit tests too, and those run under plain node — where `import.meta.env` does
+ * not exist — so a static import would make the whole module unloadable there.
+ */
+async function postToBridge<T>(path: string, body: unknown, jwt: string): Promise<T> {
+  const { api } = await import("@/shared/api/client");
+  return api.post<T>(path, body, jwt);
+}
 
 interface TranslateResponse {
   title?: string;
@@ -126,7 +150,7 @@ export async function importPageFile(file: File): Promise<ImportedPagePayload> {
     const sourcePage = json.page ?? json;
     return {
       title: sourcePage.title,
-      content: Array.isArray(sourcePage.content) ? sourcePage.content : [],
+      content: Array.isArray(sourcePage.content) ? sanitizeLinkBlockFields(sourcePage.content) : [],
     };
   }
 
@@ -134,7 +158,7 @@ export async function importPageFile(file: File): Promise<ImportedPagePayload> {
 
   return {
     title: extensionIndex > 0 ? file.name.slice(0, extensionIndex) : file.name,
-    content: parseMarkdownToBlocks(text),
+    content: sanitizeLinkBlockFields(parseMarkdownToBlocks(text)),
   };
 }
 
@@ -313,7 +337,7 @@ export async function translatePage(
 ): Promise<TranslateResponse> {
   if (jwt) {
     try {
-      const translated = await api.post<TranslateResponse>(
+      const translated = await postToBridge<TranslateResponse>(
         `/api/pages/${page._id}/translate`,
         { targetLocale, workspaceId: page.workspaceId, title: page.title, content: page.content ?? [] },
         jwt,
@@ -343,7 +367,7 @@ export async function syncPageActionEvent(
 ) {
   if (!jwt || !PAGE_ACTION_SYNC_ENABLED) return;
   try {
-    await api.post(`/api/pages/${pageId}/actions`, { action, payload }, jwt);
+    await postToBridge(`/api/pages/${pageId}/actions`, { action, payload }, jwt);
   } catch {
     // Offline mode keeps Zustand/local data. API can sync later.
   }

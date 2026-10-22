@@ -22,8 +22,8 @@
  *
  * Routes (every one of them needs a verified session and spends one token of
  * the caller's bucket BEFORE any read or write):
- *   GET    /api/personalization            { ok, captureExplicit }  (no row → true)
- *   PUT    /api/personalization            { captureExplicit: boolean } → upsert
+ *   GET    /api/personalization            { ok, captureExplicit, beaconConsent }  (no row → true / false)
+ *   PUT    /api/personalization            { captureExplicit?: boolean, beaconConsent?: boolean } → upsert
  *   GET    /api/personalization/activity   { ok, events, derived } — the log + what was made of it
  *   DELETE /api/personalization/activity   { ok, erased }   — the user's own log, gone
  *
@@ -38,8 +38,10 @@
  * (PostgREST's PGRST202 for an RPC that does not exist) is an empty answer,
  * never a broken download.
  *
- * There is NO view beacon here, and no consent toggle for one: the capture
- * covers the explicit actions only.
+ * There is NO view beacon here: the capture covers the explicit actions only.
+ * The beacon of the recommender has its own switch, `beaconConsent`, and it is
+ * OFF by default (C48): no row = no beacon, and the write of the beacon reads
+ * this row before anything else.
  */
 
 import { takeToken } from './bridge-ratelimit.mjs';
@@ -56,47 +58,68 @@ const SETTINGS_TABLE = 'ai_personalization_settings';
 /** Twenty calls a minute, per user, burst included. */
 const RATE = { capacity: 20, refillPerSec: 1 };
 
-/** The switch the row holds: the default (on) when there is no row yet. */
-async function readSetting(deps, config, userId) {
-	const rows = await rest(config, deps.fetchImpl, `${SETTINGS_TABLE}?user_id=eq.${userId}&select=capture_explicit&limit=1`);
-	const row = Array.isArray(rows) ? rows[0] : null;
-	// No row = the defaults = capture on. A row that does not say a boolean is
-	// no answer either, so it reads as the default too.
+/** The row of the user: the two switches, as they are stored. */
+async function readRow(deps, config, userId) {
+	const rows = await rest(config, deps.fetchImpl, `${SETTINGS_TABLE}?user_id=eq.${userId}&select=capture_explicit,beacon_consent&limit=1`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
+/** The switch over the explicit actions: the default (on) when there is no row. */
+function captureOf(row) {
 	return row && typeof row.capture_explicit === 'boolean' ? row.capture_explicit : true;
 }
 
-/** The switch, upserted for the SESSION user — never for one the body names. */
-async function writeSetting(deps, config, userId, captureExplicit) {
+/** The switch over the beacon: OFF when there is no row (C48 — it is opt-in). */
+function beaconOf(row) {
+	return row && typeof row.beacon_consent === 'boolean' ? row.beacon_consent : false;
+}
+
+/**
+ * The switch(es), upserted for the SESSION user — never for one the body
+ * names — and ONLY the ones the body carried: a row that does not mention
+ * the beacon keeps the beacon it had.
+ */
+async function writeSetting(deps, config, userId, settings) {
+	const body = { user_id: userId, updated_at: new Date().toISOString() };
+	if (typeof settings.captureExplicit === 'boolean') body.capture_explicit = settings.captureExplicit;
+	if (typeof settings.beaconConsent === 'boolean') body.beacon_consent = settings.beaconConsent;
 	await rest(config, deps.fetchImpl, `${SETTINGS_TABLE}?on_conflict=user_id`, {
 		method: 'POST',
-		body: {
-			user_id: userId,
-			capture_explicit: captureExplicit,
-			updated_at: new Date().toISOString(),
-		},
+		body,
 		prefer: 'resolution=merge-duplicates,return=representation',
 	});
-	return captureExplicit;
+	return settings;
 }
 
 /** The body keys that never name the row: the session's user does. */
 const IGNORED_BODY_KEYS = new Set(['userId', 'user_id']);
 
 /**
- * The body: `captureExplicit`, and a boolean. A user id may ride along — it is
- * IGNORED, because the row is the session user's and never the body's to name
- * — but any OTHER key is refused: the switch has one shape.
+ * The body: `captureExplicit` and/or `beaconConsent`, both booleans. A user
+ * id may ride along — it is IGNORED, because the row is the session user's and
+ * never the body's to name — but any OTHER key is refused: the switches have
+ * one shape.
  */
-function captureFromBody(payload) {
+function switchesFromBody(payload) {
 	const body = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null;
 	const keys = body ? Object.keys(body) : [];
-	if (!body || keys.some((key) => key !== 'captureExplicit' && !IGNORED_BODY_KEYS.has(key))) {
+	const known = new Set(['captureExplicit', 'beaconConsent']);
+	if (!body || keys.some((key) => !known.has(key) && !IGNORED_BODY_KEYS.has(key))) {
 		throw httpError('captureExplicit must be a boolean.', 422);
 	}
-	if (typeof body.captureExplicit !== 'boolean') {
+	if ('captureExplicit' in body && typeof body.captureExplicit !== 'boolean') {
 		throw httpError('captureExplicit must be a boolean.', 422);
 	}
-	return body.captureExplicit;
+	if ('beaconConsent' in body && typeof body.beaconConsent !== 'boolean') {
+		throw httpError('beaconConsent must be a boolean.', 422);
+	}
+	if (typeof body.captureExplicit !== 'boolean' && typeof body.beaconConsent !== 'boolean') {
+		throw httpError('captureExplicit must be a boolean.', 422);
+	}
+	const switches = {};
+	if (typeof body.captureExplicit === 'boolean') switches.captureExplicit = body.captureExplicit;
+	if (typeof body.beaconConsent === 'boolean') switches.beaconConsent = body.beaconConsent;
+	return switches;
 }
 
 /** The user's own log, oldest first, as the database stores it. */
@@ -173,13 +196,21 @@ export function createPersonalizationHandler({ config, verifySession, fetchImpl 
 				return sendJson(response, 405, { ok: false, message: `Method ${method} is not supported here.` }, requestConfig);
 			}
 			if (method === 'GET') {
-				const captureExplicit = await readSetting(deps, requestConfig, session.userId);
-				return sendJson(response, 200, { ok: true, captureExplicit }, requestConfig);
+				const row = await readRow(deps, requestConfig, session.userId);
+				return sendJson(response, 200, { ok: true, captureExplicit: captureOf(row), beaconConsent: beaconOf(row) }, requestConfig);
 			}
 			if (method === 'PUT') {
-				const captureExplicit = captureFromBody(await readJsonBody(request));
-				await writeSetting(deps, requestConfig, session.userId, captureExplicit);
-				return sendJson(response, 200, { ok: true, captureExplicit }, requestConfig);
+				const switches = switchesFromBody(await readJsonBody(request));
+				// The row is read first: the answer is the state the row holds
+				// after the write, and only the switches the body carried are
+				// written — the other one keeps what it had.
+				const row = await readRow(deps, requestConfig, session.userId);
+				await writeSetting(deps, requestConfig, session.userId, switches);
+				return sendJson(response, 200, {
+					ok: true,
+					captureExplicit: typeof switches.captureExplicit === 'boolean' ? switches.captureExplicit : captureOf(row),
+					beaconConsent: typeof switches.beaconConsent === 'boolean' ? switches.beaconConsent : beaconOf(row),
+				}, requestConfig);
 			}
 			return sendJson(response, 405, { ok: false, message: `Method ${method} is not supported here.` }, requestConfig);
 		} catch (error) {
