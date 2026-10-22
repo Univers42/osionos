@@ -20,8 +20,13 @@ import type { ApprovalPlan } from '../approvals/types.ts';
  * the hands of the provider.
  */
 
-/** What a tool does to the workspace. */
-export type ToolKind = 'read' | 'write';
+/**
+ * What a tool does to the workspace.
+ *
+ * C42: a `proposal` is a write that has an execute and never asks; what it
+ * writes is inert until the user approves it.
+ */
+export type ToolKind = 'read' | 'write' | 'proposal';
 
 /**
  * What a read tool gets: the database of the service, and the caller.
@@ -97,6 +102,23 @@ export interface ReadTool<TArgs, TData> extends AssistantTool<TArgs, TData> {
 	 */
 	pin?(data: TData): { id: string; version: number; source: 'builtin' | 'workspace' };
 }
+
+/**
+ * C42: a proposal write. It has an execute and it never asks: what it writes is
+ * inert until the user approves it somewhere else (Settings). So it travels the
+ * read path (no approval card, allowed wherever reads are) and is never a
+ * `write` tool.
+ */
+export interface ProposalTool<TArgs, TData> extends AssistantTool<TArgs, TData> {
+	kind: 'proposal';
+	/** A proposal quotes no page. */
+	sources(data: TData): readonly RetrievedChunk[];
+	/** The memory a result proposed: the run emits `memory.proposed` for it. */
+	proposed?(data: TData): { id: string };
+	pin?: undefined;
+}
+
+export type AnyProposalTool = ProposalTool<unknown, unknown>;
 
 /**
  * A read tool of the registry, whatever its arguments and its data are.
