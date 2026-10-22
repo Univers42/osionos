@@ -49,10 +49,10 @@ const reply = (rows, status = 200) => ({
 	text: async () => (rows === '' ? '' : JSON.stringify(rows)),
 });
 
-/** The ids of an `in.(a,b)` filter, or [] when the filter says nothing. */
+/** The ids of an `in.(a,b)` filter, or [] when the filter says nothing. The bridge quotes them (inFilter), so the quotes come off. */
 export function idsOf(value) {
 	const inner = String(value ?? '').replace(/^in\.\((.*)\)$/, '$1');
-	return inner.split(',').map((entry) => entry.trim()).filter(Boolean);
+	return inner.split(',').map((entry) => entry.trim().replace(/^"(.*)"$/, '$1')).filter(Boolean);
 }
 
 /** The value of an `eq.x` filter. */

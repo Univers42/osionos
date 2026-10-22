@@ -160,7 +160,7 @@ const SHAPES = [
 		keys: ['user_id', 'workspace_id', 'select'],
 		fixed: { select: 'workspace_id' },
 		run: (world, p) => {
-			const wanted = new Set(UUID_LIST.exec(p.workspace_id)[1].split(','));
+			const wanted = new Set(idsOf(p.workspace_id));
 			return world.members
 				.filter((row) => row.user_id === p.user_id.slice(3) && wanted.has(row.workspace_id))
 				.map((row) => ({ workspace_id: row.workspace_id }));

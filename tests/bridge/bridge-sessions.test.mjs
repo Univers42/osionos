@@ -155,6 +155,7 @@ describe('the session row is written when the session is delivered', () => {
 	});
 });
 
+// The boot tests name an administrator so the OSIONOS_ADMIN_EMAILS warning stays out of the count.
 describe('the account plane off is one state', () => {
 	it('writes no row, checks no revocation and answers 503 on the session routes', async (t) => {
 		const config = sessionConfig({ records: 'off', now: () => CLOCK.at });
@@ -174,7 +175,7 @@ describe('the account plane off is one state', () => {
 		const original = console.warn;
 		console.warn = (line) => warn.push(line);
 		try {
-			startBridgeServer({ ...sessionConfig({ serviceKey: '' }), port: 0 }).close();
+			startBridgeServer({ ...sessionConfig({ serviceKey: '' }), adminEmails: ['ops@example.test'], port: 0 }).close();
 		} finally {
 			console.warn = original;
 		}
@@ -187,7 +188,7 @@ describe('the account plane off is one state', () => {
 		const original = console.warn;
 		console.warn = (line) => warn.push(line);
 		try {
-			startBridgeServer({ ...sessionConfig({ records: 'off' }), port: 0 }).close();
+			startBridgeServer({ ...sessionConfig({ records: 'off' }), adminEmails: ['ops@example.test'], port: 0 }).close();
 		} finally {
 			console.warn = original;
 		}
