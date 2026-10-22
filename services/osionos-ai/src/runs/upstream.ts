@@ -13,6 +13,7 @@ import * as runStore from './runStore.ts';
 import { buildUserTurn, historyChars, historyMessages, quotedPageChars } from './prompt.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
+import type { SkillIndex } from '../skills/runSkills.ts';
 import { promptCharCount } from './estimate.ts';
 import { extendRunReservation } from './extend.ts';
 import type { LoopBudget } from './loopBudget.ts';
@@ -77,6 +78,9 @@ export interface UpstreamRunInput {
 	 * adds its block to the prompt and narrows the tools to its own list.
 	 */
 	agent?: BuiltinAgent | null;
+	/** The skills the prompt lists (the agent's built-ins and the workspace's), and their workspace. */
+	skillIndex?: SkillIndex;
+	workspaceId?: string;
 }
 
 /**
@@ -106,7 +110,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const agent = input.agent ?? null;
 	// The system prompt of THIS run: the base one, or the one of the agent,
 	// whose data-boundary line comes last (devil C38).
-	const system = systemPromptFor(agent);
+	const system = systemPromptFor(agent, input.skillIndex);
 
 	const controller = new AbortController();
 	runStore.trackRun(runId, controller);
@@ -183,6 +187,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			pages,
 			sources,
 			agent,
+			skillIndex: input.skillIndex,
+			workspaceId: input.workspaceId,
 			emit: (type, data) => emit(type, data),
 		});
 		const tools = runTools.tools;

@@ -147,6 +147,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		attachments: body.attachments,
 		sessionToken,
 		agent,
+		workspaceId: conversation.workspace_id,
 		emit: (event) => writeSseFrame(ctx.response, event),
 	});
 	if (outcome.kind === 'refused') {

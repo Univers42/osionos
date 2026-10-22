@@ -17,6 +17,7 @@ import React, { useMemo } from "react";
 import { useUserStore } from "@/features/auth";
 import { AccessTokensPanel, type AccessTokenWorkspace } from "./AccessTokensPanel";
 import { AiConnectionsPanel } from "./AiConnectionsPanel";
+import { WorkspaceSkillsPanel } from "./WorkspaceSkillsPanel";
 
 export const AiConnectionsSection: React.FC = () => {
   const userSession = useUserStore((s) => s.activeSession());
@@ -31,6 +32,7 @@ export const AiConnectionsSection: React.FC = () => {
     <>
       <AiConnectionsPanel />
       <AccessTokensPanel workspaces={workspaces} />
+      <WorkspaceSkillsPanel workspaces={workspaces} />
     </>
   );
 };

@@ -39,7 +39,7 @@ export interface ToolOutcome {
 	 */
 	found?: number;
 	/** The skill a `load_skill` call loaded: pinned in the history of the run (devil C40). */
-	skill?: { id: string; version: number };
+	skill?: { id: string; version: number; source: 'builtin' | 'workspace' };
 }
 
 export type { ToolSource };

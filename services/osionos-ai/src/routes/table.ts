@@ -20,6 +20,7 @@ import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
 import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
+import { handleSkillArchive, handleSkillCreate, handleSkillsList, handleSkillUpdate } from './skills.ts';
 import type { RouteEntry } from './types.ts';
 
 /**
@@ -119,6 +120,10 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalDecision,
 	},
+	{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillsList },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillCreate },
+	{ methods: ['PUT'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillUpdate },
+	{ methods: ['DELETE'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillArchive },
 	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
 	...(config.patEnabled
 		? [
