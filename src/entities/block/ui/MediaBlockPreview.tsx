@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { FileText, ImageIcon, Music, Play } from "lucide-react";
 
@@ -20,10 +20,12 @@ import {
   type Block,
   type MediaBlockType,
 } from "@/entities/block";
+import { animatedMediaMayPlay, usePrefersReducedMotion } from "@/entities/page/ui/coverMedia";
 import {
   type ResolvedCollectionMediaAsset,
   resolveCollectionMediaAsset,
 } from "@/shared/ui/assets/collectionMedia";
+import { useAnimatedImagesMode } from "@/shared/config/useAppearance";
 
 interface MediaBlockPreviewProps {
   block: Block;
@@ -66,9 +68,102 @@ function mediaWidthStyle(block: Block): React.CSSProperties {
   return { width: `${width}%`, maxWidth: "100%" };
 }
 
+/**
+ * Whether the source is an animated image the app can freeze.
+ *
+ * Caveat: only GIFs are detected — an animated WebP or APNG keeps animating
+ * whatever the person chose — and chat attachments and avatars are not covered
+ * at all: they have their own renderers, not this one.
+ */
+function isAnimatedImageSource(url: string): boolean {
+  const source = url.toLowerCase();
+  if (source.startsWith("data:image/gif")) return true;
+  return /\.gif(?:$|[?#])/.test(source);
+}
+
+interface ImageFrameProps {
+  src: string;
+  alt: string;
+  /** The first frame is painted instead of the animation. */
+  still: boolean;
+  className: string;
+  style?: React.CSSProperties;
+}
+
+/**
+ * An image block's picture. A frozen animated image is painted on a canvas —
+ * drawImage of the decoded image paints its default frame — and a button
+ * swaps the live image back in, so the animation is the person's to start.
+ */
+const ImageFrame: React.FC<ImageFrameProps> = ({ src, alt, still, className, style }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    if (!still || playing) return undefined;
+    const image = new Image();
+    image.onload = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      canvas.width = image.naturalWidth || 1;
+      canvas.height = image.naturalHeight || 1;
+      canvas.getContext("2d")?.drawImage(image, 0, 0);
+    };
+    image.src = src;
+    return () => {
+      image.onload = null;
+    };
+  }, [src, still, playing]);
+
+  if (!still || playing) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        style={style}
+        className={className}
+        data-testid="media-block-image"
+      />
+    );
+  }
+
+  return (
+    <div className="relative">
+      <canvas
+        ref={canvasRef}
+        role="img"
+        aria-label={alt}
+        style={style}
+        className={className}
+        data-testid="media-block-image-canvas"
+      />
+      {/* The editor wraps an image block in a button (it opens the media
+          settings), so this one stops the click from bubbling to it. */}
+      <button
+        type="button"
+        data-testid="media-block-image-play"
+        aria-label="Play animation"
+        onClick={(event) => {
+          event.stopPropagation();
+          setPlaying(true);
+        }}
+        className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-[var(--osio-radius-control)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs font-medium text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-sm)]"
+      >
+        <Play size={14} aria-hidden />
+        Play
+      </button>
+    </div>
+  );
+};
+
 export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
   block,
 }) => {
+  const animatedImages = useAnimatedImagesMode();
+  const reducedMotion = usePrefersReducedMotion();
+
   if (!isMediaBlockType(block.type)) {
     return null;
   }
@@ -81,12 +176,16 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
   }
 
   if (block.type === "image") {
+    const alt = block.mediaAlt ?? label;
+    const still = isAnimatedImageSource(resolved.url)
+      && !animatedMediaMayPlay(animatedImages, reducedMotion);
     if (block.mediaShape === "circle") {
       return (
         <div style={mediaWidthStyle(block)}>
-          <img
+          <ImageFrame
             src={resolved.url}
-            alt={block.mediaAlt ?? label}
+            alt={alt}
+            still={still}
             className="mx-auto block aspect-square w-full rounded-full border border-[var(--osio-border-soft)] object-cover shadow-[var(--osio-shadow-cell)]"
           />
         </div>
@@ -98,11 +197,10 @@ export const MediaBlockPreview: React.FC<MediaBlockPreviewProps> = ({
       block.mediaAspect && block.mediaAspect !== "original" ? block.mediaAspect : undefined;
     return (
       <div style={mediaWidthStyle(block)}>
-        <img
+        <ImageFrame
           src={resolved.url}
-          alt={block.mediaAlt ?? label}
-          loading="lazy"
-          decoding="async"
+          alt={alt}
+          still={still}
           style={aspect ? { aspectRatio: aspect } : undefined}
           className={
             aspect
