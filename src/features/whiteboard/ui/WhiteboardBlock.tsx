@@ -12,6 +12,7 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { isBoardSlug, normalizeBoardTitle } from "../model/boardRefs";
 import { startBoardCreation, usePendingBoards } from "../model/pendingBoards";
 import { boardUrl } from "../model/whiteboardClient";
+import { JsonCanvasImport } from "./JsonCanvasImport";
 
 interface Props {
   block: Block;
@@ -45,6 +46,16 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
     void startBoardCreation(block.id, title, (boardSlug) => onUpdateBlock({ boardSlug }));
   }, [block.id, title, onUpdateBlock]);
 
+  /** An imported canvas is a board of its own: the block binds to it and takes its
+   *  title. Offered only while the block has no board, so an import never replaces a
+   *  drawing someone already made. */
+  const onImported = useCallback(
+    (board: { slug: string; title: string }) => {
+      onUpdateBlock({ boardSlug: board.slug, content: board.title });
+    },
+    [onUpdateBlock],
+  );
+
   const { isDragging, gripProps } = useHeightResizeGrip({
     height,
     min: WHITEBOARD_MIN_HEIGHT,
@@ -73,10 +84,13 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
   } else {
     body = (
       <Message>
-        This whiteboard has no board yet.
-        <button type="button" className={ACTION_BUTTON} onClick={createBoard}>
-          Create board
-        </button>
+        <span>This whiteboard has no board yet.</span>
+        <span className="flex flex-wrap items-center justify-center gap-2">
+          <button type="button" className={ACTION_BUTTON} onClick={createBoard}>
+            Create board
+          </button>
+          <JsonCanvasImport onImported={onImported} />
+        </span>
       </Message>
     );
   }
