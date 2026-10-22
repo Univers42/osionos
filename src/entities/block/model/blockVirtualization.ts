@@ -47,6 +47,7 @@ export const BLOCK_HEIGHT_ESTIMATE_BY_TYPE: Record<BlockType, number> = {
   graph_view: 360,
   draw: 96,
   whiteboard: 540,
+  diagram: 360,
   home_views: 280,
   placeholder: 36,
 };
