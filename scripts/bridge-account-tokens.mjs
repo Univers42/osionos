@@ -42,7 +42,7 @@
 import { randomUUID } from 'node:crypto';
 import { clientMeta, rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { PAT_PERMISSIONS, PAT_RESOURCES, isPatScope } from './bridge-pat-permissions.mjs';
-import { createPat, listPats, mintPatSecret, revokeAllPats, revokePat } from './bridge-pat-store.mjs';
+import { PAT_LIVE_LIMIT, countLivePats, createPat, listPats, mintPatSecret, revokeAllPats, revokePat } from './bridge-pat-store.mjs';
 import { bearerToken, readJsonBody, requireUuid, sendJson } from './bridge-social-core.mjs';
 
 const TOKENS_PATH = '/api/account/tokens';
@@ -248,6 +248,9 @@ async function createToken({ config, pg, kv, session, request }, response) {
 	if (await throttle(kv, ['pat-create', session.userId], CREATE_LIMIT, response, config)) return true;
 	await requireSudo(kv, session);
 	const { kind, name, scopes, grants, expiresAt } = parseBody(await readBody(request));
+	if (await countLivePats({ pg, userId: session.userId }) >= PAT_LIVE_LIMIT) {
+		throw patError(422, 'pat_limit_reached', `You have ${PAT_LIVE_LIMIT} active tokens. Revoke one before creating another.`);
+	}
 	const { secret, hash } = mintPatSecret();
 	// The id is minted here because the audit row that names it is written before the row.
 	const tokenId = randomUUID();
