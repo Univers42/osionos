@@ -31,6 +31,7 @@ import { createSessionsRoutes } from './bridge-sessions.mjs';
 import { createPublishedPagesRoutes } from './bridge-account-published-pages.mjs';
 import { createAvatarRoutes } from './bridge-avatar.mjs';
 import { createSelfDataRoutes } from './bridge-self-data.mjs';
+import { createWorkspaceSettingsRoutes } from './bridge-workspace-settings.mjs';
 
 export function createAccountHandler(deps) {
 	const modules = [
@@ -42,6 +43,7 @@ export function createAccountHandler(deps) {
 		createAccountSudoRoutes({ ...deps, env: deps.env ?? process.env }),
 		createAccountIdentityRoutes(deps),
 		createSelfDataRoutes(deps),
+		createWorkspaceSettingsRoutes(deps),
 	];
 	return async function handleAccountRequest(url, request, response) {
 		for (const module of modules) {
