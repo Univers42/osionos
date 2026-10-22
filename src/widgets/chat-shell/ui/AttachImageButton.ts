@@ -37,7 +37,10 @@ interface Props {
   max?: number;
 }
 
-export const AttachImageButton: React.FC<Props> = ({ vision, attachments, onChange, max = 4 }) => {
+/** The hard cap on the number of attachments the composer takes. */
+export const MAX_ATTACHMENTS = 4;
+
+export const AttachImageButton: React.FC<Props> = ({ vision, attachments, onChange, max = MAX_ATTACHMENTS }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);

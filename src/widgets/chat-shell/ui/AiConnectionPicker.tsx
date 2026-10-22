@@ -41,8 +41,12 @@ interface Props {
   value: AiSelection;
   /** The user picked another one. */
   onChange: (selection: AiSelection) => void;
-  /** Whether the chosen model sees images. */
-  onVisionChange?: (sees: boolean) => void;
+  /**
+   * Whether the chosen model sees images — null while the service has not
+   * said. An unknown is not a "no": a picture that is already attached waits
+   * for the answer instead of being dropped.
+   */
+  onVisionChange?: (sees: boolean | null) => void;
 }
 
 export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionChange }) => {
@@ -91,7 +95,8 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionC
       ids.map(async (id) => [id, await listModels(id)] as const),
     )
       .then((entries) => {
-        if (alive) setModelsByConnection(Object.fromEntries(entries));
+        if (!alive) return;
+        setModelsByConnection(Object.fromEntries(entries));
       })
       .catch(() => undefined);
     return () => {
@@ -110,7 +115,14 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionC
 
   // Whether the chosen model sees images. The picker is the one that holds the
   // models, so it is the one that says: the composer only shows the button.
-  const sees = selectionSeesImages(value, modelsByConnection);
+  //
+  // Null while the service has not answered — the picture waits for the word.
+  // A choice that names no model of the list (the one the service has not
+  // resolved yet, or a model that is gone) is an unknown too: answering "no"
+  // there would drop a picture over a choice that is about to be made.
+  const models = modelsByConnection[value.connectionId] ?? [];
+  const chosen = models.some((model) => model.id === value.model);
+  const sees = chosen ? selectionSeesImages(value, modelsByConnection) : null;
   useEffect(() => {
     onVisionChangeRef.current?.(sees);
   }, [sees]);

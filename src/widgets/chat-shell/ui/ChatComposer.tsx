@@ -12,11 +12,13 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { ArrowUp, FileText, Layers, Plug, Square, X } from "lucide-react";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 
 import { AiConnectionPicker } from "./AiConnectionPicker";
 import { AttachImageButton } from "./AttachImageButton";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import { WORKSPACE_CHIP, type ContextChip } from "@/features/ai/model/aiContext";
+import { runError } from "@/features/chat/model/runErrors";
 import { PageSelectorMenu } from "@/features/block-editor/ui/PageSelectorMenu";
 import { DictationButton } from "@/features/voice/ui/DictationButton";
 import { insertTranscript } from "@/features/voice/model/insertTranscript";
@@ -66,17 +68,21 @@ export const ChatComposer: React.FC<Props> = ({
 }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
   // Whether the chosen model sees images. The picker is the one that holds the
-  // models, so it is the one that says.
-  const [vision, setVision] = useState(false);
+  // models, so it is the one that says. Null while the service has not
+  // answered: an unknown is not a "no", and a picture waits for the word.
+  const [vision, setVision] = useState<boolean | null>(null);
+  const pushToast = useToastStore((s) => s.push);
   const grow = (el: HTMLTextAreaElement) => { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 240)}px`; };
   useEffect(() => { if (ref.current) grow(ref.current); }, [value]);
 
   // A model that cannot see must never receive the images: when the choice
-  // moves to a model that cannot see them, the attachments go.
+  // moves to a model that cannot see them, the attachments go — and the
+  // reader is told why, with the sentence the run failures use.
   useEffect(() => {
-    if (vision || attachments.length === 0) return;
+    if (vision !== false || attachments.length === 0) return;
     onAttachmentsChange?.([]);
-  }, [attachments.length, onAttachmentsChange, vision]);
+    pushToast({ kind: "info", title: runError("model_no_vision").text });
+  }, [attachments.length, onAttachmentsChange, pushToast, vision]);
 
   // The dictation: the transcript lands where the caret is, as typed input.
   // It never submits: the user still presses the key.
@@ -146,7 +152,7 @@ export const ChatComposer: React.FC<Props> = ({
       />
       <div className="flex items-center gap-2 px-2 pb-2 pt-1">
         <AttachImageButton
-          vision={vision}
+          vision={vision === true}
           attachments={attachments}
           onChange={(paths) => onAttachmentsChange?.(paths)}
         />
