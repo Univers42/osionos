@@ -45,6 +45,8 @@ import { MediaCaption } from "./media/MediaCaption";
 import { ImageHoverToolbar } from "./media/ImageHoverToolbar";
 import { ImageFullscreen } from "./media/ImageFullscreen";
 import { AltTextDialog } from "./media/AltTextDialog";
+import { ImageDescriptionPanel } from "./media/ImageDescriptionPanel";
+import { useDescribeImage } from "./media/useDescribeImage";
 
 interface MediaBlockEditorProps {
   pageId: string;
@@ -95,6 +97,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   // The image job of this block, when one is running (the state is in memory:
   // a job that died with the tab leaves the plain placeholder).
   const imageJob = useAiImageStore((state) => state.jobs[block.id]);
+  const describe = useDescribeImage(pageId, block);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showEmbed, setShowEmbed] = useState(false);
@@ -222,8 +225,10 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           onFullScreen={() => setFullscreen(true)}
           onReplace={() => setShowEmbed(true)}
           onAltText={() => setAltOpen(true)}
+          describe={describe}
         />
       ) : null}
+      {isImage && hasAsset ? <ImageDescriptionPanel pageId={pageId} block={block} describe={describe} /> : null}
 
       {shouldShowSettings ? (
         <MediaSettingsBar
