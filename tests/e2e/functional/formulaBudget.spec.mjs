@@ -28,7 +28,7 @@ const NAMES = ["a", "b", "c", "d", "e", "f", "g", "h"];
 
 function nestedMapFormula(depth) {
   let expr = NAMES[depth - 1];
-  for (let level = depth - 2; level >= 0; level -= 1) {
+  for (let level = depth - 1; level >= 0; level -= 1) {
     expr = `map(${TEN}, ${NAMES[level]} => ${expr})`;
   }
   return expr;
