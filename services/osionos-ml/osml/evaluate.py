@@ -12,6 +12,7 @@ The numbers are about the SIMULATION. Nothing here has read a real user.
 
 import argparse
 import json
+import os
 import platform
 import sys
 from pathlib import Path
@@ -254,10 +255,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     # Bounded so a CLI argument cannot write outside the results directory.
-    results_root = (Path.cwd() / "results").resolve()
-    out = args.out.resolve()
-    if not out.is_relative_to(results_root):
+    results_root = os.path.realpath(Path.cwd() / "results")
+    real_out = os.path.realpath(args.out)
+    if real_out != results_root and not real_out.startswith(results_root + os.sep):
         parser.error(f"--out must stay under {results_root}")
+    out = Path(real_out)
 
     report = evaluate(
         users=args.users,
