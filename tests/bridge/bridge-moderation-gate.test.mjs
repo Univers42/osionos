@@ -198,4 +198,19 @@ describe('recordDecision — the one audit row', () => {
 		assert.equal(recorded, false);
 		assert.equal(calls.length, 1);
 	});
+
+	it('the layer and the actor: the gate writes l0 and nobody, an admin writes itself', async () => {
+		const { calls, fetchImpl } = recorder();
+		await recordDecision(config, fetchImpl, decision);
+		// The default is unchanged: the gate's row, with no actor.
+		assert.equal(calls[0].body.layer, 'l0');
+		assert.equal(calls[0].body.actor_id, null);
+		const admin = { ...decision, action: 'remove', layer: 'admin', actorId: 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb', reason: 'spam' };
+		await recordDecision(config, fetchImpl, admin);
+		assert.equal(calls[1].body.layer, 'admin');
+		assert.equal(calls[1].body.actor_id, admin.actorId);
+		assert.equal(calls[1].body.action, 'remove');
+		// The admin's own reason replaces the L0 codes in that row.
+		assert.equal(calls[1].body.reason, 'spam');
+	});
 });

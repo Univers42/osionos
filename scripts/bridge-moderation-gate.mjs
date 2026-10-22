@@ -98,10 +98,20 @@ export function decideWrite({
 }
 
 /**
- * The audit row of one decision: ONE row of public.ai_moderation_events, layer
- * 'l0'. It says who wrote what was judged, under which policy — NEVER the text
- * itself: the content is a sha256, and the reason is the reason CODES joined
- * by ','. The matched terms never reach this row (C94).
+ * The audit row of one decision: ONE row of public.ai_moderation_events.
+ *
+ * The `layer` says WHO decided: 'l0' is the gate (the default, and what every
+ * existing caller writes), 'admin' is a human at the console. The `actorId` is
+ * that human — null for the gate, which has no actor but its rules.
+ *
+ * The `reason` is the reason CODES, joined by ','. They are the codes the
+ * same rules name for this content on this surface — the subject kind names
+ * the surface — and the matched TERMS never reach this row (C94). An admin's
+ * own reason (a code from the console's closed list) REPLACES those codes in
+ * that row: the human's words are the reason for the human's act.
+ *
+ * NEVER the text itself: the content is a sha256, and the reason is a code.
+ * The matched terms never reach this row (C94).
  *
  * A failed insert is a warn and nothing more: the write that triggered it has
  * already happened, and the audit is a net behind it, not a gate in front of
@@ -116,13 +126,17 @@ export async function recordDecision(config, fetchImpl, {
 	mode,
 	policyHash,
 	content,
+	layer = 'l0',
+	actorId = null,
+	reason = null,
 }) {
 	// The reason is the reason CODES, joined by ','. They are the codes the
 	// same rules name for this content on this surface — the subject kind names
 	// the surface — and the matched TERMS never come here (C94).
 	const codes = checkText(content, { surface: SURFACES.includes(subjectKind) ? subjectKind : 'chat' })
-		.reasons.map((reason) => reason.code);
-	const reason = codes.filter(Boolean).join(',').slice(0, 200) || null;
+		.reasons.map((entry) => entry.code);
+	const computed = codes.filter(Boolean).join(',').slice(0, 200) || null;
+	const reasonText = String(reason ?? computed ?? '').slice(0, 200) || null;
 	try {
 		await rest(config, fetchImpl, 'ai_moderation_events', {
 			method: 'POST',
@@ -131,20 +145,21 @@ export async function recordDecision(config, fetchImpl, {
 				subject_id: String(subjectId ?? '').slice(0, 80),
 				workspace_id: workspaceId ?? null,
 				author_id: authorId ?? null,
-				layer: 'l0',
+				layer,
+				actor_id: actorId ?? null,
 				action,
 				mode,
 				scores: { verdict: action },
 				policy_hash: policyHash,
 				content_sha256: createHash('sha256').update(String(content ?? ''), 'utf8').digest('hex'),
-				reason,
+				reason: reasonText,
 			},
 			prefer: 'return=minimal',
 		});
 		return true;
 	} catch {
 		// The codes, never the content and never the terms.
-		console.warn(`[osionos-bridge] moderation event not recorded (${reason ?? 'no reason'})`);
+		console.warn(`[osionos-bridge] moderation event not recorded (${reasonText ?? 'no reason'})`);
 		return false;
 	}
 }
