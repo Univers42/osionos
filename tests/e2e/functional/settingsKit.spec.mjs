@@ -106,7 +106,9 @@ test.describe("settings use the kit", () => {
       const nobodyBlocked = sectionId === "moderation" && (await region(page).getByRole("button", { name: "Unblock" }).count()) === 0;
       // Accessibility & voice is two selects and a slider: it has no button at all.
       const noButtonByDesign = sectionId === "accessibility_voice";
-      if (!(emptyStateInstead || kitOutsourced || nobodyBlocked || noButtonByDesign)) {
+      // AI connections says so, and offers nothing, when the build has no AI service (this one).
+      const aiUnconfigured = sectionId === "ai_connections" && (await region(page).getByText(/The AI service is not configured in this build/).count()) > 0;
+      if (!(emptyStateInstead || kitOutsourced || nobodyBlocked || noButtonByDesign || aiUnconfigured)) {
         expect(radii.length, `section ${index} shows buttons`).toBeGreaterThan(0);
         const offRadius = radii.filter((entry) => !segmentLabels.includes(entry.name) && entry.radius !== (entry.isPanel ? panelRadius : radius));
         expect(offRadius, `section ${index}: buttons off the control radius`).toEqual([]);
