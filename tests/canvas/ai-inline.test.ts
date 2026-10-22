@@ -303,5 +303,5 @@ test("the slash catalog gates the AI group on the service being configured", () 
     "utf8",
   );
   assert.match(source, /import \{ isAiConfigured \} from "@\/features\/ai\/api\/aiClient"/);
-  assert.match(source, /aiSlashCommands\(isAiConfigured\(\)\)/);
+  assert.match(source, /aiSlashCommands\(isAiConfigured\(\), isAiImagesEnabled\(\)\)/);
 });

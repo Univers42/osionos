@@ -140,6 +140,8 @@ export interface Block {
   widthRatio?: number;      /** Relative width for column blocks */
   collapsed?: boolean;		/** Whether a toggle is collapsed */
   asset?: string;           /** Serialized ui-collection asset value for media blocks */
+  /** Image made by the AI: its provenance (never the prompt). Shown as an "AI-generated" label. */
+  aiGenerated?: { model: string; runId: string; createdAt: string };
   mediaWidth?: number;      /** Display width percentage for media blocks */
   mediaShape?: 'rounded' | 'circle'; /** Image crop shape (circle = avatar; default rounded) */
   mediaAspect?: string;     /** CSS aspect-ratio for image blocks (e.g. "16 / 9"); "original"/unset = natural */

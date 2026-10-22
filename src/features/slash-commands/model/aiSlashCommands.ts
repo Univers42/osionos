@@ -21,7 +21,7 @@
  * (see `selectInferencePort`).
  */
 
-import type { SlashAiCommand, SlashDictateCommand } from "./types";
+import type { SlashAiCommand, SlashAiImageCommand, SlashDictateCommand } from "./types";
 
 /** The AI actions of the slash menu — one per editor command, and the dictation. */
 export const AI_SLASH_COMMANDS: (SlashAiCommand | SlashDictateCommand)[] = [
@@ -137,11 +137,37 @@ export const AI_SLASH_COMMANDS: (SlashAiCommand | SlashDictateCommand)[] = [
 ];
 
 /**
+ * The image entry: `/imagine <prompt>` drops an image block, and the engine
+ * fills it.
+ *
+ * It is NOT a command of the service (the service's commands act on the text
+ * of a block): it is a block the service makes. The prompt is the argument of
+ * the entry — `/imagine a lighthouse at dusk`.
+ */
+export const AI_IMAGE_SLASH_COMMAND: SlashAiImageCommand = {
+  id: "ai:image",
+  kind: "ai-image",
+  section: "ai",
+  label: "Generate image",
+  aliases: ["imagine", "generate image", "ai image"],
+  icon: "🖼️",
+  description: "Describe an image after the command: /imagine a lighthouse at dusk",
+};
+
+/**
  * The AI group — empty when the AI service is not configured.
  *
  * The flag is a parameter so the caller owns the check (the menu passes
  * `isAiConfigured()`) and so the rule is testable without a service.
+ *
+ * The image entry comes last and only when the images flag is on too: the
+ * service refuses images when its own flag is off, and an entry that cannot
+ * answer must not be offered.
  */
-export function aiSlashCommands(enabled: boolean): (SlashAiCommand | SlashDictateCommand)[] {
-  return enabled ? AI_SLASH_COMMANDS : [];
+export function aiSlashCommands(
+  enabled: boolean,
+  imagesEnabled = false,
+): (SlashAiCommand | SlashDictateCommand | SlashAiImageCommand)[] {
+  if (!enabled) return [];
+  return imagesEnabled ? [...AI_SLASH_COMMANDS, AI_IMAGE_SLASH_COMMAND] : AI_SLASH_COMMANDS;
 }
