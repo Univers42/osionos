@@ -12,11 +12,13 @@
 
 // The account plane must never be reached with the service role on behalf of a user, and
 // a PostgREST detail can quote another row, so these tests pin the exact JWT claims, the
-// fixed error messages and the paging boundaries as much as the happy path.
+// fixed error messages and the paging boundaries as much as the happy path. The path guard's
+// layer 2 (same origin, still under the base) is a backstop no known input reaches.
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
+import { signAppSessionToken, verifyAppSessionToken } from '../../scripts/bridge-api.mjs';
 import { ACCOUNT_DB_ROLE, ACCOUNT_JWT_AUDIENCE, ACCOUNT_JWT_TTL_SECONDS, createPg, mintAccountJwt } from '../../scripts/bridge-pg.mjs';
 import { inFilter, keyset } from '../../scripts/bridge-paging.mjs';
 
@@ -28,16 +30,21 @@ const SERVICE_KEY = 'service-role-key-DO-NOT-LEAK';
 const CONFIG = { baasUrl: 'http://baas:8000', publicApiKey: 'public-anon-key', serviceKey: SERVICE_KEY };
 const ENV = { JWT_SECRET: SECRET };
 const BASE = 'http://baas:8000/rest/v1';
+const SESSION_CONFIG = { appSessionSecret: SECRET, sessionTtlSeconds: 3600 };
+const SESSION_ISSUED_AT = 1_760_000_000_000;
 
-// Exact shape returned by verifyAppSessionToken (bridge-api.mjs:486-492); importing
-// bridge-api.mjs here would boot a server, so the object is built by hand.
-const SESSION = {
-	userId: USER_ID,
-	workspaceIds: [WORKSPACE_ID],
-	roles: { [WORKSPACE_ID]: 'owner' },
-	isAdmin: false,
-	raw: { iss: 'osionos-bridge', aud: 'osionos-app', sub: USER_ID, jti: SESSION_ID, iat: 1, exp: 2 },
-};
+// Built through the real signer and verifier so the session.raw.jti seam is the production one.
+const SESSION = verifyAppSessionToken(
+	signAppSessionToken({
+		payload: { subject: USER_ID, provider: 'test' },
+		workspace: { _id: WORKSPACE_ID },
+		config: SESSION_CONFIG,
+		now: SESSION_ISSUED_AT,
+		jti: SESSION_ID,
+	}).token,
+	SESSION_CONFIG,
+	SESSION_ISSUED_AT + 1000,
+);
 
 const decodeJwt = (token) => {
 	const [header, payload, signature] = token.split('.');
@@ -196,6 +203,13 @@ describe('postgrest status mapping', () => {
 		});
 	}
 
+	it('turns a missing account role into account_plane_unavailable for a user', async () => {
+		const { fetchImpl } = recorded(() => jsonResponse(400, { code: '22023', message: 'role does not exist' }));
+		await assert.rejects(pgFor(fetchImpl).asUser(SESSION).get('osionos_profiles'), predicate(503, 'account_plane_unavailable'));
+		const service = recorded(() => jsonResponse(400, { code: '22023', message: 'role does not exist' }));
+		await assert.rejects(pgFor(service.fetchImpl).asService().get('osionos_profiles'), predicate(422, 'invalid_request'));
+	});
+
 	it('leaves upstreamCode undefined for a non-JSON body', async () => {
 		const { fetchImpl } = recorded(() => new Response('BOOM-MARKER', { status: 500 }));
 		await assert.rejects(pgFor(fetchImpl).asService().get('osionos_profiles'), (error) => {
@@ -214,21 +228,28 @@ describe('postgrest status mapping', () => {
 	});
 
 	it('maps a timeout to baas_unreachable', async () => {
+		let sawSignal = false;
 		const fetchImpl = (url, init) => new Promise((resolve, reject) => {
-			// The fallback timer keeps the loop alive long enough for the unref'd timeout signal.
-			const fallback = setTimeout(() => reject(new Error('not aborted')), 200);
+			sawSignal = init.signal instanceof AbortSignal;
+			if (!sawSignal) {
+				resolve(jsonResponse(200, []));
+				return;
+			}
+			// Resolve later than the timeout so only the abort can settle this request.
+			const timer = setTimeout(() => resolve(jsonResponse(200, [])), 50);
 			init.signal.addEventListener('abort', () => {
-				clearTimeout(fallback);
-				reject(new Error('aborted'));
+				clearTimeout(timer);
+				reject(init.signal.reason);
 			});
 		});
 		const pg = createPg({ config: CONFIG, env: ENV, fetchImpl, timeoutMs: 5 });
 		await assert.rejects(pg.asService().get('osionos_profiles'), predicate(503, 'baas_unreachable'));
+		assert.equal(sawSignal, true);
 	});
 });
 
 describe('path guard', () => {
-	const unsafe = ['/x', 'a/../b', 'http://x', 'a\nb', 'a\\b', '%2E%2e/%2e%2e/auth/v1/admin/users', 'x/%2F..', '%5c', '%2e%2e/x?y=1', 'a/../b?c=d'];
+	const unsafe = ['', '?x', '/x', 'a/../b', 'http://x', 'a\nb', 'a\\b', '%2E%2e/%2e%2e/auth/v1/admin/users', 'x/%2F..', '%5c', '%2e%2e/x?y=1', 'a/../b?c=d'];
 	for (const path of unsafe) {
 		it(`rejects ${JSON.stringify(path)} without calling fetch`, async () => {
 			const { calls, fetchImpl } = recorded(() => jsonResponse(200, []));

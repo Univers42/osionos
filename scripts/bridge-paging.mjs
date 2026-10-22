@@ -28,10 +28,12 @@ const has = (value) => value !== undefined && value !== null && value !== '';
 
 // Caveat: 50 was measured with unquoted ids (bridge-api.mjs:1371-1379). `inFilter` adds 6
 // bytes per id for quotes and encoding, so 50 uuids are ~2.15 KB instead of ~1.85 KB,
-// leaving ~1.5 KB of Kong's 4 KB header buffer for the rest of the query string.
+// leaving ~1.5 KB of Kong's 4 KB header buffer for the rest of the query string. A 50-id
+// chunk (~2.1 KB) plus a 3-column cursor (~2.3 KB) must not share one request; 80 is the
+// hard ceiling here, not a safe default.
 export function idChunks(ids, size = 50) {
 	if (!Array.isArray(ids)) throw new TypeError('idChunks expects an array of ids.');
-	if (!Number.isInteger(size) || size < 1 || size > 500) throw new RangeError('chunk size must be an integer from 1 to 500.');
+	if (!Number.isInteger(size) || size < 1 || size > 80) throw new RangeError('chunk size must be an integer from 1 to 80.');
 	const unique = [];
 	const seen = new Set();
 	for (const id of ids) {
@@ -73,7 +75,11 @@ export function decodeCursor(token, arity) {
 	}
 	if (!Array.isArray(values) || values.length !== arity) throw invalid();
 	for (const value of values) {
-		if (typeof value === 'string') continue;
+		if (typeof value === 'string') {
+			// A lone surrogate passes JSON but makes encodeURIComponent throw URIError later.
+			if (!value.isWellFormed()) throw invalid();
+			continue;
+		}
 		if (typeof value === 'number' && Number.isFinite(value)) continue;
 		throw invalid();
 	}
@@ -129,6 +135,8 @@ export function keyset({ order, cursor, limit, maxLimit = DEFAULT_MAX_LIMIT } = 
 
 // Caveat: numbers travel through JSON, so a bigint column above 2^53 loses precision.
 // Page by a uuid or timestamptz tie-breaker, never by a raw bigint id.
+// Caveat: `rows` must be the raw PostgREST values. Converting `created_at` through `Date`
+// truncates microseconds, so the next page silently skips rows.
 export function pageOf(rows, order, take) {
 	if (!Array.isArray(rows)) throw new TypeError('pageOf expects an array of rows.');
 	if (!Number.isInteger(take) || take < 1) throw new TypeError('pageOf take must be a positive integer.');
