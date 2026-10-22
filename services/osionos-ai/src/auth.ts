@@ -11,6 +11,15 @@ export interface AuthUser {
 	workspaceId: string;
 	memberWorkspaces: { id: string; role: string }[];
 	isAdmin: boolean;
+	/**
+	 * The moment the session was issued, in milliseconds.
+	 *
+	 * The bridge signs it (`iat` and `iat_ms` in the payload of the token,
+	 * scripts/bridge-session-token.mjs:95-109). A personal access token is
+	 * minted from a FRESH session (C113), and this is the moment the freshness
+	 * is measured against.
+	 */
+	issuedAtMs: number;
 }
 
 /**
@@ -48,7 +57,29 @@ function toAuthUser(verified: VerifiedAppSessionToken): AuthUser {
 	const memberWorkspaces = verified.workspaceIds
 		.filter((id) => id !== workspaceId)
 		.map((id) => ({ id, role: verified.roles[id] ?? 'member' }));
-	return { userId: verified.userId, workspaceId, memberWorkspaces, isAdmin: verified.isAdmin };
+	return {
+		userId: verified.userId,
+		workspaceId,
+		memberWorkspaces,
+		isAdmin: verified.isAdmin,
+		issuedAtMs: issuedAtMsOf(verified),
+	};
+}
+
+/**
+ * The moment the session was issued, in milliseconds.
+ *
+ * The token carries `iat_ms` (milliseconds) and `iat` (seconds); the
+ * milliseconds are the ones that count, because a cut-off and a token minted
+ * in the same second must still be ordered (scripts/bridge-session-cutoff.mjs).
+ */
+function issuedAtMsOf(verified: VerifiedAppSessionToken): number {
+	const raw = verified.raw as { iat_ms?: unknown; iat?: unknown };
+	if (typeof raw.iat_ms === 'number' && Number.isSafeInteger(raw.iat_ms) && raw.iat_ms >= 0) {
+		return raw.iat_ms;
+	}
+	const iat = Number(raw.iat);
+	return Number.isFinite(iat) ? iat * 1000 : 0;
 }
 
 /** The failure's code and status; the token itself never reaches the log. */

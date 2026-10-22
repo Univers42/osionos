@@ -224,6 +224,7 @@ export async function startStack(options: StackOptions): Promise<{ stack: EvalSt
 		workspaceId: WORKSPACE_ID,
 		memberWorkspaces: [],
 		isAdmin: false,
+		issuedAtMs: Date.now(),
 	});
 	const workspaces = new Map<string, string[]>();
 	for (const key of Object.keys(USER_ID_BY_KEY)) {
