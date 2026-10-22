@@ -91,27 +91,47 @@ describe('rateLimit', () => {
 	it('allows the limit then throws a 429 with the window as retry-after', async () => {
 		const kv = createKv({});
 		const options = { limit: 2, windowMs: 1_500 };
-		await rateLimit(kv, 'login:abcd', options);
-		await rateLimit(kv, 'login:abcd', options);
+		await rateLimit(kv, ['login', 'abcd'], options);
+		await rateLimit(kv, ['login', 'abcd'], options);
 		await assert.rejects(
-			rateLimit(kv, 'login:abcd', options),
+			rateLimit(kv, ['login', 'abcd'], options),
 			(error) => fail(429, 'rate_limited')(error) && error.retryAfterSeconds === 2,
 		);
 		assert.equal(await kv.get('rl:login:abcd'), '3');
 		kv.close();
 	});
 
-	it('refuses an empty key or an empty, null or undefined segment', async () => {
+	it('accepts an IPv6 prefix and encodes it into the stored key', async () => {
 		const kv = createKv({});
-		for (const key of ['', 'login:', 'login:null', 'login:undefined']) {
-			await assert.rejects(rateLimit(kv, key, { limit: 1, windowMs: 1_000 }), TypeError);
+		const options = { limit: 1, windowMs: 1_000 };
+		await rateLimit(kv, ['login', '2001:db8::/48'], options);
+		assert.equal(await kv.get('rl:login:2001%3Adb8%3A%3A%2F48'), '1');
+		await assert.rejects(rateLimit(kv, ['login', '2001:db8::/48'], options), fail(429, 'rate_limited'));
+		kv.close();
+	});
+
+	it('keeps one part with a colon distinct from two parts', async () => {
+		const kv = createKv({});
+		const options = { limit: 1, windowMs: 1_000 };
+		await rateLimit(kv, ['a:b'], options);
+		await rateLimit(kv, ['a', 'b'], options);
+		await assert.rejects(rateLimit(kv, ['a:b'], options), fail(429, 'rate_limited'));
+		kv.close();
+	});
+
+	it('refuses an empty part list or a non-string part without a string heuristic', async () => {
+		const kv = createKv({});
+		const options = { limit: 1, windowMs: 1_000 };
+		for (const parts of [[], ['login', ''], ['login', null], ['login', undefined], ['login', 7], 'login:abcd']) {
+			await assert.rejects(rateLimit(kv, parts, options), TypeError);
 		}
+		await rateLimit(kv, ['login', 'null'], options);
 		kv.close();
 	});
 
 	it('passes a kv 503 through unchanged', async () => {
 		const down = { incrWithTtl: async () => { throw Object.assign(new Error('down'), { status: 503, code: 'kv_unavailable' }); } };
-		await assert.rejects(rateLimit(down, 'login:abcd', { limit: 1, windowMs: 1_000 }), fail(503, 'kv_unavailable'));
+		await assert.rejects(rateLimit(down, ['login', 'abcd'], { limit: 1, windowMs: 1_000 }), fail(503, 'kv_unavailable'));
 	});
 });
 
@@ -139,7 +159,7 @@ describe('sudo grants', () => {
 
 	it('cannot be created through the rate-limit key space', async () => {
 		const kv = createKv({});
-		await rateLimit(kv, `sudo:${JTI_C}`, { limit: 5, windowMs: 1_000 });
+		await rateLimit(kv, ['sudo', JTI_C], { limit: 5, windowMs: 1_000 });
 		await assert.rejects(requireSudo(kv, SESSION_C), fail(403, 'sudo_required'));
 		kv.close();
 	});
@@ -180,10 +200,18 @@ describe('writeAudit', () => {
 		assert.deepEqual(calls[0].row.details, {});
 	});
 
-	it('turns an unconfigured or failing service client into audit_unavailable', async () => {
+	it('turns an unconfigured or failing service client into audit_unavailable with a cause', async () => {
 		const params = { session: SESSION_A, meta: {}, eventType: 'login' };
-		await assert.rejects(writeAudit({ asService() { throw new Error('unconfigured'); } }, params), fail(503, 'audit_unavailable'));
-		await assert.rejects(writeAudit({ asService: () => ({ post: async () => { throw new Error('boom'); } }) }, params), fail(503, 'audit_unavailable'));
+		const unconfigured = new Error('unconfigured');
+		const failed = new Error('boom');
+		await assert.rejects(
+			writeAudit({ asService() { throw unconfigured; } }, params),
+			(error) => fail(503, 'audit_unavailable')(error) && error.cause === unconfigured,
+		);
+		await assert.rejects(
+			writeAudit({ asService: () => ({ post: async () => { throw failed; } }) }, params),
+			(error) => fail(503, 'audit_unavailable')(error) && error.cause === failed,
+		);
 	});
 
 	it('refuses a non-uuid subject and hostile details', async () => {
