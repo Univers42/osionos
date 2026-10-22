@@ -59,7 +59,8 @@ function deletesOf(mock) {
 
 function deleteIds(call) {
 	const raw = call.params.get('id') ?? '';
-	if (raw.startsWith('in.(')) return raw.slice(4, -1).split(',').map(decodeURIComponent);
+	// The bridge quotes the ids of its `in` lists (inFilter), so the quotes come off here.
+	if (raw.startsWith('in.(')) return raw.slice(4, -1).split(',').map((id) => decodeURIComponent(id).replace(/^"(.*)"$/, '$1'));
 	return [raw.slice(3)];
 }
 

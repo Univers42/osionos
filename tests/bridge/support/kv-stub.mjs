@@ -29,6 +29,9 @@ export function kvStub() {
 		async get(key) {
 			return values.get(full(key)) ?? null;
 		},
+		async getMany(keys) {
+			return keys.map((key) => values.get(full(key)) ?? null);
+		},
 		async set(key, value) {
 			values.set(full(key), String(value));
 		},

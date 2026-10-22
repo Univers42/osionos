@@ -26,12 +26,16 @@ const DEFAULT_MAX_LIMIT = 100;
 
 const has = (value) => value !== undefined && value !== null && value !== '';
 
-// Caveat: 50 was measured with unquoted ids (bridge-api.mjs:1371-1379). `inFilter` adds 6
-// bytes per id for quotes and encoding, so 50 uuids are ~2.15 KB instead of ~1.85 KB,
-// leaving ~1.5 KB of Kong's 4 KB header buffer for the rest of the query string. A 50-id
-// chunk (~2.1 KB) plus a 3-column cursor (~2.3 KB) must not share one request; 80 is the
-// hard ceiling here, not a safe default.
-export function idChunks(ids, size = 50) {
+// Caveat: 50 was measured with unquoted ids. `inFilter` adds 6 bytes per id for the quotes
+// and the encoding, so 50 uuids are ~2.15 KB instead of ~1.85 KB, leaving ~1.5 KB of Kong's
+// 4 KB header buffer for the rest of the query string. A 50-id chunk (~2.1 KB) plus a
+// 3-column cursor (~2.3 KB) must not share one request; 80 is the hard ceiling of idChunks,
+// not a safe default.
+export const CHUNK_SIZE = 50;
+// Caveat: four in flight is a guess at what the BaaS tolerates; a busier deployment lowers it.
+export const CHUNK_CONCURRENCY = 4;
+
+export function idChunks(ids, size = CHUNK_SIZE) {
 	if (!Array.isArray(ids)) throw new TypeError('idChunks expects an array of ids.');
 	if (!Number.isInteger(size) || size < 1 || size > 80) throw new RangeError('chunk size must be an integer from 1 to 80.');
 	const unique = [];
@@ -44,6 +48,33 @@ export function idChunks(ids, size = 50) {
 	const chunks = [];
 	for (let at = 0; at < unique.length; at += size) chunks.push(unique.slice(at, at + size));
 	return chunks;
+}
+
+/**
+ * `read` over `chunks` with at most `concurrency` requests in flight; the answers come back
+ * in chunk order. The first failure rejects the whole call: a read the route requires has no
+ * partial answer. A read that is best-effort catches its own errors per chunk.
+ */
+export async function runChunks(chunks, read, { concurrency = CHUNK_CONCURRENCY } = {}) {
+	const parts = new Array(chunks.length);
+	let cursor = 0;
+	let failure = null;
+	const worker = async () => {
+		for (;;) {
+			const index = cursor;
+			cursor += 1;
+			if (index >= chunks.length || failure) return;
+			try {
+				parts[index] = await read(chunks[index], index);
+			} catch (error) {
+				if (!failure) failure = error;
+				return;
+			}
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(concurrency, chunks.length) }, worker));
+	if (failure) throw failure;
+	return parts;
 }
 
 function quoteFilterValue(value) {
