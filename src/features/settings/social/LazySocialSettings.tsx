@@ -11,8 +11,8 @@
 /* ************************************************************************** */
 
 /**
- * Code-split boundary for the Contacts settings tab. The three social panels
- * (contacts, blocked users, reports) + their stores form one async chunk so the
+ * Code-split boundary for the Contacts settings tab. The two social panels
+ * (contacts, reports) + their stores form one async chunk so the
  * settings center never drags the social graph into its warm bundle.
  */
 
