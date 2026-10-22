@@ -87,7 +87,7 @@ describe('the beacon of "For you"', () => {
 			},
 		});
 		assert.equal(answer.status, 200);
-		assert.deepEqual(answer.body, { ok: true, written: 2 });
+		assert.deepEqual(answer.body, { ok: true });
 		assert.equal(stub.rpcs().length, 1);
 		assert.deepEqual(stub.rpcs()[0].body, {
 			p_user: me,
@@ -147,7 +147,36 @@ describe('the beacon of "For you"', () => {
 			body: { slate: token, events: events(GHOST) },
 		});
 		assert.equal(answer.status, 200);
-		assert.deepEqual(answer.body, { ok: true, written: 0 });
+		assert.deepEqual(answer.body, { ok: true });
+		assert.deepEqual(stub.rpcs(), []);
+	});
+
+	it('answers the same body whether a slate page was readable or not', async () => {
+		const me = user();
+		const stub = createEventsStub(world({}, me));
+		const token = slate([SHOWN, HIDDEN], me);
+		const readable = await callEvents(stub, { userId: me, body: { slate: token, events: events(SHOWN) } });
+		const hidden = await callEvents(stub, { userId: me, body: { slate: token, events: events(HIDDEN) } });
+		assert.deepEqual(hidden.body, readable.body);
+	});
+
+	it('refuses a slate of an hour and one second ago', async () => {
+		const me = user();
+		const stub = createEventsStub(world({}, me));
+		const token = slate([SHOWN], me, { issuedAt: Date.now() - 3_601_000 });
+		const answer = await callEvents(stub, { userId: me, body: { slate: token, events: events(SHOWN) } });
+		assert.equal(answer.status, 400);
+		assert.deepEqual(answer.body, { ok: false, code: 'invalid_slate' });
+		assert.deepEqual(stub.rpcs(), []);
+	});
+
+	it('refuses a slate whose signature was tampered with', async () => {
+		const me = user();
+		const stub = createEventsStub(world({}, me));
+		const [payload, signature] = slate([SHOWN], me).split('.');
+		const flipped = `${payload}.${signature[0] === 'A' ? 'B' : 'A'}${signature.slice(1)}`;
+		const answer = await callEvents(stub, { userId: me, body: { slate: flipped, events: events(SHOWN) } });
+		assert.equal(answer.status, 400);
 		assert.deepEqual(stub.rpcs(), []);
 	});
 
@@ -177,6 +206,16 @@ describe('the consent comes first (C48)', () => {
 		});
 		assert.equal(answer.status, 204);
 		assert.equal(answer.text, '');
+		assert.deepEqual(stub.tables(), ['ai_personalization_settings']);
+		assert.deepEqual(stub.rpcs(), []);
+	});
+
+	it('answers 204 and writes nothing when the row says no', async () => {
+		const me = user();
+		const stub = createEventsStub(world({ settings: [{ user_id: me, beacon_consent: false }] }, me));
+		const token = slate([SHOWN], me);
+		const answer = await callEvents(stub, { userId: me, body: { slate: token, events: events(SHOWN) } });
+		assert.equal(answer.status, 204);
 		assert.deepEqual(stub.tables(), ['ai_personalization_settings']);
 		assert.deepEqual(stub.rpcs(), []);
 	});
