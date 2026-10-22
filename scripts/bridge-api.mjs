@@ -3509,7 +3509,29 @@ async function handleFavoritesList(request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const query = postgrestQuery({ user_id: `eq.${authContext.userId}`, select: 'page_id', order: 'created_at.desc' });
 	const rows = await baasRest(config, fetchImpl, `osionos_page_favorites?${query}`);
-	json(response, 200, { ok: true, pageIds: (Array.isArray(rows) ? rows : []).map((row) => row.page_id) }, config);
+	const favoriteIds = (Array.isArray(rows) ? rows : []).map((row) => row.page_id);
+	// A page hidden by a no_access rule is a missing id, so it never shows in the
+	// caller's favorites even if it was starred before the rule landed.
+	const readableIds = [];
+	for (const pageId of favoriteIds) {
+		let row;
+		try { row = await fetchPageAuthRow(pageId, config, fetchImpl); } catch { row = null; }
+		if (!row) continue;
+		let level = null;
+		if (!sameId(row.owner_id, authContext.userId)) {
+			let member = null;
+			try { member = await callerWorkspaceMember(authContext, row.workspace_id, config, fetchImpl); } catch { member = null; }
+			const role = safeText(member?.role, 16);
+			const exempt = role === 'owner' || role === 'admin';
+			if (!member) continue;
+			if (!exempt) {
+				try { level = await shareLevelForPage(config, row.workspace_id, pageId, authContext.userId, role, fetchImpl); }
+				catch { continue; }
+			}
+		}
+		try { requireReadablePage(row, authContext.userId, level); readableIds.push(pageId); } catch { /* hidden or unreadable */ }
+	}
+	json(response, 200, { ok: true, pageIds: readableIds }, config);
 	return true;
 }
 

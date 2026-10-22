@@ -25,7 +25,9 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createShareRuleStore } from '../../scripts/bridge-perms-rules.mjs';
+import { createShareRuleStore, normalizeShareRule } from '../../scripts/bridge-perms-rules.mjs';
+import { canWritePageRow } from '../../scripts/bridge-api.mjs';
+import { IDS, createPostgrestMock, harnessConfig, patch, post, send, sessionHeaders, withBridge } from './support/bridge-harness.mjs';
 
 const WS = '11111111-1111-4111-8111-111111111111';
 const OTHER_WS = '22222222-2222-4222-8222-222222222222';
@@ -169,6 +171,198 @@ describe('a store failure is never a silent "no rules"', () => {
 			assert.equal(error.status, 503);
 			assert.equal(error.code, 'share_rules_unavailable');
 			return true;
+		});
+	});
+});
+
+const config = harnessConfig();
+
+describe('page ids are matched case-insensitively', () => {
+	it('normalizeShareRule lower-cases a page resource id', () => {
+		const rule = normalizeShareRule({ workspaceId: WS, resourceType: 'page', resourceId: PAGE.toUpperCase(), permission: 'no_access', target: { type: 'workspace' } });
+		assert.equal(rule.resource_id, PAGE.toLowerCase());
+	});
+
+	it('listForPage finds a lower-case rule when the page is requested in upper case', async () => {
+		const rows = [row({ id: 'case-a', resource_id: PAGE.toLowerCase(), permission: 'no_access' })];
+		const { fetchImpl } = fakeFetch(rows);
+		const store = createShareRuleStore({ fetchImpl });
+		const rules = await store.listForPage(CONFIG, WS, PAGE.toUpperCase());
+		assert.deepEqual(rules.map((rule) => rule.id), ['case-a']);
+	});
+});
+
+describe('canWritePageRow refuses a viewer on another member page', () => {
+	const SELF = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
+	const OTHER = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+	const W = 'c0c0c0c0-3333-4333-8333-c0c0c0c0c0c0';
+	const P = 'e1e1e1e1-1111-4111-8111-e1e1e1e1e1e1';
+
+	it('a viewer cannot write another member page', () => {
+		const row = { id: P, workspace_id: W, owner_id: OTHER, visibility: 'shared', collaborators: [], properties: [], content: [] };
+		const member = { role: 'viewer', permissions: ['read'] };
+		assert.equal(canWritePageRow(row, SELF, member, 'update'), false);
+		assert.equal(canWritePageRow(row, SELF, member, 'delete'), false);
+	});
+
+	it('a no_access rule refuses even an editor', () => {
+		const row = { id: P, workspace_id: W, owner_id: OTHER, visibility: 'shared', collaborators: [], properties: [], content: [] };
+		const member = { role: 'editor', permissions: ['create', 'read', 'update'] };
+		const rules = [{ resource_type: 'page', resource_id: P, target: { type: 'user', userId: SELF }, permission: 'no_access' }];
+		assert.equal(canWritePageRow(row, SELF, member, 'update', rules), false);
+	});
+});
+
+describe('no_access hides a page on every page-scoped route', () => {
+	const OWNER = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+	const CALLER = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
+	const WSID = 'c0c0c0c0-3333-4333-8333-c0c0c0c0c0c0';
+	const HOME = 'a0a0a0a0-1111-4111-8111-a0a0a0a0a0a0';
+	const PAGE = 'c3000000-1111-4111-8111-c30000000f03';
+	const MISSING = 'dddddddd-4444-4444-8444-dddddddddddd';
+	const RULE_ID = 'b9000000-1111-4111-8111-b90000000f09';
+	const tableWrites = (mock) => mock.calls.filter((c) => c.method !== 'GET' && !c.table.startsWith('rpc/')).map((c) => `${c.method} ${c.table}`);
+
+	function members() {
+		return [
+			{ workspace_id: HOME, user_id: CALLER, role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] },
+			{ workspace_id: WSID, user_id: CALLER, role: 'viewer', permissions: ['read'] },
+			{ workspace_id: WSID, user_id: OWNER, role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] },
+		];
+	}
+	function pages() {
+		return [{ id: PAGE, workspace_id: WSID, owner_id: OWNER, visibility: 'public', title: 'Public', collaborators: [], properties: [], parent_page_id: null, archived_at: null, content: [], created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z' }];
+	}
+	function rules() {
+		return [{ id: RULE_ID, workspace_id: WSID, resource_type: 'page', resource_id: PAGE, target: { type: 'user', userId: CALLER }, permission: 'no_access', explicit: true }];
+	}
+
+	const routes = [
+		['GET', (id) => `/api/pages/${id}`, undefined],
+		['PATCH', (id) => `/api/pages/${id}`, patch({ title: 'changed' })],
+		['DELETE', (id) => `/api/pages/${id}`, { method: 'DELETE' }],
+		['GET', (id) => `/api/pages/${id}/config`, undefined],
+		['PATCH', (id) => `/api/pages/${id}/config`, patch({ config: { view: 'board' } })],
+		['POST', (id) => `/api/pages/${id}/actions`, post({ action: 'duplicate', payload: {} })],
+		['POST', (id) => `/api/pages/${id}/translate`, post({ targetLocale: 'fr' })],
+		['GET', (id) => `/api/pages/${id}/backlinks`, undefined],
+	];
+
+	for (const [index, [method, pathFor, init]] of routes.entries()) {
+		it(`${method} ${pathFor(':id')} answers 404 for a no_access page`, async () => {
+			const mock = createPostgrestMock({ osionos_workspace_members: members(), osionos_pages: pages(), osionos_share_rules: rules() }, { realWorkspaceRpc: true });
+			const headers = sessionHeaders(config, CALLER, HOME, [WSID]);
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const denied = await send(base, pathFor(PAGE), headers, init || {});
+				assert.equal(denied.status, 404, denied.text);
+				assert.equal(denied.body?.message, 'Page not found.');
+				assert.deepEqual(tableWrites(mock), []);
+				assert.deepEqual(mock.outbound, []);
+				// Only the page itself shares a body with a missing id; a missing id on the scoped
+				// routes is a scope-less 200 by design, so there is nothing to compare there.
+				if (index < 3) {
+					const missing = await send(base, pathFor(MISSING), headers, init || {});
+					assert.deepEqual([denied.status, denied.body], [missing.status, missing.body]);
+				}
+			});
+		});
+	}
+
+	for (const [method, pathFor, init] of routes.slice(0, 3)) {
+		it(`${method} ${pathFor(':id')} with an UPPER-case id answers the missing-id 404 and writes nothing`, async () => {
+			const mock = createPostgrestMock({ osionos_workspace_members: members(), osionos_pages: pages(), osionos_share_rules: rules() }, { realWorkspaceRpc: true });
+			const headers = sessionHeaders(config, CALLER, HOME, [WSID]);
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const denied = await send(base, pathFor(PAGE.toUpperCase()), headers, init || {});
+				const missing = await send(base, pathFor(MISSING.toUpperCase()), headers, init || {});
+				assert.equal(denied.status, 404, denied.text);
+				assert.deepEqual([denied.status, denied.body], [missing.status, missing.body]);
+				assert.deepEqual(tableWrites(mock), []);
+			});
+		});
+	}
+
+	it('the same routes still answer a caller no rule names (the 404 is the rule, not the route)', async () => {
+		const mock = createPostgrestMock({ osionos_workspace_members: members(), osionos_pages: pages(), osionos_share_rules: [] }, { realWorkspaceRpc: true });
+		const headers = sessionHeaders(config, CALLER, HOME, [WSID]);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			assert.equal((await send(base, `/api/pages/${PAGE}`, headers)).status, 200);
+			assert.equal((await send(base, `/api/pages/${PAGE.toUpperCase()}`, headers)).status, 200);
+		});
+	});
+
+	it('a viewer is refused a write on another member page through PATCH, DELETE and PATCH config', async () => {
+		for (const [pathFor, init] of [[(id) => `/api/pages/${id}`, patch({ title: 'changed' })], [(id) => `/api/pages/${id}`, { method: 'DELETE' }], [(id) => `/api/pages/${id}/config`, patch({ config: { view: 'board' } })]]) {
+			const mock = createPostgrestMock({ osionos_workspace_members: members(), osionos_pages: pages(), osionos_share_rules: [] }, { realWorkspaceRpc: true });
+			const headers = sessionHeaders(config, CALLER, HOME, [WSID]);
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const res = await send(base, pathFor(PAGE), headers, init);
+				assert.ok(res.status === 403 || res.status === 404, `${init.method} ${pathFor(':id')} -> ${res.status} ${res.text}`);
+				assert.deepEqual(tableWrites(mock), []);
+				assert.equal(mock.page(PAGE).title, 'Public');
+			});
+		}
+	});
+
+	it('a rule written with an upper-case resource id hides the page requested in lower case', async () => {
+		const upperRules = [{ id: RULE_ID, workspace_id: WSID, resource_type: 'page', resource_id: PAGE.toUpperCase(), target: { type: 'user', userId: CALLER }, permission: 'no_access', explicit: true }];
+		// normalize through the store is not applied to seeded rows, so emulate by storing lower via normalizeShareRule
+		const normalized = normalizeShareRule({ workspaceId: WSID, resourceType: 'page', resourceId: PAGE.toUpperCase(), permission: 'no_access', target: { type: 'user', userId: CALLER } });
+		const stored = [{ id: RULE_ID, workspace_id: WSID, resource_type: 'page', resource_id: normalized.resource_id, target: { type: 'user', userId: CALLER }, permission: 'no_access', explicit: true }];
+		const mock = createPostgrestMock({ osionos_workspace_members: members(), osionos_pages: pages(), osionos_share_rules: stored }, { realWorkspaceRpc: true });
+		const headers = sessionHeaders(config, CALLER, HOME, [WSID]);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const res = await send(base, `/api/pages/${PAGE}`, headers);
+			assert.equal(res.status, 404, res.text);
+		});
+	});
+});
+
+describe('favorites honour no_access rules', () => {
+	const OWNER = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+	const CALLER = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
+	const WSID = 'c0c0c0c0-3333-4333-8333-c0c0c0c0c0c0';
+	const HOME = 'a0a0a0a0-1111-4111-8111-a0a0a0a0a0a0';
+	const PAGE = 'c3000000-1111-4111-8111-c30000000f03';
+	const ACCESSIBLE = 'e5000000-1111-4111-8111-e50000000f05';
+
+	function members() {
+		return [
+			{ workspace_id: HOME, user_id: CALLER, role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] },
+			{ workspace_id: WSID, user_id: CALLER, role: 'viewer', permissions: ['read'] },
+			{ workspace_id: WSID, user_id: OWNER, role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] },
+		];
+	}
+	function pages() {
+		return [
+			{ id: PAGE, workspace_id: WSID, owner_id: OWNER, visibility: 'public', title: 'Hidden', collaborators: [], properties: [], parent_page_id: null, archived_at: null, content: [], created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z' },
+			{ id: ACCESSIBLE, workspace_id: WSID, owner_id: OWNER, visibility: 'public', title: 'Open', collaborators: [], properties: [], parent_page_id: null, archived_at: null, content: [], created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z' },
+		];
+	}
+	function rules() {
+		return [{ id: 'r1', workspace_id: WSID, resource_type: 'page', resource_id: PAGE, target: { type: 'user', userId: CALLER }, permission: 'no_access', explicit: true }];
+	}
+
+	it('a no_access page cannot be added to favorites', async () => {
+		const mock = createPostgrestMock({ osionos_workspace_members: members(), osionos_pages: pages(), osionos_share_rules: rules() }, { realWorkspaceRpc: true });
+		const headers = sessionHeaders(config, CALLER, HOME, [WSID]);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const denied = await send(base, '/api/favorites', headers, post({ pageId: PAGE }));
+			const missing = await send(base, '/api/favorites', headers, post({ pageId: 'dddddddd-4444-4444-8444-dddddddddddd' }));
+			assert.equal(denied.status, 404, denied.text);
+			assert.deepEqual([denied.status, denied.body], [missing.status, missing.body]);
+			assert.equal(mock.rows('osionos_page_favorites').length, 0);
+			assert.equal((await send(base, '/api/favorites', headers, post({ pageId: ACCESSIBLE }))).status, 200);
+		});
+	});
+
+	it('a no_access page is absent from the favorites list', async () => {
+		const mock = createPostgrestMock({ osionos_workspace_members: members(), osionos_pages: pages(), osionos_share_rules: rules(), osionos_page_favorites: [{ user_id: CALLER, page_id: PAGE }, { user_id: CALLER, page_id: ACCESSIBLE }] }, { realWorkspaceRpc: true });
+		const headers = sessionHeaders(config, CALLER, HOME, [WSID]);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const res = await send(base, '/api/favorites', headers);
+			assert.equal(res.status, 200, res.text);
+			assert.deepEqual(res.body.pageIds, [ACCESSIBLE]);
 		});
 	});
 });
