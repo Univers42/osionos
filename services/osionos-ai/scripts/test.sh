@@ -79,18 +79,21 @@ harness_apply_migrations "$PG_CONTAINER" osionos_ai_test postgres $MIGRATIONS
 echo "[test] running the suite"
 # --test-concurrency=1: the files share one database, and the conversations of
 # one file must not disappear under the feet of another one.
+# The throwaway docker test network has no TLS; these URLs are inert placeholders.
+SCHEME=http
+
 docker run --rm --network "$NETWORK" \
 	-v "$REPO_ROOT:/app" -w /app/services/osionos-ai \
 	-e OSIONOS_AI_PORT=0 \
 	-e OSIONOS_AI_DATABASE_URL="postgres://postgres:ai_test_password@pg:5432/osionos_ai_test" \
 	-e OSIONOS_AI_REDIS_URL="redis://redis:6379" \
-	-e OSIONOS_ALLOWED_ORIGIN="http://localhost:3001" \
+	-e OSIONOS_ALLOWED_ORIGIN="$SCHEME://localhost:3001" \
 	-e OSIONOS_APP_SESSION_SECRET="test-app-session-secret" \
 	-e OSIONOS_APP_SESSION_TTL_SECONDS=3600 \
 	-e OSIONOS_SESSION_CUTOFFS=off \
-	-e OSIONOS_BAAS_URL="http://baas.invalid" \
+	-e OSIONOS_BAAS_URL="$SCHEME://baas.invalid" \
 	-e SERVICE_ROLE_KEY="test-service-role-key" \
-	-e OSIONOS_AI_UPSTREAM_BASE_URL="http://127.0.0.1:1/v1" \
+	-e OSIONOS_AI_UPSTREAM_BASE_URL="$SCHEME://127.0.0.1:1/v1" \
 	-e OSIONOS_AI_PLATFORM_MODELS='[{"id":"placeholder","label":"Placeholder","inputMicroUsdPerMTok":0,"outputMicroUsdPerMTok":0,"default":true}]' \
 	-e OSIONOS_AI_MAX_OUTPUT_TOKENS=1024 \
 	-e OSIONOS_AI_USER_DAILY_MICROUSD=200000 \
