@@ -56,12 +56,31 @@ const SETTINGS_NAV_STUB = `
 export const calls = [];
 export function openSettings(section = "profile", anchor) { calls.push({ section, anchor }); }
 `;
+// The menus are app data; what this file proves is how buildCommands merges
+// them with the extra commands, so the menu source is a stub with one label
+// shared by two menus (the case the label de-duplication exists for).
+const MENUS_STUB = `
+export function buildMenus() {
+  return [
+    { id: "file", label: "File", items: [
+      { id: "file.settings", label: "Settings", run: () => undefined },
+    ] },
+    { id: "help", label: "Help", items: [
+      { id: "help.shortcuts", label: "Keyboard shortcuts", run: () => undefined },
+    ] },
+    { id: "view", label: "View", items: [
+      { id: "view.shortcuts", label: "Keyboard shortcuts", run: () => undefined },
+    ] },
+  ];
+}
+`;
 const BY_SUFFIX: [string, string][] = [
   ["/src/shared/api/client.ts", CLIENT_STUB],
   ["/src/features/auth/model/useUserStore.ts", USER_STORE_STUB],
   ["/src/features/auth/index.ts", AUTH_INDEX_STUB],
   ["/src/features/auth/model/userStore.helpers.ts", "export function pageApiJwtFromSessionToken(token) { return token; }"],
   ["/src/features/settings/model/settingsNav.ts", SETTINGS_NAV_STUB],
+  ["/src/widgets/top-bar/model/menus.ts", MENUS_STUB],
 ];
 
 const url = (code: string): string => `data:text/javascript,${encodeURIComponent(code)}`;
@@ -86,6 +105,7 @@ const { settingsPaletteCommands } = await import("../../src/features/settings/mo
 const { SETTINGS_SECTIONS } = await import("../../src/features/settings/model/sections.ts");
 const { readSettingsDeepLink, applySettingsDeepLink } = await import("../../src/features/settings/model/settingsDeepLink.ts");
 const { matchCommands } = await import("../../src/widgets/top-bar/model/search.ts");
+const { buildCommands } = await import("../../src/widgets/top-bar/model/commands.ts");
 const { useWorkspaceLayout } = await import("../../src/widgets/workspace-grid/model/workspaceLayout.ts");
 const { DEFAULT_AUTOMATIONS } = await import("../../src/features/automations/model/defaultAutomations.ts");
 const { comboSteps } = await import("../../src/features/automations/model/combo.ts");
@@ -110,9 +130,11 @@ test("one command per section and per anchor, with unique ids", () => {
     for (const anchor of section.anchors) {
       const anchorCommand = commands.find((command) => command.id === `settings.${section.id}.${anchor.id}`);
       assert.ok(anchorCommand, `a command for the ${section.id}/${anchor.id} anchor`);
-      assert.equal(anchorCommand.label, `Settings: ${section.title} › ${anchor.label}`);
-      assert.equal(anchorCommand.group, "Settings");
-      assert.deepEqual(anchorCommand.keywords, anchor.keywords);
+      // The anchor name leads the row: the palette truncates a long title, and
+      // four anchors of one section must not read the same.
+      assert.equal(anchorCommand.label, anchor.label);
+      assert.equal(anchorCommand.group, `Settings › ${section.title}`);
+      assert.deepEqual(anchorCommand.keywords, ["settings", section.title, ...anchor.keywords]);
     }
   }
 });
@@ -153,6 +175,30 @@ test("a query that matches no keyword keeps the registry order", () => {
 
 test("a query matching nothing lists nothing", () => {
   assert.deepEqual(matchCommands("zzz-not-a-setting", commands), []);
+});
+
+test("buildCommands keeps an extra whose label equals a menu item's label", () => {
+  const extra = [
+    { id: "settings.shortcuts.keyboard-shortcuts", label: "Keyboard shortcuts", group: "Settings › Keyboard shortcuts", run: () => {} },
+  ];
+  const built = buildCommands({ openSettings: () => {} }, extra);
+
+  // The menus list "Keyboard shortcuts" twice: the label de-duplication keeps
+  // the first one — and only the first one.
+  assert.equal(built.some((command) => command.id === "view.shortcuts"), false);
+  // The settings anchor shares that label but is a different row (its subtitle
+  // says so), so it survives.
+  const shortcuts = built.filter((command) => command.label === "Keyboard shortcuts");
+  assert.deepEqual(shortcuts.map((command) => command.id), ["help.shortcuts", "settings.shortcuts.keyboard-shortcuts"]);
+});
+
+test("buildCommands drops a repeated extra id", () => {
+  const extra = [
+    { id: "settings.shortcuts.keyboard-shortcuts", label: "Keyboard shortcuts", group: "Settings › Keyboard shortcuts", run: () => {} },
+    { id: "settings.shortcuts.keyboard-shortcuts", label: "Keyboard shortcuts", group: "Settings › Keyboard shortcuts", run: () => {} },
+  ];
+  const built = buildCommands({ openSettings: () => {} }, extra);
+  assert.equal(built.filter((command) => command.id === "settings.shortcuts.keyboard-shortcuts").length, 1);
 });
 
 test("a deep link resolves a section and one of its own anchors", () => {

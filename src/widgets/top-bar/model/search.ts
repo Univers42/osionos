@@ -127,11 +127,9 @@ export function matchCommands(query: string, commands: PaletteCommand[], limit =
   const byLabel: PaletteCommand[] = [];
   const byKeyword: PaletteCommand[] = [];
   for (const command of commands) {
-    if (!trimmed || command.label.toLowerCase().includes(trimmed)) {
-      byLabel.push(command);
-      continue;
-    }
-    if (command.keywords?.some((keyword) => keyword.toLowerCase().includes(trimmed))) byKeyword.push(command);
+    // An empty query includes every label, so the whole list stays in order.
+    if (command.label.toLowerCase().includes(trimmed)) byLabel.push(command);
+    else if (command.keywords?.some((keyword) => keyword.toLowerCase().includes(trimmed))) byKeyword.push(command);
   }
   return [...byLabel, ...byKeyword].slice(0, limit).map((command) => ({
     id: command.id,

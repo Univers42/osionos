@@ -14,6 +14,11 @@
 // and every one of its anchors become a command. A new section is reachable
 // from the palette the day it is registered — there is no second list here, so
 // there is nothing to keep in sync.
+//
+// An ANCHOR row leads with the anchor name: the palette truncates a long
+// title, and "Settings: Notifications › In-app notifications" cut at 60% of
+// the row leaves four anchors reading the same. The section rides in the
+// subtitle, which is where the eye reads the context.
 
 import type { PaletteCommand } from "@/widgets/top-bar/model/commands";
 
@@ -37,9 +42,9 @@ export function settingsPaletteCommands(): PaletteCommand[] {
     for (const anchor of section.anchors) {
       commands.push({
         id: `settings.${section.id}.${anchor.id}`,
-        label: `Settings: ${section.title} › ${anchor.label}`,
-        group: GROUP,
-        keywords: [...anchor.keywords],
+        label: anchor.label,
+        group: `${GROUP} › ${section.title}`,
+        keywords: ["settings", section.title, ...anchor.keywords],
         run: () => openSettings(section.id, anchor.id),
       });
     }
