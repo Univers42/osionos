@@ -22,7 +22,6 @@ export const classNotes: SeedPage = {
   workspaceId: 'mock-ws-private-0',
   ownerId: 'mock-user-0',
   isTemplate: true,
-  templateSurface: 'class-notes',
   content: [
     h1('Class Notes'),
     callout('One page per course. Keep a toggle per lecture so the page stays scannable as the term grows.', '📝'),

@@ -30,13 +30,50 @@ const CELL_COLOR_SWATCHES = [
 
 const MAX_ROW_SPAN = 512;
 
+const EMPTY_MEASURED_HEIGHTS: ReadonlyMap<string, number> = new Map();
+
+/**
+ * Live hug measurements of the stage. The stage owns the ResizeObserver (one
+ * observer for every hug cell), the inspector reads the map through this
+ * context to pin the height it currently sees.
+ */
+const MeasuredHeightsContext = React.createContext<ReadonlyMap<string, number>>(EMPTY_MEASURED_HEIGHTS);
+
+export const CanvasMeasuredHeightsProvider: React.FC<{ heights: ReadonlyMap<string, number>; children: React.ReactNode }> = ({ heights, children }) => (
+  <MeasuredHeightsContext.Provider value={heights}>{children}</MeasuredHeightsContext.Provider>
+);
+
+export function useMeasuredCellHeight(cellId: string | undefined): number | undefined {
+  const heights = React.useContext(MeasuredHeightsContext);
+  return cellId === undefined ? undefined : heights.get(cellId);
+}
+
+/**
+ * The hug measurement is the CONTENT height of the cell editor (a
+ * contentRect), while a cell's frame height is its border box: pinning the
+ * raw measurement would freeze the card below its own padding and clip the
+ * text. The padding is a CSS value (a clamp), so it is read from the
+ * rendered cell.
+ * Caveat: a cell that is not mounted (a background pane) falls back to the
+ * raw measurement, so the frozen card clips its text there.
+ */
+function measuredHeightWithPadding(cellId: string, measuredHeight: number): number {
+  const editor = document.querySelector(`[data-layout-cell-id="${CSS.escape(cellId)}"] .osionos-layout-cell-editor`);
+  if (!editor) return measuredHeight;
+  const style = window.getComputedStyle(editor);
+  const padding = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
+  return Number.isFinite(padding) ? measuredHeight + padding : measuredHeight;
+}
+
 export const CanvasInspector: React.FC<{ store: CanvasStoreApi; cellId: string; onClose: () => void }> = ({ store, cellId, onClose }) => {
   const cell = useStore(store, (state) => state.cells.find((candidate) => candidate.id === cellId));
   const layoutConfig = useStore(store, (state) => state.layoutConfig);
   const dispatch = useStore(store, (state) => state.dispatch);
+  const measuredHeight = useMeasuredCellHeight(cell?.id);
   if (!cell) return null;
 
   const span = gridCellFromFrame(cell.frame, layoutConfig);
+  const gridHeight = (span.rowSpan ?? 1) * layoutConfig.rowHeight + Math.max(0, (span.rowSpan ?? 1) - 1) * layoutConfig.rowGap;
   const setSpan = (colSpan: number, rowSpan: number) => {
     dispatch({
       type: "updateCellFrames",
@@ -79,6 +116,42 @@ export const CanvasInspector: React.FC<{ store: CanvasStoreApi; cellId: string; 
         options={["top", "stretch", "hug"] as const}
         onChange={(vertical) => dispatch({ type: "updateCell", id: cell.id, patch: { constraints: { ...cell.constraints, vertical: migrateVerticalConstraint(vertical) } } })}
       />
+      <div className="osionos-layout-control-row osionos-layout-control-row--stacked">
+        <span>Height</span>
+        <div className="osionos-layout-segmented">
+          {cell.sizing.height === "hug" ? (
+            <button
+              type="button"
+              disabled={measuredHeight === undefined}
+              title="Freeze the cell at the height its content measures right now"
+              onClick={() => {
+                if (measuredHeight === undefined) return;
+                dispatch({ type: "setCellMeasuredHeight", id: cell.id, height: measuredHeightWithPadding(cell.id, measuredHeight) });
+              }}
+            >
+              Save measured height
+            </button>
+          ) : (
+            <button
+              type="button"
+              title="Let the content drive the height again"
+              onClick={() => dispatch({
+                type: "updateCell",
+                id: cell.id,
+                patch: {
+                  sizing: { ...cell.sizing, height: "hug" },
+                  // A pin moved the frame off the grid, so the grid height is
+                  // restored with it: a hug cell is never smaller than its row.
+                  ...(cell.measuredHeight === undefined ? {} : { frame: { ...cell.frame, height: gridHeight } }),
+                  measuredHeight: undefined,
+                },
+              })}
+            >
+              Auto height
+            </button>
+          )}
+        </div>
+      </div>
       <CanvasToggle label="Wrap content" checked={cell.wrap !== false} onChange={(wrap) => dispatch({ type: "updateCell", id: cell.id, patch: { wrap } })} />
       <CanvasSegmented
         label="Padding"

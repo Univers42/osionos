@@ -49,3 +49,12 @@
     oklch(0.7 0.14 360)
   );
 }
+
+/* Link underlines. "default" is today's rule and stays untouched: the inline
+   editor links (.editor-link, global.css) and the page body links
+   (.osionos-page-body a, notionPage.css) are underlined, the app chrome is
+   not. "always" underlines every link at rest, wherever it sits. */
+:root[data-link-underline="always"] a[href] {
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+}
