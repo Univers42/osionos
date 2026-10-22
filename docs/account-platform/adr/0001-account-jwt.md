@@ -1,6 +1,7 @@
 # ADR 0001 — per-user account JWT for the account plane
 
-Status: accepted 2026-10-22 (devil verdict PROCEED-WITH-CONDITIONS on P0-2).
+Status: accepted 2026-10-22 (devil verdict PROCEED-WITH-CONDITIONS on the P0-2 spec, and again on its
+diff: two tests that could not fail and the 22023 mapping were conditions of the merge).
 
 ## Decision
 The bridge reads and writes account-plane tables (`osionos_profiles`, `osionos_user_settings`,
@@ -30,7 +31,9 @@ never falls back to the service role for these tables.
 
 ## Status mapping (asUser)
 401/403 → 503 (setup fault, never the user's), 404 → 503 (missing table/function; a missing row is
-`200 []`), 400 → 422, 409 → 409, 429 → 429, other → 502, network → 503 `baas_unreachable`.
+`200 []`), 400 → 422 except `upstreamCode 22023` → 503 `account_plane_unavailable` (the role
+switch failed: the database lacks `osionos_account_user`, e.g. P0-1 not applied), 409 → 409,
+429 → 429, other → 502, network → 503 `baas_unreachable`.
 `upstreamCode` (`42501` = RLS refusal) separates a policy refusal from a JWT/grant fault in logs.
 
 ## Not decided here
