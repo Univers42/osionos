@@ -30,5 +30,5 @@ RUN useradd --create-home --uid 10001 osml \
 USER osml
 
 # The training job. The offline evaluation is one command away:
-#   docker run --rm <image> python -m osml.evaluate --out /app/results/sim
+#   docker run --rm <image> python -m osml.evaluate   (writes /app/results/sim)
 CMD ["python", "-m", "osml.job"]
