@@ -9,8 +9,8 @@ Everything here is bound to the conditions **C70–C78** of
 `~/.cache/osionos-ai-records/a2-images-moderation-verdict.md`. The out-of-scope
 of this slice is written at the bottom.
 
-**Status: ai-dev only. The public stack stays OFF** (C70) until C72 L1 and C73
-land (see "What is not done").
+**Status: ai-dev only. The public stack stays OFF** (C70) until C72 L1 lands
+(see "What is not done").
 
 ---
 
@@ -47,7 +47,8 @@ asked for — see "What proves what", C77.
 S=/tmp/claude-1000/-home-dlesieur-Documents-groot-apps-opposite-osiris/f01db1ed-1f78-43ef-aaac-95b48d7f37b9/scratchpad
 
 # The service (throwaway Postgres + Redis, the AI migrations, the suite).
-# tests/images.test.ts (20 tests) and tests/imagesOff.test.ts (4 tests) are in it.
+# tests/images.test.ts (20 tests), tests/imagesOff.test.ts (5 tests) and
+# tests/imagesOutputCheck.test.ts (6 tests) are in it.
 sh services/osionos-ai/scripts/test.sh "$S/wt-groot-ai/models/osionos-ai-migration.sql" \
                                            "$S/wt-groot-ai/models/osionos-ai-rag-migration.sql"
 
@@ -85,7 +86,7 @@ The client suite of 2026-10-22 (commit `562678f3`): 2780 tests, 2780 pass,
 | **C70** | Off by default, off in public | `services/osionos-ai/tests/imagesOff.test.ts` ("the route answers exactly what an unknown route answers, and the engine is never called" — the same body as an unknown route, 0 engine calls; "turned on without an engine URL, the service refuses to start and names the variable"), `scripts/verify/ai-images-public-off.sh` (the public overlay forces `OSIONOS_AI_IMAGES` empty), and the client flag default off — `tests/canvas/ai-image-run.test.ts` ("the image entry is in the AI group only when the images flag is on") |
 | **C71** | The adapter is proven by a real call | A1: `git show feat/ai-spike-a1:services/osionos-ai/spikes/a1/results/imagegen/RESULTS.md` (the wire of the measured path: body keys exactly `model, n, prompt, size`, one PNG 512×512 back as `b64_json`), and the ai-dev run of 2026-10-22 (the numbers below) |
 | **C72** | The prompt gate — **L0 only** | A prompt carrying the engine's `sd_cpp_extra_args` tag is refused, and the schema is strict: `services/osionos-ai/tests/images.test.ts` ("a prompt that carries engine arguments is refused before anything", "the request has no image input: an extra field is refused"). **L1 (a classifier) is NOT done** → the public stack stays off |
-| **C73** | The output safety check | **NOT done** → the public stack stays off. The lineage is recorded below, and nothing else |
+| **C73** | The output safety check — **done, the recall UNMEASURED** | The bytes the engine answered are checked before they are stored: two pinned classifiers (Falconsai q8 ≥ 0.5, AdamCodd q8 ≥ 0.9), the union refuses the image if either fires, and a check that fails refuses too — `services/osionos-ai/tests/imagesOutputCheck.test.ts` ("a refused image is never uploaded: the run fails with image_refused, and the image is booked", "a check that is not there refuses the request before the queue, the reservation and the engine", "a check that throws refuses the image: the check fails closed", "an image is refused when either model reaches its threshold"). The models are pinned in `services/osionos-ai/spikes/a1/models.lock` and fetched by `services/osionos-ai/scripts/fetch-image-check.sh`; what the check catches is unknown → the public stack stays off until C72 L1 |
 | **C74** | The price | Required config: the service refuses to boot with `OSIONOS_AI_IMAGES=on` and no price — `services/osionos-ai/tests/imagesOff.test.ts` ("turned on without a price, the service refuses to start (C74: an image is never free)"). Booked once the engine received the call, whatever happens next — `services/osionos-ai/tests/images.test.ts` ("a cancelled image is still booked at its price", "an engine that never answers times out, and the image is booked", "the sweep of a stale image run books its price, not zero"). NOT booked when the engine was unreachable or the run was refused before it — `services/osionos-ai/tests/images.test.ts` ("an engine that is not running is told apart from one that failed: nothing is booked", "a user at the cap of the day is refused until midnight, and books nothing") |
 | **C75** | The caps | 3 images a minute per user, 20 a day per user, 200 a day for the platform (`OSIONOS_AI_IMAGES_PER_USER_DAY`, `OSIONOS_AI_IMAGES_PER_DAY`), one GPU served first-come-first-served by a Redis queue of 5 — `services/osionos-ai/tests/images.test.ts` ("the fourth image of a minute is refused with a Retry-After", "a user at the cap of the day is refused until midnight, and books nothing", "the platform at its cap of the day refuses everybody", "a second image waits for the first one: one call reaches the engine at a time", "a full queue refuses the next image with a Retry-After") |
 | **C76** | Only sniffed rasters | png/jpeg/webp checked by their bytes, ≤10 MB, ≤4096 px a side, an SVG refused before storage, the text chunks stripped, and the bridge's answer must carry the same sha256 — `services/osionos-ai/tests/images.test.ts` ("an engine answer that is svg is refused before storage", "an engine answer that is huge is refused before storage", "the image is generated, stripped, uploaded with the caller's token, and booked at its price"). The client renders only a URL the bridge minted — `tests/canvas/ai-image-run.test.ts` ("an image the bridge did not mint is refused") |
@@ -143,8 +144,9 @@ dropped (Stability AI non-commercial community licence).
 
 ## What is not done
 
-- **C72 L1 (a prompt classifier)** and **C73 (an output safety check)** — the
-  public stack stays off until both land with tests.
+- **C72 L1 (a prompt classifier)** — the public stack stays off until it lands
+  with tests. (C73 landed: the output check is in the service — see the
+  caveats for what it does not prove.)
 - **The cover picker's "Generate" tab** — the image is made from the editor's
   slash menu, not from the cover.
 - **Regenerate and variations** — a second image is a second prompt.
@@ -158,8 +160,16 @@ dropped (Stability AI non-commercial community licence).
 
 ## Caveats
 
-- **Caveat: the output is not checked by any safety model yet (C73)** — the
-  reason the public stack stays off.
+- **Caveat: the recall of the output check is UNMEASURED (C73)** — the gate is
+  the union of two classifiers (Falconsai q8 at 0.5, AdamCodd q8 at 0.9), each
+  at a threshold where it flagged none of the 352 safe images of A1, so the
+  union costs no measured false positive; but no unsafe image was ever
+  downloaded, generated or stored, so what the check CATCHES is unknown. A
+  threshold without a recall is a proposal, not a number — the recall has to be
+  measured on a licensed, labelled set before the thresholds are trusted.
+- **Caveat: a check that cannot be loaded refuses every image (C73)** — the
+  service still starts (the other routes are not hostage), and the image route
+  answers `503 image_check_unavailable` until the models are on the disk.
 - **Caveat: the Retry-After of `image_busy` is an estimate** — the runs ahead ×
   20 s (the warm time); a cold engine takes longer.
 - **Caveat: a replica that dies holding the GPU turn blocks the queue** until

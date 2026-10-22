@@ -23,9 +23,16 @@ process.env.OSIONOS_AI_IMAGES = 'on';
 process.env.OSIONOS_AI_IMAGE_URL = `${engine.baseUrl}/v1`;
 process.env.OSIONOS_AI_IMAGE_MICROUSD = String(PRICE);
 process.env.OSIONOS_AI_IMAGE_TIMEOUT_MS = '5000';
+// The configuration needs the directory of the check (C73); the suite brings
+// its own stub, so nothing is ever loaded from the disk.
+process.env.OSIONOS_AI_IMAGE_CHECK_DIR = '/tmp/osionos-ai-check-stub';
 
 const { startHarness, USER_DAILY_MICROUSD, WORKSPACE_A } = await import('./harness.ts');
-const { app, mock, bridge, base, call, tokenFor, postRun, createConversation } = await startHarness();
+const { app, mock, bridge, base, call, tokenFor, postRun, createConversation } = await startHarness({
+	// A check that lets every image through: the cases of this file are about
+	// the bytes, the queue and the money (C73 has its own file).
+	outputCheck: { check: async () => ({ refused: false, scores: { falconsai: 0.01, adamcodd: 0.02 } }) },
+});
 const { imageDayKey, imageGlobalDayKey } = await import('../src/images/quota.ts');
 const { utcDay } = await import('../src/voice/quota.ts');
 const { sweepStaleRuns } = await import('../src/runs/runner.ts');
