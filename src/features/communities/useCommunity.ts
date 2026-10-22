@@ -26,23 +26,34 @@ import {
   listCommunities,
   type Community,
 } from '@/shared/social/communityApi';
+import { warningFrom, type ModerationWarning } from '@/shared/moderation/moderationWarning';
 
 function useBridgeOp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<ModerationWarning | null>(null);
   const run = useCallback(async <T>(op: () => Promise<T>): Promise<T | null> => {
     setBusy(true);
     setError(null);
+    setWarning(null);
     try {
       return await op();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Something went wrong');
+      // L0's warning is not an error message: it is the author's question, and
+      // the screen shows it as one.
+      const asked = warningFrom(cause);
+      if (asked) {
+        setWarning(asked);
+      } else {
+        setError(cause instanceof Error ? cause.message : 'Something went wrong');
+      }
       return null;
     } finally {
       setBusy(false);
     }
   }, []);
-  return { busy, error, run };
+  const dismissWarning = useCallback(() => setWarning(null), []);
+  return { busy, error, warning, dismissWarning, run };
 }
 
 /** List my communities (load on mount, expose a manual `reload`). */
@@ -87,13 +98,21 @@ export function useCommunity(id: string | null) {
   return { community, busy, error, reload, join };
 }
 
-/** Create-community mutator for the modal. */
+/**
+ * Create-community mutator for the modal.
+ *
+ * `warning` is L0's question (the community was not written): the modal shows
+ * it and the author creates it anyway with `{ acknowledgeWarning: true }`.
+ */
 export function useCreateCommunity() {
-  const { busy, error, run } = useBridgeOp();
+  const { busy, error, warning, dismissWarning, run } = useBridgeOp();
   const create = useCallback(
-    (input: { name: string; description?: string; avatar?: string }): Promise<Community | null> =>
-      run(() => createCommunity(input)),
+    (
+      input: { name: string; description?: string; avatar?: string },
+      { acknowledgeWarning }: { acknowledgeWarning?: boolean } = {},
+    ): Promise<Community | null> =>
+      run(() => createCommunity(input, { acknowledgeWarning })),
     [run],
   );
-  return { busy, error, create };
+  return { busy, error, warning, dismissWarning, create };
 }

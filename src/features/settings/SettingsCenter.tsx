@@ -34,6 +34,7 @@ import {
   Mail,
   MoreHorizontal,
   Palette,
+  Plug,
   Search,
   Settings,
   Shield,
@@ -44,6 +45,7 @@ import {
   User,
   UserPlus,
   Users,
+  Volume2,
   X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -54,6 +56,10 @@ import { LazySocialSettings } from '@/features/settings/social/LazySocialSetting
 import { LazyAutomationManager } from '@/features/automations/ui/LazyAutomationManager';
 import { PeopleDatabasePanel } from '@/features/settings/people/PeopleDatabasePanel';
 import { McpPanel } from '@/features/settings/mcp/McpPanel';
+import { AiConnectionsPanel } from '@/features/settings/ai/AiConnectionsPanel';
+import { AccessTokensPanel, type AccessTokenWorkspace } from '@/features/settings/ai/AccessTokensPanel';
+import { ACCESSIBILITY_VOICE_TAB, AI_CONNECTIONS_TAB, type AppSettingsTab } from '@/features/settings/appSettingsTab';
+import { VoiceSettingsPanel } from '@/features/settings/voice/VoiceSettingsPanel';
 import { usePeopleCounts } from '@/features/settings/people/usePeopleCounts';
 import type { PeopleSourceKey } from '@/features/settings/people/peopleModel';
 import { ImageAvatarUpload } from '@/features/settings/profile/ImageAvatarUpload';
@@ -101,17 +107,18 @@ import {
   useSettingsSearchIndex,
   useToastStore,
   type SettingsSearchEntry,
-  type SettingsTab,
 } from '@/shared/ui';
 import { ConnectionsPanel } from './connections/ConnectionsPanel';
 import { PageSelectorModal } from './PageSelectorModal';
+import { RecommendationPrivacy } from './ui/RecommendationPrivacy';
+import { Section, SettingRow } from './ui/SettingsRows';
 
 interface SettingsCenterProps {
-  initialTab?: SettingsTab;
+  initialTab?: AppSettingsTab;
   onClose: () => void;
 }
 
-type TabItem = { id: SettingsTab; label: string; icon: React.ReactNode };
+type TabItem = { id: AppSettingsTab; label: string; icon: React.ReactNode };
 
 const tabGroups: Array<{ label: string; tabs: TabItem[] }> = [
   {
@@ -133,12 +140,14 @@ const tabGroups: Array<{ label: string; tabs: TabItem[] }> = [
       { id: 'import', label: 'Import', icon: <Import size={16} /> },
       { id: 'page_settings', label: 'Page settings', icon: <FileText size={16} /> },
       { id: 'shortcuts', label: 'Keyboard shortcuts', icon: <Keyboard size={16} /> },
+      { id: ACCESSIBILITY_VOICE_TAB, label: 'Accessibility & voice', icon: <Volume2 size={16} /> },
     ],
   },
   {
     label: 'Features',
     tabs: [
       { id: 'ai', label: 'osionos AI', icon: <Sparkles size={16} /> },
+      { id: AI_CONNECTIONS_TAB, label: 'AI connections', icon: <Plug size={16} /> },
       { id: 'mcp', label: 'osionos MCP', icon: <Bot size={16} /> },
       { id: 'public_pages', label: 'Public pages', icon: <Globe size={16} /> },
       { id: 'library', label: 'Emoji & Library', icon: <Palette size={16} /> },
@@ -155,7 +164,7 @@ const tabGroups: Array<{ label: string; tabs: TabItem[] }> = [
   },
 ];
 
-const prompts: Record<SettingsTab, { title: string; subtitle: string }> = {
+const prompts: Record<AppSettingsTab, { title: string; subtitle: string }> = {
   profile: { title: 'Profile', subtitle: 'Manage your profile, login information, and devices' },
   preferences: { title: 'Preferences', subtitle: 'Choose how you want osionos to look and behave' },
   notifications: { title: 'Notifications', subtitle: 'Decide when and how you want to be notified' },
@@ -167,7 +176,9 @@ const prompts: Record<SettingsTab, { title: string; subtitle: string }> = {
   import: { title: 'Import', subtitle: 'Import data from other apps and files into osionos' },
   page_settings: { title: 'Page settings', subtitle: 'Actions, style switches, analytics and connections from settings_page.md' },
   shortcuts: { title: 'Keyboard shortcuts', subtitle: 'Rebind, add, toggle, and export keyboard shortcuts — each is an editable automation' },
+  [ACCESSIBILITY_VOICE_TAB]: { title: 'Accessibility & voice', subtitle: 'Dictate what you say, and hear an answer read aloud — on your device by default' },
   ai: { title: 'osionos AI', subtitle: 'Search everywhere, automate meeting notes and configure AI features' },
+  [AI_CONNECTIONS_TAB]: { title: 'AI connections', subtitle: 'Bring your own model access — your keys stay on the server' },
   mcp: { title: 'osionos MCP', subtitle: 'Connect osionos to your AI tools to summarize, search, and move faster' },
   public_pages: { title: 'Public pages', subtitle: 'Manage public content from your workspace' },
   library: { title: 'Emoji & Library', subtitle: 'Emoji + photo things that we upload' },
@@ -177,7 +188,6 @@ const prompts: Record<SettingsTab, { title: string; subtitle: string }> = {
   plans: { title: 'Explore plans', subtitle: 'Compare all osionos plans' },
 };
 
-const rowBorder = 'border-t border-[var(--osio-border-default)]';
 const EMPTY_ASSETS: AccountAsset[] = [];
 const EMPTY_BILLING_INVOICES: BillingInvoice[] = [];
 const EMPTY_IMPORT_HISTORY: ImportHistoryEntry[] = [];
@@ -339,43 +349,12 @@ function providerConnectionInput(userId: string, provider: string, labelSuffix =
   };
 }
 
-function anchorFromTitle(value: string): string {
-  return value
-    .toLowerCase()
-    .replaceAll('&', '')
-    .replaceAll(/[^a-z0-9]+/g, '-')
-    .replaceAll(/^-|-$/g, '');
-}
-
 // Options are the label plus two placeholders, as the old SelectButton offered: member access has no backing store yet.
 const MemberAccess: React.FC<{ label: string }> = ({ label }) => {
   const [value, setValue] = useState(label);
   const options = [label, 'Default', 'Off'].map((option) => ({ value: option, label: option }));
   return <Dropdown label={`Member access: ${label}`} value={value} options={options} onChange={(next) => { setValue(next); noopHandledAction('settings_select_change', { label, value: next }); }} align="end" width="auto" />;
 };
-
-const Section: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className = '' }) => (
-  <section className={`space-y-4 ${className}`} data-settings-anchor={anchorFromTitle(title)}>
-    <h3 className="text-base font-medium text-[var(--osio-fg-default)]">{title}</h3>
-    <div>{children}</div>
-  </section>
-);
-
-const SettingRow: React.FC<{
-  title: React.ReactNode;
-  description?: React.ReactNode;
-  action?: React.ReactNode;
-  stack?: boolean;
-  danger?: boolean;
-}> = ({ title, description, action, stack = false, danger = false }) => (
-  <div className={`flex w-full gap-3 py-3 ${rowBorder} ${stack ? 'flex-col items-start' : 'flex-wrap items-center justify-between'}`}>
-    <div className="min-w-[220px] flex-1">
-      <div className={`text-sm font-medium ${danger ? 'text-[var(--osio-danger)]' : 'text-[var(--osio-fg-default)]'}`}>{title}</div>
-      {description && <div className="mt-1 text-sm leading-[18px] text-[var(--osio-fg-muted)]">{description}</div>}
-    </div>
-    {action && <div className="flex shrink-0 items-center justify-end gap-2">{action}</div>}
-  </div>
-);
 
 const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][]; className?: string }> = ({ headers, rows, className = '' }) => (
   <div className={`overflow-x-auto rounded-[var(--osio-radius-panel)] border border-[var(--osio-db-line)] ${className}`}>
@@ -432,13 +411,23 @@ function flashSavedIndicator(setSaved: React.Dispatch<React.SetStateAction<boole
 }
 
 export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'profile', onClose }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<AppSettingsTab>(initialTab);
   const [settingsQuery, setSettingsQuery] = useState('');
   const navRef = useRef<HTMLElement>(null);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const persona = useUserStore((s) => s.activePersona());
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const members = useUserStore((s) => s.personas);
+  // The workspaces a token may reach: the ones the user owns and the ones
+  // they are a member of (G4a).
+  const userSession = useUserStore((s) => s.activeSession());
+  const tokenWorkspaces = useMemo<AccessTokenWorkspace[]>(
+    () => [
+      ...(userSession?.privateWorkspaces ?? []),
+      ...(userSession?.sharedWorkspaces ?? []),
+    ].map((workspace) => ({ id: workspace._id, name: workspace.name })),
+    [userSession],
+  );
   const current = prompts[activeTab];
   const searchMatches = useSettingsSearchIndex(settingsQuery);
   const settingsResults = settingsQuery.trim() ? searchMatches.slice(0, 8) : [];
@@ -571,6 +560,11 @@ export const SettingsCenter: React.FC<SettingsCenterProps> = ({ initialTab = 'pr
               {activeTab === 'page_settings' && <PageSettingsPanel />}
               {activeTab === 'shortcuts' && <LazyAutomationManager />}
               {activeTab === 'ai' && <AiPanel />}
+              {activeTab === ACCESSIBILITY_VOICE_TAB && <VoiceSettingsPanel />}
+              {activeTab === AI_CONNECTIONS_TAB && <AiConnectionsPanel />}
+              {activeTab === AI_CONNECTIONS_TAB && (
+                <AccessTokensPanel workspaces={tokenWorkspaces} />
+              )}
               {activeTab === 'mcp' && <McpPanel />}
               {activeTab === 'public_pages' && <PublicPagesPanel />}
               {activeTab === 'library' && <LibraryPanel />}
@@ -891,6 +885,7 @@ const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUserId }) 
         <SettingRow title="Show my view history" description="People with edit or full access can see when you’ve viewed a page." action={<Toggle checked={privacy?.viewHistory ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, viewHistory: checked } })} label="Show my view history" />} />
         <SettingRow title="Profile discoverability" description="Users who know your email will see your profile when inviting you." action={<Toggle checked={privacy?.profileDiscoverability ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, profileDiscoverability: checked } })} label="Profile discoverability" />} />
         <Button className="mt-3" onClick={() => setModal({ name: 'reset-preferences' })}>Reset to defaults</Button>
+        <RecommendationPrivacy />
       </Section>
 
       {modal?.name === 'cookies' && <CookieSettingsModal mode={cookies?.mode ?? 'customize'} onSave={(mode) => { update({ cookies: { ...preferences?.cookies, mode } }); setModal(null); }} onClose={() => setModal(null)} />}

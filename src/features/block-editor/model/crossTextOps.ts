@@ -8,15 +8,16 @@
 
 import type { Block } from "@/entities/block/model/types";
 import { findBlockInTree } from "@/entities/block/model/blockTreeUtils";
+import { parse, renderHtml } from "@osionos/markdown-engine";
 import {
-  getInlineNodesTextLength,
-  parse,
-  parseInline,
-  renderHtml,
-  serializeInlineNodes,
-  splitNodesAtOffset,
-  type InlineNode,
-} from "@osionos/markdown-engine";
+  plainTextOfInlineSource,
+  sliceInlineSource,
+} from "@/shared/lib/text/inlineSource";
+
+// The two source<->plain-text helpers live in @/shared (the plain components
+// that host an inline editor need them too); they are re-exported here so the
+// editor's own imports keep naming one module.
+export { plainTextOfInlineSource, sliceInlineSource };
 
 export interface CrossTextPoint {
   blockId: string;
@@ -30,30 +31,6 @@ export interface CrossTextRange {
   end: CrossTextPoint;
   /** Every block between start and end in document order (leaves included). */
   middleIds: string[];
-}
-
-/** Slice inline source by plain-text offsets, preserving formatting tokens. */
-export function sliceInlineSource(source: string, from: number, to?: number): string {
-  const nodes = parseInline(source);
-  const total = getInlineNodesTextLength(nodes);
-  const clampedFrom = Math.max(0, Math.min(from, total));
-  const clampedTo = Math.max(clampedFrom, Math.min(to ?? total, total));
-  const [, tail] = splitNodesAtOffset(nodes, clampedFrom);
-  const [middle] = splitNodesAtOffset(tail, clampedTo - clampedFrom);
-  return serializeInlineNodes(middle);
-}
-
-/** Plain text (markup stripped) of an inline source string. */
-export function plainTextOfInlineSource(source: string): string {
-  const walk = (nodes: InlineNode[]): string =>
-    nodes
-      .map((node) => {
-        if ("children" in node && Array.isArray(node.children)) return walk(node.children);
-        if ("value" in node && typeof node.value === "string") return node.value;
-        return "";
-      })
-      .join("");
-  return walk(parseInline(source));
 }
 
 const MARKDOWN_PREFIX: Partial<Record<Block["type"], string>> = {

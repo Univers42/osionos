@@ -22,7 +22,8 @@ import {
   stripSlashQuery,
 } from "../../src/features/slash-commands/model/slashQueryText.ts";
 
-// slashMenuCatalog.tsx holds JSX, which node's type stripping cannot load.
+// slashMenuCatalog.tsx holds JSX: the canvas loader compiles it, so the
+// catalog loads. The skip is the safety net of a loader that cannot.
 async function loadParseSlashQuery() {
   try {
     const mod = await import("../../src/features/slash-commands/model/slashMenuCatalog.tsx");
@@ -41,7 +42,7 @@ test("/color gray keeps its argument through parseSlashQuery", async (t) => {
   const filter = filterFromText("/color gray", 0);
   assert.equal(filter, "color gray");
   const parse = await loadParseSlashQuery();
-  if (!parse) return t.skip("parseSlashQuery is not loadable under node (JSX)");
+  if (!parse) return t.skip("parseSlashQuery is not loadable under node");
   assert.deepEqual(parse(filter as string), { command: "color", arg: "gray" });
 });
 
@@ -52,7 +53,7 @@ test("/whiteboard Q3/Q4 plan: the slash inside the argument does not move the qu
   assert.equal(stripSlashQuery(text, 0), "");
   assert.equal(stripSlashQuery(`intro ${text}`, 6), "intro ");
   const parse = await loadParseSlashQuery();
-  if (!parse) return t.skip("parseSlashQuery is not loadable under node (JSX)");
+  if (!parse) return t.skip("parseSlashQuery is not loadable under node");
   assert.deepEqual(parse(filter as string), { command: "whiteboard", arg: "Q3/Q4 plan" });
 });
 

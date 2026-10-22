@@ -13,6 +13,10 @@
 import { useCallback } from "react";
 import { usePageStore } from "@/store/usePageStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
+import { API_BASE } from "@/shared/api/client";
+import { mediaPathOfAsset, useAssistantHandoff } from "@/features/chat/model/assistantHandoff";
+import { chatTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { duplicateBlockInTree } from "../../model/blockContextMenu.helpers";
 
 export interface ImageBlockActions {
@@ -32,7 +36,7 @@ export interface ImageBlockActions {
 
 /**
  * Real, capability-backed actions for an image block's toolbar/menu.
- * Ones with no backend (moveTo/addLink/suggestEdits/askAI) surface an
+ * Ones with no backend (moveTo/addLink/suggestEdits) surface an
  * honest "coming soon" toast rather than a silent no-op.
  */
 export function useImageBlockActions(
@@ -40,6 +44,7 @@ export function useImageBlockActions(
   blockId: string,
   url: string | undefined,
   altText: string,
+  asset: string | undefined,
 ): ImageBlockActions {
   const deleteBlock = usePageStore((s) => s.deleteBlock);
   const updatePageContent = usePageStore((s) => s.updatePageContent);
@@ -115,7 +120,31 @@ export function useImageBlockActions(
   const moveTo = useCallback(() => comingSoon("Move to"), [comingSoon]);
   const addLink = useCallback(() => comingSoon("Add link"), [comingSoon]);
   const suggestEdits = useCallback(() => comingSoon("Suggest edits"), [comingSoon]);
-  const askAI = useCallback(() => comingSoon("Ask AI"), [comingSoon]);
+
+  /**
+   * Hands the image over to the Assistant.
+   *
+   * The picture becomes an attachment of the question — the user still types
+   * and presses Send, and the image goes with it then (devil C79).
+   *
+   * An image the service will not read — a gallery picture, an external link,
+   * a picture of another host — is never sent: the reader is told why (devil
+   * C80: the service never receives a URL).
+   */
+  const askAI = useCallback(() => {
+    const path = mediaPathOfAsset(asset, API_BASE);
+    if (!path) {
+      pushToast({
+        kind: "info",
+        title: "Ask AI",
+        description:
+          "Ask AI reads images uploaded to this workspace. This image is a link: upload it to ask about it.",
+      });
+      return;
+    }
+    useAssistantHandoff.getState().handOff({ attachments: [path], text: "" });
+    useWorkspaceLayout.getState().openTab(chatTab());
+  }, [asset, pushToast]);
 
   return {
     download,

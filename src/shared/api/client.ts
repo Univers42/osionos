@@ -30,7 +30,9 @@ import { revocationAwareFetch } from './sessionRevocation';
 export { ApiError };
 export type { ApiErrorBody } from '@osionos/http-gate';
 
-export const API_BASE = ((import.meta.env as Record<string, string>)['VITE_API_URL'] ?? '').trim();
+// `import.meta.env` is Vite's; under plain node (the canvas tests) it is not
+// there at all, and reading a property of it would throw on import.
+export const API_BASE = (((import.meta.env ?? {}) as Record<string, string>)['VITE_API_URL'] ?? '').trim();
 
 /**
  * The user store publishes itself on `globalThis` as a decoupling seam (it is
@@ -66,8 +68,16 @@ export function getActivePageJwt(): string | null {
   });
 }
 
+/** The id of the workspace in use, when a session has one. */
+export function getActiveWorkspaceId(): string | null {
+  return userStore((state) => {
+    const workspace = (state.activeWorkspace as (() => { _id?: string } | null) | undefined)?.();
+    return workspace?._id ?? null;
+  });
+}
+
 /** Tells the user store a bridge call came back 401 session_revoked, so it drops the session that owned the token. */
-function reportRevokedSession(token: string): void {
+export function reportRevokedSession(token: string): void {
   userStore((state) => (state.handleSessionRevoked as ((token: string) => void) | undefined)?.(token));
 }
 
