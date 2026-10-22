@@ -15,6 +15,11 @@
  * strictly in order per connection, as Redis does: a delayed reply holds back every
  * later reply written to the same socket. It can also drop a connection, answer with a
  * malformed frame or split one reply into chunks.
+ *
+ * The client's capability probe (SET NX, PEXPIRE NX, GETDEL on an `osb:probe:` key) is
+ * connection setup, not store traffic: a real Redis answers it, so this fake answers it
+ * too and keeps it out of the recorded commands — the exact-command assertions stay about
+ * the store's API. `probe: false` hands the probe to the test's own handler instead.
  */
 
 import net from 'node:net';
@@ -22,6 +27,19 @@ import net from 'node:net';
 export const simple = (value) => `+${value}\r\n`;
 export const integer = (value) => `:${value}\r\n`;
 export const bulk = (value) => (value === null ? '$-1\r\n' : `$${Buffer.byteLength(value)}\r\n${value}\r\n`);
+
+const PROBE_PREFIX = 'osb:probe:';
+
+function isProbe(command) {
+	return String(command[1] ?? '').startsWith(PROBE_PREFIX);
+}
+
+// The three answers of the probe: +OK, :1 and the value it read back.
+function probeReply(command) {
+	if (command[0] === 'SET') return { data: simple('OK') };
+	if (command[0] === 'PEXPIRE') return { data: integer(1) };
+	return { data: bulk('1') };
+}
 
 function decode(buffer) {
 	const commands = [];
@@ -48,7 +66,7 @@ function decode(buffer) {
 	}
 }
 
-export async function respServer(handle) {
+export async function respServer(handle, { probe = true } = {}) {
 	const commands = [];
 	const connectionIds = [];
 	const sockets = new Set();
@@ -66,9 +84,12 @@ export async function respServer(handle) {
 			const parsed = decode(buffer);
 			buffer = parsed.rest;
 			for (const command of parsed.commands) {
-				commands.push(command);
-				connectionIds.push(connectionId);
-				const reply = handle(command, commands.length - 1);
+				const probed = probe && isProbe(command);
+				if (!probed) {
+					commands.push(command);
+					connectionIds.push(connectionId);
+				}
+				const reply = probed ? probeReply(command) : handle(command, commands.length - 1);
 				if (!reply) continue;
 				if (reply.drop) {
 					socket.destroy();
@@ -113,8 +134,24 @@ export async function singleWriteServer(payload) {
 	const server = net.createServer((socket) => {
 		sockets.add(socket);
 		socket.on('error', () => {});
-		socket.once('data', () => {
-			if (!socket.destroyed) socket.write(payload);
+		let buffer = Buffer.alloc(0);
+		let written = false;
+		socket.on('data', (chunk) => {
+			buffer = Buffer.concat([buffer, chunk]);
+			const parsed = decode(buffer);
+			buffer = parsed.rest;
+			for (const command of parsed.commands) {
+				// The capability probe is answered here: the payload belongs to the first
+				// command of the store's own API.
+				if (isProbe(command)) {
+					if (!socket.destroyed) socket.write(probeReply(command).data);
+					continue;
+				}
+				if (!written && !socket.destroyed) {
+					written = true;
+					socket.write(payload);
+				}
+			}
 		});
 	});
 	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

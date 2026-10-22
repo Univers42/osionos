@@ -29,6 +29,16 @@ function lengthOf(line, what) {
 	return value;
 }
 
+// An integer reply is a count, not a length: every safe integer is legal, negative ones
+// included (a DEL of a missing key answers 0, a command can answer -1). Only a value that
+// is not an integer at all is a protocol error.
+function integerOf(line) {
+	if (!/^-?\d+$/.test(line)) throw new RedisProtocolError('malformed integer reply');
+	const value = Number(line);
+	if (!Number.isSafeInteger(value)) throw new RedisProtocolError('malformed integer reply');
+	return value;
+}
+
 // Minimal RESP parser: { value, end } or null while the reply is incomplete.
 export function parseReply(buffer, offset = 0) {
 	if (offset >= buffer.length) return null;
@@ -39,7 +49,7 @@ export function parseReply(buffer, offset = 0) {
 	const next = lineEnd + 2;
 	if (type === 0x2b) return { value: line, end: next };
 	if (type === 0x2d) return { value: new Error(line), end: next };
-	if (type === 0x3a) return { value: lengthOf(line, 'integer'), end: next };
+	if (type === 0x3a) return { value: integerOf(line), end: next };
 	if (type === 0x24) {
 		const length = lengthOf(line, 'bulk');
 		if (length === -1) return { value: null, end: next };

@@ -21,6 +21,7 @@ import {
 	verifyAppSessionToken,
 	verifyBridgeRequest,
 } from '../../scripts/bridge-api.mjs';
+import { kvStub } from './support/kv-stub.mjs';
 
 const secret = 'test-bridge-secret-that-is-long-enough';
 const now = 1_768_000_000_000;
@@ -42,10 +43,10 @@ function gatewayPayload(extra = {}) {
 }
 
 async function sessionIsAdmin(payload, cfg = config(), fetchImpl = fetch) {
-	const handoffStore = new Map();
-	const handoff = await createBridgeHandoff({ payload: validateBridgePayload(payload), config: cfg, handoffStore, now, fetchImpl });
+	const kv = kvStub();
+	const handoff = await createBridgeHandoff({ payload: validateBridgePayload(payload), config: cfg, kv, now, fetchImpl });
 	const token = new URL(handoff.redirectUrl).hash.match(/bridge_token=([^&]+)/)[1];
-	const { session } = consumeHandoffToken(decodeURIComponent(token), handoffStore, now);
+	const { session } = await consumeHandoffToken(decodeURIComponent(token), kv, now, cfg.appSessionSecret);
 	return verifyAppSessionToken(session.accessToken, cfg, now).isAdmin;
 }
 
@@ -53,7 +54,7 @@ async function sessionIsAdmin(payload, cfg = config(), fetchImpl = fetch) {
 function signedRequest(payload) {
 	const timestamp = String(now);
 	const headers = { 'x-prismatica-bridge-timestamp': timestamp, 'x-prismatica-bridge-signature': bridgeSignature(secret, timestamp, payload) };
-	return { headers, payload, secret, now, replayStore: new Map() };
+	return { headers, payload, secret, now };
 }
 
 describe('admin promotion needs a verified email', () => {
