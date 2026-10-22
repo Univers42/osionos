@@ -31,10 +31,14 @@ interface Props {
   /** The pages (and the workspace) the answer is read from. */
   chips: ContextChip[];
   onChipsChange: (chips: ContextChip[]) => void;
+  /** The attached image paths — a block's "Ask AI" may have brought one. */
+  attachments?: string[];
+  /** Replaces the attached image list. */
+  onAttachmentsChange?: (paths: string[]) => void;
 }
 
 /** The launcher empty state (per ai_prompt_chat.png): mark + heading + composer + connectors + cards. */
-export const EmptyStateHero: React.FC<Props> = ({ value, onChange, onSubmit, onConnect, onPick, selection, onSelectionChange, chips, onChipsChange }) => (
+export const EmptyStateHero: React.FC<Props> = ({ value, onChange, onSubmit, onConnect, onPick, selection, onSelectionChange, chips, onChipsChange, attachments, onAttachmentsChange }) => (
   <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-6 px-4 py-10">
     <AppMark size={56} />
     <h1 className="text-2xl font-semibold tracking-tight text-[var(--osio-fg-default)]">How can I help you today?</h1>
@@ -48,6 +52,8 @@ export const EmptyStateHero: React.FC<Props> = ({ value, onChange, onSubmit, onC
         onSelectionChange={onSelectionChange}
         chips={chips}
         onChipsChange={onChipsChange}
+        attachments={attachments}
+        onAttachmentsChange={onAttachmentsChange}
         autoFocus
       />
     </div>

@@ -186,6 +186,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           blockId={block.id}
           url={imageUrl}
           altText={altText}
+          asset={block.asset}
           onCaption={() => setCaptionOpen(true)}
           onFullScreen={() => setFullscreen(true)}
           onReplace={() => setShowEmbed(true)}
