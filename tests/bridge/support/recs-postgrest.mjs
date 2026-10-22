@@ -108,6 +108,20 @@ const SHAPES = [
 			return (world.blocks ?? []).filter((row) => users.has(String(row.blocker_id)) || users.has(String(row.blocked_id)));
 		},
 	},
+	{
+		logical: 'settings', method: 'GET', table: 'ai_personalization_settings',
+		keys: ['user_id', 'select', 'limit'],
+		fixed: { select: 'capture_explicit', limit: '1' },
+		run: (world, p) => {
+			const user = eqOf(p.user_id);
+			return (world.settings ?? []).filter((row) => String(row.user_id) === user).slice(0, 1);
+		},
+	},
+	{
+		logical: 'events', method: 'POST', table: 'ai_events',
+		keys: [], fixed: {},
+		run: (_world, _p, body) => (body ? [body] : []),
+	},
 ];
 
 function matches(shape, method, table, params, prefer) {
@@ -119,11 +133,11 @@ function matches(shape, method, table, params, prefer) {
 }
 
 /**
- * `world`: { context, contexts, nearest, pages, members, blocks }.
+ * `world`: { context, contexts, nearest, pages, members, blocks, settings }.
  * `failing`: logical names that answer 500.
  */
 export function createRecsStub(world = {}, { failing = [] } = {}) {
-	const store = { context: { model: null }, nearest: [], pages: [], members: [], blocks: [], ...world };
+	const store = { context: { model: null }, nearest: [], pages: [], members: [], blocks: [], settings: [], ...world };
 	const calls = [];
 	const violations = [];
 	const failures = new Set(failing);
@@ -162,6 +176,7 @@ export function createRecsStub(world = {}, { failing = [] } = {}) {
 /**
  * One call to the "For you" route, as `userId`, through the real handler.
  * `token: null` sends no Authorization header at all.
+ * `body` is sent as the request's JSON body (the refusal route reads one).
  * Returns { status, body, text, handled }.
  */
 export async function callRecs(stub, {
@@ -171,6 +186,7 @@ export async function callRecs(stub, {
 	userId = uid(1),
 	token = 'Bearer test',
 	env = { OSIONOS_RECS_FOR_YOU: '1' },
+	body,
 } = {}) {
 	const handler = createRecsHandler({
 		config: CONFIG,
@@ -182,6 +198,11 @@ export async function callRecs(stub, {
 		method,
 		headers: token ? { authorization: token } : {},
 	};
+	// A body is an async iterable of one chunk: that is what readJsonBody reads.
+	if (body !== undefined) {
+		const text = JSON.stringify(body);
+		request[Symbol.asyncIterator] = async function* stream() { yield text; };
+	}
 	const captured = {};
 	const response = {
 		writeHead: (status) => { captured.status = status; },

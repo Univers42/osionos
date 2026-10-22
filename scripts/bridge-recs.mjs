@@ -13,7 +13,8 @@
  * "For you" on the bridge: the user's slate of pages, folded into the
  * recommender's champion, and only the pages they may read.
  *
- *   GET /api/recs/for-you?limit=N   N is clamped 1..20, the default is 10.
+ *   GET  /api/recs/for-you?limit=N   N is clamped 1..20, the default is 10.
+ *   POST /api/recs/not-interested   { slate, pageId } — the user's refusal.
  *
  * THE DATA PATH
  *   1. the context of the user (one RPC): the champion, the user's own
@@ -21,12 +22,10 @@
  *   2. the user is FOLDED IN (scripts/bridge-recs-model.mjs) over the items
  *      they touched, with the weights the champion was trained with;
  *   3. the nearest pages of the champion (one RPC), best inner product first;
- *   4. the pages are FILTERED: what the user refused, what they already
- *      touched, what is archived, what they may not read, what they own and
- *      what a block hides;
+ *   4. the pages are FILTERED: what the user refused or touched, what is
+ *      archived, what they may not read, what they own, what a block hides;
  *   5. the slate is DIVERSIFIED (MMR) and every page carries its "why";
- *   6. the slate is SIGNED, so the beacon of the next slice can prove that
- *      this list is the one that was served.
+ *   6. the slate is SIGNED, so a later request can prove this list was served.
  *
  * THE OPT-OUT (C48)
  *   The context answers `{"opted_out": true}` for a user who refused, and
@@ -42,8 +41,8 @@
  *   is never named.
  *
  * THE SIGNED SLATE
- *   bridge-recs-slate.mjs seals it. The beacon of the next slice checks it;
- *   this slice only issues it.
+ *   bridge-recs-slate.mjs seals it: the refusal route checks it, so a user
+ *   may refuse only a page of a list WE issued to THEM (C49).
  */
 
 import { randomUUID } from 'node:crypto';
@@ -52,9 +51,11 @@ import { bearerToken, rest, sendJson } from './bridge-social-core.mjs';
 import { confidences, explain, foldIn, itemWeights, mmr } from './bridge-recs-model.mjs';
 import { readablePages, readPages } from './bridge-recs-pages.mjs';
 import { signSlate } from './bridge-recs-slate.mjs';
+import { NOT_INTERESTED_RATE, answerNotInterested } from './bridge-recs-not-interested.mjs';
 
-/** The one route of this module. */
+/** The two routes of this module. */
 const RECS_PATH = '/api/recs/for-you';
+const NOT_INTERESTED_PATH = '/api/recs/not-interested';
 
 /** Twenty calls, then one every two seconds: a slate is not a firehose. */
 const RATE = { capacity: 20, refillPerSec: 0.5 };
@@ -256,7 +257,8 @@ async function answerSlate(deps, config, session, url, response) {
 export function createRecsHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
 	const deps = { fetchImpl, env };
 	return async function handleRecsRoute(url, request, response, requestConfig = config) {
-		if (url.pathname !== RECS_PATH) return false;
+		const notInterested = url.pathname === NOT_INTERESTED_PATH;
+		if (!notInterested && url.pathname !== RECS_PATH) return false;
 		const method = (request.method || 'GET').toUpperCase();
 		// The flag off: the route does not exist, exactly like an unknown path —
 		// checked BEFORE the session, so a caller without a token cannot tell a
@@ -264,6 +266,15 @@ export function createRecsHandler({ config, verifySession, fetchImpl = fetch, en
 		if (!recsEnabled(deps.env)) return sendJson(response, 404, { ok: false }, requestConfig);
 		try {
 			const session = verifySession(bearerToken(request), requestConfig);
+			if (notInterested) {
+				// Its own bucket, charged BEFORE any read: a refusal is rarer
+				// than a slate, and it must not spend the slate's budget.
+				takeToken(`recs-ni:${session.userId}`, NOT_INTERESTED_RATE);
+				if (method !== 'POST') {
+					return sendJson(response, 405, { ok: false, message: `Method ${method} is not supported here.` }, requestConfig);
+				}
+				return await answerNotInterested(deps, requestConfig, session, request, response);
+			}
 			// The limit is charged BEFORE any read: a caller must not be able to
 			// read the recommender for free, and a burst is the one thing this
 			// route must not be.
