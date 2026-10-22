@@ -6,7 +6,7 @@ GPU (no paid service, $0 per image), stored through the bridge, marked
 "AI-generated".
 
 Everything here is bound to the conditions **C70–C78** of
-`~/.cache/osionos-ai-records/a2-images-moderation-verdict.md`. The out-of-scope
+`/home/dlesieur/osionos-ai-records/a2-images-moderation-verdict.md`. The out-of-scope
 of this slice is written at the bottom.
 
 **Status: ai-dev only. The public stack stays OFF** (C70): the gate of the
