@@ -40,7 +40,7 @@ export async function load(url, context, nextLoad) {
 `;
 register(`data:text/javascript,${encodeURIComponent(LOADER)}`, import.meta.url);
 
-const { platformRoleFromSessionToken } = await import("../../src/features/auth/model/userStore.helpers.ts");
+const { platformRoleFromSessionToken, isAdminFromSessionToken } = await import("../../src/features/auth/model/userStore.helpers.ts");
 const { PLATFORM_ROLES, ROLE_RANK, roleAtLeast } = await import("../../src/features/auth/model/platformRole.ts");
 
 const FUTURE = Math.floor(Date.now() / 1000) + 3600;
@@ -98,4 +98,22 @@ test("a role is at least a minimum only when it outranks it", () => {
   assert.equal(roleAtLeast("user", "user"), true);
   assert.equal(roleAtLeast(null, "guest"), false);
   assert.equal(roleAtLeast(undefined, "guest"), false);
+});
+
+test("C2: a valid non-admin platform_role forces isAdmin false on the client", () => {
+  const t = claim({ platform_role: "user", is_admin: true });
+  assert.equal(platformRoleFromSessionToken(t), "user");
+  assert.equal(isAdminFromSessionToken(t), false);
+});
+
+test("C2: an absent claim keeps the legacy is_admin fallback on the client", () => {
+  const t = claim({ is_admin: true });
+  assert.equal(platformRoleFromSessionToken(t), "admin");
+  assert.equal(isAdminFromSessionToken(t), true);
+});
+
+test("C2: an unknown platform_role keeps the legacy is_admin fallback on the client", () => {
+  const t = claim({ platform_role: "wizard", is_admin: true });
+  assert.equal(platformRoleFromSessionToken(t), null);
+  assert.equal(isAdminFromSessionToken(t), true);
 });

@@ -502,13 +502,17 @@ export function verifyAppSessionToken(token, config, now = undefined) {
 	if (workspaceIds.length === 0) {
 		throw Object.assign(new Error('App session token has no workspace access.'), { status: 401 });
 	}
+	// is_admin applies only to tokens with no platform_role (rolling deploy); a valid claim wins. (C2, C6)
+	const isAdmin = isPlatformRole(payload.platform_role)
+		? payload.platform_role === 'admin'
+		: payload.is_admin === true;
 	return {
 		userId: String(payload.sub).toLowerCase(),
 		workspaceIds,
 		roles: payload.roles && typeof payload.roles === 'object' && !Array.isArray(payload.roles) ? payload.roles : {},
 		// A token minted before the claim existed answers no role, not the admin bit.
 		platformRole: isPlatformRole(payload.platform_role) ? payload.platform_role : null,
-		isAdmin: payload.is_admin === true,
+		isAdmin,
 		raw: payload,
 	};
 }
