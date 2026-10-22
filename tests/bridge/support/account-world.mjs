@@ -43,7 +43,7 @@ export function accountConfig() {
 		OSIONOS_APP_URL: 'http://localhost:3001',
 		OSIONOS_BRIDGE_SHARED_SECRET: 'test-bridge-secret-that-is-long-enough',
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
-		OSIONOS_BAAS_URL: 'http://baas.local',
+		OSIONOS_BAAS_URL: 'https://baas.local',
 		KONG_SERVICE_API_KEY: 'service-role-test-key',
 		KONG_PUBLIC_API_KEY: 'tenant-test-key',
 	});
