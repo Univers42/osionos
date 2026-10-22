@@ -2,17 +2,18 @@
 /*                                                                            */
 /*                                                        :::      ::::::::   */
 /*   CanvasStage.tsx                                    :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                    +#+#+ +#+        :+:     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  :+:       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useMemo, type RefObject } from "react";
 import { useStore } from "zustand";
 
+import type { PropertyMap } from "@/shared/notion-database-sys/src/lib/engine/bridge";
 import type { SurfaceBlockEditorProps } from "../../BlockEditorSurface";
 import type { CanvasInteractionStore } from "../controller/interactionStore";
 import { createLazyMounter } from "../controller/lazyMount";
@@ -22,6 +23,7 @@ import { useCanvasMarquee } from "../controller/useCanvasMarquee";
 import { useHugHeights } from "../controller/useHugHeights";
 import { resolveHugDisplacements } from "../model/collision";
 import { getCellsOrderedByZ } from "../model/selectors";
+import { evaluateCellVisibility } from "../model/visibility";
 import type { CanvasStoreApi } from "../store/canvasStore";
 import { CanvasCellView } from "./CanvasCellView";
 import { CanvasEmptyState } from "./CanvasEmptyState";
@@ -37,13 +39,17 @@ export interface CanvasStageProps {
   scaleRef: RefObject<number>;
   pageId: string;
   layoutBlockId: string;
+  /** The page's own properties — the context every cell formula is evaluated against. */
+  propertyMap: PropertyMap;
+  /** True once the WASM formula engine has booted (it loads lazily). */
+  formulaEngineReady: boolean;
   renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
 }
 
 const STAGE_MIN_HEIGHT = 200;
 const STAGE_BOTTOM_PADDING = 48;
 
-export function CanvasStage({ store, interaction, cellOps, stageRef, scaleRef, pageId, layoutBlockId, renderBlockEditor }: CanvasStageProps) {
+export function CanvasStage({ store, interaction, cellOps, stageRef, scaleRef, pageId, layoutBlockId, propertyMap, formulaEngineReady, renderBlockEditor }: CanvasStageProps) {
   const cells = useStore(store, (state) => state.cells);
   const selectedIds = useStore(store, (state) => state.selectedIds);
   const layoutConfig = useStore(store, (state) => state.layoutConfig);
@@ -54,25 +60,26 @@ export function CanvasStage({ store, interaction, cellOps, stageRef, scaleRef, p
   const lazyMounter = useMemo(() => createLazyMounter(), []);
   useEffect(() => () => lazyMounter.disconnect(), [lazyMounter]);
 
+  const orderedCells = useMemo(() => getCellsOrderedByZ(cells), [cells]);
+  // A hidden cell is filtered out of the RENDER LIST, never out of the store:
+  // the inspector can still select it, its formula can still be edited, and
+  // undo still restores it. Every render re-evaluates, so a property edit
+  // re-answers every formula (no dependency-narrowed cache in the first cut).
+  const visibleCells = orderedCells.filter((cell) => evaluateCellVisibility(cell.visibilityFormula, propertyMap));
+
   // Hug cells whose content outgrew their frame push neighbours down at
   // render time only — this never writes back to the store (two panes at
   // different widths would fight over persisted heights).
-  const displaced = useMemo(
-    () => resolveHugDisplacements(cells, heights, layoutConfig.rowGap),
-    [cells, heights, layoutConfig.rowGap],
-  );
-  const contentHeight = useMemo(() => {
-    let max = STAGE_MIN_HEIGHT;
-    for (const cell of cells) {
-      const frame = displaced[cell.id] ?? cell.frame;
-      const height = Math.max(frame.height, cell.sizing.height === "hug" ? heights.get(cell.id) ?? 0 : 0);
-      max = Math.max(max, frame.y + height);
-    }
-    return Math.ceil(max + STAGE_BOTTOM_PADDING);
-  }, [cells, displaced, heights]);
+  const displaced = resolveHugDisplacements(visibleCells, heights, layoutConfig.rowGap);
+  let contentHeight = STAGE_MIN_HEIGHT;
+  for (const cell of visibleCells) {
+    const frame = displaced[cell.id] ?? cell.frame;
+    const height = Math.max(frame.height, cell.sizing.height === "hug" ? heights.get(cell.id) ?? 0 : 0);
+    contentHeight = Math.max(contentHeight, frame.y + height);
+  }
+  contentHeight = Math.ceil(contentHeight + STAGE_BOTTOM_PADDING);
 
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
-  const orderedCells = useMemo(() => getCellsOrderedByZ(cells), [cells]);
   const shouldShowGuides = !layoutConfig.preview && layoutConfig.guideVisibility !== "never";
 
   const handleBackgroundPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
@@ -103,10 +110,10 @@ export function CanvasStage({ store, interaction, cellOps, stageRef, scaleRef, p
         onKeyDown={handleKeyDown}
       >
         <CanvasGuidesLayer interaction={interaction} />
-        {orderedCells.length === 0 ? (
+        {cells.length === 0 ? (
           <CanvasEmptyState onAdd={cellOps.addCell} onTemplate={cellOps.applyTemplate} />
         ) : null}
-        {orderedCells.map((cell) => (
+        {visibleCells.map((cell) => (
           <CanvasCellView
             key={cell.id}
             cell={cell}
@@ -116,6 +123,8 @@ export function CanvasStage({ store, interaction, cellOps, stageRef, scaleRef, p
             preview={layoutConfig.preview}
             pageId={pageId}
             layoutBlockId={layoutBlockId}
+            properties={propertyMap}
+            formulaEngineReady={formulaEngineReady}
             lazyMounter={lazyMounter}
             renderBlockEditor={renderBlockEditor}
             onSelectCell={cellOps.selectCell}
