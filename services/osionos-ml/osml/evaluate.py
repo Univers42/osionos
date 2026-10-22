@@ -1,18 +1,17 @@
 """Measure the model on a SYNTHETIC log, and write the numbers down.
 
     python -m osml.evaluate --users 2000 --items 3000 --topics 20 \
-        --events 60000 --seed 42 --out results/sim/
+        --events 60000 --seed 42
 
 The run simulates a log, splits it by time, tunes the model on the VALIDATION
 split, trains it on the TRAINING split and scores it on the TEST split. It
-writes `metrics.json` and `RESULTS.md` under `--out`.
+writes `metrics.json` and `RESULTS.md` under `results/sim/`.
 
 The numbers are about the SIMULATION. Nothing here has read a real user.
 """
 
 import argparse
 import json
-import os
 import platform
 import sys
 from pathlib import Path
@@ -37,6 +36,9 @@ from .metrics import (
 from .simulate import simulate
 from .split import ground_truth, split_events
 from .train import train_ials, tune
+
+# Where a run writes its numbers, relative to the working directory.
+RESULTS_DIR = Path("results/sim")
 
 # The depth of the ranking the report is about.
 K_NDCG = 10
@@ -251,15 +253,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--topics", type=int, default=20)
     parser.add_argument("--events", type=int, default=60000)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--out", type=Path, default=Path("results/sim"))
     args = parser.parse_args(argv)
-
-    # Bounded so a CLI argument cannot write outside the results directory.
-    results_root = os.path.realpath(Path.cwd() / "results")
-    real_out = os.path.realpath(args.out)
-    if real_out != results_root and not real_out.startswith(results_root + os.sep):
-        parser.error(f"--out must stay under {results_root}")
-    out = Path(real_out)
+    # A fixed directory, not a CLI path: nothing on the command line names where files are written.
+    out = RESULTS_DIR
 
     report = evaluate(
         users=args.users,
