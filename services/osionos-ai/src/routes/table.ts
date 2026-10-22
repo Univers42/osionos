@@ -1,3 +1,4 @@
+import { config } from '../config.ts';
 import { handleHealth } from './health.ts';
 import { handleConversationMessages, handleConversations } from './conversations.ts';
 import { handleModels } from './models.ts';
@@ -118,17 +119,22 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalDecision,
 	},
-	{
-		methods: [],
-		pattern: /^\/api\/ai\/access-tokens$/,
-		label: '/api/ai/access-tokens',
-		handle: handleAccessTokens,
-		anyMethod: true,
-	},
-	{
-		methods: ['DELETE'],
-		pattern: /^\/api\/ai\/access-tokens\/([^/]+)$/,
-		label: '/api/ai/access-tokens/:id',
-		handle: handleAccessTokenDelete,
-	},
+	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
+	...(config.patEnabled
+		? [
+			{
+				methods: [],
+				pattern: /^\/api\/ai\/access-tokens$/,
+				label: '/api/ai/access-tokens',
+				handle: handleAccessTokens,
+				anyMethod: true,
+			},
+			{
+				methods: ['DELETE'],
+				pattern: /^\/api\/ai\/access-tokens\/([^/]+)$/,
+				label: '/api/ai/access-tokens/:id',
+				handle: handleAccessTokenDelete,
+			},
+		]
+		: []),
 ];

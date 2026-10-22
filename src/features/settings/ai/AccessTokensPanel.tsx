@@ -35,6 +35,7 @@ import {
   type AiAccessToken,
   type AiAccessTokenCreated,
 } from "@/features/ai/api/aiClient";
+import { AiError } from "@/features/ai/api/aiContract";
 import { errorWords } from "@/widgets/chat-shell/ui/errorWords";
 
 /** A workspace the user may give a token. */
@@ -54,6 +55,16 @@ export const PAT_ENV_VAR = "OSIONOS_PAT";
  */
 export const AGENT_COPY =
   "An agent using this token reads text that other members wrote. osionos cannot see or control the agent's other tools.";
+
+/**
+ * True when the service answered 404 to the list: the feature is off on this
+ * deployment (R-C4a) and the panel renders nothing. Any other failure stays a
+ * message. Caveat: a 404 from a proxy in front of a service that has the
+ * feature on also hides the panel.
+ */
+export function isAccessTokensOff(failure: unknown): boolean {
+  return failure instanceof AiError && failure.status === 404;
+}
 
 /** The words of a session that is too old to mint a token (C113). */
 export const REAUTH_MESSAGE = "Sign in again to create a token.";
@@ -218,6 +229,7 @@ export const AccessTokensPanel: React.FC<{ workspaces: AccessTokenWorkspace[] }>
   const [tokens, setTokens] = useState<AiAccessToken[]>([]);
   const [created, setCreated] = useState<AiAccessTokenCreated | null>(null);
   const [error, setError] = useState("");
+  const [off, setOff] = useState(false);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -232,7 +244,8 @@ export const AccessTokensPanel: React.FC<{ workspaces: AccessTokenWorkspace[] }>
     try {
       setTokens(await listAccessTokens());
     } catch (failure) {
-      setError(tokenFailureMessage(failure));
+      if (isAccessTokensOff(failure)) setOff(true);
+      else setError(tokenFailureMessage(failure));
     }
   }, []);
 
@@ -309,6 +322,8 @@ export const AccessTokensPanel: React.FC<{ workspaces: AccessTokenWorkspace[] }>
   }
 
   const canSubmit = name.trim().length > 0 && scopes.length > 0 && workspaceIds.length > 0;
+
+  if (off) return null;
 
   return (
     <section className="space-y-5" data-settings-anchor="ai-access-tokens" data-testid="ai-access-tokens-panel">
