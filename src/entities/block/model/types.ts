@@ -125,6 +125,13 @@ export interface LayoutCell {
    * value goes stale.
    */
   measuredHeight?: number;
+  /**
+   * A formula that decides whether the cell is rendered at all, evaluated
+   * against the page's own properties. Empty (or absent) means always visible.
+   * Caveat: it runs in every reader's browser, so a formula that branches on a
+   * value leaks that value's existence to every reader of the page.
+   */
+  visibilityFormula?: string;
 }
 
 /** A single content block in a page. */
