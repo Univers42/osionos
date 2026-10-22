@@ -232,7 +232,8 @@ export async function memberWorkspacesAmong(config, fetchImpl, session, workspac
  * bridge-collab / bridge-profile so the block-aware filter lives in one place.
  */
 export async function blockedViewerBy(config, fetchImpl, viewerId) {
-	if (!UUID_REGEX.test(String(viewerId))) return new Set();
+	const self = String(viewerId ?? '').toLowerCase();
+	if (!UUID_REGEX.test(self)) return new Set();
 	const rows = await rest(
 		config,
 		fetchImpl,
@@ -240,8 +241,13 @@ export async function blockedViewerBy(config, fetchImpl, viewerId) {
 	);
 	const hidden = new Set();
 	for (const row of Array.isArray(rows) ? rows : []) {
-		// the "other" party in each block edge is the one to hide from the viewer
-		hidden.add(row.blocker_id === viewerId ? row.blocked_id : row.blocker_id);
+		// the "other" party in each block edge is the one to hide from the viewer;
+		// ids are compared case-insensitively so a block row whose casing differs
+		// still hides its subject.
+		const blocker = String(row?.blocker_id ?? '').toLowerCase();
+		const blocked = String(row?.blocked_id ?? '').toLowerCase();
+		const other = blocker === self ? blocked : (blocked === self ? blocker : null);
+		if (other) hidden.add(other);
 	}
 	return hidden;
 }

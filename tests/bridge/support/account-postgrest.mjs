@@ -37,8 +37,24 @@ const NOTIFICATIONS = 'osionos_notifications';
 const IDENTITIES = 'osionos_bridge_identities';
 const DELETIONS = 'osionos_account_deletion_requests';
 const AUDIT = 'osionos_bridge_audit_events';
+// The tables of the self sources: the four legacy ones the service role reads, the two
+// account-plane ones the account role reads, and the directory the peer card is built on.
+const PAGES = 'osionos_pages';
+const TASKS = 'osionos_tasks';
+const PUBLISHED = 'osionos_published_pages';
+const CONNECTIONS = 'osionos_connections';
 const WORKSPACES = 'osionos_workspaces';
 const MEMBERS = 'osionos_workspace_members';
+const SESSIONS = 'osionos_sessions';
+const DIRECTORY = 'osionos_people_directory';
+
+// The self-source tables answer the WHOLE row, not the projection: a route that spreads
+// a row must leak here, so the test sees the leak instead of trusting the select.
+const WHOLE_ROW_TABLES = new Set([PAGES, TASKS, PUBLISHED, CONNECTIONS, WORKSPACES, MEMBERS, SESSIONS, DIRECTORY]);
+
+// The column that holds the owner of a row: the account role reads its own rows only,
+// and the two account-plane tables name their owner differently.
+const OWNER_COLUMN = { [PUBLISHED]: 'owner_id' };
 
 const ACCOUNT_ROLE = 'osionos_account_user';
 const RESERVED_PARAMS = new Set(['select', 'order', 'limit', 'offset', 'on_conflict']);
@@ -110,10 +126,17 @@ function matches(row, key, expr) {
 	if (expr === 'not.is.null') return row[key] != null;
 	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));
 	if (expr.startsWith('ilike.')) return likeMatches(row[key], expr.slice(6));
+	if (expr.startsWith('gt.')) return String(row[key] ?? '') > expr.slice(3);
 	if (expr.startsWith('in.(') && expr.endsWith(')')) {
-		return expr.slice(4, -1).split(',').some((item) => sameText(row[key], item));
+		// `inFilter` quotes its values, so the quotes are stripped before the comparison.
+		return expr.slice(4, -1).split(',').some((item) => sameText(row[key], unquote(item)));
 	}
 	throw new Error(`account store: unsupported filter ${key}=${expr}`);
+}
+
+/** The value of an `in.(…)` entry, without the quotes `inFilter` puts around it. */
+function unquote(value) {
+	return String(value).trim().replace(/^"(.*)"$/, '$1');
 }
 
 function matchesClause(row, clause) {
@@ -177,7 +200,7 @@ function stripNulls(value) {
 	return out;
 }
 
-export function createAccountStore({ profiles = [], settings = [], blocks = [], history = [], notifications = [], identities = [], deletions = [], audit = [], workspaces = [], members = [], fail = null } = {}) {
+export function createAccountStore({ profiles = [], settings = [], blocks = [], history = [], notifications = [], identities = [], deletions = [], audit = [], pages = [], tasks = [], published = [], connections = [], workspaces = [], members = [], sessions = [], directory = [], fail = null } = {}) {
 	const calls = [];
 	const tables = new Map([
 		[PROFILES, profiles.map((row) => ({ ...row }))],
@@ -188,14 +211,21 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 		[IDENTITIES, identities.map((row) => ({ ...row }))],
 		[DELETIONS, deletions.map((row) => ({ ...row }))],
 		[AUDIT, audit.map((row) => ({ ...row }))],
+		[PAGES, pages.map((row) => ({ ...row }))],
+		[TASKS, tasks.map((row) => ({ ...row }))],
+		[PUBLISHED, published.map((row) => ({ ...row }))],
+		[CONNECTIONS, connections.map((row) => ({ ...row }))],
 		[WORKSPACES, workspaces.map((row) => ({ ...row }))],
 		[MEMBERS, members.map((row) => ({ ...row }))],
+		[SESSIONS, sessions.map((row) => ({ ...row }))],
+		[DIRECTORY, directory.map((row) => ({ ...row }))],
 	]);
 	const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 
-	/** The rows the caller may see: a valid account role sees its own rows, the service
-	 *  role sees all of them, and a request with no valid claims sees nothing. Deletion
-	 *  requests are account-private: even the service role does not read them. */
+	/** The rows the caller may see: a valid account role sees its own rows (by the table's
+	 *  owner column), the service role sees all of them, and a request with no valid claims
+	 *  sees nothing. Deletion requests are account-private: even the service role does not
+	 *  read them. */
 	function visible(store, claims, table) {
 		if (claims?._service) {
 			if (table === DELETIONS) return [];
@@ -203,7 +233,8 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 		}
 		if (!claims || claims.aud !== 'osionos-account' || claims.role !== ACCOUNT_ROLE) return [];
 		const owner = String(claims.sub ?? '').toLowerCase();
-		return store.filter((row) => sameText(row.user_id, owner));
+		const column = OWNER_COLUMN[table] ?? 'user_id';
+		return store.filter((row) => sameText(row[column], owner));
 	}
 
 	function selected(store, params, claims, table) {
@@ -327,7 +358,8 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 		const store = tables.get(table);
 		if (!store) return json({ message: `account store: ${table} is not served` }, 404);
 		if (method === 'GET') {
-			const rows = selected(store, params, claims, table).map((row) => project(row, params.get('select')));
+			const rows = selected(store, params, claims, table)
+				.map((row) => (WHOLE_ROW_TABLES.has(table) ? { ...row } : project(row, params.get('select'))));
 			return json(rows, 200);
 		}
 		if (method === 'POST') {
@@ -349,7 +381,7 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 			return new Response(null, { status: 204 });
 		}
 		if (method === 'PATCH') {
-			const hits = selected(store, params, claims);
+			const hits = selected(store, params, claims, table);
 			for (const row of hits) {
 				const violation = checkViolation({ ...row, ...body });
 				if (!violation) continue;

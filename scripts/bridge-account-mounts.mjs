@@ -30,6 +30,7 @@ import { createPreferencesRoutes } from './bridge-preferences.mjs';
 import { createSessionsRoutes } from './bridge-sessions.mjs';
 import { createPublishedPagesRoutes } from './bridge-account-published-pages.mjs';
 import { createAvatarRoutes } from './bridge-avatar.mjs';
+import { createSelfDataRoutes } from './bridge-self-data.mjs';
 
 export function createAccountHandler(deps) {
 	const modules = [
@@ -40,6 +41,7 @@ export function createAccountHandler(deps) {
 		createAvatarRoutes(deps),
 		createAccountSudoRoutes({ ...deps, env: deps.env ?? process.env }),
 		createAccountIdentityRoutes(deps),
+		createSelfDataRoutes(deps),
 	];
 	return async function handleAccountRequest(url, request, response) {
 		for (const module of modules) {
