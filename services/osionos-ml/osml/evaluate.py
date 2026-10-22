@@ -253,6 +253,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=Path("results/sim"))
     args = parser.parse_args(argv)
 
+    # Bounded so a CLI argument cannot write outside the results directory.
+    results_root = (Path.cwd() / "results").resolve()
+    out = args.out.resolve()
+    if not out.is_relative_to(results_root):
+        parser.error(f"--out must stay under {results_root}")
+
     report = evaluate(
         users=args.users,
         items=args.items,
@@ -260,11 +266,11 @@ def main(argv: list[str] | None = None) -> int:
         events=args.events,
         seed=args.seed,
     )
-    write_results(report, args.out)
+    write_results(report, out)
 
     metrics = report["metrics"]
     difference = report["difference_ials_minus_popularity"]
-    print(f"SYNTHETIC run -> {args.out}")
+    print(f"SYNTHETIC run -> {out}")
     for name, label in (("ials", "iALS"), ("popularity", "popularity"), ("random", "random")):
         print(f"  {label:<12} nDCG@10 {metrics[name]['ndcg@10']:.4f}  recall@20 {metrics[name]['recall@20']:.4f}")
     interval = f"[{difference['ci95_low']:.4f}, {difference['ci95_high']:.4f}]"
