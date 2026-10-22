@@ -196,9 +196,12 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 
 // Revocation enforcement is off unless a test asks for it ({ sessionCutoffs: 'on' }): with it on, every
 // request answers 503 until the poller's first load, which unrelated route tests must not wait for.
-export function harnessConfig({ sessionCutoffs = 'off' } = {}) {
+// The session rows and the per-session revocations are off for the same reason: with them on, every
+// request answers 503 until the tracker has loaded public.osionos_sessions.
+export function harnessConfig({ sessionCutoffs = 'off', sessionRecords = 'off' } = {}) {
 	return configFromEnv({
 		OSIONOS_SESSION_CUTOFFS: sessionCutoffs,
+		OSIONOS_SESSION_RECORDS: sessionRecords,
 		OSIONOS_APP_URL: 'http://localhost:3001',
 		OSIONOS_BRIDGE_SHARED_SECRET: 'test-bridge-secret-that-is-long-enough',
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',

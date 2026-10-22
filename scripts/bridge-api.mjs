@@ -24,6 +24,12 @@ import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRo
 import { publishRealtime } from './bridge-social-core.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { assertSessionNotCutOff, sessionCutoffsFromConfig, startSessionCutoffPoller, tokenIssuedAtMs } from './bridge-session-cutoff.mjs';
+import { assertSessionNotRevoked, sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
+import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
+import { createAccountHandler } from './bridge-account-mounts.mjs';
+import { handoffLookupKey, openHandoffRecord, sealHandoffRecord } from './bridge-shared-store.mjs';
+import { createKv } from './bridge-kv.mjs';
+import { createPg } from './bridge-pg.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
@@ -187,6 +193,13 @@ export function configFromEnv(env = process.env) {
 		persistence: env.OSIONOS_BRIDGE_PERSISTENCE ?? 'auto',
 		// 'off' is the operator's escape hatch for a deployment without public.auth_session_cutoffs.
 		sessionCutoffsMode: String(env.OSIONOS_SESSION_CUTOFFS ?? '').trim().toLowerCase() === 'off' ? 'off' : 'on',
+		// The same escape hatch for the session rows and the per-session revocations.
+		sessionRecordsMode: String(env.OSIONOS_SESSION_RECORDS ?? '').trim().toLowerCase() === 'off' ? 'off' : 'on',
+		// A configured Redis is what makes the handoff and the replay markers shared.
+		redisUrl: String(env.OSIONOS_BRIDGE_REDIS_URL ?? '').trim(),
+		// The one header that names the client address; without it the peer is the proxy.
+		clientIpHeader: String(env.OSIONOS_BRIDGE_CLIENT_IP_HEADER ?? '').trim(),
+		ipHashSecret: String(env.OSIONOS_BRIDGE_IP_HASH_SECRET ?? ''),
 		translationApiUrl: (env.OSIONOS_TRANSLATION_API_URL ?? env.VITE_TRANSLATION_API_URL ?? '').trim(),
 		timestampSkewMs: Number(env.OSIONOS_BRIDGE_TIMESTAMP_SKEW_MS ?? DEFAULT_TIMESTAMP_SKEW_MS),
 		handoffTtlMs: Number(env.OSIONOS_BRIDGE_HANDOFF_TTL_MS ?? DEFAULT_HANDOFF_TTL_MS),
@@ -393,13 +406,7 @@ export function validateBridgePayload(payload) {
 	return normalized;
 }
 
-function pruneExpiringMap(map, now) {
-	for (const [key, value] of map.entries()) {
-		if (value.expiresAt <= now) map.delete(key);
-	}
-}
-
-export function verifyBridgeRequest({ headers, payload, secret, now = Date.now(), timestampSkewMs = DEFAULT_TIMESTAMP_SKEW_MS, replayStore = new Map() }) {
+export function verifyBridgeRequest({ headers, payload, secret, now = Date.now(), timestampSkewMs = DEFAULT_TIMESTAMP_SKEW_MS }) {
 	if (!secret) throw Object.assign(new Error('osionos bridge secret is not configured.'), { status: 503 });
 	const timestampHeader = headers['x-prismatica-bridge-timestamp'] ?? headers['X-Prismatica-Bridge-Timestamp'];
 	const signatureHeader = headers['x-prismatica-bridge-signature'] ?? headers['X-Prismatica-Bridge-Signature'];
@@ -412,12 +419,19 @@ export function verifyBridgeRequest({ headers, payload, secret, now = Date.now()
 	if (typeof signatureHeader !== 'string' || !safeCompareHex(expected, signatureHeader)) {
 		throw Object.assign(new Error('Bridge signature is invalid.'), { status: 401 });
 	}
-	pruneExpiringMap(replayStore, now);
-	if (replayStore.has(normalizedPayload.jti)) {
-		throw Object.assign(new Error('Bridge assertion replay rejected.'), { status: 409 });
-	}
-	replayStore.set(normalizedPayload.jti, { expiresAt: now + timestampSkewMs });
 	return { ...normalizedPayload, subject: normalizedPayload.subject.toLowerCase() };
+}
+
+/**
+ * Claims the jti of a verified gateway assertion. The marker lives 2 × skew, because a
+ * timestamp up to +skew in the future is still accepted: a marker of one window would let
+ * the same assertion through a second time. A bad signature never reaches this function, so
+ * it never burns a jti.
+ */
+export async function claimBridgeReplay(kv, jti, ttlMs) {
+	const claimed = await kv.setNx(`replay:${jti}`, '1', ttlMs);
+	if (!claimed) throw Object.assign(new Error('Bridge assertion replay rejected.'), { status: 409 });
+	return true;
 }
 
 export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], isAdmin = false }) {
@@ -477,6 +491,7 @@ export function verifyAppSessionToken(token, config, now = undefined) {
 		throw Object.assign(new Error('App session token has expired.'), { status: 401 });
 	}
 	assertSessionNotCutOff(config.sessionCutoffs, String(payload.sub).toLowerCase(), tokenIssuedAtMs(payload));
+	assertSessionNotRevoked(config.sessionRevocations, String(payload.jti ?? '').toLowerCase());
 	const workspaceIds = Array.isArray(payload.workspace_ids)
 		? payload.workspace_ids.map(String).filter((workspaceId) => UUID_REGEX.test(workspaceId))
 		: [];
@@ -1428,6 +1443,9 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 
 export function createUserSession(payload, config, persisted = null, now = Date.now(), memberWorkspaces = [], isAdmin = false) {
 	const userId = payload.subject;
+	// The session id is minted here, not inside the signer: it is the primary key of the
+	// session row and the single-use guard of the delivered token.
+	const sessionId = randomUUID();
 	const fallbackWorkspaceId = uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
 	const workspaceName = persisted?.workspaceName ?? `${payload.name}'s osionos`;
 	const workspace = {
@@ -1447,9 +1465,10 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 	// Org/teamspace workspaces (osionos_workspace_members) ride along so the
 	// app can hydrate + switch to them; owned ones stay private, rest shared.
 	const extras = memberWorkspaces.filter((entry) => entry?._id && !sameId(entry._id, workspace._id));
-	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, memberWorkspaces: extras, isAdmin });
+	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, jti: sessionId, memberWorkspaces: extras, isAdmin });
 	return {
 		expiresAt,
+		sessionId,
 		persona: {
 			id: userId,
 			email: payload.email,
@@ -1629,15 +1648,17 @@ async function readClaimsConcurrently(payload, config, fetchImpl) {
 	return { persisted, isAdmin, memberWorkspaces: memberRead.status === 'fulfilled' ? memberRead.value : [] };
 }
 
-export async function createBridgeHandoff({ payload, config, handoffStore, now = Date.now(), fetchImpl = fetch }) {
+export async function createBridgeHandoff({ payload, config, kv, now = Date.now(), fetchImpl = fetch }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const readClaims = isEnvAdminEmail(payload, config) ? readClaimsInOrder : readClaimsConcurrently;
 	const { persisted, isAdmin, memberWorkspaces } = await readClaims(payload, config, fetchImpl);
 	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces, isAdmin);
 	const token = randomToken();
 	const expiresAt = now + config.handoffTtlMs;
-	handoffStore.set(token, { ...bridgeSession, expiresAt });
-	pruneExpiringMap(handoffStore, now);
+	// The store keeps the record sealed and under a key derived from the token: a shared
+	// Redis holds neither the token nor a usable session. The TTL outlives the handoff by a
+	// minute, so an expired handoff is still found (and answered 410) instead of vanishing.
+	await kv.set(handoffLookupKey(token), sealHandoffRecord({ ...bridgeSession, expiresAt }, config.appSessionSecret), config.handoffTtlMs + 60_000);
 	const redirectUrl = new URL(config.callbackPath, `${config.appUrl}/`);
 	redirectUrl.hash = `bridge_token=${encodeURIComponent(token)}`;
 	return {
@@ -1649,14 +1670,14 @@ export async function createBridgeHandoff({ payload, config, handoffStore, now =
 	};
 }
 
-export function consumeHandoffToken(token, handoffStore, now = Date.now()) {
-	const record = handoffStore.get(token);
+export async function consumeHandoffToken(token, kv, now = Date.now(), secret = '') {
+	const stored = await kv.getDel(handoffLookupKey(token));
+	if (stored === null || stored === undefined) throw Object.assign(new Error('Bridge handoff token is invalid.'), { status: 404 });
+	const record = openHandoffRecord(stored, secret);
 	if (!record) throw Object.assign(new Error('Bridge handoff token is invalid.'), { status: 404 });
 	if (record.expiresAt <= now) {
-		handoffStore.delete(token);
 		throw Object.assign(new Error('Bridge handoff token has expired.'), { status: 410 });
 	}
-	handoffStore.delete(token);
 	return {
 		ok: true,
 		persona: record.persona,
@@ -3957,8 +3978,7 @@ async function handlePagesPost(url, request, response, config, fetchImpl) {
 
 async function handleBridgeGet(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/auth/bridge/health') {
-		const cutoffs = config.sessionCutoffs;
-		json(response, 200, { ok: true, service: 'osionos-bridge', session_cutoffs: cutoffs?.status() ?? 'off', session_cutoffs_age_ms: cutoffs?.ageMs() ?? null }, config);
+		json(response, 200, bridgeHealthState(config), config);
 		return true;
 	}
 	if (url.pathname === '/api/geocode') {
@@ -3985,23 +4005,28 @@ async function handleBridgeGet(url, request, response, config, fetchImpl) {
 	return true;
 }
 
-async function handleBridgeSession(request, response, config, handoffStore, replayStore, fetchImpl) {
+async function handleBridgeSession(request, response, config, kv, fetchImpl) {
 	const rawPayload = await readJson(request);
 	const payload = verifyBridgeRequest({
 		headers: request.headers,
 		payload: rawPayload,
 		secret: config.sharedSecret,
 		timestampSkewMs: config.timestampSkewMs,
-		replayStore,
 	});
-	json(response, 200, await createBridgeHandoff({ payload, config, handoffStore, fetchImpl }), config);
+	// The jti is claimed only now: a bad signature never burns one.
+	await claimBridgeReplay(kv, payload.jti, 2 * config.timestampSkewMs);
+	json(response, 200, await createBridgeHandoff({ payload, config, kv, fetchImpl }), config);
 }
 
-async function handleBridgeConsume(request, response, config, handoffStore) {
+async function handleBridgeConsume(request, response, config, kv, pg) {
 	const payload = await readJson(request);
 	const token = safeText(payload.token, 512);
 	if (!token) throw Object.assign(new Error('Bridge handoff token is required.'), { status: 422 });
-	json(response, 200, consumeHandoffToken(token, handoffStore), config);
+	const consumed = await consumeHandoffToken(token, kv, sessionClock(config), config.appSessionSecret);
+	// The row is written here, where the client metadata is the user's: the mint is a
+	// server-to-server call from the gateway.
+	await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod: 'handoff' });
+	json(response, 200, consumed, config);
 }
 
 function bridgeTokenFromRedirect(redirectUrl) {
@@ -4039,7 +4064,7 @@ async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}',
 // gateway's website-only CORS does not apply), then mint + return the osionos
 // session the app already consumes ({ user, accessToken, refreshToken }). Reuses
 // the gateway hardening (lockout/policy) + its register-time workspace creation.
-async function handleAuthProxy(url, request, response, config, handoffStore, fetchImpl) {
+async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl) {
 	if (!config.gatewayUrl) throw Object.assign(new Error('Auth gateway is not configured.'), { status: 503 });
 	const payload = await readJson(request);
 	const email = safeText(payload.email, 320).trim().toLowerCase();
@@ -4071,7 +4096,10 @@ async function handleAuthProxy(url, request, response, config, handoffStore, fet
 	const bridgeToken = bridgeTokenFromRedirect(sData.redirectUrl);
 	if (!sRes.ok || !bridgeToken) { json(response, 502, { message: sData.message || 'Could not establish the app session.' }, config); return; }
 
-	const consumed = consumeHandoffToken(bridgeToken, handoffStore);
+	const consumed = await consumeHandoffToken(bridgeToken, kv, sessionClock(config), config.appSessionSecret);
+	// A password sign-in is the user's own request: this is where its client metadata is
+	// the user's, so this is where its session row is written.
+	await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod: 'password' });
 	json(response, 200, {
 		user: { id: lData.user?.id ?? consumed.session.userId, email },
 		accessToken: consumed.session.accessToken,
@@ -4124,13 +4152,13 @@ async function handleBridgeLogout(request, response, config, fetchImpl) {
 	response.end();
 }
 
-async function handleBridgePost(url, request, response, config, handoffStore, replayStore, fetchImpl) {
+async function handleBridgePost(url, request, response, config, kv, pg, fetchImpl) {
 	if (url.pathname === '/api/auth/bridge/logout') {
 		await handleBridgeLogout(request, response, config, fetchImpl);
 		return true;
 	}
 	if (url.pathname === '/api/auth/login' || url.pathname === '/api/auth/register') {
-		await handleAuthProxy(url, request, response, config, handoffStore, fetchImpl);
+		await handleAuthProxy(url, request, response, config, kv, pg, fetchImpl);
 		return true;
 	}
 	// Database automations deliver webhooks server-side: the browser can't reach
@@ -4150,11 +4178,11 @@ async function handleBridgePost(url, request, response, config, handoffStore, re
 	}
 	if (await handlePagesPost(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/auth/bridge/session') {
-		await handleBridgeSession(request, response, config, handoffStore, replayStore, fetchImpl);
+		await handleBridgeSession(request, response, config, kv, fetchImpl);
 		return true;
 	}
 	if (url.pathname !== '/api/auth/bridge/consume') return false;
-	await handleBridgeConsume(request, response, config, handoffStore);
+	await handleBridgeConsume(request, response, config, kv, pg);
 	return true;
 }
 
@@ -4188,6 +4216,8 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.collab(url, request, response, context.config)) return;
 	if (await context.social.workspaceInvites(url, request, response, context.config)) return;
 	if (await context.social.realtimeToken(url, request, response, context.config)) return;
+	// The account plane: one seam, and the modules behind it decide what is theirs.
+	if (await context.social.account(url, request, response)) return;
 	if (request.method === 'POST' && url.pathname === '/api/agent/claude/stream') {
 		await handleClaudeAgentStream(request, response, context.config, context.spawnImpl);
 		return;
@@ -4200,8 +4230,8 @@ async function handleBridgeRequest(request, response, context) {
 		request,
 		response,
 		context.config,
-		context.handoffStore,
-		context.replayStore,
+		context.kv,
+		context.pg,
 		context.fetchImpl,
 	)) return;
 	if (request.method === 'PATCH' && await handleMarketplacePatch(url, request, response, context.config, context.fetchImpl)) return;
@@ -4219,9 +4249,12 @@ export function createBridgeServer(options = {}) {
 	// One tracker per server, hung off the config every handler closes over; the per-request
 	// copies (requestOriginConfig) spread it, so they share the same object.
 	const sessionCutoffs = baseConfig.sessionCutoffs ?? sessionCutoffsFromConfig(baseConfig, { now: options.now, log: options.sessionCutoffLog });
-	const config = { ...baseConfig, sessionCutoffs };
-	const handoffStore = options.handoffStore ?? new Map();
-	const replayStore = options.replayStore ?? new Map();
+	const { sessionRecords, sessionRevocations } = sessionStateFromConfig(baseConfig, { now: options.now, log: options.sessionCutoffLog });
+	// A configured Redis is what makes the handoff and the replay markers shared; without one
+	// the bridge keeps them in its own memory and can only ever be one replica.
+	const kvRequired = baseConfig.redisUrl !== '';
+	const kv = options.kv ?? createKv({ redisUrl: baseConfig.redisUrl, required: kvRequired, logger: options.kvLog });
+	const config = { ...baseConfig, sessionCutoffs, sessionRecords, sessionRevocations, kvRequired, kv };
 	const meter = createRequestMeter({ enabled: options.perf ?? process.env.OSIONOS_BRIDGE_PERF === '1', baasUrl: config.baasUrl, log: options.perfLog });
 	// Opt-in: proven only on the Funnel link path. Injected fetches (tests) never get one.
 	const transport = !options.fetchImpl && process.env.OSIONOS_BAAS_KEEPALIVE === '1'
@@ -4229,6 +4262,7 @@ export function createBridgeServer(options = {}) {
 		: null;
 	const fetchImpl = meter.wrapFetch(options.fetchImpl ?? transport?.fetch ?? fetch);
 	const spawnImpl = options.spawnImpl ?? spawn;
+	const pg = options.pg ?? createPg({ config, env: options.env ?? process.env, fetchImpl, now: options.now });
 	// Comments and publish reach a page through the same read rule as GET /api/pages/:id.
 	const verifyPageAccess = (request, pageId, permission) => readablePageAccess(request, pageId, permission, config, fetchImpl);
 	// Standalone workstream handlers, created once. rtc keeps the sibling
@@ -4256,12 +4290,13 @@ export function createBridgeServer(options = {}) {
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		account: createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken }),
 	};
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);
 			try {
-				await handleBridgeRequest(request, response, { config: responseConfig, handoffStore, replayStore, fetchImpl, spawnImpl, social });
+				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social });
 			} catch (error) {
 				if (!response.headersSent) errorJson(response, error, responseConfig);
 			}
@@ -4272,17 +4307,21 @@ export function createBridgeServer(options = {}) {
 	server.on('upgrade', (_request, socket) => socket.destroy());
 	server.on('close', () => transport?.close());
 	let cutoffPoller = null;
+	let revocationPoller = null;
 	server.on('listening', () => {
 		cutoffPoller = startSessionCutoffPoller(sessionCutoffs, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionCutoffPoll);
+		revocationPoller = startSessionRevocationPoller(sessionRevocations, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionRevocationPoll);
+		server.sessionRevocationPoller = revocationPoller;
 	});
-	server.on('close', () => cutoffPoller?.stop());
-	server.sessionCutoffs = sessionCutoffs;
+	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); if (!options.kv) kv.close(); });
+	Object.assign(server, { sessionCutoffs, sessionRevocations, sessionRecords, kv, kvRequired });
 	return server;
 }
 
 export function startBridgeServer(config = configFromEnv()) {
 	const server = createBridgeServer({ config });
-	console[server.sessionCutoffs.enforced ? 'info' : 'warn'](server.sessionCutoffs.bootLine());
+	// One boot line for the three states an operator has to know.
+	console[bridgeBootIsDegraded(server) ? 'warn' : 'info'](bridgeBootLine(server));
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
 	});
