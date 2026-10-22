@@ -3520,7 +3520,7 @@ async function favoriteAuthRows(favoriteIds, config, fetchImpl) {
 	const byId = new Map();
 	for (const chunk of idChunks([...new Set(ids)])) {
 		try {
-			const rows = await baasRest(config, fetchImpl, `osionos_pages?${idsFilter(chunk)}&select=${PAGE_AUTH_SELECT}`);
+			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&select=${PAGE_AUTH_SELECT}`);
 			for (const row of Array.isArray(rows) ? rows : []) byId.set(String(row.id).toLowerCase(), row);
 		} catch { /* fail closed: this chunk's pages stay absent */ }
 	}
