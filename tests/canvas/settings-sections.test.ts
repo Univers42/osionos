@@ -41,7 +41,7 @@ function srcFiles(base = SRC_ROOT): string[] {
   return files;
 }
 
-test("the registry lists exactly the 19 legacy section ids, all unique", () => {
+test("the registry lists the 19 legacy section ids plus moderation, all unique", () => {
   const ids = SETTINGS_SECTIONS.map((section) => section.id);
   assert.equal(new Set(ids).size, ids.length, "a section id appears twice");
   const LEGACY_IDS = [
@@ -51,7 +51,8 @@ test("the registry lists exactly the 19 legacy section ids, all unique", () => {
     "teamspaces", "permissions", "billing", "plans",
   ];
   for (const id of LEGACY_IDS) assert.ok(ids.includes(id), `${id} left the registry`);
-  assert.equal(ids.length, LEGACY_IDS.length);
+  assert.equal(ids.length, LEGACY_IDS.length + 1);
+  assert.ok(ids.includes("moderation"), "moderation missing from registry");
 });
 
 test("every section points at an existing group, and no group is empty", () => {
