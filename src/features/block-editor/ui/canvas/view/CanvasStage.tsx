@@ -26,6 +26,7 @@ import type { CanvasStoreApi } from "../store/canvasStore";
 import { CanvasCellView } from "./CanvasCellView";
 import { CanvasEmptyState } from "./CanvasEmptyState";
 import { CanvasGuidesLayer } from "./CanvasGuidesLayer";
+import { CanvasMeasuredHeightsProvider } from "./CanvasInspector";
 import { CanvasSelectionToolbar } from "./CanvasSelectionToolbar";
 
 export interface CanvasStageProps {
@@ -85,49 +86,51 @@ export function CanvasStage({ store, interaction, cellOps, stageRef, scaleRef, p
   }, [dispatch, layoutConfig.preview, startMarquee]);
 
   return (
-    <div
-      ref={stageRef}
-      data-layout-grid={layoutBlockId}
-      data-layout-guides={shouldShowGuides ? "true" : undefined}
-      data-canvas-active={selectedIds.length > 0 ? "true" : undefined}
-      className="osionos-layout-grid osio-canvas-v2-stage"
-      tabIndex={-1}
-      style={{
-        height: `${contentHeight}px`,
-        "--osionos-layout-dot-size": "16px",
-        "--osionos-layout-row-size": `${layoutConfig.rowHeight + layoutConfig.rowGap}px`,
-      } as React.CSSProperties}
-      onPointerDownCapture={handleBackgroundPointerDown}
-      onKeyDown={handleKeyDown}
-    >
-      <CanvasGuidesLayer interaction={interaction} />
-      {orderedCells.length === 0 ? (
-        <CanvasEmptyState onAdd={cellOps.addCell} onTemplate={cellOps.applyTemplate} />
-      ) : null}
-      {orderedCells.map((cell) => (
-        <CanvasCellView
-          key={cell.id}
-          cell={cell}
-          displayFrame={displaced[cell.id] ?? cell.frame}
-          gridConfig={layoutConfig}
-          selected={selected.has(cell.id)}
-          preview={layoutConfig.preview}
-          pageId={pageId}
-          layoutBlockId={layoutBlockId}
-          lazyMounter={lazyMounter}
-          renderBlockEditor={renderBlockEditor}
-          onSelectCell={cellOps.selectCell}
-          onStartMove={cellOps.startMove}
-          onStartResize={cellOps.startResize}
-          onMeasureCell={measureCell}
-          onRenameCell={cellOps.renameCell}
-          onAddCell={cellOps.addCell}
-          onInspectCell={cellOps.inspectCell}
-          onDuplicateCell={cellOps.duplicateCell}
-          onDeleteCell={cellOps.deleteCell}
-        />
-      ))}
-      <CanvasSelectionToolbar store={store} interaction={interaction} stageRef={stageRef} />
-    </div>
+    <CanvasMeasuredHeightsProvider heights={heights}>
+      <div
+        ref={stageRef}
+        data-layout-grid={layoutBlockId}
+        data-layout-guides={shouldShowGuides ? "true" : undefined}
+        data-canvas-active={selectedIds.length > 0 ? "true" : undefined}
+        className="osionos-layout-grid osio-canvas-v2-stage"
+        tabIndex={-1}
+        style={{
+          height: `${contentHeight}px`,
+          "--osionos-layout-dot-size": "16px",
+          "--osionos-layout-row-size": `${layoutConfig.rowHeight + layoutConfig.rowGap}px`,
+        } as React.CSSProperties}
+        onPointerDownCapture={handleBackgroundPointerDown}
+        onKeyDown={handleKeyDown}
+      >
+        <CanvasGuidesLayer interaction={interaction} />
+        {orderedCells.length === 0 ? (
+          <CanvasEmptyState onAdd={cellOps.addCell} onTemplate={cellOps.applyTemplate} />
+        ) : null}
+        {orderedCells.map((cell) => (
+          <CanvasCellView
+            key={cell.id}
+            cell={cell}
+            displayFrame={displaced[cell.id] ?? cell.frame}
+            gridConfig={layoutConfig}
+            selected={selected.has(cell.id)}
+            preview={layoutConfig.preview}
+            pageId={pageId}
+            layoutBlockId={layoutBlockId}
+            lazyMounter={lazyMounter}
+            renderBlockEditor={renderBlockEditor}
+            onSelectCell={cellOps.selectCell}
+            onStartMove={cellOps.startMove}
+            onStartResize={cellOps.startResize}
+            onMeasureCell={measureCell}
+            onRenameCell={cellOps.renameCell}
+            onAddCell={cellOps.addCell}
+            onInspectCell={cellOps.inspectCell}
+            onDuplicateCell={cellOps.duplicateCell}
+            onDeleteCell={cellOps.deleteCell}
+          />
+        ))}
+        <CanvasSelectionToolbar store={store} interaction={interaction} stageRef={stageRef} />
+      </div>
+    </CanvasMeasuredHeightsProvider>
   );
 }
