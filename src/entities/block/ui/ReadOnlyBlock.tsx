@@ -52,6 +52,12 @@ const HomeViewsBlock = lazy(() =>
   import("@/widgets/database-view/ui/HomeViewsBlock").then((m) => ({ default: m.HomeViewsBlock })),
 );
 
+// The diagram block: the stored SPEC drawn live. On a public page it draws
+// nothing (devil C110) — the component itself knows the route.
+const DiagramBlock = lazy(() =>
+  import("@/features/diagram/ui/DiagramBlock").then((m) => ({ default: m.DiagramBlock })),
+);
+
 const databaseLoadingFallback = (
   <div className="my-2 flex items-center justify-center py-8">
     <div className="animate-spin w-5 h-5 border-2 border-[var(--osio-accent)] border-t-transparent rounded-full" />
@@ -485,6 +491,15 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         <div className="my-3">
           <Suspense fallback={databaseLoadingFallback}>
             <WhiteboardBlockCard block={block} />
+          </Suspense>
+        </div>
+      );
+
+    case "diagram":
+      return (
+        <div className="my-3">
+          <Suspense fallback={null}>
+            <DiagramBlock block={block} />
           </Suspense>
         </div>
       );
