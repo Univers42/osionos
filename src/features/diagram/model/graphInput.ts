@@ -243,22 +243,22 @@ export function neighbourhood(
     const next: string[] = [];
     for (const entry of found) {
       seen.add(entry.id);
-      if (neighbors.length >= MAX_NEIGHBORS) {
+      if (neighbors.length < MAX_NEIGHBORS) {
+        neighbors.push({
+          pageId: entry.id,
+          title: titles.get(entry.id) ?? "",
+          kind: entry.kind,
+          depth: level,
+          ...(entry.via ? { via: entry.via } : {}),
+        });
+      } else {
+        // The cap was reached: this neighbour is not shown, but it is still a
+        // neighbour of the graph, so it is COUNTED (C109). The walk keeps
+        // going through it, so the deeper neighbours are counted too.
         dropped += 1;
-        continue;
       }
-      neighbors.push({
-        pageId: entry.id,
-        title: titles.get(entry.id) ?? "",
-        kind: entry.kind,
-        depth: level,
-        ...(entry.via ? { via: entry.via } : {}),
-      });
       next.push(entry.id);
     }
-    // The cap is the cap: the walk stops there, and the pages it did not reach
-    // are the ones the diagram does not show.
-    if (neighbors.length >= MAX_NEIGHBORS) break;
     frontier = next;
   }
 

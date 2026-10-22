@@ -32,7 +32,9 @@ export type ExportOutcome =
   /** A published page: no export, no request. */
   | "refused"
   /** There was nothing to export. */
-  | "empty";
+  | "empty"
+  /** There is no clipboard to write to. */
+  | "unavailable";
 
 /**
  * May this document export a diagram?
@@ -93,7 +95,7 @@ export async function copyMermaidText(options: {
   if (!canExportDiagram({ isPublic: options.isPublic })) return "refused";
   if (!options.source) return "empty";
   const clipboard = options.clipboard ?? browserClipboard();
-  if (!clipboard) return "empty";
+  if (!clipboard) return "unavailable";
   await clipboard.writeText(options.source);
   return "copied";
 }
