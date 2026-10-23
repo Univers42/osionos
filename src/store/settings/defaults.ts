@@ -14,7 +14,6 @@ import type {
   AccountSettings,
   BillingState,
   ConnectionRecord,
-  DeviceRecord,
   EmailRecord,
   NotificationSettings,
   UserPreferences,
@@ -33,21 +32,6 @@ export function defaultAccountSettings(userId: string): AccountSettings {
     supportAccessGrantedUntil: null,
     pendingDeletionAt: null,
     removedAt: null,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-}
-
-export function defaultDevice(userId: string): DeviceRecord {
-  const timestamp = nowIso();
-  return {
-    _id: 'current-device',
-    userId,
-    deviceFingerprint: 'current-device',
-    userAgent: typeof navigator === 'undefined' ? 'This device' : navigator.userAgent,
-    location: 'This device',
-    lastActiveAt: timestamp,
-    revokedAt: null,
     createdAt: timestamp,
     updatedAt: timestamp,
   };

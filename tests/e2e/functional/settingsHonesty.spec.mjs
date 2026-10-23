@@ -95,30 +95,23 @@ test.describe("settings honesty (offline build)", () => {
     await closeSettings(page);
   });
 
-  test("Devices table has exactly one row and no 'Ubuntu' text unless the browser UA says so", async ({ page, baseURL }) => {
+  test("Sessions fabricates no row when the server cannot be reached, and never shows 'Ubuntu'", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await openSettings(page);
 
     // Navigate to Profile via search
-    await searchSettings(page, "devices");
+    await searchSettings(page, "sessions");
 
-    // Should land on Profile at the Devices anchor
-    await expect(region(page).getByRole("heading", { name: "Devices", exact: true })).toBeVisible();
-    await expect(region(page).locator('[data-settings-anchor="devices"]')).toBeInViewport();
+    // Should land on Profile at the Sessions anchor
+    await expect(region(page).getByRole("heading", { name: "Sessions", exact: true })).toBeVisible();
+    const anchor = region(page).locator('[data-settings-anchor="sessions"]');
+    await expect(anchor).toBeInViewport();
 
-    // Find the Devices section and its table
-    const rows = region(page).locator("table tbody tr");
-    await expect(rows).toHaveCount(1);
-
-    // The device name should come from navigator.userAgent (honest), not "Ubuntu · This Device"
-    const deviceNameCell = rows.locator("td").first();
-    const deviceName = await deviceNameCell.textContent();
-
-    // In the offline Playwright build the UA is headless Chromium on Linux — it does not contain "Ubuntu"
-    // So we assert the text is NOT the old hard-coded value
-    expect(deviceName).not.toContain("Ubuntu · This Device");
-    // And it should contain something honest from the UA (e.g., "Chrome on Linux")
-    expect(deviceName.length).toBeGreaterThan(0);
+    // The offline build has no bridge: the block says so instead of inventing this browser as a row.
+    await expect(anchor.getByText("Sessions can't be listed on this server")).toBeVisible();
+    await expect(anchor.locator("table tbody tr")).toHaveCount(0);
+    await expect(anchor.getByText("Ubuntu · This device")).toHaveCount(0);
+    await expect(anchor.getByText("Ubuntu · This Device")).toHaveCount(0);
 
     await closeSettings(page);
   });

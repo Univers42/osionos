@@ -15,14 +15,14 @@ import { startRegistration } from '@simplewebauthn/browser';
 import { Copy, KeyRound } from 'lucide-react';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
-import { useAccountDevicesStore, useAccountEmailsStore, useAccountPasskeysStore, useAccountProfileStore, useAccountSettingsStore } from '@/store/settings';
-import { defaultDevice } from '@/store/settings/defaults';
+import { useAccountEmailsStore, useAccountPasskeysStore, useAccountProfileStore, useAccountSettingsStore } from '@/store/settings';
 import { isAccountDeleteEnabled } from '@/shared/config/featureFlags';
 import { Button, IconButton, useToastStore } from '@/shared/ui';
 import { ConfirmModal } from '../ui/ConfirmModals';
 import { AccountDangerZone } from '../ui/danger/AccountDangerZone';
-import { DataTable, Section, SettingRow } from '../ui/settingsKit';
+import { Section, SettingRow } from '../ui/settingsKit';
 import { runAsync } from '../model/settingsCalls';
+import { SessionsSettings } from './SessionsSettings';
 import { PublicProfileSection } from './PublicProfileSection';
 import { signInRows } from './signInMethods';
 import { EmailManagerModal, PasskeyManagerModal, PasswordModal, TwoFactorModal, UsernameModal } from './ProfileSecurityModals';
@@ -40,30 +40,6 @@ interface ActiveSettingsModal {
   payload?: Record<string, unknown>;
 }
 
-/**
- * A device name read from the user agent, e.g. "Chrome on Linux".
- *
- * Caveat: this matches on token patterns, so an unrecognised browser shows
- * "Browser on unknown OS" instead of the raw agent string.
- */
-function deviceName(userAgent?: string | null): string {
-  const agent = userAgent ?? '';
-  if (!agent) return 'This device';
-  const browser = /Edg\//.test(agent) ? 'Edge'
-    : /OPR\//.test(agent) ? 'Opera'
-    : /Firefox\//.test(agent) ? 'Firefox'
-    : /Chrome\//.test(agent) ? 'Chrome'
-    : /Safari\//.test(agent) ? 'Safari'
-    : 'Browser';
-  const os = /Windows/.test(agent) ? 'Windows'
-    : /Android/.test(agent) ? 'Android'
-    : /Mac OS X|Macintosh/.test(agent) ? 'macOS'
-    : /CrOS/.test(agent) ? 'ChromeOS'
-    : /Linux/.test(agent) ? 'Linux'
-    : 'unknown OS';
-  return `${browser} on ${os}`;
-}
-
 export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) => {
   const userId = persona?.id || 'anonymous';
   const toast = useToastStore((state) => state.push);
@@ -72,9 +48,6 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   const hydrateAccount = useAccountSettingsStore((state) => state.hydrate);
   const updateAccount = useAccountSettingsStore((state) => state.update);
   const username = useAccountProfileStore((state) => state.profile?.username ?? null);
-  const devices = useAccountDevicesStore((state) => state.data);
-  const hydrateDevices = useAccountDevicesStore((state) => state.hydrate);
-  const revokeDevice = useAccountDevicesStore((state) => state.revoke);
   const passkeys = useAccountPasskeysStore((state) => state.data);
   const hydratePasskeys = useAccountPasskeysStore((state) => state.hydrate);
   const registerPasskeyOptions = useAccountPasskeysStore((state) => state.registerOptions);
@@ -87,10 +60,9 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
 
   useEffect(() => {
     runAsync(hydrateAccount(userId));
-    runAsync(hydrateDevices(userId));
     runAsync(hydratePasskeys());
     runAsync(hydrateEmails(userId, persona?.email));
-  }, [hydrateAccount, hydrateDevices, hydrateEmails, hydratePasskeys, persona?.email, userId]);
+  }, [hydrateAccount, hydrateEmails, hydratePasskeys, persona?.email, userId]);
 
   const primaryEmail = emails.find((email) => email.isPrimary)?.email ?? persona?.email;
   const security = account?.security ?? {};
@@ -98,19 +70,6 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   const rows = signInRows(security);
   const passwordRow = rows.find((row) => row.id === 'password');
   const passkeysReported = rows.some((row) => row.id === 'passkeys');
-  // Only the rows the server sent. With none (offline, or a server without the
-  // route) this browser is the one device that certainly exists.
-  const serverDevices = devices.filter((device) => !device.revokedAt);
-  const visibleDevices = serverDevices.length ? serverDevices : [defaultDevice(userId)];
-  const deviceRows = visibleDevices.map((device) => [
-    <span key={`${device._id}-name`}>
-      {deviceName(device.userAgent)}
-      {device._id === 'current-device' ? <span className="ml-2 rounded-xs bg-[var(--osio-accent-subtle)] px-1.5 py-0.5 text-xs text-[var(--osio-accent-text)]">Current</span> : null}
-    </span>,
-    device._id === 'current-device' ? 'Now' : new Date(device.lastActiveAt).toLocaleString(),
-    device.location ?? 'Unknown location',
-    device._id === 'current-device' ? '' : <Button key={`${device._id}-logout`} onClick={() => { runAsync(revokeDevice(device._id)); }}>Log out</Button>,
-  ]);
 
   async function handleRegisterPasskey(nickname = 'osionos passkey') {
     const options = await registerPasskeyOptions(nickname);
@@ -136,10 +95,7 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
           : <SettingRow title="Passkeys" description="Passkeys aren't available on this server yet." />}
       </Section>
       {isAccountDeleteEnabled() && <AccountDangerZone username={username} email={primaryEmail} />}
-      <Section title="Devices">
-        <SettingRow danger title="Log out of all devices" description="Sign out of every session on all your devices, including this one." action={<Button tone="danger" onClick={() => setModal({ name: 'sign-out-all' })}>Log out of all devices</Button>} />
-        <DataTable headers={['Device Name', 'Last Active', 'Location', '']} rows={deviceRows} />
-      </Section>
+      <SessionsSettings userId={userId} onSignOutAll={() => setModal({ name: 'sign-out-all' })} />
       <Section title="User ID">
         <SettingRow
           title="User ID"
