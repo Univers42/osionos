@@ -188,3 +188,35 @@ export async function loadAllCutoffs(source, timeoutMs) {
 export function startSessionCutoffPoller(tracker, source, { intervalMs = POLL_INTERVAL_MS, timeoutMs = BAAS_FETCH_TIMEOUT_MS } = {}) {
 	return startPolledSessionPoller(tracker, () => loadAllCutoffs(source, timeoutMs), { intervalMs });
 }
+
+/**
+ * Records that every token issued before `writtenAtMs` stops verifying. The timestamp is
+ * explicit (a column DEFAULT would leave an existing row untouched on conflict). Moved here
+ * from bridge-api.mjs so the sign-out and the password change share one write.
+ */
+export async function writeSessionCutoff(config, fetchImpl, userId, writtenAtMs) {
+	try {
+		if (!config.baasUrl || !config.serviceKey) throw new Error('service-role access is not configured');
+		const response = await fetchImpl(`${config.baasUrl}/rest/v1/auth_session_cutoffs?on_conflict=user_id`, {
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				apikey: config.serviceKey,
+				Authorization: `Bearer ${config.serviceKey}`,
+				Prefer: 'resolution=merge-duplicates',
+			},
+			body: JSON.stringify({ user_id: userId, sessions_valid_after: new Date(writtenAtMs).toISOString() }),
+			signal: AbortSignal.timeout(BAAS_FETCH_TIMEOUT_MS),
+		});
+		if (!response.ok) {
+			const text = await response.text().catch(() => '');
+			throw Object.assign(new Error(`BaaS request failed with ${response.status}`), { upstreamStatus: response.status, upstreamText: text.slice(0, 160) });
+		}
+	} catch (error) {
+		if (error?.upstreamStatus === 409 && /23503/.test(error.upstreamText ?? '')) {
+			throw Object.assign(new Error('No account matches this session.'), { status: 409, code: 'user_not_found' });
+		}
+		throw Object.assign(new Error('Sign-out could not be recorded; try again shortly.'), { status: 503, code: 'session_cutoffs_unavailable', retryAfterSeconds: 5 });
+	}
+}
