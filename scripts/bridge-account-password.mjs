@@ -36,9 +36,12 @@
  * at that tag (api.go:340-387 lists none). Not read at the tag: the refresh_tokens foreign
  * key, so "their refresh tokens die" rests on a refresh needing its session row.
  * The 72-byte cap is bcrypt's input limit, not read from the tag.
- * Release note (devil D-P3-1b C10): the gateway's /api/auth/osionos-session is unread; until
- * it is, treat a GoTrue token minted before the change as possibly still able to mint an
- * osionos session.
+ * Release note (devil D-P3-1b C10): the gateway's /api/auth/osionos-session mints from any
+ * GoTrue access token that `auth.getUser()` accepts (apps/opposite-osiris
+ * scripts/auth-gateway.mjs:950-972 at 47ca59e7; no amr or age check). The PUT above deletes the
+ * user's GoTrue sessions, so a website refresh token cannot outlive the change. Not verified at
+ * the tag: whether getUser refuses an unexpired access token whose session row is gone; until
+ * it is, such a token (at most its 1 h lifetime) may still mint an osionos session.
  *
  * Caveat: personal access tokens are not revoked (deliberate, tested): a PAT is created
  * only under sudo and the owner's PATs survive a password change as on other platforms.
