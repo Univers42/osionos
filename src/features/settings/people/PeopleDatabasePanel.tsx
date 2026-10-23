@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/24 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,6 +38,31 @@ interface PanelProps {
   onCountsChange?: () => void;
 }
 
+/** Shown once after an invite: no mail is sent, so the inviter passes the link on. */
+const AcceptLinkModal: React.FC<{ link: string; onClose: () => void }> = ({ link, onClose }) => {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <Modal open onClose={onClose} size="sm" title="Invite link">
+      <div className="space-y-3 p-6">
+        <p className="text-sm">Send this link to the person you invited. It is shown once and works for 7 days.</p>
+        <input readOnly value={link} onFocus={(event) => event.currentTarget.select()} className={INPUT_CLASS} aria-label="Invite link" />
+        <div className="flex justify-end gap-2">
+          <Button onClick={() => void copy()}>{copied ? "Copied" : "Copy link"}</Button>
+          <Button tone="primary" onClick={onClose}>Done</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 /** Create-flow modal — a group (chat/community) or an email invite. */
 const CreatePeopleModal: React.FC<{
   kind: "group" | "guest"; workspaceId: string; invitedBy: string; onClose: () => void; onDone: () => void;
@@ -47,6 +72,8 @@ const CreatePeopleModal: React.FC<{
   const [role, setRole] = useState<Exclude<WorkspaceMemberRole, "owner">>("member");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The accept link exists only now: the bridge keeps a hash, so closing this modal loses it.
+  const [acceptLink, setAcceptLink] = useState<string | null>(null);
 
   const submit = async (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -65,7 +92,13 @@ const CreatePeopleModal: React.FC<{
           return;
         }
         const workspaceName = useUserStore.getState().activeWorkspace()?.name ?? "your workspace";
-        useToastStore.getState().push({ kind: "success", title: `Added ${email} to ${workspaceName}` });
+        useToastStore.getState().push({ kind: "success", title: `Invited ${email} to ${workspaceName}` });
+        const link = useWorkspaceInvitesStore.getState().acceptLinks[created._id];
+        if (link) {
+          setAcceptLink(link);
+          onDone();
+          return;
+        }
       }
       onDone();
       onClose();
@@ -73,6 +106,8 @@ const CreatePeopleModal: React.FC<{
       setError(inviteError instanceof Error ? inviteError.message : "Could not send the invite.");
     } finally { setBusy(false); }
   };
+
+  if (acceptLink) return <AcceptLinkModal link={acceptLink} onClose={onClose} />;
 
   return (
     <Modal open onClose={onClose} size="sm" title={kind === "group" ? "New group" : "Invite people"}>
