@@ -23,6 +23,9 @@ import type { Citation } from "./citations";
 
 /** Opens the page of a source, and scrolls to its block when it has one. */
 export function openCitation(citation: Citation): void {
+  // A pack passage has no page: there is nothing to navigate to, and the page
+  // store is never touched.
+  if (citation.collection === "pack") return;
   const store = usePageStore.getState();
   const page = store.pageById(citation.pageId);
   store.openPage({

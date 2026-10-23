@@ -72,14 +72,26 @@ export function dispatchRunEvent(
   if (event === "citation") {
     const citation = citationFromEvent(data);
     if (!citation) return;
-    actions.appendCitation({
-      type: "citation",
-      n: citation.n,
-      pageId: citation.pageId,
-      ...(citation.blockId ? { blockId: citation.blockId } : {}),
-      title: citation.title,
-      snippet: citation.snippet,
-    });
+    actions.appendCitation(
+      citation.collection === "pack"
+        ? {
+            type: "citation",
+            n: citation.n,
+            collection: "pack",
+            pack: citation.pack,
+            title: citation.title,
+            snippet: citation.snippet,
+          }
+        : {
+            type: "citation",
+            n: citation.n,
+            collection: "page",
+            pageId: citation.pageId,
+            ...(citation.blockId ? { blockId: citation.blockId } : {}),
+            title: citation.title,
+            snippet: citation.snippet,
+          },
+    );
     // The sources a tool found are its result: they arrive between the call
     // and its outcome.
     actions.appendToolSource(data);
