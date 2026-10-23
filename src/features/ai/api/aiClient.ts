@@ -356,3 +356,57 @@ export async function createAccessToken(
 export async function revokeAccessToken(id: string): Promise<void> {
   await requestNoContent("DELETE", `/access-tokens/${encodeURIComponent(id)}`);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Workspace skills                                                            */
+/* -------------------------------------------------------------------------- */
+
+/** A skill of a workspace, with its body (members read, owners/admins write). */
+export interface AiWorkspaceSkill {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  body: string;
+  version: number;
+  updatedAt: string;
+  /** Whether the prompt offers it: the index is capped. */
+  inIndex: boolean;
+}
+
+/** The fields an owner/admin writes. */
+export interface AiSkillFields {
+  name: string;
+  description: string;
+  body: string;
+}
+
+const skillsPath = (workspaceId: string) => `/workspaces/${encodeURIComponent(workspaceId)}/skills`;
+
+/** `GET /workspaces/:ws/skills` */
+export async function listWorkspaceSkills(workspaceId: string): Promise<AiWorkspaceSkill[]> {
+  const body = await requestJson<{ skills?: AiWorkspaceSkill[] }>("GET", skillsPath(workspaceId));
+  return body.skills ?? [];
+}
+
+/** `POST /workspaces/:ws/skills` */
+export async function createWorkspaceSkill(
+  workspaceId: string,
+  input: AiSkillFields & { slug: string },
+): Promise<AiWorkspaceSkill> {
+  return requestJson<AiWorkspaceSkill>("POST", skillsPath(workspaceId), input);
+}
+
+/** `PUT /workspaces/:ws/skills/:slug` — a new version. */
+export async function updateWorkspaceSkill(
+  workspaceId: string,
+  slug: string,
+  input: AiSkillFields,
+): Promise<AiWorkspaceSkill> {
+  return requestJson<AiWorkspaceSkill>("PUT", `${skillsPath(workspaceId)}/${encodeURIComponent(slug)}`, input);
+}
+
+/** `DELETE /workspaces/:ws/skills/:slug` — archives. */
+export async function archiveWorkspaceSkill(workspaceId: string, slug: string): Promise<void> {
+  await requestNoContent("DELETE", `${skillsPath(workspaceId)}/${encodeURIComponent(slug)}`);
+}
