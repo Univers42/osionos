@@ -36,6 +36,7 @@ import {
   type AiAccessTokenCreated,
 } from "@/features/ai/api/aiClient";
 import { CreateTokenForm } from "./accessTokenCreateForm";
+import { McpApprovalsSection } from "./McpApprovalsSection";
 import { RevokeControl, ShowOnceTokenBox } from "./accessTokenRows";
 import { isAccessTokensOff, lastUsedWords, tokenFailureMessage } from "./accessTokenWords";
 import { CHIP } from "./aiPanelClasses";
@@ -198,6 +199,8 @@ export const AccessTokensPanel: React.FC<{ workspaces: AccessTokenWorkspace[] }>
         busy={busy}
         onSubmit={() => void submit()}
       />
+
+      <McpApprovalsSection />
 
       {/* The tokens of the user. */}
       <div className="space-y-2">

@@ -40,6 +40,7 @@ import {
   approvedInRunWords,
   decideApprovalCard,
   expiryWords,
+  externalAgentWords,
   previewWords,
   refusalWords,
   stateWords,
@@ -51,6 +52,8 @@ export interface ApprovalCardProps {
   approvalId: string;
   /** The card, when the client already holds it. */
   approval?: ApprovalDescription | null;
+  /** The agent that asked, when the write comes from outside osionos. */
+  agentName?: string;
   /** The pages the request comes from, by title — when they are known. */
   provenanceTitles?: readonly string[];
   /** Opens the page the write touches. */
@@ -69,7 +72,7 @@ const BUTTON =
 
 /** The card of a write, as the reader sees it. */
 export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
-  const { approvalId, approval: known, onOpenPage, onContinuation } = props;
+  const { approvalId, approval: known, agentName, onOpenPage, onContinuation } = props;
   const [approval, setApproval] = useState<ApprovalDescription | null>(known ?? null);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
@@ -123,6 +126,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     "div",
     { className: CARD, "data-testid": "chat-approval-card", "data-status": state },
     heading(approval),
+    typeof agentName === "string" ? noteLine(externalAgentWords(agentName)) : null,
     target ? targetLine(target.title, target.workspaceName || target.workspaceId) : null,
     approval ? argsBlock(approvalArgs(approval.args)) : null,
     previewWords(approval?.preview) ? previewLine(previewWords(approval?.preview)) : null,
