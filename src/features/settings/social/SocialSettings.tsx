@@ -18,7 +18,7 @@ import { ContactsPanel } from './ContactsPanel';
 import { ReportsPanel } from './ReportsPanel';
 
 export const SocialSettings: React.FC = () => (
-  <div className="flex flex-col gap-6">
+  <div className="flex flex-col gap-8">
     <ContactsPanel />
     <ReportsPanel />
   </div>

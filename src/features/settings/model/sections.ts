@@ -95,8 +95,10 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: "contacts", group: "account", label: "Contacts", title: "Contacts",
     subtitle: "Manage your connections and the reports you filed", icon: UserPlus,
-    // The modal's search index had no Contacts anchors — an exact copy keeps it so.
-    anchors: [],
+    anchors: [
+      { id: "connections", label: "Your connections", keywords: ["contacts", "friends", "requests", "remove", "people"] },
+      { id: "reports", label: "Reports you filed", keywords: ["report", "abuse", "filed", "flag"] },
+    ],
   },
   {
     id: "moderation", group: "account", label: "Moderation", title: "Moderation",
