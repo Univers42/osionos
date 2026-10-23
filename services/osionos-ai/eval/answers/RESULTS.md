@@ -17,5 +17,6 @@ Command: node --experimental-strip-types eval/answers/answers.ts
 Caveat: the judge is the same 4B model that wrote the answers, so it can favour its own wording, and it is not
 calibrated yet: these scores are the judge's, not a measured faithfulness, until `calibrate.ts` compares them with the
 30 human labels. Abstention here is only "retrieval returned nothing": the run has no reranker and no
-`OSIONOS_AI_ABSTAIN_THRESHOLD`, so the low abstention recall (0.10) measures that fallback, not the service's
-rerank-score abstention.
+`OSIONOS_AI_ABSTAIN_THRESHOLD`, which is the product's default on CPU (the reranker is off there, see
+`../wiki/RESULTS-rag.md`). So the low abstention recall (0.10) is the default product's; the rerank-score abstention
+is measured in that file's variant 3, not here.
