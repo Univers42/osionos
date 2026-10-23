@@ -21,14 +21,22 @@ export async function cachedHomeUpdatedAt(page) {
   });
 }
 
+/** Lands the page cache's debounced, idle-scheduled write now, through the same
+ *  `pagehide` flush a reload runs. Under CPU load that write lagged the two reads
+ *  below by seconds (CI-136), so the reload's own flush wrote the typed note's
+ *  stamp and the reload was blamed for it. */
+const flushPendingCacheWrites = (page) => page.evaluate(() => globalThis.dispatchEvent(new Event("pagehide")));
+
 /** The stamp once the user's own edits have stopped moving it. An edit touches
  *  `updatedAt` too, so reading it right after typing would blame the reload for
- *  the edit's own write. Caveat: "settled" is two equal reads 1.2s apart, so an
- *  edit write slower than that would still be blamed on the reload. */
+ *  the edit's own write. Caveat: "settled" is two equal reads 1.2s apart after a
+ *  flush, so a draft commit that lands later than that would still be blamed. */
 export async function settledHomeUpdatedAt(page) {
+  await flushPendingCacheWrites(page);
   let previous = await cachedHomeUpdatedAt(page);
   for (let attempt = 0; attempt < 20; attempt += 1) {
     await page.waitForTimeout(1200);
+    await flushPendingCacheWrites(page);
     const current = await cachedHomeUpdatedAt(page);
     if (current === previous) return current;
     previous = current;
