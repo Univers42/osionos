@@ -61,13 +61,31 @@ interface KitViewConfig {
 	id: string;
 	databaseId: string;
 	name: string;
-	type: 'table' | 'board' | 'calendar' | 'list' | 'gallery';
+	type: 'table' | 'board' | 'calendar' | 'list' | 'gallery' | 'chart' | 'dashboard';
 	filters: never[];
 	filterConjunction: 'and';
 	sorts: never[];
 	grouping?: { propertyId: string };
 	visibleProperties: string[];
-	settings: { showCalendarBy?: string };
+	settings: {
+		showCalendarBy?: string;
+		chartType?: string;
+		xAxisProperty?: string;
+		yAxisAggregation?: 'count' | 'sum' | 'average' | 'min' | 'max' | 'median';
+		yAxisProperty?: string;
+		dashboardWidgets?: {
+			id: string;
+			viewId: string;
+			title?: string;
+			stat?: { fn: 'count' | 'sum' | 'avg' | 'min' | 'max'; propertyId?: string };
+		}[];
+		dashboardRows?: {
+			id: string;
+			widgetIds: string[];
+			widths: number[];
+			height: number;
+		}[];
+	};
 }
 export interface KitState {
 	databases: Record<string, KitDatabaseSchema>;
@@ -165,9 +183,17 @@ function convertValue(property: KitSchemaProperty, value: string | number | bool
 	}
 }
 
-function buildView(dbKey: string, view: PlanDatabaseItem['views'][number], index: number, properties: KitSchemaProperty[]): KitViewConfig {
+function buildView(
+	dbKey: string,
+	view: PlanDatabaseItem['views'][number],
+	index: number,
+	properties: KitSchemaProperty[],
+	allViews: PlanDatabaseItem['views']
+): KitViewConfig {
+	const byName = new Map(properties.map((p) => [p.name, p]));
+	const viewId = `${dbKey}-v${index}`;
 	const config: KitViewConfig = {
-		id: `${dbKey}-v${index}`,
+		id: viewId,
 		databaseId: dbKey,
 		name: view.name,
 		type: view.type,
@@ -184,6 +210,51 @@ function buildView(dbKey: string, view: PlanDatabaseItem['views'][number], index
 	if (view.type === 'calendar') {
 		const date = properties.find((property) => property.type === 'date');
 		if (date) config.settings.showCalendarBy = date.id;
+	}
+	if (view.type === 'chart') {
+		const xProp = byName.get(view.xAxis);
+		const yProp = view.yAxis ? byName.get(view.yAxis) : undefined;
+		config.settings.chartType = view.chartType;
+		config.settings.xAxisProperty = xProp?.id;
+		config.settings.yAxisAggregation = view.aggregation ?? 'count';
+		if (yProp) config.settings.yAxisProperty = yProp.id;
+	}
+	if (view.type === 'dashboard') {
+		// Build dashboardWidgets: one per cell, referencing the named view by its id
+		const viewByName = new Map(allViews.map((v, i) => [v.name, `${dbKey}-v${i}`]));
+		type DashboardWidget = NonNullable<KitViewConfig['settings']['dashboardWidgets']>[0];
+		const widgets = view.cells.map((cell, i) => {
+			const targetViewId = viewByName.get(cell.view);
+			if (!targetViewId) return null; // Should not happen due to validation
+			const widgetId = `${targetViewId}-w${i}`;
+			const widget: DashboardWidget = {
+				id: widgetId,
+				viewId: targetViewId,
+				...(cell.title ? { title: cell.title } : {}),
+			};
+			if (cell.stat) {
+				const propId = cell.stat.property ? byName.get(cell.stat.property)?.id : undefined;
+				widget.stat = { fn: cell.stat.fn, ...(propId ? { propertyId: propId } : {}) };
+			}
+			return widget;
+		}).filter((w): w is DashboardWidget => w !== null);
+
+		// Build dashboardRows: two widgets per row, widths [0.5, 0.5], last single gets [1]
+		// Height uses DEFAULT_ROW_HEIGHT from dashboardLayout.ts:29
+		const DEFAULT_ROW_HEIGHT = 320;
+		const rows: KitViewConfig['settings']['dashboardRows'] = [];
+		for (let i = 0; i < widgets.length; i += 2) {
+			const rowWidgets = widgets.slice(i, i + 2);
+			const widths = rowWidgets.length === 2 ? [0.5, 0.5] : [1];
+			rows.push({
+				id: `${viewId}-r${rows.length}`,
+				widgetIds: rowWidgets.map((w) => w.id),
+				widths,
+				height: DEFAULT_ROW_HEIGHT,
+			});
+		}
+		config.settings.dashboardWidgets = widgets;
+		config.settings.dashboardRows = rows;
 	}
 	return config;
 }
@@ -218,7 +289,7 @@ export function kitSliceOf(database: PlanDatabaseItem, ctx: { userId: string; no
 		};
 	});
 
-	const views = database.views.map((view, i) => buildView(dbKey, view, i, properties));
+	const views = database.views.map((view, i) => buildView(dbKey, view, i, properties, database.views));
 	return {
 		dbKey,
 		title: database.title,

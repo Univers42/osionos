@@ -22,10 +22,6 @@ import { z } from 'zod';
  *  - `person` / `user` / `files_media`: identities and uploads, not plain data;
  *  - `image` / `video` / `audio` / `file` / embed blocks: remote media is an
  *    exfiltration beacon (the viewer's browser fetches the URL);
- *  - the `dashboard` view is P6b (C165);
- *  - the `chart` view draws nothing until `settings.xAxisProperty` is set
- *    (kit views/chart/useChartData.ts:26-31, ChartView.tsx:98), a choice the
- *    plan does not carry. Re-add it once the plan names its axis.
  */
 export const PLAN_BLOCK_TYPES = [
 	'paragraph',
@@ -57,7 +53,7 @@ export const PLAN_PROPERTY_TYPES = [
 	'phone',
 ] as const;
 
-export const PLAN_VIEW_TYPES = ['table', 'board', 'calendar', 'list', 'gallery'] as const;
+export const PLAN_VIEW_TYPES = ['table', 'board', 'calendar', 'list', 'gallery', 'chart', 'dashboard'] as const;
 
 /** The block types that point at a database of the same plan. */
 // osionos renders only `database_inline` as a database; `database_full_page` is a
@@ -66,6 +62,13 @@ const DATABASE_BLOCK_TYPES = ['database_inline'] as const;
 
 /** The property types that take a list of options. */
 const OPTION_PROPERTY_TYPES: readonly string[] = ['select', 'multi_select', 'status'];
+
+const CHART_TYPES = ['vertical_bar', 'horizontal_bar', 'line', 'donut'] as const;
+const AGGREGATION_TYPES = ['count', 'sum', 'average'] as const;
+const STAT_FNS = ['count', 'sum', 'avg', 'min', 'max'] as const;
+
+/** X-axis types from the kit (ChartSubScreens.tsx:40-43) intersected with PLAN_PROPERTY_TYPES. */
+const CHART_X_AXIS_TYPES = ['text', 'select', 'multi_select', 'status', 'date', 'checkbox'] as const;
 
 export const MAX_PLAN_ITEMS = 40;
 export const MAX_PLAN_DEPTH = 3;
@@ -95,7 +98,33 @@ const propertySchema = z.object({
 	options: z.array(z.string().min(1).max(60)).max(30).optional(),
 });
 
-const viewSchema = z.object({ type: z.enum(PLAN_VIEW_TYPES), name: nameSchema });
+const plainViewSchema = z.object({ type: z.enum(['table', 'board', 'calendar', 'list', 'gallery']), name: nameSchema });
+
+const chartViewSchema = z.object({
+	type: z.literal('chart'),
+	name: nameSchema,
+	chartType: z.enum(CHART_TYPES),
+	xAxis: nameSchema,
+	aggregation: z.enum(AGGREGATION_TYPES).optional(),
+	yAxis: nameSchema.optional(),
+});
+
+const dashboardCellSchema = z.object({
+	view: nameSchema,
+	title: nameSchema.optional(),
+	stat: z.object({
+		fn: z.enum(STAT_FNS),
+		property: nameSchema.optional(),
+	}).optional(),
+});
+
+const dashboardViewSchema = z.object({
+	type: z.literal('dashboard'),
+	name: nameSchema,
+	cells: z.array(dashboardCellSchema).min(1).max(6),
+});
+
+const viewSchema = z.union([plainViewSchema, chartViewSchema, dashboardViewSchema]);
 
 const rowSchema = z.object({
 	values: z
@@ -118,7 +147,7 @@ const databaseItem = z.object({
 	dbKey: z.string().regex(DB_KEY).optional(),
 	title: titleSchema,
 	properties: z.array(propertySchema).min(1).max(12),
-	views: z.array(viewSchema).min(1).max(4),
+	views: z.array(viewSchema).min(1).max(6),
 	rows: z.array(rowSchema).max(50).optional(),
 });
 
@@ -164,6 +193,34 @@ function treeError(all: { item: PlanItem; depth: number }[]): string | null {
 }
 
 /** The first error in one database item (its properties and rows), or null. */
+/**
+ * The first error of the database's dashboard. A cell names a view of the SAME
+ * database (C165): a view of another database of the plan is an unknown name here.
+ */
+function dashboardError(db: PlanDatabaseItem): string | null {
+	const dashboards = db.views.filter((view) => view.type === 'dashboard');
+	if (dashboards.length > 1) return `the database "${db.key}" holds more than one dashboard`;
+	const viewByName = new Map(db.views.map((view) => [view.name, view]));
+	const propByName = new Map(db.properties.map((property) => [property.name, property]));
+	for (const view of dashboards) {
+		const cellViews = new Set<string>();
+		for (const cell of view.cells) {
+			const target = viewByName.get(cell.view);
+			if (!target) return `the dashboard "${view.name}" of "${db.key}" references an unknown view "${cell.view}"`;
+			if (target.type === 'dashboard') return `the dashboard "${view.name}" of "${db.key}" references a dashboard view "${cell.view}"`;
+			if (cellViews.has(cell.view)) return `the dashboard "${view.name}" of "${db.key}" repeats a cell view`;
+			cellViews.add(cell.view);
+			if (cell.stat && cell.stat.fn !== 'count') {
+				const statProp = cell.stat.property ? propByName.get(cell.stat.property) : undefined;
+				if (statProp?.type !== 'number') {
+					return `the dashboard "${view.name}" of "${db.key}" cell "${cell.view}" stat ${cell.stat.fn} needs a number property`;
+				}
+			}
+		}
+	}
+	return null;
+}
+
 function databaseError(db: PlanDatabaseItem): string | null {
 	const titles = db.properties.filter((property) => property.type === 'title').length;
 	if (titles !== 1) return `the database "${db.key}" needs exactly one title property`;
@@ -175,14 +232,34 @@ function databaseError(db: PlanDatabaseItem): string | null {
 		}
 	}
 	const types = new Set(db.properties.map((property) => property.type));
+	const propByName = new Map(db.properties.map((property) => [property.name, property]));
+	const viewNames = new Set<string>();
 	for (const view of db.views) {
+		if (viewNames.has(view.name)) return `the database "${db.key}" repeats a view name`;
+		viewNames.add(view.name);
 		if (view.type === 'board' && !types.has('select') && !types.has('status')) {
 			return `the board "${view.name}" of "${db.key}" needs a select or status property`;
 		}
 		if (view.type === 'calendar' && !types.has('date')) {
 			return `the calendar "${view.name}" of "${db.key}" needs a date property`;
 		}
+		if (view.type === 'chart') {
+			const xProp = propByName.get(view.xAxis);
+			if (!xProp) return `the chart "${view.name}" of "${db.key}" names an unknown xAxis property`;
+			// Chart x-axis follows the kit (ChartSubScreens.tsx:40-43) intersected with PLAN_PROPERTY_TYPES.
+			if (!CHART_X_AXIS_TYPES.includes(xProp.type as typeof CHART_X_AXIS_TYPES[number])) {
+				return `the chart "${view.name}" of "${db.key}" xAxis must be a text, select, multi_select, status, date or checkbox property`;
+			}
+			if (view.aggregation === 'sum' || view.aggregation === 'average') {
+				if (!view.yAxis) return `the chart "${view.name}" of "${db.key}" needs a yAxis for ${view.aggregation}`;
+				const yProp = propByName.get(view.yAxis);
+				if (!yProp) return `the chart "${view.name}" of "${db.key}" names an unknown yAxis property`;
+				if (yProp.type !== 'number') return `the chart "${view.name}" of "${db.key}" yAxis must be a number property`;
+			}
+		}
 	}
+	const dashboard = dashboardError(db);
+	if (dashboard) return dashboard;
 	for (const row of db.rows ?? []) {
 		for (const name of Object.keys(row.values)) {
 			if (!names.has(name)) return `a row of "${db.key}" names the unknown property "${name}"`;

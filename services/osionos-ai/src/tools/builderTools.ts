@@ -19,7 +19,7 @@ export const buildPlan: WriteTool<Plan> = {
 		'Page blocks: paragraph, heading_1-3, bulleted_list, numbered_list, to_do, toggle, quote, callout, divider, code, table_block, ' +
 		'and database_inline pointing at a database key of the same plan. ' +
 		'Database properties: title (exactly one), text, number, select, multi_select, status, date, checkbox, url, email, phone. ' +
-		'Views: table, board, calendar, list, gallery. At most 40 items, 3 levels deep. ' +
+		'Views: table, board, calendar, list, gallery, chart (needs xAxis, optional yAxis+aggregation), dashboard (1–6 cells referencing other views of the same database). At most 40 items, 3 levels deep, 6 views per database. ' +
 		'Ids are assigned by the system: do not send any.',
 	kind: 'write',
 	verb: 'Build pages and databases',
