@@ -46,8 +46,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
     );
   }
 
+  // Only an https URL or a same-origin path is drawn; the field is the allowlisted bannerUrl, nothing else.
+  const bannerSrc = /^(https:\/\/|\/(?!\/))/.test(profile.bannerUrl ?? '') ? profile.bannerUrl : undefined;
+
   return (
     <div className="h-full overflow-auto bg-[var(--osio-bg-page)] text-[var(--osio-fg-default)]">
+      {bannerSrc && (
+        <div className="mx-auto aspect-[3/1] max-h-64 w-full max-w-4xl overflow-hidden bg-[var(--osio-bg-subtle)]">
+          <img src={bannerSrc} alt="" data-testid="profile-banner" className="h-full w-full object-cover" />
+        </div>
+      )}
       <div className="mx-auto max-w-2xl px-8 py-12">
         <div className="flex items-center gap-6">
           <div className="relative">
