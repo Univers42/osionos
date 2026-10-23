@@ -32,6 +32,8 @@ import {
   startRun,
 } from "../api/aiClient";
 import { streamRun } from "./runStream";
+import { DEVICE_CONNECTION_ID, readDeviceEngine } from "./deviceEngine";
+import { deviceInferencePort } from "./deviceInferencePort";
 import { getActiveWorkspaceId } from "@/shared/api/client";
 import {
   stubInferencePort,
@@ -150,6 +152,33 @@ export const aiInferencePort: InferencePort = {
  * The port the app starts with: the AI service when a base URL is configured,
  * the offline stub otherwise.
  */
+function serviceConfigured(): boolean {
+  if (isAiConfigured()) return true;
+  try {
+    const env = (import.meta as { env?: { VITE_AI_URL?: string } }).env;
+    return Boolean(env?.VITE_AI_URL);
+  } catch {
+    return false;
+  }
+}
+
 export function selectInferencePort(): InferencePort {
-  return isAiConfigured() ? aiInferencePort : stubInferencePort;
+  if (!serviceConfigured()) return stubInferencePort;
+
+  const routesToDevice = (request: { connectionId?: string }) =>
+    request.connectionId === DEVICE_CONNECTION_ID && readDeviceEngine() !== null;
+
+  return {
+    complete: async (request) => {
+      if (routesToDevice(request)) return deviceInferencePort.complete(request);
+      return aiInferencePort.complete(request);
+    },
+    stream: async (request, onEvent, signal) => {
+      if (routesToDevice(request)) {
+        return deviceInferencePort.stream!(request, onEvent, signal);
+      }
+      return aiInferencePort.stream!(request, onEvent, signal);
+    },
+    attach: aiInferencePort.attach,
+  };
 }
