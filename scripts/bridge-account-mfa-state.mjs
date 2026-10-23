@@ -48,8 +48,14 @@ function keyState(env) {
 	return Buffer.from(String(text), 'base64').length === 32 ? 'set' : 'invalid';
 }
 
-/** Names only, never a value. */
-export const mfaBootLine = (config, env = process.env) => `[osionos-bridge] mfa_gate=${mfaGateEnabled(config) ? 'on' : 'off'} mfa_key=${keyState(env)} client_ip_header=${config?.clientIpHeader ? 'set' : 'unset'}`;
+function pepperState(env) {
+	const text = env?.OSIONOS_RECOVERY_PEPPER;
+	if (!text) return 'unset';
+	return Buffer.from(String(text), 'base64').length === 32 ? 'set' : 'invalid';
+}
+
+/** Names and states only, never a value. */
+export const mfaBootLine = (config, env = process.env) => `[osionos-bridge] mfa_gate=${mfaGateEnabled(config) ? 'on' : 'off'} mfa_key=${keyState(env)} recovery_pepper=${pepperState(env)} client_ip_header=${config?.clientIpHeader ? 'set' : 'unset'}`;
 
 const factorQuery = (userId, extra) => `${TOTP_TABLE}?${new URLSearchParams({ user_id: `eq.${userId.toLowerCase()}`, ...extra })}`;
 

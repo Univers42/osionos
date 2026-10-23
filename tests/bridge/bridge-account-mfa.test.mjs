@@ -208,6 +208,21 @@ describe('two-step verification: status and unenrol', () => {
 		assert.equal((await world.api('GET', '/api/account/sessions', done.body.accessToken)).status, 200);
 	});
 
+	it('deletes the codes before the factor, so a failure never leaves a factor without its codes', async (t) => {
+		const recovery = [{ user_id: USER_A, code_hmac: 'a'.repeat(64), used_at: null }];
+		const { world, secret } = await enrolledWorld(t, { recovery });
+		const { accessToken } = await world.signIn();
+		const stepped = await verify(world, accessToken, hotp(secret, stepAt(world.clock.at)));
+		await world.sudo(stepped.body.accessToken);
+		const serve = world.mfa.fetchImpl;
+		let deletes = 0;
+		world.mfa.fetchImpl = async (url, init = {}) => (init.method === 'DELETE' && (deletes += 1) === 2 ? new Response('{}', { status: 500 }) : serve(url, init));
+		const failed = await world.api('POST', '/api/account/2fa/disable', stepped.body.accessToken, { body: {} });
+		assert.notEqual(failed.status, 200);
+		assert.equal(world.mfa.rows(CODES_TABLE).length, 0);
+		assert.equal(world.mfa.rows(TOTP_TABLE).length, 1, 'the factor survives without codes, never the reverse');
+	});
+
 	it('needs a sudo window to unenrol', async (t) => {
 		const { world, secret } = await enrolledWorld(t);
 		const { accessToken } = await world.signIn();
