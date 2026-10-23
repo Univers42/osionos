@@ -35,9 +35,11 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { attributesOutsideMask, evaluatePat, maskAttributes } from './bridge-pat-permissions.mjs';
 import { findPatByHash, hashPatSecret, isPatSecret, PAT_PREFIX } from './bridge-pat-store.mjs';
+import { platformRoleReader } from './bridge-roles.mjs';
 import { signAppSessionToken } from './bridge-session-token.mjs';
 
 const PAT_TABLE = 'osionos_personal_access_tokens';
@@ -306,6 +308,14 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, rateL
 		if (!(Date.parse(row.expires_at) > now())) {
 			await refuse(ctx, 401, 'pat_invalid', 'expired');
 			return true;
+		}
+		// The owner's ban or live suspension refuses the token like it refuses a sign-in (the one
+		// moderation function every path asks); a failed moderation read lets it through, as there.
+		try {
+			await assertAccountNotRefused(platformRoleReader(pg), row.user_id, now());
+		} catch (error) {
+			if (error?.status !== 403) throw error;
+			return refuse(ctx, 403, error.code, 'account_refused');
 		}
 		const route = PAT_ROUTES.find((candidate) => candidate.method === request.method && candidate.path.test(url.pathname));
 		if (!route) return refuse(ctx, 403, 'pat_route_not_allowed', 'route_not_allowed');

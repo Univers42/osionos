@@ -62,10 +62,10 @@ const workspace = { id: HOME, owner_id: OWNER, created_at: '2026-10-01T00:00:00.
 /** The identity row of the owner; `is_admin` proves a PAT never inherits it. */
 const identity = (isAdmin) => ({ user_id: OWNER, is_admin: isAdmin });
 
-export async function startPatWorld(t, { tokens = [], fail = null, hasIdentity = true, ownerIsAdmin = false, now, rateLimit, pageFail } = {}) {
+export async function startPatWorld(t, { tokens = [], fail = null, hasIdentity = true, ownerIsAdmin = false, now, rateLimit, pageFail, reports = [] } = {}) {
 	const config = harnessConfig();
 	const patStore = createPatStore({ tokens, fail });
-	const pages = createPostgrestMock({ osionos_pages: [pageRow()], osionos_workspaces: hasIdentity ? [workspace] : [], osionos_bridge_identities: [identity(ownerIsAdmin)] }, pageFail ? { failWhen: pageFail } : {});
+	const pages = createPostgrestMock({ osionos_pages: [pageRow()], osionos_workspaces: hasIdentity ? [workspace] : [], osionos_bridge_identities: [identity(ownerIsAdmin)], osionos_user_reports: reports }, pageFail ? { failWhen: pageFail } : {});
 	const seen = [];
 	const fetchImpl = async (url, init = {}) => {
 		const table = new URL(String(url)).pathname.replace('/rest/v1/', '');
