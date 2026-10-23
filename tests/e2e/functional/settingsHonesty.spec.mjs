@@ -17,26 +17,29 @@
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
+import { enableAccountDelete } from "../support/accountDelete.mjs";
 import { closeSettings, openSettings, region, searchSettings } from "../support/settingsHelpers.mjs";
 
 test.describe("settings honesty (offline build)", () => {
   test("Profile → Delete account shows honest notice, keeps user signed in", async ({ page, baseURL }) => {
+    await enableAccountDelete(page);
     await openFreshPage(page, baseURL);
     await openSettings(page);
 
     // Navigate to Profile via search (the Profile nav button shows persona name)
     await searchSettings(page, "delete account");
 
-    // Should land on Profile at the Support anchor (where Delete my account is)
-    await expect(region(page).getByRole("heading", { name: "Support", exact: true })).toBeVisible();
-    await expect(region(page).locator('[data-settings-anchor="support"]')).toBeInViewport();
+    // Should land on Profile at the Danger zone anchor (where Delete my account is)
+    await expect(region(page).getByRole("heading", { name: "Danger zone", exact: true })).toBeVisible();
+    await expect(region(page).locator('[data-settings-anchor="danger"]')).toBeInViewport();
 
     // Open delete account modal
     await page.getByRole("button", { name: "Delete my account", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Delete account" })).toBeVisible();
 
     // Type confirmation
-    await page.getByRole("textbox", { name: "DELETE" }).fill("DELETE");
+    const typed = page.getByRole("dialog", { name: "Delete account" }).getByRole("textbox");
+    await typed.fill((await typed.getAttribute("placeholder")) ?? "");
     await page.getByRole("button", { name: "Schedule deletion" }).click();
 
     // Wait for the modal to close and any toast to appear

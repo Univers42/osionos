@@ -12,25 +12,27 @@
 
 import React, { useEffect, useState } from 'react';
 import { startRegistration } from '@simplewebauthn/browser';
-import { Copy, FileDown, KeyRound } from 'lucide-react';
+import { Copy, KeyRound } from 'lucide-react';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
-import { useAccountDevicesStore, useAccountEmailsStore, useAccountPasskeysStore, useAccountSettingsStore, recordSettingsAction } from '@/store/settings';
+import { useAccountDevicesStore, useAccountEmailsStore, useAccountPasskeysStore, useAccountProfileStore, useAccountSettingsStore } from '@/store/settings';
 import { defaultDevice } from '@/store/settings/defaults';
-import { Button, IconButton, Toggle, useToastStore } from '@/shared/ui';
-import { ConfirmModal, TypedConfirmModal } from '../ui/ConfirmModals';
+import { isAccountDeleteEnabled } from '@/shared/config/featureFlags';
+import { Button, IconButton, useToastStore } from '@/shared/ui';
+import { ConfirmModal } from '../ui/ConfirmModals';
+import { AccountDangerZone } from '../ui/danger/AccountDangerZone';
 import { DataTable, Section, SettingRow } from '../ui/settingsKit';
-import { accountActionNotice, noopHandledAction, runAccountAction, runAsync } from '../model/settingsCalls';
+import { runAsync } from '../model/settingsCalls';
 import { PublicProfileSection } from './PublicProfileSection';
-import { EmailManagerModal, PasskeyManagerModal, PasswordModal, SupportDurationModal, TwoFactorModal } from './ProfileSecurityModals';
+import { signInRows } from './signInMethods';
+import { EmailManagerModal, PasskeyManagerModal, PasswordModal, TwoFactorModal, UsernameModal } from './ProfileSecurityModals';
 
 type SettingsModalName =
   | 'email-manager'
   | 'password'
   | 'two-factor'
   | 'passkeys'
-  | 'support-duration'
-  | 'delete-account'
+  | 'username'
   | 'sign-out-all';
 
 interface ActiveSettingsModal {
@@ -69,6 +71,7 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   const account = useAccountSettingsStore((state) => state.data);
   const hydrateAccount = useAccountSettingsStore((state) => state.hydrate);
   const updateAccount = useAccountSettingsStore((state) => state.update);
+  const username = useAccountProfileStore((state) => state.profile?.username ?? null);
   const devices = useAccountDevicesStore((state) => state.data);
   const hydrateDevices = useAccountDevicesStore((state) => state.hydrate);
   const revokeDevice = useAccountDevicesStore((state) => state.revoke);
@@ -89,9 +92,12 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
     runAsync(hydrateEmails(userId, persona?.email));
   }, [hydrateAccount, hydrateDevices, hydrateEmails, hydratePasskeys, persona?.email, userId]);
 
-  const primaryEmail = emails.find((email) => email.isPrimary)?.email ?? persona?.email ?? 'dev.pro.photo@gmail.com';
+  const primaryEmail = emails.find((email) => email.isPrimary)?.email ?? persona?.email;
   const security = account?.security ?? {};
   const activePasskeys = passkeys.filter((passkey) => !passkey.removedAt);
+  const rows = signInRows(security);
+  const passwordRow = rows.find((row) => row.id === 'password');
+  const passkeysReported = rows.some((row) => row.id === 'passkeys');
   // Only the rows the server sent. With none (offline, or a server without the
   // route) this browser is the one device that certainly exists.
   const serverDevices = devices.filter((device) => !device.revokedAt);
@@ -108,24 +114,13 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
 
   async function handleRegisterPasskey(nickname = 'osionos passkey') {
     const options = await registerPasskeyOptions(nickname);
-    const response = options
-      ? await startRegistration({ optionsJSON: options as unknown as Parameters<typeof startRegistration>[0]['optionsJSON'] })
-      : { id: `local-${Date.now()}`, response: { transports: ['internal'] } };
-    await verifyPasskeyRegistration(response, nickname);
-    toast({ kind: 'success', title: 'Passkey added' });
-  }
-
-  async function handleDeleteAccount() {
-    const outcome = await runAccountAction('/api/account/request-deletion', {});
-    if (!outcome.ok) {
-      const notice = accountActionNotice(outcome, 'Account deletion');
-      if (notice) toast(notice);
+    if (!options) {
+      toast({ kind: 'info', title: "Passkeys aren't available on this server yet" });
       return;
     }
-    recordSettingsAction('account_request_deletion', { userId });
-    await logoutUser(userId);
-    toast({ kind: 'success', title: 'Account scheduled for deletion in 14 days. Cancel anytime in Settings.' });
-    globalThis.location.assign('/');
+    const response = await startRegistration({ optionsJSON: options as unknown as Parameters<typeof startRegistration>[0]['optionsJSON'] });
+    await verifyPasskeyRegistration(response, nickname);
+    toast({ kind: 'success', title: 'Passkey added' });
   }
 
   return (
@@ -133,18 +128,17 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
       <PublicProfileSection />
       <Section title="Account security">
         <SettingRow title="Email" description={primaryEmail} action={<Button onClick={() => setModal({ name: 'email-manager' })}>Manage emails</Button>} />
-        <SettingRow title="Password" description={security.hasPassword ? 'Password sign-in is available for this account.' : 'Add a password to keep another sign-in option available.'} action={<Button onClick={() => setModal({ name: 'password' })}>{security.hasPassword ? 'Update password' : 'Add password'}</Button>} />
+        {username && <SettingRow title="Username" description={`@${username}`} action={<Button onClick={() => setModal({ name: 'username' })}>Change</Button>} />}
+        {passwordRow && <SettingRow title="Password" description={security.hasPassword ? 'Password sign-in is available for this account.' : 'Add a password to keep another sign-in option available.'} action={<Button onClick={() => setModal({ name: 'password' })}>{passwordRow.label}</Button>} />}
         <SettingRow title="Two-step verification" description="Add another layer of security to your account" action={<Button onClick={() => setModal({ name: 'two-factor' })}>{security.twoStepEnabled ? 'Manage' : 'Add verification method'}</Button>} />
-        <SettingRow title="Passkeys" description={`${activePasskeys.length} passkey${activePasskeys.length === 1 ? '' : 's'} configured`} action={<Button onClick={() => setModal({ name: 'passkeys' })}><KeyRound size={14} /> Add passkey</Button>} />
+        {passkeysReported
+          ? <SettingRow title="Passkeys" description={`${activePasskeys.length} passkey${activePasskeys.length === 1 ? '' : 's'} configured`} action={<Button onClick={() => setModal({ name: 'passkeys' })}><KeyRound size={14} /> Add passkey</Button>} />
+          : <SettingRow title="Passkeys" description="Passkeys aren't available on this server yet." />}
       </Section>
-      <Section title="Support">
-        <SettingRow title="Support access" description="Grant support temporary access to troubleshoot problems. You can revoke access anytime." action={<Toggle checked={Boolean(account?.supportAccessGrantedUntil)} onChange={(checked) => { if (checked) setModal({ name: 'support-duration' }); else updateAccount({ supportAccessGrantedUntil: null }); }} label="Support access" />} />
-        <SettingRow danger title="Delete my account" description="Permanently delete your account and remove access to your pages and workspaces." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-account' })}>Delete my account</Button>} />
-      </Section>
+      {isAccountDeleteEnabled() && <AccountDangerZone username={username} email={primaryEmail} />}
       <Section title="Devices">
         <SettingRow danger title="Log out of all devices" description="Sign out of every session on all your devices, including this one." action={<Button tone="danger" onClick={() => setModal({ name: 'sign-out-all' })}>Log out of all devices</Button>} />
         <DataTable headers={['Device Name', 'Last Active', 'Location', '']} rows={deviceRows} />
-        <Button tone="ghost" className="mt-2" onClick={() => noopHandledAction('settings_button_click', { label: 'Load more devices' })}><FileDown size={14} /> Load more devices</Button>
       </Section>
       <Section title="User ID">
         <SettingRow
@@ -155,11 +149,10 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
       </Section>
 
       {modal?.name === 'email-manager' && <EmailManagerModal userId={userId} fallbackEmail={persona?.email} onClose={() => setModal(null)} />}
-      {modal?.name === 'password' && <PasswordModal hasPassword={Boolean(security.hasPassword)} onSaved={() => updateAccount({ security: { ...security, hasPassword: true } })} onClose={() => setModal(null)} />}
+      {modal?.name === 'password' && <PasswordModal hasPassword={security.hasPassword === true} onSaved={() => updateAccount({ security: { ...security, hasPassword: true } })} onClose={() => setModal(null)} />}
       {modal?.name === 'two-factor' && <TwoFactorModal enabled={Boolean(security.twoStepEnabled)} onEnabled={(enabled) => updateAccount({ security: { ...security, twoStepEnabled: enabled } })} onClose={() => setModal(null)} />}
       {modal?.name === 'passkeys' && <PasskeyManagerModal passkeys={activePasskeys} onAdd={() => runAsync(handleRegisterPasskey())} onRename={renamePasskey} onRemove={(id) => runAsync(removePasskey(id))} onClose={() => setModal(null)} />}
-      {modal?.name === 'support-duration' && <SupportDurationModal onSelect={(days) => { updateAccount({ supportAccessGrantedUntil: new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString() }); setModal(null); }} onClose={() => setModal(null)} />}
-      {modal?.name === 'delete-account' && <TypedConfirmModal title="Delete account" message="Type DELETE to schedule this account for deletion. The account is removed 14 days later." confirmText="DELETE" danger actionLabel="Schedule deletion" onConfirm={() => { setModal(null); runAsync(handleDeleteAccount()); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'username' && username && <UsernameModal current={username} onClose={() => setModal(null)} />}
       {modal?.name === 'sign-out-all' && <ConfirmModal title="Log out all devices" message="This signs you out on every device, including this one." danger actionLabel="Log out of all devices" onConfirm={() => { setModal(null); runAsync(logoutUser(userId)); }} onClose={() => setModal(null)} />}
     </>
   );
