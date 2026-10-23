@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { after, afterEach, before, beforeEach, describe, it } from 'node:test';
-import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import { createSentimentHandler } from '../src/sentiment/handler.ts';
 import type { Job } from '../src/jobs/queue.ts';
 import { AUTHOR, WS_PRIVATE, installHooks, mock, pool, ready, sentimentReady, sha, signal } from './moderationHarness.ts';
+import { serveAi, tokenFor } from './serveAi.ts';
 
 /**
  * The object-database row projection (M6p-1): the trigger that rebuilds it from
@@ -20,27 +20,7 @@ const objectTables = await pool.query(
 const rowsReady = Boolean(objectTables.rows[0]?.databases) && Boolean(objectTables.rows[0]?.rows);
 const canRun = ready && sentimentReady && rowsReady;
 
-const APP_SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
-const tokenFor = (userId: string): string =>
-	signAppSessionToken({
-		payload: { subject: userId, provider: 'test' },
-		workspace: { _id: randomUUID() },
-		config: { appSessionSecret: APP_SECRET, sessionTtlSeconds: 3600 },
-	}).token;
-
-process.env.OSIONOS_AI_PLATFORM_MODELS ??= JSON.stringify([
-	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true },
-]);
-const { createAiServer } = await import('../src/server.ts');
-const app = createAiServer();
-await new Promise<void>((resolve) => {
-	app.server.listen(0, '127.0.0.1', () => resolve());
-});
-const address = app.server.address();
-const base = `http://127.0.0.1:${address && typeof address === 'object' ? address.port : 0}`;
-after(async () => {
-	await app.close();
-});
+const base = await serveAi();
 
 const DB_KEY = 'db-rows-test';
 const TITLE_ID = 'prop-title';
