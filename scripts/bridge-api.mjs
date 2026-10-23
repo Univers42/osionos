@@ -40,6 +40,7 @@ import { handoffLookupKey, openHandoffRecord, sealHandoffRecord } from './bridge
 import { createKv } from './bridge-kv.mjs';
 import { createPg } from './bridge-pg.mjs';
 import { createPatGate, patWritePayload } from './bridge-pat-middleware.mjs';
+import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
 import { claimPlatformRole, platformRoleReader, readPlatformRole } from './bridge-roles.mjs';
 import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 // Re-exported so every existing caller (bridge-chat, bridge-rtc, db-isolation-suite, the tests)
@@ -1726,6 +1727,7 @@ export async function readRefreshClaims(identity, { config, pg, fetchImpl }) {
 
 /** Today's order: persist, admin flag, admin membership, member workspaces. Env admins keep it. */
 async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
+	await assertAccountNotRefused(roleReader, payload.subject);
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
 	if (isAdmin) await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
@@ -1749,12 +1751,15 @@ async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
  * corrects it. Nothing here can widen a claim.
  */
 async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
-	const [persistence, adminRead, memberRead, roleRead] = await Promise.allSettled([
+	const [persistence, adminRead, memberRead, roleRead, refusal] = await Promise.allSettled([
 		persistIdentityForHandoff(payload, config, fetchImpl),
 		resolveAdminFlag(payload, config, fetchImpl),
 		memberWorkspaceEntries(payload.subject, [], config, fetchImpl),
 		readPlatformRole(roleReader, payload.subject),
+		assertAccountNotRefused(roleReader, payload.subject),
 	]);
+	// Refusal first: a banned person is told so rather than that persistence failed.
+	if (refusal.status === 'rejected') throw refusal.reason;
 	if (persistence.status === 'rejected') throw persistence.reason;
 	const persisted = persistence.value;
 	const isAdmin = adminRead.status === 'fulfilled' && adminRead.value === true;
@@ -4563,6 +4568,7 @@ async function handleBridgeConsume(request, response, config, kv, pg) {
 	const token = safeText(payload.token, 512);
 	if (!token) throw Object.assign(new Error('Bridge handoff token is required.'), { status: 422 });
 	const consumed = await consumeHandoffToken(token, kv, sessionClock(config), config.appSessionSecret);
+	await assertAccountNotRefused(platformRoleReader(pg), consumed.session.userId, sessionClock(config));
 	// The row is written here, where the client metadata is the user's: the mint is a
 	// server-to-server call from the gateway.
 	const delivered = await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod: 'handoff', persona: consumed.persona });
@@ -4614,6 +4620,7 @@ async function establishAppSession({ request, config, kv, pg, fetchImpl, gateway
 	if (expectedUserId && consumed.session.userId !== expectedUserId) {
 		throw Object.assign(new Error('The sign-in could not be verified; sign in again.'), { status: 401, code: 'invalid_provider_token' });
 	}
+	await assertAccountNotRefused(platformRoleReader(pg), consumed.session.userId, sessionClock(config));
 	const delivered = await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod, persona: consumed.persona });
 	return deliveredAnswer(consumed, delivered);
 }
