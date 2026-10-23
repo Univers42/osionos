@@ -29,7 +29,7 @@ export function defaultAccountSettings(userId: string, name?: string): AccountSe
   return {
     userId,
     profile: { preferredName: name },
-    security: { hasPassword: true, twoStepEnabled: false, passkeysEnabled: false },
+    security: { hasPassword: false, twoStepEnabled: false, passkeysEnabled: false },
     supportAccessGrantedUntil: null,
     pendingDeletionAt: null,
     removedAt: null,
@@ -75,7 +75,8 @@ export function defaultPreferences(userId: string): UserPreferences {
     language: 'en-US',
     weekStart: 'monday',
     dateFormat: 'relative',
-    timezone: 'Europe/Madrid',
+    // Caveat: the device zone, not the user's chosen one; wrong on a shared or travelling device.
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     autoTimezone: false,
     numberFormat: 'default',
     enterAddsNewline: false,
