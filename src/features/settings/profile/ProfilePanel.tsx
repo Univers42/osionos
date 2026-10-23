@@ -25,6 +25,7 @@ import { SessionsSettings } from './SessionsSettings';
 import { PublicProfileSection } from './PublicProfileSection';
 import { signInRows } from './signInMethods';
 import { EmailManagerModal, PasskeyManagerModal, PasswordModal, UsernameModal } from './ProfileSecurityModals';
+import { LinkedIdentitiesRow } from './LinkedIdentitiesRow';
 import { TwoFactorModal } from './TwoFactorModal';
 import { useTwoStepStatus } from './twoStepClient';
 
@@ -82,6 +83,7 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
         {passkeysReported
           ? <SettingRow title="Passkeys" description={`${activePasskeys.length} passkey${activePasskeys.length === 1 ? '' : 's'} configured`} action={<Button onClick={() => setModal({ name: 'passkeys' })}><KeyRound size={14} /> Manage passkeys</Button>} />
           : <SettingRow title="Passkeys" description="Passkeys aren't available on this server yet." />}
+        <LinkedIdentitiesRow />
       </Section>
       {isAccountDeleteEnabled() && <AccountDangerZone username={username} email={primaryEmail} />}
       <SessionsSettings userId={userId} onSignOutAll={() => setModal({ name: 'sign-out-all' })} />
