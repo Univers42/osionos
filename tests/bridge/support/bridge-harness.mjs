@@ -174,6 +174,25 @@ function workspaceMemberRpc(body, table) {
 		}));
 }
 
+/**
+ * public.osionos_workspace_transfer_ownership: validated first, then the owner_id and both
+ * member rows move in one synchronous step, so a reader never sees two owners or none.
+ * Returns false (nothing written) when the preconditions fail, like the SQL function.
+ */
+function transferOwnershipRpc(body, { table }) {
+	const members = table('osionos_workspace_members');
+	const inWorkspace = (userId) => members.find((row) => sameText(row.workspace_id, body.p_workspace) && sameText(row.user_id, userId));
+	const workspace = table('osionos_workspaces').find((row) => sameText(row.id, body.p_workspace));
+	const target = inWorkspace(body.p_to);
+	if (!workspace || !sameText(workspace.owner_id, body.p_from) || !target) return false;
+	const previous = inWorkspace(body.p_from);
+	if (previous) previous.role = 'admin';
+	else members.push({ workspace_id: body.p_workspace, user_id: body.p_from, role: 'admin', permissions: ALL_PERMISSIONS });
+	Object.assign(target, { role: 'owner', permissions: ALL_PERMISSIONS });
+	workspace.owner_id = body.p_to;
+	return true;
+}
+
 /** seed: { table: rows[] }, records: { 'dbId/table': rows[] }, failWhen(call) → { status, body } | null. */
 export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null, realWorkspaceRpc = false, rpc = {} } = {}) {
 	const tables = new Map(Object.entries(seed).map(([name, rows]) => [name, rows.map((row) => structuredClone(row))]));
@@ -226,7 +245,7 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		// table(version bigint, content jsonb)); an unregistered one keeps the row path.
 		// The two edge reads are always registered: a test that seeds no link must
 		// still get an empty answer, not a table named after the RPC.
-		const rpcs = { ...EDGE_RPCS, ...rpc };
+		const rpcs = { osionos_workspace_transfer_ownership: transferOwnershipRpc, ...EDGE_RPCS, ...rpc };
 		if (method === 'POST' && Object.hasOwn(rpcs, name.slice(4))) {
 			return jsonResponse(rpcs[name.slice(4)](body, { table }), 200);
 		}
