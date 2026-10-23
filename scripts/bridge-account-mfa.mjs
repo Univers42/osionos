@@ -35,10 +35,11 @@ import { accountError, callerSession, clientMetaOf, readBody, respondWithError }
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { sendJson } from './bridge-social-core.mjs';
 import { CODES_TABLE, TOTP_TABLE, assertNotBlocked, clearFailures, countAttempt, issueAal2, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
+import { recoveryRemaining } from './bridge-account-mfa-recovery.mjs';
 import { matchStep, newSecret, openSecret, otpauthUrl, sealSecret } from './bridge-account-mfa-totp.mjs';
 
 const ISSUER = 'osionos';
-const VERIFY_LIMIT = { limit: 30, windowMs: 60_000 };
+export const VERIFY_LIMIT = { limit: 30, windowMs: 60_000 };
 
 const rowFilter = (userId, extra = {}) => `${new URLSearchParams({ user_id: `eq.${userId}`, ...extra })}`;
 
@@ -77,7 +78,8 @@ function upgraded(ctx, session, atMs, response) {
 async function status(ctx, request, response) {
 	const session = callerSession(request, ctx.config, verifyStepUp);
 	const row = await readFactor(ctx.pg, session.userId);
-	return sendJson(response, 200, { enabled: row?.status === 'verified', methods: ['totp'], aal: session.aal }, ctx.config);
+	const remaining = await recoveryRemaining(ctx.pg, session.userId);
+	return sendJson(response, 200, { enabled: row?.status === 'verified', methods: ['totp'], recoveryRemaining: remaining, aal: session.aal }, ctx.config);
 }
 
 async function enroll(ctx, request, response) {

@@ -100,6 +100,22 @@ describe('recovery codes: generate', () => {
 		assert.equal(world.mfa.rows(CODES_TABLE).length, 10);
 	});
 
+	it('inserts the whole set in one bulk POST', async (t) => {
+		const { world, aal2 } = await steppedUp(t);
+		await generate(world, aal2);
+		const posts = world.mfa.calls.filter((call) => call.table === CODES_TABLE && call.method === 'POST');
+		assert.equal(posts.length, 1);
+		assert.equal(posts[0].body.length, 10);
+	});
+
+	it('writes no row when the bulk insert fails', async (t) => {
+		const { world, aal2 } = await steppedUp(t);
+		const serve = world.mfa.fetchImpl;
+		world.mfa.fetchImpl = async (url, init = {}) => (init.method === 'POST' && String(url).includes(CODES_TABLE) ? new Response('{}', { status: 500 }) : serve(url, init));
+		assert.equal((await generate(world, aal2)).status, 503);
+		assert.equal(world.mfa.rows(CODES_TABLE).length, 0);
+	});
+
 	it('needs a verified factor', async (t) => {
 		const world = await startMfaWorld(t, { env: ENV });
 		const { accessToken } = await world.signIn();
@@ -246,6 +262,26 @@ describe('recovery codes: verify', () => {
 		const { accessToken } = await world.signIn();
 		const answer = await recover(world, accessToken, 'abcd-efgh');
 		assert.deepEqual([answer.status, answer.body.code], [503, 'mfa_unavailable']);
+	});
+});
+
+describe('recovery codes: status', () => {
+	const remainingOf = async (world, token) => (await world.api('GET', '/api/account/2fa/status', token)).body.recoveryRemaining;
+
+	it('reports the unused codes of the newest set: 0, 10, then 9, then 10 after a regenerate', async (t) => {
+		const { world, aal2, codes } = await withCodes(t);
+		assert.equal(await remainingOf(world, aal2), 10);
+		const { accessToken } = await world.signIn();
+		await recover(world, accessToken, codes[0]);
+		assert.equal(await remainingOf(world, aal2), 9);
+		await world.sudo(aal2);
+		await world.api('POST', REGENERATE, aal2, { body: {} });
+		assert.equal(await remainingOf(world, aal2), 10);
+	});
+
+	it('reports 0, never absent, when there are no codes', async (t) => {
+		const { world, aal2 } = await steppedUp(t);
+		assert.equal(await remainingOf(world, aal2), 0);
 	});
 });
 
