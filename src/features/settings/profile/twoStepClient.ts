@@ -15,14 +15,14 @@
  * `enabled` is whatever GET /api/account/2fa/status says, and the preferred method only
  * orders the options the modal shows; the server never reads it.
  *
- * Caveat: a new token (after verify or disable) is adopted in memory only. The server's
- * session cutoff kills every older token, so a reload before the next refresh falls back to
- * the persisted one and the user signs in again; persisting needs a hook in the user store.
+ * Caveat: the new token (after verify or disable) carries no refresh token, and the cut-off
+ * also refuses the refresh family issued before it (bridge-sessions.mjs assertSessionNotCutOff
+ * on fam_iat_ms), so this device signs in again when that access token expires.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { useUserStore } from '@/features/auth';
+import { adoptStepUpToken } from '@/features/auth';
 import { trySettingsGet, errorMessage } from '@/store/settings/settingsStoreUtils';
 import { runAccountAction } from '../model/settingsCalls';
 
@@ -59,11 +59,7 @@ export function useTwoStepStatus(): { state: TwoStepState; refresh: () => Promis
 
 /** Uses the token a verify or disable returned, because the server just retired the old one. */
 export function adoptSessionToken(userId: string, accessToken: string | undefined): void {
-  if (!accessToken) return;
-  useUserStore.setState((current) => {
-    const session = current.sessions[userId];
-    return session ? { sessions: { ...current.sessions, [userId]: { ...session, accessToken } } } : current;
-  });
+  if (accessToken) adoptStepUpToken(userId, accessToken);
 }
 
 export const startEnrolment = () => runAccountAction<{ otpauthUrl?: string }>('/api/account/2fa/enroll', {});
