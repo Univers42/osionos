@@ -16,23 +16,11 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { registerHooks } from "node:module";
 
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-const CLIENT = new URL("../../src/shared/api/client.ts", import.meta.url).href;
-
-registerHooks({
-  load(url, context, nextLoad) {
-    const result = nextLoad(url, context);
-    if (url === CLIENT && typeof result === "object" && result && "source" in result) {
-      const source = typeof result.source === "string" ? result.source : new TextDecoder().decode(result.source);
-      return { ...result, source: `import.meta.env ??= { VITE_API_URL: "https://bridge.test" };\n${source}` };
-    }
-    return result;
-  },
-});
+import { withBridge, type Call, type Reply } from "./support/stub-bridge.ts";
 
 const { useAdminUsersStore } = await import("../../src/features/admin-users/useAdminUsersStore.ts");
 const { adminUsersErrorCopy } = await import("../../src/features/admin-users/adminUsersCopy.ts");
@@ -45,23 +33,6 @@ const row = (userId: string, displayName: string) => ({
   userId, displayName, username: displayName.toLowerCase(), directoryOptOut: false,
   createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-02T00:00:00Z", email: `${displayName}@leak.test`,
 });
-
-type Call = { url: string; method: string; body: Record<string, unknown> | null };
-type Reply = { status?: number; body: unknown };
-
-/** Runs `run` with a fetch that answers from `reply` and records every call. */
-async function withBridge(reply: (call: Call) => Reply, run: () => Promise<void>): Promise<Call[]> {
-  const original = globalThis.fetch;
-  const calls: Call[] = [];
-  globalThis.fetch = (async (input: string, init?: RequestInit) => {
-    const call = { url: String(input), method: init?.method ?? "GET", body: typeof init?.body === "string" ? JSON.parse(init.body) : null };
-    calls.push(call);
-    const { status = 200, body } = reply(call);
-    return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
-  }) as typeof fetch;
-  try { await run(); } finally { globalThis.fetch = original; }
-  return calls;
-}
 
 function resetStore() {
   useAdminUsersStore.setState({ users: [], roles: {}, nextCursor: null, loading: false, loaded: false, error: null, rowErrors: {}, busyUserId: null });
