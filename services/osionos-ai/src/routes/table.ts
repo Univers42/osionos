@@ -18,7 +18,7 @@ import {
 } from './connections.ts';
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
-import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
+import { handleApprovalDecision, handleApprovalGet, handleApprovalResume } from './approvals.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
 import type { RouteEntry } from './types.ts';
 
@@ -118,6 +118,12 @@ export const ROUTES: RouteEntry[] = [
 		pattern: /^\/api\/ai\/approvals\/([^/]+)$/,
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalDecision,
+	},
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/approvals\/([^/]+)\/resume$/,
+		label: '/api/ai/approvals/:id/resume',
+		handle: handleApprovalResume,
 	},
 	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
 	...(config.patEnabled
