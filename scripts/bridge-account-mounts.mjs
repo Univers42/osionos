@@ -37,6 +37,7 @@ import { createSelfDataRoutes } from './bridge-self-data.mjs';
 import { createSelfViewsRoutes } from './bridge-self-views.mjs';
 import { createWorkspaceSettingsRoutes } from './bridge-workspace-settings.mjs';
 import { createWorkspaceLifecycleRoutes } from './bridge-workspace-lifecycle.mjs';
+import { createWorkspaceTeamsRoutes } from './bridge-workspace-teams.mjs';
 import { createAdminUsersRoutes } from './bridge-account-users.mjs';
 import { createAdminAuditRoutes } from './bridge-account-audit.mjs';
 import { createAdminModerationRoutes } from './bridge-account-moderation.mjs';
@@ -62,6 +63,7 @@ export function createAccountHandler(deps) {
 		createSelfViewsRoutes(deps),
 		createWorkspaceSettingsRoutes(deps),
 		createWorkspaceLifecycleRoutes(deps),
+		createWorkspaceTeamsRoutes(deps),
 		createPatRoutes(deps),
 		createAccountKeysRoutes(deps),
 		createAdminUsersRoutes(deps),
