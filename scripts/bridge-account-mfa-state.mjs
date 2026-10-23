@@ -18,7 +18,8 @@
  * "no factor". A missing relation reads as a failure on purpose: a deploy that forgot the
  * migration must not silently turn the second factor off for everyone.
  * Caveat: the lockout is keyed on (user, client address). Callers behind one NAT share a
- * counter, and an attacker rotating addresses is slowed only by the per-address limit and the
+ * counter, a client that retries through a block extends it (each refused attempt counts, up to
+ * the 15 min cap and the one-hour window), and an attacker rotating addresses is slowed only by the per-address limit and the
  * per-user audit signal; no account is ever locked, so the owner can always sign in.
  */
 
@@ -35,10 +36,20 @@ const SUSPECT_AFTER = 50;
 
 const unavailable = (cause) => Object.assign(new Error('Two-step verification is unavailable; try again shortly.'), { status: 503, code: 'mfa_unavailable', cause });
 
-/** Caveat: without service-role access the bridge cannot ask, so the gate is off and every token is aal 2. */
-export const mfaGateEnabled = (config) => Boolean(config?.baasUrl && config?.serviceKey);
+/**
+ * The gate is off only when the bridge has no BaaS to ask. With a BaaS URL but no service key
+ * the lookup cannot run, and that is a 503 at sign-in, never a silent aal 2.
+ */
+export const mfaGateEnabled = (config) => Boolean(config?.baasUrl);
 
-export const mfaBootLine = (config) => `[osionos-bridge] mfa_gate=${mfaGateEnabled(config) ? 'on' : 'off'}`;
+function keyState(env) {
+	const text = env?.OSIONOS_MFA_SECRET_KEY;
+	if (!text) return 'unset';
+	return Buffer.from(String(text), 'base64').length === 32 ? 'set' : 'invalid';
+}
+
+/** Names only, never a value. */
+export const mfaBootLine = (config, env = process.env) => `[osionos-bridge] mfa_gate=${mfaGateEnabled(config) ? 'on' : 'off'} mfa_key=${keyState(env)} client_ip_header=${config?.clientIpHeader ? 'set' : 'unset'}`;
 
 const factorQuery = (userId, extra) => `${TOTP_TABLE}?${new URLSearchParams({ user_id: `eq.${userId.toLowerCase()}`, ...extra })}`;
 
@@ -56,7 +67,7 @@ async function readRows(pg, path) {
 /** True when the user has a verified factor. A pending enrolment does not gate sign-in. */
 export async function mfaRequiredFor({ pg, config }, userId) {
 	if (!mfaGateEnabled(config)) return false;
-	if (typeof pg?.asService !== 'function') throw unavailable();
+	if (!config.serviceKey || typeof pg?.asService !== 'function') throw unavailable();
 	return (await readRows(pg, factorQuery(userId, { status: 'eq.verified', select: 'user_id', limit: '1' }))).length > 0;
 }
 
@@ -91,11 +102,8 @@ export function issueAal2(session, config, { nowMs }) {
 	});
 }
 
-function lockoutKey(userId, meta) {
-	const address = meta?.ipHash ?? meta?.ipPrefix;
-	if (!address) throw unavailable();
-	return `${userId}:${address}`;
-}
+// Without a client address header every caller is "no address": the bucket is still this user's own, never shared.
+const lockoutKey = (userId, meta) => `${userId}:${meta?.ipHash ?? meta?.ipPrefix ?? 'no-address'}`;
 
 /** Throws 429 with the time left while this (user, address) is blocked. */
 export async function assertNotBlocked(kv, userId, meta, nowMs) {
@@ -106,14 +114,22 @@ export async function assertNotBlocked(kv, userId, meta, nowMs) {
 	}
 }
 
-/** Counts a wrong code: the per-address block, and the per-user signal that never blocks. */
-export async function recordFailure({ kv, pg, session, meta, nowMs }) {
+/**
+ * Counts an attempt BEFORE its code is compared, so a parallel burst cannot out-run the block:
+ * the fifth attempt is the last one to reach the compare until the block expires. Throws 429
+ * for any attempt past it. A success clears the count.
+ */
+export async function countAttempt({ kv, session, meta, nowMs }) {
 	const key = lockoutKey(session.userId, meta);
-	const failures = await kv.incrWithTtl(`mfa-fail:${key}`, FAIL_WINDOW_MS);
-	if (failures >= BLOCK_AFTER) {
-		const blockMs = Math.min(BLOCK_BASE_MS * 2 ** (failures - BLOCK_AFTER), BLOCK_CAP_MS);
-		await kv.setNx(`mfa-block:${key}`, String(nowMs + blockMs), blockMs);
-	}
+	const attempts = await kv.incrWithTtl(`mfa-fail:${key}`, FAIL_WINDOW_MS);
+	if (attempts < BLOCK_AFTER) return;
+	const blockMs = Math.min(BLOCK_BASE_MS * 2 ** (attempts - BLOCK_AFTER), BLOCK_CAP_MS);
+	await kv.setNx(`mfa-block:${key}`, String(nowMs + blockMs), blockMs);
+	if (attempts > BLOCK_AFTER) throw Object.assign(new Error('Too many wrong codes; try again later.'), { status: 429, code: 'mfa_locked', retryAfterSeconds: Math.ceil(blockMs / 1000) });
+}
+
+/** The per-user signal that never blocks: one audit row at fifty wrong codes an hour. */
+export async function recordFailure({ kv, pg, session, meta }) {
 	const spread = await kv.incrWithTtl(`mfa-fail-user:${session.userId}`, FAIL_WINDOW_MS);
 	if (spread === SUSPECT_AFTER) {
 		try {

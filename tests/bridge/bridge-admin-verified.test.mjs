@@ -37,6 +37,7 @@ function config(extra = {}) {
 		OSIONOS_BRIDGE_SHARED_SECRET: secret,
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
 		OSIONOS_BRIDGE_PERSISTENCE: 'memory',
+		OSIONOS_BAAS_URL: '',
 		OSIONOS_ADMIN_EMAILS: ADMIN_EMAIL,
 		...extra,
 	});

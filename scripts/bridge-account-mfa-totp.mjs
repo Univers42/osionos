@@ -131,7 +131,12 @@ export function openSecret(sealed, userId, env = process.env) {
 	const raw = Buffer.from(sealed.slice(VERSION.length), 'base64');
 	if (raw.length <= IV_BYTES + TAG_BYTES) throw unavailable();
 	const keys = [keyFrom(env.OSIONOS_MFA_SECRET_KEY)];
-	if (env.OSIONOS_MFA_SECRET_KEY_PREVIOUS) keys.push(keyFrom(env.OSIONOS_MFA_SECRET_KEY_PREVIOUS));
+	// A malformed previous key only loses the rows sealed under it; it must not lock out the current ones.
+	if (env.OSIONOS_MFA_SECRET_KEY_PREVIOUS) {
+		try {
+			keys.push(keyFrom(env.OSIONOS_MFA_SECRET_KEY_PREVIOUS));
+		} catch { /* ignored on purpose, see above */ }
+	}
 	for (const key of keys) {
 		try {
 			return openWith(key, raw, userId);

@@ -20,7 +20,13 @@
  * caller gets back a fresh aal2 token for its own session.
  * Caveat: the cut-off also ends the refresh family of the session that enrolled, so that
  * browser signs in again at its next refresh (and is born aal1). A cut-off written before a
- * failed row flip leaves the user signed out everywhere with the factor still pending.
+ * failed row flip, or a failed revoke of the personal access tokens, leaves the user signed out
+ * everywhere with the factor still pending.
+ * Caveat: the cut-off reaches this instance at once but other instances only through their
+ * poller (every 10 s), so a token minted before the change still verifies there for up to that
+ * long, the same window as a sign-out.
+ * Caveat: a code of the next step is accepted and burns the replay counter, so
+ * a +1-step code refuses the current-step code for up to 30 s.
  */
 
 import { writeSessionCutoff } from './bridge-session-cutoff.mjs';
@@ -28,7 +34,7 @@ import { revokeAllPats } from './bridge-pat-store.mjs';
 import { accountError, callerSession, clientMetaOf, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { sendJson } from './bridge-social-core.mjs';
-import { CODES_TABLE, TOTP_TABLE, assertNotBlocked, clearFailures, issueAal2, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
+import { CODES_TABLE, TOTP_TABLE, assertNotBlocked, clearFailures, countAttempt, issueAal2, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
 import { matchStep, newSecret, openSecret, otpauthUrl, sealSecret } from './bridge-account-mfa-totp.mjs';
 
 const ISSUER = 'osionos';
@@ -83,9 +89,11 @@ async function enroll(ctx, request, response) {
 	if (existing?.status === 'verified') throw accountError(409, 'already_enrolled', 'Two-step verification is already on; turn it off first.');
 	await writeAudit(ctx.pg, { session, meta: clientMetaOf(request, ctx.config), eventType: 'account.2fa.enrol', details: { method: 'totp' } });
 	const fresh = { secret_enc: sealed, last_step: 0, created_at: new Date(ctx.clock()).toISOString() };
-	await guardedWrite(() => (existing
-		? ctx.pg.asService().patch(`${TOTP_TABLE}?${rowFilter(session.userId, { status: 'eq.pending' })}`, fresh, { prefer: 'return=minimal' })
+	const written = await guardedWrite(() => (existing
+		? ctx.pg.asService().patch(`${TOTP_TABLE}?${rowFilter(session.userId, { status: 'eq.pending' })}`, fresh, { prefer: 'return=representation' })
 		: ctx.pg.asService().post(TOTP_TABLE, { user_id: session.userId, status: 'pending', ...fresh }, { prefer: 'return=minimal' })));
+	// A verify that flipped the row meanwhile leaves nothing to replace: never hand out a secret that was not stored.
+	if (existing && (!Array.isArray(written) || written.length === 0)) throw accountError(409, 'enrolment_changed', 'The enrolment changed while you were setting it up; start again.');
 	return sendJson(response, 200, { otpauthUrl: otpauthUrl({ secret, account: session.userId, issuer: ISSUER }) }, ctx.config);
 }
 
@@ -94,14 +102,14 @@ async function confirm(ctx, request, session, step, meta) {
 	const atMs = ctx.clock();
 	await writeAudit(ctx.pg, { session, meta, eventType: 'account.2fa.confirm', details: { method: 'totp' } });
 	await cutAllSessions(ctx, session.userId, atMs);
+	// Before the flip: a personal access token minted before the factor existed must not outlive the change, and a failure here leaves the factor pending.
+	await guardedWrite(() => revokeAllPats({ pg: ctx.pg, userId: session.userId, now: new Date(atMs).toISOString() }));
 	const flipped = await guardedWrite(() => ctx.pg.asService().patch(
 		`${TOTP_TABLE}?${rowFilter(session.userId, { status: 'eq.pending' })}`,
 		{ status: 'verified', verified_at: new Date(atMs).toISOString(), last_step: step },
 		{ prefer: 'return=representation' },
 	));
 	if (!Array.isArray(flipped) || flipped.length === 0) throw accountError(409, 'enrolment_changed', 'The enrolment changed while you were verifying; start again.');
-	// A personal access token minted before the factor existed must not outlive the change.
-	await revokeAllPats({ pg: ctx.pg, userId: session.userId, now: new Date(atMs).toISOString() });
 	await redateSession(ctx, session, atMs);
 	return atMs;
 }
@@ -120,15 +128,17 @@ async function verify(ctx, request, response) {
 	const session = callerSession(request, ctx.config, verifyStepUp);
 	const { code } = await readBody(request);
 	const meta = clientMetaOf(request, ctx.config);
-	await rateLimit(ctx.kv, ['mfa-verify', 'ip', meta.ipHash ?? meta.ipPrefix ?? 'unknown'], VERIFY_LIMIT);
+	const address = meta.ipHash ?? meta.ipPrefix;
+	await rateLimit(ctx.kv, address ? ['mfa-verify', 'ip', address] : ['mfa-verify', 'user', session.userId], VERIFY_LIMIT);
 	await assertNotBlocked(ctx.kv, session.userId, meta, ctx.clock());
+	await countAttempt({ kv: ctx.kv, session, meta, nowMs: ctx.clock() });
 	const row = await readFactor(ctx.pg, session.userId);
 	if (!row) throw accountError(409, 'not_enrolled', 'Two-step verification is not set up.');
 	const secret = openSecret(row.secret_enc, session.userId, ctx.env);
 	const step = matchStep({ secret, code, nowMs: ctx.clock(), lastStep: Number(row.last_step) || 0 });
 	const accepted = step !== null && (row.status === 'pending' || await claimStep(ctx, session.userId, step));
 	if (!accepted) {
-		await recordFailure({ kv: ctx.kv, pg: ctx.pg, session, meta, nowMs: ctx.clock() });
+		await recordFailure({ kv: ctx.kv, pg: ctx.pg, session, meta });
 		throw accountError(422, 'code_invalid', 'That code is not valid.');
 	}
 	const atMs = row.status === 'pending' ? await confirm(ctx, request, session, step, meta) : ctx.clock();
