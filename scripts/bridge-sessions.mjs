@@ -38,7 +38,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
-import { familyRefreshExp, hashRefreshToken, mintRefreshToken, readRefreshToken } from './bridge-refresh-token.mjs';
+import { familyRefreshExp, hashRefreshToken, mintRefreshToken, readRefreshToken, refreshTtlSeconds } from './bridge-refresh-token.mjs';
 import { bearerToken, readJsonBody, requireUuid, sendJson } from './bridge-social-core.mjs';
 import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
 import { platformRoleReader } from './bridge-roles.mjs';
@@ -240,21 +240,30 @@ function liveSince(cutoffMicros, createdAt) {
 	return created === null || created >= cutoffMicros;
 }
 
-/** Live rows, newest first, one page at a time: PostgREST has no DISTINCT to ask for families. */
-async function* liveRowPages({ pg, session, now }) {
+/**
+ * Live rows, newest first, one page at a time: PostgREST has no DISTINCT to ask for families.
+ * A row whose access token lives is listed; so is a family row inside the refresh window, as
+ * its refresh token may still rotate (an idle sign-in stays revocable). A legacy row without
+ * a family is never kept by the window: it has no refresh token.
+ * Caveat: the window runs from the newest generation, not the family root, so a family rotated
+ * near its end stays listed up to one access + refresh TTL after it died (revoking it is
+ * harmless); a live family is never hidden.
+ */
+async function* liveRowPages({ config, pg, session, now }) {
+	const windowSeconds = config.sessionTtlSeconds + (config.refreshTtlSeconds ?? refreshTtlSeconds());
 	let before = null;
 	for (let page = 0; page < MAX_LIST_PAGES; page += 1) {
 		const params = new URLSearchParams({
 			select: SESSION_COLUMNS,
 			revoked_at: 'is.null',
-			expires_at: `gt.${new Date(now).toISOString()}`,
+			or: `(expires_at.gt.${new Date(now).toISOString()},created_at.gt.${new Date(now - windowSeconds * 1000).toISOString()})`,
 			order: 'created_at.desc',
 			limit: String(LIST_PAGE_SIZE),
 		});
 		if (before) params.set('created_at', `lt.${before}`);
 		const rows = await pg.asUser(session).get(`osionos_sessions?${params}`);
 		const found = Array.isArray(rows) ? rows : [];
-		yield found;
+		yield found.filter((row) => row?.family_id != null || Date.parse(row?.expires_at) > now);
 		if (found.length < LIST_PAGE_SIZE) return;
 		before = found.at(-1)?.created_at;
 		if (!before) return;
@@ -282,7 +291,7 @@ async function listFamilies({ config, pg, session }) {
 	const cutoffMicros = config.sessionCutoffs?.cutoffMicros?.(session.userId);
 	const currentId = String(session.raw?.jti ?? '').toLowerCase();
 	const families = new Map();
-	for await (const rows of liveRowPages({ pg, session, now })) {
+	for await (const rows of liveRowPages({ config, pg, session, now })) {
 		for (const row of rows) {
 			if (liveSince(cutoffMicros, row?.created_at) && !families.has(familyKey(row))) families.set(familyKey(row), row);
 		}

@@ -417,6 +417,27 @@ describe('the list shows one row per family', () => {
 		assert.equal(sessions.length, 3);
 	});
 
+	it('keeps a sign-in idle past its access token while its refresh token can rotate', async (t) => {
+		const idle = seedRow({ family_id: randomUUID(), created_at: new Date(Date.now() - 7_200_000).toISOString(), expires_at: new Date(Date.now() - 3_600_000).toISOString() });
+		const { base } = await startSessionBridge({ clock: newClock(), t, rows: [idle] });
+		const me = await signIn(base);
+		assert.ok((await listWith(base, me.accessToken)).body.sessions.some((entry) => entry.id === idle.id), 'a refreshable sign-in stays revocable');
+	});
+
+	it('drops a family once its refresh window has passed', async (t) => {
+		const dead = seedRow({ family_id: randomUUID(), created_at: new Date(Date.now() - 9 * 24 * 3_600_000).toISOString(), expires_at: new Date(Date.now() - 9 * 24 * 3_600_000 + 3_600_000).toISOString() });
+		const { base } = await startSessionBridge({ clock: newClock(), t, rows: [dead] });
+		const me = await signIn(base);
+		assert.ok(!(await listWith(base, me.accessToken)).body.sessions.some((entry) => entry.id === dead.id));
+	});
+
+	it('drops a legacy row (no family) once its access token expired', async (t) => {
+		const stale = seedRow({ created_at: new Date(Date.now() - 7_200_000).toISOString(), expires_at: new Date(Date.now() - 3_600_000).toISOString() });
+		const { base } = await startSessionBridge({ clock: newClock(), t, rows: [stale] });
+		const me = await signIn(base);
+		assert.ok(!(await listWith(base, me.accessToken)).body.sessions.some((entry) => entry.id === stale.id));
+	});
+
 	it('shows the caller\'s own generation for its family', async (t) => {
 		const { base } = await startSessionBridge({ clock: newClock(), t });
 		const first = await signIn(base);
