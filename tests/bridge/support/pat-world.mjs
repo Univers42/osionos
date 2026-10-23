@@ -62,7 +62,7 @@ const workspace = { id: HOME, owner_id: OWNER, created_at: '2026-10-01T00:00:00.
 /** The identity row of the owner; `is_admin` proves a PAT never inherits it. */
 const identity = (isAdmin) => ({ user_id: OWNER, is_admin: isAdmin });
 
-export async function startPatWorld(t, { tokens = [], fail = null, hasIdentity = true, ownerIsAdmin = false } = {}) {
+export async function startPatWorld(t, { tokens = [], fail = null, hasIdentity = true, ownerIsAdmin = false, now, rateLimit } = {}) {
 	const config = harnessConfig();
 	const patStore = createPatStore({ tokens, fail });
 	const pages = createPostgrestMock({ osionos_pages: [pageRow()], osionos_workspaces: hasIdentity ? [workspace] : [], osionos_bridge_identities: [identity(ownerIsAdmin)] });
@@ -73,12 +73,16 @@ export async function startPatWorld(t, { tokens = [], fail = null, hasIdentity =
 		return (PAT_SIDE.has(table) ? patStore : pages).fetchImpl(url, init);
 	};
 	const kv = kvStub();
-	const server = createBridgeServer({ config, fetchImpl, kv, env: { JWT_SECRET } });
+	const server = createBridgeServer({ config, fetchImpl, kv, env: { JWT_SECRET }, now, patRateLimit: rateLimit });
 	await new Promise((done) => server.listen(0, '127.0.0.1', done));
 	t?.after(() => new Promise((done) => server.close(done)));
-	const pg = createPg({ config, env: { JWT_SECRET }, fetchImpl });
-	const gate = createPatGate({ pg, fetchImpl, memberWorkspaceEntries: async () => [] });
-	return { base: `http://127.0.0.1:${server.address().port}`, config, patStore, pages, seen, gate };
+	/** A gate over this world's stores, its fetch optionally wrapped: how a test fails one table or feeds it a foreign row. */
+	const gateWith = (wrap = (inner) => inner, options = {}) => {
+		const wrapped = wrap(fetchImpl);
+		const pg = createPg({ config, env: { JWT_SECRET }, fetchImpl: wrapped });
+		return createPatGate({ pg, fetchImpl: wrapped, memberWorkspaceEntries: async () => [], kv, now, rateLimit, ...options });
+	};
+	return { base: `http://127.0.0.1:${server.address().port}`, config, patStore, pages, seen, kv, gate: gateWith(), gateWith };
 }
 
 /** The audit rows the bridge wrote, in order. */
