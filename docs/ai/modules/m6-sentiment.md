@@ -49,9 +49,10 @@ gone and the thread line too.
 
 ```sh
 # The service (throwaway Postgres + Redis, the AI migrations incl. moderation and sentiment, the suite).
-cd /home/dlesieur/wt-ai-night
-AI_MIGS="$(sh ops/ai-migs.sh osionos-ugc-moderation-migration.sql) <groot>/models/osionos-ugc-sentiment-migration.sql" \
-  sh ops/gate-batch.sh <this worktree> m6p svc-tsc ai
+# Run from the repository root. ../ops holds the shared gate scripts; <groot> is
+# the groot worktree root, holding models/osionos-ugc-sentiment-migration.sql.
+AI_MIGS="$(sh ../ops/ai-migs.sh osionos-ugc-moderation-migration.sql) <groot>/models/osionos-ugc-sentiment-migration.sql" \
+  sh ../ops/gate-batch.sh "$PWD" m6p svc-tsc ai
 
 # The client.
 bash scripts/docker-run.sh test-canvas
