@@ -204,3 +204,11 @@ describe('saved views on a sys: source', () => {
 		assert.equal(refused.body.code, 'rate_limited');
 	});
 });
+
+describe('the section a source saves into', () => {
+	// The root CHECK on osionos_user_settings.section (osionos-account-profiles-migration.sql):
+	// a source id that breaks it would answer the 23514 as "view_too_large" on every save.
+	it('fits the section CHECK for every sys: source', () => {
+		for (const source of SELF_SOURCES) assert.match(`sys-views-${source.id}`, /^[a-z][a-z0-9_-]{0,31}$/, source.id);
+	});
+});
