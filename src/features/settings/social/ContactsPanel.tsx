@@ -16,6 +16,7 @@ import React, { useState } from 'react';
 import { Users } from 'lucide-react';
 
 import { Button } from '@/shared/ui';
+import { PeopleHovercard } from '../people/PeoplePeek';
 import { RequestsInbox } from '@/features/connections/RequestsInbox';
 import { useContactsStore } from '@/store/social/useContactsStore';
 import type { ContactEdge } from '@/store/social/types';
@@ -44,7 +45,7 @@ export const ContactsPanel: React.FC = () => {
         ) : data.map((edge) => (
           <SettingRow
             key={edge.id}
-            title={edge.peer.name}
+            title={<PeopleHovercard person={edge.peer}>{edge.peer.name}</PeopleHovercard>}
             description={edge.introMessage || undefined}
             action={<Button tone="danger-subtle" onClick={() => setLeaving(edge)}>Remove</Button>}
           />
