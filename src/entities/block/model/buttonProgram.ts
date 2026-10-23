@@ -22,7 +22,36 @@ export type ProgramValue = string | number | boolean | null | { formula: string 
 
 export type ProgramAction =
 	| { type: "notify"; message: ProgramValue }
-	| { type: "set_property"; property: string; value: ProgramValue };
+	| { type: "set_property"; property: string; value: ProgramValue }
+	| { type: "page_action"; name: string };
+
+/**
+ * Whether a page action changes the page's state and so must be confirmed
+ * before a program runs it. Keyed by name and total over PAGE_ACTION_NAMES
+ * (a canvas test pins that), so a new action fails until it is classified.
+ *
+ * Caveat: classified by name only; an action the program names that is not in
+ * this table is treated as not destructive and fails at the runner instead.
+ */
+export const DESTRUCTIVE_PAGE_ACTIONS: Readonly<Record<string, boolean>> = {
+	copy_link: false,
+	copy_page_contents: false,
+	duplicate: false,
+	move_to_trash: true,
+	present: false,
+	small_text: false,
+	full_width: false,
+	lock_page: true,
+	translate: false,
+	import: false,
+	export: false,
+	updates_analytics: false,
+	version_history: false,
+	notify_me: false,
+	connections: false,
+	remove_header: false,
+	turn_into_dashboard: false,
+};
 
 export type ProgramStep =
 	| { op: "set"; name: string; value: ProgramValue }
@@ -114,6 +143,12 @@ function parseAction(input: unknown, path: string): ProgramAction {
 		const property = parseText(record.property, join(path, "property"));
 		if (!property) fail(join(path, "property"), "a property needs a name");
 		return { type: "set_property", property, value: parseValue(record.value, join(path, "value")) };
+	}
+	if (record.type === "page_action") {
+		checkKeys(record, path, ["type", "name"]);
+		const name = parseText(record.name, join(path, "name"));
+		if (!name) fail(join(path, "name"), "a page action needs a name");
+		return { type: "page_action", name };
 	}
 	return fail(join(path, "type"), "unknown action type");
 }
