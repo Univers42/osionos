@@ -48,7 +48,7 @@ function setup(overrides: Record<string, unknown> = {}) {
       calls.push(`save ${JSON.stringify(patch)} @${version}`);
       return profile(PAGE_ID, version + 1);
     },
-    findPage: () => null,
+    openLinked: async () => ({ status: "error" }),
     createPage: async (workspaceId: string) => {
       calls.push(`create ${workspaceId}`);
       return { _id: PAGE_ID, workspaceId, title: "README" };
@@ -65,19 +65,41 @@ test("customizeReadme: first click creates the page in the chosen workspace, the
   assert.deepEqual(calls, ["load", "create ws-a", `save {"readmePageId":"${PAGE_ID}"} @3`]);
 });
 
-test("customizeReadme: a README that already exists is opened, never created again", async () => {
-  const existing = { _id: PAGE_ID, workspaceId: "ws-a", title: "README" };
-  const { calls, deps } = setup({ loadProfile: async () => profile(PAGE_ID), findPage: () => existing });
+const LINKED = { _id: PAGE_ID, workspaceId: "ws-a", title: "README" };
+
+test("customizeReadme: a linked id is opened by id (loaded or not) and never created again", async () => {
+  const opened: string[] = [];
+  const { calls, deps } = setup({
+    loadProfile: async () => profile(PAGE_ID),
+    openLinked: async (id: string) => { opened.push(id); return { status: "found", page: LINKED }; },
+  });
   const result = await customizeReadme(deps, "ws-a");
-  assert.deepEqual(result, { ok: true, page: existing });
+  assert.deepEqual(result, { ok: true, page: LINKED });
+  assert.deepEqual(opened, [PAGE_ID]);
   assert.deepEqual(calls, []);
 });
 
-test("customizeReadme: a linked page that is archived is replaced", async () => {
-  const archived = { _id: PAGE_ID, workspaceId: "ws-a", title: "README", archivedAt: "2026-01-01" };
-  const { calls, deps } = setup({ loadProfile: async () => profile(PAGE_ID), findPage: () => archived });
-  await customizeReadme(deps, "ws-a");
-  assert.ok(calls.some((call) => call.startsWith("create")));
+test("customizeReadme: a linked id that is gone creates nothing and asks first", async () => {
+  const { calls, deps } = setup({ loadProfile: async () => profile(PAGE_ID), openLinked: async () => ({ status: "gone" }) });
+  const result = await customizeReadme(deps, "ws-a");
+  assert.equal(result.ok, false);
+  assert.equal(result.ok === false && result.linkedGone, true);
+  assert.deepEqual(calls, []);
+});
+
+test("customizeReadme: a failed open of the linked id replaces nothing", async () => {
+  const { calls, deps } = setup({ loadProfile: async () => profile(PAGE_ID), openLinked: async () => ({ status: "error" }) });
+  const result = await customizeReadme(deps, "ws-a");
+  assert.equal(result.ok, false);
+  assert.equal(result.ok === false && result.linkedGone, undefined);
+  assert.deepEqual(calls, []);
+});
+
+test("customizeReadme: after the explicit button, the gone link is replaced", async () => {
+  const { calls, deps } = setup({ loadProfile: async () => profile(PAGE_ID), openLinked: async () => ({ status: "gone" }) });
+  const result = await customizeReadme(deps, "ws-a", true);
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ["create ws-a", `save {"readmePageId":"${PAGE_ID}"} @3`]);
 });
 
 test("customizeReadme: no owned workspace creates nothing", async () => {
