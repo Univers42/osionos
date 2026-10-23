@@ -1,0 +1,200 @@
+{"id": "q01", "ref": "golden"}
+{"id": "q02", "ref": "golden"}
+{"id": "q03", "ref": "golden"}
+{"id": "q04", "ref": "golden"}
+{"id": "q05", "ref": "golden"}
+{"id": "q06", "ref": "golden"}
+{"id": "q07", "ref": "golden"}
+{"id": "q08", "ref": "golden"}
+{"id": "q09", "ref": "golden"}
+{"id": "q10", "ref": "golden"}
+{"id": "q11", "ref": "golden"}
+{"id": "q12", "ref": "golden"}
+{"id": "q13", "ref": "golden"}
+{"id": "q14", "ref": "golden"}
+{"id": "q15", "ref": "golden"}
+{"id": "q16", "ref": "golden"}
+{"id": "q17", "ref": "golden"}
+{"id": "q18", "ref": "golden"}
+{"id": "q19", "ref": "golden"}
+{"id": "q20", "ref": "golden"}
+{"id": "q21", "ref": "golden"}
+{"id": "q22", "ref": "golden"}
+{"id": "q23", "ref": "golden"}
+{"id": "q24", "ref": "golden"}
+{"id": "q25", "ref": "golden"}
+{"id": "q26", "ref": "golden"}
+{"id": "q27", "ref": "golden"}
+{"id": "q28", "ref": "golden"}
+{"id": "q29", "ref": "golden"}
+{"id": "q30", "ref": "golden"}
+{"id": "q31", "ref": "golden"}
+{"id": "q32", "ref": "golden"}
+{"id": "q33", "ref": "golden"}
+{"id": "q34", "ref": "golden"}
+{"id": "q35", "ref": "golden"}
+{"id": "q36", "ref": "golden"}
+{"id": "q37", "ref": "golden"}
+{"id": "q38", "ref": "golden"}
+{"id": "q39", "ref": "golden"}
+{"id": "q40", "ref": "golden"}
+{"id": "q41", "ref": "golden"}
+{"id": "q42", "ref": "golden"}
+{"id": "q43", "ref": "golden"}
+{"id": "q44", "ref": "golden"}
+{"id": "q45", "ref": "golden"}
+{"id": "q46", "ref": "golden"}
+{"id": "q47", "ref": "golden"}
+{"id": "q48", "ref": "golden"}
+{"id": "q49", "ref": "golden"}
+{"id": "q50", "ref": "golden"}
+{"id": "q51", "ref": "golden"}
+{"id": "q52", "ref": "golden"}
+{"id": "q53", "ref": "golden"}
+{"id": "q54", "ref": "golden"}
+{"id": "q55", "ref": "golden"}
+{"id": "q56", "ref": "golden"}
+{"id": "q57", "ref": "golden"}
+{"id": "q58", "ref": "golden"}
+{"id": "q59", "ref": "golden"}
+{"id": "q60", "ref": "golden"}
+{"id": "q61", "ref": "golden"}
+{"id": "q62", "ref": "golden"}
+{"id": "q63", "ref": "golden"}
+{"id": "q64", "ref": "golden"}
+{"id": "q65", "ref": "golden"}
+{"id": "q66", "ref": "golden"}
+{"id": "q67", "ref": "golden"}
+{"id": "q68", "ref": "golden"}
+{"id": "q69", "q": "What is the lead time for the NW-LARK-77 frame kit?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": ["spec-lark-task-chair"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "eight weeks"}
+{"id": "q70", "q": "How long after the frame kit does the cast base arrive?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["spec-lark-task-chair"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "three weeks later"}
+{"id": "q71", "q": "What is the seat height range of the Lark chair?", "lang": "en", "kind": "paraphrase", "asker": "u_ben", "expected": ["spec-lark-task-chair"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "forty-two to fifty-six centimetres"}
+{"id": "q72", "q": "Combien de couches de contreplaqué la coque du Lark comporte-t-elle ?", "lang": "fr", "kind": "lexical", "asker": "u_chloe", "expected": ["spec-lark-task-chair"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "fourteen layers"}
+{"id": "q73", "q": "What timber is used for the Halden conference table top?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": ["spec-halden-conference-table"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "European oak"}
+{"id": "q74", "q": "What is the thickness of the Halden table top in millimetres?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": ["spec-halden-conference-table"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "forty-two millimetres"}
+{"id": "q75", "q": "Quels sont les traitements de surface disponibles pour le Halden ?", "lang": "fr", "kind": "paraphrase", "asker": "u_chloe", "expected": ["spec-halden-conference-table"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "clear hardwax oil and fumed dark treatment"}
+{"id": "q76", "q": "How many seats does the 4.0 metre Halden table accommodate?", "lang": "en", "kind": "paraphrase", "asker": "u_ben", "expected": ["spec-halden-conference-table"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "sixteen"}
+{"id": "q77", "q": "How many modules make up the NW-VESPER-12 configuration?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": ["spec-vesper-modular-sofa"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "six modules"}
+{"id": "q78", "q": "What is the width of the armless Vesper module?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": ["spec-vesper-modular-sofa"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "kiln-dried beech"}
+{"id": "q79", "q": "Combien de hauteurs d'assise le Vesper propose-t-il ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ben", "expected": ["spec-vesper-modular-sofa"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "two seat heights"}
+{"id": "q80", "q": "What material is the Vesper frame made from?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["spec-vesper-modular-sofa"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "kiln-dried beech"}
+{"id": "q81", "q": "What is the maximum load rating of the NW-MARLOW-21 frame?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": ["spec-marlow-standing-desk"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "one hundred and twenty kilograms"}
+{"id": "q82", "q": "What is the height range of the Marlow frame in centimetres?", "lang": "en", "kind": "paraphrase", "asker": "u_chloe", "expected": ["spec-marlow-standing-desk"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "sixty-two to one hundred and twenty-eight centimetres"}
+{"id": "q83", "q": "Combien de positions mémoire le bureau Marlow possède-t-il ?", "lang": "fr", "kind": "lexical", "asker": "u_ana", "expected": ["spec-marlow-standing-desk"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "four memory positions"}
+{"id": "q84", "q": "What is the speed of the Marlow frame under load?", "lang": "en", "kind": "paraphrase", "asker": "u_ben", "expected": ["spec-marlow-standing-desk"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "forty millimetres per second"}
+{"id": "q85", "q": "What are the four upholstery options for the NW-BRINDLE-08 shell?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": ["spec-brindle-lounge-chair"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "wool bouclé, saddle leather, recycled felt, fire-resistant plain weave"}
+{"id": "q86", "q": "At what angle do the Brindle chair legs splay?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["spec-brindle-lounge-chair"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "four degrees"}
+{"id": "q87", "q": "Combien de couches de contreplaqué la coque du Brindle comporte-t-elle ?", "lang": "fr", "kind": "lexical", "asker": "u_ben", "expected": ["spec-brindle-lounge-chair"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "nine layers"}
+{"id": "q88", "q": "What is the seat height of the Brindle lounge chair?", "lang": "en", "kind": "paraphrase", "asker": "u_chloe", "expected": ["spec-brindle-lounge-chair"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "forty-three centimetres"}
+{"id": "q89", "q": "How long does it take to assemble the NW-FJORD-15 bench sections?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": ["spec-fjord-bench-system"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "under ten minutes"}
+{"id": "q90", "q": "What is the seat height of the Fjord bench system?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["spec-fjord-bench-system"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "forty-five centimetres"}
+{"id": "q91", "q": "Quelle est la longueur des sections du système Fjord ?", "lang": "fr", "kind": "lexical", "asker": "u_chloe", "expected": ["spec-fjord-bench-system"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "one-metre-twenty"}
+{"id": "q92", "q": "What does error ERR-4712 mean when a node joins the pool?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": ["runbook-node-provisioning"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "the node refused to join the pool because its key does not match the signed one"}
+{"id": "q93", "q": "How long is the node burned in before leaving the workshop?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["runbook-node-provisioning"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "twenty-four hours"}
+{"id": "q94", "q": "Combien de temps dure le test de trempage sur site ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ben", "expected": ["runbook-node-provisioning"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "twenty minutes"}
+{"id": "q95", "q": "What causes error ERR-6083 during the nightly invoice run?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": ["runbook-invoice-sync"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "an invoice line carries no cost centre"}
+{"id": "q96", "q": "At what time does the invoice sync run each night?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["runbook-invoice-sync"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "two in the morning"}
+{"id": "q97", "q": "Combien de figures le sync copie-t-il sans jamais les deviner ?", "lang": "fr", "kind": "paraphrase", "asker": "u_chloe", "expected": ["runbook-invoice-sync"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "three figures"}
+{"id": "q98", "q": "What three documents does a warranty claim need?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": ["runbook-warranty-claims"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "order number, delivery note, photograph"}
+{"id": "q99", "q": "What is the warranty period for structure and fixings?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["runbook-warranty-claims"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "five years"}
+{"id": "q100", "q": "Combien de temps dure la garantie sur les finitions ?", "lang": "fr", "kind": "paraphrase", "asker": "u_chloe", "expected": ["runbook-warranty-claims"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "two years"}
+{"id": "q101", "q": "In what quantity should wall shelf fixings be ordered?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": ["runbook-ordering-spares"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "packs of fifty"}
+{"id": "q102", "q": "What is the lead time for gas lifts class 4?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["runbook-ordering-spares"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "eight weeks"}
+{"id": "q103", "q": "Combien de semaines de délai pour les modules clips du canapé ?", "lang": "fr", "kind": "lexical", "asker": "u_ben", "expected": ["runbook-ordering-spares"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "seven weeks"}
+{"id": "q104", "q": "Who validates the newcomer's checklist after the first week?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["hr-onboarding-guide"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "team lead"}
+{"id": "q105", "q": "How many things must be true before a start date is confirmed?", "lang": "en", "kind": "paraphrase", "asker": "u_chloe", "expected": ["hr-onboarding-guide"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "three things"}
+{"id": "q106", "q": "Combien de pourcentage des personnes qui partent la première année n'avaient pas de carnet de formation complété ?", "lang": "fr", "kind": "lexical", "asker": "u_ben", "expected": ["hr-onboarding-guide"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "thirty per cent"}
+{"id": "q107", "q": "How many days per week may staff work remotely after ninety days?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": ["hr-remote-work-policy"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "three days"}
+{"id": "q108", "q": "How far ahead must remote days be booked?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["hr-remote-work-policy"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "a week ahead"}
+{"id": "q109", "q": "Combien de jours par an peut-on travailler depuis un autre pays ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ben", "expected": ["hr-remote-work-policy"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "twenty working days"}
+{"id": "q110", "q": "How many days of paid annual leave does everyone have?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": ["hr-leave-policy"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "twenty-eight days"}
+{"id": "q111", "q": "What is the maximum number of consecutive leave days?", "lang": "en", "kind": "paraphrase", "asker": "u_chloe", "expected": ["hr-leave-policy"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "twenty-five consecutive days"}
+{"id": "q112", "q": "Combien de jours inutilisés peuvent être reportés l'année suivante ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ana", "expected": ["hr-leave-policy"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "up to five unused days"}
+{"id": "q113", "q": "What must visitors and suppliers do before entering the workshop?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": ["hr-code-of-conduct"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "sign the conduct sheet at reception"}
+{"id": "q114", "q": "What is the gift declaration threshold in euros?", "lang": "en", "kind": "paraphrase", "asker": "u_ben", "expected": ["hr-code-of-conduct"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "two hundred euros"}
+{"id": "q115", "q": "Combien de règles fondamentales régissent le respect au travail ?", "lang": "fr", "kind": "paraphrase", "asker": "u_chloe", "expected": ["hr-code-of-conduct"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "three rules"}
+{"id": "q116", "q": "What must be worn on the sanding line?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": ["hr-workshop-safety"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "hearing protection"}
+{"id": "q117", "q": "When must the dust extractor run?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["hr-workshop-safety"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "whenever a spindle sander is switched on"}
+{"id": "q118", "q": "Combien de semaines de retard accuse le ponçage ?", "lang": "fr", "kind": "lexical", "asker": "u_ben", "expected": ["hr-workshop-safety"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "eleven weeks"}
+{"id": "q119", "q": "What limits what we can promise to a client?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["sales-playbook-overview"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "the workshop is the constraint"}
+{"id": "q120", "q": "How many stages does a deal move through?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": ["sales-playbook-overview"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "four stages"}
+{"id": "q121", "q": "Combien de personnes travaillent chez Northwind Atelier ?", "lang": "fr", "kind": "lexical", "asker": "u_chloe", "expected": ["sales-playbook-overview"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "sixty people"}
+{"id": "q122", "q": "What is the committed value of the museum wing?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": ["deal-brightwater-museum"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "one million four hundred and fifty thousand euros"}
+{"id": "q123", "q": "Which storage system is used in the archive store?", "lang": "en", "kind": "paraphrase", "asker": "u_chloe", "expected": ["deal-brightwater-museum"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "Rive Nord system"}
+{"id": "q124", "q": "Combien de galeries le projet Brightwater comprend-il ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ben", "expected": ["deal-brightwater-museum"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "six galleries"}
+{"id": "q125", "q": "After how long does an entry disappear from the forecast?", "lang": "en", "kind": "paraphrase", "asker": "u_ben", "expected": ["meeting-sales-kickoff-q1"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "four weeks"}
+{"id": "q126", "q": "Quels facteurs d'étape sont utilisés pour le calcul de la valeur pondérée ?", "lang": "fr", "kind": "lexical", "asker": "u_ana", "expected": ["meeting-sales-kickoff-q1"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "ten per cent for discovery, thirty-five for proposal, sixty for negotiation, one hundred once signed"}
+{"id": "q127", "q": "Why do we leave the existing desk frame alone for a year?", "lang": "en", "kind": "paraphrase", "asker": "u_chloe", "expected": ["meeting-product-council-march"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "the desk frame is left alone for a year"}
+{"id": "q128", "q": "Quel bois le conseil produit a-t-il décidé de conserver pour la table de conférence ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ana", "expected": ["meeting-product-council-march"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "one timber"}
+{"id": "q129", "q": "Combien de pourcentage de remise déclenche une double signature ?", "lang": "fr", "kind": "lexical", "asker": "u_chloe", "expected": ["deal-pricing-discounts"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "twelve per cent"}
+{"id": "q130", "q": "What reduction is being asked for in the PEREGRINE-LOOM negotiation?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": ["deal-competitive-pricing"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "nine per cent"}
+{"id": "q131", "q": "Quel volume mensuel de panneaux déclenche la négociation PEREGRINE-LOOM ?", "lang": "fr", "kind": "lexical", "asker": "u_ben", "expected": ["deal-competitive-pricing"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "four hundred panels a month"}
+{"id": "q132", "q": "What audit reference was filed for the 2026 workshop audit?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": ["meeting-quality-review-may"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "AUDIT-77"}
+{"id": "q133", "q": "Quelle est la règle pour un fauteuil qui grince après six mois ?", "lang": "fr", "kind": "paraphrase", "asker": "u_chloe", "expected": ["meeting-quality-review-may"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "manufacturing fault, replaced not repaired"}
+{"id": "q134", "q": "What is checked weekly on the delivery vehicles?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["entretien-flotte-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "pression des pneus"}
+{"id": "q135", "q": "How often are the delivery fleet tyres rotated?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": ["entretien-flotte-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "trente mille kilomètres"}
+{"id": "q136", "q": "Combien de véhicules de livraison servent le nord et la France ?", "lang": "fr", "kind": "lexical", "asker": "u_chloe", "expected": ["entretien-flotte-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "six vehicles"}
+{"id": "q137", "q": "Who writes the quotes for the French market?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": ["playbook-commercial-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "the Lyon studio"}
+{"id": "q138", "q": "What discount percentage triggers a double signature?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": ["playbook-commercial-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "douze pour cent"}
+{"id": "q139", "q": "Combien de parties contient un devis francophone ?", "lang": "fr", "kind": "lexical", "asker": "u_ben", "expected": ["playbook-commercial-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "sept parties"}
+{"id": "q140", "q": "How much was budgeted for the Hamburg refurbishment?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": ["reunion-presentation-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "six hundred thousand euros"}
+{"id": "q141", "q": "Over what period is the Nordhavn programme budgeted?", "lang": "en", "kind": "paraphrase", "asker": "u_chloe", "expected": ["reunion-presentation-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "six cent mille euros"}
+{"id": "q142", "q": "Quels documents ont été transmis à l'architecte du client ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ana", "expected": ["reunion-presentation-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "technical sheet of Rive Nord system and the specification"}
+{"id": "q143", "q": "What is the delivery lead time for the NW-CEDAR-40 shelf system?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": ["cahier-des-charges-rive-nord-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "six weeks"}
+{"id": "q144", "q": "How many levels does the Rive Nord system have?", "lang": "en", "kind": "paraphrase", "asker": "u_ben", "expected": ["cahier-des-charges-rive-nord-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "cinq niveaux"}
+{"id": "q145", "q": "Combien de finitions sont disponibles pour le système Rive Nord ?", "lang": "fr", "kind": "lexical", "asker": "u_chloe", "expected": ["cahier-des-charges-rive-nord-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "trois finitions"}
+{"id": "q146", "q": "Quels sujets ont été traités lors de la synchronisation opérationnelle de février ?", "lang": "fr", "kind": "paraphrase", "asker": "u_chloe", "expected": ["meeting-ops-sync-february"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "the paint line was two weeks behind"}
+{"id": "q147", "q": "What is the value of the Fjord studio deal?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": ["deal-fjord-studio"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "ninety-five thousand euros"}
+{"id": "q148", "q": "Quel est le montant du projet Fjord studio ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ben", "expected": ["deal-fjord-studio"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "ninety-five thousand euros"}
+{"id": "q149", "q": "What are the salary bands for the workshop team?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": ["hr-compensation-bands"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "forty-six thousand euros"}
+{"id": "q150", "q": "Combien de niveaux de salaire comporte le barème atelier ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ana", "expected": ["hr-compensation-bands"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "forty-six thousand euros"}
+{"id": "q151", "q": "What timber does the conference table keep, and what did the product council decide to drop?", "lang": "en", "kind": "multi", "asker": "u_chloe", "expected": ["meeting-product-council-march", "spec-halden-conference-table"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "the conference table keeps one timber; the council decided to drop a product from the range"}
+{"id": "q152", "q": "How many days may a colleague work from home, and how much annual leave must be booked ahead?", "lang": "en", "kind": "multi", "asker": "u_ana", "expected": ["hr-remote-work-policy", "hr-leave-policy"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "up to three days per week remote; annual leave must be booked before the first day of the requested month"}
+{"id": "q153", "q": "What is the museum wing value, and what discount limit applies to a project of that size?", "lang": "en", "kind": "multi", "asker": "u_ben", "expected": ["deal-brightwater-museum", "deal-pricing-discounts"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "one million four hundred and fifty thousand euros; discount limit check corpus"}
+{"id": "q154", "q": "How much is the café programme worth, and what is the total open pipeline for the quarter?", "lang": "en", "kind": "multi", "asker": "u_chloe", "expected": ["deal-verdant-coffees", "deal-forecast-q3"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "three hundred and forty thousand euros"}
+{"id": "q155", "q": "How many rooms does the clinic programme cover, and what did the leadership meeting decide about it?", "lang": "en", "kind": "multi", "asker": "u_ana", "expected": ["deal-arc-hospitals", "meeting-leadership-retreat"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "twenty-six examination rooms"}
+{"id": "q156", "q": "Which parts do we keep in stock, and what did the workshop meeting decide about the paint line?", "lang": "en", "kind": "multi", "asker": "u_ben", "expected": ["runbook-ordering-spares", "meeting-supply-chain-workshop"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "sheet goods for three most-used products and small box of fittings; rebuild paint line and finishing cell"}
+{"id": "q157", "q": "Combien de jours de télétravail par semaine et combien de jours de congé annuel ?", "lang": "fr", "kind": "multi", "asker": "u_chloe", "expected": ["hr-remote-work-policy", "hr-leave-policy"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "up to three days per week remote; twenty-eight days annual leave"}
+{"id": "q158", "q": "What is the committed value of the museum wing and of the hotel room programme?", "lang": "en", "kind": "multi", "asker": "u_ana", "expected": ["deal-brightwater-museum", "deal-northlake-hotels"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "one million four hundred and fifty thousand euros for museum; check corpus for hotel"}
+{"id": "q159", "q": "What figures does the sync copy, and what are the payment milestones?", "lang": "en", "kind": "multi", "asker": "u_ben", "expected": ["runbook-invoice-sync", "deal-contract-terms"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "cost centre"}
+{"id": "q160", "q": "What are the seat heights of the Lark and Brindle chairs?", "lang": "en", "kind": "multi", "asker": "u_chloe", "expected": ["spec-lark-task-chair", "spec-brindle-lounge-chair"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "Lark forty-two to fifty-six centimetres; Brindle forty-three centimetres"}
+{"id": "q161", "q": "What materials are used for the Halden table top and the Vesper frame?", "lang": "en", "kind": "multi", "asker": "u_ana", "expected": ["spec-halden-conference-table", "spec-vesper-modular-sofa"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "European oak; kiln-dried beech"}
+{"id": "q162", "q": "Quelle est la fréquence du contrôle hebdomadaire et qui rédige les devis francophones ?", "lang": "fr", "kind": "multi", "asker": "u_ben", "expected": ["entretien-flotte-fr", "playbook-commercial-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "weekly tyre and brake check; Lyon studio writes quotes"}
+{"id": "q163", "q": "Quel est le budget du programme Nordhavn et quel est le délai de livraison du système Rive Nord ?", "lang": "fr", "kind": "multi", "asker": "u_chloe", "expected": ["reunion-presentation-fr", "cahier-des-charges-rive-nord-fr"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "six hundred thousand euros over eighteen months; six weeks"}
+{"id": "q164", "q": "When does a new joiner get safety induction, and what must be worn on the sanding line?", "lang": "en", "kind": "multi", "asker": "u_ana", "expected": ["hr-onboarding-guide", "hr-workshop-safety"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "week three; hearing protection"}
+{"id": "q165", "q": "What documents does a warranty claim need, and in what quantity are shelf fixings ordered?", "lang": "en", "kind": "multi", "asker": "u_ben", "expected": ["runbook-warranty-claims", "runbook-ordering-spares"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "order number, delivery note, photograph; packs of fifty"}
+{"id": "q166", "q": "What are the load ratings and seat heights of the Marlow desk and Fjord bench?", "lang": "en", "kind": "multi", "asker": "u_chloe", "expected": ["spec-marlow-standing-desk", "spec-fjord-bench-system"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "Marlow one hundred and twenty kilograms; Fjord forty-five centimetres"}
+{"id": "q167", "q": "What discount triggers double signature, and what reduction is asked in PEREGRINE-LOOM?", "lang": "en", "kind": "multi", "asker": "u_ana", "expected": ["deal-pricing-discounts", "deal-competitive-pricing"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "twelve per cent; nine per cent"}
+{"id": "q168", "q": "What audit reference was filed, and what does ERR-4712 mean?", "lang": "en", "kind": "multi", "asker": "u_ben", "expected": ["meeting-quality-review-may", "runbook-node-provisioning"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "AUDIT-77; node refused to join pool because key does not match"}
+{"id": "q169", "q": "What must visitors do before entering the workshop, and how many remote days are allowed?", "lang": "en", "kind": "multi", "asker": "u_chloe", "expected": ["hr-code-of-conduct", "hr-remote-work-policy"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "sign conduct sheet; up to three days per week"}
+{"id": "q170", "q": "How many people work at Northwind Atelier, and what is the museum wing value?", "lang": "en", "kind": "multi", "asker": "u_ana", "expected": ["sales-playbook-overview", "deal-brightwater-museum"], "answerable": true, "origin": "llm-drafted", "validated": "machine", "gold": "sixty people; one million four hundred and fifty thousand euros"}
+{"id": "q171", "q": "What is the delivery lead time for the NW-KITE-33 shelf system?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "NW-KITE-33"}
+{"id": "q172", "q": "How many modules are in the NW-AURORA-09 sofa configuration?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "NW-AURORA-09"}
+{"id": "q173", "q": "What is the maximum load rating of the NW-TIDAL-44 frame?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "NW-TIDAL-44"}
+{"id": "q174", "q": "Which upholstery options are approved for the NW-CINDER-12 shell?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "NW-CINDER-12"}
+{"id": "q175", "q": "How long does it take to assemble the NW-STRAND-22 bench sections?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "NW-STRAND-22"}
+{"id": "q176", "q": "What is the total fit-out value of the Meridian project?", "lang": "en", "kind": "paraphrase", "asker": "u_chloe", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "Meridian"}
+{"id": "q177", "q": "How many examination rooms does the St. Elmo programme cover?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "St. Elmo"}
+{"id": "q178", "q": "What is the committed value of the Riverside gallery wing?", "lang": "en", "kind": "paraphrase", "asker": "u_ben", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "Riverside"}
+{"id": "q179", "q": "Who signs off discounts above fifty thousand on the Calder programme?", "lang": "en", "kind": "paraphrase", "asker": "u_chloe", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "Calder"}
+{"id": "q180", "q": "What is the escalation path for a Bramble line warranty claim?", "lang": "en", "kind": "paraphrase", "asker": "u_ana", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "Bramble"}
+{"id": "q181", "q": "What does error ERR-9999 mean when a node joins the pool?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "ERR-9999"}
+{"id": "q182", "q": "What causes error ERR-8888 during the nightly invoice run?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "ERR-8888"}
+{"id": "q183", "q": "When does the project codenamed PHOENIX-NEST start and how long does it run?", "lang": "en", "kind": "lexical", "asker": "u_ana", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "PHOENIX-NEST"}
+{"id": "q184", "q": "What reduction is being asked for in the negotiation tracked as SILVER-FERN?", "lang": "en", "kind": "lexical", "asker": "u_ben", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "SILVER-FERN"}
+{"id": "q185", "q": "What was recorded under the audit reference AUDIT-99?", "lang": "en", "kind": "lexical", "asker": "u_chloe", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "AUDIT-99"}
+{"id": "q186", "q": "Quel est le délai de livraison pour le système d'étagères NW-ORION-55 ?", "lang": "fr", "kind": "lexical", "asker": "u_ana", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "NW-ORION-55"}
+{"id": "q187", "q": "Combien de modules comporte la configuration NW-NOVA-18 ?", "lang": "fr", "kind": "lexical", "asker": "u_ben", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "NW-NOVA-18"}
+{"id": "q188", "q": "Quelle est la charge maximale du cadre NW-DELTA-66 ?", "lang": "fr", "kind": "lexical", "asker": "u_chloe", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "NW-DELTA-66"}
+{"id": "q189", "q": "Quelles options de rembourrage sont approuvées pour la coque NW-SABLE-07 ?", "lang": "fr", "kind": "lexical", "asker": "u_ana", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "NW-SABLE-07"}
+{"id": "q190", "q": "Combien de temps faut-il pour assembler les sections NW-DRIFT-31 ?", "lang": "fr", "kind": "lexical", "asker": "u_ben", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "NW-DRIFT-31"}
+{"id": "q191", "q": "Quelle est la valeur totale du projet Horizon ?", "lang": "fr", "kind": "paraphrase", "asker": "u_chloe", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "Horizon"}
+{"id": "q192", "q": "Combien de salles d'examen couvre le programme Atlas ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ana", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "Atlas"}
+{"id": "q193", "q": "Quelle valeur a été engagée pour l'aile du musée Riverside ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ben", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "Riverside"}
+{"id": "q194", "q": "Qui valide les remises au-dessus de cinquante mille sur le programme Calder ?", "lang": "fr", "kind": "paraphrase", "asker": "u_chloe", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "Calder"}
+{"id": "q195", "q": "Quel est le parcours d'escalade pour une réclamation de garantie Bramble ?", "lang": "fr", "kind": "paraphrase", "asker": "u_ana", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "Bramble"}
+{"id": "q196", "q": "Que signifie l'erreur ERR-7777 lorsqu'un nœud rejoint le pool ?", "lang": "fr", "kind": "lexical", "asker": "u_ben", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "ERR-7777"}
+{"id": "q197", "q": "Qu'est-ce qui provoque l'erreur ERR-5555 lors de la synchronisation nocturne des factures ?", "lang": "fr", "kind": "lexical", "asker": "u_chloe", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "ERR-5555"}
+{"id": "q198", "q": "Quand commence le projet baptisé ATELIER-FOUNTAIN et combien de temps dure-t-il ?", "lang": "fr", "kind": "lexical", "asker": "u_ana", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "ATELIER-FOUNTAIN"}
+{"id": "q199", "q": "Quelle réduction est demandée dans la négociation suivie sous le nom de GILDED-LOOM ?", "lang": "fr", "kind": "lexical", "asker": "u_ben", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "GILDED-LOOM"}
+{"id": "q200", "q": "Que mentionne la référence d'audit AUDIT-55 ?", "lang": "fr", "kind": "lexical", "asker": "u_chloe", "expected": [], "answerable": false, "origin": "llm-drafted", "validated": "machine", "absent": "AUDIT-55"}
