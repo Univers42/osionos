@@ -30,6 +30,7 @@ import { useSlashAiImageSelect, useSlashSelect, useSlashWhiteboardSelect } from 
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";
 import { useUserStore } from "@/features/auth";
+import { rememberDatabaseWorkspace } from "@/widgets/database-view/model/objectDatabaseWorkspaces";
 import { useUrlPasteMode } from "@/shared/config/useAppearance";
 import {
   isIndentable,
@@ -1951,7 +1952,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   /** Create a real inline database + default view in the shared DBMS store. */
   const createInlineDatabase = useCallback((name?: string) => {
-    return useDatabaseStore.getState().createInlineDatabase(name);
+    const reference = useDatabaseStore.getState().createInlineDatabase(name);
+    rememberDatabaseWorkspace(reference.databaseId, useUserStore.getState().activeWorkspace()?._id);
+    return reference;
   }, []);
 
   const createPageInPrivateWorkspace = useCallback(
@@ -2000,6 +2003,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       const jwt = session?.accessToken ?? "";
       const databaseReference = useDatabaseStore.getState().createInlineDatabase(title);
+      rememberDatabaseWorkspace(databaseReference.databaseId, privateWorkspaceId);
       const page = await usePageStore
         .getState()
         .addDatabasePage(
