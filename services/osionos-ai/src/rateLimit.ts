@@ -22,6 +22,7 @@ const KEY_TTL_SECONDS = 70;
  */
 export const RUN_LIMIT_PREFIX = 'ai:rl';
 export const RELATED_LIMIT_PREFIX = 'ai:rl:related';
+export const SOURCES_LIMIT_PREFIX = 'ai:rl:sources';
 export const IMAGE_LIMIT_PREFIX = 'ai:rl:image';
 export const DESCRIBE_LIMIT_PREFIX = 'ai:rl:describe';
 /** The window of the mints: a PAT is minted from a fresh session, and rarely. */
@@ -91,6 +92,22 @@ export async function checkRelatedRateLimit(
 	now: Date = new Date(),
 ): Promise<RateLimitResult> {
 	return checkRateLimit(redis, userId, limit, now, RELATED_LIMIT_PREFIX);
+}
+
+/**
+ * The window of the device-run sources: the same limiter, its own counter.
+ *
+ * The sources are the chunks a device run would have quoted, served on the
+ * run's own access path: a client that searches cannot spend the budget of
+ * the runs or of the related reads.
+ */
+export async function checkSourcesRateLimit(
+	redis: Redis,
+	userId: string,
+	limit: number,
+	now: Date = new Date(),
+): Promise<RateLimitResult> {
+	return checkRateLimit(redis, userId, limit, now, SOURCES_LIMIT_PREFIX);
 }
 
 /**
