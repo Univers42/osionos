@@ -31,6 +31,7 @@ function matches(row, key, expr) {
 	if (expr === 'not.is.null') return row[key] != null;
 	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));
 	if (expr.startsWith('gt.')) return String(row[key] ?? '') > expr.slice(3);
+	if (expr.startsWith('lt.')) return String(row[key] ?? '') < expr.slice(3);
 	throw new Error(`session store: unsupported filter ${key}=${expr}`);
 }
 
@@ -88,6 +89,10 @@ export function createSessionStore({ rows = [], fail = null } = {}) {
 		if (method === 'POST') {
 			const id = body?.id;
 			if (id !== undefined && store.some((row) => sameText(row.id, id))) {
+				return json({ code: '23505', message: 'duplicate key value violates unique constraint' }, 409);
+			}
+			// The partial unique index on parent_id: one child per row, however the requests interleave.
+			if (body?.parent_id != null && store.some((row) => sameText(row.parent_id, body.parent_id))) {
 				return json({ code: '23505', message: 'duplicate key value violates unique constraint' }, 409);
 			}
 			const row = { ...body };

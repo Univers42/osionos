@@ -115,7 +115,8 @@ async function exchange(request, response, deps) {
 	sendJson(response, 200, {
 		user: { id: userId, email: typeof consumed.persona?.email === 'string' ? consumed.persona.email : '' },
 		accessToken: consumed.session.accessToken,
-		refreshToken: '',
+		// The bridge's rotating refresh token; the gateway's own is never forwarded.
+		refreshToken: consumed.session.refreshToken ?? '',
 		workspaceIds: Array.isArray(consumed.persona?.workspaceIds) ? consumed.persona.workspaceIds : [],
 		session: consumed.session,
 	}, config);
