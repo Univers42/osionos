@@ -34,7 +34,7 @@ import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge
 import { resolveTurnstileToken, turnstileBootLine, turnstileSettingsFromEnv } from './bridge-turnstile.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller, writeSessionCutoff } from './bridge-session-cutoff.mjs';
 import { sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
-import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
+import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, deliveredAnswer, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
 import { createAccountHandler } from './bridge-account-mounts.mjs';
 import { handoffLookupKey, openHandoffRecord, sealHandoffRecord } from './bridge-shared-store.mjs';
 import { createKv } from './bridge-kv.mjs';
@@ -4546,8 +4546,8 @@ async function handleBridgeConsume(request, response, config, kv, pg) {
 	const consumed = await consumeHandoffToken(token, kv, sessionClock(config), config.appSessionSecret);
 	// The row is written here, where the client metadata is the user's: the mint is a
 	// server-to-server call from the gateway.
-	await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod: 'handoff' });
-	json(response, 200, consumed, config);
+	const delivered = await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod: 'handoff', persona: consumed.persona });
+	json(response, 200, deliveredAnswer(consumed, delivered), config);
 }
 
 function bridgeTokenFromRedirect(redirectUrl) {
@@ -4595,8 +4595,8 @@ async function establishAppSession({ request, config, kv, pg, fetchImpl, gateway
 	if (expectedUserId && consumed.session.userId !== expectedUserId) {
 		throw Object.assign(new Error('The sign-in could not be verified; sign in again.'), { status: 401, code: 'invalid_provider_token' });
 	}
-	await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod });
-	return consumed;
+	const delivered = await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod, persona: consumed.persona });
+	return deliveredAnswer(consumed, delivered);
 }
 
 // The address the gateway would also attribute the request to: the configured header, else the socket peer.
@@ -4638,7 +4638,9 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 	json(response, 200, {
 		user: { id: lData.user?.id ?? consumed.session.userId, email },
 		accessToken: consumed.session.accessToken,
-		refreshToken: typeof lData.refresh_token === 'string' ? lData.refresh_token : '',
+		// The gateway's own refresh token is dropped on purpose: the app refreshes through the bridge's rotating one.
+		refreshToken: consumed.session.refreshToken,
+		expiresAt: consumed.expiresAt,
 		workspaceIds: Array.isArray(consumed.persona?.workspaceIds) ? consumed.persona.workspaceIds : [],
 		session: consumed.session,
 	}, config);

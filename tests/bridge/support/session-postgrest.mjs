@@ -31,6 +31,7 @@ function matches(row, key, expr) {
 	if (expr === 'not.is.null') return row[key] != null;
 	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));
 	if (expr.startsWith('gt.')) return String(row[key] ?? '') > expr.slice(3);
+	if (expr.startsWith('lt.')) return String(row[key] ?? '') < expr.slice(3);
 	throw new Error(`session store: unsupported filter ${key}=${expr}`);
 }
 
