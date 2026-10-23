@@ -22,7 +22,10 @@ import { z } from 'zod';
  *  - `person` / `user` / `files_media`: identities and uploads, not plain data;
  *  - `image` / `video` / `audio` / `file` / embed blocks: remote media is an
  *    exfiltration beacon (the viewer's browser fetches the URL);
- *  - the `dashboard` view is P6b (C165).
+ *  - the `dashboard` view is P6b (C165);
+ *  - the `chart` view draws nothing until `settings.xAxisProperty` is set
+ *    (kit views/chart/useChartData.ts:26-31, ChartView.tsx:98), a choice the
+ *    plan does not carry. Re-add it once the plan names its axis.
  */
 export const PLAN_BLOCK_TYPES = [
 	'paragraph',
@@ -54,7 +57,7 @@ export const PLAN_PROPERTY_TYPES = [
 	'phone',
 ] as const;
 
-export const PLAN_VIEW_TYPES = ['table', 'board', 'calendar', 'list', 'gallery', 'chart'] as const;
+export const PLAN_VIEW_TYPES = ['table', 'board', 'calendar', 'list', 'gallery'] as const;
 
 /** The block types that point at a database of the same plan. */
 const DATABASE_BLOCK_TYPES = ['database_inline', 'database_full_page'] as const;
@@ -167,6 +170,15 @@ function databaseError(db: PlanDatabaseItem): string | null {
 	for (const property of db.properties) {
 		if (property.options && !OPTION_PROPERTY_TYPES.includes(property.type)) {
 			return 'only select, multi_select and status properties take options';
+		}
+	}
+	const types = new Set(db.properties.map((property) => property.type));
+	for (const view of db.views) {
+		if (view.type === 'board' && !types.has('select') && !types.has('status')) {
+			return `the board "${view.name}" of "${db.key}" needs a select or status property`;
+		}
+		if (view.type === 'calendar' && !types.has('date')) {
+			return `the calendar "${view.name}" of "${db.key}" needs a date property`;
 		}
 	}
 	for (const row of db.rows ?? []) {
