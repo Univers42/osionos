@@ -45,6 +45,7 @@ export type ApprovalStatus =
   | "failed"
   | "declined"
   | "expired"
+  | "partial"
   | "unknown";
 
 /** The target of a write: the page, the title and the workspace. */
@@ -183,17 +184,28 @@ export async function fetchApproval(approvalId: string): Promise<ApprovalDescrip
 /**
  * `POST /approvals/:id` — the decision of the user.
  *
- * The body is the decision, and nothing else: a body that carries more than a
- * decision is a body that tries to be an argument, and the service refuses it.
+ * The body is the decision, and, for a `build_plan` approval, the kept keys
+ * of the plan: `{ decision, items }`. Otherwise it is the decision alone.
  */
 export async function decideApproval(
   approvalId: string,
   decision: ApprovalChoice,
+  items?: string[],
 ): Promise<ApprovalDecision> {
+  const body: { decision: ApprovalChoice; items?: string[] } = { decision };
+  if (items !== undefined) body.items = items;
   const response = await request(`/approvals/${encodeURIComponent(approvalId)}`, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({ decision }),
+    body: JSON.stringify(body),
+  });
+  return (await response.json()) as ApprovalDecision;
+}
+
+export async function resumeApproval(approvalId: string): Promise<ApprovalDecision> {
+  const response = await request(`/approvals/${encodeURIComponent(approvalId)}/resume`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
   });
   return (await response.json()) as ApprovalDecision;
 }
