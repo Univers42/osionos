@@ -13,10 +13,11 @@
 import { Sparkles } from 'lucide-react';
 
 import { useUserStore } from '@/features/auth';
-import { useAiSettingsStore, recordSettingsAction } from '@/store/settings';
+import { useAiSettingsStore } from '@/store/settings';
 import { Button, Toggle } from '@/shared/ui';
 import { isAiConfigured } from '@/features/ai/api/aiClient';
 import { FeatureCard, Section, SettingRow } from '../ui/settingsKit';
+import { openSettings } from '../model/settingsNav';
 import { SentimentSection } from './SentimentSection';
 
 export const AiPanel = () => {
@@ -25,7 +26,8 @@ export const AiPanel = () => {
   const update = useAiSettingsStore((state) => state.update);
   return (
     <Section title="osionos AI">
-      <FeatureCard className="mb-3" icon={<Sparkles size={16} />} title="osionos AI" description="Search everywhere, automate meeting notes, create summaries, and run agents." action={<Button tone="primary" onClick={() => { update(workspaceId, { connectors: true, searchEverywhereIndexing: true }); recordSettingsAction('ai_upgrade_click', { workspaceId }); }}>Upgrade</Button>} />
+      <p className="mb-3 text-sm text-[var(--osio-fg-muted)]">These switches are kept on this device.</p>
+      <FeatureCard className="mb-3" icon={<Sparkles size={16} />} title="osionos AI" description="Search everywhere, automate meeting notes, create summaries, and run agents." action={<Button tone="primary" onClick={() => openSettings('plans')}>Upgrade</Button>} />
       <SettingRow title="AI connectors" description="Let AI search connected tools from this workspace." action={<Toggle checked={settings.connectors} onChange={(checked) => update(workspaceId, { connectors: checked })} label="AI connectors" />} />
       <SettingRow title="Meeting notes auto-record" description="Automatically record and summarize meetings when available." action={<Toggle checked={settings.meetingNotesAutoRecord} onChange={(checked) => update(workspaceId, { meetingNotesAutoRecord: checked })} label="Meeting notes auto-record" />} />
       <SettingRow title="Agents" description="Enable workspace agents." action={<Toggle checked={settings.agentsEnabled} onChange={(checked) => update(workspaceId, { agentsEnabled: checked })} label="Agents" />} />
