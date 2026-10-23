@@ -585,3 +585,28 @@ describe('a members outage is not an empty member list', () => {
 		await assert.rejects(memberWorkspaceEntries(OWNER, [], config, down, { strict: true }));
 	});
 });
+
+describe('a banned or suspended owner cannot act through a token', () => {
+	// P3-4-e condition 6: the PAT gate asks the same refusal as every sign-in path.
+	const decision = (kind, until = null) => ({
+		id: 'r1', subject_kind: 'user', subject_user_id: OWNER, decision: kind, decision_until: until, decision_at: '2026-10-20T00:00:00.000Z',
+	});
+
+	for (const [label, report, code] of [
+		['a ban', decision('ban'), 'account_banned'],
+		['a live suspension', decision('suspend', new Date(Date.now() + 86_400_000).toISOString()), 'account_suspended'],
+	]) {
+		it(`answers ${label} with 403 ${code} before any page is read`, async (t) => {
+			const { world, secret } = await viaPat(t, {}, {}, { reports: [report] });
+			const answer = await send(world.base, PAGE_PATH, bearer(secret));
+			assert.equal(answer.status, 403);
+			assert.equal(answer.body.error, code);
+			assert.equal(world.seen.some((call) => call.table === 'osionos_pages'), false);
+		});
+	}
+
+	it('lets a token through once the suspension is over', async (t) => {
+		const { world, secret } = await viaPat(t, {}, {}, { reports: [decision('suspend', '2026-10-01T00:00:00.000Z')] });
+		assert.equal((await send(world.base, PAGE_PATH, bearer(secret))).status, 200);
+	});
+});
