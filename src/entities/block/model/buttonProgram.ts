@@ -26,7 +26,7 @@ export type ProgramAction =
 
 export type ProgramStep =
 	| { op: "set"; name: string; value: ProgramValue }
-	| { op: "if"; condition: ProgramValue; then: ProgramStep[]; else?: ProgramStep[] }
+	| { op: "if"; condition: ProgramValue; steps: ProgramStep[]; else?: ProgramStep[] }
 	| { op: "repeat"; count: ProgramValue; steps: ProgramStep[] }
 	| { op: "forEach"; items: ProgramValue; as: string; steps: ProgramStep[] }
 	| { op: "action"; action: ProgramAction };
@@ -138,8 +138,8 @@ function parseStep(input: unknown, path: string, depth: number, walk: Walk): Pro
 			checkKeys(record, path, ["op", "name", "value"]);
 			return { op: "set", name: parseName(record.name, join(path, "name")), value: parseValue(record.value, join(path, "value")) };
 		case "if": {
-			checkKeys(record, path, ["op", "condition", "then"], ["else"]);
-			const step: ProgramStep = { op: "if", condition: parseValue(record.condition, join(path, "condition")), then: sub("then") };
+			checkKeys(record, path, ["op", "condition", "steps"], ["else"]);
+			const step: ProgramStep = { op: "if", condition: parseValue(record.condition, join(path, "condition")), steps: sub("steps") };
 			if (record.else !== undefined) step.else = sub("else");
 			return step;
 		}
