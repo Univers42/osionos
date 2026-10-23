@@ -14,6 +14,7 @@ import type { ApprovalContext, PermissionAsked } from '../approvals/types.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import type { PageContext } from './prompt.ts';
+import { citationData } from './sources.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
 
 /**
@@ -100,11 +101,7 @@ export function buildRunTools(input: {
 			cited.push(...found.map(({ source }) => source));
 			for (const { n, source } of found) {
 				await emit('citation', {
-					n,
-					pageId: source.pageId,
-					...(source.blockId ? { blockId: source.blockId } : {}),
-					title: source.title,
-					snippet: source.snippet,
+					...citationData(source, n),
 					// The call that found the passage: the client credits
 					// it to that call, and to no other.
 					toolCallId,

@@ -222,6 +222,7 @@ export const readPage: ReadTool<z.infer<typeof readPageArgs>, ReadPageData> = {
 	sources(data) {
 		return [
 			{
+				collection: 'page',
 				pageId: data.pageId,
 				blockId: null,
 				title: data.title,
