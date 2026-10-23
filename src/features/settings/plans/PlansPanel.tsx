@@ -10,14 +10,19 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, Sparkles } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Check, Sparkles } from 'lucide-react';
 
 import { useBillingStore, type BillingState } from '@/store/settings';
 import { defaultBillingState } from '@/store/settings/defaults';
 import { Button, Modal, useToastStore } from '@/shared/ui';
-import { FeatureCard, Section, SettingRow } from '../ui/settingsKit';
-import { runAsync } from '../model/settingsCalls';
+import { FeatureCard, PanelStatus, Section } from '../ui/settingsKit';
+import { useSettingsHydration } from '../model/settingsHydration';
+
+const faq = [
+  ['Plans, billing & payment', 'Plans are set per workspace, and payment details live in the Billing section.'],
+  ['Message support', 'Support requests are not handled inside the app yet.'],
+];
 
 export const PlansPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = 'local-workspace' }) => {
   const storedBilling = useBillingStore((state) => state.data[workspaceId]);
@@ -33,18 +38,21 @@ export const PlansPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = '
     ['Enterprise', 'AI analytics, zero data retention, SCIM, audit log, domain management'],
   ];
 
-  useEffect(() => {
-    runAsync(hydrate(workspaceId));
+  // The store keeps a failed read in `error` instead of rejecting, so it is turned back into a rejection here.
+  const hydration = useSettingsHydration(async () => {
+    await hydrate(workspaceId);
+    const failure = useBillingStore.getState().error[workspaceId];
+    if (failure) throw new Error(failure);
   }, [hydrate, workspaceId]);
 
   return (
-    <>
-      <FeatureCard title="Your current plan" description={`${billing.plan} · For students & educators`} action={<Check size={18} className="text-[var(--osio-accent)]" />} />
+    <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
+      <FeatureCard title="Your current plan" description={billing.plan} action={<Check size={18} className="text-[var(--osio-accent)]" />} />
       <FeatureCard icon={<Sparkles size={16} />} title="osionos AI" description="Upgrade to search everywhere, automate meeting notes & more" action={<Button tone="primary" onClick={() => setUpgradePlan('AI')}>Upgrade</Button>} />
       <Section title="Compare all plans"><div className="grid gap-3 md:grid-cols-2">{plans.map(([name, description]) => <div key={name} className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4"><div className="flex items-center justify-between"><h4 className="font-semibold text-[var(--osio-fg-default)]">{name}</h4>{name !== 'Free' && <span className="text-xs text-[var(--osio-fg-muted)]">billed monthly</span>}</div><p className="mt-3 text-sm leading-5 text-[var(--osio-fg-muted)]">{description}</p><Button className="mt-4 w-full" onClick={() => setUpgradePlan(name)}>Upgrade</Button></div>)}</div></Section>
-      <Section title="FAQ"><SettingRow title="Plans, Billing & Payment" action={<ChevronDown size={16} />} /><SettingRow title="Message support" action={<ChevronDown size={16} />} /></Section>
-      {upgradePlan && <UpgradePlanModal plan={upgradePlan} onConfirm={() => { update(workspaceId, { plan: upgradePlan }); useToastStore.getState().push({ kind: 'success', title: 'accountUpgraded' }); setUpgradePlan(null); }} onClose={() => setUpgradePlan(null)} />}
-    </>
+      <Section title="FAQ">{faq.map(([question, answer]) => <details key={question} className="border-t border-[var(--osio-border-default)] py-3"><summary className="cursor-pointer text-sm font-medium text-[var(--osio-fg-default)]">{question}</summary><p className="mt-2 text-sm leading-[18px] text-[var(--osio-fg-muted)]">{answer}</p></details>)}</Section>
+      {upgradePlan && <UpgradePlanModal plan={upgradePlan} onConfirm={() => { update(workspaceId, { plan: upgradePlan }); useToastStore.getState().push({ kind: 'success', title: `Plan set to ${upgradePlan} on this device.` }); setUpgradePlan(null); }} onClose={() => setUpgradePlan(null)} />}
+    </PanelStatus>
   );
 };
 
