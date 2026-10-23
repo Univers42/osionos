@@ -138,10 +138,11 @@ describe('the revoke route filters what it may touch', () => {
 		const revoked = await sendJson(base, `/api/account/sessions/${theirs.id}`, { method: 'DELETE', headers: { authorization: `Bearer ${mine.accessToken}` } });
 		assert.equal(revoked.status, 404);
 		assert.equal(revoked.body.code, 'session_not_found');
-		const patch = store.callsTo('osionos_sessions').find((call) => call.method === 'PATCH');
-		assert.equal(patch.params.get('user_id'), `eq.${USER_A}`);
-		assert.equal(patch.params.get('revoked_at'), 'is.null');
-		assert.equal(patch.params.get('id'), `eq.${theirs.id}`);
+		// The family is found by a read that carries the caller's id; a foreign row is never found, so nothing is patched.
+		const read = store.callsTo('osionos_sessions').find((call) => call.method === 'GET' && call.params.get('id') === `eq.${theirs.id}`);
+		assert.equal(read.params.get('user_id'), `eq.${USER_A}`);
+		assert.equal(read.params.get('revoked_at'), 'is.null');
+		assert.equal(store.callsTo('osionos_sessions').some((call) => call.method === 'PATCH'), false);
 		const row = store.rows().find((entry) => entry.id === theirs.id);
 		assert.equal(row.revoked_at, undefined, 'the row of the other user is untouched');
 		const stillAlive = await sendJson(base, '/api/favorites', { headers: { authorization: `Bearer ${theirs.accessToken}` } });
