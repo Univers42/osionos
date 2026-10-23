@@ -39,6 +39,11 @@ export const useSudoPromptStore = create<SudoPromptStore>()((set) => ({
   granted: () => set((state) => ({ open: false, grants: state.grants + 1 })),
 }));
 
+/** "Try again" is offered once the prompt granted sudo after the refusal; nothing re-sends by itself. */
+export function canRetryAfterSudo(needsSudo: boolean, grants: number, grantsAtRefusal: number): boolean {
+  return !needsSudo || grants > grantsAtRefusal;
+}
+
 /** Opens the prompt on every `sudo_required` refusal. Returns the unsubscribe. */
 export function startSudoListener(): () => void {
   return onSudoRequired(() => useSudoPromptStore.getState().show());
