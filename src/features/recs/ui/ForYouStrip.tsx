@@ -14,6 +14,10 @@
  * "For you" on the Home dashboard: the pages the recommender serves to the
  * user, why each of them is there, and the way to refuse one.
  *
+ * When the recommender cannot personalise (opted out, no model, a new user)
+ * the strip shows the popular order under the heading "Popular" (C48); an
+ * opted-out user gets no "Not interested" action, they write no events.
+ *
  * The strip is OPTIONAL: when there is no slate, no item, or a recommender
  * that is off, it renders NOTHING. The dashboard is not waiting for a
  * recommendation, and there is no empty state to explain.
@@ -39,6 +43,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { IconValueView, useToastStore } from "@/shared/ui";
 import { reportClick, reportImpression } from "../api/beacon";
 import { fetchForYou, markNotInterested, type ForYouItem } from "../api/forYou";
+import { stripView, type StripView } from "../model/stripView";
 import { whyText } from "../model/whyText";
 
 /** The id of the heading the section is labelled by. */
@@ -66,8 +71,7 @@ const whyId = (pageId: string) => `osionos-for-you-why-${pageId}`;
 export const ForYouStrip: React.FC = () => {
   const openPage = usePageStore((s) => s.openPage);
   const toast = useToastStore((s) => s.push);
-  const [items, setItems] = useState<ForYouItem[]>([]);
-  const [slate, setSlate] = useState("");
+  const [view, setView] = useState<StripView | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
   const [whyOpen, setWhyOpen] = useState<string | null>(null);
   // The cards of the strip: the observer watches them all at once.
@@ -83,18 +87,17 @@ export const ForYouStrip: React.FC = () => {
     let alive = true;
     void fetchForYou().then((result) => {
       if (!alive || !result.ok) return;
-      if (!result.value.personalized) return;
-      setItems(result.value.items);
-      setSlate(result.value.slate ?? "");
+      setView(stripView(result.value));
     });
     return () => {
       alive = false;
     };
   }, []);
 
+  const slate = view?.slate ?? "";
   const visible = useMemo(
-    () => items.filter((item) => !hidden.includes(item.pageId)),
-    [items, hidden],
+    () => (view?.items ?? []).filter((item) => !hidden.includes(item.pageId)),
+    [view, hidden],
   );
 
   // An IMPRESSION is a card the user really saw: half of it on the screen.
@@ -142,7 +145,7 @@ export const ForYouStrip: React.FC = () => {
       className="shrink-0 border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-page)] px-3 py-2"
     >
       <h2 id={HEADING_ID} className="mb-1.5 text-xs font-medium text-[var(--osio-fg-muted)]">
-        For you
+        {view?.heading}
       </h2>
       <ul ref={listRef} className="flex flex-wrap gap-2">
         {visible.map((item) => {
@@ -186,15 +189,17 @@ export const ForYouStrip: React.FC = () => {
                 >
                   Why this?
                 </button>
-                <button
-                  type="button"
-                  className={ACTION}
-                  onClick={() => {
-                    void onNotInterested(item);
-                  }}
-                >
-                  Not interested
-                </button>
+                {view?.canRefuse && (
+                  <button
+                    type="button"
+                    className={ACTION}
+                    onClick={() => {
+                      void onNotInterested(item);
+                    }}
+                  >
+                    Not interested
+                  </button>
+                )}
               </div>
               <p id={whyId(item.pageId)} hidden={!open} className="text-xs text-[var(--osio-fg-muted)]">
                 {whyText(item.why)}
