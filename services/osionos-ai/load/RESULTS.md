@@ -9,7 +9,7 @@ docker run --rm --network ai-load-net ... node --experimental-strip-types load/s
 # stats sampler
 sh services/osionos-ai/load/stats.sh /home/dlesieur/wt-ai-night/tmp/load-stats.jsonl &
 # generator
-docker run -d --name ai-load-gen --network ai-load-net --cpus 2 --memory 2g ... node --experimental-strip-types load/run-load.ts
+docker run -d --name ai-load-gen --network ai-load-net --cpus 2 --memory 2g -e SERVICE_URL=http://service:4300 ... node --experimental-strip-types load/run-load.ts
 sh services/osionos-ai/load/stack.sh down
 ```
 
