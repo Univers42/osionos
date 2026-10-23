@@ -209,7 +209,10 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: "teamspaces", group: "access", label: "Teamspaces", title: "Teamspaces",
     subtitle: "Manage teamspaces in this workspace", icon: Shield,
-    anchors: [{ id: "teamspaces", label: "Teamspaces", keywords: ["teamspace", "owner", "access", "security"] }],
+    anchors: [
+      { id: "teams", label: "Teams", keywords: ["team", "teams", "group", "members"] },
+      { id: "teamspaces", label: "Teamspaces", keywords: ["teamspace", "owner", "access", "security"] },
+    ],
   },
   {
     id: "permissions", group: "access", label: "Permissions", title: "Permissions",

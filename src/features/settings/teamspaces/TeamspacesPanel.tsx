@@ -20,6 +20,7 @@ import { Button, Dropdown, Modal } from '@/shared/ui';
 import { ConfirmModal } from '../ui/ConfirmModals';
 import { DataTable, EmptyState, Section } from '../ui/settingsKit';
 import { runAsync } from '../model/settingsCalls';
+import { TeamsSection } from './TeamsSection';
 
 // Stable empty: `?? []` inside a zustand-v5 selector returns a FRESH array each
 // getSnapshot when the key is absent (new workspace) → infinite-loop blank panel.
@@ -52,6 +53,7 @@ export const TeamspacesPanel: React.FC = () => {
 
   return (
     <>
+      <TeamsSection />
       <Section title="Teamspaces"><p className="mb-3 text-sm text-[var(--osio-fg-muted)]">Manage all teamspaces you have access to here.</p><DataTable headers={['Teamspace', 'Owners', 'Access', '']} rows={rows} empty={<EmptyState icon={<Users size={16} />} title="No teamspaces yet" hint="Create one to group pages for a team." />} /><Button className="mt-4" onClick={() => setModalOpen(true)}>New teamspace</Button></Section>
       {archiving && <ConfirmModal title="Archive teamspace" message={`Archive ${archiving.name}? It leaves this list; its pages are not deleted.`} actionLabel="Archive" danger onConfirm={() => archiveTeamspace(workspaceId, archiving.id)} onClose={() => setArchiving(null)} />}
       {modalOpen && <NewTeamspaceModal onCreate={(name) => { runAsync(createNewTeamspace(name)); setModalOpen(false); }} onClose={() => setModalOpen(false)} />}
