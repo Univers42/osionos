@@ -60,7 +60,7 @@ const project = (row, select) => (!select || select === '*' ? { ...row } : Objec
 /** The two factor tables. `failRead` / `failWrite` are { status, body } answers for the next kind of request. */
 export function createMfaStore({ totp = [], recovery = [] } = {}) {
 	const tables = new Map([[TOTP_TABLE, totp.map((row) => ({ ...row }))], [CODES_TABLE, recovery.map((row) => ({ ...row }))]]);
-	const store = { calls: [], failRead: null, failWrite: null, frozenReads: null, rows: (name = TOTP_TABLE) => tables.get(name) };
+	const store = { calls: [], failRead: null, failWrite: null, frozenReads: null, holdReads: null, rows: (name = TOTP_TABLE) => tables.get(name) };
 	store.fetchImpl = async (url, init = {}) => {
 		const parsed = new URL(String(url));
 		const table = parsed.pathname.replace('/rest/v1/', '');
@@ -74,6 +74,7 @@ export function createMfaStore({ totp = [], recovery = [] } = {}) {
 		const hits = rows.filter((row) => [...parsed.searchParams].every(([key, expr]) => RESERVED.has(key) || matches(row, key, expr)));
 		const answer = (list) => (prefer.includes('return=representation') ? json(list.map((row) => project(row, parsed.searchParams.get('select'))), method === 'POST' ? 201 : 200) : new Response(null, { status: 204 }));
 		// `frozenReads` is the snapshot two racing requests both read before either writes.
+		if (method === 'GET' && table === TOTP_TABLE && store.holdReads) await store.holdReads;
 		if (method === 'GET' && store.frozenReads && table === TOTP_TABLE) return json(store.frozenReads.map((row) => project(row, parsed.searchParams.get('select'))));
 		if (method === 'GET') return json(hits.map((row) => project(row, parsed.searchParams.get('select'))));
 		if (method === 'POST') {
@@ -102,12 +103,12 @@ export const verifiedRow = (userId, secretEnc, extra = {}) => ({ user_id: userId
  * `signIn` goes through the handoff and consume the way the app does; `sudo` opens the
  * sudo window of a token; `advance` moves the bridge clock.
  */
-export async function startMfaWorld(t, { env = { OSIONOS_MFA_SECRET_KEY: MFA_KEY }, totp = [], recovery = [], cutoffRows = [] } = {}) {
+export async function startMfaWorld(t, { env = { OSIONOS_MFA_SECRET_KEY: MFA_KEY }, totp = [], recovery = [], cutoffRows = [], ipHeader = 'x-forwarded-for' } = {}) {
 	const clock = { at: Date.now() };
 	const mfa = createMfaStore({ totp, recovery });
 	const sessions = createSessionStore();
 	const cutoffs = createCutoffSource(cutoffRows);
-	const world = { clock, mfa, sessions, cutoffs, cutoffWrites: [], cutoffCallIndex: [], failCutoffWrite: false, failSessionPatch: false, kv: kvStub(), subject: USER_A };
+	const world = { clock, mfa, sessions, cutoffs, cutoffWrites: [], cutoffCallIndex: [], failCutoffWrite: false, failSessionPatch: false, failPatRevoke: false, kv: kvStub(), subject: USER_A };
 	// The gateway's session route mints through the real handoff, so login and exchange reach the same mint site as a handoff.
 	const gateway = async (route) => {
 		if (route === '/api/auth/login') return json({ access_token: 'gateway-token', user: { id: world.subject } });
@@ -119,6 +120,7 @@ export async function startMfaWorld(t, { env = { OSIONOS_MFA_SECRET_KEY: MFA_KEY
 		if (String(url).endsWith('/auth/v1/user')) return json({ id: world.subject });
 		const table = new URL(String(url)).pathname.replace('/rest/v1/', '');
 		if (table.startsWith('osionos_mfa_')) return mfa.fetchImpl(url, init);
+		if (table === 'osionos_personal_access_tokens' && init.method === 'PATCH' && world.failPatRevoke) return json({ message: 'boom' }, 500);
 		if (table === 'osionos_sessions' && init.method === 'PATCH' && world.failSessionPatch) return json({ message: 'boom' }, 500);
 		if (table !== 'auth_session_cutoffs') return sessions.fetchImpl(url, init);
 		if (init.method !== 'POST') return cutoffs.fetchImpl(url, init);
@@ -130,7 +132,7 @@ export async function startMfaWorld(t, { env = { OSIONOS_MFA_SECRET_KEY: MFA_KEY
 		cutoffs.rows = [...cutoffs.rows.filter((row) => row.user_id !== body.user_id), body];
 		return new Response(null, { status: 201 });
 	};
-	const config = sessionConfig({ now: () => clock.at, ipHeader: 'x-forwarded-for' });
+	const config = sessionConfig({ now: () => clock.at, ipHeader });
 	config.sessionCutoffs = new SessionCutoffs({ enforced: true, now: () => clock.at, log: quietLog });
 	config.sessionCutoffs.completeLoad(new Map(), config.sessionCutoffs.beginLoad());
 	config.gatewayUrl = GATEWAY;
@@ -144,7 +146,7 @@ export async function startMfaWorld(t, { env = { OSIONOS_MFA_SECRET_KEY: MFA_KEY
 	Object.assign(world, { config, server, base });
 	world.advance = (ms) => { clock.at += ms; };
 	world.api = async (method, path, token, { body, ip = '198.51.100.7' } = {}) => {
-		const headers = { 'content-type': 'application/json', 'x-forwarded-for': ip, ...(token ? { authorization: `Bearer ${token}` } : {}) };
+		const headers = { 'content-type': 'application/json', ...(ip ? { 'x-forwarded-for': ip } : {}), ...(token ? { authorization: `Bearer ${token}` } : {}) };
 		const response = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
 		const text = await response.text();
 		return { status: response.status, text, body: text ? JSON.parse(text) : null, headers: response.headers };

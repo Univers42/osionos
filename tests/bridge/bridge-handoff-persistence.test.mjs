@@ -65,7 +65,7 @@ describe('bridge handoff with BaaS persistence', () => {
 	});
 
 	it('keeps the hash-derived fallback session when persistence is disabled', async () => {
-		const config = configFromEnv({ ...base, OSIONOS_BRIDGE_PERSISTENCE: 'memory' });
+		const config = configFromEnv({ ...base, OSIONOS_BAAS_URL: '', OSIONOS_BRIDGE_PERSISTENCE: 'memory' });
 		const { session } = await handoff(config, async () => { throw new Error('no BaaS expected'); });
 		assert.match(session.privateWorkspaces[0]._id, /^[0-9a-f-]{36}$/);
 		assert.notEqual(session.privateWorkspaces[0]._id, persistedId);
