@@ -55,14 +55,18 @@ export async function stubSessions(page, rows) {
 /** Loads the app, gives it a page JWT, a recorder for local sign-outs and, with `bridgeToken`, an app session that logout can send to the bridge, and opens Settings > Profile. */
 export async function openProfile(page, baseURL, { bridgeToken = "" } = {}) {
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
+  // Seed only once the boot sign-in has written its session, or it overwrites the token below.
+  await page.getByRole("button", { name: "Settings", exact: true }).first().waitFor();
   await page.evaluate(([jwt, token]) => {
     globalThis.__signedOut = [];
     const store = globalThis.__playgroundUserStore;
     const { activeUserId, sessions } = store.getState();
+    // The stub build's sign-in is refused (503), so there may be no session to extend: seed the
+    // workspace arrays a session always has, or activeWorkspace() throws and the app renders blank.
     store.setState({
       activePageJwt: () => jwt,
       handleSessionRevoked: (revoked) => globalThis.__signedOut.push(revoked),
-      ...(token ? { sessions: { ...sessions, [activeUserId]: { ...sessions[activeUserId], userId: activeUserId, accessToken: token } } } : {}),
+      ...(token ? { sessions: { ...sessions, [activeUserId]: { privateWorkspaces: [], sharedWorkspaces: [], ...sessions[activeUserId], userId: activeUserId, accessToken: token } } } : {}),
     });
   }, [PAGE_JWT, bridgeToken]);
   await openSettings(page);
