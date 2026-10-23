@@ -35,6 +35,7 @@ export interface PatToken {
   createdAt: string | null;
   expiresAt: string | null;
   revokedAt: string | null;
+  lastUsedAt: string | null;
 }
 
 export interface PatCatalog {
@@ -174,4 +175,40 @@ export function createTokenBody(form: TokenForm, now: number = Date.now()): Crea
 export function dateLabel(iso: string | null): string {
   const at = iso ? Date.parse(iso) : Number.NaN;
   return Number.isFinite(at) ? dayOf(at) : "—";
+}
+
+const HOUR_MS = 3_600_000;
+
+/**
+ * Worded by the hour, never as a time: the bridge stamps the FIRST use of each hour, so the
+ * real last use lies up to an hour after the stamp.
+ * Caveat: a token used once an hour ago and again just now reads "Within the hour" only after
+ * the next stamp; until then it can read one step older than the truth. It never reads newer.
+ */
+export function lastUsedLabel(lastUsedAt: string | null, now: number = Date.now()): string {
+  const at = lastUsedAt ? Date.parse(lastUsedAt) : Number.NaN;
+  if (!Number.isFinite(at)) return "Never used";
+  const hours = Math.ceil((now - at) / HOUR_MS);
+  if (hours <= 1) return "Within the hour";
+  if (hours < 24) return `Last used within ${hours} hours`;
+  const days = Math.ceil(hours / 24);
+  return `Last used within ${days} ${days === 1 ? "day" : "days"}`;
+}
+
+export interface TokenPreset {
+  name: string;
+  kind: "classic";
+  scopes: string[];
+  expiryDays: number;
+}
+
+/** What osionos's MCP server needs: read pages, create them, archive them. */
+export const MCP_PRESET: TokenPreset = { name: "Claude Code (MCP)", kind: "classic", scopes: ["pages:read", "pages:write"], expiryDays: 30 };
+
+/** The fields a preset's write scopes let the app change, from the served catalog: what the dialog shows before Create. */
+export function presetWriteAttributes(preset: TokenPreset, catalog: PatCatalog): string[] {
+  return preset.scopes.flatMap((scope) => {
+    const [resource, permission] = scope.split(":");
+    return permission === "write" ? attributesOf(catalog, resource) : [];
+  });
 }

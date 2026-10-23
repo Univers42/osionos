@@ -28,7 +28,10 @@ import {
   expiryLabel,
   isExpiryValid,
   kindLabel,
+  lastUsedLabel,
   maxExpiryDate,
+  MCP_PRESET,
+  presetWriteAttributes,
   patErrorMessage,
   permissionSummary,
   scopeLabel,
@@ -39,7 +42,7 @@ import {
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 const NOW = Date.parse("2026-10-23T12:00:00Z");
 const UUID = "11111111-2222-4333-8444-555555555555";
-const CATALOG: PatCatalog = { resources: { pages: { attributes: ["_id", "title", "content"] } }, permissions: ["read", "write"] };
+const CATALOG: PatCatalog = { resources: { pages: { attributes: ["_id", "title", "content", "workspaceId", "archivedAt"] } }, permissions: ["read", "write"] };
 
 const classicForm: TokenForm = {
   name: "  CI  ", kind: "classic", expiry: "2026-11-22", scopes: ["pages:read"], resource: "pages", attributes: [], permissions: [],
@@ -96,12 +99,12 @@ test("createTokenBody carries exactly the keys the bridge accepts", () => {
 
 test("the picker is the served catalog, never a second list", () => {
   assert.deepEqual(classicScopes(CATALOG), ["pages:read", "pages:write"]);
-  assert.deepEqual(attributesOf(CATALOG, "pages"), ["_id", "title", "content"]);
+  assert.deepEqual(attributesOf(CATALOG, "pages"), ["_id", "title", "content", "workspaceId", "archivedAt"]);
   assert.deepEqual(attributesOf(CATALOG, "nope"), []);
 });
 
 test("permissionSummary names the scopes or the grants of a token", () => {
-  const base = { id: UUID, name: "n", createdAt: null, expiresAt: null, revokedAt: null };
+  const base = { id: UUID, name: "n", createdAt: null, expiresAt: null, revokedAt: null, lastUsedAt: null };
   assert.equal(permissionSummary({ ...base, kind: "classic", scopes: ["pages:read"], grants: [] }), "Pages: read");
   assert.equal(
     permissionSummary({ ...base, kind: "fine_grained", scopes: [], grants: [{ resource: "pages", attributes: ["title", "icon"], permissions: ["read"] }] }),
@@ -123,11 +126,15 @@ test("parseTokenList never throws on a malformed body and drops rows without a u
     assert.deepEqual(out.tokens, []);
   }
   const out = parseTokenList({
-    tokens: [{ id: UUID, name: "a", kind: "classic", scopes: ["pages:read"], grants: [], createdAt: "c", expiresAt: "e", revokedAt: null, token_hash: "h" }],
+    tokens: [{ id: UUID, name: "a", kind: "classic", scopes: ["pages:read"], grants: [], createdAt: "c", expiresAt: "e", revokedAt: null, lastUsedAt: "2026-10-23T09:00:00.000Z", token_hash: "h" }],
     catalog: CATALOG,
   });
   assert.equal(out.tokens.length, 1);
-  assert.deepEqual(Object.keys(out.tokens[0]).sort(), ["createdAt", "expiresAt", "grants", "id", "kind", "name", "revokedAt", "scopes"]);
+  assert.equal(out.tokens[0].lastUsedAt, "2026-10-23T09:00:00.000Z");
+  for (const lastUsedAt of [4, {}, undefined, null]) {
+    assert.equal(parseTokenList({ tokens: [{ id: UUID, name: "a", lastUsedAt }] }).tokens[0].lastUsedAt, null);
+  }
+  assert.deepEqual(Object.keys(out.tokens[0]).sort(), ["createdAt", "expiresAt", "grants", "id", "kind", "lastUsedAt", "name", "revokedAt", "scopes"]);
   assert.deepEqual(out.catalog, CATALOG);
   assert.deepEqual(parseTokenList({ tokens: [], catalog: 4 }).catalog, { resources: {}, permissions: [] });
 });
@@ -159,4 +166,53 @@ test("revoking goes through the in-app confirm: the row button only asks", () =>
 
 test("expiry is required by the form itself: the dialog disables Create until the body is ready", () => {
   assert.match(read("src/features/settings/developer/CreateTokenModal.tsx"), /createTokenBody\(form\)/);
+});
+
+test("last use is worded by the hour, never as a timestamp, and a never-used token says so", () => {
+  assert.equal(lastUsedLabel(null, NOW), "Never used");
+  assert.equal(lastUsedLabel("not a date", NOW), "Never used");
+  assert.equal(lastUsedLabel("2026-10-23T11:30:00.000Z", NOW), "Within the hour");
+  assert.equal(lastUsedLabel("2026-10-23T13:30:00.000Z", NOW), "Within the hour");
+  assert.equal(lastUsedLabel("2026-10-23T10:00:00.000Z", NOW), "Last used within 2 hours");
+  assert.equal(lastUsedLabel("2026-10-22T12:00:00.000Z", NOW), "Last used within 1 day");
+  assert.equal(lastUsedLabel("2026-10-13T12:00:00.000Z", NOW), "Last used within 10 days");
+  for (const iso of ["2026-10-23T11:30:00.000Z", "2026-10-23T10:00:00.000Z", "2026-10-13T12:00:00.000Z"]) {
+    assert.doesNotMatch(lastUsedLabel(iso, NOW), /\d{1,2}:\d{2}|20\d\d|T\d/, "no exact time or date");
+  }
+});
+
+test("the MCP preset reads and writes pages, expires in 30 days, and shows the fields write reaches", () => {
+  assert.equal(MCP_PRESET.name, "Claude Code (MCP)");
+  assert.equal(MCP_PRESET.kind, "classic");
+  assert.deepEqual(MCP_PRESET.scopes, ["pages:read", "pages:write"]);
+  assert.equal(MCP_PRESET.expiryDays, 30);
+  const written = presetWriteAttributes(MCP_PRESET, CATALOG);
+  assert.ok(written.includes("workspaceId"), "osionos_create_page sends workspaceId");
+  assert.ok(written.includes("archivedAt"), "osionos_archive_page patches archivedAt");
+  assert.deepEqual(presetWriteAttributes({ ...MCP_PRESET, scopes: ["pages:read"] }, CATALOG), []);
+  assert.ok(attributesOf({ resources: { pages: { attributes: [] } }, permissions: [] }, "pages").length === 0);
+  assert.match(read("scripts/bridge-pat-permissions.mjs"), /'workspaceId'/, "the bridge vocabulary has the field the preset names");
+});
+
+test("the section carries the authorized-apps anchor once, under the developer id", () => {
+  const section = findSection("developer");
+  assert.equal(section?.anchors.filter((anchor) => anchor.id === "authorized-apps").length, 1);
+  assert.ok(section?.anchors.some((anchor) => anchor.id === "personal-access-tokens"));
+  assert.ok(searchSettings("authorized").some((hit) => hit.section.id === "developer" && hit.anchor.id === "authorized-apps"));
+  assert.equal(section?.title, "Developer", "existing e2e helpers open it by this exact name");
+});
+
+test("one table: a Last used column beside the confirmed per-row Revoke, and the preset only fills the form", () => {
+  const panel = read("src/features/settings/developer/DeveloperPanel.tsx");
+  assert.equal((panel.match(/<DataTable/g) ?? []).length, 1);
+  assert.match(panel, /"Last used"/);
+  assert.match(panel, /lastUsedLabel\(token\.lastUsedAt\)/);
+  assert.match(panel, /accurate to the hour/);
+  assert.match(panel, /No apps can act for you yet\./);
+  const modal = read("src/features/settings/developer/CreateTokenModal.tsx");
+  assert.match(modal, /osionos MCP \(Claude Code\)/);
+  assert.match(modal, /archiving pages/);
+  assert.doesNotMatch(modal, /onClick=\{[^}]*(submit|createToken)\(/, "a preset click never creates");
+  assert.doesNotMatch(modal, /OSIONOS_MCP_TOKEN=osio_pat/, "no literal secret in a sample");
+  assert.match(modal, /OSIONOS_MCP_TOKEN/);
 });
