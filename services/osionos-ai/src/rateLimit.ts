@@ -140,6 +140,8 @@ export async function checkDailyBuildLimit(
 /** The windows of the remote MCP calls: one per token, one per user (C118). */
 export const MCP_TOKEN_LIMIT_PREFIX = 'ai:rl:mcp:token';
 export const MCP_USER_LIMIT_PREFIX = 'ai:rl:mcp:user';
+/** The window of the MCP WRITE proposals: one per token (G4b-2). */
+export const MCP_WRITE_LIMIT_PREFIX = 'ai:rl:mcp:write';
 export const MCP_CALLS_PER_TOKEN_MINUTE = 60;
 export const MCP_CALLS_PER_USER_MINUTE = 120;
 

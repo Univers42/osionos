@@ -3,11 +3,13 @@ import { request } from 'node:http';
 import type { IncomingHttpHeaders } from 'node:http';
 import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import { startMockEmbedder } from './mockEmbed.ts';
+import { startMockBridge } from './mockBridge.ts';
 import { Seeds, USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } from './retrievalSeed.ts';
 
 /**
  * The harness of the remote MCP tests: a service with the endpoint on, the
- * mock embedder, and a raw JSON-RPC client over node:http.
+ * mock embedder, a mock bridge (a write the user approves has somewhere to
+ * go), and a raw JSON-RPC client over node:http.
  *
  * node:http and not fetch, because the tests set the Host and Origin headers,
  * which a fetch client may rewrite or refuse.
@@ -19,6 +21,8 @@ process.env.OSIONOS_AI_PLATFORM_MODELS ??= JSON.stringify([
 export const embedder = await startMockEmbedder();
 process.env.OSIONOS_AI_EMBED_URL = embedder.baseUrl;
 process.env.OSIONOS_AI_EMBED_MODEL = 'intfloat/multilingual-e5-small';
+export const bridge = await startMockBridge();
+process.env.OSIONOS_AI_BRIDGE_URL = bridge.baseUrl;
 
 const { createAiServer } = await import('../src/server.ts');
 export const app = createAiServer();
@@ -137,5 +141,6 @@ export async function closeAll(): Promise<void> {
 	await seeds.clear();
 	await app.db.query('delete from public.ai_access_tokens');
 	await embedder.close();
+	await bridge.close();
 	await app.close();
 }
