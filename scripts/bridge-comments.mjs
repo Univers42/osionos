@@ -149,9 +149,12 @@ async function updateComment(deps, session, commentId, request, response, config
 	if (typeof patch.content === 'string') {
 		const { mode, stateEnabled } = moderationSettings(deps.env);
 		const pageId = typeof comment.page_id === 'string' && comment.page_id ? comment.page_id : null;
-		const pageRows = pageId && stateEnabled ? await rest(config, deps.fetchImpl, `osionos_pages?id=eq.${pageId}&select=visibility,workspace_id&limit=1`) : [];
+		const pageRows = pageId ? await rest(config, deps.fetchImpl, `osionos_pages?id=eq.${pageId}&select=owner_id,visibility,workspace_id&limit=1`) : [];
 		page = Array.isArray(pageRows) ? pageRows[0] : null;
-		const publicReadable = await publicReadablePage(config, deps.fetchImpl, page);
+		if (page?.owner_id) {
+			await requireInteraction(config, deps.fetchImpl, { interaction: 'comments', actorId: session.userId, targetId: page.owner_id, workspaceId: page.workspace_id });
+		}
+		const publicReadable = stateEnabled && await publicReadablePage(config, deps.fetchImpl, page);
 		decision = decideWrite({
 			text: patch.content,
 			surface: 'page_comment',
