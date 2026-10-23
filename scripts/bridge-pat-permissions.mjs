@@ -204,7 +204,7 @@ export function maskAttributes(entry, mask) {
  */
 // The default sort's order (UTF-16 code units), spelled out: locale-independent, so the
 // list a client sees never depends on the server's locale.
-const byCodeUnit = (left, right) => (left < right ? -1 : Number(left > right));
+export const byCodeUnit = (left, right) => (left < right ? -1 : Number(left > right));
 
 export function attributesOutsideMask(payload, mask) {
 	if (!isPlainObject(payload)) return [];

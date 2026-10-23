@@ -41,7 +41,7 @@ function srcFiles(base = SRC_ROOT): string[] {
   return files;
 }
 
-test("the registry lists exactly the 19 legacy section ids, the 2 AI ones and moderation, all unique", () => {
+test("the registry lists exactly the 19 legacy section ids, the 2 AI ones, moderation and developer, all unique", () => {
   const ids = SETTINGS_SECTIONS.map((section) => section.id);
   assert.equal(new Set(ids).size, ids.length, "a section id appears twice");
   const LEGACY_IDS = [
@@ -51,6 +51,8 @@ test("the registry lists exactly the 19 legacy section ids, the 2 AI ones and mo
     "teamspaces", "permissions", "billing", "plans",
     // feat/ai: the AI connections tab and the accessibility & voice tab of the retired modal.
     "ai_connections", "accessibility_voice",
+    // P5-1-e: personal access tokens.
+    "developer",
   ];
   for (const id of LEGACY_IDS) assert.ok(ids.includes(id), `${id} left the registry`);
   assert.equal(ids.length, LEGACY_IDS.length + 1);

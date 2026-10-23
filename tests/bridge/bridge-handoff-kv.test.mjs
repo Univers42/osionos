@@ -24,6 +24,8 @@ import { consumeHandoffToken, createBridgeHandoff } from '../../scripts/bridge-a
 import { handoffLookupKey, handoffSealKey } from '../../scripts/bridge-shared-store.mjs';
 import { createKv } from '../../scripts/bridge-kv.mjs';
 import { kvStub } from './support/kv-stub.mjs';
+import { noFactorPg } from './support/no-factor-pg.mjs';
+
 import { APP_SECRET, USER_A, gatewayRequest, postJson, sessionConfig, startSessionBridge } from './support/session-world.mjs';
 
 const SKEW_MS = 5 * 60 * 1000;
@@ -98,7 +100,7 @@ describe('the stored handoff is sealed', () => {
 	it('holds neither the token nor a usable session', async () => {
 		const kv = kvStub();
 		const config = sessionConfig({ persistence: 'memory' });
-		const minted = await createBridgeHandoff({ payload: payloadFor(), config, kv, now: Date.now(), fetchImpl: async () => new Response('[]') });
+		const minted = await createBridgeHandoff({ payload: payloadFor(), config, pg: noFactorPg(), kv, now: Date.now(), fetchImpl: async () => new Response('[]') });
 		const token = tokenOf(minted.redirectUrl);
 		const key = handoffLookupKey(token);
 		const stored = kv.values.get(`osb:${key}`);
@@ -116,7 +118,7 @@ describe('the stored handoff is sealed', () => {
 	it('looks the record up under a key that is not the seal key and holds no part of the token', async () => {
 		const kv = kvStub();
 		const config = sessionConfig({ persistence: 'memory' });
-		const minted = await createBridgeHandoff({ payload: payloadFor(), config, kv, now: Date.now(), fetchImpl: async () => new Response('[]') });
+		const minted = await createBridgeHandoff({ payload: payloadFor(), config, pg: noFactorPg(), kv, now: Date.now(), fetchImpl: async () => new Response('[]') });
 		const token = tokenOf(minted.redirectUrl);
 		const key = handoffLookupKey(token);
 		assert.notEqual(key, handoffSealKey(APP_SECRET).toString('hex'));
@@ -128,7 +130,7 @@ describe('the stored handoff is sealed', () => {
 	it('answers 404 for a record whose ciphertext was flipped', async () => {
 		const kv = kvStub();
 		const config = sessionConfig({ persistence: 'memory' });
-		const minted = await createBridgeHandoff({ payload: payloadFor(), config, kv, now: Date.now(), fetchImpl: async () => new Response('[]') });
+		const minted = await createBridgeHandoff({ payload: payloadFor(), config, pg: noFactorPg(), kv, now: Date.now(), fetchImpl: async () => new Response('[]') });
 		const token = tokenOf(minted.redirectUrl);
 		const name = `osb:${handoffLookupKey(token)}`;
 		const blob = Buffer.from(kv.values.get(name), 'base64');
@@ -140,7 +142,7 @@ describe('the stored handoff is sealed', () => {
 	it('answers 410 for an expired handoff and 404 for an unknown one', async () => {
 		const kv = kvStub();
 		const config = sessionConfig({ persistence: 'memory' });
-		const minted = await createBridgeHandoff({ payload: payloadFor(), config, kv, now: Date.now(), fetchImpl: async () => new Response('[]') });
+		const minted = await createBridgeHandoff({ payload: payloadFor(), config, pg: noFactorPg(), kv, now: Date.now(), fetchImpl: async () => new Response('[]') });
 		const token = tokenOf(minted.redirectUrl);
 		await assert.rejects(
 			() => consumeHandoffToken(token, kv, Date.now() + 91_000, APP_SECRET),

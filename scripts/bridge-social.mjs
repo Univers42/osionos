@@ -41,6 +41,7 @@ import {
 import { onlineAmong } from './bridge-presence.mjs';
 import { publicAvatar } from './bridge-avatar.mjs';
 import { handleReportRoutes } from './bridge-reports.mjs';
+import { handleFollowRoute } from './bridge-social-follows.mjs';
 import { assertNotBlocked, requireInteraction } from './bridge-moderation-core.mjs';
 
 function personEntry(row, online, config) {
@@ -279,6 +280,7 @@ async function handleSocialOps(deps, session, request, url, response, config) {
 		return sendJson(response, 200, { ok: true, userId: blockedId, unblocked: true }, config);
 	}
 	if (pathname === '/api/social/reports') return await handleReportRoutes(deps, session, request, response, config);
+	if (await handleFollowRoute(deps, session, request, url, response, config)) return true;
 	return sendJson(response, 404, { ok: false, message: 'Social route not found.' }, config);
 }
 

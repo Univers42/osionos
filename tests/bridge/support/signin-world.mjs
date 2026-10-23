@@ -24,6 +24,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { configFromEnv, consumeHandoffToken, createBridgeHandoff, validateBridgePayload, verifyAppSessionToken } from '../../../scripts/bridge-api.mjs';
 import { createPostgrestMock } from './bridge-harness.mjs';
 import { kvStub } from './kv-stub.mjs';
+import { noFactorPg } from './no-factor-pg.mjs';
 
 export const BAAS_URL = 'http://baas.local';
 export const SUBJECT = '3f6d2a70-5b3f-4c92-8f06-8f4644fd1209';
@@ -149,7 +150,7 @@ export function createSigninStub(seed = {}, options = {}) {
 export async function signIn(stub, { email = 'owner@example.com', emailVerified = true, config = signinConfig(), subject = SUBJECT } = {}) {
 	const payload = validateBridgePayload({ provider: 'prismatica', subject, email, emailVerified, name: 'Owner', jti: randomUUID() });
 	const kv = kvStub();
-	const minted = await createBridgeHandoff({ payload, config, kv, now: NOW, fetchImpl: stub.fetchImpl });
+	const minted = await createBridgeHandoff({ payload, config, kv, pg: noFactorPg(), now: NOW, fetchImpl: stub.fetchImpl });
 	const token = new URL(minted.redirectUrl).hash.replace('#bridge_token=', '');
 	const { session } = await consumeHandoffToken(decodeURIComponent(token), kv, NOW + 1000, config.appSessionSecret);
 	return { session, claims: verifyAppSessionToken(session.accessToken, config, NOW + 1000) };

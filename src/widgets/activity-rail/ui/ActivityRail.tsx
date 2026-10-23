@@ -15,7 +15,7 @@ import { Settings, CircleUser } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useUIStore } from "@/shared/config/uiStore";
 import { isAutomationsEnabled } from "@/shared/config/featureFlags";
-import { useUserStore } from "@/features/auth";
+import { usePlatformRole, useUserStore } from "@/features/auth";
 import { useAutomationStore } from "@/features/automations/model/useAutomationStore";
 import { shortcutLabel } from "@/features/automations/model/shortcutLabel";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
@@ -56,6 +56,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
   const unread = useUnreadStore((s) => Object.values(s.counts).reduce((sum, count) => sum + (count > 0 ? count : 0), 0));
   const listRef = useRef<HTMLDivElement>(null);
   const showKeys = isAutomationsEnabled();
+  const platformRole = usePlatformRole();
 
   // Live connection-invitation notifications: hydrate + realtime; badge = incoming count.
   useConnectionNotifications();
@@ -71,6 +72,10 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
     (item: RailItem) => {
       if (item.action.kind === "panel") {
         selectPanel(item.action.panel);
+        return;
+      }
+      if (item.action.kind === "workspaceTab") {
+        useWorkspaceLayout.getState().openTab(item.action.makeTab());
         return;
       }
       useWorkspaceLayout.getState().openTab(APP_TABS[item.action.app]());
@@ -112,7 +117,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
       {RAIL_GROUPS.map((group) => (
         <React.Fragment key={group.id}>
           <Separator />
-          {visibleRailItems(group).map((item) => {
+          {visibleRailItems(group, platformRole).map((item) => {
             const panel = item.action.kind === "panel" ? item.action.panel : null;
             return (
               <RailIcon

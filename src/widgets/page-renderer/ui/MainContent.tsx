@@ -19,7 +19,10 @@ import {
   HOME_DASHBOARD_PAGE_TITLE,
   KNOWN_DATABASE_VIEWS,
 } from "@/widgets/database-view/model/databaseViewCatalog.meta";
-import { mergeHomeContent } from "@/widgets/page-renderer/model/homeContentMerge";
+import { fingerprintHomeBlock, mergeHomeContent } from "@/widgets/page-renderer/model/homeContentMerge";
+import { isProfessionId } from "@/data/professions/professions";
+import { createProfessionHomeContent } from "@/widgets/database-view/model/professionHomeContent";
+import { useProfessionStore } from "@/features/professions/model/useProfessionStore";
 import { WorkspaceGrid } from "@/widgets/workspace-grid";
 import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
@@ -29,13 +32,8 @@ import type { PageEntry } from "@/entities/page";
 const HOME_DASHBOARD_VERSION = 10;
 const HOME_DASHBOARD_FOCUS_VIEW_ID = "v-prod-table";
 
-/** The profession the Home page was seeded from. The field lands with the
- *  profession-aware seed (a later package): until then it is absent and both
- *  sides of the comparison read null, so the trigger stays on the version. */
-type HomePageWithProfession = PageEntry & { homeProfession?: string | null };
-
 function getHomeProfession(page: PageEntry | undefined): string | null {
-  return (page as HomePageWithProfession | undefined)?.homeProfession ?? null;
+  return page?.homeProfession ?? null;
 }
 
 function homeDashboardNeedsRefresh(page: PageEntry | undefined, currentProfession: string | null): boolean {
@@ -98,12 +96,11 @@ export const MainContent: React.FC = () => {
   const homeDashboardPage = usePageStore((s) => (
     firstWsId ? s.pages[firstWsId]?.find((page) => page._id === homeDashboardPageId && !page.archivedAt) : undefined
   ));
-
+  const profession = useProfessionStore((s) => s.profession);
   useEffect(() => {
     if (!firstWsId) return;
-    // The profession-aware seed lands in a later package: no user has a
-    // profession yet, so both sides of the profession check read null.
-    if (!homeDashboardNeedsRefresh(homeDashboardPage, null)) return;
+    const currentProfession = isProfessionId(profession) ? profession : null;
+    if (!homeDashboardNeedsRefresh(homeDashboardPage, currentProfession)) return;
 
     // The home builder drags in the seeded database state (~600KB JSON), so it
     // is loaded on demand: only when the dashboard needs (re)seeding — the
@@ -112,19 +109,27 @@ export const MainContent: React.FC = () => {
     void import("@/widgets/database-view/model/databaseViewCatalog").then(({ createHomeLayoutContent }) => {
       if (cancelled) return;
       const greetingName = useUserStore.getState().activePersona()?.name;
-      const nextHomePage = createHomeDashboardPage(createHomeLayoutContent, firstWsId, activeUserId || null, greetingName);
+      // A profession change is a deliberate template switch: it replaces the
+      // content instead of merging, because the user asked for a different seed.
+      // A version bump (or any other re-seed) keeps merging, so edits survive.
+      const createContent = currentProfession
+        ? (_greetingName: string | undefined, options?: { idScope?: string }) =>
+            createProfessionHomeContent(currentProfession, { idScope: options?.idScope ?? getHomeDashboardPageId(firstWsId) })
+        : createHomeLayoutContent;
+      const nextHomePage = createHomeDashboardPage(createContent, firstWsId, activeUserId || null, greetingName);
       const seedContent = nextHomePage.content ?? [];
       usePageStore.setState((state) => {
         const existingPages = state.pages[firstWsId] ?? [];
         const existingIndex = existingPages.findIndex((page) => page._id === nextHomePage._id && !page.archivedAt);
         const existingHomePage = existingIndex >= 0 ? existingPages[existingIndex] : undefined;
-        // A re-seed is a merge, never a replace: what the user wrote on the
-        // Home page survives the seed (P2-4-b).
-        const merged = mergeHomeContent(
-          existingHomePage?.content ?? [],
-          seedContent,
-          existingHomePage?.homeSeedFingerprints,
-        );
+        const professionChanged = getHomeProfession(existingHomePage) !== currentProfession;
+        const merged = professionChanged
+          ? { content: seedContent, fingerprints: Object.fromEntries(seedContent.map((block) => [block.id, fingerprintHomeBlock(block)])) }
+          : mergeHomeContent(
+              existingHomePage?.content ?? [],
+              seedContent,
+              existingHomePage?.homeSeedFingerprints,
+            );
         const homePage: PageEntry = {
           ...nextHomePage,
           content: merged.content,
@@ -132,6 +137,7 @@ export const MainContent: React.FC = () => {
           title: existingHomePage?.title || nextHomePage.title,
           icon: existingHomePage?.icon ?? nextHomePage.icon,
           cover: existingHomePage?.cover ?? nextHomePage.cover,
+          homeProfession: currentProfession,
         };
         const pages = existingIndex >= 0
           ? { ...state.pages, [firstWsId]: existingPages.map((page, index) => (index === existingIndex ? homePage : page)) }
@@ -141,7 +147,7 @@ export const MainContent: React.FC = () => {
       });
     });
     return () => { cancelled = true; };
-  }, [activeUserId, firstWsId, homeDashboardPage]);
+  }, [activeUserId, firstWsId, homeDashboardPage, profession]);
 
   return <WorkspaceGrid />;
 };

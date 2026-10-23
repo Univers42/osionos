@@ -49,6 +49,7 @@ export interface AccountProfile {
   bannerUrl: string | null;
   directoryOptOut: boolean | null;
   profession: string | null;
+  readmePageId: string | null;
   version: number;
   createdAt: string | null;
   updatedAt: string | null;
@@ -57,7 +58,7 @@ export interface AccountProfile {
 /** The columns a client may write. `username` is P1-2b's and is not here. */
 export type AccountProfilePatch = Partial<Pick<AccountProfile,
   'displayName' | 'pronouns' | 'headline' | 'bio' | 'location' | 'company' | 'website' | 'links'
-  | 'timezone' | 'orcid' | 'patreon' | 'directoryOptOut' | 'profession'>>;
+  | 'timezone' | 'orcid' | 'patreon' | 'directoryOptOut' | 'profession' | 'readmePageId'>>;
 
 export type AccountProfileOutcome =
   | { ok: true; profile: AccountProfile; version: number }
@@ -98,6 +99,7 @@ function toProfile(raw: unknown): AccountProfile | null {
     bannerUrl: text(row.bannerUrl),
     directoryOptOut: typeof row.directoryOptOut === 'boolean' ? row.directoryOptOut : null,
     profession: text(row.profession),
+    readmePageId: text(row.readmePageId),
     version: count(row.version),
     createdAt: text(row.createdAt),
     updatedAt: text(row.updatedAt),

@@ -54,6 +54,7 @@ const childPageId = 'bb44cf14-84df-4f08-8b02-97dc84727744';
 
 function testConfig() {
 	return configFromEnv({
+		OSIONOS_BAAS_URL: '',
 		OSIONOS_SESSION_CUTOFFS: 'off',
 		OSIONOS_APP_URL: 'http://localhost:3001',
 		OSIONOS_BRIDGE_SHARED_SECRET: secret,

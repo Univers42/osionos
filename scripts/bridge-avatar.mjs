@@ -20,6 +20,8 @@
  * `osionos_profiles.avatar_url`. The served object needs no session: an avatar
  * is shown to other people, and the key is the content address of the bytes.
  *
+ * The banner is the same pipeline with ONE 1500x500 variant stored as `<sha>-banner.<ext>`.
+ *
  * Caveat: the account seam carries no fetch of its own, so the storage calls
  * here use the global client; the tests inject one.
  */
@@ -34,6 +36,10 @@ import { ensureBucket, servedObjectHeaders, storageDelete, storageGet, storagePu
 const AVATAR_BUCKET = 'avatars';
 const VARIANT_SIZES = [64, 160, 460];
 const VARIANT_CAPS = { 64: 24 * 1024, 160: 80 * 1024, 460: 300 * 1024 };
+const BANNER_WIDTH = 1500;
+const BANNER_HEIGHT = 500;
+const BANNER_CAP = 400 * 1024;
+const BANNER_BODY_LIMIT = 640 * 1024;
 // The sizes the bridge stores, their caps and the canvas cap: the caps keep
 // the three objects small enough to serve.
 const MAX_EDGE = 4096;
@@ -46,8 +52,9 @@ const AVATAR_TYPES = new Set(['image/webp', 'image/jpeg']);
 const LEGACY_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const EXT_BY_TYPE = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif' };
 const TYPE_BY_EXT = { webp: 'image/webp', jpg: 'image/jpeg', png: 'image/png', gif: 'image/gif' };
+const BANNER_ROUTE = '/api/profile/banner';
 const AVATAR_PATH_RE = /^\/api\/media\/avatars\/([^/]+)\/([^/]+)$/;
-const SERVE_RE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([0-9a-f]{64}(?:-(?:64|160|460))?\.(?:webp|jpg|png|gif))$/i;
+const SERVE_RE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([0-9a-f]{64}(?:-(?:64|160|460|banner))?\.(?:webp|jpg|png|gif))$/i;
 const DATA_URL_RE = /^data:image\/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=]+)$/;
 const HOSTILE_SCHEMES = /^(data|javascript|vbscript|file|blob|http):/i;
 
@@ -169,10 +176,12 @@ function readLegacyAvatar(payload) {
  */
 async function removeStoredVariants(deps, userId, path) {
 	const key = String(path ?? '').split('/').pop() ?? '';
-	const match = /^([0-9a-f]{64})(?:-(\d+))?\.(webp|jpg|png|gif)$/.exec(key);
+	const match = /^([0-9a-f]{64})(?:-(\d+|banner))?\.(webp|jpg|png|gif)$/.exec(key);
 	if (!match) return;
 	const [, sha, size, ext] = match;
-	const keys = size ? VARIANT_SIZES.map((candidate) => `${sha}-${candidate}.${ext}`) : [`${sha}.${ext}`];
+	let keys = [`${sha}.${ext}`];
+	if (size === 'banner') keys = [key];
+	else if (size) keys = VARIANT_SIZES.map((candidate) => `${sha}-${candidate}.${ext}`);
 	for (const stored of keys) {
 		try {
 			await storageDelete(userId, stored, deps.fetchImpl, deps.env, AVATAR_BUCKET);
@@ -209,6 +218,48 @@ async function postAvatar(deps, session, request, response, config) {
 		throw avatarError(404, 'profile_missing', 'The account has no profile row to hold the avatar.');
 	}
 	return sendJson(response, 201, { ok: true, userId: session.userId, avatar: publicAvatar(path, config) ?? path, avatarPath: path }, config);
+}
+
+/** The one banner variant of a body: `{ banner: b64 }`, a WebP or JPEG, exactly 1500x500, under 400 KB. */
+function readBanner(payload) {
+	const bytes = decodeBase64(payload?.banner, 'banner');
+	if (bytes.length > BANNER_CAP) throw avatarError(422, 'banner_too_large', `The banner is over its ${BANNER_CAP / 1024}KB cap.`);
+	const banner = readVariant(bytes, 'banner', AVATAR_TYPES);
+	if (banner.width !== BANNER_WIDTH || banner.height !== BANNER_HEIGHT) {
+		throw avatarError(422, 'banner_wrong_size', `The banner is ${banner.width}x${banner.height}, not ${BANNER_WIDTH}x${BANNER_HEIGHT}.`);
+	}
+	return banner;
+}
+
+/** POST /api/profile/banner — the avatar pipeline with one variant; the owner is the session, never the body. */
+async function postBanner(deps, session, request, response, config) {
+	await rateLimit(deps.kv, ['banner', session.userId], { limit: UPLOAD_LIMIT, windowMs: UPLOAD_WINDOW_MS });
+	const banner = readBanner(await readJsonBody(request, BANNER_BODY_LIMIT));
+	const sha = createHash('sha256').update(banner.bytes).digest('hex');
+	const key = `${sha}-banner.${EXT_BY_TYPE[banner.type]}`;
+	await ensureBucket(session.userId, AVATAR_BUCKET, deps.fetchImpl, deps.env);
+	await storagePut(session.userId, key, banner.type, banner.bytes, deps.fetchImpl, deps.env, AVATAR_BUCKET);
+	const path = `/api/media/avatars/${session.userId}/${key}`;
+	const written = await deps.pg.asService().patch(
+		`osionos_profiles?user_id=eq.${session.userId}`,
+		{ banner_url: path },
+		{ prefer: 'return=representation' },
+	);
+	if (!(Array.isArray(written) && written.length > 0)) {
+		throw avatarError(404, 'profile_missing', 'The account has no profile row to hold the banner.');
+	}
+	return sendJson(response, 201, { ok: true, userId: session.userId, banner: publicAvatar(path, config) ?? path, bannerPath: path }, config);
+}
+
+/** DELETE /api/profile/banner — the column first, then the stored object (see removeStoredVariants' caveat). */
+async function deleteBanner(deps, session, response, config) {
+	const rows = await deps.pg.asService().get(`osionos_profiles?user_id=eq.${session.userId}&select=banner_url&limit=1`);
+	const path = Array.isArray(rows) && typeof rows[0]?.banner_url === 'string' && rows[0].banner_url ? rows[0].banner_url : null;
+	await deps.pg.asService().patch(`osionos_profiles?user_id=eq.${session.userId}`, { banner_url: null }, { prefer: 'return=minimal' });
+	if (path) await removeStoredVariants(deps, session.userId, path);
+	response.writeHead(204, { 'cache-control': 'no-store', 'access-control-allow-origin': config.allowedOrigin, 'access-control-allow-credentials': 'true', vary: 'Origin' });
+	response.end();
+	return true;
 }
 
 /**
@@ -277,8 +328,9 @@ export function createAvatarRoutes({ config, pg, kv, verifySession, fetchImpl = 
 		const pathname = url.pathname;
 		const method = (request.method || 'GET').toUpperCase();
 		const isAvatar = pathname === '/api/profile/avatar';
+		const isBanner = pathname === BANNER_ROUTE;
 		const serve = AVATAR_PATH_RE.exec(pathname);
-		if (!isAvatar && !serve) return false;
+		if (!isAvatar && !isBanner && !serve) return false;
 		try {
 			if (serve && method === 'GET') {
 				const match = SERVE_RE.exec(`${serve[1]}/${serve[2]}`);
@@ -290,6 +342,11 @@ export function createAvatarRoutes({ config, pg, kv, verifySession, fetchImpl = 
 				const session = verifySession(bearerToken(request), config);
 				if (method === 'POST') return await postAvatar(deps, session, request, response, config);
 				return await deleteAvatar(deps, session, response, config);
+			}
+			if (isBanner && (method === 'POST' || method === 'DELETE')) {
+				const session = verifySession(bearerToken(request), config);
+				if (method === 'POST') return await postBanner(deps, session, request, response, config);
+				return await deleteBanner(deps, session, response, config);
 			}
 			throw httpError(`Method ${method} is not supported here.`, 405);
 		} catch (error) {

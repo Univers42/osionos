@@ -407,7 +407,7 @@ describe('GET /api/account/self-data/<source>', () => {
 
 	it('does not claim a path with two segments', async (t) => {
 		const { base, store } = await world(t);
-		const response = await read(base, 'views/my-pages', { token: 'x' });
+		const response = await read(base, 'views/my-pages/x/y', { token: 'x' });
 		assert.equal(response.status, 404, 'the path belongs to another route');
 		assert.equal(store.calls.length, 0, 'no table is read for another route');
 	});

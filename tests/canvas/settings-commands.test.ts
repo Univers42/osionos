@@ -160,9 +160,9 @@ test("a keyword match finds an anchor whose label never says the word", () => {
 });
 
 test("a label match outranks a keyword match", () => {
-  const results = matchCommands("delete", commands);
-  const label = results.findIndex((result) => result.id === "settings.general.danger-zone");
-  const keyword = results.findIndex((result) => result.id === "settings.profile.support");
+  const results = matchCommands("access", commands);
+  const label = results.findIndex((result) => result.id === "settings.ai_connections.ai-access-tokens");
+  const keyword = results.findIndex((result) => result.id === "settings.teamspaces.teamspaces");
   assert.ok(label >= 0, "the label match is listed");
   assert.ok(keyword >= 0, "the keyword match is listed");
   assert.ok(label < keyword, "the label match comes first");
