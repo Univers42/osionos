@@ -69,6 +69,8 @@ import { useDatabaseHostAdapters } from '../model/databaseHostAdapters';
 import { rememberDatabaseWorkspace } from '../model/objectDatabaseWorkspaces';
 import { WorkspaceDatabaseBlock, WorkspaceRecordPeek } from './WorkspaceDatabaseBlock';
 import { RecordSubItemsPanel } from './RecordSubItemsPanel';
+import { SysDatabaseBlock } from './SysDatabaseBlock';
+import { isSysDatabaseId } from '../model/sysDataSources';
 import './databaseBlockEmbed.css';
 
 // Async boundary: the full osionos page (and its editor tree) loads only when
@@ -192,6 +194,31 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
           onDatabaseRenamed={handleDatabaseRenamed}
         />
       </div>
+    );
+  }
+
+  // `sys:` = the caller's own data, read-only. Before the Home and known/fallback
+  // branches, so an unknown or unreachable source never shows the demo seed.
+  if (isSysDatabaseId(resolvedDatabaseId)) {
+    return (
+      <SysDatabaseBlock
+        databaseId={resolvedDatabaseId}
+        initialViewId={resolvedInitialView}
+        mode={mode}
+        recordLimit={recordLimit}
+        renderDatabase={({ adapter, initialView, renderPage: peek, key }) => (
+          <HostedObjectDatabase
+            key={key}
+            adapter={adapter}
+            databaseId={resolvedDatabaseId}
+            initialView={initialView}
+            mode={resolvedMode}
+            renderPage={peek}
+            className={mode === 'full' ? 'h-full' : undefined}
+            chrome={mode === 'full' ? 'full' : 'inline'}
+          />
+        )}
+      />
     );
   }
 
