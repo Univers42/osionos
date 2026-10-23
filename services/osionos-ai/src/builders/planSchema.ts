@@ -23,8 +23,6 @@ import { z } from 'zod';
  *  - `image` / `video` / `audio` / `file` / embed blocks: remote media is an
  *    exfiltration beacon (the viewer's browser fetches the URL);
  */
-export const PLAN_VIEW_TYPES = ['table', 'board', 'calendar', 'list', 'gallery', 'chart', 'dashboard'] as const;
-
 export const PLAN_BLOCK_TYPES = [
 	'paragraph',
 	'heading_1',
@@ -55,6 +53,16 @@ export const PLAN_PROPERTY_TYPES = [
 	'phone',
 ] as const;
 
+export const PLAN_VIEW_TYPES = ['table', 'board', 'calendar', 'list', 'gallery', 'chart', 'dashboard'] as const;
+
+/** The block types that point at a database of the same plan. */
+// osionos renders only `database_inline` as a database; `database_full_page` is a
+// slash action that creates a page (src/entities/block/ui/ReadOnlyBlock.tsx:445).
+const DATABASE_BLOCK_TYPES = ['database_inline'] as const;
+
+/** The property types that take a list of options. */
+const OPTION_PROPERTY_TYPES: readonly string[] = ['select', 'multi_select', 'status'];
+
 const CHART_TYPES = ['vertical_bar', 'horizontal_bar', 'line', 'donut'] as const;
 const AGGREGATION_TYPES = ['count', 'sum', 'average'] as const;
 const STAT_FNS = ['count', 'sum', 'avg', 'min', 'max'] as const;
@@ -78,19 +86,11 @@ const textBlock = z.object({
 	type: z.enum(PLAN_BLOCK_TYPES),
 	content: z.string().max(10_000),
 });
-
-/** The block types that point at a database of the same plan. */
-// osionos renders only `database_inline` as a database; `database_full_page` is a
-// slash action that creates a page (src/entities/block/ui/ReadOnlyBlock.tsx:445).
-const DATABASE_BLOCK_TYPES = ['database_inline'] as const;
 const databaseBlock = z.object({
 	type: z.enum(DATABASE_BLOCK_TYPES),
 	databaseKey: keySchema,
 });
 const blockSchema = z.union([textBlock, databaseBlock]);
-
-/** The property types that take a list of options. */
-const OPTION_PROPERTY_TYPES: readonly string[] = ['select', 'multi_select', 'status'];
 
 const propertySchema = z.object({
 	name: nameSchema,
@@ -193,6 +193,34 @@ function treeError(all: { item: PlanItem; depth: number }[]): string | null {
 }
 
 /** The first error in one database item (its properties and rows), or null. */
+/**
+ * The first error of the database's dashboard. A cell names a view of the SAME
+ * database (C165): a view of another database of the plan is an unknown name here.
+ */
+function dashboardError(db: PlanDatabaseItem): string | null {
+	const dashboards = db.views.filter((view) => view.type === 'dashboard');
+	if (dashboards.length > 1) return `the database "${db.key}" holds more than one dashboard`;
+	const viewByName = new Map(db.views.map((view) => [view.name, view]));
+	const propByName = new Map(db.properties.map((property) => [property.name, property]));
+	for (const view of dashboards) {
+		const cellViews = new Set<string>();
+		for (const cell of view.cells) {
+			const target = viewByName.get(cell.view);
+			if (!target) return `the dashboard "${view.name}" of "${db.key}" references an unknown view "${cell.view}"`;
+			if (target.type === 'dashboard') return `the dashboard "${view.name}" of "${db.key}" references a dashboard view "${cell.view}"`;
+			if (cellViews.has(cell.view)) return `the dashboard "${view.name}" of "${db.key}" repeats a cell view`;
+			cellViews.add(cell.view);
+			if (cell.stat && cell.stat.fn !== 'count') {
+				const statProp = cell.stat.property ? propByName.get(cell.stat.property) : undefined;
+				if (statProp?.type !== 'number') {
+					return `the dashboard "${view.name}" of "${db.key}" cell "${cell.view}" stat ${cell.stat.fn} needs a number property`;
+				}
+			}
+		}
+	}
+	return null;
+}
+
 function databaseError(db: PlanDatabaseItem): string | null {
 	const titles = db.properties.filter((property) => property.type === 'title').length;
 	if (titles !== 1) return `the database "${db.key}" needs exactly one title property`;
@@ -229,15 +257,9 @@ function databaseError(db: PlanDatabaseItem): string | null {
 				if (yProp.type !== 'number') return `the chart "${view.name}" of "${db.key}" yAxis must be a number property`;
 			}
 		}
-		if (view.type === 'dashboard') {
-			// cells length is enforced by zod (.min(1).max(6))
-			const cellViewNames = new Set<string>();
-			for (const cell of view.cells) {
-				if (cellViewNames.has(cell.view)) return `the dashboard "${view.name}" of "${db.key}" repeats a cell view`;
-				cellViewNames.add(cell.view);
-			}
-		}
 	}
+	const dashboard = dashboardError(db);
+	if (dashboard) return dashboard;
 	for (const row of db.rows ?? []) {
 		for (const name of Object.keys(row.values)) {
 			if (!names.has(name)) return `a row of "${db.key}" names the unknown property "${name}"`;
@@ -264,54 +286,12 @@ export function checkPlan(plan: Plan): string | null {
 			}
 		}
 	}
-	// Build a map of database key -> view names for cross-database dashboard validation
-	const dbViews = new Map<string, Set<string>>();
-	const dbProps = new Map<string, Map<string, PlanProperty>>();
-	for (const { item } of all) {
-		if (item.kind === 'database') {
-			const viewNames = new Set(item.views.map((v) => v.name));
-			dbViews.set(item.key, viewNames);
-			const props = new Map(item.properties.map((p) => [p.name, p]));
-			dbProps.set(item.key, props);
-		}
-	}
-	let dashboardCount = 0;
 	for (const { item } of all) {
 		if (item.kind === 'database') {
 			const error = databaseError(item);
 			if (error) return error;
 			if (!referencedDbs.has(item.key)) {
 				return `the database "${item.key}" is shown by no page: add a database_inline block that points at it`;
-			}
-			// Count dashboards per database
-			const dashboards = item.views.filter((v) => v.type === 'dashboard');
-			if (dashboards.length > 1) {
-				return `the database "${item.key}" holds more than one dashboard`;
-			}
-			dashboardCount += dashboards.length;
-			// Validate dashboard cells reference views of the same database
-			const propByName = dbProps.get(item.key)!;
-			for (const view of dashboards) {
-				for (const cell of view.cells) {
-					if (!dbViews.get(item.key)!.has(cell.view)) {
-						return `the dashboard "${view.name}" of "${item.key}" references an unknown view "${cell.view}"`;
-					}
-					// Check that referenced view is not a dashboard
-					const refView = item.views.find((v) => v.name === cell.view);
-					if (refView && refView.type === 'dashboard') {
-						return `the dashboard "${view.name}" of "${item.key}" references a dashboard view "${cell.view}"`;
-					}
-					// Validate stat property
-					if (cell.stat && cell.stat.fn !== 'count') {
-						if (!cell.stat.property) {
-							return `the dashboard "${view.name}" of "${item.key}" cell "${cell.view}" stat ${cell.stat.fn} needs a property`;
-						}
-						const statProp = propByName.get(cell.stat.property);
-						if (!statProp || statProp.type !== 'number') {
-							return `the dashboard "${view.name}" of "${item.key}" cell "${cell.view}" stat ${cell.stat.fn} needs a number property`;
-						}
-					}
-				}
 			}
 			continue;
 		}

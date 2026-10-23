@@ -235,7 +235,7 @@ describe('builder execute', () => {
 		assert.equal(approved3.length, 3);
 	});
 
-	it('C151 execute a plan with chart verifies xAxisProperty is property ID', async () => {
+	it('C151 C165 an executed chart axis is a property id and every dashboard cell is a stored view', async () => {
 		const plan = {
 			workspaceId: WORKSPACE_A,
 			title: 'Chart test',
@@ -256,7 +256,13 @@ describe('builder execute', () => {
 						{ name: 'Value', type: 'number' },
 					],
 					views: [
-						{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Category', aggregation: 'sum', yAxis: 'Value' }
+						{
+							type: 'dashboard',
+							name: 'Overview',
+							cells: [{ view: 'All' }, { view: 'Chart', stat: { fn: 'sum', property: 'Value' } }],
+						},
+						{ type: 'table', name: 'All' },
+						{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Category', aggregation: 'sum', yAxis: 'Value' },
 					],
 					rows: [{ values: { Name: 'Test', Category: 'A', Value: 100 } }],
 				},
@@ -288,6 +294,14 @@ describe('builder execute', () => {
 		assert.ok(xAxisProp, 'xAxisProperty should be set');
 		// Verify it's a property ID (format: dbKey-pN) not a property name
 		assert.match(xAxisProp!, /^db-[a-f0-9]{24}-p\d+$/, 'xAxisProperty should be a property ID, not a name');
+		// The dashboard is listed first, yet each cell resolves to a view of the stored state.
+		const dashboard = Object.values(views).find((view) => (view as { type: string }).type === 'dashboard') as
+			| { settings: { dashboardWidgets: { viewId: string }[] } }
+			| undefined;
+		assert.ok(dashboard, 'the dashboard view is stored');
+		const widgetViews = dashboard.settings.dashboardWidgets.map((widget) => widget.viewId);
+		assert.equal(widgetViews.length, 2);
+		for (const viewId of widgetViews) assert.ok(viewId in views, `${viewId} is a stored view`);
 	});
 
 	it('C151 stored revalidation refuses dashboard cell referencing another database view', async () => {
