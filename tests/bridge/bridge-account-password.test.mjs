@@ -16,8 +16,8 @@
  * The world is the whole bridge with session records ON, so the refresh route is real: the
  * claim that matters is "every other sign-in is dead, the caller's own keeps working", and
  * only a refresh against the family rows proves it. GoTrue's admin route is a fake on the
- * global fetch (the account modules call it the way the sudo module does); the PostgREST
- * fake learns `neq`, which the revoke needs and the shared store does not serve.
+ * global fetch (the account modules call it the way the sudo module does); the shared
+ * PostgREST fake serves `neq`, so the real filter of the revoke is what is exercised.
  * Every password in this file is an obviously fake value.
  */
 
@@ -30,6 +30,7 @@ import { refreshWith, signIn } from './support/session-signin.mjs';
 import { send, startAccountWorld, sudoToken } from './support/account-world.mjs';
 import { USER_A, USER_B, sendJson, sessionConfig, startSessionBridge } from './support/session-world.mjs';
 import { createSessionStore } from './support/session-postgrest.mjs';
+import { patRow } from './support/pat-world.mjs';
 
 const ADDRESS = 'ada.lovelace@example.com';
 const FAKE_PASSWORD = 'Fake-Passw0rd-for-tests';
@@ -39,41 +40,13 @@ const AUDIT = 'osionos_bridge_audit_events';
 
 const lower = (value) => String(value).toLowerCase();
 
-/** One PostgREST filter, with the `neq` the shared fake lacks; a NULL never satisfies neq. */
-function rowMatches(row, key, expr) {
-	if (key === 'or') return expr.slice(1, -1).split(',').some((clause) => {
-		const [column, ...rest] = clause.split('.');
-		return rowMatches(row, column, rest.join('.'));
-	});
-	if (expr === 'is.null') return row[key] == null;
-	if (expr.startsWith('neq.')) return row[key] != null && lower(row[key]) !== lower(expr.slice(4));
-	if (expr.startsWith('eq.')) return row[key] != null && lower(row[key]) === lower(expr.slice(3));
-	throw new Error(`password test store: unsupported filter ${key}=${expr}`);
-}
-
-/** The shared session store, answering a PATCH that carries `neq` itself. */
-function withNeq(store) {
-	const wrapped = { ...store, neqPatches: [] };
-	const fetchImpl = async (url, init = {}) => {
-		const parsed = new URL(String(url));
-		const usesNeq = [...parsed.searchParams].some(([, expr]) => expr.includes('neq.'));
-		if ((init.method ?? 'GET') !== 'PATCH' || !usesNeq) return store.fetchImpl(url, init);
-		const filters = [...parsed.searchParams].filter(([key]) => !['select', 'order', 'limit'].includes(key));
-		const table = parsed.pathname.replace('/rest/v1/', '');
-		const hits = store.rows(table).filter((row) => filters.every(([key, expr]) => rowMatches(row, key, expr)));
-		for (const row of hits) Object.assign(row, JSON.parse(init.body));
-		wrapped.neqPatches.push(parsed.search);
-		return new Response(JSON.stringify(hits.map((row) => ({ id: row.id, expires_at: row.expires_at }))), { status: 200, headers: { 'content-type': 'application/json' } });
-	};
-	return Object.assign(wrapped, { fetchImpl });
-}
-
 /**
  * Builds the bridge, the PostgREST and GoTrue's admin route. GoTrue and the PostgREST are
  * both reached through the global fetch by the account modules, so one override serves both.
  */
 async function world(t, { records = 'on', putStatus = 200, address = ADDRESS, kv = createTtlKv() } = {}) {
-	const store = withNeq(createSessionStore());
+	const faults = { fail: null };
+	const store = createSessionStore({ fail: (call) => faults.fail?.(call) });
 	const gotrue = { puts: [], gets: [], auditAtPut: [] };
 	const original = globalThis.fetch;
 	globalThis.fetch = async (url, init = {}) => {
@@ -88,14 +61,14 @@ async function world(t, { records = 'on', putStatus = 200, address = ADDRESS, kv
 		}
 		gotrue.auditAtPut = store.rows(AUDIT).map((row) => row.event_type);
 		gotrue.puts.push(record);
-		return new Response('{}', { status: putStatus, headers: { 'content-type': 'application/json' } });
+		return new Response('{}', { status: gotrue.putStatus ?? putStatus, headers: { 'content-type': 'application/json' } });
 	};
 	t.after(() => { globalThis.fetch = original; });
 	const config = sessionConfig({ records });
 	const bridge = await startSessionBridge({ config, store, kv, t });
 	const grantSudo = (claims, userId = USER_A) => kv.set(`sudo:${claims.jti}`, userId, 600_000);
 	const change = (token, body) => send(bridge.base, PATH, { method: 'POST', token, body });
-	return { ...bridge, config, store, gotrue, kv, grantSudo, change };
+	return { ...bridge, config, store, gotrue, kv, grantSudo, change, faults };
 }
 
 const revokedRows = (store, userId) => store.rows(SESSIONS).filter((row) => lower(row.user_id) === lower(userId) && row.revoked_at);
@@ -145,6 +118,8 @@ describe('POST /api/account/password: the password', () => {
 	const refused = [
 		['too short', { nextPassword: 'Ab1!xyz' }],
 		['too long', { nextPassword: `Ab1!${'x'.repeat(125)}` }],
+		['100 bytes', { nextPassword: `Ab1!${'x'.repeat(96)}` }],
+		['over 72 bytes though under 72 characters', { nextPassword: `Ab1!${'é'.repeat(35)}` }],
 		['one character class', { nextPassword: 'abcdefghijklmnop' }],
 		['two character classes', { nextPassword: 'abcdefgh12345' }],
 		['not a string', { nextPassword: 1234567890123 }],
@@ -216,17 +191,106 @@ describe('POST /api/account/password: the change', () => {
 		const live = store.rows(SESSIONS).filter((row) => row.family_id === first.claims.jti);
 		assert.equal(live.some((row) => row.revoked_at), false, 'no generation of the caller\'s family is revoked');
 		assert.deepEqual(revokedRows(store, USER_A).map((row) => [row.family_id, row.revoked_reason]), [[elsewhere.claims.jti, 'password_change']]);
-				assert.equal(store.neqPatches.length, 1, 'one PATCH revokes them all');
+		assert.equal(store.callsTo(SESSIONS).filter((call) => call.method === 'PATCH').length, 1, 'one PATCH revokes them all');
 	});
 
-	it('answers 503 account_plane_unavailable and revokes nothing when GoTrue refuses the write', async (t) => {
-		const { base, change, grantSudo, store } = await world(t, { putStatus: 500 });
+	it('answers 503 account_plane_unavailable, revokes nothing and gives the grant back when GoTrue refuses the write', async (t) => {
+		const { base, change, grantSudo, store, gotrue, kv } = await world(t, { putStatus: 500 });
 		const caller = await signIn(base);
 		await signIn(base, USER_A, 'other-device');
 		await grantSudo(caller.claims);
 		const answer = await change(caller.accessToken, { nextPassword: FAKE_PASSWORD });
 		assert.deepEqual([answer.status, answer.body.code], [503, 'account_plane_unavailable']);
 		assert.equal(revokedRows(store, USER_A).length, 0);
+		assert.equal(kv.has(`sudo:${caller.claims.jti}`), true, 'the grant is restored');
+		gotrue.putStatus = 200;
+		assert.equal((await change(caller.accessToken, { nextPassword: FAKE_PASSWORD })).status, 204);
+	});
+
+	it('keeps the meaning of a GoTrue 422: 422 invalid_password, a fixed message, the grant restored', async (t) => {
+		const { base, change, grantSudo, kv } = await world(t, { putStatus: 422 });
+		const caller = await signIn(base);
+		await grantSudo(caller.claims);
+		const answer = await change(caller.accessToken, { nextPassword: FAKE_PASSWORD });
+		assert.deepEqual([answer.status, answer.body.code], [422, 'invalid_password']);
+		assert.doesNotMatch(answer.text, /Fake-Passw0rd/);
+		assert.equal(kv.has(`sudo:${caller.claims.jti}`), true);
+	});
+
+	it('spends one grant once: two parallel requests make one GoTrue write and one 204', async (t) => {
+		const { base, change, grantSudo, gotrue } = await world(t);
+		const caller = await signIn(base);
+		await grantSudo(caller.claims);
+		const answers = await Promise.all([1, 2].map(() => change(caller.accessToken, { nextPassword: FAKE_PASSWORD })));
+		assert.deepEqual(answers.map((answer) => answer.status).sort(), [204, 403]);
+		assert.equal(gotrue.puts.length, 1);
+		assert.equal(answers.find((answer) => answer.status === 403).body.code, 'sudo_required');
+	});
+
+	it('keeps a legacy caller (no family) and revokes a legacy stranger, but not a row that was already revoked', async (t) => {
+		const { base, change, grantSudo, store } = await world(t);
+		const caller = await signIn(base);
+		const elsewhere = await signIn(base, USER_A, 'other-device');
+		const rows = store.rows(SESSIONS);
+		const row = (claims) => rows.find((candidate) => lower(candidate.id) === lower(claims.jti));
+		row(caller.claims).family_id = null;
+		const legacy = { ...row(elsewhere.claims), id: '00000000-0000-4000-8000-0000000000a1', family_id: null };
+		const already = { ...row(elsewhere.claims), id: '00000000-0000-4000-8000-0000000000a2', family_id: '00000000-0000-4000-8000-0000000000a2', revoked_at: '2026-01-01T00:00:00.000Z', revoked_reason: 'user' };
+		rows.push(legacy, already);
+		await grantSudo(caller.claims);
+		assert.equal((await change(caller.accessToken, { nextPassword: FAKE_PASSWORD })).status, 204);
+		assert.equal(row(caller.claims).revoked_at ?? null, null, 'the legacy caller keeps its sign-in');
+		assert.ok(legacy.revoked_at, 'a legacy stranger is revoked');
+		assert.ok(row(elsewhere.claims).revoked_at);
+		assert.deepEqual([already.revoked_at, already.revoked_reason], ['2026-01-01T00:00:00.000Z', 'user'], 'a revoked row is not stamped again');
+	});
+
+	it('signs everyone out with the header when the family lookup fails after the write', async (t) => {
+		const { base, change, grantSudo, store, faults } = await world(t);
+		const caller = await signIn(base);
+		await grantSudo(caller.claims);
+		faults.fail = (call) => (call.table === SESSIONS && call.method === 'GET' && call.params.get('select') === 'family_id' ? { status: 500 } : null);
+		const answer = await change(caller.accessToken, { nextPassword: FAKE_PASSWORD });
+		assert.equal(answer.status, 204, answer.text);
+		assert.equal(answer.headers.get('x-session-revoked'), 'all');
+		assert.equal(store.rows('auth_session_cutoffs').length, 1);
+	});
+
+	it('signs everyone out with the header when the revoke PATCH fails after the write', async (t) => {
+		const { base, change, grantSudo, store, faults } = await world(t);
+		const caller = await signIn(base);
+		await grantSudo(caller.claims);
+		faults.fail = (call) => (call.table === SESSIONS && call.method === 'PATCH' ? { status: 500 } : null);
+		const answer = await change(caller.accessToken, { nextPassword: FAKE_PASSWORD });
+		assert.equal(answer.status, 204, answer.text);
+		assert.equal(answer.headers.get('x-session-revoked'), 'all');
+		assert.equal(store.rows('auth_session_cutoffs').length, 1);
+	});
+
+	it('answers 503 password_changed_signout_failed, saying the password changed, when the cut-off fails too', async (t) => {
+		const { base, change, grantSudo, gotrue, faults } = await world(t);
+		const caller = await signIn(base);
+		await grantSudo(caller.claims);
+		faults.fail = (call) => ((call.table === SESSIONS && call.method === 'PATCH') || (call.table === 'auth_session_cutoffs' && call.method !== 'GET') ? { status: 500 } : null);
+		const answer = await change(caller.accessToken, { nextPassword: FAKE_PASSWORD });
+		assert.deepEqual([answer.status, answer.body.code], [503, 'password_changed_signout_failed']);
+		assert.match(answer.body.message, /HAS changed/);
+		assert.equal(gotrue.puts.length, 1);
+	});
+
+	// devil D-P3-1b C11: a password change does NOT revoke personal access tokens. Deliberate.
+	it('leaves a personal access token created before the change working', async (t) => {
+		const { base, change, grantSudo, store } = await world(t);
+		const { secret, row } = patRow({ userId: USER_A });
+		store.rows('osionos_personal_access_tokens').push(row);
+		const read = () => sendJson(base, `/api/pages/${USER_A}`, { headers: { authorization: `Bearer ${secret}` } });
+		const before = await read();
+		assert.notEqual(before.body.code, 'pat_invalid', 'the token is accepted by the gate before the change');
+		const caller = await signIn(base);
+		await grantSudo(caller.claims);
+		assert.equal((await change(caller.accessToken, { nextPassword: FAKE_PASSWORD })).status, 204);
+		const after = await read();
+		assert.deepEqual([after.status, after.body.code], [before.status, before.body.code]);
 	});
 
 	it('answers 503 account_plane_unavailable before any audit when the service key is not configured', async (t) => {
@@ -258,6 +322,7 @@ describe('POST /api/account/password: the rate limit', () => {
 		const answers = [];
 		for (let attempt = 0; attempt < 6; attempt += 1) answers.push((await change(caller.accessToken, { nextPassword: FAKE_PASSWORD })).status);
 		assert.deepEqual(answers, [403, 403, 403, 403, 403, 429]);
+		assert.equal((await change(caller.accessToken, { nextPassword: FAKE_PASSWORD })).headers.get('retry-after'), '3600');
 		assert.equal(gotrue.puts.length, 0);
 	});
 });

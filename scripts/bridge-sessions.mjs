@@ -320,14 +320,12 @@ async function listSessions({ config, pg, session }, response) {
 }
 
 /**
- * Revokes a family (or the one named row when it has no family) and applies every revoked
- * id to this process at once. The ids come from the rows the write returned, never from
- * the request.
+ * Stamps every live row the filter selects as revoked and applies each id to this process
+ * at once. The ids come from the rows the write returned, never from the request. The one
+ * place a revoke is written, so the rows of a family and "everything but one family" can
+ * never disagree on the stamp.
  */
-async function revokeFamily({ config, pg }, { userId, familyId, rowId, reason }) {
-	const params = new URLSearchParams({ user_id: `eq.${userId}`, revoked_at: 'is.null', select: 'id,expires_at' });
-	if (familyId) params.set('family_id', `eq.${familyId}`);
-	else params.set('id', `eq.${rowId}`);
+async function stampRevoked({ config, pg }, params, reason) {
 	const rows = await pg.asService().patch(
 		`osionos_sessions?${params}`,
 		{ revoked_at: new Date(sessionClock(config)).toISOString(), revoked_reason: reason },
@@ -339,6 +337,31 @@ async function revokeFamily({ config, pg }, { userId, familyId, rowId, reason })
 		if (revokedId) config.sessionRevocations?.applyLocal(revokedId, timestampMicros(row?.expires_at) ?? 0);
 	}
 	return revoked.length;
+}
+
+/** Revokes a family (or the one named row when it has no family). */
+async function revokeFamily({ config, pg }, { userId, familyId, rowId, reason }) {
+	const params = new URLSearchParams({ user_id: `eq.${userId}`, revoked_at: 'is.null', select: 'id,expires_at' });
+	if (familyId) params.set('family_id', `eq.${familyId}`);
+	else params.set('id', `eq.${rowId}`);
+	return stampRevoked({ config, pg }, params, reason);
+}
+
+/**
+ * Revokes every live row of the user except one family and the one row `keepRowId`, in a
+ * single write. A row with no family (a legacy row) is its own family, so it is revoked
+ * unless it is `keepRowId`; `keepFamilyId` defaults to `keepRowId`.
+ * Caveat: PostgREST `neq` never matches NULL, hence the explicit `family_id.is.null` clause.
+ */
+export async function revokeOtherFamilies({ config, pg }, { userId, keepFamilyId, keepRowId, reason }) {
+	const params = new URLSearchParams({
+		user_id: `eq.${userId}`,
+		revoked_at: 'is.null',
+		id: `neq.${keepRowId}`,
+		or: `(family_id.is.null,family_id.neq.${keepFamilyId ?? keepRowId})`,
+		select: 'id,expires_at',
+	});
+	return stampRevoked({ config, pg }, params, reason);
 }
 
 async function liveRowOf(pg, { sessionId, userId }) {
