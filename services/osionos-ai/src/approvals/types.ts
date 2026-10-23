@@ -62,8 +62,8 @@ export interface ApprovalTarget {
 	workspaceName: string;
 }
 
-/** What the preview of a write counts: the blocks of a page, or its sub-pages. */
-export type PreviewUnit = 'blocks' | 'sub_pages' | 'none';
+/** What the preview of a write counts: the blocks of a page, its sub-pages, or the items of a builder plan. */
+export type PreviewUnit = 'blocks' | 'sub_pages' | 'items' | 'none';
 
 /** The preview of a write: a number, and what the number is. */
 export interface ApprovalPreview {
