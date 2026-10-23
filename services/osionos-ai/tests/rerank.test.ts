@@ -144,7 +144,7 @@ describe('the reranker of the retrieval', () => {
 		assert.equal(reranker.calls, 0);
 		assert.deepEqual(found.map((chunk) => chunk.pageId), [pages.both, pages.lexical, pages.vector]);
 		for (const chunk of found) {
-			assert.deepEqual(Object.keys(chunk).sort(), ['blockId', 'headingPath', 'pageId', 'score', 'snippet', 'title']);
+			assert.deepEqual(Object.keys(chunk).sort(), ['blockId', 'collection', 'headingPath', 'pageId', 'score', 'snippet', 'title']);
 		}
 	});
 });

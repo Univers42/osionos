@@ -18,7 +18,7 @@ import type { SkillIndex } from '../skills/runSkills.ts';
 import { promptCharCount } from './estimate.ts';
 import { extendRunReservation } from './extend.ts';
 import type { LoopBudget } from './loopBudget.ts';
-import { sourceChars } from './sources.ts';
+import { citationData, sourceChars } from './sources.ts';
 import { createToolPool } from '../tools/index.ts';
 import { buildRunTools } from './toolSet.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
@@ -172,13 +172,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// sees them, before the first word of the answer. The number of a
 		// source is its rank: the first is [1], the second [2].
 		for (const [index, source] of sources.entries()) {
-			await emit('citation', {
-				n: index + 1,
-				pageId: source.pageId,
-				...(source.blockId ? { blockId: source.blockId } : {}),
-				title: source.title,
-				snippet: source.snippet,
-			});
+			await emit('citation', citationData(source, index + 1));
 		}
 
 		// The tools of the assistant: the search of a workspace, the read of
@@ -269,11 +263,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				// model: the part of a source is its number minus one.
 				...runTools.cited.map((source, index) => ({
 					type: 'citation',
-					n: index + 1,
-					pageId: source.pageId,
-					...(source.blockId ? { blockId: source.blockId } : {}),
-					title: source.title,
-					snippet: source.snippet,
+					...citationData(source, index + 1),
 				})),
 				// The writes the run asked for: the card of each one. The
 				// approval id is what the client needs to draw the card again
