@@ -106,6 +106,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     anchors: [
       { id: "blocked-users", label: "Blocked users",
         keywords: ["block", "blocked", "unblock", "hide", "people", "mute"] },
+      { id: "interaction-limits", label: "Interaction limits",
+        keywords: ["message", "connect", "comment", "limit", "restrict", "who can", "duration", "mute", "reach"] },
     ],
   },
   {
