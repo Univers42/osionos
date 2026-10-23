@@ -10,7 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// Settings > Developer: the owner's personal access tokens. Listing, creating and
+// Settings > Developer and authorized apps: the owner's personal access tokens, which are
+// the apps that act for them. Listing, creating and
 // revoking go through patApi (the bridge's /api/account/tokens routes); the vocabulary
 // the create dialog offers is the catalog that list call returns.
 
@@ -18,14 +19,15 @@ import React, { useCallback, useEffect, useState } from "react";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
 
 import { Button, IconButton } from "@/shared/ui";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import { ConfirmModal } from "@/features/settings/ui/ConfirmModals";
 import { DataTable, EmptyState, PanelStatus, Section, SettingRow, type PanelStatusState } from "@/features/settings/ui/settingsKit";
 
 import { CreateTokenModal } from "./CreateTokenModal";
 import { listTokens, revokeAllTokens, revokeToken } from "./patApi";
-import { dateLabel, expiryLabel, kindLabel, patErrorMessage, permissionSummary, type PatCatalog, type PatToken } from "./patModel";
+import { dateLabel, expiryLabel, kindLabel, lastUsedLabel, patErrorMessage, permissionSummary, type PatCatalog, type PatToken } from "./patModel";
 
-const HEADERS = ["Name", "Kind", "Permissions", "Created", "Expires", "Actions"];
+const HEADERS = ["Name", "Kind", "Permissions", "Last used", "Created", "Expires", "Actions"];
 const NO_CATALOG: PatCatalog = { resources: {}, permissions: [] };
 
 function failureOf(error: unknown): string {
@@ -78,6 +80,7 @@ export const DeveloperPanel: React.FC = () => {
     </span>,
     kindLabel(token.kind),
     <span key="permissions" className="block break-words">{permissionSummary(token)}</span>,
+    lastUsedLabel(token.lastUsedAt),
     dateLabel(token.createdAt),
     <span key="expires" title={dateLabel(token.expiresAt)}>{expiryLabel(token.expiresAt)}</span>,
     <IconButton key="revoke" label={`Revoke ${token.name}`} tone="danger" onClick={() => setPendingRevoke(token)}><Trash2 size={16} /></IconButton>,
@@ -86,14 +89,15 @@ export const DeveloperPanel: React.FC = () => {
   return (
     <div className="space-y-6">
       <Section title="Personal access tokens" anchor="personal-access-tokens">
+        <div data-settings-anchor="authorized-apps" />
         <SettingRow
           title="Tokens act as you"
-          description="Use one in a script or an app instead of your password. You see a token only once, when you create it."
+          description="Each token is an app that acts as you. Last use is accurate to the hour, so an app shows as used within the hour, not at an exact time. You see a token only once, when you create it."
           action={<Button tone="primary" onClick={() => setCreating(true)} disabled={status !== "ready"}><Plus size={16} />New token</Button>}
         />
         <PanelStatus status={status} error={error} onRetry={() => void load()}>
           {tokens.length === 0 ? (
-            <EmptyState icon={<KeyRound size={16} />} title="No personal access tokens yet." hint="A token lets a script or an app call osionos as you, with only the permissions you give it." />
+            <EmptyState icon={<KeyRound size={16} />} title="No personal access tokens yet." hint="No apps can act for you yet. A token lets a script or an app call osionos as you, with only the permissions you give it." />
           ) : (
             <>
               <DataTable headers={HEADERS} rows={rows} />
@@ -103,6 +107,10 @@ export const DeveloperPanel: React.FC = () => {
             </>
           )}
         </PanelStatus>
+        <p className="text-sm text-[var(--osio-fg-muted)]">
+          Tokens for remote AI agents are listed under{" "}
+          <button type="button" className="underline" onClick={() => openSettings("ai_connections", "ai-access-tokens")}>AI connections</button>.
+        </p>
       </Section>
       {creating && <CreateTokenModal catalog={catalog} onClose={() => setCreating(false)} onCreated={(token) => setTokens((current) => [token, ...current])} />}
       {pendingRevoke && (

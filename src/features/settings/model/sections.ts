@@ -189,9 +189,10 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   },
   {
     id: "developer", group: "features", label: "Developer", title: "Developer",
-    subtitle: "Personal access tokens for the apps that talk to osionos", icon: Terminal,
+    subtitle: "Personal access tokens, and the apps that act for you", icon: Terminal,
     anchors: [
       { id: "personal-access-tokens", label: "Personal access tokens", keywords: ["token", "pat", "api key", "secret", "credential", "scope", "developer"] },
+      { id: "authorized-apps", label: "Authorized apps", keywords: ["authorized", "apps", "mcp", "claude", "token", "access", "revoke"] },
     ],
   },
   {
