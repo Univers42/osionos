@@ -87,9 +87,11 @@ test.describe("settings developer panel", () => {
     page.on("console", (message) => { if (message.type() === "error" && !message.text().startsWith("Failed to load resource")) errors.push(message.text()); });
     bridge.failList = { status: 500, json: { ok: false, message: "boom", code: "server_error" } };
     await openDeveloper(page, baseURL);
-    await expect(panel(page).getByRole("alert")).toBeVisible();
+    // The panel also holds the SSH and GPG keys section, whose list this stub does not serve.
+    const tokensAlert = panel(page).getByRole("alert").filter({ hasText: "boom" });
+    await expect(tokensAlert).toBeVisible();
     bridge.failList = null;
-    await panel(page).getByRole("button", { name: "Retry" }).click();
+    await tokensAlert.getByRole("button", { name: "Retry" }).click();
     await expect(panel(page).getByText("CI pipeline")).toBeVisible();
     expect(errors).toEqual([]);
   });
