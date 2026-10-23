@@ -11,40 +11,11 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { createHash, createHmac, randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import * as z from 'zod/v4';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createMcpApiClient, fetchJson } from './osionos-mcp-api.mjs';
-
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const APP_ROOT = resolve(SCRIPT_DIR, '..');
-
-const ENV_FILES = [
-  resolve(APP_ROOT, '.env.local'),
-  resolve(APP_ROOT, '.env'),
-  resolve(APP_ROOT, '../../../.env.local'),
-  resolve(APP_ROOT, '../../opposite-osiris/.env.local'),
-  resolve(APP_ROOT, '../../opposite-osiris/.env'),
-  resolve(APP_ROOT, '../../../apps/grobase/.env.local'),
-];
-
-for (const file of ENV_FILES) {
-  if (!existsSync(file)) continue;
-  for (const rawLine of readFileSync(file, 'utf8').split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#') || !line.includes('=')) continue;
-    const [key, ...valueParts] = line.split('=');
-    let value = valueParts.join('=').trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    if (key && process.env[key] === undefined) process.env[key] = value;
-  }
-}
+import { createMcpApiClient, fetchJson, mcpTokenFromEnv } from './osionos-mcp-api.mjs';
 
 const DEFAULT_BRIDGE_URL = `http://localhost:${process.env.OSIONOS_BRIDGE_PORT ?? '4000'}`;
 const DEFAULT_API_URL = DEFAULT_BRIDGE_URL;
@@ -170,46 +141,6 @@ function configuredApiCandidates() {
   ]);
 }
 
-function stableStringify(value) {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-  const entries = Object.keys(value)
-    .sort((left, right) => left.localeCompare(right))
-    .map((key) => JSON.stringify(key) + ':' + stableStringify(value[key]));
-  return `{${entries.join(',')}}`;
-}
-
-function uuidFromHash(value) {
-  const hex = createHash('sha256').update(value).digest('hex').slice(0, 32).split('');
-  hex[12] = '5';
-  hex[16] = ((Number.parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
-  return `${hex.slice(0, 8).join('')}-${hex.slice(8, 12).join('')}-${hex.slice(12, 16).join('')}-${hex.slice(16, 20).join('')}-${hex.slice(20, 32).join('')}`;
-}
-
-function bridgeIdentity() {
-  const email = String(process.env.OSIONOS_MCP_EMAIL ?? 'claude.mcp@osionos.local').trim().toLowerCase();
-  const name = String(process.env.OSIONOS_MCP_NAME ?? 'Claude MCP').trim() || 'Claude MCP';
-  const subject = String(process.env.OSIONOS_MCP_SUBJECT ?? uuidFromHash(`osionos-mcp:${email}`)).trim();
-  return { provider: 'prismatica', subject, email, name };
-}
-
-function bridgeAssertion() {
-  return { ...bridgeIdentity(), jti: randomUUID() };
-}
-
-function bridgeSecret() {
-  return bridgeSecrets()[0] ?? '';
-}
-
-function bridgeSecrets() {
-  return unique([
-    process.env.OSIONOS_MCP_BRIDGE_SECRET,
-    process.env.OSIONOS_BRIDGE_SHARED_SECRET,
-    process.env.JWT_SECRET,
-    'dev-secret-change-in-production',
-  ]);
-}
-
 async function probeJson(url) {
   try {
     const body = await fetchJson(fetch, url, { timeoutMs: 1_500 });
@@ -244,103 +175,20 @@ async function resolveApiUrl() {
   return candidates[0] ?? DEFAULT_API_URL;
 }
 
-function tokenExpiresAt(token) {
-  const parts = String(token).split('.');
-  if (parts.length !== 3) return 0;
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-    return Number(payload.exp ?? 0) * 1000;
-  } catch {
-    return 0;
-  }
-}
-
-function handoffTokenFromPayload(payload) {
-  const directToken = String(payload?.token ?? payload?.bridgeToken ?? '').trim();
-  if (directToken) return directToken;
-  const redirectUrl = String(payload?.redirectUrl ?? '').trim();
-  if (!redirectUrl) return '';
-  try {
-    const hash = new URL(redirectUrl).hash.replace(/^#/, '');
-    return new URLSearchParams(hash).get('bridge_token') ?? '';
-  } catch {
-    return '';
-  }
-}
-
-async function consumeBridgeHandoff(apiUrl, payload) {
-  if (payload?.accessToken) return payload;
-  if (payload?.session?.accessToken) return payload.session;
-  const token = handoffTokenFromPayload(payload);
-  if (!token) return payload;
-  const consumed = await fetchJson(fetch, `${apiUrl}/api/auth/bridge/consume`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ token }),
-  });
-  return consumed?.session ?? consumed;
-}
-
 /**
- * Mints a new app session: the bridge signs one for the shared secret.
- *
- * The cache of the session is the client's (scripts/osionos-mcp-api.mjs): this only
- * knows how to ask for one.
+ * The API client (scripts/osionos-mcp-api.mjs): it sends the personal access token of
+ * OSIONOS_MCP_TOKEN and nothing else -- this server mints no session for anyone.
  */
-async function mintApiSession() {
-  const secrets = bridgeSecrets();
-  if (secrets.length === 0) {
-    throw new Error('OSIONOS_BRIDGE_SHARED_SECRET or JWT_SECRET is required for local MCP API sessions.');
-  }
-  const body = bridgeAssertion();
-  const apiUrl = await resolveApiUrl();
-  let payload = null;
-  let lastAuthError = null;
-  for (const secret of secrets) {
-    const timestamp = String(Date.now());
-    const signature = createHmac('sha256', secret).update(`${timestamp}.${stableStringify(body)}`).digest('hex');
-    try {
-      const sessionPayload = await fetchJson(fetch, `${apiUrl}/api/auth/bridge/session`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'X-Prismatica-Bridge-Timestamp': timestamp,
-          'X-Prismatica-Bridge-Signature': signature,
-        },
-        body: JSON.stringify(body),
-      });
-      payload = await consumeBridgeHandoff(apiUrl, sessionPayload);
-      break;
-    } catch (error) {
-      lastAuthError = error;
-      if (error?.status !== 401) throw error;
-    }
-  }
-  if (!payload) throw lastAuthError ?? new Error('Unable to create an osionos MCP API session.');
-  const accessToken = String(payload?.accessToken ?? '').trim();
-  if (!accessToken) throw new Error('The osionos API bridge session did not return an access token.');
-  return {
-    accessToken,
-    refreshToken: String(payload?.refreshToken ?? ''),
-    user: payload?.user ?? null,
-    workspaces: Array.isArray(payload?.workspaces) ? payload.workspaces : [],
-    expiresAt: tokenExpiresAt(accessToken) || Date.now() + 10 * 60 * 1000,
-  };
-}
-
-/**
- * The API client: the session it keeps, and the one retry a revoked session earns
- * (scripts/osionos-mcp-api.mjs). A call refused with `session_revoked` drops the
- * session, mints a new one and is made again -- once (C128).
- */
-const api = createMcpApiClient({ fetchImpl: fetch, mintSession: mintApiSession, resolveApiUrl });
+const api = createMcpApiClient({ fetchImpl: fetch, resolveApiUrl });
 
 async function apiRequest(path, { method = 'GET', body, auth = true } = {}) {
   return api.request(path, { method, body, auth });
+}
+
+/** Which credential the calls carry, never the credential or who it belongs to. */
+function authSummary() {
+  const mode = process.env.OSIONOS_MCP_TOKEN ? 'personal-access-token' : process.env.OSIONOS_MCP_JWT ? 'explicit-jwt' : 'none';
+  return { mode, hasToken: mode !== 'none' };
 }
 
 function compact(value) {
@@ -640,7 +488,7 @@ async function listPagesForWorkspace(workspaceId) {
 }
 
 async function workspaceOverview(limit) {
-  const workspaces = await apiRequest('/api/workspaces').catch(() => []);
+  const workspaces = await apiRequest('/api/workspaces');
   const overview = [];
   for (const workspace of Array.isArray(workspaces) ? workspaces : []) {
     const pages = await listPagesForWorkspace(String(workspace._id)).catch(() => []);
@@ -648,7 +496,6 @@ async function workspaceOverview(limit) {
     overview.push({
       id: workspace._id,
       name: workspace.name,
-      plan: workspace.plan,
       pageCount: visiblePages.length,
       pages: visiblePages.slice(0, limit).map(compactPage),
     });
@@ -675,9 +522,7 @@ server.registerResource('osionos-connection', 'osionos://connection', {
       version: SERVER_VERSION,
       bridgeUrl: bridgeUrl(),
       apiCandidates: configuredApiCandidates(),
-      identityEmail: bridgeIdentity().email,
-      hasBridgeSecret: Boolean(bridgeSecret()),
-      hasExplicitJwt: Boolean(process.env.OSIONOS_MCP_JWT),
+      auth: authSummary(),
     }),
   }],
 }));
@@ -697,11 +542,7 @@ server.registerTool('osionos_status', {
     ok: true,
     bridge: { url: bridgeUrl(), ...bridgeHealth },
     api: { resolvedUrl: resolvedApiUrl, candidates: apiChecks },
-    auth: {
-      mode: process.env.OSIONOS_MCP_JWT ? 'explicit-jwt' : 'signed-bridge-session',
-      identityEmail: bridgeIdentity().email,
-      hasBridgeSecret: Boolean(bridgeSecret()),
-    },
+    auth: authSummary(),
     note: 'Claude Code uses this local stdio MCP server. Claude web/mobile connectors need a hosted HTTPS MCP endpoint with OAuth.',
   });
 });
@@ -730,7 +571,7 @@ server.registerTool('osionos_describe_app', {
       ],
       mcpFlow: [
         'Claude Code connects to scripts/osionos-mcp-server.mjs over stdio.',
-        'The MCP server signs into the local API through the bridge/session flow or uses OSIONOS_MCP_JWT.',
+        'The MCP server authenticates with a personal access token (OSIONOS_MCP_TOKEN).',
         'Tools list/read/search/create/update/archive pages through the local API.',
         'For app documentation, call osionos_describe_app first, inspect pages as needed, then create a page using explicit content blocks.',
       ],
@@ -758,7 +599,7 @@ server.registerTool('osionos_describe_app', {
 
 server.registerTool('osionos_list_workspaces', {
   title: 'List osionos Workspaces',
-  description: 'List workspaces visible to the local Claude MCP osionos identity.',
+  description: 'List workspaces visible to the owner of the access token.',
   annotations: { readOnlyHint: true, openWorldHint: false },
 }, async () => {
   const workspaces = await apiRequest('/api/workspaces');
@@ -818,8 +659,7 @@ server.registerTool('osionos_read_page', {
   annotations: { readOnlyHint: true, openWorldHint: false },
 }, async ({ pageId }) => {
   const page = await apiRequest(`/api/pages/${encodeURIComponent(pageId)}`);
-  const blocks = await apiRequest(`/api/blocks?pageId=${encodeURIComponent(pageId)}`).catch(() => []);
-  return textResult({ page, blocks });
+  return textResult({ page, blocks: [] });
 });
 
 server.registerTool('osionos_create_page', {
@@ -928,6 +768,14 @@ server.registerPrompt('write_osionos_page', {
     },
   }],
 }));
+
+// A token that is not shaped like one is a mistake to fix now, not a 401 on the first call.
+try {
+  mcpTokenFromEnv();
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
