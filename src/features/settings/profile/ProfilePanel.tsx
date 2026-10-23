@@ -6,22 +6,22 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/22 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/23 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useEffect, useState } from 'react';
 import { startRegistration } from '@simplewebauthn/browser';
-import { Check, Copy, FileDown, KeyRound } from 'lucide-react';
+import { Copy, FileDown, KeyRound } from 'lucide-react';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
 import { useAccountDevicesStore, useAccountEmailsStore, useAccountPasskeysStore, useAccountSettingsStore, recordSettingsAction } from '@/store/settings';
 import { defaultDevice } from '@/store/settings/defaults';
-import { Button, EmojiPicker, IconButton, Toggle, useToastStore } from '@/shared/ui';
-import { ImageAvatarUpload } from './ImageAvatarUpload';
+import { Button, IconButton, Toggle, useToastStore } from '@/shared/ui';
 import { ConfirmModal, TypedConfirmModal } from '../ui/ConfirmModals';
-import { Avatar, DataTable, Section, SettingRow } from '../ui/settingsKit';
+import { DataTable, Section, SettingRow } from '../ui/settingsKit';
 import { accountActionNotice, noopHandledAction, runAccountAction, runAsync } from '../model/settingsCalls';
+import { PublicProfileSection } from './PublicProfileSection';
 import { EmailManagerModal, PasskeyManagerModal, PasswordModal, SupportDurationModal, TwoFactorModal } from './ProfileSecurityModals';
 
 type SettingsModalName =
@@ -36,11 +36,6 @@ type SettingsModalName =
 interface ActiveSettingsModal {
   name: SettingsModalName;
   payload?: Record<string, unknown>;
-}
-
-function flashSavedIndicator(setSaved: React.Dispatch<React.SetStateAction<boolean>>) {
-  setSaved(true);
-  globalThis.setTimeout(() => setSaved(false), 1400);
 }
 
 /**
@@ -67,15 +62,6 @@ function deviceName(userAgent?: string | null): string {
   return `${browser} on ${os}`;
 }
 
-/**
- * IconValueView draws an image only for an `img:` value, so a stored avatar URL
- * is prefixed here — the caller, not the package.
- */
-function avatarIconValue(value?: string): string | undefined {
-  if (!value) return value;
-  return /^(https:\/\/|\/)/.test(value) ? `img:${value}` : value;
-}
-
 export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ persona }) => {
   const userId = persona?.id || 'anonymous';
   const toast = useToastStore((state) => state.push);
@@ -95,31 +81,16 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   const emails = useAccountEmailsStore((state) => state.data);
   const hydrateEmails = useAccountEmailsStore((state) => state.hydrate);
   const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
-  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
-  const [preferredNameDraft, setPreferredNameDraft] = useState(persona?.name ?? '');
-  const [nameSaved, setNameSaved] = useState(false);
 
   useEffect(() => {
-    runAsync(hydrateAccount(userId, persona?.name));
+    runAsync(hydrateAccount(userId));
     runAsync(hydrateDevices(userId));
     runAsync(hydratePasskeys());
     runAsync(hydrateEmails(userId, persona?.email));
-  }, [hydrateAccount, hydrateDevices, hydrateEmails, hydratePasskeys, persona?.email, persona?.name, userId]);
+  }, [hydrateAccount, hydrateDevices, hydrateEmails, hydratePasskeys, persona?.email, userId]);
 
-  useEffect(() => {
-    const currentName = account?.profile.preferredName ?? persona?.name ?? '';
-    if (!preferredNameDraft.trim() || preferredNameDraft === currentName) return;
-    const timer = globalThis.setTimeout(() => {
-      updateAccount({ profile: { ...account?.profile, preferredName: preferredNameDraft.trim() } });
-      flashSavedIndicator(setNameSaved);
-    }, 300);
-    return () => globalThis.clearTimeout(timer);
-  }, [account?.profile, persona?.name, preferredNameDraft, updateAccount]);
-
-  const preferredName = account?.profile.preferredName ?? persona?.name ?? '';
   const primaryEmail = emails.find((email) => email.isPrimary)?.email ?? persona?.email ?? 'dev.pro.photo@gmail.com';
   const security = account?.security ?? {};
-  const avatarValue = account?.profile.avatar ?? persona?.emoji;
   const activePasskeys = passkeys.filter((passkey) => !passkey.removedAt);
   // Only the rows the server sent. With none (offline, or a server without the
   // route) this browser is the one device that certainly exists.
@@ -159,38 +130,7 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
 
   return (
     <>
-      <Section title="Account">
-        <div className="flex items-center gap-5 pb-3">
-          <div className="relative">
-            <button type="button" className="rounded-full focus:outline-none focus:ring-2 focus:ring-[var(--osio-accent)]" onClick={() => setAvatarPickerOpen((open) => !open)} aria-label="Change avatar">
-              <Avatar value={avatarIconValue(avatarValue)} label={preferredName} size={60} />
-            </button>
-            {avatarPickerOpen && (
-              <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2">
-                <EmojiPicker
-                  current={avatarValue}
-                  onSelect={(value) => { updateAccount({ profile: { ...account?.profile, avatar: value } }); setAvatarPickerOpen(false); }}
-                  onRemove={() => { updateAccount({ profile: { ...account?.profile, avatar: undefined } }); setAvatarPickerOpen(false); }}
-                  onClose={() => setAvatarPickerOpen(false)}
-                />
-              </div>
-            )}
-          </div>
-          <label className="w-[260px] text-xs text-[var(--osio-fg-muted)]">
-            <span>Preferred name</span>
-            <span className="relative mt-1 block">
-              <input
-                className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 pr-8 text-sm text-[var(--osio-fg-default)] outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]"
-                value={preferredNameDraft}
-                onChange={(event) => setPreferredNameDraft(event.target.value)}
-              />
-              {nameSaved && <Check size={16} className="absolute right-2 top-2.5 text-[var(--osio-success)]" />}
-            </span>
-          </label>
-          <ImageAvatarUpload onUploaded={(avatarUrl) => updateAccount({ profile: { ...account?.profile, avatar: avatarUrl } })} />
-        </div>
-        <p className="text-sm text-[var(--osio-fg-muted)]"><span className="text-[var(--osio-accent-text)]">Create a custom self-portrait</span> with osionos Faces</p>
-      </Section>
+      <PublicProfileSection />
       <Section title="Account security">
         <SettingRow title="Email" description={primaryEmail} action={<Button onClick={() => setModal({ name: 'email-manager' })}>Manage emails</Button>} />
         <SettingRow title="Password" description={security.hasPassword ? 'Password sign-in is available for this account.' : 'Add a password to keep another sign-in option available.'} action={<Button onClick={() => setModal({ name: 'password' })}>{security.hasPassword ? 'Update password' : 'Add password'}</Button>} />

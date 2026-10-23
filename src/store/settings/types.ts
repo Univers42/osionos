@@ -12,11 +12,6 @@
 
 export interface AccountSettings {
   userId: string;
-  profile: {
-    preferredName?: string;
-    avatar?: string;
-    locale?: string;
-  };
   security: {
     hasPassword?: boolean;
     twoStepEnabled?: boolean;

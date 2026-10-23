@@ -131,14 +131,16 @@ test.describe("settings honesty (offline build)", () => {
     await expect(region(page).getByRole("heading", { name: "User ID", exact: true })).toBeVisible();
     await expect(region(page).locator('[data-settings-anchor="user-id"]')).toBeInViewport();
 
-    const userIdRow = region(page).locator('[data-settings-anchor="user-id"]').locator("..");
-    const description = userIdRow.locator('[data-testid="setting-description"], .text-sm').first();
-    const text = (await description.textContent()) ?? "";
+    // Scoped to the section itself: its parent is the whole panel, whose first
+    // .text-sm is whatever section happens to come first.
+    const description = region(page).locator('[data-settings-anchor="user-id"] .mt-1.text-sm').first();
+    const text = (await description.count()) > 0 ? ((await description.textContent()) ?? "") : "";
 
     // In the offline build the persona may not have an id — showing nothing is honest
     // Not the literal UUID "b0181a89-4ad8-476c-9657-352d6eadf49e"
     expect(text).not.toBe("b0181a89-4ad8-476c-9657-352d6eadf49e");
-    // If present, it should be a UUID format
-    if (text) expect(text).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    // The offline persona's id is "mock-user-0", not a UUID: it was never read before,
+    // because the old locator landed on an empty <input>.
+    if (text) expect(text).toMatch(/^[\w-]+$/);
   });
 });

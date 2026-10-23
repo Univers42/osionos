@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/23 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,14 +23,6 @@ export interface DirectoryPerson {
   avatar: string | null;
   headline: string | null;
   online: boolean;
-}
-
-export interface ProfilePatch {
-  username?: string;
-  bio?: string;
-  headline?: string;
-  location?: string;
-  directoryOptOut?: boolean;
 }
 
 function jwt(): string | undefined {
@@ -55,8 +47,4 @@ export async function fetchPeople(scope: 'org' | 'global' = 'org'): Promise<Dire
     jwt(),
   );
   return Array.isArray(reply.people) ? reply.people : [];
-}
-
-export async function patchProfileMe(patch: ProfilePatch): Promise<void> {
-  await api.patch('/api/profile/me', patch, jwt());
 }
