@@ -3,6 +3,7 @@ import type { z } from 'zod';
 import type { AuthUser } from '../auth.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { ApprovalPlan } from '../approvals/types.ts';
+import type { Authorship } from '../runs/sources.ts';
 
 /**
  * The tools of the assistant: what the model may call, and what it may not.
@@ -82,8 +83,15 @@ export interface AssistantTool<TArgs, TData> {
 	 * whether it is FRESH. The numbers are per passage: a passage keeps
 	 * the number it was given the first time, so a source the run already
 	 * cited is not quoted again.
+	 *
+	 * `authorOf` is given by the remote MCP endpoint only (C119): the blocks
+	 * then carry who wrote the page. The run loop never gives it.
 	 */
-	render(data: TData, cites: readonly { n: number; fresh: boolean }[]): string;
+	render(
+		data: TData,
+		cites: readonly { n: number; fresh: boolean }[],
+		authorOf?: (pageId: string) => Authorship | undefined,
+	): string;
 }
 
 /** A tool that only reads. */
@@ -91,6 +99,11 @@ export interface ReadTool<TArgs, TData> extends AssistantTool<TArgs, TData> {
 	kind: 'read';
 	/** The sources the data holds: the pages the answer may cite. */
 	sources(data: TData): readonly RetrievedChunk[];
+	/**
+	 * The skill a result loaded, when it loaded one: the tool result event
+	 * carries it, so the history of a run pins what was loaded (devil C40).
+	 */
+	pin?(data: TData): { id: string; version: number };
 }
 
 /**

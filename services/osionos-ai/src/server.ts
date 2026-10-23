@@ -7,6 +7,7 @@ import { cutoffPoller } from './auth.ts';
 import { config } from './config.ts';
 import { createPool, isPoolTimeout } from './db.ts';
 import { sendError, sendPreflight } from './http.ts';
+import { sendMcpError } from './mcp/guard.ts';
 import { sweepStaleRuns } from './runs/runner.ts';
 import { sweepApprovals } from './approvals/repo.ts';
 import * as runStore from './runs/runStore.ts';
@@ -123,6 +124,12 @@ async function handleRequest(
 	try {
 		if (request.method === 'OPTIONS') {
 			route = 'preflight';
+			// The MCP endpoint grants no CORS to anybody (C118): its preflight is a 405.
+			if (config.patEnabled && new URL(request.url ?? '/', 'https://localhost').pathname === '/api/ai/mcp') {
+				sendMcpError(response, 405, 'method_not_allowed');
+				status = 405;
+				return;
+			}
 			sendPreflight(response);
 			status = 204;
 			return;
