@@ -133,7 +133,7 @@ describe('onlineAmong', () => {
 		const online = await onlineAmong(kv, ids, { now: START });
 		const mgets = server.commands.filter((command) => command[0] === 'MGET');
 		assert.equal(mgets.length, 3);
-		assert.deepEqual(mgets.map((command) => command.length - 1), [100, 100, 50]);
+		assert.deepEqual(mgets.map((command) => command.length - 1), [200, 200, 100]);
 		assert.equal(online.has(ids[0]), true);
 		assert.equal(online.size, 1);
 	});

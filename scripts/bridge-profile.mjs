@@ -20,7 +20,7 @@
  *                                    (emails are HMAC-hashed at rest — raw
  *                                    email search is impossible by design)
  *   GET  /api/profile/:userId        display name, avatar, org role, presence
- *   POST /api/profile/heartbeat      presence: the beat, nothing else
+ *   POST /api/profile/heartbeat      presence: the beat, optionally {state, customText}
  *
  * The avatar routes live in bridge-avatar.mjs (the account seam): the bytes go
  * to storage and the profile column holds the path. This module only projects
@@ -59,7 +59,8 @@ import {
 import { inFilter } from './bridge-paging.mjs';
 import { publicAvatar } from './bridge-avatar.mjs';
 import { canReadPageRowAsMember } from './bridge-page-read.mjs';
-import { onlineAmong, recordHeartbeat } from './bridge-presence.mjs';
+import { onlineAmong, parseBeat, recordHeartbeat } from './bridge-presence.mjs';
+import { readStatus } from './bridge-status.mjs';
 import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 
 
@@ -117,7 +118,9 @@ async function getProfile(deps, session, userId, response, config) {
 	}
 	const { role, workspaceId } = await workspaceRole(config, deps.fetchImpl, userId, deps.env);
 	const fields = profile.fields && typeof profile.fields === 'object' && !Array.isArray(profile.fields) ? profile.fields : {};
-	const online = await onlineAmong(deps.kv, [userId], { now: deps.now() });
+	const now = deps.now();
+	const online = await onlineAmong(deps.kv, [userId], { now, viewerId: session.userId });
+	const present = online.get(userId);
 	return sendJson(response, 200, {
 		ok: true,
 		userId,
@@ -129,6 +132,9 @@ async function getProfile(deps, session, userId, response, config) {
 		// coarse; `online` below is the exact one.
 		lastSeenAt: row.last_seen_at ?? null,
 		online: online.has(userId),
+		// An invisible user is offline to everyone else; the owner sees the true state.
+		presence: present ? { state: present.state, customText: present.customText } : { state: 'offline', customText: null },
+		status: await readStatus(config, deps.fetchImpl, userId, now),
 		// Widened fields the admin-authored profile template binds to.
 		username: typeof row.username === 'string' ? row.username : null,
 		headline: typeof profile.headline === 'string' ? profile.headline : null,
@@ -140,9 +146,11 @@ async function getProfile(deps, session, userId, response, config) {
 	}, config);
 }
 
-async function heartbeat(deps, session, response, config) {
-	// The body of the request is never read: the clock is the server's.
-	await recordHeartbeat(deps.kv, { userId: session.userId, config, fetchImpl: deps.fetchImpl, now: deps.now() });
+async function heartbeat(deps, session, request, response, config) {
+	// Only `state` and `customText` are read from the body: the clock is the server's. A
+	// client that sends no body at all is a plain beat.
+	const beat = parseBeat(Symbol.asyncIterator in request ? await readJsonBody(request) : undefined);
+	await recordHeartbeat(deps.kv, { userId: session.userId, config, fetchImpl: deps.fetchImpl, now: deps.now(), ...beat });
 	response.writeHead(204, {
 		'cache-control': 'no-store',
 		'access-control-allow-origin': config.allowedOrigin,
@@ -306,7 +314,7 @@ export function createProfileHandler({ config, verifySession, fetchImpl = fetch,
 			if (isPeople && method === 'GET') return await searchPeople(deps, session, url, response, requestConfig);
 			if (isEmbed && method === 'POST') return await embedDirectory(deps, session, response, requestConfig);
 			if (pathname === '/api/profile/me' && method === 'PATCH') return await patchMe(deps, session, request, response, requestConfig);
-			if (pathname === '/api/profile/heartbeat' && method === 'POST') return await heartbeat(deps, session, response, requestConfig);
+			if (pathname === '/api/profile/heartbeat' && method === 'POST') return await heartbeat(deps, session, request, response, requestConfig);
 			const sharesMatch = /^\/api\/profile\/([0-9a-f-]{36})\/shares$/i.exec(pathname);
 			if (sharesMatch && method === 'GET') {
 				return await listProfileShares(deps, session, profileUserId(sharesMatch[1]), response, requestConfig);
