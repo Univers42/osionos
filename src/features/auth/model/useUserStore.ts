@@ -717,9 +717,18 @@ export const useUserStore = create<RefreshingUserStore>((set, get) => ({
     const allWorkspaces = [...session.privateWorkspaces, ...session.sharedWorkspaces];
     if (allWorkspaces.length <= 1) return false;
 
-    const jwt = get().activeJwt();
+    // The page-API token: activeJwt() is '' for osionos_v1 bridge sessions, which would skip the call
+    // and drop the workspace locally while the server still has it.
+    const jwt = get().activePageJwt();
     if (jwt) {
-      await api.delete(`/api/workspaces/${workspaceId}`, jwt).catch(() => undefined);
+      // The bridge only schedules the delete (14-day grace); a refusal such as
+      // sudo_required leaves the workspace in place and reaches the panel via `error`.
+      try {
+        await api.delete(`/api/workspaces/${workspaceId}`, jwt);
+      } catch (failure) {
+        set({ error: failure instanceof Error && failure.message.trim() ? failure.message : 'The workspace could not be deleted.' });
+        return false;
+      }
     }
 
     set((currentState) => {
