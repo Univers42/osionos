@@ -91,6 +91,10 @@ export function createSessionStore({ rows = [], fail = null } = {}) {
 			if (id !== undefined && store.some((row) => sameText(row.id, id))) {
 				return json({ code: '23505', message: 'duplicate key value violates unique constraint' }, 409);
 			}
+			// The partial unique index on parent_id: one child per row, however the requests interleave.
+			if (body?.parent_id != null && store.some((row) => sameText(row.parent_id, body.parent_id))) {
+				return json({ code: '23505', message: 'duplicate key value violates unique constraint' }, 409);
+			}
 			const row = { ...body };
 			store.push(row);
 			tables.set(table, store);

@@ -52,6 +52,7 @@ export function mintRefreshToken({ config, now = Date.now(), claims }) {
 		aud: 'osionos-refresh',
 		sub: claims.sub,
 		fam: claims.fam,
+		fam_iat_ms: claims.famIatMs,
 		jti: claims.jti,
 		iat: Math.floor(now / 1000),
 		exp: claims.familyExp,
@@ -96,7 +97,7 @@ function payloadOf(token, config) {
 function wellFormed(payload) {
 	return payload.iss === 'osionos-bridge' && payload.aud === 'osionos-refresh'
 		&& isUuid(payload.sub) && isUuid(payload.fam) && isUuid(payload.jti)
-		&& Number.isFinite(payload.exp)
+		&& Number.isFinite(payload.exp) && Number.isSafeInteger(payload.fam_iat_ms) && payload.fam_iat_ms >= 0
 		&& Array.isArray(payload.workspace_ids) && payload.workspace_ids.length > 0 && payload.workspace_ids.every(isUuid)
 		&& payload.roles !== null && typeof payload.roles === 'object' && !Array.isArray(payload.roles);
 }
