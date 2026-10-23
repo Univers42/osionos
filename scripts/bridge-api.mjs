@@ -37,6 +37,7 @@ import { createAccountHandler } from './bridge-account-mounts.mjs';
 import { handoffLookupKey, openHandoffRecord, sealHandoffRecord } from './bridge-shared-store.mjs';
 import { createKv } from './bridge-kv.mjs';
 import { createPg } from './bridge-pg.mjs';
+import { createPatGate, patWritePayload } from './bridge-pat-middleware.mjs';
 import { claimPlatformRole, platformRoleReader, readPlatformRole } from './bridge-roles.mjs';
 import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 // Re-exported so every existing caller (bridge-chat, bridge-rtc, db-isolation-suite, the tests)
@@ -2222,7 +2223,9 @@ async function readJson(request, maxBytes = DEFAULT_JSON_BODY_LIMIT_BYTES) {
 		body += chunk;
 		if (body.length > maxBytes) throw Object.assign(new Error('Request body too large.'), { status: 413 });
 	}
-	return body ? JSON.parse(body) : {};
+	const parsed = body ? JSON.parse(body) : {};
+	// A personal access token's write is held to its mask here, where every route reads a body.
+	return request.patWriteMask ? patWritePayload(parsed, request.patWriteMask) : parsed;
 }
 
 function json(response, status, body, config, extraHeaders = {}) {
@@ -4704,6 +4707,8 @@ async function handleBridgeRequest(request, response, context) {
 		return;
 	}
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+	// A personal access token is exchanged for a masked internal session before any route reads it.
+	if (await context.patGate(request, response, url, context.config)) return;
 	// Workstream modules — each returns false when the path is not theirs:
 	// in-chat AI agent (SSE), perms proxy (WS-C), LiveKit tokens (WS-D),
 	// chat/profile/feed (WS-B).
@@ -4820,11 +4825,12 @@ export function createBridgeServer(options = {}) {
 		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		account: createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken }),
 	};
+	const patGate = createPatGate({ pg, fetchImpl, memberWorkspaceEntries });
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);
 			try {
-				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env });
+				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env, patGate });
 			} catch (error) {
 				if (!response.headersSent) errorJson(response, error, responseConfig);
 			}
