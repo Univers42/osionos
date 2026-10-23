@@ -69,5 +69,5 @@ export async function transferOwnership(workspaceId: string, userId: string): Pr
   // owner) would otherwise look like success to the caller.
   const after = useWorkspaceMembersStore.getState();
   const transferred = after.data[workspaceId]?.some((member) => member.userId === userId && member.role === "owner");
-  if (!transferred) throw new Error(after.error[workspaceId] ?? "Could not transfer ownership");
+  if (!transferred) throw Object.assign(new Error(after.error[workspaceId] ?? "Could not transfer ownership"), { code: after.errorCode[workspaceId] ?? undefined });
 }

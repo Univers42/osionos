@@ -26,10 +26,11 @@ import type { PageEntry } from '@/entities/page';
 import { Button, EmojiPicker, IconValueView, IconButton, Toggle, useToastStore } from '@/shared/ui';
 import { PageSelectorModal } from '../PageSelectorModal';
 import { ConfirmModal, TypedConfirmModal } from '../ui/ConfirmModals';
+import { PendingDeleteBanner } from './PendingDeleteBanner';
 import { EmptyState, PanelStatus, Section, SettingRow } from '../ui/settingsKit';
 import { csvCell, downloadBlob, downloadText, safeSlug } from '../model/settingsFiles';
 import { accountActionNotice, runAccountAction, runAsync } from '../model/settingsCalls';
-import { isWorkspaceOwner } from '../model/workspaceOwnership';
+import { isWorkspaceOwner, pendingDeleteFor } from '../model/workspaceOwnership';
 import { useSettingsHydration } from '../model/settingsHydration';
 
 const EMPTY_PAGES: PageEntry[] = [];
@@ -53,7 +54,9 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
     () => [...(activeSession?.privateWorkspaces ?? []), ...(activeSession?.sharedWorkspaces ?? [])],
     [activeSession],
   );
-  const isOwner = isWorkspaceOwner(sessionWorkspaces.find((workspace) => workspace._id === workspaceId), resolvedUserId);
+  const currentWorkspace = sessionWorkspaces.find((workspace) => workspace._id === workspaceId);
+  const isOwner = isWorkspaceOwner(currentWorkspace, resolvedUserId);
+  const pendingDeleteAfter = pendingDeleteFor(currentWorkspace, resolvedUserId);
   const pages = usePageStore((state) => state.pages[workspaceId] ?? EMPTY_PAGES);
   const workspaceMembers = useWorkspaceMembersStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS);
   const storedSettings = useWorkspaceSettingsStore((state) => state.data[workspaceId]);
@@ -113,8 +116,9 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
       toast({ kind: 'warning', title: 'You need at least one workspace.' });
       return;
     }
-    const deleted = await deleteWorkspace(workspaceId);
-    if (!deleted) throw new Error(useUserStore.getState().error ?? "This workspace could not be deleted. Nothing was removed.");
+    const outcome = await deleteWorkspace(workspaceId);
+    // The code travels on the error so the dialog can tell a sudo refusal (Try again) from a failure.
+    if (!outcome.ok) throw Object.assign(new Error(outcome.message ?? 'This workspace could not be deleted. Nothing was removed.'), { code: outcome.code });
     toast({ kind: 'success', title: 'Workspace scheduled for deletion', description: 'It is removed after 14 days. Cancel before then to keep it.' });
   }
 
@@ -146,6 +150,7 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
         <SettingRow title="Save and display page view analytics" description={`Collect page view data for all pages in ${settings.name}. Editors can see how many views it has.`} action={<Toggle checked={analytics.pageViews ?? true} onChange={(checked) => update(resolvedUserId, workspaceId, { analytics: { ...settings.analytics, pageViews: checked } })} label="Save and display page view analytics" />} />
       </Section>
       <Section title="Danger zone">
+        {pendingDeleteAfter !== null && <PendingDeleteBanner workspaceId={workspaceId} userId={resolvedUserId} deleteAfter={pendingDeleteAfter} />}
         {isOwner ? (
           <SettingRow danger title="Delete workspace" description="Schedule this workspace for deletion. Nothing is removed for 14 days, and you can cancel until then." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-workspace' })}>Delete workspace</Button>} />
         ) : (

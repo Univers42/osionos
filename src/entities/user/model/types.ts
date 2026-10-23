@@ -38,6 +38,16 @@ export interface Workspace {
   role?: string;
   /** The caller's own workspace permissions (the strings the bridge's ACL compares). */
   permissions?: string[];
+  /** Set by the bridge's workspace list while a delete is staged: the owner may cancel until `deleteAfter`. */
+  pendingDeleteAt?: string | null;
+  deleteAfter?: string | null;
+}
+
+/** What `deleteWorkspace` did: `code` is the bridge's machine code (e.g. `sudo_required`) on a refusal. */
+export interface DeleteWorkspaceOutcome {
+  ok: boolean;
+  code?: string;
+  message?: string;
 }
 
 export interface UserSession {
@@ -78,7 +88,7 @@ export interface UserStore {
   refreshWorkspaces: (userId: string) => Promise<void>;
   createWorkspace: (name: string, slug: string) => Promise<Workspace | null>;
   renameWorkspace: (workspaceId: string, name: string, icon?: string) => void;
-  deleteWorkspace: (workspaceId: string) => Promise<boolean>;
+  deleteWorkspace: (workspaceId: string) => Promise<DeleteWorkspaceOutcome>;
   importBridgeSession: (session: UserSession, persona: StaticPersona, expiresAt?: string) => void;
 
   // Selectors

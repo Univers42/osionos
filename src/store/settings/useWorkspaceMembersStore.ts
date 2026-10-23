@@ -14,7 +14,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { defaultWorkspaceMember } from './defaults';
-import { errorMessage, nowIso, pushSettingsError, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPost, upsertById } from './settingsStoreUtils';
+import { errorCode, errorMessage, nowIso, pushSettingsError, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPost, upsertById } from './settingsStoreUtils';
 import type { WorkspaceMember, WorkspaceMemberRole } from './types';
 import { sanitizePersistedMembers, workspaceMemberFromWire, workspaceMembersFromWire } from './workspaceMembersWire';
 
@@ -22,6 +22,8 @@ interface WorkspaceMembersStore {
   data: Record<string, WorkspaceMember[]>;
   loading: Record<string, boolean>;
   error: Record<string, string | null>;
+  /** The bridge code of the last failed transfer (`sudo_required` asks for a retry, not an error). */
+  errorCode: Record<string, string | null>;
   hydrate: (workspaceId: string, activeUserId: string, seedUserIds?: string[]) => Promise<void>;
   updateRole: (workspaceId: string, userId: string, role: WorkspaceMemberRole) => Promise<void>;
   changeRole: (workspaceId: string, userId: string, role: WorkspaceMemberRole) => Promise<void>;
@@ -50,6 +52,7 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
       data: {},
       loading: {},
       error: {},
+      errorCode: {},
       hydrate: async (workspaceId, activeUserId, seedUserIds = []) => {
         if (!workspaceId) return;
         set((state) => ({ loading: { ...state.loading, [workspaceId]: true }, error: { ...state.error, [workspaceId]: null } }));
@@ -100,13 +103,21 @@ export const useWorkspaceMembersStore = create<WorkspaceMembersStore>()(
             ...state.data,
             [workspaceId]: previous.map((member) => transferOwnerRole(member, toUserId)),
           },
+          errorCode: { ...state.errorCode, [workspaceId]: null },
         }));
         try {
           const saved = workspaceMembersFromWire(workspaceId, await trySettingsPost<unknown>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members/transfer-ownership`, { toUserId }));
           if (saved) set((state) => ({ data: { ...state.data, [workspaceId]: saved } }));
         } catch (error) {
-          set((state) => ({ data: { ...state.data, [workspaceId]: previous }, error: { ...state.error, [workspaceId]: errorMessage(error) } }));
-          pushSettingsError('Could not transfer ownership', error);
+          const code = errorCode(error) ?? null;
+          // sudo_required: the shared fetch path already raised the prompt; the dialog offers Try again.
+          const needsSudo = code === 'sudo_required';
+          set((state) => ({
+            data: { ...state.data, [workspaceId]: previous },
+            error: { ...state.error, [workspaceId]: needsSudo ? null : errorMessage(error) },
+            errorCode: { ...state.errorCode, [workspaceId]: code },
+          }));
+          if (!needsSudo) pushSettingsError('Could not transfer ownership', error);
         }
       },
       reset: (workspaceId, activeUserId) => set((state) => ({ data: { ...state.data, [workspaceId]: fallbackMembers(workspaceId, activeUserId) }, error: { ...state.error, [workspaceId]: null } })),
