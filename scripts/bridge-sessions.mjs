@@ -40,6 +40,8 @@ import { randomUUID } from 'node:crypto';
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { familyRefreshExp, hashRefreshToken, mintRefreshToken, readRefreshToken } from './bridge-refresh-token.mjs';
 import { bearerToken, readJsonBody, requireUuid, sendJson } from './bridge-social-core.mjs';
+import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
+import { platformRoleReader } from './bridge-roles.mjs';
 import { kvBootLine, kvState } from './bridge-shared-store.mjs';
 import { safeText, signAppSessionToken } from './bridge-session-token.mjs';
 import { assertSessionNotCutOff } from './bridge-session-cutoff.mjs';
@@ -473,6 +475,7 @@ async function refreshSession({ config, pg, kv, request, readRefreshClaims }, re
 	// that had not polled the cut-off yet cannot outlive a logout-everywhere.
 	assertSessionNotCutOff(config.sessionCutoffs, payload.sub, payload.fam_iat_ms);
 	if (await hasChild(pg, holder.id)) return answerReuse({ config, pg, meta }, holder);
+	await assertAccountNotRefused(platformRoleReader(pg), payload.sub, now);
 	const fresh = await readRefreshClaims(payload);
 	await writeAudit(pg, { session: { userId: payload.sub, raw: { jti: holder.id } }, meta, eventType: 'session_refresh', details: { sessionId: holder.id } });
 	const tokens = nextTokens({ config, now, payload, fresh });

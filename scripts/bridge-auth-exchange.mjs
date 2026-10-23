@@ -28,6 +28,8 @@
 import { createHash } from 'node:crypto';
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { clientMetaOf } from './bridge-account-sudo.mjs';
+import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
+import { platformRoleReader } from './bridge-roles.mjs';
 import { readJsonBody, sendJson } from './bridge-social-core.mjs';
 
 export const EXCHANGE_PATH = '/api/auth/exchange';
@@ -107,6 +109,8 @@ async function exchange(request, response, deps) {
 	await rateLimit(kv, ['auth-exchange-user', userId], { limit: USER_LIMIT, windowMs: WINDOW_MS });
 	const payload = payloadOf(token);
 	if (payload.sub !== userId) throw refusedProof();
+	// Before the gateway: establishSession mints through the gateway, which does not know the moderation state.
+	await assertAccountNotRefused(platformRoleReader(deps.pg), userId);
 	// Single use: one token mints one session, so a fragment-borne OAuth token cannot be replayed.
 	const digest = createHash('sha256').update(token).digest('hex');
 	if (!await kv.setNx(`auth-exchange-used:${digest}`, '1', MAX_PROOF_AGE_S * 1000)) throw refusedProof();
