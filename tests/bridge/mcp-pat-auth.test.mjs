@@ -186,7 +186,7 @@ test('a malformed OSIONOS_MCP_TOKEN stops the server at startup, naming the vari
 });
 
 /** A fake bridge that records every request, and a connected MCP client over the real server. */
-async function spawnServer(extraEnv) {
+async function spawnServer(extraEnv, pageContent = []) {
 	const requests = [];
 	const bridge = http.createServer((req, res) => {
 		req.resume();
@@ -197,7 +197,7 @@ async function spawnServer(extraEnv) {
 			if (path === '/api/auth/bridge/health') return res.end(JSON.stringify({ service: 'osionos-bridge' }));
 			if (path === '/api/workspaces') return res.end(JSON.stringify([{ _id: 'w1', name: 'W' }]));
 			if (path === '/api/pages/all') return res.end('[]');
-			return res.end(JSON.stringify({ _id: 'p', title: 'T', content: [] }));
+			return res.end(JSON.stringify({ _id: 'p', title: 'T', content: pageContent }));
 		});
 	});
 	await new Promise((resolve) => bridge.listen(0, '127.0.0.1', resolve));
@@ -269,6 +269,9 @@ test('without a token every tool answers the instruction and the bridge sees no 
 			assert.match(JSON.stringify(result.content), /Set OSIONOS_MCP_TOKEN/, name);
 		}
 		assert.deepEqual(server.requests.filter((request) => request.authorization !== undefined), []);
+		// The two health probes are the only unauthenticated traffic allowed; no data route is asked for.
+		const HEALTH = new Set(['/api/auth/bridge/health', '/health']);
+		assert.deepEqual(server.requests.filter((request) => !HEALTH.has(request.path)), []);
 		assert.equal(server.requests.some((request) => request.path.includes('/auth/bridge/session')), false);
 	} finally {
 		await server.close();
@@ -287,6 +290,37 @@ test('status and the connection resource name the auth mode and never echo a sec
 		assert.equal(text.includes(token), false);
 		for (let at = 0; at + 8 <= token.length; at += 1) assert.equal(text.includes(token.slice(at, at + 8)), false);
 		assert.equal(/@/.test(text), false, 'an email leaked');
+	} finally {
+		await server.close();
+	}
+});
+
+test('osionos_read_page returns the page content the bridge sent, not an empty list', async () => {
+	const blocks = [{ id: 'b1', type: 'paragraph', content: 'first' }, { id: 'b2', type: 'paragraph', content: 'second' }];
+	const server = await spawnServer({ OSIONOS_MCP_TOKEN: fakePat() }, blocks);
+	try {
+		const result = await server.mcp.callTool({ name: 'osionos_read_page', arguments: { pageId: PAGE } });
+		const shown = JSON.parse(result.content[0].text);
+		assert.deepEqual(shown.blocks, blocks);
+		assert.deepEqual(shown.page.content, blocks);
+		assert.equal(shown.note, undefined);
+	} finally {
+		await server.close();
+	}
+});
+
+test('with only OSIONOS_MCP_JWT the JWT is the bearer, no PAT check applies and no session is minted', async () => {
+	const jwt = 'header.payload.signature';
+	const server = await spawnServer({ OSIONOS_MCP_JWT: jwt });
+	try {
+		const listed = await server.mcp.callTool({ name: 'osionos_list_workspaces', arguments: {} });
+		assert.notEqual(listed.isError, true);
+		const status = await server.mcp.callTool({ name: 'osionos_status', arguments: {} });
+		assert.match(status.content[0].text, /explicit-jwt/);
+		const authed = server.requests.filter((request) => request.authorization !== undefined);
+		assert.ok(authed.length >= 1);
+		for (const request of authed) assert.equal(request.authorization, `Bearer ${jwt}`);
+		assert.equal(server.requests.some((request) => request.path.includes('/auth/bridge/session')), false);
 	} finally {
 		await server.close();
 	}
