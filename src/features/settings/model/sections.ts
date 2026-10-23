@@ -105,6 +105,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     id: "contacts", group: "account", label: "Contacts", title: "Contacts",
     subtitle: "Manage your connections and the reports you filed", icon: UserPlus,
     anchors: [
+      { id: "presence-status", label: "Presence and status", keywords: ["presence", "status", "away", "busy", "do not disturb", "invisible", "online"] },
       { id: "connections", label: "Your connections", keywords: ["contacts", "friends", "requests", "remove", "people"] },
       { id: "reports", label: "Reports you filed", keywords: ["report", "abuse", "filed", "flag"] },
     ],
