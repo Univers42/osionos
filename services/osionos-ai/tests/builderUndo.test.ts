@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, beforeEach, describe, it } from 'node:test';
-import { SseStream, collect } from './sse.ts';
-import type { SseEvent } from './sse.ts';
+import type { Json } from './builderHarness.ts';
 
 /**
  * C159: undo a build; C161: the abuse limits of the builder.
@@ -13,77 +12,23 @@ import type { SseEvent } from './sse.ts';
  * same here, so a child archived by the undo is no longer live when its parent
  * is checked.
  */
-process.env.OSIONOS_AI_BUILDERS = 'on';
 process.env.OSIONOS_AI_BUILD_BUDGET_MS = '500';
 // One build a day: the test flushes the day bucket before each case, and the
 // over-limit case is two passes on purpose.
 process.env.OSIONOS_AI_BUILDS_PER_DAY = '1';
-const { startHarness, USER_A, USER_B, WORKSPACE_A } = await import('./harness.ts');
-const { app, bridge, mock, postRun, tokenFor, createConversation, call } = await startHarness();
+const { harness, closeBuilderHarness, goodPlan, ask, asked, decide } = await import('./builderHarness.ts');
+const { USER_A, USER_B, WORKSPACE_A } = await import('./harness.ts');
+const { app, bridge, tokenFor, call } = harness;
 const { allItems } = await import('../src/builders/items.ts');
 
-after(async () => {
-	await app.close();
-	await mock.close();
-	await bridge.close();
-});
+after(closeBuilderHarness);
 
-type Json = Record<string, unknown>;
-
-/** A plan of three pages (one holds a child) and one database. */
+/** The plan of builderHarness plus a sibling page: three pages (one holds a child) and one database. */
 function undoPlan(): Json {
-	return {
-		workspaceId: WORKSPACE_A,
+	const [home, deals] = goodPlan().items as Json[];
+	return goodPlan({
 		title: 'Undo workspace',
-		items: [
-			{
-				kind: 'page',
-				key: 'home',
-				title: 'Home',
-				blocks: [
-					{ type: 'heading_1', content: 'Welcome' },
-					{ type: 'database_inline', databaseKey: 'deals' },
-				],
-				children: [{ kind: 'page', key: 'notes', title: 'Notes' }],
-			},
-			{ kind: 'page', key: 'about', title: 'About', blocks: [{ type: 'paragraph', content: 'About' }] },
-			{
-				kind: 'database',
-				key: 'deals',
-				title: 'Deals',
-				properties: [{ name: 'Name', type: 'title' }],
-				views: [{ type: 'table', name: 'All' }],
-				rows: [],
-			},
-		],
-	};
-}
-
-async function ask(args: Json): Promise<SseEvent[]> {
-	mock.setOptions({
-		preDelayMs: 0,
-		chunkCount: 2,
-		chunkGapMs: 0,
-		fail: false,
-		toolCall: { name: 'build_plan', arguments: args },
-		toolCallTrigger: 'do it',
-		toolCallEveryStep: false,
-		parallelToolCalls: 1,
-		usage: null,
-	});
-	const conversationId = await createConversation();
-	return collect(new SseStream(await postRun(conversationId, randomUUID(), 'do it')));
-}
-
-function asked(events: SseEvent[]): SseEvent[] {
-	return events.filter((event) => event.event === 'permission.asked');
-}
-
-async function decide(approvalId: string, decision = 'approve', token = tokenFor(USER_A, WORKSPACE_A)) {
-	return call(`/api/ai/approvals/${approvalId}`, {
-		method: 'POST',
-		token,
-		body: { decision },
+		items: [home, { kind: 'page', key: 'about', title: 'About', blocks: [{ type: 'paragraph', content: 'About' }] }, deals],
 	});
 }
 
