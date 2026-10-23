@@ -191,18 +191,21 @@ export async function recordHeartbeat(kv, { userId, config, fetchImpl, now = Dat
 	}
 	try {
 		const seenAt = new Date(now).toISOString();
-		await Promise.all([
-			rest(config, fetchImpl, `osionos_bridge_identities?user_id=eq.${userId}`, {
+		const writes = [rest(config, fetchImpl, 'osionos_presence?on_conflict=user_id', {
+			method: 'POST',
+			body: { user_id: userId, state: entry.state, custom_text: entry.customText, updated_at: seenAt },
+			prefer: 'resolution=merge-duplicates,return=minimal',
+		})];
+		// `last_seen_at` is shown to other people (the profile card, my-connections), so an
+		// invisible beat leaves it where it was: moving it would show the user as active.
+		if (entry.state !== 'invisible') {
+			writes.push(rest(config, fetchImpl, `osionos_bridge_identities?user_id=eq.${userId}`, {
 				method: 'PATCH',
 				body: { last_seen_at: seenAt },
 				prefer: 'return=minimal',
-			}),
-			rest(config, fetchImpl, 'osionos_presence?on_conflict=user_id', {
-				method: 'POST',
-				body: { user_id: userId, state: entry.state, custom_text: entry.customText, updated_at: seenAt },
-				prefer: 'resolution=merge-duplicates,return=minimal',
-			}),
-		]);
+			}));
+		}
+		await Promise.all(writes);
 	} catch (error) {
 		// The window key is released so the next beat writes the column instead of
 		// leaving it stale for the whole window.
