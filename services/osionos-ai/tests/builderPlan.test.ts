@@ -1,59 +1,20 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
-import { SseStream, collect } from './sse.ts';
-import type { SseEvent } from './sse.ts';
+import type { Json } from './builderHarness.ts';
 
 /**
  * The builder plan, proposed and stored (devil P6 C150-C153, C160, C163,
  * C164.1 and C164.8). Nothing here executes a plan: that is P6a-3.
  */
-process.env.OSIONOS_AI_BUILDERS = 'on';
-const { startHarness, USER_A, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
-const { app, bridge, mock, postRun, tokenFor, createConversation, call } = await startHarness();
+const { harness, closeBuilderHarness, goodPlan, ask, asked } = await import('./builderHarness.ts');
+const { USER_A, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
+const { app, bridge, tokenFor, call } = harness;
 // The service reads its config on import: after the harness set the environment.
 const { revalidateStoredPlan } = await import('../src/builders/plan.ts');
 const { writeTools } = await import('../src/tools/writeToolList.ts');
 
-after(async () => {
-	await app.close();
-	await mock.close();
-	await bridge.close();
-});
-
-type Json = Record<string, unknown>;
-
-/** A plan within the caps: a page holding a database and a sub-page. */
-function goodPlan(patch: Json = {}): Json {
-	return {
-		workspaceId: WORKSPACE_A,
-		title: 'Sales workspace',
-		items: [
-			{
-				kind: 'page',
-				key: 'home',
-				title: 'Home',
-				blocks: [
-					{ type: 'heading_1', content: 'Welcome' },
-					{ type: 'database_inline', databaseKey: 'deals' },
-				],
-				children: [{ kind: 'page', key: 'notes', title: 'Notes' }],
-			},
-			{
-				kind: 'database',
-				key: 'deals',
-				title: 'Deals',
-				properties: [
-					{ name: 'Name', type: 'title' },
-					{ name: 'Stage', type: 'status', options: ['Open', 'Won'] },
-				],
-				views: [{ type: 'table', name: 'All' }],
-				rows: [{ values: { Name: 'Acme', Stage: 'Open' } }],
-			},
-		],
-		...patch,
-	};
-}
+after(closeBuilderHarness);
 
 /** The plan with one database changed. */
 function withDatabase(patch: Json): Json {
@@ -67,28 +28,6 @@ function withPage(patch: Json): Json {
 	const plan = goodPlan() as { items: Json[] };
 	plan.items.push({ kind: 'page', key: 'extra', title: 'Extra', ...patch });
 	return plan;
-}
-
-/** The events of a run in which the model calls build_plan. */
-async function ask(args: Json): Promise<SseEvent[]> {
-	mock.setOptions({
-		preDelayMs: 0,
-		chunkCount: 2,
-		chunkGapMs: 0,
-		fail: false,
-		toolCall: { name: 'build_plan', arguments: args },
-		toolCallTrigger: 'do it',
-		toolCallEveryStep: false,
-		parallelToolCalls: 1,
-		usage: null,
-	});
-	const conversationId = await createConversation();
-	return collect(new SseStream(await postRun(conversationId, randomUUID(), 'do it')));
-}
-
-/** The permission.asked events. */
-function asked(events: SseEvent[]): SseEvent[] {
-	return events.filter((event) => event.event === 'permission.asked');
 }
 
 /** The number of the build_plan approvals. */
@@ -174,6 +113,16 @@ describe('the builder plan', () => {
 		await assertRefused(withDatabase({ views: [{ type: 'dashboard', name: 'Dash' }] }), 'dashboard');
 	});
 
+	it('C154 a database_full_page block is refused', async () => {
+		await assertRefused(withPage({ blocks: [{ type: 'database_full_page', databaseKey: 'deals' }] }), 'database_full_page');
+	});
+
+	it('C154 an unreferenced database is refused', async () => {
+		const plan = JSON.parse(JSON.stringify(goodPlan())) as { items: { blocks?: unknown[] }[] };
+		plan.items[0].blocks = [{ type: 'heading_1', content: 'Welcome' }];
+		await assertRefused(plan, 'unreferenced database');
+	});
+
 	it('C153 an image, video, audio or file block is refused', async () => {
 		for (const type of ['image', 'video', 'audio', 'file', 'embed']) {
 			await assertRefused(withPage({ blocks: [{ type, content: 'https://x' }] }), type);
@@ -182,7 +131,7 @@ describe('the builder plan', () => {
 
 	it('C151 unknown keys are stripped', async () => {
 		const plan = goodPlan() as { items: Json[] };
-		plan.items[0] = { ...plan.items[0], blocks: [{ type: 'paragraph', content: 'hi', src: 'https://x' }] };
+		plan.items[0] = { ...plan.items[0], blocks: [{ type: 'paragraph', content: 'hi', src: 'https://x' }, { type: 'database_inline', databaseKey: 'deals' }] };
 		plan.items[1] = {
 			...plan.items[1],
 			properties: [{ name: 'Name', type: 'title', buttonConfig: { url: 'https://x' } }],
@@ -229,7 +178,7 @@ describe('the builder plan', () => {
 		assert.equal(asked(await ask(goodPlan())).length, 1, 'on: the run tool set offers it');
 	});
 
-	it('C150 a build_plan approval cannot execute before P6a-3', async () => {
+	it('C150 a build_plan approval executes after P6a-3', async () => {
 		const data = asked(await ask(goodPlan()))[0].data as { approvalId: string };
 		bridge.reset();
 		const decided = await call(`/api/ai/approvals/${data.approvalId}`, {
@@ -238,7 +187,6 @@ describe('the builder plan', () => {
 			body: { decision: 'approve' },
 		});
 		assert.equal(decided.status, 200);
-		assert.equal((decided.body as { status: string }).status, 'failed');
-		assert.equal(bridge.count, 0, 'nothing reached the bridge');
+		assert.equal((decided.body as { status: string }).status, 'executed');
 	});
 });
