@@ -20,7 +20,7 @@ import type { BuiltinAgent } from '../agents/builtins.ts';
 import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
 import { estimateRunMicroUsd } from './estimate.ts';
 import { sourceChars } from './sources.ts';
-import { retrieve } from '../retrieval/search.ts';
+import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import { fetchAttachment } from '../vision/fetchAttachment.ts';
@@ -120,19 +120,25 @@ const PREFLIGHT_ERRORS: Record<string, number> = {
  * A run without a search has no sources, and a search that fails has none
  * either: the embedding service may be down, and an answer without sources
  * is better than no answer. The failure is logged once, and the run goes on.
+ *
+ * When the reranker scored the chunks and even the best is under the
+ * abstention threshold, the run quotes none and tells the model the question
+ * was not found in the workspace (`abstained`).
  */
 async function findSources(
 	db: Pool,
 	input: StartRunInput,
 	text: string,
-): Promise<RetrievedChunk[]> {
-	if (input.searchWorkspace !== true || !input.user) return [];
+): Promise<{ sources: RetrievedChunk[]; abstained: boolean }> {
+	if (input.searchWorkspace !== true || !input.user) return { sources: [], abstained: false };
 	try {
-		return await retrieve(db, input.user, { query: text });
+		const chunks = await retrieve(db, input.user, { query: text });
+		if (shouldAbstain(chunks, abstainThreshold())) return { sources: [], abstained: true };
+		return { sources: chunks, abstained: false };
 	} catch (error) {
 		const code = error instanceof Error ? error.message : 'retrieval_failed';
 		console.warn(JSON.stringify({ event: 'retrieval_failed', code }));
-		return [];
+		return { sources: [], abstained: false };
 	}
 }
 
@@ -240,7 +246,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// the question. They are read before the money moves too: they are part of
 	// the prompt. A retrieval that fails is not a failure of the run: the run
 	// goes on without sources, and the failure is logged once.
-	const sources = await findSources(db, input, text);
+	const { sources, abstained } = await findSources(db, input, text);
 	// The skills index of THIS run: the agent's built-ins and the workspace's
 	// skills, built once so the reservation counts the prompt the call sends.
 	const skillIndex = buildSkillIndex(
@@ -308,6 +314,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			history,
 			pages: context.pages,
 			sources,
+			abstained,
 			user: input.user,
 			skippedPageIds: context.skippedPageIds,
 			userMessageId: userMessage.id,
