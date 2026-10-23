@@ -5,6 +5,7 @@ import { after, beforeEach, describe, it } from 'node:test';
 import { READ_TOOLS } from '../src/tools/readTools.ts';
 import { WRITE_TOOLS } from '../src/tools/writeTools.ts';
 import { USER_A, WORKSPACE_A, addMember, app, clearWindows, closeAll, mint, raw, rpc, sessionFor } from './mcpHarness.ts';
+import { awaitWindowRoom } from './harness.ts';
 
 /**
  * Who may speak to the remote MCP endpoint (G4b-1): C112, C114, C116, C118,
@@ -133,6 +134,7 @@ describe('the remote MCP endpoint: host, origin and rate (C118)', () => {
 	});
 
 	it('the 61st call of a token in a minute is 429 (60 a minute)', async () => {
+		await awaitWindowRoom();
 		const { token } = await mint(USER_A, [WORKSPACE_A]);
 		for (let call = 1; call <= 60; call += 1) {
 			assert.equal((await rpc(token, 'tools/list')).status, 200, `call ${call}`);
@@ -143,6 +145,7 @@ describe('the remote MCP endpoint: host, origin and rate (C118)', () => {
 	});
 
 	it('the limit is on the owner too: three tokens of one user share 120 a minute', async () => {
+		await awaitWindowRoom();
 		const tokens = [await mint(USER_A, [WORKSPACE_A]), await mint(USER_A, [WORKSPACE_A]), await mint(USER_A, [WORKSPACE_A])];
 		let ok = 0;
 		let limited = 0;
