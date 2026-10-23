@@ -72,6 +72,42 @@ export async function bridgeWrite(
 }
 
 /**
+ * A read of the bridge: a GET, with the same token and timeout discipline.
+ *
+ * Like `bridgeWrite`, a failure is a failure, never a throw.
+ */
+export async function bridgeRead(
+	{
+		url,
+		token,
+		path,
+		fetchImpl = fetch,
+		timeoutMs = BRIDGE_TIMEOUT_MS,
+	}: {
+		url: string;
+		token: string;
+		path: string;
+		fetchImpl?: typeof fetch;
+		timeoutMs?: number;
+	},
+): Promise<BridgeAnswer> {
+	try {
+		const response = await fetchImpl(`${url}${path}`, {
+			method: 'GET',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			signal: AbortSignal.timeout(timeoutMs),
+		});
+		const body = await response.text();
+		return { ok: response.ok, status: response.status, body: body.slice(0, 4000) };
+	} catch {
+		return { ok: false, status: 0, body: '' };
+	}
+}
+
+/**
  * The message of a refusal of the bridge: a safe sentence.
  *
  * The body of the bridge may hold the internals of the server, so it is never

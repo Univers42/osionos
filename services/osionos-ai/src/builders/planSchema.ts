@@ -60,6 +60,8 @@ export const PLAN_PROPERTY_TYPES = [
 export const PLAN_VIEW_TYPES = ['table', 'board', 'calendar', 'list', 'gallery'] as const;
 
 /** The block types that point at a database of the same plan. */
+// osionos renders only `database_inline` as a database; `database_full_page` is a
+// slash action that creates a page (src/entities/block/ui/ReadOnlyBlock.tsx:445).
 const DATABASE_BLOCK_TYPES = ['database_inline'] as const;
 
 /** The property types that take a list of options. */

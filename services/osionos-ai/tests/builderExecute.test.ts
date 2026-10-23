@@ -177,13 +177,12 @@ describe('builder execute', () => {
 		const events = await ask(goodPlan());
 		const data = asked(events)[0].data as { approvalId: string };
 		bridge.reset();
-		bridge.failNextWith(503, 1);
+		bridge.loseNextAnswers(1);
 		const first = await decide(data.approvalId, 'approve', tokenFor(USER_A, WORKSPACE_A));
 		assert.equal(first.status, 200);
 		assert.equal((first.body as { status: string }).status, 'partial');
-		// resume
+		// resume without reset
 		bridge.delayMs = 0;
-		bridge.reset();
 		const resumed = await call(`/api/ai/approvals/${data.approvalId}/resume`, {
 			method: 'POST',
 			token: tokenFor(USER_A, WORKSPACE_A),
@@ -191,10 +190,11 @@ describe('builder execute', () => {
 		});
 		assert.equal(resumed.status, 200);
 		assert.equal((resumed.body as { status: string }).status, 'executed');
-		// mock holds one page for the retried id
 		const pageCalls = bridge.calls.filter((c) => c.method === 'POST' && c.path === '/api/pages');
-		// the retried page id sent again
-		assert.ok(pageCalls.length >= 1);
+		const pageIds = pageCalls.map((c) => (c.body as { id: string }).id);
+		const unique = new Set(pageIds);
+		assert.equal(unique.size, 2, 'each page id is created exactly once');
+		assert.ok(pageIds.includes('notes') === false || pageCalls.some((c) => (c.body as { title?: string }).title === 'Notes'), 'children created');
 	});
 
 	it('C157 a second resume of the same approval is refused', async () => {

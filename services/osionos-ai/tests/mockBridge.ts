@@ -2,64 +2,37 @@ import { createServer } from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
 
-/**
- * The mock bridge: the HTTP API of the bridge, without the bridge.
- *
- * It records EVERY call — the method, the path, the body, and the
- * Authorization header — so a test can prove what did NOT go out: no DELETE,
- * no `visibility`, no token in a body.
- */
-
 export interface BridgeCall {
 	method: string;
 	path: string;
-	/** The body of the call, parsed. */
 	body: unknown;
-	/** The Authorization header of the call: the token, and where it went. */
 	authorization: string;
-	/** The bytes of the body, untouched: an upload is not text. */
 	bytes: Buffer;
-	/** The Content-Type header of the call. */
 	contentType: string;
 }
 
-/**
- * A file the mock bridge serves: the bytes, the type, and the status.
- */
 export interface BridgeFile {
 	bytes: Uint8Array;
 	contentType: string;
-	/** The status of the answer: 200 for the real one. */
 	status?: number;
-	/** The `location` of a redirect answer. */
 	location?: string;
 }
 
 export interface MockBridge {
-	/** The base URL of the mock: the service talks to it directly. */
 	baseUrl: string;
-	/** The calls, in the order they arrived. */
 	readonly calls: readonly BridgeCall[];
-	/** The calls of one method. */
 	ofMethod(method: string): BridgeCall[];
-	/** The number of the calls. */
 	readonly count: number;
-	/** The status the next answers carry: 0 for the real one. */
 	failWith: number;
-	/** The delay applied to POST /api/pages and /api/object-databases, in ms. */
 	delayMs: number;
-	/** Make the next n of those calls answer `status` without remembering them. */
 	failNextWith(status: number, n: number): void;
-	/** Serves a file at a path: the bytes of an attachment. */
+	loseNextAnswers(n: number): void;
 	serve(path: string, file: BridgeFile): void;
-	/** The files the mock serves, by path. */
 	readonly files: ReadonlyMap<string, BridgeFile>;
-	/** Forget the calls. */
 	reset(): void;
 	close(): Promise<void>;
 }
 
-/** The body of a request, read to the end. */
 function readBody(request: IncomingMessage): Promise<Buffer> {
 	return new Promise((resolve) => {
 		const chunks: Buffer[] = [];
@@ -69,16 +42,15 @@ function readBody(request: IncomingMessage): Promise<Buffer> {
 	});
 }
 
-/** The owner of the media the mock stores: the bridge puts the uploader's id there. */
 export const MOCK_MEDIA_OWNER = '00000000-0000-4000-8000-0000000000aa';
 
-/** The mock bridge, on a random port of the loopback. */
 export async function startMockBridge(): Promise<MockBridge> {
 	const calls: BridgeCall[] = [];
 	const files = new Map<string, BridgeFile>();
 	let failNextStatus = 0;
 	let failNextCount = 0;
-	const seenPages = new Set<string>();
+	let loseNextCount = 0;
+	const seenPages = new Map<string, string>(); // id -> workspaceId
 	const seenDbs = new Set<string>();
 
 	const mock: MockBridge = {
@@ -96,6 +68,9 @@ export async function startMockBridge(): Promise<MockBridge> {
 			failNextStatus = status;
 			failNextCount = n;
 		},
+		loseNextAnswers(n: number): void {
+			loseNextCount = n;
+		},
 		serve(path: string, file: BridgeFile): void {
 			files.set(path, file);
 		},
@@ -108,6 +83,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 			seenDbs.clear();
 			failNextStatus = 0;
 			failNextCount = 0;
+			loseNextCount = 0;
 		},
 		async close(): Promise<void> {
 			await new Promise<void>((resolve) => {
@@ -137,7 +113,6 @@ export async function startMockBridge(): Promise<MockBridge> {
 			const path = request.url ?? '';
 			const method = request.method ?? '';
 
-			// A file the mock serves.
 			const file = files.get(path);
 			if (file) {
 				if (file.status && file.status !== 200) {
@@ -156,11 +131,35 @@ export async function startMockBridge(): Promise<MockBridge> {
 				return;
 			}
 
+			// GET /api/pages/<id>
+			if (method === 'GET' && path.startsWith('/api/pages/')) {
+				const pid = decodeURIComponent(path.slice('/api/pages/'.length));
+				if (seenPages.has(pid)) {
+					response.writeHead(200, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ id: pid, workspaceId: seenPages.get(pid), title: 'Page' }));
+					return;
+				}
+				response.writeHead(404, { 'content-type': 'application/json' });
+				response.end(JSON.stringify({ error: 'not found' }));
+				return;
+			}
+
 			const isPage = method === 'POST' && path === '/api/pages';
 			const isDb = method === 'POST' && path === '/api/object-databases';
 
 			if (isPage || isDb) {
-				// failNextWith
+				// loseNextAnswers: store, then 503.
+				if (loseNextCount > 0) {
+					loseNextCount--;
+					const reqBody = body as { id?: unknown; dbKey?: unknown; workspaceId?: unknown } | null;
+					if (isPage && typeof reqBody?.id === 'string') {
+						seenPages.set(reqBody.id, typeof reqBody.workspaceId === 'string' ? reqBody.workspaceId : '');
+					}
+					if (isDb && typeof reqBody?.dbKey === 'string') seenDbs.add(reqBody.dbKey);
+					response.writeHead(503, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ error: 'service unavailable' }));
+					return;
+				}
 				if (failNextCount > 0) {
 					failNextCount--;
 					const status = failNextStatus;
@@ -168,7 +167,6 @@ export async function startMockBridge(): Promise<MockBridge> {
 					response.end(JSON.stringify({ error: 'failed' }));
 					return;
 				}
-				// global failWith
 				if (mock.failWith) {
 					response.writeHead(mock.failWith, { 'content-type': 'application/json' });
 					response.end(JSON.stringify({ error: { message: 'refused' } }));
@@ -176,16 +174,18 @@ export async function startMockBridge(): Promise<MockBridge> {
 				}
 				const finish = () => {
 					if (isPage) {
-						const reqBody = body as { id?: unknown; title?: unknown } | null;
+						const reqBody = body as { id?: unknown; title?: unknown; workspaceId?: unknown } | null;
 						const id = typeof reqBody?.id === 'string' ? reqBody.id : null;
 						const title = typeof reqBody?.title === 'string' ? reqBody.title : 'Untitled';
+						const workspaceId = typeof reqBody?.workspaceId === 'string' ? reqBody.workspaceId : '';
 						if (id && seenPages.has(id)) {
-							response.writeHead(200, { 'content-type': 'application/json' });
-							response.end(JSON.stringify({ _id: id, title }));
+							// real bridge: duplicate id is a unique violation -> 502
+							response.writeHead(502, { 'content-type': 'application/json' });
+							response.end(JSON.stringify({ error: 'BaaS request failed with 409' }));
 							return;
 						}
 						if (id) {
-							seenPages.add(id);
+							seenPages.set(id, workspaceId);
 							response.writeHead(201, { 'content-type': 'application/json' });
 							response.end(JSON.stringify({ _id: id, title }));
 							return;
@@ -194,8 +194,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 						response.end(JSON.stringify({ _id: randomUUID(), title }));
 						return;
 					}
-					// object-databases
-					const reqBody = body as { dbKey?: unknown; title?: unknown; ifAbsent?: unknown } | null;
+					const reqBody = body as { dbKey?: unknown; ifAbsent?: unknown } | null;
 					const dbKey = typeof reqBody?.dbKey === 'string' ? reqBody.dbKey : '';
 					const ifAbsent = reqBody?.ifAbsent === true;
 					if (ifAbsent && seenDbs.has(dbKey)) {
@@ -221,13 +220,6 @@ export async function startMockBridge(): Promise<MockBridge> {
 				return;
 			}
 
-			if (request.method === 'POST' && path === '/api/pages') {
-				// fallback (shouldn't reach here)
-				const title = (body as { title?: unknown } | null)?.title;
-				response.writeHead(201, { 'content-type': 'application/json' });
-				response.end(JSON.stringify({ _id: randomUUID(), title: typeof title === 'string' ? title : 'Untitled' }));
-				return;
-			}
 			if (request.method === 'POST' && path.startsWith('/api/media/uploads?')) {
 				const sha256 = createHash('sha256').update(bytes).digest('hex');
 				const mimeType = String(request.headers['content-type'] ?? '');
