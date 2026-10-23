@@ -1,63 +1,24 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
-import { SseStream, collect } from './sse.ts';
-import type { SseEvent } from './sse.ts';
+import type { Json } from './builderHarness.ts';
 
 /**
  * The builder plan, proposed and stored (devil P6 C150-C153, C160, C163,
  * C164.1 and C164.8). Nothing here executes a plan: that is P6a-3.
  */
-process.env.OSIONOS_AI_BUILDERS = 'on';
-// This file asks many plans and keeps them waiting on purpose: the C161 limits
-// have their own file (builderUndo.test.ts).
+// The C161 limits have their own file (builderUndo.test.ts); this one asks many
+// plans on purpose, so it lifts them out of the way.
 process.env.OSIONOS_AI_PENDING_PLANS = '100';
 process.env.OSIONOS_AI_BUILDS_PER_DAY = '100';
-const { startHarness, USER_A, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
-const { app, bridge, mock, postRun, tokenFor, createConversation, call } = await startHarness();
+const { harness, closeBuilderHarness, goodPlan, ask, asked } = await import('./builderHarness.ts');
+const { USER_A, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
+const { app, bridge, tokenFor, call } = harness;
 // The service reads its config on import: after the harness set the environment.
 const { revalidateStoredPlan } = await import('../src/builders/plan.ts');
 const { writeTools } = await import('../src/tools/writeToolList.ts');
 
-after(async () => {
-	await app.close();
-	await mock.close();
-	await bridge.close();
-});
-
-type Json = Record<string, unknown>;
-
-/** A plan within the caps: a page holding a database and a sub-page. */
-function goodPlan(patch: Json = {}): Json {
-	return {
-		workspaceId: WORKSPACE_A,
-		title: 'Sales workspace',
-		items: [
-			{
-				kind: 'page',
-				key: 'home',
-				title: 'Home',
-				blocks: [
-					{ type: 'heading_1', content: 'Welcome' },
-					{ type: 'database_inline', databaseKey: 'deals' },
-				],
-				children: [{ kind: 'page', key: 'notes', title: 'Notes' }],
-			},
-			{
-				kind: 'database',
-				key: 'deals',
-				title: 'Deals',
-				properties: [
-					{ name: 'Name', type: 'title' },
-					{ name: 'Stage', type: 'status', options: ['Open', 'Won'] },
-				],
-				views: [{ type: 'table', name: 'All' }],
-				rows: [{ values: { Name: 'Acme', Stage: 'Open' } }],
-			},
-		],
-		...patch,
-	};
-}
+after(closeBuilderHarness);
 
 /** The plan with one database changed. */
 function withDatabase(patch: Json): Json {
@@ -71,28 +32,6 @@ function withPage(patch: Json): Json {
 	const plan = goodPlan() as { items: Json[] };
 	plan.items.push({ kind: 'page', key: 'extra', title: 'Extra', ...patch });
 	return plan;
-}
-
-/** The events of a run in which the model calls build_plan. */
-async function ask(args: Json): Promise<SseEvent[]> {
-	mock.setOptions({
-		preDelayMs: 0,
-		chunkCount: 2,
-		chunkGapMs: 0,
-		fail: false,
-		toolCall: { name: 'build_plan', arguments: args },
-		toolCallTrigger: 'do it',
-		toolCallEveryStep: false,
-		parallelToolCalls: 1,
-		usage: null,
-	});
-	const conversationId = await createConversation();
-	return collect(new SseStream(await postRun(conversationId, randomUUID(), 'do it')));
-}
-
-/** The permission.asked events. */
-function asked(events: SseEvent[]): SseEvent[] {
-	return events.filter((event) => event.event === 'permission.asked');
 }
 
 /** The number of the build_plan approvals. */
