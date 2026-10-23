@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
+import { inTransaction } from '../db.ts';
 
 /**
  * The workspace skills in the database (models/osionos-ai-skills-migration.sql).
@@ -55,22 +56,6 @@ const AUDIT_SQL = `
 /** The row as the audit keeps it: dates as strings, nothing else dropped. */
 function snapshot(row: WorkspaceSkill): string {
 	return JSON.stringify(row);
-}
-
-/** Runs `work` in a transaction; the client is released on every path. */
-async function inTransaction<T>(db: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> {
-	const client = await db.connect();
-	try {
-		await client.query('begin');
-		const out = await work(client);
-		await client.query('commit');
-		return out;
-	} catch (error) {
-		await client.query('rollback').catch(() => undefined);
-		throw error;
-	} finally {
-		client.release();
-	}
 }
 
 export type CreateOutcome =

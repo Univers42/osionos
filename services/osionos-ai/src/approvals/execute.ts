@@ -3,6 +3,7 @@ import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { config } from '../config.ts';
 import { resolveTarget } from '../gateway/resolve.ts';
+import { findBuiltinAgent } from '../agents/builtins.ts';
 import { startRun } from '../runs/runner.ts';
 import { getRun } from '../runs/repo.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
@@ -151,6 +152,9 @@ async function continueRun(
 	const model = run?.model ?? conversation.model ?? undefined;
 	const resolved = await resolveTarget(db, redis, user, undefined, model);
 	if (resolved.kind === 'refused') return undefined;
+	// The workspace and the agent of the conversation go on too: without them the
+	// continuation lost the workspace skills and the approved memories (review
+	// p5d1, gap 1).
 	const started = await startRun({
 		db,
 		redis,
@@ -160,6 +164,8 @@ async function continueRun(
 		text: continuationText(row, outcome, detail),
 		target: resolved.target,
 		user,
+		workspaceId: conversation.workspace_id,
+		agent: run?.agent_id ? findBuiltinAgent(run.agent_id) : null,
 		emit: () => {},
 	});
 	if (started.kind !== 'started') return undefined;

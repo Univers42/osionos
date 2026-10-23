@@ -5,8 +5,9 @@ import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { PermissionAsked } from '../approvals/types.ts';
 import { READ_TOOLS } from './readTools.ts';
 import { writeTools } from './writeToolList.ts';
-import type { AnyReadTool, ReadToolContext } from './types.ts';
+import type { AnyProposalTool, AnyReadTool, ReadToolContext } from './types.ts';
 import { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS } from './loop.ts';
+import { rememberTool } from './memoryTools.ts';
 import { loadSkillTool } from './skillTools.ts';
 import { numberSources, sourceKey, type ToolSource } from '../runs/sources.ts';
 
@@ -38,6 +39,8 @@ export interface ToolOutcome {
 	 * included: those are not cited again, so the citations alone undercount.
 	 */
 	found?: number;
+	/** The memory a `remember` call proposed: the run emits `memory.proposed` for it (C42). */
+	memoryId?: string;
 	/** The skill a `load_skill` call loaded: pinned in the history of the run (devil C40). */
 	skill?: { id: string; version: number; source: 'builtin' | 'workspace' };
 }
@@ -165,13 +168,13 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
  * has to count them. The number is computed once, from the tool set, and it
  * never changes: the registry is frozen.
  *
- * The write tools and `load_skill` (offered only to an agent with skills) are counted even when they are not registered (a
+ * The write tools, `load_skill` (offered only to an agent with skills) and `remember` are counted even when they are not registered (a
  * deployment without a bridge URL): the count is a ceiling, and a ceiling
  * that depends on the deployment is a ceiling that is wrong somewhere.
  * The one exception is `build_plan` (its schema is large): it is counted only
  * when OSIONOS_AI_BUILDERS is on, the one case where it is sent.
  */
-export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...writeTools(), loadSkillTool([])]);
+export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...writeTools(), loadSkillTool([]), rememberTool({ workspaceId: '', runId: '' })]);
 
 /** The shape the count of the definitions reads. */
 interface ToolDefinition {
@@ -207,7 +210,7 @@ export function readToolSet(
 	ctx: ReadToolContext,
 	hooks: ToolHooks,
 	pool: ToolPool = createToolPool(),
-	extra: readonly AnyReadTool[] = [],
+	extra: readonly (AnyReadTool | AnyProposalTool)[] = [],
 ): ToolSet {
 	// The sources of the run are numbered once: the ones of the prompt
 	// first, then the ones the tools find, in the order the tools found
@@ -288,6 +291,7 @@ export function readToolSet(
 					ok: true,
 					found: cites.length,
 					...(tool.pin ? { skill: tool.pin(result.data) } : {}),
+					...('proposed' in tool && tool.proposed ? { memoryId: tool.proposed(result.data).id } : {}),
 				});
 				return output;
 			},
