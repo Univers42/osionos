@@ -19,6 +19,7 @@ import {
 } from './connections.ts';
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
+import { handleSources } from './sources.ts';
 import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
 import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
 import { handleSentimentSettings } from './sentimentSettings.ts';
@@ -67,6 +68,7 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/pages/:id/related',
 		handle: handleRelated,
 	},
+	{ methods: ['POST'], pattern: /^\/api\/ai\/sources$/, label: '/api/ai/sources', handle: handleSources },
 	{
 		methods: [],
 		pattern: /^\/api\/ai\/connections$/,
@@ -137,10 +139,6 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalDecision,
 	},
-	{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillsList },
-	{ methods: ['POST'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillCreate },
-	{ methods: ['PUT'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillUpdate },
-	{ methods: ['DELETE'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillArchive },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/memories$/, label: '/api/ai/workspaces/:ws/memories', handle: handleMemoriesList },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/approve$/, label: '/api/ai/memories/:id/approve', handle: handleMemoryApprove },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/reject$/, label: '/api/ai/memories/:id/reject', handle: handleMemoryReject },
@@ -153,6 +151,10 @@ export const ROUTES: RouteEntry[] = [
 		handle: handleSentimentSettings,
 		anyMethod: true,
 	},
+	{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillsList },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillCreate },
+	{ methods: ['PUT'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillUpdate },
+	{ methods: ['DELETE'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillArchive },
 	{
 		methods: ['GET'],
 		pattern: /^\/api\/ai\/workspaces\/([^/]+)\/sentiment\/pulse$/,
