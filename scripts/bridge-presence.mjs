@@ -108,6 +108,7 @@ function parseEntry(raw, legacy, now) {
 export async function onlineAmong(kv, userIds, { now = Date.now(), viewerId = null } = {}) {
 	const ids = [...new Set((Array.isArray(userIds) ? userIds : []).map((id) => String(id ?? '')).filter(Boolean))];
 	if (!kv || typeof kv.getMany !== 'function' || ids.length === 0) return new Map();
+	const viewer = viewerId == null ? '' : String(viewerId);
 	const online = new Map();
 	try {
 		for (let at = 0; at < ids.length; at += PRESENCE_BATCH) {
@@ -115,7 +116,7 @@ export async function onlineAmong(kv, userIds, { now = Date.now(), viewerId = nu
 			const values = await kv.getMany([...chunk.map(presenceV2Key), ...chunk.map(presenceKey)]);
 			chunk.forEach((id, index) => {
 				const entry = parseEntry(values?.[index], values?.[chunk.length + index], now);
-				if (entry && (entry.state !== 'invisible' || id === viewerId)) online.set(id, entry);
+				if (entry && (entry.state !== 'invisible' || id === viewer)) online.set(id, entry);
 			});
 		}
 		noteStoreUp('read');

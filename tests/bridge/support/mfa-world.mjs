@@ -36,7 +36,7 @@ export const MFA_KEY = Buffer.alloc(32, 7).toString('base64');
 export const OTHER_KEY = Buffer.alloc(32, 9).toString('base64');
 export const TOTP_TABLE = 'osionos_mfa_totp';
 export const CODES_TABLE = 'osionos_mfa_recovery_codes';
-const GATEWAY = 'http://gateway.local';
+const GATEWAY = 'https://gateway.local';
 const quietLog = { info() {}, warn() {} };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
