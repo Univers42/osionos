@@ -49,7 +49,27 @@ export const DEFAULT_LIMITS: ProgramLimits = {
 /** An action whose values the interpreter has already resolved. */
 export type ResolvedAction =
 	| { type: "notify"; message: unknown }
-	| { type: "set_property"; property: string; value: unknown };
+	| { type: "set_property"; property: string; value: unknown }
+	| { type: "page_action"; name: string };
+
+/**
+ * Wrap an action runner so a destructive page action asks `confirm` first;
+ * a refusal returns `cancelled` and the runner is never called. Lives here,
+ * pure, so the rule is testable without the app; the dialog and the table
+ * (this file value-imports nothing) are the caller's.
+ */
+export function guardDestructive(
+	runAction: ProgramRunContext["runAction"],
+	confirm: (actionName: string) => Promise<boolean>,
+	destructive: Readonly<Record<string, boolean>>,
+): ProgramRunContext["runAction"] {
+	return async (action, scope) => {
+		if (action.type === "page_action" && destructive[action.name] === true) {
+			if (!(await confirm(action.name))) return { status: "cancelled", detail: "not confirmed" };
+		}
+		return runAction(action, scope);
+	};
+}
 
 export interface ActionOutcome {
 	status: "ok" | "failed" | "blocked" | "cancelled";
@@ -231,8 +251,8 @@ class Run {
 	}
 
 	private async runActionStep(action: Extract<ProgramStep, { op: "action" }>["action"]): Promise<void> {
-		const isWrite = action.type === "set_property";
-		const label = isWrite ? `Set property \`${action.property}\`` : "Notify";
+		const isWrite = action.type !== "notify";
+		const label = labelOf(action);
 		const resolved = this.resolveAction(action);
 		if ("sentinel" in resolved) return this.record("action", label, "failed", resolved.sentinel);
 		if (isWrite) {
@@ -248,6 +268,7 @@ class Run {
 	}
 
 	private resolveAction(action: Extract<ProgramStep, { op: "action" }>["action"]): { action: ResolvedAction } | { sentinel: string } {
+		if (action.type === "page_action") return { action };
 		const result = this.evaluate(action.type === "notify" ? action.message : action.value);
 		if ("sentinel" in result) return result;
 		return {
@@ -257,6 +278,11 @@ class Run {
 					: { type: "set_property", property: action.property, value: result.value },
 		};
 	}
+}
+
+function labelOf(action: Extract<ProgramStep, { op: "action" }>["action"]): string {
+	if (action.type === "set_property") return `Set property \`${action.property}\``;
+	return action.type === "page_action" ? `Page action \`${action.name}\`` : "Notify";
 }
 
 export async function runButtonProgram(program: ButtonProgram, ctx: ProgramRunContext): Promise<ProgramRunResult> {
