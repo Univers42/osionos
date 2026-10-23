@@ -39,6 +39,7 @@ import { createAdminUsersRoutes } from './bridge-account-users.mjs';
 import { createAdminAuditRoutes } from './bridge-account-audit.mjs';
 import { createAdminModerationRoutes } from './bridge-account-moderation.mjs';
 import { createMfaRoutes } from './bridge-account-mfa.mjs';
+import { createAccountPasswordRoutes } from './bridge-account-password.mjs';
 
 export function createAccountHandler(deps) {
 	const modules = [
@@ -49,6 +50,7 @@ export function createAccountHandler(deps) {
 		createAvatarRoutes(deps),
 		createAccountSudoRoutes({ ...deps, env: deps.env ?? process.env }),
 		createAccountIdentityRoutes(deps),
+		createAccountPasswordRoutes(deps),
 		createSelfDataRoutes(deps),
 		createSelfViewsRoutes(deps),
 		createWorkspaceSettingsRoutes(deps),
