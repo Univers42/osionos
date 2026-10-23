@@ -87,6 +87,17 @@ export interface ApprovalDescription {
   createdAt: string;
 }
 
+/**
+ * An outside agent's write, as the list describes it.
+ *
+ * `agentName` is the name of the token that asked: it is untrusted text,
+ * chosen by whoever minted the token, and the card shows it as a text node.
+ */
+export interface McpApproval extends ApprovalDescription {
+  origin: "mcp";
+  agentName: string;
+}
+
 /** The decision of the user, and what came of it. */
 export interface ApprovalDecision {
   ok: boolean;
@@ -178,6 +189,40 @@ export async function fetchApproval(approvalId: string): Promise<ApprovalDescrip
     headers: { Accept: "application/json" },
   });
   return (await response.json()) as ApprovalDescription;
+}
+
+/**
+ * One row of the list, or nothing.
+ *
+ * The service sends the card's data plus the origin and the agent. A row
+ * without an id or without a string name is not a card the user can decide:
+ * it is dropped rather than drawn half-read.
+ */
+function toMcpApproval(value: unknown): McpApproval | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.approvalId !== "string") return null;
+  if (typeof row.agentName !== "string") return null;
+  return row as unknown as McpApproval;
+}
+
+/**
+ * `GET /approvals?origin=mcp` — the outside agents' writes that wait.
+ *
+ * Newest first, at most 50, pending only: what the user still has to decide.
+ * The rows of somebody else never reach this client, and an agent's name is
+ * text: the panel never treats it as markup.
+ */
+export async function listMcpApprovals(): Promise<McpApproval[]> {
+  const response = await request("/approvals?origin=mcp", {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  const body = (await response.json()) as { approvals?: unknown } | null;
+  if (!Array.isArray(body?.approvals)) return [];
+  return body.approvals
+    .map(toMcpApproval)
+    .filter((approval): approval is McpApproval => approval !== null);
 }
 
 /**
