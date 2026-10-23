@@ -193,6 +193,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     anchors: [
       { id: "personal-access-tokens", label: "Personal access tokens", keywords: ["token", "pat", "api key", "secret", "credential", "scope", "developer"] },
       { id: "authorized-apps", label: "Authorized apps", keywords: ["authorized", "apps", "mcp", "claude", "token", "access", "revoke"] },
+      { id: "ssh-gpg-keys", label: "SSH and GPG keys", keywords: ["ssh", "gpg", "key", "fingerprint", "git", "signing", "deploy"] },
     ],
   },
   {
