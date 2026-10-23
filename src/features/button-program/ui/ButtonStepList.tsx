@@ -34,7 +34,7 @@ import {
   type StepOp,
   type ValueKind,
 } from "../model/stepList";
-import type { ProgramAction, ProgramValue } from "@/entities/block/model/buttonProgram";
+import { DESTRUCTIVE_PAGE_ACTIONS, type ProgramAction, type ProgramValue } from "@/entities/block/model/buttonProgram";
 
 const STEP_LABELS: Record<StepOp, string> = {
   set: "Set a variable",
@@ -97,7 +97,24 @@ const ValueField: React.FC<{ label: string; value: ProgramValue; onChange: (valu
   );
 };
 
-const ACTION_LABELS: Record<ProgramAction["type"], string> = { notify: "Show a message", set_property: "Set a page property" };
+const ACTION_LABELS: Record<ProgramAction["type"], string> = {
+  notify: "Show a message",
+  set_property: "Set a page property",
+  page_action: "Run a page action",
+};
+
+const PAGE_ACTION_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(DESTRUCTIVE_PAGE_ACTIONS).map(([name, destructive]) => [
+    name,
+    `${name.replaceAll("_", " ")}${destructive ? " (asks first)" : ""}`,
+  ]),
+);
+
+function blankAction(type: ProgramAction["type"]): ProgramAction {
+  if (type === "notify") return { type, message: "" };
+  if (type === "page_action") return { type, name: Object.keys(DESTRUCTIVE_PAGE_ACTIONS)[0] };
+  return { type, property: "", value: "" };
+}
 
 const ActionFields: React.FC<{ action: ProgramAction; onChange: (action: ProgramAction) => void }> = ({ action, onChange }) => (
   <div className="flex flex-col gap-1">
@@ -105,13 +122,15 @@ const ActionFields: React.FC<{ action: ProgramAction; onChange: (action: Program
       label="Action"
       value={action.type}
       options={ACTION_LABELS}
-      onChange={(type) =>
-        onChange(type === "notify" ? { type, message: "" } : { type, property: "", value: "" })
-      }
+      onChange={(type) => onChange(blankAction(type))}
     />
-    {action.type === "notify" ? (
+    {action.type === "notify" && (
       <ValueField label="Message" value={action.message} onChange={(message) => onChange({ ...action, message })} />
-    ) : (
+    )}
+    {action.type === "page_action" && (
+      <Select label="Page action" value={action.name} options={PAGE_ACTION_LABELS} onChange={(name) => onChange({ ...action, name })} />
+    )}
+    {action.type === "set_property" && (
       <>
         <input
           aria-label="Property name"
