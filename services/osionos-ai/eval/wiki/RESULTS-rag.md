@@ -5,7 +5,9 @@ by a 4B model and checked by nobody (see the Caveats); read the numbers as "on t
 
 ## Decision
 
-Reranker kept: recall@5 paired CI low -0.013 (needs > 0) / abstention F1 on the test half 0.714 (needs >= 0.6); at least one holds.
+Reranker kept, OFF by default on this hardware: recall@5 paired CI low -0.013 (needs > 0) / abstention F1 on the test half 0.714 (needs >= 0.6); at least one holds, but its p95 of 22106 ms is over the service's 1500 ms timeout, so in the product every call would time out and fall back to the hybrid. The abstention needs the rerank score, so it is off with it.
+
+This decision line was corrected by hand after the run (2026-10-23 04:18): the script's rule then looked at quality only. measure-rag.ts now adds the latency half, and the next run writes this line itself. What would turn it on: a reranker whose p95 on 20 candidates fits 1500 ms (a GPU, a smaller cross-encoder, or fewer candidates), measured with this script.
 
 ## Reproduce
 
@@ -21,16 +23,20 @@ docker run --rm --network ai-m2-net --memory 2g --cpus 2 --env-file /home/dlesie
   - embedder intfloat/multilingual-e5-small
   - TEI image ghcr.io/huggingface/text-embeddings-inference@sha256:2538ea1c9640d3763b15af668039d24172d063b42337b0c27796fc2be180c78d
 
-## Load when measured
+## Load
 
-- ` 02:37:47 up  9:57,  1 user,  load average: 9.46, 9.30, 9.63`
-- `               total        used        free      shared  buff/cache   available`
-- `Mem:              31          20           2           0           8          10`
-- `Swap:             24          17           7`
-- ` 02:42:47 up 10:02,  1 user,  load average: 4.92, 7.30, 8.75`
-- `               total        used        free      shared  buff/cache   available`
-- `Mem:              31          18           4           0           7          13`
-- `Swap:             24          17           7`
+- during this run: not captured by the script at the time (it only had the lines below). Two `uptime` samples the lead
+  took while it ran (question 114/200 at 03:29): `03:26:20 load average: 11.70, 9.68, 9.59` and
+  `03:29:56 load average: 9.49, 10.01, 9.77`. The script now records os.loadavg at its start and end.
+- when the stack was built (02:37–02:42, about an hour before the run):
+  - ` 02:37:47 up  9:57,  1 user,  load average: 9.46, 9.30, 9.63`
+  - `               total        used        free      shared  buff/cache   available`
+  - `Mem:              31          20           2           0           8          10`
+  - `Swap:             24          17           7`
+  - ` 02:42:47 up 10:02,  1 user,  load average: 4.92, 7.30, 8.75`
+  - `               total        used        free      shared  buff/cache   available`
+  - `Mem:              31          18           4           0           7          13`
+  - `Swap:             24          17           7`
 
 ## Variant 1: hybrid (reranker off), 160 answerable questions
 

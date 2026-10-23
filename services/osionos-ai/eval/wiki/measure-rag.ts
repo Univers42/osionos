@@ -14,7 +14,8 @@
 /*                                                                            */
 /*   Caveat: the rerank latency is the time of the HTTP call to the TEI,      */
 /*   taken by wrapping fetch; the retrieval latency is wall time of retrieve()*/
-/*   on a shared CPU host, so both move with the load recorded in the report. */
+/*   on a shared CPU host, so both move with the load the report records   */
+/*   (os.loadavg at the start and the end of the run: host-wide, not ours). */
 /*   A question with no chunk at all has top score 0 and counts as abstained. */
 /*                                                                            */
 /*   environment:                                                             */
@@ -25,8 +26,10 @@
 /* ************************************************************************** */
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { loadavg } from 'node:os';
 import { Pool } from 'pg';
 import type { AuthUser } from '../../src/auth.ts';
+import { RERANK_TIMEOUT_MS } from '../../src/retrieval/rerank.ts';
 import { retrieve } from '../../src/retrieval/search.ts';
 import { GOLDEN_FILE } from './golden.mjs';
 import {
@@ -73,6 +76,8 @@ const meta = JSON.parse(readFileSync(process.env.MEASURE_META ?? '', 'utf8')) as
 	load: string[];
 };
 const db = new Pool({ connectionString: process.env.OSIONOS_AI_DATABASE_URL, max: 2 });
+const loadAtStart = loadavg();
+const loadLine = (load: number[]): string => load.map((value) => value.toFixed(2)).join(', ');
 
 // The time of every call to /rerank, taken where the service makes it.
 const rerankMs: number[] = [];
@@ -175,10 +180,16 @@ async function main(): Promise<void> {
 	const median = (positive: boolean): number => percentile(scored.filter((item) => item.positive === positive).map((item) => item.score), 0.5);
 
 	const recallGain = differences.find((entry) => entry.name === 'recall@5');
-	const keep = (recallGain?.low ?? 0) > 0 || f1.value >= DECISION_F1;
-	const decision = keep
-		? `Reranker kept: recall@5 paired CI low ${fmt(recallGain?.low ?? 0)} (needs > 0) / abstention F1 on the test half ${fmt(f1.value)} (needs >= ${DECISION_F1}); at least one holds.`
-		: `Reranker not kept: recall@5 paired CI low ${fmt(recallGain?.low ?? 0)} (needs > 0) and abstention F1 on the test half ${fmt(f1.value)} (needs >= ${DECISION_F1}); neither holds.`;
+	const quality = (recallGain?.low ?? 0) > 0 || f1.value >= DECISION_F1;
+	const qualityLine = `recall@5 paired CI low ${fmt(recallGain?.low ?? 0)} (needs > 0) / abstention F1 on the test half ${fmt(f1.value)} (needs >= ${DECISION_F1})`;
+	// Quality alone is not enough: the service gives the reranker RERANK_TIMEOUT_MS, and a call
+	// that is slower falls back to the hybrid, so a reranker over that budget never runs.
+	const rerankP95 = percentile(rerankMs, 0.95);
+	const decision = !quality
+		? `Reranker not kept: ${qualityLine}; neither holds.`
+		: rerankP95 <= RERANK_TIMEOUT_MS
+			? `Reranker kept and on: ${qualityLine}; at least one holds, and its p95 of ${rerankP95.toFixed(0)} ms fits the service's ${RERANK_TIMEOUT_MS} ms timeout.`
+			: `Reranker kept, OFF by default on this hardware: ${qualityLine}; at least one holds, but its p95 of ${rerankP95.toFixed(0)} ms is over the service's ${RERANK_TIMEOUT_MS} ms timeout, so in the product every call would time out and fall back to the hybrid. The abstention needs the rerank score, so it is off with it.`;
 
 	const report = `# RAG at ${counts.rows[0].chunks} chunks: hybrid, rerank, abstention (M2)
 
@@ -201,9 +212,11 @@ ${meta.command}
 - pins:
 ${meta.pins.map((pin) => `  - ${pin}`).join('\n')}
 
-## Load when measured
+## Load
 
-${meta.load.map((line) => `- \`${line}\``).join('\n')}
+- during this run, os.loadavg (1, 5, 15 min, host-wide): start ${loadLine(loadAtStart)}; end ${loadLine(loadavg())}
+- when the stack was built:
+${meta.load.map((line) => `  - \`${line}\``).join('\n')}
 
 ## Variant 1: hybrid (reranker off), ${answerable.length} answerable questions
 
