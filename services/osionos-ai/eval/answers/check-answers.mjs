@@ -60,6 +60,19 @@ const goldenIds = new Set(goldenQuestions.map((q) => q.id));
 /** Count unanswerable golden questions (negative + acl). */
 const goldenUnanswerable = goldenQuestions.filter((q) => q.kind === "negative" || q.kind === "acl").length;
 
+/** Jaccard similarity of two content-word sets. */
+function jaccard(a, b) {
+	if (a.size === 0 && b.size === 0) return 1;
+	const intersection = [...a].filter((w) => b.has(w)).length;
+	const union = a.size + b.size - intersection;
+	return intersection / union;
+}
+
+/** Content word set of a question text. */
+function contentWordSet(text) {
+	return new Set(contentWords(text));
+}
+
 /** The text of a page, lowercased. */
 function pageText(slug) {
 	const page = bySlug.get(slug);
@@ -125,6 +138,30 @@ const seenGoldenRefIds = new Set();
 for (const id of goldenRefIds) {
 	if (seenGoldenRefIds.has(id)) fail(`${id}: duplicate golden reference id`);
 	seenGoldenRefIds.add(id);
+}
+
+// --- Near-duplicate check: llm-drafted vs golden, and llm-drafted vs llm-drafted ---
+const goldenWordSets = new Map(goldenQuestions.map((q) => [q.id, contentWordSet(q.q)]));
+const llmDraftedQuestions = questions.filter((q) => q.origin === "llm-drafted");
+const llmWordSets = new Map(llmDraftedQuestions.map((q) => [q.id, contentWordSet(q.q)]));
+
+for (const q of llmDraftedQuestions) {
+	const ws = llmWordSets.get(q.id);
+	// vs golden
+	for (const [gid, gws] of goldenWordSets) {
+		const j = jaccard(ws, gws);
+		if (j >= 0.6) {
+			fail(`${q.id}: near-duplicate of golden ${gid} (J=${j.toFixed(2)})`);
+		}
+	}
+	// vs other llm-drafted (only check pairs once, by id order)
+	for (const [oid, ows] of llmWordSets) {
+		if (oid >= q.id) continue;
+		const j = jaccard(ws, ows);
+		if (j >= 0.6) {
+			fail(`${q.id}: near-duplicate of ${oid} (J=${j.toFixed(2)})`);
+		}
+	}
 }
 
 // --- Per-question checks ---

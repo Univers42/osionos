@@ -15,7 +15,7 @@
 /*   No dependencies beyond the service's own. Node 22.                        */
 /* ************************************************************************** */
 
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
@@ -29,6 +29,22 @@ import { readCorpus } from '../../eval/lib.mjs';
 import { judge } from './judge.ts';
 import { score, scoreByOrigin } from './score.ts';
 import type { LabeledAnswer } from './score.ts';
+
+interface GoldenQuestion {
+	id: string;
+	q: string;
+	lang: string;
+	kind: string;
+	asker: string;
+	expected: string[];
+}
+
+interface LabelData {
+	id: string;
+	answer: string;
+	sources: string[];
+	judge: { faithful: boolean; relevant: number; abstained: boolean } | null;
+}
 
 const EVAL_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ANSWERS_DIR = EVAL_DIR; // this file is in eval/answers/
@@ -45,17 +61,16 @@ if (databaseUrl.length === 0 || embedUrl.length === 0) {
 }
 
 // Load questions
-import { readFileSync } from 'node:fs';
-
 function loadQuestions() {
-	const golden = readGolden();
-	const goldenMap = new Map(golden.map((q: any) => [q.id, q]));
+	const golden = readGolden() as GoldenQuestion[];
+	const goldenMap = new Map(golden.map((q) => [q.id, q]));
 	const raw = readFileSync(path.join(ANSWERS_DIR, 'questions.jsonl'), 'utf8');
 	const lines = raw.split(/\r?\n/).filter((l) => l.trim());
 	return lines.map((line) => {
 		const parsed = JSON.parse(line);
 		if (parsed.ref === 'golden') {
 			const g = goldenMap.get(parsed.id);
+			if (!g) throw new Error(`Golden question ${parsed.id} not found`);
 			return {
 				id: parsed.id,
 				q: g.q,
@@ -108,7 +123,7 @@ async function main() {
 	const embedder = new Embedder({ baseUrl: embedUrl, model: embedModel });
 
 	const labeledAnswers: LabeledAnswer[] = [];
-	const labelsData: any[] = [];
+	const labelsData: LabelData[] = [];
 
 	for (const question of questions) {
 		const asker = stack.authUser(question.asker);
