@@ -22,23 +22,14 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
-import { createUserSession, validateBridgePayload, verifyAppSessionToken } from '../../scripts/bridge-api.mjs';
-import { createAccountHandler } from '../../scripts/bridge-account-mounts.mjs';
 import { encodeCursor } from '../../scripts/bridge-paging.mjs';
-import { createPg } from '../../scripts/bridge-pg.mjs';
-import { ACCOUNT_JWT_SECRET, accountConfig, send, USER_A, USER_B } from './support/account-world.mjs';
+import { send, USER_A, USER_B } from './support/account-world.mjs';
 import { createKeysetStore } from './support/keyset-postgrest.mjs';
+import { ROLE_IDS, startAdminWorld, tokenFor } from './support/admin-route-world.mjs';
 import { kvStub } from './support/kv-stub.mjs';
 
 const USER_C = 'cccccccc-3333-4333-8333-cccccccccccc';
-const ROLE_IDS = {
-	admin: '11111111-0000-4000-8000-000000000001',
-	moderator: '11111111-0000-4000-8000-000000000002',
-	user: '11111111-0000-4000-8000-000000000003',
-	guest: '11111111-0000-4000-8000-000000000004',
-};
 const SELECT = 'user_id,display_name,username,directory_opt_out,created_at,updated_at';
 const USERS = '/api/account/admin/users';
 const AUDIT = 'osionos_bridge_audit_events';
@@ -56,36 +47,8 @@ function seed({ withoutRoles = [], grants = [{ userId: USER_A, role: 'admin' }],
 	};
 }
 
-/** A real app session; `claim` is the is_admin flag the token carries, which the routes must ignore. */
-function tokenFor(config, userId = USER_A, claim = false) {
-	const payload = validateBridgePayload({ provider: 'prismatica', subject: userId, email: 'member@example.com', name: 'Member', jti: randomUUID() });
-	const persisted = { workspaceId: '0a4d1c2e-0000-4000-8000-000000000ad1', workspaceName: 'Home', workspaceSlug: 'home' };
-	return createUserSession(payload, config, persisted, Date.now(), [], claim).session.accessToken;
-}
-
 /** The account handler alone, the keyset store behind the real createPg transport. */
-async function world(t, { tables = seed(), refuse = [], kv = kvStub() } = {}) {
-	const config = accountConfig();
-	const store = createKeysetStore({ tables, refuse });
-	const pg = createPg({ config, env: { JWT_SECRET: ACCOUNT_JWT_SECRET }, fetchImpl: store.fetchImpl });
-	const handler = createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken, env: { JWT_SECRET: ACCOUNT_JWT_SECRET } });
-	const server = createServer(async (request, response) => {
-		const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
-		try {
-			if (await handler(url, request, response)) return;
-			response.writeHead(404).end('{}');
-		} catch (error) {
-			const retry = Number.isFinite(error?.retryAfterSeconds) ? { 'retry-after': String(error.retryAfterSeconds) } : {};
-			response.writeHead(error?.status ?? 500, { 'content-type': 'application/json', ...retry });
-			response.end(JSON.stringify({ ok: false, message: error?.message, code: error?.code }));
-		}
-	});
-	await new Promise((done) => server.listen(0, '127.0.0.1', done));
-	t.after(() => new Promise((done) => server.close(done)));
-	const base = `http://127.0.0.1:${server.address().port}`;
-	const admin = tokenFor(config, USER_A);
-	return { store, config, kv, base, admin, call: (path, options = {}) => send(base, `${USERS}${path}`, { token: admin, ...options }) };
-}
+const world = (t, { tables = seed(), refuse = [], kv = kvStub() } = {}) => startAdminWorld(t, { path: USERS, tables, refuse, kv });
 
 describe('the keyset list', () => {
 	it('serves two pages over three profiles and then an empty one', async (t) => {

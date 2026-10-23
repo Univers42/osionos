@@ -45,18 +45,19 @@ export function tokenFor(config, userId = USER_A, claim = false) {
 	return createUserSession(payload, config, persisted, Date.now(), [], claim).session.accessToken;
 }
 
-export async function startAdminWorld(t, { path, tables }) {
+export async function startAdminWorld(t, { path, tables, refuse = [], kv = kvStub() }) {
 	const config = accountConfig();
-	const store = createKeysetStore({ tables });
+	const store = createKeysetStore({ tables, refuse });
 	const pg = createPg({ config, env: { JWT_SECRET: ACCOUNT_JWT_SECRET }, fetchImpl: store.fetchImpl });
-	const handler = createAccountHandler({ config, pg, kv: kvStub(), verifySession: verifyAppSessionToken, env: { JWT_SECRET: ACCOUNT_JWT_SECRET } });
+	const handler = createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken, env: { JWT_SECRET: ACCOUNT_JWT_SECRET } });
 	const server = createServer(async (request, response) => {
 		const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
 		try {
 			if (await handler(url, request, response)) return;
 			response.writeHead(404).end('{}');
 		} catch (error) {
-			response.writeHead(error?.status ?? 500, { 'content-type': 'application/json' });
+			const retry = Number.isFinite(error?.retryAfterSeconds) ? { 'retry-after': String(error.retryAfterSeconds) } : {};
+			response.writeHead(error?.status ?? 500, { 'content-type': 'application/json', ...retry });
 			response.end(JSON.stringify({ ok: false, message: error?.message, code: error?.code }));
 		}
 	});
@@ -64,5 +65,5 @@ export async function startAdminWorld(t, { path, tables }) {
 	t.after(() => new Promise((done) => server.close(done)));
 	const base = `http://127.0.0.1:${server.address().port}`;
 	const admin = tokenFor(config, USER_A);
-	return { store, config, base, call: (query = '', options = {}) => send(base, `${path}${query}`, { token: admin, ...options }) };
+	return { store, config, kv, base, admin, call: (query = '', options = {}) => send(base, `${path}${query}`, { token: admin, ...options }) };
 }
