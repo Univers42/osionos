@@ -94,6 +94,20 @@ describe('a rotation', () => {
 		assert.equal((await listWith(base, rotated.body.accessToken)).status, 200);
 	});
 
+	it('never mints an access token that outlives its family', async (t) => {
+		const clock = newClock();
+		const { base } = await startSessionBridge({ clock, t });
+		const first = await signIn(base);
+		const claimsOf = (token) => JSON.parse(Buffer.from(token.split('.')[1], 'base64url'));
+		const familyExp = claimsOf(first.refreshToken).exp;
+		clock.at = (familyExp - 600) * 1000;
+		const rotated = await refreshWith(base, first.refreshToken);
+		assert.equal(rotated.status, 200);
+		assert.equal(claimsOf(rotated.body.refreshToken).exp, familyExp);
+		assert.equal(claimsOf(rotated.body.accessToken).exp, familyExp);
+		assert.equal(rotated.body.expiresAt, familyExp * 1000);
+	});
+
 	it('writes the audit row before the child row', async (t) => {
 		const { base, store } = await startSessionBridge({ clock: newClock(), t });
 		const first = await signIn(base);

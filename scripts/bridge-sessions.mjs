@@ -429,6 +429,8 @@ function nextTokens({ config, now, payload, fresh }) {
 		isAdmin: rights.is_admin,
 		// A refresh never raises assurance: a gated family stays aal1 until it steps up again.
 		...(payload.mfa_req === true ? { aal: 1, mfaReq: true } : {}),
+		// Never past the family's own expiry: the last rotation before it gets a shorter token.
+		exp: Math.min(Math.floor(now / 1000) + config.sessionTtlSeconds, payload.exp),
 	});
 	const claims = { ...payload, ...rights, workspace_ids: [payload.workspace_ids[0], ...extras.map((entry) => entry._id)], roles, famIatMs: payload.fam_iat_ms, jti, familyExp: payload.exp, provider };
 	return { jti, access, refresh: mintRefreshToken({ config, now, claims }) };

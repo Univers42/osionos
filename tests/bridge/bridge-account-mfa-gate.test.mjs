@@ -162,12 +162,14 @@ describe('two-step verification: the lookup fails closed', () => {
 });
 
 describe('two-step verification: the mint is not scattered', () => {
-	it('signs an app session token in exactly the three places that know about the gate', () => {
+	// The PAT middleware's internal session carries no `aal` (so aal 2) by construction: a PAT is
+	// created only through a route that refuses an aal1 token, and confirming a factor revokes every PAT.
+	it('signs an app session token in exactly the four places that know about the gate', () => {
 		const dir = new URL('../../scripts/', import.meta.url);
 		const callers = readdirSync(dir).filter((name) => name.endsWith('.mjs') && !name.endsWith('.test.mjs') && name !== 'db-isolation-suite.mjs')
 			.filter((name) => /(?<![\w.])signAppSessionToken\(/.test(readFileSync(new URL(name, dir), 'utf8').replace(/export function signAppSessionToken\(/, '')))
 			.sort();
-		assert.deepEqual(callers, ['bridge-account-mfa-state.mjs', 'bridge-api.mjs', 'bridge-sessions.mjs']);
+		assert.deepEqual(callers, ['bridge-account-mfa-state.mjs', 'bridge-api.mjs', 'bridge-pat-middleware.mjs', 'bridge-sessions.mjs']);
 	});
 
 	it('creates a user session in one production place only', () => {
