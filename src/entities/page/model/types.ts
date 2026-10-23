@@ -86,6 +86,9 @@ export interface PageEntry {
   /** Fingerprint of every block the Home page was seeded with, so a re-seed can
    *  tell the user's edits from the seed's own changes. Client-local. */
   homeSeedFingerprints?: Record<string, string>;
+  /** The profession the Home page was seeded from, so a profession change
+   *  (and only a profession change) replaces its content. Client-local. */
+  homeProfession?: string | null;
   /** True when this page is a database template (hidden from the normal tree/records). */
   isTemplate?: boolean;
   /** True when this template is the default used by the "New" button (one per workspace). */
