@@ -21,6 +21,11 @@ function firstEnv(...names: string[]): string | undefined {
 
 export type { PlatformModelEntry } from './platformModels.ts';
 
+/** The entries of a comma list, trimmed, the empty ones dropped. */
+function commaList(value: string | undefined): string[] {
+	return (value ?? '').split(',').map((entry) => entry.trim()).filter((entry) => entry !== '');
+}
+
 const envSchema = z.object({
 	OSIONOS_AI_PORT: z.coerce.number().int().min(0).max(65_535).default(4300),
 	OSIONOS_AI_DATABASE_URL: z.string().min(1),
@@ -80,6 +85,13 @@ const envSchema = z.object({
 	// leaves it empty until the G4 conditions C112-C120 are merged (devil
 	// verdict g-graph-diagrams-mcp-verdict.md). Off, the routes do not exist.
 	OSIONOS_AI_PAT: z.string().optional(),
+	// The remote MCP endpoint (G4b, devil C118). Comma lists, added to the
+	// loopback defaults: the hosts the endpoint answers to (the public host
+	// goes here, only when the deployment has one) and the browser origins
+	// that may reach it. An empty origin list refuses every request that
+	// carries an Origin header; agents that are not browsers send none.
+	OSIONOS_AI_MCP_ALLOWED_HOSTS: z.string().optional(),
+	OSIONOS_AI_MCP_ALLOWED_ORIGINS: z.string().optional(),
 	// The image engine: INTERNAL, the OpenAI-compatible base URL of sd-server
 	// (`…/v1`), a deployment setting and never a caller's. Required when on.
 	OSIONOS_AI_IMAGE_URL: z.string().optional(),
@@ -144,6 +156,8 @@ const rawEnv = {
 	OSIONOS_AI_STT_SECONDS_PER_DAY: process.env.OSIONOS_AI_STT_SECONDS_PER_DAY,
 	OSIONOS_AI_IMAGES: process.env.OSIONOS_AI_IMAGES,
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
+	OSIONOS_AI_MCP_ALLOWED_HOSTS: process.env.OSIONOS_AI_MCP_ALLOWED_HOSTS,
+	OSIONOS_AI_MCP_ALLOWED_ORIGINS: process.env.OSIONOS_AI_MCP_ALLOWED_ORIGINS,
 	OSIONOS_AI_IMAGE_URL: firstEnv('OSIONOS_AI_IMAGE_URL'),
 	OSIONOS_AI_IMAGE_MODEL: process.env.OSIONOS_AI_IMAGE_MODEL,
 	OSIONOS_AI_IMAGE_MICROUSD: process.env.OSIONOS_AI_IMAGE_MICROUSD,
@@ -291,6 +305,10 @@ export interface AiServiceConfig {
 	/** The image generation is on: without it the route does not exist. */
 	imagesEnabled: boolean;
 	patEnabled: boolean;
+	/** The hosts the MCP endpoint answers to (lower-case, loopback included). */
+	mcpAllowedHosts: readonly string[];
+	/** The browser origins that may reach the MCP endpoint: none by default. */
+	mcpAllowedOrigins: readonly string[];
 	/** The OpenAI-compatible base URL of the internal image engine. */
 	imageUrl?: string;
 	/** The model of the engine, as the provenance of an image names it. */
@@ -345,6 +363,8 @@ export const config: AiServiceConfig = Object.freeze({
 	sttSecondsPerDay: parsed.data.OSIONOS_AI_STT_SECONDS_PER_DAY,
 	imagesEnabled: parsed.data.OSIONOS_AI_IMAGES?.trim().toLowerCase() === 'on',
 	patEnabled: parsed.data.OSIONOS_AI_PAT?.trim().toLowerCase() === 'on',
+	mcpAllowedHosts: Object.freeze(['localhost', '127.0.0.1', ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),
+	mcpAllowedOrigins: Object.freeze(commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_ORIGINS)),
 	imageUrl: parsed.data.OSIONOS_AI_IMAGE_URL,
 	imageModel: parsed.data.OSIONOS_AI_IMAGE_MODEL,
 	imageMicroUsd: parsed.data.OSIONOS_AI_IMAGE_MICROUSD,
