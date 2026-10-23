@@ -67,6 +67,12 @@ function matchesFilter(row, key, expr) {
 		return `${row.title ?? ''} ${JSON.stringify(row.content ?? [])}`.toLowerCase().includes(needle);
 	}
 	if (expr === 'is.null') return row[key] == null;
+	if (expr === 'not.is.null') return row[key] != null;
+	// ilike: case-insensitive; PostgREST writes the wildcard as * (SQL %), a literal otherwise.
+	if (expr.startsWith('ilike.')) {
+		const pattern = expr.slice(6).replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*').replaceAll('%', '.*');
+		return new RegExp(`^${pattern}$`, 'i').test(String(row[key] ?? ''));
+	}
 	if (expr.startsWith('eq.')) return sameText(columnValue(row, key), expr.slice(3));
 	if (expr.startsWith('neq.')) return !sameText(columnValue(row, key), expr.slice(4));
 	if (expr.startsWith('gt.')) return String(row[key] ?? '').toLowerCase() > expr.slice(3).toLowerCase();
@@ -184,13 +190,28 @@ function transferOwnershipRpc(body, { table }) {
 	const inWorkspace = (userId) => members.find((row) => sameText(row.workspace_id, body.p_workspace) && sameText(row.user_id, userId));
 	const workspace = table('osionos_workspaces').find((row) => sameText(row.id, body.p_workspace));
 	const target = inWorkspace(body.p_to);
-	if (!workspace || !sameText(workspace.owner_id, body.p_from) || !target) return false;
+	if (!workspace || !sameText(workspace.owner_id, body.p_from) || workspace.pending_delete_at || !target) return false;
 	const previous = inWorkspace(body.p_from);
 	if (previous) previous.role = 'admin';
 	else members.push({ workspace_id: body.p_workspace, user_id: body.p_from, role: 'admin', permissions: ALL_PERMISSIONS });
 	Object.assign(target, { role: 'owner', permissions: ALL_PERMISSIONS });
 	workspace.owner_id = body.p_to;
 	return true;
+}
+
+/**
+ * public.osionos_workspace_mark_delete: the owner check, the last-live-workspace count and the
+ * mark are one synchronous step, as the SQL function does them under its row locks.
+ */
+function markDeleteRpc(body, { table }) {
+	const workspaces = table('osionos_workspaces');
+	const target = workspaces.find((row) => sameText(row.id, body.p_workspace));
+	if (!target || !sameText(target.owner_id, body.p_owner)) return 'not_owner';
+	if (target.pending_delete_at && Date.parse(target.delete_after) > Date.parse(body.p_now)) return 'already_pending';
+	const others = workspaces.filter((row) => sameText(row.owner_id, body.p_owner) && !sameText(row.id, body.p_workspace) && !row.pending_delete_at);
+	if (others.length < 1) return 'last_workspace';
+	Object.assign(target, { pending_delete_at: body.p_now, delete_after: body.p_after });
+	return 'marked';
 }
 
 /** seed: { table: rows[] }, records: { 'dbId/table': rows[] }, failWhen(call) → { status, body } | null. */
@@ -245,7 +266,7 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		// table(version bigint, content jsonb)); an unregistered one keeps the row path.
 		// The two edge reads are always registered: a test that seeds no link must
 		// still get an empty answer, not a table named after the RPC.
-		const rpcs = { osionos_workspace_transfer_ownership: transferOwnershipRpc, ...EDGE_RPCS, ...rpc };
+		const rpcs = { osionos_workspace_transfer_ownership: transferOwnershipRpc, osionos_workspace_mark_delete: markDeleteRpc, ...EDGE_RPCS, ...rpc };
 		if (method === 'POST' && Object.hasOwn(rpcs, name.slice(4))) {
 			return jsonResponse(rpcs[name.slice(4)](body, { table }), 200);
 		}

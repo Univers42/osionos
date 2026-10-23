@@ -28,6 +28,7 @@ const STRANGER = 'eeeeeeee-5555-4555-8555-eeeeeeeeeeee';
 const OWNER_PERMISSIONS = ['create', 'read', 'update', 'delete', 'admin'];
 const DAY_MS = 86_400_000;
 const TRANSFER_RPC = 'rpc/osionos_workspace_transfer_ownership';
+const MARK_RPC = 'rpc/osionos_workspace_mark_delete';
 
 const actors = {
 	owner: sessionHeaders(config, OWNER, IDS.homeA),
@@ -59,15 +60,18 @@ function world({ extra = {}, members } = {}) {
 }
 
 /** One call against a fresh bridge; `sudo` names the actor whose session holds a sudo grant. */
-async function call(actor, method, suffix, { body, sudo = false, seed = world(), mockOptions } = {}) {
+async function call(actor, method, suffix, { body, sudo = false, seed = world(), mockOptions, id = WS, before } = {}) {
 	const mock = createPostgrestMock(seed, mockOptions);
+	// `before(mock, url, init)` runs just ahead of each upstream request: the way a test makes a
+	// concurrent writer land between the bridge's read and its write.
+	const fetchImpl = before ? (url, init) => { before(mock, String(url), init ?? {}); return mock.fetchImpl(url, init); } : mock.fetchImpl;
 	const kv = kvStub();
-	const result = await withBridge(config, mock.fetchImpl, async (base) => {
+	const result = await withBridge(config, fetchImpl, async (base) => {
 		if (sudo) {
 			const claims = tokenClaims(actors[actor].authorization.slice('Bearer '.length));
 			await grantSudo(kv, { userId: claims.sub, raw: { jti: claims.jti } });
 		}
-		const response = await fetch(`${base}/api/workspaces/${WS}${suffix}`, { method, headers: actors[actor], body: body === undefined ? undefined : JSON.stringify(body) });
+		const response = await fetch(`${base}/api/workspaces/${id}${suffix}`, { method, headers: actors[actor], body: body === undefined ? undefined : JSON.stringify(body) });
 		const text = await response.text();
 		return { status: response.status, text, body: text ? JSON.parse(text) : null };
 	}, { kv });
@@ -120,7 +124,7 @@ describe('DELETE /api/workspaces/:id (staged)', () => {
 	it('writes the audit row before the workspace is marked, with the id and page count', async () => {
 		const result = await remove('owner', { sudo: true });
 		const auditAt = result.mock.calls.findIndex((entry) => entry.table === 'osionos_bridge_audit_events' && entry.method === 'POST');
-		const markAt = result.mock.calls.findIndex((entry) => entry.table === 'osionos_workspaces' && entry.method === 'PATCH');
+		const markAt = result.mock.calls.findIndex((entry) => entry.table === MARK_RPC);
 		assert.ok(auditAt >= 0 && markAt > auditAt, `audit ${auditAt} mark ${markAt}`);
 		const row = result.mock.calls[auditAt].body;
 		assert.equal(row.event_type, 'workspace.deleted');
@@ -136,6 +140,58 @@ describe('DELETE /api/workspaces/:id (staged)', () => {
 		assert.equal(result.status, 409, result.text);
 		assert.equal(result.body.code, 'last_workspace');
 		assert.equal(result.workspace.pending_delete_at, undefined);
+	});
+
+	it('marks through the one SQL function, bound to the session user, with a 14 day deadline', async () => {
+		const result = await remove('owner', { sudo: true });
+		const marks = result.mock.calls.filter((entry) => entry.table === MARK_RPC);
+		assert.equal(marks.length, 1);
+		assert.equal(marks[0].body.p_workspace, WS);
+		assert.equal(marks[0].body.p_owner, OWNER);
+		assert.equal(Date.parse(marks[0].body.p_after) - Date.parse(marks[0].body.p_now), 14 * DAY_MS);
+		assert.equal(writesTo(result.mock, 'osionos_workspaces').length, 0, 'no separate count or PATCH');
+	});
+
+	it('two deletes of an owner\'s two workspaces: the second is 409 last_workspace and one survives', async () => {
+		const mock = createPostgrestMock(world());
+		const kv = kvStub();
+		const statuses = await withBridge(config, mock.fetchImpl, async (base) => {
+			const claims = tokenClaims(actors.owner.authorization.slice('Bearer '.length));
+			await grantSudo(kv, { userId: claims.sub, raw: { jti: claims.jti } });
+			const seen = [];
+			for (const id of [WS, OTHER_WS]) {
+				const reply = await fetch(`${base}/api/workspaces/${id}`, { method: 'DELETE', headers: actors.owner });
+				seen.push([reply.status, (await reply.json()).code]);
+			}
+			return seen;
+		}, { kv });
+		assert.deepEqual(statuses.map(([status]) => status), [200, 409]);
+		assert.equal(statuses[1][1], 'last_workspace');
+		const survivors = mock.rows('osionos_workspaces').filter((row) => row.owner_id === OWNER && !row.pending_delete_at);
+		assert.ok(survivors.length >= 1, 'the owner keeps a live workspace');
+	});
+
+	it('answers 409 owner_changed and marks nothing when the owner changes between the check and the mark', async () => {
+		const before = (mock, url) => {
+			if (url.includes('osionos_workspace_mark_delete')) mock.rows('osionos_workspaces').find((row) => row.id === WS).owner_id = MEMBER;
+		};
+		const result = await remove('owner', { sudo: true, before });
+		assert.equal(result.status, 409, result.text);
+		assert.equal(result.body.code, 'owner_changed');
+		assert.equal(result.workspace.pending_delete_at, undefined);
+	});
+
+	it('re-stamps a workspace whose grace passed with no sweep, and refuses one still inside it', async () => {
+		const stale = world();
+		Object.assign(stale.osionos_workspaces[0], { pending_delete_at: '2026-09-01T00:00:00.000Z', delete_after: '2026-09-15T00:00:00.000Z' });
+		const again = await remove('owner', { sudo: true, seed: stale });
+		assert.equal(again.status, 200, again.text);
+		assert.ok(Date.parse(again.workspace.delete_after) > Date.now() + 13 * DAY_MS);
+		const live = world();
+		Object.assign(live.osionos_workspaces[0], { pending_delete_at: '2026-10-01T00:00:00.000Z', delete_after: new Date(Date.now() + 3 * DAY_MS).toISOString() });
+		const inside = await remove('owner', { sudo: true, seed: live });
+		assert.equal(inside.status, 409, inside.text);
+		assert.equal(inside.body.code, 'already_pending_delete');
 	});
 
 	it('is limited to 5 an hour and refuses a second delete of the same workspace', async () => {
@@ -168,6 +224,17 @@ describe('POST /api/workspaces/:id/cancel-delete', () => {
 		assert.deepEqual([result.body.ok, result.body.cancelled], [true, true]);
 		assert.equal(result.workspace.pending_delete_at, null);
 		assert.equal(result.workspace.delete_after, null);
+		const patch = result.mock.calls.find((entry) => entry.table === 'osionos_workspaces' && entry.method === 'PATCH');
+		assert.equal(patch.params.get('pending_delete_at'), 'not.is.null');
+	});
+
+	it('answers 409 not_pending_delete when another cancel lands between the read and the write', async () => {
+		const before = (mock, url, init) => {
+			if (init.method === 'PATCH') mock.rows('osionos_workspaces').find((row) => row.id === WS).pending_delete_at = null;
+		};
+		const result = await call('owner', 'POST', '/cancel-delete', { sudo: true, seed: pending(future()), before });
+		assert.equal(result.status, 409, result.text);
+		assert.equal(result.body.code, 'not_pending_delete');
 	});
 
 	for (const [label, actor, sudo, seed, status, code] of [
@@ -210,6 +277,32 @@ describe('POST /api/workspaces/:id/leave', () => {
 		assert.equal(result.status, 409, result.text);
 		assert.equal(result.body.code, 'is_owner');
 		assert.equal(ownerRows(result.members).length, 1);
+	});
+
+	it('does not remove a member who became the owner after the read (409 is_owner)', async () => {
+		const before = (mock, url, init) => {
+			if (init.method === 'DELETE' && url.includes('osionos_workspace_members')) {
+				mock.rows('osionos_workspace_members').find((row) => row.user_id === MEMBER).role = 'owner';
+			}
+		};
+		const result = await leave('member', { before });
+		assert.equal(result.status, 409, result.text);
+		assert.equal(result.body.code, 'is_owner');
+		assert.ok(result.members.some((row) => row.user_id === MEMBER), 'the new owner keeps their row');
+	});
+
+	it('drops a share rule whose key carries an upper-case user id', async () => {
+		const seed = world();
+		seed.osionos_share_rules[0].target_key = `user:${MEMBER.toUpperCase()}:`;
+		const result = await leave('member', { seed });
+		assert.equal(result.status, 200, result.text);
+		assert.deepEqual(result.mock.rows('osionos_share_rules').map((row) => row.id), ['r2', 'r3']);
+	});
+
+	it('answers an unknown workspace id like a non-member, not 404 workspace_not_found', async () => {
+		const result = await leave('stranger', { id: 'f0f0f0f0-6666-4666-8666-f0f0f0f0f0f0' });
+		assert.equal(result.status, 404, result.text);
+		assert.equal(result.body.code, 'not_a_member');
 	});
 
 	it('answers a non-member 404 not_a_member and removes nothing', async () => {
@@ -260,11 +353,11 @@ describe('POST /api/workspaces/:id/members/transfer-ownership', () => {
 		assert.equal(result.workspace.owner_id, OWNER);
 	});
 
-	for (const actor of ['admin', 'member', 'stranger']) {
-		it(`refuses ${actor} with 403 forbidden`, async () => {
+	for (const [actor, status, code] of [['admin', 403, 'forbidden'], ['member', 403, 'forbidden'], ['stranger', 404, 'workspace_not_found']]) {
+		it(`refuses ${actor} with ${status} ${code}`, async () => {
 			const result = await transfer(actor, ADMIN, { sudo: true });
-			assert.equal(result.status, 403, result.text);
-			assert.equal(result.body.code, 'forbidden');
+			assert.equal(result.status, status, result.text);
+			assert.equal(result.body.code, code);
 			assert.equal(result.workspace.owner_id, OWNER);
 			assert.equal(result.text.includes(OTHER_WS), false);
 		});
@@ -278,6 +371,16 @@ describe('POST /api/workspaces/:id/members/transfer-ownership', () => {
 			assert.equal(result.mock.calls.some((entry) => entry.table === TRANSFER_RPC), false);
 		});
 	}
+
+	it('refuses a workspace scheduled for deletion with 409 pending_delete and never calls the function', async () => {
+		const seed = world();
+		Object.assign(seed.osionos_workspaces[0], { pending_delete_at: '2026-10-01T00:00:00.000Z', delete_after: new Date(Date.now() + 5 * DAY_MS).toISOString() });
+		const result = await transfer('owner', MEMBER, { sudo: true, seed });
+		assert.equal(result.status, 409, result.text);
+		assert.equal(result.body.code, 'pending_delete');
+		assert.equal(result.workspace.owner_id, OWNER);
+		assert.equal(result.mock.calls.some((entry) => entry.table === TRANSFER_RPC), false);
+	});
 
 	it('answers 409 transfer_conflict when the function refuses under its locks', async () => {
 		const result = await transfer('owner', MEMBER, { sudo: true, mockOptions: { rpc: { osionos_workspace_transfer_ownership: () => false } } });
