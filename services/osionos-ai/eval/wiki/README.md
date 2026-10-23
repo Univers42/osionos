@@ -137,3 +137,11 @@ node services/osionos-ai/eval/wiki/golden.mjs --pages pages.jsonl --articles /da
   --llm-url http://<llama.cpp>:8080 --model-label "<model, quant, gguf sha256>"   # pages.jsonl: see the header of golden.mjs
 node --test services/osionos-ai/eval/wiki/golden.test.mjs
 ```
+
+## The golden set
+
+200 questions: 160 answerable / 40 unanswerable. Seed 42. LLM-drafted, 0 human-validated. Drafting model:
+Qwen3-4B-Instruct-2507 Q4_K_M GGUF, sha256 `3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597`.
+Dropped and resampled: 361 for naming the article title, 4 for copying 7 consecutive words, 29 pages with no
+usable section. Caveat: another imported article may still mention the subject of an "unanswerable" question,
+so unanswerable is approximate. See [RESULTS-rag.md](RESULTS-rag.md).
