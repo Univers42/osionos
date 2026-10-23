@@ -104,6 +104,31 @@ export async function revokeToken(db: Pool, userId: string, tokenId: string): Pr
 	return result.rows[0]?.revoked === true;
 }
 
+/**
+ * The state of a token at decision time: what the re-check reads.
+ *
+ * It is not `resolveToken`: a decision must TELL a revoked or expired token
+ * apart from a missing one in the same way (all three expire the approval), and
+ * it never touches `last_used_at` — the decision is not a call of the agent.
+ */
+export interface TokenState extends QueryResultRow {
+	id: string;
+	user_id: string;
+	name: string;
+	workspace_ids: string[];
+	expires_at: Date;
+	revoked_at: Date | null;
+}
+
+/** One token by id, or null when it does not exist (any more). */
+export async function getTokenState(db: Pool, tokenId: string): Promise<TokenState | null> {
+	const result = await db.query<TokenState>(
+		'select id, user_id, name, workspace_ids, expires_at, revoked_at from public.ai_access_tokens where id = $1::uuid limit 1',
+		[tokenId],
+	);
+	return result.rows[0] ?? null;
+}
+
 /** The tokens of a user, the newest first. The hash is not among them. */
 export async function listTokens(db: Pool, userId: string): Promise<TokenRow[]> {
 	const result = await db.query<TokenRow>(
