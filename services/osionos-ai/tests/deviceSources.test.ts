@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import type { Pool } from 'pg';
-import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
-import { startHarness } from './harness.ts';
+import { memberTokenFor as tokenFor, startHarness } from './harness.ts';
 import { startMockEmbedder } from './mockEmbed.ts';
 import { Seeds, USER_A, USER_B, USER_C, WORKSPACE_A, WORKSPACE_B, vectorOf } from './retrievalSeed.ts';
 
@@ -14,16 +13,6 @@ process.env.OSIONOS_AI_EMBED_MODEL = 'intfloat/multilingual-e5-small';
 
 const harness = await startHarness();
 const db: Pool = harness.app.db;
-const SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
-
-function tokenFor(userId: string, workspaceId: string, members: string[] = []): string {
-	return signAppSessionToken({
-		payload: { subject: userId, provider: 'test' },
-		workspace: { _id: workspaceId },
-		config: { appSessionSecret: SECRET, sessionTtlSeconds: 3600 },
-		memberWorkspaces: members.map((_id) => ({ _id, role: 'member' })),
-	}).token;
-}
 
 const QUERY = 'zorblax quux';
 
