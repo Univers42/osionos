@@ -128,6 +128,16 @@ export interface Harness {
 /** The secret the tokens are signed with. */
 const APP_SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
 
+/** A token that carries the member workspaces, the way the bridge mints one. */
+export function memberTokenFor(userId: string, workspaceId: string, members: string[] = []): string {
+	return signAppSessionToken({
+		payload: { subject: userId, provider: 'test' },
+		workspace: { _id: workspaceId },
+		config: { appSessionSecret: APP_SECRET, sessionTtlSeconds: 3600 },
+		memberWorkspaces: members.map((_id) => ({ _id, role: 'member' })),
+	}).token;
+}
+
 /** The options of the harness: the upstream of the service may be another one. */
 export interface HarnessOptions {
 	/**

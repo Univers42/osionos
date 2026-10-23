@@ -48,6 +48,10 @@ const envSchema = z.object({
 	// the most expensive read of the service, and it has its own budget so a
 	// client that hammers it cannot spend the budget of the runs.
 	OSIONOS_AI_RELATED_PER_MINUTE: z.coerce.number().int().positive().default(60),
+	// The window of the device-run sources: the chunks a device run would have
+	// quoted, served on the run's own access path. Its own budget, so a client
+	// that searches cannot spend the budget of the runs or of the related reads.
+	OSIONOS_AI_SOURCES_PER_MINUTE: z.coerce.number().int().positive().default(30),
 	// The KEK of the users' own connections: the base64 of exactly 32 bytes.
 	// Without it the service serves the platform connection only, and the
 	// creation of a connection answers 503 connections_unavailable.
@@ -163,6 +167,7 @@ const rawEnv = {
 	OSIONOS_AI_PLATFORM_DAILY_MICROUSD: process.env.OSIONOS_AI_PLATFORM_DAILY_MICROUSD,
 	OSIONOS_AI_RUNS_PER_MINUTE: process.env.OSIONOS_AI_RUNS_PER_MINUTE,
 	OSIONOS_AI_RELATED_PER_MINUTE: process.env.OSIONOS_AI_RELATED_PER_MINUTE,
+	OSIONOS_AI_SOURCES_PER_MINUTE: process.env.OSIONOS_AI_SOURCES_PER_MINUTE,
 	OSIONOS_AI_KEK: firstEnv('OSIONOS_AI_KEK'),
 	OSIONOS_AI_KEK_ID: process.env.OSIONOS_AI_KEK_ID,
 	OSIONOS_AI_DEV_ENDPOINT_HOSTS: process.env.OSIONOS_AI_DEV_ENDPOINT_HOSTS,
@@ -303,6 +308,8 @@ export interface AiServiceConfig {
 	runsPerMinute: number;
 	/** The window of the related reads: the calls per minute of one user. */
 	relatedPerMinute: number;
+	/** The window of the device-run sources: the calls per minute of one user. */
+	sourcesPerMinute: number;
 	/** The base64 of the 32 bytes of the KEK, or nothing when it is not set. */
 	kek?: string;
 	/** The name of the KEK: the rows carry it, so a rotation is possible. */
@@ -389,6 +396,7 @@ export const config: AiServiceConfig = Object.freeze({
 	platformDailyMicroUsd: parsed.data.OSIONOS_AI_PLATFORM_DAILY_MICROUSD,
 	runsPerMinute: parsed.data.OSIONOS_AI_RUNS_PER_MINUTE,
 	relatedPerMinute: parsed.data.OSIONOS_AI_RELATED_PER_MINUTE,
+	sourcesPerMinute: parsed.data.OSIONOS_AI_SOURCES_PER_MINUTE,
 	kek: parsed.data.OSIONOS_AI_KEK,
 	kekId: parsed.data.OSIONOS_AI_KEK_ID,
 	devEndpointHosts: parseDevHosts(parsed.data.OSIONOS_AI_DEV_ENDPOINT_HOSTS),
