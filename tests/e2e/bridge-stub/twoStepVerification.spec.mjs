@@ -19,7 +19,7 @@ import { test, expect } from "@playwright/test";
 
 import { region } from "../support/settingsHelpers.mjs";
 import { openProfile } from "../support/sessionsStub.mjs";
-import { OTPAUTH, RECOVERY_CODES, passkeyRow, stubTwoStep } from "../support/twoStepStub.mjs";
+import { NEW_TOKEN, OTPAUTH, RECOVERY_CODES, passkeyRow, stubTwoStep } from "../support/twoStepStub.mjs";
 
 const dialog = (page) => page.getByRole("dialog", { name: "Two-step verification" });
 const openModal = (page, name) => region(page).getByRole("button", { name, exact: true }).click();
@@ -55,6 +55,27 @@ test.describe("Two-step verification modal (bridge stub)", () => {
     await openModal(page, "Manage");
     await expect(dialog(page).getByText(RECOVERY_CODES[0])).toHaveCount(0);
     await expect(dialog(page)).toContainText("Two-step verification is on");
+  });
+
+  test("the token a verify returns replaces the saved one, so a reload keeps the upgraded sign-in", async ({ page, baseURL }) => {
+    await stubTwoStep(page);
+    await openProfile(page, baseURL, { bridgeToken: "osionos_v1.e2e-old.sig" });
+    const userId = await page.evaluate(() => {
+      const { activeUserId, sessions } = globalThis.__playgroundUserStore.getState();
+      const record = { session: sessions[activeUserId], persona: { id: activeUserId }, expiresAt: "2099-01-01T00:00:00.000Z" };
+      localStorage.setItem("osionos:bridge-session", JSON.stringify({ [activeUserId]: record }));
+      return activeUserId;
+    });
+    await openModal(page, "Add verification method");
+    await dialog(page).getByRole("button", { name: "Set up authenticator app" }).click();
+    await dialog(page).getByLabel("6-digit code").fill("123456");
+    await dialog(page).getByRole("button", { name: "Verify", exact: true }).click();
+    await expect(dialog(page).getByRole("list", { name: "Recovery codes" })).toBeVisible();
+    const tokens = await page.evaluate((id) => ({
+      saved: JSON.parse(localStorage.getItem("osionos:bridge-session"))[id].session.accessToken,
+      live: globalThis.__playgroundUserStore.getState().sessions[id].accessToken,
+    }), userId);
+    expect(tokens).toEqual({ saved: NEW_TOKEN, live: NEW_TOKEN });
   });
 
   test("the preferred method orders the options", async ({ page, baseURL }) => {
