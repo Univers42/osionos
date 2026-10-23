@@ -34,12 +34,11 @@ import { revokeAllPats } from './bridge-pat-store.mjs';
 import { accountError, callerSession, clientMetaOf, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { sendJson } from './bridge-social-core.mjs';
-import { CODES_TABLE, TOTP_TABLE, assertNotBlocked, clearFailures, countAttempt, issueAal2, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
+import { CODES_TABLE, TOTP_TABLE, VERIFY_LIMIT, assertNotBlocked, clearFailures, countAttempt, issueAal2, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
 import { recoveryRemaining } from './bridge-account-mfa-recovery.mjs';
 import { matchStep, newSecret, openSecret, otpauthUrl, sealSecret } from './bridge-account-mfa-totp.mjs';
 
 const ISSUER = 'osionos';
-export const VERIFY_LIMIT = { limit: 30, windowMs: 60_000 };
 
 const rowFilter = (userId, extra = {}) => `${new URLSearchParams({ user_id: `eq.${userId}`, ...extra })}`;
 

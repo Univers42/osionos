@@ -28,6 +28,8 @@ import { writeAudit } from './bridge-guard.mjs';
 
 export const TOTP_TABLE = 'osionos_mfa_totp';
 export const CODES_TABLE = 'osionos_mfa_recovery_codes';
+/** One verify bucket for TOTP and recovery codes: both answer the same second-factor prompt. */
+export const VERIFY_LIMIT = { limit: 30, windowMs: 60_000 };
 const FAIL_WINDOW_MS = 3_600_000;
 const BLOCK_AFTER = 5;
 const BLOCK_BASE_MS = 30_000;
