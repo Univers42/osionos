@@ -34,7 +34,9 @@ export type ForYouWhy =
       title: string | null;
       event: "liked" | "commented" | "shared" | "saved";
     }
-  | { kind: "for_you" };
+  | { kind: "for_you" }
+  // The non-personalised order, served when "For you" cannot personalise (C48).
+  | { kind: "popular" };
 
 /** One page of the slate, with the reason it is there. */
 export interface ForYouItem {

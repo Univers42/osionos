@@ -40,6 +40,7 @@ function becauseText(why: Extract<ForYouWhy, { kind: "because" }>): string {
  * @returns the sentence, ready to be shown
  */
 export function whyText(why: ForYouWhy | null | undefined): string {
+  if (why?.kind === "popular") return "Popular with readers";
   if (!why || why.kind !== "because") return "Suggested from your activity";
   return becauseText(why);
 }
