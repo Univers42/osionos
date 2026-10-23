@@ -376,6 +376,18 @@ describe('the README projected on GET /api/users/:username', () => {
 		assert.doesNotMatch(first.text + second.text, /Hello|readme/i);
 	});
 
+	it('leaves no binding to an owner-only field in the card, and keeps an allowed one', async (t) => {
+		const page = readmePage({ content: [
+			{ id: 'b1', type: 'heading_1', content: '', recordRef: '$record', fieldBind: 'email' },
+			{ id: 'b2', type: 'paragraph', content: '', recordRef: '$record', fieldBind: 'headline' },
+		] });
+		const { response } = await lookupAs(t, USER_B, withReadme(page));
+		const [denied, allowed] = response.body.readme.blocks;
+		assert.deepEqual(denied, { id: 'b1', type: 'paragraph', content: '' });
+		assert.equal(allowed.fieldBind, 'headline');
+		assert.doesNotMatch(response.text, /"email"/);
+	});
+
 	it('serves the card without a README when the page read fails', async (t) => {
 		const { base, config } = await world(t, {
 			rows: withReadme(), fail: (call) => (call.table === 'osionos_pages' ? { status: 500, body: {} } : null),
