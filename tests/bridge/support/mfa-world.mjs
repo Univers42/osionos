@@ -78,10 +78,13 @@ export function createMfaStore({ totp = [], recovery = [] } = {}) {
 		if (method === 'GET' && store.frozenReads && table === TOTP_TABLE) return json(store.frozenReads.map((row) => project(row, parsed.searchParams.get('select'))));
 		if (method === 'GET') return json(hits.map((row) => project(row, parsed.searchParams.get('select'))));
 		if (method === 'POST') {
-			const duplicate = rows.some((row) => (table === TOTP_TABLE ? row.user_id === call.body.user_id : row.user_id === call.body.user_id && row.code_hmac === call.body.code_hmac));
+			// One statement: a duplicate anywhere in the batch rejects the whole request, as in Postgres.
+			const batch = Array.isArray(call.body) ? call.body : [call.body];
+			const same = (left, right) => left.user_id === right.user_id && (table === TOTP_TABLE || left.code_hmac === right.code_hmac);
+			const duplicate = batch.some((item, index) => rows.some((row) => same(row, item)) || batch.slice(0, index).some((earlier) => same(earlier, item)));
 			if (duplicate) return json({ code: '23505', message: 'duplicate key value violates unique constraint' }, 409);
-			rows.push({ ...call.body });
-			return answer([call.body]);
+			rows.push(...batch.map((item) => ({ ...item })));
+			return answer(batch);
 		}
 		if (method === 'PATCH') {
 			for (const row of hits) Object.assign(row, call.body);

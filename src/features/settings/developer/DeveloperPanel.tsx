@@ -109,7 +109,7 @@ export const DeveloperPanel: React.FC = () => {
         </PanelStatus>
         <p className="text-sm text-[var(--osio-fg-muted)]">
           Tokens for remote AI agents are listed under{" "}
-          <button type="button" className="underline" onClick={() => openSettings("ai_connections", "ai-access-tokens")}>AI connections</button>.
+          <button type="button" className="rounded-[var(--osio-control-radius)] underline" onClick={() => openSettings("ai_connections", "ai-access-tokens")}>AI connections</button>.
         </p>
       </Section>
       {creating && <CreateTokenModal catalog={catalog} onClose={() => setCreating(false)} onCreated={(token) => setTokens((current) => [token, ...current])} />}

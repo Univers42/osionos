@@ -28,6 +28,7 @@ import { createAccountProfileRoutes } from './bridge-account-profile.mjs';
 import { createAccountStatusRoutes } from './bridge-account-status.mjs';
 import { createAccountSudoRoutes } from './bridge-account-sudo.mjs';
 import { createPatRoutes } from './bridge-account-tokens.mjs';
+import { createAccountKeysRoutes } from './bridge-account-keys.mjs';
 import { createPreferencesRoutes } from './bridge-preferences.mjs';
 import { createSessionsRoutes } from './bridge-sessions.mjs';
 import { createPublishedPagesRoutes } from './bridge-account-published-pages.mjs';
@@ -39,6 +40,7 @@ import { createAdminUsersRoutes } from './bridge-account-users.mjs';
 import { createAdminAuditRoutes } from './bridge-account-audit.mjs';
 import { createAdminModerationRoutes } from './bridge-account-moderation.mjs';
 import { createMfaRoutes } from './bridge-account-mfa.mjs';
+import { createMfaRecoveryRoutes } from './bridge-account-mfa-recovery.mjs';
 
 export function createAccountHandler(deps) {
 	const modules = [
@@ -53,11 +55,13 @@ export function createAccountHandler(deps) {
 		createSelfViewsRoutes(deps),
 		createWorkspaceSettingsRoutes(deps),
 		createPatRoutes(deps),
+		createAccountKeysRoutes(deps),
 		createAdminUsersRoutes(deps),
 		createAdminAuditRoutes(deps),
 		createAdminModerationRoutes(deps),
 		createAccountStatusRoutes(deps),
 		createMfaRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env, fetchImpl: deps.mfaFetch ?? fetch, now: deps.mfaNow ?? null }),
+		createMfaRecoveryRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env, now: deps.mfaNow ?? null }),
 	];
 	return async function handleAccountRequest(url, request, response) {
 		for (const module of modules) {
