@@ -208,6 +208,29 @@ export async function workspaceMembership(config, fetchImpl, userId, workspaceId
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
+/** One osionos_workspaces row (id, owner_id, name) or null. */
+export async function fetchWorkspace(config, fetchImpl, workspaceId) {
+	const rows = await rest(config, fetchImpl, `osionos_workspaces?id=eq.${workspaceId}&select=id,owner_id,name&limit=1`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
+/**
+ * The owner, or a member whose row says `admin`. A plain member is a 403; a user with no
+ * relation to the workspace gets the same 404 as a workspace that does not exist, so the
+ * answer is no oracle for which workspace ids are real.
+ */
+export async function requireWorkspaceAdmin(config, fetchImpl, userId, workspaceId) {
+	const workspace = await fetchWorkspace(config, fetchImpl, workspaceId);
+	if (!workspace) throw httpError('Workspace not found.', 404);
+	if (String(workspace.owner_id).toLowerCase() === String(userId).toLowerCase()) return { workspace, role: 'owner' };
+	const membership = await workspaceMembership(config, fetchImpl, userId, workspaceId);
+	if (!membership) throw httpError('Workspace not found.', 404);
+	if (String(membership.role ?? '').toLowerCase() !== 'admin') {
+		throw httpError('Only the workspace owner or an admin may do this.', 403);
+	}
+	return { workspace, role: 'admin', membership };
+}
+
 /**
  * The ids in `workspaceIds` the session belongs to: its own token workspaces plus its
  * osionos_workspace_members rows (lower-cased). Throws on a backend failure, so a caller
