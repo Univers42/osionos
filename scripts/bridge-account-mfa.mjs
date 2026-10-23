@@ -34,11 +34,11 @@ import { revokeAllPats } from './bridge-pat-store.mjs';
 import { accountError, callerSession, clientMetaOf, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { sendJson } from './bridge-social-core.mjs';
-import { CODES_TABLE, TOTP_TABLE, assertNotBlocked, clearFailures, countAttempt, issueAal2, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
+import { CODES_TABLE, TOTP_TABLE, VERIFY_LIMIT, assertNotBlocked, clearFailures, countAttempt, issueAal2, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
+import { recoveryRemaining } from './bridge-account-mfa-recovery.mjs';
 import { matchStep, newSecret, openSecret, otpauthUrl, sealSecret } from './bridge-account-mfa-totp.mjs';
 
 const ISSUER = 'osionos';
-const VERIFY_LIMIT = { limit: 30, windowMs: 60_000 };
 
 const rowFilter = (userId, extra = {}) => `${new URLSearchParams({ user_id: `eq.${userId}`, ...extra })}`;
 
@@ -77,7 +77,8 @@ function upgraded(ctx, session, atMs, response) {
 async function status(ctx, request, response) {
 	const session = callerSession(request, ctx.config, verifyStepUp);
 	const row = await readFactor(ctx.pg, session.userId);
-	return sendJson(response, 200, { enabled: row?.status === 'verified', methods: ['totp'], aal: session.aal }, ctx.config);
+	const remaining = await recoveryRemaining(ctx.pg, session.userId);
+	return sendJson(response, 200, { enabled: row?.status === 'verified', methods: ['totp'], recoveryRemaining: remaining, aal: session.aal }, ctx.config);
 }
 
 async function enroll(ctx, request, response) {
@@ -153,8 +154,9 @@ async function disable(ctx, request, response) {
 	await writeAudit(ctx.pg, { session, meta: clientMetaOf(request, ctx.config), eventType: 'account.2fa.disable', details: { method: 'totp' } });
 	await cutAllSessions(ctx, session.userId, atMs);
 	await guardedWrite(async () => {
-		await ctx.pg.asService().del(`${TOTP_TABLE}?${rowFilter(session.userId)}`);
+		// Codes first: a failure between the two leaves a factor without codes, never codes without a factor.
 		await ctx.pg.asService().del(`${CODES_TABLE}?${rowFilter(session.userId)}`);
+		await ctx.pg.asService().del(`${TOTP_TABLE}?${rowFilter(session.userId)}`);
 	});
 	await redateSession(ctx, session, atMs);
 	return upgraded(ctx, session, atMs, response);

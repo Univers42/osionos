@@ -124,7 +124,7 @@ case "${COMMAND}" in
     OSIONOS_MCP_BRIDGE_URL="${OSIONOS_MCP_BRIDGE_URL:-http://host.docker.internal:4000}" \
     OSIONOS_MCP_API_URL="${OSIONOS_MCP_API_URL:-http://host.docker.internal:4000}" \
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm -T --no-deps \
-      -e OSIONOS_MCP_BRIDGE_URL -e OSIONOS_MCP_API_URL \
+      -e OSIONOS_MCP_BRIDGE_URL -e OSIONOS_MCP_API_URL -e OSIONOS_MCP_TOKEN \
       playground bash scripts/docker-run.sh mcp-claude "$@"
     ;;
   *)
