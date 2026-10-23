@@ -98,11 +98,43 @@ describe('the builder plan', () => {
 		}
 	});
 
-	it('C151 a board without a select or status property, a calendar without a date property, and a chart are refused', async () => {
+	it('C151 a board without a select or status property, a calendar without a date property are refused', async () => {
 		const title = { name: 'Name', type: 'title' };
 		await assertRefused(withDatabase({ rows: [], properties: [title], views: [{ type: 'board', name: 'Board' }] }), 'board');
 		await assertRefused(withDatabase({ rows: [], properties: [title], views: [{ type: 'calendar', name: 'Cal' }] }), 'calendar');
-		await assertRefused(withDatabase({ views: [{ type: 'chart', name: 'Chart' }] }), 'chart');
+	});
+
+	it('C151 a chart without xAxis is refused', async () => {
+		await assertRefused(withDatabase({ views: [{ type: 'chart', name: 'Chart' }] }), 'chart without xAxis');
+	});
+
+	it('C151 a chart with xAxis naming no property is refused', async () => {
+		await assertRefused(withDatabase({ rows: [], properties: [{ name: 'Name', type: 'title' }], views: [{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Missing' }] }), 'chart unknown xAxis');
+	});
+
+	it('C151 a chart with sum/average aggregation without yAxis is refused', async () => {
+		await assertRefused(withDatabase({ rows: [], properties: [{ name: 'Name', type: 'title' }, { name: 'Cat', type: 'select', options: ['A'] }], views: [{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Cat', aggregation: 'sum' }] }), 'chart sum without yAxis');
+		await assertRefused(withDatabase({ rows: [], properties: [{ name: 'Name', type: 'title' }, { name: 'Cat', type: 'select', options: ['A'] }], views: [{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Cat', aggregation: 'average' }] }), 'chart average without yAxis');
+	});
+
+	it('C151 a chart with sum/average aggregation with non-number yAxis is refused', async () => {
+		await assertRefused(withDatabase({ rows: [], properties: [{ name: 'Name', type: 'title' }, { name: 'Cat', type: 'select', options: ['A'] }, { name: 'Txt', type: 'text' }], views: [{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Cat', aggregation: 'sum', yAxis: 'Txt' }] }), 'chart sum with text yAxis');
+	});
+
+	it('C151 a chart with valid xAxis and count aggregation is stored', async () => {
+		const before = await rowCount();
+		const properties = [{ name: 'Name', type: 'title' }, { name: 'Stage', type: 'select', options: ['A'] }];
+		const events = await ask(withDatabase({ rows: [], properties, views: [{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Stage' }] }));
+		assert.equal(asked(events).length, 1);
+		assert.equal(await rowCount(), before + 1);
+	});
+
+	it('C151 a chart with valid xAxis, sum aggregation and number yAxis is stored', async () => {
+		const before = await rowCount();
+		const properties = [{ name: 'Name', type: 'title' }, { name: 'Cat', type: 'select', options: ['A'] }, { name: 'Val', type: 'number' }];
+		const events = await ask(withDatabase({ rows: [], properties, views: [{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Cat', aggregation: 'sum', yAxis: 'Val' }] }));
+		assert.equal(asked(events).length, 1);
+		assert.equal(await rowCount(), before + 1);
 	});
 
 	it('C151 a board with a select property and a calendar with a date property are stored', async () => {
@@ -113,8 +145,137 @@ describe('the builder plan', () => {
 		assert.equal(await rowCount(), before + 1);
 	});
 
-	it('C152 a dashboard view is refused', async () => {
-		await assertRefused(withDatabase({ views: [{ type: 'dashboard', name: 'Dash' }] }), 'dashboard');
+	it('C151 a dashboard with valid cells over same database views is stored', async () => {
+		const before = await rowCount();
+		const properties = [{ name: 'Name', type: 'title' }, { name: 'Stage', type: 'status', options: ['Open', 'Won'] }, { name: 'Val', type: 'number' }];
+		const events = await ask(withDatabase({
+			rows: [],
+			properties,
+			views: [
+				{ type: 'table', name: 'All' },
+				{ type: 'board', name: 'Board' },
+				{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Stage' },
+				{ type: 'dashboard', name: 'Dash', cells: [
+					{ view: 'All' },
+					{ view: 'Board', stat: { fn: 'count' } },
+					{ view: 'Chart', stat: { fn: 'sum', property: 'Val' } }
+				] }
+			]
+		}));
+		assert.equal(asked(events).length, 1);
+		assert.equal(await rowCount(), before + 1);
+	});
+
+	it('C151 a dashboard without cells is refused', async () => {
+		await assertRefused(withDatabase({ views: [{ type: 'dashboard', name: 'Dash', cells: [] }] }), 'dashboard no cells');
+	});
+
+	it('C151 a dashboard with 7 cells is refused', async () => {
+		await assertRefused(withDatabase({
+			views: [{ type: 'dashboard', name: 'Dash', cells: [
+				{ view: 'A' }, { view: 'B' }, { view: 'C' }, { view: 'D' }, { view: 'E' }, { view: 'F' }, { view: 'G' }
+			] }]
+		}), 'dashboard 7 cells');
+	});
+
+	it('C165 a dashboard cell naming a view of another database is refused', async () => {
+		const plan = goodPlan() as { items: Json[] };
+		plan.items.push({
+			kind: 'database',
+			key: 'other',
+			title: 'Other',
+			properties: [{ name: 'Name', type: 'title' }],
+			views: [{ type: 'table', name: 'OtherView' }],
+			rows: [],
+		});
+		plan.items[1] = {
+			...plan.items[1],
+			properties: [{ name: 'Name', type: 'title' }],
+			views: [
+				{ type: 'table', name: 'All' },
+				{ type: 'dashboard', name: 'Dash', cells: [{ view: 'OtherView' }] }
+			],
+			rows: [],
+		};
+		await assertRefused(plan, 'dashboard cross-database cell');
+	});
+
+	it('C165 a dashboard cell naming a dashboard view is refused', async () => {
+		await assertRefused(withDatabase({
+			views: [
+				{ type: 'table', name: 'All' },
+				{ type: 'dashboard', name: 'Dash1', cells: [{ view: 'All' }] },
+				{ type: 'dashboard', name: 'Dash2', cells: [{ view: 'Dash1' }] }
+			]
+		}), 'dashboard cell references dashboard');
+	});
+
+	it('C151 two views with the same name in a database is refused', async () => {
+		await assertRefused(withDatabase({
+			views: [
+				{ type: 'table', name: 'All' },
+				{ type: 'board', name: 'All' }
+			]
+		}), 'duplicate view name');
+	});
+
+	it('C151 a database with 7 views is refused', async () => {
+		await assertRefused(withDatabase({
+			properties: [{ name: 'Name', type: 'title' }, { name: 'Stage', type: 'status', options: ['A'] }],
+			views: [
+				{ type: 'table', name: 'V1' },
+				{ type: 'board', name: 'V2' },
+				{ type: 'calendar', name: 'V3' },
+				{ type: 'list', name: 'V4' },
+				{ type: 'gallery', name: 'V5' },
+				{ type: 'chart', name: 'V6', chartType: 'vertical_bar', xAxis: 'Stage' },
+				{ type: 'dashboard', name: 'V7', cells: [{ view: 'V1' }] }
+			]
+		}), '7 views');
+	});
+
+	it('C151 a database with two dashboards is refused', async () => {
+		await assertRefused(withDatabase({
+			properties: [{ name: 'Name', type: 'title' }, { name: 'Stage', type: 'status', options: ['A'] }],
+			views: [
+				{ type: 'table', name: 'All' },
+				{ type: 'dashboard', name: 'Dash1', cells: [{ view: 'All' }] },
+				{ type: 'dashboard', name: 'Dash2', cells: [{ view: 'All' }] }
+			]
+		}), 'two dashboards');
+	});
+
+	it('C151 a dashboard stat with sum/avg/min/max without property is refused', async () => {
+		await assertRefused(withDatabase({
+			properties: [{ name: 'Name', type: 'title' }, { name: 'Stage', type: 'status', options: ['A'] }],
+			views: [
+				{ type: 'table', name: 'All' },
+				{ type: 'dashboard', name: 'Dash', cells: [{ view: 'All', stat: { fn: 'sum' } }] }
+			]
+		}), 'stat sum without property');
+	});
+
+	it('C151 a dashboard stat with sum/avg/min/max on non-number property is refused', async () => {
+		await assertRefused(withDatabase({
+			properties: [{ name: 'Name', type: 'title' }, { name: 'Stage', type: 'status', options: ['A'] }],
+			views: [
+				{ type: 'table', name: 'All' },
+				{ type: 'dashboard', name: 'Dash', cells: [{ view: 'All', stat: { fn: 'sum', property: 'Stage' } }] }
+			]
+		}), 'stat sum on non-number');
+	});
+
+	it('C151 a dashboard stat with count needs no property', async () => {
+		const before = await rowCount();
+		const events = await ask(withDatabase({
+			properties: [{ name: 'Name', type: 'title' }, { name: 'Stage', type: 'status', options: ['A'] }],
+			views: [
+				{ type: 'table', name: 'All' },
+				{ type: 'dashboard', name: 'Dash', cells: [{ view: 'All', stat: { fn: 'count' } }] }
+			]
+		}));
+		assert.equal(asked(events).length, 1);
+		assert.equal(await rowCount(), before + 1);
 	});
 
 	it('C154 a database_full_page block is refused', async () => {
@@ -147,6 +308,26 @@ describe('the builder plan', () => {
 		assert.ok(!text.includes('src'), 'no src stored');
 		assert.ok(!text.includes('buttonConfig'), 'no buttonConfig stored');
 		assert.ok(!text.includes('https://x'));
+	});
+
+	it('C151 unknown keys in dashboard cells are stripped', async () => {
+		const plan = goodPlan() as { items: Json[] };
+		plan.items[1] = {
+			...plan.items[1],
+			properties: [{ name: 'Name', type: 'title' }, { name: 'Stage', type: 'status', options: ['A'] }],
+			views: [
+				{ type: 'table', name: 'All' },
+				{ type: 'dashboard', name: 'Dash', cells: [{ view: 'All', url: 'https://x', webhook: 'https://y' }] }
+			],
+			rows: [],
+		};
+		const data = asked(await ask(plan))[0].data as { approvalId: string };
+		const row = await app.db.query(`select args from public.ai_approvals where id = $1`, [data.approvalId]);
+		const text = JSON.stringify(row.rows[0].args);
+		assert.ok(!text.includes('url'), 'no url stored');
+		assert.ok(!text.includes('webhook'), 'no webhook stored');
+		assert.ok(!text.includes('https://x'));
+		assert.ok(!text.includes('https://y'));
 	});
 
 	it('C164.1 a stored plan tampered with a button property is refused when re-validated', async () => {
