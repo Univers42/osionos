@@ -37,8 +37,7 @@ import { randomInt, createHmac } from 'node:crypto';
 import { accountError, callerSession, clientMetaOf, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { sendJson } from './bridge-social-core.mjs';
-import { VERIFY_LIMIT } from './bridge-account-mfa.mjs';
-import { issueAal2, assertNotBlocked, clearFailures, countAttempt, CODES_TABLE, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
+import { VERIFY_LIMIT, issueAal2, assertNotBlocked, clearFailures, countAttempt, CODES_TABLE, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
 
 const ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz';
 const HALF = 4;
