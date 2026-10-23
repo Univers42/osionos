@@ -26,6 +26,13 @@ import { handleSentimentRows } from './sentimentRows.ts';
 import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
 import { handleSkillArchive, handleSkillCreate, handleSkillsList, handleSkillUpdate } from './skills.ts';
+import {
+	handleMemoriesList,
+	handleMemoryApprove,
+	handleMemoryArchive,
+	handleMemoryEdit,
+	handleMemoryReject,
+} from './memories.ts';
 import { handleMcp } from './mcp.ts';
 import type { RouteEntry } from './types.ts';
 
@@ -133,6 +140,11 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalDecision,
 	},
+	{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/memories$/, label: '/api/ai/workspaces/:ws/memories', handle: handleMemoriesList },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/approve$/, label: '/api/ai/memories/:id/approve', handle: handleMemoryApprove },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/reject$/, label: '/api/ai/memories/:id/reject', handle: handleMemoryReject },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/archive$/, label: '/api/ai/memories/:id/archive', handle: handleMemoryArchive },
+	{ methods: ['PATCH'], pattern: /^\/api\/ai\/memories\/([^/]+)$/, label: '/api/ai/memories/:id', handle: handleMemoryEdit },
 	{
 		methods: ['POST'],
 		pattern: /^\/api\/ai\/approvals\/([^/]+)\/resume$/,
@@ -168,7 +180,6 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/sentiment/rows',
 		handle: handleSentimentRows,
 	},
-
 	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
 	...(config.patEnabled
 		? [

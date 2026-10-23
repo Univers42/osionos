@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import type { PoolClient } from 'pg';
 import type { QueryConfig, QueryResult, QueryResultRow } from 'pg';
 
 /**
@@ -75,4 +76,20 @@ export function createPool(databaseUrl: string, max = 10, queryTimeoutMs = QUERY
 		console.warn(JSON.stringify({ event: 'pool_error', code: error.name }));
 	});
 	return pool;
+}
+
+/** Runs `work` in a transaction; the client is released on every path. */
+export async function inTransaction<T>(db: Pool, work: (client: PoolClient) => Promise<T>): Promise<T> {
+	const client = await db.connect();
+	try {
+		await client.query('begin');
+		const out = await work(client);
+		await client.query('commit');
+		return out;
+	} catch (error) {
+		await client.query('rollback').catch(() => undefined);
+		throw error;
+	} finally {
+		client.release();
+	}
 }

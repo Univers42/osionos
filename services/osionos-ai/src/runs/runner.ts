@@ -13,11 +13,14 @@ import {
 	historyChars,
 	loadHistory,
 	loadPageContext,
+	memoryChars,
 	quotedPageChars,
 } from './prompt.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
 import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
+import { memoriesForRun } from '../memory/runMemories.ts';
+import { recordMemoryPins } from '../memory/repo.ts';
 import { estimateRunMicroUsd } from './estimate.ts';
 import { sourceChars } from './sources.ts';
 import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.ts';
@@ -253,6 +256,12 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		agent?.skills ?? [],
 		await workspaceSkillsForRun(db, input.user, input.workspaceId),
 	);
+	// The user's approved memories, loaded ONCE for this run and pinned on its
+	// row (C40): a continuation run loads its own, as skills do. The pin is what
+	// the run was GIVEN, recorded before it executes: a run that fails before
+	// the upstream call still lists them.
+	const memories = await memoriesForRun(db, input.user, input.workspaceId);
+	await recordMemoryPins(db, runId, memories);
 	const day = today();
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
@@ -260,7 +269,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const baseAmount = estimateRunMicroUsd(target.pricing, {
 		text,
 		historyChars: historyChars(history),
-		pageChars: quotedPageChars(context.pages),
+		pageChars: quotedPageChars(context.pages) + memoryChars(memories),
 		sourceChars: sourceChars(sources),
 		// The system prompt of THIS run: the base one, or the longer one of
 		// the agent. The reservation counts what the call really sends.
@@ -322,6 +331,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			images,
 			agent,
 			skillIndex,
+			memories,
 			workspaceId: input.workspaceId,
 		});
 	};
