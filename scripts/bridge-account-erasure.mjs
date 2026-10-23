@@ -100,13 +100,16 @@ export function createAccountErasureRunner({ config, pg, kv = null, fetchImpl = 
 	}
 
 	// A 2xx alone proves nothing: GoTrue ignores fields it does not know, so a wrong
-	// shape answers 200 and bans nobody. The effect is read back from `banned_until`.
+	// shape answers 200 and bans nobody. The effect is read back from the user it returns;
+	// v2.188.1 omits `banned_until` once lifted (`json:"banned_until,omitempty"`,
+	// internal/models/user.go:70), so an unban is "absent or null", never "=== null".
 	async function banUser(userId, banDuration) {
 		const response = await goTrue('PUT', userId, { ban_duration: banDuration });
 		if (!response.ok) throw new Error(`gotrue ${response.status}`);
 		const body = await response.json().catch(() => null);
-		const until = body?.banned_until;
-		if (banDuration === 'none' ? until !== null : !(Date.parse(until) > now())) throw new Error('gotrue ban not in effect');
+		if (body?.id !== userId) throw new Error('gotrue ban not in effect');
+		const until = body.banned_until;
+		if (banDuration === 'none' ? until != null : !(Date.parse(until) > now())) throw new Error('gotrue ban not in effect');
 	}
 
 	async function requestStillThere(userId) {
