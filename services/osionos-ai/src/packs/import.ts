@@ -68,7 +68,8 @@ function packFiles(packsDir: string): string[] {
 		const file = join(packsDir, entry.name, 'pack.json');
 		if (existsSync(file)) files.push(file);
 	}
-	return files.sort();
+	// A fixed locale: the import order must not depend on the host's.
+	return files.sort((left, right) => left.localeCompare(right, 'en'));
 }
 
 /** The sha256 of a file, in hex: the version of a document. */
