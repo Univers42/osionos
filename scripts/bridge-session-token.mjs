@@ -57,6 +57,8 @@ export const APP_SESSION_TOKEN_VERSION = 'osionos_v1';
  * @property {Record<string, string>} roles
  * @property {string | null} platformRole admin | moderator | user | guest, or null for a token minted before the claim
  * @property {boolean} isAdmin
+ * @property {1 | 2} aal the assurance level; a token without the claim is 2
+ * @property {boolean} mfaPending true while the token still owes its second factor (only with allowPendingMfa)
  * @property {Record<string, unknown>} raw
  */
 
@@ -93,12 +95,15 @@ function base64url(input) {
  * @param {AppSessionMemberWorkspace[]} [options.memberWorkspaces] the other workspaces of the user
  * @param {string | null} [options.platformRole] the platform role; it decides is_admin
  * @param {boolean} [options.isAdmin] whether the user is an administrator, for callers that pass no role
+ * @param {1 | 2} [options.aal] the assurance level to sign; absent signs no claim (a token with none counts as aal 2)
+ * @param {boolean} [options.mfaReq] true marks a token that needs a second factor before it is useful
+ * @param {number} [options.exp] an absolute expiry in seconds, for a step-up that must keep the old one
  * @returns {SignedAppSessionToken}
  */
-export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], platformRole = null, isAdmin = false }) {
+export function signAppSessionToken({ payload, workspace, config, now = Date.now(), jti = randomUUID(), memberWorkspaces = [], platformRole = null, isAdmin = false, aal, mfaReq, exp: expOverride }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const iat = Math.floor(now / 1000);
-	const exp = iat + config.sessionTtlSeconds;
+	const exp = Number.isSafeInteger(expOverride) ? expOverride : iat + config.sessionTtlSeconds;
 	const memberRoles = Object.fromEntries(memberWorkspaces.map((entry) => [entry._id, safeText(entry.role, 16) || 'member']));
 	// One source: the role names the admin, so the two claims can never disagree.
 	const role = isPlatformRole(platformRole) ? platformRole : (isAdmin === true ? 'admin' : null);
@@ -116,6 +121,9 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
 		// Milliseconds: a cut-off and a token minted in the same second must still be ordered.
 		iat_ms: Math.floor(now),
 		exp,
+		// Absent keys, not null ones: a token that needs no second factor is byte-identical to one minted before the gate.
+		...(aal === undefined ? {} : { aal }),
+		...(mfaReq === true ? { mfa_req: true } : {}),
 	};
 	const encodedPayload = base64url(JSON.stringify(tokenPayload));
 	const signature = createHmac('sha256', config.appSessionSecret).update(encodedPayload).digest('base64url');
@@ -131,9 +139,11 @@ export function signAppSessionToken({ payload, workspace, config, now = Date.now
  * @param {AppSessionConfig} config the secret, the TTL, the cut-off tracker
  * @param {number} [now] the moment of the check, in milliseconds; defaults to the bridge's clock
  *   (config.sessionCutoffs.now), then the wall clock
+ * @param {{ allowPendingMfa?: boolean }} [options] allowPendingMfa lets a token that still owes its second factor through;
+ *   only the step-up routes and sign-out pass it
  * @returns {VerifiedAppSessionToken}
  */
-export function verifyAppSessionToken(token, config, now = undefined) {
+export function verifyAppSessionToken(token, config, now = undefined, { allowPendingMfa = false } = {}) {
 	const resolvedNow = now ?? config?.sessionCutoffs?.now?.() ?? Date.now();
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const parts = safeText(token, 4096).split('.');
@@ -168,6 +178,12 @@ export function verifyAppSessionToken(token, config, now = undefined) {
 	}
 	assertSessionNotCutOff(config.sessionCutoffs, String(payload.sub).toLowerCase(), tokenIssuedAtMs(payload));
 	assertSessionNotRevoked(config.sessionRevocations, String(payload.jti ?? '').toLowerCase());
+	// After the cut-off and revocation checks: a dead token answers 401, never a hint that a factor would help.
+	// A token without the claims is aal 2, so every token minted before the gate keeps working.
+	const mfaPending = payload.mfa_req === true && payload.aal !== 2;
+	if (mfaPending && !allowPendingMfa) {
+		throw Object.assign(new Error('A second verification step is required.'), { status: 403, code: 'mfa_required' });
+	}
 	const workspaceIds = Array.isArray(payload.workspace_ids)
 		? payload.workspace_ids.map(String).filter((workspaceId) => UUID_REGEX.test(workspaceId))
 		: [];
@@ -185,6 +201,8 @@ export function verifyAppSessionToken(token, config, now = undefined) {
 		// A token minted before the claim existed answers no role, not the admin bit.
 		platformRole: isPlatformRole(payload.platform_role) ? payload.platform_role : null,
 		isAdmin,
+		aal: payload.aal === 1 ? 1 : 2,
+		mfaPending,
 		raw: payload,
 	};
 }

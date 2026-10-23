@@ -23,6 +23,8 @@ import {
 	verifyBridgeRequest,
 } from '../../scripts/bridge-api.mjs';
 import { kvStub } from './support/kv-stub.mjs';
+import { noFactorPg } from './support/no-factor-pg.mjs';
+
 import { PRIVATE_ID, SUBJECT, createSigninStub, hashOf, signIn, signinConfig } from './support/signin-world.mjs';
 
 const secret = 'test-bridge-secret-that-is-long-enough';
@@ -46,7 +48,7 @@ function gatewayPayload(extra = {}) {
 
 async function sessionIsAdmin(payload, cfg = config(), fetchImpl = fetch) {
 	const kv = kvStub();
-	const handoff = await createBridgeHandoff({ payload: validateBridgePayload(payload), config: cfg, kv, now, fetchImpl });
+	const handoff = await createBridgeHandoff({ payload: validateBridgePayload(payload), config: cfg, pg: noFactorPg(), kv, now, fetchImpl });
 	const token = new URL(handoff.redirectUrl).hash.match(/bridge_token=([^&]+)/)[1];
 	const { session } = await consumeHandoffToken(decodeURIComponent(token), kv, now, cfg.appSessionSecret);
 	return verifyAppSessionToken(session.accessToken, cfg, now).isAdmin;

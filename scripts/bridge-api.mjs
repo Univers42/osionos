@@ -36,6 +36,7 @@ import { sessionCutoffsFromConfig, startSessionCutoffPoller, writeSessionCutoff 
 import { sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
 import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, deliveredAnswer, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
 import { createAccountHandler } from './bridge-account-mounts.mjs';
+import { mfaBootLine, mfaRequiredFor } from './bridge-account-mfa-state.mjs';
 import { handoffLookupKey, openHandoffRecord, sealHandoffRecord } from './bridge-shared-store.mjs';
 import { createKv } from './bridge-kv.mjs';
 import { createPg } from './bridge-pg.mjs';
@@ -1536,7 +1537,7 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 	};
 }
 
-export function createUserSession(payload, config, persisted = null, now = Date.now(), memberWorkspaces = [], isAdmin = false, platformRole = null) {
+export function createUserSession(payload, config, persisted = null, now = Date.now(), memberWorkspaces = [], isAdmin = false, platformRole = null, { aal, mfaReq = false } = {}) {
 	const userId = payload.subject;
 	// The session id is minted here, not inside the signer: it is the primary key of the
 	// session row and the single-use guard of the delivered token.
@@ -1563,7 +1564,7 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 	// The identity flag is the root of trust: it names the admin role, so the claim's two
 	// role facts can never disagree.
 	const role = claimPlatformRole(platformRole, isAdmin);
-	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, jti: sessionId, memberWorkspaces: extras, platformRole: role });
+	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, jti: sessionId, memberWorkspaces: extras, platformRole: role, aal, mfaReq });
 	return {
 		expiresAt,
 		sessionId,
@@ -1583,6 +1584,7 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 			refreshToken: '',
 			privateWorkspaces: [workspace, ...extras.filter((entry) => sameId(entry.ownerId, userId))],
 			sharedWorkspaces: extras.filter((entry) => !sameId(entry.ownerId, userId)),
+			...(mfaReq ? { mfaRequired: true } : {}),
 		},
 	};
 }
@@ -1770,8 +1772,12 @@ async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
 export async function createBridgeHandoff({ payload, config, kv, pg, now = Date.now(), fetchImpl = fetch }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const readClaims = isEnvAdminEmail(payload, config) ? readClaimsInOrder : readClaimsConcurrently;
-	const { persisted, isAdmin, platformRole, memberWorkspaces } = await readClaims(payload, config, fetchImpl, platformRoleReader(pg));
-	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces, isAdmin, platformRole);
+	// The factor lookup rides with the claim reads; a failed lookup is a 503, never an ungated token.
+	const [{ persisted, isAdmin, platformRole, memberWorkspaces }, mfaReq] = await Promise.all([
+		readClaims(payload, config, fetchImpl, platformRoleReader(pg)),
+		mfaRequiredFor({ pg, config }, payload.subject),
+	]);
+	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces, isAdmin, platformRole, mfaReq ? { aal: 1, mfaReq: true } : {});
 	const token = randomToken();
 	const expiresAt = now + config.handoffTtlMs;
 	// The store keeps the record sealed and under a key derived from the token: a shared
@@ -4656,6 +4662,7 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 		refreshToken: consumed.session.refreshToken,
 		expiresAt: consumed.expiresAt,
 		workspaceIds: Array.isArray(consumed.persona?.workspaceIds) ? consumed.persona.workspaceIds : [],
+		...(consumed.session.mfaRequired ? { mfaRequired: true } : {}),
 		session: consumed.session,
 	}, config);
 }
@@ -4673,7 +4680,7 @@ async function requireEmptyBody(request) {
 /** Signs the caller out everywhere: every osionos_v1 token issued before now stops verifying. */
 async function handleBridgeLogout(request, response, config, fetchImpl) {
 	const clock = config.sessionCutoffs?.now ?? Date.now;
-	const session = verifyAppSessionToken(bearerToken(request), config, clock());
+	const session = verifyAppSessionToken(bearerToken(request), config, clock(), { allowPendingMfa: true });
 	await requireEmptyBody(request);
 	const writtenAtMs = Math.floor(clock());
 	await writeSessionCutoff(config, fetchImpl, session.userId, writtenAtMs);
@@ -4845,7 +4852,7 @@ export function createBridgeServer(options = {}) {
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		account: createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken, readRefreshClaims: (identity) => readRefreshClaims(identity, { config, pg, fetchImpl }) }),
+		account: createAccountHandler({ config, pg, kv, mfaEnv: env, mfaFetch: fetchImpl, mfaNow: options.now, verifySession: verifyAppSessionToken, readRefreshClaims: (identity) => readRefreshClaims(identity, { config, pg, fetchImpl }) }),
 	};
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
@@ -4875,6 +4882,7 @@ export function createBridgeServer(options = {}) {
 
 export function startBridgeServer(config = configFromEnv()) {
 	const server = createBridgeServer({ config });
+	console.info(mfaBootLine(config));
 	// One boot line for the three states an operator has to know.
 	console[bridgeBootIsDegraded(server) ? 'warn' : 'info'](bridgeBootLine(server));
 	console.info(turnstileBootLine(config));
