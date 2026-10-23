@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import { config } from '../config.ts';
-import { bridgeWrite, refusalMessage, BRIDGE_TIMEOUT_MS } from '../approvals/bridge.ts';
+import { bridgeWrite, bridgeRead, refusalMessage, BRIDGE_TIMEOUT_MS } from '../approvals/bridge.ts';
 import type { BridgeAnswer } from '../approvals/bridge.ts';
 import type { AuthUser } from '../auth.ts';
 import type { ApprovalRow } from '../approvals/types.ts';
@@ -39,14 +39,12 @@ export function approvedKeys(flat: readonly FlatItem[], requested?: string[]): s
 	for (const key of requested) {
 		if (!flat.some((item) => item.key === key)) throw new UnknownItemError(key);
 	}
+	const byKey = new Map(flat.map((f) => [f.key, f]));
 	const approved = new Set<string>();
 	// Parents first: an item is approved only when all of its ancestors are.
 	for (const item of flat) {
 		if (!requestedSet.has(item.key)) continue;
 		let ok = true;
-		let current: FlatItem | undefined = item;
-		// walk up the parent chain
-		const byKey = new Map(flat.map((f) => [f.key, f]));
 		let parentKey = item.parentKey;
 		while (parentKey) {
 			if (!requestedSet.has(parentKey)) {
@@ -216,13 +214,36 @@ export async function executePlan(input: {
 
 		const planItem = planByKey.get(f.key)!;
 		const id = f.kind === 'page' ? (planItem as { id: string }).id : (planItem as { dbKey: string }).dbKey;
+		const remaining = budgetMs - (now() - started);
+		const timeout = Math.min(BRIDGE_TIMEOUT_MS, Math.max(1, remaining));
+
+		// Probe a page that was tried before: its answer may have been lost.
+		if (f.kind === 'page' && row.error !== null && bridgeUrl) {
+			const probe = await bridgeRead({ url: bridgeUrl, token: sessionToken, path: `/api/pages/${id}`, timeoutMs: timeout });
+			let parsed: { workspaceId?: unknown } = {};
+			try {
+				parsed = JSON.parse(probe.body) as { workspaceId?: unknown };
+			} catch {
+				parsed = {};
+			}
+			if (probe.status === 200 && parsed.workspaceId === plan.workspaceId) {
+				await setItem(db, approval.id, f.key, 'done', id, null);
+				created.push({ key: f.key, kind: f.kind, id });
+				continue;
+			}
+			if (probe.status !== 404) {
+				// 0, 5xx, 429, ... : leave pending with the probe's error.
+				await setItem(db, approval.id, f.key, 'pending', null, refusalMessage(probe));
+				continue;
+			}
+			// 404: fall through to POST.
+		}
+
 		const writeCtx = {
 			userId: user.userId,
 			now: approval.created_at instanceof Date ? approval.created_at.toISOString() : String(approval.created_at),
 		};
 		const write = writeOf(plan, f, writeCtx);
-		const remaining = budgetMs - (now() - started);
-		const timeout = Math.min(BRIDGE_TIMEOUT_MS, Math.max(1, remaining));
 		let answer: BridgeAnswer;
 		if (!bridgeUrl) {
 			answer = { ok: false, status: 0, body: '' };

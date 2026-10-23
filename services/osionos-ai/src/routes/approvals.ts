@@ -7,9 +7,8 @@ import { getOwnedApproval } from '../approvals/repo.ts';
 import { describeApproval } from '../approvals/describe.ts';
 import { decideApproval } from '../approvals/execute.ts';
 import { claimPartial, recordOutcome } from '../approvals/repo.ts';
-import { revalidateStoredPlan, flattenPlan } from '../builders/plan.ts';
+import { revalidateStoredPlan } from '../builders/plan.ts';
 import { executePlan } from '../builders/execute.ts';
-import { allItems } from '../builders/items.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -128,8 +127,7 @@ export async function handleApprovalResume(ctx: RouteContext): Promise<number> {
 		return 409;
 	}
 	// revalidate
-	const { revalidateStoredPlan: revalidate } = await import('../builders/plan.ts');
-	const rv = revalidate(claimed.args);
+	const rv = revalidateStoredPlan(claimed.args);
 	if (!rv.ok) {
 		await recordOutcome(ctx.deps.db, { id: claimed.id, status: 'failed', error: rv.error });
 		sendJson(ctx.response, 200, {
@@ -163,7 +161,7 @@ export async function handleApprovalResume(ctx: RouteContext): Promise<number> {
 		approvalId: claimed.id,
 		status,
 		result,
-		error: claimed.error ?? null,
+		error: null,
 		continuationRunId: null,
 	});
 	return 200;
