@@ -6,9 +6,10 @@ classifier (L1) that scores the comment afterwards, and an admin console where
 a human decides. Nothing is taken away by a machine.
 
 Everything here is bound to the conditions **C83–C97** of
-`/home/dlesieur/osionos-ai-records/a2-images-moderation-verdict.md`. Each
-condition is summarised in one line below; the verdict text is not copied here.
-The out-of-scope of this slice is written at the bottom.
+the images and moderation devil verdict (conditions C83–C97), kept with the
+project's review records outside this repository. Each condition is summarised
+in one line below; the verdict text is not copied here. The out-of-scope of
+this slice is written at the bottom.
 
 **Status: L1 runs in `log` mode on the public stack, and holds only where an
 operator configured it. There is no auto-removal anywhere.** Reason: on the
