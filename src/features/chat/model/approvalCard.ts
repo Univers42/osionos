@@ -31,6 +31,7 @@ import {
   resumeApproval,
   ApprovalError,
   type ApprovalChoice,
+  type ApprovalDecision,
   type ApprovalDescription,
   type ApprovalPreview,
   type ApprovalStatus,
@@ -177,25 +178,25 @@ export type ApprovalOutcome =
 const deciding = new Set<string>();
 
 /**
- * The decision of the user, and what came of it.
+ * A POST that decides the approval (the decision, or the resume of a partial
+ * build), and what came of it.
  *
- * ONE CLICK, ONE POST: an approval whose decision is on its way refuses a
- * second one, whatever the buttons say. The guard lives here, in the model,
- * and not in the button — a double click, a click and an Enter, and two
- * windows of the same conversation all reach this.
+ * ONE CLICK, ONE POST: an approval whose POST is on its way refuses a second
+ * one, whatever the buttons say. The guard lives here, in the model, and not
+ * in the button — a double click, a click and an Enter, and two windows of
+ * the same conversation all reach this.
  *
- * A 409 — the approval was already decided — is NOT a failure: the card is
- * fetched again, and it shows what really happened.
+ * A 409 — the approval was already decided, or is not partial any more — is
+ * NOT a failure: the card is fetched again, and it shows what really happened.
  */
-export async function decideApprovalCard(
+async function guardedDecision(
   approvalId: string,
-  decision: ApprovalChoice,
-  items?: string[],
+  post: () => Promise<ApprovalDecision>,
 ): Promise<ApprovalOutcome> {
   if (deciding.has(approvalId)) return { kind: "busy" };
   deciding.add(approvalId);
   try {
-    const answer = await decideApproval(approvalId, decision, items);
+    const answer = await post();
     return {
       kind: "decided",
       status: answer.status,
@@ -214,34 +215,16 @@ export async function decideApprovalCard(
   }
 }
 
-/**
- * The resume of a partial approval: build the rest of it.
- *
- * Uses the SAME in-flight guard as the decision: one click, one POST, also
- * across two windows.
- *
- * A 409 — the approval is not partial any more — is NOT a failure: the card
- * is fetched again, and it shows what really happened.
- */
-export async function resumeApprovalCard(approvalId: string): Promise<ApprovalOutcome> {
-  if (deciding.has(approvalId)) return { kind: "busy" };
-  deciding.add(approvalId);
-  try {
-    const answer = await resumeApproval(approvalId);
-    return {
-      kind: "decided",
-      status: answer.status,
-      continuationRunId: answer.continuationRunId,
-      error: answer.error ?? null,
-    };
-  } catch (error) {
-    if (error instanceof ApprovalError && error.status === 409) {
-      const approval = await fetchApproval(approvalId).catch(() => null);
-      if (approval) return { kind: "conflict", approval };
-    }
-    const code = error instanceof ApprovalError ? error.code : "unknown";
-    return { kind: "failed", code };
-  } finally {
-    deciding.delete(approvalId);
-  }
+/** The decision of the user; for a plan, `items` are the kept keys. */
+export function decideApprovalCard(
+  approvalId: string,
+  decision: ApprovalChoice,
+  items?: string[],
+): Promise<ApprovalOutcome> {
+  return guardedDecision(approvalId, () => decideApproval(approvalId, decision, items));
+}
+
+/** The resume of a partial approval: build the rest of it, under the same guard. */
+export function resumeApprovalCard(approvalId: string): Promise<ApprovalOutcome> {
+  return guardedDecision(approvalId, () => resumeApproval(approvalId));
 }
