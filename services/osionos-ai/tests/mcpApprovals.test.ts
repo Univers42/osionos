@@ -198,6 +198,12 @@ describe('the decision of an MCP approval (C114, C115, C117)', () => {
 		assert.equal(after.rows[0].n, before.rows[0].n, 'no ai_runs row was created');
 		const decided = await app.db.query('select status from public.ai_approvals where id = $1', [row.id]);
 		assert.equal(decided.rows[0].status, 'executed');
+
+		// A decided write frees its call: a token lives for months, and the
+		// same request asked again later is a new question.
+		const again = await callTool(token.token, 'create_page', { title: 'Approved later', workspaceId: WORKSPACE_A });
+		assert.equal(again.isError, false, again.text);
+		assert.equal((await rowsOf(token.id)).length, 2);
 	});
 
 	it('a revoked token expires the approval at decision time, and writes nothing', async () => {
