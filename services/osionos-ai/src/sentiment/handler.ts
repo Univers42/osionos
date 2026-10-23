@@ -1,11 +1,11 @@
 /**
- * The handler of the 'sentiment' jobs: one page comment of an opted-in
- * workspace in, one row of ai_sentiment out.
+ * The handler of the 'sentiment' jobs: one page comment or one projected
+ * object-database row of an opted-in workspace in, one row of ai_sentiment out.
  *
- * What it NEVER does: score anything but a page comment (C139), score a
- * workspace that has not opted in (C138), let a score of old content land on
- * new content (C142), or write the text or the author anywhere (C140).
- * Nothing in src/moderation or src/recs imports this file (C144).
+ * What it NEVER does: score any other subject kind (C139), score a workspace
+ * that has not opted in (C138), let a score of old content land on new content
+ * (C142), or write the text or the author anywhere (C140). Nothing in
+ * src/moderation or src/recs imports this file (C144).
  *
  * Fail-loud on labels (C148): a model whose labels are not
  * negative/neutral/positive throws a shape error; the worker retries and the
@@ -71,6 +71,29 @@ on conflict (subject_kind, subject_id) do update set
   label = excluded.label, confidence = excluded.confidence, model = excluded.model,
   revision = excluded.revision, content_sha256 = excluded.content_sha256, scored_at = now()`;
 
+// A projected object-database row (M6p-1): the text is the projection's own
+// chosen string, and the workspace must still be opted in (C138).
+const READ_ROW = `select r.scored_text as content, r.workspace_id
+  from public.osionos_object_database_rows r
+  join public.ai_sentiment_settings s
+    on s.workspace_id = r.workspace_id and s.enabled
+ where r.id = $1::uuid and length(btrim(r.scored_text)) > 0`;
+
+// C142 for a row: the write lands only when the live text still hashes to the
+// sha the job carried, so an edit between enqueue and write scores nothing.
+const WRITE_ROW = `
+insert into public.ai_sentiment (subject_kind, subject_id, workspace_id, label, confidence, model, revision, content_sha256)
+select 'database_row', r.id::text, r.workspace_id, $2, $3, $4, $5, $6
+  from public.osionos_object_database_rows r
+  join public.ai_sentiment_settings s
+    on s.workspace_id = r.workspace_id and s.enabled
+ where r.id = $1::uuid
+   and encode(sha256(convert_to(r.scored_text, 'UTF8')), 'hex') = $6
+on conflict (subject_kind, subject_id) do update set
+  label = excluded.label, confidence = excluded.confidence,
+  model = excluded.model, revision = excluded.revision,
+  content_sha256 = excluded.content_sha256, scored_at = now()`;
+
 const sha256Hex = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 
 /** The winning label of one prediction, with its score as the confidence. */
@@ -94,13 +117,14 @@ export function createSentimentHandler(options: SentimentHandlerOptions): (job: 
 	const timeoutMs = options.timeoutMs ?? CLASSIFIER_TIMEOUT_MS;
 
 	return async (job, signal) => {
-		if (job.subjectKind !== 'page_comment' || !UUID.test(job.subjectId)) {
+		const isRow = job.subjectKind === 'database_row';
+		if ((!isRow && job.subjectKind !== 'page_comment') || !UUID.test(job.subjectId)) {
 			log({ event: 'sentiment_skip', reason: 'subject_kind' });
 			return;
 		}
 		const ids = { subjectKind: job.subjectKind, subjectId: job.subjectId };
 
-		const current = (await pool.query<{ content: string }>(READ, [job.subjectId])).rows[0];
+		const current = (await pool.query<{ content: string }>(isRow ? READ_ROW : READ, [job.subjectId])).rows[0];
 		if (!current || current.content.trim().length === 0) return;
 
 		const [prediction] = await teiPredict(teiUrl, [current.content], { timeoutMs, signal });
@@ -108,13 +132,16 @@ export function createSentimentHandler(options: SentimentHandlerOptions): (job: 
 		const { label, confidence } = pickLabel(prediction);
 		if (signal.aborted) return;
 
-		const written = await pool.query(WRITE, [
+		// A row is written only under the sha the job was queued for (C142);
+		// the comment keeps its existing guard, which hashes the text it read.
+		const contentSha256 = isRow ? (job.contentSha256 ?? '') : sha256Hex(current.content);
+		const written = await pool.query(isRow ? WRITE_ROW : WRITE, [
 			job.subjectId,
 			label,
 			confidence,
 			model,
 			revision,
-			sha256Hex(current.content),
+			contentSha256,
 		]);
 		log({ event: written.rowCount ? 'sentiment_scored' : 'sentiment_stale', ...ids });
 	};
