@@ -298,7 +298,7 @@ export function createProfileHandler({ config, verifySession, fetchImpl = fetch,
 		// The avatar routes belong to the account seam (bridge-avatar.mjs). This
 		// handler is dispatched first, so it must not even claim the path: the
 		// dispatch order must not decide who answers.
-		if (pathname === '/api/profile/avatar') return false;
+		if (pathname === '/api/profile/avatar' || pathname === '/api/profile/banner') return false;
 		if (!pathname.startsWith('/api/profile/') && !isPeople && !isEmbed) return false;
 		const method = (request.method || 'GET').toUpperCase();
 		try {
