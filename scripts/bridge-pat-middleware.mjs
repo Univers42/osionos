@@ -13,16 +13,21 @@
 /**
  * The Bearer middleware of the personal access tokens. A request whose Authorization is an
  * `osio_pat_` secret is looked up by its sha256, refused with one answer for every bad token,
- * checked against the two page routes a PAT may reach and the scope it carries, and exchanged
+ * checked against the routes a PAT may reach and the scope it carries, and exchanged
  * for a 120-second internal session cut by the token's mask. Routes see that session, never
  * the PAT: the header is rewritten before any of them reads it.
  *
  * The mask is applied here and nowhere else: to the response of a read, and (through
  * `patWritePayload`, called by the route's body reader) to the payload of a write.
  *
- * Caveat: the response mask fails closed — a 2xx body that is not a JSON object, an empty
- * one, or a route that streams, is answered 500 and never forwarded — so a future route added
- * to PAT_ROUTES that answers a list or a stream is refused until it is taught here.
+ * Caveat: the response mask fails closed — a 2xx body that is not a JSON object (or, on a
+ * route marked `rows`, not an array of objects), an empty one, or a route that streams, is
+ * answered 500 and never forwarded — so a route added to PAT_ROUTES that answers another
+ * shape is refused until it is taught here.
+ * Caveat: the workspace list is a fixed projection (_id, id, name, slug, role), not a mask:
+ * a new field of a workspace entry stays hidden from PATs until it is added to WORKSPACE_KEYS.
+ * Caveat: the append body is checked as `content` against the write mask; the route's own
+ * validation of the blocks is the only check of their shape.
  * Caveat: the hourly claim of `last_used_at` is stamped before the audit row is written and
  * released if that write fails; a crash between the two, or a failed release, leaves the stamp
  * in place and loses that hour's row (the failed release is only logged; the hour stays unaudited).
@@ -43,19 +48,48 @@ import { signAppSessionToken } from './bridge-session-token.mjs';
 const PAT_TABLE = 'osionos_personal_access_tokens';
 const PAT_SESSION_TTL_SECONDS = 120;
 const AUDIT_WINDOW_MS = 3_600_000;
-const PAGE_PATH = /^\/api\/pages\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const PAGE_PATH = new RegExp(`^/api/pages/${UUID}$`, 'i');
+const APPEND_PATH = new RegExp(`^/api/pages/${UUID}/blocks$`, 'i');
+const APPEND_KEYS = new Set(['idempotencyKey', 'afterBlockId']);
 const OWNED_WORKSPACE_LIMIT = 100;
 const DEFAULT_RATE_LIMIT = { limit: 120, windowMs: 60_000 };
 const PAT_LIKE_PREFIX = 'osio_';
 const CONTROL_FIELDS = new Set(['baseVersion']);
 
-/** The whole surface a PAT reaches: read one page, change one page. */
+// A workspace entry also carries settings, permissions, ownerId and plan: none is a page
+// attribute, so no page mask can vouch for them and a PAT never receives them.
+const WORKSPACE_KEYS = ['_id', 'id', 'name', 'slug', 'role'];
+const keepWorkspaceKeys = (entry) => Object.fromEntries(WORKSPACE_KEYS.filter((key) => Object.hasOwn(entry, key)).map((key) => [key, entry[key]]));
+
+/** A created page is answered as a read of the page: the token's read mask decides what shows. */
+const createdReply = (parsed, readMask) => maskAttributes(parsed, Array.isArray(readMask) ? readMask : []);
+
+/** An append reply is the write reply, plus the stored content for a token that may read it. */
+function appendReply(parsed, readMask) {
+	const kept = writeReply(parsed, readMask);
+	if (Array.isArray(readMask) && readMask.includes('content') && Object.hasOwn(parsed, 'content')) kept.content = parsed.content;
+	return kept;
+}
+
+/** The whole surface a PAT reaches: the page routes and the four the MCP server needs. */
 export const PAT_ROUTES = [
 	{ method: 'GET', path: PAGE_PATH, resource: 'pages', permission: 'read' },
 	{ method: 'PATCH', path: PAGE_PATH, resource: 'pages', permission: 'write' },
+	{ method: 'GET', path: /^\/api\/workspaces$/, resource: 'pages', permission: 'read', rows: true, project: keepWorkspaceKeys },
+	{ method: 'GET', path: /^\/api\/pages\/all$/, resource: 'pages', permission: 'read', rows: true },
+	{ method: 'POST', path: /^\/api\/pages$/, resource: 'pages', permission: 'write', reply: createdReply },
+	{ method: 'POST', path: APPEND_PATH, resource: 'pages', permission: 'write', route: 'blocks-append', reply: appendReply },
 ];
 
 const failure = (status, code, message) => Object.assign(new Error(message), { status, code });
+
+/** The append body is exactly blocks (a write of `content`), idempotencyKey and afterBlockId. */
+function appendOutside(payload, mask) {
+	const outside = Object.keys(payload).filter((key) => key !== 'blocks' && !APPEND_KEYS.has(key));
+	if (Object.hasOwn(payload, 'blocks') && !mask.includes('content')) outside.push('content');
+	return outside.sort();
+}
 
 /**
  * The write-set check: a payload naming an attribute outside the mask is refused whole, so a
@@ -65,7 +99,7 @@ const failure = (status, code, message) => Object.assign(new Error(message), { s
 export function patWritePayload(payload, mask) {
 	const isObject = payload !== null && typeof payload === 'object' && !Array.isArray(payload);
 	if (!isObject) throw failure(422, 'pat_invalid_body', 'The request body must be a JSON object.');
-	const outside = attributesOutsideMask(payload, mask).filter((key) => !CONTROL_FIELDS.has(key));
+	const outside = mask?.route === 'blocks-append' ? appendOutside(payload, mask) : attributesOutsideMask(payload, mask).filter((key) => !CONTROL_FIELDS.has(key));
 	if (outside.length > 0) throw failure(403, 'pat_forbidden_attribute', `This token may not change: ${outside.join(', ')}.`);
 	return payload;
 }
@@ -113,6 +147,7 @@ function maskErrorBody(text, status, readMask) {
 /**
  * The write reply is an allow-list, not a mask: `version` follows the read of `content` (as in
  * the 409) and `cascadedIds`, the ids of descendant pages, follows the read of `archivedAt`.
+ * A route may supply its own `reply` allow-list instead.
  */
 function writeReply(parsed, readMask) {
 	const read = Array.isArray(readMask) ? readMask : [];
@@ -123,12 +158,26 @@ function writeReply(parsed, readMask) {
 	return kept;
 }
 
+const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+function maskOne(parsed, mask, readMask, isWrite, reply) {
+	if (!isPlainObject(parsed)) throw new TypeError('not an object');
+	if (reply) return reply(parsed, readMask);
+	return isWrite ? writeReply(parsed, readMask) : maskAttributes(parsed, mask);
+}
+
+/** A list route: every element is masked (or projected) on its own; one non-object fails the whole. */
+function maskRows(parsed, mask, project) {
+	if (!Array.isArray(parsed) || !parsed.every(isPlainObject)) throw new TypeError('not a list of objects');
+	return parsed.map((entry) => (project ? project(entry) : maskAttributes(entry, mask)));
+}
+
 /**
  * Hold a route's response back, mask it, then send it. Only the route's own head and body are
  * captured. A 2xx body is masked to `mask`, or with `isWrite` cut to the write reply allow-list
  * by the read mask; a non-2xx body goes through maskErrorBody.
  */
-export function installResponseMask(response, mask, { readMask = mask, isWrite = false } = {}) {
+export function installResponseMask(response, mask, { readMask = mask, isWrite = false, rows = false, project = null, reply = null } = {}) {
 	const send = response.writeHead.bind(response);
 	const finish = response.end.bind(response);
 	let head = null;
@@ -149,9 +198,9 @@ export function installResponseMask(response, mask, { readMask = mask, isWrite =
 		}
 		try {
 			const parsed = JSON.parse(text);
-			if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new TypeError('not an object');
+			const out = rows ? maskRows(parsed, mask, project) : maskOne(parsed, mask, readMask, isWrite, reply);
 			send(status, kept);
-			return finish(JSON.stringify(isWrite ? writeReply(parsed, readMask) : maskAttributes(parsed, mask)));
+			return finish(JSON.stringify(out));
 		} catch {
 			send(500, { ...headersWithout(kept, 'content-type'), 'content-type': 'application/json; charset=utf-8' });
 			return finish(JSON.stringify({ error: 'pat_mask_failed' }));
@@ -246,8 +295,15 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, rateL
 
 	const stampOf = () => new Date(now()).toISOString();
 
-	/** One conditional PATCH decides atomically which request of the hour records the use. */
-	async function claimHourlyUse(rowId) {
+	/**
+	 * One conditional PATCH decides atomically which request of the hour records the use; a row
+	 * read as used within the hour skips even that. Caveat: the row was read at lookup, so two
+	 * concurrent first calls both try the PATCH (the condition still lets only one win).
+	 */
+	async function claimHourlyUse(row) {
+		const rowId = row.id;
+		const lastUsed = Date.parse(row.last_used_at);
+		if (lastUsed > now() - AUDIT_WINDOW_MS) return null;
 		const stamp = stampOf();
 		const cutoff = new Date(now() - AUDIT_WINDOW_MS).toISOString();
 		const claimed = await guarded('token use', () => pg.asService().patch(`${PAT_TABLE}?id=eq.${rowId}&or=(last_used_at.is.null,last_used_at.lt.${cutoff})&select=id`, { last_used_at: stamp }, { prefer: 'return=representation' }));
@@ -260,7 +316,7 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, rateL
 	}
 
 	async function recordHourlyUse(ctx) {
-		const stamp = await claimHourlyUse(ctx.row.id);
+		const stamp = await claimHourlyUse(ctx.row);
 		if (!stamp) return;
 		try {
 			await audit(ctx.request, ctx.config, ctx.row, ctx.jti, ctx.url, 'allowed');
@@ -323,11 +379,11 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, rateL
 			now: now(),
 		});
 		replaceAuthorization(request, session.token);
-		if (route.permission === 'read') installResponseMask(response, decision.mask);
+		if (route.permission === 'read') installResponseMask(response, decision.mask, { rows: route.rows, project: route.project });
 		else {
 			const readDecision = evaluatePat(row, { resource: route.resource, permission: 'read' });
-			installResponseMask(response, decision.mask, { readMask: readDecision.allowed ? readDecision.mask : [], isWrite: true });
-			request.patWriteMask = decision.mask;
+			installResponseMask(response, decision.mask, { readMask: readDecision.allowed ? readDecision.mask : [], isWrite: true, reply: route.reply });
+			request.patWriteMask = route.route ? Object.assign([...decision.mask], { route: route.route }) : decision.mask;
 		}
 		return false;
 	};

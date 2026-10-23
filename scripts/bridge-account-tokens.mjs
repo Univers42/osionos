@@ -177,7 +177,7 @@ function requestMeta(request, config) {
 	return meta;
 }
 
-/** One entry of the list: the eight keys of the contract, and nothing else. */
+/** One entry of the list: the nine keys of the contract, and nothing else. */
 function tokenEntry(row) {
 	return {
 		id: row.id,
@@ -188,6 +188,7 @@ function tokenEntry(row) {
 		createdAt: row.created_at ?? null,
 		expiresAt: row.expires_at ?? null,
 		revokedAt: row.revoked_at ?? null,
+		lastUsedAt: row.last_used_at ?? null,
 	};
 }
 

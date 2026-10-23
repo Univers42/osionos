@@ -114,9 +114,7 @@ describe('every bad token gets the same answer', () => {
 describe('the route allowlist is the whole surface', () => {
 	const refused = [
 		['GET', '/api/account/tokens'],
-		['GET', '/api/workspaces'],
 		['GET', '/api/pages'],
-		['GET', '/api/pages/all'],
 		['GET', `${PAGE_PATH}/config`],
 		['POST', PAGE_PATH],
 		['DELETE', PAGE_PATH],
@@ -139,8 +137,8 @@ describe('the route allowlist is the whole surface', () => {
 		assert.ok(reads.every((call) => call.claims === null && call.params.has('token_hash')));
 	});
 
-	it('lists exactly the two page routes', () => {
-		assert.deepEqual(PAT_ROUTES.map((route) => `${route.method} ${route.permission}`), ['GET read', 'PATCH write']);
+	it('lists exactly the six routes', () => {
+		assert.deepEqual(PAT_ROUTES.map((route) => `${route.method} ${route.permission}`).sort(), ['GET read', 'GET read', 'GET read', 'PATCH write', 'POST write', 'POST write']);
 	});
 });
 
@@ -250,7 +248,7 @@ describe('every PAT request is audited, before the route runs', () => {
 
 	it('audits a denial once per token and outcome per hour, however often it repeats', async (t) => {
 		const { world, secret } = await viaPat(t, {});
-		for (let index = 0; index < 20; index += 1) await send(world.base, '/api/workspaces', bearer(secret));
+		for (let index = 0; index < 20; index += 1) await send(world.base, '/api/pages', bearer(secret));
 		await send(world.base, PAGE_PATH, bearer(secret), { method: 'PATCH', body: '{}' });
 		await send(world.base, PAGE_PATH, bearer(secret), { method: 'PATCH', body: '{}' });
 		assert.deepEqual(lastUse(world).map((row) => row.details.outcome), ['route_not_allowed', 'scope_denied']);
@@ -419,13 +417,13 @@ describe('a PAT-shaped bearer that is not a PAT is answered like any bad token',
 describe('the hourly use is recorded once, and never lost to a failed audit', () => {
 	const patches = (world) => world.patStore.callsTo(PAT_TABLE).filter((call) => call.method === 'PATCH');
 
-	it('claims with one conditional PATCH per request', async (t) => {
+	it('claims with one conditional PATCH, and skips it while the last use is within the hour', async (t) => {
 		const { world, secret } = await viaPat(t, {});
 		await send(world.base, PAGE_PATH, bearer(secret));
 		assert.equal(patches(world).length, 1);
 		assert.match(patches(world)[0].params.get('or'), /^\(last_used_at\.is\.null,last_used_at\.lt\./);
 		await send(world.base, PAGE_PATH, bearer(secret));
-		assert.equal(patches(world).length, 2);
+		assert.equal(patches(world).length, 1);
 	});
 
 	it('leaves last_used_at null when the audit write fails, so the next request audits', async (t) => {
