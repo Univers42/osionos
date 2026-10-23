@@ -210,7 +210,7 @@ describe('the built-in agents', () => {
 		});
 		assert.equal(answer.status, 200);
 		const body = (await answer.json()) as { id: string; version: number; name: string; description: string }[];
-		assert.equal(body.length, 3, 'three built-ins');
+		assert.equal(body.length, BUILTIN_AGENT_IDS.length, 'every built-in is listed');
 		assert.deepEqual(
 			body.map((agent) => agent.id),
 			[...BUILTIN_AGENT_IDS],

@@ -70,6 +70,12 @@ export function authorshipAttributes(authorship?: Authorship): string {
  * second [2]. The page is the id read_page takes.
  */
 export function sourceBlock(source: RetrievedChunk, n: number, authorship?: Authorship): string {
+	// A pack source says what it is: the collection discriminator, the pack and
+	// the document path. It has no page, so it carries no `page=` attribute and
+	// no authorship (C44).
+	if (source.collection === 'pack') {
+		return `<source n="${n}" collection="pack" pack="${attributeText(source.packSlug ?? '')}" title="${attributeText(source.title)}" path="${attributeText(source.docPath ?? '')}">\n${quotedData(source.snippet)}\n</source>`;
+	}
 	const path = source.headingPath.length > 0 ? source.headingPath : source.title;
 	return `<source n="${n}" page="${attributeText(source.pageId)}" title="${attributeText(source.title)}" path="${attributeText(path)}"${authorshipAttributes(authorship)}>\n${quotedData(source.snippet)}\n</source>`;
 }
@@ -78,10 +84,42 @@ export function sourceBlock(source: RetrievedChunk, n: number, authorship?: Auth
  * The identity of a passage: what makes two sources the same source.
  *
  * The snippet is part of it because a page read in full has no block id: the
- * text is what tells that source from the chunks of the same page.
+ * text is what tells that source from the chunks of the same page. A pack
+ * chunk has the empty pageId by construction, so its key is the pack, the
+ * document and the heading path: two packs never collide on the empty id.
  */
 export function sourceKey(source: RetrievedChunk): string {
+	if (source.collection === 'pack') {
+		return `pack:${source.packSlug ?? ''}:${source.docPath ?? ''}:${source.headingPath}`;
+	}
 	return `${source.pageId}\u0000${source.blockId ?? ''}\u0000${source.headingPath}\u0000${source.snippet}`;
+}
+
+/**
+ * The data of a `citation` event (C44).
+ *
+ * A page citation names its page and its block, and carries the collection
+ * discriminator. A pack citation names the pack and the document, and has NO
+ * pageId and no blockId: a pack document is not a page the client can open.
+ */
+export function citationData(source: RetrievedChunk, n: number): Record<string, unknown> {
+	if (source.collection === 'pack') {
+		return {
+			n,
+			collection: 'pack',
+			pack: source.packSlug ?? '',
+			title: source.title,
+			snippet: source.snippet,
+		};
+	}
+	return {
+		n,
+		collection: 'page',
+		pageId: source.pageId,
+		...(source.blockId ? { blockId: source.blockId } : {}),
+		title: source.title,
+		snippet: source.snippet,
+	};
 }
 
 /** A source the tools found, and the number the answer cites it by. */

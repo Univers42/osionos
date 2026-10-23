@@ -130,9 +130,16 @@ async function findSources(
 	input: StartRunInput,
 	text: string,
 ): Promise<{ sources: RetrievedChunk[]; abstained: boolean }> {
-	if (input.searchWorkspace !== true || !input.user) return { sources: [], abstained: false };
+	const packs = input.agent?.knowledge ?? [];
+	const pages = input.searchWorkspace === true;
+	// A run without a caller has no retrieval at all; a run with neither a
+	// workspace search nor a pack has nothing to look for.
+	if (!input.user || (!pages && packs.length === 0)) return { sources: [], abstained: false };
 	try {
-		const chunks = await retrieve(db, input.user, { query: text });
+		// The pages only when the client asked for the workspace search; the
+		// packs whenever the agent carries knowledge, whether or not it did
+		// (C34). The packs need no membership: they are tenant-free.
+		const chunks = await retrieve(db, input.user, { query: text, pages, packs });
 		if (shouldAbstain(chunks, abstainThreshold())) return { sources: [], abstained: true };
 		return { sources: chunks, abstained: false };
 	} catch (error) {

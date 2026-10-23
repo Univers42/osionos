@@ -1,0 +1,6 @@
+{
+	"slug": "alpha",
+	"title": "Alpha pack",
+	"description": "The alpha fixture pack.",
+	"docs": ["alpha/one.md", "alpha/two.md"]
+}
