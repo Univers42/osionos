@@ -106,7 +106,7 @@ describe('the session row is written when the session is delivered', () => {
 
 	it('writes auth_method=password for a password sign-in', async () => {
 		const kv = kvStub();
-		const config = sessionConfig({ now: () => CLOCK.at, persistence: 'memory' });
+		const config = { ...sessionConfig({ now: () => CLOCK.at, persistence: 'memory' }), turnstileBypassLocal: true };
 		const minted = await createBridgeHandoff({ payload: payloadFor(USER_B), config, kv, now: CLOCK.at, fetchImpl: async () => new Response('[]') });
 		const gateway = async (url) => {
 			const route = String(url);

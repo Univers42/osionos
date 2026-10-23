@@ -25,6 +25,8 @@ function config() {
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
 		OSIONOS_BRIDGE_PERSISTENCE: 'memory',
 		AUTH_GATEWAY_URL: GATEWAY,
+		// The local sign-in has no Turnstile widget; without the bypass the bridge refuses a token-less request.
+		TURNSTILE_BYPASS_LOCAL: 'true',
 	});
 }
 
@@ -33,7 +35,7 @@ function reply(body, status = 200) {
 }
 
 // A gateway stub that records each call, and answers the sign-in flow end to end.
-async function signIn(path, forwardedHeader) {
+async function signIn(path, forwardedHeader, extraBody = {}) {
 	const cfg = config();
 	const kv = kvStub();
 	const handoff = await createBridgeHandoff({
@@ -43,7 +45,7 @@ async function signIn(path, forwardedHeader) {
 	const seen = [];
 	const fetchImpl = async (url, init = {}) => {
 		const route = String(url).replace(GATEWAY, '');
-		seen.push({ route, forwardedFor: init.headers?.['x-forwarded-for'] });
+		seen.push({ route, forwardedFor: init.headers?.['x-forwarded-for'], body: init.body ? JSON.parse(init.body) : {} });
 		if (route === '/api/auth/register') return reply({ ok: true });
 		if (route === '/api/auth/login') return reply({ access_token: 'gw-token', refresh_token: 'r', user: { id: randomUUID() } });
 		return reply({ redirectUrl: handoff.redirectUrl });
@@ -54,7 +56,7 @@ async function signIn(path, forwardedHeader) {
 		const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json', ...(forwardedHeader ? { 'x-forwarded-for': forwardedHeader } : {}) },
-			body: JSON.stringify({ email: 'a@example.com', password: 'correct horse battery' }),
+			body: JSON.stringify({ email: 'a@example.com', password: 'correct horse battery', ...extraBody }),
 		});
 		await response.text();
 		return { status: response.status, seen };
@@ -80,5 +82,10 @@ describe('bridge calls to the auth gateway forward the client address', () => {
 		const { seen } = await signIn('/api/auth/register', '198.51.100.4');
 		assert.equal(seen[0].route, '/api/auth/register');
 		for (const call of seen) assert.equal(call.forwardedFor, '198.51.100.4, 127.0.0.1');
+	});
+
+	it('forwards the Turnstile token the browser sent, not a constant', async () => {
+		const { seen } = await signIn('/api/auth/login', undefined, { turnstileToken: 'browser-token' });
+		assert.equal(seen[0].body.turnstileToken, 'browser-token');
 	});
 });
