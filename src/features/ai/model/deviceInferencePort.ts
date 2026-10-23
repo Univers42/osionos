@@ -64,7 +64,7 @@ function lastUserText(messages: InferenceRequest["messages"]): string {
 function buildMessages(text: string, sources: DeviceSource[]): Array<{ role: string; content: string }> {
   return [
     { role: "system", content: SYSTEM_INSTRUCTIONS },
-    { role: "user", content: sources.map(sourceBlock).join("\n") },
+    { role: "user", content: sources.map((source, index) => sourceBlock(source, index)).join("\n") },
     { role: "user", content: text },
   ];
 }
