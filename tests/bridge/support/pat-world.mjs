@@ -32,6 +32,19 @@ export const PAGE = IDS.privateA;
 export const JWT_SECRET = 'account-jwt-test-secret';
 const PAT_SIDE = new Set([PAT_TABLE, AUDIT_TABLE, 'osionos_sessions']);
 
+const UUID_SOURCE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+/** The route table, spelled out: method, path regexp source, permission. A widened path changes a line. */
+export const EXPECTED_ROUTES = [
+	`GET ^\\/api\\/pages\\/${UUID_SOURCE}$ read`,
+	`PATCH ^\\/api\\/pages\\/${UUID_SOURCE}$ write`,
+	'GET ^\\/api\\/workspaces$ read',
+	'GET ^\\/api\\/pages\\/all$ read',
+	'POST ^\\/api\\/pages$ write',
+	`POST ^\\/api\\/pages\\/${UUID_SOURCE}\\/blocks$ write`,
+];
+export const routeSignatures = (routes) => routes.map((route) => `${route.method} ${route.path.source} ${route.permission}`);
+
 export const inDays = (days) => new Date(Date.now() + days * 86_400_000).toISOString();
 
 /** A stored token and the secret that opens it; the row carries only the hash. */
