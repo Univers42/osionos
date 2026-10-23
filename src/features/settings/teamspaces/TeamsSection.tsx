@@ -92,7 +92,7 @@ export const TeamsSection: React.FC = () => {
     <>
       <Section title="Teams" anchor="teams">
         <p className="mb-3 text-sm text-[var(--osio-fg-muted)]">Group workspace members into teams.</p>
-        <DataTable headers={['Team', 'Members', '', '']} rows={rows} empty={<EmptyState icon={<Users size={16} />} title="No teams yet" hint="Create a team to group the people who work together." />} />
+        <DataTable headers={['Team', 'Members', 'Roster', 'Actions']} rows={rows} empty={<EmptyState icon={<Users size={16} />} title="No teams yet" hint="Create a team to group the people who work together." />} />
         <form className="mt-4 flex gap-2" onSubmit={submit}>
           <input aria-label="New team name" placeholder="Team name" className={`flex-1 ${FIELD}`} value={name} onChange={(event) => setName(event.target.value)} />
           <Button type="submit" tone="primary" disabled={!name.trim()}>Create team</Button>
