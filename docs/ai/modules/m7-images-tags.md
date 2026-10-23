@@ -8,9 +8,10 @@ the machine and nothing costs money per image.
 
 Everything here is bound to the vision conditions **C79–C82** and the
 conditions that the code of osionos #95 and #97 cites, **C80, C81, C92, C94 and
-C97**, of `/home/dlesieur/osionos-ai-records/a2-images-moderation-verdict.md`.
-Each is summarised in one line below; the verdict text is not copied here. The
-out-of-scope of this slice is written at the bottom.
+C97**, of the images and moderation devil verdict (conditions C79–C82, C80,
+C81, C92, C94 and C97), kept with the project's review records outside this
+repository. Each is summarised in one line below; the verdict text is not
+copied here. The out-of-scope of this slice is written at the bottom.
 
 **Status: ai-dev only. The public stack has no VLM.** The public overlay of
 groot puts `osionos-ai-vlm` in the profile `ai-vlm`, which the public stack

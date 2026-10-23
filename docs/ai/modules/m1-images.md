@@ -6,8 +6,9 @@ GPU (no paid service, $0 per image), stored through the bridge, marked
 "AI-generated".
 
 Everything here is bound to the conditions **C70–C78** of
-`/home/dlesieur/osionos-ai-records/a2-images-moderation-verdict.md`. The out-of-scope
-of this slice is written at the bottom.
+the images and moderation devil verdict (conditions C70–C78), kept with the
+project's review records outside this repository. The out-of-scope of this
+slice is written at the bottom.
 
 **Status: ai-dev only. The public stack stays OFF** (C70): the gate of the
 prompt (C72) is in the service, but the guard is not deployed yet and its
@@ -45,21 +46,23 @@ asked for — see "What proves what", C77.
 ## The commands (the gates)
 
 ```sh
-S=/tmp/claude-1000/-home-dlesieur-Documents-groot-apps-opposite-osiris/f01db1ed-1f78-43ef-aaac-95b48d7f37b9/scratchpad
+# <the groot worktree root>: it holds models/osionos-ai-migration.sql and the
+# other AI migrations named below.
+S="<the groot worktree root>"
 
 # The service (throwaway Postgres + Redis, the AI migrations, the suite).
 # tests/images.test.ts (20 tests), tests/imagesOff.test.ts (6 tests),
 # tests/imagesOutputCheck.test.ts (6 tests), tests/guardPolicy.test.ts (15 tests)
 # and tests/imagesPromptGate.test.ts (7 tests) are in it.
-sh services/osionos-ai/scripts/test.sh "$S/wt-groot-ai/models/osionos-ai-migration.sql" \
-                                           "$S/wt-groot-ai/models/osionos-ai-rag-migration.sql"
+sh services/osionos-ai/scripts/test.sh "$S/models/osionos-ai-migration.sql" \
+                                           "$S/models/osionos-ai-rag-migration.sql"
 
 # The full suite of 2026-10-22 — the AI migration applied twice (the `kind`
 # column must be idempotent), the RAG migration and the graph one: 338/338.
-sh services/osionos-ai/scripts/test.sh "$S/wt-groot-ai/models/osionos-ai-migration.sql" \
-                                           "$S/wt-groot-ai/models/osionos-ai-migration.sql" \
-                                           "$S/wt-groot-ai/models/osionos-ai-rag-migration.sql" \
-                                           "$S/wt-groot-ai/models/osionos-ai-graph-migration.sql"
+sh services/osionos-ai/scripts/test.sh "$S/models/osionos-ai-migration.sql" \
+                                           "$S/models/osionos-ai-migration.sql" \
+                                           "$S/models/osionos-ai-rag-migration.sql" \
+                                           "$S/models/osionos-ai-graph-migration.sql"
 
 # The policy of the gate on the verdicts A1 recorded (no guard is called).
 docker run --rm -v "$PWD":/app -w /app node:22-bookworm-slim \
