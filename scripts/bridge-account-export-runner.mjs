@@ -100,7 +100,7 @@ async function runJob(db, job, { env, fetchImpl, now }) {
 		}, { prefer: 'return=minimal' });
 	} catch (error) {
 		// An object with no done row has no expiry and nobody to sweep it.
-		if (stored) await storageDelete(job.user_id, EXPORT_KEY_FOR(job), fetchImpl, env, EXPORT_BUCKET).catch(() => {});
+		if (stored) await storageDelete(job.user_id, EXPORT_KEY_FOR(job), fetchImpl, env, EXPORT_BUCKET).catch((deleteError) => console.warn(`[osionos-bridge] account export object left with no expiry: ${failureCode(deleteError)}`));
 		console.warn(`[osionos-bridge] account export failed after ${now() - startedAt} ms: ${failureCode(error)}`);
 		await db.patch(`osionos_account_exports?id=eq.${job.id}`, {
 			status: 'failed',
