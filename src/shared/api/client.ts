@@ -25,6 +25,7 @@
  */
 
 import { ApiError, createHttpClient } from '@osionos/http-gate';
+import { refreshAwareFetch } from './sessionRefreshAware';
 import { revocationAwareFetch } from './sessionRevocation';
 import { sudoRequiredAwareFetch } from './sudoRequired';
 
@@ -82,10 +83,22 @@ export function reportRevokedSession(token: string): void {
   userStore((state) => (state.handleSessionRevoked as ((token: string) => void) | undefined)?.(token));
 }
 
+/** The token that replaces `token` after the user store rotated the session that owns it, or null. */
+async function refreshOwnerOf(token: string): Promise<string | null> {
+  const owner = userStore((state) => Object.values((state.sessions ?? {}) as Record<string, { userId: string; accessToken: string }>)
+    .find((session) => session.accessToken === token)?.userId);
+  if (!owner) return null;
+  await userStore((state) => (state.refreshAccount as ((userId: string) => Promise<unknown>) | undefined)?.(owner));
+  return userStore((state) => (state.sessions as Record<string, { accessToken: string }>)[owner]?.accessToken ?? null);
+}
+
 /** Thin fetch wrapper exposing typed GET/POST/PATCH/DELETE helpers. */
 export const api = createHttpClient({
   baseUrl: API_BASE,
   maxConcurrent: 6,
-  fetchImpl: sudoRequiredAwareFetch(revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession)),
+  fetchImpl: sudoRequiredAwareFetch(refreshAwareFetch(
+    revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
+    refreshOwnerOf,
+  )),
   missingBaseUrlMessage: 'VITE_API_URL is not configured.',
 });
