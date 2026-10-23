@@ -30,7 +30,7 @@ import { useTemplateForSurface } from "@/widgets/page-renderer/model/useTemplate
 import { ProfileView } from "./ProfileView";
 import { ProfileActions } from "./profileChrome";
 import { ReadmeBlocks } from "./ReadmeBlocks";
-import { BindingProvider, toBoundRecord } from "./model/binding";
+import { BindingProvider, toBoundRecord, toReadmeRecord } from "./model/binding";
 import { useProfile } from "./useProfile";
 
 export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
@@ -49,6 +49,7 @@ export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
   const professionBlocks = subjectProfession ? professionProfileContent(subjectProfession) : null;
   const templateBlocks = useTemplateForSurface("profile");
   const record = useMemo(() => toBoundRecord(profile), [profile]);
+  const readmeRecord = useMemo(() => toReadmeRecord(profile), [profile]);
   usePresenceHeartbeat();
 
   // A member's own pick wins over the admin's global template: it is the
@@ -69,7 +70,7 @@ export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
           <BindingProvider record={record}>
             <PageBlocksRenderer blocks={professionBlocks} />
           </BindingProvider>
-          <ReadmeBlocks readme={profile?.readme} />
+          <ReadmeBlocks readme={profile?.readme} record={readmeRecord} />
         </div>
       </div>
     );
@@ -87,7 +88,7 @@ export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
         <BindingProvider record={record}>
           <PageBlocksRenderer blocks={templateBlocks} />
         </BindingProvider>
-        <ReadmeBlocks readme={profile?.readme} />
+        <ReadmeBlocks readme={profile?.readme} record={readmeRecord} />
       </div>
     </div>
   );
