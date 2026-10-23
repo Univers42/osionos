@@ -28,6 +28,7 @@ import { createAccountProfileRoutes } from './bridge-account-profile.mjs';
 import { createAccountStatusRoutes } from './bridge-account-status.mjs';
 import { createAccountSudoRoutes } from './bridge-account-sudo.mjs';
 import { createPatRoutes } from './bridge-account-tokens.mjs';
+import { createAccountKeysRoutes } from './bridge-account-keys.mjs';
 import { createPreferencesRoutes } from './bridge-preferences.mjs';
 import { createSessionsRoutes } from './bridge-sessions.mjs';
 import { createPublishedPagesRoutes } from './bridge-account-published-pages.mjs';
@@ -53,6 +54,7 @@ export function createAccountHandler(deps) {
 		createSelfViewsRoutes(deps),
 		createWorkspaceSettingsRoutes(deps),
 		createPatRoutes(deps),
+		createAccountKeysRoutes(deps),
 		createAdminUsersRoutes(deps),
 		createAdminAuditRoutes(deps),
 		createAdminModerationRoutes(deps),
