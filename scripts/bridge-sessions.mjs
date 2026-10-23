@@ -171,6 +171,7 @@ function refreshClaimsFor(accessClaims, persona, config) {
 		roles: payload.roles,
 		platform_role: payload.platform_role ?? null,
 		is_admin: payload.is_admin === true,
+		...(payload.mfa_req === true && payload.aal !== 2 ? { mfa_req: true } : {}),
 	};
 }
 
@@ -424,6 +425,8 @@ function nextTokens({ config, now, payload, fresh }) {
 		memberWorkspaces: extras,
 		platformRole: rights.platform_role,
 		isAdmin: rights.is_admin,
+		// A refresh never raises assurance: a gated family stays aal1 until it steps up again.
+		...(payload.mfa_req === true ? { aal: 1, mfaReq: true } : {}),
 	});
 	const claims = { ...payload, ...rights, workspace_ids: [payload.workspace_ids[0], ...extras.map((entry) => entry._id)], roles, famIatMs: payload.fam_iat_ms, jti, familyExp: payload.exp, provider };
 	return { jti, access, refresh: mintRefreshToken({ config, now, claims }) };
