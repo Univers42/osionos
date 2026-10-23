@@ -22,6 +22,7 @@ import React from 'react';
 import { ProfileActions } from './profileChrome';
 import { ProfileFacts } from './profileFields';
 import { ProfileSharedPosts } from './ProfileSharedPosts';
+import { ReadmeBlocks } from './ReadmeBlocks';
 import { useProfile } from './useProfile';
 
 interface ProfileViewProps {
@@ -82,6 +83,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
         <ProfileFacts profile={profile} />
 
         <ProfileActions userId={userId} name={profile.name} />
+
+        <ReadmeBlocks readme={profile.readme} />
 
         <ProfileSharedPosts userId={userId} />
       </div>

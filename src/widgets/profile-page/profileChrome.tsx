@@ -16,10 +16,10 @@ import { MessageCircle, MoreHorizontal } from "lucide-react";
 import { ConnectButton } from "@/features/connections/ConnectButton";
 import { ContactContextMenu } from "@/features/connections/ContactContextMenu";
 import { useUserStore } from "@/features/auth";
-import { openSettings } from "@/features/settings/model/settingsNav";
 import { openDm } from "@/shared/chat/channelApi";
 import { genId } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { OwnerActions } from "./OwnerActions";
 
 /**
  * Shared profile chrome — the Message / Connect / More actions row, shown only
@@ -30,19 +30,7 @@ export function ProfileActions({ userId, name }: { userId: string; name: string 
   const activeUserId = useUserStore((s) => s.activeUserId);
   const moreRef = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  if (userId === activeUserId) {
-    return (
-      <div className="mt-6 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => openSettings("profile", "public-profile")}
-          className="inline-flex items-center gap-2 rounded-md border border-[var(--osio-border-default)] px-4 py-2 text-sm font-medium hover:bg-[var(--osio-bg-hover)]"
-        >
-          Edit profile
-        </button>
-      </div>
-    );
-  }
+  if (userId === activeUserId) return <OwnerActions />;
 
   const startDm = () => {
     openDm(userId)
