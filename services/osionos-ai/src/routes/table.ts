@@ -20,7 +20,7 @@ import {
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
 import { handleSources } from './sources.ts';
-import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
+import { handleApprovalDecision, handleApprovalGet, handleApprovalResume } from './approvals.ts';
 import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
 import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
@@ -144,6 +144,12 @@ export const ROUTES: RouteEntry[] = [
 	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/reject$/, label: '/api/ai/memories/:id/reject', handle: handleMemoryReject },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/archive$/, label: '/api/ai/memories/:id/archive', handle: handleMemoryArchive },
 	{ methods: ['PATCH'], pattern: /^\/api\/ai\/memories\/([^/]+)$/, label: '/api/ai/memories/:id', handle: handleMemoryEdit },
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/approvals\/([^/]+)\/resume$/,
+		label: '/api/ai/approvals/:id/resume',
+		handle: handleApprovalResume,
+	},
 	{
 		methods: [],
 		pattern: /^\/api\/ai\/workspaces\/([^/]+)\/sentiment\/settings$/,

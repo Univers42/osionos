@@ -6,6 +6,9 @@ import { bearerToken } from '../auth.ts';
 import { getOwnedApproval } from '../approvals/repo.ts';
 import { describeApproval } from '../approvals/describe.ts';
 import { decideApproval } from '../approvals/execute.ts';
+import { claimPartial, recordOutcome } from '../approvals/repo.ts';
+import { revalidateStoredPlan } from '../builders/plan.ts';
+import { executePlan } from '../builders/execute.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -26,7 +29,7 @@ import type { RouteContext } from './types.ts';
  */
 
 /** The body of a decision: the decision, and nothing else. */
-const decisionSchema = z.object({ decision: z.enum(['approve', 'decline']) }).strict();
+const decisionSchema = z.object({ decision: z.enum(['approve', 'decline']), items: z.array(z.string().min(1).max(40)).max(40).optional() }).strict();
 
 /** GET /api/ai/approvals/:id */
 export async function handleApprovalGet(ctx: RouteContext): Promise<number> {
@@ -77,6 +80,7 @@ export async function handleApprovalDecision(ctx: RouteContext): Promise<number>
 		sessionToken,
 		approvalId: id,
 		decision: body.decision,
+		items: body.items,
 	});
 	if (outcome.kind === 'refused') {
 		sendError(ctx.response, outcome.status, outcome.code);
@@ -89,6 +93,76 @@ export async function handleApprovalDecision(ctx: RouteContext): Promise<number>
 		result: outcome.result ?? null,
 		error: outcome.approval.error ?? null,
 		continuationRunId: outcome.continuationRunId ?? null,
+	});
+	return 200;
+}
+
+/** POST /api/ai/approvals/:id/resume */
+export async function handleApprovalResume(ctx: RouteContext): Promise<number> {
+	const user = requireUser(ctx);
+	if (!user) return 401;
+	const rate = await checkRunRateLimit(ctx.deps.redis, user.userId, config.runsPerMinute);
+	if (!rate.allowed) {
+		sendError(ctx.response, 429, 'rate_limited');
+		return 429;
+	}
+	const id = ctx.params[0] ?? '';
+	if (!UUID.test(id)) {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	const sessionToken = bearerToken(ctx.request);
+	if (!sessionToken) {
+		sendError(ctx.response, 401, 'unauthorized');
+		return 401;
+	}
+	const claimed = await claimPartial(ctx.deps.db, { id, ownerId: user.userId });
+	if (!claimed) {
+		const owned = await getOwnedApproval(ctx.deps.db, { id, ownerId: user.userId });
+		if (!owned) {
+			sendError(ctx.response, 404, 'not_found');
+			return 404;
+		}
+		sendError(ctx.response, 409, 'approval_not_partial');
+		return 409;
+	}
+	// revalidate
+	const rv = revalidateStoredPlan(claimed.args);
+	if (!rv.ok) {
+		await recordOutcome(ctx.deps.db, { id: claimed.id, status: 'failed', error: rv.error });
+		sendJson(ctx.response, 200, {
+			ok: true,
+			approvalId: claimed.id,
+			status: 'failed',
+			result: null,
+			error: rv.error,
+			continuationRunId: null,
+		});
+		return 200;
+	}
+	const plan = rv.plan;
+	const execResult = await executePlan({
+		db: ctx.deps.db,
+		user,
+		sessionToken,
+		approval: claimed,
+		plan,
+		budgetMs: config.buildBudgetMs,
+	});
+	const c = execResult.counts;
+	let status: 'partial' | 'failed' | 'executed';
+	if (c.pending > 0) status = 'partial';
+	else if (c.done === 0) status = 'failed';
+	else status = 'executed';
+	const result = { ...c, created: execResult.created, counts: c };
+	await recordOutcome(ctx.deps.db, { id: claimed.id, status, result });
+	sendJson(ctx.response, 200, {
+		ok: true,
+		approvalId: claimed.id,
+		status,
+		result,
+		error: null,
+		continuationRunId: null,
 	});
 	return 200;
 }

@@ -9,7 +9,10 @@ import { getRun } from '../runs/repo.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
 import { bridgeWrite, refusalMessage } from './bridge.ts';
 import type { BridgeWrite } from './bridge.ts';
-import { claimApproval, getOwnedApproval, recordOutcome } from './repo.ts';
+import { claimApproval, getOwnedApproval, recordOutcome, claimPartial } from './repo.ts';
+import { revalidateStoredPlan, flattenPlan } from '../builders/plan.ts';
+import { approvedKeys, executePlan, writeOf } from '../builders/execute.ts';
+import { seedItems, setItem } from '../builders/items.ts';
 import { WRITE_VERBS } from '../tools/writeTools.ts';
 import type { AuthUser } from '../auth.ts';
 import type { ApprovalRow } from './types.ts';
@@ -36,7 +39,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type DecisionOutcome =
 	| {
 			kind: 'decided';
-			status: 'executed' | 'failed' | 'declined';
+			status: 'executed' | 'failed' | 'declined' | 'partial';
 			approval: ApprovalRow;
 			result?: unknown;
 			continuationRunId?: string;
@@ -186,10 +189,14 @@ export async function decideApproval(input: {
 	sessionToken: string;
 	approvalId: string;
 	decision: 'approve' | 'decline';
+	items?: string[];
 }): Promise<DecisionOutcome> {
-	const { db, redis, user, sessionToken, approvalId, decision } = input;
+	const { db, redis, user, sessionToken, approvalId, decision, items } = input;
 	const row = await getOwnedApproval(db, { id: approvalId, ownerId: user.userId });
 	if (!row) return { kind: 'refused', status: 404, code: 'not_found' };
+	if (items && items.length > 0 && row.tool !== 'build_plan') {
+		return { kind: 'refused', status: 400, code: 'items_not_allowed' };
+	}
 	if (row.status !== 'pending') return { kind: 'refused', status: 409, code: 'approval_not_pending' };
 	if (row.expires_at.getTime() <= Date.now()) {
 		await db.query(
@@ -197,6 +204,16 @@ export async function decideApproval(input: {
 			[approvalId],
 		);
 		return { kind: 'refused', status: 409, code: 'approval_expired' };
+	}
+
+	if (row.tool === 'build_plan' && items && items.length > 0) {
+		const rv = revalidateStoredPlan(row.args);
+		if (rv.ok) {
+			const keys = new Set(flattenPlan(rv.plan).map((f) => f.key));
+			if (items.some((key) => !keys.has(key))) {
+				return { kind: 'refused', status: 400, code: 'unknown_item' };
+			}
+		}
 	}
 
 	if (decision === 'decline') {
@@ -208,6 +225,51 @@ export async function decideApproval(input: {
 
 	const claimed = await claimApproval(db, { id: approvalId, ownerId: user.userId, next: 'executing' });
 	if (!claimed) return { kind: 'refused', status: 409, code: 'approval_not_pending' };
+
+	if (claimed.tool === 'build_plan') {
+		const rv = revalidateStoredPlan(claimed.args);
+		if (!rv.ok) {
+			await recordOutcome(db, { id: claimed.id, status: 'failed', error: rv.error });
+			const continuationRunId = await continueRun(db, redis, user, claimed, 'failed', rv.error);
+			return { kind: 'decided', status: 'failed', approval: claimed, continuationRunId };
+		}
+		const plan = rv.plan;
+		const flat = flattenPlan(plan);
+		let approved: string[];
+		try {
+			approved = approvedKeys(flat, items);
+		} catch {
+			// Should not happen: validated above. Treat as failed without bridge.
+			const error = 'unknown_item';
+			await recordOutcome(db, { id: claimed.id, status: 'failed', error });
+			const continuationRunId = await continueRun(db, redis, user, claimed, 'failed', error);
+			return { kind: 'decided', status: 'failed', approval: claimed, continuationRunId };
+		}
+		await seedItems(db, claimed.id, flat);
+		const approvedSet = new Set(approved);
+		for (const f of flat) {
+			if (!approvedSet.has(f.key)) await setItem(db, claimed.id, f.key, 'skipped');
+		}
+		const execResult = await executePlan({
+			db,
+			user,
+			sessionToken,
+			approval: claimed,
+			plan,
+			budgetMs: config.buildBudgetMs,
+		});
+		const c = execResult.counts;
+		let status: 'partial' | 'failed' | 'executed';
+		if (c.pending > 0) status = 'partial';
+		else if (c.done === 0) status = 'failed';
+		else status = 'executed';
+		const result = { ...c, created: execResult.created, counts: c };
+		await recordOutcome(db, { id: claimed.id, status, result });
+		const detail = `the plan "${plan.title}" was built: ${c.done} created, ${c.failed} failed, ${c.pending} left to resume`;
+		const continuationOutcome = status === 'failed' ? 'failed' : 'executed';
+		const continuationRunId = await continueRun(db, redis, user, claimed, continuationOutcome, detail);
+		return { kind: 'decided', status, approval: claimed, result, continuationRunId };
+	}
 
 	const write = bridgeWriteOf(claimed);
 	const bridgeUrl = config.bridgeUrl;

@@ -17,7 +17,7 @@ export const buildPlan: WriteTool<Plan> = {
 		'Propose a whole structure of new pages and databases for the user to approve once. ' +
 		'It can only CREATE new pages and databases, all under one parent (or the workspace root); it never edits existing ones. ' +
 		'Page blocks: paragraph, heading_1-3, bulleted_list, numbered_list, to_do, toggle, quote, callout, divider, code, table_block, ' +
-		'and database_inline / database_full_page pointing at a database key of the same plan. ' +
+		'and database_inline pointing at a database key of the same plan. ' +
 		'Database properties: title (exactly one), text, number, select, multi_select, status, date, checkbox, url, email, phone. ' +
 		'Views: table, board, calendar, list, gallery. At most 40 items, 3 levels deep. ' +
 		'Ids are assigned by the system: do not send any.',
