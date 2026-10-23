@@ -30,7 +30,9 @@ import { createShareRuleStore } from './bridge-perms-rules.mjs';
 import { moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
-import { sessionCutoffsFromConfig, startSessionCutoffPoller } from './bridge-session-cutoff.mjs';
+import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge-auth-exchange.mjs';
+import { resolveTurnstileToken, turnstileBootLine, turnstileSettingsFromEnv } from './bridge-turnstile.mjs';
+import { sessionCutoffsFromConfig, startSessionCutoffPoller, writeSessionCutoff } from './bridge-session-cutoff.mjs';
 import { sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
 import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
 import { createAccountHandler } from './bridge-account-mounts.mjs';
@@ -168,6 +170,12 @@ const CLAUDE_TOOL_MAP = {
 	archive: ['mcp__osionos__osionos_archive_page'],
 };
 
+// Throws at boot on a Turnstile misconfiguration (see turnstileSettingsFromEnv).
+function turnstileConfigFromEnv(env) {
+	const { mode, secret, bypass } = turnstileSettingsFromEnv(env);
+	return { turnstileMode: mode, turnstileSecret: secret, turnstileBypassLocal: bypass };
+}
+
 export function configFromEnv(env = process.env) {
 	const appUrl = (env.OSIONOS_APP_URL ?? env.PUBLIC_OSIONOS_APP_URL ?? 'http://localhost:3001').replace(/\/$/, '');
 	return {
@@ -205,6 +213,7 @@ export function configFromEnv(env = process.env) {
 		baasTenantId: env.OSIONOS_BAAS_TENANT_ID ?? env.VITE_BAAS_TENANT_ID ?? env.BAAS_TENANT_ID ?? '',
 		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
 		publicApiKey: env.PUBLIC_BAAS_ANON_KEY ?? env.KONG_PUBLIC_API_KEY ?? '',
+		...turnstileConfigFromEnv(env),
 		serviceKey: env.SERVICE_ROLE_KEY ?? env.KONG_SERVICE_API_KEY ?? env.BAAS_SERVICE_ROLE_KEY ?? '',
 		requireBaas: env.OSIONOS_BRIDGE_REQUIRE_BAAS === 'true',
 		persistence: env.OSIONOS_BRIDGE_PERSISTENCE ?? 'auto',
@@ -4572,6 +4581,30 @@ async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}',
 	return { res, data };
 }
 
+// The gateway mints a one-time handoff for a GoTrue access token; consuming it here makes the
+// osionos session the app uses. The session row is written here, where the request's client
+// metadata is the user's. `expectedUserId` refuses a session minted for someone else before it is recorded.
+async function establishAppSession({ request, config, kv, pg, fetchImpl, gatewayToken, authMethod, expectedUserId = '' }) {
+	const { res, data } = await gatewayCall(fetchImpl, config, '/api/auth/osionos-session', {
+		headers: { authorization: `Bearer ${gatewayToken}` },
+		forwardedFor: forwardedForHeader(request),
+	});
+	const bridgeToken = bridgeTokenFromRedirect(data.redirectUrl);
+	if (!res.ok || !bridgeToken) throw Object.assign(new Error(data.message || 'Could not establish the app session.'), { status: 502 });
+	const consumed = await consumeHandoffToken(bridgeToken, kv, sessionClock(config), config.appSessionSecret);
+	if (expectedUserId && consumed.session.userId !== expectedUserId) {
+		throw Object.assign(new Error('The sign-in could not be verified; sign in again.'), { status: 401, code: 'invalid_provider_token' });
+	}
+	await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod });
+	return consumed;
+}
+
+// The address the gateway would also attribute the request to: the configured header, else the socket peer.
+function signInRemoteIp(request, config) {
+	const header = config.clientIpHeader ? String(request.headers[config.clientIpHeader.toLowerCase()] ?? '') : '';
+	return header.split(',')[0].trim() || (request.socket?.remoteAddress ?? '');
+}
+
 // Proxy the app's login/register to the hardened auth-gateway (server-side, so the
 // gateway's website-only CORS does not apply), then mint + return the osionos
 // session the app already consumes ({ user, accessToken, refreshToken }). Reuses
@@ -4582,8 +4615,8 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 	const email = safeText(payload.email, 320).trim().toLowerCase();
 	const password = safeText(payload.password, 512);
 	if (!email || !password) throw Object.assign(new Error('Email and password are required.'), { status: 422 });
-	const turnstileToken = 'localhost-turnstile-token';
 	const forwardedFor = forwardedForHeader(request);
+	const turnstileToken = await resolveTurnstileToken(payload, { config, fetchImpl, remoteIp: signInRemoteIp(request, config) });
 
 	if (url.pathname === '/api/auth/register') {
 		const rawName = safeText(payload.username ?? payload.name ?? email.split('@')[0], 64);
@@ -4601,17 +4634,7 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 	});
 	if (!lRes.ok || !lData.access_token) { json(response, lRes.status || 401, { message: lData.message || 'Invalid credentials.' }, config); return; }
 
-	const { res: sRes, data: sData } = await gatewayCall(fetchImpl, config, '/api/auth/osionos-session', {
-		headers: { authorization: `Bearer ${lData.access_token}` },
-		forwardedFor,
-	});
-	const bridgeToken = bridgeTokenFromRedirect(sData.redirectUrl);
-	if (!sRes.ok || !bridgeToken) { json(response, 502, { message: sData.message || 'Could not establish the app session.' }, config); return; }
-
-	const consumed = await consumeHandoffToken(bridgeToken, kv, sessionClock(config), config.appSessionSecret);
-	// A password sign-in is the user's own request: this is where its client metadata is
-	// the user's, so this is where its session row is written.
-	await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod: 'password' });
+	const consumed = await establishAppSession({ request, config, kv, pg, fetchImpl, gatewayToken: lData.access_token, authMethod: 'password' });
 	json(response, 200, {
 		user: { id: lData.user?.id ?? consumed.session.userId, email },
 		accessToken: consumed.session.accessToken,
@@ -4629,22 +4652,6 @@ async function requireEmptyBody(request) {
 		if (bytes > DEFAULT_JSON_BODY_LIMIT_BYTES) throw Object.assign(new Error('Request body too large.'), { status: 413 });
 	}
 	if (bytes > 0) throw Object.assign(new Error('Sign-out takes no request body.'), { status: 400, code: 'logout_body_not_allowed' });
-}
-
-/** An explicit timestamp from the bridge clock: a column DEFAULT would leave an existing row untouched on conflict. */
-async function writeSessionCutoff(config, fetchImpl, userId, writtenAtMs) {
-	try {
-		await baasRest(config, fetchImpl, `auth_session_cutoffs?${postgrestQuery({ on_conflict: 'user_id' })}`, {
-			method: 'POST',
-			body: { user_id: userId, sessions_valid_after: new Date(writtenAtMs).toISOString() },
-			prefer: 'resolution=merge-duplicates',
-		});
-	} catch (error) {
-		if (error?.upstreamStatus === 409 && /23503/.test(error.upstreamText ?? '')) {
-			throw Object.assign(new Error('No account matches this session.'), { status: 409, code: 'user_not_found' });
-		}
-		throw Object.assign(new Error('Sign-out could not be recorded; try again shortly.'), { status: 503, code: 'session_cutoffs_unavailable', retryAfterSeconds: 5 });
-	}
 }
 
 /** Signs the caller out everywhere: every osionos_v1 token issued before now stops verifying. */
@@ -4667,6 +4674,10 @@ async function handleBridgeLogout(request, response, config, fetchImpl) {
 async function handleBridgePost(url, request, response, config, kv, pg, fetchImpl, env = process.env) {
 	if (url.pathname === '/api/auth/bridge/logout') {
 		await handleBridgeLogout(request, response, config, fetchImpl);
+		return true;
+	}
+	if (url.pathname === EXCHANGE_PATH) {
+		await handleAuthExchange(request, response, { config, kv, pg, fetchImpl, establishSession: (args) => establishAppSession({ ...args, config, kv, pg, fetchImpl }) });
 		return true;
 	}
 	if (url.pathname === '/api/auth/login' || url.pathname === '/api/auth/register') {
@@ -4850,6 +4861,9 @@ export function startBridgeServer(config = configFromEnv()) {
 	const server = createBridgeServer({ config });
 	// One boot line for the three states an operator has to know.
 	console[bridgeBootIsDegraded(server) ? 'warn' : 'info'](bridgeBootLine(server));
+	console.info(turnstileBootLine(config));
+	const ipWarning = clientIpBootWarning(config);
+	if (ipWarning) console.info(ipWarning);
 	// No administrator configured: nobody is promoted to is_admin at login, so
 	// an account-admin workspace has no admin until the operator sets one.
 	if (!config.adminEmails.length) console.warn('[bridge] no account administrators configured (OSIONOS_ADMIN_EMAILS unset)');
