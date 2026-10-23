@@ -124,6 +124,7 @@ test("the adapter is read-only: every write leaves the state as loaded", async (
   const t = stub(answer("my-tasks", ["page_id", "block_id", "content", "checked"], [{ page_id: "p", block_id: "b", content: "x", checked: true }]));
   const adapter = state.getSysDatabaseAdapter("sys:my-tasks", t);
   const before = await adapter.loadState();
+  const snapshot = JSON.stringify(before);
   assert.equal(before.pages["p:b"].properties.checked, true);
   await adapter.patchPage("p:b", { properties: { content: "edited" } });
   await adapter.insertPage("sys:my-tasks", { properties: {} });
@@ -131,7 +132,9 @@ test("the adapter is read-only: every write leaves the state as loaded", async (
   await adapter.addProperty("sys:my-tasks", { id: "z", name: "z", type: "text" });
   await adapter.removeProperty("sys:my-tasks", "content");
   await adapter.changePropertyType("sys:my-tasks", "content", "number");
-  assert.deepEqual(await adapter.getPage("p:b"), before.pages["p:b"]);
+  assert.equal(JSON.stringify(await adapter.loadState()), snapshot, "a fresh load equals the first");
+  assert.equal(JSON.stringify(before), snapshot, "the loaded state was not edited in place");
+  assert.equal((await adapter.getPage("p:b"))?.properties.content, "x");
   assert.equal((await adapter.findPages({ databaseId: "sys:my-tasks" })).length, 1);
   assert.equal((await adapter.loadState()).databases["sys:my-tasks"].properties.content.type, "title");
 });
@@ -177,4 +180,12 @@ test("the catalog registers the My data section and its sys: commands", () => {
 test("sys: ids are never registered as data-source providers", () => {
   const text = readFileSync(new URL("../../src/widgets/database-view/model/sysDatabaseState.ts", import.meta.url), "utf8");
   assert.doesNotMatch(text, /registerDataSourceProvider/);
+});
+
+test("DatabaseBlock routes sys: ids before the Home and known branches", () => {
+  const text = readFileSync(new URL("../../src/widgets/database-view/ui/DatabaseBlock.tsx", import.meta.url), "utf8");
+  const sys = text.search(/if \(isSysDatabaseId\(resolvedDatabaseId\)\) \{/);
+  const home = text.indexOf("if (isHomeLiveDatabaseId(resolvedDatabaseId)");
+  assert.ok(sys > 0, "an unconditional sys: branch exists");
+  assert.ok(home > sys, "the sys: branch precedes the Home and known/fallback branches");
 });
