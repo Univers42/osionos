@@ -50,6 +50,32 @@ const HEADING_LEVELS: Readonly<Record<string, number>> = Object.freeze({
 	heading_3: 3,
 });
 
+/**
+ * The text of a block. An image block's `content` is a capability path, not
+ * prose, so it is never indexed; its alt text is, as `Image: <alt>`.
+ */
+function blockText(block: PageBlock, type: string): string {
+	if (type === 'image') return imageText(block);
+	return typeof block.content === 'string' ? block.content.trim() : '';
+}
+
+/** `Image: <alt>`, `Tags: a, b` and `Text in image: <text>`: one line each, when present. */
+function imageText(block: PageBlock): string {
+	const { mediaAlt, mediaTags, mediaText } = block as { mediaAlt?: unknown; mediaTags?: unknown; mediaText?: unknown };
+	const alt = typeof mediaAlt === 'string' ? mediaAlt.trim() : '';
+	const tags = Array.isArray(mediaTags)
+		? mediaTags.filter((t): t is string => typeof t === 'string').map((t) => t.trim()).filter(Boolean)
+		: [];
+	const text = typeof mediaText === 'string' ? mediaText.trim() : '';
+	return [
+		alt ? `Image: ${alt}` : '',
+		tags.length > 0 ? `Tags: ${tags.join(', ')}` : '',
+		text ? `Text in image: ${text}` : '',
+	]
+		.filter(Boolean)
+		.join('\n');
+}
+
 /** The id of a block: a string, or nothing. */
 function blockId(block: PageBlock): string {
 	return typeof block.id === 'string' ? block.id : '';
@@ -98,8 +124,8 @@ export function pageSections(page: PageDocument): Section[] {
 	let current: Section | null = null;
 
 	for (const block of pageBlocks(page.content)) {
-		const text = typeof block.content === 'string' ? block.content.trim() : '';
 		const type = typeof block.type === 'string' ? block.type : '';
+		const text = blockText(block, type);
 		const level = HEADING_LEVELS[type];
 		if (level !== undefined) {
 			// A heading opens a section. The headings it closes are the ones of

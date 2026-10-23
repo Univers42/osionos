@@ -20,6 +20,14 @@ export interface AuthUser {
 	 * is measured against.
 	 */
 	issuedAtMs: number;
+	/**
+	 * The workspaces a personal access token is limited to (C115).
+	 *
+	 * `liveMemberWorkspaces` intersects it with the LIVE membership, so every
+	 * caller of that one function honours it without knowing it exists. An app
+	 * session has none.
+	 */
+	scope?: readonly string[];
 }
 
 /**

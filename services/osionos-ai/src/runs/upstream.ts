@@ -59,6 +59,8 @@ export interface UpstreamRunInput {
 	pages: readonly PageContext[];
 	/** The sources of the answer: the chunks the retrieval found. */
 	sources: readonly RetrievedChunk[];
+	/** True when the search ran and found nothing that answers (no sources, by design). */
+	abstained?: boolean;
 	/**
 	 * The caller, when the run has one.
 	 *
@@ -96,6 +98,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		history,
 		pages,
 		sources,
+		abstained = false,
 		user,
 		skippedPageIds,
 		userMessageId,
@@ -187,7 +190,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		});
 		const tools = runTools.tools;
 
-		const userText = buildUserTurn(text, pages, sources);
+		const userText = buildUserTurn(text, pages, sources, abstained);
 		const userContent = [
 			{ type: 'text' as const, text: userText },
 			...images.map((image) => ({ type: 'image' as const, image: image.data, mediaType: image.mediaType })),

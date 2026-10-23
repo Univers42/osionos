@@ -24,6 +24,7 @@ import {
   MoveRight,
   PencilLine,
   Replace,
+  ScanText,
   Settings2,
   Sparkles,
   Trash2,
@@ -48,6 +49,8 @@ export interface ImageMenuHandlers {
   comment: () => void;
   suggestEdits: () => void;
   askAI: () => void;
+  /** Absent when the image cannot be described (a link, the feature off). */
+  describe?: { run: () => void; running: boolean };
 }
 
 const SZ = 15;
@@ -106,6 +109,14 @@ export function buildImageMenuSections(h: ImageMenuHandlers): BlockContextMenuSe
         { icon: <MessageSquare size={SZ} />, label: "Comment", onClick: h.comment },
         { icon: <PencilLine size={SZ} />, label: "Suggest edits", onClick: h.suggestEdits },
         { icon: <Sparkles size={SZ} />, label: "Ask AI", onClick: h.askAI },
+        ...(h.describe
+          ? [{
+              icon: <ScanText size={SZ} />,
+              label: h.describe.running ? "Describing…" : "Describe with AI",
+              disabled: h.describe.running,
+              onClick: h.describe.run,
+            }]
+          : []),
       ],
     },
   ];

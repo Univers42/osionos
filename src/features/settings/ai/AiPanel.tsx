@@ -15,7 +15,9 @@ import { Sparkles } from 'lucide-react';
 import { useUserStore } from '@/features/auth';
 import { useAiSettingsStore, recordSettingsAction } from '@/store/settings';
 import { Button, Toggle } from '@/shared/ui';
+import { isAiConfigured } from '@/features/ai/api/aiClient';
 import { FeatureCard, Section, SettingRow } from '../ui/settingsKit';
+import { SentimentSection } from './SentimentSection';
 
 export const AiPanel = () => {
   const workspaceId = useUserStore((state) => state.activeWorkspace()?._id ?? 'local-workspace');
@@ -30,6 +32,7 @@ export const AiPanel = () => {
       <SettingRow title="Custom agents" description="Allow members to create custom agents." action={<Toggle checked={settings.customAgentsAllowed} onChange={(checked) => update(workspaceId, { customAgentsAllowed: checked })} label="Custom agents" />} />
       <SettingRow title="Search everywhere indexing" description="Index pages and connected content for AI answers." action={<Toggle checked={settings.searchEverywhereIndexing} onChange={(checked) => update(workspaceId, { searchEverywhereIndexing: checked })} label="Search everywhere indexing" />} />
       <SettingRow title="Summaries" description="Generate page and meeting summaries." action={<Toggle checked={settings.summaries} onChange={(checked) => update(workspaceId, { summaries: checked })} label="Summaries" />} />
+      {isAiConfigured() && workspaceId !== 'local-workspace' && <SentimentSection key={workspaceId} workspaceId={workspaceId} />}
     </Section>
   );
 };
