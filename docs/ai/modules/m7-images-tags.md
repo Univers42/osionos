@@ -158,8 +158,10 @@ host shared with other agents (RESULTS.md:3-7). gemma-3-4b was not measured
 ## What is not done
 
 - **Browser check.** The toolbar button, the menu entry, the chips and the
-  disclosure were not exercised in a browser (PR #97 body). No live VLM smoke
-  either (PR #95 body, host load). This sheet did not run them.
+  disclosure were not exercised in a browser (PR #97 body). One real-model
+  smoke exists, without the bridge: the groot #117 service definition on one
+  COCO picture answered schema-valid JSON in 16.96 s at 4.38 GiB under the
+  6 GiB limit (PR #95 comment, 2026-10-23). It is a smoke, not a benchmark.
 - **Search in the app.** Step 4 is the assistant's retrieval index, proved on
   chunks. No test or run shows a page search box finding the image by a caption
   word.
@@ -170,9 +172,9 @@ host shared with other agents (RESULTS.md:3-7). gemma-3-4b was not measured
   found no code that holds a public image for review or blurs it in the console.
 - **The 60 000-pixel header case and RSS bound of C81.** The pixel cap is
   tested, the memory bound is not.
-- **The production working set.** Measured only against a 7 GiB cap; the
-  compose limit is 6 GiB and the spike says the working set under 4 GiB is not
-  measured (`RESULTS.md:101-103`).
+- **The production working set.** The spike measured against a 7 GiB cap
+  (`RESULTS.md:101-103`); the one smoke under the 6 GiB compose limit used
+  4.38 GiB on one picture. A sustained run under 6 GiB is not measured.
 - **A 20-per-hour bucket.** The rate limit is per minute (PR #95 body).
 - **Totals re-run.** The pass counts above are the PR bodies', not mine.
 - **Course lessons `04/18` and `04/25`.** The plan text is not in this
