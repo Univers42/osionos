@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 
 import { IDS, harnessConfig, send, sessionHeaders } from './support/bridge-harness.mjs';
 import { avatarBridge } from './support/avatar-storage.mjs';
-import { htmlFixture, jpegFixture, jpegSegment, webpChunk, webpFixture } from './support/image-fixtures.mjs';
+import { gifFixture, htmlFixture, jpegFixture, jpegSegment, pngFixture, webpChunk, webpFixture } from './support/image-fixtures.mjs';
 import { imageInfo } from '../../scripts/bridge-image-meta.mjs';
 
 const config = harnessConfig();
@@ -50,6 +50,16 @@ describe('POST /api/profile/banner', () => {
 			assert.equal(result.status, 415, result.text);
 			assert.equal(storage.stats().puts, 0);
 			assert.equal(profilePatches(mock).length, 0);
+		}, { profiles });
+	});
+
+	it('refuses a real PNG or GIF of the right size: only WebP and JPEG are stored', async () => {
+		await avatarBridge(async ({ base, storage }) => {
+			for (const bytes of [pngFixture({ width: 1500, height: 500 }), gifFixture({ width: 1500, height: 500 })]) {
+				const result = await post(base, bannerBody(bytes));
+				assert.equal(result.status, 415, result.text);
+			}
+			assert.equal(storage.stats().puts, 0);
 		}, { profiles });
 	});
 
