@@ -60,7 +60,7 @@ const project = (row, select) => (!select || select === '*' ? { ...row } : Objec
 /** The two factor tables. `failRead` / `failWrite` are { status, body } answers for the next kind of request. */
 export function createMfaStore({ totp = [], recovery = [] } = {}) {
 	const tables = new Map([[TOTP_TABLE, totp.map((row) => ({ ...row }))], [CODES_TABLE, recovery.map((row) => ({ ...row }))]]);
-	const store = { calls: [], failRead: null, failWrite: null, rows: (name = TOTP_TABLE) => tables.get(name) };
+	const store = { calls: [], failRead: null, failWrite: null, frozenReads: null, rows: (name = TOTP_TABLE) => tables.get(name) };
 	store.fetchImpl = async (url, init = {}) => {
 		const parsed = new URL(String(url));
 		const table = parsed.pathname.replace('/rest/v1/', '');
@@ -73,6 +73,8 @@ export function createMfaStore({ totp = [], recovery = [] } = {}) {
 		const rows = tables.get(table);
 		const hits = rows.filter((row) => [...parsed.searchParams].every(([key, expr]) => RESERVED.has(key) || matches(row, key, expr)));
 		const answer = (list) => (prefer.includes('return=representation') ? json(list.map((row) => project(row, parsed.searchParams.get('select'))), method === 'POST' ? 201 : 200) : new Response(null, { status: 204 }));
+		// `frozenReads` is the snapshot two racing requests both read before either writes.
+		if (method === 'GET' && store.frozenReads && table === TOTP_TABLE) return json(store.frozenReads.map((row) => project(row, parsed.searchParams.get('select'))));
 		if (method === 'GET') return json(hits.map((row) => project(row, parsed.searchParams.get('select'))));
 		if (method === 'POST') {
 			const duplicate = rows.some((row) => (table === TOTP_TABLE ? row.user_id === call.body.user_id : row.user_id === call.body.user_id && row.code_hmac === call.body.code_hmac));

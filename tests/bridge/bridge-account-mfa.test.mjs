@@ -159,6 +159,15 @@ describe('two-step verification: step-up, replay and the window', () => {
 		assert.equal(world.mfa.rows(TOTP_TABLE)[0].last_step, stepAt(world.clock.at));
 	});
 
+	it('lets exactly one of two concurrent requests with the same code through', async (t) => {
+		const { world, secret } = await enrolledWorld(t);
+		const { accessToken } = await world.signIn();
+		const code = hotp(secret, stepAt(world.clock.at));
+		world.mfa.frozenReads = structuredClone(world.mfa.rows(TOTP_TABLE));
+		const answers = await Promise.all([verify(world, accessToken, code), verify(world, accessToken, code)]);
+		assert.deepEqual(answers.map((answer) => answer.status).sort(), [200, 422]);
+	});
+
 	it('accepts a code from the next step and then refuses the current-step code (pinned, see the Caveat)', async (t) => {
 		const { world, secret } = await enrolledWorld(t);
 		const { accessToken } = await world.signIn();
