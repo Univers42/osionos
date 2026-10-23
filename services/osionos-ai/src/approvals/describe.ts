@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { WRITE_TOOLS } from '../tools/writeTools.ts';
+import { writeTools } from '../tools/writeToolList.ts';
 import { countExecutedInRun } from './repo.ts';
 import type { ApprovalPlan, ApprovalRow, ApprovalTarget } from './types.ts';
 import type { AuthUser } from '../auth.ts';
@@ -34,7 +34,7 @@ export interface ApprovalDescription {
 
 /** The tool of an approval, by name. */
 function toolOf(name: string) {
-	return WRITE_TOOLS.find((tool) => tool.name === name) ?? null;
+	return writeTools().find((tool) => tool.name === name) ?? null;
 }
 
 /**

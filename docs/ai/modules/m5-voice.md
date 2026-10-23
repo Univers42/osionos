@@ -100,10 +100,19 @@ docker run --rm -v "$PWD/infrastructure/tls":/etc/nginx/conf.d:ro nginx:1.27-alp
 
 ## Caveats
 
-- **Caveat: the WER and the latency of the dictation are PENDING A1.** No
-  number is written here: the A1 spike measures `faster-whisper-small` against
-  `large-v3-turbo` on this machine, and it may change the model, the `cpus`
-  and the `mem_limit` of the service (both are provisional: 4 CPUs, 2 GB).
+- **Caveat: WER and latency of the dictation (measured, A1).** `faster-whisper-small`
+  on speaches, `--cpus 5`, FLEURS test split, 100 clips per language:
+  WER en_us 0.064 (95 % CI [0.051, 0.079]), fr_fr 0.128 ([0.106, 0.150]),
+  es_419 0.049 ([0.039, 0.061]); p95 latency 4.64 s / 4.78 s / 4.70 s;
+  p95 RTF 0.579 / 0.535 / 0.469. Measured with
+  `services/osionos-ai/spikes/a1/stt.sh` (see
+  `services/osionos-ai/spikes/a1/stt-bench.py`); full numbers in
+  `services/osionos-ai/spikes/a1/results/stt/RESULTS.md`. Decision: small stays;
+  turbo's WER is lower in fr/es but its p95 RTF is above 0.5 on this CPU.
+- **Caveat:** FLEURS is read speech, not dictation; the CPU was shared with
+  other jobs during the measurement (load 6-14); the normaliser is NFKC +
+  lowercase + punctuation removed, not Whisper's own, so the numbers are not
+  comparable to papers.
 - **Caveat: the voices of the browsers are measured on ONE platform.** The
   table below has one measured row; the others are the same command on another
   machine. The command that produced it:
