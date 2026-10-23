@@ -1444,6 +1444,27 @@ async function listWorkspacePageRefs(workspaceId, config, fetchImpl) {
 	return await baasRest(config, fetchImpl, `osionos_pages?${query}`) ?? [];
 }
 
+/**
+ * Marks the listed workspaces that are staged for deletion (pendingDeleteAt / deleteAfter), which the
+ * list RPC does not return. Caveat: best effort; when the read fails the list is returned unmarked,
+ * so the owner sees no Cancel banner until the next list, and the delete itself is unaffected.
+ */
+async function withPendingDelete(workspaces, config, fetchImpl) {
+	const ids = workspaces.map((entry) => String(entry.id)).filter((id) => UUID_REGEX.test(id));
+	if (ids.length === 0) return workspaces;
+	try {
+		const rows = await baasRest(config, fetchImpl, `osionos_workspaces?id=in.(${ids.join(',')})&pending_delete_at=not.is.null&select=id,pending_delete_at,delete_after`);
+		const stamps = new Map((Array.isArray(rows) ? rows : []).map((row) => [String(row.id).toLowerCase(), row]));
+		return workspaces.map((entry) => {
+			const stamp = stamps.get(String(entry.id).toLowerCase());
+			return stamp ? { ...entry, pendingDeleteAt: stamp.pending_delete_at, deleteAfter: stamp.delete_after } : entry;
+		});
+	} catch (error) {
+		console.warn(`[osionos-bridge] pending-delete marks unavailable: ${error?.status ?? 'error'}`);
+		return workspaces;
+	}
+}
+
 async function listSessionWorkspaces(authContext, config, fetchImpl) {
 	if (authContext.workspaceIds.length === 0) return [];
 	try {
@@ -1466,7 +1487,8 @@ async function listSessionWorkspaces(authContext, config, fetchImpl) {
 			role: row.workspace_role,
 			permissions: row.permissions,
 		}));
-		return workspaces.length > 0 ? workspaces : authContext.workspaceIds.map((workspaceId) => fallbackWorkspaceEntry(workspaceId, authContext));
+		if (workspaces.length > 0) return await withPendingDelete(workspaces, config, fetchImpl);
+		return authContext.workspaceIds.map((workspaceId) => fallbackWorkspaceEntry(workspaceId, authContext));
 	} catch (error) {
 		if (config.requireBaas) throw error;
 		console.warn(`[osionos-bridge] workspace list fell back to session scope: ${error instanceof Error ? error.message : 'unknown error'}`);
