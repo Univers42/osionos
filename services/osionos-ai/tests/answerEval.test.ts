@@ -5,11 +5,7 @@ import { writeFileSync, readFileSync, mkdtempSync, rmSync, copyFileSync } from '
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseVerdict, judgePrompt } from '../eval/answers/judge.ts';
-import {
-	score,
-	cohenKappa,
-	spearman,
-} from '../eval/answers/score.ts';
+import { score, cohenKappa, spearman } from '../eval/answers/score.ts';
 
 const NODE = 'node';
 import { fileURLToPath } from 'node:url';
@@ -168,6 +164,41 @@ describe('check-answers.mjs', () => {
 			});
 			assert.notEqual(result.status, 0, 'should fail');
 			assert.ok(result.stderr.includes('ZZZZNOTINPAGE') || result.stdout.includes('ZZZZNOTINPAGE') || result.stderr.includes('not found'), result.stderr || result.stdout);
+		} finally {
+			writeFileSync(questionsPath, backup);
+		}
+	});
+
+	it('a drafted line that copies a golden question text fails with near-duplicate', () => {
+		const questionsPath = path.join(SVC_DIR, 'eval', 'answers', 'questions.jsonl');
+		const backup = readFileSync(questionsPath, 'utf8');
+		const lines = backup.trim().split('\n');
+
+		// Find a golden question to copy
+		const goldenPath = path.join(SVC_DIR, 'eval', 'golden.jsonl');
+		const goldenLines = readFileSync(goldenPath, 'utf8').trim().split('\n');
+		const goldenQ = JSON.parse(goldenLines[0]);
+
+		let modified = false;
+		const newLines = lines.map((line) => {
+			const q = JSON.parse(line);
+			if (!modified && q.origin === 'llm-drafted' && q.answerable === true) {
+				// Replace the drafted question text with the golden question text
+				q.q = goldenQ.q;
+				modified = true;
+				return JSON.stringify(q);
+			}
+			return line;
+		});
+
+		writeFileSync(questionsPath, newLines.join('\n') + '\n');
+		try {
+			const result = spawnSync(NODE, ['eval/answers/check-answers.mjs'], {
+				cwd: SVC_DIR,
+				encoding: 'utf8',
+			});
+			assert.notEqual(result.status, 0, 'should fail');
+			assert.ok(result.stderr.includes('near-duplicate') || result.stdout.includes('near-duplicate'), result.stderr || result.stdout);
 		} finally {
 			writeFileSync(questionsPath, backup);
 		}
