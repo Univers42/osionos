@@ -12,39 +12,38 @@
 
 /** Settings panel: history of abuse reports the user has submitted. */
 
-import React, { useEffect } from 'react';
+import React from 'react';
+import { Flag } from 'lucide-react';
 
-import { Badge, Card, SectionHeader } from '@/shared/ui';
+import { Badge } from '@/shared/ui';
 import { useReportsStore } from '@/store/social/useReportsStore';
+import { EmptyState, PanelStatus, Section, SettingRow } from '../ui/settingsKit';
+import { useSettingsHydration } from '../model/settingsHydration';
 
 export const ReportsPanel: React.FC = () => {
-  const { data, loading, hydrate } = useReportsStore();
+  const data = useReportsStore((state) => state.data);
+  const hydrate = useReportsStore((state) => state.hydrate);
 
-  useEffect(() => { void hydrate(); }, [hydrate]);
+  const hydration = useSettingsHydration(async () => {
+    await hydrate();
+    const failure = useReportsStore.getState().error;
+    if (failure) throw new Error(failure);
+  }, [hydrate]);
 
   return (
-    <Card>
-      <div className="flex flex-col gap-3">
-        <SectionHeader title={`Reports (${data.length})`} />
-        {loading && data.length === 0 ? (
-          <p className="text-sm text-[var(--osio-fg-muted)]">Loading…</p>
-        ) : data.length === 0 ? (
-          <p className="text-sm text-[var(--osio-fg-muted)]">You haven&apos;t filed any reports.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {data.map((report) => (
-              <li key={report.id} className="flex items-center gap-3">
-                <span className="min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">
-                  <span className="font-medium">{report.category}</span>
-                  <span className="text-[var(--osio-fg-muted)]"> · {report.subjectKind}</span>
-                  {report.details ? <span className="text-[var(--osio-fg-muted)]"> — {report.details}</span> : null}
-                </span>
-                {report.status ? <Badge tone="accent">{report.status}</Badge> : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </Card>
+    <Section title="Reports you filed" anchor="reports">
+      <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
+        {data.length === 0 ? (
+          <EmptyState icon={<Flag size={16} />} title="No reports filed" hint="Reports you send about people or content show up here." />
+        ) : data.map((report) => (
+          <SettingRow
+            key={report.id}
+            title={`${report.category} · ${report.subjectKind}`}
+            description={report.details || undefined}
+            action={report.status ? <Badge tone="accent">{report.status}</Badge> : undefined}
+          />
+        ))}
+      </PanelStatus>
+    </Section>
   );
 };
