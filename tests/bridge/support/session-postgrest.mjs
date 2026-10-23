@@ -27,6 +27,13 @@ function sameText(value, text) {
 }
 
 function matches(row, key, expr) {
+	// A PostgREST `or=(a.gt.b,c.gt.d)` group: the row matches when ANY clause does.
+	if (key === 'or' && expr.startsWith('(') && expr.endsWith(')')) {
+		return expr.slice(1, -1).split(',').some((clause) => {
+			const [column, ...rest] = clause.split('.');
+			return matches(row, column, rest.join('.'));
+		});
+	}
 	if (expr === 'is.null') return row[key] == null;
 	if (expr === 'not.is.null') return row[key] != null;
 	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));
