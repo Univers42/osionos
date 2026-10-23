@@ -106,6 +106,13 @@ export const INVALID_DEVICE_URL_MESSAGE = "That is not a URL. Use the http://loc
 export const DEVICE_URL_NOT_LOCAL_MESSAGE =
   "This device runs on your machine: the URL must point at localhost, 127.0.0.1 or [::1].";
 
+/** Removes the trailing slashes of a path in one linear pass. */
+function withoutTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47) end -= 1;
+  return value.slice(0, end);
+}
+
 /**
  * Checks the base URL of the user's own engine.
  *
@@ -141,10 +148,10 @@ export function validateDeviceUrl(raw: string): DeviceUrlCheck {
   }
 
   let baseUrl = url.origin + url.pathname;
-  baseUrl = baseUrl.replace(/\/+$/, "");
+  baseUrl = withoutTrailingSlashes(baseUrl);
   const lower = baseUrl.toLowerCase();
   if (lower.endsWith("/v1")) {
-    baseUrl = baseUrl.slice(0, baseUrl.length - 3).replace(/\/+$/, "");
+    baseUrl = withoutTrailingSlashes(baseUrl.slice(0, baseUrl.length - 3));
   }
   if (!baseUrl) baseUrl = url.origin;
   return { ok: true, baseUrl };
