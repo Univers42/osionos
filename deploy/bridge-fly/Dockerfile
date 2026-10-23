@@ -45,7 +45,7 @@ COPY scripts/bridge-moderation.mjs scripts/bridge-moderation-gate.mjs scripts/br
 COPY scripts/moderation-lists/ ./scripts/moderation-lists/
 
 # Passkey management (list, rename, remove) on the account plane.
-COPY scripts/bridge-account-passkeys.mjs ./scripts/
+COPY scripts/bridge-account-passkeys.mjs scripts/bridge-account-identities.mjs ./scripts/
 
 ENV OSIONOS_BRIDGE_PORT=4000
 ENV HOME=/tmp
