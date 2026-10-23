@@ -99,8 +99,8 @@ function ordered(rows, order) {
 	});
 }
 
-/** `refuse` names the tables whose writes answer 500, so a test can break the audit log. */
-export function createKeysetStore({ tables = {}, refuse = [] } = {}) {
+/** `refuse` names the tables whose writes answer 500, so a test can break the audit log; `failReads(table, params)` answers true to fail a GET. */
+export function createKeysetStore({ tables = {}, refuse = [], failReads = () => false } = {}) {
 	const data = new Map(Object.entries(tables).map(([name, rows]) => [name, rows.map((row) => ({ ...row }))]));
 	const calls = [];
 	const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -114,6 +114,7 @@ export function createKeysetStore({ tables = {}, refuse = [] } = {}) {
 		const body = init.body ? JSON.parse(init.body) : undefined;
 		calls.push({ method, table, params, body, prefer, authorization: String(init.headers?.Authorization ?? ''), apikey: String(init.headers?.apikey ?? '') });
 		if (method !== 'GET' && refuse.includes(table)) return json({ message: 'refused' }, 500);
+		if (method === 'GET' && failReads(table, params)) return json({ message: 'unreadable' }, 500);
 		const rows = data.get(table) ?? [];
 		const filtered = () => rows.filter((row) => [...params].every(([key, value]) => RESERVED.has(key) || matchesParam(row, key, value)));
 		if (method === 'GET') {

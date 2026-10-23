@@ -45,9 +45,9 @@ export function tokenFor(config, userId = USER_A, claim = false) {
 	return createUserSession(payload, config, persisted, Date.now(), [], claim).session.accessToken;
 }
 
-export async function startAdminWorld(t, { path, tables, refuse = [], kv = kvStub() }) {
+export async function startAdminWorld(t, { path, tables, refuse = [], failReads, kv = kvStub() }) {
 	const config = accountConfig();
-	const store = createKeysetStore({ tables, refuse });
+	const store = createKeysetStore({ tables, refuse, failReads });
 	const pg = createPg({ config, env: { JWT_SECRET: ACCOUNT_JWT_SECRET }, fetchImpl: store.fetchImpl });
 	const handler = createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken, env: { JWT_SECRET: ACCOUNT_JWT_SECRET } });
 	const server = createServer(async (request, response) => {

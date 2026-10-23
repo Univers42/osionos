@@ -29,8 +29,8 @@
  * Caveat: the sign-in refusal is a best-effort read with a short timeout and fails OPEN: if
  * the reports table cannot be read, a banned person can still sign in until it can. The
  * decision itself revoked their sessions, so the gap is only a new sign-in during an outage.
- * Caveat: the refusal reads at most 100 decisions about one person; a person with more live
- * decisions than that is judged on the first 100 the database returns.
+ * Caveat: the suspension message's `until` comes from one live suspension, not necessarily
+ * the latest; the refusal itself (two exact existence reads) never depends on row counts.
  * Caveat: the warn notice is a plain `system` row; the inbox cannot tell it from other
  * system notices, so it cannot be filtered out.
  * Caveat: the audit row records an attempt; a failure after it leaves a row for a decision
@@ -39,7 +39,7 @@
 
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { decodeCursor, inFilter, keyset, pageOf } from './bridge-paging.mjs';
-import { readPlatformRole, roleAtLeast } from './bridge-roles.mjs';
+import { isPlatformRole, readPlatformRole, roleAtLeast, roleFromNames } from './bridge-roles.mjs';
 import { timestampMicros } from './bridge-session-tracker.mjs';
 import { UUID_REGEX, bearerToken, readJsonBody, sendJson } from './bridge-social-core.mjs';
 
@@ -55,7 +55,7 @@ const WRITE_LIMIT = 30;
 const WINDOW_MS = 60_000;
 const MAX_NOTE = 500;
 const MAX_SUSPEND_MS = 30 * 86_400_000;
-const REFUSAL_READ_LIMIT = 100;
+const RANK = { warn: 1, suspend: 2, ban: 3 };
 const REFUSAL_TIMEOUT_MS = 2_000;
 const NOTICE = {
 	warn: 'A moderator reviewed a report about your account and issued a warning.',
@@ -71,23 +71,27 @@ function moderationError(status, code, message) {
  */
 export async function assertAccountNotRefused(client, userId, now = Date.now()) {
 	if (!client || typeof client.get !== 'function' || !UUID_REGEX.test(String(userId ?? ''))) return;
-	let rows;
+	const subject = `${REPORTS}?subject_user_id=eq.${String(userId).toLowerCase()}&subject_kind=eq.user`;
+	const nowIso = new Date(now).toISOString();
+	let bans;
+	let suspensions;
 	let timer;
 	try {
-		const read = client.get(`${REPORTS}?subject_user_id=eq.${String(userId).toLowerCase()}&subject_kind=eq.user&decision=in.(ban,suspend)&select=decision,decision_until&limit=${REFUSAL_READ_LIMIT}`);
+		const reads = Promise.all([
+			client.get(`${subject}&decision=eq.ban&select=decision&limit=1`),
+			client.get(`${subject}&decision=eq.suspend&or=(decision_until.is.null,decision_until.gt.${nowIso})&select=decision_until&limit=1`),
+		]);
 		const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('moderation read timed out')), REFUSAL_TIMEOUT_MS); });
-		rows = await Promise.race([read, timeout]);
+		[bans, suspensions] = await Promise.race([reads, timeout]);
 	} catch {
 		console.warn(`[osionos-bridge] moderation: the refusal read failed for ${userId}; the sign-in is not refused`);
 		return;
 	} finally {
 		clearTimeout(timer);
 	}
-	const live = (Array.isArray(rows) ? rows : []).filter((row) => row?.decision === 'ban' || row?.decision === 'suspend');
-	if (live.some((row) => row.decision === 'ban')) throw moderationError(403, 'account_banned', 'This account has been banned.');
-	const ends = live.map((row) => (row.decision_until ? Date.parse(row.decision_until) : Infinity)).filter((end) => end > now);
-	if (ends.length === 0) return;
-	const until = Math.max(...ends);
+	if (Array.isArray(bans) && bans.length > 0) throw moderationError(403, 'account_banned', 'This account has been banned.');
+	if (!Array.isArray(suspensions) || suspensions.length === 0) return;
+	const until = suspensions[0].decision_until ? Date.parse(suspensions[0].decision_until) : NaN;
 	const suffix = Number.isFinite(until) ? ` until ${new Date(until).toISOString()}` : '';
 	throw moderationError(403, 'account_suspended', `This account is suspended${suffix}.`);
 }
@@ -176,10 +180,29 @@ function parseDecision(body, now) {
 	return { decision, note: note ?? null, until: end === null ? null : new Date(end).toISOString() };
 }
 
+/** Unlike readPlatformRole this never fails open: an unreadable grant is a 503, not "not an admin". */
 async function targetIsAdmin(client, userId) {
-	if ((await readPlatformRole(client, userId)).role === 'admin') return true;
-	const rows = await client.get(`osionos_bridge_identities?user_id=eq.${userId}&select=is_admin&limit=1`).catch(() => []);
-	return Array.isArray(rows) && rows[0]?.is_admin === true;
+	const unavailable = () => moderationError(503, 'admin_check_unavailable', 'The target could not be checked; nothing was changed.');
+	try {
+		const nowIso = new Date().toISOString();
+		const grants = await client.get(`user_roles?user_id=eq.${userId}&or=(expires_at.is.null,expires_at.gt.${nowIso})&select=role_id`);
+		const ids = [...new Set((Array.isArray(grants) ? grants : []).map((g) => String(g?.role_id ?? '').trim()).filter(Boolean))].map(encodeURIComponent);
+		if (ids.length > 0) {
+			const catalogue = await client.get(`roles?id=in.(${ids.join(',')})&select=id,name`);
+			const names = (Array.isArray(catalogue) ? catalogue : []).map((r) => String(r?.name ?? '').trim().toLowerCase()).filter(isPlatformRole);
+			if (roleFromNames(names) === 'admin') return true;
+		}
+		const rows = await client.get(`osionos_bridge_identities?user_id=eq.${userId}&select=is_admin&limit=1`);
+		return Array.isArray(rows) && rows[0]?.is_admin === true;
+	} catch {
+		throw unavailable();
+	}
+}
+
+function liveRank(row, now) {
+	if (row.decision === 'ban') return RANK.ban;
+	if (row.decision === 'suspend' && (!row.decision_until || Date.parse(row.decision_until) > now)) return RANK.suspend;
+	return 0;
 }
 
 async function revokeSessions({ client, config }, userId) {
@@ -194,14 +217,40 @@ async function revokeSessions({ client, config }, userId) {
 	}
 }
 
+/**
+ * Runs after the decision is saved, so a failure here answers a code that says so: the
+ * decision stands and a retry of the same decision repeats the effect.
+ * Caveat: a failed warn notice is not re-sent by a retry (a repeated warn sends none).
+ */
+async function applyEffects(ctx, row, decision) {
+	if (decision === 'suspend' || decision === 'ban') {
+		try {
+			await revokeSessions(ctx, row.subject_user_id);
+		} catch {
+			throw moderationError(500, 'decision_saved_revoke_failed', 'The decision was saved but the sessions could not be revoked; repeat the decision.');
+		}
+	}
+	if (decision === 'warn' && row.decision !== 'warn') {
+		try {
+			await ctx.client.post('osionos_notifications', { user_id: row.subject_user_id, type: 'system', actor_id: null, preview: NOTICE.warn }, { prefer: 'return=minimal' });
+		} catch {
+			throw moderationError(500, 'decision_saved_notify_failed', 'The decision was saved but the warning could not be delivered.');
+		}
+	}
+}
+
 async function decide(ctx, request, reportId, response) {
 	const { client, config, pg, session } = ctx;
 	const wanted = parseDecision(await readBody(request), Date.now());
 	const found = await client.get(`${REPORTS}?id=eq.${reportId}&select=${SELECT}&limit=1`);
 	const row = Array.isArray(found) ? found[0] : null;
 	if (!row) throw moderationError(404, 'report_not_found', 'Report not found.');
+	if (row.subject_kind === 'user' && !UUID_REGEX.test(String(row.subject_user_id ?? ''))) throw moderationError(422, 'invalid_subject', 'This report names no person to decide on.');
 	if (String(row.reporter_id).toLowerCase() === session.userId.toLowerCase()) throw moderationError(403, 'self_report', 'You cannot decide a report you filed.');
+	if (String(row.subject_user_id ?? '').toLowerCase() === session.userId.toLowerCase()) throw moderationError(403, 'self_subject', 'You cannot decide a report about yourself.');
 	if (await targetIsAdmin(client, row.subject_user_id)) throw moderationError(403, 'target_is_admin', 'An administrator cannot be moderated here.');
+	const held = liveRank(row, Date.now());
+	if (held > 0 && wanted.decision !== 'dismiss' && (RANK[wanted.decision] ?? 0) < held) throw moderationError(409, 'decision_downgrade', 'A live ban or suspension can only be dismissed or made stronger.');
 	await writeAudit(pg, {
 		session,
 		meta: requestMeta(request, config),
@@ -217,10 +266,7 @@ async function decide(ctx, request, reportId, response) {
 		decision_note: wanted.note,
 	};
 	await client.patch(`${REPORTS}?id=eq.${reportId}`, patch, { prefer: 'return=minimal' });
-	if (row.subject_kind === 'user') {
-		if (wanted.decision === 'suspend' || wanted.decision === 'ban') await revokeSessions(ctx, row.subject_user_id);
-		if (wanted.decision === 'warn') await client.post('osionos_notifications', { user_id: row.subject_user_id, type: 'system', actor_id: null, preview: NOTICE.warn }, { prefer: 'return=minimal' });
-	}
+	if (row.subject_kind === 'user') await applyEffects(ctx, row, wanted.decision);
 	return sendJson(response, 200, { ok: true, reportId, decision: wanted.decision, status: patch.status }, config);
 }
 

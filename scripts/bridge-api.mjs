@@ -4563,6 +4563,7 @@ async function handleBridgeConsume(request, response, config, kv, pg) {
 	const token = safeText(payload.token, 512);
 	if (!token) throw Object.assign(new Error('Bridge handoff token is required.'), { status: 422 });
 	const consumed = await consumeHandoffToken(token, kv, sessionClock(config), config.appSessionSecret);
+	await assertAccountNotRefused(platformRoleReader(pg), consumed.session.userId, sessionClock(config));
 	// The row is written here, where the client metadata is the user's: the mint is a
 	// server-to-server call from the gateway.
 	const delivered = await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod: 'handoff', persona: consumed.persona });
@@ -4614,6 +4615,7 @@ async function establishAppSession({ request, config, kv, pg, fetchImpl, gateway
 	if (expectedUserId && consumed.session.userId !== expectedUserId) {
 		throw Object.assign(new Error('The sign-in could not be verified; sign in again.'), { status: 401, code: 'invalid_provider_token' });
 	}
+	await assertAccountNotRefused(platformRoleReader(pg), consumed.session.userId, sessionClock(config));
 	const delivered = await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod, persona: consumed.persona });
 	return deliveredAnswer(consumed, delivered);
 }
