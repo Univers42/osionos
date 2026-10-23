@@ -87,6 +87,6 @@ export async function liveMemberWorkspaces(
 	return liveReadableWorkspaces({
 		privateWorkspaceId: user.workspaceId,
 		memberWorkspaces,
-		scope: scope ?? null,
+		scope: scope ?? user.scope ?? null,
 	});
 }
