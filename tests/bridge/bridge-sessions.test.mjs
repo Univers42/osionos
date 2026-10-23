@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createBridgeHandoff, createBridgeServer, startBridgeServer } from '../../scripts/bridge-api.mjs';
 import { kvStub } from './support/kv-stub.mjs';
+import { noFactorPg } from './support/no-factor-pg.mjs';
 import {
 	JWT_SECRET, USER_A, USER_B,
 	gatewayRequest, postJson, sendJson, sessionConfig, startSessionBridge,
@@ -111,7 +112,7 @@ describe('the session row is written when the session is delivered', () => {
 	it('writes auth_method=password for a password sign-in', async () => {
 		const kv = kvStub();
 		const config = sessionConfig({ now: () => CLOCK.at, persistence: 'memory' });
-		const minted = await createBridgeHandoff({ payload: payloadFor(USER_B), config, kv, now: CLOCK.at, fetchImpl: async () => new Response('[]') });
+		const minted = await createBridgeHandoff({ payload: payloadFor(USER_B), config, kv, pg: noFactorPg(), now: CLOCK.at, fetchImpl: async () => new Response('[]') });
 		const gateway = async (url) => {
 			const route = String(url);
 			if (route.endsWith('/api/auth/login')) return new Response(JSON.stringify({ access_token: 'gw', refresh_token: 'r', user: { id: USER_B } }), { status: 200 });

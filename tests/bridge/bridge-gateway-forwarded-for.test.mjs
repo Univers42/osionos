@@ -24,6 +24,7 @@ function config() {
 		OSIONOS_BRIDGE_SHARED_SECRET: 'test-bridge-secret-that-is-long-enough',
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
 		OSIONOS_BRIDGE_PERSISTENCE: 'memory',
+		OSIONOS_BAAS_URL: '',
 		AUTH_GATEWAY_URL: GATEWAY,
 		// The local sign-in has no Turnstile widget; without the bypass the bridge refuses a token-less request.
 	});
