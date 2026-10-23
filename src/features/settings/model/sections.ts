@@ -33,6 +33,7 @@ import {
   Shield,
   SlidersHorizontal,
   Sparkles,
+  Terminal,
   User,
   UserPlus,
   Users,
@@ -40,22 +41,30 @@ import {
   UserX,
 } from "lucide-react";
 
+import { isAccountDeleteEnabled } from "@/shared/config/featureFlags";
+
 import type { SettingsAnchor, SettingsSection } from "./sectionTypes";
 
 export { SETTINGS_GROUPS } from "./sectionTypes";
 export type { SettingsAnchor, SettingsGroup, SettingsGroupId, SettingsSection, SettingsSectionId } from "./sectionTypes";
 
+const DANGER_ANCHOR: SettingsAnchor = { id: "danger", label: "Delete account", keywords: ["delete", "close", "remove account"] };
+
+const PROFILE_ANCHORS: readonly SettingsAnchor[] = [
+  { id: "public-profile", label: "Public profile", keywords: ["name", "pronouns", "bio", "website", "links", "company", "location", "orcid", "patreon", "avatar", "photo"], description: "Edit your public profile." },
+  { id: "account-security", label: "Account security", keywords: ["email", "password", "verification", "passkey", "two step"] },
+  { id: "sessions", label: "Sessions", keywords: ["sessions", "sign out", "logout", "device", "web", "desktop", "mobile"] },
+  { id: "user-id", label: "User ID", keywords: ["copy", "id", "identifier"] },
+];
+
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: "profile", group: "account", label: "Profile", title: "Profile",
-    subtitle: "Manage your profile, login information, and devices", icon: User,
-    anchors: [
-      { id: "account", label: "Preferred name", keywords: ["profile", "name", "avatar", "face"], description: "Edit your account identity." },
-      { id: "account-security", label: "Account security", keywords: ["email", "password", "verification", "passkey", "two step"] },
-      { id: "support", label: "Support access", keywords: ["support", "access", "delete account"] },
-      { id: "devices", label: "Devices", keywords: ["sessions", "logout", "device"] },
-      { id: "user-id", label: "User ID", keywords: ["copy", "id", "identifier"] },
-    ],
+    subtitle: "Manage your profile, login information, and sessions", icon: User,
+    // A getter so the palette and search read the flag when they run: a hidden row is never offered.
+    get anchors(): readonly SettingsAnchor[] {
+      return [...PROFILE_ANCHORS, ...(isAccountDeleteEnabled() ? [DANGER_ANCHOR] : [])];
+    },
   },
   {
     id: "preferences", group: "account", label: "Preferences", title: "Preferences",
@@ -96,6 +105,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     id: "contacts", group: "account", label: "Contacts", title: "Contacts",
     subtitle: "Manage your connections and the reports you filed", icon: UserPlus,
     anchors: [
+      { id: "presence-status", label: "Presence and status", keywords: ["presence", "status", "away", "busy", "do not disturb", "invisible", "online"] },
       { id: "connections", label: "Your connections", keywords: ["contacts", "friends", "requests", "remove", "people"] },
       { id: "reports", label: "Reports you filed", keywords: ["report", "abuse", "filed", "flag"] },
     ],
@@ -178,6 +188,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     anchors: [{ id: "osionos-mcp", label: "osionos MCP", keywords: ["mcp", "tools", "developer", "ai clients"] }],
   },
   {
+    id: "developer", group: "features", label: "Developer", title: "Developer",
+    subtitle: "Personal access tokens, and the apps that act for you", icon: Terminal,
+    anchors: [
+      { id: "personal-access-tokens", label: "Personal access tokens", keywords: ["token", "pat", "api key", "secret", "credential", "scope", "developer"] },
+      { id: "authorized-apps", label: "Authorized apps", keywords: ["authorized", "apps", "mcp", "claude", "token", "access", "revoke"] },
+    ],
+  },
+  {
     id: "public_pages", group: "features", label: "Published pages", title: "Published pages",
     subtitle: "The pages you published to the web", icon: Globe,
     anchors: [{ id: "public-pages", label: "Published pages", keywords: ["publish", "published", "web", "public", "live", "republish", "unpublish", "snapshot", "link"] }],
@@ -224,9 +242,8 @@ export interface SettingsSearchHit {
 }
 
 /** Registry order — an empty query answers with the same list the nav shows. */
-const ALL_HITS: readonly SettingsSearchHit[] = SETTINGS_SECTIONS.flatMap((section) =>
-  section.anchors.map((anchor) => ({ section, anchor })),
-);
+const allHits = (): readonly SettingsSearchHit[] =>
+  SETTINGS_SECTIONS.flatMap((section) => section.anchors.map((anchor) => ({ section, anchor })));
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
@@ -234,10 +251,10 @@ function normalize(value: string): string {
 
 export function searchSettings(query: string): SettingsSearchHit[] {
   const normalized = normalize(query);
-  if (!normalized) return [...ALL_HITS];
+  if (!normalized) return [...allHits()];
   const terms = normalized.split(/\s+/).filter(Boolean);
 
-  return ALL_HITS.map((hit) => {
+  return allHits().map((hit) => {
       const haystack = normalize([
         hit.anchor.label,
         hit.anchor.description ?? "",

@@ -14,7 +14,6 @@ import type {
   AccountSettings,
   BillingState,
   ConnectionRecord,
-  DeviceRecord,
   EmailRecord,
   NotificationSettings,
   UserPreferences,
@@ -24,30 +23,15 @@ import type {
 } from './types';
 import { nowIso } from './settingsStoreUtils';
 
-export function defaultAccountSettings(userId: string, name?: string): AccountSettings {
+export function defaultAccountSettings(userId: string): AccountSettings {
   const timestamp = nowIso();
   return {
     userId,
-    profile: { preferredName: name },
-    security: { hasPassword: true, twoStepEnabled: false, passkeysEnabled: false },
+    // Empty on purpose: the sign-in methods are only what the server reports, never a guess.
+    security: {},
     supportAccessGrantedUntil: null,
     pendingDeletionAt: null,
     removedAt: null,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-}
-
-export function defaultDevice(userId: string): DeviceRecord {
-  const timestamp = nowIso();
-  return {
-    _id: 'current-device',
-    userId,
-    deviceFingerprint: 'current-device',
-    userAgent: typeof navigator === 'undefined' ? 'This device' : navigator.userAgent,
-    location: 'This device',
-    lastActiveAt: timestamp,
-    revokedAt: null,
     createdAt: timestamp,
     updatedAt: timestamp,
   };

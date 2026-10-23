@@ -560,9 +560,10 @@ export async function retrieve(
 	if (question.length === 0) return [];
 	const packSlugs = [...new Set(packs.filter((slug) => slug.length > 0))];
 	// C45: the system workspace is operator configuration. Unset, packs are
-	// off everywhere, and the page path is the one of today.
-	const { config } = await import('../config.ts');
-	const systemWorkspace = config.systemWorkspaceId;
+	// off everywhere, and the page path is the one of today. The config loads
+	// only for a pack request: the eval runners call retrieve() without the
+	// server's environment, and loading it there exits the process.
+	const systemWorkspace = packSlugs.length > 0 ? (await import('../config.ts')).config.systemWorkspaceId : null;
 	const packsOn = packSlugs.length > 0 && systemWorkspace !== null;
 	if (!pages && !packsOn) return [];
 

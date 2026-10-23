@@ -62,6 +62,12 @@ export function removeMember(workspaceId: string, userId: string): Promise<void>
 }
 
 /** Transfer ownership to another member (the destructive owner cutover). */
-export function transferOwnership(workspaceId: string, userId: string): Promise<void> {
-  return useWorkspaceMembersStore.getState().transferOwnership(workspaceId, userId);
+export async function transferOwnership(workspaceId: string, userId: string): Promise<void> {
+  const store = useWorkspaceMembersStore.getState();
+  await store.transferOwnership(workspaceId, userId);
+  // The store reverts and records `error` instead of rejecting, so a refusal (sudo, not the
+  // owner) would otherwise look like success to the caller.
+  const after = useWorkspaceMembersStore.getState();
+  const transferred = after.data[workspaceId]?.some((member) => member.userId === userId && member.role === "owner");
+  if (!transferred) throw Object.assign(new Error(after.error[workspaceId] ?? "Could not transfer ownership"), { code: after.errorCode[workspaceId] ?? undefined });
 }

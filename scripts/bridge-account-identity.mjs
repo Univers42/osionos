@@ -26,8 +26,8 @@
  * who holds what.
  *
  * The deletion request is a row, not an action: the database owns the fourteen-day
- * grace and the schedule, and nothing here executes a deletion (P5-6 does). Cancelling
- * it needs no proof — undoing a request is protective, like cutting a session.
+ * grace and the schedule, and nothing here executes a deletion (bridge-account-erasure.mjs
+ * does). Cancelling it needs no proof — undoing a request is protective, like cutting a session.
  *
  * The plumbing this module shares with the other account-plane routes (the error shape,
  * the caller session, the audit metadata) lives with the sudo module, because these
@@ -40,6 +40,9 @@ import { accountError, callerSession, clientMetaOf, noContent, readBody, respond
 
 const USERNAME_PATH = '/api/account/username';
 const DELETION_PATH = '/api/account/deletion';
+const ACCEPT_PATH = '/api/account/deletion/successor/accept';
+const REQUESTS_TABLE = 'osionos_account_deletion_requests';
+const SUCCESSOR_NOTICE = 'A workspace owner named you as the successor of their workspaces. You may accept from your account.';
 const USERNAME_LIMIT = 3;
 const USERNAME_WINDOW_MS = 24 * 60 * 60 * 1000;
 const USERNAME_SHAPE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{2,31}$/;
@@ -120,6 +123,18 @@ async function assertSuccessor(pg, session, successor) {
 	}
 }
 
+/**
+ * Tells the successor a request names them. The text carries no id and no name of the
+ * requester. Best effort: the request already exists and is audited.
+ */
+async function notifySuccessor(pg, successor) {
+	try {
+		await pg.asService().post('osionos_notifications', { user_id: successor, type: 'system', actor_id: null, preview: SUCCESSOR_NOTICE }, { prefer: 'return=minimal' });
+	} catch {
+		// Caveat: a lost notice leaves the successor unaware; acceptance is API-only anyway.
+	}
+}
+
 async function requestDeletion({ pg, kv }, session, request, response, config) {
 	await requireSudo(kv, session);
 	const successor = readSuccessor(await readBody(request), session);
@@ -155,16 +170,25 @@ async function requestDeletion({ pg, kv }, session, request, response, config) {
 		throw accountError(503, 'account_plane_unavailable', PLANE_DOWN);
 	}
 	const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+	if (successor) await notifySuccessor(pg, successor);
 	return sendJson(response, 201, {
 		requestedAt: row?.requested_at ?? null,
 		scheduledFor: row?.scheduled_for ?? null,
 	}, config);
 }
 
+/** Erased means the executor passed the point of no return; the account role cannot read it. */
+async function readInProgress(pg, session) {
+	const rows = await pg.asService().get(`${REQUESTS_TABLE}?user_id=eq.${session.userId}&select=erased_at&limit=1`);
+	return Array.isArray(rows) && rows.length > 0 && Boolean(rows[0]?.erased_at);
+}
+
 async function readDeletion({ pg }, session, response, config) {
 	let row;
+	let inProgress;
 	try {
 		row = await readDeletionRow(pg, session);
+		inProgress = row ? await readInProgress(pg, session) : false;
 	} catch {
 		throw accountError(503, 'account_plane_unavailable', PLANE_DOWN);
 	}
@@ -173,6 +197,7 @@ async function readDeletion({ pg }, session, response, config) {
 		requestedAt: row.requested_at ?? null,
 		scheduledFor: row.scheduled_for ?? null,
 		successorUserId: row.successor_user_id ?? null,
+		inProgress,
 	}, config);
 }
 
@@ -185,10 +210,47 @@ async function cancelDeletion({ pg }, session, request, response, config) {
 	});
 	try {
 		await pg.asUser(session).del(`osionos_account_deletion_requests?user_id=eq.${session.userId}`, { prefer: 'return=minimal' });
-	} catch {
+	} catch (error) {
+		// The guard trigger refuses the account role once the erase stamped the row.
+		if (String(error?.upstreamText ?? '').includes('deletion_in_progress')) {
+			throw accountError(409, 'deletion_in_progress', 'The deletion is already running and can no longer be cancelled.');
+		}
 		throw accountError(503, 'account_plane_unavailable', PLANE_DOWN);
 	}
 	return noContent(response, config);
+}
+
+/**
+ * The named successor accepts. Not-the-successor and no-such-request answer the same 403,
+ * so the route is no oracle for who has a request. Sudo is not needed: accepting hands the
+ * caller work, not power over their own account.
+ */
+async function acceptSuccessor({ pg }, session, request, response, config) {
+	const requester = String((await readBody(request))?.requesterUserId ?? '').trim().toLowerCase();
+	if (!UUID_REGEX.test(requester)) throw accountError(422, 'invalid_requester', 'That is not a user id.');
+	const notSuccessor = accountError(403, 'not_successor', 'You are not the successor of this request.');
+	let row;
+	try {
+		const rows = await pg.asService().get(`${REQUESTS_TABLE}?user_id=eq.${requester}&select=successor_user_id,erased_at&limit=1`);
+		row = Array.isArray(rows) ? rows[0] : null;
+	} catch {
+		throw accountError(503, 'account_plane_unavailable', PLANE_DOWN);
+	}
+	if (!row || String(row.successor_user_id ?? '').toLowerCase() !== session.userId.toLowerCase()) throw notSuccessor;
+	if (row.erased_at) throw accountError(409, 'deletion_in_progress', 'The deletion is already running.');
+	await writeAudit(pg, { session, meta: clientMetaOf(request, config), eventType: 'account.successor_accepted', details: { requesterUserId: requester } });
+	let written;
+	try {
+		written = await pg.asService().patch(
+			`${REQUESTS_TABLE}?user_id=eq.${requester}&successor_user_id=eq.${session.userId}&erased_at=is.null`,
+			{ successor_accepted_at: new Date().toISOString() },
+			{ prefer: 'return=representation' },
+		);
+	} catch {
+		throw accountError(503, 'account_plane_unavailable', PLANE_DOWN);
+	}
+	if (!Array.isArray(written) || written.length === 0) throw accountError(409, 'deletion_in_progress', 'The deletion is already running.');
+	return sendJson(response, 200, { accepted: true }, config);
 }
 
 /**
@@ -201,12 +263,16 @@ export function createAccountIdentityRoutes({ config, pg, kv, verifySession }) {
 		const pathname = url.pathname;
 		const method = (request.method || 'GET').toUpperCase();
 		const isUsername = pathname === USERNAME_PATH;
-		if (!isUsername && pathname !== DELETION_PATH) return false;
+		if (!isUsername && pathname !== DELETION_PATH && pathname !== ACCEPT_PATH) return false;
 		try {
 			const session = callerSession(request, config, verifySession);
 			if (isUsername) {
 				if (method !== 'POST') throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
 				return await changeUsername({ pg, kv }, session, request, response, config);
+			}
+			if (pathname === ACCEPT_PATH) {
+				if (method !== 'POST') throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
+				return await acceptSuccessor({ pg }, session, request, response, config);
 			}
 			if (method === 'POST') return await requestDeletion({ pg, kv }, session, request, response, config);
 			if (method === 'GET') return await readDeletion({ pg }, session, response, config);

@@ -73,6 +73,11 @@ export async function runAccountAction<T>(path: string, body: unknown): Promise<
   }
 }
 
+/** Cancels a staged workspace delete (owner + sudo); the outcome says whether the prompt is needed. */
+export function cancelWorkspaceDelete(workspaceId: string): Promise<AccountActionOutcome<unknown>> {
+  return runAccountAction(`/api/workspaces/${workspaceId}/cancel-delete`, {});
+}
+
 /**
  * The honest notice for an action that did not happen. `null` for a success
  * and for a sudo refusal: the shared fetch path raises the re-auth prompt, so

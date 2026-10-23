@@ -83,6 +83,12 @@ export function settingsApiAvailable(): boolean {
   return Boolean(API_BASE && settingsJwt());
 }
 
+/** The bridge's machine code on a failed call (ApiError.code), or undefined for anything else. */
+export function errorCode(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === 'string' ? code : undefined;
+}
+
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'Settings request failed.';
 }

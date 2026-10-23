@@ -5,6 +5,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
+import { enableAccountDelete } from "../support/accountDelete.mjs";
 import { closeSettings, nav, openSection as openSettingsSection, openSettings, region, searchSettings } from "../support/settingsHelpers.mjs";
 
 /** What a token resolves to on this page, so a test compares computed values, not names. */
@@ -185,11 +186,14 @@ test.describe("settings use the kit", () => {
   });
 
   test("the typed-confirm input has an accessible name", async ({ page, baseURL }) => {
+    await enableAccountDelete(page);
     await openFreshPage(page, baseURL);
     await openSettings(page);
     await searchSettings(page, "delete account");
     await page.getByRole("button", { name: "Delete my account", exact: true }).click();
-    await expect(page.getByLabel("Type DELETE to confirm")).toBeVisible();
+    const typed = page.getByRole("dialog", { name: "Delete account" }).getByRole("textbox");
+    const confirmText = await typed.getAttribute("placeholder");
+    await expect(page.getByLabel(`Type ${confirmText} to confirm`)).toBeVisible();
   });
 
   test("an async confirm disables both buttons while pending", async ({ page, baseURL }) => {

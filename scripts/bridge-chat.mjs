@@ -439,6 +439,12 @@ async function patchMessage(deps, session, request, messageId, response, config)
 		const decision = askBeforeWrite({ text: content, surface: 'channel', env: deps.env, payload });
 		if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
 	}
+	if (channel.kind === 'dm') {
+		const peers = await rest(config, deps.fetchImpl, `osionos_channel_members?channel_id=eq.${channel.id}&user_id=neq.${session.userId}&select=user_id`);
+		for (const peer of Array.isArray(peers) ? peers : []) {
+			await requireInteraction(config, deps.fetchImpl, { interaction: 'messages', actorId: session.userId, targetId: peer.user_id });
+		}
+	}
 	const rows = await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${messageId}`, {
 		method: 'PATCH',
 		body: { content, edited_at: new Date().toISOString() },

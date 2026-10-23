@@ -137,7 +137,7 @@ async function grobase(config, fetchImpl, path, { method = 'GET', body, headers 
 }
 
 /** The address GoTrue holds for this user, or the failure that says there is none. */
-async function accountAddress({ config, fetchImpl }, userId) {
+export async function accountAddress({ config, fetchImpl }, userId) {
 	if (!config.baasUrl || !config.serviceKey) throw accountError(503, 'sudo_unavailable', UNAVAILABLE);
 	const response = await grobase(config, fetchImpl, `/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
 		headers: { apikey: config.serviceKey, Authorization: `Bearer ${config.serviceKey}` },

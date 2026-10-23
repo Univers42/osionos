@@ -104,10 +104,11 @@ test("the production timeout is 20 s and the override can only lower it", async 
   try {
     const env = { ...envFor(daemon.host), OSIONOS_IDE_DOCKER_TIMEOUT_MS: "999999" };
     const docker = createDockerClient(env);
-    const started = Date.now();
     const pending = docker.runExec("ide-x", { Cmd: ["true"] }).catch((error) => error);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    assert.ok(Date.now() - started >= 600); // still waiting: 999999 was clamped to 20 s, not applied
+    // A race, not Date.now(): a 600 ms timer may fire a millisecond early on Date.now()'s
+    // clock, which failed this test on 2026-10-23 (twice) with the request still waiting.
+    const settled = await Promise.race([pending.then(() => true), new Promise((resolve) => setTimeout(resolve, 600, false))]);
+    assert.equal(settled, false); // still waiting: 999999 was clamped to 20 s, not applied
     daemon.close();
     assert.ok(await pending);
   } finally {

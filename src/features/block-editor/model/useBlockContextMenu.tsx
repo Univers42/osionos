@@ -197,6 +197,16 @@ function createTableContextMenuSections(
   ];
 }
 
+function createButtonContextMenuSections(block: Block, onOpenSettings: () => void): BlockContextMenuSection[] {
+  if (block.type !== "button") return [];
+  return [
+    {
+      label: "Button",
+      items: [{ icon: <Settings2 size={16} />, label: "Button settings", onClick: onOpenSettings }],
+    },
+  ];
+}
+
 export function useBlockContextMenu({
   pageId,
   content,
@@ -402,6 +412,14 @@ export function useBlockContextMenu({
     },
     [applyOperation, content, contextMenu],
   );
+
+  const handleButtonSettings = useCallback(() => {
+    if (!contextMenu) return;
+    globalThis.dispatchEvent(
+      new CustomEvent("osionos:button-settings", { detail: { pageId, blockId: contextMenu.blockId } }),
+    );
+    closeContextMenu();
+  }, [closeContextMenu, contextMenu, pageId]);
 
   const handleUnavailable = useCallback(() => {
     closeContextMenu();
@@ -637,6 +655,8 @@ export function useBlockContextMenu({
       handleSetTableConfig,
     );
 
+    const buttonSections = createButtonContextMenuSections(blockLocation.block, handleButtonSettings);
+
     const actionItems = [
       {
         icon: <Copy size={16} />,
@@ -683,6 +703,7 @@ export function useBlockContextMenu({
       ...moveSections,
       transformSection,
       ...tableSections,
+      ...buttonSections,
       { label: "Actions", items: actionItems },
       {
         items: [
@@ -742,6 +763,7 @@ export function useBlockContextMenu({
     handleSetBlockStyle,
     handleSetTableConfig,
     handleToggleHeading,
+    handleButtonSettings,
     handleUnavailable,
     handleAskAI,
   ]);

@@ -30,13 +30,18 @@ import { createShareRuleStore } from './bridge-perms-rules.mjs';
 import { moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
-import { sessionCutoffsFromConfig, startSessionCutoffPoller } from './bridge-session-cutoff.mjs';
+import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge-auth-exchange.mjs';
+import { resolveTurnstileToken, turnstileBootLine, turnstileSettingsFromEnv } from './bridge-turnstile.mjs';
+import { sessionCutoffsFromConfig, startSessionCutoffPoller, writeSessionCutoff } from './bridge-session-cutoff.mjs';
 import { sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
-import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
+import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, deliveredAnswer, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
 import { createAccountHandler } from './bridge-account-mounts.mjs';
+import { mfaBootLine, mfaRequiredFor } from './bridge-account-mfa-state.mjs';
 import { handoffLookupKey, openHandoffRecord, sealHandoffRecord } from './bridge-shared-store.mjs';
 import { createKv } from './bridge-kv.mjs';
 import { createPg } from './bridge-pg.mjs';
+import { createPatGate, patWritePayload } from './bridge-pat-middleware.mjs';
+import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
 import { claimPlatformRole, platformRoleReader, readPlatformRole } from './bridge-roles.mjs';
 import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 // Re-exported so every existing caller (bridge-chat, bridge-rtc, db-isolation-suite, the tests)
@@ -168,6 +173,12 @@ const CLAUDE_TOOL_MAP = {
 	archive: ['mcp__osionos__osionos_archive_page'],
 };
 
+// Throws at boot on a Turnstile misconfiguration (see turnstileSettingsFromEnv).
+function turnstileConfigFromEnv(env) {
+	const { mode, secret, bypass } = turnstileSettingsFromEnv(env);
+	return { turnstileMode: mode, turnstileSecret: secret, turnstileBypassLocal: bypass };
+}
+
 export function configFromEnv(env = process.env) {
 	const appUrl = (env.OSIONOS_APP_URL ?? env.PUBLIC_OSIONOS_APP_URL ?? 'http://localhost:3001').replace(/\/$/, '');
 	return {
@@ -205,6 +216,7 @@ export function configFromEnv(env = process.env) {
 		baasTenantId: env.OSIONOS_BAAS_TENANT_ID ?? env.VITE_BAAS_TENANT_ID ?? env.BAAS_TENANT_ID ?? '',
 		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
 		publicApiKey: env.PUBLIC_BAAS_ANON_KEY ?? env.KONG_PUBLIC_API_KEY ?? '',
+		...turnstileConfigFromEnv(env),
 		serviceKey: env.SERVICE_ROLE_KEY ?? env.KONG_SERVICE_API_KEY ?? env.BAAS_SERVICE_ROLE_KEY ?? '',
 		requireBaas: env.OSIONOS_BRIDGE_REQUIRE_BAAS === 'true',
 		persistence: env.OSIONOS_BRIDGE_PERSISTENCE ?? 'auto',
@@ -1432,6 +1444,27 @@ async function listWorkspacePageRefs(workspaceId, config, fetchImpl) {
 	return await baasRest(config, fetchImpl, `osionos_pages?${query}`) ?? [];
 }
 
+/**
+ * Marks the listed workspaces that are staged for deletion (pendingDeleteAt / deleteAfter), which the
+ * list RPC does not return. Caveat: best effort; when the read fails the list is returned unmarked,
+ * so the owner sees no Cancel banner until the next list, and the delete itself is unaffected.
+ */
+async function withPendingDelete(workspaces, config, fetchImpl) {
+	const ids = workspaces.map((entry) => String(entry.id)).filter((id) => UUID_REGEX.test(id));
+	if (ids.length === 0) return workspaces;
+	try {
+		const rows = await baasRest(config, fetchImpl, `osionos_workspaces?id=in.(${ids.join(',')})&pending_delete_at=not.is.null&select=id,pending_delete_at,delete_after`);
+		const stamps = new Map((Array.isArray(rows) ? rows : []).map((row) => [String(row.id).toLowerCase(), row]));
+		return workspaces.map((entry) => {
+			const stamp = stamps.get(String(entry.id).toLowerCase());
+			return stamp ? { ...entry, pendingDeleteAt: stamp.pending_delete_at, deleteAfter: stamp.delete_after } : entry;
+		});
+	} catch (error) {
+		console.warn(`[osionos-bridge] pending-delete marks unavailable: ${error?.status ?? 'error'}`);
+		return workspaces;
+	}
+}
+
 async function listSessionWorkspaces(authContext, config, fetchImpl) {
 	if (authContext.workspaceIds.length === 0) return [];
 	try {
@@ -1454,7 +1487,8 @@ async function listSessionWorkspaces(authContext, config, fetchImpl) {
 			role: row.workspace_role,
 			permissions: row.permissions,
 		}));
-		return workspaces.length > 0 ? workspaces : authContext.workspaceIds.map((workspaceId) => fallbackWorkspaceEntry(workspaceId, authContext));
+		if (workspaces.length > 0) return await withPendingDelete(workspaces, config, fetchImpl);
+		return authContext.workspaceIds.map((workspaceId) => fallbackWorkspaceEntry(workspaceId, authContext));
 	} catch (error) {
 		if (config.requireBaas) throw error;
 		console.warn(`[osionos-bridge] workspace list fell back to session scope: ${error instanceof Error ? error.message : 'unknown error'}`);
@@ -1527,7 +1561,7 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 	};
 }
 
-export function createUserSession(payload, config, persisted = null, now = Date.now(), memberWorkspaces = [], isAdmin = false, platformRole = null) {
+export function createUserSession(payload, config, persisted = null, now = Date.now(), memberWorkspaces = [], isAdmin = false, platformRole = null, { aal, mfaReq = false } = {}) {
 	const userId = payload.subject;
 	// The session id is minted here, not inside the signer: it is the primary key of the
 	// session row and the single-use guard of the delivered token.
@@ -1554,7 +1588,7 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 	// The identity flag is the root of trust: it names the admin role, so the claim's two
 	// role facts can never disagree.
 	const role = claimPlatformRole(platformRole, isAdmin);
-	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, jti: sessionId, memberWorkspaces: extras, platformRole: role });
+	const { token, expiresAt } = signAppSessionToken({ payload, workspace, config, now, jti: sessionId, memberWorkspaces: extras, platformRole: role, aal, mfaReq });
 	return {
 		expiresAt,
 		sessionId,
@@ -1574,6 +1608,7 @@ export function createUserSession(payload, config, persisted = null, now = Date.
 			refreshToken: '',
 			privateWorkspaces: [workspace, ...extras.filter((entry) => sameId(entry.ownerId, userId))],
 			sharedWorkspaces: extras.filter((entry) => !sameId(entry.ownerId, userId)),
+			...(mfaReq ? { mfaRequired: true } : {}),
 		},
 	};
 }
@@ -1608,7 +1643,7 @@ function memberRowsToEntries(rows, userId, excludeIds) {
  * would otherwise mint private-only tokens with no error anywhere.
  * Caveat: sort ties keep the order PostgREST answered, where the list RPC left them unspecified.
  */
-export async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
+export async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl, { strict = false } = {}) {
 	if (!config.serviceKey || !config.baasUrl) return [];
 	try {
 		const query = postgrestQuery({ user_id: `eq.${userId}`, select: MEMBER_WORKSPACES_SELECT });
@@ -1616,9 +1651,11 @@ export async function memberWorkspaceEntries(userId, excludeIds, config, fetchIm
 		const entries = memberRowsToEntries(Array.isArray(rows) ? rows : [], userId, excludeIds);
 		if (entries) return entries;
 		console.warn('[osionos-bridge] member workspaces unavailable: rows of another user');
+		if (strict) throw new Error('member rows of another user');
 		return [];
 	} catch (error) {
 		console.warn(`[osionos-bridge] member workspaces unavailable: ${error?.status ?? 'error'}`);
+		if (strict) throw error;
 		return [];
 	}
 }
@@ -1698,8 +1735,23 @@ function privateWorkspaceIdOf(payload, persisted) {
 	return persisted?.workspaceId ?? uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
 }
 
+/**
+ * What a refresh re-reads instead of replaying: the admin flag, the platform role and the member
+ * workspaces, the way a sign-in reads them. The private workspace stays the token's own.
+ * Caveat: a read that fails degrades to fewer rights (no extras, no role), never more; the next
+ * sign-in restores them.
+ */
+export async function readRefreshClaims(identity, { config, pg, fetchImpl }) {
+	const payload = { subject: identity.sub, provider: identity.provider, email: identity.email, emailVerified: false };
+	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
+	const memberWorkspaces = await memberWorkspaceEntries(identity.sub, identity.workspace_ids.slice(0, 1), config, fetchImpl);
+	const platformRole = isAdmin ? 'admin' : (await readPlatformRole(platformRoleReader(pg), identity.sub)).role;
+	return { isAdmin, platformRole, memberWorkspaces };
+}
+
 /** Today's order: persist, admin flag, admin membership, member workspaces. Env admins keep it. */
 async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
+	await assertAccountNotRefused(roleReader, payload.subject);
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
 	if (isAdmin) await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
@@ -1723,12 +1775,15 @@ async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
  * corrects it. Nothing here can widen a claim.
  */
 async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
-	const [persistence, adminRead, memberRead, roleRead] = await Promise.allSettled([
+	const [persistence, adminRead, memberRead, roleRead, refusal] = await Promise.allSettled([
 		persistIdentityForHandoff(payload, config, fetchImpl),
 		resolveAdminFlag(payload, config, fetchImpl),
 		memberWorkspaceEntries(payload.subject, [], config, fetchImpl),
 		readPlatformRole(roleReader, payload.subject),
+		assertAccountNotRefused(roleReader, payload.subject),
 	]);
+	// Refusal first: a banned person is told so rather than that persistence failed.
+	if (refusal.status === 'rejected') throw refusal.reason;
 	if (persistence.status === 'rejected') throw persistence.reason;
 	const persisted = persistence.value;
 	const isAdmin = adminRead.status === 'fulfilled' && adminRead.value === true;
@@ -1747,8 +1802,12 @@ async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
 export async function createBridgeHandoff({ payload, config, kv, pg, now = Date.now(), fetchImpl = fetch }) {
 	if (!config.appSessionSecret) throw Object.assign(new Error('osionos app session secret is not configured.'), { status: 503 });
 	const readClaims = isEnvAdminEmail(payload, config) ? readClaimsInOrder : readClaimsConcurrently;
-	const { persisted, isAdmin, platformRole, memberWorkspaces } = await readClaims(payload, config, fetchImpl, platformRoleReader(pg));
-	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces, isAdmin, platformRole);
+	// The factor lookup rides with the claim reads; a failed lookup is a 503, never an ungated token.
+	const [{ persisted, isAdmin, platformRole, memberWorkspaces }, mfaReq] = await Promise.all([
+		readClaims(payload, config, fetchImpl, platformRoleReader(pg)),
+		mfaRequiredFor({ pg, config }, payload.subject),
+	]);
+	const bridgeSession = createUserSession(payload, config, persisted, now, memberWorkspaces, isAdmin, platformRole, mfaReq ? { aal: 1, mfaReq: true } : {});
 	const token = randomToken();
 	const expiresAt = now + config.handoffTtlMs;
 	// The store keeps the record sealed and under a key derived from the token: a shared
@@ -2222,7 +2281,9 @@ async function readJson(request, maxBytes = DEFAULT_JSON_BODY_LIMIT_BYTES) {
 		body += chunk;
 		if (body.length > maxBytes) throw Object.assign(new Error('Request body too large.'), { status: 413 });
 	}
-	return body ? JSON.parse(body) : {};
+	const parsed = body ? JSON.parse(body) : {};
+	// A personal access token's write is held to its mask here, where every route reads a body.
+	return request.patWriteMask ? patWritePayload(parsed, request.patWriteMask) : parsed;
 }
 
 function json(response, status, body, config, extraHeaders = {}) {
@@ -4535,10 +4596,11 @@ async function handleBridgeConsume(request, response, config, kv, pg) {
 	const token = safeText(payload.token, 512);
 	if (!token) throw Object.assign(new Error('Bridge handoff token is required.'), { status: 422 });
 	const consumed = await consumeHandoffToken(token, kv, sessionClock(config), config.appSessionSecret);
+	await assertAccountNotRefused(platformRoleReader(pg), consumed.session.userId, sessionClock(config));
 	// The row is written here, where the client metadata is the user's: the mint is a
 	// server-to-server call from the gateway.
-	await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod: 'handoff' });
-	json(response, 200, consumed, config);
+	const delivered = await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod: 'handoff', persona: consumed.persona });
+	json(response, 200, deliveredAnswer(consumed, delivered), config);
 }
 
 function bridgeTokenFromRedirect(redirectUrl) {
@@ -4572,6 +4634,31 @@ async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}',
 	return { res, data };
 }
 
+// The gateway mints a one-time handoff for a GoTrue access token; consuming it here makes the
+// osionos session the app uses. The session row is written here, where the request's client
+// metadata is the user's. `expectedUserId` refuses a session minted for someone else before it is recorded.
+async function establishAppSession({ request, config, kv, pg, fetchImpl, gatewayToken, authMethod, expectedUserId = '' }) {
+	const { res, data } = await gatewayCall(fetchImpl, config, '/api/auth/osionos-session', {
+		headers: { authorization: `Bearer ${gatewayToken}` },
+		forwardedFor: forwardedForHeader(request),
+	});
+	const bridgeToken = bridgeTokenFromRedirect(data.redirectUrl);
+	if (!res.ok || !bridgeToken) throw Object.assign(new Error(data.message || 'Could not establish the app session.'), { status: 502 });
+	const consumed = await consumeHandoffToken(bridgeToken, kv, sessionClock(config), config.appSessionSecret);
+	if (expectedUserId && consumed.session.userId !== expectedUserId) {
+		throw Object.assign(new Error('The sign-in could not be verified; sign in again.'), { status: 401, code: 'invalid_provider_token' });
+	}
+	await assertAccountNotRefused(platformRoleReader(pg), consumed.session.userId, sessionClock(config));
+	const delivered = await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod, persona: consumed.persona });
+	return deliveredAnswer(consumed, delivered);
+}
+
+// The address the gateway would also attribute the request to: the configured header, else the socket peer.
+function signInRemoteIp(request, config) {
+	const header = config.clientIpHeader ? String(request.headers[config.clientIpHeader.toLowerCase()] ?? '') : '';
+	return header.split(',')[0].trim() || (request.socket?.remoteAddress ?? '');
+}
+
 // Proxy the app's login/register to the hardened auth-gateway (server-side, so the
 // gateway's website-only CORS does not apply), then mint + return the osionos
 // session the app already consumes ({ user, accessToken, refreshToken }). Reuses
@@ -4582,8 +4669,8 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 	const email = safeText(payload.email, 320).trim().toLowerCase();
 	const password = safeText(payload.password, 512);
 	if (!email || !password) throw Object.assign(new Error('Email and password are required.'), { status: 422 });
-	const turnstileToken = 'localhost-turnstile-token';
 	const forwardedFor = forwardedForHeader(request);
+	const turnstileToken = await resolveTurnstileToken(payload, { config, fetchImpl, remoteIp: signInRemoteIp(request, config) });
 
 	if (url.pathname === '/api/auth/register') {
 		const rawName = safeText(payload.username ?? payload.name ?? email.split('@')[0], 64);
@@ -4601,22 +4688,15 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 	});
 	if (!lRes.ok || !lData.access_token) { json(response, lRes.status || 401, { message: lData.message || 'Invalid credentials.' }, config); return; }
 
-	const { res: sRes, data: sData } = await gatewayCall(fetchImpl, config, '/api/auth/osionos-session', {
-		headers: { authorization: `Bearer ${lData.access_token}` },
-		forwardedFor,
-	});
-	const bridgeToken = bridgeTokenFromRedirect(sData.redirectUrl);
-	if (!sRes.ok || !bridgeToken) { json(response, 502, { message: sData.message || 'Could not establish the app session.' }, config); return; }
-
-	const consumed = await consumeHandoffToken(bridgeToken, kv, sessionClock(config), config.appSessionSecret);
-	// A password sign-in is the user's own request: this is where its client metadata is
-	// the user's, so this is where its session row is written.
-	await recordDeliveredSession(config, pg, { request, accessToken: consumed.session.accessToken, authMethod: 'password' });
+	const consumed = await establishAppSession({ request, config, kv, pg, fetchImpl, gatewayToken: lData.access_token, authMethod: 'password' });
 	json(response, 200, {
 		user: { id: lData.user?.id ?? consumed.session.userId, email },
 		accessToken: consumed.session.accessToken,
-		refreshToken: typeof lData.refresh_token === 'string' ? lData.refresh_token : '',
+		// The gateway's own refresh token is dropped on purpose: the app refreshes through the bridge's rotating one.
+		refreshToken: consumed.session.refreshToken,
+		expiresAt: consumed.expiresAt,
 		workspaceIds: Array.isArray(consumed.persona?.workspaceIds) ? consumed.persona.workspaceIds : [],
+		...(consumed.session.mfaRequired ? { mfaRequired: true } : {}),
 		session: consumed.session,
 	}, config);
 }
@@ -4631,26 +4711,10 @@ async function requireEmptyBody(request) {
 	if (bytes > 0) throw Object.assign(new Error('Sign-out takes no request body.'), { status: 400, code: 'logout_body_not_allowed' });
 }
 
-/** An explicit timestamp from the bridge clock: a column DEFAULT would leave an existing row untouched on conflict. */
-async function writeSessionCutoff(config, fetchImpl, userId, writtenAtMs) {
-	try {
-		await baasRest(config, fetchImpl, `auth_session_cutoffs?${postgrestQuery({ on_conflict: 'user_id' })}`, {
-			method: 'POST',
-			body: { user_id: userId, sessions_valid_after: new Date(writtenAtMs).toISOString() },
-			prefer: 'resolution=merge-duplicates',
-		});
-	} catch (error) {
-		if (error?.upstreamStatus === 409 && /23503/.test(error.upstreamText ?? '')) {
-			throw Object.assign(new Error('No account matches this session.'), { status: 409, code: 'user_not_found' });
-		}
-		throw Object.assign(new Error('Sign-out could not be recorded; try again shortly.'), { status: 503, code: 'session_cutoffs_unavailable', retryAfterSeconds: 5 });
-	}
-}
-
 /** Signs the caller out everywhere: every osionos_v1 token issued before now stops verifying. */
 async function handleBridgeLogout(request, response, config, fetchImpl) {
 	const clock = config.sessionCutoffs?.now ?? Date.now;
-	const session = verifyAppSessionToken(bearerToken(request), config, clock());
+	const session = verifyAppSessionToken(bearerToken(request), config, clock(), { allowPendingMfa: true });
 	await requireEmptyBody(request);
 	const writtenAtMs = Math.floor(clock());
 	await writeSessionCutoff(config, fetchImpl, session.userId, writtenAtMs);
@@ -4667,6 +4731,10 @@ async function handleBridgeLogout(request, response, config, fetchImpl) {
 async function handleBridgePost(url, request, response, config, kv, pg, fetchImpl, env = process.env) {
 	if (url.pathname === '/api/auth/bridge/logout') {
 		await handleBridgeLogout(request, response, config, fetchImpl);
+		return true;
+	}
+	if (url.pathname === EXCHANGE_PATH) {
+		await handleAuthExchange(request, response, { config, kv, pg, fetchImpl, establishSession: (args) => establishAppSession({ ...args, config, kv, pg, fetchImpl }) });
 		return true;
 	}
 	if (url.pathname === '/api/auth/login' || url.pathname === '/api/auth/register') {
@@ -4704,6 +4772,8 @@ async function handleBridgeRequest(request, response, context) {
 		return;
 	}
 	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+	// A personal access token is exchanged for a masked internal session before any route reads it.
+	if (await context.patGate(request, response, url, context.config)) return;
 	// Workstream modules — each returns false when the path is not theirs:
 	// in-chat AI agent (SSE), perms proxy (WS-C), LiveKit tokens (WS-D),
 	// chat/profile/feed (WS-B).
@@ -4818,13 +4888,14 @@ export function createBridgeServer(options = {}) {
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		account: createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken }),
+		account: createAccountHandler({ config, pg, kv, mfaEnv: env, mfaFetch: fetchImpl, mfaNow: options.now, verifySession: verifyAppSessionToken, readRefreshClaims: (identity) => readRefreshClaims(identity, { config, pg, fetchImpl }) }),
 	};
+	const patGate = createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, now: options.now, rateLimit: options.patRateLimit });
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);
 			try {
-				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env });
+				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env, patGate });
 			} catch (error) {
 				if (!response.headersSent) errorJson(response, error, responseConfig);
 			}
@@ -4848,8 +4919,12 @@ export function createBridgeServer(options = {}) {
 
 export function startBridgeServer(config = configFromEnv()) {
 	const server = createBridgeServer({ config });
+	console.info(mfaBootLine(config));
 	// One boot line for the three states an operator has to know.
 	console[bridgeBootIsDegraded(server) ? 'warn' : 'info'](bridgeBootLine(server));
+	console.info(turnstileBootLine(config));
+	const ipWarning = clientIpBootWarning(config);
+	if (ipWarning) console.info(ipWarning);
 	// No administrator configured: nobody is promoted to is_admin at login, so
 	// an account-admin workspace has no admin until the operator sets one.
 	if (!config.adminEmails.length) console.warn('[bridge] no account administrators configured (OSIONOS_ADMIN_EMAILS unset)');

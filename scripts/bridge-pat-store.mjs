@@ -40,7 +40,7 @@ export const PAT_PREFIX = 'osio_pat_';
 
 const PAT_TABLE = 'osionos_personal_access_tokens';
 const PAT_SECRET_PATTERN = /^osio_pat_[A-Za-z0-9_-]{43}$/;
-const LIST_COLUMNS = 'id,name,kind,scopes,grants,created_at,expires_at,revoked_at,revoked_reason';
+const LIST_COLUMNS = 'id,name,kind,scopes,grants,created_at,expires_at,last_used_at,revoked_at,revoked_reason';
 // One number for the list window and the cap: a live token is always inside the window.
 export const PAT_LIVE_LIMIT = 50;
 const LIST_LIMIT = PAT_LIVE_LIMIT;
@@ -181,7 +181,7 @@ export async function revokeAllPats({ pg, userId, now }) {
 export async function findPatByHash({ pg, hash }) {
 	const params = new URLSearchParams({
 		token_hash: `eq.${hash}`,
-		select: 'id,user_id,kind,scopes,grants,expires_at,revoked_at',
+		select: 'id,user_id,kind,scopes,grants,expires_at,last_used_at,revoked_at',
 	});
 	try {
 		const rows = await pg.asService().get(`${PAT_TABLE}?${params}`);

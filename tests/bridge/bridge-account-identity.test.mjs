@@ -22,6 +22,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTtlKv } from './support/account-kv.mjs';
+import { startIdentityWorld } from './support/account-erasure-world.mjs';
 import { send, sessionToken, startAccountWorld, startBridgeWorld, sudoToken, USER_A, USER_B } from './support/account-world.mjs';
 
 const WORKSPACE = '0a4d1c2e-0000-4000-8000-000000000ad1';
@@ -264,5 +265,83 @@ describe('the deletion request', () => {
 		assert.equal(response.status, 503);
 		assert.equal(response.body.code, 'audit_unavailable');
 		assert.equal(store.rows('osionos_account_deletion_requests').length, 1);
+	});
+});
+
+const ACCEPT = '/api/account/deletion/successor/accept';
+const OPEN_ROW = { requested_at: '2026-10-02T00:00:00.000Z', scheduled_for: '2026-10-16T00:00:00.000Z' };
+
+async function identity(t, { rows = {}, failNotification = false, as = USER_A } = {}) {
+	const kv = createTtlKv();
+	const built = await startIdentityWorld(t, {
+		kv,
+		failNotification,
+		rows: {
+			profiles: [profileOf(USER_A)],
+			workspaces: [{ id: WORKSPACE, owner_id: USER_A, name: 'Home' }],
+			members: [{ workspace_id: WORKSPACE, user_id: SUCCESSOR, role: 'member' }],
+			...rows,
+		},
+	});
+	return { ...built, token: await sudoToken(built.config, kv, as) };
+}
+
+describe('the deletion executor seams', () => {
+	for (const [label, erasedAt, expected] of [['a plain request', null, false], ['a lease or failed attempt', null, false], ['an erased request', '2026-11-20T00:00:00.000Z', true]]) {
+		it(`reports inProgress=${expected} for ${label}`, async (t) => {
+			const { base, token } = await identity(t, { rows: { deletions: [{ user_id: USER_A, ...OPEN_ROW, successor_user_id: null, erased_at: erasedAt, claimed_at: '2026-11-19T00:00:00.000Z', attempts: 2 }] } });
+			const response = await send(base, '/api/account/deletion', { token });
+			assert.equal(response.status, 200);
+			assert.equal(response.body.inProgress, expected);
+		});
+	}
+
+	it('answers 409 deletion_in_progress when the request was erased, and 204 before', async (t) => {
+		const erased = await identity(t, { rows: { deletions: [{ user_id: USER_A, ...OPEN_ROW, successor_user_id: null, erased_at: '2026-11-20T00:00:00.000Z' }] } });
+		const refused = await send(erased.base, '/api/account/deletion', { method: 'DELETE', token: erased.token });
+		assert.equal(refused.status, 409);
+		assert.equal(refused.body.code, 'deletion_in_progress');
+		const plain = await identity(t, { rows: { deletions: [{ user_id: USER_A, ...OPEN_ROW, successor_user_id: null, erased_at: null }] } });
+		assert.equal((await send(plain.base, '/api/account/deletion', { method: 'DELETE', token: plain.token })).status, 204);
+	});
+
+	it('lets the successor accept, and nobody else', async (t) => {
+		const rows = { deletions: [{ user_id: USER_A, ...OPEN_ROW, successor_user_id: SUCCESSOR, erased_at: null }] };
+		const wrong = await identity(t, { rows, as: USER_B });
+		const refused = await send(wrong.base, ACCEPT, { method: 'POST', token: wrong.token, body: { requesterUserId: USER_A } });
+		assert.equal(refused.status, 403);
+		assert.equal(refused.body.code, 'not_successor');
+		const right = await identity(t, { rows, as: SUCCESSOR });
+		const accepted = await send(right.base, ACCEPT, { method: 'POST', token: right.token, body: { requesterUserId: USER_A } });
+		assert.equal(accepted.status, 200);
+		assert.ok(right.store.rows('osionos_account_deletion_requests')[0].successor_accepted_at);
+		assert.equal(right.store.rows('osionos_bridge_audit_events').at(-1).event_type, 'account.successor_accepted');
+	});
+
+	it('refuses to accept an erased request and a malformed requester', async (t) => {
+		const { base, token } = await identity(t, { as: SUCCESSOR, rows: { deletions: [{ user_id: USER_A, ...OPEN_ROW, successor_user_id: SUCCESSOR, erased_at: '2026-11-20T00:00:00.000Z' }] } });
+		const erased = await send(base, ACCEPT, { method: 'POST', token, body: { requesterUserId: USER_A } });
+		assert.equal(erased.status, 409);
+		const bad = await send(base, ACCEPT, { method: 'POST', token, body: { requesterUserId: 'nope' } });
+		assert.equal(bad.status, 422);
+	});
+
+	it('tells the named successor with one system notification that holds no id or name', async (t) => {
+		const { base, token, store } = await identity(t);
+		const response = await send(base, '/api/account/deletion', { method: 'POST', token, body: { successorUserId: SUCCESSOR } });
+		assert.equal(response.status, 201);
+		const notes = store.rows('osionos_notifications');
+		assert.equal(notes.length, 1);
+		assert.equal(notes[0].type, 'system');
+		assert.equal(notes[0].user_id, SUCCESSOR);
+		const text = JSON.stringify(notes[0]);
+		assert.equal(text.includes(USER_A) || text.includes('Ada'), false);
+	});
+
+	it('still answers 201 when the notification cannot be written', async (t) => {
+		const { base, token, store } = await identity(t, { failNotification: true });
+		const response = await send(base, '/api/account/deletion', { method: 'POST', token, body: { successorUserId: SUCCESSOR } });
+		assert.equal(response.status, 201);
+		assert.equal(store.rows('osionos_notifications').length, 0);
 	});
 });
