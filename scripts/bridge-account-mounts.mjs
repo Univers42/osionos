@@ -34,6 +34,7 @@ import { createAvatarRoutes } from './bridge-avatar.mjs';
 import { createSelfDataRoutes } from './bridge-self-data.mjs';
 import { createWorkspaceSettingsRoutes } from './bridge-workspace-settings.mjs';
 import { createAdminUsersRoutes } from './bridge-account-users.mjs';
+import { createAdminAuditRoutes } from './bridge-account-audit.mjs';
 
 export function createAccountHandler(deps) {
 	const modules = [
@@ -48,6 +49,7 @@ export function createAccountHandler(deps) {
 		createWorkspaceSettingsRoutes(deps),
 		createPatRoutes(deps),
 		createAdminUsersRoutes(deps),
+		createAdminAuditRoutes(deps),
 	];
 	return async function handleAccountRequest(url, request, response) {
 		for (const module of modules) {
