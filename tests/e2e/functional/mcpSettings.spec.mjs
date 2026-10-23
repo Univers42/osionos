@@ -60,8 +60,9 @@ test.describe("osionos MCP settings", () => {
     // (5) Disconnect all users → back to 0 connected.
     await panelTab(page, /Manage/).click();
     await page.getByTestId("mcp-disconnect-all").click();
-    await expect(page.getByTestId("mcp-disconnect-all-confirm")).toBeVisible();
-    await page.getByTestId("mcp-disconnect-all-confirm-btn").click();
+    const confirm = page.getByRole("dialog", { name: "Disconnect all users from osionos MCP" });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole("button", { name: "Disconnect all users" }).click();
     await expect(page.getByTestId("mcp-connected-count")).toHaveText("0");
   });
 
