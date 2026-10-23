@@ -32,11 +32,17 @@ export async function fetchPeople(workspaceId: string): Promise<SharePerson[]> {
   return body.people ?? [];
 }
 
-/** Stored AccessRules for one resource. */
-export async function fetchRules(workspaceId: string, resourceId: string): Promise<Array<ShareAccessRule & { _id: string }>> {
+/** Stored AccessRules for one resource and the workspace-wide ones that decide its grant. */
+export async function fetchEffectiveRules(workspaceId: string, resourceId: string): Promise<Array<ShareAccessRule & { _id: string }>> {
   const query = `workspaceId=${encodeURIComponent(workspaceId)}&resourceId=${encodeURIComponent(resourceId)}`;
   const body = await api.get<RulesResponse>(`/api/perms/rules?${query}`, permsBearer());
   return body.rules ?? [];
+}
+
+/** Stored AccessRules for one resource only — the Share dialog's own view. */
+export async function fetchRules(workspaceId: string, resourceId: string): Promise<Array<ShareAccessRule & { _id: string }>> {
+  const rules = await fetchEffectiveRules(workspaceId, resourceId);
+  return rules.filter((rule) => rule.resourceId?.toLowerCase() === resourceId.toLowerCase());
 }
 
 /** Upsert one AccessRule (same workspace/resource/target replaces). */

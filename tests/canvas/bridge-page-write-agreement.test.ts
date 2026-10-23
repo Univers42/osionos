@@ -25,10 +25,21 @@ import {
 } from "../../src/shared/lib/auth/pageAccess.ts";
 // @ts-expect-error — bridge modules are plain JS (Node built-ins only), no types.
 import { canWritePageRow, pageRowToEntry } from "../../scripts/bridge-api.mjs";
+// @ts-expect-error — bridge modules are plain JS (Node built-ins only), no types.
+import { SHARE_LEVELS } from "../../scripts/bridge-share-rules.mjs";
 
 type Row = Record<string, unknown>;
 type Permission = "update" | "delete";
 type Member = { role: string; permissions: string[] };
+type ShareRule = {
+  _id: string;
+  workspaceId: string;
+  resourceId: string | null;
+  resourceType: "page";
+  target: { type: "user"; userId: string } | { type: "role"; role: string } | { type: "workspace" } | { type: "public" };
+  permission: (typeof SHARE_LEVELS)[number];
+  explicit: boolean;
+};
 
 const ALL = ["create", "read", "update", "delete", "admin"];
 const SELF = "b2b2b2b2-2222-4222-8222-b2b2b2b2b2b2";
@@ -55,6 +66,28 @@ const COLLABS: Record<string, Array<{ userId: string; role: string }>> = {
 const VISIBILITIES = ["private", "shared", "public"];
 const PERMISSIONS: Permission[] = ["update", "delete"];
 const PUBLISHED = [false, true];
+
+function makeRule(target: ShareRule["target"], level: (typeof SHARE_LEVELS)[number], resourceId: string | null = PAGE): ShareRule {
+  return {
+    _id: `rule-${target.type}-${level}-${resourceId ?? "wide"}`,
+    workspaceId: WS,
+    resourceId,
+    resourceType: "page",
+    target,
+    permission: level,
+    explicit: true,
+  };
+}
+
+/**
+ * The bridge's decision as the routes compose it (readablePageAccess + requirePageWrite):
+ * a non-member never reaches the rules, and the workspace owner/admin keep their access
+ * whatever the rules say, so they are evaluated with none.
+ */
+function serverWrite(row: Row, member: Member | null, permission: Permission, rules: ShareRule[]): boolean {
+  const exempt = member === null || member.role === "owner" || member.role === "admin";
+  return canWritePageRow(row, SELF, member, permission, exempt ? [] : rules);
+}
 
 function pageRow(owner: string | null, visibility: string, collaborators: unknown, published: boolean): Row {
   return {
@@ -129,6 +162,63 @@ function tableRows(): Array<{
           permission,
         });
       }
+    }
+  }
+  return rows;
+}
+
+/** Share-rule axis: crosses each base row with a share rule scenario. */
+interface ShareRuleScenario {
+  label: string;
+  rules: ShareRule[];
+}
+
+function shareRuleScenarios(): ShareRuleScenario[] {
+  const pageId = PAGE;
+  const scenarios: ShareRuleScenario[] = [
+    { label: "no-rules", rules: [] },
+    { label: "self-can_view", rules: [makeRule({ type: "user", userId: SELF }, "can_view", pageId)] },
+    { label: "self-can_edit", rules: [makeRule({ type: "user", userId: SELF }, "can_edit", pageId)] },
+    { label: "self-full_access", rules: [makeRule({ type: "user", userId: SELF }, "full_access", pageId)] },
+    { label: "self-no_access", rules: [makeRule({ type: "user", userId: SELF }, "no_access", pageId)] },
+    { label: "other-can_edit", rules: [makeRule({ type: "user", userId: OTHER }, "can_edit", pageId)] },
+    { label: "editor-role-can_edit", rules: [makeRule({ type: "role", role: "editor" }, "can_edit", pageId)] },
+    { label: "workspace-can_view", rules: [makeRule({ type: "workspace" }, "can_view", pageId)] },
+    { label: "workspace-can_edit", rules: [makeRule({ type: "workspace" }, "can_edit", pageId)] },
+    { label: "public-can_view", rules: [makeRule({ type: "public" }, "can_view", pageId)] },
+    { label: "public-can_edit", rules: [makeRule({ type: "public" }, "can_edit", pageId)] },
+    { label: "wide-self-can_edit", rules: [makeRule({ type: "user", userId: SELF }, "can_edit", null)] },
+    { label: "wide-workspace-can_edit", rules: [makeRule({ type: "workspace" }, "can_edit", null)] },
+    { label: "self-can_comment", rules: [makeRule({ type: "user", userId: SELF }, "can_comment", pageId)] },
+    { label: "self-can_view+wide-no_access", rules: [
+      makeRule({ type: "user", userId: SELF }, "can_view", pageId),
+      makeRule({ type: "workspace" }, "no_access", null),
+    ]},
+    { label: "self-can_edit+self-no_access", rules: [
+      makeRule({ type: "user", userId: SELF }, "can_edit", pageId),
+      makeRule({ type: "user", userId: SELF }, "no_access", pageId),
+    ]},
+  ];
+  return scenarios;
+}
+
+/** The share-rule axis table: base rows x share rule scenarios. */
+function shareRuleTableRows(): Array<{
+  label: string;
+  row: Row;
+  context: PageAccessContext;
+  member: Member | null;
+  permission: Permission;
+  rules: ShareRule[];
+}> {
+  const rows = [];
+  for (const base of tableRows()) {
+    for (const scenario of shareRuleScenarios()) {
+      rows.push({
+        ...base,
+        label: `${base.label} share=${scenario.label}`,
+        rules: scenario.rules,
+      });
     }
   }
   return rows;
@@ -256,4 +346,114 @@ test("the page owner cannot move the page into a workspace without create", () =
 test("an editor may reorder a page inside its own workspace", () => {
   const context = moveContext({ role: "viewer", permissions: ["read"] });
   assert.equal(canMovePage(movePage(OTHER), SOURCE_WS, context), true);
+});
+
+/** Share-rule axis: bridge and client must agree when share rules are present. */
+test("bridge canWritePageRow agrees with client canWritePage on all share-rule axis rows", () => {
+  let agreed = 0;
+  const disagreements: string[] = [];
+  for (const { label, row, context, member, permission, rules } of shareRuleTableRows()) {
+    const server = serverWrite(row, member, permission, rules);
+    const client = canWritePage(pageRowToEntry(row), context, permission, rules);
+    if (server === client) {
+      agreed += 1;
+      continue;
+    }
+    disagreements.push(`${label}: bridge=${String(server)} client=${String(client)}`);
+  }
+  const total = shareRuleTableRows().length;
+  assert.deepEqual({ agreed, disagreements: disagreements.slice(0, 10) }, { agreed: total, disagreements: [] });
+});
+
+test("the share-rule axis answers true for some rows and false for others", () => {
+  let allowed = 0;
+  for (const { row, context, member, permission, rules } of shareRuleTableRows()) {
+    if (canWritePage(pageRowToEntry(row), context, permission, rules)) allowed += 1;
+  }
+  const total = shareRuleTableRows().length;
+  assert.ok(allowed > 0 && allowed < total, `allowed=${allowed}/${total}`);
+});
+
+/** Spot tests for share-rule scenarios. */
+interface ShareSpot extends Spot {
+  ruleLabel: string;
+  rules: ShareRule[];
+}
+
+function shareWriteAnswer(spot: ShareSpot): { update: boolean; delete: boolean } {
+  const entry = pageRowToEntry(pageRow(
+    OWNERS[spot.owner], spot.visibility, COLLABS[spot.collaborators], spot.published,
+  ));
+  const context = contextFor(MEMBERS[spot.member]);
+  return {
+    update: canWritePage(entry, context, "update", spot.rules),
+    delete: canWritePage(entry, context, "delete", spot.rules),
+  };
+}
+
+test("a can_view rule for self grants read but not write", () => {
+  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-can_view", rules: [makeRule({ type: "user", userId: SELF }, "can_view", PAGE)] };
+  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
+});
+
+test("a can_edit rule for self grants write on a private page", () => {
+  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-can_edit", rules: [makeRule({ type: "user", userId: SELF }, "can_edit", PAGE)] };
+  assert.deepEqual(shareWriteAnswer(spot), { update: true, delete: true });
+});
+
+test("a no_access rule for self denies write even with update permission", () => {
+  const spot: ShareSpot = { member: "editor", owner: "other", visibility: "shared", collaborators: "none", published: false, ruleLabel: "self-no_access", rules: [makeRule({ type: "user", userId: SELF }, "no_access", PAGE)] };
+  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
+});
+
+test("a no_access rule for self denies write even for page owner", () => {
+  const spot: ShareSpot = { member: "none", owner: "self", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-no_access", rules: [makeRule({ type: "user", userId: SELF }, "no_access", PAGE)] };
+  // Page owner is exempt from share rules on the server — this tests that the client mirrors that
+  assert.deepEqual(shareWriteAnswer(spot), { update: true, delete: true });
+});
+
+test("a can_comment rule does not grant write", () => {
+  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-can_comment", rules: [makeRule({ type: "user", userId: SELF }, "can_comment", PAGE)] };
+  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
+});
+
+test("a workspace-wide can_edit rule grants write", () => {
+  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "wide-workspace-can_edit", rules: [makeRule({ type: "workspace" }, "can_edit", null)] };
+  assert.deepEqual(shareWriteAnswer(spot), { update: true, delete: true });
+});
+
+test("a rule for another user does not affect self", () => {
+  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "other-can_edit", rules: [makeRule({ type: "user", userId: OTHER }, "can_edit", PAGE)] };
+  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
+});
+
+test("a can_edit rule plus a no_access rule for same target: no_access wins", () => {
+  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-can_edit+self-no_access", rules: [
+    makeRule({ type: "user", userId: SELF }, "can_edit", PAGE),
+    makeRule({ type: "user", userId: SELF }, "no_access", PAGE),
+  ]};
+  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
+});
+
+test("a page-scoped can_view plus workspace-wide no_access: no_access wins", () => {
+  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-can_view+wide-no_access", rules: [
+    makeRule({ type: "user", userId: SELF }, "can_view", PAGE),
+    makeRule({ type: "workspace" }, "no_access", null),
+  ]};
+  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
+});
+
+test("a no_access rule naming a workspace admin does not take their write away", () => {
+  const spot: ShareSpot = { member: "admin", owner: "other", visibility: "shared", collaborators: "none", published: false, ruleLabel: "self-no_access", rules: [makeRule({ type: "user", userId: SELF }, "no_access", PAGE)] };
+  assert.deepEqual(shareWriteAnswer(spot), { update: true, delete: true });
+});
+
+test("a can_edit rule does not let a non-member write", () => {
+  const spot: ShareSpot = { member: "none", owner: "other", visibility: "public", collaborators: "none", published: false, ruleLabel: "self-can_edit", rules: [makeRule({ type: "user", userId: SELF }, "can_edit", PAGE)] };
+  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
+});
+
+test("a can_edit rule for another page grants nothing on this one", () => {
+  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "other-page", rules: [makeRule({ type: "user", userId: SELF }, "can_edit", "f2f2f2f2-2222-4222-8222-f2f2f2f2f2f2")] };
+  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
 });
