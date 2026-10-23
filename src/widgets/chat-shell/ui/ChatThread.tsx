@@ -71,7 +71,7 @@ const AssistantAnswer: React.FC<{
           key={permission.approvalId}
           approvalId={permission.approvalId}
           provenanceTitles={provenanceTitles(permission.provenancePageIds, citations)}
-          onOpenPage={(pageId) => openCitation({ n: 0, pageId, title: "", snippet: "" })}
+          onOpenPage={(pageId) => openCitation({ n: 0, collection: "page", pageId, title: "", snippet: "" })}
           onContinuation={(runId) => {
             void useChatStore.getState().followUp(conversationId, runId);
           }}
