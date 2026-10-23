@@ -81,6 +81,11 @@ const envSchema = z.object({
 	OSIONOS_AI_STT_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
 	// The seconds of audio a user may dictate in a day.
 	OSIONOS_AI_STT_SECONDS_PER_DAY: z.coerce.number().int().nonnegative().default(600),
+	// The dedicated, knowledge-only workspace of the knowledge packs (P5c,
+	// C45). It is operator configuration: a user or the model never sets it.
+	// Unset, or not a uuid, means packs are off everywhere. The import CLI
+	// refuses a workspace that holds any osionos_pages row.
+	OSIONOS_AI_SYSTEM_WORKSPACE_ID: z.string().optional(),
 	// The image generation (M1). OFF unless exactly "on": the public overlay
 	// leaves it empty until the prompt gate (devil C72) and the output gate
 	// (C73) exist. Off, the route does not exist.
@@ -194,6 +199,7 @@ const rawEnv = {
 	OSIONOS_AI_IMAGES: process.env.OSIONOS_AI_IMAGES,
 	OSIONOS_AI_BUILDERS: process.env.OSIONOS_AI_BUILDERS,
 	OSIONOS_AI_BUILD_BUDGET_MS: process.env.OSIONOS_AI_BUILD_BUDGET_MS,
+	OSIONOS_AI_SYSTEM_WORKSPACE_ID: process.env.OSIONOS_AI_SYSTEM_WORKSPACE_ID,
 	OSIONOS_AI_PENDING_PLANS: process.env.OSIONOS_AI_PENDING_PLANS,
 	OSIONOS_AI_BUILDS_PER_DAY: process.env.OSIONOS_AI_BUILDS_PER_DAY,
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
@@ -305,6 +311,19 @@ function parseDevProviderUrls(raw: string | undefined): Readonly<Record<string, 
 	}
 }
 
+/** The shape of a uuid: anything else is not one. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A uuid of the environment, lower-cased, or null when it is unset or is not
+ * a uuid. A typo turns the feature off instead of pointing it at a workspace
+ * that is not the system one.
+ */
+function optionalUuid(raw: string | undefined): string | null {
+	const value = (raw ?? '').trim();
+	return UUID.test(value) ? value.toLowerCase() : null;
+}
+
 export interface AiServiceConfig {
 	port: number;
 	databaseUrl: string;
@@ -385,6 +404,13 @@ export interface AiServiceConfig {
 	imagesPerUserDay: number;
 	/** The images of the platform in a UTC day. */
 	imagesPerDay: number;
+	/**
+	 * The dedicated, knowledge-only workspace of the knowledge packs, or null.
+	 *
+	 * Operator configuration (C45): no user and no model sets it. Null means
+	 * packs are off everywhere, and the retrieval never looks at them.
+	 */
+	systemWorkspaceId: string | null;
 	/** The deadline of one generation, in milliseconds. */
 	imageTimeoutMs: number;
 	/** The directory of the models of the output check (C73). */
@@ -451,6 +477,7 @@ export const config: AiServiceConfig = Object.freeze({
 	imageMicroUsd: parsed.data.OSIONOS_AI_IMAGE_MICROUSD,
 	imagesPerUserDay: parsed.data.OSIONOS_AI_IMAGES_PER_USER_DAY,
 	imagesPerDay: parsed.data.OSIONOS_AI_IMAGES_PER_DAY,
+	systemWorkspaceId: optionalUuid(parsed.data.OSIONOS_AI_SYSTEM_WORKSPACE_ID),
 	imageTimeoutMs: parsed.data.OSIONOS_AI_IMAGE_TIMEOUT_MS,
 	imageCheckDir: parsed.data.OSIONOS_AI_IMAGE_CHECK_DIR,
 	promptGuardUrl: parsed.data.OSIONOS_AI_PROMPT_GUARD_URL,

@@ -14,6 +14,7 @@ import type { ApprovalContext, PermissionAsked } from '../approvals/types.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import type { PageContext } from './prompt.ts';
+import { citationData } from './sources.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
 
 /**
@@ -100,11 +101,7 @@ export function buildRunTools(input: {
 			cited.push(...found.map(({ source }) => source));
 			for (const { n, source } of found) {
 				await emit('citation', {
-					n,
-					pageId: source.pageId,
-					...(source.blockId ? { blockId: source.blockId } : {}),
-					title: source.title,
-					snippet: source.snippet,
+					...citationData(source, n),
 					// The call that found the passage: the client credits
 					// it to that call, and to no other.
 					toolCallId,
@@ -114,7 +111,9 @@ export function buildRunTools(input: {
 		onResult: async (outcome: ToolOutcome) => {
 			await emit('tool.result', outcome);
 			// C42: a proposal is announced so a client can show the chip.
-			if (outcome.memoryId) await emit('memory.proposed', { type: 'memory.proposed', id: outcome.memoryId });
+			if (outcome.memoryId && outcome.memoryBody) {
+				await emit('memory.proposed', { type: 'memory.proposed', id: outcome.memoryId, body: outcome.memoryBody });
+			}
 			// The skill a load returned is pinned on the row of the run (C40):
 			// the stream expires, the row does not.
 			if (outcome.skill) await recordSkillPin(db, runId, outcome.skill);

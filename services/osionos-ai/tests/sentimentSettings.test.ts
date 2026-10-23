@@ -2,35 +2,18 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
 import { Pool } from 'pg';
-import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
+import { serveAi, tokenFor } from './serveAi.ts';
 
 /**
  * The switch of AI sentiment (M6): C138. The permission is read from the
  * LIVE osionos_workspace_members row, never from the claims of the token.
  */
 
-const APP_SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
 const db = new Pool({ connectionString: process.env.OSIONOS_AI_DATABASE_URL ?? '', max: 4 });
 const present = await db.query("select to_regclass('public.ai_sentiment_settings') as settings");
 const migrated = Boolean(present.rows[0]?.settings);
 
-const tokenFor = (userId: string, workspaceId: string): string =>
-	signAppSessionToken({
-		payload: { subject: userId, provider: 'test' },
-		workspace: { _id: workspaceId },
-		config: { appSessionSecret: APP_SECRET, sessionTtlSeconds: 3600 },
-	}).token;
-
-process.env.OSIONOS_AI_PLATFORM_MODELS ??= JSON.stringify([
-	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true },
-]);
-const { createAiServer } = await import('../src/server.ts');
-const app = createAiServer();
-await new Promise<void>((resolve) => {
-	app.server.listen(0, '127.0.0.1', () => resolve());
-});
-const address = app.server.address();
-const base = `http://127.0.0.1:${address && typeof address === 'object' ? address.port : 0}`;
+const base = await serveAi();
 
 const WS = randomUUID();
 const OWNER = randomUUID();
@@ -57,7 +40,6 @@ after(async () => {
 		await db.query('delete from public.ai_sentiment_settings where workspace_id = $1', [WS]);
 		await db.query('delete from public.osionos_workspace_members where workspace_id = $1', [WS]);
 	}
-	await app.close();
 	await db.end();
 });
 
