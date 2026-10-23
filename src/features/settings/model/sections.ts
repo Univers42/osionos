@@ -53,14 +53,14 @@ const DANGER_ANCHOR: SettingsAnchor = { id: "danger", label: "Delete account", k
 const PROFILE_ANCHORS: readonly SettingsAnchor[] = [
   { id: "public-profile", label: "Public profile", keywords: ["name", "pronouns", "bio", "website", "links", "company", "location", "orcid", "patreon", "avatar", "photo"], description: "Edit your public profile." },
   { id: "account-security", label: "Account security", keywords: ["email", "password", "verification", "passkey", "two step"] },
-  { id: "devices", label: "Devices", keywords: ["sessions", "logout", "device"] },
+  { id: "sessions", label: "Sessions", keywords: ["sessions", "sign out", "logout", "device", "web", "desktop", "mobile"] },
   { id: "user-id", label: "User ID", keywords: ["copy", "id", "identifier"] },
 ];
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: "profile", group: "account", label: "Profile", title: "Profile",
-    subtitle: "Manage your profile, login information, and devices", icon: User,
+    subtitle: "Manage your profile, login information, and sessions", icon: User,
     // A getter so the palette and search read the flag when they run: a hidden row is never offered.
     get anchors(): readonly SettingsAnchor[] {
       return [...PROFILE_ANCHORS, ...(isAccountDeleteEnabled() ? [DANGER_ANCHOR] : [])];
