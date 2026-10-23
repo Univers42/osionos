@@ -34,7 +34,7 @@ import { createAccountStore } from './account-postgrest.mjs';
 import { kvStub } from './kv-stub.mjs';
 import { ACCOUNT_JWT_SECRET, accountConfig } from './account-world.mjs';
 
-export const STORAGE_URL = 'http://storage.local/v1';
+export const STORAGE_URL = 'https://storage.local/v1';
 const LEASE_MS = 30 * 60_000;
 const SERVICE_AUTH = 'Bearer service-role-test-key';
 
@@ -59,8 +59,8 @@ export function createErasureWorld({ users = [], objects = {} } = {}) {
 		erases: new Map(),
 		count: 0,
 		killAfter: 0,
-		banReply: null,
-		deleteReply: null,
+		banReply: 'gotrue',
+		deleteReply: 'gotrue',
 	};
 
 	function record(label, userId) {
