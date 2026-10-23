@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { attributeText } from '../runs/sources.ts';
+import { attributeText, escapeTags } from '../runs/sources.ts';
 import { findBuiltinSkill } from '../skills/builtins.ts';
 import type { BuiltinSkill } from '../skills/builtins.ts';
 import type { ReadTool } from './types.ts';
@@ -74,11 +74,8 @@ export function loadSkillTool(
 
 /**
  * A body cannot close or open a <skill> tag (devil C38): its text is data.
- *
- * Caveat: only the tag name `skill` is neutralised (any case, with or without
- * the slash); a body can still contain other tags, which the model reads as
- * text inside the block — the data-boundary line is what covers those.
+ * The generic helper is `escapeTags` (src/runs/sources.ts).
  */
 export function escapeSkillTags(body: string): string {
-	return body.replace(/<(\/?)skill/gi, '&lt;$1skill');
+	return escapeTags(body, ['skill']);
 }
