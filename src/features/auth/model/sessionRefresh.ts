@@ -230,7 +230,7 @@ export async function runRefresh(deps: RefreshDeps): Promise<RefreshOutcome> {
   const start = deps.readTokens()?.refreshToken;
   if (!start) return 'skipped';
   if (adoptPublished(deps, start)) return 'adopted';
-  const owner = `${deps.now ? deps.now() : Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const owner = `${deps.now ? deps.now() : Date.now()}-${crypto.randomUUID()}`;
   if (await takeLease(deps, owner, start) === 'adopted') return 'adopted';
   try {
     const current = deps.readTokens()?.refreshToken;

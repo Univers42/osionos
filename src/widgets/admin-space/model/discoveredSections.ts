@@ -21,7 +21,7 @@ const modules = import.meta.glob<{ section: AdminSection }>("../sections/*/secti
  *  is then simply absent. */
 export async function loadDiscoveredSections(): Promise<AdminSection[]> {
   const loaded = await Promise.all(
-    Object.keys(modules).sort().map((path) => modules[path]().then((m) => m.section, () => null)),
+    Object.keys(modules).sort((a, b) => (a < b ? -1 : Number(a > b))).map((path) => modules[path]().then((m) => m.section, () => null)),
   );
   return loaded.filter((section): section is AdminSection => section !== null);
 }

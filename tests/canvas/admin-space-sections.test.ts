@@ -66,3 +66,12 @@ test("the role filter leaves the isAvailable filter of the apps group alone", ()
   const without = ids(visibleRailItems(apps));
   assert.deepEqual(withRole, without);
 });
+
+test("the Moderation section renders both its regions, each named by its heading", async () => {
+  const React = (await import("react")).default;
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { default: ModerationSection } = await import("../../src/widgets/admin-space/ui/ModerationSection.tsx");
+  const html = renderToStaticMarkup(React.createElement(ModerationSection));
+  assert.match(html, /<section aria-labelledby="moderation-content-heading"[^>]*><h2 id="moderation-content-heading"[^>]*>Content held for review</);
+  assert.match(html, /<section aria-labelledby="moderation-people-heading"[^>]*><h2 id="moderation-people-heading"[^>]*>Reports about people</);
+});

@@ -21,8 +21,8 @@ import { configFromEnv, createBridgeHandoff, createBridgeServer, validateBridgeP
 import { kvStub } from './kv-stub.mjs';
 import { noFactorPg } from './no-factor-pg.mjs';
 
-export const GATEWAY = 'http://gateway.local';
-export const BAAS = 'http://baas.local';
+export const GATEWAY = 'https://gateway.local';
+export const BAAS = 'https://baas.local';
 export const SITEVERIFY = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 export const SECRET = 'turnstile-secret-that-must-never-leak';
 export const USER_ID = '3f6d2a70-5b3f-4c92-8f06-8f4644fd1209';

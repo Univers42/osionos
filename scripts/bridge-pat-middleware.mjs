@@ -42,7 +42,7 @@
 import { randomUUID } from 'node:crypto';
 import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
-import { attributesOutsideMask, evaluatePat, maskAttributes } from './bridge-pat-permissions.mjs';
+import { attributesOutsideMask, evaluatePat, maskAttributes, byCodeUnit } from './bridge-pat-permissions.mjs';
 import { findPatByHash, hashPatSecret, isPatSecret, PAT_PREFIX } from './bridge-pat-store.mjs';
 import { platformRoleReader } from './bridge-roles.mjs';
 import { signAppSessionToken } from './bridge-session-token.mjs';
@@ -90,7 +90,7 @@ const failure = (status, code, message) => Object.assign(new Error(message), { s
 function appendOutside(payload, mask) {
 	const outside = Object.keys(payload).filter((key) => key !== 'blocks' && !APPEND_KEYS.has(key));
 	if (Object.hasOwn(payload, 'blocks') && !mask.includes('content')) outside.push('content');
-	return outside.sort();
+	return outside.sort(byCodeUnit);
 }
 
 /**

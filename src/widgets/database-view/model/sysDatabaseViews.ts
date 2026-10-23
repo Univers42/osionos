@@ -34,7 +34,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /** JSON with sorted keys: jsonb on the server reorders them. */
 function canonical(value: unknown): string {
   return JSON.stringify(value, (_key, v) => isRecord(v)
-    ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]]))
+    ? Object.fromEntries(Object.keys(v).sort((a, b) => (a < b ? -1 : Number(a > b))).map((k) => [k, v[k]]))
     : v);
 }
 
