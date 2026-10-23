@@ -9,7 +9,7 @@ import { config } from './config.ts';
 const CORS_HEADERS: Record<string, string> = {
 	'access-control-allow-origin': config.allowedOrigin,
 	'access-control-allow-credentials': 'true',
-	'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+	'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
 	'access-control-allow-headers':
 		'content-type, authorization, x-prismatica-bridge-timestamp, x-prismatica-bridge-signature, last-event-id',
 	vary: 'Origin',

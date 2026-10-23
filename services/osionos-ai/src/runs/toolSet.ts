@@ -2,6 +2,10 @@ import type { Pool } from 'pg';
 import type { ToolSet } from 'ai';
 import { config } from '../config.ts';
 import { loadSkillTool } from '../tools/skillTools.ts';
+import type { WorkspaceSkillLoader } from '../tools/skillTools.ts';
+import { buildSkillIndex } from '../skills/runSkills.ts';
+import type { SkillIndex } from '../skills/runSkills.ts';
+import { loadListedVersion, recordSkillPin } from '../skills/repo.ts';
 import { readToolSet } from '../tools/index.ts';
 import type { ToolOutcome, ToolPool } from '../tools/index.ts';
 import { writeToolSet } from '../approvals/toolSet.ts';
@@ -65,11 +69,20 @@ export function buildRunTools(input: {
 	 * tools it keeps stay behind the approval of the user.
 	 */
 	agent?: BuiltinAgent | null;
+	/**
+	 * The skills the prompt of the run lists, and the workspace they come from.
+	 *
+	 * `load_skill` answers for exactly these ids. Without it the index is the
+	 * agent's built-ins, as before workspace skills existed.
+	 */
+	skillIndex?: SkillIndex;
+	workspaceId?: string;
 	/** The event of the run. */
 	emit: (type: string, data: unknown) => Promise<void>;
 }): RunTools {
 	const { db, user, pool, runId, conversationId, ownerId, pages, sources, emit } = input;
 	const agent = input.agent ?? null;
+	const skillIndex = input.skillIndex ?? buildSkillIndex(agent?.skills ?? [], []);
 	const cited: RetrievedChunk[] = [...sources];
 	const permissions: PermissionAsked[] = [];
 	const run: RunTools = { tools: undefined, cited, awaitingApproval: false, permissions };
@@ -99,6 +112,9 @@ export function buildRunTools(input: {
 		},
 		onResult: async (outcome: ToolOutcome) => {
 			await emit('tool.result', outcome);
+			// The skill a load returned is pinned on the row of the run (C40):
+			// the stream expires, the row does not.
+			if (outcome.skill) await recordSkillPin(db, runId, outcome.skill);
 		},
 		onApproval: async (asked: PermissionAsked) => {
 			run.awaitingApproval = true;
@@ -118,9 +134,24 @@ export function buildRunTools(input: {
 		],
 	};
 
+	const workspaceEntries = new Map(
+		skillIndex.entries.flatMap((entry) =>
+			entry.source === 'workspace' && entry.skillId ? [[entry.id, { version: entry.version, skillId: entry.skillId }] as const] : [],
+		),
+	);
+	const loader: WorkspaceSkillLoader | undefined =
+		workspaceEntries.size > 0 && input.workspaceId
+			? {
+					entries: workspaceEntries,
+					load: (skillId, version) => loadListedVersion(db, { workspaceId: input.workspaceId as string, skillId, version }),
+				}
+			: undefined;
+	const skillTools =
+		skillIndex.entries.length > 0 ? [loadSkillTool(skillIndex.entries.map((entry) => entry.id), undefined, loader)] : [];
+
 	run.tools = user
 		? {
-				...readToolSet({ db, user }, hooks, pool, agent?.skills.length ? [loadSkillTool(agent.skills)] : []),
+				...readToolSet({ db, user }, hooks, pool, skillTools),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
 		: undefined;

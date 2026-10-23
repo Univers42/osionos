@@ -17,6 +17,7 @@ import {
 } from './prompt.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
+import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
 import { estimateRunMicroUsd } from './estimate.ts';
 import { sourceChars } from './sources.ts';
 import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.ts';
@@ -89,6 +90,8 @@ export interface StartRunInput {
 	 * to its own list — it never gains one.
 	 */
 	agent?: BuiltinAgent | null;
+	/** The workspace of the conversation: its skills join the prompt, when the caller is a live member. */
+	workspaceId?: string;
 	/** Where the model is called, and who pays for it. */
 	target: ResolvedTarget;
 	emit: (event: RunEvent) => void;
@@ -244,6 +247,12 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// the prompt. A retrieval that fails is not a failure of the run: the run
 	// goes on without sources, and the failure is logged once.
 	const { sources, abstained } = await findSources(db, input, text);
+	// The skills index of THIS run: the agent's built-ins and the workspace's
+	// skills, built once so the reservation counts the prompt the call sends.
+	const skillIndex = buildSkillIndex(
+		agent?.skills ?? [],
+		await workspaceSkillsForRun(db, input.user, input.workspaceId),
+	);
 	const day = today();
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
@@ -255,7 +264,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		sourceChars: sourceChars(sources),
 		// The system prompt of THIS run: the base one, or the longer one of
 		// the agent. The reservation counts what the call really sends.
-		systemChars: systemPromptFor(agent).length,
+		systemChars: systemPromptFor(agent, skillIndex).length,
 	});
 	const imageMicroUsd = Math.ceil(
 		(images.length * config.visionTokensPerImage * target.pricing.inputMicroUsdPerMTok) / 1e6,
@@ -312,6 +321,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			title,
 			images,
 			agent,
+			skillIndex,
+			workspaceId: input.workspaceId,
 		});
 	};
 	return { kind: 'started', run: (await getRun(db, runId)) as RunRow, execute };

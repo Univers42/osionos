@@ -17,6 +17,7 @@ import type { QueryResultRow } from 'pg';
 export type ApprovalStatus =
 	| 'pending'
 	| 'executing'
+	| 'partial'
 	| 'executed'
 	| 'failed'
 	| 'declined'
