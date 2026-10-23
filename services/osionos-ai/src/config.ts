@@ -122,6 +122,19 @@ const envSchema = z.object({
 	// The deadline of one call to the guard: A1 measured 5389 ms at p95 with
 	// four clients at once, and 9.5 ms for a server that is not there.
 	OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+	// "Describe image" (M7): the INTERNAL llama-server with the vision model
+	// (`/v1/chat/completions`). Unset or empty = the route is a 404.
+	OSIONOS_AI_VLM_URL: z.string().optional(),
+	// The model name and revision key the cache: a new revision is a new row.
+	// The default is the Qwen2.5-VL-3B Q4_K_M of spikes/a1/models.lock.
+	OSIONOS_AI_VLM_MODEL: z.string().min(1).default('qwen2.5-vl-3b-instruct-q4_k_m'),
+	OSIONOS_AI_VLM_REVISION: z.string().min(1).default('5037fcf163dd95d1e41d1974465f0898ed108ca2'),
+	// One CPU describe took tens of seconds under load (spikes/a1/results/vlm).
+	OSIONOS_AI_VLM_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
+	// How long a request waits for the single slot before a 429.
+	OSIONOS_AI_VLM_QUEUE_WAIT_MS: z.coerce.number().int().positive().default(30_000),
+	// The describes of one user in a minute (the window of the rate limiter).
+	OSIONOS_AI_DESCRIBE_PER_MINUTE: z.coerce.number().int().positive().default(6),
 });
 
 const rawEnv = {
@@ -168,6 +181,12 @@ const rawEnv = {
 	OSIONOS_AI_PROMPT_GUARD_URL: process.env.OSIONOS_AI_PROMPT_GUARD_URL,
 	OSIONOS_AI_PROMPT_GUARD_MODEL: process.env.OSIONOS_AI_PROMPT_GUARD_MODEL,
 	OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS: process.env.OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS,
+	OSIONOS_AI_VLM_URL: process.env.OSIONOS_AI_VLM_URL,
+	OSIONOS_AI_VLM_MODEL: process.env.OSIONOS_AI_VLM_MODEL,
+	OSIONOS_AI_VLM_REVISION: process.env.OSIONOS_AI_VLM_REVISION,
+	OSIONOS_AI_VLM_TIMEOUT_MS: process.env.OSIONOS_AI_VLM_TIMEOUT_MS,
+	OSIONOS_AI_VLM_QUEUE_WAIT_MS: process.env.OSIONOS_AI_VLM_QUEUE_WAIT_MS,
+	OSIONOS_AI_DESCRIBE_PER_MINUTE: process.env.OSIONOS_AI_DESCRIBE_PER_MINUTE,
 };
 
 const parsed = envSchema.safeParse(rawEnv);
@@ -329,6 +348,13 @@ export interface AiServiceConfig {
 	promptGuardModel: string;
 	/** The deadline of one call to the prompt guard, in milliseconds. */
 	promptGuardTimeoutMs: number;
+	/** The base URL of the internal VLM; without it "Describe image" does not exist. */
+	vlmUrl?: string;
+	vlmModel: string;
+	vlmRevision: string;
+	vlmTimeoutMs: number;
+	vlmQueueWaitMs: number;
+	describePerMinute: number;
 }
 
 export const config: AiServiceConfig = Object.freeze({
@@ -375,6 +401,12 @@ export const config: AiServiceConfig = Object.freeze({
 	promptGuardUrl: parsed.data.OSIONOS_AI_PROMPT_GUARD_URL,
 	promptGuardModel: parsed.data.OSIONOS_AI_PROMPT_GUARD_MODEL,
 	promptGuardTimeoutMs: parsed.data.OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS,
+	vlmUrl: parsed.data.OSIONOS_AI_VLM_URL?.trim().replace(/\/+$/, '') || undefined,
+	vlmModel: parsed.data.OSIONOS_AI_VLM_MODEL,
+	vlmRevision: parsed.data.OSIONOS_AI_VLM_REVISION,
+	vlmTimeoutMs: parsed.data.OSIONOS_AI_VLM_TIMEOUT_MS,
+	vlmQueueWaitMs: parsed.data.OSIONOS_AI_VLM_QUEUE_WAIT_MS,
+	describePerMinute: parsed.data.OSIONOS_AI_DESCRIBE_PER_MINUTE,
 });
 
 // The image generation, turned on, needs its engine, a price (an image is

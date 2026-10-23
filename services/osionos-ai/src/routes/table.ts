@@ -7,6 +7,7 @@ import { handleAgents } from './agents.ts';
 import { handleComplete } from './complete.ts';
 import { handleVoiceTranscribe } from './voice.ts';
 import { handleImages } from './images.ts';
+import { handleMediaDescribe } from './mediaDescribe.ts';
 import { handleRunCancel, handleRunEvents, handleRuns } from './runs.ts';
 import {
 	handleConnectionDelete,
@@ -95,6 +96,12 @@ export const ROUTES: RouteEntry[] = [
 		handle: handleVoiceTranscribe,
 	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/images$/, label: '/api/ai/images', handle: handleImages },
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/media\/describe$/,
+		label: '/api/ai/media/describe',
+		handle: handleMediaDescribe,
+	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/runs$/, label: '/api/ai/runs', handle: handleRuns },
 	{
 		methods: ['GET'],
