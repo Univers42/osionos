@@ -713,9 +713,9 @@ export const useUserStore = create<RefreshingUserStore>((set, get) => ({
     const state = get();
     const uid = state.activeUserId;
     const session = state.sessions[uid];
-    if (!session) return false;
+    if (!session) return { ok: false };
     const allWorkspaces = [...session.privateWorkspaces, ...session.sharedWorkspaces];
-    if (allWorkspaces.length <= 1) return false;
+    if (allWorkspaces.length <= 1) return { ok: false, message: 'You need at least one workspace.' };
 
     // The page-API token: activeJwt() is '' for osionos_v1 bridge sessions, which would skip the call
     // and drop the workspace locally while the server still has it.
@@ -726,8 +726,11 @@ export const useUserStore = create<RefreshingUserStore>((set, get) => ({
       try {
         await api.delete(`/api/workspaces/${workspaceId}`, jwt);
       } catch (failure) {
-        set({ error: failure instanceof Error && failure.message.trim() ? failure.message : 'The workspace could not be deleted.' });
-        return false;
+        const code = (failure as { code?: unknown } | null)?.code;
+        const message = failure instanceof Error && failure.message.trim() ? failure.message : 'The workspace could not be deleted.';
+        // sudo_required is not an error: the prompt is open and the dialog offers Try again.
+        if (code !== 'sudo_required') set({ error: message });
+        return { ok: false, code: typeof code === 'string' ? code : undefined, message };
       }
     }
 
@@ -749,7 +752,7 @@ export const useUserStore = create<RefreshingUserStore>((set, get) => ({
       return { sessions, activeWorkspaceByUser };
     });
 
-    return true;
+    return { ok: true };
   },
 
   importBridgeSession: (session, persona, expiresAt) => set((state) => {
