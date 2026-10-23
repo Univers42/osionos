@@ -251,7 +251,9 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		await workspaceSkillsForRun(db, input.user, input.workspaceId),
 	);
 	// The user's approved memories, loaded ONCE for this run and pinned on its
-	// row (C40): a continuation run loads its own, as skills do.
+	// row (C40): a continuation run loads its own, as skills do. The pin is what
+	// the run was GIVEN, recorded before it executes: a run that fails before
+	// the upstream call still lists them.
 	const memories = await memoriesForRun(db, input.user, input.workspaceId);
 	await recordMemoryPins(db, runId, memories);
 	const day = today();
