@@ -32,13 +32,13 @@ import { randomInt, createHmac } from 'node:crypto';
 import { accountError, callerSession, clientMetaOf, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { sendJson } from './bridge-social-core.mjs';
+import { VERIFY_LIMIT } from './bridge-account-mfa.mjs';
 import { issueAal2, assertNotBlocked, clearFailures, countAttempt, CODES_TABLE, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
 
 const ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz';
 const HALF = 4;
 const SET_SIZE = 10;
 const PEPPER_BYTES = 32;
-const VERIFY_LIMIT = { limit: 30, windowMs: 60_000 };
 const CODE_SHAPE = new RegExp(`^[${ALPHABET}]{${HALF * 2}}$`);
 
 const pick = () => ALPHABET[randomInt(ALPHABET.length)];
@@ -87,25 +87,23 @@ async function readRows(pg, path) {
 	return rows;
 }
 
-const unusedCount = async (pg, userId) => (await readRows(pg, filter(userId, { used_at: 'is.null', select: 'id' }))).length;
+/** The unused codes of the newest generation; 0 when the user has none. */
+export async function recoveryRemaining(pg, userId) {
+	const rows = await readRows(pg, filter(userId, { select: 'generation,used_at' }));
+	const newest = Math.max(0, ...rows.map((row) => Number(row.generation) || 0));
+	return rows.filter((row) => (Number(row.generation) || 0) === newest && row.used_at == null).length;
+}
 
 async function requireVerifiedFactor(pg, userId) {
 	const factor = await readFactor(pg, userId);
 	if (factor?.status !== 'verified') throw accountError(409, 'not_enrolled', 'Turn on two-step verification before creating recovery codes.');
 }
 
-/** One row per request: the fake and PostgREST both accept it, and a failure stops at a known row. */
+/** One bulk POST: PostgREST runs it as one statement, so a failure leaves no half-written set. */
 async function insertSet({ pg, userId, pepper, generation }) {
 	const codes = newRecoveryCodes();
-	try {
-		for (const code of codes) {
-			await guarded(() => pg.asService().post(CODES_TABLE, { user_id: userId, code_hmac: hashRecoveryCode({ pepper, userId, code }), generation }, { prefer: 'return=minimal' }));
-		}
-	} catch (error) {
-		// Best effort: a half-written new generation must not survive to be counted as a set.
-		await pg.asService().del(filter(userId, { generation: `eq.${generation}` })).catch(() => {});
-		throw error;
-	}
+	const rows = codes.map((code) => ({ user_id: userId, code_hmac: hashRecoveryCode({ pepper, userId, code }), generation }));
+	await guarded(() => pg.asService().post(CODES_TABLE, rows, { prefer: 'return=minimal' }));
 	return codes;
 }
 
@@ -166,7 +164,7 @@ async function verify(ctx, request, response) {
 	await assertNotBlocked(ctx.kv, session.userId, meta, ctx.clock());
 	await countAttempt({ kv: ctx.kv, session, meta, nowMs: ctx.clock() });
 	if (normaliseRecoveryCode(code) === null) return refuse(ctx, session, meta);
-	const before = await unusedCount(ctx.pg, session.userId);
+	const before = await recoveryRemaining(ctx.pg, session.userId);
 	if (!(await spend(ctx, session.userId, hashRecoveryCode({ pepper, userId: session.userId, code })))) return refuse(ctx, session, meta);
 	const remaining = Math.max(0, before - 1);
 	await auditSpend(ctx, session, meta, remaining);

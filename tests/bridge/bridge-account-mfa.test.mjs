@@ -189,7 +189,7 @@ describe('two-step verification: status and unenrol', () => {
 	it('reports a user with no factor as not enabled', async (t) => {
 		const world = await startMfaWorld(t);
 		const { accessToken } = await world.signIn();
-		assert.deepEqual((await world.api('GET', '/api/account/2fa/status', accessToken)).body, { enabled: false, methods: ['totp'], aal: 2 });
+		assert.deepEqual((await world.api('GET', '/api/account/2fa/status', accessToken)).body, { enabled: false, methods: ['totp'], recoveryRemaining: 0, aal: 2 });
 	});
 
 	it('deletes the factor and the recovery codes, cuts the other sessions off, and returns a fresh aal2 token', async (t) => {
