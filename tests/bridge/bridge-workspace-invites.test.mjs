@@ -369,6 +369,28 @@ describe('PATCH/DELETE /api/workspaces/:id/members/:userId', () => {
 		assert.equal(mock.publishes[0].payload.op, 'role');
 	});
 
+	it('refuses an admin promoting a member to admin (C15 on the role route), with no write', async () => {
+		const mock = backend({ seed: world({ members: memberRows }) });
+		const result = await withBridge(config, mock.fetchImpl, (base) =>
+			send(base, memberPath(INVITEE), asAdmin, patch({ role: 'admin' })));
+		assert.equal(result.status, 403, result.text);
+		assert.deepEqual(writes(mock), []);
+	});
+
+	it('refuses an admin changing an admin role, and lets the owner do both', async () => {
+		const mock = backend({ seed: world({ members: memberRows }) });
+		const refused = await withBridge(config, mock.fetchImpl, (base) =>
+			send(base, memberPath(ADMIN), asAdmin, patch({ role: 'member' })));
+		assert.equal(refused.status, 403, refused.text);
+		assert.deepEqual(writes(mock), []);
+		const promoted = await withBridge(config, mock.fetchImpl, (base) =>
+			send(base, memberPath(INVITEE), asOwner, patch({ role: 'admin' })));
+		assert.equal(promoted.status, 200, promoted.text);
+		const demoted = await withBridge(config, mock.fetchImpl, (base) =>
+			send(base, memberPath(ADMIN), asOwner, patch({ role: 'member' })));
+		assert.equal(demoted.status, 200, demoted.text);
+	});
+
 	it('refuses to change the owner row (409)', async () => {
 		const mock = backend({ seed: world({ members: memberRows }) });
 		const result = await withBridge(config, mock.fetchImpl, (base) =>

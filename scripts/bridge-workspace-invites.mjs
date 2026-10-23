@@ -246,7 +246,7 @@ async function acceptInvite(deps, request, response, config) {
 
 /** PATCH /api/workspaces/:id/members/:userId {role} — owner/admin only. */
 async function changeMemberRole(deps, session, request, workspaceId, targetId, response, config) {
-  const { workspace } = await requireWorkspaceAdmin(config, deps.fetchImpl, session.userId, workspaceId);
+  const { workspace, role: actorRole } = await requireWorkspaceAdmin(config, deps.fetchImpl, session.userId, workspaceId);
   if (String(targetId).toLowerCase() === String(workspace.owner_id).toLowerCase()) {
     throw Object.assign(httpError('The workspace owner\'s role cannot be changed.', 409), { code: 'is_owner' });
   }
@@ -254,9 +254,12 @@ async function changeMemberRole(deps, session, request, workspaceId, targetId, r
   const rows = await rest(
     config,
     deps.fetchImpl,
-    `osionos_workspace_members?workspace_id=eq.${workspaceId}&user_id=eq.${targetId}&select=user_id&limit=1`,
+    `osionos_workspace_members?workspace_id=eq.${workspaceId}&user_id=eq.${targetId}&select=user_id,role&limit=1`,
   );
   if (!Array.isArray(rows) || rows.length === 0) throw httpError('Member not found.', 404);
+  // C15 holds here too, or an admin would promote through this route what the invite refuses.
+  const touchesAdmin = role.name === 'admin' || String(rows[0].role ?? '').toLowerCase() === 'admin';
+  if (touchesAdmin && actorRole !== 'owner') throw httpError('Only the workspace owner may grant or change an admin role.', 403);
   const timestamp = new Date().toISOString();
   await rest(config, deps.fetchImpl, `osionos_workspace_members?workspace_id=eq.${workspaceId}&user_id=eq.${targetId}`, {
     method: 'PATCH',
