@@ -196,7 +196,7 @@ describe('the moderation vocabulary', () => {
 });
 
 /** A fake BaaS over the tables the three handlers read; every non-GET call is recorded. */
-function fakeBaas({ settings = {}, blocks = [], edges = [], members = [], pageOwner = TARGET, failing = [] } = {}) {
+function fakeBaas({ settings = {}, blocks = [], edges = [], members = [], pageOwner = TARGET, failing = [], author = ACTOR, channelKind = 'dm' } = {}) {
 	const writes = [];
 	const reads = [];
 	const rows = (data, status = 200) => ({ ok: status < 400, status, text: async () => JSON.stringify(data) });
@@ -227,7 +227,10 @@ function fakeBaas({ settings = {}, blocks = [], edges = [], members = [], pageOw
 			const user = /user_id=eq\.([^&]+)/.exec(query)[1];
 			return rows(members.includes(user) ? [{ role: 'member', permissions: [] }] : []);
 		}
-		if (table === 'osionos_channels') return rows([{ id: CHANNEL, kind: 'dm', workspace_id: WORKSPACE, is_private: true, dm_key: 'k', name: 'dm' }]);
+		if (table === 'osionos_messages') return rows([{ id: PAGE, channel_id: CHANNEL, author_id: author, content: 'original' }]);
+		if (table === 'osionos_page_comments') return rows([{ id: PAGE, page_id: PAGE, author_id: author, content: 'original' }]);
+		if (table === 'osionos_pages') return rows([{ id: PAGE, owner_id: pageOwner, workspace_id: WORKSPACE, visibility: 'private' }]);
+		if (table === 'osionos_channels') return rows([{ id: CHANNEL, kind: channelKind, workspace_id: WORKSPACE, is_private: true, dm_key: 'k', name: 'dm' }]);
 		if (table === 'osionos_channel_members') {
 			return rows(query.includes('user_id=neq.') ? [{ user_id: TARGET }] : [{ role: 'member' }]);
 		}
@@ -249,10 +252,10 @@ function jsonRequest(method, payload) {
 	};
 }
 
-async function call(handler, path, payload) {
+async function call(handler, path, payload, method = 'POST') {
 	const captured = {};
 	const response = { writeHead: (status) => { captured.status = status; }, setHeader() {}, end: (text) => { captured.text = text; captured.body = text ? JSON.parse(text) : null; } };
-	await handler(new URL(`http://bridge.test${path}`), jsonRequest('POST', payload), response, CONFIG);
+	await handler(new URL(`http://bridge.test${path}`), jsonRequest(method, payload), response, CONFIG);
 	return captured;
 }
 
@@ -260,6 +263,8 @@ const verifySession = () => ({ userId: ACTOR, workspaceIds: [WORKSPACE] });
 const connect = (baas) => call(createSocialHandler({ config: CONFIG, verifySession, fetchImpl: baas.fetchImpl, env: {} }), '/api/connections', { addresseeId: TARGET });
 const openDm = (baas) => call(createChatHandler({ config: CONFIG, verifySession, fetchImpl: baas.fetchImpl, env: {} }), '/api/chat/dm', { peerUserId: TARGET });
 const sendDm = (baas) => call(createChatHandler({ config: CONFIG, verifySession, fetchImpl: baas.fetchImpl, env: {} }), `/api/chat/channels/${CHANNEL}/messages`, { content: 'hello' });
+const editDm = (baas) => call(createChatHandler({ config: CONFIG, verifySession, fetchImpl: baas.fetchImpl, env: {} }), `/api/chat/messages/${PAGE}`, { content: 'edited' }, 'PATCH');
+const editComment = (baas, payload = { content: 'edited' }) => call(createCommentsHandler({ config: CONFIG, verifySession, fetchImpl: baas.fetchImpl, env: {} }), `/api/comments/${PAGE}`, payload, 'PATCH');
 const comment = (baas) => {
 	const verifyPageAccess = async () => ({ row: { owner_id: baas.pageOwner, workspace_id: WORKSPACE } });
 	return call(createCommentsHandler({ config: CONFIG, verifySession, verifyPageAccess, fetchImpl: baas.fetchImpl, env: {} }), '/api/comments', { pageId: PAGE, content: 'nice' });
@@ -328,6 +333,37 @@ describe('connection requests', () => {
 });
 
 describe('direct messages', () => {
+	it('applies the recipient\'s current policy to edits of an existing DM', async () => {
+		const settings = {};
+		const baas = fakeBaas({ settings });
+		assert.equal((await editDm(baas)).status, 200);
+		baas.writes.length = 0;
+		settings[TARGET] = { messages: stillLive('nobody') };
+		assertRefused(await editDm(baas), baas);
+	});
+
+	it('allows DM edits only for accepted connections in connections mode', async () => {
+		for (const status of ['pending', 'accepted']) {
+			const baas = fakeBaas({ settings: { [TARGET]: { messages: stillLive('connections') } }, edges: [{ requester_id: ACTOR, addressee_id: TARGET, status }] });
+			const result = await editDm(baas);
+			if (status === 'accepted') assert.equal(result.status, 200);
+			else assertRefused(result, baas);
+		}
+	});
+
+	it('keeps non-DM edits outside the recipient interaction check', async () => {
+		const baas = fakeBaas({ settings: { [TARGET]: { messages: stillLive('nobody') } }, channelKind: 'channel' });
+		assert.equal((await editDm(baas)).status, 200);
+		assert.equal(baas.reads.some((entry) => entry.table === 'osionos_user_settings'), false);
+	});
+
+	it('still checks message authorship before reading interaction settings', async () => {
+		const baas = fakeBaas({ author: TARGET });
+		assert.equal((await editDm(baas)).status, 403);
+		assert.deepEqual(forbiddenWrites(baas), []);
+		assert.equal(baas.reads.some((entry) => entry.table === 'osionos_user_settings'), false);
+	});
+
 	it('refuses a DM to a target whose messages mode is nobody, and creates no channel', async () => {
 		const baas = fakeBaas({ settings: { [TARGET]: { messages: stillLive('nobody') } } });
 		assertRefused(await openDm(baas), baas);
@@ -374,6 +410,39 @@ describe('direct messages', () => {
 });
 
 describe('page comments', () => {
+	it('applies the page owner\'s current policy to content edits with moderation state disabled', async () => {
+		const settings = {};
+		const baas = fakeBaas({ settings });
+		assert.equal((await editComment(baas)).status, 200);
+		baas.writes.length = 0;
+		settings[TARGET] = { comments: stillLive('nobody') };
+		assertRefused(await editComment(baas, { content: 'replacement', resolved: true }), baas);
+	});
+
+	it('applies workspace membership to comment edits', async () => {
+		for (const members of [[], [ACTOR]]) {
+			const baas = fakeBaas({ settings: { [TARGET]: { comments: stillLive('workspace') } }, members });
+			const result = await editComment(baas);
+			if (members.length) assert.equal(result.status, 200);
+			else assertRefused(result, baas);
+		}
+	});
+
+	it('leaves resolution-only updates unaffected by comment limits', async () => {
+		const baas = fakeBaas({ settings: { [TARGET]: { comments: stillLive('nobody') } } });
+		assert.equal((await editComment(baas, { resolved: true })).status, 200);
+		assert.deepEqual(baas.writes[0].body, { resolved_at: baas.writes[0].body.resolved_at });
+		assert.ok(baas.writes[0].body.resolved_at);
+		assert.equal(baas.reads.some((entry) => entry.table === 'osionos_pages' || entry.table === 'osionos_user_settings'), false);
+	});
+
+	it('still checks comment authorship before reading interaction settings', async () => {
+		const baas = fakeBaas({ author: TARGET });
+		assert.equal((await editComment(baas)).status, 403);
+		assert.deepEqual(forbiddenWrites(baas), []);
+		assert.equal(baas.reads.some((entry) => entry.table === 'osionos_user_settings'), false);
+	});
+
 	it('refuses a comment on a page whose owner has comments mode nobody, and writes no row', async () => {
 		const baas = fakeBaas({ settings: { [TARGET]: { comments: stillLive('nobody') } } });
 		assertRefused(await comment(baas), baas);
