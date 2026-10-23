@@ -150,6 +150,17 @@ export function provenanceTitles(
   return titles;
 }
 
+/**
+ * The line of an outside agent's write: who asked, and what osionos cannot see.
+ *
+ * The name is the one the user gave the token, and it is untrusted text: the
+ * card shows it as a text node. The sentence says plainly that the agent's
+ * reads are outside osionos, so the card never pretends to know them.
+ */
+export function externalAgentWords(name: string): string {
+  return `Requested by external agent "${name}" — osionos cannot see what it read.`;
+}
+
 /** The words of a refusal: the decision did not go through. */
 export function refusalWords(code: string): string {
   if (code === "not_found") return "This request does not exist any more.";

@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { config } from '../config.ts';
 import type { ApprovalRow, ApprovalSource, ApprovalStatus } from './types.ts';
 
 /**
@@ -19,8 +20,13 @@ import type { ApprovalRow, ApprovalSource, ApprovalStatus } from './types.ts';
 const COLUMNS =
 	'id, origin, run_id, conversation_id, token_id, owner_id, workspace_id, tool, args, args_sha256, status, result, error, created_at, decided_at, expires_at';
 
-/** How long a user has to decide: ten minutes. */
+/** How long a user has to decide a run's write: ten minutes. */
 export const APPROVAL_TTL_MS = 10 * 60_000;
+
+/** How long an outside agent's question waits: an hour by default (G4b-3). */
+function mcpApprovalTtlMs(): number {
+	return config.mcpApprovalTtlMinutes * 60_000;
+}
 
 /** How long a write may stay 'executing' before the sweeper reconciles it. */
 export const EXECUTING_TIMEOUT_MS = 5 * 60_000;
@@ -55,6 +61,9 @@ export async function insertApproval(
 	const runId = source.kind === 'run' ? source.runId : null;
 	const conversationId = source.kind === 'run' ? source.conversationId : null;
 	const tokenId = source.kind === 'mcp' ? source.tokenId : null;
+	// A run waits on its approval, so ten minutes is all it needs. An agent's
+	// question waits for the user to come back: an hour by default (G4b-3).
+	const ttlMs = source.kind === 'mcp' ? mcpApprovalTtlMs() : APPROVAL_TTL_MS;
 	try {
 		const result = await db.query<ApprovalRow>(
 			`insert into public.ai_approvals
@@ -71,7 +80,7 @@ export async function insertApproval(
 				tool,
 				JSON.stringify(args),
 				argsSha256,
-				APPROVAL_TTL_MS,
+				ttlMs,
 			],
 		);
 		return result.rows[0] ?? null;
