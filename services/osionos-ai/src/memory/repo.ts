@@ -2,7 +2,7 @@ import type { Pool, PoolClient } from 'pg';
 import { inTransaction } from '../db.ts';
 
 /**
- * The user memories in the database (models/osionos-ai-memory-migration.sql).
+ * The user memories in the database (models/osionos-ai-user-memory-migration.sql in groot).
  *
  * A memory belongs to ONE user in ONE workspace and shapes only that user's
  * runs there (devil C41): every write below is `where id = $1 and user_id = $2`,
