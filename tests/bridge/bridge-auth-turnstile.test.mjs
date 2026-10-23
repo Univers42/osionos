@@ -19,11 +19,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { configFromEnv } from '../../scripts/bridge-api.mjs';
-import { turnstileBootLine } from '../../scripts/bridge-turnstile.mjs';
+import { LOCAL_BYPASS_TOKEN, turnstileBootLine } from '../../scripts/bridge-turnstile.mjs';
 import { authEnv, SECRET, startAuthWorld } from './support/auth-world.mjs';
 
 const CREDENTIALS = { email: 'ada@example.com', password: 'correct horse battery' };
-const secured = { TURNSTILE_SECRET_KEY: SECRET };
+const secured = { OSIONOS_BRIDGE_TURNSTILE: 'enforce', TURNSTILE_SECRET_KEY: SECRET };
+const bypassed = { ...secured, TURNSTILE_BYPASS_LOCAL: 'true' };
 const reply = (body, status = 200) => new Response(JSON.stringify(body), { status });
 
 describe('turnstile on /api/auth/login and /api/auth/register', () => {
@@ -36,14 +37,6 @@ describe('turnstile on /api/auth/login and /api/auth/register', () => {
 		}
 		assert.deepEqual(world.calls.gateway, []);
 		assert.deepEqual(world.calls.siteverify, []);
-	});
-
-	it('answers 503 turnstile_unconfigured when the bypass is off and there is no secret, without skipping the check', async (t) => {
-		const world = await startAuthWorld(t);
-		const response = await world.post('/api/auth/login', { ...CREDENTIALS, turnstileToken: 'real-token' });
-		assert.equal(response.status, 503);
-		assert.equal(response.body.code, 'turnstile_unconfigured');
-		assert.deepEqual(world.calls.gateway, []);
 	});
 
 	it('verifies the browser token with siteverify and forwards that exact token to the gateway', async (t) => {
@@ -107,7 +100,7 @@ describe('turnstile on /api/auth/login and /api/auth/register', () => {
 	});
 
 	it('with the bypass on and no token, forwards the localhost token and never calls Cloudflare', async (t) => {
-		const world = await startAuthWorld(t, { env: { TURNSTILE_BYPASS_LOCAL: 'true' } });
+		const world = await startAuthWorld(t, { env: bypassed });
 		const response = await world.post('/api/auth/login', CREDENTIALS);
 		assert.equal(response.status, 200);
 		assert.equal(world.calls.gateway.find((call) => call.route === '/api/auth/login').body.turnstileToken, 'localhost-turnstile-token');
@@ -115,7 +108,7 @@ describe('turnstile on /api/auth/login and /api/auth/register', () => {
 	});
 
 	it('with the bypass on and a token, still forwards the real token', async (t) => {
-		const world = await startAuthWorld(t, { env: { TURNSTILE_BYPASS_LOCAL: 'true' } });
+		const world = await startAuthWorld(t, { env: bypassed });
 		await world.post('/api/auth/login', { ...CREDENTIALS, turnstileToken: 'real-token' });
 		assert.equal(world.calls.gateway.find((call) => call.route === '/api/auth/login').body.turnstileToken, 'real-token');
 	});
@@ -130,25 +123,92 @@ describe('turnstile on /api/auth/login and /api/auth/register', () => {
 	});
 });
 
-describe('the Turnstile bypass at boot', () => {
-	it('is on only for the exact string "true"', () => {
+describe('OSIONOS_BRIDGE_TURNSTILE=off, the default', () => {
+	const loginBody = (world, extra = {}) => world.post('/api/auth/login', { ...CREDENTIALS, ...extra });
+	const forwarded = (world) => world.calls.gateway.find((call) => call.route === '/api/auth/login').body.turnstileToken;
+
+	it('with no token, no secret and no bypass answers exactly as before: the constant token goes to the gateway', async (t) => {
+		const world = await startAuthWorld(t);
+		const response = await loginBody(world);
+		assert.equal(response.status, 200);
+		assert.equal(forwarded(world), LOCAL_BYPASS_TOKEN);
+		assert.deepEqual(world.calls.siteverify, []);
+	});
+
+	it('forwards the constant whatever the browser sent, and never calls Cloudflare, even with a secret', async (t) => {
+		const world = await startAuthWorld(t, { env: { TURNSTILE_SECRET_KEY: SECRET } });
+		await loginBody(world, { turnstileToken: 'real-token' });
+		assert.equal(forwarded(world), LOCAL_BYPASS_TOKEN);
+		assert.deepEqual(world.calls.siteverify, []);
+	});
+
+	it('ignores the bypass switch: it only has a meaning under enforce', async (t) => {
+		assert.equal(configFromEnv(authEnv({ TURNSTILE_BYPASS_LOCAL: 'true', NODE_ENV: 'production' })).turnstileBypassLocal, false);
+		assert.match(turnstileBootLine(configFromEnv(authEnv())), /off/);
+	});
+});
+
+describe('which token reaches the gateway in each mode', () => {
+	const cases = [
+		['off, token sent', {}, 'real-token', LOCAL_BYPASS_TOKEN],
+		['off, no token', {}, undefined, LOCAL_BYPASS_TOKEN],
+		['enforce, token sent', secured, 'real-token', 'real-token'],
+		['enforce + bypass, token sent', bypassed, 'real-token', 'real-token'],
+		['enforce + bypass, no token', bypassed, undefined, LOCAL_BYPASS_TOKEN],
+	];
+	for (const [label, env, sent, expected] of cases) {
+		it(label, async (t) => {
+			const world = await startAuthWorld(t, { env });
+			await world.post('/api/auth/login', { ...CREDENTIALS, ...(sent ? { turnstileToken: sent } : {}) });
+			assert.equal(world.calls.gateway.find((call) => call.route === '/api/auth/login').body.turnstileToken, expected);
+		});
+	}
+});
+
+describe('siteverify answers', () => {
+	for (const [label, answer] of [['no success field', {}], ['success as the string "true"', { success: 'true' }], ['success 1', { success: 1 }]]) {
+		it(`refuses ${label}`, async (t) => {
+			const world = await startAuthWorld(t, { env: secured, siteverify: () => reply(answer) });
+			const response = await world.post('/api/auth/login', { ...CREDENTIALS, turnstileToken: 'real-token' });
+			assert.equal(response.status, 422);
+			assert.equal(response.body.code, 'turnstile_failed');
+			assert.deepEqual(world.calls.gateway, []);
+		});
+	}
+
+	it('sends the header-derived address as remoteip when the header is configured', async (t) => {
+		const world = await startAuthWorld(t, { env: { ...secured, OSIONOS_BRIDGE_CLIENT_IP_HEADER: 'x-real-ip' } });
+		await world.post('/api/auth/login', { ...CREDENTIALS, turnstileToken: 'real-token' }, { 'x-real-ip': '203.0.113.9' });
+		assert.equal(world.calls.siteverify[0].remoteip, '203.0.113.9');
+	});
+});
+
+describe('the Turnstile settings at boot', () => {
+	it('refuses an unknown mode, and enforce without a secret', () => {
+		assert.throws(() => configFromEnv(authEnv({ OSIONOS_BRIDGE_TURNSTILE: 'on' })), /OSIONOS_BRIDGE_TURNSTILE/);
+		assert.throws(() => configFromEnv(authEnv({ OSIONOS_BRIDGE_TURNSTILE: 'enforce' })), /TURNSTILE_SECRET_KEY/);
+	});
+
+	it('turns the bypass on only for the exact string "true"', () => {
 		for (const value of [undefined, '', 'TRUE', '1', 'yes', ' true']) {
-			assert.equal(configFromEnv(authEnv({ TURNSTILE_BYPASS_LOCAL: value })).turnstileBypassLocal, false, String(value));
+			assert.equal(configFromEnv(authEnv({ ...secured, TURNSTILE_BYPASS_LOCAL: value })).turnstileBypassLocal, false, String(value));
 		}
-		assert.equal(configFromEnv(authEnv({ TURNSTILE_BYPASS_LOCAL: 'true' })).turnstileBypassLocal, true);
+		assert.equal(configFromEnv(authEnv(bypassed)).turnstileBypassLocal, true);
 	});
 
-	it('refuses to boot with the bypass on under NODE_ENV=production or GROBASE_PUBLIC_ADDRESSES', () => {
-		assert.throws(() => configFromEnv(authEnv({ TURNSTILE_BYPASS_LOCAL: 'true', NODE_ENV: 'production' })), /TURNSTILE_BYPASS_LOCAL/);
-		assert.throws(() => configFromEnv(authEnv({ TURNSTILE_BYPASS_LOCAL: 'true', GROBASE_PUBLIC_ADDRESSES: 'a.example.com' })), /TURNSTILE_BYPASS_LOCAL/);
-		assert.doesNotThrow(() => configFromEnv(authEnv({ NODE_ENV: 'production', ...secured })));
+	it('refuses the bypass under NODE_ENV=production, GROBASE_PUBLIC_ADDRESSES or a public https origin', () => {
+		assert.throws(() => configFromEnv(authEnv({ ...bypassed, NODE_ENV: 'production' })), /TURNSTILE_BYPASS_LOCAL/);
+		assert.throws(() => configFromEnv(authEnv({ ...bypassed, GROBASE_PUBLIC_ADDRESSES: 'a.example.com' })), /TURNSTILE_BYPASS_LOCAL/);
+		assert.throws(() => configFromEnv(authEnv({ ...bypassed, OSIONOS_APP_URL: 'https://app.example.com' })), /TURNSTILE_BYPASS_LOCAL/);
+		assert.throws(() => configFromEnv(authEnv({ ...bypassed, OSIONOS_ALLOWED_ORIGIN: 'https://app.example.com' })), /TURNSTILE_BYPASS_LOCAL/);
+		assert.doesNotThrow(() => configFromEnv(authEnv({ ...bypassed, OSIONOS_APP_URL: 'https://localhost:3001' })));
+		assert.doesNotThrow(() => configFromEnv(authEnv({ ...secured, NODE_ENV: 'production' })));
 	});
 
-	it('says in the boot line whether the check is real, and never prints the secret', () => {
+	it('says in the boot line which mode runs, and never prints the secret', () => {
 		const verified = turnstileBootLine(configFromEnv(authEnv(secured)));
-		const bypassed = turnstileBootLine(configFromEnv(authEnv({ TURNSTILE_BYPASS_LOCAL: 'true' })));
-		assert.match(verified, /siteverify/);
-		assert.match(bypassed, /BYPASS/);
+		assert.match(verified, /enforce.*siteverify/);
+		assert.match(turnstileBootLine(configFromEnv(authEnv(bypassed))), /BYPASS/);
 		assert.ok(!verified.includes(SECRET));
 	});
 });

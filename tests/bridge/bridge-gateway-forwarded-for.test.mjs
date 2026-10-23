@@ -26,7 +26,6 @@ function config() {
 		OSIONOS_BRIDGE_PERSISTENCE: 'memory',
 		AUTH_GATEWAY_URL: GATEWAY,
 		// The local sign-in has no Turnstile widget; without the bypass the bridge refuses a token-less request.
-		TURNSTILE_BYPASS_LOCAL: 'true',
 	});
 }
 
@@ -84,8 +83,8 @@ describe('bridge calls to the auth gateway forward the client address', () => {
 		for (const call of seen) assert.equal(call.forwardedFor, '198.51.100.4, 127.0.0.1');
 	});
 
-	it('forwards the Turnstile token the browser sent, not a constant', async () => {
+	it('forwards the constant Turnstile token while the bridge check is off, whatever the browser sent', async () => {
 		const { seen } = await signIn('/api/auth/login', undefined, { turnstileToken: 'browser-token' });
-		assert.equal(seen[0].body.turnstileToken, 'browser-token');
+		assert.equal(seen[0].body.turnstileToken, 'localhost-turnstile-token');
 	});
 });

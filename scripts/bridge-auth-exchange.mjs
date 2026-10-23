@@ -25,6 +25,7 @@
 // bucket is the socket peer unless OSIONOS_CLIENT_IP_HEADER names a header, so behind a proxy
 // without it every caller shares one bucket and the 20-call window can be spent by one client.
 
+import { createHash } from 'node:crypto';
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { clientMetaOf } from './bridge-account-sudo.mjs';
 import { readJsonBody, sendJson } from './bridge-social-core.mjs';
@@ -37,7 +38,6 @@ const IP_LIMIT = 20;
 const USER_LIMIT = 10;
 const WINDOW_MS = 600_000;
 const GOTRUE_TIMEOUT_MS = 8_000;
-const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 // GoTrue's amr method -> the authMethod bridge-sessions records.
 const METHOD_TO_AUTH = new Map([['oauth', 'oauth'], ['otp', 'email_otp']]);
 const REFUSED = 'The sign-in could not be verified; sign in again.';
@@ -107,6 +107,9 @@ async function exchange(request, response, deps) {
 	await rateLimit(kv, ['auth-exchange-user', userId], { limit: USER_LIMIT, windowMs: WINDOW_MS });
 	const payload = payloadOf(token);
 	if (payload.sub !== userId) throw refusedProof();
+	// Single use: one token mints one session, so a fragment-borne OAuth token cannot be replayed.
+	const digest = createHash('sha256').update(token).digest('hex');
+	if (!await kv.setNx(`auth-exchange-used:${digest}`, '1', MAX_PROOF_AGE_S * 1000)) throw refusedProof();
 	const authMethod = authMethodFromClaims(payload, Math.floor(Date.now() / 1000));
 	const consumed = await deps.establishSession({ request, gatewayToken: token, authMethod, expectedUserId: userId });
 	sendJson(response, 200, {
@@ -116,6 +119,11 @@ async function exchange(request, response, deps) {
 		workspaceIds: Array.isArray(consumed.persona?.workspaceIds) ? consumed.persona.workspaceIds : [],
 		session: consumed.session,
 	}, config);
+}
+
+// Logged at info level: an operator's boot-line checks count warn lines.
+export function clientIpBootWarning(config) {
+	return config.clientIpHeader ? '' : '[osionos-bridge] WARNING: OSIONOS_BRIDGE_CLIENT_IP_HEADER is unset: behind a proxy every caller shares one auth-exchange rate bucket.';
 }
 
 /** Never lets a failing audit write hide the refusal it was recording. */
@@ -134,11 +142,13 @@ async function auditRefusal(error, request, { config, pg, subject }) {
  * handoff, injected because this file cannot import bridge-api without a cycle.
  */
 export async function handleAuthExchange(request, response, deps) {
-	const subject = { id: NIL_UUID };
+	const subject = { id: null };
 	try {
 		await exchange(request, response, { ...deps, subject });
 	} catch (error) {
-		if (Number.isInteger(error?.status)) await auditRefusal(error, request, { ...deps, subject });
+		// Audited only once GoTrue has named the user: an anonymous caller must not be able to write rows,
+		// and the limiter's own 429 is not an event worth a row.
+		if (subject.id && Number.isInteger(error?.status) && error.status !== 429) await auditRefusal(error, request, { ...deps, subject });
 		throw error;
 	}
 }

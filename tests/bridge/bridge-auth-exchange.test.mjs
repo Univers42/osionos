@@ -19,6 +19,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { clientIpBootWarning } from '../../scripts/bridge-auth-exchange.mjs';
 import { gotrueJwt, startAuthWorld, USER_ID } from './support/auth-world.mjs';
 
 const PATH = '/api/auth/exchange';
@@ -94,6 +95,12 @@ describe('POST /api/auth/exchange, the refused proofs', () => {
 	it('refuses a token whose most recent method is token_refresh, even after an OTP', async (t) => {
 		const iat = nowSeconds();
 		await refused(t, gotrueJwt({ iat, amr: [{ method: 'otp', timestamp: iat - 100 }, { method: 'token_refresh', timestamp: iat }] }));
+	});
+
+	it('refuses a tie at the newest timestamp between password and otp, in either order', async (t) => {
+		const iat = nowSeconds();
+		await refused(t, gotrueJwt({ iat, amr: [{ method: 'otp', timestamp: iat }, { method: 'password', timestamp: iat }] }));
+		await refused(t, gotrueJwt({ iat, amr: [{ method: 'password', timestamp: iat }, { method: 'otp', timestamp: iat }] }));
 	});
 
 	it('refuses other methods (recovery, magiclink, totp, sso/saml)', async (t) => {
@@ -197,7 +204,17 @@ describe('POST /api/auth/exchange, limits and audit', () => {
 		assert.equal(statuses[10], 429);
 	});
 
-	it('audits every refusal, and no audit row holds the token', async (t) => {
+	it('spends a token on its first exchange: the second is a 401', async (t) => {
+		const token = gotrueJwt();
+		const world = await startAuthWorld(t);
+		assert.equal((await world.post(PATH, { accessToken: token })).status, 200);
+		const second = await world.post(PATH, { accessToken: token });
+		assert.equal(second.status, 401);
+		assert.equal(second.body.code, 'invalid_provider_token');
+		assert.equal(world.rows.sessions.length, 1);
+	});
+
+	it('audits refusals once GoTrue named the user, and no audit row holds the token', async (t) => {
 		const iat = nowSeconds();
 		const world = await startAuthWorld(t);
 		const tokens = [
@@ -205,20 +222,41 @@ describe('POST /api/auth/exchange, limits and audit', () => {
 			gotrueJwt({ iat: iat - 600 }),
 		];
 		for (const accessToken of tokens) await world.post(PATH, { accessToken });
-		await world.post(PATH, { accessToken: tokens[0], authMethod: 'oauth' });
-		assert.equal(world.rows.audit.length, 3);
-		assert.ok(world.rows.audit.every((row) => row.event_type === 'auth.exchange_refused'));
-		assert.deepEqual(world.rows.audit.map((row) => row.details.reason), ['invalid_provider_token', 'invalid_provider_token', 'invalid_exchange_request']);
+		assert.equal(world.rows.audit.length, 2);
+		assert.ok(world.rows.audit.every((row) => row.event_type === 'auth.exchange_refused' && row.subject === USER_ID));
+		assert.deepEqual(world.rows.audit.map((row) => row.details.reason), ['invalid_provider_token', 'invalid_provider_token']);
 		const dump = JSON.stringify(world.rows.audit);
 		for (const token of tokens) assert.ok(!dump.includes(token) && !dump.includes(token.split('.')[1]));
+	});
+
+	it('writes no audit row for an anonymous caller: bad body, unknown token, or a rate-limited flood', async (t) => {
+		const world = await startAuthWorld(t, { gotrue: unauthorized });
+		await world.post(PATH, { accessToken: gotrueJwt(), authMethod: 'oauth' });
+		for (let call = 0; call < 30; call += 1) await world.post(PATH, { accessToken: gotrueJwt() });
+		assert.deepEqual(world.rows.audit, []);
+	});
+
+	it('writes no audit row for a 429, only for the refusals before it', async (t) => {
+		const iat = nowSeconds();
+		const world = await startAuthWorld(t);
+		for (let call = 0; call < 30; call += 1) {
+			await world.post(PATH, { accessToken: gotrueJwt({ iat, amr: [{ method: 'password', timestamp: iat }], extra: { n: call } }) });
+		}
+		assert.equal(world.rows.audit.length, 10);
+	});
+
+	it('warns at boot when no client address header is configured', () => {
+		assert.match(clientIpBootWarning({ clientIpHeader: '' }), /CLIENT_IP_HEADER/);
+		assert.equal(clientIpBootWarning({ clientIpHeader: 'x-real-ip' }), '');
 	});
 
 	it('still answers the refusal when the audit write fails, and logs that without the token', async (t) => {
 		const warned = [];
 		t.mock.method(console, 'warn', (...args) => warned.push(args.join(' ')));
 		const ours = () => warned.filter((line) => line.includes('auth exchange'));
-		const token = gotrueJwt();
-		const world = await startAuthWorld(t, { gotrue: unauthorized, failAudit: true });
+		const iat = nowSeconds();
+		const token = gotrueJwt({ iat, amr: [{ method: 'password', timestamp: iat }] });
+		const world = await startAuthWorld(t, { failAudit: true });
 		const response = await world.post(PATH, { accessToken: token });
 		assert.equal(response.status, 401);
 		assert.equal(response.body.code, 'invalid_provider_token');
