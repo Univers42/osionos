@@ -155,8 +155,9 @@ async function disable(ctx, request, response) {
 	await writeAudit(ctx.pg, { session, meta: clientMetaOf(request, ctx.config), eventType: 'account.2fa.disable', details: { method: 'totp' } });
 	await cutAllSessions(ctx, session.userId, atMs);
 	await guardedWrite(async () => {
-		await ctx.pg.asService().del(`${TOTP_TABLE}?${rowFilter(session.userId)}`);
+		// Codes first: a failure between the two leaves a factor without codes, never codes without a factor.
 		await ctx.pg.asService().del(`${CODES_TABLE}?${rowFilter(session.userId)}`);
+		await ctx.pg.asService().del(`${TOTP_TABLE}?${rowFilter(session.userId)}`);
 	});
 	await redateSession(ctx, session, atMs);
 	return upgraded(ctx, session, atMs, response);

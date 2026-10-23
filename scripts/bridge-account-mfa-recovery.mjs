@@ -22,6 +22,14 @@
  * new codes, never none. Verify shares the lockout and the rate limit of the authenticator.
  * Caveat: two concurrent generate calls can each pass the "no set yet" check and leave two
  * sets of ten (both valid, only one returned to each caller); a regenerate then collapses them.
+ * Caveat: two concurrent regenerates get distinct generations from a random jitter; the higher set
+ * wins, the lower withdraws (409 regenerate_raced) or is swept. A caller that read before the winner
+ * inserted can still be shown codes that the winner then sweeps. A jitter collision (1 in 65536)
+ * leaves both sets live until the next regenerate; the generation grows by up to 65536 per
+ * regenerate, so an int4 column overflows after about 32000 of them.
+ * Caveat: a spent code is not restored when issuing the token or clearing the failure counter
+ * throws afterwards: the caller gets a 500 and must use another code. Burning is the safe side;
+ * issuing before spending would allow a replay.
  * Caveat: a regenerate whose sweep fails answers 503 without the new codes, which stay live
  * and unseen until the next regenerate removes them.
  * Caveat: the audit row of a spent code is written after the spend (it records the codes left),
@@ -39,6 +47,7 @@ const ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz';
 const HALF = 4;
 const SET_SIZE = 10;
 const PEPPER_BYTES = 32;
+const GENERATION_JITTER = 65_536;
 const CODE_SHAPE = new RegExp(`^[${ALPHABET}]{${HALF * 2}}$`);
 
 const pick = () => ALPHABET[randomInt(ALPHABET.length)];
@@ -126,10 +135,16 @@ async function regenerate(ctx, request, response) {
 	const pepper = pepperOf(ctx.env);
 	await requireVerifiedFactor(ctx.pg, session.userId);
 	const generations = (await readRows(ctx.pg, filter(session.userId, { select: 'generation' }))).map((row) => Number(row.generation) || 0);
-	const generation = Math.max(0, ...generations) + 1;
+	const generation = Math.max(0, ...generations) + 1 + randomInt(GENERATION_JITTER);
 	await writeAudit(ctx.pg, { session, meta: clientMetaOf(request, ctx.config), eventType: 'account.2fa.recovery.regenerate', details: { count: SET_SIZE } });
 	const codes = await insertSet({ pg: ctx.pg, userId: session.userId, pepper, generation });
 	await guarded(() => ctx.pg.asService().del(filter(session.userId, { generation: `lt.${generation}` })));
+	// A racing regenerate may have inserted a higher set after our sweep: the higher one wins, so withdraw ours.
+	const newest = Math.max(0, ...(await readRows(ctx.pg, filter(session.userId, { select: 'generation' }))).map((row) => Number(row.generation) || 0));
+	if (newest > generation) {
+		await guarded(() => ctx.pg.asService().del(filter(session.userId, { generation: `eq.${generation}` })));
+		throw accountError(409, 'regenerate_raced', 'Another regeneration finished first; use its codes.');
+	}
 	return shown(ctx, response, codes);
 }
 
@@ -163,6 +178,8 @@ async function verify(ctx, request, response) {
 	await rateLimit(ctx.kv, address ? ['mfa-verify', 'ip', address] : ['mfa-verify', 'user', session.userId], VERIFY_LIMIT);
 	await assertNotBlocked(ctx.kv, session.userId, meta, ctx.clock());
 	await countAttempt({ kv: ctx.kv, session, meta, nowMs: ctx.clock() });
+	// Codes that outlived a failed disable must not open a user who has no factor any more.
+	if ((await readFactor(ctx.pg, session.userId))?.status !== 'verified') throw accountError(409, 'not_enrolled', 'Two-step verification is not set up.');
 	if (normaliseRecoveryCode(code) === null) return refuse(ctx, session, meta);
 	const before = await recoveryRemaining(ctx.pg, session.userId);
 	if (!(await spend(ctx, session.userId, hashRecoveryCode({ pepper, userId: session.userId, code })))) return refuse(ctx, session, meta);

@@ -158,7 +158,7 @@ describe('recovery codes: regenerate', () => {
 		assert.equal(answer.headers.get('cache-control'), 'no-store');
 		assert.ok(answer.body.codes.every((code) => !codes.includes(code)));
 		const rows = world.mfa.rows(CODES_TABLE);
-		assert.deepEqual([rows.length, new Set(rows.map((row) => row.generation)).size, rows[0].generation], [10, 1, 2]);
+		assert.deepEqual([rows.length, new Set(rows.map((row) => row.generation)).size, rows[0].generation > 1], [10, 1, true]);
 		const writes = world.mfa.calls.filter((call) => call.table === CODES_TABLE && call.method !== 'GET').map((call) => call.method);
 		assert.deepEqual(writes.slice(-2), ['POST', 'DELETE']);
 		assert.equal((await recover(world, aal1, codes[0])).status, 422, 'an old code no longer works');
@@ -176,7 +176,17 @@ describe('recovery codes: regenerate', () => {
 		assert.deepEqual([world.mfa.rows(CODES_TABLE).length, new Set(world.mfa.rows(CODES_TABLE).map((row) => row.generation)).size], [20, 2]);
 		world.mfa.fetchImpl = serve;
 		assert.equal((await world.api('POST', REGENERATE, aal2, { body: {} })).status, 200);
-		assert.deepEqual(world.mfa.rows(CODES_TABLE).map((row) => row.generation), Array(10).fill(3));
+		assert.deepEqual([world.mfa.rows(CODES_TABLE).length, new Set(world.mfa.rows(CODES_TABLE).map((row) => row.generation)).size], [10, 1]);
+	});
+
+	it('two racing regenerates leave exactly one live set', async (t) => {
+		const { world, aal2 } = await withCodes(t);
+		await world.sudo(aal2);
+		world.mfa.frozenCodeReads = { rows: world.mfa.rows(CODES_TABLE).map((row) => ({ ...row })), left: 2 };
+		const both = await Promise.all([world.api('POST', REGENERATE, aal2, { body: {} }), world.api('POST', REGENERATE, aal2, { body: {} })]);
+		assert.ok(both.some((answer) => answer.status === 200), both.map((answer) => answer.text).join());
+		const rows = world.mfa.rows(CODES_TABLE);
+		assert.deepEqual([rows.length, new Set(rows.map((row) => row.generation)).size], [10, 1]);
 	});
 });
 
@@ -300,5 +310,32 @@ describe('recovery codes: nothing secret is logged', () => {
 		const everything = JSON.stringify([logged, world.audit(), world.sessions.calls.map((call) => call.text ?? call.body)]);
 		for (const forbidden of [...first.body.codes, ...second.body.codes, ...hashes, PEPPER]) assert.ok(!everything.includes(forbidden), `leaked ${forbidden.slice(0, 6)}`);
 		assert.ok(world.audit().every((row) => JSON.stringify(row.details).length <= 2048));
+	});
+});
+
+describe('recovery codes: verdict conditions', () => {
+	it('burns a spent code when the failure counter cannot be cleared, and other codes still work', async (t) => {
+		const { world, codes } = await withCodes(t);
+		const { accessToken } = await world.signIn();
+		const getDel = world.kv.getDel;
+		world.kv.getDel = async (key) => {
+			if (String(key).startsWith('mfa-fail:')) throw new Error('kv down');
+			return getDel(key);
+		};
+		const failed = await recover(world, accessToken, codes[0]);
+		assert.equal(failed.status, 500, failed.text);
+		world.kv.getDel = getDel;
+		const retry = await recover(world, accessToken, codes[0]);
+		assert.deepEqual([retry.status, retry.body.code], [422, 'code_invalid']);
+		assert.equal((await recover(world, accessToken, codes[1])).status, 200);
+	});
+
+	it('answers 409 not_enrolled without spending when the factor is gone', async (t) => {
+		const recovery = [{ user_id: USER_A, code_hmac: hashRecoveryCode({ pepper: PEPPER, userId: USER_A, code: 'abcd-efgh' }), used_at: null, generation: 1 }];
+		const world = await startMfaWorld(t, { env: ENV, recovery });
+		const { accessToken } = await world.signIn();
+		const answer = await recover(world, accessToken, 'abcd-efgh');
+		assert.deepEqual([answer.status, answer.body.code], [409, 'not_enrolled']);
+		assert.equal(world.mfa.rows(CODES_TABLE)[0].used_at, null);
 	});
 });
