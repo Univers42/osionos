@@ -206,7 +206,7 @@ export function pageBlock(page: PageContext): string {
  */
 export function memoriesBlock(memories: readonly RunMemory[]): string {
 	const lines = memories.map(
-		(memory) => `<memory id="${attributeText(memory.id)}" version="${memory.version}">${quotedData(memory.body)}</memory>`,
+		(memory) => `<memory id="${attributeText(memory.id)}" version="${attributeText(String(memory.version))}">${quotedData(memory.body)}</memory>`,
 	);
 	return `<memories>\n${lines.join('\n')}\n</memories>`;
 }
