@@ -57,6 +57,7 @@ async function world(t, { records = 'on', putStatus = 200, address = ADDRESS, kv
 		const record = { path: parsed.pathname, headers: { ...init.headers }, body: init.body ? JSON.parse(init.body) : undefined };
 		if ((init.method ?? 'GET') === 'GET') {
 			gotrue.gets.push(record);
+			await gotrue.barrier?.();
 			return new Response(JSON.stringify({ id: USER_A, email: address }), { status: 200, headers: { 'content-type': 'application/json' } });
 		}
 		gotrue.auditAtPut = store.rows(AUDIT).map((row) => row.event_type);
@@ -221,6 +222,10 @@ describe('POST /api/account/password: the change', () => {
 		const { base, change, grantSudo, gotrue } = await world(t);
 		const caller = await signIn(base);
 		await grantSudo(caller.claims);
+		// Both requests must pass the sudo check before either spends the grant: they meet at the address read.
+		let waiting = 0;
+		const meeting = Promise.withResolvers();
+		gotrue.barrier = async () => { waiting += 1; if (waiting === 2) meeting.resolve(); await meeting.promise; };
 		const answers = await Promise.all([1, 2].map(() => change(caller.accessToken, { nextPassword: FAKE_PASSWORD })));
 		assert.deepEqual(answers.map((answer) => answer.status).sort(), [204, 403]);
 		assert.equal(gotrue.puts.length, 1);
