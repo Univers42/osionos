@@ -125,7 +125,7 @@ export function setAiTransport(impl: FetchLike): void {
  * envelope — instead of copying it.
  */
 export async function requestJson<T>(
-  method: "GET" | "POST" | "PUT" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<T> {

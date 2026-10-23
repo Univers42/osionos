@@ -46,8 +46,10 @@ bash scripts/docker-run.sh test-canvas
 node --test services/osionos-ai/eval/wiki/rag-stats.test.mjs \
             services/osionos-ai/eval/wiki/golden.test.mjs
 
-# The measurement (110363 chunks).
-docker run --rm --network ai-m2-net --memory 2g --cpus 2 --env-file /home/dlesieur/wt-ai-night/tmp/m2.env -e OSIONOS_AI_EMBED_URL=http://ai-m2-tei-embed:80 -e OSIONOS_AI_RERANK_URL=http://ai-m2-tei-rerank:80 -e OSIONOS_AI_RERANK_TIMEOUT_MS=60000 -e MEASURE_META=/meta/m2-meta.json -e MEASURE_OUT=/app/services/osionos-ai/eval/wiki/RESULTS-rag.md -v /home/dlesieur/wt-ai-night/wt-ai-m2:/app -v /home/dlesieur/wt-ai-night/tmp:/meta:ro -w /app/services/osionos-ai node:22-bookworm-slim node --experimental-strip-types eval/wiki/measure-rag.ts
+# The measurement (110363 chunks). Run from the repository root.
+# <env file holding OSIONOS_AI_* settings> is the env file of the eval stack
+# (database, embedding and rerank settings); <meta directory> holds m2-meta.json.
+docker run --rm --network ai-m2-net --memory 2g --cpus 2 --env-file <env file holding OSIONOS_AI_* settings> -e OSIONOS_AI_EMBED_URL=http://ai-m2-tei-embed:80 -e OSIONOS_AI_RERANK_URL=http://ai-m2-tei-rerank:80 -e OSIONOS_AI_RERANK_TIMEOUT_MS=60000 -e MEASURE_META=/meta/m2-meta.json -e MEASURE_OUT=/app/services/osionos-ai/eval/wiki/RESULTS-rag.md -v "$PWD":/app -v <meta directory>:/meta:ro -w /app/services/osionos-ai node:22-bookworm-slim node --experimental-strip-types eval/wiki/measure-rag.ts
 ```
 
 ## What proves what

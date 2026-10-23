@@ -24,12 +24,17 @@ import { isObjectDatabaseServerSyncEnabled } from "@/shared/config/featureFlags"
 import { hashSlice, sliceDatabase, userDatabaseIds, withMergedSlice, withServerSlice } from "./objectDatabaseSlice";
 import { withoutDeletedPages, tombstonesStillNeeded } from "./knownDatabasePersistedState";
 import { startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objectDatabaseRealtime";
+import {
+  databaseWorkspace,
+  rememberDatabaseWorkspace,
+  resetObjectDatabaseWorkspaces,
+} from "./objectDatabaseWorkspaces";
 
 const PUSHED_HASHES_KEY = "osionos.objectDb.pushed.v1";
 const HYDRATION_JWT_RETRY_MS = 1500;
 const HYDRATION_JWT_MAX_ATTEMPTS = 12;
 
-type ServerObjectDatabase = { dbKey: string; title?: string; state?: NotionState };
+type ServerObjectDatabase = { dbKey: string; title?: string; state?: NotionState; workspaceId?: string | null };
 type ServerListResponse = { databases?: ServerObjectDatabase[] };
 
 export type ObjectDatabaseSyncHooks = {
@@ -91,12 +96,38 @@ function serverStateOf(row: ServerObjectDatabase): NotionState {
 async function fetchServerDatabases(jwt: string): Promise<Map<string, ServerObjectDatabase>> {
   const response = await api.get<ServerListResponse>("/api/object-databases", jwt);
   const map = new Map<string, ServerObjectDatabase>();
-  for (const row of response.databases ?? []) if (row?.dbKey) map.set(row.dbKey, row);
+  for (const row of response.databases ?? []) {
+    if (!row?.dbKey) continue;
+    map.set(row.dbKey, row);
+    // The bridge returns the workspace; remember it before any push can happen.
+    rememberDatabaseWorkspace(row.dbKey, row.workspaceId);
+  }
   return map;
 }
 
+/** The exact body of a push. Exported so the test can prove the workspace
+ *  comes from the database's map, not from the active workspace. */
+export function objectDatabasePushBody(
+  dbKey: string,
+  title: string,
+  slice: NotionState,
+  workspaceId?: string,
+): { dbKey: string; title: string; state: NotionState; workspaceId?: string } {
+  return { dbKey, title, state: slice, ...(workspaceId ? { workspaceId } : {}) };
+}
+
 async function pushDatabaseSlice(jwt: string, dbKey: string, title: string, slice: NotionState): Promise<void> {
-  await api.post("/api/object-databases", { dbKey, title, state: slice }, jwt);
+  // C138 is per workspace: send the database's own workspace, never an active one.
+  await api.post("/api/object-databases", objectDatabasePushBodyFor(dbKey, title, slice), jwt);
+}
+
+/** The body of a dirty-database push, workspace included from the map. */
+export function objectDatabasePushBodyFor(
+  dbKey: string,
+  title: string,
+  slice: NotionState,
+): { dbKey: string; title: string; state: NotionState; workspaceId?: string } {
+  return objectDatabasePushBody(dbKey, title, slice, databaseWorkspace(dbKey));
 }
 
 async function deleteDatabaseRemote(jwt: string, dbKey: string): Promise<void> {
@@ -264,6 +295,7 @@ export function resetObjectDatabaseSync(): void {
   hydrationDone = false;
   hydrationPolling = false;
   hydrationCompleted = false;
+  resetObjectDatabaseWorkspaces();
   try {
     globalThis.localStorage?.removeItem(PUSHED_HASHES_KEY);
   } catch {

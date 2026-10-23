@@ -32,6 +32,8 @@ import {
   startRun,
 } from "../api/aiClient";
 import { streamRun } from "./runStream";
+import { DEVICE_CONNECTION_ID, readDeviceEngine } from "./deviceEngine";
+import { deviceInferencePort } from "./deviceInferencePort";
 import { getActiveWorkspaceId } from "@/shared/api/client";
 import {
   stubInferencePort,
@@ -146,10 +148,53 @@ export const aiInferencePort: InferencePort = {
   },
 };
 
+/** The one-shot request of a port without a stream. */
+function completeRequest(request: StreamInferenceRequest): InferenceRequest {
+  return {
+    connectorId: request.connectorId ?? "ai",
+    model: request.model ?? "auto",
+    messages: [{ role: "user", content: request.text }],
+    ...(request.connectionId ? { connectionId: request.connectionId } : {}),
+  };
+}
+
+/**
+ * Routes each call to the port that owns it: the device engine for a `device`
+ * connection with an engine stored, the service for everything else.
+ *
+ * A port without a stream answers in one piece, exactly as the pane's own
+ * callers fall back when they meet one.
+ */
+export function routedInferencePort(
+  service: InferencePort,
+  device: InferencePort,
+  hasDeviceEngine: () => boolean,
+): InferencePort {
+  const chosen = (request: { connectionId?: string }) =>
+    request.connectionId === DEVICE_CONNECTION_ID && hasDeviceEngine() ? device : service;
+
+  return {
+    complete: async (request) => chosen(request).complete(request),
+    stream: async (request, onEvent, signal) => {
+      const port = chosen(request);
+      if (port.stream) return port.stream(request, onEvent, signal);
+      const result = await port.complete(completeRequest(request));
+      if (result.content) onEvent("text.delta", { text: result.content });
+      onEvent("done", {});
+    },
+    attach: async (runId, onEvent, signal) => {
+      if (!service.attach) throw new Error("This service cannot attach to a run.");
+      return service.attach(runId, onEvent, signal);
+    },
+  };
+}
+
 /**
  * The port the app starts with: the AI service when a base URL is configured,
  * the offline stub otherwise.
  */
 export function selectInferencePort(): InferencePort {
-  return isAiConfigured() ? aiInferencePort : stubInferencePort;
+  return isAiConfigured()
+    ? routedInferencePort(aiInferencePort, deviceInferencePort, () => readDeviceEngine() !== null)
+    : stubInferencePort;
 }

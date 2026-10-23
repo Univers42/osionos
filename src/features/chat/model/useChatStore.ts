@@ -21,6 +21,7 @@ import { listAgents } from "@/features/ai/api/aiClient";
 import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTurn";
 import { dispatchRunEvent } from "./runEventDispatch";
 import { failureCode, retryAfterOf } from "./runErrors";
+import { withMemoryDecision, type MemoryDecision } from "./memoryParts";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -86,6 +87,8 @@ export interface ChatStoreState extends ChatData {
    * stream — the way it resumes a run whose connection dropped.
    */
   followUp: (conversationId: string, runId: string) => Promise<void>;
+  /** Writes the user's decision on a memory chip into the part, so it persists in the message. */
+  decideMemoryProposal: (messageId: string, memoryId: string, decision: MemoryDecision) => void;
   attachContext: (scope: SharedContextItem["scope"], scopeId: string, item: Pick<SharedContextItem, "kind" | "label" | "ref">) => void;
   detachContext: (id: string) => void;
   messagesFor: (conversationId: string) => ChatMessage[];
@@ -301,6 +304,15 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       await runTurn(conversationId, { connectorId, model, connectionId }, (turn, signal) =>
         port.attach!(runId, (event, data) => dispatchRunEvent(event, data, turn), signal),
       );
+    },
+
+    decideMemoryProposal: (messageId, memoryId, decision) => {
+      set((s) => ({
+        messages: s.messages.map((m) =>
+          m.id === messageId && m.parts ? { ...m, parts: withMemoryDecision(m.parts, memoryId, decision) } : m,
+        ),
+      }));
+      persist();
     },
 
     attachContext: (scope, scopeId, item) => {

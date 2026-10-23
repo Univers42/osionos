@@ -29,6 +29,8 @@ import { resolveConversationTitle } from "./conversationTitle";
 import { withToolCall, withToolResult, withToolSource } from "./toolActivity";
 import { withPermission } from "./approvalParts";
 import type { PermissionPart } from "./approvalParts";
+import { withMemoryProposal } from "./memoryParts";
+import type { MemoryProposalPart } from "./memoryParts";
 import type { RunEventActions } from "./runEventDispatch";
 
 /** What a turn needs from the store. */
@@ -121,6 +123,10 @@ export function assistantTurn(
 
     askPermission(permission: PermissionPart) {
       patchParts((current) => withPermission(current, permission));
+    },
+
+    proposeMemory(proposal: MemoryProposalPart) {
+      patchParts((current) => withMemoryProposal(current, proposal));
     },
 
     finish() {

@@ -44,6 +44,7 @@ function seen(): Seen {
     patchAssistant: (patch) => void calls.push(`patch:${Object.keys(patch).join(",")}`),
     applyServerTitle: (title) => void calls.push(`title:${title}`),
     askPermission: (permission) => void calls.push(`permission:${permission.approvalId}`),
+    proposeMemory: (proposal) => void calls.push(`memory:${proposal.memoryId}`),
   };
   return { calls, actions };
 }

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 
 /**
@@ -36,6 +37,7 @@ const {
 } = await import('./mcpHarness.ts');
 const { READ_TOOLS } = await import('../src/tools/readTools.ts');
 const { WRITE_TOOLS } = await import('../src/tools/writeTools.ts');
+const { insertApproval } = await import('../src/approvals/repo.ts');
 
 after(closeAll);
 beforeEach(async () => {
@@ -171,6 +173,50 @@ describe('the proposal of an MCP write (C117, C115)', () => {
 		assert.match(refused.text, /not one of yours/i);
 		assert.equal((await rowsOf(token.id)).length, 0, 'no row for a target out of scope');
 		assert.equal(bridge.count, 0);
+	});
+});
+
+describe('the question of an agent waits longer (G4b-3)', () => {
+	it('an MCP row expires in about an hour, and a run row stays at ten minutes', async () => {
+		const token = await mint(USER_A, [WORKSPACE_A], ['write_approval']);
+		const call = await callTool(token.token, 'create_page', {
+			title: 'A question that waits',
+			workspaceId: WORKSPACE_A,
+		});
+		assert.equal(call.isError, false, call.text);
+		const mcpRow = await onlyApproval(token.id);
+		const mcpMinutes = (new Date(mcpRow.expires_at).getTime() - Date.now()) / 60_000;
+		assert.ok(
+			Math.abs(mcpMinutes - 60) <= 1,
+			`the MCP row waits about 60 minutes, not ${mcpMinutes.toFixed(1)}`,
+		);
+
+		// A run's approval still lives ten minutes: the run is waiting on it.
+		const conversationId = randomUUID();
+		const runId = randomUUID();
+		await app.db.query(
+			`insert into public.ai_conversations (id, owner_id, workspace_id)
+			 values ($1::uuid, $2::uuid, $3::uuid)`,
+			[conversationId, USER_A, WORKSPACE_A],
+		);
+		await app.db.query(
+			`insert into public.ai_runs (id, conversation_id, owner_id, status, model)
+			 values ($1::uuid, $2::uuid, $3::uuid, 'succeeded', 'mock-model')`,
+			[runId, conversationId, USER_A],
+		);
+		const runRow = await insertApproval(app.db, {
+			source: { kind: 'run', runId, conversationId, ownerId: USER_A },
+			workspaceId: WORKSPACE_A,
+			tool: 'create_page',
+			args: { title: 'A run write', workspaceId: WORKSPACE_A },
+			argsSha256: 'run-ttl',
+		});
+		assert.ok(runRow, 'the run row was written');
+		const runMinutes = (new Date(runRow.expires_at).getTime() - Date.now()) / 60_000;
+		assert.ok(
+			Math.abs(runMinutes - 10) <= 1,
+			`a run's row waits about 10 minutes, not ${runMinutes.toFixed(1)}`,
+		);
 	});
 });
 

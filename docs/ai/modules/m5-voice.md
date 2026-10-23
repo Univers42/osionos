@@ -5,8 +5,9 @@ lands in the composer **as typed input**, and an answer can be read aloud on the
 device.
 
 Everything here is bound to the conditions **C58–C65** of
-`/home/dlesieur/osionos-ai-records/a2-events-voice-verdict.md` (§4). The out-of-scope
-of this slice is written at the bottom.
+the events and voice devil verdict (conditions C58–C65, §4), kept with the
+project's review records outside this repository. The out-of-scope of this
+slice is written at the bottom.
 
 ---
 
@@ -48,11 +49,13 @@ dictation of the composer that holds the caret — and of no other one.
 ## The commands (the gates)
 
 ```sh
-S=/tmp/claude-1000/-home-dlesieur-Documents-groot-apps-opposite-osiris/f01db1ed-1f78-43ef-aaac-95b48d7f37b9/scratchpad
+# <the groot worktree root>: it holds models/osionos-ai-migration.sql and
+# models/osionos-ai-rag-migration.sql.
+S="<the groot worktree root>"
 
 # The service (throwaway Postgres + Redis, the AI migrations, the suite).
-sh services/osionos-ai/scripts/test.sh "$S/wt-groot-ai/models/osionos-ai-migration.sql" \
-                                           "$S/wt-groot-ai/models/osionos-ai-rag-migration.sql"
+sh services/osionos-ai/scripts/test.sh "$S/models/osionos-ai-migration.sql" \
+                                           "$S/models/osionos-ai-rag-migration.sql"
 
 # The layout of the service.
 docker run --rm -v "$PWD":/app -w /app/services/osionos-ai node:22-bookworm-slim \

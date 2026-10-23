@@ -66,6 +66,7 @@ import { getRecentsDatabaseAdapter } from '../model/recentsDatabaseState';
 import { getTemplatesDatabaseAdapter } from '../model/templatesDatabaseState';
 import { withRecordLimit } from '../model/recordLimitAdapter';
 import { useDatabaseHostAdapters } from '../model/databaseHostAdapters';
+import { rememberDatabaseWorkspace } from '../model/objectDatabaseWorkspaces';
 import { WorkspaceDatabaseBlock, WorkspaceRecordPeek } from './WorkspaceDatabaseBlock';
 import { RecordSubItemsPanel } from './RecordSubItemsPanel';
 import './databaseBlockEmbed.css';
@@ -322,6 +323,8 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
 
   React.useEffect(() => {
     if (!databasePage || !workspaceId) return;
+    // Opening a record names the database's workspace for the next push (C138).
+    rememberDatabaseWorkspace(databasePage.databaseId, workspaceId);
     const resolver: RecordValueResolver = {
       formula: (property) => state.resolveFormula(
         databasePage.databaseId,

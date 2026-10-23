@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { afterEach, before, after, describe, it } from 'node:test';
-import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import { AUTHOR, PAGE_PRIVATE, PAGE_PUBLIC, WS_PRIVATE, installHooks, pool, ready, sentimentReady, sha } from './moderationHarness.ts';
+import { serveAi, tokenFor } from './serveAi.ts';
 
 /**
  * The Pulse and the thread mood (M6): C138, C140, C141, C142. Scores are seeded
@@ -11,29 +11,7 @@ import { AUTHOR, PAGE_PRIVATE, PAGE_PUBLIC, WS_PRIVATE, installHooks, pool, read
 
 installHooks();
 
-const APP_SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
-const tokenFor = (userId: string): string =>
-	signAppSessionToken({
-		payload: { subject: userId, provider: 'test' },
-		workspace: { _id: randomUUID() },
-		config: { appSessionSecret: APP_SECRET, sessionTtlSeconds: 3600 },
-	}).token;
-
-process.env.OSIONOS_AI_PLATFORM_MODELS ??= JSON.stringify([
-	{ id: 'mock-model', label: 'Mock model', inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: true },
-]);
-const { createAiServer } = await import('../src/server.ts');
-const app = createAiServer();
-await new Promise<void>((resolve) => {
-	app.server.listen(0, '127.0.0.1', () => resolve());
-});
-const address = app.server.address();
-const base = `http://127.0.0.1:${address && typeof address === 'object' ? address.port : 0}`;
-// The server starts at import, so it closes at file level: closed inside the suite, a skipped suite left it
-// listening and the file never exited (the whole service suite hung 30 min without the sentiment migration, 2026-10-23).
-after(async () => {
-	await app.close();
-});
+const base = await serveAi();
 
 const VIEWER = randomUUID();
 const STRANGER = randomUUID();
