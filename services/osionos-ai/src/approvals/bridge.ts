@@ -43,11 +43,13 @@ export async function bridgeWrite(
 		token,
 		write,
 		fetchImpl = fetch,
+		timeoutMs = BRIDGE_TIMEOUT_MS,
 	}: {
 		url: string;
 		token: string;
 		write: BridgeWrite;
 		fetchImpl?: typeof fetch;
+		timeoutMs?: number;
 	},
 ): Promise<BridgeAnswer> {
 	try {
@@ -58,7 +60,7 @@ export async function bridgeWrite(
 				'content-type': 'application/json',
 			},
 			body: JSON.stringify(write.body),
-			signal: AbortSignal.timeout(BRIDGE_TIMEOUT_MS),
+			signal: AbortSignal.timeout(timeoutMs),
 		});
 		const body = await response.text();
 		return { ok: response.ok, status: response.status, body: body.slice(0, 4000) };

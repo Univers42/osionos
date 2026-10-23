@@ -60,7 +60,7 @@ export const PLAN_PROPERTY_TYPES = [
 export const PLAN_VIEW_TYPES = ['table', 'board', 'calendar', 'list', 'gallery'] as const;
 
 /** The block types that point at a database of the same plan. */
-const DATABASE_BLOCK_TYPES = ['database_inline', 'database_full_page'] as const;
+const DATABASE_BLOCK_TYPES = ['database_inline'] as const;
 
 /** The property types that take a list of options. */
 const OPTION_PROPERTY_TYPES: readonly string[] = ['select', 'multi_select', 'status'];
@@ -199,10 +199,21 @@ export function checkPlan(plan: Plan): string | null {
 	const shape = treeError(all);
 	if (shape) return shape;
 	const databaseKeys = new Set(all.filter(({ item }) => item.kind === 'database').map(({ item }) => item.key));
+	const referencedDbs = new Set<string>();
+	for (const { item } of all) {
+		if (item.kind === 'page') {
+			for (const block of item.blocks ?? []) {
+				if ('databaseKey' in block) referencedDbs.add(block.databaseKey);
+			}
+		}
+	}
 	for (const { item } of all) {
 		if (item.kind === 'database') {
 			const error = databaseError(item);
 			if (error) return error;
+			if (!referencedDbs.has(item.key)) {
+				return `the database "${item.key}" is shown by no page: add a database_inline block that points at it`;
+			}
 			continue;
 		}
 		for (const block of item.blocks ?? []) {

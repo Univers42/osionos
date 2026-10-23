@@ -25,10 +25,6 @@ export interface BridgeCall {
 
 /**
  * A file the mock bridge serves: the bytes, the type, and the status.
- *
- * The status is how a test refuses an attachment the way the bridge does: a
- * 403 for a channel the caller left, a 404 for an attachment that is not
- * there.
  */
 export interface BridgeFile {
 	bytes: Uint8Array;
@@ -50,6 +46,10 @@ export interface MockBridge {
 	readonly count: number;
 	/** The status the next answers carry: 0 for the real one. */
 	failWith: number;
+	/** The delay applied to POST /api/pages and /api/object-databases, in ms. */
+	delayMs: number;
+	/** Make the next n of those calls answer `status` without remembering them. */
+	failNextWith(status: number, n: number): void;
 	/** Serves a file at a path: the bytes of an attachment. */
 	serve(path: string, file: BridgeFile): void;
 	/** The files the mock serves, by path. */
@@ -76,6 +76,11 @@ export const MOCK_MEDIA_OWNER = '00000000-0000-4000-8000-0000000000aa';
 export async function startMockBridge(): Promise<MockBridge> {
 	const calls: BridgeCall[] = [];
 	const files = new Map<string, BridgeFile>();
+	let failNextStatus = 0;
+	let failNextCount = 0;
+	const seenPages = new Set<string>();
+	const seenDbs = new Set<string>();
+
 	const mock: MockBridge = {
 		baseUrl: '',
 		calls,
@@ -86,6 +91,11 @@ export async function startMockBridge(): Promise<MockBridge> {
 			return calls.length;
 		},
 		failWith: 0,
+		delayMs: 0,
+		failNextWith(status: number, n: number): void {
+			failNextStatus = status;
+			failNextCount = n;
+		},
 		serve(path: string, file: BridgeFile): void {
 			files.set(path, file);
 		},
@@ -94,6 +104,10 @@ export async function startMockBridge(): Promise<MockBridge> {
 		},
 		reset(): void {
 			calls.length = 0;
+			seenPages.clear();
+			seenDbs.clear();
+			failNextStatus = 0;
+			failNextCount = 0;
 		},
 		async close(): Promise<void> {
 			await new Promise<void>((resolve) => {
@@ -120,14 +134,10 @@ export async function startMockBridge(): Promise<MockBridge> {
 				bytes,
 				contentType: String(request.headers['content-type'] ?? ''),
 			});
-			if (mock.failWith) {
-				response.writeHead(mock.failWith, { 'content-type': 'application/json' });
-				response.end(JSON.stringify({ error: { message: 'refused' } }));
-				return;
-			}
 			const path = request.url ?? '';
-			// A file the mock serves: the bytes of an attachment, with the type
-			// the bridge announces — and the status it refuses with.
+			const method = request.method ?? '';
+
+			// A file the mock serves.
 			const file = files.get(path);
 			if (file) {
 				if (file.status && file.status !== 200) {
@@ -145,13 +155,79 @@ export async function startMockBridge(): Promise<MockBridge> {
 				response.end(Buffer.from(file.bytes));
 				return;
 			}
+
+			const isPage = method === 'POST' && path === '/api/pages';
+			const isDb = method === 'POST' && path === '/api/object-databases';
+
+			if (isPage || isDb) {
+				// failNextWith
+				if (failNextCount > 0) {
+					failNextCount--;
+					const status = failNextStatus;
+					response.writeHead(status, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ error: 'failed' }));
+					return;
+				}
+				// global failWith
+				if (mock.failWith) {
+					response.writeHead(mock.failWith, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ error: { message: 'refused' } }));
+					return;
+				}
+				const finish = () => {
+					if (isPage) {
+						const reqBody = body as { id?: unknown; title?: unknown } | null;
+						const id = typeof reqBody?.id === 'string' ? reqBody.id : null;
+						const title = typeof reqBody?.title === 'string' ? reqBody.title : 'Untitled';
+						if (id && seenPages.has(id)) {
+							response.writeHead(200, { 'content-type': 'application/json' });
+							response.end(JSON.stringify({ _id: id, title }));
+							return;
+						}
+						if (id) {
+							seenPages.add(id);
+							response.writeHead(201, { 'content-type': 'application/json' });
+							response.end(JSON.stringify({ _id: id, title }));
+							return;
+						}
+						response.writeHead(201, { 'content-type': 'application/json' });
+						response.end(JSON.stringify({ _id: randomUUID(), title }));
+						return;
+					}
+					// object-databases
+					const reqBody = body as { dbKey?: unknown; title?: unknown; ifAbsent?: unknown } | null;
+					const dbKey = typeof reqBody?.dbKey === 'string' ? reqBody.dbKey : '';
+					const ifAbsent = reqBody?.ifAbsent === true;
+					if (ifAbsent && seenDbs.has(dbKey)) {
+						response.writeHead(409, { 'content-type': 'application/json' });
+						response.end(JSON.stringify({ error: 'db_exists' }));
+						return;
+					}
+					seenDbs.add(dbKey);
+					response.writeHead(200, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ ok: true, dbKey }));
+				};
+				if (mock.delayMs > 0) {
+					setTimeout(finish, mock.delayMs);
+				} else {
+					finish();
+				}
+				return;
+			}
+
+			if (mock.failWith) {
+				response.writeHead(mock.failWith, { 'content-type': 'application/json' });
+				response.end(JSON.stringify({ error: { message: 'refused' } }));
+				return;
+			}
+
 			if (request.method === 'POST' && path === '/api/pages') {
+				// fallback (shouldn't reach here)
 				const title = (body as { title?: unknown } | null)?.title;
 				response.writeHead(201, { 'content-type': 'application/json' });
 				response.end(JSON.stringify({ _id: randomUUID(), title: typeof title === 'string' ? title : 'Untitled' }));
 				return;
 			}
-			// The page-media upload: content-addressed, the way the bridge stores it.
 			if (request.method === 'POST' && path.startsWith('/api/media/uploads?')) {
 				const sha256 = createHash('sha256').update(bytes).digest('hex');
 				const mimeType = String(request.headers['content-type'] ?? '');
@@ -183,8 +259,6 @@ export async function startMockBridge(): Promise<MockBridge> {
 	await new Promise<void>((resolve) => {
 		server.listen(0, '127.0.0.1', () => resolve());
 	});
-	// The listening socket does not keep the process alive: a test file that
-	// never writes anything must still be able to end.
 	server.unref();
 	const address = server.address();
 	const port = address && typeof address === 'object' ? address.port : 0;

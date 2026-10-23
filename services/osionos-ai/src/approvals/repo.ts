@@ -125,6 +125,24 @@ export async function claimApproval(
 	return result.rows[0] ?? null;
 }
 
+/**
+ * The claim of a partial approval for resume: the ONE statement that moves a
+ * 'partial' row back to 'executing'. Two racing resumes: one wins.
+ */
+export async function claimPartial(
+	db: Pool,
+	{ id, ownerId }: { id: string; ownerId: string },
+): Promise<ApprovalRow | null> {
+	const result = await db.query<ApprovalRow>(
+		`update public.ai_approvals
+		    set status = 'executing', decided_at = now()
+		  where id = $1 and owner_id = $2 and status = 'partial'
+		  returning ${COLUMNS}`,
+		[id, ownerId],
+	);
+	return result.rows[0] ?? null;
+}
+
 /** The outcome of a write: the row leaves 'executing' with what happened. */
 export async function recordOutcome(
 	db: Pool,
@@ -135,7 +153,7 @@ export async function recordOutcome(
 		error,
 	}: {
 		id: string;
-		status: Extract<ApprovalStatus, 'executed' | 'failed'>;
+		status: Extract<ApprovalStatus, 'executed' | 'failed' | 'partial'>;
 		result?: unknown;
 		error?: string | null;
 	},
