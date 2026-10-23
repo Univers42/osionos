@@ -155,6 +155,21 @@ describe('the builder plan', () => {
 		}
 	});
 
+	it('C151 a board without a select or status property, a calendar without a date property, and a chart are refused', async () => {
+		const title = { name: 'Name', type: 'title' };
+		await assertRefused(withDatabase({ rows: [], properties: [title], views: [{ type: 'board', name: 'Board' }] }), 'board');
+		await assertRefused(withDatabase({ rows: [], properties: [title], views: [{ type: 'calendar', name: 'Cal' }] }), 'calendar');
+		await assertRefused(withDatabase({ views: [{ type: 'chart', name: 'Chart' }] }), 'chart');
+	});
+
+	it('C151 a board with a select property and a calendar with a date property are stored', async () => {
+		const before = await rowCount();
+		const properties = [{ name: 'Name', type: 'title' }, { name: 'Stage', type: 'select', options: ['A'] }, { name: 'Due', type: 'date' }];
+		const events = await ask(withDatabase({ rows: [], properties, views: [{ type: 'board', name: 'B' }, { type: 'calendar', name: 'C' }] }));
+		assert.equal(asked(events).length, 1);
+		assert.equal(await rowCount(), before + 1);
+	});
+
 	it('C152 a dashboard view is refused', async () => {
 		await assertRefused(withDatabase({ views: [{ type: 'dashboard', name: 'Dash' }] }), 'dashboard');
 	});
