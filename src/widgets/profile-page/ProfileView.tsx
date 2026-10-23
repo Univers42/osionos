@@ -20,6 +20,7 @@
 import React from 'react';
 
 import { ProfileActions } from './profileChrome';
+import { ProfileFacts } from './profileFields';
 import { ProfileSharedPosts } from './ProfileSharedPosts';
 import { useProfile } from './useProfile';
 
@@ -57,17 +58,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
             </div>
             <span
               title={profile.online ? 'Online' : 'Offline'}
-              className={`absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-[var(--osio-bg-page)] ${profile.online ? 'bg-green-500' : 'bg-[var(--osio-fg-subtle)]'}`}
+              className={`absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-[var(--osio-bg-page)] ${profile.online ? 'bg-[var(--osio-success)]' : 'bg-[var(--osio-fg-subtle)]'}`}
             />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-bold">{profile.name}</h1>
+            {profile.pronouns && <p className="text-sm text-[var(--osio-fg-muted)]">{profile.pronouns}</p>}
             <p className="mt-1 text-sm text-[var(--osio-fg-muted)]">
               {profile.role ? `${profile.role} · ` : ''}
               {profile.online ? 'Online now' : 'Offline'}
             </p>
           </div>
         </div>
+
+        <ProfileFacts profile={profile} />
 
         <ProfileActions userId={userId} name={profile.name} />
 
