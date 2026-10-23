@@ -19,7 +19,7 @@ import {
 } from './connections.ts';
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
-import { handleApprovalDecision, handleApprovalGet, handleApprovalResume } from './approvals.ts';
+import { handleApprovalDecision, handleApprovalGet, handleApprovalResume, handleApprovalUndo } from './approvals.ts';
 import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
 import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
@@ -134,6 +134,12 @@ export const ROUTES: RouteEntry[] = [
 		pattern: /^\/api\/ai\/approvals\/([^/]+)\/resume$/,
 		label: '/api/ai/approvals/:id/resume',
 		handle: handleApprovalResume,
+	},
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/approvals\/([^/]+)\/undo$/,
+		label: '/api/ai/approvals/:id/undo',
+		handle: handleApprovalUndo,
 	},
 	{
 		methods: [],
