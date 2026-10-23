@@ -65,10 +65,29 @@ function headersWithout(headers, name) {
 }
 
 /**
- * Hold a route's response back, mask it, then send it. Only the route's own head and body are
- * captured; a non-2xx answer carries no page and goes out unchanged.
+ * A route error may carry page attributes in `details` (the 409 version_conflict returns the
+ * stored content). They are held to the token's READ mask; `version` rides with `content`.
+ * Caveat: only a JSON object body with an object `details` is filtered; any other error body
+ * passes through, which is safe only while routes put no page data outside `details`.
  */
-export function installResponseMask(response, mask) {
+function maskErrorDetails(text, readMask) {
+	try {
+		const parsed = JSON.parse(text);
+		if (parsed === null || typeof parsed !== 'object' || !parsed.details || typeof parsed.details !== 'object') return text;
+		const allowed = Array.isArray(readMask) ? [...readMask] : [];
+		if (allowed.includes('content')) allowed.push('version');
+		return JSON.stringify({ ...parsed, details: maskAttributes(parsed.details, allowed) });
+	} catch {
+		return text;
+	}
+}
+
+/**
+ * Hold a route's response back, mask it, then send it. Only the route's own head and body are
+ * captured. A 2xx body is masked unless maskSuccess is off (the write route's reply holds no
+ * page attributes); a non-2xx body has its `details` held to the read mask.
+ */
+export function installResponseMask(response, mask, { readMask = mask, maskSuccess = true } = {}) {
 	const send = response.writeHead.bind(response);
 	const finish = response.end.bind(response);
 	let head = null;
@@ -84,6 +103,10 @@ export function installResponseMask(response, mask) {
 		const { status, headers } = head ?? { status: 200, headers: {} };
 		const kept = headersWithout(headers, 'content-length');
 		if (status < 200 || status >= 300) {
+			send(status, kept);
+			return finish(maskErrorDetails(text, readMask));
+		}
+		if (!maskSuccess) {
 			send(status, headers);
 			return finish(text);
 		}
@@ -204,7 +227,11 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, now = Dat
 		});
 		replaceAuthorization(request, session.token);
 		if (route.permission === 'read') installResponseMask(response, decision.mask);
-		else request.patWriteMask = decision.mask;
+		else {
+			const readDecision = evaluatePat(row, { resource: route.resource, permission: 'read' });
+			installResponseMask(response, decision.mask, { readMask: readDecision.allowed ? readDecision.mask : [], maskSuccess: false });
+			request.patWriteMask = decision.mask;
+		}
 		return false;
 	};
 }
