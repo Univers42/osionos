@@ -30,8 +30,8 @@ import { createShareRuleStore } from './bridge-perms-rules.mjs';
 import { moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
-import { handleAuthExchange, EXCHANGE_PATH } from './bridge-auth-exchange.mjs';
-import { resolveTurnstileToken, turnstileBootLine, turnstileBypassFromEnv } from './bridge-turnstile.mjs';
+import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge-auth-exchange.mjs';
+import { resolveTurnstileToken, turnstileBootLine, turnstileSettingsFromEnv } from './bridge-turnstile.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller, writeSessionCutoff } from './bridge-session-cutoff.mjs';
 import { sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
 import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
@@ -170,6 +170,12 @@ const CLAUDE_TOOL_MAP = {
 	archive: ['mcp__osionos__osionos_archive_page'],
 };
 
+// Throws at boot on a Turnstile misconfiguration (see turnstileSettingsFromEnv).
+function turnstileConfigFromEnv(env) {
+	const { mode, secret, bypass } = turnstileSettingsFromEnv(env);
+	return { turnstileMode: mode, turnstileSecret: secret, turnstileBypassLocal: bypass };
+}
+
 export function configFromEnv(env = process.env) {
 	const appUrl = (env.OSIONOS_APP_URL ?? env.PUBLIC_OSIONOS_APP_URL ?? 'http://localhost:3001').replace(/\/$/, '');
 	return {
@@ -207,9 +213,7 @@ export function configFromEnv(env = process.env) {
 		baasTenantId: env.OSIONOS_BAAS_TENANT_ID ?? env.VITE_BAAS_TENANT_ID ?? env.BAAS_TENANT_ID ?? '',
 		gatewayUrl: (env.AUTH_GATEWAY_URL ?? 'http://auth-gateway:8787').replace(/\/$/, ''),
 		publicApiKey: env.PUBLIC_BAAS_ANON_KEY ?? env.KONG_PUBLIC_API_KEY ?? '',
-		// Throws at boot when the bypass is on for a public deployment.
-		turnstileBypassLocal: turnstileBypassFromEnv(env),
-		turnstileSecret: env.TURNSTILE_SECRET_KEY ?? '',
+		...turnstileConfigFromEnv(env),
 		serviceKey: env.SERVICE_ROLE_KEY ?? env.KONG_SERVICE_API_KEY ?? env.BAAS_SERVICE_ROLE_KEY ?? '',
 		requireBaas: env.OSIONOS_BRIDGE_REQUIRE_BAAS === 'true',
 		persistence: env.OSIONOS_BRIDGE_PERSISTENCE ?? 'auto',
@@ -4595,6 +4599,12 @@ async function establishAppSession({ request, config, kv, pg, fetchImpl, gateway
 	return consumed;
 }
 
+// The address the gateway would also attribute the request to: the configured header, else the socket peer.
+function signInRemoteIp(request, config) {
+	const header = config.clientIpHeader ? String(request.headers[config.clientIpHeader.toLowerCase()] ?? '') : '';
+	return header.split(',')[0].trim() || (request.socket?.remoteAddress ?? '');
+}
+
 // Proxy the app's login/register to the hardened auth-gateway (server-side, so the
 // gateway's website-only CORS does not apply), then mint + return the osionos
 // session the app already consumes ({ user, accessToken, refreshToken }). Reuses
@@ -4606,7 +4616,7 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 	const password = safeText(payload.password, 512);
 	if (!email || !password) throw Object.assign(new Error('Email and password are required.'), { status: 422 });
 	const forwardedFor = forwardedForHeader(request);
-	const turnstileToken = await resolveTurnstileToken(payload, { config, fetchImpl, remoteIp: request.socket?.remoteAddress ?? '' });
+	const turnstileToken = await resolveTurnstileToken(payload, { config, fetchImpl, remoteIp: signInRemoteIp(request, config) });
 
 	if (url.pathname === '/api/auth/register') {
 		const rawName = safeText(payload.username ?? payload.name ?? email.split('@')[0], 64);
@@ -4852,6 +4862,8 @@ export function startBridgeServer(config = configFromEnv()) {
 	// One boot line for the three states an operator has to know.
 	console[bridgeBootIsDegraded(server) ? 'warn' : 'info'](bridgeBootLine(server));
 	console.info(turnstileBootLine(config));
+	const ipWarning = clientIpBootWarning(config);
+	if (ipWarning) console.info(ipWarning);
 	// No administrator configured: nobody is promoted to is_admin at login, so
 	// an account-admin workspace has no admin until the operator sets one.
 	if (!config.adminEmails.length) console.warn('[bridge] no account administrators configured (OSIONOS_ADMIN_EMAILS unset)');
