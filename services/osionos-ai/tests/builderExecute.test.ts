@@ -3,7 +3,11 @@ import { after, before, describe, it } from 'node:test';
 import type { Json } from './builderHarness.ts';
 
 process.env.OSIONOS_AI_BUILD_BUDGET_MS = '500';
-const { harness, closeBuilderHarness, goodPlan, ask, asked } = await import('./builderHarness.ts');
+// The C161 limits have their own file (builderUndo.test.ts); this one asks many
+// plans on purpose, so it lifts them out of the way.
+process.env.OSIONOS_AI_PENDING_PLANS = '100';
+process.env.OSIONOS_AI_BUILDS_PER_DAY = '100';
+const { harness, closeBuilderHarness, goodPlan, ask, asked, decide } = await import('./builderHarness.ts');
 const { USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
 const { app, bridge, tokenFor, call } = harness;
 const { revalidateStoredPlan, flattenPlan } = await import('../src/builders/plan.ts');
@@ -11,14 +15,6 @@ const { approvedKeys, writeOf } = await import('../src/builders/execute.ts');
 const { allItems, pendingItems } = await import('../src/builders/items.ts');
 
 after(closeBuilderHarness);
-
-async function decide(approvalId: string, decision: string, token = tokenFor(USER_A, WORKSPACE_A), items?: string[]) {
-	return call(`/api/ai/approvals/${approvalId}`, {
-		method: 'POST',
-		token,
-		body: { decision, ...(items ? { items } : {}) },
-	});
-}
 
 describe('builder execute', () => {
 	before(async () => {

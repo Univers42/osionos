@@ -29,6 +29,8 @@ export interface MockBridge {
 	loseNextAnswers(n: number): void;
 	serve(path: string, file: BridgeFile): void;
 	readonly files: ReadonlyMap<string, BridgeFile>;
+	/** A hook that runs before the mock answers a PATCH, e.g. to mirror the archive in the database. */
+	onPatch?: (call: { path: string; body: unknown }) => void | Promise<void>;
 	reset(): void;
 	close(): Promise<void>;
 }
@@ -94,7 +96,7 @@ export async function startMockBridge(): Promise<MockBridge> {
 	};
 
 	const server = createServer((request, response) => {
-		void readBody(request).then((bytes) => {
+		void readBody(request).then(async (bytes) => {
 			const raw = bytes.toString('utf8');
 			let body: unknown = raw;
 			try {
@@ -239,6 +241,19 @@ export async function startMockBridge(): Promise<MockBridge> {
 				return;
 			}
 			if (request.method === 'PATCH' && /^\/api\/pages\/[^/]+$/.test(path)) {
+				if (failNextCount > 0) {
+					failNextCount--;
+					response.writeHead(failNextStatus, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ error: 'failed' }));
+					return;
+				}
+				try {
+					await mock.onPatch?.({ path, body });
+				} catch {
+					response.writeHead(500, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ error: { message: 'hook failed' } }));
+					return;
+				}
 				response.writeHead(200, { 'content-type': 'application/json' });
 				response.end(JSON.stringify({ ok: true }));
 				return;
