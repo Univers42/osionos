@@ -112,6 +112,9 @@ const envSchema = z.object({
 	// The MCP write proposals of one token in a minute: the same fixed window
 	// as the runs, its own counter.
 	OSIONOS_AI_MCP_WRITES_PER_MINUTE: z.coerce.number().int().positive().default(10),
+	// How long an outside agent's write waits for the user: an hour, where a
+	// run's approval waits ten minutes because the run is waiting on it.
+	OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(60),
 	// The image engine: INTERNAL, the OpenAI-compatible base URL of sd-server
 	// (`…/v1`), a deployment setting and never a caller's. Required when on.
 	OSIONOS_AI_IMAGE_URL: z.string().optional(),
@@ -198,6 +201,7 @@ const rawEnv = {
 	OSIONOS_AI_MCP_ALLOWED_ORIGINS: process.env.OSIONOS_AI_MCP_ALLOWED_ORIGINS,
 	OSIONOS_AI_MCP_PENDING_PER_TOKEN: process.env.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
 	OSIONOS_AI_MCP_WRITES_PER_MINUTE: process.env.OSIONOS_AI_MCP_WRITES_PER_MINUTE,
+	OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES: process.env.OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES,
 	OSIONOS_AI_IMAGE_URL: firstEnv('OSIONOS_AI_IMAGE_URL'),
 	OSIONOS_AI_IMAGE_MODEL: process.env.OSIONOS_AI_IMAGE_MODEL,
 	OSIONOS_AI_IMAGE_MICROUSD: process.env.OSIONOS_AI_IMAGE_MICROUSD,
@@ -369,6 +373,8 @@ export interface AiServiceConfig {
 	mcpPendingPerToken: number;
 	/** The MCP write proposals of one token in a minute. */
 	mcpWritesPerMinute: number;
+	/** How long an MCP approval waits for the user, in minutes (G4b-3). */
+	mcpApprovalTtlMinutes: number;
 	/** The OpenAI-compatible base URL of the internal image engine. */
 	imageUrl?: string;
 	/** The model of the engine, as the provenance of an image names it. */
@@ -439,6 +445,7 @@ export const config: AiServiceConfig = Object.freeze({
 	mcpAllowedOrigins: Object.freeze(commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_ORIGINS)),
 	mcpPendingPerToken: parsed.data.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
 	mcpWritesPerMinute: parsed.data.OSIONOS_AI_MCP_WRITES_PER_MINUTE,
+	mcpApprovalTtlMinutes: parsed.data.OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES,
 	imageUrl: parsed.data.OSIONOS_AI_IMAGE_URL,
 	imageModel: parsed.data.OSIONOS_AI_IMAGE_MODEL,
 	imageMicroUsd: parsed.data.OSIONOS_AI_IMAGE_MICROUSD,
