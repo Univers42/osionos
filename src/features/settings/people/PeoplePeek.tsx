@@ -26,6 +26,8 @@ import { isVideoCoverSource } from "@/entities/page/ui/coverMedia";
 import type { Page } from "@notion-db/object-database";
 import type { WorkspaceMemberRole } from "@/store/settings";
 import { useUserStore } from "@/features/auth";
+import { TypedConfirmModal } from "../ui/ConfirmModals";
+import { isWorkspaceOwner } from "../model/workspaceOwnership";
 import { useHovercardsEnabled } from "@/shared/config/useAppearance";
 import { CONTACT, DIR, GROUP, GUEST, MEMBER, type PeopleSourceKey } from "./peopleModel";
 import {
@@ -170,6 +172,12 @@ export const PeopleHovercard: React.FC<{ person: PersonSummary; children: React.
 
 export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, connect, onClose, onChanged }) => {
   const props = page.properties;
+  const viewerId = useUserStore((state) => state.activeUserId);
+  const isViewerOwner = useUserStore((state) => isWorkspaceOwner(
+    [...(state.activeSession()?.privateWorkspaces ?? []), ...(state.activeSession()?.sharedWorkspaces ?? [])].find((workspace) => workspace._id === workspaceId),
+    viewerId,
+  ));
+  const [confirmingTransfer, setConfirmingTransfer] = useState(false);
   const done = (work: Promise<unknown>) => { void work.then(() => onChanged()).finally(() => onClose()); };
 
   const title = String(
@@ -212,7 +220,7 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
               <Button key={role} tone={props[MEMBER.role] === role ? "primary" : "default"}
                 onClick={() => done(changeMemberRole(workspaceId, page.id, role))}>{role}</Button>
             ))}
-            <ConfirmButton label="Transfer ownership" onConfirm={() => transferOwnership(workspaceId, page.id)} />
+            {isViewerOwner && page.id !== viewerId && <Button tone="danger" onClick={() => setConfirmingTransfer(true)}>Transfer ownership</Button>}
             <ConfirmButton label="Remove member" onConfirm={() => removeMember(workspaceId, page.id)} />
           </>)}
 
@@ -221,6 +229,11 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
           )}
         </div>
       </div>
+      {confirmingTransfer && (
+        <TypedConfirmModal title="Transfer ownership" message={`Type ${title} to make them the owner. You stay on as an admin.`} confirmText={title} danger
+          actionLabel="Transfer ownership" onConfirm={() => transferOwnership(workspaceId, page.id).then(() => { onChanged(); onClose(); })}
+          onClose={() => setConfirmingTransfer(false)} />
+      )}
     </Modal>
   );
 };

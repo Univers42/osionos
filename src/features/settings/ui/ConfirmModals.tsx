@@ -13,6 +13,9 @@
 import React, { useId, useState } from 'react';
 
 import { Button, Modal } from '@/shared/ui';
+import { SUDO_REQUIRED_CODE } from '@/shared/api/sudoRequired';
+
+import { canRetryAfterSudo, useSudoPromptStore } from './sudo/sudoPromptModel';
 
 /**
  * How long a confirm waits before it closes, so an action that answers at once
@@ -35,6 +38,10 @@ function wait(ms: number): Promise<void> {
  * buttons are disabled and the action says what it is doing. A rejection keeps
  * the dialog open and says what went wrong, so a destructive action never
  * reports a success it did not have.
+ *
+ * A rejection whose `code` is `sudo_required` is not a failure: the shared fetch path has already
+ * raised the sudo prompt, so the dialog says nothing, stays open and its button reads "Try again",
+ * enabled once the prompt has granted. Nothing re-sends by itself.
  */
 const ConfirmBody: React.FC<{
   message: string;
@@ -47,17 +54,28 @@ const ConfirmBody: React.FC<{
 }> = ({ message, actionLabel, danger, confirmDisabled = false, onConfirm, onClose, children }) => {
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const grants = useSudoPromptStore((state) => state.grants);
+  const [needsSudo, setNeedsSudo] = useState(false);
+  const [grantsAtRefusal, setGrantsAtRefusal] = useState(grants);
+  const canRetry = canRetryAfterSudo(needsSudo, grants, grantsAtRefusal);
 
   async function handleConfirm() {
     const startedAt = Date.now();
     setPending(true);
     setFailure(null);
+    setNeedsSudo(false);
     try {
       await onConfirm();
       const waited = Date.now() - startedAt;
       if (waited < MIN_PENDING_MS) await wait(MIN_PENDING_MS - waited);
       onClose();
     } catch (error) {
+      if ((error as { code?: unknown } | null)?.code === SUDO_REQUIRED_CODE) {
+        setNeedsSudo(true);
+        setGrantsAtRefusal(grants);
+        setPending(false);
+        return;
+      }
       setFailure(error instanceof Error && error.message.trim() ? error.message : 'That action did not go through.');
       setPending(false);
     }
@@ -73,8 +91,8 @@ const ConfirmBody: React.FC<{
       {failure && <p role="alert" className="text-sm text-[var(--osio-danger)]">{failure}</p>}
       <div className="flex justify-end gap-2">
         <Button onClick={onClose} disabled={pending}>Cancel</Button>
-        <Button tone={danger ? 'danger' : 'primary'} onClick={handleConfirm} disabled={pending || confirmDisabled}>
-          {pending ? `${actionLabel}…` : actionLabel}
+        <Button tone={danger ? 'danger' : 'primary'} onClick={handleConfirm} disabled={pending || confirmDisabled || !canRetry}>
+          {pending ? `${actionLabel}…` : needsSudo ? 'Try again' : actionLabel}
         </Button>
       </div>
     </div>

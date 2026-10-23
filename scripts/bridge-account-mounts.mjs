@@ -36,12 +36,15 @@ import { createAvatarRoutes } from './bridge-avatar.mjs';
 import { createSelfDataRoutes } from './bridge-self-data.mjs';
 import { createSelfViewsRoutes } from './bridge-self-views.mjs';
 import { createWorkspaceSettingsRoutes } from './bridge-workspace-settings.mjs';
+import { createWorkspaceLifecycleRoutes } from './bridge-workspace-lifecycle.mjs';
 import { createAdminUsersRoutes } from './bridge-account-users.mjs';
 import { createAdminAuditRoutes } from './bridge-account-audit.mjs';
 import { createAdminModerationRoutes } from './bridge-account-moderation.mjs';
 import { createMfaRoutes } from './bridge-account-mfa.mjs';
 import { createMfaRecoveryRoutes } from './bridge-account-mfa-recovery.mjs';
 import { createAccountPasswordRoutes } from './bridge-account-password.mjs';
+import { createAccountExportRoutes } from './bridge-account-export.mjs';
+import { createAccountErasureRunner } from './bridge-account-erasure.mjs';
 
 export function createAccountHandler(deps) {
 	const modules = [
@@ -56,6 +59,7 @@ export function createAccountHandler(deps) {
 		createSelfDataRoutes(deps),
 		createSelfViewsRoutes(deps),
 		createWorkspaceSettingsRoutes(deps),
+		createWorkspaceLifecycleRoutes(deps),
 		createPatRoutes(deps),
 		createAccountKeysRoutes(deps),
 		createAdminUsersRoutes(deps),
@@ -64,7 +68,10 @@ export function createAccountHandler(deps) {
 		createAccountStatusRoutes(deps),
 		createMfaRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env, fetchImpl: deps.mfaFetch ?? fetch, now: deps.mfaNow ?? null }),
 		createMfaRecoveryRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env, now: deps.mfaNow ?? null }),
+		createAccountExportRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.exportEnv ?? process.env, fetchImpl: deps.exportFetch ?? fetch, now: deps.exportNow ?? Date.now, runner: deps.exportRunner !== false }),
 	];
+	// Off unless OSIONOS_ACCOUNT_DELETION_EXECUTOR=1 (and, in production, a dry run or a verdict).
+	createAccountErasureRunner({ config: deps.config, pg: deps.pg, kv: deps.kv, fetchImpl: deps.erasureFetch ?? deps.mfaFetch ?? fetch, env: deps.erasureEnv ?? deps.mfaEnv ?? process.env }).start();
 	return async function handleAccountRequest(url, request, response) {
 		for (const module of modules) {
 			if (await module(url, request, response)) return true;
