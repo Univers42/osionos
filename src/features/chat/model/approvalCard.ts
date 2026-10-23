@@ -135,7 +135,7 @@ export function approvedInRunWords(count: number): string {
  */
 export function provenanceTitles(
   pageIds: readonly string[] | undefined,
-  known: readonly { pageId: string; title: string }[],
+  known: readonly { pageId?: string; title: string }[],
 ): string[] {
   if (!pageIds || pageIds.length === 0) return [];
   const titles: string[] = [];
