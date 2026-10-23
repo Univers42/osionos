@@ -22,11 +22,8 @@
  * new codes, never none. Verify shares the lockout and the rate limit of the authenticator.
  * Caveat: two concurrent generate calls can each pass the "no set yet" check and leave two
  * sets of ten (both valid, only one returned to each caller); a regenerate then collapses them.
- * Caveat: two concurrent regenerates get distinct generations from a random jitter; the higher set
- * wins, the lower withdraws (409 regenerate_raced) or is swept. A caller that read before the winner
- * inserted can still be shown codes that the winner then sweeps. A jitter collision (1 in 65536)
- * leaves both sets live until the next regenerate; the generation grows by up to 65536 per
- * regenerate, so an int4 column overflows after about 32000 of them.
+ * Caveat: regenerate holds a single-flight lock (`mfa-regenerate:<userId>`, 10 s TTL) so racing calls
+ * answer 409 instead of leaving two live sets; if the holder crashes the lock lasts up to 10 s.
  * Caveat: a spent code is not restored when issuing the token or clearing the failure counter
  * throws afterwards: the caller gets a 500 and must use another code. Burning is the safe side;
  * issuing before spending would allow a replay.
@@ -45,9 +42,9 @@ import { issueAal2, assertNotBlocked, clearFailures, countAttempt, CODES_TABLE, 
 
 const ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz';
 const HALF = 4;
+const REGENERATE_LOCK_MS = 10_000;
 const SET_SIZE = 10;
 const PEPPER_BYTES = 32;
-const GENERATION_JITTER = 65_536;
 const CODE_SHAPE = new RegExp(`^[${ALPHABET}]{${HALF * 2}}$`);
 
 const pick = () => ALPHABET[randomInt(ALPHABET.length)];
@@ -131,21 +128,22 @@ async function generate(ctx, request, response) {
 
 async function regenerate(ctx, request, response) {
 	const session = callerSession(request, ctx.config, ctx.verifySession);
-	await requireSudo(ctx.kv, session);
-	const pepper = pepperOf(ctx.env);
-	await requireVerifiedFactor(ctx.pg, session.userId);
-	const generations = (await readRows(ctx.pg, filter(session.userId, { select: 'generation' }))).map((row) => Number(row.generation) || 0);
-	const generation = Math.max(0, ...generations) + 1 + randomInt(GENERATION_JITTER);
-	await writeAudit(ctx.pg, { session, meta: clientMetaOf(request, ctx.config), eventType: 'account.2fa.recovery.regenerate', details: { count: SET_SIZE } });
-	const codes = await insertSet({ pg: ctx.pg, userId: session.userId, pepper, generation });
-	await guarded(() => ctx.pg.asService().del(filter(session.userId, { generation: `lt.${generation}` })));
-	// A racing regenerate may have inserted a higher set after our sweep: the higher one wins, so withdraw ours.
-	const newest = Math.max(0, ...(await readRows(ctx.pg, filter(session.userId, { select: 'generation' }))).map((row) => Number(row.generation) || 0));
-	if (newest > generation) {
-		await guarded(() => ctx.pg.asService().del(filter(session.userId, { generation: `eq.${generation}` })));
-		throw accountError(409, 'regenerate_raced', 'Another regeneration finished first; use its codes.');
+	const lock = `mfa-regenerate:${session.userId}`;
+	if (!(await guarded(() => ctx.kv.setNx(lock, '1', REGENERATE_LOCK_MS)))) throw accountError(409, 'regenerate_in_progress', 'Your recovery codes are already being regenerated.');
+	try {
+		await requireSudo(ctx.kv, session);
+		const pepper = pepperOf(ctx.env);
+		await requireVerifiedFactor(ctx.pg, session.userId);
+		const generations = (await readRows(ctx.pg, filter(session.userId, { select: 'generation' }))).map((row) => Number(row.generation) || 0);
+		const generation = Math.max(0, ...generations) + 1;
+		await writeAudit(ctx.pg, { session, meta: clientMetaOf(request, ctx.config), eventType: 'account.2fa.recovery.regenerate', details: { count: SET_SIZE } });
+		const codes = await insertSet({ pg: ctx.pg, userId: session.userId, pepper, generation });
+		await guarded(() => ctx.pg.asService().del(filter(session.userId, { generation: `lt.${generation}` })));
+		return shown(ctx, response, codes);
+	} finally {
+		// getDel, not del: the same call the failure counter uses, so every kv double serves it.
+		await Promise.resolve().then(() => ctx.kv.getDel(lock)).catch((error) => console.warn('[osionos-bridge] mfa-regenerate lock not released:', error?.message));
 	}
-	return shown(ctx, response, codes);
 }
 
 const invalidCode = () => accountError(422, 'code_invalid', 'That code is not valid.');

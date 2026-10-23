@@ -158,7 +158,7 @@ describe('recovery codes: regenerate', () => {
 		assert.equal(answer.headers.get('cache-control'), 'no-store');
 		assert.ok(answer.body.codes.every((code) => !codes.includes(code)));
 		const rows = world.mfa.rows(CODES_TABLE);
-		assert.deepEqual([rows.length, new Set(rows.map((row) => row.generation)).size, rows[0].generation > 1], [10, 1, true]);
+		assert.deepEqual([rows.length, new Set(rows.map((row) => row.generation)).size, rows[0].generation], [10, 1, 2]);
 		const writes = world.mfa.calls.filter((call) => call.table === CODES_TABLE && call.method !== 'GET').map((call) => call.method);
 		assert.deepEqual(writes.slice(-2), ['POST', 'DELETE']);
 		assert.equal((await recover(world, aal1, codes[0])).status, 422, 'an old code no longer works');
@@ -176,17 +176,38 @@ describe('recovery codes: regenerate', () => {
 		assert.deepEqual([world.mfa.rows(CODES_TABLE).length, new Set(world.mfa.rows(CODES_TABLE).map((row) => row.generation)).size], [20, 2]);
 		world.mfa.fetchImpl = serve;
 		assert.equal((await world.api('POST', REGENERATE, aal2, { body: {} })).status, 200);
-		assert.deepEqual([world.mfa.rows(CODES_TABLE).length, new Set(world.mfa.rows(CODES_TABLE).map((row) => row.generation)).size], [10, 1]);
+		assert.deepEqual(world.mfa.rows(CODES_TABLE).map((row) => row.generation), Array(10).fill(3));
 	});
 
-	it('two racing regenerates leave exactly one live set', async (t) => {
+	it('two racing regenerates: one wins, the other gets 409, one live set at generation 2', async (t) => {
 		const { world, aal2 } = await withCodes(t);
 		await world.sudo(aal2);
-		world.mfa.frozenCodeReads = { rows: world.mfa.rows(CODES_TABLE).map((row) => ({ ...row })), left: 2 };
-		const both = await Promise.all([world.api('POST', REGENERATE, aal2, { body: {} }), world.api('POST', REGENERATE, aal2, { body: {} })]);
-		assert.ok(both.some((answer) => answer.status === 200), both.map((answer) => answer.text).join());
+		// The first call is held at its insert until the second has been answered, so the two truly overlap.
+		const serve = world.mfa.fetchImpl;
+		let release;
+		const held = new Promise((resolve) => { release = resolve; });
+		world.mfa.fetchImpl = async (url, init = {}) => {
+			if (init.method === 'POST' && String(url).includes(CODES_TABLE)) await held;
+			return serve(url, init);
+		};
+		const first = world.api('POST', REGENERATE, aal2, { body: {} });
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		const second = await world.api('POST', REGENERATE, aal2, { body: {} });
+		release();
+		assert.deepEqual([second.status, second.body.code], [409, 'regenerate_in_progress']);
+		assert.equal((await first).status, 200);
 		const rows = world.mfa.rows(CODES_TABLE);
-		assert.deepEqual([rows.length, new Set(rows.map((row) => row.generation)).size], [10, 1]);
+		assert.deepEqual([rows.length, new Set(rows.map((row) => row.generation)).size, rows[0].generation], [10, 1, 2]);
+		assert.equal((await world.api('POST', REGENERATE, aal2, { body: {} })).status, 200, 'the lock was released');
+	});
+
+	it('answers 503 mfa_unavailable when the lock store is down', async (t) => {
+		const { world, aal2 } = await withCodes(t);
+		await world.sudo(aal2);
+		world.kv.setNx = async () => { throw new Error('kv down'); };
+		const answer = await world.api('POST', REGENERATE, aal2, { body: {} });
+		assert.deepEqual([answer.status, answer.body.code], [503, 'mfa_unavailable']);
+		assert.equal(world.mfa.rows(CODES_TABLE).length, 10);
 	});
 });
 

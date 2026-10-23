@@ -60,7 +60,7 @@ const project = (row, select) => (!select || select === '*' ? { ...row } : Objec
 /** The two factor tables. `failRead` / `failWrite` are { status, body } answers for the next kind of request. */
 export function createMfaStore({ totp = [], recovery = [] } = {}) {
 	const tables = new Map([[TOTP_TABLE, totp.map((row) => ({ ...row }))], [CODES_TABLE, recovery.map((row) => ({ ...row }))]]);
-	const store = { calls: [], failRead: null, failWrite: null, frozenReads: null, frozenCodeReads: null, holdReads: null, rows: (name = TOTP_TABLE) => tables.get(name) };
+	const store = { calls: [], failRead: null, failWrite: null, frozenReads: null, holdReads: null, rows: (name = TOTP_TABLE) => tables.get(name) };
 	store.fetchImpl = async (url, init = {}) => {
 		const parsed = new URL(String(url));
 		const table = parsed.pathname.replace('/rest/v1/', '');
@@ -76,7 +76,6 @@ export function createMfaStore({ totp = [], recovery = [] } = {}) {
 		// `frozenReads` is the snapshot two racing requests both read before either writes.
 		if (method === 'GET' && table === TOTP_TABLE && store.holdReads) await store.holdReads;
 		if (method === 'GET' && store.frozenReads && table === TOTP_TABLE) return json(store.frozenReads.map((row) => project(row, parsed.searchParams.get('select'))));
-		if (method === 'GET' && store.frozenCodeReads?.left > 0 && table === CODES_TABLE && (store.frozenCodeReads.left -= 1) >= 0) return json(store.frozenCodeReads.rows.map((row) => project(row, parsed.searchParams.get('select'))));
 		if (method === 'GET') return json(hits.map((row) => project(row, parsed.searchParams.get('select'))));
 		if (method === 'POST') {
 			// One statement: a duplicate anywhere in the batch rejects the whole request, as in Postgres.
