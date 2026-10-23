@@ -79,6 +79,11 @@ describe('buildArtifact', () => {
 		assert.ok(buildArtifact('zip', tables).bytes.includes(Buffer.from("'=boom")));
 		assert.equal(JSON.parse(buildArtifact('json', tables).bytes).tables.osionos_notes[0].title, '=boom');
 	});
+	it('names every zip entry after the table, never after row data', () => {
+		const bytes = buildArtifact('zip', tables).bytes;
+		for (const name of ['manifest.json', 'osionos_notes.json', 'osionos_notes.csv']) assert.ok(bytes.includes(Buffer.from(name)), name);
+		assert.equal(bytes.includes(Buffer.from('=boom.json')), false);
+	});
 	it('refuses an unknown format and a table name that is not an identifier', () => {
 		assert.throws(() => buildArtifact('xml', tables), (error) => error.code === 'export_bad_format');
 		assert.throws(() => buildArtifact('zip', [{ ...tables[0], name: '../x' }]), (error) => error.code === 'export_bad_identifier');
