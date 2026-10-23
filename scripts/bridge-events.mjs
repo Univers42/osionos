@@ -36,8 +36,8 @@
  *
  * THE WRITE
  *   One call to the database function ai_events_beacon(p_user, p_events): the
- *   database re-checks the consent, the hour bucket, the daily cap and the
- *   rank, and writes one row per page, event, surface and hour. Its refusals
+ *   database re-checks the consent, the UTC-day bucket, the daily cap and the
+ *   rank, and writes one row per page, event, surface and UTC day. Its refusals
  *   are answers, not crashes: 22023 is a 400, 54000 (the daily cap) a 429,
  *   anything else a 503 — logged once, with no token and no id in the log.
  *

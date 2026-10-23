@@ -81,6 +81,11 @@ const SHAPES = [
 		run: (world) => world.nearest ?? [],
 	},
 	{
+		logical: 'popular', method: 'POST', table: 'rpc/ai_rec_popular',
+		keys: [], fixed: {},
+		run: (world) => world.popular ?? [],
+	},
+	{
 		logical: 'pages', method: 'GET', table: 'osionos_pages',
 		keys: ['id', 'archived_at', 'select'],
 		fixed: { archived_at: 'is.null', select: 'id,title,icon,workspace_id,owner_id,visibility,collaborators' },
@@ -134,13 +139,15 @@ function matches(shape, method, table, params, prefer) {
 
 /**
  * `world`: { context, contexts, nearest, pages, members, blocks, settings }.
- * `failing`: logical names that answer 500.
+ * `failing`: logical names that answer 500; `missing`: logical names that answer 404.
+ * `popular`: the rows { item_id, users } of ai_rec_popular.
  */
-export function createRecsStub(world = {}, { failing = [] } = {}) {
+export function createRecsStub(world = {}, { failing = [], missing = [] } = {}) {
 	const store = { context: { model: null }, nearest: [], pages: [], members: [], blocks: [], settings: [], ...world };
 	const calls = [];
 	const violations = [];
 	const failures = new Set(failing);
+	const absent = new Set(missing);
 	const fetchImpl = async (url, init = {}) => {
 		const parsed = new URL(url);
 		const method = init.method ?? 'GET';
@@ -160,6 +167,8 @@ export function createRecsStub(world = {}, { failing = [] } = {}) {
 			throw new Error(message);
 		}
 		if (failures.has(shape.logical)) return reply({ message: 'stub failure' }, 500);
+		// An older database: PostgREST answers 404 PGRST202 for a function it does not have.
+		if (absent.has(shape.logical)) return reply({ code: 'PGRST202' }, 404);
 		const params = Object.fromEntries(parsed.searchParams);
 		return reply(shape.run(store, params, record.body, record.prefer));
 	};

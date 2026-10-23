@@ -57,6 +57,9 @@ export type DecisionOutcome =
  */
 export function bridgeWriteOf(row: ApprovalRow): BridgeWrite | null {
 	const args = row.args ?? {};
+	// build_plan has no execution until P6a-3: null makes the decision fail
+	// without a bridge call.
+	if (row.tool === 'build_plan') return null;
 	const pageId = typeof args.pageId === 'string' ? args.pageId : '';
 	if (row.tool === 'create_page') {
 		const workspaceId = typeof args.workspaceId === 'string' ? args.workspaceId : '';

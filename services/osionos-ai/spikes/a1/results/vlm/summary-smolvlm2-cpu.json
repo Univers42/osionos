@@ -1,0 +1,156 @@
+{
+  "images": 297,
+  "warmup_answers": 3,
+  "valid_json": {
+    "rate": 0.9966666666666667,
+    "count": 299,
+    "total": 300
+  },
+  "precision_at_5": {
+    "macro": 0.27946127946127947,
+    "ci": [
+      0.2626094276094283,
+      0.2976430976430982
+    ]
+  },
+  "recall": {
+    "macro": 0.609658551325218,
+    "ci": [
+      0.5686178764650986,
+      0.647810368643702
+    ]
+  },
+  "precision_at_5_tags_only": {
+    "macro": 0.25723905723905727
+  },
+  "recall_tags_only": {
+    "macro": 0.5463294935517158
+  },
+  "latency_s": {
+    "p50": 11.7477,
+    "p95": 29.762619999999995,
+    "min": 5.117100000000001,
+    "max": 61.064800000000005,
+    "mean": 13.819566329966328
+  },
+  "tokens": {
+    "prompt_p50": 543.0,
+    "prompt_max": 710,
+    "completion_p50": 83.0,
+    "completion_max": 640
+  },
+  "safety": {
+    "distribution": {
+      "safe": 279,
+      "unknown": 17,
+      "missing": 1
+    },
+    "flagged": 17,
+    "false_flag_rate": 0.05723905723905724
+  },
+  "ocr_answered": 296,
+  "unmapped_tags": 952,
+  "predicted_tags": 1459,
+  "ocr_sample": [
+    {
+      "id": 212072,
+      "caption": "A stop sign in front of some buildings.",
+      "ocr": "stop"
+    },
+    {
+      "id": 322829,
+      "caption": "A white meta bench next to a patch of grass.",
+      "ocr": "bench"
+    },
+    {
+      "id": 349678,
+      "caption": "A large tower with a clock on it advertising transportation via train.",
+      "ocr": "GO BY TRAIN"
+    },
+    {
+      "id": 249643,
+      "caption": "A train traveling down train tracks near a train station.",
+      "ocr": "428 613-7"
+    },
+    {
+      "id": 148999,
+      "caption": "A biilboard with a railcar in front of it.",
+      "ocr": "train"
+    },
+    {
+      "id": 573008,
+      "caption": "A large Colgate clock is by the water.",
+      "ocr": "Colgate"
+    },
+    {
+      "id": 516708,
+      "caption": "A street sign that reads Sparta sitting next to a tall building.",
+      "ocr": "Street sign for Sparta at 3056"
+    },
+    {
+      "id": 293245,
+      "caption": "A Yamaha motorcycle parked outside of a building.",
+      "ocr": "500"
+    },
+    {
+      "id": 252332,
+      "caption": "A stop sign is shown among foliage and grass.",
+      "ocr": "STOP"
+    },
+    {
+      "id": 189698,
+      "caption": "A picture of a road sign labeled bodacious drive.",
+      "ocr": "BODACIOUS DR"
+    },
+    {
+      "id": 323571,
+      "caption": "A street sign on the street near a building.",
+      "ocr": "Hollywood Ave."
+    },
+    {
+      "id": 63602,
+      "caption": "A laptop computer sitting on top of a white desk.",
+      "ocr": "a computer screen with text on it"
+    },
+    {
+      "id": 314914,
+      "caption": "A two sign sitting on the side of a road.",
+      "ocr": "unauthorized vehicles will be towed away at owners expense"
+    },
+    {
+      "id": 94751,
+      "caption": "A parking lot is on the side of the ocean.",
+      "ocr": "road, traffic, sign, fence, beach, ocean"
+    },
+    {
+      "id": 161128,
+      "caption": "A curse word written on a traffic sign.",
+      "ocr": "no smoking"
+    },
+    {
+      "id": 460683,
+      "caption": "A man wearing a blue tie with the ten commandments on it.",
+      "ocr": "The text on the tie is in Hebrew and reads \"The Lord is my shepherd, there is no other; I shall not want a father, nor a mother, nor a brother, nor a friend, for my God is my all in all.\""
+    },
+    {
+      "id": 202001,
+      "caption": "An emo girl holding a smart phone with a shaved head.",
+      "ocr": "someday, you will know the meaning of my devotion"
+    },
+    {
+      "id": 284762,
+      "caption": "A traffic light sitting next to a street sign.",
+      "ocr": "Ramistrasse"
+    },
+    {
+      "id": 232646,
+      "caption": "A stop sign at the end of the road.",
+      "ocr": "STOP"
+    },
+    {
+      "id": 571943,
+      "caption": "a pole with a street light and signs next to a bare tree",
+      "ocr": "5 Ave SE"
+    }
+  ]
+}
