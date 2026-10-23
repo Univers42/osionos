@@ -133,7 +133,7 @@ async function mayWritePage(db: Pool, ctx: WriteToolContext, row: PageRow): Prom
  * A page that does not exist and a page the caller may not read are the same
  * thing: the answer must not tell that the page is there.
  */
-async function writablePage(ctx: WriteToolContext, pageId: string): Promise<PageRow | null> {
+export async function writablePage(ctx: WriteToolContext, pageId: string): Promise<PageRow | null> {
 	const result = await ctx.db.query<PageRow>(PAGE_SQL, [pageId]);
 	const row = result.rows[0];
 	if (!row) return null;
@@ -144,7 +144,7 @@ async function writablePage(ctx: WriteToolContext, pageId: string): Promise<Page
 }
 
 /** The name of a workspace: the card shows it beside the title. */
-async function workspaceName(db: Pool, workspaceId: string): Promise<string> {
+export async function workspaceName(db: Pool, workspaceId: string): Promise<string> {
 	const result = await db.query<{ name: string }>(WORKSPACE_NAME_SQL, [workspaceId]);
 	return result.rows[0]?.name ?? '';
 }

@@ -7,13 +7,20 @@ first members are the twenty first of the stream: the fetcher reads the
 stream, keeps those twenty, and closes the connection as soon as it has
 them. The ids and the transcripts go into a json file next to the clips.
 
+With --total N the fetcher extends the set instead: the clips that are
+already in the dest dir are kept (never deleted), and N minus those are drawn
+from the rest of the test split with random.Random(--seed). That reads the
+whole tarball, not its head.
+
 usage: fetch-fleurs.py --lang en_us --tsv <file> --tar <url> --dest <dir>
+       [--total 100 --seed 42]
 """
 
 import argparse
 import io
 import json
 import os
+import random
 import tarfile
 import urllib.request
 
@@ -27,6 +34,8 @@ def main():
     parser.add_argument("--tar", required=True, help="the url of the test.tar.gz")
     parser.add_argument("--dest", required=True)
     parser.add_argument("--count", type=int, default=20)
+    parser.add_argument("--total", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     rows = []
@@ -41,6 +50,13 @@ def main():
 
     out_dir = os.path.join(args.dest, args.lang)
     os.makedirs(out_dir, exist_ok=True)
+    wanted = None
+    have = set()
+    if args.total:
+        have = {n for n in os.listdir(out_dir) if n in by_file}
+        rest = sorted(set(by_file) - have)
+        picked = random.Random(args.seed).sample(rest, max(0, args.total - len(have)))
+        wanted = set(picked)
     request = urllib.request.Request(args.tar, headers=UA)
     kept = []
     with urllib.request.urlopen(request, timeout=180) as response:
@@ -50,15 +66,21 @@ def main():
                     continue
                 name = os.path.basename(member.name)
                 row = by_file.get(name)
-                if row is None:
+                if row is None or (wanted is not None and name not in wanted):
                     continue
                 data = archive.extractfile(member).read()
                 with open(os.path.join(out_dir, name), "wb") as out:
                     out.write(data)
                 kept.append({**row, "id": name.split(".")[0], "bytes": len(data)})
                 print(f"  {args.lang}: {name} ({len(data)} bytes)", flush=True)
-                if len(kept) >= args.count:
+                if wanted is None and len(kept) >= args.count:
                     break
+                if wanted is not None and len(kept) >= len(wanted):
+                    break
+    for name in sorted(have):
+        row = by_file[name]
+        kept.append({**row, "id": name.split(".")[0],
+                     "bytes": os.path.getsize(os.path.join(out_dir, name))})
     if not kept:
         raise SystemExit(f"no clip of {args.lang} was found")
     with open(os.path.join(out_dir, "clips.json"), "w", encoding="utf-8") as out:

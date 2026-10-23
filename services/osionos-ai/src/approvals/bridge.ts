@@ -43,11 +43,13 @@ export async function bridgeWrite(
 		token,
 		write,
 		fetchImpl = fetch,
+		timeoutMs = BRIDGE_TIMEOUT_MS,
 	}: {
 		url: string;
 		token: string;
 		write: BridgeWrite;
 		fetchImpl?: typeof fetch;
+		timeoutMs?: number;
 	},
 ): Promise<BridgeAnswer> {
 	try {
@@ -58,13 +60,49 @@ export async function bridgeWrite(
 				'content-type': 'application/json',
 			},
 			body: JSON.stringify(write.body),
-			signal: AbortSignal.timeout(BRIDGE_TIMEOUT_MS),
+			signal: AbortSignal.timeout(timeoutMs),
 		});
 		const body = await response.text();
 		return { ok: response.ok, status: response.status, body: body.slice(0, 4000) };
 	} catch {
 		// The failure says nothing about the URL and nothing about the token:
 		// the log of a write carries the code and the name of the error.
+		return { ok: false, status: 0, body: '' };
+	}
+}
+
+/**
+ * A read of the bridge: a GET, with the same token and timeout discipline.
+ *
+ * Like `bridgeWrite`, a failure is a failure, never a throw.
+ */
+export async function bridgeRead(
+	{
+		url,
+		token,
+		path,
+		fetchImpl = fetch,
+		timeoutMs = BRIDGE_TIMEOUT_MS,
+	}: {
+		url: string;
+		token: string;
+		path: string;
+		fetchImpl?: typeof fetch;
+		timeoutMs?: number;
+	},
+): Promise<BridgeAnswer> {
+	try {
+		const response = await fetchImpl(`${url}${path}`, {
+			method: 'GET',
+			headers: {
+				authorization: `Bearer ${token}`,
+				'content-type': 'application/json',
+			},
+			signal: AbortSignal.timeout(timeoutMs),
+		});
+		const body = await response.text();
+		return { ok: response.ok, status: response.status, body: body.slice(0, 4000) };
+	} catch {
 		return { ok: false, status: 0, body: '' };
 	}
 }

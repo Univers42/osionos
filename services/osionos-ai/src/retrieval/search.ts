@@ -4,6 +4,7 @@ import type { QueryRunner } from '../db.ts';
 import { Embedder } from '../indexer/embedder.ts';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 import { ROW_ALLOWED_SQL, WORKSPACE_ALLOWED_SQL, liveMemberWorkspaces } from './acl.ts';
+import { RERANK_TIMEOUT_MS, RerankError, rerank } from './rerank.ts';
 
 /**
  * The retrieval: the chunks that answer a question, in one statement.
@@ -77,6 +78,11 @@ export interface RetrievedChunk {
 	snippet: string;
 	/** The fused rank of the chunk. */
 	score: number;
+	/**
+	 * The cross-encoder score, in (0, 1). Present only when the reranker ran
+	 * (OSIONOS_AI_RERANK_URL) and answered for this question.
+	 */
+	rerankScore?: number;
 }
 
 /**
@@ -244,12 +250,12 @@ async function readable(
 	user: AuthUser,
 	workspaces: readonly string[],
 	limit: number,
-): Promise<RetrievedChunk[]> {
+): Promise<ReadableChunk[]> {
 	if (candidates.length === 0) return [];
 	const ids = [...new Set(candidates.map((candidate) => candidate.source_id))];
 	const pages = await readablePages(db, ids, user, workspaces);
 	const perPage = new Map<string, number>();
-	const kept: RetrievedChunk[] = [];
+	const kept: ReadableChunk[] = [];
 	for (const candidate of candidates) {
 		if (kept.length >= limit) break;
 		const page = pages.get(String(candidate.source_id).toLowerCase());
@@ -258,15 +264,83 @@ async function readable(
 		if (count >= MAX_CHUNKS_PER_PAGE) continue;
 		perPage.set(page.id, count + 1);
 		kept.push({
-			pageId: String(page.id),
-			blockId: candidate.block_id,
-			title: String(page.title ?? '') || candidate.title,
-			headingPath: candidate.heading_path,
-			snippet: snippet(candidate.content),
-			score: Number(candidate.score),
+			chunk: {
+				pageId: String(page.id),
+				blockId: candidate.block_id,
+				title: String(page.title ?? '') || candidate.title,
+				headingPath: candidate.heading_path,
+				snippet: snippet(candidate.content),
+				score: Number(candidate.score),
+			},
+			content: candidate.content,
 		});
 	}
 	return kept;
+}
+
+/** A chunk that passed the re-check, with its whole text (the snippet is cut). */
+interface ReadableChunk {
+	chunk: RetrievedChunk;
+	content: string;
+}
+
+/** The text the cross-encoder reads: where the chunk is, then the whole chunk. */
+function rerankText({ chunk, content }: ReadableChunk): string {
+	return chunk.headingPath.length > 0 ? `${chunk.headingPath}\n${content}` : content;
+}
+
+/** The wait for the reranker: OSIONOS_AI_RERANK_TIMEOUT_MS, else the default. */
+function rerankTimeoutMs(): number {
+	const raw = Number(process.env.OSIONOS_AI_RERANK_TIMEOUT_MS);
+	return Number.isFinite(raw) && raw > 0 ? raw : RERANK_TIMEOUT_MS;
+}
+
+/**
+ * The best `limit` chunks by cross-encoder score.
+ *
+ * The reranker is an improvement and never a dependency: when it times out,
+ * errors or answers nonsense, the fused order stands and the failure kind is
+ * logged (never the texts).
+ */
+async function rerankChunks(
+	baseUrl: string,
+	query: string,
+	candidates: readonly ReadableChunk[],
+	limit: number,
+): Promise<RetrievedChunk[]> {
+	try {
+		const scores = await rerank(baseUrl, query, candidates.map(rerankText), { timeoutMs: rerankTimeoutMs() });
+		return candidates
+			.map(({ chunk }, index) => ({ ...chunk, rerankScore: scores[index] }))
+			.sort((left, right) => (right.rerankScore ?? 0) - (left.rerankScore ?? 0))
+			.slice(0, limit);
+	} catch (error) {
+		const kind = error instanceof RerankError ? error.kind : 'unexpected';
+		console.warn(JSON.stringify({ event: 'rerank_fallback', kind }));
+		return candidates.slice(0, limit).map(({ chunk }) => chunk);
+	}
+}
+
+/**
+ * True when the reranker ran and even its best chunk scores under the
+ * threshold: nothing in the workspace answers the question.
+ *
+ * Caveat: a null threshold never abstains, and chunks without a rerank score
+ * (reranker off, or it failed and the fused order stands) never abstain
+ * either: without the cross-encoder there is no score to trust.
+ */
+export function shouldAbstain(chunks: readonly RetrievedChunk[], threshold: number | null): boolean {
+	if (threshold === null) return false;
+	const scores = chunks.flatMap((chunk) => (chunk.rerankScore === undefined ? [] : [chunk.rerankScore]));
+	return scores.length > 0 && Math.max(...scores) < threshold;
+}
+
+/** The threshold of OSIONOS_AI_ABSTAIN_THRESHOLD, or null when unset or not a number. */
+export function abstainThreshold(): number | null {
+	const raw = (process.env.OSIONOS_AI_ABSTAIN_THRESHOLD ?? '').trim();
+	if (raw.length === 0) return null;
+	const value = Number(raw);
+	return Number.isFinite(value) ? value : null;
 }
 
 /**
@@ -290,5 +364,13 @@ export async function retrieve(
 	if (workspaces.length === 0) return [];
 	const vector = await queryVector(embedder, question);
 	const candidates = await fuse(db, { workspaces, userId: user.userId, query: question, vector });
-	return readable(db, candidates, user, workspaces, Math.max(0, limit));
+	const rerankUrl = (process.env.OSIONOS_AI_RERANK_URL ?? '').trim();
+	if (rerankUrl.length === 0) {
+		const kept = await readable(db, candidates, user, workspaces, Math.max(0, limit));
+		return kept.map(({ chunk }) => chunk);
+	}
+	// The cross-encoder reads every fused candidate that survives the re-check.
+	const pool = await readable(db, candidates, user, workspaces, FUSED_LIMIT);
+	if (pool.length === 0) return [];
+	return rerankChunks(rerankUrl, question, pool, Math.max(0, limit));
 }

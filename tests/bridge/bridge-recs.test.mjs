@@ -15,8 +15,8 @@
  * What the route must hold:
  *   * the flag off answers the 404 of a route that does not exist, and reads
  *     nothing at all;
- *   * the opt-out ends the request: the user is told why, and NOTHING else is
- *     read (C48 — the opt-out stops the use, not only the capture);
+ *   * the opt-out reads no personal data: the user is told why, and only the
+ *     popular order is read (C48; bridge-recs-popular.test.mjs);
  *   * a champion that is not there, or a vector that cannot be computed, are
  *     answers with a reason and no item;
  *   * only the pages the caller may read are in the slate: a private page of
@@ -96,7 +96,7 @@ describe('the opt-out, the champion and the vector', () => {
 		const answer = await callRecs(stub, { userId: me });
 		assert.equal(answer.status, 200);
 		assert.deepEqual(answer.body, { ok: true, personalized: false, reason: 'opted_out', items: [] });
-		assert.deepEqual(stub.tables(), ['rpc/ai_rec_user_context']);
+		assert.deepEqual(stub.tables(), ['rpc/ai_rec_user_context', 'rpc/ai_rec_popular']);
 	});
 
 	it('answers no_model when there is no champion', async () => {
