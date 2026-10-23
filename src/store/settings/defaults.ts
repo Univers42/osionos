@@ -24,11 +24,10 @@ import type {
 } from './types';
 import { nowIso } from './settingsStoreUtils';
 
-export function defaultAccountSettings(userId: string, name?: string): AccountSettings {
+export function defaultAccountSettings(userId: string): AccountSettings {
   const timestamp = nowIso();
   return {
     userId,
-    profile: { preferredName: name },
     security: { hasPassword: true, twoStepEnabled: false, passkeysEnabled: false },
     supportAccessGrantedUntil: null,
     pendingDeletionAt: null,
