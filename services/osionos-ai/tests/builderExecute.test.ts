@@ -1,75 +1,16 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { after, before, describe, it } from 'node:test';
-import { SseStream, collect } from './sse.ts';
-import type { SseEvent } from './sse.ts';
+import type { Json } from './builderHarness.ts';
 
-process.env.OSIONOS_AI_BUILDERS = 'on';
 process.env.OSIONOS_AI_BUILD_BUDGET_MS = '500';
-const { startHarness, USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
-const { app, bridge, mock, postRun, tokenFor, createConversation, call } = await startHarness();
+const { harness, closeBuilderHarness, goodPlan, ask, asked } = await import('./builderHarness.ts');
+const { USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
+const { app, bridge, tokenFor, call } = harness;
 const { revalidateStoredPlan, flattenPlan } = await import('../src/builders/plan.ts');
-const { approvedKeys, writeOf, classify } = await import('../src/builders/execute.ts');
+const { approvedKeys, writeOf } = await import('../src/builders/execute.ts');
 const { allItems, pendingItems } = await import('../src/builders/items.ts');
 
-after(async () => {
-	await app.close();
-	await mock.close();
-	await bridge.close();
-});
-
-type Json = Record<string, unknown>;
-
-function goodPlan(patch: Json = {}): Json {
-	return {
-		workspaceId: WORKSPACE_A,
-		title: 'Sales workspace',
-		items: [
-			{
-				kind: 'page',
-				key: 'home',
-				title: 'Home',
-				blocks: [
-					{ type: 'heading_1', content: 'Welcome' },
-					{ type: 'database_inline', databaseKey: 'deals' },
-				],
-				children: [{ kind: 'page', key: 'notes', title: 'Notes' }],
-			},
-			{
-				kind: 'database',
-				key: 'deals',
-				title: 'Deals',
-				properties: [
-					{ name: 'Name', type: 'title' },
-					{ name: 'Stage', type: 'status', options: ['Open', 'Won'] },
-				],
-				views: [{ type: 'table', name: 'All' }],
-				rows: [{ values: { Name: 'Acme', Stage: 'Open' } }],
-			},
-		],
-		...patch,
-	};
-}
-
-async function ask(args: Json): Promise<SseEvent[]> {
-	mock.setOptions({
-		preDelayMs: 0,
-		chunkCount: 2,
-		chunkGapMs: 0,
-		fail: false,
-		toolCall: { name: 'build_plan', arguments: args },
-		toolCallTrigger: 'do it',
-		toolCallEveryStep: false,
-		parallelToolCalls: 1,
-		usage: null,
-	});
-	const conversationId = await createConversation();
-	return collect(new SseStream(await postRun(conversationId, randomUUID(), 'do it')));
-}
-
-function asked(events: SseEvent[]): SseEvent[] {
-	return events.filter((event) => event.event === 'permission.asked');
-}
+after(closeBuilderHarness);
 
 async function decide(approvalId: string, decision: string, token = tokenFor(USER_A, WORKSPACE_A), items?: string[]) {
 	return call(`/api/ai/approvals/${approvalId}`, {
