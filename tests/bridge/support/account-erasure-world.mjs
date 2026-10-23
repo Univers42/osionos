@@ -59,6 +59,8 @@ export function createErasureWorld({ users = [], objects = {} } = {}) {
 		erases: new Map(),
 		count: 0,
 		killAfter: 0,
+		banReply: null,
+		deleteReply: null,
 	};
 
 	function record(label, userId) {
@@ -152,11 +154,18 @@ export function createErasureWorld({ users = [], objects = {} } = {}) {
 				const unban = JSON.parse(init.body).ban_duration === 'none';
 				record(unban ? 'unban' : 'ban', user);
 				if (!unban) world.bannedAuth.add(user);
-				return ok();
+				const noEffect = world.banReply === 'no_effect' && !unban;
+				const bannedUntil = unban ? null : new Date(clock.at + 100 * 365 * 24 * 3_600_000).toISOString();
+				return new Response(JSON.stringify(noEffect ? {} : { banned_until: bannedUntil }), { status: 200 });
 			}
 			if (text.includes('/auth/v1/admin/users/') && method === 'DELETE') {
 				record('gotrue_delete', user);
+				if (world.deleteReply === 'kong') return new Response('{"message":"no Route matched with those values"}', { status: 404 });
 				world.deletedAuth.add(user);
+				if (world.deleteReply === 'gone') {
+					world.requests.delete(user);
+					return new Response('{"code":404,"error_code":"user_not_found","msg":"User not found"}', { status: 404 });
+				}
 				world.requests.delete(user);
 				return ok();
 			}
