@@ -29,6 +29,11 @@ await new Promise<void>((resolve) => {
 });
 const address = app.server.address();
 const base = `http://127.0.0.1:${address && typeof address === 'object' ? address.port : 0}`;
+// The server starts at import, so it closes at file level: closed inside the suite, a skipped suite left it
+// listening and the file never exited (the whole service suite hung 30 min without the sentiment migration, 2026-10-23).
+after(async () => {
+	await app.close();
+});
 
 const VIEWER = randomUUID();
 const STRANGER = randomUUID();
@@ -82,7 +87,6 @@ describe('the sentiment pulse and thread mood', { timeout: 60_000, skip: ready &
 
 	after(async () => {
 		await pool.query('delete from public.osionos_workspace_members where workspace_id = $1', [WS_PRIVATE]);
-		await app.close();
 	});
 
 	it('C140 k: a past week with 4 distinct authors is absent; with 5 it is present with the right counts', async () => {
