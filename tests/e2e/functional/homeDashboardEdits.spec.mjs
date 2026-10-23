@@ -17,6 +17,8 @@
 
 import { expect, test } from "@playwright/test";
 
+import { cachedHomeUpdatedAt, settledHomeUpdatedAt } from "../support/homeCache.mjs";
+
 /** The rail's Home button: it opens the home-surface menu. */
 function railHome(page) {
   return page.locator('[role="tab"][aria-label="Home"]');
@@ -74,20 +76,25 @@ test.describe("home dashboard edits", () => {
     await deleteHomeBlock(page, "home-events-block-title");
 
     // A reload: the page comes back from the local cache.
+    const updatedAtBeforeReload = await settledHomeUpdatedAt(page);
     await page.reload();
     await openHome(page);
 
     await expect(page.getByText("My own home note")).toBeVisible();
     await expect(homeBlock(page, "home-learn-block-title")).toHaveCount(0);
     await expect(homeBlock(page, "home-events-block-title")).toHaveCount(0);
+    // The reload did not re-seed: the cached Home page keeps its stamp.
+    expect(await cachedHomeUpdatedAt(page)).toBe(updatedAtBeforeReload);
 
     // A second reload: the page is not re-seeded again.
+    const updatedAtBeforeSecondReload = await settledHomeUpdatedAt(page);
     await page.reload();
     await openHome(page);
 
     await expect(page.getByText("My own home note")).toBeVisible();
     await expect(homeBlock(page, "home-learn-block-title")).toHaveCount(0);
     await expect(homeBlock(page, "home-events-block-title")).toHaveCount(0);
+    expect(await cachedHomeUpdatedAt(page)).toBe(updatedAtBeforeSecondReload);
   });
 
   test("a re-seed of the Home keeps the user's own blocks", async ({ page, baseURL }) => {
