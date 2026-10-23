@@ -225,8 +225,14 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		listForPages,
 		async list(config, workspaceId, resourceId) {
 			const params = { select: SELECT, workspace_id: `eq.${workspaceId}`, order: 'created_at.asc', limit: String(LIST_LIMIT) };
-			if (resourceId != null) params.resource_id = `eq.${resourceId}`;
-			return (await call(config, query(params))).map(toApiRule);
+			if (resourceId == null) return (await call(config, query(params))).map(toApiRule);
+			// A resource's effective grant also depends on the workspace-wide rules
+			// (resource_id = ''), so both reads answer; the Share dialog filters its own view.
+			const [own, wide] = await Promise.all([
+				call(config, query({ ...params, resource_id: `eq.${String(resourceId).toLowerCase()}` })),
+				resourceId === '' ? [] : call(config, query({ ...params, resource_id: 'eq.' })),
+			]);
+			return [...own, ...wide].map(toApiRule);
 		},
 		async upsert(config, rule) {
 			const body = { ...rule, updated_at: new Date().toISOString() };
