@@ -112,16 +112,10 @@ function fmt(n) {
 	return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-// The paths come from the command line, so the report reads only inside the run's shared directory.
+// The paths come from the command line, so the report reads files by name, inside the run's shared directory only.
 const SHARED_DIR = path.resolve(process.env.LOAD_SHARED_DIR ?? '/home/dlesieur/wt-ai-night/tmp');
 function sharedFile(arg) {
-	if (!arg) return undefined;
-	const file = path.resolve(SHARED_DIR, arg);
-	if (!file.startsWith(SHARED_DIR + path.sep)) {
-		console.error(`report.mjs reads only under ${SHARED_DIR} (LOAD_SHARED_DIR): ${arg}`);
-		process.exit(2);
-	}
-	return file;
+	return arg ? path.join(SHARED_DIR, path.basename(arg)) : undefined;
 }
 
 function main() {
