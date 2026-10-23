@@ -15,8 +15,10 @@ import React, { useEffect, useState } from 'react';
 // jszip / i18next / pdf-lib / qrcode are click-path only (export, language
 // change, invoice PDF, 2FA QR): they are imported dynamically at their call
 // sites so the settings chunk stays lean (~280KB of deps off its parse path).
+import { changeUsername } from '@/shared/api/accountSecurityApi';
 import { Button, Modal, useToastStore } from '@/shared/ui';
-import { useAccountEmailsStore } from '@/store/settings';
+import { useAccountEmailsStore, useAccountProfileStore } from '@/store/settings';
+import { useSudoPromptStore } from '../ui/sudo/sudoPromptModel';
 import { DataTable } from '../ui/settingsKit';
 import { accountActionNotice, runAccountAction, runAsync } from '../model/settingsCalls';
 
@@ -47,6 +49,75 @@ export const EmailManagerModal: React.FC<{ userId: string; fallbackEmail?: strin
         <div className="flex gap-2">
           <input className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
           <Button tone="primary" onClick={() => { if (emailDraft.includes('@')) { runAsync(addEmail(emailDraft, userId)); setEmailDraft(''); } }}>Add email</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// The bridge's rule (P1-1): 3-32 characters, a letter, digit or underscore first.
+export const USERNAME_SHAPE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{2,31}$/;
+
+const USERNAME_PROBLEMS: Record<string, string> = {
+  username_unavailable: 'That name is not available.',
+  invalid_username: 'Use 3 to 32 letters, digits, dots, dashes or underscores.',
+};
+
+export const UsernameModal: React.FC<{ current: string; onClose: () => void }> = ({ current, onClose }) => {
+  const hydrateProfile = useAccountProfileStore((state) => state.hydrate);
+  const grants = useSudoPromptStore((state) => state.grants);
+  const toast = useToastStore((state) => state.push);
+  const [draft, setDraft] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState('');
+  const [needsSudo, setNeedsSudo] = useState(false);
+  const [grantsAtRefusal, setGrantsAtRefusal] = useState(grants);
+  const shapeOk = USERNAME_SHAPE.test(draft);
+  // "Try again" is offered once the prompt granted sudo; nothing re-sends by itself.
+  const canRetry = !needsSudo || grants > grantsAtRefusal;
+
+  async function submit() {
+    setBusy(true);
+    setProblem('');
+    const outcome = await changeUsername(draft);
+    setBusy(false);
+    if (outcome.ok) {
+      await hydrateProfile();
+      toast({ kind: 'success', title: 'Username changed' });
+      onClose();
+      return;
+    }
+    if (outcome.reason === 'sudo_required') {
+      setNeedsSudo(true);
+      setGrantsAtRefusal(grants);
+      setProblem("Confirm it's you first, then press Try again.");
+      return;
+    }
+    setNeedsSudo(false);
+    if (outcome.reason === 'unavailable') setProblem("Changing the username isn't available on this server yet.");
+    else if (outcome.reason === 'rate_limited') setProblem('You changed your username too often. Try again later.');
+    else if (outcome.reason === 'refused' || outcome.reason === 'failed') setProblem(USERNAME_PROBLEMS[outcome.code] ?? outcome.message);
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Change username" size="sm">
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <label htmlFor="account-username-input" className="block text-sm font-medium text-[var(--osio-fg-default)]">Username</label>
+          <input
+            id="account-username-input"
+            className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]"
+            value={draft}
+            aria-invalid={draft !== current && !shapeOk ? true : undefined}
+            aria-describedby="account-username-hint"
+            onChange={(event) => { setDraft(event.target.value); setProblem(''); }}
+          />
+          <p id="account-username-hint" className="text-xs text-[var(--osio-fg-muted)]">3 to 32 letters, digits, dots, dashes or underscores.</p>
+        </div>
+        {problem && <p role="alert" className="text-sm text-[var(--osio-danger)]">{problem}</p>}
+        <div className="flex justify-end gap-2">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button tone="primary" disabled={busy || !shapeOk || draft === current || !canRetry} onClick={() => { void submit(); }}>{needsSudo ? 'Try again' : 'Change username'}</Button>
         </div>
       </div>
     </Modal>
@@ -142,14 +213,6 @@ export const PasskeyManagerModal: React.FC<{ passkeys: Array<{ _id: string; nick
         <Button key={`${passkey._id}-remove`} tone="danger-subtle" onClick={() => onRemove(passkey._id)}>Remove</Button>,
       ])} />
       <div className="flex justify-end gap-2"><Button onClick={onClose}>Done</Button><Button tone="primary" onClick={onAdd}>Add passkey</Button></div>
-    </div>
-  </Modal>
-);
-
-export const SupportDurationModal: React.FC<{ onSelect: (days: number) => void; onClose: () => void }> = ({ onSelect, onClose }) => (
-  <Modal open onClose={onClose} title="Support access duration" size="sm">
-    <div className="grid gap-2">
-      {[1, 7, 30].map((days) => <Button key={days} onClick={() => onSelect(days)}>{days === 1 ? '1 day' : `${days} days`}</Button>)}
     </div>
   </Modal>
 );

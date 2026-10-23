@@ -28,7 +28,8 @@ export function defaultAccountSettings(userId: string): AccountSettings {
   const timestamp = nowIso();
   return {
     userId,
-    security: { hasPassword: true, twoStepEnabled: false, passkeysEnabled: false },
+    // Empty on purpose: the sign-in methods are only what the server reports, never a guess.
+    security: {},
     supportAccessGrantedUntil: null,
     pendingDeletionAt: null,
     removedAt: null,

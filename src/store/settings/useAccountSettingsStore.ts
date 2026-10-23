@@ -43,9 +43,11 @@ export const useAccountSettingsStore = create<AccountSettingsStore>()(
         set({ loading: true, error: null });
         try {
           const remote = await trySettingsGet<AccountSettings>('/api/account/settings');
-          set({ data: remote ?? get().data ?? fallback(userId), loading: false, error: null });
+          // Without a server answer, drop any persisted sign-in claims: a stale `hasPassword: true` must not count as reported.
+          const offline = { ...(get().data ?? fallback(userId)), security: {} };
+          set({ data: remote ?? offline, loading: false, error: null });
         } catch (error) {
-          set({ data: get().data ?? fallback(userId), loading: false, error: errorMessage(error) });
+          set({ data: { ...(get().data ?? fallback(userId)), security: {} }, loading: false, error: errorMessage(error) });
           pushSettingsError('Account settings unavailable', error);
         }
       },

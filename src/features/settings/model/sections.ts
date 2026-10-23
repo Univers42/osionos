@@ -41,22 +41,30 @@ import {
   UserX,
 } from "lucide-react";
 
+import { isAccountDeleteEnabled } from "@/shared/config/featureFlags";
+
 import type { SettingsAnchor, SettingsSection } from "./sectionTypes";
 
 export { SETTINGS_GROUPS } from "./sectionTypes";
 export type { SettingsAnchor, SettingsGroup, SettingsGroupId, SettingsSection, SettingsSectionId } from "./sectionTypes";
 
+const DANGER_ANCHOR: SettingsAnchor = { id: "danger", label: "Delete account", keywords: ["delete", "close", "remove account"] };
+
+const PROFILE_ANCHORS: readonly SettingsAnchor[] = [
+  { id: "public-profile", label: "Public profile", keywords: ["name", "pronouns", "bio", "website", "links", "company", "location", "orcid", "patreon", "avatar", "photo"], description: "Edit your public profile." },
+  { id: "account-security", label: "Account security", keywords: ["email", "password", "verification", "passkey", "two step"] },
+  { id: "devices", label: "Devices", keywords: ["sessions", "logout", "device"] },
+  { id: "user-id", label: "User ID", keywords: ["copy", "id", "identifier"] },
+];
+
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: "profile", group: "account", label: "Profile", title: "Profile",
     subtitle: "Manage your profile, login information, and devices", icon: User,
-    anchors: [
-      { id: "public-profile", label: "Public profile", keywords: ["name", "pronouns", "bio", "website", "links", "company", "location", "orcid", "patreon", "avatar", "photo"], description: "Edit your public profile." },
-      { id: "account-security", label: "Account security", keywords: ["email", "password", "verification", "passkey", "two step"] },
-      { id: "support", label: "Support access", keywords: ["support", "access", "delete account"] },
-      { id: "devices", label: "Devices", keywords: ["sessions", "logout", "device"] },
-      { id: "user-id", label: "User ID", keywords: ["copy", "id", "identifier"] },
-    ],
+    // A getter so the palette and search read the flag when they run: a hidden row is never offered.
+    get anchors(): readonly SettingsAnchor[] {
+      return [...PROFILE_ANCHORS, ...(isAccountDeleteEnabled() ? [DANGER_ANCHOR] : [])];
+    },
   },
   {
     id: "preferences", group: "account", label: "Preferences", title: "Preferences",
@@ -232,9 +240,8 @@ export interface SettingsSearchHit {
 }
 
 /** Registry order — an empty query answers with the same list the nav shows. */
-const ALL_HITS: readonly SettingsSearchHit[] = SETTINGS_SECTIONS.flatMap((section) =>
-  section.anchors.map((anchor) => ({ section, anchor })),
-);
+const allHits = (): readonly SettingsSearchHit[] =>
+  SETTINGS_SECTIONS.flatMap((section) => section.anchors.map((anchor) => ({ section, anchor })));
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
@@ -242,10 +249,10 @@ function normalize(value: string): string {
 
 export function searchSettings(query: string): SettingsSearchHit[] {
   const normalized = normalize(query);
-  if (!normalized) return [...ALL_HITS];
+  if (!normalized) return [...allHits()];
   const terms = normalized.split(/\s+/).filter(Boolean);
 
-  return ALL_HITS.map((hit) => {
+  return allHits().map((hit) => {
       const haystack = normalize([
         hit.anchor.label,
         hit.anchor.description ?? "",
