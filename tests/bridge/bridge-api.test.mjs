@@ -213,6 +213,26 @@ describe('osionos bridge receiver', () => {
 		assert.equal(result.email, 'owner@example.com');
 	});
 
+	it('accepts the signed emailVerified claim and rejects non-boolean values', () => {
+		const verifiedPayload = { ...payload, emailVerified: true };
+		const timestamp = String(now);
+		const normalized = validateBridgePayload(verifiedPayload);
+		assert.equal(normalized.emailVerified, true);
+		const signature = bridgeSignature(secret, timestamp, normalized);
+		const result = verifyBridgeRequest({
+			headers: {
+				'x-prismatica-bridge-timestamp': timestamp,
+				'x-prismatica-bridge-signature': signature,
+			},
+			payload: verifiedPayload,
+			secret,
+			now,
+			replayStore: new Map(),
+		});
+		assert.equal(result.emailVerified, true);
+		assert.throws(() => validateBridgePayload({ ...payload, emailVerified: 'true' }), /emailVerified must be a boolean/);
+	});
+
 	it('rejects tampered signatures and stale timestamps', () => {
 		const timestamp = String(now);
 		const signature = bridgeSignature(secret, timestamp, validateBridgePayload(payload));
