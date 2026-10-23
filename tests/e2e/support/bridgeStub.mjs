@@ -12,7 +12,7 @@ export async function stubBridge(page, respond) {
       "access-control-allow-origin": request.headers().origin ?? "*",
       "access-control-allow-credentials": "true",
       "access-control-allow-headers": "*",
-      "access-control-allow-methods": "GET, POST, PATCH, DELETE, OPTIONS",
+      "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     };
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers });
     const answer = respond(new URL(request.url()), request) ?? { status: 503, json: {} };

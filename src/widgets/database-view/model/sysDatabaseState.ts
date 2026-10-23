@@ -30,6 +30,7 @@ import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
 import { sysSourceById, SYS_VIEW_TYPE, type SysColumnType, type SysSource } from "./sysDataSources";
 import type { SysTransport } from "./sysDatabaseTransport";
+import { deleteSavedView, diffViews, fetchSavedViews, saveSavedView } from "./sysDatabaseViews";
 import { synthOptions } from "./workspaceDatabaseMappers";
 
 type Row = Record<string, unknown>;
@@ -151,6 +152,10 @@ export const clearSysSourceStateCache = (): void => { cache.clear(); };
 class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   private readonly subscribers = new Set<(event: ChangeEvent) => void>();
   private readonly watchers = new Set<(status: SysStatus) => void>();
+  private readonly failureWatchers = new Set<(message: string) => void>();
+  // What the bridge holds, as of the last load or confirmed write. The host's own diff
+  // alone re-saves a loaded view after a reload (its baseline is the pre-load state).
+  private held: NotionState["views"] = {};
 
   private readonly sourceId: string;
   private readonly transport: SysTransport;
@@ -163,10 +168,16 @@ class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   async loadState(): Promise<NotionState> {
     const signal = sysSessionSignal();
     try {
-      const loaded = await loadSysSourceState(this.sourceId, this.transport);
-      if (sysSessionSignal() === signal) cache.set(this.sourceId, loaded);
+      // Saved views are an extra: a failure there never hides the rows.
+      const [loaded, saved] = await Promise.all([
+        loadSysSourceState(this.sourceId, this.transport),
+        fetchSavedViews(this.slug(), this.transport).catch(() => ({})),
+      ]);
+      this.held = { ...saved };
+      const merged: SysLoaded = { ...loaded, state: { ...loaded.state, views: { ...saved, ...loaded.state.views } } };
+      if (sysSessionSignal() === signal) cache.set(this.sourceId, merged);
       this.announce({ truncated: loaded.truncated, error: null });
-      return loaded.state;
+      return merged.state;
     } catch (error) {
       cache.delete(this.sourceId);
       this.announce({ truncated: false, error: error instanceof Error ? error.message : "Could not load your data." });
@@ -205,7 +216,43 @@ class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   // change (views only) is the viewer's own and must survive.
   persistState = (next: NotionState, previous?: NotionState): void => {
     if (previous && viewStateChanged({ ...next, views: {} }, { ...previous, views: {} })) this.reload();
+    this.persistViews(next, previous);
   };
+
+  // Only `views` leaves here, and only the ones that differ from the host's previous state.
+  private persistViews(next: NotionState, previous?: NotionState): void {
+    // No baseline, no diff: the host's own post-load persist (with the record limit's
+    // loadLimit already folded in) must not be mistaken for an edit.
+    const source = sysSourceById(this.sourceId);
+    if (!source || !previous) return;
+    const edit = diffViews(next.views, previous.views, source.defaultViewId);
+    const unsent = diffViews(next.views, this.held, source.defaultViewId);
+    const sendable = new Set(unsent.saved.map(([id]) => id));
+    const goneable = new Set(unsent.removed);
+    for (const [id, view] of edit.saved.filter(([id]) => sendable.has(id))) {
+      saveSavedView(source.source, id, view, this.transport)
+        .then(() => { this.held = { ...this.held, [id]: view }; })
+        .catch((error: unknown) => this.failed(error));
+    }
+    for (const id of edit.removed.filter((id) => goneable.has(id))) {
+      deleteSavedView(source.source, id, this.transport)
+        .then(() => { const rest = { ...this.held }; delete rest[id]; this.held = rest; })
+        .catch((error: unknown) => this.failed(error));
+    }
+  }
+
+  // The bridge names a source by its slug (`my-pages`); the database id is `sys:my-pages`.
+  private slug(): string { return sysSourceById(this.sourceId)?.source ?? this.sourceId; }
+
+  private failed(error: unknown): void {
+    const message = error instanceof Error ? error.message : "Could not save this view.";
+    for (const watcher of this.failureWatchers) watcher(message);
+  }
+
+  watchSaveFailure(callback: (message: string) => void): () => void {
+    this.failureWatchers.add(callback);
+    return () => { this.failureWatchers.delete(callback); };
+  }
 
   subscribe(callback: (event: ChangeEvent) => void): () => void {
     this.subscribers.add(callback);
