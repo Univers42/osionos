@@ -25,7 +25,7 @@ import { mintPatSecret } from '../../scripts/bridge-pat-store.mjs';
 import { memberWorkspaceEntries } from '../../scripts/bridge-api.mjs';
 import { installResponseMask, patWritePayload, PAT_ROUTES } from '../../scripts/bridge-pat-middleware.mjs';
 import { PAT_TABLE } from './support/pat-postgrest.mjs';
-import { auditRows, bearer, everythingSent, fakeRequest, fakeResponse, fineGrained, HOME, OWNER, PAGE, patRow, startPatWorld } from './support/pat-world.mjs';
+import { auditRows, bearer, EXPECTED_ROUTES, everythingSent, fakeRequest, fakeResponse, fineGrained, HOME, OWNER, PAGE, patRow, routeSignatures, startPatWorld } from './support/pat-world.mjs';
 
 const PAGE_PATH = `/api/pages/${PAGE}`;
 const claimsOf = (header) => JSON.parse(Buffer.from(header.split('.')[1], 'base64url').toString('utf8'));
@@ -137,10 +137,9 @@ describe('the route allowlist is the whole surface', () => {
 		assert.ok(reads.every((call) => call.claims === null && call.params.has('token_hash')));
 	});
 
-	it('lists exactly the six routes', () => {
-		assert.deepEqual(PAT_ROUTES.map((route) => `${route.method} ${route.permission}`).sort(), ['GET read', 'GET read', 'GET read', 'PATCH write', 'POST write', 'POST write']);
-	});
-});
+	it('lists exactly the six routes, each by method, path and permission', () => {
+		assert.deepEqual(routeSignatures(PAT_ROUTES), EXPECTED_ROUTES);
+	});});
 
 describe('the scope has to cover the route', () => {
 	it('refuses a read-only token on PATCH with 403 pat_scope_denied and leaves the page alone', async (t) => {

@@ -23,7 +23,7 @@ import { IDS, send, sessionHeaders, teamPage } from './support/bridge-harness.mj
 import { installResponseMask, patWritePayload, PAT_ROUTES } from '../../scripts/bridge-pat-middleware.mjs';
 import { PAT_RESOURCES } from '../../scripts/bridge-pat-permissions.mjs';
 import { PAT_TABLE } from './support/pat-postgrest.mjs';
-import { bearer, fakeRequest, fakeResponse, fineGrained, HOME, OWNER, PAGE, patRow, startPatWorld } from './support/pat-world.mjs';
+import { bearer, EXPECTED_ROUTES, fakeRequest, fakeResponse, fineGrained, HOME, OWNER, PAGE, patRow, routeSignatures, startPatWorld } from './support/pat-world.mjs';
 
 const ALL = ['create', 'read', 'update', 'delete', 'admin'];
 const SECOND = 'a9a9a9a9-1111-4111-8111-a9a9a9a9a9a9';
@@ -89,7 +89,8 @@ describe('each MCP route passes the right scope and refuses the wrong one', () =
 describe('a route outside the table stays refused', () => {
 	const outside = [
 		['DELETE', `/api/pages/${PAGE}`], ['GET', '/api/account/tokens'], ['POST', '/api/auth/bridge/session'],
-		['GET', `/api/blocks?pageId=${PAGE}`], ['GET', '/api/pages'], ['POST', `/api/pages/${PAGE}`], ['GET', `/api/pages/${PAGE}/blocks`],
+		['GET', `/api/blocks?pageId=${PAGE}`], ['GET', '/api/pages'],
+		['GET', `/api/workspaces/${HOME}`], ['GET', '/api/workspaces/'], ['GET', '/api/pages/all/x'], ['GET', '/api/pages/all/'], ['POST', '/api/pages/'], ['POST', `/api/pages/${PAGE}/blocks/x`], ['POST', `/api/pages/${PAGE}/blocksX`], ['POST', `/api/pages/${PAGE}/blocks/`], ['POST', `/api/pages/${PAGE}`], ['GET', `/api/pages/${PAGE}/blocks`],
 	];
 
 	it('answers 403 pat_route_not_allowed for each, with a token that holds both scopes', async (t) => {
@@ -101,10 +102,9 @@ describe('a route outside the table stays refused', () => {
 		}
 	});
 
-	it('lists exactly the six routes', () => {
-		assert.deepEqual(PAT_ROUTES.map((route) => `${route.method} ${route.permission}`).sort(), ['GET read', 'GET read', 'GET read', 'PATCH write', 'POST write', 'POST write']);
-	});
-});
+	it('lists exactly the six routes, each by method, path and permission', () => {
+		assert.deepEqual(routeSignatures(PAT_ROUTES), EXPECTED_ROUTES);
+	});});
 
 describe('the page list is masked per row', () => {
 	it('keeps only _id and title of every row for a [_id, title] token', async (t) => {
@@ -237,8 +237,28 @@ describe('a token reaches only its owner’s workspaces', () => {
 	it('refuses to create a page in another user’s workspace and writes no row', async (t) => {
 		const { world, secret } = await viaPat(t, classic('pages:write'));
 		const answer = await send(world.base, '/api/pages', bearer(secret), { method: 'POST', body: JSON.stringify({ workspaceId: IDS.homeB, title: 'Planted' }) });
-		assert.ok([403, 404].includes(answer.status), answer.text);
+		assert.equal(answer.status, 403, answer.text);
 		assert.ok(!world.pages.rows('osionos_pages').some((entry) => entry.title === 'Planted'));
+	});
+});
+
+describe('a write token appends and creates only where its owner may', () => {
+	it('answers exactly 404 to an append on another user’s page and calls no RPC', async (t) => {
+		const { world, secret } = await viaPat(t, classic('pages:write'));
+		const answer = await send(world.base, `/api/pages/${IDS.pageB}/blocks`, bearer(secret), { method: 'POST', body: JSON.stringify(MCP_APPEND) });
+		assert.equal(answer.status, 404, answer.text);
+		assert.deepEqual(rpcCalls(world), []);
+	});
+
+	// Pins today's behaviour: ownerId is ignored, collaborators is stored. Narrowing either is a visible change.
+	it('stores collaborators from a classic token’s create and ignores ownerId', async (t) => {
+		const { world, secret } = await viaPat(t, classic('pages:write'));
+		const body = { workspaceId: HOME, title: 'Shared', ownerId: IDS.userB, collaborators: [IDS.userB] };
+		const answer = await send(world.base, '/api/pages', bearer(secret), { method: 'POST', body: JSON.stringify(body) });
+		assert.equal(answer.status, 201, answer.text);
+		const stored = world.pages.rows('osionos_pages').find((entry) => entry.title === 'Shared');
+		assert.equal(stored.owner_id, OWNER);
+		assert.deepEqual(stored.collaborators, [IDS.userB]);
 	});
 });
 
