@@ -141,6 +141,8 @@ for (const id of goldenRefIds) {
 }
 
 // --- Near-duplicate check: llm-drafted vs golden, and llm-drafted vs llm-drafted ---
+// Caveat: word overlap misses a paraphrase that rewords a golden question ("Combien de pourcentage de
+// remise…" against q66 scored under 0.6 and passed); only the human validation catches those.
 const goldenWordSets = new Map(goldenQuestions.map((q) => [q.id, contentWordSet(q.q)]));
 const llmDraftedQuestions = questions.filter((q) => q.origin === "llm-drafted");
 const llmWordSets = new Map(llmDraftedQuestions.map((q) => [q.id, contentWordSet(q.q)]));
