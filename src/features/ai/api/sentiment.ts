@@ -25,8 +25,10 @@ import {
   parseSettings,
   parseThreadMood,
   type Pulse,
+  type SentimentLabel,
   type ThreadMood,
 } from "@/features/ai/model/sentimentPulse";
+import { parseRowSentiments } from "@/features/ai/model/sentimentRows";
 
 const malformed = (): AiError => new AiError(502, "bad_answer", "The AI service answered something unexpected.");
 
@@ -56,4 +58,19 @@ export async function getPulse(workspaceId: string, weeks = 12): Promise<Pulse> 
 /** `GET /pages/:id/sentiment/mood` — the mood of a thread, or null when there is none to show. */
 export async function getThreadMood(pageId: string): Promise<ThreadMood | null> {
   return parseThreadMood(await requestJson<unknown>("GET", `/pages/${encodeURIComponent(pageId)}/sentiment/mood`));
+}
+
+/** `GET /sentiment/rows?databaseId=&propertyId=` — the AI-filled labels of one
+ *  database column, keyed by row id. Owner-only; `{}` when off or unreadable. */
+export async function getRowSentiments(
+  databaseId: string,
+  propertyId: string,
+): Promise<Record<string, SentimentLabel>> {
+  const answer = await requestJson<unknown>(
+    "GET",
+    `/sentiment/rows?databaseId=${encodeURIComponent(databaseId)}&propertyId=${encodeURIComponent(propertyId)}`,
+  );
+  const rows = parseRowSentiments(answer);
+  if (!rows) throw malformed();
+  return rows;
 }

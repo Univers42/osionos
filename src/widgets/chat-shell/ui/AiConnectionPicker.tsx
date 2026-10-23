@@ -35,6 +35,7 @@ import {
   writeAiSelection,
   type AiSelection,
 } from "@/features/ai/model/aiSelection";
+import { DEVICE_CONNECTION_ID, readDeviceEngine } from "@/features/ai/model/deviceEngine";
 
 interface Props {
   /** The choice right now. */
@@ -51,7 +52,17 @@ interface Props {
 
 export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionChange }) => {
   const [connections, setConnections] = useState<AiConnection[]>([]);
-  const [modelsByConnection, setModelsByConnection] = useState<Record<string, AiModel[]>>({});
+  const [serviceModels, setServiceModels] = useState<Record<string, AiModel[]>>({});
+
+  const [deviceEngine] = useState(readDeviceEngine);
+
+  const modelsByConnection = React.useMemo(
+    () =>
+      deviceEngine
+        ? { ...serviceModels, [DEVICE_CONNECTION_ID]: [{ id: deviceEngine.model, label: deviceEngine.model, default: true }] }
+        : serviceModels,
+    [deviceEngine, serviceModels],
+  );
 
   // The callback lives in a ref: a parent that builds it anew on every render
   // must not restart the loading.
@@ -90,13 +101,15 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionC
   // where a stale choice lands.
   useEffect(() => {
     let alive = true;
-    const ids = Array.from(new Set([PLATFORM_CONNECTION_ID, value.connectionId]));
+    const ids = Array.from(new Set([PLATFORM_CONNECTION_ID, value.connectionId])).filter(
+      (id) => id !== DEVICE_CONNECTION_ID,
+    );
     void Promise.all(
       ids.map(async (id) => [id, await listModels(id)] as const),
     )
       .then((entries) => {
         if (!alive) return;
-        setModelsByConnection(Object.fromEntries(entries));
+        setServiceModels(Object.fromEntries(entries));
       })
       .catch(() => undefined);
     return () => {
@@ -107,11 +120,14 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionC
   // A stale choice is fixed here, quietly: the platform connection and its
   // default model.
   useEffect(() => {
-    if (connections.length === 0) return;
-    const resolved = resolveAiSelection(value, connections, modelsByConnection);
+    if (connections.length === 0 && !deviceEngine) return;
+    const availableConnections = deviceEngine
+      ? [...connections, { id: DEVICE_CONNECTION_ID }]
+      : connections;
+    const resolved = resolveAiSelection(value, availableConnections, modelsByConnection);
     if (resolved.connectionId === value.connectionId && resolved.model === value.model) return;
     apply(resolved);
-  }, [apply, connections, modelsByConnection, value]);
+  }, [apply, connections, deviceEngine, modelsByConnection, value]);
 
   // Whether the chosen model sees images. The picker is the one that holds the
   // models, so it is the one that says: the composer only shows the button.
@@ -127,16 +143,23 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionC
     onVisionChangeRef.current?.(sees);
   }, [sees]);
 
-  const connectionOptions = connections.map((connection) => ({
-    value: connection.id,
-    label: connection.label,
-  }));
+  const connectionOptions = [
+    ...connections.map((connection) => ({
+      value: connection.id,
+      label: connection.label,
+    })),
+    ...(deviceEngine ? [{ value: DEVICE_CONNECTION_ID, label: "This device" }] : []),
+  ];
   const modelOptions = (modelsByConnection[value.connectionId] ?? []).map((model) => ({
     value: model.id,
     label: model.vision ? `${model.label} (sees images)` : model.label,
   }));
 
   const onConnectionChange = (nextId: string) => {
+    if (nextId === DEVICE_CONNECTION_ID && deviceEngine) {
+      apply({ connectionId: nextId, model: deviceEngine.model });
+      return;
+    }
     const models = modelsByConnection[nextId] ?? [];
     if (models.length > 0) {
       apply({ connectionId: nextId, model: defaultModelId(models) });
@@ -145,7 +168,7 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionC
     // The models of a connection we have not seen yet.
     void listModels(nextId)
       .then((list) => {
-        setModelsByConnection((current) => ({ ...current, [nextId]: list }));
+        setServiceModels((current) => ({ ...current, [nextId]: list }));
         apply({ connectionId: nextId, model: defaultModelId(list) });
       })
       .catch(() => undefined);

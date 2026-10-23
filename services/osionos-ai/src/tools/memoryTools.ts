@@ -20,6 +20,7 @@ const rememberArgs = z.object({
 
 export interface RememberData {
 	id: string;
+	body: string;
 }
 
 export function rememberTool(run: {
@@ -45,11 +46,11 @@ export function rememberTool(run: {
 				return { ok: false, error: outcome.reason === 'too_many_pending' ? 'the user has too many proposals waiting' : 'the text is not a valid memory' };
 			}
 			proposals += 1;
-			return { ok: true, data: { id: outcome.memory.id } };
+			return { ok: true, data: { id: outcome.memory.id, body: outcome.memory.body } };
 		},
 		render: (data) =>
 			`Proposed for the user's approval (id ${data.id}). It is not remembered until the user approves it in Settings › AI memory.`,
 		sources: () => [],
-		proposed: (data) => ({ id: data.id }),
+		proposed: (data) => ({ id: data.id, body: data.body }),
 	};
 }
