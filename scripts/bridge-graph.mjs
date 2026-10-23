@@ -17,7 +17,8 @@
  * (folders are organizing "gap" nodes). Edges are:
  *   - `parent`   : the file/folder hierarchy (child -> parent_page_id),
  *   - `relation` : explicit page<->page links from `relation`-typed properties,
- *   - `tagged`   : tag-by-name (a `tags` node per distinct tag value).
+ *   - `tagged`   : tag-by-name (a `tags` node per distinct tag value),
+ *   - `link`     : the inline [[page:]] links, read live from osionos_page_links.
  * Folders are kept as nodes so a note nested under a folder is NOT orphaned — the
  * earlier version excluded folders, which dropped every parent edge. Owner-scoping
  * is done by the caller (handleGraphPages); this module is side-effect-free.
@@ -84,8 +85,15 @@ function pageNode(row) {
 	};
 }
 
-/** Build the page graph of `rows` (already filtered to what the caller may read): page+folder nodes + parent + relation + tag edges. */
-export function pagesToGraph(rows) {
+/**
+ * Build the page graph of `rows` (already filtered to what the caller may read): page+folder nodes + parent + relation + tag edges.
+ *
+ * `links` are the inline [[page:]] edges, already read live and already checked
+ * on BOTH ends by the edge-read module (scripts/bridge-graph-edges.mjs): an
+ * edge whose endpoint is not a node of this graph is dropped here, so the
+ * answer never carries a dangling end.
+ */
+export function pagesToGraph(rows, links = []) {
 	const pages = (Array.isArray(rows) ? rows : []).filter(isGraphPageRow);
 	const ids = new Set(pages.map((row) => String(row.id)));
 	const nodes = pages.map(pageNode);
@@ -116,6 +124,13 @@ export function pagesToGraph(rows) {
 			}
 			addEdge(`tagged:${row.id}:${tag}`, self, tagId, 'tagged');
 		}
+	}
+	for (const link of Array.isArray(links) ? links : []) {
+		const source = String(link?.source ?? '');
+		const target = String(link?.target ?? '');
+		if (!source || !target || source === target) continue;
+		if (!ids.has(source) || !ids.has(target)) continue;
+		addEdge(`link:${source}:${target}`, nodeId(source), nodeId(target), 'link');
 	}
 	return { depth: 0, nodes: [...nodes, ...tagNodes.values()], edges, guarantee: 'subgraph_eventual' };
 }

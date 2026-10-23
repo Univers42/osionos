@@ -30,9 +30,13 @@ import {
   ImageBlockPicture,
   ImagePlayButton,
   MediaBlockPreview,
+  mediaWidthStyle,
   resolveMediaBlockAsset,
   useImageAnimation,
 } from "@/entities/block/ui/MediaBlockPreview";
+import { useAiImageStore } from "@/features/ai/model/aiImageStore";
+import { AiImageJobView } from "@/features/ai/ui/AiImageJobView";
+import type { EmbedSnapshot } from "@/shared/lib/embed/embedInfo";
 import { usePageStore } from "@/store/usePageStore";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { MediaEmbedDialog } from "./MediaEmbedDialog";
@@ -41,6 +45,8 @@ import { MediaCaption } from "./media/MediaCaption";
 import { ImageHoverToolbar } from "./media/ImageHoverToolbar";
 import { ImageFullscreen } from "./media/ImageFullscreen";
 import { AltTextDialog } from "./media/AltTextDialog";
+import { ImageDescriptionPanel } from "./media/ImageDescriptionPanel";
+import { useDescribeImage } from "./media/useDescribeImage";
 
 interface MediaBlockEditorProps {
   pageId: string;
@@ -57,8 +63,10 @@ interface MediaBlockEditorProps {
  */
 const ImageBlockEditor: React.FC<{ block: Block; label: string; onEdit: () => void }> = ({ block, label, onEdit }) => {
   const animation = useImageAnimation(block);
+  // The width preset lands here: the editor renders the picture without the
+  // preview's <figure>, which is where the read-only path puts it.
   return (
-    <div className="relative">
+    <div className="relative" style={mediaWidthStyle(block)}>
       <button
         type="button"
         className="block w-full rounded-lg p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/30"
@@ -86,6 +94,10 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   onPaste,
 }) => {
   const updateBlock = usePageStore((state) => state.updateBlock);
+  // The image job of this block, when one is running (the state is in memory:
+  // a job that died with the tab leaves the plain placeholder).
+  const imageJob = useAiImageStore((state) => state.jobs[block.id]);
+  const describe = useDescribeImage(pageId, block);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showEmbed, setShowEmbed] = useState(false);
@@ -107,8 +119,10 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   const textStyle = getBlockTextStyle(block);
 
   const handleSelect = useCallback(
-    (value: string) => {
-      updateBlock(pageId, block.id, { asset: value });
+    (value: string, embed?: EmbedSnapshot) => {
+      // A user who replaces the image with their own file loses the
+      // "AI-generated" label: the block is theirs now.
+      updateBlock(pageId, block.id, { asset: value, aiGenerated: undefined, embed });
       setShowSettings(false);
     },
     [updateBlock, pageId, block.id],
@@ -179,15 +193,20 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
       onFocusCapture={() => { if (hasAsset) setShowSettings(true); }}
     >
       {!hasAsset ? (
-        // Empty: the Notion-style void row opens the embed dialog on click.
-        <button
-          type="button"
-          className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40"
-          aria-label={`Add ${label.toLowerCase()}`}
-          onClick={() => setShowEmbed(true)}
-        >
-          <MediaBlockPreview block={block} />
-        </button>
+        imageJob ? (
+          // An image is being made: the job speaks instead of the placeholder.
+          <AiImageJobView blockId={block.id} job={imageJob} />
+        ) : (
+          // Empty: the Notion-style void row opens the embed dialog on click.
+          <button
+            type="button"
+            className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40"
+            aria-label={`Add ${label.toLowerCase()}`}
+            onClick={() => setShowEmbed(true)}
+          >
+            <MediaBlockPreview block={block} />
+          </button>
+        )
       ) : isImage ? (
         <ImageBlockEditor block={block} label={label} onEdit={() => setShowSettings(true)} />
       ) : (
@@ -201,12 +220,15 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           blockId={block.id}
           url={imageUrl}
           altText={altText}
+          asset={block.asset}
           onCaption={() => setCaptionOpen(true)}
           onFullScreen={() => setFullscreen(true)}
           onReplace={() => setShowEmbed(true)}
           onAltText={() => setAltOpen(true)}
+          describe={describe}
         />
       ) : null}
+      {isImage && hasAsset ? <ImageDescriptionPanel pageId={pageId} block={block} describe={describe} /> : null}
 
       {shouldShowSettings ? (
         <MediaSettingsBar

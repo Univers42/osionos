@@ -93,7 +93,8 @@ test.describe("the blocked users panel", () => {
 
     await r.getByRole("button", { name: "Unblock", exact: true }).click();
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByText(/Unblock Ada\?/)).toBeVisible();
+    // The copy is both the visible paragraph and the dialog's accessible description.
+    await expect(dialog).toHaveAccessibleDescription(/Unblock Ada\?/);
     await dialog.getByRole("button", { name: "Unblock", exact: true }).click();
 
     await expect(r.getByText("Ada")).toHaveCount(0);

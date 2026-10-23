@@ -31,6 +31,13 @@
  * path: clients POST /api/profile/heartbeat every ~45s and the beat is a key/value
  * write (bridge-presence.mjs); the database column is refreshed at most once every ten
  * minutes, and every surface that shows "online" reads the key/value store.
+ *
+ * L0 runs BEFORE a profile is written (bridge-moderation-gate.mjs): the words
+ * THIS PATCH sets (bio, headline, location, username) are checked, and a
+ * warning is the author's question (409) — nothing is written until they answer
+ * it with acknowledgeWarning: true. WARN-ONLY: osionos_bridge_identities has
+ * no moderation_state column, so nothing is ever written held and no audit row
+ * is ever written.
  */
 
 import {
@@ -40,6 +47,7 @@ import {
 	directoryFuzzyFilter,
 	httpError,
 	memberWorkspacesAmong,
+	moderationWarningBody,
 	orgWorkspaceId,
 	readInChunks,
 	readJsonBody,
@@ -52,6 +60,7 @@ import { inFilter } from './bridge-paging.mjs';
 import { publicAvatar } from './bridge-avatar.mjs';
 import { canReadPageRowAsMember } from './bridge-page-read.mjs';
 import { onlineAmong, recordHeartbeat } from './bridge-presence.mjs';
+import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 
 
 
@@ -207,6 +216,19 @@ async function patchMe(deps, session, request, response, config) {
 	}
 	update.profile = nextProfile;
 	if (Object.hasOwn(payload, 'directoryOptOut')) update.directory_opt_out = payload.directoryOptOut === true;
+	// L0 asks BEFORE the profile is written: the words THIS PATCH sets are the
+	// ones checked (only the keys it carries — a PATCH that only opts out of the
+	// directory says nothing new about anybody). A warning is the author's
+	// question (409) and nothing is written until they answer it.
+	const written = [];
+	for (const key of ['bio', 'headline', 'location']) {
+		if (Object.hasOwn(payload, key)) written.push(nextProfile[key] ?? '');
+	}
+	if (Object.hasOwn(payload, 'username')) written.push(update.username ?? '');
+	if (written.length > 0) {
+		const decision = askBeforeWrite({ text: written.join('\n'), surface: 'profile', env: deps.env, payload });
+		if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
+	}
 	try {
 		await rest(config, deps.fetchImpl, `osionos_bridge_identities?user_id=eq.${session.userId}`, {
 			method: 'PATCH',

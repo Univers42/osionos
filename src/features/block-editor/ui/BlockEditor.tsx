@@ -23,6 +23,7 @@ import { Braces, Check, ChevronDown, Code, Copy, Eye, Hash, Moon, Sun } from "lu
 import { EquationView } from "@/shared/ui";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
+import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
 import { PlaceholderBlock } from "./PlaceholderBlock";
 import {
   getBlockPlaceholder,
@@ -56,6 +57,12 @@ import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
 
+// embed/bookmark are void blocks (their content is a URL, not text), so they never reach
+// EditableContent. Lazy, like the whiteboard: the frame and card code stays off the warm chunk.
+const LinkBlockEditor = lazy(() =>
+  import("./LinkBlockEditor").then((m) => ({ default: m.LinkBlockEditor })),
+);
+
 // The inline whiteboard (iframe of the drawnosaurus board) — lazy, same boundary.
 const WhiteboardBlock = lazy(() =>
   import("@/features/whiteboard/ui/WhiteboardBlock").then((m) => ({ default: m.WhiteboardBlock })),
@@ -64,6 +71,12 @@ const WhiteboardBlock = lazy(() =>
 // The Home "view launcher" (home_views block) — lazy, same boundary discipline.
 const HomeViewsBlock = lazy(() =>
   import("@/widgets/database-view/ui/HomeViewsBlock").then((m) => ({ default: m.HomeViewsBlock })),
+);
+
+// The diagram block: a stored SPEC drawn live through the locked renderer —
+// lazy, same boundary (the mermaid renderer is a heavy chunk of its own).
+const DiagramBlock = lazy(() =>
+  import("@/features/diagram/ui/DiagramBlock").then((m) => ({ default: m.DiagramBlock })),
 );
 
 // Database blocks are rare in an edited document. Lazy-boundary them (same
@@ -207,6 +220,15 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       commitBlockUpdate(block.id, { type: type as Block["type"] });
     },
     [commitBlockUpdate, block.id],
+  );
+
+  // "Ask AI" from the selection toolbar: the panel opens under the block with
+  // the SELECTION as its input. Nothing is written until the user accepts.
+  const handleAskAI = useCallback(
+    (selectionText: string) => {
+      useInlineAiStore.getState().open({ pageId, blockId: block.id, selectionText });
+    },
+    [block.id, pageId],
   );
 
   const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -468,6 +490,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
         />
       );
     case "heading_2":
@@ -484,6 +507,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
         />
       );
     case "heading_3":
@@ -500,6 +524,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
         />
       );
 
@@ -517,6 +542,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
         />
       );
 
@@ -534,6 +560,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
         />
       );
 
@@ -551,6 +578,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
         />
       );
 
@@ -568,6 +596,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
         />
       );
 
@@ -619,6 +648,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               pageId={pageId}
               blockType={block.type}
               onTurnInto={handleTurnInto}
+              onAskAI={handleAskAI}
             />
           </div>
         </div>
@@ -650,6 +680,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               pageId={pageId}
               blockType={block.type}
               onTurnInto={handleTurnInto}
+              onAskAI={handleAskAI}
             />
           </div>
         </div>
@@ -665,6 +696,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
+          onAskAI={handleAskAI}
         />
       );
 
@@ -679,6 +711,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           focusBlock={focusBlock}
           onRequestSlashMenu={onRequestSlashMenu}
+          onAskAI={handleAskAI}
         />
       );
 
@@ -818,6 +851,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
+              onAskAI={handleAskAI}
             />
             {!block.collapsed && renderChildren?.()}
           </div>
@@ -875,6 +909,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
+              onAskAI={handleAskAI}
             />
             {hasChildren ? (
               <div className="min-w-0 max-w-full">{renderChildren?.()}</div>
@@ -1076,6 +1111,32 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
         </div>
       );
 
+    case "diagram":
+      return (
+        <div tabIndex={-1} aria-label="Diagram block" className="relative my-0">
+          <Suspense fallback={null}>
+            <DiagramBlock
+              block={block}
+              pageId={pageId}
+              editable
+              onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+            />
+          </Suspense>
+        </div>
+      );
+
+    case "embed":
+    case "bookmark":
+      return (
+        <Suspense fallback={null}>
+          <LinkBlockEditor
+            block={block}
+            onKeyDown={onKeyDown}
+            onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+          />
+        </Suspense>
+      );
+
     case "home_views":
       return (
         <div tabIndex={-1} aria-label="Home views launcher" className="relative">
@@ -1099,6 +1160,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
         />
       );
   }

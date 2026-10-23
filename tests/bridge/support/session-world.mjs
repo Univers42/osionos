@@ -34,7 +34,7 @@ export function sessionConfig({ records = 'on', serviceKey = 'service-role-test-
 		OSIONOS_APP_URL: 'http://localhost:3001',
 		OSIONOS_BRIDGE_SHARED_SECRET: SHARED_SECRET,
 		OSIONOS_APP_SESSION_SECRET: APP_SECRET,
-		OSIONOS_BAAS_URL: 'http://baas.local',
+		OSIONOS_BAAS_URL: 'https://baas.local',
 		KONG_SERVICE_API_KEY: serviceKey,
 		OSIONOS_BRIDGE_CLIENT_IP_HEADER: ipHeader,
 		OSIONOS_BRIDGE_IP_HASH_SECRET: 'ip-hash-secret',

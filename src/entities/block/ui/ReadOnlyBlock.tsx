@@ -47,9 +47,20 @@ const LegacyDrawNotice = lazy(() =>
   import("@/features/whiteboard/ui/LegacyDrawNotice").then((m) => ({ default: m.LegacyDrawNotice })),
 );
 
+// Embeds/bookmarks pull in the iframe and card UI — kept off the warm chunk.
+const ReadOnlyLinkBlock = lazy(() =>
+  import("./ReadOnlyLinkBlock").then((m) => ({ default: m.ReadOnlyLinkBlock })),
+);
+
 // The Home "view launcher" (home_views block) — lazy, same discipline.
 const HomeViewsBlock = lazy(() =>
   import("@/widgets/database-view/ui/HomeViewsBlock").then((m) => ({ default: m.HomeViewsBlock })),
+);
+
+// The diagram block: the stored SPEC drawn live. On a public page it draws
+// nothing (devil C110) — the component itself knows the route.
+const DiagramBlock = lazy(() =>
+  import("@/features/diagram/ui/DiagramBlock").then((m) => ({ default: m.DiagramBlock })),
 );
 
 const databaseLoadingFallback = (
@@ -487,6 +498,25 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         <div className="my-3">
           <Suspense fallback={databaseLoadingFallback}>
             <WhiteboardBlockCard block={block} />
+          </Suspense>
+        </div>
+      );
+
+    case "diagram":
+      return (
+        <div className="my-3">
+          <Suspense fallback={null}>
+            <DiagramBlock block={block} />
+          </Suspense>
+        </div>
+      );
+
+    case "embed":
+    case "bookmark":
+      return (
+        <div className="my-3">
+          <Suspense fallback={databaseLoadingFallback}>
+            <ReadOnlyLinkBlock block={block} />
           </Suspense>
         </div>
       );

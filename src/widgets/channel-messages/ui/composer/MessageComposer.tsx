@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 15:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,12 +17,20 @@
  * Holds the DRAFT attachments[] and calls onSend(text, attachments) — text-only
  * is allowed; Cmd/Ctrl+Enter sends. Uploads go through useAttachmentUpload;
  * voice + slash-media wiring live in ./composerActions to stay under 5 fns here.
+ *
+ * L0's warning is answered by ./useComposerWarning: the draft STAYS, the
+ * notice shows above the input, and the author edits the text or posts it
+ * anyway.
  */
 
 import React, { useRef } from 'react';
 import { Send, X } from 'lucide-react';
 
-import type { Attachment } from '@/shared/chat/messageApi';
+import { ModerationWarningNotice } from '@/shared/moderation/ModerationWarningNotice';
+import { DictationButton } from '@/features/voice/ui/DictationButton';
+import { insertTranscript } from '@/features/voice/model/insertTranscript';
+import { dictationLanguage } from '@/features/voice/model/language';
+import { useVoiceSettingsStore } from '@/store/settings';
 import { useAttachmentUpload } from '../../model/useAttachmentUpload';
 import { useComposerDraft } from '../../model/useComposerDraft';
 import { ChatComposerMenu, type ChatCommandId } from './ChatComposerMenu';
@@ -31,6 +39,7 @@ import { DraftAttachmentBar } from './DraftAttachmentBar';
 import { VoiceRecorder } from './VoiceRecorder';
 import { MentionAutocomplete, mentionQuery } from './MentionAutocomplete';
 import { useComposerActions } from './composerActions';
+import { useComposerWarning, type ComposerSend } from './useComposerWarning';
 
 interface MessageComposerProps {
   channelId: string;
@@ -39,7 +48,8 @@ interface MessageComposerProps {
   compact?: boolean;
   replyTo?: { authorName: string; content: string } | null;
   onClearReply?: () => void;
-  onSend: (text: string, attachments?: Attachment[]) => Promise<unknown> | unknown;
+  /** Sends the draft. The answer is the typed outcome, or the old boolean. */
+  onSend: ComposerSend;
 }
 
 export const MessageComposer: React.FC<MessageComposerProps> = ({
@@ -60,6 +70,28 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
 
   const actions = useComposerActions({ draft, upload, textareaRef });
   const canSend = Boolean(draft.text.trim() || draft.attachments.length);
+  const voice = useVoiceSettingsStore((state) => state.data);
+
+  // L0's warning: the draft stays, the notice shows, the author answers.
+  const asked = useComposerWarning({
+    onSend,
+    text: draft.text,
+    attachments: draft.attachments,
+    reset: draft.reset,
+    textareaRef,
+  });
+
+  // The dictation: the transcript lands where the caret is, as typed input.
+  // It never sends the message: the user still presses the key.
+  const applyDictation = (text: string) => {
+    const element = textareaRef.current;
+    const caret = element?.selectionStart ?? draft.text.length;
+    draft.setText(insertTranscript(draft.text, text, caret));
+    requestAnimationFrame(() => {
+      element?.focus();
+      element?.setSelectionRange(caret + text.length, caret + text.length);
+    });
+  };
 
   // "/" launcher commands map to the real composer actions (the file picker is a
   // hidden input clicked here so /image and /file reuse the upload pipeline).
@@ -79,9 +111,9 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   const submit = () => {
     if (!canSend) return;
     setMention(null);
-    // Only clear the draft when the send actually succeeded — a failed send must
-    // keep the text so it is never silently lost.
-    void Promise.resolve(onSend(draft.text, draft.attachments)).then((ok) => { if (ok !== false) draft.reset(); }).catch(() => undefined);
+    // The draft is cleared only when the write really happened: a warning and
+    // a failure both keep the text, so it is never silently lost.
+    void asked.submit();
   };
 
   const pickMention = (username: string) => {
@@ -109,6 +141,18 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         )}
         <DraftAttachmentBar attachments={draft.attachments} onRemove={draft.removeAttachment} />
 
+        {/* The warning is announced, not shouted: the author hears it once. */}
+        {asked.warning && (
+          <div aria-live="polite" className="mb-1.5">
+            <ModerationWarningNotice
+              warning={asked.warning}
+              onEdit={asked.edit}
+              onConfirm={() => void asked.submit({ acknowledgeWarning: true })}
+              confirmLabel="Post anyway"
+            />
+          </div>
+        )}
+
         {recording ? (
           <VoiceRecorder
             onComplete={(result) => { setRecording(false); void actions.addVoice(result); }}
@@ -117,7 +161,10 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
         ) : (
           <div className="relative">
           {mention !== null && <MentionAutocomplete query={mention} onPick={pickMention} />}
-          <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 focus-within:border-[var(--osio-accent)]">
+          <div
+            data-dictation-composer="channel"
+            className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-2 focus-within:border-[var(--osio-accent)]"
+          >
             <textarea
               ref={textareaRef}
               value={draft.text}
@@ -139,6 +186,13 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
                 onInsertEmoji={(emoji) => actions.insertText(emoji)}
                 onPickGif={(gif) => actions.addGif(gif)}
                 onStartVoice={() => setRecording(true)}
+              />
+              {/* The dictation, next to the voice note, and told apart by its accent ring. */}
+              <DictationButton
+                onText={applyDictation}
+                language={dictationLanguage(voice)}
+                label="Dictate a message"
+                className="ring-1 ring-[var(--osio-accent)]"
               />
               <button
                 type="button"

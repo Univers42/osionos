@@ -22,11 +22,12 @@ import test from "node:test";
 // defines, and the seed JSON is a module node reads on its own. A loader gives both the
 // env object and an empty seed, the way the app-removals suite stubs them.
 const LOADER = `
-const EMPTY_SEED = "export default { users: [], workspaces: [] };";
+const EMPTY_SEED = JSON.stringify({ users: [], workspaces: [] });
 export async function resolve(specifier, context, nextResolve) {
 	const resolved = await nextResolve(specifier, context);
 	if (resolved.url.endsWith("seedUsers.json")) {
-		return { url: "data:text/javascript," + encodeURIComponent(EMPTY_SEED), shortCircuit: true };
+		// A JSON module: the canvas loader imports .json files with { type: "json" }.
+		return { url: "data:application/json," + encodeURIComponent(EMPTY_SEED), shortCircuit: true };
 	}
 	return resolved;
 }
