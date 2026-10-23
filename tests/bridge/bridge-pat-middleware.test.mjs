@@ -21,6 +21,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { sessionHeaders, send } from './support/bridge-harness.mjs';
+import { mintPatSecret } from '../../scripts/bridge-pat-store.mjs';
 import { installResponseMask, patWritePayload, PAT_ROUTES } from '../../scripts/bridge-pat-middleware.mjs';
 import { PAT_TABLE } from './support/pat-postgrest.mjs';
 import { auditRows, bearer, everythingSent, fakeRequest, fakeResponse, fineGrained, HOME, OWNER, PAGE, patRow, startPatWorld } from './support/pat-world.mjs';
@@ -246,13 +247,14 @@ describe('every PAT request is audited, before the route runs', () => {
 		assert.equal(lastUse(world).length, 1);
 	});
 
-	it('audits every denial on its own row', async (t) => {
+	it('audits a denial once per token and outcome per hour, however often it repeats', async (t) => {
 		const { world, secret } = await viaPat(t, {});
-		await send(world.base, '/api/workspaces', bearer(secret));
-		await send(world.base, '/api/workspaces', bearer(secret));
+		for (let index = 0; index < 20; index += 1) await send(world.base, '/api/workspaces', bearer(secret));
 		await send(world.base, PAGE_PATH, bearer(secret), { method: 'PATCH', body: '{}' });
-		assert.deepEqual(lastUse(world).map((row) => row.details.outcome), ['route_not_allowed', 'route_not_allowed', 'scope_denied']);
+		await send(world.base, PAGE_PATH, bearer(secret), { method: 'PATCH', body: '{}' });
+		assert.deepEqual(lastUse(world).map((row) => row.details.outcome), ['route_not_allowed', 'scope_denied']);
 	});
+
 });
 
 describe('the PAT never travels past the gate', () => {
@@ -373,5 +375,142 @@ describe('the gate compares no secret and no hash in JavaScript', () => {
 		const source = readFileSync(new URL('../../scripts/bridge-pat-middleware.mjs', import.meta.url), 'utf8');
 		const offending = source.split('\n').filter((line) => /(hash|secret)/i.test(line) && /[!=]==/.test(line));
 		assert.deepEqual(offending, []);
+	});
+});
+
+describe('the gate bounds what an anonymous client can make it do', () => {
+	it('answers 429 with retry-after once a client passes its bucket, and stops reading the token table', async (t) => {
+		const world = await startPatWorld(t, { rateLimit: { limit: 5, windowMs: 60_000 } });
+		const answers = [];
+		for (let index = 0; index < 200; index += 1) answers.push(await fetch(`${world.base}${PAGE_PATH}`, { headers: bearer(mintPatSecret().secret) }));
+		const statuses = answers.map((answer) => answer.status);
+		assert.equal(statuses.filter((status) => status === 401).length, 5);
+		assert.equal(statuses.filter((status) => status === 429).length, 195);
+		assert.equal(answers.at(-1).headers.get('retry-after'), '60');
+		assert.equal(world.patStore.callsTo(PAT_TABLE).length, 5);
+	});
+
+	it('counts a bearer of the wrong shape too, so garbage is not free', async (t) => {
+		const world = await startPatWorld(t, { rateLimit: { limit: 2, windowMs: 60_000 } });
+		const statuses = [];
+		for (let index = 0; index < 4; index += 1) statuses.push((await send(world.base, PAGE_PATH, bearer('osio_pat_short'))).status);
+		assert.deepEqual(statuses, [401, 401, 429, 429]);
+	});
+
+	it('leaves a request without an osio_ bearer out of the bucket', async (t) => {
+		const world = await startPatWorld(t, { rateLimit: { limit: 1, windowMs: 60_000 } });
+		for (let index = 0; index < 3; index += 1) await send(world.base, PAGE_PATH, { authorization: 'Bearer something-else' });
+		assert.equal(world.kv.keys().filter((key) => key.includes('rl:')).length, 0);
+	});
+});
+
+describe('a PAT-shaped bearer that is not a PAT is answered like any bad token', () => {
+	for (const presented of ['osio_x', 'osio_pat', 'osio_other_abc']) {
+		it(`answers ${presented} with 401 pat_invalid and no lookup`, async (t) => {
+			const world = await startPatWorld(t);
+			const answer = await send(world.base, PAGE_PATH, bearer(presented));
+			assert.equal(answer.text, '{"error":"pat_invalid"}');
+			assert.equal(world.patStore.callsTo(PAT_TABLE).length, 0);
+		});
+	}
+});
+
+describe('the hourly use is recorded once, and never lost to a failed audit', () => {
+	const patches = (world) => world.patStore.callsTo(PAT_TABLE).filter((call) => call.method === 'PATCH');
+
+	it('claims with one conditional PATCH per request', async (t) => {
+		const { world, secret } = await viaPat(t, {});
+		await send(world.base, PAGE_PATH, bearer(secret));
+		assert.equal(patches(world).length, 1);
+		assert.match(patches(world)[0].params.get('or'), /^\(last_used_at\.is\.null,last_used_at\.lt\./);
+		await send(world.base, PAGE_PATH, bearer(secret));
+		assert.equal(patches(world).length, 2);
+	});
+
+	it('leaves last_used_at null when the audit write fails, so the next request audits', async (t) => {
+		let failing = true;
+		const { world, secret } = await viaPat(t, {}, {}, { fail: (call) => (failing && call.table === 'osionos_bridge_audit_events' ? { status: 500 } : null) });
+		const first = await send(world.base, PAGE_PATH, bearer(secret));
+		assert.equal(first.status, 503);
+		assert.equal(world.patStore.rows(PAT_TABLE)[0].last_used_at, null);
+		failing = false;
+		const second = await send(world.base, PAGE_PATH, bearer(secret));
+		assert.equal(second.status, 200);
+		assert.equal(lastUse(world).length, 1);
+		assert.ok(world.patStore.rows(PAT_TABLE)[0].last_used_at);
+	});
+});
+
+describe('every store failure behind the gate is a 503', () => {
+	const failing = (status) => (inner) => (url, init) => (String(url).includes('/osionos_workspaces') ? Promise.resolve(new Response('{}', { status, headers: { 'content-type': 'application/json' } })) : inner(url, init));
+
+	for (const status of [500, 401, 404]) {
+		it(`answers 503 when the workspace read answers ${status}`, async (t) => {
+			const { world, secret } = await viaPat(t, {});
+			await assert.rejects(world.gateWith(failing(status))(fakeRequest(secret), fakeResponse(), new URL(`http://bridge.test${PAGE_PATH}`), world.config), (error) => error.status === 503);
+		});
+	}
+
+	it('answers 503 when the token store answers something that is not a list', async (t) => {
+		const { world, secret } = await viaPat(t, {});
+		const odd = (inner) => (url, init) => (String(url).includes(`/${PAT_TABLE}`) ? Promise.resolve(new Response('{"message":"odd"}', { status: 200, headers: { 'content-type': 'application/json' } })) : inner(url, init));
+		await assert.rejects(world.gateWith(odd)(fakeRequest(secret), fakeResponse(), new URL(`http://bridge.test${PAGE_PATH}`), world.config), (error) => error.status === 503);
+	});
+
+	it('refuses a workspace row that another user owns, with 503', async (t) => {
+		const { world, secret } = await viaPat(t, {});
+		const foreign = (inner) => (url, init) => (String(url).includes('/osionos_workspaces') ? Promise.resolve(new Response(JSON.stringify([{ id: HOME, owner_id: '99999999-9999-4999-8999-999999999999' }]), { status: 200, headers: { 'content-type': 'application/json' } })) : inner(url, init));
+		await assert.rejects(world.gateWith(foreign)(fakeRequest(secret), fakeResponse(), new URL(`http://bridge.test${PAGE_PATH}`), world.config), (error) => error.status === 503);
+	});
+});
+
+describe('a write body has to be an object', () => {
+	for (const [name, body] of [['an array', '[{"title":"x"}]'], ['null', 'null'], ['a number', '7'], ['a string', '"title"']]) {
+		it(`refuses ${name} with 422 and writes nothing`, async (t) => {
+			const { world, secret } = await viaPat(t, fineGrained(['title'], ['read', 'write']));
+			const answer = await send(world.base, PAGE_PATH, bearer(secret), { method: 'PATCH', body });
+			assert.equal(answer.status, 422);
+			assert.equal(world.pages.page(PAGE).title, 'Plan');
+		});
+	}
+
+	it('throws pat_invalid_body from patWritePayload for a non-object', () => {
+		for (const payload of [[], null, 3, 'x']) assert.throws(() => patWritePayload(payload, ['title']), (error) => error.status === 422 && error.code === 'pat_invalid_body');
+	});
+});
+
+describe('the gate runs on the server clock', () => {
+	it('refuses as expired a token that is past its expiry on the pinned clock', async (t) => {
+		const { secret, row } = patRow({ expiresAt: '2030-01-01T00:00:00.000Z' });
+		const world = await startPatWorld(t, { tokens: [row], now: () => Date.parse('2030-01-02T00:00:00.000Z') });
+		const answer = await send(world.base, PAGE_PATH, bearer(secret));
+		assert.equal(answer.status, 401);
+		assert.equal(lastUse(world)[0].details.outcome, 'expired');
+	});
+
+	it('stamps the session and the last use with the pinned clock', async (t) => {
+		const pinned = Date.parse('2030-01-01T00:00:00.000Z');
+		const { secret, row } = patRow({ expiresAt: '2031-01-01T00:00:00.000Z' });
+		const world = await startPatWorld(t, { tokens: [row], now: () => pinned });
+		const request = fakeRequest(secret);
+		assert.equal(await world.gate(request, fakeResponse(), new URL(`http://bridge.test${PAGE_PATH}`), world.config), false);
+		assert.equal(claimsOf(request.headers.authorization.slice('Bearer '.length)).iat, pinned / 1000);
+		assert.equal(world.patStore.rows(PAT_TABLE)[0].last_used_at, new Date(pinned).toISOString());
+	});
+});
+
+describe('the two page routes are answered by the page handlers', () => {
+	it('reads through the page read handler', async (t) => {
+		const { world, secret } = await viaPat(t, {});
+		const answer = await send(world.base, PAGE_PATH, bearer(secret));
+		assert.equal(answer.status, 200);
+		assert.ok(world.pages.calls.some((call) => call.method === 'GET' && call.table === 'osionos_pages'));
+	});
+
+	it('writes through the page update handler', async (t) => {
+		const { world, secret } = await viaPat(t, fineGrained(['title'], ['read', 'write']));
+		const answer = await send(world.base, PAGE_PATH, bearer(secret), { method: 'PATCH', body: JSON.stringify({ title: 'Renamed' }) });
+		assert.equal(answer.body.ok, true);
+		assert.ok(world.pages.calls.some((call) => call.method === 'PATCH' && call.table === 'osionos_pages'));
 	});
 });

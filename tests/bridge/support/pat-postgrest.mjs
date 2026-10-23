@@ -52,7 +52,17 @@ function inListValues(expr) {
 	return expr.slice(4, -1).split(',').map((value) => value.trim()).filter((value) => value !== '');
 }
 
+/** `or=(col.op.value,col.op.value)`: the row matches when any member does (members hold no commas). */
+function matchesAny(row, expr) {
+	if (!expr.startsWith('(') || !expr.endsWith(')')) throw new Error(`pat store: unsupported or group ${expr}`);
+	return expr.slice(1, -1).split(',').some((member) => {
+		const dot = member.indexOf('.');
+		return matches(row, member.slice(0, dot), member.slice(dot + 1));
+	});
+}
+
 function matches(row, key, expr) {
+	if (key === 'or') return matchesAny(row, expr);
 	if (expr === 'is.null') return row[key] == null;
 	if (expr === 'not.is.null') return row[key] != null;
 	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));

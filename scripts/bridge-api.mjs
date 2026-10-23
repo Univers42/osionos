@@ -4825,7 +4825,7 @@ export function createBridgeServer(options = {}) {
 		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		account: createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken }),
 	};
-	const patGate = createPatGate({ pg, fetchImpl, memberWorkspaceEntries });
+	const patGate = createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, now: options.now, rateLimit: options.patRateLimit });
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);

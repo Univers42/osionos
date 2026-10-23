@@ -23,14 +23,18 @@
  * Caveat: the response mask fails closed — a 2xx body that is not a JSON object, an empty
  * one, or a route that streams, is answered 500 and never forwarded — so a future route added
  * to PAT_ROUTES that answers a list or a stream is refused until it is taught here.
- * Caveat: the hourly claim of `last_used_at` is stamped before the audit row is written, so a
- * failed audit write loses that hour's row (the request itself is refused 503, not served).
+ * Caveat: the hourly claim of `last_used_at` is stamped before the audit row is written and
+ * released if that write fails; a crash between the two (not a failure) loses that hour's row.
+ * Caveat: the per-client bucket keys on the client-address hash (or its /24 prefix), so clients
+ * behind one NAT share a bucket and a fresh address gets a fresh one; it bounds work, not abuse.
+ * Caveat: denial rows are throttled through the kv store (one per token and outcome per hour);
+ * on a bridge without a shared store each replica writes its own.
  * Caveat: the gate sees only the Authorization header; a PAT sent in the query string or a
  * cookie is not a PAT here, and is refused by the routes as any malformed session.
  */
 
 import { randomUUID } from 'node:crypto';
-import { clientMeta, writeAudit } from './bridge-guard.mjs';
+import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
 import { attributesOutsideMask, evaluatePat, maskAttributes } from './bridge-pat-permissions.mjs';
 import { findPatByHash, hashPatSecret, isPatSecret, PAT_PREFIX } from './bridge-pat-store.mjs';
 import { signAppSessionToken } from './bridge-session-token.mjs';
@@ -39,6 +43,9 @@ const PAT_TABLE = 'osionos_personal_access_tokens';
 const PAT_SESSION_TTL_SECONDS = 120;
 const AUDIT_WINDOW_MS = 3_600_000;
 const PAGE_PATH = /^\/api\/pages\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const OWNED_WORKSPACE_LIMIT = 100;
+const DEFAULT_RATE_LIMIT = { limit: 120, windowMs: 60_000 };
+const PAT_LIKE_PREFIX = 'osio_';
 const CONTROL_FIELDS = new Set(['baseVersion']);
 
 /** The whole surface a PAT reaches: read one page, change one page. */
@@ -55,6 +62,8 @@ const failure = (status, code, message) => Object.assign(new Error(message), { s
  * the route, not a page attribute, and rides through.
  */
 export function patWritePayload(payload, mask) {
+	const isObject = payload !== null && typeof payload === 'object' && !Array.isArray(payload);
+	if (!isObject) throw failure(422, 'pat_invalid_body', 'The request body must be a JSON object.');
 	const outside = attributesOutsideMask(payload, mask).filter((key) => !CONTROL_FIELDS.has(key));
 	if (outside.length > 0) throw failure(403, 'pat_forbidden_attribute', `This token may not change: ${outside.join(', ')}.`);
 	return payload;
@@ -137,8 +146,9 @@ function replaceAuthorization(request, token) {
 	}
 }
 
-function answer(response, config, status, code) {
+function answer(response, config, status, code, extraHeaders = {}) {
 	response.writeHead(status, {
+		...extraHeaders,
 		'content-type': 'application/json; charset=utf-8',
 		'cache-control': 'no-store',
 		'access-control-allow-origin': config.allowedOrigin,
@@ -153,15 +163,31 @@ function answer(response, config, status, code) {
  * pg and memberWorkspaceEntries are injected: the second lives in bridge-api.mjs, which
  * imports this module.
  */
-export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, now = Date.now }) {
-	async function lookup(secret) {
+export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, rateLimit: bucket = DEFAULT_RATE_LIMIT, now = Date.now }) {
+	const unavailable = (what) => failure(503, 'pat_unavailable', `${what} is unavailable; try again.`);
+
+	/** Every store call of the gate runs through here: whatever it throws, the caller sees 503. */
+	async function guarded(what, work) {
 		try {
-			return await findPatByHash({ pg, hash: hashPatSecret(secret) });
+			return await work();
 		} catch (error) {
-			console.warn(`[osionos-bridge] pat lookup unavailable: ${error?.status ?? 'error'}`);
-			throw failure(503, 'pat_unavailable', 'Token lookup is unavailable; try again.');
+			if (error?.status === 503) throw error;
+			console.warn(`[osionos-bridge] pat ${what} unavailable: ${error?.status ?? 'error'}`);
+			throw unavailable(what);
 		}
 	}
+
+	// An answer that is not a list is a store anomaly, not "no such token".
+	const listOnly = {
+		asService: () => ({
+			get: async (path) => {
+				const rows = await pg.asService().get(path);
+				if (!Array.isArray(rows)) throw new TypeError('non-list answer');
+				return rows;
+			},
+		}),
+	};
+	const lookup = (secret) => guarded('token lookup', () => findPatByHash({ pg: listOnly, hash: hashPatSecret(secret) }));
 
 	async function audit(request, config, row, jti, url, outcome) {
 		const meta = clientMeta(request, { ipHeader: config.clientIpHeader, hashSecret: config.ipHashSecret });
@@ -169,26 +195,63 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, now = Dat
 		await writeAudit(pg, { session: { userId: row.user_id, raw: { jti } }, meta, eventType: 'pat_use', details });
 	}
 
-	/** A refusal of a token that resolved leaves its own row; a failing audit never turns it into success. */
+	/** Throws 429 past the client's bucket; a failing store is 503, never a free pass. */
+	async function limitClient(request, config) {
+		const meta = clientMeta(request, { ipHeader: config.clientIpHeader, hashSecret: config.ipHashSecret });
+		try {
+			await rateLimit(kv, ['pat', meta.ipHash ?? meta.ipPrefix ?? 'unknown'], bucket);
+		} catch (error) {
+			if (error?.status === 429) throw Object.assign(failure(429, 'pat_rate_limited', 'Too many requests.'), { retryAfterSeconds: error.retryAfterSeconds });
+			throw unavailable('rate limiting');
+		}
+	}
+
+	/**
+	 * A refusal of a token that resolved leaves a row, but one per token and outcome per hour:
+	 * a repeated denial is the same fact. A failing audit never turns the refusal into success.
+	 */
 	async function refuse(ctx, status, code, outcome) {
-		await audit(ctx.request, ctx.config, ctx.row, ctx.jti, ctx.url, outcome).catch(() => console.warn('[osionos-bridge] pat denial audit unavailable'));
+		const first = await kv.setNx(`patdeny:${ctx.row.id}:${outcome}`, '1', AUDIT_WINDOW_MS).catch(() => true);
+		if (first) await audit(ctx.request, ctx.config, ctx.row, ctx.jti, ctx.url, outcome).catch(() => console.warn('[osionos-bridge] pat denial audit unavailable'));
 		return answer(ctx.response, ctx.config, status, code);
 	}
 
-	/** True for the one request of an hour that records a use; the conditional PATCH decides atomically. */
+	const stampOf = () => new Date(now()).toISOString();
+
+	/** One conditional PATCH decides atomically which request of the hour records the use. */
 	async function claimHourlyUse(rowId) {
-		const stamp = new Date(now()).toISOString();
+		const stamp = stampOf();
 		const cutoff = new Date(now() - AUDIT_WINDOW_MS).toISOString();
-		for (const filter of ['is.null', `lt.${cutoff}`]) {
-			const claimed = await pg.asService().patch(`${PAT_TABLE}?id=eq.${rowId}&last_used_at=${filter}&select=id`, { last_used_at: stamp }, { prefer: 'return=representation' });
-			if (Array.isArray(claimed) && claimed.length > 0) return true;
-		}
-		return false;
+		const claimed = await guarded('token use', () => pg.asService().patch(`${PAT_TABLE}?id=eq.${rowId}&or=(last_used_at.is.null,last_used_at.lt.${cutoff})&select=id`, { last_used_at: stamp }, { prefer: 'return=representation' }));
+		return Array.isArray(claimed) && claimed.length > 0 ? stamp : null;
 	}
 
+	/** The claim is given back when its audit row fails, so the next request records the hour. */
+	async function releaseClaim(rowId, stamp) {
+		await pg.asService().patch(`${PAT_TABLE}?id=eq.${rowId}&last_used_at=eq.${stamp}`, { last_used_at: null }, { prefer: 'return=minimal' }).catch(() => console.warn('[osionos-bridge] pat claim release unavailable'));
+	}
+
+	async function recordHourlyUse(ctx) {
+		const stamp = await claimHourlyUse(ctx.row.id);
+		if (!stamp) return;
+		try {
+			await audit(ctx.request, ctx.config, ctx.row, ctx.jti, ctx.url, 'allowed');
+		} catch {
+			await releaseClaim(ctx.row.id, stamp);
+			throw unavailable('token audit');
+		}
+	}
+
+	/**
+	 * The workspaces the session may carry. Divergence from D-P5-1: the home is the owner's
+	 * oldest owned workspace, not osionos_bridge_identities.private_workspace_id (which the
+	 * bridge does not read at this layer); a row that is not the user's own is a store fault.
+	 */
 	async function workspacesOf(userId, config) {
-		const owned = await pg.asService().get(`osionos_workspaces?owner_id=eq.${userId}&select=id&order=created_at.asc&limit=100`);
-		const ids = (Array.isArray(owned) ? owned : []).map((entry) => String(entry.id));
+		const owned = await guarded('workspace lookup', () => pg.asService().get(`osionos_workspaces?owner_id=eq.${userId}&select=id,owner_id&order=created_at.asc&limit=${OWNED_WORKSPACE_LIMIT}`));
+		const rows = Array.isArray(owned) ? owned : [];
+		if (rows.some((entry) => String(entry.owner_id).toLowerCase() !== String(userId).toLowerCase())) throw unavailable('workspace lookup');
+		const ids = rows.map((entry) => String(entry.id));
 		if (ids.length === 0) return null;
 		const members = await memberWorkspaceEntries(userId, ids, config, fetchImpl);
 		return { home: ids[0], extras: [...ids.slice(1).map((id) => ({ _id: id, role: 'owner' })), ...members] };
@@ -197,8 +260,14 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, now = Dat
 	/** Returns true when it answered the request, false when the route may run. */
 	return async function patGate(request, response, url, config) {
 		const presented = bearerOf(request);
-		if (presented === null || !presented.startsWith(PAT_PREFIX)) return false;
-		if (!isPatSecret(presented)) return answer(response, config, 401, 'pat_invalid');
+		if (presented === null || !presented.startsWith(PAT_LIKE_PREFIX)) return false;
+		try {
+			await limitClient(request, config);
+		} catch (error) {
+			if (error.status !== 429) throw error;
+			return answer(response, config, 429, error.code, { 'retry-after': String(error.retryAfterSeconds) });
+		}
+		if (!presented.startsWith(PAT_PREFIX) || !isPatSecret(presented)) return answer(response, config, 401, 'pat_invalid');
 		const row = await lookup(presented);
 		if (!row) return answer(response, config, 401, 'pat_invalid');
 		const ctx = { request, response, url, config, row, jti: randomUUID() };
@@ -216,7 +285,7 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, now = Dat
 		if (!decision.allowed) return refuse(ctx, 403, 'pat_scope_denied', 'scope_denied');
 		const workspaces = await workspacesOf(row.user_id, config);
 		if (!workspaces) return refuse(ctx, 403, 'pat_no_workspace', 'no_workspace');
-		if (await claimHourlyUse(row.id)) await audit(request, config, row, ctx.jti, url, 'allowed');
+		await recordHourlyUse(ctx);
 		const session = signAppSessionToken({
 			payload: { subject: row.user_id, provider: 'pat' },
 			workspace: { _id: workspaces.home },
