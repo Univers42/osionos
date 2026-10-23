@@ -17,6 +17,10 @@
  * The credential is a personal access token from OSIONOS_MCP_TOKEN (or, kept for
  * callers that already hold one, a bridge-issued bearer from OSIONOS_MCP_JWT). It
  * is read before any network call, and nothing mints a session for another user.
+ * Credential order, first hit wins: OSIONOS_MCP_TOKEN, OSIONOS_MCP_JWT, an injected
+ * `mintSession`. OSIONOS_MCP_JWT is NOT scoped by a PAT: it is a bearer the caller
+ * already holds, sent as is with no scope mask, route allow-list or per-token revoke,
+ * and it can only present its own user, never choose one.
  * A call refused with `session_revoked` drops the cache of an injected
  * `mintSession` (tests) and makes the call again -- ONCE (C128).
  *
@@ -58,6 +62,7 @@ export function mcpTokenFromEnv() {
 
 /** The refusal of the PAT gate rewritten as a plain sentence; the status and body stay on the error. */
 function explainRefusal(error) {
+  // error.body is read for its code only: it is never printed or put in a tool result.
   const hint = typeof error?.body?.error === 'string' ? PAT_HINTS.get(error.body.error) : undefined;
   if (hint) error.message = hint;
   return error;
@@ -106,6 +111,7 @@ export async function fetchJson(fetchImpl, url, options = {}) {
     else if (typeof body === 'object' && body && 'message' in body) message = body.message;
     const error = new Error(String(message));
     error.status = response.status;
+    // Kept for callers that read a refusal code (explainRefusal, isRevoked); never print it.
     error.body = body;
     throw error;
   }
@@ -114,6 +120,7 @@ export async function fetchJson(fetchImpl, url, options = {}) {
 
 /** True when the error is the 401 of a session that was revoked everywhere. */
 function isRevoked(error) {
+  // error.body is read for its code only: it is never printed.
   const code = error?.body?.code ?? error?.body?.error?.code;
   return error?.status === 401 && code === REVOKED_CODE;
 }

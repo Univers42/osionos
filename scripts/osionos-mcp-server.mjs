@@ -571,7 +571,7 @@ server.registerTool('osionos_describe_app', {
       ],
       mcpFlow: [
         'Claude Code connects to scripts/osionos-mcp-server.mjs over stdio.',
-        'The MCP server authenticates with a personal access token (OSIONOS_MCP_TOKEN).',
+        'The MCP server authenticates with a personal access token (OSIONOS_MCP_TOKEN), limited to the scopes it was created with. OSIONOS_MCP_JWT, if set instead, is an unscoped bearer the caller already holds.',
         'Tools list/read/search/create/update/archive pages through the local API.',
         'For app documentation, call osionos_describe_app first, inspect pages as needed, then create a page using explicit content blocks.',
       ],
@@ -659,7 +659,12 @@ server.registerTool('osionos_read_page', {
   annotations: { readOnlyHint: true, openWorldHint: false },
 }, async ({ pageId }) => {
   const page = await apiRequest(`/api/pages/${encodeURIComponent(pageId)}`);
-  return textResult({ page, blocks: [] });
+  const hasContent = Array.isArray(page?.content);
+  return textResult({
+    page,
+    blocks: hasContent ? page.content : null,
+    ...(hasContent ? {} : { note: "The page came back without content: the token's permissions may not include it." }),
+  });
 });
 
 server.registerTool('osionos_create_page', {
