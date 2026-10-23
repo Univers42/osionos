@@ -72,6 +72,7 @@ export const SETTINGS_PANELS: Record<SettingsSectionId, LazyExoticComponent<Comp
   ai: lazy(() => import("@/features/settings/ai/AiPanel").then((m) => ({ default: m.AiPanel }))),
   ai_connections: lazy(() => import("@/features/settings/ai/AiConnectionsSection").then((m) => ({ default: m.AiConnectionsSection }))),
   mcp: lazy(() => import("@/features/settings/mcp/McpPanel").then((m) => ({ default: m.McpPanel }))),
+  developer: lazy(() => import("@/features/settings/developer/DeveloperPanel").then((m) => ({ default: m.DeveloperPanel }))),
   public_pages: lazy(() => import("@/features/settings/public-pages/PublicPagesPanel").then((m) => ({ default: m.PublicPagesPanel }))),
   library: lazy(() => import("@/features/settings/library/LibraryPanel").then((m) => ({ default: m.LibraryPanel }))),
   teamspaces: lazy(() => import("@/features/settings/teamspaces/TeamspacesPanel").then((m) => ({ default: m.TeamspacesPanel }))),

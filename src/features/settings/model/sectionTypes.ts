@@ -32,6 +32,7 @@ export type SettingsSectionId =
   | "ai"
   | "ai_connections"
   | "mcp"
+  | "developer"
   | "public_pages"
   | "library"
   | "teamspaces"
