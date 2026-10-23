@@ -12,11 +12,6 @@
 
 export interface AccountSettings {
   userId: string;
-  profile: {
-    preferredName?: string;
-    avatar?: string;
-    locale?: string;
-  };
   security: {
     hasPassword?: boolean;
     twoStepEnabled?: boolean;
@@ -26,19 +21,6 @@ export interface AccountSettings {
   supportAccessGrantedUntil?: string | null;
   pendingDeletionAt?: string | null;
   removedAt?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface DeviceRecord {
-  _id: string;
-  userId: string;
-  deviceFingerprint: string;
-  userAgent?: string;
-  ipHash?: string;
-  location?: string;
-  lastActiveAt: string;
-  revokedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -283,4 +265,16 @@ export interface TeamspaceRecord {
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
+}
+
+/** One signed-in device as `GET /api/account/sessions` answers it: one row per sign-in family. */
+export interface SessionRow {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  lastSeenAt: string | null;
+  authMethod: string;
+  ipPrefix: string | null;
+  userAgent: string | null;
+  current: boolean;
 }

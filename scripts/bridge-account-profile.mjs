@@ -35,6 +35,7 @@
 
 import { rateLimit } from './bridge-guard.mjs';
 import { bearerToken, blockedViewerBy, readJsonBody, safeText, sendJson } from './bridge-social-core.mjs';
+import { STATUS_COLUMNS, statusOf } from './bridge-status.mjs';
 
 const PROFILE_PATH = '/api/account/profile';
 const USERS_PREFIX = '/api/users/';
@@ -43,7 +44,7 @@ const PROFILE_WINDOW_MS = 60_000;
 const PROFILE_BODY_LIMIT = 16 * 1024;
 const USERNAME_SHAPE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{2,31}$/;
 
-const accountError = (status, code, message, extra) => Object.assign(new Error(message), { status, code }, extra);
+export const accountError = (status, code, message, extra) => Object.assign(new Error(message), { status, code }, extra);
 
 /** The wire name of a database column. */
 function camelCase(column) {
@@ -54,7 +55,7 @@ function camelCase(column) {
 const OWNER_COLUMNS = [
 	'user_id', 'display_name', 'username', 'pronouns', 'headline', 'bio', 'location', 'company',
 	'website', 'links', 'timezone', 'orcid', 'patreon', 'avatar_url', 'banner_url', 'directory_opt_out',
-	'profession', 'version', 'created_at', 'updated_at', 'search_doc',
+	'profession', 'readme_page_id', 'version', 'created_at', 'updated_at', 'search_doc',
 ];
 
 // The public card: the allowlist. The email, the settings, the deletion state, the
@@ -74,12 +75,15 @@ const REDUCED_CARD_COLUMNS = ['user_id', 'username', 'display_name', 'avatar_url
 // The columns the account role may UPDATE, minus `username` (P1-2b owns the rename).
 const EDITABLE_COLUMNS = [
 	'display_name', 'pronouns', 'headline', 'bio', 'location', 'company', 'website', 'links',
-	'timezone', 'orcid', 'patreon', 'directory_opt_out', 'profession',
+	'timezone', 'orcid', 'patreon', 'directory_opt_out', 'profession', 'readme_page_id',
 ];
 const EDITABLE = new Map(EDITABLE_COLUMNS.map((column) => [camelCase(column), column]));
 const FIELD_BY_COLUMN = new Map(EDITABLE_COLUMNS.map((column) => [column, camelCase(column)]));
 const OWNER_SELECT = OWNER_COLUMNS.join(',');
-const CARD_SELECT = `${CARD_COLUMNS.join(',')},directory_opt_out`;
+// readme_page_id is read to project the README, never to answer: it is in no card list.
+const CARD_SELECT = `${CARD_COLUMNS.join(',')},directory_opt_out,readme_page_id,${STATUS_COLUMNS.join(',')}`;
+const README_BYTE_CAP = 200 * 1024;
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function camelRow(row, columns) {
 	const out = {};
@@ -87,7 +91,7 @@ function camelRow(row, columns) {
 	return out;
 }
 
-function respondWithError(response, error, config) {
+export function respondWithError(response, error, config) {
 	const status = Number.isInteger(error?.status) ? error.status : 500;
 	const code = typeof error?.code === 'string' && /^[a-z][a-z0-9_]*$/.test(error.code) ? error.code : 'profile_request_failed';
 	const body = { ok: false, message: error instanceof Error ? error.message : 'The profile request failed.', code };
@@ -99,7 +103,7 @@ function respondWithError(response, error, config) {
 	return sendJson(response, status, body, config);
 }
 
-function callerSession(request, config, verifySession) {
+export function callerSession(request, config, verifySession) {
 	try {
 		return verifySession(bearerToken(request), config);
 	} catch (error) {
@@ -108,7 +112,7 @@ function callerSession(request, config, verifySession) {
 	}
 }
 
-async function readProfileBody(request) {
+export async function readProfileBody(request) {
 	try {
 		return await readJsonBody(request, PROFILE_BODY_LIMIT);
 	} catch (error) {
@@ -135,6 +139,9 @@ function editableUpdate(payload) {
 	for (const [key, value] of Object.entries(payload)) {
 		const column = EDITABLE.get(key);
 		if (!column) throw accountError(422, 'field_not_editable', `The field "${key}" cannot be edited through this route.`, { field: key });
+		if (column === 'readme_page_id' && value !== null && !(typeof value === 'string' && UUID_SHAPE.test(value))) {
+			throw accountError(422, 'invalid_field', `The field "${key}" must be a page id or null.`, { field: key });
+		}
 		update[column] = value;
 	}
 	return update;
@@ -270,7 +277,39 @@ async function lookupUser({ config, pg, session }, rawName, response) {
 	const subject = safeText(row.user_id, 80).toLowerCase();
 	const reduced = subject !== session.userId
 		&& (row.directory_opt_out === true || await hiddenFromViewer(config, pg, session.userId, subject));
-	return sendJson(response, 200, camelRow(row, reduced ? REDUCED_CARD_COLUMNS : CARD_COLUMNS), config);
+	if (reduced) return sendJson(response, 200, camelRow(row, REDUCED_CARD_COLUMNS), config);
+	const card = { ...camelRow(row, CARD_COLUMNS), status: statusOf(row) };
+	const readme = await projectReadme(pg, row);
+	if (readme) card.readme = readme;
+	return sendJson(response, 200, card, config);
+}
+
+/**
+ * The README of a profile, projected for a viewer who may see the whole card: the blocks of
+ * exactly `readme_page_id`, read through the service role, and only when the profile's own
+ * user owns that page and it is not archived (the app's trash is `archived_at`). The viewer
+ * never reads the page, so its sharing settings are not what lets them see it: the owner
+ * choosing it as their README is.
+ *
+ * Caveat: a failed page read answers the card without a README, so an outage looks like
+ * "no README"; and the cap counts the serialized blocks, not what the renderer draws.
+ */
+async function projectReadme(pg, row) {
+	const pageId = safeText(row.readme_page_id, 80).toLowerCase();
+	if (!UUID_SHAPE.test(pageId)) return null;
+	const params = new URLSearchParams({
+		id: `eq.${pageId}`, owner_id: `eq.${safeText(row.user_id, 80).toLowerCase()}`, archived_at: 'is.null', select: 'id,content', limit: '1',
+	});
+	let pages;
+	try {
+		pages = await pg.asService().get(`osionos_pages?${params}`);
+	} catch {
+		return null;
+	}
+	if (!Array.isArray(pages) || pages.length === 0) return null;
+	const blocks = Array.isArray(pages[0].content) ? pages[0].content : [];
+	if (Buffer.byteLength(JSON.stringify(blocks)) > README_BYTE_CAP) return { pageId, truncated: true };
+	return { pageId, blocks };
 }
 
 /**

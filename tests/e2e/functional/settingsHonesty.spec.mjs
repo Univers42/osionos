@@ -17,26 +17,29 @@
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
+import { enableAccountDelete } from "../support/accountDelete.mjs";
 import { closeSettings, openSettings, region, searchSettings } from "../support/settingsHelpers.mjs";
 
 test.describe("settings honesty (offline build)", () => {
   test("Profile → Delete account shows honest notice, keeps user signed in", async ({ page, baseURL }) => {
+    await enableAccountDelete(page);
     await openFreshPage(page, baseURL);
     await openSettings(page);
 
     // Navigate to Profile via search (the Profile nav button shows persona name)
     await searchSettings(page, "delete account");
 
-    // Should land on Profile at the Support anchor (where Delete my account is)
-    await expect(region(page).getByRole("heading", { name: "Support", exact: true })).toBeVisible();
-    await expect(region(page).locator('[data-settings-anchor="support"]')).toBeInViewport();
+    // Should land on Profile at the Danger zone anchor (where Delete my account is)
+    await expect(region(page).getByRole("heading", { name: "Danger zone", exact: true })).toBeVisible();
+    await expect(region(page).locator('[data-settings-anchor="danger"]')).toBeInViewport();
 
     // Open delete account modal
     await page.getByRole("button", { name: "Delete my account", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Delete account" })).toBeVisible();
 
     // Type confirmation
-    await page.getByRole("textbox", { name: "DELETE" }).fill("DELETE");
+    const typed = page.getByRole("dialog", { name: "Delete account" }).getByRole("textbox");
+    await typed.fill((await typed.getAttribute("placeholder")) ?? "");
     await page.getByRole("button", { name: "Schedule deletion" }).click();
 
     // Wait for the modal to close and any toast to appear
@@ -92,30 +95,23 @@ test.describe("settings honesty (offline build)", () => {
     await closeSettings(page);
   });
 
-  test("Devices table has exactly one row and no 'Ubuntu' text unless the browser UA says so", async ({ page, baseURL }) => {
+  test("Sessions fabricates no row when the server cannot be reached, and never shows 'Ubuntu'", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await openSettings(page);
 
     // Navigate to Profile via search
-    await searchSettings(page, "devices");
+    await searchSettings(page, "sessions");
 
-    // Should land on Profile at the Devices anchor
-    await expect(region(page).getByRole("heading", { name: "Devices", exact: true })).toBeVisible();
-    await expect(region(page).locator('[data-settings-anchor="devices"]')).toBeInViewport();
+    // Should land on Profile at the Sessions anchor
+    await expect(region(page).getByRole("heading", { name: "Sessions", exact: true })).toBeVisible();
+    const anchor = region(page).locator('[data-settings-anchor="sessions"]');
+    await expect(anchor).toBeInViewport();
 
-    // Find the Devices section and its table
-    const rows = region(page).locator("table tbody tr");
-    await expect(rows).toHaveCount(1);
-
-    // The device name should come from navigator.userAgent (honest), not "Ubuntu · This Device"
-    const deviceNameCell = rows.locator("td").first();
-    const deviceName = await deviceNameCell.textContent();
-
-    // In the offline Playwright build the UA is headless Chromium on Linux — it does not contain "Ubuntu"
-    // So we assert the text is NOT the old hard-coded value
-    expect(deviceName).not.toContain("Ubuntu · This Device");
-    // And it should contain something honest from the UA (e.g., "Chrome on Linux")
-    expect(deviceName.length).toBeGreaterThan(0);
+    // The offline build has no bridge: the block says so instead of inventing this browser as a row.
+    await expect(anchor.getByText("Sessions can't be listed on this server")).toBeVisible();
+    await expect(anchor.locator("table tbody tr")).toHaveCount(0);
+    await expect(anchor.getByText("Ubuntu · This device")).toHaveCount(0);
+    await expect(anchor.getByText("Ubuntu · This Device")).toHaveCount(0);
 
     await closeSettings(page);
   });
@@ -131,14 +127,16 @@ test.describe("settings honesty (offline build)", () => {
     await expect(region(page).getByRole("heading", { name: "User ID", exact: true })).toBeVisible();
     await expect(region(page).locator('[data-settings-anchor="user-id"]')).toBeInViewport();
 
-    const userIdRow = region(page).locator('[data-settings-anchor="user-id"]').locator("..");
-    const description = userIdRow.locator('[data-testid="setting-description"], .text-sm').first();
-    const text = (await description.textContent()) ?? "";
+    // Scoped to the section itself: its parent is the whole panel, whose first
+    // .text-sm is whatever section happens to come first.
+    const description = region(page).locator('[data-settings-anchor="user-id"] .mt-1.text-sm').first();
+    const text = (await description.count()) > 0 ? ((await description.textContent()) ?? "") : "";
 
     // In the offline build the persona may not have an id — showing nothing is honest
     // Not the literal UUID "b0181a89-4ad8-476c-9657-352d6eadf49e"
     expect(text).not.toBe("b0181a89-4ad8-476c-9657-352d6eadf49e");
-    // If present, it should be a UUID format
-    if (text) expect(text).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    // The offline persona's id is "mock-user-0", not a UUID: it was never read before,
+    // because the old locator landed on an empty <input>.
+    if (text) expect(text).toMatch(/^[\w-]+$/);
   });
 });

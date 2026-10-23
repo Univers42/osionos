@@ -20,7 +20,9 @@
 import React from 'react';
 
 import { ProfileActions } from './profileChrome';
+import { ProfileFacts } from './profileFields';
 import { ProfileSharedPosts } from './ProfileSharedPosts';
+import { ReadmeBlocks } from './ReadmeBlocks';
 import { useProfile } from './useProfile';
 
 interface ProfileViewProps {
@@ -45,8 +47,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
     );
   }
 
+  // Only an https URL or a same-origin path is drawn; the field is the allowlisted bannerUrl, nothing else.
+  const bannerSrc = /^(https:\/\/|\/(?!\/))/.test(profile.bannerUrl ?? '') ? profile.bannerUrl : undefined;
+
   return (
     <div className="h-full overflow-auto bg-[var(--osio-bg-page)] text-[var(--osio-fg-default)]">
+      {bannerSrc && (
+        <div className="mx-auto aspect-[3/1] max-h-64 w-full max-w-4xl overflow-hidden bg-[var(--osio-bg-subtle)]">
+          <img src={bannerSrc} alt="" data-testid="profile-banner" className="h-full w-full object-cover" />
+        </div>
+      )}
       <div className="mx-auto max-w-2xl px-8 py-12">
         <div className="flex items-center gap-6">
           <div className="relative">
@@ -57,11 +67,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
             </div>
             <span
               title={profile.online ? 'Online' : 'Offline'}
-              className={`absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-[var(--osio-bg-page)] ${profile.online ? 'bg-green-500' : 'bg-[var(--osio-fg-subtle)]'}`}
+              className={`absolute bottom-1 right-1 h-4 w-4 rounded-full border-2 border-[var(--osio-bg-page)] ${profile.online ? 'bg-[var(--osio-success)]' : 'bg-[var(--osio-fg-subtle)]'}`}
             />
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-bold">{profile.name}</h1>
+            {profile.pronouns && <p className="text-sm text-[var(--osio-fg-muted)]">{profile.pronouns}</p>}
             <p className="mt-1 text-sm text-[var(--osio-fg-muted)]">
               {profile.role ? `${profile.role} · ` : ''}
               {profile.online ? 'Online now' : 'Offline'}
@@ -69,7 +80,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
           </div>
         </div>
 
+        <ProfileFacts profile={profile} />
+
         <ProfileActions userId={userId} name={profile.name} />
+
+        <ReadmeBlocks readme={profile.readme} />
 
         <ProfileSharedPosts userId={userId} />
       </div>

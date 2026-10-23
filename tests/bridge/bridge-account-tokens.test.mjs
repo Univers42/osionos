@@ -37,8 +37,8 @@ import { AUDIT_TABLE, createPatStore, PAT_TABLE } from './support/pat-postgrest.
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-// The eight keys of a token entry, and nothing else.
-const ENTRY_KEYS = ['createdAt', 'expiresAt', 'grants', 'id', 'kind', 'name', 'revokedAt', 'scopes'];
+// The nine keys of a token entry, and nothing else.
+const ENTRY_KEYS = ['createdAt', 'expiresAt', 'grants', 'id', 'kind', 'lastUsedAt', 'name', 'revokedAt', 'scopes'];
 
 function inDays(days) {
 	return new Date(Date.now() + days * 86_400_000).toISOString();
@@ -151,7 +151,7 @@ describe('GET /api/account/tokens', () => {
 		assert.equal(foreign.revoked_reason, null);
 	});
 
-	it('answers exactly the eight keys of an entry, and never the hash', async (t) => {
+	it('answers exactly the nine keys of an entry, and never the hash', async (t) => {
 		const { base } = await world(t, { tokens: [tokenRow({ hash: 'b'.repeat(64) })] });
 		const token = await signIn(base);
 		const listed = await send(base, '/api/account/tokens', { token });
@@ -169,7 +169,7 @@ describe('GET /api/account/tokens', () => {
 		assert.ok(read, 'the list is read from the token table');
 		assert.equal(read.claims?.role, 'osionos_account_user');
 		assert.equal(read.claims?.aud, 'osionos-account');
-		assert.equal(read.params.get('select'), 'id,name,kind,scopes,grants,created_at,expires_at,revoked_at,revoked_reason');
+		assert.equal(read.params.get('select'), 'id,name,kind,scopes,grants,created_at,expires_at,last_used_at,revoked_at,revoked_reason');
 		assert.equal(read.params.get('order'), 'created_at.desc');
 		assert.equal(read.params.get('limit'), '50');
 	});

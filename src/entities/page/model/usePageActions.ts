@@ -96,6 +96,28 @@ function wordCountFromPage(page: { content?: Array<{ content?: string; children?
   return (page?.content ?? []).reduce((count, block) => count + textWordCount(block.content) + (block.children ?? []).reduce((total, child) => total + textWordCount(child.content), 0), 0);
 }
 
+export interface ProgramPageActionOutcome {
+  status: 'ok' | 'failed';
+  detail?: string;
+}
+
+const programPageRunners = new Map<string, (name: string) => Promise<ProgramPageActionOutcome>>();
+
+/**
+ * Run a page action by name for a button program, through the same callbacks
+ * the page menu uses (snapshot and logAction included). The runner exists only
+ * while a menu or settings panel is mounted for that page.
+ *
+ * Caveat: translate, import, export, updates_analytics and version_history open
+ * UI or need input, so a program cannot run them; a callback that returns
+ * early (no workspace, no page) is reported ok because the menu has no signal.
+ */
+export async function runProgramPageAction(pageId: string, name: string): Promise<ProgramPageActionOutcome> {
+  const runner = programPageRunners.get(pageId);
+  if (!runner) return { status: 'failed', detail: 'page actions are not available for this page right now' };
+  return runner(name);
+}
+
 export function usePageActions(pageId: string | null, workspaceId?: string) {
   const page = usePageStore((state) => (pageId ? state.pageById(pageId) : undefined));
   const activeUserId = useUserStore((state) => state.activeUserId);
@@ -342,6 +364,42 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     updatePageContent(pageId, turnIntoDashboardContent(page, cells));
     await logAction('turn_into_dashboard', 'Page turned into a dashboard');
   }, [logAction, page, pageId, snapshot, updatePageContent]);
+
+  const programActions: Record<string, () => unknown> = {
+    copy_link: copyLink,
+    copy_page_contents: copyContents,
+    duplicate,
+    move_to_trash: moveToTrash,
+    present,
+    small_text: toggleSmallText,
+    full_width: toggleFullWidth,
+    lock_page: toggleLock,
+    notify_me: toggleNotifications,
+    connections: manageConnections,
+    remove_header: removeHeaderCanvas,
+    turn_into_dashboard: turnIntoDashboard,
+  };
+  const programActionsRef = useRef(programActions);
+  useEffect(() => {
+    programActionsRef.current = programActions;
+  });
+  useEffect(() => {
+    if (!pageId) return undefined;
+    const runner = async (name: string): Promise<ProgramPageActionOutcome> => {
+      const action = programActionsRef.current[name];
+      if (!action) return { status: 'failed', detail: `page action "${name}" cannot run from a button` };
+      try {
+        await action();
+        return { status: 'ok' };
+      } catch (error) {
+        return { status: 'failed', detail: error instanceof Error ? error.message : 'page action failed' };
+      }
+    };
+    programPageRunners.set(pageId, runner);
+    return () => {
+      if (programPageRunners.get(pageId) === runner) programPageRunners.delete(pageId);
+    };
+  }, [pageId]);
 
   return {
     hasRemovableHeader,
