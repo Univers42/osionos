@@ -24,6 +24,7 @@ import { filterSlashCommandsFrom, parseSlashQuery } from "./slashMenuFilter";
 import type { SlashQuery } from "./slashMenuFilter";
 import { EMBED_SLASH_COMMANDS } from "./embedSlashCommands";
 import { EMBEDS_SECTION_ID } from "./embedSlashEntries";
+import { buildSysSlashCommands } from "./sysSlashCommands";
 import type {
   SlashCreatePageCommand,
   SlashCommand,
@@ -96,6 +97,7 @@ const EXTRA_SECTION_LABELS: Record<string, string> = {
   "turn-into": "Turn into",
   ai: "AI",
   [EMBEDS_SECTION_ID]: "Embeds",
+  "my-data": "My data",
 };
 
 const SECTION_ORDER = [
@@ -105,6 +107,7 @@ const SECTION_ORDER = [
   EMBEDS_SECTION_ID,
   "turn-into",
   "database",
+  "my-data",
   "layout",
   "advanced",
 ] as const;
@@ -376,6 +379,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   ...LOCAL_SLASH_COMMANDS,
   ...EMBED_SLASH_COMMANDS,
   ...TURN_INTO_COMMANDS,
+  ...buildSysSlashCommands(),
 ];
 
 /**
