@@ -33,6 +33,7 @@ import {
   Shield,
   SlidersHorizontal,
   Sparkles,
+  Terminal,
   User,
   UserPlus,
   Users,
@@ -176,6 +177,13 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     id: "mcp", group: "features", label: "osionos MCP", title: "osionos MCP",
     subtitle: "Connect osionos to your AI tools to summarize, search, and move faster", icon: Bot,
     anchors: [{ id: "osionos-mcp", label: "osionos MCP", keywords: ["mcp", "tools", "developer", "ai clients"] }],
+  },
+  {
+    id: "developer", group: "features", label: "Developer", title: "Developer",
+    subtitle: "Personal access tokens for the apps that talk to osionos", icon: Terminal,
+    anchors: [
+      { id: "personal-access-tokens", label: "Personal access tokens", keywords: ["token", "pat", "api key", "secret", "credential", "scope", "developer"] },
+    ],
   },
   {
     id: "public_pages", group: "features", label: "Published pages", title: "Published pages",
