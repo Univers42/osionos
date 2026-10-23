@@ -66,6 +66,9 @@ function loadEngine() {
 	engineReady ??= import("@/shared/notion-database-sys/src/lib/engine/bridge").then(async (bridge) => {
 		await bridge.initFormulaEngine();
 		return bridge;
+	}).catch((error: unknown) => {
+		engineReady = null;
+		throw error;
 	});
 	return engineReady;
 }
@@ -158,6 +161,8 @@ export async function runButtonBlock(block: Block, hostPageId?: string): Promise
 		});
 		lastRun = { blockId: block.id, pageId, result };
 		listeners.forEach((listener) => listener());
+	} catch {
+		toast("error", "This button's program could not be run");
 	} finally {
 		inFlight = false;
 	}

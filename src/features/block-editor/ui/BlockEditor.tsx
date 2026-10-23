@@ -1139,7 +1139,28 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
 
     case "button":
-      return <ButtonBlockReadOnly block={block} hostPageId={pageId} />;
+      return (
+        <div className="flex items-center gap-3">
+          <EditableContent
+            content={block.buttonLabel || block.content}
+            className="min-w-0 flex-1 text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5"
+            style={editableStyle}
+            placeholder="Button label"
+            onChange={(text) => {
+              if (block.buttonLabel) commitBlockUpdate(block.id, { buttonLabel: text });
+              else onChange(text);
+            }}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            onRequestSlashMenu={onRequestSlashMenu}
+            pageId={pageId}
+            blockType={block.type}
+            onTurnInto={handleTurnInto}
+            onAskAI={handleAskAI}
+          />
+          <ButtonBlockReadOnly block={block} hostPageId={pageId} />
+        </div>
+      );
 
     case "home_views":
       return (
