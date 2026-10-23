@@ -20,20 +20,36 @@ import React, { useState } from "react";
 
 import { useUserStore } from "@/features/auth";
 import { openSettings } from "@/features/settings/model/settingsNav";
+import { ApiError, api } from "@/shared/api/client";
 import { fetchAccountProfile, saveAccountProfile } from "@/shared/api/accountProfileApi";
 import { usePageStore } from "@/store/usePageStore";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
-import { customizeReadme, pickReadmeWorkspace, type CustomizeDeps } from "./model/readmeCustomize";
+import type { PageEntry } from "@/entities/page";
+import { customizeReadme, pickReadmeWorkspace, type CustomizeDeps, type LinkedPage } from "./model/readmeCustomize";
 
 const BUTTON = "inline-flex items-center gap-2 rounded-md border border-[var(--osio-border-default)] px-4 py-2 text-sm font-medium hover:bg-[var(--osio-bg-hover)] disabled:opacity-60";
+
+// Opens by id: the store first, else the bridge. Archived or 404 is "gone"; any other failure
+// is "error", which never leads to a replacement.
+async function openLinked(pageId: string, jwt: string): Promise<LinkedPage> {
+  const stored = usePageStore.getState().pageById(pageId);
+  if (stored) return stored.archivedAt ? { status: "gone" } : { status: "found", page: stored };
+  try {
+    const page = await api.get<PageEntry>(`/api/pages/${encodeURIComponent(pageId)}`, jwt);
+    if (!page) return { status: "error" };
+    return page.archivedAt ? { status: "gone" } : { status: "found", page };
+  } catch (error) {
+    return error instanceof ApiError && error.status === 404 ? { status: "gone" } : { status: "error" };
+  }
+}
 
 function readmeDeps(jwt: string): CustomizeDeps {
   const store = usePageStore.getState();
   return {
     loadProfile: fetchAccountProfile,
     saveProfile: saveAccountProfile,
-    findPage: (pageId) => store.pageById(pageId) ?? null,
+    openLinked: (pageId) => openLinked(pageId, jwt),
     createPage: (id) => store.addPage(id, "README", jwt, undefined, { surface: "page" }),
   };
 }
@@ -41,8 +57,9 @@ function readmeDeps(jwt: string): CustomizeDeps {
 export const OwnerActions: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [gone, setGone] = useState(false);
 
-  const customize = async () => {
+  const customize = async (replaceLinked = false) => {
     const user = useUserStore.getState();
     const session = user.sessions[user.activeUserId];
     const workspaceId = pickReadmeWorkspace(
@@ -52,10 +69,14 @@ export const OwnerActions: React.FC = () => {
     );
     setBusy(true);
     setMessage("");
-    const result = await customizeReadme(readmeDeps(user.activePageJwt() ?? ""), workspaceId);
+    setGone(false);
+    const result = await customizeReadme(readmeDeps(user.activePageJwt() ?? ""), workspaceId, replaceLinked);
     setBusy(false);
     if (result.ok) useWorkspaceLayout.getState().openTab(pageEntryToTab(result.page));
-    else setMessage(result.message);
+    else {
+      setMessage(result.message);
+      setGone(result.linkedGone === true);
+    }
   };
 
   return (
@@ -64,11 +85,16 @@ export const OwnerActions: React.FC = () => {
         <button type="button" onClick={() => openSettings("profile", "public-profile")} className={BUTTON}>
           Edit profile
         </button>
-        <button type="button" disabled={busy} onClick={() => void customize()} className={BUTTON}>
+        <button type="button" disabled={busy} onClick={() => void customize(false)} className={BUTTON}>
           Customize
         </button>
       </div>
       {message && <p role="alert" className="mt-2 text-sm text-[var(--osio-danger)]">{message}</p>}
+      {gone && (
+        <button type="button" disabled={busy} onClick={() => void customize(true)} className={`mt-2 ${BUTTON}`}>
+          Create a new README
+        </button>
+      )}
     </div>
   );
 };
