@@ -37,6 +37,7 @@ import {
 } from './bridge-social-core.mjs';
 import { pushToUser } from './bridge-push.mjs';
 import { decideWrite, recordDecision } from './bridge-moderation-gate.mjs';
+import { requireInteraction } from './bridge-moderation-core.mjs';
 
 const UUID_RE = /^[0-9a-fA-F-]{36}$/;
 
@@ -71,6 +72,10 @@ async function createComment(deps, session, request, response, config) {
 	const blockId = payload?.blockId ? String(payload.blockId) : null;
 	if (!UUID_RE.test(pageId) || !content) return sendJson(response, 400, { ok: false, message: 'Invalid comment.' }, config);
 	const { row } = await deps.verifyPageAccess(request, pageId, 'read');
+	// The page owner's interaction limit, judged before anything is written.
+	if (row.owner_id) {
+		await requireInteraction(config, deps.fetchImpl, { interaction: 'comments', actorId: session.userId, targetId: row.owner_id, workspaceId: row.workspace_id });
+	}
 	// L0 runs BEFORE the write: a warning is the author's question (409), a hold
 	// is a comment written held and seen by nobody but its author (C85, C87).
 	const { mode, stateEnabled } = moderationSettings(deps.env);
@@ -197,7 +202,9 @@ export function createCommentsHandler({ config, verifySession, verifyPageAccess,
 			if (commentId && method === 'DELETE') return await deleteComment(deps, session, commentId, response, requestConfig);
 			return sendJson(response, 404, { ok: false, message: 'Comment route not found.' }, requestConfig);
 		} catch (error) {
-			return sendJson(response, error?.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'Comment request failed.' }, requestConfig);
+			const body = { ok: false, message: error instanceof Error ? error.message : 'Comment request failed.' };
+			if (typeof error?.code === 'string') body.code = error.code;
+			return sendJson(response, error?.status ?? 500, body, requestConfig);
 		}
 	};
 }
