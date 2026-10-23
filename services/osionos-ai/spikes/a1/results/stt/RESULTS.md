@@ -131,11 +131,14 @@ WER is lower with the paired CI excluding 0, **and** its p95 RTF ≤ 0.5 at
 Outcome: **keep small**. Turbo's WER is lower in fr/es but its p95 RTF is
 above 0.5 on this CPU, so the rule's second condition fails.
 
-Compose recommendation for groot (do not edit groot here): the measurement used
-5 CPUs; set `mem_limit` to the small model's measured peak plus 30 %, rounded
-up to 0.5 GB = 1.47 GiB × 1.30 = 1.911 GiB → **2.0 GB**. The current
-values are 4 CPUs / 2 GB (`docs/ai/modules/m5-voice.md` caveat). The measured
-peak (1.47 GiB) fits under the current 2 GB cap.
+Compose recommendation for groot (not edited here): the small model's measured
+peak plus 30 % is 1.47 GiB × 1.30 = 1.91 GiB, so the current `mem_limit` of
+2 GiB (`2g`) holds and stays. The measurement used `--cpus 5`; the compose
+gives 4 (`docs/ai/modules/m5-voice.md` caveat), and RTF at 4 CPUs is not
+measured — either raise it to 5 or re-measure at 4.
+
+`load.log` and `rss-*.log` are committed with `git add -f` (the repo ignores
+`*.log`), so every number above can be checked against its source.
 
 ## Caveat
 
