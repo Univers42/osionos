@@ -19,7 +19,9 @@
 import React from "react";
 
 import type { Block } from "@/entities/block";
+import { BoundFieldEmptyText, type BoundRecord } from "@/entities/block/model/binding";
 import { PageBlocksRenderer } from "@/widgets/page-renderer/ui/PageBlocksRenderer";
+import { BindingProvider } from "./model/binding";
 
 export interface ReadmeProjection {
   pageId: string;
@@ -27,7 +29,7 @@ export interface ReadmeProjection {
   truncated?: boolean;
 }
 
-export const ReadmeBlocks: React.FC<{ readme: ReadmeProjection | null | undefined }> = ({ readme }) => {
+export const ReadmeBlocks: React.FC<{ readme: ReadmeProjection | null | undefined; record: BoundRecord | null }> = ({ readme, record }) => {
   if (!readme) return null;
   if (readme.truncated) {
     return <p data-testid="readme-truncated" className="mt-8 text-sm text-[var(--osio-fg-muted)]">README too large to preview</p>;
@@ -35,7 +37,11 @@ export const ReadmeBlocks: React.FC<{ readme: ReadmeProjection | null | undefine
   if (!Array.isArray(readme.blocks) || readme.blocks.length === 0) return null;
   return (
     <section aria-label="README" data-testid="profile-readme" className="mt-8">
-      <PageBlocksRenderer blocks={readme.blocks} />
+      <BindingProvider record={record}>
+        <BoundFieldEmptyText.Provider value={null}>
+          <PageBlocksRenderer blocks={readme.blocks} />
+        </BoundFieldEmptyText.Provider>
+      </BindingProvider>
     </section>
   );
 };
