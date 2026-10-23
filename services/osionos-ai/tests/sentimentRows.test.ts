@@ -354,6 +354,29 @@ describe('the object-database row projection', { timeout: 180_000, skip: canRun 
 		assert.equal(left.rowCount, 0);
 	});
 
+	it('C143 with the jobs off, a removed page still takes its projection and its score', async () => {
+		await optIn(true);
+		await save(state(PAGES));
+		const rows = await projection();
+		for (const row of rows) await scoreRow(row, 'neutral');
+		const gone = rows.find((row) => row.row_id === 'row-1')!;
+
+		const client = await pool.connect();
+		try {
+			await client.query('begin');
+			await client.query("set local osionos.ai_jobs = 'off'");
+			await client.query(
+				'update public.osionos_object_databases set state = $3 where owner_id = $1 and db_key = $2',
+				[AUTHOR, DB_KEY, state(PAGES.filter((page) => page.id !== 'row-1'))],
+			);
+			await client.query('commit');
+		} finally {
+			client.release();
+		}
+		assert.deepEqual((await projection()).map((row) => row.row_id).sort(), ['row-2', 'row-3']);
+		assert.equal((await scoreFor(gone.id)).length, 0);
+	});
+
 	it('C150 early exit: a state with no AI property projects nothing; removing the property deletes the projection', async () => {
 		await save(state(PAGES, false));
 		assert.equal((await projection()).length, 0);
