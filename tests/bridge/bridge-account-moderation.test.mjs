@@ -33,9 +33,9 @@ import { roleTables, startAdminWorld, tokenFor } from './support/admin-route-wor
 import { createKeysetStore } from './support/keyset-postgrest.mjs';
 import { kvStub } from './support/kv-stub.mjs';
 import { gotrueJwt } from './support/auth-world.mjs';
-import { startSessionBridge, sessionConfig } from './support/session-world.mjs';
+import { startSessionBridge, sessionConfig, postJson } from './support/session-world.mjs';
 import { createSessionStore } from './support/session-postgrest.mjs';
-import { refreshWith, signIn } from './support/session-signin.mjs';
+import { mintHandoff, refreshWith, signIn } from './support/session-signin.mjs';
 
 const TARGET = 'cccccccc-3333-4333-8333-cccccccccccc';
 const MODERATOR = 'dddddddd-4444-4444-8444-dddddddddddd';
@@ -351,5 +351,94 @@ describe('every sign-in path asks the same function', () => {
 	it('the refresh lets a person whose suspension has ended continue', async (t) => {
 		const answer = await refreshAfter(t, report(R1, { decision: 'suspend', decision_until: '2026-01-01T00:00:00.000Z' }));
 		assert.equal(answer.status, 200);
+	});
+});
+
+describe('the review conditions', () => {
+	const unchanged = (w) => {
+		assert.equal(writes(w, REPORTS).length, 0);
+		assert.equal(w.store.rows(AUDIT).length, 0);
+	};
+
+	for (const [name, failReads] of [
+		['the target role read fails', (table, params) => table === 'user_roles' && params.get('user_id') === `eq.${TARGET}`],
+		['the target identity read fails', (table) => table === 'osionos_bridge_identities'],
+	]) {
+		it(`fails closed with 503 when ${name}: nothing is written`, async (t) => {
+			const w = await world(t, seed(), { failReads });
+			const answer = await decide(w, R1, { decision: 'ban' });
+			assert.deepEqual([answer.status, answer.body.code], [503, 'admin_check_unavailable']);
+			unchanged(w);
+		});
+	}
+
+	const live = (decision, until = null) => seed({ reports: [report(R1, { decision, decision_until: until, status: 'resolved' })] });
+	const downgrades = [
+		['ban', null, 'warn', 409], ['ban', null, 'suspend', 409], ['ban', null, 'dismiss', 200], ['ban', null, 'ban', 200],
+		['suspend', FUTURE(), 'warn', 409], ['suspend', FUTURE(), 'ban', 200], ['suspend', '2020-01-01T00:00:00.000Z', 'warn', 200],
+	];
+	for (const [current, until, next, status] of downgrades) {
+		const extra = next === 'suspend' ? { until: FUTURE() } : {};
+		it(`a ${until && until < '2021' ? 'lapsed ' : ''}${current} re-decided to ${next} answers ${status}`, async (t) => {
+			const w = await world(t, live(current, until));
+			const answer = await decide(w, R1, { decision: next, ...extra });
+			assert.equal(answer.status, status);
+			if (status === 409) {
+				assert.equal(answer.body.code, 'decision_downgrade');
+				assert.equal(w.store.rows(REPORTS)[0].decision, current);
+				assert.equal(w.store.rows(AUDIT).length, 0);
+			}
+		});
+	}
+
+	it('a moderator cannot decide a report about themselves', async (t) => {
+		const w = await world(t, seed({ reports: [report(R1, { subject_user_id: MODERATOR, subject_id: MODERATOR })] }));
+		const answer = await decide(w, R1, { decision: 'dismiss' }, tokenFor(w.config, MODERATOR));
+		assert.deepEqual([answer.status, answer.body.code], [403, 'self_subject']);
+		unchanged(w);
+	});
+
+	it('a user report with no subject user is a 422 before any write', async (t) => {
+		const w = await world(t, seed({ reports: [report(R1, { subject_user_id: null })] }));
+		const answer = await decide(w, R1, { decision: 'ban' });
+		assert.deepEqual([answer.status, answer.body.code], [422, 'invalid_subject']);
+		unchanged(w);
+	});
+
+	it('the refusal read finds a live ban or suspension behind 101 lapsed suspensions', async () => {
+		const lapsed = Array.from({ length: 101 }, (_, index) => report(`22222222-aaaa-4aaa-8aaa-${String(index).padStart(12, '0')}`, { decision: 'suspend', decision_until: '2020-01-01T00:00:00.000Z' }));
+		for (const [last, code] of [[row('ban'), 'account_banned'], [row('suspend', '2026-10-30T00:00:00.000Z'), 'account_suspended']]) {
+			const client = createClient(createKeysetStore({ tables: { [REPORTS]: [...lapsed, last] } }));
+			await assert.rejects(assertAccountNotRefused(client, TARGET, NOW), { status: 403, code });
+		}
+	});
+
+	it('a handoff minted before a ban is refused when it is consumed, and writes no session row', async (t) => {
+		const keyset = createKeysetStore({ tables: { [REPORTS]: [] } });
+		const sessions = createSessionStore({ rows: [] });
+		const fetchImpl = (url, init) => (new URL(String(url)).pathname.endsWith(`/${REPORTS}`) ? keyset.fetchImpl(url, init) : sessions.fetchImpl(url, init));
+		const { base } = await startSessionBridge({ t, store: { ...sessions, fetchImpl }, config: sessionConfig() });
+		const token = await mintHandoff(base, TARGET);
+		keyset.rows(REPORTS).push(report(R1, { decision: 'ban' }));
+		const answer = await postJson(base, '/api/auth/bridge/consume', { body: { token } });
+		assert.deepEqual([answer.status, answer.body.code], [403, 'account_banned']);
+		assert.equal(sessions.callsTo('osionos_sessions').filter((call) => call.method === 'POST').length, 0);
+	});
+
+	for (const [decision, table, code, extra] of [['ban', 'osionos_sessions', 'decision_saved_revoke_failed', {}], ['warn', 'osionos_notifications', 'decision_saved_notify_failed', {}]]) {
+		it(`a failed ${table} write after the PATCH answers ${code}, the decision stays saved`, async (t) => {
+			const w = await world(t, seed(), { refuse: [table] });
+			const answer = await decide(w, R1, { decision, ...extra });
+			assert.equal(answer.status, 500);
+			assert.equal(answer.body.code, code);
+			assert.equal(w.store.rows(REPORTS)[0].decision, decision);
+		});
+	}
+
+	it('repeating a warn on the same report sends no second notice', async (t) => {
+		const w = await world(t);
+		await decide(w, R1, { decision: 'warn' });
+		assert.equal((await decide(w, R1, { decision: 'warn' })).status, 200);
+		assert.equal(w.store.rows('osionos_notifications').length, 1);
 	});
 });
