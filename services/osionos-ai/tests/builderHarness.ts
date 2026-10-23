@@ -9,9 +9,9 @@ import type { SseEvent } from './sse.ts';
  * first and imports this module dynamically after it.
  */
 process.env.OSIONOS_AI_BUILDERS = 'on';
-const { startHarness, WORKSPACE_A } = await import('./harness.ts');
+const { startHarness, USER_A, WORKSPACE_A } = await import('./harness.ts');
 export const harness = await startHarness();
-const { app, bridge, mock, postRun, createConversation } = harness;
+const { app, bridge, mock, postRun, createConversation, tokenFor, call } = harness;
 
 export async function closeBuilderHarness(): Promise<void> {
 	await app.close();
@@ -73,4 +73,13 @@ export async function ask(args: Json): Promise<SseEvent[]> {
 /** The permission.asked events. */
 export function asked(events: SseEvent[]): SseEvent[] {
 	return events.filter((event) => event.event === 'permission.asked');
+}
+
+/** Decide an approval, as user A by default; `items` are the plan keys kept. */
+export async function decide(approvalId: string, decision = 'approve', token = tokenFor(USER_A, WORKSPACE_A), items?: string[]) {
+	return call(`/api/ai/approvals/${approvalId}`, {
+		method: 'POST',
+		token,
+		body: { decision, ...(items ? { items } : {}) },
+	});
 }

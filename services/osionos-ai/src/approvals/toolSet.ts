@@ -1,6 +1,7 @@
 import type { ToolSet } from 'ai';
+import { config } from '../config.ts';
 import { argsSha256 } from './canonical.ts';
-import { countExecutedInRun, insertApproval } from './repo.ts';
+import { countExecutedInRun, countPendingPlans, insertApproval } from './repo.ts';
 import { MAX_PLAN_ARGS_BYTES } from '../builders/planSchema.ts';
 import { writeTools } from '../tools/writeToolList.ts';
 import type { ToolHooks, ToolPool } from '../tools/index.ts';
@@ -80,6 +81,22 @@ export function writeToolSet(
 						error: 'the request is too big',
 					});
 					return pool.draw('This request is too big to be approved. Ask for less at a time.');
+				}
+				// The plans a user may have waiting at once (C161): a backlog of
+				// cards is a backlog of decisions nobody is making.
+				if (tool.name === 'build_plan') {
+					const waiting = await countPendingPlans(ctx.db, approval.ownerId);
+					if (waiting >= config.pendingPlans) {
+						await hooks.onResult?.({
+							toolCallId: options.toolCallId,
+							toolName: tool.name,
+							ok: false,
+							error: 'too many plans are waiting',
+						});
+						return pool.draw(
+							`You already have ${waiting} plans waiting for the user. Ask them to decide those first.`,
+						);
+					}
 				}
 				// The row: the state of the decision. A null row means the same
 				// call is already waiting — the index refuses the duplicate.

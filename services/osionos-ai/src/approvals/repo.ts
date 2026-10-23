@@ -176,6 +176,17 @@ export async function countExecutedInRun(db: Pool, runId: string): Promise<numbe
 	return Number(result.rows[0]?.count ?? 0);
 }
 
+/** The number of the plans of a user that are still waiting for a decision (C161). */
+export async function countPendingPlans(db: Pool, ownerId: string): Promise<number> {
+	const result = await db.query<{ count: string }>(
+		`select count(*)::text as count
+		   from public.ai_approvals
+		  where owner_id = $1 and tool = 'build_plan' and status = 'pending' and expires_at > now()`,
+		[ownerId],
+	);
+	return Number(result.rows[0]?.count ?? 0);
+}
+
 /** What the sweeper did. */
 export interface SweepOutcome {
 	/** The approvals nobody answered in time. */

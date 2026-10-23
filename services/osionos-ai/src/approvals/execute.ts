@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { config } from '../config.ts';
+import { checkDailyBuildLimit } from '../rateLimit.ts';
 import { resolveTarget } from '../gateway/resolve.ts';
 import { findBuiltinAgent } from '../agents/builtins.ts';
 import { startRun } from '../runs/runner.ts';
@@ -221,6 +222,14 @@ export async function decideApproval(input: {
 		if (!declined) return { kind: 'refused', status: 409, code: 'approval_not_pending' };
 		const continuationRunId = await continueRun(db, redis, user, declined, 'declined');
 		return { kind: 'decided', status: 'declined', approval: declined, continuationRunId };
+	}
+
+	// A builder pass spends the day's bucket BEFORE the claim (C161): at the
+	// limit the approval stays 'pending', and no write has started. A decline
+	// never reaches here, and never spends a pass.
+	if (row.tool === 'build_plan') {
+		const daily = await checkDailyBuildLimit(redis, user.userId, config.buildsPerDay);
+		if (!daily.allowed) return { kind: 'refused', status: 429, code: 'build_limit_reached' };
 	}
 
 	const claimed = await claimApproval(db, { id: approvalId, ownerId: user.userId, next: 'executing' });
