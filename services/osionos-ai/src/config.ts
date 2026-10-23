@@ -88,6 +88,9 @@ const envSchema = z.object({
 	// The builder tool (P6a). OFF unless exactly "on": the public overlay leaves
 	// it empty. Off, `build_plan` is not in any tool set.
 	OSIONOS_AI_BUILDERS: z.string().optional(),
+	// The time budget of one build, in milliseconds (P6a-3b): the plan is built
+	// item by item until this runs out, and the rest is left to resume.
+	OSIONOS_AI_BUILD_BUDGET_MS: z.coerce.number().int().positive().default(25_000),
 	// The personal access tokens. OFF unless exactly "on": the public overlay
 	// leaves it empty until the G4 conditions C112-C120 are merged (devil
 	// verdict g-graph-diagrams-mcp-verdict.md). Off, the routes do not exist.
@@ -177,6 +180,7 @@ const rawEnv = {
 	OSIONOS_AI_STT_SECONDS_PER_DAY: process.env.OSIONOS_AI_STT_SECONDS_PER_DAY,
 	OSIONOS_AI_IMAGES: process.env.OSIONOS_AI_IMAGES,
 	OSIONOS_AI_BUILDERS: process.env.OSIONOS_AI_BUILDERS,
+	OSIONOS_AI_BUILD_BUDGET_MS: process.env.OSIONOS_AI_BUILD_BUDGET_MS,
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
 	OSIONOS_AI_MCP_ALLOWED_HOSTS: process.env.OSIONOS_AI_MCP_ALLOWED_HOSTS,
 	OSIONOS_AI_MCP_ALLOWED_ORIGINS: process.env.OSIONOS_AI_MCP_ALLOWED_ORIGINS,
@@ -336,6 +340,8 @@ export interface AiServiceConfig {
 	imagesEnabled: boolean;
 	/** The builder tool `build_plan` is offered. */
 	buildersEnabled: boolean;
+	/** The time budget of one build, in milliseconds. */
+	buildBudgetMs: number;
 	patEnabled: boolean;
 	/** The hosts the MCP endpoint answers to (lower-case, loopback included). */
 	mcpAllowedHosts: readonly string[];
@@ -403,6 +409,7 @@ export const config: AiServiceConfig = Object.freeze({
 	sttSecondsPerDay: parsed.data.OSIONOS_AI_STT_SECONDS_PER_DAY,
 	imagesEnabled: parsed.data.OSIONOS_AI_IMAGES?.trim().toLowerCase() === 'on',
 	buildersEnabled: parsed.data.OSIONOS_AI_BUILDERS?.trim().toLowerCase() === 'on',
+	buildBudgetMs: parsed.data.OSIONOS_AI_BUILD_BUDGET_MS,
 	patEnabled: parsed.data.OSIONOS_AI_PAT?.trim().toLowerCase() === 'on',
 	mcpAllowedHosts: Object.freeze(['localhost', '127.0.0.1', ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),
 	mcpAllowedOrigins: Object.freeze(commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_ORIGINS)),

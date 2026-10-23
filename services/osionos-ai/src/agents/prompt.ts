@@ -1,6 +1,8 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_LINES } from '../runs/prompt.ts';
 import { attributeText } from '../runs/sources.ts';
-import { SKILL_INDEX_MAX, findBuiltinSkill } from '../skills/builtins.ts';
+import { findBuiltinSkill } from '../skills/builtins.ts';
+import { buildSkillIndex } from '../skills/runSkills.ts';
+import type { SkillIndex } from '../skills/runSkills.ts';
 import type { BuiltinSkill } from '../skills/builtins.ts';
 import { AGENT_INSTRUCTIONS_MAX } from './builtins.ts';
 import type { BuiltinAgent } from './builtins.ts';
@@ -39,33 +41,27 @@ export function skillsBlock(
 	agent: BuiltinAgent,
 	find: (id: string) => BuiltinSkill | null = findBuiltinSkill,
 ): string | null {
-	if (agent.skills.length === 0) return null;
-	const lines = agent.skills.map((id) => {
-		const skill = find(id);
-		if (!skill) throw new Error(`the agent names an unknown skill: ${id}`);
-		return `- ${skill.id}: ${skill.description}`;
-	});
-	lines.push('When the task matches a skill, call load_skill with its id before you answer.');
-	const block = `<skills>\n${lines.join('\n')}\n</skills>`;
-	if (block.length > SKILL_INDEX_MAX) throw new Error('the skills index of the agent is over the cap');
-	return block;
+	return buildSkillIndex(agent.skills, [], find).block;
 }
 
 /**
  * The system prompt of a run.
  *
- * `null` is the general assistant: the base prompt, unchanged. An agent adds
- * its block between the style and the data-boundary line.
+ * `null` and no skills is the general assistant: the base prompt, byte for
+ * byte. An agent adds its block between the style and the data-boundary line;
+ * the skills index (the agent's built-ins and the workspace's skills) follows
+ * it, and the boundary line stays LAST in every shape (devil C38). Without an
+ * `index`, the index is the agent's built-ins.
  */
-export function systemPromptFor(agent: BuiltinAgent | null): string {
-	if (!agent) return SYSTEM_PROMPT;
+export function systemPromptFor(agent: BuiltinAgent | null, index?: SkillIndex): string {
+	const skills = index ? index.block : agent ? skillsBlock(agent) : null;
+	if (!agent && !skills) return SYSTEM_PROMPT;
 	// The prefix is capped (devil C47): the instructions of an agent are a
 	// page at most. An agent over the cap is a bug in the registry, and a run
 	// must not start on a prompt that nobody bounded.
-	if (agent.instructions.length > AGENT_INSTRUCTIONS_MAX) {
+	if (agent && agent.instructions.length > AGENT_INSTRUCTIONS_MAX) {
 		throw new Error('the instructions of the agent are over the cap');
 	}
 	const [identity, language, boundary, style] = SYSTEM_PROMPT_LINES;
-	const skills = skillsBlock(agent);
-	return [identity, language, style, agentBlock(agent), ...(skills ? [skills] : []), boundary].join('\n');
+	return [identity, language, style, ...(agent ? [agentBlock(agent)] : []), ...(skills ? [skills] : []), boundary].join('\n');
 }
