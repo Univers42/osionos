@@ -75,6 +75,7 @@ import { publicIconAvatar } from './bridge-avatar.mjs';
 import { searchMessages } from './bridge-chat-search.mjs';
 import { getThread } from './bridge-chat-threads.mjs';
 import { askBeforeWrite } from './bridge-moderation-gate.mjs';
+import { assertNotBlocked, requireInteraction } from './bridge-moderation-core.mjs';
 
 const CHANNEL_KINDS = new Set(['text', 'dm', 'voice', 'video', 'group']);
 const DEFAULT_PAGE = 50;
@@ -343,6 +344,14 @@ async function postMessage(deps, session, request, channelId, response, config) 
 		const decision = askBeforeWrite({ text: content, surface: 'channel', env: deps.env, payload });
 		if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
 	}
+	// The other member of a DM is read once, before the insert: the limit check needs it
+	// and the fan-out below reuses it.
+	const dmPeers = channel.kind === 'dm'
+		? await rest(config, deps.fetchImpl, `osionos_channel_members?channel_id=eq.${channel.id}&user_id=neq.${session.userId}&select=user_id`)
+		: [];
+	for (const peer of Array.isArray(dmPeers) ? dmPeers : []) {
+		await requireInteraction(config, deps.fetchImpl, { interaction: 'messages', actorId: session.userId, targetId: peer.user_id });
+	}
 	const replyToId = payload.replyTo && UUID_REGEX.test(String(payload.replyTo)) ? String(payload.replyTo) : null;
 	let replyTo = null;
 	let replyAuthorId = null;
@@ -394,8 +403,7 @@ async function postMessage(deps, session, request, channelId, response, config) 
 		notifs.push({ recipientId: replyAuthorId, type: 'reply', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview });
 	}
 	if (channel.kind === 'dm') {
-		const others = await rest(config, deps.fetchImpl, `osionos_channel_members?channel_id=eq.${channel.id}&user_id=neq.${session.userId}&select=user_id`);
-		for (const r of Array.isArray(others) ? others : []) {
+		for (const r of Array.isArray(dmPeers) ? dmPeers : []) {
 			if (seen.has(r.user_id)) continue;
 			seen.add(r.user_id);
 			notifs.push({ recipientId: r.user_id, type: 'dm', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview });
@@ -504,8 +512,8 @@ async function setReaction(deps, session, request, url, messageId, add, response
  */
 export async function ensureDmChannel(deps, session, config, peerUserId, workspaceHint = '') {
 	if (peerUserId === session.userId) throw httpError('Cannot open a DM with yourself.', 422);
-	const blockRows = await rest(config, deps.fetchImpl, `osionos_user_blocks?or=(and(blocker_id.eq.${session.userId},blocked_id.eq.${peerUserId}),and(blocker_id.eq.${peerUserId},blocked_id.eq.${session.userId}))&select=blocker_id&limit=1`);
-	if (Array.isArray(blockRows) && blockRows.length > 0) throw httpError('You cannot message this person.', 403);
+	await assertNotBlocked(config, deps.fetchImpl, session.userId, peerUserId, 'You cannot message this person.');
+	await requireInteraction(config, deps.fetchImpl, { interaction: 'messages', actorId: session.userId, targetId: peerUserId });
 	let workspaceId = UUID_REGEX.test(safeText(workspaceHint, 80)) ? workspaceHint : '';
 	// The id list is bounded by construction: the caller and one peer.
 	const pairRows = await rest(config, deps.fetchImpl, `osionos_workspace_members?user_id=in.(${session.userId},${peerUserId})&select=user_id,workspace_id`);
@@ -817,7 +825,9 @@ export function createChatHandler({ config, verifySession, fetchImpl = fetch, en
 			if (reactions && method === 'DELETE') return await setReaction(deps, session, request, url, reactions[1], false, response, requestConfig);
 			return sendJson(response, 404, { ok: false, message: 'Chat route not found.' }, requestConfig);
 		} catch (error) {
-			return sendJson(response, error?.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'Chat request failed.' }, requestConfig);
+			const body = { ok: false, message: error instanceof Error ? error.message : 'Chat request failed.' };
+			if (typeof error?.code === 'string') body.code = error.code;
+			return sendJson(response, error?.status ?? 500, body, requestConfig);
 		}
 	};
 }

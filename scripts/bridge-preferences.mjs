@@ -12,8 +12,10 @@
 
 /**
  * The settings sections of the account plane: `/api/preferences` is the `preferences`
- * section and `/api/account/notification-settings` is the `notifications` one. Nothing
- * else is exposed — a path under one of them that is not the section answers 404.
+ * section, `/api/account/notification-settings` is the `notifications` one and
+ * `/api/account/moderation-settings` is the `moderation` one (interaction limits: GET and
+ * PATCH only, the bridge turns a duration into an absolute `until` on its own clock, and a
+ * PATCH to an interaction replaces its whole entry). Nothing else is exposed — a path under one of them that is not the section answers 404.
  *
  * The write goes through the database's merge function (`osionos_user_settings_merge`),
  * which the caller runs as itself: the merge is one statement, so two writes to one section
@@ -32,10 +34,13 @@
 
 import { rateLimit } from './bridge-guard.mjs';
 import { bearerToken, readJsonBody, sendJson } from './bridge-social-core.mjs';
+import { MODERATION_SECTION, normaliseModerationPatch } from './bridge-moderation-core.mjs';
 
+const ALL_METHODS = ['GET', 'PATCH', 'PUT'];
 const SECTIONS = new Map([
-	['/api/preferences', 'preferences'],
-	['/api/account/notification-settings', 'notifications'],
+	['/api/preferences', { section: 'preferences' }],
+	['/api/account/notification-settings', { section: 'notifications' }],
+	['/api/account/moderation-settings', { section: MODERATION_SECTION, methods: ['GET', 'PATCH'], prepare: normaliseModerationPatch }],
 ]);
 const SECTION_BODY_LIMIT = 16 * 1024;
 const SETTINGS_LIMIT = 120;
@@ -96,8 +101,9 @@ async function getSection(pg, session, section, response, config) {
 	return sendJson(response, 200, await readSection(pg, session, section), config);
 }
 
-async function patchSection(pg, session, section, request, response, config) {
-	const patch = await readSectionBody(request);
+async function patchSection(pg, session, { section, prepare }, request, response, config) {
+	const body = await readSectionBody(request);
+	const patch = prepare ? prepare(body) : body;
 	return sendJson(response, 200, await mergeSection(pg, session, section, patch), config);
 }
 
@@ -110,22 +116,24 @@ async function putSection(pg, session, section, request, response, config) {
 }
 
 /**
- * The settings routes of this module: GET, PATCH and PUT on the two section paths. It
+ * The settings routes of this module: GET, PATCH and PUT on the section paths (PUT not on the moderation one). It
  * answers true when it handled the request and false when the path is not its own.
  */
 export function createPreferencesRoutes({ config, pg, kv, verifySession }) {
 	return async function handlePreferences(url, request, response) {
 		const pathname = url.pathname;
 		const method = (request.method || 'GET').toUpperCase();
-		const section = SECTIONS.get(pathname);
+		const entry = SECTIONS.get(pathname);
 		const underSection = [...SECTIONS.keys()].some((base) => pathname.startsWith(`${base}/`));
-		if (!section && !underSection) return false;
+		if (!entry && !underSection) return false;
 		try {
 			const session = callerSession(request, config, verifySession);
-			if (!section) throw accountError(404, 'section_not_found', 'There is no settings section on that path.');
+			if (!entry) throw accountError(404, 'section_not_found', 'There is no settings section on that path.');
 			await rateLimit(kv, ['settings', session.userId], { limit: SETTINGS_LIMIT, windowMs: SETTINGS_WINDOW_MS });
+			const { section } = entry;
+			if (!(entry.methods ?? ALL_METHODS).includes(method)) throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
 			if (method === 'GET') return await getSection(pg, session, section, response, config);
-			if (method === 'PATCH') return await patchSection(pg, session, section, request, response, config);
+			if (method === 'PATCH') return await patchSection(pg, session, entry, request, response, config);
 			if (method === 'PUT') return await putSection(pg, session, section, request, response, config);
 			throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
 		} catch (error) {
