@@ -57,6 +57,8 @@ function matches(row, key, expr) {
 	if (expr === 'not.is.null') return row[key] != null;
 	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));
 	if (expr.startsWith('gt.')) return String(row[key] ?? '') > expr.slice(3);
+	// SQL: a NULL is never less than anything, so an unset column does not match.
+	if (expr.startsWith('lt.')) return row[key] != null && String(row[key]) < expr.slice(3);
 	if (expr.startsWith('in.(') && expr.endsWith(')')) return inListValues(expr).some((value) => sameText(row[key], value));
 	throw new Error(`pat store: unsupported filter ${key}=${expr}`);
 }
