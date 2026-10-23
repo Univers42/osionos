@@ -76,6 +76,9 @@ const envSchema = z.object({
 	// leaves it empty until the prompt gate (devil C72) and the output gate
 	// (C73) exist. Off, the route does not exist.
 	OSIONOS_AI_IMAGES: z.string().optional(),
+	// The builder tool (P6a). OFF unless exactly "on": the public overlay leaves
+	// it empty. Off, `build_plan` is not in any tool set.
+	OSIONOS_AI_BUILDERS: z.string().optional(),
 	// The personal access tokens. OFF unless exactly "on": the public overlay
 	// leaves it empty until the G4 conditions C112-C120 are merged (devil
 	// verdict g-graph-diagrams-mcp-verdict.md). Off, the routes do not exist.
@@ -143,6 +146,7 @@ const rawEnv = {
 	OSIONOS_AI_STT_TIMEOUT_MS: process.env.OSIONOS_AI_STT_TIMEOUT_MS,
 	OSIONOS_AI_STT_SECONDS_PER_DAY: process.env.OSIONOS_AI_STT_SECONDS_PER_DAY,
 	OSIONOS_AI_IMAGES: process.env.OSIONOS_AI_IMAGES,
+	OSIONOS_AI_BUILDERS: process.env.OSIONOS_AI_BUILDERS,
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
 	OSIONOS_AI_IMAGE_URL: firstEnv('OSIONOS_AI_IMAGE_URL'),
 	OSIONOS_AI_IMAGE_MODEL: process.env.OSIONOS_AI_IMAGE_MODEL,
@@ -290,6 +294,8 @@ export interface AiServiceConfig {
 	sttSecondsPerDay: number;
 	/** The image generation is on: without it the route does not exist. */
 	imagesEnabled: boolean;
+	/** The builder tool `build_plan` is offered. */
+	buildersEnabled: boolean;
 	patEnabled: boolean;
 	/** The OpenAI-compatible base URL of the internal image engine. */
 	imageUrl?: string;
@@ -344,6 +350,7 @@ export const config: AiServiceConfig = Object.freeze({
 	sttTimeoutMs: parsed.data.OSIONOS_AI_STT_TIMEOUT_MS,
 	sttSecondsPerDay: parsed.data.OSIONOS_AI_STT_SECONDS_PER_DAY,
 	imagesEnabled: parsed.data.OSIONOS_AI_IMAGES?.trim().toLowerCase() === 'on',
+	buildersEnabled: parsed.data.OSIONOS_AI_BUILDERS?.trim().toLowerCase() === 'on',
 	patEnabled: parsed.data.OSIONOS_AI_PAT?.trim().toLowerCase() === 'on',
 	imageUrl: parsed.data.OSIONOS_AI_IMAGE_URL,
 	imageModel: parsed.data.OSIONOS_AI_IMAGE_MODEL,
