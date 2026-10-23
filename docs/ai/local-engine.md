@@ -138,6 +138,16 @@ Grounded in the current code.
   gesture and a permission grant; the UI should pre-check
   `navigator.permissions.query({ name: 'loopback-network' })` and gate on a click.
 
+- **The engine is exposed to every site, not only to osionos.** The proof above
+  shows `llama-server` with default flags reflecting ANY `Origin` with
+  credentials allowed: any public page the user visits can call it, with
+  Chrome's loopback prompt as the only guard. The setup guide must tell the user
+  to restrict the engine to the osionos origin (`--cors-origins <origin>` for
+  llama-server, `OLLAMA_ORIGINS=<origin>` for Ollama, `--cors <origin>` plus
+  `OPENCODE_SERVER_PASSWORD` for opencode) and to set a key (`--api-key`). The
+  key then lives in the browser (it never reaches our server), so it guards the
+  engine against other sites, not against a script running inside osionos.
+
 ## 5. Open questions
 
 - Every "unknown" above: Safari has no LNA ship date and blocks loopback mixed
@@ -159,6 +169,8 @@ the retrieval-only route, and a manual permission-prompt walkthrough on Chrome 1
 
 ## 6. Caveat
 
-The browser facts above are as of the sources' dates and move fast; re-check
-before building.
+Caveat: the browser facts above are as of the sources' dates and move fast;
+re-check before building. Rows whose source says "(no)" or "(no, via search)"
+were read from search results, not from the page itself: treat them as leads,
+not as facts. Only the llama-server headers in section 3 were measured here.
 
