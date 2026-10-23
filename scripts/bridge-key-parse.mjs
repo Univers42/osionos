@@ -232,7 +232,8 @@ export function parseGpgPublicKey(value) {
 	const bytes = dearmor(value);
 	const { body, algorithm } = primaryOf(walkPackets(bytes));
 	const header = Buffer.from([0x99, body.length >> 8, body.length & 0xff]);
-	const fingerprint = createHash('sha1').update(header).update(body).digest('hex').toUpperCase();
+	// Not a security hash: a v4 fingerprint is SHA-1 by definition (RFC 4880 section 12.2) and only names the key.
+	const fingerprint = createHash('sha1').update(header).update(body).digest('hex').toUpperCase(); // NOSONAR
 	return { fingerprint, algorithm, armor: armorOf(bytes) };
 }
 
