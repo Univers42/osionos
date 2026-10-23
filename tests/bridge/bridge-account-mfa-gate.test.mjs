@@ -95,7 +95,7 @@ describe('two-step verification: what an aal1 token may do', () => {
 		const world = await startMfaWorld(t, enrolled());
 		const { accessToken } = await world.signIn();
 		const status = await world.api('GET', '/api/account/2fa/status', accessToken);
-		assert.deepEqual(status.body, { enabled: true, methods: ['totp'], aal: 1 });
+		assert.deepEqual(status.body, { enabled: true, methods: ['totp'], recoveryRemaining: 0, aal: 1 });
 		assert.equal((await world.api('POST', '/api/auth/bridge/logout', accessToken)).status, 204);
 	});
 
