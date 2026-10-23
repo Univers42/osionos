@@ -4,7 +4,7 @@ import type { z } from 'zod';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { PermissionAsked } from '../approvals/types.ts';
 import { READ_TOOLS } from './readTools.ts';
-import { WRITE_TOOLS } from './writeTools.ts';
+import { writeTools } from './writeToolList.ts';
 import type { AnyReadTool, ReadToolContext } from './types.ts';
 import { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS } from './loop.ts';
 import { loadSkillTool } from './skillTools.ts';
@@ -168,8 +168,10 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
  * The write tools and `load_skill` (offered only to an agent with skills) are counted even when they are not registered (a
  * deployment without a bridge URL): the count is a ceiling, and a ceiling
  * that depends on the deployment is a ceiling that is wrong somewhere.
+ * The one exception is `build_plan` (its schema is large): it is counted only
+ * when OSIONOS_AI_BUILDERS is on, the one case where it is sent.
  */
-export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...WRITE_TOOLS, loadSkillTool([])]);
+export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...writeTools(), loadSkillTool([])]);
 
 /** The shape the count of the definitions reads. */
 interface ToolDefinition {

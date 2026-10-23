@@ -20,6 +20,7 @@ import {
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
 import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
+import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
 import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
 import { handleSkillArchive, handleSkillCreate, handleSkillsList, handleSkillUpdate } from './skills.ts';
@@ -140,6 +141,19 @@ export const ROUTES: RouteEntry[] = [
 	{ methods: ['POST'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillCreate },
 	{ methods: ['PUT'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillUpdate },
 	{ methods: ['DELETE'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillArchive },
+	{
+		methods: ['GET'],
+		pattern: /^\/api\/ai\/workspaces\/([^/]+)\/sentiment\/pulse$/,
+		label: '/api/ai/workspaces/:workspaceId/sentiment/pulse',
+		handle: handleSentimentPulse,
+	},
+	{
+		methods: ['GET'],
+		pattern: /^\/api\/ai\/pages\/([^/]+)\/sentiment\/mood$/,
+		label: '/api/ai/pages/:pageId/sentiment/mood',
+		handle: handleSentimentMood,
+	},
+
 	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
 	...(config.patEnabled
 		? [

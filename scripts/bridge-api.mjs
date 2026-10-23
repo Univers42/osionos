@@ -744,6 +744,7 @@ function pageCreateRowFromPayload(payload, authContext) {
 	const databaseId = hasOwn(payload, 'databaseId') && payload.databaseId !== null ? safeText(payload.databaseId, 160) || null : null;
 	const visibility = pageVisibility(payload.visibility);
 	const surface = PAGE_SURFACE_VALUES.has(payload.surface) ? payload.surface : null;
+	const clientId = optionalUuid(payload.id, 'id');
 	const row = {
 		workspace_id: workspaceId,
 		parent_page_id: parentPageId === undefined ? null : parentPageId,
@@ -759,6 +760,8 @@ function pageCreateRowFromPayload(payload, authContext) {
 		properties: safeJsonArray(payload.properties),
 		content: safeJsonArray(payload.content),
 	};
+	// Only a create that carries an id gets one; without it the database mints it, as before.
+	if (clientId) row.id = clientId;
 	// Only attach the cover focal point when the create actually carries one, so a
 	// backend that lags the cover_position migration still accepts ordinary inserts.
 	if (hasOwn(payload, 'coverPosition') && typeof payload.coverPosition === 'number') {
@@ -3702,17 +3705,44 @@ async function handleWorkspaceGet(url, request, response, config, fetchImpl) {
 	return true;
 }
 
+// C156 (P6 builder retries): a create may carry its own page id, so a retry after a lost
+// response replays instead of duplicating. A primary-key conflict answers 200 with the
+// existing page ONLY when it is the caller's own AND sits in the payload's workspace under
+// the payload's parent: the same create, replayed. Any other conflict (someone else's id, or
+// the caller's id elsewhere) answers one identical 409 that names nothing of the row, so the
+// id cannot be used to probe or read another user's page. Workspace access and the parent
+// check still run BEFORE the insert.
+async function replayOrConflict(error, payload, authContext, config, fetchImpl) {
+	const isKeyConflict = error?.upstreamStatus === 409 && String(error.upstreamText).includes('23505');
+	const existing = isKeyConflict ? await fetchPageRow(optionalUuid(payload.id, 'id'), config, fetchImpl) : null;
+	if (!existing) throw error;
+	const parentPageId = optionalUuid(payload.parentPageId, 'parentPageId') ?? null;
+	const isReplay = sameId(existing.owner_id, authContext.userId)
+		&& sameId(existing.workspace_id, payload.workspaceId)
+		&& (existing.parent_page_id == null ? parentPageId === null : sameId(existing.parent_page_id, parentPageId));
+	return isReplay ? existing : null;
+}
+
 async function handlePageCreate(request, response, config, fetchImpl) {
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const workspaceId = requireUuid(payload.workspaceId, 'workspaceId');
 	const authContext = await requireWorkspaceAccess(request, workspaceId, 'create', config, fetchImpl);
 	const parentPageId = optionalUuid(payload.parentPageId, 'parentPageId');
 	if (parentPageId && !await canNestUnder(authContext, parentPageId, config, fetchImpl)) throw parentPageNotFound();
-	const rows = await baasRest(config, fetchImpl, 'osionos_pages', {
-		method: 'POST',
-		body: pageCreateRowFromPayload(payload, authContext),
-		prefer: 'return=representation',
-	});
+	const body = pageCreateRowFromPayload(payload, authContext);
+	let rows;
+	try {
+		rows = await baasRest(config, fetchImpl, 'osionos_pages', { method: 'POST', body, prefer: 'return=representation' });
+	} catch (error) {
+		if (!body.id) throw error;
+		const replayed = await replayOrConflict(error, payload, authContext, config, fetchImpl);
+		if (!replayed) {
+			json(response, 409, { error: 'id_conflict' }, config);
+			return true;
+		}
+		json(response, 200, pageRowToEntry(replayed), config);
+		return true;
+	}
 	json(response, 201, pageRowToEntry(Array.isArray(rows) ? rows[0] : rows), config);
 	return true;
 }
@@ -4059,18 +4089,33 @@ async function handleObjectDatabasesUpsert(url, request, response, config, fetch
 		const accessible = new Set([...authContext.workspaceIds, ...(await memberWorkspaceIds(authContext.userId, config, fetchImpl))]);
 		workspaceId = accessible.has(requested) ? requested : null;
 	}
-	const rows = await baasRest(config, fetchImpl, 'osionos_object_databases?on_conflict=owner_id,db_key', {
-		method: 'POST',
-		body: {
-			owner_id: authContext.userId,
-			workspace_id: workspaceId,
-			db_key: dbKey,
-			title: safeText(payload.title, 200) || 'Untitled',
-			state: safeJsonObject(payload.state, 'state'),
-			updated_at: new Date().toISOString(),
-		},
-		prefer: 'resolution=merge-duplicates,return=representation',
-	});
+	// C156 (P6 builder): `ifAbsent: true` makes the call create-only: the insert carries no
+	// on_conflict and no merge, so an existing (owner, db_key) answers 409 `db_exists` and
+	// nothing is written. A replay of the caller's OWN create (same key, title, workspace)
+	// answers 409 `db_exists` too, on purpose: the builder reads `db_exists` on a key it
+	// minted itself as "already done". Do not turn it into a 200 that echoes the stored state.
+	const createOnly = payload.ifAbsent === true;
+	let rows;
+	try {
+		rows = await baasRest(config, fetchImpl, createOnly ? 'osionos_object_databases' : 'osionos_object_databases?on_conflict=owner_id,db_key', {
+			method: 'POST',
+			body: {
+				owner_id: authContext.userId,
+				workspace_id: workspaceId,
+				db_key: dbKey,
+				title: safeText(payload.title, 200) || 'Untitled',
+				state: safeJsonObject(payload.state, 'state'),
+				updated_at: new Date().toISOString(),
+			},
+			prefer: createOnly ? 'return=representation' : 'resolution=merge-duplicates,return=representation',
+		});
+	} catch (error) {
+		if (createOnly && error?.upstreamStatus === 409 && String(error.upstreamText).includes('23505')) {
+			json(response, 409, { error: 'db_exists' }, config);
+			return true;
+		}
+		throw error;
+	}
 	const row = Array.isArray(rows) ? rows[0] : rows;
 	// Nudge the owner's OTHER browsers/tabs to re-hydrate — cross-client realtime for
 	// object DBs, which otherwise only pick up remote writes on a full reload. The
