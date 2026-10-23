@@ -19,6 +19,7 @@
 import { randomUUID } from 'node:crypto';
 import { configFromEnv, createBridgeHandoff, createBridgeServer, validateBridgePayload } from '../../../scripts/bridge-api.mjs';
 import { kvStub } from './kv-stub.mjs';
+import { noFactorPg } from './no-factor-pg.mjs';
 
 export const GATEWAY = 'http://gateway.local';
 export const BAAS = 'http://baas.local';
@@ -84,7 +85,7 @@ export async function startAuthWorld(t, options = {}) {
 			if (route === '/api/auth/login') return reply({ access_token: 'gw-token', refresh_token: 'gw-refresh', user: { id: subject } });
 			const handoff = await createBridgeHandoff({
 				payload: validateBridgePayload({ provider: 'prismatica', subject, email: EMAIL, name: 'Ada', jti: randomUUID() }),
-				config, kv,
+				config, kv, pg: noFactorPg(),
 			});
 			return reply({ redirectUrl: handoff.redirectUrl });
 		}

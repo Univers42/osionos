@@ -38,6 +38,7 @@ import { createWorkspaceSettingsRoutes } from './bridge-workspace-settings.mjs';
 import { createAdminUsersRoutes } from './bridge-account-users.mjs';
 import { createAdminAuditRoutes } from './bridge-account-audit.mjs';
 import { createAdminModerationRoutes } from './bridge-account-moderation.mjs';
+import { createMfaRoutes } from './bridge-account-mfa.mjs';
 
 export function createAccountHandler(deps) {
 	const modules = [
@@ -56,6 +57,7 @@ export function createAccountHandler(deps) {
 		createAdminAuditRoutes(deps),
 		createAdminModerationRoutes(deps),
 		createAccountStatusRoutes(deps),
+		createMfaRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env, fetchImpl: deps.mfaFetch ?? fetch, now: deps.mfaNow ?? null }),
 	];
 	return async function handleAccountRequest(url, request, response) {
 		for (const module of modules) {

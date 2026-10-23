@@ -63,6 +63,8 @@ export function mintRefreshToken({ config, now = Date.now(), claims }) {
 		roles: claims.roles,
 		platform_role: claims.platform_role ?? null,
 		is_admin: claims.is_admin === true,
+		// Present only for a family born gated, so an ungated family's token is unchanged.
+		...(claims.mfa_req === true ? { aal: 1, mfa_req: true } : {}),
 	};
 	const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
 	const token = `${REFRESH_TOKEN_PREFIX}.${encoded}.${sign(config, encoded)}`;

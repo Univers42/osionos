@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { configFromEnv, consumeHandoffToken, createBridgeHandoff, validateBridgePayload } from '../../scripts/bridge-api.mjs';
 import { handoffKeys, kvStub } from './support/kv-stub.mjs';
+import { noFactorPg } from './support/no-factor-pg.mjs';
 
 const subject = '3f6d2a70-5b3f-4c92-8f06-8f4644fd1209';
 const payload = validateBridgePayload({ provider: 'prismatica', subject, email: 'owner@example.com', name: 'Owner', jti: '1c76c7f0-f07e-442d-96fd-77d601764c3b' });
@@ -31,7 +32,7 @@ function fetchWith(upserts) {
 
 async function handoff(config, fetchImpl) {
 	const kv = kvStub();
-	const minted = await createBridgeHandoff({ payload, config, kv, now, fetchImpl });
+	const minted = await createBridgeHandoff({ payload, config, kv, pg: noFactorPg(), now, fetchImpl });
 	const token = new URL(minted.redirectUrl).hash.replace('#bridge_token=', '');
 	return { kv, session: (await consumeHandoffToken(decodeURIComponent(token), kv, now + 1000, config.appSessionSecret)).session };
 }
@@ -50,7 +51,7 @@ describe('bridge handoff with BaaS persistence', () => {
 			const kv = kvStub();
 			const config = baasConfig(requireBaas ? { OSIONOS_BRIDGE_REQUIRE_BAAS: 'true' } : {});
 			await assert.rejects(
-				() => createBridgeHandoff({ payload, config, kv, now, fetchImpl }),
+				() => createBridgeHandoff({ payload, config, kv, pg: noFactorPg(), now, fetchImpl }),
 				(error) => error.status === 503 && /try again/.test(error.message),
 			);
 			assert.equal(calls.upsert, 2);
@@ -64,7 +65,7 @@ describe('bridge handoff with BaaS persistence', () => {
 	});
 
 	it('keeps the hash-derived fallback session when persistence is disabled', async () => {
-		const config = configFromEnv({ ...base, OSIONOS_BRIDGE_PERSISTENCE: 'memory' });
+		const config = configFromEnv({ ...base, OSIONOS_BAAS_URL: '', OSIONOS_BRIDGE_PERSISTENCE: 'memory' });
 		const { session } = await handoff(config, async () => { throw new Error('no BaaS expected'); });
 		assert.match(session.privateWorkspaces[0]._id, /^[0-9a-f-]{36}$/);
 		assert.notEqual(session.privateWorkspaces[0]._id, persistedId);
