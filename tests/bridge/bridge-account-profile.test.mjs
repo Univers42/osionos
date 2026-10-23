@@ -25,7 +25,7 @@ import { kvStub } from './support/kv-stub.mjs';
 // The columns the account role may select (P1-1's grant), camelCased for the wire.
 const OWNER_KEYS = [
 	'avatarUrl', 'bannerUrl', 'bio', 'company', 'createdAt', 'directoryOptOut', 'displayName', 'headline',
-	'links', 'location', 'orcid', 'patreon', 'profession', 'pronouns', 'searchDoc', 'timezone', 'updatedAt',
+	'links', 'location', 'orcid', 'patreon', 'profession', 'pronouns', 'readmePageId', 'searchDoc', 'timezone', 'updatedAt',
 	'userId', 'username', 'version', 'website',
 ];
 
@@ -45,7 +45,7 @@ function profileOf(userId, overrides = {}) {
 		links: ['https://example.com/ada/papers'], timezone: 'Europe/London',
 		orcid: '0000-0002-1825-0097', patreon: 'ada',
 		avatar_url: 'https://cdn.example.com/ada.png', banner_url: 'https://cdn.example.com/ada-banner.png',
-		directory_opt_out: false, version: 1,
+		directory_opt_out: false, version: 1, readme_page_id: null,
 		created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z',
 		search_doc: "'first':3 'programmer':2",
 		profession: 'developer',
@@ -263,6 +263,127 @@ describe('the profession on the account row', () => {
 		assert.equal(response.status, 200);
 		assert.deepEqual(Object.keys(response.body).sort(), REDUCED_KEYS);
 		assert.equal(response.body.profession, undefined);
+	});
+});
+
+const README_ID = 'cccccccc-3333-4333-8333-cccccccccccc';
+const readmePage = (overrides = {}) => ({
+	id: README_ID, workspace_id: 'wwwwwwww-0000-4000-8000-000000000001', owner_id: USER_A, title: 'README',
+	content: [{ id: 'b1', type: 'paragraph', content: 'Hello' }], archived_at: null, ...overrides,
+});
+const lookupAs = (t, viewer, rows) => world(t, { rows }).then(async ({ base, config }) => ({
+	response: await send(base, '/api/users/ada', { token: sessionToken(config, viewer) }), base, config,
+}));
+const withReadme = (page = readmePage(), profile = {}) => ({
+	profiles: [profileOf(USER_A, { readme_page_id: README_ID, ...profile })], pages: page ? [page] : [],
+});
+
+describe('the README on the account row', () => {
+	it('writes readme_page_id with the If-Match and answers it on the owner row only', async (t) => {
+		const { base, token, store } = await world(t);
+		const response = await writeProfile(base, token, { readmePageId: README_ID });
+		assert.equal(response.status, 200);
+		assert.equal(response.body.readmePageId, README_ID);
+		assert.equal(store.rows('osionos_profiles')[0].readme_page_id, README_ID);
+		const write = store.callsTo('osionos_profiles').find((call) => call.method === 'PATCH');
+		assert.equal(write.params.get('version'), 'eq.1');
+	});
+
+	it('clears the README with null', async (t) => {
+		const { base, token } = await world(t, { rows: { profiles: [profileOf(USER_A, { readme_page_id: README_ID })] } });
+		const response = await writeProfile(base, token, { readmePageId: null });
+		assert.equal(response.status, 200);
+		assert.equal(response.body.readmePageId, null);
+	});
+
+	it('answers 422 invalid_field naming readmePageId for a value that is not a UUID, and writes nothing', async (t) => {
+		const { base, token, store } = await world(t);
+		for (const bad of ['not-a-uuid', 7, '', {}]) {
+			const response = await writeProfile(base, token, { readmePageId: bad });
+			assert.equal(response.status, 422);
+			assert.equal(response.body.code, 'invalid_field');
+			assert.equal(response.body.field, 'readmePageId');
+		}
+		assert.equal(store.callsTo('osionos_profiles').filter((call) => call.method === 'PATCH').length, 0);
+	});
+});
+
+describe('the README projected on GET /api/users/:username', () => {
+	it('gives another viewer the blocks of the page the profile owner owns', async (t) => {
+		const { response } = await lookupAs(t, USER_B, withReadme());
+		assert.equal(response.status, 200);
+		assert.deepEqual(response.body.readme, { pageId: README_ID, blocks: readmePage().content });
+		assert.equal(response.body.readmePageId, undefined, 'the id lives only inside readme');
+	});
+
+	it('reads exactly readme_page_id, owner-scoped and not archived, through the service role', async (t) => {
+		const { base, config, store } = await world(t, { rows: withReadme() });
+		await send(base, '/api/users/ada', { token: sessionToken(config, USER_B) });
+		const read = store.callsTo('osionos_pages')[0];
+		assert.equal(read.authorization, 'Bearer service-role-test-key');
+		assert.equal(read.params.get('id'), `eq.${README_ID}`);
+		assert.equal(read.params.get('owner_id'), `eq.${USER_A}`);
+		assert.equal(read.params.get('archived_at'), 'is.null');
+		assert.equal(store.callsTo('osionos_pages').length, 1);
+	});
+
+	it('never hands over the blocks of a page the profile owner does not own', async (t) => {
+		const { response } = await lookupAs(t, USER_B, withReadme(readmePage({ owner_id: USER_B })));
+		assert.equal(response.status, 200);
+		assert.equal(response.body.readme, undefined);
+		assert.doesNotMatch(JSON.stringify(response.body), /Hello/);
+	});
+
+	it('never hands over the blocks of an archived or trashed page', async (t) => {
+		const { response } = await lookupAs(t, USER_B, withReadme(readmePage({ archived_at: '2026-10-02T00:00:00.000Z' })));
+		assert.equal(response.status, 200);
+		assert.equal(response.body.readme, undefined);
+		assert.doesNotMatch(JSON.stringify(response.body), /Hello/);
+	});
+
+	it('omits readme when the profile has none or the page is gone', async (t) => {
+		const none = await lookupAs(t, USER_B, { profiles: [profileOf(USER_A)] });
+		assert.equal(none.response.body.readme, undefined);
+		const gone = await lookupAs(t, USER_B, withReadme(null));
+		assert.equal(gone.response.body.readme, undefined);
+	});
+
+	it('answers truncated, with no blocks, over 200 KB, and the blocks at the cap', async (t) => {
+		const big = readmePage({ content: [{ id: 'b1', type: 'paragraph', content: 'x'.repeat(200 * 1024 + 1) }] });
+		const { response } = await lookupAs(t, USER_B, withReadme(big));
+		assert.deepEqual(response.body.readme, { pageId: README_ID, truncated: true });
+		const room = 200 * 1024 - JSON.stringify([{ id: 'b1', type: 'paragraph', content: '' }]).length;
+		const edge = readmePage({ content: [{ id: 'b1', type: 'paragraph', content: 'x'.repeat(room) }] });
+		const ok = await lookupAs(t, USER_B, withReadme(edge));
+		assert.equal(ok.response.body.readme.truncated, undefined);
+		assert.equal(ok.response.body.readme.blocks.length, 1);
+	});
+
+	it('gives the owner their own README', async (t) => {
+		const { response } = await lookupAs(t, USER_A, withReadme());
+		assert.deepEqual(response.body.readme.pageId, README_ID);
+	});
+
+	it('never carries readme on a reduced card, opted out or blocked, and reads no page for it', async (t) => {
+		const optedOut = await world(t, { rows: withReadme(readmePage(), { directory_opt_out: true }) });
+		const first = await send(optedOut.base, '/api/users/ada', { token: sessionToken(optedOut.config, USER_B) });
+		assert.deepEqual(Object.keys(first.body).sort(), REDUCED_KEYS);
+		assert.equal(optedOut.store.callsTo('osionos_pages').length, 0);
+		const blocked = await world(t, { rows: { ...withReadme(), blocks: [{ blocker_id: USER_A, blocked_id: USER_B }] } });
+		const second = await send(blocked.base, '/api/users/ada', { token: sessionToken(blocked.config, USER_B) });
+		assert.deepEqual(Object.keys(second.body).sort(), REDUCED_KEYS);
+		assert.equal(blocked.store.callsTo('osionos_pages').length, 0);
+		assert.doesNotMatch(first.text + second.text, /Hello|readme/i);
+	});
+
+	it('serves the card without a README when the page read fails', async (t) => {
+		const { base, config } = await world(t, {
+			rows: withReadme(), fail: (call) => (call.table === 'osionos_pages' ? { status: 500, body: {} } : null),
+		});
+		const response = await send(base, '/api/users/ada', { token: sessionToken(config, USER_B) });
+		assert.equal(response.status, 200);
+		assert.equal(response.body.readme, undefined);
+		assert.equal(response.body.username, 'ada');
 	});
 });
 
