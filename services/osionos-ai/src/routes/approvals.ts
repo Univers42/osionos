@@ -3,7 +3,7 @@ import { readJson, sendError, sendJson } from '../http.ts';
 import { checkDailyBuildLimit, checkRunRateLimit } from '../rateLimit.ts';
 import { config } from '../config.ts';
 import { bearerToken } from '../auth.ts';
-import { getOwnedApproval } from '../approvals/repo.ts';
+import { getOwnedApproval, listPendingMcpApprovals } from '../approvals/repo.ts';
 import { describeApproval } from '../approvals/describe.ts';
 import { decideApproval } from '../approvals/execute.ts';
 import { claimPartial, recordOutcome } from '../approvals/repo.ts';
@@ -32,6 +32,31 @@ import type { RouteContext } from './types.ts';
 
 /** The body of a decision: the decision, and nothing else. */
 const decisionSchema = z.object({ decision: z.enum(['approve', 'decline']), items: z.array(z.string().min(1).max(40)).max(40).optional() }).strict();
+
+/**
+ * GET /api/ai/approvals?origin=mcp
+ *
+ * The MCP writes of the caller that still wait for a decision, newest first,
+ * at most 50. Each row is the card's data, plus the origin and the name of the
+ * agent (the token) that asked. A PAT never reaches this route: the app
+ * session is the only credential that decides (C114).
+ */
+export async function handleApprovalList(ctx: RouteContext): Promise<number> {
+	const user = requireUser(ctx);
+	if (!user) return 401;
+	if (ctx.url.searchParams.get('origin') !== 'mcp') {
+		sendError(ctx.response, 400, 'invalid_origin');
+		return 400;
+	}
+	const rows = await listPendingMcpApprovals(ctx.deps.db, user.userId, 50);
+	const approvals = [];
+	for (const row of rows) {
+		const description = await describeApproval(ctx.deps.db, user, row);
+		approvals.push({ ...description, origin: 'mcp' as const, agentName: String(row.agent_name) });
+	}
+	sendJson(ctx.response, 200, { approvals });
+	return 200;
+}
 
 /** GET /api/ai/approvals/:id */
 export async function handleApprovalGet(ctx: RouteContext): Promise<number> {

@@ -19,7 +19,7 @@ import {
 } from './connections.ts';
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
-import { handleApprovalDecision, handleApprovalGet, handleApprovalResume, handleApprovalUndo } from './approvals.ts';
+import { handleApprovalDecision, handleApprovalGet, handleApprovalList, handleApprovalResume, handleApprovalUndo } from './approvals.ts';
 import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
 import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
@@ -116,6 +116,12 @@ export const ROUTES: RouteEntry[] = [
 		pattern: /^\/api\/ai\/runs\/([^/]+)\/cancel$/,
 		label: '/api/ai/runs/:id/cancel',
 		handle: handleRunCancel,
+	},
+	{
+		methods: ['GET'],
+		pattern: /^\/api\/ai\/approvals$/,
+		label: '/api/ai/approvals',
+		handle: handleApprovalList,
 	},
 	{
 		methods: ['GET'],

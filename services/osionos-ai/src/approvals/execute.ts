@@ -9,7 +9,8 @@ import { getRun } from '../runs/repo.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
 import { bridgeWrite, refusalMessage } from './bridge.ts';
 import type { BridgeWrite } from './bridge.ts';
-import { claimApproval, getOwnedApproval, recordOutcome, claimPartial } from './repo.ts';
+import { claimApproval, expireApproval, getOwnedApproval, recordOutcome, claimPartial } from './repo.ts';
+import { getTokenState } from '../pat/repo.ts';
 import { revalidateStoredPlan, flattenPlan } from '../builders/plan.ts';
 import { approvedKeys, executePlan, writeOf } from '../builders/execute.ts';
 import { seedItems, setItem } from '../builders/items.ts';
@@ -127,11 +128,34 @@ function createdPage(body: string): { pageId?: string; title?: string } {
 }
 
 /**
+ * Whether the token of an MCP approval may still be honoured.
+ *
+ * The scope and the revocation are re-checked at DECISION time, not trusted
+ * from the moment the agent asked (C115, C117): a revoked token, an expired
+ * one, a token that is gone, or a workspace taken out of its scope all mean
+ * the same thing — the question died with the credential, and nothing is
+ * written.
+ */
+async function mcpTokenCovers(db: Pool, row: ApprovalRow): Promise<boolean> {
+	if (!row.token_id) return false;
+	const token = await getTokenState(db, row.token_id);
+	if (!token) return false;
+	if (String(token.user_id) !== row.owner_id) return false;
+	if (token.revoked_at) return false;
+	if (token.expires_at.getTime() <= Date.now()) return false;
+	return token.workspace_ids.map(String).includes(row.workspace_id);
+}
+
+/**
  * The continuation of a decided approval: a NEW run in the same conversation.
  *
  * It is a new run, with its own reservation and its own row: the run that
  * asked is over, and the one that continues counts against the cap of the day
  * like any other.
+ *
+ * An MCP approval has NO continuation: there is no conversation to go on in,
+ * and the agent that asked is not waiting on a stream. Its decision is a row,
+ * and the next call of the agent reads the workspace.
  */
 async function continueRun(
 	db: Pool,
@@ -141,8 +165,11 @@ async function continueRun(
 	outcome: 'executed' | 'failed' | 'declined',
 	detail = '',
 ): Promise<string | undefined> {
+	if (row.origin !== 'run') return undefined;
+	if (!row.conversation_id || !row.run_id) return undefined;
+	const conversationId = row.conversation_id;
 	const conversation = await getOwnedConversation(db, {
-		id: row.conversation_id,
+		id: conversationId,
 		ownerId: row.owner_id,
 	});
 	if (!conversation) return undefined;
@@ -156,7 +183,7 @@ async function continueRun(
 		db,
 		redis,
 		runId: randomUUID(),
-		conversationId: row.conversation_id,
+		conversationId,
 		ownerId: row.owner_id,
 		text: continuationText(row, outcome, detail),
 		target: resolved.target,
@@ -198,6 +225,15 @@ export async function decideApproval(input: {
 			`update public.ai_approvals set status = 'expired', decided_at = now() where id = $1 and status = 'pending'`,
 			[approvalId],
 		);
+		return { kind: 'refused', status: 409, code: 'approval_expired' };
+	}
+
+	// An MCP approval is decided against the token LIVE: a revoked or expired
+	// token, or a workspace taken out of its scope, kills the question before
+	// the claim, and nothing is written (C114, C115, C117). A decline needs no
+	// token: saying no never writes.
+	if (decision === 'approve' && row.origin === 'mcp' && !(await mcpTokenCovers(db, row))) {
+		await expireApproval(db, row.id);
 		return { kind: 'refused', status: 409, code: 'approval_expired' };
 	}
 
