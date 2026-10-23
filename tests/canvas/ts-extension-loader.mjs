@@ -212,12 +212,9 @@ export async function load(url, context, nextLoad) {
 
   const loaded = await nextLoad(url, context);
   if (loaded.source == null) return loaded;
-  const envParam = new URL(url).searchParams.get("env");
-  if (path === AI_CLIENT_MODULE || envParam !== null) {
-    const env = envParam ?? (path === AI_CLIENT_MODULE ? "{}" : null);
-    if (env !== null) {
-      return { ...loaded, source: `import.meta.env ??= ${env};\n${loaded.source}` };
-    }
+  if (path === AI_CLIENT_MODULE) {
+    const env = new URL(url).searchParams.get("env") ?? "{}";
+    return { ...loaded, source: `import.meta.env ??= ${env};\n${loaded.source}` };
   }
 
   // The app's own files: the JSON attribute node asks for, and the env object

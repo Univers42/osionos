@@ -148,37 +148,53 @@ export const aiInferencePort: InferencePort = {
   },
 };
 
+/** The one-shot request of a port without a stream. */
+function completeRequest(request: StreamInferenceRequest): InferenceRequest {
+  return {
+    connectorId: request.connectorId ?? "ai",
+    model: request.model ?? "auto",
+    messages: [{ role: "user", content: request.text }],
+    ...(request.connectionId ? { connectionId: request.connectionId } : {}),
+  };
+}
+
+/**
+ * Routes each call to the port that owns it: the device engine for a `device`
+ * connection with an engine stored, the service for everything else.
+ *
+ * A port without a stream answers in one piece, exactly as the pane's own
+ * callers fall back when they meet one.
+ */
+export function routedInferencePort(
+  service: InferencePort,
+  device: InferencePort,
+  hasDeviceEngine: () => boolean,
+): InferencePort {
+  const chosen = (request: { connectionId?: string }) =>
+    request.connectionId === DEVICE_CONNECTION_ID && hasDeviceEngine() ? device : service;
+
+  return {
+    complete: async (request) => chosen(request).complete(request),
+    stream: async (request, onEvent, signal) => {
+      const port = chosen(request);
+      if (port.stream) return port.stream(request, onEvent, signal);
+      const result = await port.complete(completeRequest(request));
+      if (result.content) onEvent("text.delta", { text: result.content });
+      onEvent("done", {});
+    },
+    attach: async (runId, onEvent, signal) => {
+      if (!service.attach) throw new Error("This service cannot attach to a run.");
+      return service.attach(runId, onEvent, signal);
+    },
+  };
+}
+
 /**
  * The port the app starts with: the AI service when a base URL is configured,
  * the offline stub otherwise.
  */
-function serviceConfigured(): boolean {
-  if (isAiConfigured()) return true;
-  try {
-    const env = (import.meta as { env?: { VITE_AI_URL?: string } }).env;
-    return Boolean(env?.VITE_AI_URL);
-  } catch {
-    return false;
-  }
-}
-
 export function selectInferencePort(): InferencePort {
-  if (!serviceConfigured()) return stubInferencePort;
-
-  const routesToDevice = (request: { connectionId?: string }) =>
-    request.connectionId === DEVICE_CONNECTION_ID && readDeviceEngine() !== null;
-
-  return {
-    complete: async (request) => {
-      if (routesToDevice(request)) return deviceInferencePort.complete(request);
-      return aiInferencePort.complete(request);
-    },
-    stream: async (request, onEvent, signal) => {
-      if (routesToDevice(request)) {
-        return deviceInferencePort.stream!(request, onEvent, signal);
-      }
-      return aiInferencePort.stream!(request, onEvent, signal);
-    },
-    attach: aiInferencePort.attach,
-  };
+  return isAiConfigured()
+    ? routedInferencePort(aiInferencePort, deviceInferencePort, () => readDeviceEngine() !== null)
+    : stubInferencePort;
 }
