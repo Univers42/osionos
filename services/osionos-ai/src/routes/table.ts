@@ -19,6 +19,7 @@ import {
 } from './connections.ts';
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
+import { handleSources } from './sources.ts';
 import { handleApprovalDecision, handleApprovalGet, handleApprovalList, handleApprovalResume, handleApprovalUndo } from './approvals.ts';
 import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
 import { handleSentimentSettings } from './sentimentSettings.ts';
@@ -59,6 +60,7 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/pages/:id/related',
 		handle: handleRelated,
 	},
+	{ methods: ['POST'], pattern: /^\/api\/ai\/sources$/, label: '/api/ai/sources', handle: handleSources },
 	{
 		methods: [],
 		pattern: /^\/api\/ai\/connections$/,
