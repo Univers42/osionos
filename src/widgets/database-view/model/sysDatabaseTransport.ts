@@ -19,9 +19,13 @@ import { api, getActivePageJwt } from "@/shared/api/client";
  */
 export interface SysTransport {
   get<T>(path: string): Promise<T>;
+  put<T>(path: string, body: unknown): Promise<T>;
+  delete<T>(path: string): Promise<T>;
 }
 
 /** The app-session token, not the gotrue one: the wrong token makes the bridge skip the read. */
 export const sysTransport: SysTransport = {
   get: <T,>(path: string) => api.get<T>(path, getActivePageJwt() ?? undefined),
+  put: <T,>(path: string, body: unknown) => api.put<T>(path, body, getActivePageJwt() ?? undefined),
+  delete: <T,>(path: string) => api.delete<T>(path, getActivePageJwt() ?? undefined),
 };
