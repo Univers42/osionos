@@ -22,6 +22,8 @@ import { useEffect, useState } from 'react';
 
 import { api, getActivePageJwt } from '@/shared/api/client';
 
+import type { ReadmeProjection } from './ReadmeBlocks';
+
 export interface MemberProfile {
   userId: string;
   name: string;
@@ -49,13 +51,14 @@ export interface MemberProfile {
   patreon?: string | null;
   avatarUrl?: string | null;
   bannerUrl?: string | null;
+  readme?: ReadmeProjection | null;
 }
 
 // The only keys copied from the public projection: a private field the server
 // ever adds there must not reach the page by accident.
 export const PUBLIC_FIELD_KEYS = [
   'pronouns', 'headline', 'bio', 'location', 'company', 'website', 'links',
-  'timezone', 'orcid', 'patreon', 'avatarUrl', 'bannerUrl',
+  'timezone', 'orcid', 'patreon', 'avatarUrl', 'bannerUrl', 'readme',
 ] as const;
 
 export function mergePublicFields(base: MemberProfile, pub: Record<string, unknown>): MemberProfile {

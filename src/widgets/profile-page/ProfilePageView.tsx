@@ -29,6 +29,7 @@ import { PageBlocksRenderer } from "@/widgets/page-renderer/ui/PageBlocksRendere
 import { useTemplateForSurface } from "@/widgets/page-renderer/model/useTemplateForSurface";
 import { ProfileView } from "./ProfileView";
 import { ProfileActions } from "./profileChrome";
+import { ReadmeBlocks } from "./ReadmeBlocks";
 import { BindingProvider, toBoundRecord } from "./model/binding";
 import { useProfile } from "./useProfile";
 
@@ -68,6 +69,7 @@ export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
           <BindingProvider record={record}>
             <PageBlocksRenderer blocks={professionBlocks} />
           </BindingProvider>
+          <ReadmeBlocks readme={profile?.readme} />
         </div>
       </div>
     );
@@ -85,6 +87,7 @@ export const ProfilePageView: React.FC<{ userId: string }> = ({ userId }) => {
         <BindingProvider record={record}>
           <PageBlocksRenderer blocks={templateBlocks} />
         </BindingProvider>
+        <ReadmeBlocks readme={profile?.readme} />
       </div>
     </div>
   );
