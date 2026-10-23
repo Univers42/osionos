@@ -234,4 +234,122 @@ describe('builder execute', () => {
 		const approved3 = approvedKeys(flat);
 		assert.equal(approved3.length, 3);
 	});
+
+	it('C151 C165 an executed chart axis is a property id and every dashboard cell is a stored view', async () => {
+		const plan = {
+			workspaceId: WORKSPACE_A,
+			title: 'Chart test',
+			items: [
+				{
+					kind: 'page',
+					key: 'home',
+					title: 'Home',
+					blocks: [{ type: 'database_inline', databaseKey: 'deals' }],
+				},
+				{
+					kind: 'database',
+					key: 'deals',
+					title: 'Deals',
+					properties: [
+						{ name: 'Name', type: 'title' },
+						{ name: 'Category', type: 'select', options: ['A', 'B'] },
+						{ name: 'Value', type: 'number' },
+					],
+					views: [
+						{
+							type: 'dashboard',
+							name: 'Overview',
+							cells: [{ view: 'All' }, { view: 'Chart', stat: { fn: 'sum', property: 'Value' } }],
+						},
+						{ type: 'table', name: 'All' },
+						{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Category', aggregation: 'sum', yAxis: 'Value' },
+					],
+					rows: [{ values: { Name: 'Test', Category: 'A', Value: 100 } }],
+				},
+			],
+		};
+		const ev = await ask(plan);
+		const d = asked(ev)[0].data as { approvalId: string };
+		bridge.reset();
+		const token = tokenFor(USER_A, WORKSPACE_A);
+		const decided = await decide(d.approvalId, 'approve', token);
+		assert.equal(decided.status, 200);
+		assert.equal((decided.body as { status: string }).status, 'executed');
+		// Find the database creation call and verify xAxisProperty is a property ID
+		const dbCalls = bridge.calls.filter((c) => c.method === 'POST' && c.path === '/api/object-databases');
+		assert.equal(dbCalls.length, 1);
+		const dbBody = dbCalls[0].body as { state: { views: Record<string, unknown> } };
+		const views = dbBody.state.views;
+		const viewEntries = Object.entries(views);
+		let chartView: { settings?: { xAxisProperty?: string } } | undefined;
+		for (const [, view] of viewEntries) {
+			const v = view as { settings?: { xAxisProperty?: string } };
+			if (v.settings?.xAxisProperty) {
+				chartView = v;
+				break;
+			}
+		}
+		assert.ok(chartView, 'chart view should exist');
+		const xAxisProp = chartView!.settings!.xAxisProperty;
+		assert.ok(xAxisProp, 'xAxisProperty should be set');
+		// Verify it's a property ID (format: dbKey-pN) not a property name
+		assert.match(xAxisProp!, /^db-[a-f0-9]{24}-p\d+$/, 'xAxisProperty should be a property ID, not a name');
+		// The dashboard is listed first, yet each cell resolves to a view of the stored state.
+		const dashboard = Object.values(views).find((view) => (view as { type: string }).type === 'dashboard') as
+			| { settings: { dashboardWidgets: { viewId: string }[] } }
+			| undefined;
+		assert.ok(dashboard, 'the dashboard view is stored');
+		const widgetViews = dashboard.settings.dashboardWidgets.map((widget) => widget.viewId);
+		assert.equal(widgetViews.length, 2);
+		for (const viewId of widgetViews) assert.ok(viewId in views, `${viewId} is a stored view`);
+	});
+
+	it('C151 stored revalidation refuses dashboard cell referencing another database view', async () => {
+		// Create a plan with one database, dashboard referencing a view in the SAME database
+		// This passes initial checkPlan
+		const plan = {
+			workspaceId: WORKSPACE_A,
+			title: 'One DB',
+			items: [
+				{
+					kind: 'page',
+					key: 'home',
+					title: 'Home',
+					blocks: [{ type: 'database_inline', databaseKey: 'deals' }],
+				},
+				{
+					kind: 'database',
+					key: 'deals',
+					title: 'Deals',
+					properties: [{ name: 'Name', type: 'title' }, { name: 'Stage', type: 'status', options: ['Open', 'Won'] }],
+					views: [
+						{ type: 'table', name: 'All' },
+						{ type: 'dashboard', name: 'Dash', cells: [{ view: 'All' }] }
+					],
+					rows: [],
+				},
+			],
+		};
+		const events = await ask(plan);
+		const askedEvents = asked(events);
+		assert.equal(askedEvents.length, 1, 'plan should be accepted at proposal');
+		const data = askedEvents[0].data as { approvalId: string };
+		// Now tamper the stored plan: change the dashboard cell's view to a non-existent view
+		// This simulates a stored plan being modified to reference a view that doesn't exist
+		const row = await app.db.query('select args from public.ai_approvals where id = $1', [data.approvalId]);
+		const stored = row.rows[0].args as { items: Json[] };
+		const tampered = JSON.parse(JSON.stringify(stored)) as { items: Json[] };
+		// Find the dashboard view and change its cell's view to "NonExistent"
+		const dbItem = tampered.items.find((item): item is { kind: string; views?: Array<{ type: string; cells?: Array<{ view: string }> }> } => item.kind === 'database');
+		const dashView = dbItem?.views?.find((v) => v.type === 'dashboard');
+		if (dashView && dashView.cells && dashView.cells[0]) {
+			dashView.cells[0].view = 'NonExistent';
+		}
+		await app.db.query('update public.ai_approvals set args = $1::jsonb where id = $2', [JSON.stringify(tampered), data.approvalId]);
+		bridge.reset();
+		const decided = await decide(data.approvalId, 'approve', tokenFor(USER_A, WORKSPACE_A));
+		assert.equal(decided.status, 200);
+		assert.equal((decided.body as { status: string }).status, 'failed');
+		assert.equal(bridge.count, 0, 'no bridge writes when revalidation fails');
+	});
 });
