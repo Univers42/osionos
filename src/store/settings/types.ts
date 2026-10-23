@@ -10,12 +10,15 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+export type PreferredMfaMethod = 'totp' | 'recovery';
+
 export interface AccountSettings {
   userId: string;
   security: {
     hasPassword?: boolean;
-    twoStepEnabled?: boolean;
     passkeysEnabled?: boolean;
+    /** Only orders the options the two-step modal offers; the server never trusts it. */
+    preferredMfaMethod?: PreferredMfaMethod;
     passwordUpdatedAt?: string;
   };
   supportAccessGrantedUntil?: string | null;
@@ -28,13 +31,11 @@ export interface AccountSettings {
 export interface PasskeyRecord {
   _id: string;
   userId: string;
-  credentialId: string;
-  publicKey: string;
-  counter: number;
   transports: string[];
   nickname?: string;
   createdAt: string;
   updatedAt: string;
+  lastUsedAt?: string | null;
   removedAt?: string | null;
 }
 

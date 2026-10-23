@@ -45,6 +45,7 @@ import { createMfaRecoveryRoutes } from './bridge-account-mfa-recovery.mjs';
 import { createAccountPasswordRoutes } from './bridge-account-password.mjs';
 import { createAccountExportRoutes } from './bridge-account-export.mjs';
 import { createAccountErasureRunner } from './bridge-account-erasure.mjs';
+import { createPasskeyRoutes } from './bridge-account-passkeys.mjs';
 
 export function createAccountHandler(deps) {
 	const modules = [
@@ -69,6 +70,7 @@ export function createAccountHandler(deps) {
 		createMfaRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env, fetchImpl: deps.mfaFetch ?? fetch, now: deps.mfaNow ?? null }),
 		createMfaRecoveryRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env, now: deps.mfaNow ?? null }),
 		createAccountExportRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.exportEnv ?? process.env, fetchImpl: deps.exportFetch ?? fetch, now: deps.exportNow ?? Date.now, runner: deps.exportRunner !== false }),
+		createPasskeyRoutes({ config: deps.config, pg: deps.pg, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env }),
 	];
 	// Off unless OSIONOS_ACCOUNT_DELETION_EXECUTOR=1 (and, in production, a dry run or a verdict).
 	createAccountErasureRunner({ config: deps.config, pg: deps.pg, kv: deps.kv, fetchImpl: deps.erasureFetch ?? deps.mfaFetch ?? fetch, env: deps.erasureEnv ?? deps.mfaEnv ?? process.env }).start();
