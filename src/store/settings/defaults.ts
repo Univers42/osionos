@@ -27,8 +27,9 @@ export function defaultAccountSettings(userId: string): AccountSettings {
   const timestamp = nowIso();
   return {
     userId,
-    // Empty on purpose: the sign-in methods are only what the server reports, never a guess.
-    security: {},
+    // The sign-in methods are only what the server reports, never a guess; the preferred
+    // two-step method is the one choice the user makes, and the authenticator is the default.
+    security: { preferredMfaMethod: 'totp' },
     supportAccessGrantedUntil: null,
     pendingDeletionAt: null,
     removedAt: null,
