@@ -2,7 +2,7 @@ import type { Pool, QueryResultRow } from 'pg';
 import type { ModelMessage } from 'ai';
 import { listMessages } from '../conversations/repo.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
-import { attributeText, quotedData, sourceBlock, SOURCE_INSTRUCTION } from './sources.ts';
+import { ABSTAIN_INSTRUCTION, attributeText, quotedData, sourceBlock, SOURCE_INSTRUCTION } from './sources.ts';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 
 /**
@@ -204,8 +204,10 @@ export function buildUserTurn(
 	text: string,
 	pages: readonly PageContext[],
 	sources: readonly RetrievedChunk[] = [],
+	abstained = false,
 ): string {
 	const blocks: string[] = pages.map(pageBlock);
+	if (abstained && sources.length === 0) blocks.push(ABSTAIN_INSTRUCTION);
 	if (sources.length > 0) {
 		// The line comes before the sources: it is what they are.
 		blocks.push(SOURCE_INSTRUCTION);
