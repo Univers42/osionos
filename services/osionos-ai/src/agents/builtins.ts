@@ -33,6 +33,14 @@ export interface BuiltinAgent {
 	tools: readonly string[];
 	/** The ids of the built-in skills the agent may load with `load_skill`. */
 	skills: readonly string[];
+	/**
+	 * The knowledge packs the agent may read, by slug (P5c, C34).
+	 *
+	 * The retrieval runs the pack path for these slugs next to the workspace
+	 * search, whether or not that search is on. The list is configuration: it
+	 * comes from here, never from a request or a model.
+	 */
+	knowledge: readonly string[];
 }
 
 /**
@@ -56,7 +64,7 @@ export const READ_TOOL_NAMES: readonly string[] = Object.freeze(READ_TOOLS.map((
 export const WRITE_TOOL_NAMES: readonly string[] = Object.freeze(WRITE_TOOLS.map((tool) => tool.name));
 
 /** The ids of the built-ins: the wire contract of `agentId`. */
-export const BUILTIN_AGENT_IDS = ['db-architect', 'doc-writer', 'analyst'] as const;
+export const BUILTIN_AGENT_IDS = ['db-architect', 'doc-writer', 'analyst', 'guide'] as const;
 
 /** The id of a built-in agent. */
 export type BuiltinAgentId = (typeof BUILTIN_AGENT_IDS)[number];
@@ -108,6 +116,20 @@ How you answer:
 - Never invent a number, a row or a trend. When the workspace does not hold the data, say so and say what would be needed.`;
 
 /**
+ * The instructions of the osionos guide.
+ *
+ * It answers from the product docs, and the docs reach it as retrieved
+ * <source> blocks: the prompt does not carry the titles of the packs, so its
+ * prefix does not grow with the product (C47).
+ */
+const GUIDE = `You are the osionos guide.
+
+How you answer:
+- Answer from the quoted product-doc sources, and cite each claim as [n].
+- When the docs do not cover the question, say so.
+- Never invent a setting, a flag or a default: if the docs do not name it, it is not there.`;
+
+/**
  * The built-in agents, in the order the client lists them.
  *
  * The read agents carry the read tools only: an agent never gains a tool the
@@ -124,6 +146,7 @@ export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 		instructions: DB_ARCHITECT,
 		tools: READ_TOOL_NAMES,
 		skills: Object.freeze(['schema-design', 'acid-review']),
+		knowledge: Object.freeze([]),
 	}),
 	Object.freeze({
 		id: 'doc-writer',
@@ -133,6 +156,7 @@ export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 		instructions: DOC_WRITER,
 		tools: Object.freeze([...READ_TOOL_NAMES, ...WRITE_TOOL_NAMES]),
 		skills: Object.freeze(['concise-docs']),
+		knowledge: Object.freeze([]),
 	}),
 	Object.freeze({
 		id: 'analyst',
@@ -142,6 +166,17 @@ export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 		instructions: ANALYST,
 		tools: READ_TOOL_NAMES,
 		skills: Object.freeze(['data-summary']),
+		knowledge: Object.freeze([]),
+	}),
+	Object.freeze({
+		id: 'guide',
+		version: 1,
+		name: 'osionos guide',
+		description: 'How osionos and its AI features work — answers from the product docs, with their sources.',
+		instructions: GUIDE,
+		tools: READ_TOOL_NAMES,
+		skills: Object.freeze([]),
+		knowledge: Object.freeze(['osionos-ai']),
 	}),
 ]);
 
