@@ -12,7 +12,7 @@
 
 /**
  * The client of the account plane's step-up and identity routes (P1-2b): the emailed sudo
- * code, the username change and the deletion request.
+ * code, the username change, the deletion request and the data export.
  *
  * Like `accountProfileApi`, it calls `fetch` itself: the shared `api` client turns every
  * non-2xx into an `ApiError` that drops the body's `retryAfterSeconds`, which the sudo
@@ -37,7 +37,24 @@ export type AccountSecurityOutcome<T> =
 export interface DeletionRequest {
   requestedAt: string | null;
   scheduledFor: string | null;
+  /** The executor has begun erasing: Cancel is refused (409 `deletion_in_progress`) from here on. */
+  inProgress: boolean;
 }
+
+export type ExportFormat = 'json' | 'csv' | 'zip';
+export type ExportStatus = 'queued' | 'running' | 'done' | 'failed' | 'expired';
+
+export interface ExportJob {
+  id: string;
+  format: ExportFormat;
+  status: ExportStatus;
+  requestedAt: string | null;
+  expiresAt: string | null;
+  bytes: number | null;
+  errorCode: string | null;
+}
+
+export const EXPIRED_EXPORT_MESSAGE = 'This export expired; request a new one';
 
 const guardedFetch = sudoRequiredAwareFetch((input, init) => fetch(input, init));
 
@@ -98,7 +115,27 @@ async function call<T>(
 const deletionOf = (payload: Record<string, unknown>): DeletionRequest => ({
   requestedAt: text(payload.requestedAt),
   scheduledFor: text(payload.scheduledFor),
+  inProgress: payload.inProgress === true,
 });
+
+const FORMATS: readonly string[] = ['json', 'csv', 'zip'];
+const STATUSES: readonly string[] = ['queued', 'running', 'done', 'failed', 'expired'];
+
+function jobOf(raw: unknown): ExportJob | null {
+  const row = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  const { id, format, status } = row;
+  if (typeof id !== 'string' || typeof format !== 'string' || typeof status !== 'string') return null;
+  if (!FORMATS.includes(format) || !STATUSES.includes(status)) return null;
+  return {
+    id,
+    format: format as ExportFormat,
+    status: status as ExportStatus,
+    requestedAt: text(row.requestedAt),
+    expiresAt: text(row.expiresAt),
+    bytes: typeof row.bytes === 'number' ? row.bytes : null,
+    errorCode: text(row.errorCode),
+  };
+}
 
 /** Sends the emailed code. The address comes from the session, never from the client. */
 export const requestSudoCode = () =>
@@ -120,3 +157,30 @@ export const deletionStatus = () =>
   call<DeletionRequest | null>('GET', '/api/account/deletion', undefined, deletionOf, null);
 
 export const cancelDeletion = () => call('DELETE', '/api/account/deletion', undefined, () => null);
+
+/** 202 `{id}`; a second request while one runs is 409 `export_in_progress`, typed `refused` with that code. */
+export const requestExport = (format: ExportFormat) =>
+  call('POST', '/api/account/export', { format }, (payload) => ({ id: text(payload.id) }));
+
+/** Newest first, at most ten (the bridge's cap). A row of an unknown shape is dropped, not shown. */
+export const listExports = () =>
+  call('GET', '/api/account/export', undefined, (payload) =>
+    (Array.isArray(payload.exports) ? payload.exports : []).map(jobOf).filter((job): job is ExportJob => job !== null));
+
+/**
+ * The archive as a Blob, fetched with the session token (the bridge has no cookie, so an
+ * anchor href cannot carry it). A 410 is its own sentence and never returns a Blob.
+ */
+export async function downloadExport(id: string): Promise<AccountSecurityOutcome<Blob>> {
+  const jwt = settingsJwt();
+  if (!API_BASE || !jwt) return { ok: false, reason: 'unavailable' };
+  let response: Response;
+  try {
+    response = await guardedFetch(`${API_BASE}/api/account/export/${encodeURIComponent(id)}/download`, { method: 'GET', headers: { Authorization: `Bearer ${jwt}` } });
+  } catch (error) {
+    return { ok: false, reason: 'failed', code: 'network', message: error instanceof Error ? error.message : 'The request failed.' };
+  }
+  if (response.ok) return { ok: true, data: await response.blob() };
+  if (response.status === 410) return { ok: false, reason: 'refused', code: 'export_expired', message: EXPIRED_EXPORT_MESSAGE };
+  return failure(response, await bodyOf(response));
+}
