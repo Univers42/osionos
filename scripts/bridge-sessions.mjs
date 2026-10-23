@@ -22,20 +22,37 @@
  * and never writes); the bridge writes them through `asService` (ADR 0003). Both writes take
  * the user id from the verified session, never from the request.
  *
- * Caveat: the list has no paging — a user with more than 50 live sessions sees the newest 50
- * and the rest are not reachable from the API. `last_seen_at` is never written (a write per
- * request is the P0-5 problem), and no reaper removes the rows of expired sessions yet.
+ * A sign-in is a family: its row is the root (`family_id` = its own id), and every refresh
+ * writes a child row (`parent_id` = the row it replaces) carrying a new access token. The
+ * refresh token is single-use: presenting one that already has a child revokes the family.
+ * Revoking a session revokes its whole family, because one device holds several access
+ * tokens and revoking only one would leave it signed in through the next refresh.
+ *
+ * Caveat: the list shows one row per family, found by scanning at most MAX_LIST_PAGES pages
+ * of live rows newest first — a user with more live generations than that (about a dozen
+ * devices signed in for a week) loses the oldest families from the list, and rows created in
+ * the same microsecond can straddle a page boundary. `last_seen_at` is never written (a
+ * write per request is the P0-5 problem), and no reaper removes the rows of expired
+ * sessions yet.
  */
 
+import { randomUUID } from 'node:crypto';
 import { clientMeta, rateLimit, writeAudit } from './bridge-guard.mjs';
-import { bearerToken, requireUuid, sendJson } from './bridge-social-core.mjs';
+import { familyRefreshExp, hashRefreshToken, mintRefreshToken, readRefreshToken } from './bridge-refresh-token.mjs';
+import { bearerToken, readJsonBody, requireUuid, sendJson } from './bridge-social-core.mjs';
 import { kvBootLine, kvState } from './bridge-shared-store.mjs';
+import { safeText, signAppSessionToken } from './bridge-session-token.mjs';
+import { assertSessionNotCutOff } from './bridge-session-cutoff.mjs';
 import { sessionRevocationsFromConfig } from './bridge-session-revocations.mjs';
 import { timestampMicros } from './bridge-session-tracker.mjs';
 
 const TOKEN_VERSION = 'osionos_v1';
-const SESSION_COLUMNS = 'id,created_at,expires_at,last_seen_at,auth_method,ip_prefix,user_agent';
+const SESSION_COLUMNS = 'id,created_at,expires_at,last_seen_at,auth_method,ip_prefix,user_agent,family_id';
 const LIST_LIMIT = 50;
+const LIST_PAGE_SIZE = 500;
+const MAX_LIST_PAGES = 10;
+const REFRESH_LIMIT = 60;
+const REFRESH_BODY_LIMIT_BYTES = 16_384;
 const REVOKE_LIMIT = 30;
 const REVOKE_WINDOW_MS = 60_000;
 const AUTH_METHODS = new Set(['password', 'email_otp', 'passkey', 'oauth', 'handoff', 'refresh']);
@@ -135,17 +152,38 @@ function decodeAccessToken(accessToken) {
 	if (!jti || !sub || !Number.isFinite(iatMs) || !Number.isFinite(exp)) {
 		throw sessionError(500, 'session_token_unreadable', 'The delivered session token could not be read.');
 	}
-	return { jti, sub, iatMs, exp };
+	return { jti, sub, iatMs, exp, payload: claims };
+}
+
+/** What the refresh token repeats of the access token it is minted beside (D2). */
+function refreshClaimsFor(accessClaims, persona, config) {
+	const { payload } = accessClaims;
+	return {
+		sub: accessClaims.sub,
+		fam: accessClaims.jti,
+		famIatMs: accessClaims.iatMs,
+		jti: accessClaims.jti,
+		familyExp: familyRefreshExp(config, accessClaims.exp),
+		provider: safeText(payload.provider, 64),
+		email: safeText(persona?.email, 320),
+		name: safeText(persona?.name, 64),
+		workspace_ids: payload.workspace_ids,
+		roles: payload.roles,
+		platform_role: payload.platform_role ?? null,
+		is_admin: payload.is_admin === true,
+	};
 }
 
 /**
- * Writes the row of the session that is being delivered. The primary key is the token jti,
- * so a row that already exists is a session that was already delivered: a 409, never a
- * silent overwrite.
+ * Writes the row of the session that is being delivered, as the root of a new family. The
+ * primary key is the token jti, so a row that already exists is a session that was already
+ * delivered: a 409, never a silent overwrite. The raw refresh token is returned once and
+ * only its hash is written.
  */
-export async function recordSession(pg, { accessToken, authMethod, meta } = {}) {
+export async function recordSession(pg, { accessToken, authMethod, meta, config, persona } = {}) {
 	if (!AUTH_METHODS.has(authMethod)) throw new TypeError('authMethod must be a known sign-in method.');
 	const claims = decodeAccessToken(accessToken);
+	const refresh = mintRefreshToken({ config, now: claims.iatMs, claims: refreshClaimsFor(claims, persona, config) });
 	const row = {
 		id: claims.jti,
 		user_id: claims.sub,
@@ -155,7 +193,14 @@ export async function recordSession(pg, { accessToken, authMethod, meta } = {}) 
 		ip_prefix: meta?.ipPrefix ?? null,
 		ip_hash: meta?.ipHash ?? null,
 		user_agent: meta?.userAgent ?? null,
+		refresh_hash: refresh.hash,
+		family_id: claims.jti,
 	};
+	await insertRow(pg, row);
+	return { row, refreshToken: refresh.token };
+}
+
+async function insertRow(pg, row) {
 	try {
 		await pg.asService().post('osionos_sessions', row, { prefer: 'return=minimal' });
 	} catch (error) {
@@ -164,13 +209,25 @@ export async function recordSession(pg, { accessToken, authMethod, meta } = {}) 
 		}
 		throw sessionError(503, 'session_record_unavailable', 'The session could not be recorded; try again shortly.');
 	}
-	return row;
 }
 
-/** The row of the session that is being delivered; nothing is written while the records are off. */
-export async function recordDeliveredSession(config, pg, { request, accessToken, authMethod } = {}) {
+/**
+ * The row and refresh token of the session that is being delivered; nothing is written
+ * while the records are off.
+ */
+export async function recordDeliveredSession(config, pg, { request, accessToken, authMethod, persona } = {}) {
 	if (!config.sessionRecords?.enabled) return null;
-	return recordSession(pg, { accessToken, authMethod, meta: sessionClientMeta(request, config) });
+	return recordSession(pg, { accessToken, authMethod, meta: sessionClientMeta(request, config), config, persona });
+}
+
+/**
+ * The consume/login answer with the refresh token in it and the DELIVERED token's expiry:
+ * the handoff's own 90 s expiry stays inside the handoff record, where the client would
+ * otherwise persist it and drop a live session.
+ */
+export function deliveredAnswer(consumed, delivered) {
+	const { exp } = decodeAccessToken(consumed.session.accessToken);
+	return { ...consumed, session: { ...consumed.session, refreshToken: delivered?.refreshToken ?? '' }, expiresAt: exp * 1000 };
 }
 
 function liveSince(cutoffMicros, createdAt) {
@@ -180,58 +237,117 @@ function liveSince(cutoffMicros, createdAt) {
 	return created === null || created >= cutoffMicros;
 }
 
-async function listSessions({ config, pg, session }, response) {
-	const now = sessionClock(config);
+/** Live rows, newest first, one page at a time: PostgREST has no DISTINCT to ask for families. */
+async function* liveRowPages({ pg, session, now }) {
+	let before = null;
+	for (let page = 0; page < MAX_LIST_PAGES; page += 1) {
+		const params = new URLSearchParams({
+			select: SESSION_COLUMNS,
+			revoked_at: 'is.null',
+			expires_at: `gt.${new Date(now).toISOString()}`,
+			order: 'created_at.desc',
+			limit: String(LIST_PAGE_SIZE),
+		});
+		if (before) params.set('created_at', `lt.${before}`);
+		const rows = await pg.asUser(session).get(`osionos_sessions?${params}`);
+		const found = Array.isArray(rows) ? rows : [];
+		yield found;
+		if (found.length < LIST_PAGE_SIZE) return;
+		before = found.at(-1)?.created_at;
+		if (!before) return;
+	}
+}
+
+async function currentRow({ pg, session, now, currentId }) {
+	if (!currentId) return null;
 	const params = new URLSearchParams({
 		select: SESSION_COLUMNS,
+		id: `eq.${currentId}`,
 		revoked_at: 'is.null',
 		expires_at: `gt.${new Date(now).toISOString()}`,
-		order: 'created_at.desc',
-		limit: String(LIST_LIMIT),
+		limit: '1',
 	});
 	const rows = await pg.asUser(session).get(`osionos_sessions?${params}`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
+/** One row per family: NULL family_id means the row is its own family (a legacy row). */
+const familyKey = (row) => String(row.family_id ?? row.id).toLowerCase();
+
+async function listFamilies({ config, pg, session }) {
+	const now = sessionClock(config);
 	const cutoffMicros = config.sessionCutoffs?.cutoffMicros?.(session.userId);
 	const currentId = String(session.raw?.jti ?? '').toLowerCase();
-	const sessions = (Array.isArray(rows) ? rows : [])
-		.filter((row) => liveSince(cutoffMicros, row?.created_at))
-		.map((row) => ({
-			id: row.id,
-			createdAt: row.created_at,
-			expiresAt: row.expires_at,
-			lastSeenAt: row.last_seen_at,
-			authMethod: row.auth_method,
-			ipPrefix: row.ip_prefix,
-			userAgent: row.user_agent,
-			current: String(row.id ?? '').toLowerCase() === currentId,
-		}));
+	const families = new Map();
+	for await (const rows of liveRowPages({ pg, session, now })) {
+		for (const row of rows) {
+			if (liveSince(cutoffMicros, row?.created_at) && !families.has(familyKey(row))) families.set(familyKey(row), row);
+		}
+		if (families.size >= LIST_LIMIT) break;
+	}
+	// The caller's own generation represents its family, wherever the scan stopped.
+	const own = await currentRow({ pg, session, now, currentId });
+	if (own && liveSince(cutoffMicros, own.created_at)) families.set(familyKey(own), own);
+	return [...families.values()].slice(0, LIST_LIMIT + 1);
+}
+
+async function listSessions({ config, pg, session }, response) {
+	const currentId = String(session.raw?.jti ?? '').toLowerCase();
+	const sessions = (await listFamilies({ config, pg, session })).map((row) => ({
+		id: row.id,
+		createdAt: row.created_at,
+		expiresAt: row.expires_at,
+		lastSeenAt: row.last_seen_at,
+		authMethod: row.auth_method,
+		ipPrefix: row.ip_prefix,
+		userAgent: row.user_agent,
+		current: String(row.id ?? '').toLowerCase() === currentId,
+	}));
 	sendJson(response, 200, { sessions }, config);
 	return true;
+}
+
+/**
+ * Revokes a family (or the one named row when it has no family) and applies every revoked
+ * id to this process at once. The ids come from the rows the write returned, never from
+ * the request.
+ */
+async function revokeFamily({ config, pg }, { userId, familyId, rowId, reason }) {
+	const params = new URLSearchParams({ user_id: `eq.${userId}`, revoked_at: 'is.null', select: 'id,expires_at' });
+	if (familyId) params.set('family_id', `eq.${familyId}`);
+	else params.set('id', `eq.${rowId}`);
+	const rows = await pg.asService().patch(
+		`osionos_sessions?${params}`,
+		{ revoked_at: new Date(sessionClock(config)).toISOString(), revoked_reason: reason },
+		{ prefer: 'return=representation' },
+	);
+	const revoked = Array.isArray(rows) ? rows : [];
+	for (const row of revoked) {
+		const revokedId = String(row?.id ?? '').toLowerCase();
+		if (revokedId) config.sessionRevocations?.applyLocal(revokedId, timestampMicros(row?.expires_at) ?? 0);
+	}
+	return revoked.length;
+}
+
+async function liveRowOf(pg, { sessionId, userId }) {
+	const params = new URLSearchParams({
+		id: `eq.${sessionId}`,
+		user_id: `eq.${userId}`,
+		revoked_at: 'is.null',
+		select: 'id,family_id',
+		limit: '1',
+	});
+	const rows = await pg.asService().get(`osionos_sessions?${params}`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
 async function revokeSession({ config, pg, kv, session, meta, sessionId }, response) {
 	await rateLimit(kv, ['session-revoke', session.userId], { limit: REVOKE_LIMIT, windowMs: REVOKE_WINDOW_MS });
 	await writeAudit(pg, { session, meta, eventType: 'session_revoke', details: { sessionId } });
-	const params = new URLSearchParams({
-		id: `eq.${sessionId}`,
-		user_id: `eq.${session.userId}`,
-		revoked_at: 'is.null',
-		select: 'id,expires_at',
-	});
-	const rows = await pg.asService().patch(
-		`osionos_sessions?${params}`,
-		{ revoked_at: new Date(sessionClock(config)).toISOString(), revoked_reason: 'user' },
-		{ prefer: 'return=representation' },
-	);
-	if (!Array.isArray(rows) || rows.length === 0) {
-		throw sessionError(404, 'session_not_found', 'Session not found.');
-	}
-	// The revoked id and its expiry come from the rows the write returned: the id in the
-	// path is the caller's wish, the row is the truth.
-	for (const row of rows) {
-		const revokedId = String(row?.id ?? '').toLowerCase();
-		if (!revokedId) continue;
-		config.sessionRevocations?.applyLocal(revokedId, timestampMicros(row?.expires_at) ?? 0);
-	}
+	// "Not yours" and "already revoked" are the same 404: the read carries the caller's id.
+	const row = await liveRowOf(pg, { sessionId, userId: session.userId });
+	const revoked = row ? await revokeFamily({ config, pg }, { userId: session.userId, familyId: row.family_id, rowId: row.id, reason: 'user' }) : 0;
+	if (revoked === 0) throw sessionError(404, 'session_not_found', 'Session not found.');
 	response.writeHead(204, {
 		'cache-control': 'no-store',
 		'access-control-allow-origin': config.allowedOrigin,
@@ -251,9 +367,152 @@ function sessionIdFrom(pathname) {
 	}
 }
 
-/** The account routes of this module: GET /api/account/sessions and DELETE /api/account/sessions/:id. */
-export function createSessionsRoutes({ config, pg, kv, verifySession }) {
+const HOLDER_COLUMNS = 'id,user_id,family_id,created_at,revoked_at,ip_prefix,ip_hash,user_agent';
+
+/** The row that issued this refresh token, read straight from the table: no polled set, so a revoke bites on every replica at once. */
+async function holderOf(pg, token) {
+	const params = new URLSearchParams({ refresh_hash: `eq.${hashRefreshToken(token)}`, select: HOLDER_COLUMNS, limit: '1' });
+	const rows = await pg.asService().get(`osionos_sessions?${params}`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
+async function hasChild(pg, rowId) {
+	const params = new URLSearchParams({ parent_id: `eq.${rowId}`, select: 'id', limit: '1' });
+	const rows = await pg.asService().get(`osionos_sessions?${params}`);
+	return Array.isArray(rows) && rows.length > 0;
+}
+
+const sameText = (left, right) => String(left ?? '').toLowerCase() === String(right ?? '').toLowerCase();
+
+/** The token and the row it names must agree, and a mismatch says nothing about the other account. */
+function assertHolds(holder, payload) {
+	if (!holder || !sameText(holder.user_id, payload.sub) || !sameText(holder.id, payload.jti) || !sameText(holder.family_id, payload.fam)) {
+		throw sessionError(401, 'refresh_token_invalid', 'The refresh token is not valid.');
+	}
+}
+
+/** A consumed token came back: someone else holds a copy, so the whole family dies. */
+async function answerReuse({ config, pg, meta }, holder) {
+	const session = { userId: String(holder.user_id).toLowerCase(), raw: { jti: holder.id } };
+	try {
+		await writeAudit(pg, { session, meta, eventType: 'session_refresh_reuse', details: { sessionId: holder.id } });
+	} catch (error) {
+		// Revoking is the safety action: an unavailable audit must not keep a stolen family alive.
+		console.warn(`[osionos-bridge] refresh reuse could not be audited: ${error.code ?? 'audit_failed'}`);
+	}
+	await revokeFamily({ config, pg }, { userId: session.userId, familyId: holder.family_id, rowId: holder.id, reason: 'refresh_reuse' });
+	throw sessionError(401, 'refresh_token_reused', 'This sign-in was used elsewhere; sign in again.');
+}
+
+/**
+ * The next access token and refresh token. Identity (subject, provider, private workspace)
+ * comes from the old refresh token; rights (admin flag, platform role, member workspaces)
+ * come from `fresh`, read just now, so a demotion bites at the next rotation.
+ */
+function nextTokens({ config, now, payload, fresh }) {
+	const jti = randomUUID();
+	const provider = safeText(payload.provider, 64);
+	const extras = fresh.memberWorkspaces.filter((entry) => entry?._id);
+	const roles = Object.fromEntries([[payload.workspace_ids[0], payload.roles[payload.workspace_ids[0]] || 'owner'], ...extras.map((entry) => [entry._id, entry.role || 'member'])]);
+	const rights = { platform_role: fresh.platformRole ?? null, is_admin: fresh.isAdmin === true };
+	const access = signAppSessionToken({
+		payload: { subject: payload.sub, provider },
+		workspace: { _id: payload.workspace_ids[0] },
+		config,
+		now,
+		jti,
+		memberWorkspaces: extras,
+		platformRole: rights.platform_role,
+		isAdmin: rights.is_admin,
+	});
+	const claims = { ...payload, ...rights, workspace_ids: [payload.workspace_ids[0], ...extras.map((entry) => entry._id)], roles, famIatMs: payload.fam_iat_ms, jti, familyExp: payload.exp, provider };
+	return { jti, access, refresh: mintRefreshToken({ config, now, claims }) };
+}
+
+function childRow({ holder, tokens, now }) {
+	return {
+		id: tokens.jti,
+		user_id: holder.user_id,
+		created_at: new Date(now).toISOString(),
+		expires_at: tokens.access.expiresAt,
+		auth_method: 'refresh',
+		// The same client, so the metadata is copied: this request may come from anywhere.
+		ip_prefix: holder.ip_prefix ?? null,
+		ip_hash: holder.ip_hash ?? null,
+		user_agent: holder.user_agent ?? null,
+		family_id: holder.family_id,
+		parent_id: holder.id,
+		refresh_hash: tokens.refresh.hash,
+	};
+}
+
+/**
+ * Rotates a refresh token. The audit row comes before the INSERT and the reuse check before
+ * both, so a failed rotation leaves the old token usable and the client may retry.
+ *
+ * Caveat: the rate limit is per family and runs after the signature check, so a token that
+ * does not verify costs one HMAC and is never counted; a stolen family's own bucket is the
+ * only brake on its holder.
+ */
+async function refreshSession({ config, pg, kv, request, readRefreshClaims }, response) {
+	if (!config.sessionRecords?.enabled) throw sessionError(503, 'session_records_off', 'Session records are off on this bridge.');
+	const meta = sessionClientMeta(request, config);
+	const body = await readJsonBody(request, REFRESH_BODY_LIMIT_BYTES);
+	const presented = typeof body?.refreshToken === 'string' ? body.refreshToken.trim() : '';
+	if (!presented) throw sessionError(422, 'refresh_token_required', 'A refresh token is required.');
+	const now = sessionClock(config);
+	const read = readRefreshToken(presented, config, now);
+	if (!read.payload) throw sessionError(401, read.code, 'The refresh token is not valid.');
+	const { payload } = read;
+	// After the signature check: unsigned garbage cannot spend a legitimate family's bucket.
+	await rateLimit(kv, ['session-refresh', payload.fam], { limit: REFRESH_LIMIT, windowMs: REVOKE_WINDOW_MS });
+	const holder = await holderOf(pg, presented);
+	assertHolds(holder, payload);
+	if (holder.revoked_at) throw sessionError(401, 'session_revoked', 'This session was signed out.');
+	// The family's own sign-in instant, signed into the token: a child written by a replica
+	// that had not polled the cut-off yet cannot outlive a logout-everywhere.
+	assertSessionNotCutOff(config.sessionCutoffs, payload.sub, payload.fam_iat_ms);
+	if (await hasChild(pg, holder.id)) return answerReuse({ config, pg, meta }, holder);
+	const fresh = await readRefreshClaims(payload);
+	await writeAudit(pg, { session: { userId: payload.sub, raw: { jti: holder.id } }, meta, eventType: 'session_refresh', details: { sessionId: holder.id } });
+	const tokens = nextTokens({ config, now, payload, fresh });
+	try {
+		await pg.asService().post('osionos_sessions', childRow({ holder, tokens, now }), { prefer: 'return=minimal' });
+	} catch (error) {
+		// parent_id is unique: losing the race to a concurrent rotation is a second use of the token.
+		if (String(error?.upstreamCode) === '23505') return answerReuse({ config, pg, meta }, holder);
+		throw sessionError(503, 'session_record_unavailable', 'The session could not be refreshed; try again shortly.');
+	}
+	await refuseIfRevokedMeanwhile({ config, pg }, holder, tokens.jti);
+	sendJson(response, 200, { accessToken: tokens.access.token, refreshToken: tokens.refresh.token, expiresAt: Date.parse(tokens.access.expiresAt) }, config);
+	return true;
+}
+
+/**
+ * The family may have been revoked between the holder read and the insert; the revoke only
+ * touched the rows that existed then, so the child is revoked here with the same reason.
+ * Caveat: a revoke landing after this read, before the answer, leaves the child live until
+ * its next use (the next refresh reads the revoke of its parent, which the revoke wrote).
+ */
+async function refuseIfRevokedMeanwhile({ config, pg }, holder, childId) {
+	const params = new URLSearchParams({ id: `eq.${holder.id}`, select: 'revoked_at,revoked_reason', limit: '1' });
+	const rows = await pg.asService().get(`osionos_sessions?${params}`);
+	const parent = Array.isArray(rows) ? rows[0] : null;
+	if (!parent?.revoked_at) return;
+	await revokeFamily({ config, pg }, { userId: String(holder.user_id).toLowerCase(), familyId: holder.family_id, rowId: childId, reason: parent.revoked_reason || 'user' });
+	throw sessionError(401, 'session_revoked', 'This session was signed out.');
+}
+
+/**
+ * The routes of this module: GET /api/account/sessions, DELETE /api/account/sessions/:id,
+ * and POST /api/auth/bridge/refresh, which takes no session token (the refresh token in the
+ * body is the credential and an Authorization header is never an alternative).
+ */
+export function createSessionsRoutes({ config, pg, kv, verifySession, readRefreshClaims }) {
 	return async function handleAccountSessions(url, request, response) {
+		if (request.method === 'POST' && url.pathname === '/api/auth/bridge/refresh') {
+			return refreshSession({ config, pg, kv, request, readRefreshClaims }, response);
+		}
 		const isList = request.method === 'GET' && url.pathname === '/api/account/sessions';
 		const isRevoke = request.method === 'DELETE' && url.pathname.startsWith('/api/account/sessions/');
 		if (!isList && !isRevoke) return false;
