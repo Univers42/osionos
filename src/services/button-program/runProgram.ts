@@ -21,9 +21,15 @@
  * the same run wrote; use a `set` variable to carry a value between steps.
  */
 
+import { createElement } from "react";
+import { createRoot } from "react-dom/client";
+
+import { ConfirmDialog } from "@osionos/ui/molecules/ConfirmDialog";
+
 import { findBlockInTree, type Block } from "@/entities/block";
-import { parseButtonProgram } from "@/entities/block/model/buttonProgram";
+import { DESTRUCTIVE_PAGE_ACTIONS, parseButtonProgram } from "@/entities/block/model/buttonProgram";
 import type { PageEntry, PagePropertyEntry } from "@/entities/page";
+import { runProgramPageAction } from "@/entities/page/model/usePageActions";
 import { useUserStore } from "@/features/auth";
 import { usePageConfigStore } from "@/shared/config/pageConfigStore";
 import { useToastStore } from "@/shared/ui";
@@ -31,6 +37,7 @@ import { publishPage } from "@/store/sync/pageOutbox";
 import { usePageStore } from "@/store/usePageStore";
 
 import {
+	guardDestructive,
 	runButtonProgram,
 	type ActionOutcome,
 	type PropertyMap,
@@ -122,11 +129,43 @@ async function writeProperty(pageId: string, property: string, raw: unknown): Pr
 	return { status: "ok" };
 }
 
+/**
+ * An in-app confirmation (the viewer has no window.confirm). Closing the dialog
+ * by any route other than the confirm button counts as a refusal.
+ */
+function confirmDestructive(actionName: string): Promise<boolean> {
+	return new Promise((resolve) => {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		const settle = (answer: boolean) => {
+			root.unmount();
+			host.remove();
+			resolve(answer);
+		};
+		root.render(
+			createElement(
+				ConfirmDialog,
+				{
+					title: "Run this action?",
+					confirmLabel: "Run",
+					tone: "danger",
+					actionTone: "danger",
+					onCancel: () => settle(false),
+					onConfirm: () => settle(true),
+				},
+				createElement("p", { className: "text-sm text-[var(--osio-fg-muted)]" }, "This button wants to run ", createElement("strong", null, actionName), ". It changes this page."),
+			),
+		);
+	});
+}
+
 function performAction(pageId: string, action: ResolvedAction): Promise<ActionOutcome> {
 	if (action.type === "notify") {
 		toast("info", String(action.message ?? ""));
 		return Promise.resolve({ status: "ok" });
 	}
+	if (action.type === "page_action") return runProgramPageAction(pageId, action.name);
 	return writeProperty(pageId, action.property, action.value);
 }
 
@@ -153,7 +192,7 @@ export async function runButtonBlock(block: Block, hostPageId?: string): Promise
 		const result = await runButtonProgram(parsed.program, {
 			props: propsOf(page),
 			evaluateFormula: engine.evalFormula,
-			runAction: (action) => performAction(pageId, action),
+			runAction: guardDestructive((action) => performAction(pageId, action), confirmDestructive, DESTRUCTIVE_PAGE_ACTIONS),
 			now: () => Date.now(),
 		});
 		lastRun = { blockId: block.id, pageId, result };
