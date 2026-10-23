@@ -93,6 +93,10 @@ export const OVERLAY_PROBES: Record<string, Probe> = {
     "tableConfig",
   ),
   conflictOf: probe(mk({ type: "paragraph", content: "p", conflictOf: "b1" }), "conflictOf"),
+  buttonProgram: probe(
+    mk({ type: "button", content: "Go", buttonProgram: { version: 1, steps: [{ op: "action", action: { type: "notify", message: "hi" } }] } }),
+    "buttonProgram",
+  ),
   aiGenerated: probe(
     mk({ type: "image", asset: "a", aiGenerated: { model: "sd", runId: "r1", createdAt: "2026-10-22T00:00:00.000Z" } }),
     "aiGenerated",

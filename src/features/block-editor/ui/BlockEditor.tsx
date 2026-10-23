@@ -53,6 +53,7 @@ import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
+import { ButtonBlockReadOnly } from "@/entities/block/ui/ReadOnlyBlock";
 import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
@@ -1136,6 +1137,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           />
         </Suspense>
       );
+
+    case "button":
+      return <ButtonBlockReadOnly block={block} hostPageId={pageId} />;
 
     case "home_views":
       return (

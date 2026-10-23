@@ -41,6 +41,7 @@ import {
 import { onlineAmong } from './bridge-presence.mjs';
 import { publicAvatar } from './bridge-avatar.mjs';
 import { handleReportRoutes } from './bridge-reports.mjs';
+import { assertNotBlocked, requireInteraction } from './bridge-moderation-core.mjs';
 
 function personEntry(row, online, config) {
 	const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
@@ -126,12 +127,8 @@ async function createConnection(deps, session, request, response, config) {
 	const payload = await readJsonBody(request);
 	const addresseeId = requireUuid(payload.addresseeId, 'addresseeId');
 	if (addresseeId === session.userId) throw httpError('Cannot connect with yourself.', 422);
-	const blockRows = await rest(
-		config,
-		deps.fetchImpl,
-		`osionos_user_blocks?or=(and(blocker_id.eq.${session.userId},blocked_id.eq.${addresseeId}),and(blocker_id.eq.${addresseeId},blocked_id.eq.${session.userId}))&select=blocker_id&limit=1`,
-	);
-	if (Array.isArray(blockRows) && blockRows.length > 0) throw httpError('Connection is blocked.', 403);
+	await assertNotBlocked(config, deps.fetchImpl, session.userId, addresseeId, 'Connection is blocked.');
+	await requireInteraction(config, deps.fetchImpl, { interaction: 'connections', actorId: session.userId, targetId: addresseeId });
 	const pair = [session.userId, addresseeId].sort((a, b) => a.localeCompare(b)).join(':');
 	const existing = await rest(config, deps.fetchImpl, `osionos_connections?pair_key=eq.${encodeURIComponent(pair)}&select=id,status&limit=1`);
 	const prior = Array.isArray(existing) && existing.length > 0 ? existing[0] : null;
@@ -307,7 +304,9 @@ export function createSocialHandler({ config, verifySession, fetchImpl = fetch, 
 			if (pathname.startsWith('/api/social/')) return await handleSocialOps(deps, session, request, url, response, requestConfig);
 			return sendJson(response, 405, { ok: false, message: `Method ${method} is not supported here.` }, requestConfig);
 		} catch (error) {
-			return sendJson(response, error?.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'Social request failed.' }, requestConfig);
+			const body = { ok: false, message: error instanceof Error ? error.message : 'Social request failed.' };
+			if (typeof error?.code === 'string') body.code = error.code;
+			return sendJson(response, error?.status ?? 500, body, requestConfig);
 		}
 	};
 }
