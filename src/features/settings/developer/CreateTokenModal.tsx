@@ -24,8 +24,8 @@ import { Button, Input, Modal } from "@/shared/ui";
 
 import { createToken } from "./patApi";
 import {
-  EXPIRY_PRESET_DAYS, attributesOf, classicScopes, createTokenBody, expiryFromDays, maxExpiryDate,
-  patErrorMessage, scopeLabel, type PatCatalog, type PatKind, type PatToken, type TokenForm,
+  EXPIRY_PRESET_DAYS, MCP_PRESET, attributesOf, classicScopes, createTokenBody, expiryFromDays, maxExpiryDate,
+  patErrorMessage, presetWriteAttributes, scopeLabel, type PatCatalog, type PatKind, type PatToken, type TokenForm,
 } from "./patModel";
 import { PermissionPicker } from "./PermissionPicker";
 
@@ -59,6 +59,7 @@ const SecretView: React.FC<{ secret: string; onClose: () => void }> = ({ secret,
         <Button onClick={copy} aria-label="Copy token">{copied === "done" ? <Check size={16} /> : <Copy size={16} />}{copied === "done" ? "Copied" : "Copy"}</Button>
       </div>
       {copied === "failed" && <p role="alert" className="text-sm text-[var(--osio-danger)]">Copy failed. Select the token and copy it by hand.</p>}
+      <p className={hintClass}>Set it as <code>OSIONOS_MCP_TOKEN</code> in the environment of the app that will use it; do not paste it into a file you commit.</p>
       <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
     </div>
   );
@@ -72,7 +73,13 @@ export const CreateTokenModal: React.FC<{ catalog: PatCatalog; onClose: () => vo
   const nameId = useId();
   const expiryId = useId();
   const body = createTokenBody(form);
+  const offered = classicScopes(catalog);
+  const presetAvailable = MCP_PRESET.scopes.every((scope) => offered.includes(scope));
+  const presetFields = presetWriteAttributes(MCP_PRESET, catalog);
   const patch = (next: Partial<TokenForm>) => setForm((current) => ({ ...current, ...next }));
+
+  // Fills the form only: the user reads what it grants and presses Create.
+  const applyPreset = () => patch({ name: MCP_PRESET.name, kind: MCP_PRESET.kind, scopes: [...MCP_PRESET.scopes], expiry: expiryFromDays(MCP_PRESET.expiryDays) });
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -94,6 +101,13 @@ export const CreateTokenModal: React.FC<{ catalog: PatCatalog; onClose: () => vo
     <Modal open onClose={onClose} title={secret ? "Token created" : "New personal access token"} description={secret ? "Store this token somewhere safe." : "A token lets an app act as you, with only the permissions you pick."} size="md">
       {secret ? <SecretView secret={secret} onClose={onClose} /> : (
         <form onSubmit={submit} className="space-y-4">
+          <div className="space-y-1">
+            <Button onClick={applyPreset} disabled={!presetAvailable}>osionos MCP (Claude Code)</Button>
+            <p className={hintClass}>
+              Fills in a 30-day token that reads and writes pages. Write includes archiving pages
+              {presetFields.length > 0 ? `, and it can change: ${presetFields.join(", ")}.` : "."}
+            </p>
+          </div>
           <div className="space-y-1">
             <label htmlFor={nameId} className={labelClass}>Name</label>
             <Input id={nameId} value={form.name} maxLength={64} placeholder="CI pipeline" onChange={(event) => patch({ name: event.target.value })} />

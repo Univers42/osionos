@@ -34,7 +34,7 @@ function parseGrant(value: unknown): PatGrant | null {
   return { resource: value.resource, attributes: strings(value.attributes), permissions: strings(value.permissions) };
 }
 
-/** One token entry, or null when it has no uuid. Only the eight contract keys are kept. */
+/** One token entry, or null when it has no uuid. Only the nine contract keys are kept. */
 function parseToken(value: unknown): PatToken | null {
   if (!isRecord(value) || typeof value.id !== "string" || !UUID.test(value.id)) return null;
   const kind: PatKind = value.kind === "fine_grained" ? "fine_grained" : "classic";
@@ -42,7 +42,7 @@ function parseToken(value: unknown): PatToken | null {
   return {
     id: value.id, name: typeof value.name === "string" ? value.name : "", kind,
     scopes: strings(value.scopes), grants,
-    createdAt: textOrNull(value.createdAt), expiresAt: textOrNull(value.expiresAt), revokedAt: textOrNull(value.revokedAt),
+    createdAt: textOrNull(value.createdAt), expiresAt: textOrNull(value.expiresAt), revokedAt: textOrNull(value.revokedAt), lastUsedAt: textOrNull(value.lastUsedAt),
   };
 }
 
