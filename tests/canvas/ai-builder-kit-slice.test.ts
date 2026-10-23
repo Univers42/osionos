@@ -39,7 +39,14 @@ const plan: PlanDatabaseItem = {
     { name: "Mail", type: "email" },
     { name: "Phone", type: "phone" },
   ],
-  views: PLAN_VIEW_TYPES.map((type) => ({ type, name: `V ${type}` })),
+  // One view of every allowed type; the chart and the dashboard carry the settings they need to draw.
+  views: PLAN_VIEW_TYPES.map((type): PlanDatabaseItem["views"][number] => {
+    if (type === "chart") return { type, name: "V chart", chartType: "vertical_bar", xAxis: "Stage", aggregation: "sum", yAxis: "Amount" };
+    if (type === "dashboard") {
+      return { type, name: "V dashboard", cells: [{ view: "V table" }, { view: "V chart", stat: { fn: "sum", property: "Amount" } }] };
+    }
+    return { type, name: `V ${type}` };
+  }),
   rows: [
     { values: { Name: "Acme", Amount: 10, Stage: "Open", Tags: "a, b", State: "Review", Due: "2026-11-01", Paid: true, Site: "https://a.test" } },
     { values: { Name: "Bolt", Stage: "Won", Due: "2026-11-02", Amount: "not a number" } },
@@ -91,6 +98,21 @@ test("the kit's own selectors read the table, the board and the calendar", () =>
   const calendar = loaded.views[viewIdOf(loaded, "calendar")]!;
   const dated = read.getPagesForView(calendar.id).filter((page) => page.properties[calendar.settings.showCalendarBy!]);
   assert.deepEqual(dated.map((page) => page.properties[calendar.settings.showCalendarBy!]), ["2026-11-01", "2026-11-02"]);
+});
+
+test("after the app's load, the chart's axes are properties and every dashboard widget is a view of the same database", () => {
+  const loaded = withServerSlice(emptyState(), DB_KEY, kitSliceOf(plan, CTX).state);
+  const props = loaded.databases[DB_KEY]!.properties;
+  const chart = loaded.views[viewIdOf(loaded, "chart")]!;
+  assert.equal(props[chart.settings.xAxisProperty!]?.name, "Stage");
+  assert.equal(props[chart.settings.yAxisProperty!]?.name, "Amount");
+  assert.equal(chart.settings.yAxisAggregation, "sum");
+
+  const dashboard = loaded.views[viewIdOf(loaded, "dashboard")]!;
+  const widgets = dashboard.settings.dashboardWidgets ?? [];
+  assert.deepEqual(widgets.map((widget) => loaded.views[widget.viewId]?.name), ["V table", "V chart"]);
+  for (const widget of widgets) assert.equal(loaded.views[widget.viewId]!.databaseId, DB_KEY);
+  assert.deepEqual(dashboard.settings.dashboardRows?.flatMap((row) => row.widgetIds), widgets.map((widget) => widget.id));
 });
 
 test("values are typed; a value that does not fit is dropped; the status has its three groups", () => {
