@@ -20,6 +20,7 @@ import { SETTINGS_SECTIONS, findSection } from "@/features/settings/model/sectio
 import { useSettingsNav } from "@/features/settings/model/settingsNav";
 import { SettingsSectionsNav } from "@/features/settings/ui/SettingsSectionsNav";
 import { SettingsSearch } from "@/features/settings/ui/SettingsSearch";
+import { SudoPrompt } from "@/features/settings/ui/sudo/SudoPrompt";
 import { SETTINGS_PANELS, type SettingsPanelProps } from "@/features/settings/ui/sectionPanels";
 
 /** Reserve a few row heights so the lazy panel's arrival does not move the page. */
@@ -138,6 +139,7 @@ export const SettingsView: React.FC = () => {
             </div>
           </div>
         </div>
+        <SudoPrompt />
       </div>
     </div>
   );
