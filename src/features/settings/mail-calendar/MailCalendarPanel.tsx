@@ -10,12 +10,16 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { CalendarDays } from 'lucide-react';
 
 import { useConnectionsStore } from '@/store/settings';
 import { Button, Modal } from '@/shared/ui';
-import { DataTable, Section, SettingRow } from '../ui/settingsKit';
+import { ConfirmModal } from '../ui/ConfirmModals';
+import { DataTable, EmptyState, PanelStatus, Section, SettingRow } from '../ui/settingsKit';
 import { runAsync } from '../model/settingsCalls';
+import { useSettingsHydration } from '../model/settingsHydration';
+import type { ConnectionRecord } from '@/store/settings';
 
 const CONNECTION_PROVIDERS = [
   { provider: 'chartbase', label: 'ChartBase', scopes: ['content.read'] },
@@ -29,6 +33,12 @@ const CONNECTION_PROVIDERS = [
 
 function connectionProvider(provider: string) {
   return CONNECTION_PROVIDERS.find((item) => item.provider === provider) ?? CONNECTION_PROVIDERS[0];
+}
+
+// A mail or calendar row shows the account it was added for; without a signed-in
+// persona there is no address to show, so the label stays bare.
+function accountSuffix(email: string | undefined) {
+  return email ? ` · ${email}` : '';
 }
 
 function providerConnectionInput(userId: string, provider: string, labelSuffix = '') {
@@ -48,35 +58,48 @@ interface ActiveSettingsModal {
   payload?: Record<string, unknown>;
 }
 
-export const MailCalendarPanel: React.FC<{ activeUserId: string; personaEmail?: string }> = ({ activeUserId, personaEmail = 'dev.pro.photo@gmail.com' }) => {
+export const MailCalendarPanel: React.FC<{ activeUserId: string; personaEmail?: string }> = ({ activeUserId, personaEmail }) => {
   const userId = activeUserId || 'anonymous';
   const connections = useConnectionsStore((state) => state.data);
   const hydrate = useConnectionsStore((state) => state.hydrate);
   const connect = useConnectionsStore((state) => state.connect);
   const disconnect = useConnectionsStore((state) => state.disconnect);
   const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
+  const [leaving, setLeaving] = useState<ConnectionRecord | null>(null);
 
-  useEffect(() => {
-    runAsync(hydrate(userId, personaEmail));
+  const hydration = useSettingsHydration(async () => {
+    await hydrate(userId, personaEmail);
+    const failure = useConnectionsStore.getState().error;
+    if (failure) throw new Error(failure);
   }, [hydrate, personaEmail, userId]);
 
   const mailConnections = connections.filter((connection) => connection.provider === 'mail' && !connection.removedAt);
   const calendarConnections = connections.filter((connection) => connection.provider === 'calendar' && !connection.removedAt);
-  const calendarRows = calendarConnections.map((connection) => [connection.label.split(' · ')[0] ?? connection.label, personaEmail, connection.status]);
+  const calendarRows = calendarConnections.map((connection) => [connection.label.split(' · ')[0] ?? connection.label, connection.label.split(' · ')[1] ?? '—', connection.status]);
 
   return (
-    <>
+    <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
       <Section title="Connected emails">
-        {mailConnections.map((connection) => <SettingRow key={connection._id} title={connection.label.split(' · ')[0]} description={connection.label.split(' · ')[1] ?? personaEmail} action={<Button tone="danger-subtle" onClick={() => runAsync(disconnect(connection._id))}>Disconnect</Button>} />)}
+        {mailConnections.map((connection) => <SettingRow key={connection._id} title={connection.label.split(' · ')[0]} description={connection.label.split(' · ')[1]} action={<Button tone="danger-subtle" onClick={() => setLeaving(connection)}>Disconnect</Button>} />)}
         <Button onClick={() => setModal({ name: 'mail-provider' })}>Add address</Button>
       </Section>
       <Section title="Connected calendars">
-        <DataTable headers={['Calendar', 'Account', 'Status']} rows={calendarRows.length ? calendarRows : [['osionos Calendar', personaEmail, 'Not connected']]} />
+        <DataTable headers={['Calendar', 'Account', 'Status']} rows={calendarRows} empty={<EmptyState icon={<CalendarDays size={16} />} title="No calendars connected yet" hint="Add a calendar to see its events in osionos." />} />
         <Button className="mt-4" onClick={() => setModal({ name: 'calendar-provider' })}>Add calendar</Button>
       </Section>
-      {modal?.name === 'mail-provider' && <ProviderPickerModal title="Mail provider" providers={['mail', 'slack']} onSelect={(provider) => { runAsync(connect(providerConnectionInput(userId, provider, ` · ${personaEmail}`))); setModal(null); }} onClose={() => setModal(null)} />}
-      {modal?.name === 'calendar-provider' && <ProviderPickerModal title="Calendar provider" providers={['calendar', 'github']} onSelect={(provider) => { runAsync(connect(providerConnectionInput(userId, provider, ` · ${personaEmail}`))); setModal(null); }} onClose={() => setModal(null)} />}
-    </>
+      {modal?.name === 'mail-provider' && <ProviderPickerModal title="Mail provider" providers={['mail']} onSelect={(provider) => { runAsync(connect(providerConnectionInput(userId, provider, accountSuffix(personaEmail)))); setModal(null); }} onClose={() => setModal(null)} />}
+      {modal?.name === 'calendar-provider' && <ProviderPickerModal title="Calendar provider" providers={['calendar']} onSelect={(provider) => { runAsync(connect(providerConnectionInput(userId, provider, accountSuffix(personaEmail)))); setModal(null); }} onClose={() => setModal(null)} />}
+      {leaving && (
+        <ConfirmModal
+          title={`Disconnect ${leaving.label.split(' · ')[0]}?`}
+          message="It stops syncing with osionos. You can add it again at any time."
+          actionLabel="Disconnect"
+          danger
+          onConfirm={() => disconnect(leaving._id)}
+          onClose={() => setLeaving(null)}
+        />
+      )}
+    </PanelStatus>
   );
 };
 

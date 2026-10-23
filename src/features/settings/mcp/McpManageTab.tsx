@@ -13,7 +13,8 @@
 import React, { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-import { Modal, Toggle } from "@/shared/ui";
+import { Toggle } from "@/shared/ui";
+import { ConfirmModal } from "../ui/ConfirmModals";
 import type { McpRestrictPolicy, McpSettings } from "@/store/settings";
 import { useMcpSettingsStore } from "@/store/settings";
 import { AppIcon, MCP_APP_CATALOG, findMcpApp } from "./mcpCatalog";
@@ -52,30 +53,6 @@ const ConnectedAppRow: React.FC<{ appId: string; members: string[]; onDisconnect
     </div>
   );
 };
-
-const DisconnectAllConfirm: React.FC<{ count: number; onCancel: () => void; onConfirm: () => void }> = ({ count, onCancel, onConfirm }) => (
-  <Modal open onClose={onCancel} title="Disconnect all users from osionos MCP" size="sm">
-    <div data-testid="mcp-disconnect-all-confirm" className="space-y-4 text-sm text-[var(--osio-fg-muted)]">
-      <p>
-        This removes {count} external app {count === 1 ? "connection" : "connections"} for every member. They will
-        need to reconnect to use osionos through their AI tools. This cannot be undone.
-      </p>
-      <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancel} className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]">
-          Cancel
-        </button>
-        <button
-          type="button"
-          data-testid="mcp-disconnect-all-confirm-btn"
-          onClick={onConfirm}
-          className="rounded-md bg-[var(--osio-danger)] px-3.5 py-1.5 text-sm font-medium text-white hover:opacity-90"
-        >
-          Disconnect all users
-        </button>
-      </div>
-    </div>
-  </Modal>
-);
 
 export const McpManageTab: React.FC<McpManageTabProps> = ({ workspaceId, settings }) => {
   const setRestrictPolicy = useMcpSettingsStore((state) => state.setRestrictPolicy);
@@ -178,10 +155,13 @@ export const McpManageTab: React.FC<McpManageTabProps> = ({ workspaceId, setting
       </section>
 
       {confirmOpen && (
-        <DisconnectAllConfirm
-          count={settings.connections.length}
-          onCancel={() => setConfirmOpen(false)}
-          onConfirm={() => { disconnectAll(workspaceId); setConfirmOpen(false); }}
+        <ConfirmModal
+          title="Disconnect all users from osionos MCP"
+          message={`This clears the ${settings.connections.length} external app ${settings.connections.length === 1 ? "connection" : "connections"} listed here, for every member, on this device. It does not revoke access inside the AI apps themselves.`}
+          actionLabel="Disconnect all users"
+          danger
+          onConfirm={() => disconnectAll(workspaceId)}
+          onClose={() => setConfirmOpen(false)}
         />
       )}
     </div>

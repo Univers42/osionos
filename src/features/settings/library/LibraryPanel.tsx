@@ -11,12 +11,13 @@
 /* ************************************************************************** */
 
 import React from 'react';
-import { FileText, Trash2, Upload } from 'lucide-react';
+import { FileText, Image as ImageIcon, Inbox, Trash2, Upload } from 'lucide-react';
 
 import { useUserStore } from '@/features/auth';
 import { useAssetLibraryStore, type AccountAsset } from '@/shared/config/assetLibraryStore';
 import { Button, IconButton } from '@/shared/ui';
-import { DataTable, FeatureCard, MiniTabs, Section } from '../ui/settingsKit';
+import { ConfirmModal } from '../ui/ConfirmModals';
+import { DataTable, EmptyState, MiniTabs, Section } from '../ui/settingsKit';
 import { assetKindFromFile, formatBytes, readFileAsDataUrl } from '../model/settingsFiles';
 
 const EMPTY_ASSETS: AccountAsset[] = [];
@@ -27,6 +28,7 @@ export const LibraryPanel = () => {
   const assets = useAssetLibraryStore((s) => s.assetsByUser[activeUserId] ?? EMPTY_ASSETS);
   const addAsset = useAssetLibraryStore((s) => s.addAsset);
   const removeAsset = useAssetLibraryStore((s) => s.removeAsset);
+  const [removing, setRemoving] = React.useState<AccountAsset | null>(null);
   const imageAssets = assets.filter((asset) => asset.kind === 'cover' || asset.kind === 'image').slice(0, 9);
 
   async function handleLibraryUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -59,7 +61,7 @@ export const LibraryPanel = () => {
     </div>,
     asset.kind,
     formatBytes(asset.size),
-    <IconButton key={`${asset.id}-remove`} label="Remove asset" onClick={() => removeAsset(activeUserId, asset.id)}><Trash2 size={16} /></IconButton>,
+    <IconButton key={`${asset.id}-remove`} label="Remove asset" onClick={() => setRemoving(asset)}><Trash2 size={16} /></IconButton>,
   ]);
 
   return (
@@ -75,9 +77,7 @@ export const LibraryPanel = () => {
         {assets.length > 0 ? (
           <DataTable className="mt-4" headers={['Asset', 'Type', 'Size', '']} rows={rows} />
         ) : (
-          <div className="mt-4 rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-6 py-8 text-center text-sm text-[var(--osio-fg-muted)]">
-            No imported assets yet.
-          </div>
+          <EmptyState className="mt-4" icon={<Inbox size={16} />} title="No imported assets yet" hint="Use Add import to keep files here." />
         )}
       </Section>
       <Section title="Photos">
@@ -91,9 +91,10 @@ export const LibraryPanel = () => {
             ))}
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-3">{['Cover image', 'Workspace icon', 'Avatar photo'].map((item) => <FeatureCard key={item} icon={<Upload size={16} />} title={item} description="Reusable media for this account." />)}</div>
+          <EmptyState icon={<ImageIcon size={16} />} title="No photos yet" hint="Images you add above show up here." />
         )}
       </Section>
+      {removing && <ConfirmModal title="Remove asset" message={`Remove ${removing.name} from your library? Pages that already use it keep their own copy.`} actionLabel="Remove" danger onConfirm={() => removeAsset(activeUserId, removing.id)} onClose={() => setRemoving(null)} />}
     </>
   );
 };
