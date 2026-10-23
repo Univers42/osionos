@@ -28,6 +28,7 @@ import {
   LayoutGrid,
   Mail,
   Palette,
+  Plug,
   Settings,
   Shield,
   SlidersHorizontal,
@@ -35,67 +36,14 @@ import {
   User,
   UserPlus,
   Users,
+  Volume2,
   UserX,
-  type LucideIcon,
 } from "lucide-react";
 
-export type SettingsSectionId =
-  | "profile"
-  | "preferences"
-  | "notifications"
-  | "connections"
-  | "contacts"
-  | "moderation"
-  | "mail_calendar"
-  | "general"
-  | "people"
-  | "import"
-  | "page_settings"
-  | "shortcuts"
-  | "ai"
-  | "mcp"
-  | "public_pages"
-  | "library"
-  | "teamspaces"
-  | "permissions"
-  | "billing"
-  | "plans";
+import type { SettingsAnchor, SettingsSection } from "./sectionTypes";
 
-export type SettingsGroupId = "account" | "workspace" | "features" | "access";
-
-export interface SettingsGroup {
-  id: SettingsGroupId;
-  label: string;
-}
-
-export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
-  { id: "account", label: "Account" },
-  { id: "workspace", label: "Workspace" },
-  { id: "features", label: "Features" },
-  { id: "access", label: "Access & billing" },
-];
-
-/** One scroll target inside a panel (`[data-settings-anchor]`); the search index
- *  of the old modal, moved here so the registry is the only place it lives. */
-export interface SettingsAnchor {
-  id: string;
-  label: string;
-  keywords: string[];
-  description?: string;
-}
-
-export interface SettingsSection {
-  id: SettingsSectionId;
-  group: SettingsGroupId;
-  /** Nav label (the profile entry renders the persona name instead). */
-  label: string;
-  /** Panel heading. */
-  title: string;
-  /** One-line summary under the heading. */
-  subtitle: string;
-  icon: LucideIcon;
-  anchors: readonly SettingsAnchor[];
-}
+export { SETTINGS_GROUPS } from "./sectionTypes";
+export type { SettingsAnchor, SettingsGroup, SettingsGroupId, SettingsSection, SettingsSectionId } from "./sectionTypes";
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
@@ -120,6 +68,11 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
       { id: "desktop-app", label: "Desktop app", keywords: ["startup", "open", "last visited"] },
       { id: "privacy", label: "Privacy", keywords: ["cookies", "view history", "discoverability"] },
     ],
+  },
+  {
+    id: "accessibility_voice", group: "account", label: "Accessibility & voice", title: "Accessibility & voice",
+    subtitle: "Dictate what you say, and hear an answer read aloud — on your device by default", icon: Volume2,
+    anchors: [{ id: "accessibility-voice", label: "Accessibility & voice", keywords: ["voice", "dictation", "speech", "read aloud", "microphone", "text to speech"] }],
   },
   {
     id: "notifications", group: "account", label: "Notifications", title: "Notifications",
@@ -206,6 +159,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     id: "ai", group: "features", label: "osionos AI", title: "osionos AI",
     subtitle: "Search everywhere, automate meeting notes and configure AI features", icon: Sparkles,
     anchors: [{ id: "osionos-ai", label: "osionos AI", keywords: ["ai", "agents", "meeting notes", "summaries", "search"] }],
+  },
+  {
+    id: "ai_connections", group: "features", label: "AI connections", title: "AI connections",
+    subtitle: "Bring your own model access — your keys stay on the server", icon: Plug,
+    anchors: [
+      { id: "ai-connections", label: "AI connections", keywords: ["openrouter", "model", "provider", "api key", "byok", "connect"] },
+      { id: "ai-access-tokens", label: "AI access tokens", keywords: ["token", "access token", "pat", "api", "assistant"] },
+    ],
   },
   {
     id: "mcp", group: "features", label: "osionos MCP", title: "osionos MCP",

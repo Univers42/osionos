@@ -202,11 +202,15 @@ export function maskAttributes(entry, mask) {
  * A payload that is not a plain object has no keys, so nothing is outside the mask. A mask that
  * is not an array covers nothing, so every key of the payload is outside it.
  */
+// The default sort's order (UTF-16 code units), spelled out: locale-independent, so the
+// list a client sees never depends on the server's locale.
+const byCodeUnit = (left, right) => (left < right ? -1 : Number(left > right));
+
 export function attributesOutsideMask(payload, mask) {
 	if (!isPlainObject(payload)) return [];
 	const keys = Object.keys(payload);
-	if (!Array.isArray(mask)) return keys.sort();
-	return keys.filter((key) => !mask.includes(key)).sort();
+	if (!Array.isArray(mask)) return keys.sort(byCodeUnit);
+	return keys.filter((key) => !mask.includes(key)).sort(byCodeUnit);
 }
 
 /**

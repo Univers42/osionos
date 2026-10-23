@@ -142,7 +142,19 @@ export function clearBridgeTokenFromLocation() {
   globalThis.history.replaceState(globalThis.history.state, document.title, url.toString());
 }
 
+// A page the viewer embedded can redirect its own frame to `<this app>/#bridge_token=<attacker's>`;
+// the app then boots same-origin inside the frame, and consuming that token would replace the
+// viewer's account set. Reading `top` throws when a cross-origin ancestor owns it, which is also framed.
+function isFramed(): boolean {
+  try {
+    return globalThis.top !== globalThis.self;
+  } catch {
+    return true;
+  }
+}
+
 export async function consumeBridgeSessionFromLocation(): Promise<BridgeSessionImport | null> {
+  if (isFramed()) return null;
   const token = bridgeTokenFromLocation();
   if (!token || !API_BASE) return null;
   const response = await fetch(`${API_BASE}/api/auth/bridge/consume`, {

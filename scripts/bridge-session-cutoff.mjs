@@ -48,6 +48,32 @@ import {
 
 export { POLL_INTERVAL_MS, RETRY_AFTER_SECONDS, STALE_AFTER_MS, timestampMicros };
 
+/**
+ * The cut-off tracker of one process: the whole table lives in a Map that the
+ * poller replaces every 10 s, so a verification never touches the network.
+ *
+ * The bridge and the osionos-ai service both hold one, and the token verifier
+ * reads it (assertSessionNotCutOff), so the shape below is the one both code
+ * paths see. It is written in JSDoc, in the module that owns the behaviour:
+ * a copy of it somewhere else is a copy that drifts.
+ *
+ * @typedef {object} SessionCutoffTracker
+ * @property {boolean} enforced whether the cut-offs are enforced at all
+ * @property {() => string} status off | loading | fresh | stale
+ * @property {(userId: string) => number | undefined} cutoffMicros the cut-off of one user, in microseconds
+ * @property {() => number} beginLoad the sequence number of the writes this process made
+ * @property {(loaded: Map<string, number>, startSequence: number) => void} completeLoad
+ * @property {(error: unknown) => void} failLoad
+ */
+
+/**
+ * The log the tracker writes its warnings to: the bridge's and the service's
+ * console.
+ *
+ * @typedef {object} SessionCutoffLog
+ * @property {(message: string) => void} info
+ * @property {(message: string) => void} warn
+ */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TABLE_HINT = 'public.auth_session_cutoffs must exist and be readable by the service role (apply models/auth-session-cutoffs.sql)';
 
@@ -94,14 +120,27 @@ export class SessionCutoffs extends PolledSessionSet {
 	}
 }
 
-/** Enforcement is on when the bridge can reach the table, unless the operator turned it off. */
+/**
+ * Enforcement is on when the bridge can reach the table, unless the operator turned it off.
+ *
+ * @param {{ sessionCutoffsMode?: string, serviceKey?: string, baasUrl?: string }} config the bridge's config
+ * @param {{ now?: () => number, log?: SessionCutoffLog }} [options] the clock and the log of the tracker
+ * @returns {SessionCutoffTracker}
+ */
 export function sessionCutoffsFromConfig(config, options = {}) {
 	if (config.sessionCutoffsMode === 'off') return new SessionCutoffs({ ...options, enforced: false, offReason: 'OSIONOS_SESSION_CUTOFFS=off' });
 	if (!config.serviceKey || !config.baasUrl) return new SessionCutoffs({ ...options, enforced: false, offReason: 'no service key or BaaS URL' });
 	return new SessionCutoffs({ ...options, enforced: true });
 }
 
-/** Synchronous: 503 unless the table is loaded and recent, 401 for a token issued before its user's cut-off. */
+/**
+ * Synchronous: 503 unless the table is loaded and recent, 401 for a token issued before its user's cut-off.
+ *
+ * @param {SessionCutoffTracker | undefined | null} tracker the tracker of the process, nothing when there is none
+ * @param {string} userId the lower-case id of the user the token belongs to
+ * @param {number} issuedAtMs the moment the token was minted, in milliseconds
+ * @returns {void}
+ */
 export function assertSessionNotCutOff(tracker, userId, issuedAtMs) {
 	if (!tracker) return;
 	const state = tracker.status();
@@ -140,6 +179,11 @@ export async function loadAllCutoffs(source, timeoutMs) {
 /**
  * Polls with a setTimeout chain (a tick never overlaps the next) and unref'd timers. A tick
  * never rejects: every failure becomes failLoad. `stop()` ends the chain.
+ *
+ * @param {SessionCutoffTracker} tracker the tracker the loaded table goes into
+ * @param {{ fetchImpl?: typeof fetch, baasUrl: string, serviceKey: string }} source where the table is read from
+ * @param {{ intervalMs?: number, timeoutMs?: number }} [options] the interval between two ticks, the deadline of one read
+ * @returns {{ tick: () => Promise<void>, stop: () => void }}
  */
 export function startSessionCutoffPoller(tracker, source, { intervalMs = POLL_INTERVAL_MS, timeoutMs = BAAS_FETCH_TIMEOUT_MS } = {}) {
 	return startPolledSessionPoller(tracker, () => loadAllCutoffs(source, timeoutMs), { intervalMs });

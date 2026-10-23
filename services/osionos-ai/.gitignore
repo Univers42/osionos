@@ -1,0 +1,6 @@
+node_modules/
+# The store of pnpm, when it is kept inside the service.
+.pnpm-store/
+# The scratch of the output check (C73): the models of the classifiers are
+# fetched on the disk of a volume, never in the repository.
+.scratch*/

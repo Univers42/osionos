@@ -1,0 +1,175 @@
+import type { Pool } from 'pg';
+import type { ToolSet } from 'ai';
+import { config } from '../config.ts';
+import { rememberTool } from '../tools/memoryTools.ts';
+import { loadSkillTool } from '../tools/skillTools.ts';
+import type { WorkspaceSkillLoader } from '../tools/skillTools.ts';
+import { buildSkillIndex } from '../skills/runSkills.ts';
+import type { SkillIndex } from '../skills/runSkills.ts';
+import { loadListedVersion, recordSkillPin } from '../skills/repo.ts';
+import { readToolSet } from '../tools/index.ts';
+import type { ToolOutcome, ToolPool } from '../tools/index.ts';
+import { writeToolSet } from '../approvals/toolSet.ts';
+import type { ApprovalContext, PermissionAsked } from '../approvals/types.ts';
+import type { RetrievedChunk } from '../retrieval/search.ts';
+import type { AuthUser } from '../auth.ts';
+import type { PageContext } from './prompt.ts';
+import { citationData } from './sources.ts';
+import type { BuiltinAgent } from '../agents/builtins.ts';
+
+/**
+ * The tools of a run.
+ *
+ * The reads come first: the search of a workspace, and the read of a page.
+ * They read the workspace of the caller, and they carry NO token: a read tool
+ * has no use for one.
+ *
+ * The WRITES come after, when the bridge is configured: they ask the user for
+ * the right to write, and they write nothing. Without a bridge URL they are
+ * not registered at all, and the reads keep working.
+ *
+ * The tool set knows three things about the run: the sources it found (they
+ * are the citations of the answer), the pages it read or quoted (they are the
+ * provenance of an approval), and whether it asked the user (that is the
+ * finish reason of the run).
+ */
+
+/** What the tools of a run tell the run. */
+export interface RunTools {
+	/** The tools the model may call, or nothing when the run has no caller. */
+	tools: ToolSet | undefined;
+	/** The sources of the run: the ones of the prompt, then the ones the tools found. */
+	readonly cited: RetrievedChunk[];
+	/** Whether the run asked the user for the right to write. */
+	awaitingApproval: boolean;
+	/**
+	 * The writes the run asked for: one card each.
+	 *
+	 * The approval id is what a client keeps: the card is drawn again from it
+	 * when the stream of the run is gone.
+	 */
+	readonly permissions: readonly PermissionAsked[];
+}
+
+/** The tools of a run, and what they know of it. */
+export function buildRunTools(input: {
+	db: Pool;
+	user?: AuthUser;
+	pool: ToolPool;
+	runId: string;
+	conversationId: string;
+	ownerId: string;
+	/** The pages the client quoted: the run reads them in its prompt. */
+	pages: readonly PageContext[];
+	/** The sources of the prompt: they are cited before the first word. */
+	sources: readonly RetrievedChunk[];
+	/**
+	 * The agent of the run, or none.
+	 *
+	 * None is the general assistant: every tool of the runtime, as today. An
+	 * agent narrows them to its own list — it never gains one, and the write
+	 * tools it keeps stay behind the approval of the user.
+	 */
+	agent?: BuiltinAgent | null;
+	/**
+	 * The skills the prompt of the run lists, and the workspace they come from.
+	 *
+	 * `load_skill` answers for exactly these ids. Without it the index is the
+	 * agent's built-ins, as before workspace skills existed.
+	 */
+	skillIndex?: SkillIndex;
+	workspaceId?: string;
+	/** The event of the run. */
+	emit: (type: string, data: unknown) => Promise<void>;
+}): RunTools {
+	const { db, user, pool, runId, conversationId, ownerId, pages, sources, emit } = input;
+	const agent = input.agent ?? null;
+	const skillIndex = input.skillIndex ?? buildSkillIndex(agent?.skills ?? [], []);
+	const cited: RetrievedChunk[] = [...sources];
+	const permissions: PermissionAsked[] = [];
+	const run: RunTools = { tools: undefined, cited, awaitingApproval: false, permissions };
+
+	const hooks = {
+		citedSources: sources,
+		onSources: async (
+			found: readonly { n: number; source: RetrievedChunk }[],
+			toolCallId: string,
+		) => {
+			// Pushed before the first await: the calls of a step interleave at
+			// the awaits, and the list must stay in the order of the numbers
+			// (the stored part of a source is its number minus one).
+			cited.push(...found.map(({ source }) => source));
+			for (const { n, source } of found) {
+				await emit('citation', {
+					...citationData(source, n),
+					// The call that found the passage: the client credits
+					// it to that call, and to no other.
+					toolCallId,
+				});
+			}
+		},
+		onResult: async (outcome: ToolOutcome) => {
+			await emit('tool.result', outcome);
+			// C42: a proposal is announced so a client can show the chip.
+			if (outcome.memoryId && outcome.memoryBody) {
+				await emit('memory.proposed', { type: 'memory.proposed', id: outcome.memoryId, body: outcome.memoryBody });
+			}
+			// The skill a load returned is pinned on the row of the run (C40):
+			// the stream expires, the row does not.
+			if (outcome.skill) await recordSkillPin(db, runId, outcome.skill);
+		},
+		onApproval: async (asked: PermissionAsked) => {
+			run.awaitingApproval = true;
+			permissions.push(asked);
+			await emit('permission.asked', asked);
+		},
+	};
+
+	const approval: ApprovalContext = {
+		runId,
+		conversationId,
+		ownerId,
+		// The pages the run had read or quoted: where the request comes
+		// from. It grows as the run reads more.
+		provenance: () => [
+			...new Set([...pages.map((page) => page.id), ...cited.map((source) => source.pageId)]),
+		],
+	};
+
+	const workspaceEntries = new Map(
+		skillIndex.entries.flatMap((entry) =>
+			entry.source === 'workspace' && entry.skillId ? [[entry.id, { version: entry.version, skillId: entry.skillId }] as const] : [],
+		),
+	);
+	const loader: WorkspaceSkillLoader | undefined =
+		workspaceEntries.size > 0 && input.workspaceId
+			? {
+					entries: workspaceEntries,
+					load: (skillId, version) => loadListedVersion(db, { workspaceId: input.workspaceId as string, skillId, version }),
+				}
+			: undefined;
+	const skillTools =
+		skillIndex.entries.length > 0 ? [loadSkillTool(skillIndex.entries.map((entry) => entry.id), undefined, loader)] : [];
+	// C42: `remember` proposes; it needs the workspace the memory belongs to.
+	const proposalTools = input.workspaceId ? [rememberTool({ workspaceId: input.workspaceId, runId })] : [];
+
+	run.tools = user
+		? {
+				...readToolSet({ db, user }, hooks, pool, [...skillTools, ...proposalTools]),
+				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
+			}
+		: undefined;
+	// The agent narrows the tools: the set of the run is the intersection of
+	// what the runtime offers and what the agent may call. An agent never
+	// gains a tool, and a tool the agent does not list is not even sent to
+	// the model — it is not in the request.
+	if (run.tools && agent) {
+		const allowed = new Set(agent.tools);
+		const kept: ToolSet = {};
+		for (const [name, tool] of Object.entries(run.tools)) {
+			if (allowed.has(name) || name === 'load_skill' || name === 'remember') kept[name] = tool;
+		}
+		run.tools = kept;
+	}
+	return run;
+}

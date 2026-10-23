@@ -12,6 +12,7 @@
 
 import { parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
 import type { Block } from "@/entities/block";
+import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import type { PageEntry } from "@/entities/page";
 import type { PageConfig } from "@/shared/config/pageConfigStore";
 import { serializeBlocksToMarkdown } from "./pageMarkdownSerialize";
@@ -149,7 +150,7 @@ export async function importPageFile(file: File): Promise<ImportedPagePayload> {
     const sourcePage = json.page ?? json;
     return {
       title: sourcePage.title,
-      content: Array.isArray(sourcePage.content) ? sourcePage.content : [],
+      content: Array.isArray(sourcePage.content) ? sanitizeLinkBlockFields(sourcePage.content) : [],
     };
   }
 
@@ -157,7 +158,7 @@ export async function importPageFile(file: File): Promise<ImportedPagePayload> {
 
   return {
     title: extensionIndex > 0 ? file.name.slice(0, extensionIndex) : file.name,
-    content: parseMarkdownToBlocks(text),
+    content: sanitizeLinkBlockFields(parseMarkdownToBlocks(text)),
   };
 }
 

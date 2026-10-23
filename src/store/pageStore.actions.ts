@@ -44,6 +44,7 @@ import { loadLedger } from "@osionos/outbox-ledger";
 import { applyServerPages } from "./sync/applyServerPages";
 import { isPageClean, resolveFetchedPage } from "./sync/mergeServerPages";
 import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./sync/pageStamp";
+import { setBase } from "./sync/pageBase";
 import { forgetAppRemovals, recordAppRemovals } from "./appRemovals";
 import {
   cascadeIdsFrom,
@@ -201,6 +202,10 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
     try {
       const fullPage = await api.get<PageEntry>(`/api/pages/${pageId}`, pageJwt);
       if (!fullPage) return;
+      // The server's copy is the BASE the next write is made against: its content
+      // version and its content. It is remembered even when the local copy wins the
+      // merge below — the base is what the SERVER holds, not what the store shows.
+      setBase(pageId, fullPage.contentVersion ?? null, fullPage.content ?? null);
       // Decided on the page as it is NOW: an edit typed while the request was in flight must
       // stay unpublished-and-pending, never be recorded as the server's copy.
       const current = get().pageById(pageId);

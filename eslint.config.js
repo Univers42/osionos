@@ -72,6 +72,7 @@ const HEX_ALLOWLIST = [
   "src/data/seedUserPages.ts", // seed page content that quotes CSS as text
   "src/entities/block/ui/CodeBlockReadOnly.tsx", // macOS window-control dots: fixed by the platform, not themed
   "src/features/block-editor/model/blockColors.ts", // contrast maths needs concrete text colours
+  "src/features/whiteboard/model/jsonCanvasCommon.ts", // the JSON Canvas preset colours are data, not styling
   "src/features/block-editor/model/inlineIconInsert.ts", // an SVG data URI cannot read page tokens
   "src/features/block-editor/ui/ColorProfilePanel.tsx", // <input type=color> accepts only #rrggbb
   "src/features/block-editor/ui/canvas/layout.constants.ts", // canvas card tint catalog
@@ -159,6 +160,38 @@ export default [
     files: ["packages/*/scripts/**/*.{mjs,cjs,js}"],
     languageOptions: {
       globals: { console: "readonly", process: "readonly" },
+    },
+  },
+  {
+    // The bridge's server-side modules are node tooling too: they run under plain
+    // node, in the container of the bridge, never in the browser bundle. The
+    // repo's lint command does not reach the root scripts/ folder, so a gate
+    // that lints one of these files on its own needs node's globals declared.
+    files: ["scripts/bridge-*.mjs"],
+    languageOptions: {
+      globals: {
+        AbortController: "readonly",
+        AbortSignal: "readonly",
+        Buffer: "readonly",
+        Headers: "readonly",
+        Request: "readonly",
+        Response: "readonly",
+        TextDecoder: "readonly",
+        TextEncoder: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        clearInterval: "readonly",
+        clearTimeout: "readonly",
+        console: "readonly",
+        crypto: "readonly",
+        fetch: "readonly",
+        performance: "readonly",
+        process: "readonly",
+        queueMicrotask: "readonly",
+        setInterval: "readonly",
+        setTimeout: "readonly",
+        structuredClone: "readonly",
+      },
     },
   },
   {

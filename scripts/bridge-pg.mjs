@@ -73,7 +73,7 @@ function resolveBase(config, env) {
 // Layer one guards the path part only: a query value may legitimately carry encoded `/`,
 // `\` or `..`, and the parser never normalises a query into the path. Layer two proves the
 // resolved path still lives under the configured base (a crafted `%2E%2e` would not).
-const UNSAFE_PATH = /^\/|\.\.|:\/\/|\\|%2e|%2f|%5c/i;
+const UNSAFE_PATH = /(?:^\/)|\.\.|:\/\/|\\|%2e|%2f|%5c/i;
 const CONTROL_CHAR = /[\x00-\x1f\x7f]/;
 
 function buildUrl(base, path) {

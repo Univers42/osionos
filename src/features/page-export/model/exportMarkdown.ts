@@ -22,6 +22,7 @@ import type { Block } from "@/entities/block";
 import { serializeBlocksToMarkdown } from "@/services/page-actions/pageMarkdownSerialize";
 import { isDatabaseBlock } from "./databaseExportSource";
 import { inlineToMarkdown } from "./inlineDialect";
+import { LINK_EXPORT_TYPES, linkBlockMarkdown } from "./linkBlockExport";
 import type { ExportOptions } from "./exportTypes";
 
 const MEDIA_TYPES = new Set(["image", "video", "audio", "file"]);
@@ -55,6 +56,11 @@ export function transformBlocksForExport(
       const src = mediaSource(block);
       if (!src) continue;
       out.push(paragraph(block.type === "image" ? `![](${src})` : `[${block.type}](${src})`));
+      continue;
+    }
+    // "raw" keeps the osiembed/osibookmark fence: it is the lossless, re-importable form.
+    if (LINK_EXPORT_TYPES.has(block.type) && !keepDialect) {
+      out.push(paragraph(linkBlockMarkdown(block)));
       continue;
     }
     if (isDatabaseBlock(block)) {

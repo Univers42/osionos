@@ -23,6 +23,13 @@
  *   GET  /api/communities/:id             one community + its channels (member)
  *   POST /api/communities/:id/channels    {channelId} (owner/admin)
  *   POST /api/communities/:id/join        self-join (creates a member row)
+ *
+ * L0 runs BEFORE a community is created and before a channel is linked into
+ * one (bridge-moderation-gate.mjs): the words are the community's name and
+ * description, and the channel's name, and a warning is the author's question
+ * (409) — nothing is written until they answer it with acknowledgeWarning:
+ * true. WARN-ONLY: neither table has a moderation_state column, so nothing is
+ * ever written held and no audit row is ever written.
  */
 
 import {
@@ -30,6 +37,7 @@ import {
 	bearerToken,
 	httpError,
 	readInChunks,
+	moderationWarningBody,
 	readJsonBody,
 	requireUuid,
 	rest,
@@ -39,6 +47,7 @@ import {
 import { inFilter } from './bridge-paging.mjs';
 import { requireChannelAccess } from './bridge-chat.mjs';
 import { publicIconAvatar } from './bridge-avatar.mjs';
+import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 
 function communityEntry(row, role = null, config = null) {
 	return {
@@ -62,11 +71,16 @@ async function createCommunity(deps, session, request, response, config) {
 	const payload = await readJsonBody(request);
 	const name = safeText(payload.name, 80);
 	if (!name) throw httpError('Community name is required.', 422);
+	const description = safeText(payload.description, 500) || null;
+	// L0 asks BEFORE the community is written: its name and its description are
+	// the words that are checked, and a warning is the author's question (409).
+	const decision = askBeforeWrite({ text: `${name}\n${description ?? ''}`, surface: 'community', env: deps.env, payload });
+	if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
 	const rows = await rest(config, deps.fetchImpl, 'osionos_communities', {
 		method: 'POST',
 		body: {
 			name,
-			description: safeText(payload.description, 500) || null,
+			description,
 			avatar: publicIconAvatar(safeText(payload.avatar, 1024), config),
 			creator_id: session.userId,
 		},
@@ -126,7 +140,11 @@ async function addCommunityChannel(deps, session, request, communityId, response
 	const payload = await readJsonBody(request);
 	const channelId = requireUuid(payload.channelId, 'channelId');
 	// G6 F4: getCommunity shows every linked channel's metadata to all members.
-	await requireChannelAccess(config, deps.fetchImpl, session.userId, channelId);
+	const { channel } = await requireChannelAccess(config, deps.fetchImpl, session.userId, channelId);
+	// L0 asks BEFORE the link is written: the channel's NAME is the word that is
+	// checked — it is shown to every member of the community.
+	const decision = askBeforeWrite({ text: String(channel?.name ?? ''), surface: 'community', env: deps.env, payload });
+	if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
 	await rest(config, deps.fetchImpl, 'osionos_community_channels?on_conflict=community_id,channel_id', {
 		method: 'POST',
 		body: { community_id: communityId, channel_id: channelId },

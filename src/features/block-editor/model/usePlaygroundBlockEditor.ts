@@ -19,17 +19,18 @@ import React, {
   useCallback,
 } from "react";
 import { usePageStore } from "@/store/usePageStore";
-import { bareUrlToLinkSource, isSingleBareUrl } from "@osionos/markdown-engine";
+import { isSingleBareUrl } from "@osionos/markdown-engine";
 import { detectBlockType, parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
 import {
   getInlineEditorSelectionOffsets,
   type InlineEditorSelectionOffsets,
 } from "@osionos/markdown-engine/dom";
 import { getCalloutIconForKind } from "@osionos/markdown-engine/terminal";
-import { useSlashSelect, useSlashWhiteboardSelect } from "@/features/slash-commands";
+import { useSlashAiImageSelect, useSlashSelect, useSlashWhiteboardSelect } from "@/features/slash-commands";
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";
 import { useUserStore } from "@/features/auth";
+import { rememberDatabaseWorkspace } from "@/widgets/database-view/model/objectDatabaseWorkspaces";
 import { useUrlPasteMode } from "@/shared/config/useAppearance";
 import {
   isIndentable,
@@ -72,6 +73,10 @@ import {
 } from "./playgroundBlockEditor.helpers";import { inlineIconInsertText } from "./inlineIconInsert";
 import { matchInternalCopy } from "./blockClipboard";
 import { useBlockContextMenu } from "./useBlockContextMenu";
+import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
+import { insertPastedLink, isPasteMenuBlock } from "./pasteLinkMenu";
+import { useLinkSnapshotAttach } from "./useLinkSnapshotAttach";
+import { usePasteLinkMenu } from "./usePasteLinkMenu";
 import {
   commitEditableBlockText,
   focusEditableBlock,
@@ -206,6 +211,12 @@ function findChildrenForParent(
 
 function normalizeEditorSource(source: PlaygroundBlockEditorSource): NormalizedEditorSource {
   return typeof source === "string" ? { kind: "page", pageId: source } : source;
+}
+
+/** The block element the paste landed in; null for a synthetic event with no DOM target. */
+function pastedBlockElement(event: React.ClipboardEvent): HTMLElement | null {
+  const target = event.target;
+  return target instanceof Element ? target.closest<HTMLElement>("[data-block-id]") : null;
 }
 
 function editorSourceKey(source: NormalizedEditorSource): string {
@@ -700,17 +711,32 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [pageId, updatePageContent],
   );
 
+  const readCommittedContent = useCallback(() => flushPendingDrafts("structural"), [flushPendingDrafts]);
+
+  // The page as the store holds it now. contentRef stops following the store once this
+  // editor unmounts, so a write that lands after the user left the page (a link lookup
+  // finishing) must start from here or it would overwrite the page with a frozen copy.
+  const readStoreContent = useCallback(
+    () => selectEditorContent(usePageStore.getState().pageById(pageId)?.content, source),
+    [pageId, source],
+  );
+  const readFreshCommittedContent = useCallback(() => {
+    flushAllBlockDraftsForSource(sourceKey, "structural");
+    return readStoreContent();
+  }, [sourceKey, readStoreContent]);
+  const attachLinkSnapshot = useLinkSnapshotAttach(readFreshCommittedContent, replaceContent);
+
   const updateBlock = useCallback(
     (_pid: string, blockId: string, updates: Partial<Block>) => {
-      updatePageContent(pageId, updateBlockInEditorTree(contentRef.current, blockId, (block) => ({
-        ...block,
-        ...updates,
-      })));
+      const base = readStoreContent();
+      const next = updateBlockInEditorTree(base, blockId, (block) => ({ ...block, ...updates }));
+      if (next === base) return;
+      updatePageContent(pageId, next);
       if (typeof updates.content === "string") {
         rebaseBlockDraft(sourceKey, blockId, updates.content);
       }
     },
-    [pageId, sourceKey, updatePageContent],
+    [pageId, sourceKey, readStoreContent, updatePageContent],
   );
 
   const insertBlock = useCallback(
@@ -1597,6 +1623,15 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [focusBlock, slashMenu, pageSelector, emojiMenu],
   );
 
+  const { pasteMenu, offerPasteMenu, choosePaste, dismissPasteMenu } = usePasteLinkMenu({
+    readContent: readCommittedContent,
+    writeContent: replaceContent,
+    pushUndoSnapshot: pushSnapshot,
+    focusBlock,
+    attachSnapshot: attachLinkSnapshot,
+    caretPosition: getCaretRect,
+  });
+
   const handlePaste = useCallback(
     (e: React.ClipboardEvent, blockId: string) => {
       flushPendingBlockDraft(blockId, "structural");
@@ -1621,25 +1656,31 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
         return;
       }
 
-      // A pasted bare URL becomes a blue `[hostname](url)` link, not pure URL
-      // text — unless the person chose "plain", which keeps the URL as it was.
+      // A pasted bare URL becomes a blue `[hostname](url)` link, not pure URL text, and
+      // the paste menu offers Mention / Bookmark / Embed (no network until a pick) —
+      // unless the person chose "plain", which keeps the URL as it was and offers no menu.
       if (isSingleBareUrl(raw)) {
         e.preventDefault();
         const content = currentBlock.content ?? "";
         const offsets = resolvePasteSelectionOffsets(e, content);
-        const lo = Math.max(0, Math.min(offsets.start, offsets.end, content.length));
-        const hi = Math.max(lo, Math.min(Math.max(offsets.start, offsets.end), content.length));
-        const pasted = urlPaste === "plain" ? raw : bareUrlToLinkSource(raw);
-        const next = content.slice(0, lo) + pasted + content.slice(hi);
-        updateBlock(pageId, blockId, { content: next });
+        if (urlPaste === "plain") {
+          const lo = Math.max(0, Math.min(offsets.start, offsets.end, content.length));
+          const hi = Math.max(lo, Math.min(Math.max(offsets.start, offsets.end), content.length));
+          updateBlock(pageId, blockId, { content: content.slice(0, lo) + raw + content.slice(hi) });
+          focusBlock(blockId, true);
+          return;
+        }
+        const pasted = insertPastedLink(content, raw, offsets);
+        updateBlock(pageId, blockId, { content: pasted.content });
         focusBlock(blockId, true);
+        if (isPasteMenuBlock(currentBlock)) offerPasteMenu(blockId, pasted.context, pastedBlockElement(e));
         return;
       }
 
       const markdown = raw.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
       if (!markdown.trim() || !isBlockStructuredMarkdown(markdown)) return;
 
-      const parsed = parseMarkdownToBlocks(markdown);
+      const parsed = sanitizeLinkBlockFields(parseMarkdownToBlocks(markdown));
       if (parsed.length === 0) return;
 
       e.preventDefault();
@@ -1649,7 +1690,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       updatePageContent(pageId, replaceBlockInEditorTree(contentRef.current, blockId, replacement));
       focusBlock(parsed.at(-1)?.id ?? replacement.at(-1)?.id ?? blockId, true);
     },
-    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock, urlPaste],
+    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock, urlPaste, offerPasteMenu],
   );
 
   const handleContainerEnter = useCallback(
@@ -1911,7 +1952,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
   /** Create a real inline database + default view in the shared DBMS store. */
   const createInlineDatabase = useCallback((name?: string) => {
-    return useDatabaseStore.getState().createInlineDatabase(name);
+    const reference = useDatabaseStore.getState().createInlineDatabase(name);
+    rememberDatabaseWorkspace(reference.databaseId, useUserStore.getState().activeWorkspace()?._id);
+    return reference;
   }, []);
 
   const createPageInPrivateWorkspace = useCallback(
@@ -1960,6 +2003,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       const jwt = session?.accessToken ?? "";
       const databaseReference = useDatabaseStore.getState().createInlineDatabase(title);
+      rememberDatabaseWorkspace(databaseReference.databaseId, privateWorkspaceId);
       const page = await usePageStore
         .getState()
         .addDatabasePage(
@@ -2010,6 +2054,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     sourceKey,
     updatePageContent: updatePageContentWithHistory,
     focusBlock,
+    attachLinkSnapshot,
   });
 
   /** Handle slash-command selection. */
@@ -2033,6 +2078,14 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     focusBlock,
   });
   const handleSlashWhiteboardSelect = useSlashWhiteboardSelect({
+    pageId,
+    slashMenu,
+    setSlashMenu,
+    updateBlock,
+    insertBlock,
+    getBlocks: () => contentRef.current,
+  });
+  const handleSlashAiImageSelect = useSlashAiImageSelect({
     pageId,
     slashMenu,
     setSlashMenu,
@@ -2177,6 +2230,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     emojiMenu,
     setEmojiMenu,
     handleEmojiSelect,
+    pasteMenu,
+    choosePaste,
+    dismissPasteMenu,
     colorMenu,
     setColorMenu,
     handleColorSelect,
@@ -2194,6 +2250,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     handleSlashCreatePageSelect,
     handleSlashInlineSelect,
     handleSlashWhiteboardSelect,
+    handleSlashAiImageSelect,
     handlePageSelectorSelect,
     handlePageSelectorCreate,
     handleAddBlock,
@@ -2205,6 +2262,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     source,
     sourceKey,
     updateBlock,
+    insertBlock,
     deleteBlock,
     updateContent: replaceContent,
     commitContent,

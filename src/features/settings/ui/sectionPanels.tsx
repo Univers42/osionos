@@ -32,6 +32,7 @@ export interface SettingsPanelProps {
 export const SETTINGS_PANELS: Record<SettingsSectionId, LazyExoticComponent<ComponentType<SettingsPanelProps>>> = {
   profile: lazy(() => import("@/features/settings/profile/ProfilePanel").then((m) => ({ default: m.ProfilePanel }))),
   preferences: lazy(() => import("@/features/settings/preferences/PreferencesPanel").then((m) => ({ default: m.PreferencesPanel }))),
+  accessibility_voice: lazy(() => import("@/features/settings/voice/VoiceSettingsPanel").then((m) => ({ default: m.VoiceSettingsPanel }))),
   notifications: lazy(() => import("@/features/settings/notifications/NotificationsPanel").then((m) => ({ default: m.NotificationsPanel }))),
   connections: lazy(() => import("@/features/settings/connections/ConnectionsPanel").then((m) => ({
     default: (props: SettingsPanelProps) => (
@@ -69,6 +70,7 @@ export const SETTINGS_PANELS: Record<SettingsSectionId, LazyExoticComponent<Comp
   page_settings: lazy(() => import("@/features/settings/page-settings/PageSettingsPanel").then((m) => ({ default: m.PageSettingsPanel }))),
   shortcuts: lazy(() => import("@/features/automations/ui/LazyAutomationManager").then((m) => ({ default: m.LazyAutomationManager }))),
   ai: lazy(() => import("@/features/settings/ai/AiPanel").then((m) => ({ default: m.AiPanel }))),
+  ai_connections: lazy(() => import("@/features/settings/ai/AiConnectionsSection").then((m) => ({ default: m.AiConnectionsSection }))),
   mcp: lazy(() => import("@/features/settings/mcp/McpPanel").then((m) => ({ default: m.McpPanel }))),
   public_pages: lazy(() => import("@/features/settings/public-pages/PublicPagesPanel").then((m) => ({ default: m.PublicPagesPanel }))),
   library: lazy(() => import("@/features/settings/library/LibraryPanel").then((m) => ({ default: m.LibraryPanel }))),
