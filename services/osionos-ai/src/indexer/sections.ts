@@ -55,12 +55,25 @@ const HEADING_LEVELS: Readonly<Record<string, number>> = Object.freeze({
  * prose, so it is never indexed; its alt text is, as `Image: <alt>`.
  */
 function blockText(block: PageBlock, type: string): string {
-	if (type === 'image') {
-		const alt = (block as { mediaAlt?: unknown }).mediaAlt;
-		const clean = typeof alt === 'string' ? alt.trim() : '';
-		return clean ? `Image: ${clean}` : '';
-	}
+	if (type === 'image') return imageText(block);
 	return typeof block.content === 'string' ? block.content.trim() : '';
+}
+
+/** `Image: <alt>`, `Tags: a, b` and `Text in image: <text>`: one line each, when present. */
+function imageText(block: PageBlock): string {
+	const { mediaAlt, mediaTags, mediaText } = block as { mediaAlt?: unknown; mediaTags?: unknown; mediaText?: unknown };
+	const alt = typeof mediaAlt === 'string' ? mediaAlt.trim() : '';
+	const tags = Array.isArray(mediaTags)
+		? mediaTags.filter((t): t is string => typeof t === 'string').map((t) => t.trim()).filter(Boolean)
+		: [];
+	const text = typeof mediaText === 'string' ? mediaText.trim() : '';
+	return [
+		alt ? `Image: ${alt}` : '',
+		tags.length > 0 ? `Tags: ${tags.join(', ')}` : '',
+		text ? `Text in image: ${text}` : '',
+	]
+		.filter(Boolean)
+		.join('\n');
 }
 
 /** The id of a block: a string, or nothing. */

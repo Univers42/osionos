@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { ImageTagChips } from "./ImageTagChips";
 import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { FileText, ImageIcon, Music, Pause, Play } from "lucide-react";
@@ -244,6 +245,7 @@ const DirectMediaPreview: React.FC<MediaBlockPreviewProps> = ({
           ) : null}
         </div>
         {caption}
+        <ImageTagChips tags={block.mediaTags ?? []} text={block.mediaText} />
       </figure>
     );
   }

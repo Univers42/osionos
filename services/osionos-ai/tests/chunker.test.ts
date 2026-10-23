@@ -154,6 +154,30 @@ describe('the chunker', () => {
 		assert.equal((text.match(/Image:/g) ?? []).length, 1, 'an image without alt adds nothing');
 	});
 
+	it('indexes the tags and the text found in an image, so a search finds it by either', () => {
+		const url = '/api/media/uploads/00000000-0000-4000-8000-0000000000aa/' + 'a'.repeat(64) + '.png';
+		const text = chunkPage({
+			title: 'Trip',
+			content: [
+				{
+					id: 'b1',
+					type: 'image',
+					content: url,
+					mediaAlt: 'A street sign',
+					mediaTags: ['sign', ' street ', 7],
+					mediaText: ' STOP ahead ',
+				},
+				{ id: 'b2', type: 'image', content: url, mediaTags: [], mediaText: '  ' },
+			],
+		})
+			.map((chunk) => chunk.content)
+			.join('\n');
+		assert.match(text, /Image: A street sign/);
+		assert.match(text, /Tags: sign, street\b/);
+		assert.match(text, /Text in image: STOP ahead/);
+		assert.equal((text.match(/Tags:/g) ?? []).length, 1, 'empty tags and text add nothing');
+	});
+
 	it('refuses a content that is not a block array', () => {
 		assert.throws(() => chunkPage({ title: 'Broken', content: { blocks: [] } }), /block_array/);
 	});
