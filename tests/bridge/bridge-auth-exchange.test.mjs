@@ -32,13 +32,14 @@ async function exchange(t, accessToken, options) {
 }
 
 describe('POST /api/auth/exchange, the accepted proofs', () => {
-	it('turns a fresh email-OTP token into a session recorded as email_otp, with no GoTrue refresh token', async (t) => {
+	it('turns a fresh email-OTP token into a session recorded as email_otp, with the bridge refresh token and no GoTrue one', async (t) => {
 		const token = gotrueJwt();
 		const { world, response } = await exchange(t, token);
 		assert.equal(response.status, 200);
 		assert.equal(response.headers.get('cache-control'), 'no-store');
 		assert.equal(response.body.user.id, USER_ID);
-		assert.equal(response.body.refreshToken, '');
+		assert.match(response.body.refreshToken, /^osb_rt\./);
+		assert.equal(response.body.refreshToken, response.body.session.refreshToken);
 		assert.match(response.body.accessToken, /^osionos_v1\./);
 		assert.ok(Array.isArray(response.body.workspaceIds));
 		assert.equal(response.body.session.userId, USER_ID);

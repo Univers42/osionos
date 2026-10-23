@@ -42,6 +42,7 @@ import { familyRefreshExp, hashRefreshToken, mintRefreshToken, readRefreshToken 
 import { bearerToken, readJsonBody, requireUuid, sendJson } from './bridge-social-core.mjs';
 import { kvBootLine, kvState } from './bridge-shared-store.mjs';
 import { safeText, signAppSessionToken } from './bridge-session-token.mjs';
+import { assertSessionNotCutOff } from './bridge-session-cutoff.mjs';
 import { sessionRevocationsFromConfig } from './bridge-session-revocations.mjs';
 import { timestampMicros } from './bridge-session-tracker.mjs';
 
@@ -160,6 +161,7 @@ function refreshClaimsFor(accessClaims, persona, config) {
 	return {
 		sub: accessClaims.sub,
 		fam: accessClaims.jti,
+		famIatMs: accessClaims.iatMs,
 		jti: accessClaims.jti,
 		familyExp: familyRefreshExp(config, accessClaims.exp),
 		provider: safeText(payload.provider, 64),
@@ -402,22 +404,29 @@ async function answerReuse({ config, pg, meta }, holder) {
 	throw sessionError(401, 'refresh_token_reused', 'This sign-in was used elsewhere; sign in again.');
 }
 
-/** The next access token and refresh token, built from the claims the old refresh token carried. */
-function nextTokens({ config, now, payload }) {
+/**
+ * The next access token and refresh token. Identity (subject, provider, private workspace)
+ * comes from the old refresh token; rights (admin flag, platform role, member workspaces)
+ * come from `fresh`, read just now, so a demotion bites at the next rotation.
+ */
+function nextTokens({ config, now, payload, fresh }) {
 	const jti = randomUUID();
 	const provider = safeText(payload.provider, 64);
+	const extras = fresh.memberWorkspaces.filter((entry) => entry?._id);
+	const roles = Object.fromEntries([[payload.workspace_ids[0], payload.roles[payload.workspace_ids[0]] || 'owner'], ...extras.map((entry) => [entry._id, entry.role || 'member'])]);
+	const rights = { platform_role: fresh.platformRole ?? null, is_admin: fresh.isAdmin === true };
 	const access = signAppSessionToken({
 		payload: { subject: payload.sub, provider },
 		workspace: { _id: payload.workspace_ids[0] },
 		config,
 		now,
 		jti,
-		memberWorkspaces: payload.workspace_ids.slice(1).map((_id) => ({ _id, role: payload.roles[_id] || 'member' })),
-		platformRole: payload.platform_role ?? null,
-		isAdmin: payload.is_admin === true,
+		memberWorkspaces: extras,
+		platformRole: rights.platform_role,
+		isAdmin: rights.is_admin,
 	});
-	const refresh = mintRefreshToken({ config, now, claims: { ...payload, jti, familyExp: payload.exp, provider } });
-	return { jti, access, refresh };
+	const claims = { ...payload, ...rights, workspace_ids: [payload.workspace_ids[0], ...extras.map((entry) => entry._id)], roles, famIatMs: payload.fam_iat_ms, jti, familyExp: payload.exp, provider };
+	return { jti, access, refresh: mintRefreshToken({ config, now, claims }) };
 }
 
 function childRow({ holder, tokens, now }) {
@@ -441,14 +450,13 @@ function childRow({ holder, tokens, now }) {
  * Rotates a refresh token. The audit row comes before the INSERT and the reuse check before
  * both, so a failed rotation leaves the old token usable and the client may retry.
  *
- * Caveat: the rate limit is per /24 (or one shared bucket when no client-IP header is
- * configured), so a busy network can throttle its own users; the limit is the brake on
- * guessing, and a token cannot be guessed (it is signed).
+ * Caveat: the rate limit is per family and runs after the signature check, so a token that
+ * does not verify costs one HMAC and is never counted; a stolen family's own bucket is the
+ * only brake on its holder.
  */
-async function refreshSession({ config, pg, kv, request }, response) {
+async function refreshSession({ config, pg, kv, request, readRefreshClaims }, response) {
 	if (!config.sessionRecords?.enabled) throw sessionError(503, 'session_records_off', 'Session records are off on this bridge.');
 	const meta = sessionClientMeta(request, config);
-	await rateLimit(kv, ['session-refresh', meta.ipPrefix || 'unknown'], { limit: REFRESH_LIMIT, windowMs: REVOKE_WINDOW_MS });
 	const body = await readJsonBody(request, REFRESH_BODY_LIMIT_BYTES);
 	const presented = typeof body?.refreshToken === 'string' ? body.refreshToken.trim() : '';
 	if (!presented) throw sessionError(422, 'refresh_token_required', 'A refresh token is required.');
@@ -456,13 +464,18 @@ async function refreshSession({ config, pg, kv, request }, response) {
 	const read = readRefreshToken(presented, config, now);
 	if (!read.payload) throw sessionError(401, read.code, 'The refresh token is not valid.');
 	const { payload } = read;
+	// After the signature check: unsigned garbage cannot spend a legitimate family's bucket.
+	await rateLimit(kv, ['session-refresh', payload.fam], { limit: REFRESH_LIMIT, windowMs: REVOKE_WINDOW_MS });
 	const holder = await holderOf(pg, presented);
 	assertHolds(holder, payload);
-	const revoked = holder.revoked_at || !liveSince(config.sessionCutoffs?.cutoffMicros?.(payload.sub), holder.created_at);
-	if (revoked) throw sessionError(401, 'session_revoked', 'This session was signed out.');
+	if (holder.revoked_at) throw sessionError(401, 'session_revoked', 'This session was signed out.');
+	// The family's own sign-in instant, signed into the token: a child written by a replica
+	// that had not polled the cut-off yet cannot outlive a logout-everywhere.
+	assertSessionNotCutOff(config.sessionCutoffs, payload.sub, payload.fam_iat_ms);
 	if (await hasChild(pg, holder.id)) return answerReuse({ config, pg, meta }, holder);
+	const fresh = await readRefreshClaims(payload);
 	await writeAudit(pg, { session: { userId: payload.sub, raw: { jti: holder.id } }, meta, eventType: 'session_refresh', details: { sessionId: holder.id } });
-	const tokens = nextTokens({ config, now, payload });
+	const tokens = nextTokens({ config, now, payload, fresh });
 	try {
 		await pg.asService().post('osionos_sessions', childRow({ holder, tokens, now }), { prefer: 'return=minimal' });
 	} catch (error) {
@@ -470,8 +483,24 @@ async function refreshSession({ config, pg, kv, request }, response) {
 		if (String(error?.upstreamCode) === '23505') return answerReuse({ config, pg, meta }, holder);
 		throw sessionError(503, 'session_record_unavailable', 'The session could not be refreshed; try again shortly.');
 	}
+	await refuseIfRevokedMeanwhile({ config, pg }, holder, tokens.jti);
 	sendJson(response, 200, { accessToken: tokens.access.token, refreshToken: tokens.refresh.token, expiresAt: Date.parse(tokens.access.expiresAt) }, config);
 	return true;
+}
+
+/**
+ * The family may have been revoked between the holder read and the insert; the revoke only
+ * touched the rows that existed then, so the child is revoked here with the same reason.
+ * Caveat: a revoke landing after this read, before the answer, leaves the child live until
+ * its next use (the next refresh reads the revoke of its parent, which the revoke wrote).
+ */
+async function refuseIfRevokedMeanwhile({ config, pg }, holder, childId) {
+	const params = new URLSearchParams({ id: `eq.${holder.id}`, select: 'revoked_at,revoked_reason', limit: '1' });
+	const rows = await pg.asService().get(`osionos_sessions?${params}`);
+	const parent = Array.isArray(rows) ? rows[0] : null;
+	if (!parent?.revoked_at) return;
+	await revokeFamily({ config, pg }, { userId: String(holder.user_id).toLowerCase(), familyId: holder.family_id, rowId: childId, reason: parent.revoked_reason || 'user' });
+	throw sessionError(401, 'session_revoked', 'This session was signed out.');
 }
 
 /**
@@ -479,10 +508,10 @@ async function refreshSession({ config, pg, kv, request }, response) {
  * and POST /api/auth/bridge/refresh, which takes no session token (the refresh token in the
  * body is the credential and an Authorization header is never an alternative).
  */
-export function createSessionsRoutes({ config, pg, kv, verifySession }) {
+export function createSessionsRoutes({ config, pg, kv, verifySession, readRefreshClaims }) {
 	return async function handleAccountSessions(url, request, response) {
 		if (request.method === 'POST' && url.pathname === '/api/auth/bridge/refresh') {
-			return refreshSession({ config, pg, kv, request }, response);
+			return refreshSession({ config, pg, kv, request, readRefreshClaims }, response);
 		}
 		const isList = request.method === 'GET' && url.pathname === '/api/account/sessions';
 		const isRevoke = request.method === 'DELETE' && url.pathname.startsWith('/api/account/sessions/');

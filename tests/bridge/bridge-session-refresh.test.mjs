@@ -20,6 +20,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
+import { SessionCutoffs } from '../../scripts/bridge-session-cutoff.mjs';
 import { USER_A, USER_B, sendJson, sessionConfig, startSessionBridge } from './support/session-world.mjs';
 import { refreshWith, signIn } from './support/session-signin.mjs';
 
@@ -28,6 +29,15 @@ const bearer = (accessToken) => ({ authorization: `Bearer ${accessToken}` });
 const listWith = (base, accessToken) => sendJson(base, '/api/account/sessions', { headers: bearer(accessToken) });
 const revokeWith = (base, accessToken, id) => sendJson(base, `/api/account/sessions/${id}`, { method: 'DELETE', headers: bearer(accessToken) });
 const newClock = () => ({ at: Date.now() });
+const quietLog = { info() {}, warn() {} };
+
+/** An enforced cut-off tracker that holds `entries` (user id -> instant in ms) and reads the test clock. */
+function enforcedCutoffs(clock, entries = []) {
+	const tracker = new SessionCutoffs({ enforced: true, now: () => clock.at, log: quietLog });
+	tracker.completeLoad(new Map(entries.map(([user, ms]) => [user, ms * 1000])), tracker.beginLoad());
+	return tracker;
+}
+const decode = (accessToken) => JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64url'));
 
 function seedRow(overrides = {}) {
 	const created = overrides.created_at ?? new Date().toISOString();
@@ -144,6 +154,76 @@ describe('a consumed token used again', () => {
 	});
 });
 
+describe('a rotation racing another request', () => {
+	it('revokes the new child too when the family was revoked between the read and the insert', async (t) => {
+		let store;
+		let armed = false;
+		const world = await startSessionBridge({
+			clock: newClock(),
+			t,
+			fail: (call) => {
+				if (armed && call.method === 'POST' && call.table === 'osionos_sessions') {
+					for (const row of store.rows()) row.revoked_at = new Date().toISOString();
+				}
+				return null;
+			},
+		});
+		const { base } = world;
+		store = world.store;
+		const first = await signIn(base);
+		armed = true;
+		const answer = await refreshWith(base, first.refreshToken);
+		assert.equal(answer.status, 401);
+		assert.equal(answer.body.code, 'session_revoked');
+		assert.ok(store.rows().every((row) => row.revoked_at), 'the child is revoked as well');
+	});
+
+	it('lets exactly one of two concurrent refreshes with one token win and kills the family', async (t) => {
+		const { base, store } = await startSessionBridge({ clock: newClock(), t });
+		const first = await signIn(base);
+		const [left, right] = await Promise.all([refreshWith(base, first.refreshToken), refreshWith(base, first.refreshToken)]);
+		assert.deepEqual([left.status, right.status].sort(), [200, 401]);
+		const loser = left.status === 401 ? left : right;
+		const winner = left.status === 200 ? left : right;
+		assert.equal(loser.body.code, 'refresh_token_reused');
+		assert.ok(store.rows().every((row) => row.revoked_at));
+		assert.equal((await refreshWith(base, winner.body.refreshToken)).body.code, 'session_revoked');
+	});
+});
+
+describe('a refresh re-reads what the account may do', () => {
+	const grants = { ids: [{ role_id: 'r1' }], roles: [{ id: 'r1', name: 'moderator' }], admin: false };
+	const failFor = () => (call) => {
+		if (call.table === 'user_roles') return { status: 200, body: grants.ids };
+		if (call.table === 'roles') return { status: 200, body: grants.roles };
+		if (call.table === 'osionos_bridge_identities' && call.method === 'GET') return { status: 200, body: [{ is_admin: grants.admin }] };
+		return null;
+	};
+
+	it('mints a token without the role a user lost between login and refresh', async (t) => {
+		Object.assign(grants, { ids: [{ role_id: 'r1' }], roles: [{ id: 'r1', name: 'moderator' }], admin: false });
+		const { base } = await startSessionBridge({ clock: newClock(), t, fail: failFor() });
+		const first = await signIn(base);
+		assert.equal(first.claims.platform_role, 'moderator');
+		grants.ids = [];
+		const rotated = await refreshWith(base, first.refreshToken);
+		assert.equal(rotated.status, 200);
+		assert.ok(!decode(rotated.body.accessToken).platform_role);
+	});
+
+	it('mints a non-admin token for an admin who was demoted', async (t) => {
+		Object.assign(grants, { ids: [], roles: [], admin: true });
+		const { base } = await startSessionBridge({ clock: newClock(), t, fail: failFor() });
+		const first = await signIn(base);
+		assert.equal(first.claims.is_admin, true);
+		grants.admin = false;
+		const rotated = await refreshWith(base, first.refreshToken);
+		const next = decode(rotated.body.accessToken);
+		assert.notEqual(next.is_admin, true);
+		assert.ok(!next.platform_role);
+	});
+});
+
 describe('a refresh that fails', () => {
 	const hostile = [
 		['no body token', () => undefined, 422, 'refresh_token_required'],
@@ -191,14 +271,47 @@ describe('a refresh that fails', () => {
 		assert.equal(answer.body.code, 'session_revoked');
 	});
 
-	it('refuses a family signed in before the logout-everywhere cutoff', async (t) => {
-		const config = sessionConfig();
-		const { base } = await startSessionBridge({ config, t });
+	it('refuses a child created after the cutoff when the family root predates it', async (t) => {
+		const clock = newClock();
+		const config = sessionConfig({ now: () => clock.at });
+		config.sessionCutoffs = enforcedCutoffs(clock);
+		const { base } = await startSessionBridge({ config, clock, t });
 		const first = await signIn(base);
-		config.sessionCutoffs.entries = new Map([[USER_A, (Date.now() + 60_000) * 1000]]);
-		const answer = await refreshWith(base, first.refreshToken);
+		clock.at += 2000;
+		const child = await refreshWith(base, first.refreshToken);
+		assert.equal(child.status, 200);
+		config.sessionCutoffs.entries.set(USER_A, (first.claims.iat_ms + 1000) * 1000);
+		const answer = await refreshWith(base, child.body.refreshToken);
 		assert.equal(answer.status, 401);
 		assert.equal(answer.body.code, 'session_revoked');
+	});
+
+	it('answers 503, not a mint, while the cutoff table is stale', async (t) => {
+		const clock = newClock();
+		const config = sessionConfig({ now: () => clock.at });
+		config.sessionCutoffs = enforcedCutoffs(clock);
+		const { base, store } = await startSessionBridge({ config, clock, t });
+		const first = await signIn(base);
+		clock.at += 10 * 60_000;
+		const answer = await refreshWith(base, first.refreshToken);
+		assert.equal(answer.status, 503);
+		assert.equal(answer.body.code, 'session_cutoffs_unavailable');
+		assert.equal(store.rows().length, 1);
+	});
+
+	it('does not let 100 invalid tokens spend the bucket of a valid one', async (t) => {
+		const { base } = await startSessionBridge({ clock: newClock(), t });
+		const first = await signIn(base);
+		for (let attempt = 0; attempt < 100; attempt += 1) await refreshWith(base, 'osb_rt.garbage.garbage');
+		assert.equal((await refreshWith(base, first.refreshToken)).status, 200);
+	});
+
+	it('refuses a real access token as a refresh token, and a refresh token as a bearer', async (t) => {
+		const { base } = await startSessionBridge({ clock: newClock(), t });
+		const first = await signIn(base);
+		assert.equal((await refreshWith(base, first.accessToken)).status, 401);
+		const disguised = first.refreshToken.replace(/^osb_rt/, 'osionos_v1');
+		assert.equal((await listWith(base, disguised)).status, 401);
 	});
 
 	const unavailable = [

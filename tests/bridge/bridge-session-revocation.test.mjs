@@ -149,6 +149,18 @@ describe('the revoke route filters what it may touch', () => {
 		assert.equal(stillAlive.status, 200, 'the other session still verifies on this replica');
 	});
 
+	it('patches only the caller\'s unrevoked rows of the family it found', async (t) => {
+		const clock = { at: Date.now() };
+		const { base, store } = await startSessionBridge({ t, config: sessionConfig({ now: () => clock.at }), clock, kv: kvStub() });
+		const session = await sessionFor(t, base, USER_A);
+		const revoked = await sendJson(base, `/api/account/sessions/${session.id}`, { method: 'DELETE', headers: { authorization: `Bearer ${session.accessToken}` } });
+		assert.equal(revoked.status, 204);
+		const patch = store.callsTo('osionos_sessions').find((call) => call.method === 'PATCH');
+		assert.equal(patch.params.get('user_id'), `eq.${USER_A}`);
+		assert.equal(patch.params.get('revoked_at'), 'is.null');
+		assert.equal(patch.params.get('family_id'), `eq.${session.id}`);
+	});
+
 	it('answers 422 for a session id that is not a uuid', async (t) => {
 		const clock = { at: Date.now() };
 		const { base } = await startSessionBridge({ t, config: sessionConfig({ now: () => clock.at }), clock, kv: kvStub() });

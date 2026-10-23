@@ -1707,6 +1707,20 @@ function privateWorkspaceIdOf(payload, persisted) {
 	return persisted?.workspaceId ?? uuidFromHash(`osionos-workspace:${payload.provider}:${payload.subject}`);
 }
 
+/**
+ * What a refresh re-reads instead of replaying: the admin flag, the platform role and the member
+ * workspaces, the way a sign-in reads them. The private workspace stays the token's own.
+ * Caveat: a read that fails degrades to fewer rights (no extras, no role), never more; the next
+ * sign-in restores them.
+ */
+export async function readRefreshClaims(identity, { config, pg, fetchImpl }) {
+	const payload = { subject: identity.sub, provider: identity.provider, email: identity.email, emailVerified: false };
+	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
+	const memberWorkspaces = await memberWorkspaceEntries(identity.sub, identity.workspace_ids.slice(0, 1), config, fetchImpl);
+	const platformRole = isAdmin ? 'admin' : (await readPlatformRole(platformRoleReader(pg), identity.sub)).role;
+	return { isAdmin, platformRole, memberWorkspaces };
+}
+
 /** Today's order: persist, admin flag, admin membership, member workspaces. Env admins keep it. */
 async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
@@ -4831,7 +4845,7 @@ export function createBridgeServer(options = {}) {
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		account: createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken }),
+		account: createAccountHandler({ config, pg, kv, verifySession: verifyAppSessionToken, readRefreshClaims: (identity) => readRefreshClaims(identity, { config, pg, fetchImpl }) }),
 	};
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
