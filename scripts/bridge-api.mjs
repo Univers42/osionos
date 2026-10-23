@@ -1609,7 +1609,7 @@ function memberRowsToEntries(rows, userId, excludeIds) {
  * would otherwise mint private-only tokens with no error anywhere.
  * Caveat: sort ties keep the order PostgREST answered, where the list RPC left them unspecified.
  */
-export async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl) {
+export async function memberWorkspaceEntries(userId, excludeIds, config, fetchImpl, { strict = false } = {}) {
 	if (!config.serviceKey || !config.baasUrl) return [];
 	try {
 		const query = postgrestQuery({ user_id: `eq.${userId}`, select: MEMBER_WORKSPACES_SELECT });
@@ -1617,9 +1617,11 @@ export async function memberWorkspaceEntries(userId, excludeIds, config, fetchIm
 		const entries = memberRowsToEntries(Array.isArray(rows) ? rows : [], userId, excludeIds);
 		if (entries) return entries;
 		console.warn('[osionos-bridge] member workspaces unavailable: rows of another user');
+		if (strict) throw new Error('member rows of another user');
 		return [];
 	} catch (error) {
 		console.warn(`[osionos-bridge] member workspaces unavailable: ${error?.status ?? 'error'}`);
+		if (strict) throw error;
 		return [];
 	}
 }
