@@ -54,7 +54,7 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionC
   const [connections, setConnections] = useState<AiConnection[]>([]);
   const [serviceModels, setServiceModels] = useState<Record<string, AiModel[]>>({});
 
-  const deviceEngine = readDeviceEngine();
+  const [deviceEngine] = useState(readDeviceEngine);
 
   const modelsByConnection = React.useMemo(
     () =>

@@ -46,12 +46,15 @@ interface SourcesResponse {
 export async function fetchDeviceSources(query: string, limit = 8): Promise<DeviceSource[]> {
   const body = await requestJson<SourcesResponse>("POST", "/sources", { query, limit });
   const list = Array.isArray(body?.sources) ? body.sources : [];
-  return list.map((source) => ({
-    pageId: String(source?.pageId ?? ""),
-    blockId: String(source?.blockId ?? ""),
-    title: String(source?.title ?? ""),
-    headingPath: String(source?.headingPath ?? ""),
-    snippet: String(source?.snippet ?? ""),
-    score: typeof source?.score === "number" ? source.score : Number(source?.score ?? 0),
-  }));
+  return list.map((source) => {
+    const score = typeof source?.score === "number" ? source.score : Number(source?.score);
+    return {
+      pageId: String(source?.pageId ?? ""),
+      blockId: String(source?.blockId ?? ""),
+      title: String(source?.title ?? ""),
+      headingPath: String(source?.headingPath ?? ""),
+      snippet: String(source?.snippet ?? ""),
+      score: Number.isFinite(score) ? score : 0,
+    };
+  });
 }
