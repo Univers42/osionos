@@ -6,6 +6,10 @@ import type { SseEvent } from './sse.ts';
 
 process.env.OSIONOS_AI_BUILDERS = 'on';
 process.env.OSIONOS_AI_BUILD_BUDGET_MS = '500';
+// The limits of C161 are proved in builderUndo.test.ts; this file builds many
+// plans on purpose, so it lifts them out of the way.
+process.env.OSIONOS_AI_PENDING_PLANS = '100';
+process.env.OSIONOS_AI_BUILDS_PER_DAY = '100';
 const { startHarness, USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
 const { app, bridge, mock, postRun, tokenFor, createConversation, call } = await startHarness();
 const { revalidateStoredPlan, flattenPlan } = await import('../src/builders/plan.ts');

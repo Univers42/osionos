@@ -9,6 +9,10 @@ import type { SseEvent } from './sse.ts';
  * C164.1 and C164.8). Nothing here executes a plan: that is P6a-3.
  */
 process.env.OSIONOS_AI_BUILDERS = 'on';
+// This file asks many plans and keeps them waiting on purpose: the C161 limits
+// have their own file (builderUndo.test.ts).
+process.env.OSIONOS_AI_PENDING_PLANS = '100';
+process.env.OSIONOS_AI_BUILDS_PER_DAY = '100';
 const { startHarness, USER_A, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
 const { app, bridge, mock, postRun, tokenFor, createConversation, call } = await startHarness();
 // The service reads its config on import: after the harness set the environment.

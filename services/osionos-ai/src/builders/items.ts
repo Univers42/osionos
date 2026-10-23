@@ -78,3 +78,54 @@ export async function setItem(
 	);
 	return updated.rowCount === 1;
 }
+
+/** The built page items, deepest and latest first: the reverse of the plan order (C159). */
+export async function donePageItems(db: Pool, approvalId: string): Promise<PlanItemRow[]> {
+	const result = await db.query<PlanItemRow>(
+		`select ${COLUMNS} from public.ai_plan_items
+		  where approval_id = $1 and kind = 'page' and status = 'done'
+		  order by position desc`,
+		[approvalId],
+	);
+	return result.rows;
+}
+
+/** The built database items: they are kept, never archived (C159). */
+export async function countDoneDatabases(db: Pool, approvalId: string): Promise<number> {
+	const result = await db.query<{ count: string }>(
+		`select count(*)::text as count from public.ai_plan_items
+		  where approval_id = $1 and kind = 'database' and status = 'done'`,
+		[approvalId],
+	);
+	return Number(result.rows[0]?.count ?? 0);
+}
+
+/**
+ * The claim of one item for an undo (C159): only a row that is still 'done'
+ * moves, so two undos that race archive a page ONCE.
+ */
+export async function claimItemForUndo(
+	db: Pool,
+	approvalId: string,
+	key: string,
+): Promise<{ claimed: boolean; createdId: string | null }> {
+	const result = await db.query<{ created_id: string | null }>(
+		`update public.ai_plan_items
+		    set status = 'undone', updated_at = now()
+		  where approval_id = $1 and item_key = $2 and status = 'done'
+		  returning created_id`,
+		[approvalId, key],
+	);
+	return { claimed: result.rowCount === 1, createdId: result.rows[0]?.created_id ?? null };
+}
+
+/** Put a claimed item back to 'done' with the reason it was kept or failed. */
+export async function releaseItem(
+	db: Pool,
+	approvalId: string,
+	key: string,
+	createdId: string | null,
+	error: string,
+): Promise<void> {
+	await setItem(db, approvalId, key, 'done', createdId, error);
+}

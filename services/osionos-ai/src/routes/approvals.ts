@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { readJson, sendError, sendJson } from '../http.ts';
-import { checkRunRateLimit } from '../rateLimit.ts';
+import { checkDailyBuildLimit, checkRunRateLimit } from '../rateLimit.ts';
 import { config } from '../config.ts';
 import { bearerToken } from '../auth.ts';
 import { getOwnedApproval } from '../approvals/repo.ts';
@@ -9,6 +9,8 @@ import { decideApproval } from '../approvals/execute.ts';
 import { claimPartial, recordOutcome } from '../approvals/repo.ts';
 import { revalidateStoredPlan } from '../builders/plan.ts';
 import { executePlan } from '../builders/execute.ts';
+import { donePageItems } from '../builders/items.ts';
+import { undoBuild } from '../builders/undo.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -116,6 +118,13 @@ export async function handleApprovalResume(ctx: RouteContext): Promise<number> {
 		sendError(ctx.response, 401, 'unauthorized');
 		return 401;
 	}
+	// A resume is a build pass too (C161): the day's bucket is spent before the
+	// row moves, so an over-limit resume leaves the approval 'partial'.
+	const daily = await checkDailyBuildLimit(ctx.deps.redis, user.userId, config.buildsPerDay);
+	if (!daily.allowed) {
+		sendError(ctx.response, 429, 'build_limit_reached');
+		return 429;
+	}
 	const claimed = await claimPartial(ctx.deps.db, { id, ownerId: user.userId });
 	if (!claimed) {
 		const owned = await getOwnedApproval(ctx.deps.db, { id, ownerId: user.userId });
@@ -164,5 +173,65 @@ export async function handleApprovalResume(ctx: RouteContext): Promise<number> {
 		error: null,
 		continuationRunId: null,
 	});
+	return 200;
+}
+
+/**
+ * POST /api/ai/approvals/:id/undo
+ *
+ * "Remove what was built": the pages THIS plan built are archived through the
+ * bridge's soft-archive path, deepest and latest first. A page that still
+ * holds a live child the plan did not build is kept — the bridge cascades, and
+ * that child is the user's own page. The databases are kept: an object
+ * database has no soft-archive path.
+ *
+ * There is no body. The approval's status does not change; its result gains
+ * the number of pages the undo archived.
+ */
+export async function handleApprovalUndo(ctx: RouteContext): Promise<number> {
+	const user = requireUser(ctx);
+	if (!user) return 401;
+	// The undo is rate-limited like the decisions: it costs one bridge write per
+	// page.
+	const rate = await checkRunRateLimit(ctx.deps.redis, user.userId, config.runsPerMinute);
+	if (!rate.allowed) {
+		sendError(ctx.response, 429, 'rate_limited');
+		return 429;
+	}
+	const id = ctx.params[0] ?? '';
+	if (!UUID.test(id)) {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	const approval = await getOwnedApproval(ctx.deps.db, { id, ownerId: user.userId });
+	if (!approval) {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	if (approval.tool !== 'build_plan') {
+		sendError(ctx.response, 409, 'not_a_plan');
+		return 409;
+	}
+	if (approval.status !== 'executed' && approval.status !== 'partial') {
+		sendError(ctx.response, 409, 'approval_not_built');
+		return 409;
+	}
+	const sessionToken = bearerToken(ctx.request);
+	if (!sessionToken) {
+		sendError(ctx.response, 401, 'unauthorized');
+		return 401;
+	}
+	// No page is done any more: the first undo already took them.
+	const pages = await donePageItems(ctx.deps.db, approval.id);
+	if (pages.length === 0) {
+		sendError(ctx.response, 409, 'nothing_to_undo');
+		return 409;
+	}
+	const undone = await undoBuild({
+		db: ctx.deps.db,
+		sessionToken,
+		approval,
+	});
+	sendJson(ctx.response, 200, { ok: true, approvalId: approval.id, ...undone });
 	return 200;
 }
