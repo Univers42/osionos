@@ -24,7 +24,8 @@
  * one, or a route that streams, is answered 500 and never forwarded — so a future route added
  * to PAT_ROUTES that answers a list or a stream is refused until it is taught here.
  * Caveat: the hourly claim of `last_used_at` is stamped before the audit row is written and
- * released if that write fails; a crash between the two (not a failure) loses that hour's row.
+ * released if that write fails; a crash between the two, or a failed release, leaves the stamp
+ * in place and loses that hour's row (the failed release is only logged; the hour stays unaudited).
  * Caveat: the per-client bucket keys on the client-address hash (or its /24 prefix), so clients
  * behind one NAT share a bucket and a fresh address gets a fresh one; it bounds work, not abuse.
  * Caveat: denial rows are throttled through the kv store (one per token and outcome per hour);
@@ -73,30 +74,61 @@ function headersWithout(headers, name) {
 	return Object.fromEntries(Object.entries(headers ?? {}).filter(([key]) => key.toLowerCase() !== name));
 }
 
+const FIXED_MESSAGES = new Map([
+	[400, 'The request was not accepted.'],
+	[401, 'Not authorized.'],
+	[403, 'Not allowed.'],
+	[404, 'Not found.'],
+	[409, 'The page changed; reload and retry.'],
+	[422, 'The request body was not valid.'],
+	[429, 'Too many requests.'],
+]);
+const fixedMessage = (status) => FIXED_MESSAGES.get(status) ?? (status >= 500 ? 'The service is unavailable; try again.' : 'The request failed.');
+
 /**
- * A route error may carry page attributes in `details` (the 409 version_conflict returns the
- * stored content). They are held to the token's READ mask; `version` rides with `content`.
- * Caveat: only a JSON object body with an object `details` is filtered; any other error body
- * passes through, which is safe only while routes put no page data outside `details`.
+ * A route error reaches a PAT client as its code plus a fixed sentence per status: the route's
+ * own message can quote upstream text (PostgREST repeats the failing row), which sits outside
+ * the mask. `details` carries page attributes (the 409 returns the stored content) and is held
+ * to the token's READ mask; `version` rides with `content`.
+ * Caveat: only a JSON object body is rewritten; a non-JSON error body passes through, which is
+ * safe only while routes answer errors through errorJson.
  */
-function maskErrorDetails(text, readMask) {
+function maskErrorBody(text, status, readMask) {
 	try {
 		const parsed = JSON.parse(text);
-		if (parsed === null || typeof parsed !== 'object' || !parsed.details || typeof parsed.details !== 'object') return text;
-		const allowed = Array.isArray(readMask) ? [...readMask] : [];
-		if (allowed.includes('content')) allowed.push('version');
-		return JSON.stringify({ ...parsed, details: maskAttributes(parsed.details, allowed) });
+		if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return text;
+		const body = { ...parsed };
+		if (Object.hasOwn(body, 'message')) body.message = fixedMessage(status);
+		if (body.details && typeof body.details === 'object') {
+			const allowed = Array.isArray(readMask) ? [...readMask] : [];
+			if (allowed.includes('content')) allowed.push('version');
+			body.details = maskAttributes(body.details, allowed);
+		}
+		return JSON.stringify(body);
 	} catch {
 		return text;
 	}
 }
 
 /**
- * Hold a route's response back, mask it, then send it. Only the route's own head and body are
- * captured. A 2xx body is masked unless maskSuccess is off (the write route's reply holds no
- * page attributes); a non-2xx body has its `details` held to the read mask.
+ * The write reply is an allow-list, not a mask: `version` follows the read of `content` (as in
+ * the 409) and `cascadedIds`, the ids of descendant pages, follows the read of `archivedAt`.
  */
-export function installResponseMask(response, mask, { readMask = mask, maskSuccess = true } = {}) {
+function writeReply(parsed, readMask) {
+	const read = Array.isArray(readMask) ? readMask : [];
+	const kept = {};
+	for (const key of ['ok', 'updatedAt', 'ignored']) if (Object.hasOwn(parsed, key)) kept[key] = parsed[key];
+	if (read.includes('content') && Object.hasOwn(parsed, 'version')) kept.version = parsed.version;
+	if (read.includes('archivedAt') && Object.hasOwn(parsed, 'cascadedIds')) kept.cascadedIds = parsed.cascadedIds;
+	return kept;
+}
+
+/**
+ * Hold a route's response back, mask it, then send it. Only the route's own head and body are
+ * captured. A 2xx body is masked to `mask`, or with `isWrite` cut to the write reply allow-list
+ * by the read mask; a non-2xx body goes through maskErrorBody.
+ */
+export function installResponseMask(response, mask, { readMask = mask, isWrite = false } = {}) {
 	const send = response.writeHead.bind(response);
 	const finish = response.end.bind(response);
 	let head = null;
@@ -113,17 +145,13 @@ export function installResponseMask(response, mask, { readMask = mask, maskSucce
 		const kept = headersWithout(headers, 'content-length');
 		if (status < 200 || status >= 300) {
 			send(status, kept);
-			return finish(maskErrorDetails(text, readMask));
-		}
-		if (!maskSuccess) {
-			send(status, headers);
-			return finish(text);
+			return finish(maskErrorBody(text, status, readMask));
 		}
 		try {
 			const parsed = JSON.parse(text);
 			if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new TypeError('not an object');
 			send(status, kept);
-			return finish(JSON.stringify(maskAttributes(parsed, mask)));
+			return finish(JSON.stringify(isWrite ? writeReply(parsed, readMask) : maskAttributes(parsed, mask)));
 		} catch {
 			send(500, { ...headersWithout(kept, 'content-type'), 'content-type': 'application/json; charset=utf-8' });
 			return finish(JSON.stringify({ error: 'pat_mask_failed' }));
@@ -253,7 +281,7 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, rateL
 		if (rows.some((entry) => String(entry.owner_id).toLowerCase() !== String(userId).toLowerCase())) throw unavailable('workspace lookup');
 		const ids = rows.map((entry) => String(entry.id));
 		if (ids.length === 0) return null;
-		const members = await memberWorkspaceEntries(userId, ids, config, fetchImpl);
+		const members = await guarded('member lookup', () => memberWorkspaceEntries(userId, ids, config, fetchImpl, { strict: true }));
 		return { home: ids[0], extras: [...ids.slice(1).map((id) => ({ _id: id, role: 'owner' })), ...members] };
 	}
 
@@ -298,7 +326,7 @@ export function createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, rateL
 		if (route.permission === 'read') installResponseMask(response, decision.mask);
 		else {
 			const readDecision = evaluatePat(row, { resource: route.resource, permission: 'read' });
-			installResponseMask(response, decision.mask, { readMask: readDecision.allowed ? readDecision.mask : [], maskSuccess: false });
+			installResponseMask(response, decision.mask, { readMask: readDecision.allowed ? readDecision.mask : [], isWrite: true });
 			request.patWriteMask = decision.mask;
 		}
 		return false;

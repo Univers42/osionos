@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { sessionHeaders, send } from './support/bridge-harness.mjs';
 import { mintPatSecret } from '../../scripts/bridge-pat-store.mjs';
+import { memberWorkspaceEntries } from '../../scripts/bridge-api.mjs';
 import { installResponseMask, patWritePayload, PAT_ROUTES } from '../../scripts/bridge-pat-middleware.mjs';
 import { PAT_TABLE } from './support/pat-postgrest.mjs';
 import { auditRows, bearer, everythingSent, fakeRequest, fakeResponse, fineGrained, HOME, OWNER, PAGE, patRow, startPatWorld } from './support/pat-world.mjs';
@@ -362,7 +363,7 @@ describe('the mask fails closed', () => {
 		const body = JSON.stringify({ ok: false, message: 'Page not found.' });
 		const sent = reply(masked(), 404, body);
 		assert.equal(sent.head.status, 404);
-		assert.equal(sent.body, body);
+		assert.equal(sent.body, JSON.stringify({ ok: false, message: 'Not found.' }));
 	});
 
 	it('refuses a masked route that streams with 500 pat_route_streams', () => {
@@ -512,5 +513,75 @@ describe('the two page routes are answered by the page handlers', () => {
 		const answer = await send(world.base, PAGE_PATH, bearer(secret), { method: 'PATCH', body: JSON.stringify({ title: 'Renamed' }) });
 		assert.equal(answer.body.ok, true);
 		assert.ok(world.pages.calls.some((call) => call.method === 'PATCH' && call.table === 'osionos_pages'));
+	});
+});
+
+describe('a PAT client never sees upstream error text', () => {
+	const leak = 'SECRET-ROW-VALUE-7f3a';
+
+	it('replaces the message of a store refusal with a fixed sentence and keeps the code', async (t) => {
+		const { world, secret } = await viaPat(t, fineGrained(['title'], ['read', 'write']), {}, {
+			pageFail: (call) => (call.table === 'osionos_pages' && call.method === 'PATCH' ? { status: 400, body: { code: '23514', message: `new row for relation "osionos_pages" violates check constraint. Failing row contains (${leak})` } } : null),
+		});
+		const answer = await send(world.base, PAGE_PATH, bearer(secret), { method: 'PATCH', body: JSON.stringify({ title: 'Renamed' }) });
+		assert.ok(answer.status >= 400);
+		assert.ok(!answer.text.includes(leak), answer.text);
+		assert.equal(typeof answer.body.message, 'string');
+		assert.ok(answer.body.code !== undefined || answer.body.ok === false);
+	});
+
+	it('gives the same sentence to the same status whatever the upstream said', () => {
+		const send404 = (message) => {
+			const response = fakeResponse();
+			installResponseMask(response, ['title']);
+			response.writeHead(404, { 'content-type': 'application/json' });
+			response.end(JSON.stringify({ ok: false, code: 'not_found', message }));
+			return JSON.parse(response.sent.body);
+		};
+		assert.deepEqual(send404('one value'), send404('another value'));
+		assert.equal(send404('x').code, 'not_found');
+	});
+});
+
+describe('the write reply follows the read mask', () => {
+	const archive = JSON.stringify({ archivedAt: '2026-10-23T00:00:00.000Z' });
+	const grant = (read, write) => ({ kind: 'fine_grained', scopes: [], grants: [{ resource: 'pages', attributes: write, permissions: ['write'] }, ...(read.length ? [{ resource: 'pages', attributes: read, permissions: ['read'] }] : [])] });
+	const reply = async (t, spec, body) => {
+		const { world, secret } = await viaPat(t, spec);
+		return send(world.base, PAGE_PATH, bearer(secret), { method: 'PATCH', body });
+	};
+
+	it('sends ok and updatedAt, and no version, to a token that cannot read content', async (t) => {
+		const answer = await reply(t, grant(['title'], ['title']), JSON.stringify({ title: 'Renamed' }));
+		assert.equal(answer.status, 200);
+		assert.deepEqual(Object.keys(answer.body).sort(), ['ok', 'updatedAt']);
+	});
+
+	it('adds version once the read mask covers content', async (t) => {
+		const answer = await reply(t, grant(['content'], ['title']), JSON.stringify({ title: 'Renamed' }));
+		assert.ok(Object.hasOwn(answer.body, 'version'));
+	});
+
+	it('withholds cascadedIds unless the read mask covers archivedAt', async (t) => {
+		const without = await reply(t, grant(['title'], ['archivedAt']), archive);
+		assert.equal(without.status, 200);
+		assert.ok(!Object.hasOwn(without.body, 'cascadedIds'));
+		const withIt = await reply(t, grant(['archivedAt'], ['archivedAt']), archive);
+		assert.ok(Array.isArray(withIt.body.cascadedIds));
+	});
+});
+
+describe('a members outage is not an empty member list', () => {
+	it('answers 503 from the gate when the member read throws', async (t) => {
+		const { world, secret } = await viaPat(t, {});
+		const gate = world.gateWith(undefined, { memberWorkspaceEntries: async () => { throw new Error('members down'); } });
+		await assert.rejects(gate(fakeRequest(secret), fakeResponse(), new URL(`http://bridge.test${PAGE_PATH}`), world.config), (error) => error.status === 503);
+	});
+
+	it('lets memberWorkspaceEntries throw when asked to be strict, and swallow by default', async () => {
+		const config = { serviceKey: 'k', baasUrl: 'http://baas.test' };
+		const down = async () => new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } });
+		assert.deepEqual(await memberWorkspaceEntries(OWNER, [], config, down), []);
+		await assert.rejects(memberWorkspaceEntries(OWNER, [], config, down, { strict: true }));
 	});
 });
