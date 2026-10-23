@@ -1,0 +1,15 @@
+# The requirements of the bench of the encoders (AI-A1), pinned.
+#
+# The environment of the bench lives in the volume (osionos_ai_a1_data, at
+# /mnt/storage/pyenv), so that the client needs no network at all: it runs in
+# the network namespace of the TEI server, which has none.
+#
+# The versions are the ones of the run of 2026-10-22:
+#
+#   pip install --no-cache-dir --target /mnt/storage/pyenv -r requirements.txt
+#
+numpy==2.3.4
+scipy==1.16.3
+scikit-learn==1.7.2
+pyarrow==23.0.1
+tokenizers==0.22.1
