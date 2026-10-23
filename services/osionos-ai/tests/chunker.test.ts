@@ -138,6 +138,22 @@ describe('the chunker', () => {
 		assert.ok(chunks[0].content.endsWith('block.'), 'the pieces end on a sentence');
 	});
 
+	it('indexes the alt text of an image block as `Image: <alt>`, and never its URL', () => {
+		const url = '/api/media/uploads/00000000-0000-4000-8000-0000000000aa/' + 'a'.repeat(64) + '.png';
+		const chunks = chunkPage({
+			title: 'Trip',
+			content: [
+				{ id: 'b1', type: 'paragraph', content: 'Day one.' },
+				{ id: 'b2', type: 'image', content: url, mediaAlt: '  A red bicycle by a wall ' },
+				{ id: 'b3', type: 'image', content: url },
+			],
+		});
+		const text = chunks.map((chunk) => chunk.content).join('\n');
+		assert.match(text, /Image: A red bicycle by a wall/);
+		assert.ok(!text.includes('/api/media/uploads'), 'the capability path is not page text');
+		assert.equal((text.match(/Image:/g) ?? []).length, 1, 'an image without alt adds nothing');
+	});
+
 	it('refuses a content that is not a block array', () => {
 		assert.throws(() => chunkPage({ title: 'Broken', content: { blocks: [] } }), /block_array/);
 	});
