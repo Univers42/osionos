@@ -100,6 +100,10 @@ const failure = (text: string): McpToolOutcome => ({ text, isError: true });
  * The limits are checked BEFORE the insert: the pending approvals of the token
  * and its minute window. Over either, the answer is an error and no row is
  * written. The proposal itself runs in the same lane as the reads.
+ *
+ * Caveat: the pending count and the insert are two statements, so calls racing
+ * on one token can pass the cap together; the minute window bounds the
+ * overshoot to `mcpWritesPerMinute`. An exact cap needs a lock on the token row.
  */
 async function callWriteTool(
 	db: Pool,
