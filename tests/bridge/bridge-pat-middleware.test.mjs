@@ -187,6 +187,33 @@ describe('a write is held to the token write set', () => {
 	});
 });
 
+describe('a refused write does not carry what the mask denies', () => {
+	const stale = (world, secret) => send(world.base, PAGE_PATH, bearer(secret), { method: 'PATCH', body: JSON.stringify({ baseVersion: 999999 }) });
+
+	it('answers a stale baseVersion with 409 and no page content for a token that cannot read it', async (t) => {
+		const { world, secret } = await viaPat(t, fineGrained(['title'], ['read', 'write']));
+		const answer = await stale(world, secret);
+		assert.equal(answer.status, 409);
+		assert.ok(!answer.text.includes('the body'));
+		assert.equal(answer.body.details?.content, undefined);
+		assert.equal(answer.body.code, 'version_conflict');
+	});
+
+	it('keeps the content in the 409 for a token whose grant covers it', async (t) => {
+		const { world, secret } = await viaPat(t, fineGrained(['title', 'content'], ['read', 'write']));
+		const answer = await stale(world, secret);
+		assert.equal(answer.status, 409);
+		assert.deepEqual(answer.body.details.content, [{ id: 'b1', type: 'paragraph', content: 'the body' }]);
+	});
+
+	it('strips the content for a token that may write it but not read it', async (t) => {
+		const { world, secret } = await viaPat(t, { kind: 'fine_grained', scopes: [], grants: [{ resource: 'pages', attributes: ['title'], permissions: ['read'] }, { resource: 'pages', attributes: ['content'], permissions: ['write'] }] });
+		const answer = await stale(world, secret);
+		assert.equal(answer.status, 409);
+		assert.ok(!answer.text.includes('the body'));
+	});
+});
+
 describe('every PAT request is audited, before the route runs', () => {
 	it('writes one pat_use row with the token, method, path and outcome', async (t) => {
 		const { world, secret, row } = await viaPat(t, {});
