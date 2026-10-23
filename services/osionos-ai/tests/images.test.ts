@@ -33,7 +33,7 @@ process.env.OSIONOS_AI_IMAGE_CHECK_DIR = '/tmp/osionos-ai-check-stub';
 // The configuration needs the guard of the prompt (C72): the mock above is it.
 process.env.OSIONOS_AI_PROMPT_GUARD_URL = guard.baseUrl;
 
-const { startHarness, USER_DAILY_MICROUSD, WORKSPACE_A } = await import('./harness.ts');
+const { startHarness, USER_DAILY_MICROUSD, WORKSPACE_A, awaitWindowRoom } = await import('./harness.ts');
 const { app, mock, bridge, base, call, tokenFor, postRun, createConversation } = await startHarness({
 	// A check that lets every image through: the cases of this file are about
 	// the bytes, the queue and the money (C73 has its own file).
@@ -220,6 +220,7 @@ describe('osionos-ai images: the limits (C75) and the money (C74)', () => {
 	});
 
 	it('the fourth image of a minute is refused with a Retry-After', async () => {
+		await awaitWindowRoom();
 		const user = randomUUID();
 		for (let index = 0; index < 3; index += 1) await generate(user);
 		engine.reset();

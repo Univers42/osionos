@@ -6,7 +6,7 @@ import type { AuthUser } from '../src/auth.ts';
 import { createPool, isPoolTimeout } from '../src/db.ts';
 import { checkRunRateLimit } from '../src/rateLimit.ts';
 import { relatedPages } from '../src/retrieval/related.ts';
-import { startHarness } from './harness.ts';
+import { startHarness, awaitWindowRoom } from './harness.ts';
 import { vectorFor } from './mockEmbed.ts';
 import { USER_A, WORKSPACE_A } from './retrievalSeed.ts';
 
@@ -149,6 +149,7 @@ describe('the pool of the related read', { skip: hasVectors ? false : 'the graph
 	});
 
 	it('the related read has its own window, and spending it leaves the runs alone', async () => {
+		await awaitWindowRoom();
 		const { config } = await import('../src/config.ts');
 		// A caller of its own: the window is per user, and the other tests of the
 		// file must not find it spent. The page is not theirs, so every call that

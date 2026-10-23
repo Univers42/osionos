@@ -125,6 +125,18 @@ export interface Harness {
 	createConversation(title?: string, token?: string): Promise<string>;
 }
 
+/**
+ * Waits until at least `seconds` remain in the current one-minute window, so a burst
+ * that must hit the limit cannot straddle a boundary (src/rateLimit.ts is a fixed window).
+ */
+export async function awaitWindowRoom(seconds = 15): Promise<void> {
+	const now = Date.now();
+	const msIntoWindow = now % 60_000;
+	const msRemaining = 60_000 - msIntoWindow;
+	if (msRemaining >= seconds * 1000) return;
+	await new Promise<void>((resolve) => setTimeout(resolve, msRemaining + 50));
+}
+
 /** The secret the tokens are signed with. */
 const APP_SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
 
