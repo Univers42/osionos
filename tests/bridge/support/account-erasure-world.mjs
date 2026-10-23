@@ -155,8 +155,9 @@ export function createErasureWorld({ users = [], objects = {} } = {}) {
 				record(unban ? 'unban' : 'ban', user);
 				if (!unban) world.bannedAuth.add(user);
 				const noEffect = world.banReply === 'no_effect' && !unban;
-				const bannedUntil = unban ? null : new Date(clock.at + 100 * 365 * 24 * 3_600_000).toISOString();
-				return new Response(JSON.stringify(noEffect ? {} : { banned_until: bannedUntil }), { status: 200 });
+				// GoTrue answers the user object and omits banned_until once the ban is lifted.
+				const reply = unban ? { id: user } : { id: user, banned_until: new Date(clock.at + 100 * 365 * 24 * 3_600_000).toISOString() };
+				return new Response(JSON.stringify(noEffect ? { id: user } : reply), { status: 200 });
 			}
 			if (text.includes('/auth/v1/admin/users/') && method === 'DELETE') {
 				record('gotrue_delete', user);
