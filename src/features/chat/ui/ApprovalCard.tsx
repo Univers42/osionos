@@ -161,7 +161,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     heading(approval),
     target ? targetLine(target.title, target.workspaceName || target.workspaceId) : null,
     isPlanCard && tree
-      ? planTreeBlock(tree, off, toggle)
+      ? planTreeBlock(tree, off, toggle, state !== "pending" || busy)
       : (approval ? argsBlock(approvalArgs(approval.args)) : null),
     isPlanCard && tree
       ? React.createElement("p", { className: "mb-1 text-[var(--osio-fg-muted)]" }, `${keptCount} of ${totalCount} will be created`)
@@ -268,35 +268,19 @@ function stateLine(text: string, spinning = false): React.ReactElement {
   );
 }
 
-/** The tree of a plan: an indented list of checkboxes. */
+/**
+ * The tree of a plan: an indented list of checkboxes. A node under a switched-off page is shown off and disabled;
+ * once the approval is decided every box is frozen.
+ */
 function planTreeBlock(
   nodes: PlanNode[],
   off: Set<string>,
   onToggle: (key: string, currentlyOn: boolean) => void,
+  frozen: boolean,
 ): React.ReactElement {
-  const ancestorOffMap = new Map<string, boolean>();
-  for (const node of nodes) {
-    let offAncestor = false;
-    let pk = node.parentKey;
-    const seen = new Set<string>();
-    while (pk !== null) {
-      if (off.has(pk)) {
-        offAncestor = true;
-        break;
-      }
-      if (seen.has(pk)) break;
-      seen.add(pk);
-      const parent = nodes.find((candidate) => candidate.key === pk);
-      pk = parent ? parent.parentKey : null;
-    }
-    ancestorOffMap.set(node.key, offAncestor);
-  }
-
+  const kept = new Set(keptKeys(nodes, off));
   const items = nodes.map((node) => {
-    const isOffAncestor = ancestorOffMap.get(node.key) ?? false;
-    const nodeOff = off.has(node.key);
-    const checked = !nodeOff && !isOffAncestor;
-    const disabled = isOffAncestor;
+    const checked = kept.has(node.key);
     return React.createElement(
       "li",
       { key: node.key, style: { paddingLeft: `${(node.depth - 1) * 16}px` } },
@@ -306,7 +290,7 @@ function planTreeBlock(
         React.createElement("input", {
           type: "checkbox",
           checked,
-          disabled,
+          disabled: frozen || (!checked && !off.has(node.key)),
           onChange: () => onToggle(node.key, checked),
         }),
         " ",
