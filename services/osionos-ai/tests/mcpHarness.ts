@@ -133,9 +133,14 @@ export async function clearWindows(): Promise<void> {
 	}
 }
 
+// The servers close even when the cleanup throws: without the access-token migration the delete failed first,
+// the server stayed open and the file never exited (a whole suite hung on mcpAccess.test.ts, 2026-10-23).
 export async function closeAll(): Promise<void> {
-	await seeds.clear();
-	await app.db.query('delete from public.ai_access_tokens');
-	await embedder.close();
-	await app.close();
+	try {
+		await seeds.clear();
+		await app.db.query('delete from public.ai_access_tokens');
+	} finally {
+		await embedder.close();
+		await app.close();
+	}
 }
