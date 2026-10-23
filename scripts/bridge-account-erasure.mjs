@@ -50,6 +50,10 @@ export const TAKE_NO_MORE_MS = 20 * 60_000;
 export const RUN_INTERVAL_MS = 15 * 60_000;
 const MAX_ATTEMPTS = 5;
 const BAN_DURATION = '876000h';
+// A verdict id, not any truthy string: "0" or "false" must not lift the production guard.
+const VERDICT_PATTERN = /^D-P5-6/;
+const UNBAN_PENDING_KEY = 'erasure:unban_pending';
+const UNBAN_PENDING_TTL_MS = 30 * 24 * 60 * 60_000;
 const REQUESTS = 'osionos_account_deletion_requests';
 const OBJECTS = 'osionos_account_erasure_objects';
 
@@ -61,7 +65,7 @@ export function executorMode(env, config) {
 	if (env.OSIONOS_ACCOUNT_DELETION_EXECUTOR !== '1') return { mode: 'off' };
 	if (!config?.baasUrl || !config?.serviceKey) return { mode: 'off' };
 	if (env.OSIONOS_ACCOUNT_DELETION_DRY_RUN === '1') return { mode: 'dry' };
-	if (env.NODE_ENV === 'production' && !env.OSIONOS_ACCOUNT_DELETION_VERDICT) {
+	if (env.NODE_ENV === 'production' && !VERDICT_PATTERN.test(env.OSIONOS_ACCOUNT_DELETION_VERDICT ?? '')) {
 		return { mode: 'refused', missing: ['OSIONOS_ACCOUNT_DELETION_DRY_RUN', 'OSIONOS_ACCOUNT_DELETION_VERDICT'] };
 	}
 	return { mode: 'live' };
@@ -71,7 +75,7 @@ const failure = (code) => Object.assign(new Error(code), { erasureCode: code });
 const hashedId = (userId) => createHash('sha256').update(userId).digest('hex').slice(0, 8);
 const mentions = (error, text) => String(error?.upstreamText ?? error?.message ?? '').includes(text);
 
-export function createAccountErasureRunner({ config, pg, fetchImpl = fetch, env = process.env, sleep = defaultSleep, now = Date.now, log = defaultLog }) {
+export function createAccountErasureRunner({ config, pg, kv = null, fetchImpl = fetch, env = process.env, sleep = defaultSleep, now = Date.now, log = defaultLog }) {
 	const { mode, missing } = executorMode(env, config);
 	let running = false;
 	let timer = null;
@@ -95,9 +99,67 @@ export function createAccountErasureRunner({ config, pg, fetchImpl = fetch, env 
 		}
 	}
 
+	// A 2xx alone proves nothing: GoTrue ignores fields it does not know, so a wrong
+	// shape answers 200 and bans nobody. The effect is read back from `banned_until`.
 	async function banUser(userId, banDuration) {
 		const response = await goTrue('PUT', userId, { ban_duration: banDuration });
 		if (!response.ok) throw new Error(`gotrue ${response.status}`);
+		const body = await response.json().catch(() => null);
+		const until = body?.banned_until;
+		if (banDuration === 'none' ? until !== null : !(Date.parse(until) > now())) throw new Error('gotrue ban not in effect');
+	}
+
+	async function requestStillThere(userId) {
+		try {
+			return await requestExists(userId);
+		} catch {
+			return true;
+		}
+	}
+
+	async function readUnbanPending() {
+		try {
+			const parsed = JSON.parse((await kv?.get(UNBAN_PENDING_KEY)) ?? '[]');
+			return Array.isArray(parsed) ? parsed : [];
+		} catch {
+			return [];
+		}
+	}
+
+	async function writeUnbanPending(list) {
+		try {
+			await kv?.set(UNBAN_PENDING_KEY, JSON.stringify(list), UNBAN_PENDING_TTL_MS);
+		} catch {
+			log.warn('account_deletion_unban_pending_unwritable');
+		}
+	}
+
+	/** The user is banned and their request is gone: lift the ban, or remember to. */
+	async function releaseBan(userId) {
+		log.warn('banned_without_request', hashedId(userId));
+		try {
+			await banUser(userId, 'none');
+		} catch {
+			await writeUnbanPending([...new Set([...(await readUnbanPending()), userId])]);
+		}
+	}
+
+	// Caveat: the pending list is one read-modify-write key, so two replicas can drop an
+	// entry; it survives a restart only on a Redis-backed store (in-memory loses it).
+	async function retryUnbans() {
+		const pending = await readUnbanPending();
+		if (pending.length === 0) return;
+		const left = [];
+		for (const userId of pending) {
+			if (await requestStillThere(userId)) continue;
+			try {
+				await banUser(userId, 'none');
+			} catch {
+				left.push(userId);
+			}
+		}
+		await writeUnbanPending(left);
+		if (left.length > 0) log.warn('banned_without_request', `${left.length} pending`);
 	}
 
 	async function requestExists(userId) {
@@ -119,8 +181,9 @@ export function createAccountErasureRunner({ config, pg, fetchImpl = fetch, env 
 		try {
 			return await pg.asService().rpc('osionos_account_erase', { p_user: userId });
 		} catch (error) {
-			if (!mentions(error, 'no_deletion_request')) throw Object.assign(failure('erase_failed'), { cause: error });
-			await guarded('unban_failed', () => banUser(userId, 'none'));
+			const cancelled = mentions(error, 'no_deletion_request');
+			if (!cancelled && await requestStillThere(userId)) throw Object.assign(failure('erase_failed'), { cause: error });
+			await releaseBan(userId);
 			log.info('account_deletion_cancelled_after_ban', hashedId(userId));
 			return null;
 		}
@@ -136,7 +199,10 @@ export function createAccountErasureRunner({ config, pg, fetchImpl = fetch, env 
 
 	async function deleteAuthUser(userId) {
 		const response = await goTrue('DELETE', userId);
-		if (!response.ok && response.status !== 404) throw new Error(`gotrue ${response.status}`);
+		if (response.ok) return;
+		// Only GoTrue's own 404 means "already gone"; Kong's "no Route matched" is a wrong path.
+		const body = response.status === 404 ? await response.json().catch(() => null) : null;
+		if (body?.error_code !== 'user_not_found') throw new Error(`gotrue ${response.status}`);
 	}
 
 	/** Steps 4-7. */
@@ -186,6 +252,7 @@ export function createAccountErasureRunner({ config, pg, fetchImpl = fetch, env 
 	}
 
 	async function liveRun() {
+		await retryUnbans();
 		const claimedAt = now();
 		const claimed = await pg.asService().rpc('osionos_account_deletion_claim', { p_limit: CLAIM_BATCH });
 		const prepared = [];

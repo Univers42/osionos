@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { BATCH_WAIT_MS, CLAIM_BATCH, TAKE_NO_MORE_MS, createAccountErasureRunner } from '../../scripts/bridge-account-erasure.mjs';
 import { createErasureWorld, indexOfStep } from './support/account-erasure-world.mjs';
+import { kvStub } from './support/kv-stub.mjs';
 
 const ids = (n) => Array.from({ length: n }, (_, i) => `00000000-0000-4000-8000-00000000000${i + 1}`);
 const [U1, U2] = ids(2);
@@ -245,5 +246,61 @@ describe('batches and leases', () => {
 describe('boundaries', () => {
 	it('never touches the session table', () => {
 		assert.equal(readFileSync(new URL('../../scripts/bridge-account-erasure.mjs', import.meta.url), 'utf8').includes('osionos_sessions'), false);
+	});
+});
+
+describe('the devil conditions', () => {
+	for (const verdict of ['0', 'false', 'x', '1']) {
+		it(`refuses production with VERDICT=${JSON.stringify(verdict)}`, () => {
+			const w = createErasureWorld({ users: [U1] });
+			assert.equal(runner(w, { NODE_ENV: 'production', OSIONOS_ACCOUNT_DELETION_VERDICT: verdict }).mode, 'refused');
+		});
+	}
+
+	it('aborts with ban_failed when the ban answers 200 without banned_until', async () => {
+		const w = createErasureWorld({ users: [U1] });
+		w.banReply = 'no_effect';
+		await runner(w).runOnce();
+		assert.equal(w.requests.get(U1).last_error, 'ban_failed');
+		assert.deepEqual(writes(w.log).filter((entry) => /^(pat_revoke|erase|sleep|object_delete|gotrue_delete)/.test(entry)), []);
+	});
+
+	it('treats a GoTrue 404 user_not_found as already deleted', async () => {
+		const w = createErasureWorld({ users: [U1] });
+		w.deleteReply = 'gone';
+		await runner(w).runOnce();
+		assert.equal(w.requests.has(U1), false);
+		assert.equal(w.audits.some((audit) => audit.event_type === 'account.deleted'), true);
+	});
+
+	it('keeps the request on a Kong 404 and records auth_delete_failed', async () => {
+		const w = createErasureWorld({ users: [U1] });
+		w.deleteReply = 'kong';
+		await runner(w).runOnce();
+		assert.equal(w.requests.get(U1).last_error, 'auth_delete_failed');
+		assert.equal(w.audits.some((audit) => audit.event_type === 'account.deleted'), false);
+	});
+
+	it('warns banned_without_request and retries the unban on a later run, from a fresh runner', async () => {
+		const w = createErasureWorld({ users: [U1] });
+		const kv = kvStub();
+		w.after.pat_revoke = (user) => w.requests.delete(user);
+		w.fail.add('unban');
+		await createAccountErasureRunner(w.runnerDeps({ kv })).runOnce();
+		assert.equal(w.log.filter((entry) => /^warn:banned_without_request [0-9a-f]{8}$/.test(entry)).length, 1);
+		const before = w.log.filter((entry) => entry === `unban:${U1}`).length;
+		w.fail.clear();
+		await createAccountErasureRunner(w.runnerDeps({ kv })).runOnce();
+		assert.equal(w.log.filter((entry) => entry === `unban:${U1}`).length, before + 1);
+		assert.equal(JSON.parse(kv.values.get('osb:erasure:unban_pending')).length, 0);
+	});
+
+	it('warns and unbans when the erase fails after the request is already gone', async () => {
+		const w = createErasureWorld({ users: [U1] });
+		w.after.pat_revoke = (user) => w.requests.delete(user);
+		w.fail.add('erase');
+		await runner(w).runOnce();
+		assert.equal(w.log.filter((entry) => entry.startsWith('warn:banned_without_request')).length, 1);
+		assert.ok(w.log.includes(`unban:${U1}`));
 	});
 });
