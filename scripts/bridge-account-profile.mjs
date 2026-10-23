@@ -35,6 +35,7 @@
 
 import { rateLimit } from './bridge-guard.mjs';
 import { bearerToken, blockedViewerBy, readJsonBody, safeText, sendJson } from './bridge-social-core.mjs';
+import { STATUS_COLUMNS, statusOf } from './bridge-status.mjs';
 
 const PROFILE_PATH = '/api/account/profile';
 const USERS_PREFIX = '/api/users/';
@@ -43,7 +44,7 @@ const PROFILE_WINDOW_MS = 60_000;
 const PROFILE_BODY_LIMIT = 16 * 1024;
 const USERNAME_SHAPE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{2,31}$/;
 
-const accountError = (status, code, message, extra) => Object.assign(new Error(message), { status, code }, extra);
+export const accountError = (status, code, message, extra) => Object.assign(new Error(message), { status, code }, extra);
 
 /** The wire name of a database column. */
 function camelCase(column) {
@@ -79,7 +80,7 @@ const EDITABLE_COLUMNS = [
 const EDITABLE = new Map(EDITABLE_COLUMNS.map((column) => [camelCase(column), column]));
 const FIELD_BY_COLUMN = new Map(EDITABLE_COLUMNS.map((column) => [column, camelCase(column)]));
 const OWNER_SELECT = OWNER_COLUMNS.join(',');
-const CARD_SELECT = `${CARD_COLUMNS.join(',')},directory_opt_out`;
+const CARD_SELECT = `${CARD_COLUMNS.join(',')},directory_opt_out,${STATUS_COLUMNS.join(',')}`;
 
 function camelRow(row, columns) {
 	const out = {};
@@ -87,7 +88,7 @@ function camelRow(row, columns) {
 	return out;
 }
 
-function respondWithError(response, error, config) {
+export function respondWithError(response, error, config) {
 	const status = Number.isInteger(error?.status) ? error.status : 500;
 	const code = typeof error?.code === 'string' && /^[a-z][a-z0-9_]*$/.test(error.code) ? error.code : 'profile_request_failed';
 	const body = { ok: false, message: error instanceof Error ? error.message : 'The profile request failed.', code };
@@ -99,7 +100,7 @@ function respondWithError(response, error, config) {
 	return sendJson(response, status, body, config);
 }
 
-function callerSession(request, config, verifySession) {
+export function callerSession(request, config, verifySession) {
 	try {
 		return verifySession(bearerToken(request), config);
 	} catch (error) {
@@ -108,7 +109,7 @@ function callerSession(request, config, verifySession) {
 	}
 }
 
-async function readProfileBody(request) {
+export async function readProfileBody(request) {
 	try {
 		return await readJsonBody(request, PROFILE_BODY_LIMIT);
 	} catch (error) {
@@ -270,7 +271,8 @@ async function lookupUser({ config, pg, session }, rawName, response) {
 	const subject = safeText(row.user_id, 80).toLowerCase();
 	const reduced = subject !== session.userId
 		&& (row.directory_opt_out === true || await hiddenFromViewer(config, pg, session.userId, subject));
-	return sendJson(response, 200, camelRow(row, reduced ? REDUCED_CARD_COLUMNS : CARD_COLUMNS), config);
+	if (reduced) return sendJson(response, 200, camelRow(row, REDUCED_CARD_COLUMNS), config);
+	return sendJson(response, 200, { ...camelRow(row, CARD_COLUMNS), status: statusOf(row) }, config);
 }
 
 /**

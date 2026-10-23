@@ -32,7 +32,7 @@ const OWNER_KEYS = [
 // The public card: the allowlist, and nothing else.
 const CARD_KEYS = [
 	'avatarUrl', 'bannerUrl', 'bio', 'company', 'displayName', 'headline', 'links', 'location', 'orcid',
-	'patreon', 'profession', 'pronouns', 'timezone', 'userId', 'username', 'website',
+	'patreon', 'profession', 'pronouns', 'status', 'timezone', 'userId', 'username', 'website',
 ];
 
 const REDUCED_KEYS = ['avatarUrl', 'displayName', 'userId', 'username'];
