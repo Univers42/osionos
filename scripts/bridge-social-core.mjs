@@ -368,7 +368,7 @@ export async function emitNotifications(deps, config, notifs) {
 	}
 }
 
-/** display_name + profile for a set of user ids → Map(userId → {name, avatar}). */
+/** display_name + profile for a set of user ids → Map(userId → {name, avatar, headline}). */
 export async function identitySummaries(config, fetchImpl, userIds) {
 	const ids = [...new Set(userIds)].filter((id) => UUID_REGEX.test(String(id)));
 	if (ids.length === 0) return new Map();
@@ -387,6 +387,7 @@ export async function identitySummaries(config, fetchImpl, userIds) {
 			name: typeof row.display_name === 'string' && row.display_name ? row.display_name : 'Member',
 			// The ONE projection of a user avatar: a `data:` URL never leaves the bridge.
 			avatar: publicAvatar(typeof profile.avatar === 'string' ? profile.avatar : null, config),
+			headline: typeof profile.headline === 'string' ? profile.headline : null,
 		});
 	}
 	return map;

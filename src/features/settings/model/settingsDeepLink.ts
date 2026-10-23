@@ -70,7 +70,7 @@ function clearSettingsDeepLink(): void {
  *  would drop the tab again.
  *  Caveat: the link waits for a signed-in identity — a session that never
  *  resolves never opens the tab, and the link stays in the URL. */
-function whenLayoutIsRestored(run: () => void): void {
+export function whenLayoutIsRestored(run: () => void): void {
   if (useWorkspaceLayout.getState().scope) {
     run();
     return;

@@ -32,7 +32,8 @@ export type FeatureFlagName =
   | "osio.publish"
   | "osio.whiteboard"
   | "osio.panezoom"
-  | "osio.ai.images";
+  | "osio.ai.images"
+  | "osio.account.delete";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -198,4 +199,13 @@ export function isPaneZoomEnabled(): boolean {
  *  key, or `VITE_OSIO_AI_IMAGES=1`. */
 export function isAiImagesEnabled(): boolean {
   return isFeatureFlagEnabled("osio.ai.images", false);
+}
+
+/** The "Delete my account" row and its grace-period banner in Profile. Default OFF:
+ *  the bridge route exists, but the purge that follows the grace period belongs to a
+ *  later package, so a request would schedule a deletion nothing executes yet. Enable
+ *  via `?osio.account.delete=1`, the `osio.account.delete` localStorage key, or
+ *  `VITE_OSIO_ACCOUNT_DELETE=1`. */
+export function isAccountDeleteEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.account.delete", false);
 }

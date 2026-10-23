@@ -26,15 +26,17 @@ import type { PageEntry } from '@/entities/page';
 import { Button, EmojiPicker, IconValueView, IconButton, Toggle, useToastStore } from '@/shared/ui';
 import { PageSelectorModal } from '../PageSelectorModal';
 import { ConfirmModal, TypedConfirmModal } from '../ui/ConfirmModals';
+import { PendingDeleteBanner } from './PendingDeleteBanner';
 import { EmptyState, PanelStatus, Section, SettingRow } from '../ui/settingsKit';
 import { csvCell, downloadBlob, downloadText, safeSlug } from '../model/settingsFiles';
-import { runAsync } from '../model/settingsCalls';
+import { accountActionNotice, runAccountAction, runAsync } from '../model/settingsCalls';
+import { isWorkspaceOwner, pendingDeleteFor } from '../model/workspaceOwnership';
 import { useSettingsHydration } from '../model/settingsHydration';
 
 const EMPTY_PAGES: PageEntry[] = [];
 const EMPTY_WORKSPACE_MEMBERS: WorkspaceMember[] = [];
 
-type SettingsModalName = 'page-selector' | 'delete-workspace' | 'reset-workspace';
+type SettingsModalName = 'page-selector' | 'delete-workspace' | 'leave-workspace' | 'reset-workspace';
 
 interface ActiveSettingsModal {
   name: SettingsModalName;
@@ -52,6 +54,9 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
     () => [...(activeSession?.privateWorkspaces ?? []), ...(activeSession?.sharedWorkspaces ?? [])],
     [activeSession],
   );
+  const currentWorkspace = sessionWorkspaces.find((workspace) => workspace._id === workspaceId);
+  const isOwner = isWorkspaceOwner(currentWorkspace, resolvedUserId);
+  const pendingDeleteAfter = pendingDeleteFor(currentWorkspace, resolvedUserId);
   const pages = usePageStore((state) => state.pages[workspaceId] ?? EMPTY_PAGES);
   const workspaceMembers = useWorkspaceMembersStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS);
   const storedSettings = useWorkspaceSettingsStore((state) => state.data[workspaceId]);
@@ -111,9 +116,18 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
       toast({ kind: 'warning', title: 'You need at least one workspace.' });
       return;
     }
-    const deleted = await deleteWorkspace(workspaceId);
-    if (!deleted) throw new Error("This workspace could not be deleted. Nothing was removed.");
-    toast({ kind: 'success', title: 'Workspace deleted' });
+    const outcome = await deleteWorkspace(workspaceId);
+    // The code travels on the error so the dialog can tell a sudo refusal (Try again) from a failure.
+    if (!outcome.ok) throw Object.assign(new Error(outcome.message ?? 'This workspace could not be deleted. Nothing was removed.'), { code: outcome.code });
+    toast({ kind: 'success', title: 'Workspace scheduled for deletion', description: 'It is removed after 14 days. Cancel before then to keep it.' });
+  }
+
+  async function handleLeaveWorkspace() {
+    const outcome = await runAccountAction(`/api/workspaces/${workspaceId}/leave`, {});
+    const notice = accountActionNotice(outcome, 'Leaving the workspace');
+    if (notice) toast(notice);
+    if (!outcome.ok) throw new Error(outcome.message);
+    toast({ kind: 'success', title: 'You left the workspace' });
   }
 
   if (!workspaceId) {
@@ -136,13 +150,19 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
         <SettingRow title="Save and display page view analytics" description={`Collect page view data for all pages in ${settings.name}. Editors can see how many views it has.`} action={<Toggle checked={analytics.pageViews ?? true} onChange={(checked) => update(resolvedUserId, workspaceId, { analytics: { ...settings.analytics, pageViews: checked } })} label="Save and display page view analytics" />} />
       </Section>
       <Section title="Danger zone">
-        <SettingRow danger title="Delete workspace" description="Permanently delete this workspace, including all pages and files." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-workspace' })}>Delete workspace</Button>} />
+        {pendingDeleteAfter !== null && <PendingDeleteBanner workspaceId={workspaceId} userId={resolvedUserId} deleteAfter={pendingDeleteAfter} />}
+        {isOwner ? (
+          <SettingRow danger title="Delete workspace" description="Schedule this workspace for deletion. Nothing is removed for 14 days, and you can cancel until then." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-workspace' })}>Delete workspace</Button>} />
+        ) : (
+          <SettingRow danger title="Leave workspace" description="You lose access to this workspace and its pages. The owner can invite you again." action={<Button tone="danger" onClick={() => setModal({ name: 'leave-workspace' })}>Leave workspace</Button>} />
+        )}
       </Section>
       <Section title="Workspace ID">
         <SettingRow title="Workspace ID" description={workspaceId} action={<IconButton label="Copy workspace ID" onClick={() => { runAsync(navigator.clipboard.writeText(workspaceId).then(() => toast({ kind: 'success', title: 'Workspace ID copied' }))); }}><Copy size={16} /></IconButton>} />
       </Section>
       {modal?.name === 'page-selector' && <PageSelectorModal pages={pages} selectedId={settings.landingPageId ?? null} onSelect={(pageId) => { update(resolvedUserId, workspaceId, { landingPageId: pageId }); setModal(null); }} onClose={() => setModal(null)} />}
       {modal?.name === 'reset-workspace' && <ConfirmModal title="Reset to defaults" message={`Restore the default name, icon, landing page, sidebar and analytics of ${settings.name}? Your pages are not touched.`} actionLabel="Reset to defaults" onConfirm={() => reset(resolvedUserId, workspaceId, workspaceName)} onClose={() => setModal(null)} />}
+      {modal?.name === 'leave-workspace' && <ConfirmModal title="Leave workspace" message={`Leave ${settings.name}? You lose access until someone invites you again.`} actionLabel="Leave workspace" onConfirm={handleLeaveWorkspace} onClose={() => setModal(null)} />}
       {modal?.name === 'delete-workspace' && <TypedConfirmModal title="Delete workspace" message={`Type ${settings.name} to permanently delete this workspace.`} confirmText={settings.name} danger actionLabel="Delete workspace" onConfirm={handleDeleteWorkspace} onClose={() => setModal(null)} />}
     </PanelStatus>
   );

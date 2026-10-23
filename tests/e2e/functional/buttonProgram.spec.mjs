@@ -28,20 +28,11 @@ async function answerPatches(page, status = 200) {
 
 
 test.describe("button program", () => {
-  for (const buttonLabel of ["Run it", undefined]) {
-    test(`edits the displayed ${buttonLabel ? "buttonLabel" : "content"} and keeps the button runnable`, async ({ page, baseURL }) => {
-      await seed(page, baseURL, [button({ buttonLabel, buttonProgram: program([notify("edited button ran")]) })]);
-      const label = page.locator('[contenteditable="true"]').filter({ hasText: "Run it" });
-      await label.fill("Updated label");
-      await expect(page.getByRole("button", { name: "Updated label", exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Updated label", exact: true }).click();
-      await expect(page.getByText("edited button ran", { exact: true })).toBeVisible();
-      await expect.poll(() => page.evaluate(() => {
-        const host = JSON.parse(localStorage.getItem("osio:pages:mock-ws-private-0") ?? "[]").find((entry) => entry._id === "btn-host");
-        return host?.content[0];
-      })).toMatchObject(buttonLabel ? { buttonLabel: "Updated label", content: "Run it" } : { content: "Updated label" });
-    });
-  }
+  test("the block is a button, not an editable paragraph", async ({ page, baseURL }) => {
+    await seed(page, baseURL, [button({ buttonProgram: program([]) })]);
+    await expect(page.getByRole("button", { name: "Run it", exact: true })).toBeVisible();
+    await expect(page.locator('[contenteditable="true"]').filter({ hasText: "Run it" })).toHaveCount(0);
+  });
 
 
   test("an invalid program toasts and changes nothing", async ({ page, baseURL }) => {

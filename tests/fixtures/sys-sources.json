@@ -1,0 +1,8 @@
+[
+  { "id": "my-pages", "columns": ["id", "title", "icon", "cover", "surface", "visibility", "database_id", "parent_page_id", "created_at", "updated_at", "archived_at"] },
+  { "id": "my-tasks", "columns": ["page_id", "block_id", "workspace_id", "content", "checked", "due_at", "updated_at"] },
+  { "id": "my-published", "columns": ["token", "page_id", "title", "icon", "published_at"] },
+  { "id": "my-connections", "columns": ["id", "requester_id", "addressee_id", "status", "source", "created_at", "responded_at", "direction", "peer"] },
+  { "id": "my-workspaces", "columns": ["workspace_id", "role", "permissions", "id", "name", "slug", "created_at", "updated_at"] },
+  { "id": "my-sessions", "columns": ["id", "created_at", "expires_at", "last_seen_at", "auth_method", "user_agent", "current", "label"] }
+]

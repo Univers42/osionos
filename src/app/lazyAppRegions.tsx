@@ -77,6 +77,11 @@ if (globalThis.window !== undefined) {
   void import("@/features/settings/model/settingsDeepLink").then((module) => module.applySettingsDeepLink());
 }
 
+// A ?u=<username> link opens that member's profile tab, once, the same way.
+if (globalThis.window !== undefined) {
+  void import("@/widgets/profile-page/model/profileDeepLink").then((module) => module.applyProfileDeepLink());
+}
+
 const contentFallback = (
   <div className="flex h-full w-full items-center justify-center">
     <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--osio-accent)] border-t-transparent" />

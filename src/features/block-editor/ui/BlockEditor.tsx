@@ -53,7 +53,7 @@ import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
-import { ButtonBlockReadOnly } from "@/entities/block/ui/ReadOnlyBlock";
+import { ButtonBlockEditor } from "@/features/button-program/ui/ButtonSettingsPopover";
 import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
@@ -1140,26 +1140,11 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "button":
       return (
-        <div className="flex items-center gap-3">
-          <EditableContent
-            content={block.buttonLabel || block.content}
-            className="min-w-0 flex-1 text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5"
-            style={editableStyle}
-            placeholder="Button label"
-            onChange={(text) => {
-              if (block.buttonLabel) commitBlockUpdate(block.id, { buttonLabel: text });
-              else onChange(text);
-            }}
-            onKeyDown={onKeyDown}
-            onPaste={onPaste}
-            onRequestSlashMenu={onRequestSlashMenu}
-            pageId={pageId}
-            blockType={block.type}
-            onTurnInto={handleTurnInto}
-            onAskAI={handleAskAI}
-          />
-          <ButtonBlockReadOnly block={block} hostPageId={pageId} />
-        </div>
+        <ButtonBlockEditor
+          block={block}
+          hostPageId={pageId}
+          onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+        />
       );
 
     case "home_views":

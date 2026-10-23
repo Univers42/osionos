@@ -22,6 +22,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { createBridgeHandoff, createBridgeServer, startBridgeServer } from '../../scripts/bridge-api.mjs';
 import { kvStub } from './support/kv-stub.mjs';
+import { noFactorPg } from './support/no-factor-pg.mjs';
 import {
 	JWT_SECRET, USER_A, USER_B,
 	gatewayRequest, postJson, sendJson, sessionConfig, startSessionBridge,
@@ -58,7 +59,11 @@ describe('the session row is written when the session is delivered', () => {
 		const claims = tokenClaims(consumed.body.session.accessToken);
 		const rows = store.rows();
 		assert.equal(rows.length, 1);
-		assert.deepEqual(rows[0], {
+		// refresh_hash and family_id are pinned in bridge-session-refresh.test.mjs.
+		const { refresh_hash: refreshHash, family_id: familyId, ...row } = rows[0];
+		assert.match(refreshHash, /^[0-9a-f]{64}$/);
+		assert.equal(familyId, claims.jti);
+		assert.deepEqual(row, {
 			id: claims.jti,
 			user_id: USER_A,
 			created_at: new Date(claims.iat_ms).toISOString(),
@@ -107,7 +112,7 @@ describe('the session row is written when the session is delivered', () => {
 	it('writes auth_method=password for a password sign-in', async () => {
 		const kv = kvStub();
 		const config = sessionConfig({ now: () => CLOCK.at, persistence: 'memory' });
-		const minted = await createBridgeHandoff({ payload: payloadFor(USER_B), config, kv, now: CLOCK.at, fetchImpl: async () => new Response('[]') });
+		const minted = await createBridgeHandoff({ payload: payloadFor(USER_B), config, kv, pg: noFactorPg(), now: CLOCK.at, fetchImpl: async () => new Response('[]') });
 		const gateway = async (url) => {
 			const route = String(url);
 			if (route.endsWith('/api/auth/login')) return new Response(JSON.stringify({ access_token: 'gw', refresh_token: 'r', user: { id: USER_B } }), { status: 200 });
@@ -217,7 +222,8 @@ describe('GET /api/account/sessions', () => {
 		assert.ok(read, 'the list is read through the user role');
 		assert.equal(read.params.get('revoked_at'), 'is.null');
 		assert.equal(read.params.get('order'), 'created_at.desc');
-		assert.equal(read.params.get('limit'), '50');
+		// One page of the family scan (the list collapses families, so it cannot ask for 50 rows).
+		assert.equal(read.params.get('limit'), '500');
 	});
 
 	it('marks the current session and leaves the others unmarked', async (t) => {
