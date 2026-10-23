@@ -62,14 +62,23 @@ const workspace = { id: HOME, owner_id: OWNER, created_at: '2026-10-01T00:00:00.
 /** The identity row of the owner; `is_admin` proves a PAT never inherits it. */
 const identity = (isAdmin) => ({ user_id: OWNER, is_admin: isAdmin });
 
-export async function startPatWorld(t, { tokens = [], fail = null, hasIdentity = true, ownerIsAdmin = false, now, rateLimit, pageFail } = {}) {
+/** Extra rows per table, appended to the owner's own world. */
+const withSeed = (base, seed) => Object.fromEntries([...new Set([...Object.keys(base), ...Object.keys(seed)])].map((name) => [name, [...(base[name] ?? []), ...(seed[name] ?? [])]]));
+
+/**
+ * `seed` adds rows to the page tables, `pagesOptions` is the page mock's own option bag (rpc, realWorkspaceRpc),
+ * `workspaceRows` replaces what the workspace RPC answers (so a test can plant a settings blob the projection must drop).
+ */
+export async function startPatWorld(t, { tokens = [], fail = null, hasIdentity = true, ownerIsAdmin = false, now, rateLimit, pageFail, seed = {}, pagesOptions = {}, workspaceRows = null } = {}) {
 	const config = harnessConfig();
 	const patStore = createPatStore({ tokens, fail });
-	const pages = createPostgrestMock({ osionos_pages: [pageRow()], osionos_workspaces: hasIdentity ? [workspace] : [], osionos_bridge_identities: [identity(ownerIsAdmin)] }, pageFail ? { failWhen: pageFail } : {});
+	const base = { osionos_pages: [pageRow()], osionos_workspaces: hasIdentity ? [workspace] : [], osionos_bridge_identities: [identity(ownerIsAdmin)] };
+	const pages = createPostgrestMock(withSeed(base, seed), { ...(pageFail ? { failWhen: pageFail } : {}), ...pagesOptions });
 	const seen = [];
 	const fetchImpl = async (url, init = {}) => {
 		const table = new URL(String(url)).pathname.replace('/rest/v1/', '');
 		seen.push({ table, headers: { ...init.headers }, body: init.body ?? null });
+		if (workspaceRows && table === 'rpc/osionos_bridge_list_workspaces') return new Response(JSON.stringify(workspaceRows), { status: 200, headers: { 'content-type': 'application/json' } });
 		return (PAT_SIDE.has(table) ? patStore : pages).fetchImpl(url, init);
 	};
 	const kv = kvStub();
