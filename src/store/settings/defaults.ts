@@ -75,7 +75,8 @@ export function defaultPreferences(userId: string): UserPreferences {
     language: 'en-US',
     weekStart: 'monday',
     dateFormat: 'relative',
-    timezone: 'Europe/Madrid',
+    // Caveat: the device zone, not the user's chosen one; wrong on a shared or travelling device.
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     autoTimezone: false,
     numberFormat: 'default',
     enterAddsNewline: false,

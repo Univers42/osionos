@@ -10,13 +10,15 @@ import { appendMessage } from '../conversations/repo.ts';
 import { markRun } from './repo.ts';
 import type { RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
-import { buildUserTurn, historyChars, historyMessages, quotedPageChars } from './prompt.ts';
+import { buildUserTurn, historyChars, historyMessages, memoryChars, quotedPageChars } from './prompt.ts';
+import type { RunMemory } from '../memory/repo.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
+import type { SkillIndex } from '../skills/runSkills.ts';
 import { promptCharCount } from './estimate.ts';
 import { extendRunReservation } from './extend.ts';
 import type { LoopBudget } from './loopBudget.ts';
-import { sourceChars } from './sources.ts';
+import { citationData, sourceChars } from './sources.ts';
 import { createToolPool } from '../tools/index.ts';
 import { buildRunTools } from './toolSet.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
@@ -59,6 +61,8 @@ export interface UpstreamRunInput {
 	pages: readonly PageContext[];
 	/** The sources of the answer: the chunks the retrieval found. */
 	sources: readonly RetrievedChunk[];
+	/** True when the search ran and found nothing that answers (no sources, by design). */
+	abstained?: boolean;
 	/**
 	 * The caller, when the run has one.
 	 *
@@ -77,6 +81,11 @@ export interface UpstreamRunInput {
 	 * adds its block to the prompt and narrows the tools to its own list.
 	 */
 	agent?: BuiltinAgent | null;
+	/** The skills the prompt lists (the agent's built-ins and the workspace's), and their workspace. */
+	skillIndex?: SkillIndex;
+	/** The approved memories of the caller, quoted in the user turn (devil C39). */
+	memories?: readonly RunMemory[];
+	workspaceId?: string;
 }
 
 /**
@@ -96,17 +105,19 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		history,
 		pages,
 		sources,
+		abstained = false,
 		user,
 		skippedPageIds,
 		userMessageId,
 		title,
 	} = input;
 	const images = input.images ?? [];
+	const memories = input.memories ?? [];
 	// The agent of the run: none is the general assistant.
 	const agent = input.agent ?? null;
 	// The system prompt of THIS run: the base one, or the one of the agent,
 	// whose data-boundary line comes last (devil C38).
-	const system = systemPromptFor(agent);
+	const system = systemPromptFor(agent, input.skillIndex);
 
 	const controller = new AbortController();
 	runStore.trackRun(runId, controller);
@@ -127,7 +138,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const promptChars = promptCharCount({
 		text,
 		historyChars: historyChars(history),
-		pageChars: quotedPageChars(pages),
+		pageChars: quotedPageChars(pages) + memoryChars(memories),
 		sourceChars: sourceChars(sources),
 		systemChars: system.length,
 	});
@@ -161,13 +172,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// sees them, before the first word of the answer. The number of a
 		// source is its rank: the first is [1], the second [2].
 		for (const [index, source] of sources.entries()) {
-			await emit('citation', {
-				n: index + 1,
-				pageId: source.pageId,
-				...(source.blockId ? { blockId: source.blockId } : {}),
-				title: source.title,
-				snippet: source.snippet,
-			});
+			await emit('citation', citationData(source, index + 1));
 		}
 
 		// The tools of the assistant: the search of a workspace, the read of
@@ -183,11 +188,13 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			pages,
 			sources,
 			agent,
+			skillIndex: input.skillIndex,
+			workspaceId: input.workspaceId,
 			emit: (type, data) => emit(type, data),
 		});
 		const tools = runTools.tools;
 
-		const userText = buildUserTurn(text, pages, sources);
+		const userText = buildUserTurn(text, pages, sources, memories, abstained);
 		const userContent = [
 			{ type: 'text' as const, text: userText },
 			...images.map((image) => ({ type: 'image' as const, image: image.data, mediaType: image.mediaType })),
@@ -256,11 +263,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				// model: the part of a source is its number minus one.
 				...runTools.cited.map((source, index) => ({
 					type: 'citation',
-					n: index + 1,
-					pageId: source.pageId,
-					...(source.blockId ? { blockId: source.blockId } : {}),
-					title: source.title,
-					snippet: source.snippet,
+					...citationData(source, index + 1),
 				})),
 				// The writes the run asked for: the card of each one. The
 				// approval id is what the client needs to draw the card again

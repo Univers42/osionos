@@ -62,6 +62,13 @@ const isAiGenerated: ExtraKeyCheck = (value) =>
   typeof value.runId === "string" &&
   typeof value.createdAt === "string";
 
+/** Tags of an image (as "Describe with AI" writes them): ≤ 10 strings of ≤ 40 chars. */
+const isMediaTags: ExtraKeyCheck = (value) =>
+  Array.isArray(value) && value.length <= 10 && value.every((t) => typeof t === "string" && t.length > 0 && t.length <= 40);
+
+const isMediaText: ExtraKeyCheck = (value) =>
+  typeof value === "string" && value.length > 0 && value.length <= 300;
+
 /** The allowlist of block attributes Markdown cannot carry; frozen, checks included. */
 export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.freeze({
   collapsed: isBoolean,
@@ -73,6 +80,7 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   fileName: isBoundedText,
   sqlMountId: isBoundedText,
   fieldBind: isBoundedText,
+  buttonProgram: isPlainRecord,
   mediaAspect: isBoundedText,
   viewId: isBoundedText,
   dueAt: isDueAt,
@@ -101,6 +109,9 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   // The provenance of an image the AI made (never the prompt): it rides the
   // overlay, so the "AI-generated" label survives a file round trip.
   aiGenerated: isAiGenerated,
+  // What "Describe with AI" found in an image: tags and the text in it.
+  mediaTags: isMediaTags,
+  mediaText: isMediaText,
 });
 
 /**

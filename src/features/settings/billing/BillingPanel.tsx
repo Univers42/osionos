@@ -10,17 +10,18 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useId, useMemo, useState } from 'react';
 
 // jszip / i18next / pdf-lib / qrcode are click-path only (export, language
 // change, invoice PDF, 2FA QR): they are imported dynamically at their call
 // sites so the settings chunk stays lean (~280KB of deps off its parse path).
 import { defaultBillingState } from '@/store/settings/defaults';
 import { useBillingStore, type BillingInvoice, type BillingState } from '@/store/settings';
-import { Button, Dropdown, Modal } from '@/shared/ui';
-import { DataTable, Section, SettingRow } from '../ui/settingsKit';
+import { Button, Modal } from '@/shared/ui';
+import { DataTable, PanelStatus, Section, SettingRow } from '../ui/settingsKit';
 import { downloadBlob, stringPayload } from '../model/settingsFiles';
 import { runAsync } from '../model/settingsCalls';
+import { useSettingsHydration } from '../model/settingsHydration';
 
 const EMPTY_BILLING_INVOICES: BillingInvoice[] = [];
 
@@ -36,14 +37,16 @@ export const BillingPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId =
   const invoices = useBillingStore((state) => state.invoices[workspaceId] ?? EMPTY_BILLING_INVOICES);
   const hydrate = useBillingStore((state) => state.hydrate);
   const update = useBillingStore((state) => state.update);
-  const addInvoice = useBillingStore((state) => state.addInvoice);
   const reset = useBillingStore((state) => state.reset);
   const fallbackBilling = useMemo<BillingState>(() => defaultBillingState(workspaceId), [workspaceId]);
   const billing = storedBilling ?? fallbackBilling;
   const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
 
-  useEffect(() => {
-    runAsync(hydrate(workspaceId));
+  // The store keeps a failed read in `error` instead of rejecting, so it is turned back into a rejection here.
+  const hydration = useSettingsHydration(async () => {
+    await hydrate(workspaceId);
+    const failure = useBillingStore.getState().error[workspaceId];
+    if (failure) throw new Error(failure);
   }, [hydrate, workspaceId]);
 
   function saveBillingEdit(value: string) {
@@ -61,8 +64,9 @@ export const BillingPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId =
   }
 
   return (
-    <>
-      <Section title="Plan"><SettingRow title={billing.plan} description="For students & educators" action={<Dropdown label="Billing plan" value={billing.plan} options={[{ value: 'Free', label: 'Free' }, { value: 'Education Plus', label: 'Education Plus' }, { value: 'Business', label: 'Business' }]} onChange={(value) => update(workspaceId, { plan: value })} align="end" width="auto" />} /></Section>
+    <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
+      {/* Removed, not disabled: the plan changes on the Explore plans page, and a control here that only edited a label looked like a purchase. */}
+      <Section title="Plan"><SettingRow title={billing.plan} description="Plans can't be changed here yet." /></Section>
       <Section title="Payment details">
         <SettingRow title="Payment method" description={billing.paymentMethod ? 'Configured' : 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'paymentMethod', label: 'Payment method' } })}>Edit method</Button>} />
         <SettingRow title="Billed to" description={billing.billedTo ? 'Configured' : 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'billedTo', label: 'Billed to' } })}>Edit information</Button>} />
@@ -71,12 +75,13 @@ export const BillingPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId =
         <SettingRow title="VAT/GST number" description={billing.vatNumber ?? 'None'} action={<Button onClick={() => setModal({ name: 'billing-edit', payload: { field: 'vatNumber', label: 'VAT/GST number' } })}>Edit number</Button>} />
       </Section>
       <Section title="Invoices">
-        <SettingRow title="Upcoming invoice" description={billing.upcomingInvoice ? 'Ready to review' : 'No upcoming invoice'} action={<Button onClick={() => runAsync(downloadInvoicePdf(addInvoice(workspaceId, { amount: 0, status: 'open' })))}>View invoice</Button>} />
+        <SettingRow title="Upcoming invoice" description={billing.upcomingInvoice ? 'Ready to review' : 'No upcoming invoice'} />
+        {invoices.length === 0 && <SettingRow title="No invoices yet" description="Invoices appear here once this workspace has been billed." />}
         {invoices.length > 0 && <DataTable className="mt-4" headers={['Invoice', 'Amount', 'Status', '']} rows={invoices.map((invoice) => [invoice.number, `${invoice.amount} ${invoice.currency}`, invoice.status, <Button key={`${invoice._id}-view`} onClick={() => runAsync(downloadInvoicePdf(invoice))}>View invoice</Button>])} />}
         <Button className="mt-3" onClick={() => reset(workspaceId)}>Reset to defaults</Button>
       </Section>
       {modal?.name === 'billing-edit' && <BillingEditModal label={stringPayload(modal.payload?.label, 'Billing')} onSave={saveBillingEdit} onClose={() => setModal(null)} />}
-    </>
+    </PanelStatus>
   );
 };
 
@@ -94,10 +99,12 @@ async function downloadInvoicePdf(invoice: BillingInvoice) {
 
 const BillingEditModal: React.FC<{ label: string; onSave: (value: string) => void; onClose: () => void }> = ({ label, onSave, onClose }) => {
   const [value, setValue] = useState('');
+  const inputId = useId();
   return (
     <Modal open onClose={onClose} title={label} size="sm">
       <div className="space-y-4">
-        <input className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={value} onChange={(event) => setValue(event.target.value)} placeholder={label} />
+        <label htmlFor={inputId} className="block text-sm font-medium text-[var(--osio-fg-default)]">{label}</label>
+        <input id={inputId} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={value} onChange={(event) => setValue(event.target.value)} placeholder={label} />
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onSave(value)}>Save</Button></div>
       </div>
     </Modal>

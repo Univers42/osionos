@@ -13,10 +13,25 @@ import type { QueryResultRow } from 'pg';
  * request: no token is ever stored in a row, an event or a log line.
  */
 
+/** Where an approval comes from: a run of the assistant, or the remote MCP endpoint. */
+export type ApprovalOrigin = 'run' | 'mcp';
+
+/**
+ * Who asks for the write, in the shape the row stores.
+ *
+ * A run names its run, its conversation and its owner. An MCP call names the
+ * personal access token that asked and its owner, and NO run: it is an
+ * outside agent's question, decided in osionos, and it never continues a run.
+ */
+export type ApprovalSource =
+	| { kind: 'run'; runId: string; conversationId: string; ownerId: string }
+	| { kind: 'mcp'; tokenId: string; ownerId: string };
+
 /** The states of an approval. */
 export type ApprovalStatus =
 	| 'pending'
 	| 'executing'
+	| 'partial'
 	| 'executed'
 	| 'failed'
 	| 'declined'
@@ -26,8 +41,14 @@ export type ApprovalStatus =
 /** The row of an approval: what the user is asked, and what became of it. */
 export interface ApprovalRow extends QueryResultRow {
 	id: string;
-	run_id: string;
-	conversation_id: string;
+	/** Where the question comes from. */
+	origin: ApprovalOrigin;
+	/** The run of a run-origin approval; null for an MCP one. */
+	run_id: string | null;
+	/** The conversation of a run-origin approval; null for an MCP one. */
+	conversation_id: string | null;
+	/** The personal access token of an MCP approval; null for a run one. */
+	token_id: string | null;
 	owner_id: string;
 	workspace_id: string;
 	tool: string;
@@ -62,8 +83,8 @@ export interface ApprovalTarget {
 	workspaceName: string;
 }
 
-/** What the preview of a write counts: the blocks of a page, or its sub-pages. */
-export type PreviewUnit = 'blocks' | 'sub_pages' | 'none';
+/** What the preview of a write counts: the blocks of a page, its sub-pages, or the items of a builder plan. */
+export type PreviewUnit = 'blocks' | 'sub_pages' | 'items' | 'none';
 
 /** The preview of a write: a number, and what the number is. */
 export interface ApprovalPreview {

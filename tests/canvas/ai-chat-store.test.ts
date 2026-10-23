@@ -162,8 +162,8 @@ test("the store keeps the sources of the answer", async () => {
 
   const assistant = s().messagesFor(conversation.id)[1];
   assert.deepEqual(citationsFromParts(assistant.parts), [
-    { n: 1, pageId: "page-a", blockId: "block-1", title: "Alpha", snippet: "the first source" },
-    { n: 2, pageId: "page-b", title: "Beta", snippet: "the second source" },
+    { n: 1, collection: "page", pageId: "page-a", blockId: "block-1", title: "Alpha", snippet: "the first source" },
+    { n: 2, collection: "page", pageId: "page-b", title: "Beta", snippet: "the second source" },
   ]);
 });
 

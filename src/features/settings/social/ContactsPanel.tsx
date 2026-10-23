@@ -12,54 +12,54 @@
 
 /** Settings panel: accepted connections + pending incoming/outgoing requests. */
 
-import React, { useEffect } from 'react';
+import React, { useState } from 'react';
+import { Users } from 'lucide-react';
 
-import { Button, Card, SectionHeader } from '@/shared/ui';
+import { Button } from '@/shared/ui';
 import { RequestsInbox } from '@/features/connections/RequestsInbox';
 import { useContactsStore } from '@/store/social/useContactsStore';
 import type { ContactEdge } from '@/store/social/types';
-
-function PeerRow({ edge, action }: { edge: ContactEdge; action: React.ReactNode }) {
-  return (
-    <li className="flex items-center gap-3">
-      <span className="min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">
-        {edge.peer.name}
-        {edge.introMessage ? <span className="text-[var(--osio-fg-muted)]"> — {edge.introMessage}</span> : null}
-      </span>
-      {action}
-    </li>
-  );
-}
+import { ConfirmModal } from '../ui/ConfirmModals';
+import { EmptyState, PanelStatus, Section, SettingRow } from '../ui/settingsKit';
+import { useSettingsHydration } from '../model/settingsHydration';
 
 export const ContactsPanel: React.FC = () => {
-  const { data, loading, hydrate, remove } = useContactsStore();
+  const data = useContactsStore((state) => state.data);
+  const hydrate = useContactsStore((state) => state.hydrate);
+  const remove = useContactsStore((state) => state.remove);
+  const [leaving, setLeaving] = useState<ContactEdge | null>(null);
 
-  useEffect(() => { void hydrate(); }, [hydrate]);
+  const hydration = useSettingsHydration(async () => {
+    await hydrate();
+    const failure = useContactsStore.getState().error;
+    if (failure) throw new Error(failure);
+  }, [hydrate]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <RequestsInbox />
-
-      <Card>
-        <div className="flex flex-col gap-3">
-          <SectionHeader title={`Connections (${data.length})`} />
-          {loading && data.length === 0 ? (
-            <p className="text-sm text-[var(--osio-fg-muted)]">Loading…</p>
-          ) : data.length === 0 ? (
-            <p className="text-sm text-[var(--osio-fg-muted)]">No connections yet.</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {data.map((edge) => (
-                <PeerRow
-                  key={edge.id}
-                  edge={edge}
-                  action={<Button tone="ghost" onClick={() => void remove(edge.id)}>Remove</Button>}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      </Card>
-    </div>
+    <Section title="Your connections" anchor="connections">
+      <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
+        <RequestsInbox />
+        {data.length === 0 ? (
+          <EmptyState icon={<Users size={16} />} title="No connections yet" hint="People you connect with show up here." />
+        ) : data.map((edge) => (
+          <SettingRow
+            key={edge.id}
+            title={edge.peer.name}
+            description={edge.introMessage || undefined}
+            action={<Button tone="danger-subtle" onClick={() => setLeaving(edge)}>Remove</Button>}
+          />
+        ))}
+      </PanelStatus>
+      {leaving && (
+        <ConfirmModal
+          title={`Remove ${leaving.peer.name}?`}
+          message="You will no longer be connected. They are not told, and you can send a new request later."
+          actionLabel="Remove"
+          danger
+          onConfirm={() => remove(leaving.id)}
+          onClose={() => setLeaving(null)}
+        />
+      )}
+    </Section>
   );
 };

@@ -31,19 +31,38 @@ import type { ChatMessagePart } from "./chatTypes";
 
 import { codeRegions } from "./markdownCode";
 
-/** One source of an answer: the page — and the block — it points at. */
-export interface Citation {
-  /** The number the answer cites this source by: `[n]`. */
-  n: number;
-  /** The page the source is in. */
-  pageId: string;
-  /** The block inside the page, when the source is one block. */
-  blockId?: string;
-  /** The title of the page — plain text. */
-  title: string;
-  /** The snippet the answer drew on — plain text. */
-  snippet: string;
-}
+/**
+ * One source of an answer: a page and the block it points at, or a passage of
+ * a curated knowledge pack.
+ *
+ * The wire omits `collection` for a page (it is the source the client has
+ * always read); `citationOf` normalises that absence to `'page'`.
+ */
+export type Citation =
+  | {
+      collection: "page";
+      /** The number the answer cites this source by: `[n]`. */
+      n: number;
+      /** The page the source is in. */
+      pageId: string;
+      /** The block inside the page, when the source is one block. */
+      blockId?: string;
+      /** The title of the page — plain text. */
+      title: string;
+      /** The snippet the answer drew on — plain text. */
+      snippet: string;
+    }
+  | {
+      collection: "pack";
+      /** The number the answer cites this source by: `[n]`. */
+      n: number;
+      /** The knowledge pack — its slug. */
+      pack: string;
+      /** The title of the passage — plain text. */
+      title: string;
+      /** The snippet the answer drew on — plain text. */
+      snippet: string;
+    };
 
 /** A piece of an answer: plain text, or a marker of a source. */
 export type AnswerSegment =
@@ -59,22 +78,51 @@ function citationNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
 }
 
+/** The slug of a knowledge pack, exactly as the service mints it. */
+const PACK_SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
+
 /**
- * A source out of a `citation` frame. A frame that does not carry a number and
- * a page is not a source: it is dropped, and the answer shows no marker for it.
+ * One source out of a record: a `citation` frame, or a stored `citation` part.
+ *
+ * A page source needs a non-empty string `pageId`; its `collection` is absent
+ * on the wire and normalised to `'page'`. A pack source needs
+ * `collection === 'pack'` and a `pack` slug. Anything else is not a source: it
+ * is dropped here, so both paths drop exactly the same records.
+ *
+ * `rank` is the number a stored part without an `n` falls back to; an event
+ * passes `null`, because a frame without a number is not a source.
  */
-export function citationFromEvent(data: Record<string, unknown>): Citation | null {
-  const n = citationNumber(data.n);
-  const pageId = typeof data.pageId === "string" ? data.pageId : "";
-  if (n === null || !pageId) return null;
-  const blockId = typeof data.blockId === "string" && data.blockId ? data.blockId : undefined;
+export function citationOf(record: Record<string, unknown>, rank: number | null): Citation | null {
+  const n = citationNumber(record.n) ?? rank;
+  if (n === null) return null;
+  const title = typeof record.title === "string" ? record.title : "";
+  const snippet = typeof record.snippet === "string" ? record.snippet : "";
+  if (record.collection === "pack") {
+    const pack = typeof record.pack === "string" ? record.pack : "";
+    if (!PACK_SLUG.test(pack)) return null;
+    return { collection: "pack", n, pack, title, snippet };
+  }
+  if (record.collection !== undefined && record.collection !== "page") return null;
+  const pageId = typeof record.pageId === "string" ? record.pageId : "";
+  if (!pageId) return null;
+  const blockId = typeof record.blockId === "string" && record.blockId ? record.blockId : undefined;
   return {
+    collection: "page",
     n,
     pageId,
     ...(blockId ? { blockId } : {}),
-    title: typeof data.title === "string" ? data.title : "",
-    snippet: typeof data.snippet === "string" ? data.snippet : "",
+    title,
+    snippet,
   };
+}
+
+/**
+ * A source out of a `citation` frame. A frame that does not carry a number and
+ * a page or a pack is not a source: it is dropped, and the answer shows no
+ * marker for it.
+ */
+export function citationFromEvent(data: Record<string, unknown>): Citation | null {
+  return citationOf(data, null);
 }
 
 /**
@@ -93,13 +141,8 @@ export function citationsFromParts(parts: ChatMessagePart[] | undefined): Citati
   const citations: Citation[] = [];
   for (const part of parts) {
     if (!part || part.type !== "citation") continue;
-    citations.push({
-      n: citationNumber(part.n) ?? citations.length + 1,
-      pageId: part.pageId,
-      ...(part.blockId ? { blockId: part.blockId } : {}),
-      title: part.title,
-      snippet: part.snippet,
-    });
+    const citation = citationOf(part, citations.length + 1);
+    if (citation) citations.push(citation);
   }
   return citations.sort((left, right) => left.n - right.n);
 }

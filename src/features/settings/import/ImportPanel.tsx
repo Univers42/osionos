@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useState } from 'react';
-import { Database, FileText, Upload } from 'lucide-react';
+import React, { useState } from 'react';
+import { Database, FileText, Inbox, Upload } from 'lucide-react';
 
 import { useUserStore } from '@/features/auth';
 import { usePageStore } from '@/store/usePageStore';
@@ -19,13 +19,14 @@ import { useImportHistoryStore, type ImportHistoryEntry } from '@/store/settings
 import { useAssetLibraryStore } from '@/shared/config/assetLibraryStore';
 import { importPageFile } from '@/services/page-actions';
 import { Button, Modal } from '@/shared/ui';
-import { DataTable, FeatureCard, MiniTabs, Section } from '../ui/settingsKit';
+import { DataTable, EmptyState, FeatureCard, MiniTabs, PanelStatus, Section } from '../ui/settingsKit';
 import { assetKindFromFile, formatBytes, readFileAsDataUrl, stringPayload } from '../model/settingsFiles';
 import { runAsync } from '../model/settingsCalls';
+import { useSettingsHydration } from '../model/settingsHydration';
 
 const EMPTY_IMPORT_HISTORY: ImportHistoryEntry[] = [];
 
-type SettingsModalName = 'typed-import' | 'provider-import';
+type SettingsModalName = 'typed-import';
 
 interface ActiveSettingsModal {
   name: SettingsModalName;
@@ -48,8 +49,11 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
   const files = ['CSV', 'PDF', 'Text & Markdown', 'HTML', 'Word'];
   const apps = ['Asana', 'Confluence', 'Trello', 'Workflowy', 'Evernote', 'Jira', 'Monday.com', 'Quip', 'Google Docs'];
 
-  useEffect(() => {
-    runAsync(hydrateHistory(workspaceId));
+  // The store keeps a failed read in `error` instead of rejecting, so it is turned back into a rejection here.
+  const hydration = useSettingsHydration(async () => {
+    await hydrateHistory(workspaceId);
+    const failure = useImportHistoryStore.getState().error[workspaceId];
+    if (failure) throw new Error(failure);
   }, [hydrateHistory, workspaceId]);
 
   async function importFiles(imports: File[]) {
@@ -91,17 +95,17 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
 
   if (activeImportTab === 'Completed') {
     return (
-      <>
+      <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
         <MiniTabs active={activeImportTab} onChange={setActiveImportTab} tabs={[{ label: 'Discover' }, { label: 'Completed', count: completedRows.length }]} />
         <Section title="Completed imports">
-          <DataTable headers={['Import', 'Size', 'Finished', '']} rows={completedRows.length ? completedRows : [['No completed imports yet', 'Local', '', '']]} />
+          <DataTable headers={['Import', 'Size', 'Finished', '']} rows={completedRows} empty={<EmptyState icon={<Inbox size={16} />} title="No completed imports yet" hint="Files you import show up here." />} />
         </Section>
-      </>
+      </PanelStatus>
     );
   }
 
   return (
-    <>
+    <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
       <MiniTabs active={activeImportTab} onChange={setActiveImportTab} tabs={[{ label: 'Discover' }, { label: 'Completed', count: completedRows.length }]} />
       <Section title="Import your content">
         <button type="button" className="w-full rounded-[var(--osio-radius-panel)] border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center" onClick={() => fileInputRef.current?.click()} onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
@@ -114,10 +118,9 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
         </button>
       </Section>
       <Section title="File-based imports"><div className="grid gap-3 sm:grid-cols-2">{files.map((file) => <FeatureCard key={file} icon={<FileText size={16} />} title={file} description={`Import ${file.toLowerCase()} content from files`} action={<Button onClick={() => setModal({ name: 'typed-import', payload: { kind: file } })}>Open</Button>} />)}</div></Section>
-      <Section title="Third-party imports"><div className="grid gap-3 sm:grid-cols-2">{apps.map((app) => <FeatureCard key={app} icon={<Database size={16} />} title={app} description={`Migrate content from ${app}`} action={<Button onClick={() => setModal({ name: 'provider-import', payload: { app } })}>Import</Button>} />)}</div></Section>
+      <Section title="Third-party imports"><div className="grid gap-3 sm:grid-cols-2">{apps.map((app) => <FeatureCard key={app} icon={<Database size={16} />} title={app} description="Not available yet" action={<Button disabled aria-label={`Import from ${app}`}>Import</Button>} />)}</div></Section>
       {modal?.name === 'typed-import' && <TypedImportModal kind={stringPayload(modal.payload?.kind, 'File')} onChoose={() => fileInputRef.current?.click()} onClose={() => setModal(null)} />}
-      {modal?.name === 'provider-import' && <ProviderImportModal app={stringPayload(modal.payload?.app, 'Provider')} workspaceId={workspaceId} activeUserId={activeUserId || 'anonymous'} addEntry={addImportEntry} addPage={addPage} jwt={jwt ?? ''} onClose={() => setModal(null)} />}
-    </>
+    </PanelStatus>
   );
 };
 
@@ -129,26 +132,3 @@ const TypedImportModal: React.FC<{ kind: string; onChoose: () => void; onClose: 
     </div>
   </Modal>
 );
-
-const ProviderImportModal: React.FC<{ app: string; workspaceId: string; activeUserId: string; jwt: string; addEntry: ReturnType<typeof useImportHistoryStore.getState>['addEntry']; addPage: ReturnType<typeof usePageStore.getState>['addPage']; onClose: () => void }> = ({ app, workspaceId, activeUserId, jwt, addEntry, addPage, onClose }) => {
-  const [progress, setProgress] = useState(20);
-  useEffect(() => {
-    const timer = globalThis.setInterval(() => setProgress((value) => Math.min(100, value + 20)), 180);
-    return () => globalThis.clearInterval(timer);
-  }, []);
-  useEffect(() => {
-    if (progress < 100) return;
-    runAsync(addPage(workspaceId, `${app} import`, jwt, undefined, { content: [{ id: `block-${Date.now()}`, type: 'paragraph', content: `${app} imported into osionos.`, children: [] }] }).then((page) => {
-      addEntry(workspaceId, { userId: activeUserId, workspaceId, source: app, fileName: `${app} migration`, byteSize: 0, status: 'completed', pageIds: page?._id ? [page._id] : [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
-    }));
-  }, [activeUserId, addEntry, addPage, app, jwt, progress, workspaceId]);
-  return (
-    <Modal open onClose={onClose} title={`${app} import`} size="sm">
-      <div className="space-y-4">
-        <div className="h-2 overflow-hidden rounded-xs bg-[var(--osio-bg-muted)]"><div className="h-full bg-[var(--osio-accent)] transition-all" style={{ width: `${progress}%` }} /></div>
-        <p className="text-sm text-[var(--osio-fg-muted)]">{progress >= 100 ? 'Import completed.' : 'Importing workspace content...'}</p>
-        <div className="flex justify-end"><Button tone="primary" onClick={onClose}>Done</Button></div>
-      </div>
-    </Modal>
-  );
-};

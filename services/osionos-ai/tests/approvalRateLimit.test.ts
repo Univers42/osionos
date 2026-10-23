@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, describe, it } from 'node:test';
-import { startHarness } from './harness.ts';
+import { startHarness, awaitWindowRoom } from './harness.ts';
 
 /**
  * The decision route is rate-limited like a run.
@@ -25,6 +25,7 @@ const USER_C = '33333333-3333-4333-8333-333333333333';
 
 describe('the rate limit of the decisions', () => {
 	it('the third decision of the window is refused', async () => {
+		await awaitWindowRoom();
 		const token = tokenFor(USER_C, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
 		const id = randomUUID();
 		const first = await call(`/api/ai/approvals/${id}`, { method: 'POST', token, body: { decision: 'approve' } });

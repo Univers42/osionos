@@ -4,6 +4,7 @@ import type { IncomingMessage } from 'node:http';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
 import { authenticatePat } from '../src/pat/authenticatePat.ts';
+import { awaitWindowRoom } from './harness.ts';
 
 /**
  * The personal access tokens (G4a).
@@ -298,6 +299,7 @@ describe('osionos-ai personal access tokens', () => {
 	});
 
 	it('a user mints five tokens in a minute, and the sixth is refused', async () => {
+		await awaitWindowRoom();
 		const session = tokenFor(USER_B, WORKSPACE_B);
 		for (let round = 0; round < 5; round += 1) {
 			const answer = await call('/api/ai/access-tokens', {

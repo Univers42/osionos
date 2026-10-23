@@ -150,7 +150,7 @@ export const searchWorkspace: ReadTool<z.infer<typeof searchArgs>, SearchData> =
 			return { ok: false, error: 'the search failed: the pages could not be reached' };
 		}
 	},
-	render(data, cites) {
+	render(data, cites, authorOf) {
 		if (data.chunks.length === 0) return 'No page of your workspaces answers that search.';
 		// A passage the run already quoted is NOT quoted again: it keeps
 		// the number it was given, and the model is told it matches.
@@ -159,7 +159,7 @@ export const searchWorkspace: ReadTool<z.infer<typeof searchArgs>, SearchData> =
 		for (const [index, chunk] of data.chunks.entries()) {
 			const cite = cites[index];
 			if (cite.fresh) {
-				blocks.push(sourceBlock(chunk, cite.n));
+				blocks.push(sourceBlock(chunk, cite.n, authorOf?.(chunk.pageId)));
 				continue;
 			}
 			if (!already.includes(cite.n)) already.push(cite.n);
@@ -214,14 +214,15 @@ export const readPage: ReadTool<z.infer<typeof readPageArgs>, ReadPageData> = {
 			},
 		};
 	},
-	render(data) {
-		const block = pageBlock({ id: data.pageId, title: data.title, text: data.text });
+	render(data, _cites, authorOf) {
+		const block = pageBlock({ id: data.pageId, title: data.title, text: data.text }, authorOf?.(data.pageId));
 		if (!data.truncated) return block;
 		return `${block}\n\n(this page is longer: this is its first ${TOOL_PAGE_CHARS} characters)`;
 	},
 	sources(data) {
 		return [
 			{
+				collection: 'page',
 				pageId: data.pageId,
 				blockId: null,
 				title: data.title,

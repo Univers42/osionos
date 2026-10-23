@@ -29,6 +29,7 @@ import { timed } from '@osionos/perf-probe';
 import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 import { usePageStore } from "@/store/usePageStore";
+import { runButtonBlock } from "@/services/button-program/runProgram";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 
 // Async boundary: database blocks are rare in rendered pages. Loading the
@@ -603,14 +604,27 @@ function buttonPageRef(href: string | undefined): string | null {
  * Read-only CTA/link button. Presentational + safe — never renders raw user HTML.
  * `page://<id>` opens the workspace page; a `/...` path is an anchor; anything
  * else (or empty) renders a plain styled button with no navigation.
+ * A block carrying a `buttonProgram` runs it on click and ignores the href: the
+ * program is the button's behaviour (an invalid one toasts and does nothing).
+ * `hostPageId` is given by the editor; read-only callers do not know their page.
  */
-const ButtonBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
+export const ButtonBlockReadOnly: React.FC<{ block: Block; hostPageId?: string }> = ({ block, hostPageId }) => {
   const label = block.buttonLabel || block.content || "Button";
   const href = block.buttonHref;
   const className = `${BUTTON_BASE_CLASS} ${buttonVariantClass(block.buttonVariant)}`;
   const pageId = buttonPageRef(href);
   const openPage = usePageStore((s) => s.openPage);
   const page = usePageStore((s) => (pageId ? s.pageById(pageId) : undefined));
+
+  if (block.buttonProgram !== undefined) {
+    return (
+      <div className="py-1">
+        <button type="button" className={className} onClick={() => void runButtonBlock(block, hostPageId)}>
+          {label}
+        </button>
+      </div>
+    );
+  }
 
   if (pageId) {
     return (

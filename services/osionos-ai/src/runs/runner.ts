@@ -13,13 +13,17 @@ import {
 	historyChars,
 	loadHistory,
 	loadPageContext,
+	memoryChars,
 	quotedPageChars,
 } from './prompt.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
+import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
+import { memoriesForRun } from '../memory/runMemories.ts';
+import { recordMemoryPins } from '../memory/repo.ts';
 import { estimateRunMicroUsd } from './estimate.ts';
 import { sourceChars } from './sources.ts';
-import { retrieve } from '../retrieval/search.ts';
+import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import { fetchAttachment } from '../vision/fetchAttachment.ts';
@@ -89,6 +93,8 @@ export interface StartRunInput {
 	 * to its own list — it never gains one.
 	 */
 	agent?: BuiltinAgent | null;
+	/** The workspace of the conversation: its skills join the prompt, when the caller is a live member. */
+	workspaceId?: string;
 	/** Where the model is called, and who pays for it. */
 	target: ResolvedTarget;
 	emit: (event: RunEvent) => void;
@@ -117,19 +123,32 @@ const PREFLIGHT_ERRORS: Record<string, number> = {
  * A run without a search has no sources, and a search that fails has none
  * either: the embedding service may be down, and an answer without sources
  * is better than no answer. The failure is logged once, and the run goes on.
+ *
+ * When the reranker scored the chunks and even the best is under the
+ * abstention threshold, the run quotes none and tells the model the question
+ * was not found in the workspace (`abstained`).
  */
 async function findSources(
 	db: Pool,
 	input: StartRunInput,
 	text: string,
-): Promise<RetrievedChunk[]> {
-	if (input.searchWorkspace !== true || !input.user) return [];
+): Promise<{ sources: RetrievedChunk[]; abstained: boolean }> {
+	const packs = input.agent?.knowledge ?? [];
+	const pages = input.searchWorkspace === true;
+	// A run without a caller has no retrieval at all; a run with neither a
+	// workspace search nor a pack has nothing to look for.
+	if (!input.user || (!pages && packs.length === 0)) return { sources: [], abstained: false };
 	try {
-		return await retrieve(db, input.user, { query: text });
+		// The pages only when the client asked for the workspace search; the
+		// packs whenever the agent carries knowledge, whether or not it did
+		// (C34). The packs need no membership: they are tenant-free.
+		const chunks = await retrieve(db, input.user, { query: text, pages, packs });
+		if (shouldAbstain(chunks, abstainThreshold())) return { sources: [], abstained: true };
+		return { sources: chunks, abstained: false };
 	} catch (error) {
 		const code = error instanceof Error ? error.message : 'retrieval_failed';
 		console.warn(JSON.stringify({ event: 'retrieval_failed', code }));
-		return [];
+		return { sources: [], abstained: false };
 	}
 }
 
@@ -237,7 +256,19 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// the question. They are read before the money moves too: they are part of
 	// the prompt. A retrieval that fails is not a failure of the run: the run
 	// goes on without sources, and the failure is logged once.
-	const sources = await findSources(db, input, text);
+	const { sources, abstained } = await findSources(db, input, text);
+	// The skills index of THIS run: the agent's built-ins and the workspace's
+	// skills, built once so the reservation counts the prompt the call sends.
+	const skillIndex = buildSkillIndex(
+		agent?.skills ?? [],
+		await workspaceSkillsForRun(db, input.user, input.workspaceId),
+	);
+	// The user's approved memories, loaded ONCE for this run and pinned on its
+	// row (C40): a continuation run loads its own, as skills do. The pin is what
+	// the run was GIVEN, recorded before it executes: a run that fails before
+	// the upstream call still lists them.
+	const memories = await memoriesForRun(db, input.user, input.workspaceId);
+	await recordMemoryPins(db, runId, memories);
 	const day = today();
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
@@ -245,11 +276,11 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const baseAmount = estimateRunMicroUsd(target.pricing, {
 		text,
 		historyChars: historyChars(history),
-		pageChars: quotedPageChars(context.pages),
+		pageChars: quotedPageChars(context.pages) + memoryChars(memories),
 		sourceChars: sourceChars(sources),
 		// The system prompt of THIS run: the base one, or the longer one of
 		// the agent. The reservation counts what the call really sends.
-		systemChars: systemPromptFor(agent).length,
+		systemChars: systemPromptFor(agent, skillIndex).length,
 	});
 	const imageMicroUsd = Math.ceil(
 		(images.length * config.visionTokensPerImage * target.pricing.inputMicroUsdPerMTok) / 1e6,
@@ -299,12 +330,16 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			history,
 			pages: context.pages,
 			sources,
+			abstained,
 			user: input.user,
 			skippedPageIds: context.skippedPageIds,
 			userMessageId: userMessage.id,
 			title,
 			images,
 			agent,
+			skillIndex,
+			memories,
+			workspaceId: input.workspaceId,
 		});
 	};
 	return { kind: 'started', run: (await getRun(db, runId)) as RunRow, execute };

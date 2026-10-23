@@ -32,6 +32,7 @@ import { ApiKeyForm, EndpointForm } from "./aiConnectionForms";
 import { ConnectionList } from "./aiConnectionList";
 import { CHIP, PRIMARY_BUTTON, SECONDARY_BUTTON } from "./aiPanelClasses";
 import { OPENCODE_PROVIDER, useAiConnections } from "./useAiConnections";
+import { AiDeviceConnectionSection } from "./AiDeviceConnectionSection";
 
 export const AiConnectionsPanel: React.FC = () => {
   const {
@@ -190,6 +191,8 @@ export const AiConnectionsPanel: React.FC = () => {
             />
           ) : null}
         </ChoiceCard>
+
+        <AiDeviceConnectionSection />
 
         {/* The subscriptions: not ours to offer, and not ours to promise. */}
         <div className="rounded-lg border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-3">
