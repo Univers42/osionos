@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 import type { Pool } from 'pg';
 import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
-import { startHarness } from './harness.ts';
+import { startHarness, awaitWindowRoom } from './harness.ts';
 import { startMockEmbedder } from './mockEmbed.ts';
 import { Seeds, USER_A, WORKSPACE_A, vectorOf } from './retrievalSeed.ts';
 
@@ -40,6 +40,7 @@ const QUERY = 'zorblax quux';
 
 describe('the rate limit of the sources', () => {
 	it('the 3rd call in the window is 429', async () => {
+		await awaitWindowRoom();
 		await seeds.page({
 			workspaceId: WORKSPACE_A,
 			ownerId: USER_A,
