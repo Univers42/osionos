@@ -22,6 +22,7 @@ import { handleRelated } from './related.ts';
 import { handleSources } from './sources.ts';
 import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
 import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
+import { handleSentimentRows } from './sentimentRows.ts';
 import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
 import { handleMcp } from './mcp.ts';
@@ -149,6 +150,12 @@ export const ROUTES: RouteEntry[] = [
 		pattern: /^\/api\/ai\/pages\/([^/]+)\/sentiment\/mood$/,
 		label: '/api/ai/pages/:pageId/sentiment/mood',
 		handle: handleSentimentMood,
+	},
+	{
+		methods: ['GET'],
+		pattern: /^\/api\/ai\/sentiment\/rows$/,
+		label: '/api/ai/sentiment/rows',
+		handle: handleSentimentRows,
 	},
 	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
 	...(config.patEnabled
