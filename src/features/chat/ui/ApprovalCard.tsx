@@ -42,9 +42,11 @@ import {
   expiryWords,
   previewWords,
   refusalWords,
+  resumeApprovalCard,
   stateWords,
 } from "../model/approvalCard";
 import { fetchApproval, type ApprovalChoice, type ApprovalDescription } from "../model/approvals";
+import { decisionItems, keptKeys, planTree, type PlanNode } from "../model/planTree";
 
 export interface ApprovalCardProps {
   /** The id of the approval: the card asks the service about it. */
@@ -74,6 +76,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [off, setOff] = useState<Set<string>>(() => new Set());
 
   // The card the client does not hold: the service rebuilds it from the row.
   // This is the path of a reloaded conversation.
@@ -94,10 +97,10 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
   }, [approvalId, held]);
 
   /** The decision of the user: one click, one POST. */
-  const decide = async (choice: ApprovalChoice): Promise<void> => {
+  const decide = async (choice: ApprovalChoice, items?: string[]): Promise<void> => {
     setBusy(true);
     setFailure("");
-    const outcome = await decideApprovalCard(approvalId, choice);
+    const outcome = await decideApprovalCard(approvalId, choice, items);
     setBusy(false);
     if (outcome.kind === "busy") return;
     if (outcome.kind === "conflict") {
@@ -114,17 +117,55 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     if (outcome.continuationRunId) onContinuation?.(outcome.continuationRunId);
   };
 
+  const toggle = (key: string, currentlyOn: boolean): void => {
+    setOff((prev) => {
+      const next = new Set(prev);
+      if (currentlyOn) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  };
+
+  const resume = async (): Promise<void> => {
+    setBusy(true);
+    setFailure("");
+    const outcome = await resumeApprovalCard(approvalId);
+    setBusy(false);
+    if (outcome.kind === "busy") return;
+    if (outcome.kind === "conflict") {
+      setApproval(outcome.approval);
+      return;
+    }
+    if (outcome.kind === "failed") {
+      setFailure(refusalWords(outcome.code));
+      return;
+    }
+    setError(outcome.error);
+    setApproval((current) => (current ? { ...current, status: outcome.status } : current));
+    if (outcome.continuationRunId) onContinuation?.(outcome.continuationRunId);
+  };
+
   const state = approvalCardState(approval?.status ?? "pending");
   const target = approval?.target;
   const titles = props.provenanceTitles ?? [];
   const pageId = target?.pageId;
+  const isPlan = approval?.tool === "build_plan";
+  const tree = isPlan && approval ? planTree(approval.args) : null;
+  const isPlanCard = isPlan && tree !== null;
+  const keptCount = tree ? keptKeys(tree, off).length : 0;
+  const totalCount = tree ? tree.length : 0;
 
   return React.createElement(
     "div",
     { className: CARD, "data-testid": "chat-approval-card", "data-status": state },
     heading(approval),
     target ? targetLine(target.title, target.workspaceName || target.workspaceId) : null,
-    approval ? argsBlock(approvalArgs(approval.args)) : null,
+    isPlanCard && tree
+      ? planTreeBlock(tree, off, toggle)
+      : (approval ? argsBlock(approvalArgs(approval.args)) : null),
+    isPlanCard && tree
+      ? React.createElement("p", { className: "mb-1 text-[var(--osio-fg-muted)]" }, `${keptCount} of ${totalCount} will be created`)
+      : null,
     previewWords(approval?.preview) ? previewLine(previewWords(approval?.preview)) : null,
     titles.length > 0 ? noteLine(`Asked from: ${titles.join(", ")}`) : null,
     approvedInRunWords(approval?.approvedInRun ?? 0)
@@ -139,10 +180,27 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     failure ? stateLine(failure) : null,
     !approval ? stateLine("The card of this request is loading…") : null,
     approval && state === "pending"
-      ? actions(busy, decide)
+      ? actions(busy, decide, isPlanCard ? keptCount === 0 : false, isPlanCard && tree ? decisionItems(tree, off) : undefined)
       : state === "executed" && pageId
         ? openButton(pageId, onOpenPage)
         : null,
+    state === "partial"
+      ? React.createElement(
+          "div",
+          { className: "mt-2 flex items-center gap-2" },
+          React.createElement(
+            "button",
+            {
+              type: "button",
+              className: BUTTON,
+              disabled: busy,
+              onClick: () => void resume(),
+              "aria-label": "Resume",
+            },
+            "Resume",
+          ),
+        )
+      : null,
   );
 };
 
@@ -210,8 +268,65 @@ function stateLine(text: string, spinning = false): React.ReactElement {
   );
 }
 
+/** The tree of a plan: an indented list of checkboxes. */
+function planTreeBlock(
+  nodes: PlanNode[],
+  off: Set<string>,
+  onToggle: (key: string, currentlyOn: boolean) => void,
+): React.ReactElement {
+  const ancestorOffMap = new Map<string, boolean>();
+  for (const node of nodes) {
+    let offAncestor = false;
+    let pk = node.parentKey;
+    const seen = new Set<string>();
+    while (pk !== null) {
+      if (off.has(pk)) {
+        offAncestor = true;
+        break;
+      }
+      if (seen.has(pk)) break;
+      seen.add(pk);
+      const parent = nodes.find((candidate) => candidate.key === pk);
+      pk = parent ? parent.parentKey : null;
+    }
+    ancestorOffMap.set(node.key, offAncestor);
+  }
+
+  const items = nodes.map((node) => {
+    const isOffAncestor = ancestorOffMap.get(node.key) ?? false;
+    const nodeOff = off.has(node.key);
+    const checked = !nodeOff && !isOffAncestor;
+    const disabled = isOffAncestor;
+    return React.createElement(
+      "li",
+      { key: node.key, style: { paddingLeft: `${(node.depth - 1) * 16}px` } },
+      React.createElement(
+        "label",
+        null,
+        React.createElement("input", {
+          type: "checkbox",
+          checked,
+          disabled,
+          onChange: () => onToggle(node.key, checked),
+        }),
+        " ",
+        node.title,
+        " ",
+        React.createElement("span", { className: "text-[var(--osio-fg-subtle)]" }, node.kind),
+      ),
+    );
+  });
+
+  return React.createElement("ul", null, ...items);
+}
+
 /** The buttons of the card: the decision, and nothing else. */
-function actions(busy: boolean, decide: (choice: ApprovalChoice) => Promise<void>): React.ReactElement {
+function actions(
+  busy: boolean,
+  decide: (choice: ApprovalChoice, items?: string[]) => Promise<void>,
+  approveDisabled = false,
+  approveItems?: string[],
+): React.ReactElement {
   return React.createElement(
     "div",
     { className: "mt-2 flex items-center gap-2" },
@@ -220,8 +335,8 @@ function actions(busy: boolean, decide: (choice: ApprovalChoice) => Promise<void
       {
         type: "button",
         className: BUTTON,
-        disabled: busy,
-        onClick: () => void decide("approve"),
+        disabled: busy || approveDisabled,
+        onClick: () => void decide("approve", approveItems),
         "aria-label": "Approve this write",
       },
       "Approve",

@@ -28,6 +28,7 @@
 import {
   decideApproval,
   fetchApproval,
+  resumeApproval,
   ApprovalError,
   type ApprovalChoice,
   type ApprovalDescription,
@@ -51,7 +52,8 @@ export function approvalCardState(status: string): ApprovalCardState {
     status === "executed" ||
     status === "failed" ||
     status === "declined" ||
-    status === "expired"
+    status === "expired" ||
+    status === "partial"
   ) {
     return status;
   }
@@ -66,6 +68,7 @@ export function stateWords(state: ApprovalCardState, error?: string | null): str
   if (state === "expired") return "Expired — ask again";
   if (state === "unknown") return "May have been written — check the page";
   if (state === "failed") return error ? `The write failed: ${error}` : "The write failed.";
+  if (state === "partial") return "Partly built — resume to finish";
   return "";
 }
 
@@ -187,11 +190,44 @@ const deciding = new Set<string>();
 export async function decideApprovalCard(
   approvalId: string,
   decision: ApprovalChoice,
+  items?: string[],
 ): Promise<ApprovalOutcome> {
   if (deciding.has(approvalId)) return { kind: "busy" };
   deciding.add(approvalId);
   try {
-    const answer = await decideApproval(approvalId, decision);
+    const answer = await decideApproval(approvalId, decision, items);
+    return {
+      kind: "decided",
+      status: answer.status,
+      continuationRunId: answer.continuationRunId,
+      error: answer.error ?? null,
+    };
+  } catch (error) {
+    if (error instanceof ApprovalError && error.status === 409) {
+      const approval = await fetchApproval(approvalId).catch(() => null);
+      if (approval) return { kind: "conflict", approval };
+    }
+    const code = error instanceof ApprovalError ? error.code : "unknown";
+    return { kind: "failed", code };
+  } finally {
+    deciding.delete(approvalId);
+  }
+}
+
+/**
+ * The resume of a partial approval: build the rest of it.
+ *
+ * Uses the SAME in-flight guard as the decision: one click, one POST, also
+ * across two windows.
+ *
+ * A 409 — the approval is not partial any more — is NOT a failure: the card
+ * is fetched again, and it shows what really happened.
+ */
+export async function resumeApprovalCard(approvalId: string): Promise<ApprovalOutcome> {
+  if (deciding.has(approvalId)) return { kind: "busy" };
+  deciding.add(approvalId);
+  try {
+    const answer = await resumeApproval(approvalId);
     return {
       kind: "decided",
       status: answer.status,
