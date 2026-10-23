@@ -21,6 +21,11 @@ function firstEnv(...names: string[]): string | undefined {
 
 export type { PlatformModelEntry } from './platformModels.ts';
 
+/** The entries of a comma list, trimmed, the empty ones dropped. */
+function commaList(value: string | undefined): string[] {
+	return (value ?? '').split(',').map((entry) => entry.trim()).filter((entry) => entry !== '');
+}
+
 const envSchema = z.object({
 	OSIONOS_AI_PORT: z.coerce.number().int().min(0).max(65_535).default(4300),
 	OSIONOS_AI_DATABASE_URL: z.string().min(1),
@@ -43,6 +48,10 @@ const envSchema = z.object({
 	// the most expensive read of the service, and it has its own budget so a
 	// client that hammers it cannot spend the budget of the runs.
 	OSIONOS_AI_RELATED_PER_MINUTE: z.coerce.number().int().positive().default(60),
+	// The window of the device-run sources: the chunks a device run would have
+	// quoted, served on the run's own access path. Its own budget, so a client
+	// that searches cannot spend the budget of the runs or of the related reads.
+	OSIONOS_AI_SOURCES_PER_MINUTE: z.coerce.number().int().positive().default(30),
 	// The KEK of the users' own connections: the base64 of exactly 32 bytes.
 	// Without it the service serves the platform connection only, and the
 	// creation of a connection answers 503 connections_unavailable.
@@ -76,10 +85,23 @@ const envSchema = z.object({
 	// leaves it empty until the prompt gate (devil C72) and the output gate
 	// (C73) exist. Off, the route does not exist.
 	OSIONOS_AI_IMAGES: z.string().optional(),
+	// The builder tool (P6a). OFF unless exactly "on": the public overlay leaves
+	// it empty. Off, `build_plan` is not in any tool set.
+	OSIONOS_AI_BUILDERS: z.string().optional(),
+	// The time budget of one build, in milliseconds (P6a-3b): the plan is built
+	// item by item until this runs out, and the rest is left to resume.
+	OSIONOS_AI_BUILD_BUDGET_MS: z.coerce.number().int().positive().default(25_000),
 	// The personal access tokens. OFF unless exactly "on": the public overlay
 	// leaves it empty until the G4 conditions C112-C120 are merged (devil
 	// verdict g-graph-diagrams-mcp-verdict.md). Off, the routes do not exist.
 	OSIONOS_AI_PAT: z.string().optional(),
+	// The remote MCP endpoint (G4b, devil C118). Comma lists, added to the
+	// loopback defaults: the hosts the endpoint answers to (the public host
+	// goes here, only when the deployment has one) and the browser origins
+	// that may reach it. An empty origin list refuses every request that
+	// carries an Origin header; agents that are not browsers send none.
+	OSIONOS_AI_MCP_ALLOWED_HOSTS: z.string().optional(),
+	OSIONOS_AI_MCP_ALLOWED_ORIGINS: z.string().optional(),
 	// The image engine: INTERNAL, the OpenAI-compatible base URL of sd-server
 	// (`…/v1`), a deployment setting and never a caller's. Required when on.
 	OSIONOS_AI_IMAGE_URL: z.string().optional(),
@@ -110,6 +132,19 @@ const envSchema = z.object({
 	// The deadline of one call to the guard: A1 measured 5389 ms at p95 with
 	// four clients at once, and 9.5 ms for a server that is not there.
 	OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+	// "Describe image" (M7): the INTERNAL llama-server with the vision model
+	// (`/v1/chat/completions`). Unset or empty = the route is a 404.
+	OSIONOS_AI_VLM_URL: z.string().optional(),
+	// The model name and revision key the cache: a new revision is a new row.
+	// The default is the Qwen2.5-VL-3B Q4_K_M of spikes/a1/models.lock.
+	OSIONOS_AI_VLM_MODEL: z.string().min(1).default('qwen2.5-vl-3b-instruct-q4_k_m'),
+	OSIONOS_AI_VLM_REVISION: z.string().min(1).default('5037fcf163dd95d1e41d1974465f0898ed108ca2'),
+	// One CPU describe took tens of seconds under load (spikes/a1/results/vlm).
+	OSIONOS_AI_VLM_TIMEOUT_MS: z.coerce.number().int().positive().default(90_000),
+	// How long a request waits for the single slot before a 429.
+	OSIONOS_AI_VLM_QUEUE_WAIT_MS: z.coerce.number().int().positive().default(30_000),
+	// The describes of one user in a minute (the window of the rate limiter).
+	OSIONOS_AI_DESCRIBE_PER_MINUTE: z.coerce.number().int().positive().default(6),
 });
 
 const rawEnv = {
@@ -132,6 +167,7 @@ const rawEnv = {
 	OSIONOS_AI_PLATFORM_DAILY_MICROUSD: process.env.OSIONOS_AI_PLATFORM_DAILY_MICROUSD,
 	OSIONOS_AI_RUNS_PER_MINUTE: process.env.OSIONOS_AI_RUNS_PER_MINUTE,
 	OSIONOS_AI_RELATED_PER_MINUTE: process.env.OSIONOS_AI_RELATED_PER_MINUTE,
+	OSIONOS_AI_SOURCES_PER_MINUTE: process.env.OSIONOS_AI_SOURCES_PER_MINUTE,
 	OSIONOS_AI_KEK: firstEnv('OSIONOS_AI_KEK'),
 	OSIONOS_AI_KEK_ID: process.env.OSIONOS_AI_KEK_ID,
 	OSIONOS_AI_DEV_ENDPOINT_HOSTS: process.env.OSIONOS_AI_DEV_ENDPOINT_HOSTS,
@@ -143,7 +179,11 @@ const rawEnv = {
 	OSIONOS_AI_STT_TIMEOUT_MS: process.env.OSIONOS_AI_STT_TIMEOUT_MS,
 	OSIONOS_AI_STT_SECONDS_PER_DAY: process.env.OSIONOS_AI_STT_SECONDS_PER_DAY,
 	OSIONOS_AI_IMAGES: process.env.OSIONOS_AI_IMAGES,
+	OSIONOS_AI_BUILDERS: process.env.OSIONOS_AI_BUILDERS,
+	OSIONOS_AI_BUILD_BUDGET_MS: process.env.OSIONOS_AI_BUILD_BUDGET_MS,
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
+	OSIONOS_AI_MCP_ALLOWED_HOSTS: process.env.OSIONOS_AI_MCP_ALLOWED_HOSTS,
+	OSIONOS_AI_MCP_ALLOWED_ORIGINS: process.env.OSIONOS_AI_MCP_ALLOWED_ORIGINS,
 	OSIONOS_AI_IMAGE_URL: firstEnv('OSIONOS_AI_IMAGE_URL'),
 	OSIONOS_AI_IMAGE_MODEL: process.env.OSIONOS_AI_IMAGE_MODEL,
 	OSIONOS_AI_IMAGE_MICROUSD: process.env.OSIONOS_AI_IMAGE_MICROUSD,
@@ -154,6 +194,12 @@ const rawEnv = {
 	OSIONOS_AI_PROMPT_GUARD_URL: process.env.OSIONOS_AI_PROMPT_GUARD_URL,
 	OSIONOS_AI_PROMPT_GUARD_MODEL: process.env.OSIONOS_AI_PROMPT_GUARD_MODEL,
 	OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS: process.env.OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS,
+	OSIONOS_AI_VLM_URL: process.env.OSIONOS_AI_VLM_URL,
+	OSIONOS_AI_VLM_MODEL: process.env.OSIONOS_AI_VLM_MODEL,
+	OSIONOS_AI_VLM_REVISION: process.env.OSIONOS_AI_VLM_REVISION,
+	OSIONOS_AI_VLM_TIMEOUT_MS: process.env.OSIONOS_AI_VLM_TIMEOUT_MS,
+	OSIONOS_AI_VLM_QUEUE_WAIT_MS: process.env.OSIONOS_AI_VLM_QUEUE_WAIT_MS,
+	OSIONOS_AI_DESCRIBE_PER_MINUTE: process.env.OSIONOS_AI_DESCRIBE_PER_MINUTE,
 };
 
 const parsed = envSchema.safeParse(rawEnv);
@@ -262,6 +308,8 @@ export interface AiServiceConfig {
 	runsPerMinute: number;
 	/** The window of the related reads: the calls per minute of one user. */
 	relatedPerMinute: number;
+	/** The window of the device-run sources: the calls per minute of one user. */
+	sourcesPerMinute: number;
 	/** The base64 of the 32 bytes of the KEK, or nothing when it is not set. */
 	kek?: string;
 	/** The name of the KEK: the rows carry it, so a rotation is possible. */
@@ -290,7 +338,15 @@ export interface AiServiceConfig {
 	sttSecondsPerDay: number;
 	/** The image generation is on: without it the route does not exist. */
 	imagesEnabled: boolean;
+	/** The builder tool `build_plan` is offered. */
+	buildersEnabled: boolean;
+	/** The time budget of one build, in milliseconds. */
+	buildBudgetMs: number;
 	patEnabled: boolean;
+	/** The hosts the MCP endpoint answers to (lower-case, loopback included). */
+	mcpAllowedHosts: readonly string[];
+	/** The browser origins that may reach the MCP endpoint: none by default. */
+	mcpAllowedOrigins: readonly string[];
 	/** The OpenAI-compatible base URL of the internal image engine. */
 	imageUrl?: string;
 	/** The model of the engine, as the provenance of an image names it. */
@@ -311,6 +367,13 @@ export interface AiServiceConfig {
 	promptGuardModel: string;
 	/** The deadline of one call to the prompt guard, in milliseconds. */
 	promptGuardTimeoutMs: number;
+	/** The base URL of the internal VLM; without it "Describe image" does not exist. */
+	vlmUrl?: string;
+	vlmModel: string;
+	vlmRevision: string;
+	vlmTimeoutMs: number;
+	vlmQueueWaitMs: number;
+	describePerMinute: number;
 }
 
 export const config: AiServiceConfig = Object.freeze({
@@ -333,6 +396,7 @@ export const config: AiServiceConfig = Object.freeze({
 	platformDailyMicroUsd: parsed.data.OSIONOS_AI_PLATFORM_DAILY_MICROUSD,
 	runsPerMinute: parsed.data.OSIONOS_AI_RUNS_PER_MINUTE,
 	relatedPerMinute: parsed.data.OSIONOS_AI_RELATED_PER_MINUTE,
+	sourcesPerMinute: parsed.data.OSIONOS_AI_SOURCES_PER_MINUTE,
 	kek: parsed.data.OSIONOS_AI_KEK,
 	kekId: parsed.data.OSIONOS_AI_KEK_ID,
 	devEndpointHosts: parseDevHosts(parsed.data.OSIONOS_AI_DEV_ENDPOINT_HOSTS),
@@ -344,7 +408,11 @@ export const config: AiServiceConfig = Object.freeze({
 	sttTimeoutMs: parsed.data.OSIONOS_AI_STT_TIMEOUT_MS,
 	sttSecondsPerDay: parsed.data.OSIONOS_AI_STT_SECONDS_PER_DAY,
 	imagesEnabled: parsed.data.OSIONOS_AI_IMAGES?.trim().toLowerCase() === 'on',
+	buildersEnabled: parsed.data.OSIONOS_AI_BUILDERS?.trim().toLowerCase() === 'on',
+	buildBudgetMs: parsed.data.OSIONOS_AI_BUILD_BUDGET_MS,
 	patEnabled: parsed.data.OSIONOS_AI_PAT?.trim().toLowerCase() === 'on',
+	mcpAllowedHosts: Object.freeze(['localhost', '127.0.0.1', ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),
+	mcpAllowedOrigins: Object.freeze(commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_ORIGINS)),
 	imageUrl: parsed.data.OSIONOS_AI_IMAGE_URL,
 	imageModel: parsed.data.OSIONOS_AI_IMAGE_MODEL,
 	imageMicroUsd: parsed.data.OSIONOS_AI_IMAGE_MICROUSD,
@@ -355,6 +423,12 @@ export const config: AiServiceConfig = Object.freeze({
 	promptGuardUrl: parsed.data.OSIONOS_AI_PROMPT_GUARD_URL,
 	promptGuardModel: parsed.data.OSIONOS_AI_PROMPT_GUARD_MODEL,
 	promptGuardTimeoutMs: parsed.data.OSIONOS_AI_PROMPT_GUARD_TIMEOUT_MS,
+	vlmUrl: parsed.data.OSIONOS_AI_VLM_URL?.trim().replace(/\/+$/, '') || undefined,
+	vlmModel: parsed.data.OSIONOS_AI_VLM_MODEL,
+	vlmRevision: parsed.data.OSIONOS_AI_VLM_REVISION,
+	vlmTimeoutMs: parsed.data.OSIONOS_AI_VLM_TIMEOUT_MS,
+	vlmQueueWaitMs: parsed.data.OSIONOS_AI_VLM_QUEUE_WAIT_MS,
+	describePerMinute: parsed.data.OSIONOS_AI_DESCRIBE_PER_MINUTE,
 });
 
 // The image generation, turned on, needs its engine, a price (an image is

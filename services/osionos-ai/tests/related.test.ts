@@ -2,8 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import type { Pool } from 'pg';
-import { signAppSessionToken } from '../../../scripts/bridge-session-token.mjs';
-import { startHarness } from './harness.ts';
+import { memberTokenFor as tokenFor, startHarness } from './harness.ts';
 import { vectorFor } from './mockEmbed.ts';
 import { USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } from './retrievalSeed.ts';
 
@@ -18,17 +17,6 @@ import { USER_A, USER_B, WORKSPACE_A, WORKSPACE_B } from './retrievalSeed.ts';
 
 const harness = await startHarness();
 const db: Pool = harness.app.db;
-const SECRET = process.env.OSIONOS_APP_SESSION_SECRET ?? '';
-
-/** A token that carries the member workspaces, the way the bridge mints one. */
-function tokenFor(userId: string, workspaceId: string, members: string[] = []): string {
-	return signAppSessionToken({
-		payload: { subject: userId, provider: 'test' },
-		workspace: { _id: workspaceId },
-		config: { appSessionSecret: SECRET, sessionTtlSeconds: 3600 },
-		memberWorkspaces: members.map((_id) => ({ _id, role: 'member' })),
-	}).token;
-}
 
 /** The vector of a topic: the same text always gives the same vector. */
 function vectorOf(topic: string): number[] {

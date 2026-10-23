@@ -7,6 +7,7 @@ import { handleAgents } from './agents.ts';
 import { handleComplete } from './complete.ts';
 import { handleVoiceTranscribe } from './voice.ts';
 import { handleImages } from './images.ts';
+import { handleMediaDescribe } from './mediaDescribe.ts';
 import { handleRunCancel, handleRunEvents, handleRuns } from './runs.ts';
 import {
 	handleConnectionDelete,
@@ -18,7 +19,10 @@ import {
 } from './connections.ts';
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
-import { handleApprovalDecision, handleApprovalGet } from './approvals.ts';
+import { handleSources } from './sources.ts';
+import { handleApprovalDecision, handleApprovalGet, handleApprovalResume } from './approvals.ts';
+import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
+import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
 import { handleSkillArchive, handleSkillCreate, handleSkillsList, handleSkillUpdate } from './skills.ts';
 import {
@@ -28,6 +32,7 @@ import {
 	handleMemoryEdit,
 	handleMemoryReject,
 } from './memories.ts';
+import { handleMcp } from './mcp.ts';
 import type { RouteEntry } from './types.ts';
 
 /**
@@ -63,6 +68,7 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/pages/:id/related',
 		handle: handleRelated,
 	},
+	{ methods: ['POST'], pattern: /^\/api\/ai\/sources$/, label: '/api/ai/sources', handle: handleSources },
 	{
 		methods: [],
 		pattern: /^\/api\/ai\/connections$/,
@@ -102,6 +108,12 @@ export const ROUTES: RouteEntry[] = [
 		handle: handleVoiceTranscribe,
 	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/images$/, label: '/api/ai/images', handle: handleImages },
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/media\/describe$/,
+		label: '/api/ai/media/describe',
+		handle: handleMediaDescribe,
+	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/runs$/, label: '/api/ai/runs', handle: handleRuns },
 	{
 		methods: ['GET'],
@@ -127,15 +139,40 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalDecision,
 	},
-	{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillsList },
-	{ methods: ['POST'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillCreate },
-	{ methods: ['PUT'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillUpdate },
-	{ methods: ['DELETE'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillArchive },
 	{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/memories$/, label: '/api/ai/workspaces/:ws/memories', handle: handleMemoriesList },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/approve$/, label: '/api/ai/memories/:id/approve', handle: handleMemoryApprove },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/reject$/, label: '/api/ai/memories/:id/reject', handle: handleMemoryReject },
 	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/archive$/, label: '/api/ai/memories/:id/archive', handle: handleMemoryArchive },
 	{ methods: ['PATCH'], pattern: /^\/api\/ai\/memories\/([^/]+)$/, label: '/api/ai/memories/:id', handle: handleMemoryEdit },
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/approvals\/([^/]+)\/resume$/,
+		label: '/api/ai/approvals/:id/resume',
+		handle: handleApprovalResume,
+	},
+	{
+		methods: [],
+		pattern: /^\/api\/ai\/workspaces\/([^/]+)\/sentiment\/settings$/,
+		label: '/api/ai/workspaces/:workspaceId/sentiment/settings',
+		handle: handleSentimentSettings,
+		anyMethod: true,
+	},
+	{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillsList },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillCreate },
+	{ methods: ['PUT'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillUpdate },
+	{ methods: ['DELETE'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillArchive },
+	{
+		methods: ['GET'],
+		pattern: /^\/api\/ai\/workspaces\/([^/]+)\/sentiment\/pulse$/,
+		label: '/api/ai/workspaces/:workspaceId/sentiment/pulse',
+		handle: handleSentimentPulse,
+	},
+	{
+		methods: ['GET'],
+		pattern: /^\/api\/ai\/pages\/([^/]+)\/sentiment\/mood$/,
+		label: '/api/ai/pages/:pageId/sentiment/mood',
+		handle: handleSentimentMood,
+	},
 	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
 	...(config.patEnabled
 		? [
@@ -152,6 +189,8 @@ export const ROUTES: RouteEntry[] = [
 				label: '/api/ai/access-tokens/:id',
 				handle: handleAccessTokenDelete,
 			},
+			// The remote MCP endpoint: PAT only, read only (G4b-1).
+			{ methods: [], pattern: /^\/api\/ai\/mcp$/, label: '/api/ai/mcp', handle: handleMcp, anyMethod: true },
 		]
 		: []),
 ];

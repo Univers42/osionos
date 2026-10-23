@@ -72,6 +72,7 @@ const HEX_ALLOWLIST = [
   "src/data/seedUserPages.ts", // seed page content that quotes CSS as text
   "src/entities/block/ui/CodeBlockReadOnly.tsx", // macOS window-control dots: fixed by the platform, not themed
   "src/features/block-editor/model/blockColors.ts", // contrast maths needs concrete text colours
+  "src/features/whiteboard/model/jsonCanvasCommon.ts", // the JSON Canvas preset colours are data, not styling
   "src/features/block-editor/model/inlineIconInsert.ts", // an SVG data URI cannot read page tokens
   "src/features/block-editor/ui/ColorProfilePanel.tsx", // <input type=color> accepts only #rrggbb
   "src/features/block-editor/ui/canvas/layout.constants.ts", // canvas card tint catalog

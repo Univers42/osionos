@@ -1,0 +1,49 @@
+{
+  "name": "image-tags",
+  "strict": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "caption": {
+        "type": "string",
+        "maxLength": 200
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 10
+      },
+      "objects": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "maxItems": 10
+      },
+      "ocr": {
+        "type": "string",
+        "maxLength": 300
+      },
+      "safety": {
+        "type": "string",
+        "enum": [
+          "safe",
+          "suggestive",
+          "explicit",
+          "violent",
+          "unknown"
+        ]
+      }
+    },
+    "required": [
+      "caption",
+      "tags",
+      "objects",
+      "ocr",
+      "safety"
+    ],
+    "additionalProperties": false
+  }
+}

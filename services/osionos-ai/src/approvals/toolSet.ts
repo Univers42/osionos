@@ -1,7 +1,8 @@
 import type { ToolSet } from 'ai';
 import { argsSha256 } from './canonical.ts';
 import { countExecutedInRun, insertApproval } from './repo.ts';
-import { WRITE_TOOLS } from '../tools/writeTools.ts';
+import { MAX_PLAN_ARGS_BYTES } from '../builders/planSchema.ts';
+import { writeTools } from '../tools/writeToolList.ts';
 import type { ToolHooks, ToolPool } from '../tools/index.ts';
 import type { WriteToolContext } from '../tools/types.ts';
 import type { ApprovalContext, PermissionAsked } from './types.ts';
@@ -36,7 +37,7 @@ export function writeToolSet(
 	approval: ApprovalContext,
 ): ToolSet {
 	const set: ToolSet = {};
-	for (const tool of WRITE_TOOLS) {
+	for (const tool of writeTools()) {
 		set[tool.name] = {
 			description: tool.description,
 			inputSchema: tool.input,
@@ -71,7 +72,7 @@ export function writeToolSet(
 				// The arguments are bounded: a page is not a megabyte, and the
 				// table of the approvals is not a bin.
 				const bytes = Buffer.byteLength(JSON.stringify(plan.data.args), 'utf8');
-				if (bytes > MAX_APPROVAL_ARGS_BYTES) {
+				if (bytes > (tool.name === 'build_plan' ? MAX_PLAN_ARGS_BYTES : MAX_APPROVAL_ARGS_BYTES)) {
 					await hooks.onResult?.({
 						toolCallId: options.toolCallId,
 						toolName: tool.name,
