@@ -66,9 +66,30 @@ export function markCitations(text: string, citations: Citation[]): string {
   return marked + text.slice(last);
 }
 
-/** The marker of a source: a small button that opens the page. */
-const CiteMarker: React.FC<{ citation: Citation; onCite: (citation: Citation) => void }> = ({ citation, onCite }) =>
-  React.createElement(
+/**
+ * The marker of a source.
+ *
+ * A page source is a small button that opens the page. A pack source is not a
+ * page: its marker is plain text, with the snippet as its tooltip, and it
+ * carries the same visual weight as the button.
+ */
+const CiteMarker: React.FC<{ citation: Citation; onCite: (citation: Citation) => void }> = ({ citation, onCite }) => {
+  if (citation.collection === "pack") {
+    return React.createElement(
+      "sup",
+      { className: "text-2xs" },
+      React.createElement(
+        "span",
+        {
+          className: "ml-0.5 rounded-xs bg-[var(--osio-accent-subtle)] px-1 text-[var(--osio-accent)]",
+          title: citation.snippet,
+          "aria-label": `Source ${citation.n}: ${citation.title}`,
+        },
+        String(citation.n),
+      ),
+    );
+  }
+  return React.createElement(
     "sup",
     { className: "text-2xs" },
     React.createElement(
@@ -83,6 +104,7 @@ const CiteMarker: React.FC<{ citation: Citation; onCite: (citation: Citation) =>
       String(citation.n),
     ),
   );
+};
 
 /**
  * The rendered answer, with every token turned into the button of its source.
@@ -141,7 +163,9 @@ export function renderCitedAnswer(
  * The sources of an answer, under it.
  *
  * Each source reads `n. Title`, and carries the snippet as its tooltip — the
- * text the answer drew on. Both are plain text.
+ * text the answer drew on. Both are plain text. A page source is a button that
+ * opens the page; a pack source is a plain line, labelled with where it comes
+ * from, because there is no page to open.
  */
 export function renderCitationSources(
   citations: Citation[],
@@ -163,17 +187,23 @@ export function renderCitationSources(
         React.createElement(
           "li",
           { key: citation.n },
-          React.createElement(
-            "button",
-            {
-              type: "button",
-              className: "text-left text-[var(--osio-accent)] underline-offset-2 hover:underline",
-              title: citation.snippet,
-              "aria-label": `Open source ${citation.n}: ${citation.title}`,
-              onClick: () => onOpen(citation),
-            },
-            `${citation.n}. ${citation.title}`,
-          ),
+          citation.collection === "pack"
+            ? React.createElement(
+                "span",
+                { className: "text-[var(--osio-fg-muted)]", title: citation.snippet },
+                `${citation.n}. ${citation.title} · osionos docs`,
+              )
+            : React.createElement(
+                "button",
+                {
+                  type: "button",
+                  className: "text-left text-[var(--osio-accent)] underline-offset-2 hover:underline",
+                  title: citation.snippet,
+                  "aria-label": `Open source ${citation.n}: ${citation.title}`,
+                  onClick: () => onOpen(citation),
+                },
+                `${citation.n}. ${citation.title}`,
+              ),
         ),
       ),
     ),
