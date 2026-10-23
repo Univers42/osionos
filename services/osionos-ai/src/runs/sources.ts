@@ -40,6 +40,18 @@ export function quotedData(text: string): string {
 	return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
+/**
+ * Neutralises the opening and closing sequence of the named tags in a body, so
+ * the text cannot close or open a block of ours (devil C38, C39).
+ *
+ * Caveat: only the named tags are neutralised (any case, with or without the
+ * slash); a body can still contain other tags, which the model reads as text
+ * inside the block — the data-boundary line is what covers those.
+ */
+export function escapeTags(body: string, names: readonly string[]): string {
+	return body.replace(new RegExp(`<(/?)(${names.join('|')})`, 'gi'), '&lt;$1$2');
+}
+
 /** The title of a page, safe to put in an attribute. */
 export function attributeText(value: string): string {
 	return quotedData(value).replaceAll('"', '&quot;').replaceAll('\n', ' ');
