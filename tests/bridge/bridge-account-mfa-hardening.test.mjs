@@ -81,6 +81,15 @@ describe('condition 3: key state at boot and a bad previous key', () => {
 		it(`prints mfa_key=${name}`, () => assert.match(mfaBootLine(sessionConfig(), env), new RegExp(`mfa_key=${name}\\b`)));
 	}
 
+	it('prints recovery_pepper as a state and never the value', () => {
+		const good = Buffer.alloc(32, 5).toString('base64');
+		for (const [value, state] of [[undefined, 'unset'], ['short', 'invalid'], [good, 'set']]) {
+			const line = mfaBootLine(sessionConfig(), { OSIONOS_RECOVERY_PEPPER: value });
+			assert.match(line, new RegExp(`recovery_pepper=${state}\\b`));
+			if (value) assert.ok(!line.includes(value));
+		}
+	});
+
 	it('never prints the key', () => assert.ok(!mfaBootLine(sessionConfig(), { OSIONOS_MFA_SECRET_KEY: MFA_KEY }).includes(MFA_KEY)));
 
 	it('opens a row sealed under the current key when the previous key is malformed', () => {

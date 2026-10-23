@@ -28,6 +28,8 @@ import { writeAudit } from './bridge-guard.mjs';
 
 export const TOTP_TABLE = 'osionos_mfa_totp';
 export const CODES_TABLE = 'osionos_mfa_recovery_codes';
+/** One verify bucket for TOTP and recovery codes: both answer the same second-factor prompt. */
+export const VERIFY_LIMIT = { limit: 30, windowMs: 60_000 };
 const FAIL_WINDOW_MS = 3_600_000;
 const BLOCK_AFTER = 5;
 const BLOCK_BASE_MS = 30_000;
@@ -48,8 +50,14 @@ function keyState(env) {
 	return Buffer.from(String(text), 'base64').length === 32 ? 'set' : 'invalid';
 }
 
-/** Names only, never a value. */
-export const mfaBootLine = (config, env = process.env) => `[osionos-bridge] mfa_gate=${mfaGateEnabled(config) ? 'on' : 'off'} mfa_key=${keyState(env)} client_ip_header=${config?.clientIpHeader ? 'set' : 'unset'}`;
+function pepperState(env) {
+	const text = env?.OSIONOS_RECOVERY_PEPPER;
+	if (!text) return 'unset';
+	return Buffer.from(String(text), 'base64').length === 32 ? 'set' : 'invalid';
+}
+
+/** Names and states only, never a value. */
+export const mfaBootLine = (config, env = process.env) => `[osionos-bridge] mfa_gate=${mfaGateEnabled(config) ? 'on' : 'off'} mfa_key=${keyState(env)} recovery_pepper=${pepperState(env)} client_ip_header=${config?.clientIpHeader ? 'set' : 'unset'}`;
 
 const factorQuery = (userId, extra) => `${TOTP_TABLE}?${new URLSearchParams({ user_id: `eq.${userId.toLowerCase()}`, ...extra })}`;
 
