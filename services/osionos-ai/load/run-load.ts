@@ -11,7 +11,8 @@ interface SeedRow {
 
 const TOKENS_PATH = process.env.TOKENS_PATH ?? '/home/dlesieur/wt-ai-night/tmp/load-tokens.json';
 const RUNS_PATH = process.env.RUNS_PATH ?? '/home/dlesieur/wt-ai-night/tmp/load-runs.jsonl';
-const SERVICE_URL = process.env.SERVICE_URL ?? 'http://service:4300';
+const SERVICE_URL = process.env.SERVICE_URL ?? '';
+if (!SERVICE_URL) throw new Error('SERVICE_URL is required: the service as the generator reaches it on ai-load-net');
 const SHARED_DIR = process.env.LOAD_SHARED_DIR ?? '/home/dlesieur/wt-ai-night/tmp';
 const PROFILE_SECONDS = Number(process.env.PROFILE_SECONDS ?? 600);
 const STEP_SECONDS = Number(process.env.STEP_SECONDS ?? 180);

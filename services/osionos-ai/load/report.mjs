@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 function mulberry32(seed) {
@@ -14,7 +15,7 @@ function mulberry32(seed) {
 
 export function percentile(values, p) {
 	const a = [...values].sort((x, y) => x - y);
-	if (a.length === 0) return NaN;
+	if (a.length === 0) return Number.NaN;
 	const idx = Math.min(a.length - 1, Math.ceil((p / 100) * a.length) - 1);
 	return a[idx];
 }
@@ -23,7 +24,7 @@ export function bootstrapCI(values, p, seed = 42, resamples = 1000) {
 	const rng = mulberry32(seed);
 	const stats = [];
 	const n = values.length;
-	if (n === 0) return { low: NaN, high: NaN };
+	if (n === 0) return { low: Number.NaN, high: Number.NaN };
 	for (let r = 0; r < resamples; r += 1) {
 		const sample = new Array(n);
 		for (let i = 0; i < n; i += 1) sample[i] = values[Math.floor(rng() * n)];
@@ -85,11 +86,11 @@ export function parseStats(path) {
 			continue;
 		}
 		if (!o || !String(o.name ?? '').includes('service')) continue;
-		const cpu = parseFloat(String(o.cpu ?? '').replace('%', ''));
+		const cpu = Number.parseFloat(String(o.cpu ?? '').replace('%', ''));
 		if (!Number.isNaN(cpu) && cpu > cpuPeak) cpuPeak = cpu;
 		const m = String(o.mem ?? '').match(/^([\d.]+)\s*([A-Za-z]+)\s*\//);
 		if (m) {
-			const val = parseFloat(m[1]);
+			const val = Number.parseFloat(m[1]);
 			const unit = m[2];
 			let mib = val;
 			if (unit === 'B') mib = val / 1024 / 1024;
@@ -111,10 +112,22 @@ function fmt(n) {
 	return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
+// The paths come from the command line, so the report reads only inside the run's shared directory.
+const SHARED_DIR = path.resolve(process.env.LOAD_SHARED_DIR ?? '/home/dlesieur/wt-ai-night/tmp');
+function sharedFile(arg) {
+	if (!arg) return undefined;
+	const file = path.resolve(SHARED_DIR, arg);
+	if (!file.startsWith(SHARED_DIR + path.sep)) {
+		console.error(`report.mjs reads only under ${SHARED_DIR} (LOAD_SHARED_DIR): ${arg}`);
+		process.exit(2);
+	}
+	return file;
+}
+
 function main() {
-	const runsPath = process.argv[2];
-	const statsPath = process.argv[3];
-	const loadavgPath = process.argv[4];
+	const runsPath = sharedFile(process.argv[2]);
+	const statsPath = sharedFile(process.argv[3]);
+	const loadavgPath = sharedFile(process.argv[4]);
 	if (!runsPath) {
 		console.error('usage: node report.mjs <runs.jsonl> [stats.jsonl] [loadavg.json]');
 		process.exit(2);
