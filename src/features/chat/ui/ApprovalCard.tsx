@@ -44,6 +44,7 @@ import {
   refusalWords,
   resumeApprovalCard,
   stateWords,
+  type ApprovalOutcome,
 } from "../model/approvalCard";
 import { fetchApproval, type ApprovalChoice, type ApprovalDescription } from "../model/approvals";
 import { decisionItems, keptKeys, planTree, type PlanNode } from "../model/planTree";
@@ -97,10 +98,11 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
   }, [approvalId, held]);
 
   /** The decision of the user: one click, one POST. */
-  const decide = async (choice: ApprovalChoice, items?: string[]): Promise<void> => {
+  // The decision and the resume end the same way: the card shows what came of the POST.
+  const settle = async (post: () => Promise<ApprovalOutcome>): Promise<void> => {
     setBusy(true);
     setFailure("");
-    const outcome = await decideApprovalCard(approvalId, choice, items);
+    const outcome = await post();
     setBusy(false);
     if (outcome.kind === "busy") return;
     if (outcome.kind === "conflict") {
@@ -117,6 +119,9 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     if (outcome.continuationRunId) onContinuation?.(outcome.continuationRunId);
   };
 
+  const decide = (choice: ApprovalChoice, items?: string[]): Promise<void> =>
+    settle(() => decideApprovalCard(approvalId, choice, items));
+
   const toggle = (key: string, currentlyOn: boolean): void => {
     setOff((prev) => {
       const next = new Set(prev);
@@ -126,24 +131,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     });
   };
 
-  const resume = async (): Promise<void> => {
-    setBusy(true);
-    setFailure("");
-    const outcome = await resumeApprovalCard(approvalId);
-    setBusy(false);
-    if (outcome.kind === "busy") return;
-    if (outcome.kind === "conflict") {
-      setApproval(outcome.approval);
-      return;
-    }
-    if (outcome.kind === "failed") {
-      setFailure(refusalWords(outcome.code));
-      return;
-    }
-    setError(outcome.error);
-    setApproval((current) => (current ? { ...current, status: outcome.status } : current));
-    if (outcome.continuationRunId) onContinuation?.(outcome.continuationRunId);
-  };
+  const resume = (): Promise<void> => settle(() => resumeApprovalCard(approvalId));
 
   const state = approvalCardState(approval?.status ?? "pending");
   const target = approval?.target;
