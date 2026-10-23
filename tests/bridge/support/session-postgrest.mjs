@@ -37,6 +37,8 @@ function matches(row, key, expr) {
 	if (expr === 'is.null') return row[key] == null;
 	if (expr === 'not.is.null') return row[key] != null;
 	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));
+	// SQL semantics: a NULL column never satisfies neq (bridge-harness.mjs answers true here).
+	if (expr.startsWith('neq.')) return row[key] != null && !sameText(row[key], expr.slice(4));
 	if (expr.startsWith('gt.')) return String(row[key] ?? '') > expr.slice(3);
 	if (expr.startsWith('lt.')) return String(row[key] ?? '') < expr.slice(3);
 	throw new Error(`session store: unsupported filter ${key}=${expr}`);
