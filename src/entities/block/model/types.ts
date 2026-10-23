@@ -167,6 +167,8 @@ export interface Block {
   mediaShape?: 'rounded' | 'circle'; /** Image crop shape (circle = avatar; default rounded) */
   mediaAspect?: string;     /** CSS aspect-ratio for image blocks (e.g. "16 / 9"); "original"/unset = natural */
   mediaAlt?: string;        /** Alt text for image media blocks (accessibility + failed-load text) */
+  mediaTags?: string[];     /** Tags of an image block (≤ 10, each ≤ 40 chars, lowercase): written by "Describe with AI", editable; indexed */
+  mediaText?: string;       /** Text found in an image block (≤ 300 chars), from "Describe with AI"; indexed */
   placeholderText?: string; /** Temporary placeholder hint for empty transformed blocks */
   drawHeight?: number;      /** LEGACY 'draw' block canvas height in px. The retired Draw tool; its scene JSON still lives in `content`. */
   boardSlug?: string;       /** 'whiteboard' block: slug of the drawnosaurus board it embeds. Unset until the board is created. */

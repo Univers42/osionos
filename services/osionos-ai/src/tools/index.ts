@@ -4,9 +4,10 @@ import type { z } from 'zod';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { PermissionAsked } from '../approvals/types.ts';
 import { READ_TOOLS } from './readTools.ts';
-import { WRITE_TOOLS } from './writeTools.ts';
-import type { ReadToolContext } from './types.ts';
+import { writeTools } from './writeToolList.ts';
+import type { AnyReadTool, ReadToolContext } from './types.ts';
 import { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS } from './loop.ts';
+import { loadSkillTool } from './skillTools.ts';
 import { numberSources, sourceKey, type ToolSource } from '../runs/sources.ts';
 
 export { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS };
@@ -37,6 +38,8 @@ export interface ToolOutcome {
 	 * included: those are not cited again, so the citations alone undercount.
 	 */
 	found?: number;
+	/** The skill a `load_skill` call loaded: pinned in the history of the run (devil C40). */
+	skill?: { id: string; version: number };
 }
 
 export type { ToolSource };
@@ -162,11 +165,13 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
  * has to count them. The number is computed once, from the tool set, and it
  * never changes: the registry is frozen.
  *
- * The write tools are counted even when they are not registered (a
+ * The write tools and `load_skill` (offered only to an agent with skills) are counted even when they are not registered (a
  * deployment without a bridge URL): the count is a ceiling, and a ceiling
  * that depends on the deployment is a ceiling that is wrong somewhere.
+ * The one exception is `build_plan` (its schema is large): it is counted only
+ * when OSIONOS_AI_BUILDERS is on, the one case where it is sent.
  */
-export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...WRITE_TOOLS]);
+export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...writeTools(), loadSkillTool([])]);
 
 /** The shape the count of the definitions reads. */
 interface ToolDefinition {
@@ -198,7 +203,12 @@ function toolDefinitionChars(tools: readonly ToolDefinition[]): number {
  * The pool is the one of the run: the caller holds it, so it can start the
  * steps of the loop (the share of a step is given back at every step).
  */
-export function readToolSet(ctx: ReadToolContext, hooks: ToolHooks, pool: ToolPool = createToolPool()): ToolSet {
+export function readToolSet(
+	ctx: ReadToolContext,
+	hooks: ToolHooks,
+	pool: ToolPool = createToolPool(),
+	extra: readonly AnyReadTool[] = [],
+): ToolSet {
 	// The sources of the run are numbered once: the ones of the prompt
 	// first, then the ones the tools find, in the order the tools found
 	// them. A passage the run already quoted keeps its number.
@@ -206,7 +216,7 @@ export function readToolSet(ctx: ReadToolContext, hooks: ToolHooks, pool: ToolPo
 	hooks.citedSources.forEach((source, index) => numbers.set(sourceKey(source), index + 1));
 	let quoted = hooks.citedSources.length;
 	const set: ToolSet = {};
-	for (const tool of READ_TOOLS) {
+	for (const tool of [...READ_TOOLS, ...extra]) {
 		set[tool.name] = {
 			description: tool.description,
 			inputSchema: tool.input,
@@ -277,6 +287,7 @@ export function readToolSet(ctx: ReadToolContext, hooks: ToolHooks, pool: ToolPo
 					toolName: tool.name,
 					ok: true,
 					found: cites.length,
+					...(tool.pin ? { skill: tool.pin(result.data) } : {}),
 				});
 				return output;
 			},

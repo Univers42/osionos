@@ -10,6 +10,12 @@
 
 import { config } from '../config.ts';
 
+/**
+ * The capability path of a stored media file, the one the bridge serves
+ * (SERVE_RE of the bridge): the only shape of a path the service fetches.
+ */
+export const MEDIA_CAPABILITY_PATH = /^\/api\/media\/uploads\/([0-9a-f-]{36})\/([0-9a-f]{64}\.[a-z0-9]{1,8})$/i;
+
 /** The cap of an attachment: ten megabytes. */
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 

@@ -22,7 +22,7 @@
  * derived from '' would let anyone sign.
  */
 
-import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
+import { createHmac, hkdfSync, randomUUID, timingSafeEqual } from 'node:crypto';
 
 /** The HKDF label of the slate's key: one key, one purpose. */
 const SLATE_KEY_INFO = 'osionos-rec-slate-v1';
@@ -95,4 +95,14 @@ export function verifySlate(secret, token, userId, nowMs = Date.now()) {
 		surface: String(payload.surface ?? ''),
 		items: Array.isArray(payload.items) ? payload.items.map(String) : [],
 	};
+}
+
+/**
+ * A fresh slate of the "home" surface for a user: its id and its token. The
+ * personal and the popular answers issue theirs the same way.
+ */
+export function issueSlate(secret, userId, pageIds) {
+	const recId = randomUUID();
+	const slate = signSlate(secret, { recId, userId, surface: 'home', items: pageIds, issuedAt: Date.now() });
+	return { recId, slate };
 }

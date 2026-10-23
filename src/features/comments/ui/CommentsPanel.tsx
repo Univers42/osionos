@@ -15,8 +15,11 @@ import { cx } from "@osionos/ui/shared/classNames";
 import { ModerationWarningNotice } from "@/shared/moderation/ModerationWarningNotice";
 import type { ModerationWarning } from "@/shared/moderation/moderationWarning";
 import type { Comment, CommentWriteResult } from "../api/commentsClient";
+import { ThreadMoodHint } from "./ThreadMoodHint";
 
 interface Props {
+  /** The page of the thread: with it the panel shows the thread mood, when there is one. */
+  pageId?: string;
   comments: Comment[];
   loading: boolean;
   meId: string | null;
@@ -27,7 +30,7 @@ interface Props {
 }
 
 /** Presentational comment thread + composer (⌘↵ to send). */
-export const CommentsPanel: React.FC<Props> = ({ comments, loading, meId, onAdd, onResolve, onRemove }) => {
+export const CommentsPanel: React.FC<Props> = ({ pageId, comments, loading, meId, onAdd, onResolve, onRemove }) => {
   const [draft, setDraft] = useState("");
   const [warning, setWarning] = useState<ModerationWarning | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -55,6 +58,7 @@ export const CommentsPanel: React.FC<Props> = ({ comments, loading, meId, onAdd,
 
   return (
     <div className="flex max-h-[60vh] w-80 flex-col">
+      {pageId && <ThreadMoodHint pageId={pageId} />}
       <div className="flex-1 overflow-y-auto p-2">
         {comments.length === 0 && !loading && (
           <p className="px-2 py-6 text-center text-xs text-[var(--osio-fg-subtle)]">No comments yet.</p>

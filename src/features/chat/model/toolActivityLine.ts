@@ -24,7 +24,7 @@
  * Pure logic, no React: the rendering lives in toolActivityView.ts.
  */
 
-import { READ_TOOL, SEARCH_TOOL, type ToolActivityPart } from "./toolActivity";
+import { LOAD_SKILL_TOOL, READ_TOOL, SEARCH_TOOL, type ToolActivityPart } from "./toolActivity";
 
 /** One piece of a line: plain text, or the label of the call. */
 export type ToolLinePiece = { kind: "text"; text: string } | { kind: "label"; text: string };
@@ -64,6 +64,16 @@ export function toolActivityLine(activity: ToolActivityPart): ToolLinePiece[] {
           { kind: "label", text: label },
         ]
       : [{ kind: "text", text: "Read the page" }];
+  }
+  if (activity.toolName === LOAD_SKILL_TOOL) {
+    if (activity.status === "failed") return [{ kind: "text", text: "Couldn't load that skill" }];
+    const verb = activity.status === "running" ? "Loading skill: " : "Loaded skill: ";
+    return label
+      ? [
+          { kind: "text", text: verb },
+          { kind: "label", text: label },
+        ]
+      : [{ kind: "text", text: activity.status === "running" ? "Loading a skill…" : "Loaded a skill" }];
   }
   // A tool the client does not know: the reader gets a line, and nothing else.
   if (activity.status === "failed") return [{ kind: "text", text: "Couldn't do that" }];
