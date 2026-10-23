@@ -17,7 +17,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { pickReadmeWorkspace, customizeReadme } = await import("../../src/widgets/profile-page/model/readmeCustomize.ts");
+const { pickReadmeWorkspace, customizeReadme, openLinkedById } = await import("../../src/widgets/profile-page/model/readmeCustomize.ts");
 const { readProfileLinkUsername } = await import("../../src/widgets/profile-page/model/profileLinkParam.ts");
 
 const ME = "user-me";
@@ -140,4 +140,49 @@ test("readProfileLinkUsername: a valid username, nothing else", () => {
   assert.equal(readProfileLinkUsername("?x=1&u=ada.l-1"), "ada.l-1");
   const hostile = ["", "?u=", "?u=a", "?u=../etc", "?u=bob%2F..", "?u=%3Cscript%3E", `?u=${"a".repeat(40)}`, "?view=profile"];
   for (const search of hostile) assert.equal(readProfileLinkUsername(search), null, search);
+});
+
+// openLinkedById: the store alone cannot render a README that lives in a workspace that was never pulled.
+function linkedIo(overrides: Record<string, unknown> = {}) {
+  const log: string[] = [];
+  let pulled = false;
+  const stored = { _id: PAGE_ID, workspaceId: "ws-far", title: "README" };
+  const io = {
+    readStore: () => (pulled ? stored : undefined),
+    fetchPage: async () => { log.push("fetch"); return { ...stored }; },
+    pullWorkspace: async (workspaceId: string) => { log.push(`pull ${workspaceId}`); pulled = true; },
+    isNotFound: () => false,
+    ...overrides,
+  };
+  return { log, stored, io: io as never };
+}
+
+test("openLinkedById: a page in the store opens without any request", async () => {
+  const { log, stored, io } = linkedIo({ readStore: () => ({ _id: PAGE_ID, workspaceId: "ws-a", title: "README" }) });
+  const result = await openLinkedById(PAGE_ID, io);
+  assert.equal(result.status, "found");
+  assert.deepEqual(log, []);
+  assert.notEqual(stored, undefined);
+});
+
+test("openLinkedById: a fetched page is pulled into the store and the store entry is returned", async () => {
+  const { log, stored, io } = linkedIo();
+  const result = await openLinkedById(PAGE_ID, io);
+  assert.deepEqual(result, { status: "found", page: stored });
+  assert.deepEqual(log, ["fetch", "pull ws-far"]);
+});
+
+test("openLinkedById: still absent after the pull is an error, never gone", async () => {
+  const { io } = linkedIo({ pullWorkspace: async () => undefined });
+  assert.deepEqual(await openLinkedById(PAGE_ID, io), { status: "error" });
+});
+
+test("openLinkedById: 404 and archived are gone; other failures are errors", async () => {
+  const notFound = new Error("404");
+  const gone404 = linkedIo({ fetchPage: async () => { throw notFound; }, isNotFound: (error: unknown) => error === notFound });
+  assert.deepEqual(await openLinkedById(PAGE_ID, gone404.io), { status: "gone" });
+  const archived = linkedIo({ fetchPage: async () => ({ _id: PAGE_ID, workspaceId: "ws-far", archivedAt: "2026-01-01" }) });
+  assert.deepEqual(await openLinkedById(PAGE_ID, archived.io), { status: "gone" });
+  const boom = linkedIo({ fetchPage: async () => { throw new Error("500"); } });
+  assert.deepEqual(await openLinkedById(PAGE_ID, boom.io), { status: "error" });
 });

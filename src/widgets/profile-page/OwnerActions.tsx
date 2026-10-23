@@ -26,22 +26,19 @@ import { usePageStore } from "@/store/usePageStore";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import type { PageEntry } from "@/entities/page";
-import { customizeReadme, pickReadmeWorkspace, type CustomizeDeps, type LinkedPage } from "./model/readmeCustomize";
+import { customizeReadme, openLinkedById, pickReadmeWorkspace, type CustomizeDeps, type LinkedPage } from "./model/readmeCustomize";
 
 const BUTTON = "inline-flex items-center gap-2 rounded-md border border-[var(--osio-border-default)] px-4 py-2 text-sm font-medium hover:bg-[var(--osio-bg-hover)] disabled:opacity-60";
 
-// Opens by id: the store first, else the bridge. Archived or 404 is "gone"; any other failure
-// is "error", which never leads to a replacement.
-async function openLinked(pageId: string, jwt: string): Promise<LinkedPage> {
-  const stored = usePageStore.getState().pageById(pageId);
-  if (stored) return stored.archivedAt ? { status: "gone" } : { status: "found", page: stored };
-  try {
-    const page = await api.get<PageEntry>(`/api/pages/${encodeURIComponent(pageId)}`, jwt);
-    if (!page) return { status: "error" };
-    return page.archivedAt ? { status: "gone" } : { status: "found", page };
-  } catch (error) {
-    return error instanceof ApiError && error.status === 404 ? { status: "gone" } : { status: "error" };
-  }
+function openLinked(pageId: string, jwt: string): Promise<LinkedPage> {
+  const store = usePageStore.getState();
+  return openLinkedById(pageId, {
+    readStore: (id) => usePageStore.getState().pageById(id),
+    fetchPage: (id) => api.get<PageEntry>(`/api/pages/${encodeURIComponent(id)}`, jwt),
+    // force: the freshness TTL would skip a workspace pulled moments ago that did not list the page.
+    pullWorkspace: (workspaceId) => store.fetchPages(workspaceId, jwt, true),
+    isNotFound: (error) => error instanceof ApiError && error.status === 404,
+  });
 }
 
 function readmeDeps(jwt: string): CustomizeDeps {
