@@ -51,7 +51,7 @@ describe('planTables', () => {
 		}
 	});
 	it('refuses a column named like a secret', () => {
-		for (const name of ['password_hash', 'api_token', 'mfa_secret', 'private_key', 'salt', 'ip_prefix', 'recovery_code', 'totp_seed']) {
+		for (const name of ['password_hash', 'api_token', 'mfa_secret', 'private_key', 'salt', 'ip_prefix', 'recovery_code', 'totp_seed', 'code_hmac', 'seed_enc']) {
 			assert.throws(() => planTables([row({ export_columns: ['id', name] })]), (error) => error.code === 'export_forbidden_column', name);
 		}
 	});
