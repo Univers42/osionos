@@ -27,6 +27,34 @@ export interface CustomizeDeps {
   createPage: (workspaceId: string) => Promise<PageEntry | null>;
 }
 
+export interface LinkedPageIo {
+  readStore: (pageId: string) => PageEntry | undefined;
+  fetchPage: (pageId: string) => Promise<PageEntry | null>;
+  pullWorkspace: (workspaceId: string) => Promise<void>;
+  isNotFound: (error: unknown) => boolean;
+}
+
+/**
+ * Opens the linked page by id. A tab only renders pages that are in the page store, and the
+ * page's workspace may never have been pulled, so a fetched page is pulled in and re-read:
+ * absent after the pull is "error" (never "gone"), so nothing is ever replaced on a guess.
+ */
+export async function openLinkedById(pageId: string, io: LinkedPageIo): Promise<LinkedPage> {
+  const stored = io.readStore(pageId);
+  if (stored) return stored.archivedAt ? { status: "gone" } : { status: "found", page: stored };
+  try {
+    const fetched = await io.fetchPage(pageId);
+    if (!fetched) return { status: "error" };
+    if (fetched.archivedAt) return { status: "gone" };
+    await io.pullWorkspace(fetched.workspaceId);
+    const loaded = io.readStore(pageId);
+    if (!loaded) return { status: "error" };
+    return loaded.archivedAt ? { status: "gone" } : { status: "found", page: loaded };
+  } catch (error) {
+    return io.isNotFound(error) ? { status: "gone" } : { status: "error" };
+  }
+}
+
 /** `linkedGone`: the profile links a page that cannot be opened; only the owner's explicit choice replaces it. */
 export type CustomizeResult = { ok: true; page: PageEntry } | { ok: false; message: string; linkedGone?: true };
 
