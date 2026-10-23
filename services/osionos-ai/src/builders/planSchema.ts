@@ -59,6 +59,9 @@ const CHART_TYPES = ['vertical_bar', 'horizontal_bar', 'line', 'donut'] as const
 const AGGREGATION_TYPES = ['count', 'sum', 'average'] as const;
 const STAT_FNS = ['count', 'sum', 'avg', 'min', 'max'] as const;
 
+/** X-axis types from the kit (ChartSubScreens.tsx:40-43) intersected with PLAN_PROPERTY_TYPES. */
+const CHART_X_AXIS_TYPES = ['text', 'select', 'multi_select', 'status', 'date', 'checkbox'] as const;
+
 export const MAX_PLAN_ITEMS = 40;
 export const MAX_PLAN_DEPTH = 3;
 /** The stored args of a plan: bigger than an ordinary approval (64 KB). */
@@ -77,6 +80,8 @@ const textBlock = z.object({
 });
 
 /** The block types that point at a database of the same plan. */
+// osionos renders only `database_inline` as a database; `database_full_page` is a
+// slash action that creates a page (src/entities/block/ui/ReadOnlyBlock.tsx:445).
 const DATABASE_BLOCK_TYPES = ['database_inline'] as const;
 const databaseBlock = z.object({
 	type: z.enum(DATABASE_BLOCK_TYPES),
@@ -213,10 +218,9 @@ function databaseError(db: PlanDatabaseItem): string | null {
 		if (view.type === 'chart') {
 			const xProp = propByName.get(view.xAxis);
 			if (!xProp) return `the chart "${view.name}" of "${db.key}" names an unknown xAxis property`;
-			// Chart accepts: title, text, number, select, multi_select, status, date, checkbox
-			const acceptedX = ['title', 'text', 'number', 'select', 'multi_select', 'status', 'date', 'checkbox'];
-			if (!acceptedX.includes(xProp.type)) {
-				return `the chart "${view.name}" of "${db.key}" xAxis must be a title, text, number, select, multi_select, status, date or checkbox property`;
+			// Chart x-axis follows the kit (ChartSubScreens.tsx:40-43) intersected with PLAN_PROPERTY_TYPES.
+			if (!CHART_X_AXIS_TYPES.includes(xProp.type as typeof CHART_X_AXIS_TYPES[number])) {
+				return `the chart "${view.name}" of "${db.key}" xAxis must be a text, select, multi_select, status, date or checkbox property`;
 			}
 			if (view.aggregation === 'sum' || view.aggregation === 'average') {
 				if (!view.yAxis) return `the chart "${view.name}" of "${db.key}" needs a yAxis for ${view.aggregation}`;
@@ -226,9 +230,7 @@ function databaseError(db: PlanDatabaseItem): string | null {
 			}
 		}
 		if (view.type === 'dashboard') {
-			if (view.cells.length < 1 || view.cells.length > 6) {
-				return `the dashboard "${view.name}" of "${db.key}" must have 1–6 cells`;
-			}
+			// cells length is enforced by zod (.min(1).max(6))
 			const cellViewNames = new Set<string>();
 			for (const cell of view.cells) {
 				if (cellViewNames.has(cell.view)) return `the dashboard "${view.name}" of "${db.key}" repeats a cell view`;

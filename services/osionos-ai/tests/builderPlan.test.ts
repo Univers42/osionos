@@ -112,6 +112,10 @@ describe('the builder plan', () => {
 		await assertRefused(withDatabase({ rows: [], properties: [{ name: 'Name', type: 'title' }], views: [{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Missing' }] }), 'chart unknown xAxis');
 	});
 
+	it('C151 a chart with xAxis naming a number property is refused', async () => {
+		await assertRefused(withDatabase({ rows: [], properties: [{ name: 'Name', type: 'title' }, { name: 'Score', type: 'number' }], views: [{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Score' }] }), 'chart xAxis number');
+	});
+
 	it('C151 a chart with sum/average aggregation without yAxis is refused', async () => {
 		await assertRefused(withDatabase({ rows: [], properties: [{ name: 'Name', type: 'title' }, { name: 'Cat', type: 'select', options: ['A'] }], views: [{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Cat', aggregation: 'sum' }] }), 'chart sum without yAxis');
 		await assertRefused(withDatabase({ rows: [], properties: [{ name: 'Name', type: 'title' }, { name: 'Cat', type: 'select', options: ['A'] }], views: [{ type: 'chart', name: 'Chart', chartType: 'vertical_bar', xAxis: 'Cat', aggregation: 'average' }] }), 'chart average without yAxis');
@@ -180,6 +184,12 @@ describe('the builder plan', () => {
 
 	it('C165 a dashboard cell naming a view of another database is refused', async () => {
 		const plan = goodPlan() as { items: Json[] };
+		plan.items.push({
+			kind: 'page',
+			key: 'otherPage',
+			title: 'Other Page',
+			blocks: [{ type: 'database_inline', databaseKey: 'other' }],
+		});
 		plan.items.push({
 			kind: 'database',
 			key: 'other',

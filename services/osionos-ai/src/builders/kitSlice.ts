@@ -216,7 +216,7 @@ function buildView(
 		const yProp = view.yAxis ? byName.get(view.yAxis) : undefined;
 		config.settings.chartType = view.chartType;
 		config.settings.xAxisProperty = xProp?.id;
-		config.settings.yAxisAggregation = view.aggregation === 'average' ? 'average' : (view.aggregation ?? 'count');
+		config.settings.yAxisAggregation = view.aggregation ?? 'count';
 		if (yProp) config.settings.yAxisProperty = yProp.id;
 	}
 	if (view.type === 'dashboard') {
@@ -234,13 +234,13 @@ function buildView(
 			};
 			if (cell.stat) {
 				const propId = cell.stat.property ? byName.get(cell.stat.property)?.id : undefined;
-				widget.stat = { fn: cell.stat.fn === 'avg' ? 'avg' : cell.stat.fn, ...(propId ? { propertyId: propId } : {}) };
+				widget.stat = { fn: cell.stat.fn, ...(propId ? { propertyId: propId } : {}) };
 			}
 			return widget;
 		}).filter((w): w is DashboardWidget => w !== null);
 
 		// Build dashboardRows: two widgets per row, widths [0.5, 0.5], last single gets [1]
-		// Height uses DEFAULT_ROW_HEIGHT from dashboardLayout (320)
+		// Height uses DEFAULT_ROW_HEIGHT from dashboardLayout.ts:29
 		const DEFAULT_ROW_HEIGHT = 320;
 		const rows: KitViewConfig['settings']['dashboardRows'] = [];
 		for (let i = 0; i < widgets.length; i += 2) {
