@@ -21,15 +21,15 @@ interface AccountSettingsStore {
   data: AccountSettings | null;
   loading: boolean;
   error: string | null;
-  hydrate: (userId: string, name?: string) => Promise<void>;
+  hydrate: (userId: string) => Promise<void>;
   update: (patch: Partial<AccountSettings>) => void;
-  reset: (userId: string, name?: string) => Promise<void>;
+  reset: (userId: string) => Promise<void>;
 }
 
 const STORE_NAME = 'osionos:settings:account';
 
-function fallback(userId: string, name?: string): AccountSettings {
-  return defaultAccountSettings(userId || 'anonymous', name);
+function fallback(userId: string): AccountSettings {
+  return defaultAccountSettings(userId || 'anonymous');
 }
 
 export const useAccountSettingsStore = create<AccountSettingsStore>()(
@@ -38,14 +38,14 @@ export const useAccountSettingsStore = create<AccountSettingsStore>()(
       data: null,
       loading: false,
       error: null,
-      hydrate: async (userId, name) => {
+      hydrate: async (userId) => {
         if (!userId) return;
         set({ loading: true, error: null });
         try {
           const remote = await trySettingsGet<AccountSettings>('/api/account/settings');
-          set({ data: remote ?? get().data ?? fallback(userId, name), loading: false, error: null });
+          set({ data: remote ?? get().data ?? fallback(userId), loading: false, error: null });
         } catch (error) {
-          set({ data: get().data ?? fallback(userId, name), loading: false, error: errorMessage(error) });
+          set({ data: get().data ?? fallback(userId), loading: false, error: errorMessage(error) });
           pushSettingsError('Account settings unavailable', error);
         }
       },
@@ -55,7 +55,6 @@ export const useAccountSettingsStore = create<AccountSettingsStore>()(
         const next = {
           ...previous,
           ...patch,
-          profile: { ...previous.profile, ...patch.profile },
           security: { ...previous.security, ...patch.security },
           updatedAt: nowIso(),
         };
@@ -70,9 +69,9 @@ export const useAccountSettingsStore = create<AccountSettingsStore>()(
           }
         });
       },
-      reset: async (userId, name) => {
+      reset: async (userId) => {
         const previous = get().data;
-        const next = fallback(userId, name);
+        const next = fallback(userId);
         set({ data: next, error: null });
         try {
           const remote = await trySettingsPatch<AccountSettings>('/api/account/settings', next);
