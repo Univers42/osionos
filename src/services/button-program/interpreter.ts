@@ -192,7 +192,7 @@ class Run {
 	private async runIf(step: Extract<ProgramStep, { op: "if" }>): Promise<void> {
 		const { truthy, sentinel } = this.isTrue(step.condition);
 		this.record("if", "If", sentinel ? "failed" : "ok", sentinel ?? (truthy ? "then" : "else"));
-		await this.runSteps(truthy ? step.then : (step.else ?? []));
+		await this.runSteps(truthy ? step.steps : (step.else ?? []));
 	}
 
 	private async runRepeat(step: Extract<ProgramStep, { op: "repeat" }>): Promise<void> {
