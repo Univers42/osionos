@@ -4,8 +4,8 @@ The slice of the school module IV.4 for text sentiment: the comments of a worksp
 scored negative / neutral / positive by a model on our own servers, and the result is shown **only as
 totals of at least 5 people** — a weekly Pulse in Settings and one line on top of a comment thread.
 
-Everything here is bound to the conditions **C138–C149** of
-`docs/ai/verdicts/m6-sentiment-verdict.md`. The out-of-scope of this slice is written at the bottom.
+Everything here is bound to the conditions **C138–C149** of the M6 sentiment devil verdict, kept with the
+project's review records outside this repository. The out-of-scope of this slice is written at the bottom.
 
 **Status: ai-dev only. The public stack stays OFF** (C147, C149): the licence of the model is undeclared
 and "ship" waits for the legal check.
@@ -49,9 +49,10 @@ gone and the thread line too.
 
 ```sh
 # The service (throwaway Postgres + Redis, the AI migrations incl. moderation and sentiment, the suite).
-cd /home/dlesieur/wt-ai-night
-AI_MIGS="$(sh ops/ai-migs.sh osionos-ugc-moderation-migration.sql) <groot>/models/osionos-ugc-sentiment-migration.sql" \
-  sh ops/gate-batch.sh <this worktree> m6p svc-tsc ai
+# Run from the repository root. ../ops holds the shared gate scripts; <groot> is
+# the groot worktree root, holding models/osionos-ugc-sentiment-migration.sql.
+AI_MIGS="$(sh ../ops/ai-migs.sh osionos-ugc-moderation-migration.sql) <groot>/models/osionos-ugc-sentiment-migration.sql" \
+  sh ../ops/gate-batch.sh "$PWD" m6p svc-tsc ai
 
 # The client.
 bash scripts/docker-run.sh test-canvas

@@ -20,11 +20,18 @@ import {
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
 import { handleSources } from './sources.ts';
-import { handleApprovalDecision, handleApprovalGet, handleApprovalResume } from './approvals.ts';
+import { handleApprovalDecision, handleApprovalGet, handleApprovalList, handleApprovalResume, handleApprovalUndo } from './approvals.ts';
 import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
 import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
 import { handleSkillArchive, handleSkillCreate, handleSkillsList, handleSkillUpdate } from './skills.ts';
+import {
+	handleMemoriesList,
+	handleMemoryApprove,
+	handleMemoryArchive,
+	handleMemoryEdit,
+	handleMemoryReject,
+} from './memories.ts';
 import { handleMcp } from './mcp.ts';
 import type { RouteEntry } from './types.ts';
 
@@ -122,6 +129,12 @@ export const ROUTES: RouteEntry[] = [
 	},
 	{
 		methods: ['GET'],
+		pattern: /^\/api\/ai\/approvals$/,
+		label: '/api/ai/approvals',
+		handle: handleApprovalList,
+	},
+	{
+		methods: ['GET'],
 		pattern: /^\/api\/ai\/approvals\/([^/]+)$/,
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalGet,
@@ -132,11 +145,22 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/approvals/:id',
 		handle: handleApprovalDecision,
 	},
+	{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/memories$/, label: '/api/ai/workspaces/:ws/memories', handle: handleMemoriesList },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/approve$/, label: '/api/ai/memories/:id/approve', handle: handleMemoryApprove },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/reject$/, label: '/api/ai/memories/:id/reject', handle: handleMemoryReject },
+	{ methods: ['POST'], pattern: /^\/api\/ai\/memories\/([^/]+)\/archive$/, label: '/api/ai/memories/:id/archive', handle: handleMemoryArchive },
+	{ methods: ['PATCH'], pattern: /^\/api\/ai\/memories\/([^/]+)$/, label: '/api/ai/memories/:id', handle: handleMemoryEdit },
 	{
 		methods: ['POST'],
 		pattern: /^\/api\/ai\/approvals\/([^/]+)\/resume$/,
 		label: '/api/ai/approvals/:id/resume',
 		handle: handleApprovalResume,
+	},
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/approvals\/([^/]+)\/undo$/,
+		label: '/api/ai/approvals/:id/undo',
+		handle: handleApprovalUndo,
 	},
 	{
 		methods: [],
@@ -161,7 +185,6 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/pages/:pageId/sentiment/mood',
 		handle: handleSentimentMood,
 	},
-
 	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
 	...(config.patEnabled
 		? [

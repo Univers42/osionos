@@ -2,13 +2,16 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { config } from '../config.ts';
+import { checkDailyBuildLimit } from '../rateLimit.ts';
 import { resolveTarget } from '../gateway/resolve.ts';
+import { findBuiltinAgent } from '../agents/builtins.ts';
 import { startRun } from '../runs/runner.ts';
 import { getRun } from '../runs/repo.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
 import { bridgeWrite, refusalMessage } from './bridge.ts';
 import type { BridgeWrite } from './bridge.ts';
-import { claimApproval, getOwnedApproval, recordOutcome, claimPartial } from './repo.ts';
+import { claimApproval, expireApproval, getOwnedApproval, recordOutcome, claimPartial } from './repo.ts';
+import { getTokenState } from '../pat/repo.ts';
 import { revalidateStoredPlan, flattenPlan } from '../builders/plan.ts';
 import { approvedKeys, executePlan, writeOf } from '../builders/execute.ts';
 import { seedItems, setItem } from '../builders/items.ts';
@@ -126,11 +129,34 @@ function createdPage(body: string): { pageId?: string; title?: string } {
 }
 
 /**
+ * Whether the token of an MCP approval may still be honoured.
+ *
+ * The scope and the revocation are re-checked at DECISION time, not trusted
+ * from the moment the agent asked (C115, C117): a revoked token, an expired
+ * one, a token that is gone, or a workspace taken out of its scope all mean
+ * the same thing — the question died with the credential, and nothing is
+ * written.
+ */
+async function mcpTokenCovers(db: Pool, row: ApprovalRow): Promise<boolean> {
+	if (!row.token_id) return false;
+	const token = await getTokenState(db, row.token_id);
+	if (!token) return false;
+	if (String(token.user_id) !== row.owner_id) return false;
+	if (token.revoked_at) return false;
+	if (token.expires_at.getTime() <= Date.now()) return false;
+	return token.workspace_ids.map(String).includes(row.workspace_id);
+}
+
+/**
  * The continuation of a decided approval: a NEW run in the same conversation.
  *
  * It is a new run, with its own reservation and its own row: the run that
  * asked is over, and the one that continues counts against the cap of the day
  * like any other.
+ *
+ * An MCP approval has NO continuation: there is no conversation to go on in,
+ * and the agent that asked is not waiting on a stream. Its decision is a row,
+ * and the next call of the agent reads the workspace.
  */
 async function continueRun(
 	db: Pool,
@@ -140,8 +166,11 @@ async function continueRun(
 	outcome: 'executed' | 'failed' | 'declined',
 	detail = '',
 ): Promise<string | undefined> {
+	if (row.origin !== 'run') return undefined;
+	if (!row.conversation_id || !row.run_id) return undefined;
+	const conversationId = row.conversation_id;
 	const conversation = await getOwnedConversation(db, {
-		id: row.conversation_id,
+		id: conversationId,
 		ownerId: row.owner_id,
 	});
 	if (!conversation) return undefined;
@@ -151,15 +180,20 @@ async function continueRun(
 	const model = run?.model ?? conversation.model ?? undefined;
 	const resolved = await resolveTarget(db, redis, user, undefined, model);
 	if (resolved.kind === 'refused') return undefined;
+	// The workspace and the agent of the conversation go on too: without them the
+	// continuation lost the workspace skills and the approved memories (review
+	// p5d1, gap 1).
 	const started = await startRun({
 		db,
 		redis,
 		runId: randomUUID(),
-		conversationId: row.conversation_id,
+		conversationId,
 		ownerId: row.owner_id,
 		text: continuationText(row, outcome, detail),
 		target: resolved.target,
 		user,
+		workspaceId: conversation.workspace_id,
+		agent: run?.agent_id ? findBuiltinAgent(run.agent_id) : null,
 		emit: () => {},
 	});
 	if (started.kind !== 'started') return undefined;
@@ -200,6 +234,15 @@ export async function decideApproval(input: {
 		return { kind: 'refused', status: 409, code: 'approval_expired' };
 	}
 
+	// An MCP approval is decided against the token LIVE: a revoked or expired
+	// token, or a workspace taken out of its scope, kills the question before
+	// the claim, and nothing is written (C114, C115, C117). A decline needs no
+	// token: saying no never writes.
+	if (decision === 'approve' && row.origin === 'mcp' && !(await mcpTokenCovers(db, row))) {
+		await expireApproval(db, row.id);
+		return { kind: 'refused', status: 409, code: 'approval_expired' };
+	}
+
 	if (row.tool === 'build_plan' && items && items.length > 0) {
 		const rv = revalidateStoredPlan(row.args);
 		if (rv.ok) {
@@ -215,6 +258,14 @@ export async function decideApproval(input: {
 		if (!declined) return { kind: 'refused', status: 409, code: 'approval_not_pending' };
 		const continuationRunId = await continueRun(db, redis, user, declined, 'declined');
 		return { kind: 'decided', status: 'declined', approval: declined, continuationRunId };
+	}
+
+	// A builder pass spends the day's bucket BEFORE the claim (C161): at the
+	// limit the approval stays 'pending', and no write has started. A decline
+	// never reaches here, and never spends a pass.
+	if (row.tool === 'build_plan') {
+		const daily = await checkDailyBuildLimit(redis, user.userId, config.buildsPerDay);
+		if (!daily.allowed) return { kind: 'refused', status: 429, code: 'build_limit_reached' };
 	}
 
 	const claimed = await claimApproval(db, { id: approvalId, ownerId: user.userId, next: 'executing' });

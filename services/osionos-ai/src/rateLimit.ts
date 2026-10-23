@@ -27,6 +27,11 @@ export const IMAGE_LIMIT_PREFIX = 'ai:rl:image';
 export const DESCRIBE_LIMIT_PREFIX = 'ai:rl:describe';
 /** The window of the mints: a PAT is minted from a fresh session, and rarely. */
 export const PAT_LIMIT_PREFIX = 'ai:rl:pat';
+/** The day bucket of the builder passes (C161). */
+export const BUILD_LIMIT_PREFIX = 'ai:rl:build';
+
+/** How long the day bucket outlives its day, in seconds. */
+const BUILD_KEY_TTL_SECONDS = 172_800;
 
 export interface RateLimitResult {
 	allowed: boolean;
@@ -120,9 +125,40 @@ export async function checkPatRateLimit(
 	return checkRateLimit(redis, userId, limit, now, PAT_LIMIT_PREFIX);
 }
 
+/** The key of a user's build day: one counter per UTC day. */
+export function dailyBuildKey(userId: string, now: Date): string {
+	const day = now.toISOString().slice(0, 10).replace(/-/g, '');
+	return `${BUILD_LIMIT_PREFIX}:${userId}:${day}`;
+}
+
+/**
+ * The builder passes of a UTC day (C161): a fixed counter per user and day.
+ *
+ * The counter and its two-day expiry move together in one MULTI, so a burst
+ * cannot keep a day's bucket alive for ever. A resume spends it too: it is a
+ * build pass.
+ */
+export async function checkDailyBuildLimit(
+	redis: Redis,
+	userId: string,
+	limit: number,
+	now: Date = new Date(),
+): Promise<RateLimitResult> {
+	const key = dailyBuildKey(userId, now);
+	const results = await redis.multi().incr(key).expire(key, BUILD_KEY_TTL_SECONDS, 'NX').exec();
+	const count = Number(results?.[0]?.[1] ?? 0);
+	const nextDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+	return {
+		allowed: count <= limit,
+		retryAfterSeconds: Math.max(1, Math.ceil((nextDay - now.getTime()) / 1000)),
+	};
+}
+
 /** The windows of the remote MCP calls: one per token, one per user (C118). */
 export const MCP_TOKEN_LIMIT_PREFIX = 'ai:rl:mcp:token';
 export const MCP_USER_LIMIT_PREFIX = 'ai:rl:mcp:user';
+/** The window of the MCP WRITE proposals: one per token (G4b-2). */
+export const MCP_WRITE_LIMIT_PREFIX = 'ai:rl:mcp:write';
 export const MCP_CALLS_PER_TOKEN_MINUTE = 60;
 export const MCP_CALLS_PER_USER_MINUTE = 120;
 

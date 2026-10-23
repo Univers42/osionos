@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { after, beforeEach, describe, it } from 'node:test';
 import { READ_TOOLS } from '../src/tools/readTools.ts';
+import { WRITE_TOOLS } from '../src/tools/writeTools.ts';
 import { USER_A, WORKSPACE_A, addMember, app, clearWindows, closeAll, mint, raw, rpc, sessionFor } from './mcpHarness.ts';
 
 /**
@@ -176,10 +177,11 @@ describe('the remote MCP endpoint: tools list (C120)', () => {
 		assert.ok(READ_TOOLS.every((tool) => tool.kind === 'read'));
 	});
 
-	it('a token without the read scope lists nothing and every call errors', async () => {
+	it('a token with only write_approval lists the three write tools, and no read tool', async () => {
 		const { token } = await mint(USER_A, [WORKSPACE_A], ['write_approval']);
 		const list = await rpc(token, 'tools/list');
-		assert.deepEqual(list.body.result.tools, []);
+		const names = (list.body.result.tools as { name: string }[]).map((tool) => tool.name).sort();
+		assert.deepEqual(names, WRITE_TOOLS.map((tool) => tool.name).sort());
 		const call = await rpc(token, 'tools/call', { name: 'search_workspace', arguments: { query: 'x' } });
 		assert.ok(call.body.error || call.body.result?.isError, call.raw);
 	});

@@ -96,6 +96,10 @@ const envSchema = z.object({
 	// The time budget of one build, in milliseconds (P6a-3b): the plan is built
 	// item by item until this runs out, and the rest is left to resume.
 	OSIONOS_AI_BUILD_BUDGET_MS: z.coerce.number().int().positive().default(25_000),
+	// The plans one user may have waiting for a decision at once (C161).
+	OSIONOS_AI_PENDING_PLANS: z.coerce.number().int().positive().default(3),
+	// The build passes of one user in a UTC day (C161).
+	OSIONOS_AI_BUILDS_PER_DAY: z.coerce.number().int().positive().default(10),
 	// The personal access tokens. OFF unless exactly "on": the public overlay
 	// leaves it empty until the G4 conditions C112-C120 are merged (devil
 	// verdict g-graph-diagrams-mcp-verdict.md). Off, the routes do not exist.
@@ -107,6 +111,15 @@ const envSchema = z.object({
 	// carries an Origin header; agents that are not browsers send none.
 	OSIONOS_AI_MCP_ALLOWED_HOSTS: z.string().optional(),
 	OSIONOS_AI_MCP_ALLOWED_ORIGINS: z.string().optional(),
+	// The MCP write approvals one token may have waiting at once (G4b-2): a
+	// backlog of cards is a backlog of decisions nobody is making.
+	OSIONOS_AI_MCP_PENDING_PER_TOKEN: z.coerce.number().int().positive().default(20),
+	// The MCP write proposals of one token in a minute: the same fixed window
+	// as the runs, its own counter.
+	OSIONOS_AI_MCP_WRITES_PER_MINUTE: z.coerce.number().int().positive().default(10),
+	// How long an outside agent's write waits for the user: an hour, where a
+	// run's approval waits ten minutes because the run is waiting on it.
+	OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(60),
 	// The image engine: INTERNAL, the OpenAI-compatible base URL of sd-server
 	// (`…/v1`), a deployment setting and never a caller's. Required when on.
 	OSIONOS_AI_IMAGE_URL: z.string().optional(),
@@ -187,9 +200,14 @@ const rawEnv = {
 	OSIONOS_AI_BUILDERS: process.env.OSIONOS_AI_BUILDERS,
 	OSIONOS_AI_BUILD_BUDGET_MS: process.env.OSIONOS_AI_BUILD_BUDGET_MS,
 	OSIONOS_AI_SYSTEM_WORKSPACE_ID: process.env.OSIONOS_AI_SYSTEM_WORKSPACE_ID,
+	OSIONOS_AI_PENDING_PLANS: process.env.OSIONOS_AI_PENDING_PLANS,
+	OSIONOS_AI_BUILDS_PER_DAY: process.env.OSIONOS_AI_BUILDS_PER_DAY,
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
 	OSIONOS_AI_MCP_ALLOWED_HOSTS: process.env.OSIONOS_AI_MCP_ALLOWED_HOSTS,
 	OSIONOS_AI_MCP_ALLOWED_ORIGINS: process.env.OSIONOS_AI_MCP_ALLOWED_ORIGINS,
+	OSIONOS_AI_MCP_PENDING_PER_TOKEN: process.env.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
+	OSIONOS_AI_MCP_WRITES_PER_MINUTE: process.env.OSIONOS_AI_MCP_WRITES_PER_MINUTE,
+	OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES: process.env.OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES,
 	OSIONOS_AI_IMAGE_URL: firstEnv('OSIONOS_AI_IMAGE_URL'),
 	OSIONOS_AI_IMAGE_MODEL: process.env.OSIONOS_AI_IMAGE_MODEL,
 	OSIONOS_AI_IMAGE_MICROUSD: process.env.OSIONOS_AI_IMAGE_MICROUSD,
@@ -361,11 +379,21 @@ export interface AiServiceConfig {
 	buildersEnabled: boolean;
 	/** The time budget of one build, in milliseconds. */
 	buildBudgetMs: number;
+	/** The plans one user may have waiting for a decision at once. */
+	pendingPlans: number;
+	/** The build passes of one user in a UTC day. */
+	buildsPerDay: number;
 	patEnabled: boolean;
 	/** The hosts the MCP endpoint answers to (lower-case, loopback included). */
 	mcpAllowedHosts: readonly string[];
 	/** The browser origins that may reach the MCP endpoint: none by default. */
 	mcpAllowedOrigins: readonly string[];
+	/** The MCP write approvals one token may have waiting at once (G4b-2). */
+	mcpPendingPerToken: number;
+	/** The MCP write proposals of one token in a minute. */
+	mcpWritesPerMinute: number;
+	/** How long an MCP approval waits for the user, in minutes (G4b-3). */
+	mcpApprovalTtlMinutes: number;
 	/** The OpenAI-compatible base URL of the internal image engine. */
 	imageUrl?: string;
 	/** The model of the engine, as the provenance of an image names it. */
@@ -436,9 +464,14 @@ export const config: AiServiceConfig = Object.freeze({
 	imagesEnabled: parsed.data.OSIONOS_AI_IMAGES?.trim().toLowerCase() === 'on',
 	buildersEnabled: parsed.data.OSIONOS_AI_BUILDERS?.trim().toLowerCase() === 'on',
 	buildBudgetMs: parsed.data.OSIONOS_AI_BUILD_BUDGET_MS,
+	pendingPlans: parsed.data.OSIONOS_AI_PENDING_PLANS,
+	buildsPerDay: parsed.data.OSIONOS_AI_BUILDS_PER_DAY,
 	patEnabled: parsed.data.OSIONOS_AI_PAT?.trim().toLowerCase() === 'on',
 	mcpAllowedHosts: Object.freeze(['localhost', '127.0.0.1', ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),
 	mcpAllowedOrigins: Object.freeze(commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_ORIGINS)),
+	mcpPendingPerToken: parsed.data.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
+	mcpWritesPerMinute: parsed.data.OSIONOS_AI_MCP_WRITES_PER_MINUTE,
+	mcpApprovalTtlMinutes: parsed.data.OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES,
 	imageUrl: parsed.data.OSIONOS_AI_IMAGE_URL,
 	imageModel: parsed.data.OSIONOS_AI_IMAGE_MODEL,
 	imageMicroUsd: parsed.data.OSIONOS_AI_IMAGE_MICROUSD,

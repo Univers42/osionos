@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import type { ToolSet } from 'ai';
 import { config } from '../config.ts';
+import { rememberTool } from '../tools/memoryTools.ts';
 import { loadSkillTool } from '../tools/skillTools.ts';
 import type { WorkspaceSkillLoader } from '../tools/skillTools.ts';
 import { buildSkillIndex } from '../skills/runSkills.ts';
@@ -109,6 +110,8 @@ export function buildRunTools(input: {
 		},
 		onResult: async (outcome: ToolOutcome) => {
 			await emit('tool.result', outcome);
+			// C42: a proposal is announced so a client can show the chip.
+			if (outcome.memoryId) await emit('memory.proposed', { type: 'memory.proposed', id: outcome.memoryId });
 			// The skill a load returned is pinned on the row of the run (C40):
 			// the stream expires, the row does not.
 			if (outcome.skill) await recordSkillPin(db, runId, outcome.skill);
@@ -145,10 +148,12 @@ export function buildRunTools(input: {
 			: undefined;
 	const skillTools =
 		skillIndex.entries.length > 0 ? [loadSkillTool(skillIndex.entries.map((entry) => entry.id), undefined, loader)] : [];
+	// C42: `remember` proposes; it needs the workspace the memory belongs to.
+	const proposalTools = input.workspaceId ? [rememberTool({ workspaceId: input.workspaceId, runId })] : [];
 
 	run.tools = user
 		? {
-				...readToolSet({ db, user }, hooks, pool, skillTools),
+				...readToolSet({ db, user }, hooks, pool, [...skillTools, ...proposalTools]),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
 		: undefined;
@@ -160,7 +165,7 @@ export function buildRunTools(input: {
 		const allowed = new Set(agent.tools);
 		const kept: ToolSet = {};
 		for (const [name, tool] of Object.entries(run.tools)) {
-			if (allowed.has(name) || name === 'load_skill') kept[name] = tool;
+			if (allowed.has(name) || name === 'load_skill' || name === 'remember') kept[name] = tool;
 		}
 		run.tools = kept;
 	}

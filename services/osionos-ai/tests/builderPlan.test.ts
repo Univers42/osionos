@@ -7,6 +7,10 @@ import type { Json } from './builderHarness.ts';
  * The builder plan, proposed and stored (devil P6 C150-C153, C160, C163,
  * C164.1 and C164.8). Nothing here executes a plan: that is P6a-3.
  */
+// The C161 limits have their own file (builderUndo.test.ts); this one asks many
+// plans on purpose, so it lifts them out of the way.
+process.env.OSIONOS_AI_PENDING_PLANS = '100';
+process.env.OSIONOS_AI_BUILDS_PER_DAY = '100';
 const { harness, closeBuilderHarness, goodPlan, ask, asked } = await import('./builderHarness.ts');
 const { USER_A, WORKSPACE_A, WORKSPACE_B } = await import('./harness.ts');
 const { app, bridge, tokenFor, call } = harness;

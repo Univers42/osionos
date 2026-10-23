@@ -65,7 +65,7 @@ export async function handleMcp(ctx: RouteContext): Promise<number> {
 		sendMcpError(response, 400, 'batch_not_supported');
 		return 400;
 	}
-	const server = createMcpServer(ctx.deps.db, principal);
+	const server = createMcpServer(ctx.deps.db, ctx.deps.redis, principal);
 	// The host and origin check is guardRefusal above, and only it: the SDK
 	// compares the raw Host header, port included, which the configured names
 	// do not carry.
