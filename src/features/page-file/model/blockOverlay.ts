@@ -80,6 +80,7 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   fileName: isBoundedText,
   sqlMountId: isBoundedText,
   fieldBind: isBoundedText,
+  buttonProgram: isPlainRecord,
   mediaAspect: isBoundedText,
   viewId: isBoundedText,
   dueAt: isDueAt,

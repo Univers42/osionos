@@ -185,9 +185,9 @@ test("children are rebuilt; a missing entry still walks them", () => {
   assert.deepEqual(Object.keys(restored[0]).sort(), ["children", "content", "id", "type"]);
 });
 
-test("EXTRA_BLOCK_KEYS is the frozen 31-key allowlist", () => {
+test("EXTRA_BLOCK_KEYS is the frozen 32-key allowlist", () => {
   assert.deepEqual(Object.keys(EXTRA_BLOCK_KEYS).sort(), [
-    "aiGenerated", "backgroundColor", "codeTheme", "codeView", "collapsed", "collectionRef",
+    "aiGenerated", "backgroundColor", "buttonProgram", "codeTheme", "codeView", "collapsed", "collectionRef",
     "color", "conflictOf", "deferMount", "dueAt", "fieldBind", "fileName", "headingLevel",
     "heightLines", "layoutCells", "layoutConfig", "layoutMode", "layoutRole", "lineNumbers",
     "mediaAspect", "mediaShape", "mediaTags", "mediaText", "mediaWidth", "recordLimit", "recordRef",
