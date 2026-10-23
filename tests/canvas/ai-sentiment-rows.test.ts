@@ -21,7 +21,7 @@ import {
 import { useUserStore } from "../../src/features/auth/model/useUserStore";
 import type { NotionState } from "../../src/shared/notion-database-sys/packages/contract-types/src/index.ts";
 import { renderCellContent, type CellRendererProps } from "../../src/shared/notion-database-sys/src/components/views/table/CellRenderer.tsx";
-import { AutofillSelectCell, AUTOFILL_EMPTY } from "../../src/shared/notion-database-sys/src/components/views/table/cellRenderers/AutofillCellRenderer.tsx";
+import { AutofillSelectCell, AUTOFILL_EMPTY, autofillPill } from "../../src/shared/notion-database-sys/src/components/views/table/cellRenderers/AutofillCellRenderer.tsx";
 import { SelectEditor } from "../../src/shared/notion-database-sys/src/components/views/table/SelectEditors.tsx";
 import type { Page, SchemaProperty } from "../../src/shared/notion-database-sys/src/types/database";
 
@@ -156,4 +156,21 @@ test("with no adapter the AI-filled cell shows — and never writes page.propert
   const html = renderToString(React.createElement(AutofillSelectCell, cellProps({ autofill: { kind: "sentiment", sourcePropertyIds: ["prop-title"] } }, false)));
   assert.ok(html.includes(AUTOFILL_EMPTY), `the empty label is rendered, got ${html}`);
   assert.equal(JSON.stringify(page.properties), before, "the label is display-only, never state");
+});
+
+test("a label finds its pill by option id, then by option name, else it is drawn plain", () => {
+  const prop = {
+    id: "prop-mood",
+    name: "Mood",
+    type: "select",
+    options: [
+      { id: "positive", value: "positive", color: "c-pos" },
+      { id: "opt-7f3", value: "Negative", color: "c-neg" },
+    ],
+    autofill: { kind: "sentiment", sourcePropertyIds: [] },
+  } as unknown as SchemaProperty;
+  assert.deepEqual(autofillPill(prop, "positive"), { text: "positive", color: "c-pos" });
+  assert.deepEqual(autofillPill(prop, "negative"), { text: "Negative", color: "c-neg" });
+  assert.equal(autofillPill(prop, "neutral")?.text, "neutral");
+  assert.equal(autofillPill(prop, null), null);
 });
