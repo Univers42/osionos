@@ -32,7 +32,7 @@ export const EXPORT_MAX_BYTES = 50 * 1024 * 1024;
 export const EXPORT_MAX_ROWS = 250_000;
 export const EXPORT_SCHEMA_VERSION = 1;
 export const IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
-export const SECRET_NAME = /hash|secret|token|password|recovery|totp|key|salt|ip_prefix|hmac|_enc$/i;
+export const SECRET_NAME = /hash|secret|token|password|recovery|totp|key|salt|ip_prefix|hmac|(?:_enc$)/i;
 // The other side of a relation is part of the export too: a connection the user
 // accepted is still a connection of the user. Only the peer's id travels (the
 // registry lists no other column of these tables).

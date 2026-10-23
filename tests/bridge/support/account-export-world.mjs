@@ -145,7 +145,7 @@ export function createExportStore({ exports = [], registry = [], data = {} } = {
 /** The mounted handler on a server, plus a runner that shares the same fake. */
 export async function startExportWorld(t, { kv, store = createExportStore(), clock = { at: Date.now() } } = {}) {
 	const config = accountConfig();
-	const env = { JWT_SECRET: ACCOUNT_JWT_SECRET, STORAGE_ROUTER_URL: 'http://storage.local/storage/v1' };
+	const env = { JWT_SECRET: ACCOUNT_JWT_SECRET, STORAGE_ROUTER_URL: 'https://storage.local/storage/v1' };
 	const pg = createPg({ config, env, fetchImpl: store.fetchImpl });
 	const handler = createAccountHandler({
 		config, pg, kv, verifySession: verifyAppSessionToken, env, fetchImpl: store.fetchImpl,
