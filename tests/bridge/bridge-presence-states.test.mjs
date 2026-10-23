@@ -172,6 +172,13 @@ describe('the database budget', () => {
 		assert.equal(store.callsTo('osionos_presence', 'POST')[0].body.state, 'online');
 	});
 
+	it('an invisible beat records the state and leaves last_seen_at alone', async (t) => {
+		const { store, beat } = world(t);
+		assert.equal((await beat({ state: 'invisible' })).status, 204);
+		assert.equal(store.callsTo('osionos_presence', 'POST')[0].body.state, 'invisible');
+		assert.equal(store.callsTo('osionos_bridge_identities', 'PATCH').length, 0);
+	});
+
 	it('writes again after the ten minutes are over', async (t) => {
 		const { store, beat } = world(t);
 		await beat({});
