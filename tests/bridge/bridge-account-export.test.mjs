@@ -124,6 +124,16 @@ describe('reading a job', () => {
 	});
 });
 
+describe('the owner filter', () => {
+	it('carries user_id=eq.<caller> in every job read, on top of the role', async (t) => {
+		const world = await setup(t, { exports: [base()] });
+		await send(world.base, '/api/account/export', { token: world.plain });
+		const reads = world.store.calls.filter((call) => call.method === 'GET' && call.path.endsWith(`/${EXPORTS}`));
+		assert.equal(reads.length, 1);
+		assert.equal(new URLSearchParams(reads[0].search).get('user_id'), `eq.${USER_A}`);
+	});
+});
+
 describe('GET /api/account/export/:id/download', () => {
 	const gets = (world) => world.store.calls.filter((call) => call.method === 'GET' && call.path.includes('/object/'));
 	const get = (world, job) => send(world.base, `/api/account/export/${job.id}/download`, { token: world.plain });
@@ -248,6 +258,41 @@ describe('the worker', () => {
 			assert.equal(world.store.puts, 0);
 		});
 	}
+	it('never exports a blocked pair, whichever side blocked', async (t) => {
+		const connections = [
+			{ requester_id: USER_B, addressee_id: USER_A, status: 'blocked' },
+			{ requester_id: USER_A, addressee_id: USER_B, status: 'blocked' },
+			{ requester_id: USER_A, addressee_id: randomUUID(), status: 'accepted' },
+		];
+		const world = await setup(t, { data: { ...DATA, osionos_connections: connections } });
+		const job = await runOne(world);
+		const archive = JSON.parse(world.store.objects.get(`account-exports/${job.id}.json`).buffer);
+		assert.deepEqual(archive.tables.osionos_connections.map((row) => row.status), ['accepted']);
+	});
+	it('fails a job whose registry exports a peer-role row of an unknown table, before any data request', async (t) => {
+		const peer = { table_name: 'osionos_notifications', column_name: 'actor_id', role: 'peer', export_columns: ['id', 'actor_id'] };
+		const world = await setup(t, { registry: [...REGISTRY, peer], data: { ...DATA, osionos_notifications: [] } });
+		await runOne(world);
+		assert.equal(failedOf(world).error_code, 'export_forbidden_column');
+		assert.deepEqual(world.store.calls.filter((call) => /osionos_(profiles|notes|connections|notifications)/.test(call.path)), []);
+	});
+	it('exports a table in full when the server caps every response at 100 rows', async (t) => {
+		const many = Array.from({ length: 1200 }, (_, index) => note(index + 1));
+		const world = await setup(t, { data: { ...DATA, osionos_notes: many } });
+		world.store.fail.pageCap = 100;
+		const job = await runOne(world);
+		assert.equal(job.status, 'done');
+		assert.equal(JSON.parse(world.store.objects.get(`account-exports/${job.id}.json`).buffer).manifest.tables.osionos_notes, 1200);
+	});
+	it('deletes the object it just stored when the done write fails', async (t) => {
+		const world = await setup(t);
+		world.store.fail.donePatch = true;
+		await ask(world, 'json');
+		await world.runner.tick();
+		assert.equal(world.store.puts, 1);
+		assert.equal(world.store.objects.size, 0);
+		assert.equal(jobs(world)[0].status, 'failed');
+	});
 	it('deletes the object and marks a job expired once its time has passed', async (t) => {
 		const job = base({ expires_at: '2026-10-23T11:00:00.000Z' });
 		const world = await setup(t, { exports: [job] });

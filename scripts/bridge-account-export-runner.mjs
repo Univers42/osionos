@@ -49,7 +49,7 @@ function scopeFilter(plan, userId) {
 
 /** The path of one page: keyset on id when id is exported, else offset over every column. */
 function pagePath(plan, userId, cursor, offset) {
-	const base = `${plan.table}?select=${plan.columns.join(',')}&${scopeFilter(plan, userId)}&limit=${PAGE_SIZE}`;
+	const base = `${plan.table}?select=${plan.columns.join(',')}&${scopeFilter(plan, userId)}&limit=${PAGE_SIZE}${plan.filter ? `&${plan.filter}` : ''}`;
 	if (plan.columns.includes('id')) return `${base}&order=id.asc${cursor === null ? '' : `&id=gt.${encodeURIComponent(cursor)}`}`;
 	return `${base}&order=${plan.columns.map((column) => `${column}.asc`).join(',')}&offset=${offset}`;
 }
@@ -60,6 +60,7 @@ async function readTable(db, plan, userId, budget) {
 	let cursor = null;
 	for (;;) {
 		const page = await db.get(pagePath(plan, userId, cursor, rows.length));
+		// Ends on an EMPTY page: a server-side row cap below PAGE_SIZE returns short pages mid-table.
 		if (!Array.isArray(page) || page.length === 0) break;
 		for (const row of page) {
 			budget.rows += 1;
@@ -69,7 +70,6 @@ async function readTable(db, plan, userId, budget) {
 			}
 			rows.push(row);
 		}
-		if (page.length < PAGE_SIZE) break;
 		cursor = plan.columns.includes('id') ? String(page.at(-1).id) : null;
 	}
 	return { name: plan.table, columns: plan.columns, rows };
@@ -77,7 +77,7 @@ async function readTable(db, plan, userId, budget) {
 
 async function buildJobArtifact(db, job, now) {
 	if (!UUID_REGEX.test(String(job.user_id))) throw Object.assign(new Error('The job has no valid owner.'), { code: 'export_bad_owner' });
-	const registry = await db.get('osionos_account_data_map?export_columns=not.is.null&select=table_name,column_name,export_columns&limit=1000');
+	const registry = await db.get('osionos_account_data_map?export_columns=not.is.null&select=table_name,column_name,role,export_columns&limit=1000');
 	const budget = { rows: 0, bytes: 0 };
 	const tables = [];
 	for (const plan of planTables(registry)) tables.push(await readTable(db, plan, job.user_id, budget));
@@ -86,10 +86,12 @@ async function buildJobArtifact(db, job, now) {
 
 async function runJob(db, job, { env, fetchImpl, now }) {
 	const startedAt = now();
+	let stored = false;
 	try {
 		const artifact = await buildJobArtifact(db, job, now);
 		await ensureBucket(job.user_id, EXPORT_BUCKET, fetchImpl, env);
 		await storagePut(job.user_id, EXPORT_KEY_FOR(job), artifact.contentType, artifact.bytes, fetchImpl, env, EXPORT_BUCKET);
+		stored = true;
 		await db.patch(`osionos_account_exports?id=eq.${job.id}`, {
 			status: 'done',
 			bytes: artifact.bytes.length,
@@ -97,6 +99,8 @@ async function runJob(db, job, { env, fetchImpl, now }) {
 			expires_at: new Date(now() + EXPORT_TTL_MS).toISOString(),
 		}, { prefer: 'return=minimal' });
 	} catch (error) {
+		// An object with no done row has no expiry and nobody to sweep it.
+		if (stored) await storageDelete(job.user_id, EXPORT_KEY_FOR(job), fetchImpl, env, EXPORT_BUCKET).catch(() => {});
 		console.warn(`[osionos-bridge] account export failed after ${now() - startedAt} ms: ${failureCode(error)}`);
 		await db.patch(`osionos_account_exports?id=eq.${job.id}`, {
 			status: 'failed',

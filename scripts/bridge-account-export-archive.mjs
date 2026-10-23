@@ -40,6 +40,10 @@ const EDGE_COLUMNS = {
 	osionos_connections: ['requester_id', 'addressee_id'],
 	osionos_follows: ['follower_id', 'followee_id'],
 };
+// A blocked pair is one SHARED row; exporting it would tell the blocked user who blocked them.
+const ROW_FILTERS = { osionos_connections: 'status=neq.blocked' };
+// The only tables whose peer-role rows may be exported: each is scoped to the caller's own end.
+const PEER_TABLES = new Set([...Object.keys(EDGE_COLUMNS), 'osionos_user_blocks']);
 const CONTENT_TYPES = { json: 'application/json', csv: 'text/csv; charset=utf-8', zip: 'application/zip' };
 
 function exportError(code, message) {
@@ -61,7 +65,8 @@ export function planTables(registryRows) {
 	for (const row of Array.isArray(registryRows) ? registryRows : []) {
 		if (!Array.isArray(row?.export_columns) || row.export_columns.length === 0) continue;
 		const table = assertIdentifier(row.table_name);
-		const plan = plans.get(table) ?? { table, columns: [], scope: [] };
+		if (row.role === 'peer' && !PEER_TABLES.has(table)) throw exportError('export_forbidden_column', 'A peer-role registry row is not allowed in the export.');
+		const plan = plans.get(table) ?? { table, columns: [], scope: [], filter: ROW_FILTERS[table] ?? null };
 		for (const column of row.export_columns) {
 			assertIdentifier(column);
 			if (SECRET_NAME.test(column)) throw exportError('export_forbidden_column', 'A registry export column is named like a secret.');
