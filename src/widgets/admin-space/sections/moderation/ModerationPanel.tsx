@@ -47,7 +47,7 @@ export const ModerationPanelView: React.FC<ModerationPanelViewProps> = (props) =
   const { reports, status, loading, loaded, error, hasMore, rowErrors, busyId, onStatus, onRetry, onLoadMore, onDecide } = props;
   const state = !loaded ? "loading" : reports.length === 0 && error ? "error" : "ready";
   return (
-    <Section title="Moderation" className="mt-6">
+    <Section title="Reports" className="mt-6">
       <label className="mb-3 flex items-center gap-2 text-sm text-[var(--osio-fg-muted)]">
         Status
         <select className={fieldClass} value={status} onChange={(event) => onStatus(event.target.value as ReportStatus)}>

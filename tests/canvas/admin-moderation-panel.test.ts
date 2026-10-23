@@ -25,7 +25,7 @@ import { withBridge, type Call, type Reply } from "./support/stub-bridge.ts";
 const { useModerationQueueStore } = await import("../../src/features/admin-moderation/useModerationQueueStore.ts");
 const { moderationErrorCopy, MODERATION_CODES } = await import("../../src/features/admin-moderation/moderationCopy.ts");
 const { ModerationPanelView } = await import("../../src/widgets/admin-space/sections/moderation/ModerationPanel.tsx");
-const { section } = await import("../../src/widgets/admin-space/sections/moderation/section.ts");
+const { BUILT_IN_SECTIONS } = await import("../../src/widgets/admin-space/model/adminSections.ts");
 
 const T = "tttttttt-tttt-4ttt-8ttt-tttttttttttt";
 const report = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -44,10 +44,11 @@ const queue = (call: Call): Reply =>
 
 const in10Days = () => new Date(Date.now() + 10 * 86_400_000).toISOString();
 
-test("the section is the moderator-level Moderation entry", () => {
-  assert.equal(section.id, "moderation");
-  assert.equal(section.label, "Moderation");
-  assert.equal(section.requiredRole, "moderator");
+test("the built-in Moderation entry is moderator-level and is the only one", () => {
+  const entries = BUILT_IN_SECTIONS.filter((s) => s.id === "moderation");
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].label, "Moderation");
+  assert.equal(entries[0].requiredRole, "moderator");
 });
 
 test("reload sends the status, loadMore appends from the cursor, and the state keeps no reporter data", async () => {
