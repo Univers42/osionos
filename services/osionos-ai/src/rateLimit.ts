@@ -23,6 +23,7 @@ const KEY_TTL_SECONDS = 70;
 export const RUN_LIMIT_PREFIX = 'ai:rl';
 export const RELATED_LIMIT_PREFIX = 'ai:rl:related';
 export const IMAGE_LIMIT_PREFIX = 'ai:rl:image';
+export const DESCRIBE_LIMIT_PREFIX = 'ai:rl:describe';
 /** The window of the mints: a PAT is minted from a fresh session, and rarely. */
 export const PAT_LIMIT_PREFIX = 'ai:rl:pat';
 
@@ -100,4 +101,29 @@ export async function checkPatRateLimit(
 	now: Date = new Date(),
 ): Promise<RateLimitResult> {
 	return checkRateLimit(redis, userId, limit, now, PAT_LIMIT_PREFIX);
+}
+
+/** The windows of the remote MCP calls: one per token, one per user (C118). */
+export const MCP_TOKEN_LIMIT_PREFIX = 'ai:rl:mcp:token';
+export const MCP_USER_LIMIT_PREFIX = 'ai:rl:mcp:user';
+export const MCP_CALLS_PER_TOKEN_MINUTE = 60;
+export const MCP_CALLS_PER_USER_MINUTE = 120;
+
+/**
+ * One MCP call against both windows: the token's and its owner's.
+ *
+ * Keyed on ids, never on the IP: behind a shared front address one agent
+ * would otherwise spend everybody's budget. The user window is what stops a
+ * user from multiplying their budget by minting tokens. The token window is
+ * spent first, so a refused call does not spend the user's.
+ */
+export async function checkMcpRateLimit(
+	redis: Redis,
+	tokenId: string,
+	userId: string,
+	now: Date = new Date(),
+): Promise<RateLimitResult> {
+	const token = await checkRateLimit(redis, tokenId, MCP_CALLS_PER_TOKEN_MINUTE, now, MCP_TOKEN_LIMIT_PREFIX);
+	if (!token.allowed) return token;
+	return checkRateLimit(redis, userId, MCP_CALLS_PER_USER_MINUTE, now, MCP_USER_LIMIT_PREFIX);
 }

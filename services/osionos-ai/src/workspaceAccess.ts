@@ -42,3 +42,17 @@ export async function canAccessWorkspace(
 	const permissions = Array.isArray(member.permissions) ? member.permissions : [];
 	return permissions.includes('admin') || permissions.includes(permission);
 }
+
+/**
+ * canAccessWorkspace without the token's own-workspace shortcut: a session token
+ * can be an hour stale, and C138 asks for the members table at request time.
+ * Blanking the claim leaves only the live row.
+ */
+export function canAccessWorkspaceLive(
+	db: Pool,
+	user: AuthUser,
+	workspaceId: string,
+	permission: WorkspacePermission,
+): Promise<boolean> {
+	return canAccessWorkspace(db, { ...user, workspaceId: '' }, workspaceId, permission);
+}

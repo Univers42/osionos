@@ -24,6 +24,13 @@ const present = await pool.query(
 );
 export const ready = Boolean(present.rows[0]?.events) && Boolean(present.rows[0]?.jobs);
 
+const sentimentTables = await pool.query(
+	"select to_regclass('public.ai_sentiment') as scores, to_regclass('public.ai_sentiment_settings') as settings, to_regclass('public.osionos_page_comments') as comments",
+);
+/** The sentiment tests need the sentiment migration on top of the jobs and comments ones. */
+export const sentimentReady =
+	Boolean(sentimentTables.rows[0]?.scores) && Boolean(sentimentTables.rows[0]?.settings) && Boolean(sentimentTables.rows[0]?.comments) && Boolean(present.rows[0]?.jobs);
+
 export const WS_PRIVATE = randomUUID();
 export const WS_PUBLIC = randomUUID();
 export const PAGE_PUBLIC = randomUUID(); // public page in a private workspace
@@ -105,7 +112,7 @@ export function installHooks(): void {
 
 	beforeEach(async () => {
 		logs.length = 0;
-		mock.setOptions({ fail: false, onRequest: undefined, toxicLabel: 'toxic' });
+		mock.setOptions({ fail: false, onRequest: undefined, toxicLabel: 'toxic', labels: undefined });
 	});
 
 	afterEach(async () => {

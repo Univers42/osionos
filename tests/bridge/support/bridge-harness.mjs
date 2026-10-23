@@ -115,8 +115,12 @@ function readRows(rows, params) {
 	return params.has('limit') ? ordered.slice(0, Number(params.get('limit'))) : ordered;
 }
 
-function upsertRows(rows, body, params, prefer) {
-	const conflictKeys = (params.get('on_conflict') ?? 'id').split(',');
+// The unique key a plain insert collides on when it names no on_conflict (real PostgREST
+// answers 409 / 23505 from the table's unique index).
+const UNIQUE_KEYS = { osionos_object_databases: 'owner_id,db_key' };
+
+function upsertRows(rows, body, params, prefer, tableName) {
+	const conflictKeys = (params.get('on_conflict') ?? UNIQUE_KEYS[tableName] ?? 'id').split(',');
 	const written = [];
 	for (const item of Array.isArray(body) ? body : [body]) {
 		const row = { id: randomUUID(), ...item };
@@ -130,8 +134,8 @@ function upsertRows(rows, body, params, prefer) {
 	return written;
 }
 
-function writeRows(rows, method, params, body, prefer) {
-	if (method === 'POST') return upsertRows(rows, body, params, prefer);
+function writeRows(rows, method, params, body, prefer, tableName) {
+	if (method === 'POST') return upsertRows(rows, body, params, prefer, tableName);
 	const hits = matchingRows(rows, params);
 	if (method === 'PATCH') {
 		hits.forEach((row) => {
@@ -243,7 +247,7 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 			const range = rows.length === 0 ? '*/0' : `0-${rows.length - 1}/${total}`;
 			return jsonResponse(rows, 200, prefer.includes('count=exact') ? { 'content-range': range } : {});
 		}
-		const written = writeRows(table(name), method, parsed.searchParams, body, prefer);
+		const written = writeRows(table(name), method, parsed.searchParams, body, prefer, name);
 		if (!written) return jsonResponse({ code: '23505', message: 'duplicate key' }, 409);
 		// A PATCH answers with the columns its select names (PostgREST projects the
 		// written rows), so `select=version` really answers [{"version":n}] — and a

@@ -7,6 +7,7 @@ import { handleAgents } from './agents.ts';
 import { handleComplete } from './complete.ts';
 import { handleVoiceTranscribe } from './voice.ts';
 import { handleImages } from './images.ts';
+import { handleMediaDescribe } from './mediaDescribe.ts';
 import { handleRunCancel, handleRunEvents, handleRuns } from './runs.ts';
 import {
 	handleConnectionDelete,
@@ -19,7 +20,10 @@ import {
 import { handleUsage } from './usage.ts';
 import { handleRelated } from './related.ts';
 import { handleApprovalDecision, handleApprovalGet, handleApprovalResume } from './approvals.ts';
+import { handleSentimentMood, handleSentimentPulse } from './sentimentPulse.ts';
+import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
+import { handleMcp } from './mcp.ts';
 import type { RouteEntry } from './types.ts';
 
 /**
@@ -94,6 +98,12 @@ export const ROUTES: RouteEntry[] = [
 		handle: handleVoiceTranscribe,
 	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/images$/, label: '/api/ai/images', handle: handleImages },
+	{
+		methods: ['POST'],
+		pattern: /^\/api\/ai\/media\/describe$/,
+		label: '/api/ai/media/describe',
+		handle: handleMediaDescribe,
+	},
 	{ methods: ['POST'], pattern: /^\/api\/ai\/runs$/, label: '/api/ai/runs', handle: handleRuns },
 	{
 		methods: ['GET'],
@@ -125,6 +135,25 @@ export const ROUTES: RouteEntry[] = [
 		label: '/api/ai/approvals/:id/resume',
 		handle: handleApprovalResume,
 	},
+	{
+		methods: [],
+		pattern: /^\/api\/ai\/workspaces\/([^/]+)\/sentiment\/settings$/,
+		label: '/api/ai/workspaces/:workspaceId/sentiment/settings',
+		handle: handleSentimentSettings,
+		anyMethod: true,
+	},
+	{
+		methods: ['GET'],
+		pattern: /^\/api\/ai\/workspaces\/([^/]+)\/sentiment\/pulse$/,
+		label: '/api/ai/workspaces/:workspaceId/sentiment/pulse',
+		handle: handleSentimentPulse,
+	},
+	{
+		methods: ['GET'],
+		pattern: /^\/api\/ai\/pages\/([^/]+)\/sentiment\/mood$/,
+		label: '/api/ai/pages/:pageId/sentiment/mood',
+		handle: handleSentimentMood,
+	},
 	// Off, the access-token paths do not exist: the router's own 404 (R-C4).
 	...(config.patEnabled
 		? [
@@ -141,6 +170,8 @@ export const ROUTES: RouteEntry[] = [
 				label: '/api/ai/access-tokens/:id',
 				handle: handleAccessTokenDelete,
 			},
+			// The remote MCP endpoint: PAT only, read only (G4b-1).
+			{ methods: [], pattern: /^\/api\/ai\/mcp$/, label: '/api/ai/mcp', handle: handleMcp, anyMethod: true },
 		]
 		: []),
 ];

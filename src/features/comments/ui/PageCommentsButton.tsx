@@ -49,6 +49,7 @@ export const PageCommentsButton: React.FC<{ pageId: string }> = ({ pageId }) => 
       {open && (
         <div className="absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-menu)]">
           <CommentsPanel
+            pageId={pageId}
             comments={comments}
             loading={loading}
             meId={meId}
