@@ -33,6 +33,7 @@ import { createSessionsRoutes } from './bridge-sessions.mjs';
 import { createPublishedPagesRoutes } from './bridge-account-published-pages.mjs';
 import { createAvatarRoutes } from './bridge-avatar.mjs';
 import { createSelfDataRoutes } from './bridge-self-data.mjs';
+import { createSelfViewsRoutes } from './bridge-self-views.mjs';
 import { createWorkspaceSettingsRoutes } from './bridge-workspace-settings.mjs';
 import { createAdminUsersRoutes } from './bridge-account-users.mjs';
 import { createAdminAuditRoutes } from './bridge-account-audit.mjs';
@@ -47,6 +48,7 @@ export function createAccountHandler(deps) {
 		createAccountSudoRoutes({ ...deps, env: deps.env ?? process.env }),
 		createAccountIdentityRoutes(deps),
 		createSelfDataRoutes(deps),
+		createSelfViewsRoutes(deps),
 		createWorkspaceSettingsRoutes(deps),
 		createPatRoutes(deps),
 		createAdminUsersRoutes(deps),
