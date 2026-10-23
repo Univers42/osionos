@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import { Pool } from 'pg';
 import { canReadPageRowAsMember } from '../../../scripts/bridge-page-read.mjs';
-import { ROW_ALLOWED_SQL, WORKSPACE_ALLOWED_SQL } from '../src/retrieval/acl.ts';
+import { ROW_ALLOWED_SQL, WORKSPACE_ALLOWED_SQL, pageRowReadableSql } from '../src/retrieval/acl.ts';
 import { USER_B, USER_C, WORKSPACE_A, WORKSPACE_C, clearPages, seedPage, vectorOf } from './retrievalSeed.ts';
 
 /**
@@ -190,5 +190,26 @@ describe('the ACL of the retrieval', { skip: hasRag ? false : 'the RAG migration
 		// The table is not a table of trues: both answers are in it.
 		assert.ok(allowed > 0, 'some rows are readable');
 		assert.ok(allowed < table.length, 'some rows are not readable');
+	});
+
+	it('the page-row predicate and the bridge rule agree on every row of the table', async () => {
+		const table = combinations();
+		const rows = [...(await seed(table)).values()];
+		const mismatches: string[] = [];
+		for (const row of rows) {
+			const { combination } = row;
+			const page = await pool.query(
+				`select id, workspace_id, owner_id, visibility, collaborators,
+				        (p.workspace_id = any($2::uuid[]) and ${pageRowReadableSql('p', '$3')}) as allowed
+				 from public.osionos_pages p where id = $1`,
+				[row.pageId, combination.workspaces, combination.caller],
+			);
+			const pageRow = page.rows[0];
+			const byBridge = canReadPageRowAsMember(pageRow, combination.caller, combination.workspaces);
+			if (byBridge !== (pageRow.allowed === true)) {
+				mismatches.push(`${combination.visibility ?? 'null'} / ${combination.relation} / member=${combination.member}`);
+			}
+		}
+		assert.deepEqual(mismatches, [], 'the page predicate and the bridge rule must answer the same');
 	});
 });

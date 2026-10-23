@@ -172,7 +172,17 @@ export type AiPart =
   | { type: "reasoning"; text: string }
   | { type: "tool-call"; toolCallId: string; toolName: string; input: unknown }
   | { type: "tool-result"; toolCallId: string; output: unknown }
-  | { type: "citation"; n?: number; pageId: string; blockId?: string; title: string; snippet: string };
+  | {
+      type: "citation";
+      n?: number;
+      /** Absent means a page: the only collection stored before packs. */
+      collection?: "page";
+      pageId: string;
+      blockId?: string;
+      title: string;
+      snippet: string;
+    }
+  | { type: "citation"; n?: number; collection: "pack"; pack: string; title: string; snippet: string };
 
 /** A message, as the service stores it. */
 export interface AiMessage {

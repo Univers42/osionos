@@ -6,7 +6,7 @@ import { after, before, describe, it } from 'node:test';
 // is refused, and the refusal says when to come back.
 process.env.OSIONOS_AI_RUNS_PER_MINUTE = '1';
 
-import { startHarness, USER_A, VISION, WORKSPACE_A } from './harness.ts';
+import { startHarness, USER_A, VISION, WORKSPACE_A, awaitWindowRoom } from './harness.ts';
 import { pngBytes } from './visionFixtures.ts';
 import { SseStream, collect } from './sse.ts';
 
@@ -40,6 +40,7 @@ describe('the rate limit of the runs', () => {
 	});
 
 	it('answers a 429 with the seconds the client must wait', async () => {
+		await awaitWindowRoom();
 		const token = tokenFor(USER_A, WORKSPACE_A);
 		const first = await postRun(token, {
 			runId: randomUUID(),

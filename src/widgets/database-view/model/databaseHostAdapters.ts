@@ -14,6 +14,7 @@ import { MermaidDiagram } from "@/shared/ui";
 import { useUserStore } from "@/features/auth";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { collabTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { readAutofillLabels } from "./databaseAutofill";
 
 export function useDatabaseHostAdapters(): HostAdapters {
   const personas = useUserStore((s) => s.personas);
@@ -27,6 +28,8 @@ export function useDatabaseHostAdapters(): HostAdapters {
       },
       // A module-level component: the useMemo deps do not change.
       MermaidDiagram,
+      // Read-only AI labels for an AI-filled select. The kit never writes them.
+      autofill: { read: readAutofillLabels },
     }),
     [personas],
   );

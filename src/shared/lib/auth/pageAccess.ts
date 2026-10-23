@@ -17,6 +17,8 @@ import type {
   PageVisibility,
 } from "@/entities/page";
 import type { UserSession, Workspace } from "@/entities/user";
+import type { ShareAccessRule, ShareLevel } from "@/features/share/types";
+import { SHARE_LEVELS } from "@/features/share/types";
 import { useSyncExternalStore } from "react";
 
 /** The caller's own workspace membership — the osionos_workspace_members row. */
@@ -38,6 +40,12 @@ export interface PageAccessContext {
    * `?.` and treat an absent set as "nothing refused yet".
    */
   refusedPageIds?: Set<string>;
+  /**
+   * The share rules the bridge answered per page (key: lower-case page id): the page's
+   * own rules plus the workspace-wide ones. Absent = unknown, and the client then
+   * under-grants: a rule can only ever ADD a write here after the server said so.
+   */
+  shareRulesByPage?: Map<string, ShareAccessRule[]>;
 }
 
 /** The permission a page write needs, as the bridge's PATCH/DELETE routes ask for it. */
@@ -45,6 +53,54 @@ type PageWritePermission = "create" | "update" | "delete";
 
 const OWNER_PERMISSIONS = ["create", "read", "update", "delete", "admin"];
 const SHARED_PERMISSIONS = ["create", "read", "update", "delete"];
+
+const levelRank = (level: ShareLevel): number => SHARE_LEVELS.indexOf(level);
+
+/** Every field of a rule is untrusted input: a malformed rule matches nobody. */
+function ruleMatches(rule: ShareAccessRule, page: PageEntry, userId: string, role: string): boolean {
+  if (!rule || typeof rule !== "object" || rule.resourceType !== "page") return false;
+  const resourceId = rule.resourceId ?? "";
+  if (resourceId !== "" && !sameUserId(resourceId, page._id)) return false;
+  const target = rule.target;
+  if (!target || typeof target !== "object") return false;
+  if (target.type === "user") return sameUserId(target.userId, userId);
+  if (target.type === "role") return typeof target.role === "string" && target.role.toLowerCase() === role.toLowerCase();
+  if (target.type === "workspace") return sameUserId(rule.workspaceId, page.workspaceId);
+  return target.type === "public";
+}
+
+/**
+ * The level the rules give the caller on one page, as bestShareLevel in
+ * scripts/bridge-share-rules.mjs: the best matching level, a matching no_access beating
+ * every grant. O(r) over the rules.
+ */
+function shareLevelFor(
+  rules: readonly ShareAccessRule[] | null | undefined, page: PageEntry, userId: string, role: string,
+): ShareLevel | null {
+  if (!Array.isArray(rules)) return null;
+  let best: ShareLevel | null = null;
+  for (const rule of rules) {
+    if (!rule || !SHARE_LEVELS.includes(rule.permission)) continue;
+    if (!ruleMatches(rule, page, userId, role)) continue;
+    if (rule.permission === "no_access") return "no_access";
+    if (best === null || levelRank(rule.permission) > levelRank(best)) best = rule.permission;
+  }
+  return best;
+}
+
+/** Share rules never reach the page owner or the workspace owner/admin (readablePageAccess). */
+function isRuleExempt(member: PageMemberAccess | null): boolean {
+  return member === null || member.role === "owner" || member.role === "admin";
+}
+
+/** Caches the bridge's answer for one page so canWritePage can read it. */
+export function setPageShareRules(
+  context: PageAccessContext | null, pageId: string, rules: ShareAccessRule[],
+): void {
+  if (!context) return;
+  context.shareRulesByPage ??= new Map();
+  context.shareRulesByPage.set(pageId.toLowerCase(), rules);
+}
 
 interface PlaygroundUserStoreLike {
   getState: () => {
@@ -258,17 +314,27 @@ export function markPageWriteRefused(pageId: string): void {
   context.refusedPageIds.add(pageId);
 }
 
-/** The bridge's canWritePageRow (scripts/bridge-api.mjs) as one predicate. O(w + p + c). */
+/**
+ * The bridge's canWritePageRow (scripts/bridge-api.mjs) as one predicate. O(w + p + c + r).
+ * `rules` default to the ones cached on the context; the server stays the authority —
+ * this only stops the UI offering an edit the bridge refuses.
+ */
 export function canWritePage(
-  page: PageEntry, context: PageAccessContext | null, permission: "update" | "delete"
+  page: PageEntry, context: PageAccessContext | null, permission: "update" | "delete",
+  rules: readonly ShareAccessRule[] | null | undefined = context?.shareRulesByPage?.get(page._id.toLowerCase()),
 ): boolean {
   if (!context) return false;
   // The server's own verdict, ahead of every local rule: a page this session was
   // refused on stays read-only even though the membership still grants the write.
   if (context.refusedPageIds?.has(page._id)) return false;
   if (sameUserId(page.ownerId, context.userId)) return true;
-  if (!canReadPage(page, context)) return false;
   const member = memberFor(context, page.workspaceId);
+  const level = isRuleExempt(member) ? null : shareLevelFor(rules, page, context.userId, member?.role ?? "");
+  // An explicit deny beats every grant; a rule that reads makes an otherwise hidden page readable.
+  if (level === "no_access") return false;
+  const readsByRule = level !== null && levelRank(level) >= levelRank("can_view");
+  if (!canReadPage(page, context) && !readsByRule) return false;
+  if (level !== null && levelRank(level) >= levelRank("can_edit")) return true;
   if (!memberHasPermission(member, permission)) return false;
   return mayModifyPage(page, member, context.userId);
 }

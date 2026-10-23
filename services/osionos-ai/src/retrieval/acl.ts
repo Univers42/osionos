@@ -41,6 +41,16 @@ export const ROW_ALLOWED_SQL = `(
 )`;
 
 /**
+ * The same row rule on a row of osionos_pages itself (alias `alias`, caller id
+ * `userParam`, e.g. '$2'), for the queries that read pages and not chunks.
+ * Caveat: it is the row half only; the caller also checks the workspace.
+ */
+export const pageRowReadableSql = (alias: string, userParam: string): string =>
+	`(${alias}.visibility in ('shared', 'public')
+	 or ${alias}.owner_id = ${userParam}::uuid
+	 or ${userParam}::uuid = any(public.ai_collaborator_ids(${alias}.collaborators)))`;
+
+/**
  * The workspace predicate: the page must be in a workspace the caller is a
  * member of.
  *
@@ -87,6 +97,6 @@ export async function liveMemberWorkspaces(
 	return liveReadableWorkspaces({
 		privateWorkspaceId: user.workspaceId,
 		memberWorkspaces,
-		scope: scope ?? null,
+		scope: scope ?? user.scope ?? null,
 	});
 }

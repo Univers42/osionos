@@ -45,6 +45,7 @@ export type ApprovalStatus =
   | "failed"
   | "declined"
   | "expired"
+  | "partial"
   | "unknown";
 
 /** The target of a write: the page, the title and the workspace. */
@@ -85,6 +86,17 @@ export interface ApprovalDescription {
   /** When the question closes itself. */
   expiresAt: string;
   createdAt: string;
+}
+
+/**
+ * An outside agent's write, as the list describes it.
+ *
+ * `agentName` is the name of the token that asked: it is untrusted text,
+ * chosen by whoever minted the token, and the card shows it as a text node.
+ */
+export interface McpApproval extends ApprovalDescription {
+  origin: "mcp";
+  agentName: string;
 }
 
 /** The decision of the user, and what came of it. */
@@ -181,19 +193,64 @@ export async function fetchApproval(approvalId: string): Promise<ApprovalDescrip
 }
 
 /**
+ * One row of the list, or nothing.
+ *
+ * The service sends the card's data plus the origin and the agent. A row
+ * without an id or without a string name is not a card the user can decide:
+ * it is dropped rather than drawn half-read.
+ */
+function toMcpApproval(value: unknown): McpApproval | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.approvalId !== "string") return null;
+  if (typeof row.agentName !== "string") return null;
+  return row as unknown as McpApproval;
+}
+
+/**
+ * `GET /approvals?origin=mcp` — the outside agents' writes that wait.
+ *
+ * Newest first, at most 50, pending only: what the user still has to decide.
+ * The rows of somebody else never reach this client, and an agent's name is
+ * text: the panel never treats it as markup.
+ */
+export async function listMcpApprovals(): Promise<McpApproval[]> {
+  const response = await request("/approvals?origin=mcp", {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  const body = (await response.json()) as { approvals?: unknown } | null;
+  if (!Array.isArray(body?.approvals)) return [];
+  return body.approvals
+    .map(toMcpApproval)
+    .filter((approval): approval is McpApproval => approval !== null);
+}
+
+/**
  * `POST /approvals/:id` — the decision of the user.
  *
- * The body is the decision, and nothing else: a body that carries more than a
- * decision is a body that tries to be an argument, and the service refuses it.
+ * The body is the decision, and, for a `build_plan` approval, the kept keys
+ * of the plan: `{ decision, items }`. Otherwise it is the decision alone.
  */
 export async function decideApproval(
   approvalId: string,
   decision: ApprovalChoice,
+  items?: string[],
 ): Promise<ApprovalDecision> {
+  const body: { decision: ApprovalChoice; items?: string[] } = { decision };
+  if (items !== undefined) body.items = items;
   const response = await request(`/approvals/${encodeURIComponent(approvalId)}`, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({ decision }),
+    body: JSON.stringify(body),
+  });
+  return (await response.json()) as ApprovalDecision;
+}
+
+export async function resumeApproval(approvalId: string): Promise<ApprovalDecision> {
+  const response = await request(`/approvals/${encodeURIComponent(approvalId)}/resume`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
   });
   return (await response.json()) as ApprovalDecision;
 }

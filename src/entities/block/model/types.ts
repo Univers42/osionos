@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { EmbedSnapshot } from '@/shared/lib/embed/embedInfo';
+import type { ButtonProgram } from './buttonProgram';
 
 /**
  * Standalone Block types for the playground application.
@@ -167,6 +168,8 @@ export interface Block {
   mediaShape?: 'rounded' | 'circle'; /** Image crop shape (circle = avatar; default rounded) */
   mediaAspect?: string;     /** CSS aspect-ratio for image blocks (e.g. "16 / 9"); "original"/unset = natural */
   mediaAlt?: string;        /** Alt text for image media blocks (accessibility + failed-load text) */
+  mediaTags?: string[];     /** Tags of an image block (≤ 10, each ≤ 40 chars, lowercase): written by "Describe with AI", editable; indexed */
+  mediaText?: string;       /** Text found in an image block (≤ 300 chars), from "Describe with AI"; indexed */
   placeholderText?: string; /** Temporary placeholder hint for empty transformed blocks */
   drawHeight?: number;      /** LEGACY 'draw' block canvas height in px. The retired Draw tool; its scene JSON still lives in `content`. */
   boardSlug?: string;       /** 'whiteboard' block: slug of the drawnosaurus board it embeds. Unset until the board is created. */
@@ -177,6 +180,7 @@ export interface Block {
   buttonLabel?: string;     /** Visible label for a 'button' block (falls back to content) */
   buttonHref?: string;      /** Button target: internal page link `page://<id>`, a `/...` path, else presentational */
   buttonVariant?: 'primary' | 'secondary'; /** Button style for a 'button' block (default: primary) */
+  buttonProgram?: ButtonProgram; /** The steps a 'button' block runs on click (re-parsed on every click) */
   tableData?: string[][];	/** Table data (array of rows, each row is array of cell strings) */
   tableConfig?: TableBlockConfig; /** Presentation and sizing options for simple table blocks */
   databaseId?: string;		/** Database reference ID (for database_inline / database_full_page) */

@@ -28,8 +28,10 @@
 import {
   decideApproval,
   fetchApproval,
+  resumeApproval,
   ApprovalError,
   type ApprovalChoice,
+  type ApprovalDecision,
   type ApprovalDescription,
   type ApprovalPreview,
   type ApprovalStatus,
@@ -51,7 +53,8 @@ export function approvalCardState(status: string): ApprovalCardState {
     status === "executed" ||
     status === "failed" ||
     status === "declined" ||
-    status === "expired"
+    status === "expired" ||
+    status === "partial"
   ) {
     return status;
   }
@@ -66,6 +69,7 @@ export function stateWords(state: ApprovalCardState, error?: string | null): str
   if (state === "expired") return "Expired — ask again";
   if (state === "unknown") return "May have been written — check the page";
   if (state === "failed") return error ? `The write failed: ${error}` : "The write failed.";
+  if (state === "partial") return "Partly built — resume to finish";
   return "";
 }
 
@@ -135,7 +139,7 @@ export function approvedInRunWords(count: number): string {
  */
 export function provenanceTitles(
   pageIds: readonly string[] | undefined,
-  known: readonly { pageId: string; title: string }[],
+  known: readonly { pageId?: string; title: string }[],
 ): string[] {
   if (!pageIds || pageIds.length === 0) return [];
   const titles: string[] = [];
@@ -144,6 +148,17 @@ export function provenanceTitles(
     if (title && !titles.includes(title)) titles.push(title);
   }
   return titles;
+}
+
+/**
+ * The line of an outside agent's write: who asked, and what osionos cannot see.
+ *
+ * The name is the one the user gave the token, and it is untrusted text: the
+ * card shows it as a text node. The sentence says plainly that the agent's
+ * reads are outside osionos, so the card never pretends to know them.
+ */
+export function externalAgentWords(name: string): string {
+  return `Requested by external agent "${name}" — osionos cannot see what it read.`;
 }
 
 /** The words of a refusal: the decision did not go through. */
@@ -174,24 +189,25 @@ export type ApprovalOutcome =
 const deciding = new Set<string>();
 
 /**
- * The decision of the user, and what came of it.
+ * A POST that decides the approval (the decision, or the resume of a partial
+ * build), and what came of it.
  *
- * ONE CLICK, ONE POST: an approval whose decision is on its way refuses a
- * second one, whatever the buttons say. The guard lives here, in the model,
- * and not in the button — a double click, a click and an Enter, and two
- * windows of the same conversation all reach this.
+ * ONE CLICK, ONE POST: an approval whose POST is on its way refuses a second
+ * one, whatever the buttons say. The guard lives here, in the model, and not
+ * in the button — a double click, a click and an Enter, and two windows of
+ * the same conversation all reach this.
  *
- * A 409 — the approval was already decided — is NOT a failure: the card is
- * fetched again, and it shows what really happened.
+ * A 409 — the approval was already decided, or is not partial any more — is
+ * NOT a failure: the card is fetched again, and it shows what really happened.
  */
-export async function decideApprovalCard(
+async function guardedDecision(
   approvalId: string,
-  decision: ApprovalChoice,
+  post: () => Promise<ApprovalDecision>,
 ): Promise<ApprovalOutcome> {
   if (deciding.has(approvalId)) return { kind: "busy" };
   deciding.add(approvalId);
   try {
-    const answer = await decideApproval(approvalId, decision);
+    const answer = await post();
     return {
       kind: "decided",
       status: answer.status,
@@ -208,4 +224,18 @@ export async function decideApprovalCard(
   } finally {
     deciding.delete(approvalId);
   }
+}
+
+/** The decision of the user; for a plan, `items` are the kept keys. */
+export function decideApprovalCard(
+  approvalId: string,
+  decision: ApprovalChoice,
+  items?: string[],
+): Promise<ApprovalOutcome> {
+  return guardedDecision(approvalId, () => decideApproval(approvalId, decision, items));
+}
+
+/** The resume of a partial approval: build the rest of it, under the same guard. */
+export function resumeApprovalCard(approvalId: string): Promise<ApprovalOutcome> {
+  return guardedDecision(approvalId, () => resumeApproval(approvalId));
 }

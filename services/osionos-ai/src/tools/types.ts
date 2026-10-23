@@ -3,6 +3,7 @@ import type { z } from 'zod';
 import type { AuthUser } from '../auth.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { ApprovalPlan } from '../approvals/types.ts';
+import type { Authorship } from '../runs/sources.ts';
 
 /**
  * The tools of the assistant: what the model may call, and what it may not.
@@ -20,8 +21,13 @@ import type { ApprovalPlan } from '../approvals/types.ts';
  * the hands of the provider.
  */
 
-/** What a tool does to the workspace. */
-export type ToolKind = 'read' | 'write';
+/**
+ * What a tool does to the workspace.
+ *
+ * C42: a `proposal` is a write that has an execute and never asks; what it
+ * writes is inert until the user approves it.
+ */
+export type ToolKind = 'read' | 'write' | 'proposal';
 
 /**
  * What a read tool gets: the database of the service, and the caller.
@@ -82,8 +88,15 @@ export interface AssistantTool<TArgs, TData> {
 	 * whether it is FRESH. The numbers are per passage: a passage keeps
 	 * the number it was given the first time, so a source the run already
 	 * cited is not quoted again.
+	 *
+	 * `authorOf` is given by the remote MCP endpoint only (C119): the blocks
+	 * then carry who wrote the page. The run loop never gives it.
 	 */
-	render(data: TData, cites: readonly { n: number; fresh: boolean }[]): string;
+	render(
+		data: TData,
+		cites: readonly { n: number; fresh: boolean }[],
+		authorOf?: (pageId: string) => Authorship | undefined,
+	): string;
 }
 
 /** A tool that only reads. */
@@ -95,8 +108,25 @@ export interface ReadTool<TArgs, TData> extends AssistantTool<TArgs, TData> {
 	 * The skill a result loaded, when it loaded one: the tool result event
 	 * carries it, so the history of a run pins what was loaded (devil C40).
 	 */
-	pin?(data: TData): { id: string; version: number };
+	pin?(data: TData): { id: string; version: number; source: 'builtin' | 'workspace' };
 }
+
+/**
+ * C42: a proposal write. It has an execute and it never asks: what it writes is
+ * inert until the user approves it somewhere else (Settings). So it travels the
+ * read path (no approval card, allowed wherever reads are) and is never a
+ * `write` tool.
+ */
+export interface ProposalTool<TArgs, TData> extends AssistantTool<TArgs, TData> {
+	kind: 'proposal';
+	/** A proposal quotes no page. */
+	sources(data: TData): readonly RetrievedChunk[];
+	/** The memory a result proposed: the run emits `memory.proposed` for it. */
+	proposed?(data: TData): { id: string; body: string };
+	pin?: undefined;
+}
+
+export type AnyProposalTool = ProposalTool<unknown, unknown>;
 
 /**
  * A read tool of the registry, whatever its arguments and its data are.

@@ -118,3 +118,30 @@ Anything that redistributes these pages (export, published page, dataset) keeps 
   the 2026-10-01 one, so the two give different counts. The numbers above are from the parquet.
 - No images: only section text, as headings and paragraphs (`pages.mjs`, `blocksOf`).
 - Never against the live stack: only the eval stack or the throwaway `ai-wiki-*` stack.
+
+## The golden set of the wiki (`golden-wiki.jsonl`)
+
+200 questions: 160 answerable, 40 unanswerable. **LLM-drafted, 0 human-validated** (`validated_by` is null on every
+line). Seed 42; the model and its GGUF sha256 are on each line (`drafted_by`).
+
+- Answerable: one section of one imported page is quoted to the model, which writes a question and a short answer.
+  `expected` is that page's id. A draft that contains the article title (361 dropped) or copies 7 consecutive
+  words of the passage (4 dropped) is redrawn; 29 pages had no section of a usable length.
+- Unanswerable: the question is drafted from an article of `articles.jsonl` that was not imported. `expected` is `[]`.
+  Caveat: another imported article may still mention the subject, so "unanswerable" is approximate.
+- Caveat: the draw is deterministic, the model is only near-deterministic (CPU, temperature 0): a re-run may word a
+  question differently. Nothing checks that a question is good or that its `answer` is right.
+
+```sh
+node services/osionos-ai/eval/wiki/golden.mjs --pages pages.jsonl --articles /data/articles.jsonl \
+  --llm-url http://<llama.cpp>:8080 --model-label "<model, quant, gguf sha256>"   # pages.jsonl: see the header of golden.mjs
+node --test services/osionos-ai/eval/wiki/golden.test.mjs
+```
+
+## The golden set
+
+200 questions: 160 answerable / 40 unanswerable. Seed 42. LLM-drafted, 0 human-validated. Drafting model:
+Qwen3-4B-Instruct-2507 Q4_K_M GGUF, sha256 `3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597`.
+Dropped and resampled: 361 for naming the article title, 4 for copying 7 consecutive words, 29 pages with no
+usable section. Caveat: another imported article may still mention the subject of an "unanswerable" question,
+so unanswerable is approximate. See [RESULTS-rag.md](RESULTS-rag.md).

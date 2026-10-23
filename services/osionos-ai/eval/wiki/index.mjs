@@ -12,3 +12,4 @@
 import "./import.test.mjs";
 import "./database.test.mjs";
 import "./estimate.test.mjs";
+import "./golden.test.mjs";

@@ -15,7 +15,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 // jszip / i18next / pdf-lib / qrcode are click-path only (export, language
 // change, invoice PDF, 2FA QR): they are imported dynamically at their call
 // sites so the settings chunk stays lean (~280KB of deps off its parse path).
-import { Copy, Search } from 'lucide-react';
+import { Copy, Building2 } from 'lucide-react';
 
 import { useUserStore } from '@/features/auth';
 import { usePageStore } from '@/store/usePageStore';
@@ -25,10 +25,11 @@ import { API_BASE, getActiveJwt } from '@/shared/api/client';
 import type { PageEntry } from '@/entities/page';
 import { Button, EmojiPicker, IconValueView, IconButton, Toggle, useToastStore } from '@/shared/ui';
 import { PageSelectorModal } from '../PageSelectorModal';
-import { TypedConfirmModal } from '../ui/ConfirmModals';
-import { Section, SettingRow } from '../ui/settingsKit';
+import { ConfirmModal, TypedConfirmModal } from '../ui/ConfirmModals';
+import { EmptyState, PanelStatus, Section, SettingRow } from '../ui/settingsKit';
 import { csvCell, downloadBlob, downloadText, safeSlug } from '../model/settingsFiles';
-import { noopHandledAction, runAsync } from '../model/settingsCalls';
+import { runAsync } from '../model/settingsCalls';
+import { useSettingsHydration } from '../model/settingsHydration';
 
 const EMPTY_PAGES: PageEntry[] = [];
 const EMPTY_WORKSPACE_MEMBERS: WorkspaceMember[] = [];
@@ -40,7 +41,7 @@ interface ActiveSettingsModal {
   payload?: Record<string, unknown>;
 }
 
-export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspaceId?: string; membersCount: number }> = ({ userId, workspaceName = '42 school', workspaceId: workspaceIdProp, membersCount }) => {
+export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; workspaceId?: string; membersCount: number }> = ({ userId, workspaceName, workspaceId: workspaceIdProp, membersCount }) => {
   const resolvedUserId = userId || 'anonymous';
   const activeWorkspaceId = useUserStore((state) => state.activeWorkspace())?._id;
   const workspaceId = workspaceIdProp || activeWorkspaceId || '';
@@ -54,8 +55,6 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
   const pages = usePageStore((state) => state.pages[workspaceId] ?? EMPTY_PAGES);
   const workspaceMembers = useWorkspaceMembersStore((state) => state.data[workspaceId] ?? EMPTY_WORKSPACE_MEMBERS);
   const storedSettings = useWorkspaceSettingsStore((state) => state.data[workspaceId]);
-  const loading = useWorkspaceSettingsStore((state) => state.loading[workspaceId] ?? false);
-  const storeError = useWorkspaceSettingsStore((state) => state.error[workspaceId] ?? null);
   const hydrate = useWorkspaceSettingsStore((state) => state.hydrate);
   const update = useWorkspaceSettingsStore((state) => state.update);
   const removeIcon = useWorkspaceSettingsStore((state) => state.removeIcon);
@@ -75,8 +74,11 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
     return () => globalThis.clearTimeout(timer);
   }, [resolvedUserId, settings.name, update, workspaceId, workspaceNameDraft]);
 
-  useEffect(() => {
-    runAsync(hydrate(resolvedUserId, workspaceId, workspaceName));
+  // The store keeps a failed read in `error` instead of rejecting, so it is turned back into a rejection here.
+  const hydration = useSettingsHydration(async () => {
+    await hydrate(resolvedUserId, workspaceId, workspaceName);
+    const failure = useWorkspaceSettingsStore.getState().error[workspaceId];
+    if (failure) throw new Error(failure);
   }, [hydrate, resolvedUserId, workspaceId, workspaceName]);
 
   async function exportWorkspaceContent() {
@@ -110,13 +112,16 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
       return;
     }
     const deleted = await deleteWorkspace(workspaceId);
-    if (deleted) toast({ kind: 'success', title: 'Workspace deleted' });
+    if (!deleted) throw new Error("This workspace could not be deleted. Nothing was removed.");
+    toast({ kind: 'success', title: 'Workspace deleted' });
+  }
+
+  if (!workspaceId) {
+    return <EmptyState icon={<Building2 size={16} />} title="No workspace selected" hint="Open a workspace to see its settings." />;
   }
 
   return (
-    <>
-      {loading && <div role="status">Loading workspace settings…</div>}
-      {storeError && <div role="alert">{storeError}</div>}
+    <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
       <Section title="Workspace settings">
         <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input aria-label="Workspace name" className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={workspaceNameDraft} maxLength={65} onChange={(event) => setWorkspaceNameDraft(event.target.value)} />} />
         <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="relative"><button type="button" aria-label="Change workspace icon" className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl" onClick={() => setIconPickerOpen((open) => !open)}><IconValueView value={settings.icon ?? '🌏'} size={44} /></button>{iconPickerOpen && <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2"><EmojiPicker current={settings.icon ?? '🌏'} onSelect={(value) => { update(resolvedUserId, workspaceId, { icon: value }); setIconPickerOpen(false); }} onRemove={() => { removeIcon(resolvedUserId, workspaceId); setIconPickerOpen(false); }} onClose={() => setIconPickerOpen(false)} /></div>}</div>} />
@@ -125,11 +130,10 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
       </Section>
       <Section title="Export">
         <SettingRow title="Workspace content" description={`Export all pages in ${settings.name}. This can take longer depending on the size of the workspace.`} action={<Button onClick={() => runAsync(exportWorkspaceContent())}>Export</Button>} />
-        <SettingRow title="Members" description={`${membersCount} members available locally. Upgrade text from prompt is kept as a disabled export pattern.`} action={<Button onClick={exportMembersCsv}>Export</Button>} />
+        <SettingRow title="Members" description={`Download the members list as CSV (${membersCount} members).`} action={<Button onClick={exportMembersCsv}>Export</Button>} />
       </Section>
       <Section title="Analytics">
         <SettingRow title="Save and display page view analytics" description={`Collect page view data for all pages in ${settings.name}. Editors can see how many views it has.`} action={<Toggle checked={analytics.pageViews ?? true} onChange={(checked) => update(resolvedUserId, workspaceId, { analytics: { ...settings.analytics, pageViews: checked } })} label="Save and display page view analytics" />} />
-        <Button tone="ghost" className="-ml-2" onClick={() => noopHandledAction('settings_button_click', { label: 'Learn more' })}><Search size={14} /> Learn more</Button>
       </Section>
       <Section title="Danger zone">
         <SettingRow danger title="Delete workspace" description="Permanently delete this workspace, including all pages and files." action={<Button tone="danger" onClick={() => setModal({ name: 'delete-workspace' })}>Delete workspace</Button>} />
@@ -138,8 +142,8 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
         <SettingRow title="Workspace ID" description={workspaceId} action={<IconButton label="Copy workspace ID" onClick={() => { runAsync(navigator.clipboard.writeText(workspaceId).then(() => toast({ kind: 'success', title: 'Workspace ID copied' }))); }}><Copy size={16} /></IconButton>} />
       </Section>
       {modal?.name === 'page-selector' && <PageSelectorModal pages={pages} selectedId={settings.landingPageId ?? null} onSelect={(pageId) => { update(resolvedUserId, workspaceId, { landingPageId: pageId }); setModal(null); }} onClose={() => setModal(null)} />}
-      {modal?.name === 'reset-workspace' && <TypedConfirmModal title="Reset to defaults" message={`Type ${settings.name} to reset this workspace's settings.`} confirmText={settings.name} actionLabel="Reset to defaults" onConfirm={() => { runAsync(reset(resolvedUserId, workspaceId, workspaceName)); setModal(null); }} onClose={() => setModal(null)} />}
-      {modal?.name === 'delete-workspace' && <TypedConfirmModal title="Delete workspace" message={`Type ${settings.name} to permanently delete this workspace.`} confirmText={settings.name} danger actionLabel="Delete workspace" onConfirm={() => runAsync(handleDeleteWorkspace())} onClose={() => setModal(null)} />}
-    </>
+      {modal?.name === 'reset-workspace' && <ConfirmModal title="Reset to defaults" message={`Restore the default name, icon, landing page, sidebar and analytics of ${settings.name}? Your pages are not touched.`} actionLabel="Reset to defaults" onConfirm={() => reset(resolvedUserId, workspaceId, workspaceName)} onClose={() => setModal(null)} />}
+      {modal?.name === 'delete-workspace' && <TypedConfirmModal title="Delete workspace" message={`Type ${settings.name} to permanently delete this workspace.`} confirmText={settings.name} danger actionLabel="Delete workspace" onConfirm={handleDeleteWorkspace} onClose={() => setModal(null)} />}
+    </PanelStatus>
   );
 };

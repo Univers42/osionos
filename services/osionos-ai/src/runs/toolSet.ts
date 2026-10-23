@@ -1,7 +1,12 @@
 import type { Pool } from 'pg';
 import type { ToolSet } from 'ai';
 import { config } from '../config.ts';
+import { rememberTool } from '../tools/memoryTools.ts';
 import { loadSkillTool } from '../tools/skillTools.ts';
+import type { WorkspaceSkillLoader } from '../tools/skillTools.ts';
+import { buildSkillIndex } from '../skills/runSkills.ts';
+import type { SkillIndex } from '../skills/runSkills.ts';
+import { loadListedVersion, recordSkillPin } from '../skills/repo.ts';
 import { readToolSet } from '../tools/index.ts';
 import type { ToolOutcome, ToolPool } from '../tools/index.ts';
 import { writeToolSet } from '../approvals/toolSet.ts';
@@ -9,6 +14,7 @@ import type { ApprovalContext, PermissionAsked } from '../approvals/types.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import type { PageContext } from './prompt.ts';
+import { citationData } from './sources.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
 
 /**
@@ -65,11 +71,20 @@ export function buildRunTools(input: {
 	 * tools it keeps stay behind the approval of the user.
 	 */
 	agent?: BuiltinAgent | null;
+	/**
+	 * The skills the prompt of the run lists, and the workspace they come from.
+	 *
+	 * `load_skill` answers for exactly these ids. Without it the index is the
+	 * agent's built-ins, as before workspace skills existed.
+	 */
+	skillIndex?: SkillIndex;
+	workspaceId?: string;
 	/** The event of the run. */
 	emit: (type: string, data: unknown) => Promise<void>;
 }): RunTools {
 	const { db, user, pool, runId, conversationId, ownerId, pages, sources, emit } = input;
 	const agent = input.agent ?? null;
+	const skillIndex = input.skillIndex ?? buildSkillIndex(agent?.skills ?? [], []);
 	const cited: RetrievedChunk[] = [...sources];
 	const permissions: PermissionAsked[] = [];
 	const run: RunTools = { tools: undefined, cited, awaitingApproval: false, permissions };
@@ -86,11 +101,7 @@ export function buildRunTools(input: {
 			cited.push(...found.map(({ source }) => source));
 			for (const { n, source } of found) {
 				await emit('citation', {
-					n,
-					pageId: source.pageId,
-					...(source.blockId ? { blockId: source.blockId } : {}),
-					title: source.title,
-					snippet: source.snippet,
+					...citationData(source, n),
 					// The call that found the passage: the client credits
 					// it to that call, and to no other.
 					toolCallId,
@@ -99,6 +110,13 @@ export function buildRunTools(input: {
 		},
 		onResult: async (outcome: ToolOutcome) => {
 			await emit('tool.result', outcome);
+			// C42: a proposal is announced so a client can show the chip.
+			if (outcome.memoryId && outcome.memoryBody) {
+				await emit('memory.proposed', { type: 'memory.proposed', id: outcome.memoryId, body: outcome.memoryBody });
+			}
+			// The skill a load returned is pinned on the row of the run (C40):
+			// the stream expires, the row does not.
+			if (outcome.skill) await recordSkillPin(db, runId, outcome.skill);
 		},
 		onApproval: async (asked: PermissionAsked) => {
 			run.awaitingApproval = true;
@@ -118,9 +136,26 @@ export function buildRunTools(input: {
 		],
 	};
 
+	const workspaceEntries = new Map(
+		skillIndex.entries.flatMap((entry) =>
+			entry.source === 'workspace' && entry.skillId ? [[entry.id, { version: entry.version, skillId: entry.skillId }] as const] : [],
+		),
+	);
+	const loader: WorkspaceSkillLoader | undefined =
+		workspaceEntries.size > 0 && input.workspaceId
+			? {
+					entries: workspaceEntries,
+					load: (skillId, version) => loadListedVersion(db, { workspaceId: input.workspaceId as string, skillId, version }),
+				}
+			: undefined;
+	const skillTools =
+		skillIndex.entries.length > 0 ? [loadSkillTool(skillIndex.entries.map((entry) => entry.id), undefined, loader)] : [];
+	// C42: `remember` proposes; it needs the workspace the memory belongs to.
+	const proposalTools = input.workspaceId ? [rememberTool({ workspaceId: input.workspaceId, runId })] : [];
+
 	run.tools = user
 		? {
-				...readToolSet({ db, user }, hooks, pool, agent?.skills.length ? [loadSkillTool(agent.skills)] : []),
+				...readToolSet({ db, user }, hooks, pool, [...skillTools, ...proposalTools]),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
 		: undefined;
@@ -132,7 +167,7 @@ export function buildRunTools(input: {
 		const allowed = new Set(agent.tools);
 		const kept: ToolSet = {};
 		for (const [name, tool] of Object.entries(run.tools)) {
-			if (allowed.has(name) || name === 'load_skill') kept[name] = tool;
+			if (allowed.has(name) || name === 'load_skill' || name === 'remember') kept[name] = tool;
 		}
 		run.tools = kept;
 	}
