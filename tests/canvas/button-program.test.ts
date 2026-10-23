@@ -34,7 +34,7 @@ const bad = (input: unknown, path: string) => {
 test("parser: a valid program round-trips; an empty program is valid", () => {
   const p = prog([
     { op: "set", name: "x", value: 2 },
-    { op: "if", condition: { formula: "x > 1" }, then: [notify()], else: [] },
+    { op: "if", condition: { formula: "x > 1" }, steps: [notify()], else: [] },
     { op: "repeat", count: 3, steps: [notify()] },
     { op: "forEach", items: { formula: "items" }, as: "it", steps: [setProp("a", { formula: "it" } as never)] },
   ]);
@@ -46,8 +46,10 @@ test("parser: a valid program round-trips; an empty program is valid", () => {
 
 test("parser: structural errors name their path", () => {
   bad({ version: 1, steps: [{ op: "launch" }] }, "steps[0].op");
-  bad({ version: 1, steps: [notify(), { op: "if", condition: true, then: [{ op: "x" }] }] }, "steps[1].then[0].op");
-  bad({ version: 1, steps: [{ op: "if", condition: true }] }, "steps[0].then");
+  bad({ version: 1, steps: [notify(), { op: "if", condition: true, steps: [{ op: "x" }] }] }, "steps[1].steps[0].op");
+  bad({ version: 1, steps: [{ op: "if", condition: true }] }, "steps[0].steps");
+  // `then` would make an if-step a thenable-looking object (Sonar S7739); the branch key is `steps`.
+  bad({ version: 1, steps: [Object.fromEntries([["op", "if"], ["condition", true], ["then", [notify()]]])] }, "steps[0].then");
   bad({ version: 1, steps: [{ op: "repeat", count: [], steps: [] }] }, "steps[0].count");
   bad({ version: 1, steps: [{ op: "set", name: "x", value: 1, extra: 1 }] }, "steps[0].extra");
   bad({ version: 2, steps: [] }, "version");
@@ -114,8 +116,8 @@ test("interpreter: set then if takes the right branch; a variable shadows a prop
   const { calls } = await run(
     [
       { op: "set", name: "x", value: 5 },
-      { op: "if", condition: { formula: "x" }, then: [notify("then")], else: [notify("else")] },
-      { op: "if", condition: { formula: "false" }, then: [notify("A")], else: [notify("B")] },
+      { op: "if", condition: { formula: "x" }, steps: [notify("then")], else: [notify("else")] },
+      { op: "if", condition: { formula: "false" }, steps: [notify("A")], else: [notify("B")] },
     ],
     undefined,
     { x: 0 },
@@ -125,13 +127,13 @@ test("interpreter: set then if takes the right branch; a variable shadows a prop
 
 test("interpreter: truthiness — false, 0, empty string, null are false; the string 'false' is true", async () => {
   for (const [value, branch] of [[false, "else"], [0, "else"], ["", "else"], [null, "else"], ["false", "then"], [1, "then"]] as const) {
-    const { calls } = await run([{ op: "if", condition: { formula: "v" }, then: [notify("then")], else: [notify("else")] }], undefined, { v: value });
+    const { calls } = await run([{ op: "if", condition: { formula: "v" }, steps: [notify("then")], else: [notify("else")] }], undefined, { v: value });
     assert.equal((calls[0] as { message: string }).message, branch, String(value));
   }
 });
 
 test("interpreter: an if nested in a repeat; repeat 0 runs nothing; forEach binds and un-binds", async () => {
-  const a = await run([{ op: "repeat", count: 3, steps: [{ op: "if", condition: true, then: [notify()] }] }]);
+  const a = await run([{ op: "repeat", count: 3, steps: [{ op: "if", condition: true, steps: [notify()] }] }]);
   assert.equal(a.calls.length, 3);
   assert.equal((await run([{ op: "repeat", count: 0, steps: [notify()] }])).calls.length, 0);
   const b = await run(
@@ -212,10 +214,10 @@ test("budget: wall time — a clock jump stops the run, even in an empty loop", 
 });
 
 test("sentinels: a condition sentinel is false and logged; a value sentinel fails the step", async () => {
-  const c = await run([{ op: "if", condition: { formula: "UNAVAIL" }, then: [notify("then")], else: [notify("else")] }]);
+  const c = await run([{ op: "if", condition: { formula: "UNAVAIL" }, steps: [notify("then")], else: [notify("else")] }]);
   assert.deepEqual(c.calls.map((x) => (x as { message: string }).message), ["else"]);
   assert.ok(c.result.log.some((e) => e.detail === "formula_unavailable"));
-  const b = await run([{ op: "if", condition: { formula: "BUDGET" }, then: [notify("then")] }]);
+  const b = await run([{ op: "if", condition: { formula: "BUDGET" }, steps: [notify("then")] }]);
   assert.equal(b.calls.length, 0);
   assert.ok(b.result.log.some((e) => e.detail === "formula_budget_exceeded"));
   const v = await run([setProp("a", { formula: "BUDGET" }), notify({ formula: "UNAVAIL" })]);

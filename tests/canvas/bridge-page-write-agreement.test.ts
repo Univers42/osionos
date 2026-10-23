@@ -391,69 +391,38 @@ function shareWriteAnswer(spot: ShareSpot): { update: boolean; delete: boolean }
   };
 }
 
-test("a can_view rule for self grants read but not write", () => {
-  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-can_view", rules: [makeRule({ type: "user", userId: SELF }, "can_view", PAGE)] };
-  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
-});
+const SPOT_BASE = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false } as const;
+const DENIED = { update: false, delete: false };
+const ALLOWED = { update: true, delete: true };
+type Level = (typeof SHARE_LEVELS)[number];
+const forSelf = (level: Level, resourceId: string | null = PAGE) => makeRule({ type: "user", userId: SELF }, level, resourceId);
+const workspaceWide = (level: Level) => makeRule({ type: "workspace" }, level, null);
 
-test("a can_edit rule for self grants write on a private page", () => {
-  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-can_edit", rules: [makeRule({ type: "user", userId: SELF }, "can_edit", PAGE)] };
-  assert.deepEqual(shareWriteAnswer(spot), { update: true, delete: true });
-});
+// [name, the spot's differences from SPOT_BASE, the expected write answer]
+const RULE_SPOTS: Array<[string, Partial<ShareSpot> & Pick<ShareSpot, "ruleLabel" | "rules">, typeof DENIED]> = [
+  ["a can_view rule for self grants read but not write", { ruleLabel: "self-can_view", rules: [forSelf("can_view")] }, DENIED],
+  ["a can_edit rule for self grants write on a private page", { ruleLabel: "self-can_edit", rules: [forSelf("can_edit")] }, ALLOWED],
+  ["a no_access rule for self denies write even with update permission",
+    { member: "editor", visibility: "shared", ruleLabel: "self-no_access", rules: [forSelf("no_access")] }, DENIED],
+  // The page owner is exempt from share rules on the server; the client mirrors that.
+  ["a no_access rule for self denies write even for page owner",
+    { member: "none", owner: "self", ruleLabel: "self-no_access", rules: [forSelf("no_access")] }, ALLOWED],
+  ["a can_comment rule does not grant write", { ruleLabel: "self-can_comment", rules: [forSelf("can_comment")] }, DENIED],
+  ["a workspace-wide can_edit rule grants write", { ruleLabel: "wide-workspace-can_edit", rules: [workspaceWide("can_edit")] }, ALLOWED],
+  ["a rule for another user does not affect self",
+    { ruleLabel: "other-can_edit", rules: [makeRule({ type: "user", userId: OTHER }, "can_edit", PAGE)] }, DENIED],
+  ["a can_edit rule plus a no_access rule for same target: no_access wins",
+    { ruleLabel: "self-can_edit+self-no_access", rules: [forSelf("can_edit"), forSelf("no_access")] }, DENIED],
+  ["a page-scoped can_view plus workspace-wide no_access: no_access wins",
+    { ruleLabel: "self-can_view+wide-no_access", rules: [forSelf("can_view"), workspaceWide("no_access")] }, DENIED],
+  ["a no_access rule naming a workspace admin does not take their write away",
+    { member: "admin", visibility: "shared", ruleLabel: "self-no_access", rules: [forSelf("no_access")] }, ALLOWED],
+  ["a can_edit rule does not let a non-member write",
+    { member: "none", visibility: "public", ruleLabel: "self-can_edit", rules: [forSelf("can_edit")] }, DENIED],
+  ["a can_edit rule for another page grants nothing on this one",
+    { ruleLabel: "other-page", rules: [forSelf("can_edit", "f2f2f2f2-2222-4222-8222-f2f2f2f2f2f2")] }, DENIED],
+];
 
-test("a no_access rule for self denies write even with update permission", () => {
-  const spot: ShareSpot = { member: "editor", owner: "other", visibility: "shared", collaborators: "none", published: false, ruleLabel: "self-no_access", rules: [makeRule({ type: "user", userId: SELF }, "no_access", PAGE)] };
-  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
-});
-
-test("a no_access rule for self denies write even for page owner", () => {
-  const spot: ShareSpot = { member: "none", owner: "self", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-no_access", rules: [makeRule({ type: "user", userId: SELF }, "no_access", PAGE)] };
-  // Page owner is exempt from share rules on the server — this tests that the client mirrors that
-  assert.deepEqual(shareWriteAnswer(spot), { update: true, delete: true });
-});
-
-test("a can_comment rule does not grant write", () => {
-  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-can_comment", rules: [makeRule({ type: "user", userId: SELF }, "can_comment", PAGE)] };
-  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
-});
-
-test("a workspace-wide can_edit rule grants write", () => {
-  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "wide-workspace-can_edit", rules: [makeRule({ type: "workspace" }, "can_edit", null)] };
-  assert.deepEqual(shareWriteAnswer(spot), { update: true, delete: true });
-});
-
-test("a rule for another user does not affect self", () => {
-  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "other-can_edit", rules: [makeRule({ type: "user", userId: OTHER }, "can_edit", PAGE)] };
-  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
-});
-
-test("a can_edit rule plus a no_access rule for same target: no_access wins", () => {
-  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-can_edit+self-no_access", rules: [
-    makeRule({ type: "user", userId: SELF }, "can_edit", PAGE),
-    makeRule({ type: "user", userId: SELF }, "no_access", PAGE),
-  ]};
-  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
-});
-
-test("a page-scoped can_view plus workspace-wide no_access: no_access wins", () => {
-  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "self-can_view+wide-no_access", rules: [
-    makeRule({ type: "user", userId: SELF }, "can_view", PAGE),
-    makeRule({ type: "workspace" }, "no_access", null),
-  ]};
-  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
-});
-
-test("a no_access rule naming a workspace admin does not take their write away", () => {
-  const spot: ShareSpot = { member: "admin", owner: "other", visibility: "shared", collaborators: "none", published: false, ruleLabel: "self-no_access", rules: [makeRule({ type: "user", userId: SELF }, "no_access", PAGE)] };
-  assert.deepEqual(shareWriteAnswer(spot), { update: true, delete: true });
-});
-
-test("a can_edit rule does not let a non-member write", () => {
-  const spot: ShareSpot = { member: "none", owner: "other", visibility: "public", collaborators: "none", published: false, ruleLabel: "self-can_edit", rules: [makeRule({ type: "user", userId: SELF }, "can_edit", PAGE)] };
-  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
-});
-
-test("a can_edit rule for another page grants nothing on this one", () => {
-  const spot: ShareSpot = { member: "viewer", owner: "other", visibility: "private", collaborators: "none", published: false, ruleLabel: "other-page", rules: [makeRule({ type: "user", userId: SELF }, "can_edit", "f2f2f2f2-2222-4222-8222-f2f2f2f2f2f2")] };
-  assert.deepEqual(shareWriteAnswer(spot), { update: false, delete: false });
-});
+for (const [name, spot, expected] of RULE_SPOTS) {
+  test(name, () => assert.deepEqual(shareWriteAnswer({ ...SPOT_BASE, ...spot } as ShareSpot), expected));
+}
