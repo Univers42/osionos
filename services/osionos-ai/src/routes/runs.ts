@@ -5,6 +5,7 @@ import { resolveTarget } from '../gateway/resolve.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
 import { getOwnedRun } from '../runs/repo.ts';
 import { bearerToken } from '../auth.ts';
+import { MEDIA_CAPABILITY_PATH } from '../vision/fetchAttachment.ts';
 import { startRun } from '../runs/runner.ts';
 import { BUILTIN_AGENT_IDS, findBuiltinAgent } from '../agents/builtins.ts';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
@@ -31,7 +32,7 @@ const startRunSchema = z.object({
 	connectionId: z.string().min(1).max(64).optional(),
 	attachments: z.array(z.discriminatedUnion('kind', [
 		z.object({ kind: z.literal('chat'), id: z.string().regex(UUID, 'id must be a uuid') }).strict(),
-		z.object({ kind: z.literal('media'), path: z.string().regex(/^\/api\/media\/uploads\/([0-9a-f-]{36})\/([0-9a-f]{64}\.[a-z0-9]{1,8})$/i, 'path must match SERVE_RE') }).strict(),
+		z.object({ kind: z.literal('media'), path: z.string().regex(MEDIA_CAPABILITY_PATH, 'path must match SERVE_RE') }).strict(),
 	])).max(4).optional(),
 	context: z
 		.object({

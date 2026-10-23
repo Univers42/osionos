@@ -27,10 +27,11 @@
  *   5. the slate is DIVERSIFIED (MMR) and every page carries its "why";
  *   6. the slate is SIGNED, so a later request can prove this list was served.
  *
- * THE OPT-OUT (C48)
+ * THE OPT-OUT AND THE FALLBACK (C48)
  *   The context answers `{"opted_out": true}` for a user who refused, and
- *   that is the END of the request: no nearest read, no page read, nothing
- *   else. The opt-out stops the USE of the recommender, not only its capture.
+ *   that is the END of the personal path: no nearest read, no history. A user
+ *   with no model or no vector gets the same fallback. All three serve the
+ *   popular order (bridge-recs-popular.mjs), flagged personalized:false.
  *
  * THE ACL AND THE BLOCKS (C55)
  *   A page reaches the slate only if the caller may read it NOW: the same
@@ -45,12 +46,12 @@
  *   may refuse only a page of a list WE issued to THEM (C49).
  */
 
-import { randomUUID } from 'node:crypto';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { bearerToken, rest, sendJson } from './bridge-social-core.mjs';
 import { confidences, explain, foldIn, itemWeights, mmr } from './bridge-recs-model.mjs';
-import { readablePages, readPages } from './bridge-recs-pages.mjs';
-import { signSlate } from './bridge-recs-slate.mjs';
+import { limitFrom, readablePages, readPages } from './bridge-recs-pages.mjs';
+import { issueSlate } from './bridge-recs-slate.mjs';
+import { answerPopular } from './bridge-recs-popular.mjs';
 import { NOT_INTERESTED_RATE, answerNotInterested } from './bridge-recs-not-interested.mjs';
 
 /** The two routes of this module. */
@@ -59,10 +60,6 @@ const NOT_INTERESTED_PATH = '/api/recs/not-interested';
 
 /** Twenty calls, then one every two seconds: a slate is not a firehose. */
 const RATE = { capacity: 20, refillPerSec: 0.5 };
-
-/** The default and the maximum of the limit. */
-const DEFAULT_LIMIT = 10;
-const MAX_LIMIT = 20;
 
 /** How many recent items the context gives, and how many nearest items are asked for. */
 const RECENT_LIMIT = 200;
@@ -75,13 +72,6 @@ const NEAREST_LIMIT = 200;
  */
 export function recsEnabled(env) {
 	return env?.OSIONOS_RECS_FOR_YOU === '1';
-}
-
-/** The limit of the request, clamped into 1..20. */
-function limitFrom(url) {
-	const raw = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
-	if (!Number.isFinite(raw)) return DEFAULT_LIMIT;
-	return Math.min(Math.max(raw, 1), MAX_LIMIT);
 }
 
 /** The context of the user: the champion, their vector, their items, their refusals. */
@@ -184,20 +174,16 @@ function whyFor(folded, model, recent, candidate, readable) {
 	return { kind: 'because', pageId: explained, title: row.title ?? null, event };
 }
 
-/** The answer of a user the recommender cannot serve: a reason, and no item. */
-function notPersonalized(response, config, reason) {
-	return sendJson(response, 200, { ok: true, personalized: false, reason, items: [] }, config);
-}
-
 /**
  * The whole answer: the context, the fold-in, the nearest pages, the filter,
  * the diversity and the signature.
  */
 async function answerSlate(deps, config, session, url, response) {
 	const context = await readContext(deps, config, session.userId);
-	if (context?.opted_out === true) return notPersonalized(response, config, 'opted_out');
+	// The three exits that cannot personalise serve the popular order (C48).
+	// An opted-out user's history is not read: no refused set, nothing.
+	if (context?.opted_out === true) return answerPopular(deps, config, session, url, response, 'opted_out', null);
 	const model = modelOf(context);
-	if (!model) return notPersonalized(response, config, 'no_model');
 	const recent = Array.isArray(context.recent) ? context.recent : [];
 	const refused = new Set(
 		(Array.isArray(context.not_interested) ? context.not_interested : [])
@@ -207,8 +193,9 @@ async function answerSlate(deps, config, session, url, response) {
 	const touched = new Set(
 		recent.filter((entry) => entry?.item_kind === 'page').map((entry) => String(entry.item_id)),
 	);
+	if (!model) return answerPopular(deps, config, session, url, response, 'no_model', refused);
 	const folded = userVector(model, recent, context.user_vector);
-	if (!folded) return notPersonalized(response, config, 'cold_start');
+	if (!folded) return answerPopular(deps, config, session, url, response, 'cold_start', refused);
 	const nearest = await readNearest(deps, config, model, folded.vector);
 	const wanted = nearest.filter((row) => {
 		const id = String(row?.item_id ?? '');
@@ -236,14 +223,7 @@ async function answerSlate(deps, config, session, url, response) {
 			why: whyFor(folded, model, recent, candidate, readable),
 		};
 	});
-	const recId = randomUUID();
-	const slate = signSlate(config.appSessionSecret, {
-		recId,
-		userId: session.userId,
-		surface: 'home',
-		items: items.map((item) => item.pageId),
-		issuedAt: Date.now(),
-	});
+	const { recId, slate } = issueSlate(config.appSessionSecret, session.userId, items.map((item) => item.pageId));
 	return sendJson(response, 200, {
 		ok: true,
 		personalized: true,
