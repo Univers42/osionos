@@ -45,6 +45,7 @@ function passes(row, key, expression) {
 	const [operator, ...rest] = expression.split('.');
 	const wanted = rest.join('.');
 	if (operator === 'eq') return String(row[key]) === wanted;
+	if (operator === 'neq') return String(row[key]) !== wanted;
 	if (operator === 'gt') return String(row[key]) > wanted;
 	if (operator === 'lt') return String(row[key]) < wanted;
 	if (operator === 'not') return wanted === 'is.null' ? row[key] != null : true;
@@ -60,7 +61,7 @@ function orPasses(row, expression) {
 
 const CONTROL = new Set(['select', 'order', 'limit', 'offset']);
 
-function select(rows, params) {
+function select(rows, params, cap = Infinity) {
 	let hits = rows.filter((row) => [...params].every(([key, value]) => CONTROL.has(key) || (key === 'or' ? orPasses(row, value) : passes(row, key, value))));
 	const order = params.get('order');
 	if (order) {
@@ -68,12 +69,12 @@ function select(rows, params) {
 		hits = [...hits].sort((left, right) => (String(left[column]) < String(right[column]) ? -1 : 1) * (order.endsWith('.desc') ? -1 : 1));
 	}
 	const offset = Number(params.get('offset') ?? 0);
-	hits = hits.slice(offset, offset + Number(params.get('limit') ?? hits.length));
+	hits = hits.slice(offset, offset + Math.min(cap, Number(params.get('limit') ?? hits.length)));
 	const columns = (params.get('select') ?? '*').split(',');
 	return hits.map((row) => (columns[0] === '*' ? { ...row } : Object.fromEntries(columns.filter((c) => c in row).map((c) => [c, row[c]]))));
 }
 
-/** The fake fetch and its state. `fail.audit`, `fail.putAfter` (n puts then 500) are the switches. */
+/** The fake fetch and its state. `fail.audit`, `fail.putAfter` (n puts then 500), `fail.donePatch` and `fail.pageCap` (rows per response) are the switches. */
 export function createExportStore({ exports = [], registry = [], data = {} } = {}) {
 	const tables = new Map([[EXPORTS, exports.map((row) => ({ ...row }))], [AUDIT, []], ['osionos_account_data_map', registry], ...Object.entries(data)]);
 	const store = { calls: [], objects: new Map(), puts: 0, buckets: 0, fail: {}, tables, order: [] };
@@ -94,7 +95,7 @@ export function createExportStore({ exports = [], registry = [], data = {} } = {
 		if (!rows) return json({ message: `no table ${table}` }, 404);
 		if (method === 'GET') {
 			const owner = table === EXPORTS ? subjectOf(init.headers) : null;
-			return json(select(owner ? rows.filter((row) => row.user_id === owner) : rows, parsed.searchParams));
+			return json(select(owner ? rows.filter((row) => row.user_id === owner) : rows, parsed.searchParams, store.fail.pageCap));
 		}
 		if (method === 'POST') {
 			if (table === EXPORTS && open(body.user_id)) return json({ code: '23505' }, 409);
@@ -103,6 +104,7 @@ export function createExportStore({ exports = [], registry = [], data = {} } = {
 			if (table !== AUDIT) store.order.push(`insert:${table}`);
 			return json([row], 201);
 		}
+		if (method === 'PATCH' && store.fail.donePatch && body.status === 'done') return json({ message: 'down' }, 500);
 		if (method === 'PATCH') {
 			for (const row of rows.filter((r) => [...parsed.searchParams].every(([k, v]) => passes(r, k, v)))) Object.assign(row, body);
 			return new Response(null, { status: 204 });
