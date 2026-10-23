@@ -268,6 +268,28 @@ export interface TeamspaceRecord {
   archivedAt?: string | null;
 }
 
+export type WorkspaceTeamRole = 'member' | 'lead';
+
+/** A named group of workspace members, as `GET /api/workspaces/:id/teams` answers it. */
+export interface WorkspaceTeam {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  memberCount: number;
+  /** The caller's own role in the team, `null` when they are not in it. */
+  myRole: WorkspaceTeamRole | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface WorkspaceTeamMember {
+  userId: string;
+  name: string;
+  role: WorkspaceTeamRole;
+  addedAt: string | null;
+}
+
 /** One signed-in device as `GET /api/account/sessions` answers it: one row per sign-in family. */
 export interface SessionRow {
   id: string;
