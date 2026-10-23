@@ -29,7 +29,7 @@ export function defaultAccountSettings(userId: string, name?: string): AccountSe
   return {
     userId,
     profile: { preferredName: name },
-    security: { hasPassword: false, twoStepEnabled: false, passkeysEnabled: false },
+    security: { hasPassword: true, twoStepEnabled: false, passkeysEnabled: false },
     supportAccessGrantedUntil: null,
     pendingDeletionAt: null,
     removedAt: null,

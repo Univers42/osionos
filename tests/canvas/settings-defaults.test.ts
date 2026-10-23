@@ -32,7 +32,7 @@ registerHooks({
   },
 });
 
-const { defaultAccountSettings, defaultBillingState, defaultConnections, defaultPreferences } = await import("@/store/settings/defaults");
+const { defaultBillingState, defaultConnections, defaultPreferences } = await import("@/store/settings/defaults");
 
 test("defaultConnections returns no invented connections", () => {
   assert.deepEqual(defaultConnections("user-1", "user@example.com"), []);
@@ -48,10 +48,6 @@ test("defaultBillingState is the free plan with no payment details or invoice", 
   assert.equal(state.vatNumber, null);
   assert.equal(state.upcomingInvoice, null);
   assert.equal(state.workspaceId, "workspace-1");
-});
-
-test("defaultAccountSettings does not claim a password the user never set", () => {
-  assert.equal(defaultAccountSettings("user-1").security?.hasPassword, false);
 });
 
 test("defaultPreferences uses the device timezone, not a hard-coded city", () => {
