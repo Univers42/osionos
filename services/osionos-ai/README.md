@@ -26,6 +26,7 @@ after them.
 | `GET /api/ai/commands?surface=editor\|chat` | yes | `{ commands: Command[] }`, the built-ins of that surface |
 | `GET /api/ai/agents` | yes | `[{ id, version, name, description }]`, the built-in agents — never their instructions |
 | `POST /api/ai/complete` | yes | SSE: `text.delta`, `usage`, `done` or `error`, nothing persisted |
+| `POST /api/ai/sources` | yes | `{ sources: [{ pageId, blockId, title, headingPath, snippet, score }] }`, the chunks a device run would have quoted |
 
 A run that is asked again with the same `runId` re-attaches to its stream: the
 events are replayed and no model is called a second time. A client that
