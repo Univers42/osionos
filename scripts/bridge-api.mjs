@@ -39,6 +39,7 @@ import { createAccountHandler } from './bridge-account-mounts.mjs';
 import { handoffLookupKey, openHandoffRecord, sealHandoffRecord } from './bridge-shared-store.mjs';
 import { createKv } from './bridge-kv.mjs';
 import { createPg } from './bridge-pg.mjs';
+import { assertAccountNotRefused } from './bridge-account-moderation.mjs';
 import { claimPlatformRole, platformRoleReader, readPlatformRole } from './bridge-roles.mjs';
 import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 // Re-exported so every existing caller (bridge-chat, bridge-rtc, db-isolation-suite, the tests)
@@ -1723,6 +1724,7 @@ export async function readRefreshClaims(identity, { config, pg, fetchImpl }) {
 
 /** Today's order: persist, admin flag, admin membership, member workspaces. Env admins keep it. */
 async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
+	await assertAccountNotRefused(roleReader, payload.subject);
 	const persisted = await persistIdentityForHandoff(payload, config, fetchImpl);
 	const isAdmin = await resolveAdminFlag(payload, config, fetchImpl).catch(() => false);
 	if (isAdmin) await ensureAdminWorkspaceMembership(payload.subject, config, fetchImpl);
@@ -1746,12 +1748,15 @@ async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
  * corrects it. Nothing here can widen a claim.
  */
 async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
-	const [persistence, adminRead, memberRead, roleRead] = await Promise.allSettled([
+	const [persistence, adminRead, memberRead, roleRead, refusal] = await Promise.allSettled([
 		persistIdentityForHandoff(payload, config, fetchImpl),
 		resolveAdminFlag(payload, config, fetchImpl),
 		memberWorkspaceEntries(payload.subject, [], config, fetchImpl),
 		readPlatformRole(roleReader, payload.subject),
+		assertAccountNotRefused(roleReader, payload.subject),
 	]);
+	// Refusal first: a banned person is told so rather than that persistence failed.
+	if (refusal.status === 'rejected') throw refusal.reason;
 	if (persistence.status === 'rejected') throw persistence.reason;
 	const persisted = persistence.value;
 	const isAdmin = adminRead.status === 'fulfilled' && adminRead.value === true;
