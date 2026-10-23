@@ -15,10 +15,12 @@
 import React from 'react';
 
 import { ContactsPanel } from './ContactsPanel';
+import { PresenceStatusControls } from './PresenceStatusControls';
 import { ReportsPanel } from './ReportsPanel';
 
 export const SocialSettings: React.FC = () => (
   <div className="flex flex-col gap-8">
+    <PresenceStatusControls />
     <ContactsPanel />
     <ReportsPanel />
   </div>
