@@ -81,6 +81,11 @@ const envSchema = z.object({
 	OSIONOS_AI_STT_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
 	// The seconds of audio a user may dictate in a day.
 	OSIONOS_AI_STT_SECONDS_PER_DAY: z.coerce.number().int().nonnegative().default(600),
+	// The dedicated, knowledge-only workspace of the knowledge packs (P5c,
+	// C45). It is operator configuration: a user or the model never sets it.
+	// Unset, or not a uuid, means packs are off everywhere. The import CLI
+	// refuses a workspace that holds any osionos_pages row.
+	OSIONOS_AI_SYSTEM_WORKSPACE_ID: z.string().optional(),
 	// The image generation (M1). OFF unless exactly "on": the public overlay
 	// leaves it empty until the prompt gate (devil C72) and the output gate
 	// (C73) exist. Off, the route does not exist.
@@ -112,6 +117,9 @@ const envSchema = z.object({
 	// The MCP write proposals of one token in a minute: the same fixed window
 	// as the runs, its own counter.
 	OSIONOS_AI_MCP_WRITES_PER_MINUTE: z.coerce.number().int().positive().default(10),
+	// How long an outside agent's write waits for the user: an hour, where a
+	// run's approval waits ten minutes because the run is waiting on it.
+	OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES: z.coerce.number().int().min(1).max(1440).default(60),
 	// The image engine: INTERNAL, the OpenAI-compatible base URL of sd-server
 	// (`…/v1`), a deployment setting and never a caller's. Required when on.
 	OSIONOS_AI_IMAGE_URL: z.string().optional(),
@@ -191,6 +199,7 @@ const rawEnv = {
 	OSIONOS_AI_IMAGES: process.env.OSIONOS_AI_IMAGES,
 	OSIONOS_AI_BUILDERS: process.env.OSIONOS_AI_BUILDERS,
 	OSIONOS_AI_BUILD_BUDGET_MS: process.env.OSIONOS_AI_BUILD_BUDGET_MS,
+	OSIONOS_AI_SYSTEM_WORKSPACE_ID: process.env.OSIONOS_AI_SYSTEM_WORKSPACE_ID,
 	OSIONOS_AI_PENDING_PLANS: process.env.OSIONOS_AI_PENDING_PLANS,
 	OSIONOS_AI_BUILDS_PER_DAY: process.env.OSIONOS_AI_BUILDS_PER_DAY,
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
@@ -198,6 +207,7 @@ const rawEnv = {
 	OSIONOS_AI_MCP_ALLOWED_ORIGINS: process.env.OSIONOS_AI_MCP_ALLOWED_ORIGINS,
 	OSIONOS_AI_MCP_PENDING_PER_TOKEN: process.env.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
 	OSIONOS_AI_MCP_WRITES_PER_MINUTE: process.env.OSIONOS_AI_MCP_WRITES_PER_MINUTE,
+	OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES: process.env.OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES,
 	OSIONOS_AI_IMAGE_URL: firstEnv('OSIONOS_AI_IMAGE_URL'),
 	OSIONOS_AI_IMAGE_MODEL: process.env.OSIONOS_AI_IMAGE_MODEL,
 	OSIONOS_AI_IMAGE_MICROUSD: process.env.OSIONOS_AI_IMAGE_MICROUSD,
@@ -301,6 +311,19 @@ function parseDevProviderUrls(raw: string | undefined): Readonly<Record<string, 
 	}
 }
 
+/** The shape of a uuid: anything else is not one. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A uuid of the environment, lower-cased, or null when it is unset or is not
+ * a uuid. A typo turns the feature off instead of pointing it at a workspace
+ * that is not the system one.
+ */
+function optionalUuid(raw: string | undefined): string | null {
+	const value = (raw ?? '').trim();
+	return UUID.test(value) ? value.toLowerCase() : null;
+}
+
 export interface AiServiceConfig {
 	port: number;
 	databaseUrl: string;
@@ -369,6 +392,8 @@ export interface AiServiceConfig {
 	mcpPendingPerToken: number;
 	/** The MCP write proposals of one token in a minute. */
 	mcpWritesPerMinute: number;
+	/** How long an MCP approval waits for the user, in minutes (G4b-3). */
+	mcpApprovalTtlMinutes: number;
 	/** The OpenAI-compatible base URL of the internal image engine. */
 	imageUrl?: string;
 	/** The model of the engine, as the provenance of an image names it. */
@@ -379,6 +404,13 @@ export interface AiServiceConfig {
 	imagesPerUserDay: number;
 	/** The images of the platform in a UTC day. */
 	imagesPerDay: number;
+	/**
+	 * The dedicated, knowledge-only workspace of the knowledge packs, or null.
+	 *
+	 * Operator configuration (C45): no user and no model sets it. Null means
+	 * packs are off everywhere, and the retrieval never looks at them.
+	 */
+	systemWorkspaceId: string | null;
 	/** The deadline of one generation, in milliseconds. */
 	imageTimeoutMs: number;
 	/** The directory of the models of the output check (C73). */
@@ -439,11 +471,13 @@ export const config: AiServiceConfig = Object.freeze({
 	mcpAllowedOrigins: Object.freeze(commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_ORIGINS)),
 	mcpPendingPerToken: parsed.data.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
 	mcpWritesPerMinute: parsed.data.OSIONOS_AI_MCP_WRITES_PER_MINUTE,
+	mcpApprovalTtlMinutes: parsed.data.OSIONOS_AI_MCP_APPROVAL_TTL_MINUTES,
 	imageUrl: parsed.data.OSIONOS_AI_IMAGE_URL,
 	imageModel: parsed.data.OSIONOS_AI_IMAGE_MODEL,
 	imageMicroUsd: parsed.data.OSIONOS_AI_IMAGE_MICROUSD,
 	imagesPerUserDay: parsed.data.OSIONOS_AI_IMAGES_PER_USER_DAY,
 	imagesPerDay: parsed.data.OSIONOS_AI_IMAGES_PER_DAY,
+	systemWorkspaceId: optionalUuid(parsed.data.OSIONOS_AI_SYSTEM_WORKSPACE_ID),
 	imageTimeoutMs: parsed.data.OSIONOS_AI_IMAGE_TIMEOUT_MS,
 	imageCheckDir: parsed.data.OSIONOS_AI_IMAGE_CHECK_DIR,
 	promptGuardUrl: parsed.data.OSIONOS_AI_PROMPT_GUARD_URL,

@@ -13,7 +13,7 @@
  * The frames of a run, and what they do.
  *
  * A run is a stream of frames: `run.started`, `citation`, `tool.called`,
- * `tool.result`, `permission.asked`, `text.delta`, `done`, `error`. The store
+ * `tool.result`, `permission.asked`, `memory.proposed`, `text.delta`, `done`, `error`. The store
  * used to read them in one long `if` chain, inside the `send` of the chat, and
  * the chain grew with every frame the service learned.
  *
@@ -29,6 +29,8 @@ import type { ChatMessage, ChatMessagePart } from "./chatTypes";
 import { citationFromEvent } from "./citations";
 import { permissionFromEvent } from "./approvalParts";
 import type { PermissionPart } from "./approvalParts";
+import { memoryProposalFromEvent } from "./memoryParts";
+import type { MemoryProposalPart } from "./memoryParts";
 
 /** What the dispatch needs from the store. */
 export interface RunEventActions {
@@ -48,6 +50,8 @@ export interface RunEventActions {
   applyServerTitle(title: string): void;
   /** The assistant asks for the right to write: the card of the write. */
   askPermission(permission: PermissionPart): void;
+  /** The assistant proposes a fact to remember: the chip that asks the user. */
+  proposeMemory(proposal: MemoryProposalPart): void;
 }
 
 /**
@@ -68,14 +72,26 @@ export function dispatchRunEvent(
   if (event === "citation") {
     const citation = citationFromEvent(data);
     if (!citation) return;
-    actions.appendCitation({
-      type: "citation",
-      n: citation.n,
-      pageId: citation.pageId,
-      ...(citation.blockId ? { blockId: citation.blockId } : {}),
-      title: citation.title,
-      snippet: citation.snippet,
-    });
+    actions.appendCitation(
+      citation.collection === "pack"
+        ? {
+            type: "citation",
+            n: citation.n,
+            collection: "pack",
+            pack: citation.pack,
+            title: citation.title,
+            snippet: citation.snippet,
+          }
+        : {
+            type: "citation",
+            n: citation.n,
+            collection: "page",
+            pageId: citation.pageId,
+            ...(citation.blockId ? { blockId: citation.blockId } : {}),
+            title: citation.title,
+            snippet: citation.snippet,
+          },
+    );
     // The sources a tool found are its result: they arrive between the call
     // and its outcome.
     actions.appendToolSource(data);
@@ -92,6 +108,11 @@ export function dispatchRunEvent(
   if (event === "permission.asked") {
     const permission = permissionFromEvent(data);
     if (permission) actions.askPermission(permission);
+    return;
+  }
+  if (event === "memory.proposed") {
+    const proposal = memoryProposalFromEvent(data);
+    if (proposal) actions.proposeMemory(proposal);
     return;
   }
   if (event === "run.started") {

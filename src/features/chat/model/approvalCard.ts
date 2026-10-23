@@ -139,7 +139,7 @@ export function approvedInRunWords(count: number): string {
  */
 export function provenanceTitles(
   pageIds: readonly string[] | undefined,
-  known: readonly { pageId: string; title: string }[],
+  known: readonly { pageId?: string; title: string }[],
 ): string[] {
   if (!pageIds || pageIds.length === 0) return [];
   const titles: string[] = [];
@@ -148,6 +148,17 @@ export function provenanceTitles(
     if (title && !titles.includes(title)) titles.push(title);
   }
   return titles;
+}
+
+/**
+ * The line of an outside agent's write: who asked, and what osionos cannot see.
+ *
+ * The name is the one the user gave the token, and it is untrusted text: the
+ * card shows it as a text node. The sentence says plainly that the agent's
+ * reads are outside osionos, so the card never pretends to know them.
+ */
+export function externalAgentWords(name: string): string {
+  return `Requested by external agent "${name}" — osionos cannot see what it read.`;
 }
 
 /** The words of a refusal: the decision did not go through. */

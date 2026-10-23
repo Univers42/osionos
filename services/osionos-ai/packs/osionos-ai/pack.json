@@ -1,0 +1,16 @@
+{
+	"slug": "osionos-ai",
+	"title": "osionos AI features",
+	"description": "The product docs of the osionos assistant: its local engine, its remote MCP endpoint, and the image, retrieval, recommendation, moderation, voice and tag features.",
+	"docs": [
+		"docs/ai/mcp.md",
+		"docs/ai/local-engine.md",
+		"docs/ai/modules/m1-images.md",
+		"docs/ai/modules/m2-rag.md",
+		"docs/ai/modules/m3-recs.md",
+		"docs/ai/modules/m4-moderation.md",
+		"docs/ai/modules/m5-voice.md",
+		"docs/ai/modules/m6-sentiment.md",
+		"docs/ai/modules/m7-images-tags.md"
+	]
+}

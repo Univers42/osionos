@@ -28,14 +28,22 @@ import {
   segmentAnswer,
   type Citation,
 } from "@/features/chat/model/citations";
+import type { ChatMessagePart } from "@/features/chat/model/chatTypes";
 import { renderCitationSources, renderCitedAnswer } from "@/features/chat/model/citedAnswer";
 
 /* -------------------------------------------------------------------------- */
 /* The markers of an answer                                                   */
 /* -------------------------------------------------------------------------- */
 
-const SOURCE_ONE: Citation = { n: 1, pageId: "page-a", title: "Alpha", snippet: "the first source" };
-const SOURCE_TWO: Citation = { n: 2, pageId: "page-b", title: "Beta", snippet: "the second source" };
+const SOURCE_ONE: Citation = { n: 1, collection: "page", pageId: "page-a", title: "Alpha", snippet: "the first source" };
+const SOURCE_TWO: Citation = { n: 2, collection: "page", pageId: "page-b", title: "Beta", snippet: "the second source" };
+const PACK_SOURCE: Citation = {
+  n: 2,
+  collection: "pack",
+  pack: "product-docs",
+  title: "Getting started",
+  snippet: "the pack passage",
+};
 
 /** The kinds of the segments, in order — "text", "cite", "text"… */
 function kinds(segments: ReturnType<typeof segmentAnswer>): string[] {
@@ -94,6 +102,12 @@ test("a marker with a source is a small button", () => {
   assert.match(html, /<sup[^>]*>/, "the marker is a superscript");
 });
 
+test("the marker of a pack source is not a button, and its tooltip is the snippet", () => {
+  const html = answer("A pack says so [2].", [PACK_SOURCE]);
+  assert.doesNotMatch(html, /<button/, "a pack passage is not a page to open");
+  assert.match(html, /<sup[^>]*><span[^>]*title="the pack passage"[^>]*>2<\/span><\/sup>/);
+});
+
 test("a marker without a source stays the text it was", () => {
   const html = answer("A [3].", [SOURCE_ONE]);
   assert.doesNotMatch(html, /<button/);
@@ -132,11 +146,42 @@ test("a title and a snippet are plain text — never an element", () => {
     React.createElement(
       "div",
       null,
-      renderCitationSources([{ n: 1, pageId: "page-a", title: hostile, snippet: hostile }], () => undefined),
+      renderCitationSources([{ n: 1, collection: "page", pageId: "page-a", title: hostile, snippet: hostile }], () => undefined),
     ),
   );
   assert.doesNotMatch(html, /<img/i, "the payload is never an element");
   assert.doesNotMatch(html, /<pre|<code/i, "and it is not markdown-rendered either");
+  assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/, "the payload is shown as text");
+});
+
+test("a pack source is a plain line with its snippet, not a button", () => {
+  const html = renderToStaticMarkup(
+    React.createElement("div", null, renderCitationSources([PACK_SOURCE], () => undefined)),
+  );
+  assert.doesNotMatch(html, /<button/, "a pack passage is not a page to open");
+  assert.match(html, /<span[^>]*title="the pack passage"[^>]*>2\. Getting started · osionos docs<\/span>/);
+});
+
+test("a page source is still a button", () => {
+  const html = renderToStaticMarkup(
+    React.createElement("div", null, renderCitationSources([SOURCE_ONE], () => undefined)),
+  );
+  assert.match(html, /<button[^>]*>1\. Alpha<\/button>/);
+});
+
+test("a pack title is plain text — never an element", () => {
+  const hostile = "<img src=x onerror=alert(1)>";
+  const html = renderToStaticMarkup(
+    React.createElement(
+      "div",
+      null,
+      renderCitationSources(
+        [{ n: 1, collection: "pack", pack: "product-docs", title: hostile, snippet: hostile }],
+        () => undefined,
+      ),
+    ),
+  );
+  assert.doesNotMatch(html, /<img/i, "the payload is never an element");
   assert.match(html, /&lt;img src=x onerror=alert\(1\)&gt;/, "the payload is shown as text");
 });
 
@@ -165,7 +210,7 @@ test("a stored part keeps its number: the sources are listed by number", () => {
     { type: "citation", n: 2, pageId: "page-b", title: "Beta", snippet: "two" },
   ]);
   assert.deepEqual(
-    stored.map(({ n, pageId }) => [n, pageId]),
+    stored.map((citation) => [citation.n, citation.collection === "page" ? citation.pageId : citation.pack]),
     [
       [1, "page-a"],
       [2, "page-b"],
@@ -178,4 +223,89 @@ test("a frame that is not a source is dropped", () => {
   assert.equal(citationFromEvent({ n: 0, pageId: "page-a" }), null);
   assert.equal(citationFromEvent({ n: 1 }), null, "a source without a page is not a source");
   assert.equal(citationFromEvent({ pageId: "page-a" }), null, "a source without a number is not a source");
+});
+
+test("a pack frame becomes a pack source", () => {
+  const citation = citationFromEvent({
+    n: 2,
+    collection: "pack",
+    pack: "product-docs",
+    title: "Getting started",
+    snippet: "the pack passage",
+  });
+  assert.deepEqual(citation, {
+    n: 2,
+    collection: "pack",
+    pack: "product-docs",
+    title: "Getting started",
+    snippet: "the pack passage",
+  });
+});
+
+test("a pack frame with a bad slug is dropped", () => {
+  for (const pack of ["Bad_Slug", "../x"]) {
+    assert.equal(
+      citationFromEvent({ n: 1, collection: "pack", pack, title: "Getting started", snippet: "passage" }),
+      null,
+      `${pack} is not a pack slug`,
+    );
+  }
+});
+
+test("a frame with neither a page nor a pack is dropped", () => {
+  assert.equal(citationFromEvent({ n: 1, title: "Nowhere", snippet: "nothing" }), null);
+});
+
+test("a stored part with no page and no pack is dropped", () => {
+  const parts = [
+    { type: "citation", n: 1, pageId: "page-a", title: "Alpha", snippet: "one" },
+    { type: "citation", n: 2, title: "Nowhere", snippet: "two" },
+  ] as unknown as ChatMessagePart[];
+  assert.deepEqual(
+    citationsFromParts(parts).map(({ n, title }) => [n, title]),
+    [[1, "Alpha"]],
+  );
+});
+
+test("a pack part is kept among the page parts, in number order", () => {
+  const parts = [
+    { type: "citation", n: 1, collection: "page", pageId: "page-a", title: "Alpha", snippet: "one" },
+    { type: "citation", n: 3, collection: "pack", pack: "product-docs", title: "Getting started", snippet: "three" },
+    { type: "citation", n: 2, collection: "page", pageId: "page-b", title: "Beta", snippet: "two" },
+  ] as unknown as ChatMessagePart[];
+  const stored = citationsFromParts(parts);
+  assert.deepEqual(
+    stored.map(({ n, collection }) => [n, collection]),
+    [
+      [1, "page"],
+      [2, "page"],
+      [3, "pack"],
+    ],
+  );
+  assert.deepEqual(stored[2], {
+    n: 3,
+    collection: "pack",
+    pack: "product-docs",
+    title: "Getting started",
+    snippet: "three",
+  });
+});
+
+test("opening a pack source never touches the page store", async () => {
+  const [{ openCitation }, { usePageStore }] = await Promise.all([
+    import("@/features/chat/model/openCitation"),
+    import("@/store/usePageStore"),
+  ]);
+  const original = usePageStore.getState;
+  let calls = 0;
+  usePageStore.getState = (() => {
+    calls += 1;
+    return original();
+  }) as typeof usePageStore.getState;
+  try {
+    openCitation(PACK_SOURCE);
+  } finally {
+    usePageStore.getState = original;
+  }
+  assert.equal(calls, 0, "a pack passage has no page to open");
 });

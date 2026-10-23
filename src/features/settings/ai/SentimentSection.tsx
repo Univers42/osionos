@@ -21,6 +21,7 @@ import React, { useEffect, useState } from "react";
 import { AiError } from "@/features/ai/api/aiContract";
 import { getPulse, getSentimentSettings, setSentimentEnabled } from "@/features/ai/api/sentiment";
 import type { Pulse } from "@/features/ai/model/sentimentPulse";
+import { invalidateSentimentOptIn } from "@/features/settings/ai/sentimentOptInCache";
 import { Toggle } from "@/shared/ui";
 import { SettingRow } from "../ui/settingsKit";
 import { SentimentPulseChart } from "./SentimentPulseChart";
@@ -60,7 +61,7 @@ export const SentimentSection: React.FC<{ workspaceId: string }> = ({ workspaceI
 
   const change = (next: boolean): void => {
     setSentimentEnabled(workspaceId, next)
-      .then(() => setReloads((count) => count + 1))
+      .then(() => { invalidateSentimentOptIn(workspaceId); setReloads((count) => count + 1); })
       .catch((thrown: unknown) => setError(failure(thrown)));
   };
 

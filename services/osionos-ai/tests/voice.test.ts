@@ -236,7 +236,8 @@ describe('osionos-ai: the chat is not indexed', () => {
 		for (const file of files) {
 			const source = await readFile(file, 'utf8');
 			for (const match of source.matchAll(/source_kind\s*(?:=|!=|<>|in|IN)\s*'([^']*)'/g)) {
-				assert.equal(match[1], 'page', `${file} indexes a ${match[1]}`);
+				const kind = match[1];
+				assert.ok(kind === 'page' || kind === 'pack', `${file} indexes a ${kind}`);
 			}
 			assert.ok(!/'message'|'attachment'/.test(source), `${file} names a message or an attachment`);
 		}
