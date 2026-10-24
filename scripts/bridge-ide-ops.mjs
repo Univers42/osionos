@@ -25,7 +25,7 @@ import { createDockerClient } from './ide-docker.mjs';
 import { createStdStreamDemux } from './bridge-ide-exec.mjs';
 import { jsonReply as reply, sandboxNames } from './bridge-ide-sandbox.mjs';
 import {
-  requireSandboxIdentity, buildGitExecSpec, buildSearchExecSpec, buildWriteSpecs, buildFsOpSpec, buildPortsExecSpec, buildPortTunnelExecSpec,
+  requireSandboxIdentity, buildGitExecSpec, buildSearchExecSpec, buildWriteSpecs, buildFsOpSpec, buildKeySyncSpec, buildPortsExecSpec, buildPortTunnelExecSpec,
 } from './ide-sandbox-spec.mjs';
 
 const BODY_LIMIT = 1024 * 1024; // editor writes carry (base64) file content
@@ -166,7 +166,7 @@ export function tunnelUpstream(env) {
 }
 
 export function createIdeOpsHandler({ config, verifySession, env = process.env }) {
-  const routes = new Set(['/api/ide/git', '/api/ide/search', '/api/ide/fs', '/api/ide/ports']);
+  const routes = new Set(['/api/ide/git', '/api/ide/search', '/api/ide/fs', '/api/ide/ports', '/api/ide/keys/sync']);
 
   return async function handleIdeOpsRoute(url, request, response, requestConfig = config) {
     if (!routes.has(url.pathname)) return false;
@@ -181,9 +181,12 @@ export function createIdeOpsHandler({ config, verifySession, env = process.env }
 
     // Editor writes (materialize floods) get a wider bucket than git/search —
     // a 500-file workspace must materialize in seconds, not 429 after 60.
-    const bucket = url.pathname === '/api/ide/fs'
-      ? { id: 'ide-fs', capacity: 120, refillPerSec: 20 }
-      : { id: 'ide-ops', capacity: 60, refillPerSec: 1 };
+    // A key sync rewrites a file in the box: its own small bucket, not the editor's.
+    const buckets = {
+      '/api/ide/fs': { id: 'ide-fs', capacity: 120, refillPerSec: 20 },
+      '/api/ide/keys/sync': { id: 'ide-keys', capacity: 10, refillPerSec: 0.1 },
+    };
+    const bucket = buckets[url.pathname] ?? { id: 'ide-ops', capacity: 60, refillPerSec: 1 };
     let ctx;
     try { ctx = await resolveSandbox(request, payload, env, requestConfig, verifySession, bucket); }
     catch (error) { reply(response, error?.status ?? 401, { ok: false, message: error?.message ?? 'Unauthorized.' }, requestConfig); return true; }
@@ -196,6 +199,9 @@ export function createIdeOpsHandler({ config, verifySession, env = process.env }
       } else if (url.pathname === '/api/ide/ports') {
         const { output, exitCode } = await ctx.docker.runExec(ctx.names.containerName, buildPortsExecSpec());
         reply(response, 200, { ok: exitCode === 0, exitCode, output: String(output).slice(0, 64 * 1024) }, requestConfig);
+      } else if (url.pathname === '/api/ide/keys/sync') {
+        const { output, exitCode } = await ctx.docker.runExec(ctx.names.containerName, buildKeySyncSpec(payload.keys));
+        reply(response, 200, { ok: exitCode === 0, exitCode, output: String(output).slice(0, 1024) }, requestConfig);
       } else if (url.pathname === '/api/ide/search') {
         const spec = buildSearchExecSpec(String(payload.query ?? ''), 200);
         const { output } = await ctx.docker.runExec(ctx.names.containerName, spec);
