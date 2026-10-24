@@ -459,18 +459,22 @@ function dropRefreshed(userId: string, code: string) {
 }
 
 /**
- * Caveat: the guard compares the refresh token the rotation started from with the stored one when
- * the answer lands. A step-up that swapped the pair mid-flight wins, so a late answer for the old
- * family neither overwrites the new pair nor signs the device out; the tick after retries.
+ * Caveat: the guard compares the refresh token the rotation actually sent (re-read after any wait
+ * for another tab's lease) with the stored one when the answer lands. A step-up that swapped the
+ * pair mid-flight wins, so a late answer for the old family neither overwrites the new pair nor
+ * signs the device out; the tick after retries.
  */
 const refreshOne = (userId: string): Promise<RefreshOutcome> => {
-  const startedFrom = currentTokens(userId)?.refreshToken;
-  const unchanged = () => currentTokens(userId)?.refreshToken === startedFrom;
+  let rotatedFrom = currentTokens(userId)?.refreshToken;
+  const unchanged = () => currentTokens(userId)?.refreshToken === rotatedFrom;
   return runRefresh({
     userId,
     storage: refreshStorage(),
     readTokens: () => currentTokens(userId),
-    rotate: (refreshToken) => refreshBridgeSession({ apiBase: API_BASE, refreshToken }),
+    rotate: (refreshToken) => {
+      rotatedFrom = refreshToken;
+      return refreshBridgeSession({ apiBase: API_BASE, refreshToken });
+    },
     adopt: (tokens) => { if (unchanged()) applyRefreshed(userId, tokens); },
     signOut: (code) => { if (unchanged()) dropRefreshed(userId, code); },
   });
