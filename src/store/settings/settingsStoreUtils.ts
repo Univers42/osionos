@@ -53,21 +53,24 @@ export function settingsJwt(): string | null {
 
 /**
  * What a failed settings call means:
- * - `unavailable`: this server does not serve the route yet (404, 501, or a 503
- *   whose code names the feature unavailable or off) — the store keeps working
- *   locally, with no error toast.
+ * - `unavailable`: this server does not serve the route yet (a 404 with no
+ *   code or the client's default `API_ERROR`, a 501, or a 503 whose code names
+ *   the feature unavailable or off) — the store keeps working locally, with no
+ *   error toast. A 404 that carries any other code (`team_not_found`) is the
+ *   route answering, so it is `failed` and the caller shows its message.
  * - `sudo_required`: the server wants a fresh sign-in; the shared fetch path
  *   raises the prompt, so the caller says nothing extra.
  * - `failed`: everything else — the caller shows the message.
  *
  * Pure, so it can be unit-tested without importing the env-bound api client.
  *
- * Caveat: a genuine 404 on a route that DOES exist (a mistyped path) is also
- * read as `unavailable`; acceptance 2 proves the classification, and P1-2's e2e
- * proves the routes.
+ * Caveat: a 404 the bridge throws without a code (`Object.assign(new Error(..),
+ * { status: 404 })`) is still read as "route missing", so a real not-found
+ * answered that way is silently kept local; the fix is to give it a code.
  */
 export function classifySettingsError(status: number, code?: string | null): 'unavailable' | 'sudo_required' | 'failed' {
-  if (status === 404 || status === 501) return 'unavailable';
+  if (status === 404 && (!code || code === 'API_ERROR')) return 'unavailable';
+  if (status === 501) return 'unavailable';
   if (status === 503 && code && (code.endsWith('_unavailable') || code.endsWith('_off'))) return 'unavailable';
   if (status === 403 && code === 'sudo_required') return 'sudo_required';
   return 'failed';

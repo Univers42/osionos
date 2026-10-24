@@ -13,7 +13,7 @@
 /**
  * The self sources: the caller's own rows, as a read-only database.
  *
- * What is proved here: the six sources answer with their own allowlist, the answer never
+ * What is proved here: the seven sources answer with their own allowlist, the answer never
  * carries a column the allowlist does not name, the scope of a service-role read is in the
  * PATH (a forged query parameter changes nothing), the two account-plane sources are read
  * with the caller's own JWT and never with the service key, the peer of a connection is
@@ -26,6 +26,9 @@ import assert from 'node:assert/strict';
 import { accountConfig, send, sessionToken, startAccountWorld, startBridgeWorld, USER_A, USER_B } from './support/account-world.mjs';
 import { kvStub } from './support/kv-stub.mjs';
 import { SELF_SOURCES, selfSourceById, dedupeEdgesByPeer } from '../../scripts/bridge-self-sources.mjs';
+
+// my-activity is registered only while the activity flag is on; the flag-off case is tested explicitly.
+process.env.OSIONOS_ACTIVITY = '1';
 
 const WORKSPACE = 'cccccccc-3333-4333-8333-cccccccccccc';
 const PAGE_A = '11111111-1111-4111-8111-111111111111';
@@ -115,6 +118,10 @@ function seed(jti) {
 			{ user_id: PEER_QUIET, display_name: 'Quiet Peer', username: 'quiet', profile: { avatar: null, headline: '' }, last_seen_at: null, directory_opt_out: true, headline: '', search_doc: '' },
 			{ user_id: PEER_BLOCKER, display_name: 'Blocking Peer', username: 'blocking', profile: { avatar: 'https://cdn.example.com/blocking.png', headline: 'Blocked' }, last_seen_at: null, directory_opt_out: false, headline: 'Blocked', search_doc: "'blocked':1" },
 		],
+		activity: [
+			{ id: 1, ts: '2026-10-20T10:00:00.000Z', user_id: USER_A, event: 'login', surface: 'settings', workspace_id: null },
+			{ id: 2, ts: '2026-10-21T10:00:00.000Z', user_id: USER_B, event: 'search', surface: 'search', workspace_id: null },
+		],
 		blocks: [
 			{ blocker_id: PEER_BLOCKER, blocked_id: USER_A, reason: null, created_at: '2026-10-01T00:00:00.000Z' },
 		],
@@ -132,7 +139,7 @@ async function world(t, { rows = {}, fail = null, kv } = {}) {
 const read = (base, source, options = {}) => send(base, `/api/account/self-data/${source}`, options);
 
 describe('GET /api/account/self-data/<source>', () => {
-	it('answers the six sources with their own name, their allowlist and their rows', async (t) => {
+	it('answers the seven sources with their own name, their allowlist and their rows', async (t) => {
 		const { base, token } = await world(t);
 		for (const source of SELF_SOURCES) {
 			const response = await read(base, source.id, { token });
@@ -392,7 +399,7 @@ describe('GET /api/account/self-data/<source>', () => {
 
 	it('answers 404 for a source that does not exist', async (t) => {
 		const { base, store, token } = await world(t);
-		const response = await read(base, 'my-activity', { token });
+		const response = await read(base, 'my-nothing', { token });
 		assert.equal(response.status, 404);
 		assert.equal(response.body.code, 'unknown_self_source');
 		assert.equal(store.calls.length, 0, 'no table is read for an unknown source');
@@ -400,7 +407,7 @@ describe('GET /api/account/self-data/<source>', () => {
 
 	it('answers 401, not 404, for an unknown source without a session', async (t) => {
 		const { base, store } = await world(t);
-		const response = await read(base, 'my-activity');
+		const response = await read(base, 'my-nothing');
 		assert.equal(response.status, 401, 'an anonymous caller cannot probe which sources exist');
 		assert.equal(store.calls.length, 0, 'no table is read without a session');
 	});
@@ -433,5 +440,18 @@ describe('GET /api/account/self-data/<source>', () => {
 		assert.equal(response.body.source, 'my-pages');
 		const preferences = await send(built.base, '/api/preferences', { token });
 		assert.equal(preferences.status, 200, 'the other module of the seam still answers its own path');
+	});
+});
+
+describe('my-activity with the activity flag off', () => {
+	it('is an unknown source and no request reaches osionos_activity_events', async (t) => {
+		delete process.env.OSIONOS_ACTIVITY;
+		t.after(() => { process.env.OSIONOS_ACTIVITY = '1'; });
+		const { base, store, token } = await world(t);
+		const response = await read(base, 'my-activity', { token });
+		assert.equal(response.status, 404);
+		assert.equal(response.body.code, 'unknown_self_source');
+		assert.equal(store.callsTo('osionos_activity_events').length, 0);
+		assert.equal(selfSourceById('my-activity'), null);
 	});
 });

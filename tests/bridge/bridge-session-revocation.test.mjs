@@ -141,12 +141,25 @@ describe('the revoke route filters what it may touch', () => {
 		// The family is found by a read that carries the caller's id; a foreign row is never found, so nothing is patched.
 		const read = store.callsTo('osionos_sessions').find((call) => call.method === 'GET' && call.params.get('id') === `eq.${theirs.id}`);
 		assert.equal(read.params.get('user_id'), `eq.${USER_A}`);
-		assert.equal(read.params.get('revoked_at'), 'is.null');
 		assert.equal(store.callsTo('osionos_sessions').some((call) => call.method === 'PATCH'), false);
 		const row = store.rows().find((entry) => entry.id === theirs.id);
 		assert.equal(row.revoked_at, undefined, 'the row of the other user is untouched');
 		const stillAlive = await sendJson(base, '/api/favorites', { headers: { authorization: `Bearer ${theirs.accessToken}` } });
 		assert.equal(stillAlive.status, 200, 'the other session still verifies on this replica');
+	});
+
+	it('answers 404 for the caller\'s own already-revoked session and patches nothing', async (t) => {
+		const clock = { at: Date.now() };
+		const { base, store } = await startSessionBridge({ t, config: sessionConfig({ now: () => clock.at }), clock, kv: kvStub() });
+		const keeper = await sessionFor(t, base, USER_A);
+		const other = await sessionFor(t, base, USER_A);
+		const headers = { authorization: `Bearer ${keeper.accessToken}` };
+		assert.equal((await sendJson(base, `/api/account/sessions/${other.id}`, { method: 'DELETE', headers })).status, 204);
+		const patches = () => store.callsTo('osionos_sessions').filter((call) => call.method === 'PATCH').length;
+		const before = patches();
+		const again = await sendJson(base, `/api/account/sessions/${other.id}`, { method: 'DELETE', headers });
+		assert.deepEqual([again.status, again.body.code], [404, 'session_not_found']);
+		assert.equal(patches(), before);
 	});
 
 	it('patches only the caller\'s unrevoked rows of the family it found', async (t) => {
