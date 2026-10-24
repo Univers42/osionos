@@ -204,3 +204,32 @@ describe('the vigilantMode preference', () => {
 		assert.equal(response.status, 200);
 	});
 });
+
+describe('the activity_tracking preference', () => {
+	for (const method of ['PATCH', 'PUT']) {
+		for (const value of ['yes', 1, {}]) {
+			it(`refuses ${method} activity_tracking ${JSON.stringify(value)} with 422 and merges nothing`, async (t) => {
+				const { base, token, store } = await world(t);
+				const response = await send(base, '/api/preferences', { method, token, body: { activity_tracking: value } });
+				assert.equal(response.status, 422);
+				assert.equal(response.body.code, 'invalid_body');
+				assert.equal(store.callsTo(MERGE_RPC).length, 0);
+			});
+		}
+
+		it(`accepts ${method} activity_tracking true and leaves the other keys alone`, async (t) => {
+			const { base, token, store } = await world(t);
+			const response = await send(base, '/api/preferences', { method, token, body: { activity_tracking: true, theme: 'light' } });
+			assert.equal(response.status, 200);
+			assert.equal(store.callsTo(MERGE_RPC).length, 1);
+			assert.equal(store.callsTo(MERGE_RPC)[0].body.p_patch.activity_tracking, true);
+			assert.equal(store.callsTo(MERGE_RPC)[0].body.p_patch.theme, 'light');
+		});
+	}
+
+	it('reads as off when the key was never written', async (t) => {
+		const { base, token } = await world(t);
+		const response = await send(base, '/api/preferences', { token });
+		assert.equal(response.body.activity_tracking ?? false, false);
+	});
+});

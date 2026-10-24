@@ -366,3 +366,20 @@ test('a non-owner viewer is refused a page-scoped rule', async () => {
   });
   assert.equal(res.status, 403, JSON.stringify(res.body));
 });
+
+test("sharing records one 'share' event for the caller, after a stored rule, and none for a refused write", async () => {
+  const seen = [];
+  CONFIG.activity = { emit: (...args) => seen.push(args) };
+  try {
+    const { call } = setup({ access: { [WS_A]: ["read", "update"] } });
+    const other = "cccccccc-3333-4333-8333-cccccccccccc";
+    const saved = await call("POST", "/api/perms/rules", { body: { workspaceId: WS_A, resourceId: "p", target: { type: "user", userId: other }, permission: "can_view" } });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(seen, [[{ userId: USER }, "share", "editor", WS_A]]);
+    const refused = setup({ access: { [WS_A]: ["read"] } });
+    assert.equal((await refused.call("POST", "/api/perms/rules", { body: { workspaceId: WS_A, resourceId: "p", permission: "can_view" } })).status, 403);
+    assert.equal(seen.length, 1);
+  } finally {
+    delete CONFIG.activity;
+  }
+});
