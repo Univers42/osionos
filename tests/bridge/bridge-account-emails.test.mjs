@@ -13,7 +13,7 @@
 /**
  * GET /api/account/emails through the real account handler, against a two-user fake of
  * GoTrue's admin read: the id asked for is the token's, the answer is the allowlisted
- * record, and every outage is settings_read_failed. The write verbs stay unserved.
+ * record, and every outage is settings_read_failed. Routing of the write verbs is pinned here; their behaviour is in the -add, -limits, -verify and -remove files.
  */
 
 import { describe, it } from 'node:test';
@@ -87,13 +87,13 @@ describe('GET /api/account/emails', () => {
 	});
 });
 
-describe('unserved verbs and paths', () => {
-	it('B9 answers 405 to POST and 404 not_found to a sub-path, without a GoTrue call', async () => {
+describe('routing', () => {
+	it('B9 answers 403 to POST without sudo and 404 not_found to make-primary and a GET sub-path, with no GoTrue call', async () => {
 		const { call, upstream } = build();
-		assert.equal((await call(USER_A, { method: 'POST', body: { email: 'x@example.com' } })).status, 405);
-		for (const [method, path] of [['DELETE', `${PATH}/primary-${USER_A}`], ['POST', `${PATH}/primary-${USER_A}/make-primary`], ['GET', `${PATH}/x`]]) {
-			const result = await call(USER_A, { method, path });
-			assert.deepEqual([result.status, result.body.code], [404, 'not_found'], `${method} ${path}`);
+		const expected = [['POST', PATH, 403, 'sudo_required'], ['DELETE', `${PATH}/primary-${USER_A}`, 403, 'sudo_required'], ['POST', `${PATH}/primary-${USER_A}/make-primary`, 404, 'not_found'], ['GET', `${PATH}/x`, 404, 'not_found'], ['PUT', PATH, 405, 'method_not_allowed']];
+		for (const [method, path, status, code] of expected) {
+			const result = await call(USER_A, { method, path, body: { email: 'x@example.com' } });
+			assert.deepEqual([result.status, result.body.code], [status, code], `${method} ${path}`);
 		}
 		assert.equal(upstream.length, 0);
 	});
@@ -117,8 +117,8 @@ describe('rate limit and kv', () => {
 });
 
 describe('the fly image', () => {
-	it('B10 copies the three new modules by name', () => {
+	it('B10 copies the six modules by name', () => {
 		const dockerfile = readFileSync(new URL('../../deploy/bridge-fly/Dockerfile', import.meta.url), 'utf8');
-		for (const name of ['bridge-account-settings.mjs', 'bridge-account-emails.mjs', 'bridge-gotrue-user.mjs']) assert.ok(dockerfile.includes(`scripts/${name}`), name);
+		for (const name of ['bridge-account-settings.mjs', 'bridge-account-emails.mjs', 'bridge-gotrue-user.mjs', 'bridge-account-email-rows.mjs', 'bridge-account-email-flow.mjs', 'bridge-account-email-send.mjs']) assert.ok(dockerfile.includes(`scripts/${name}`), name);
 	});
 });

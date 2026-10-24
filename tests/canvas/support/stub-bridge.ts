@@ -30,7 +30,7 @@ registerHooks({
 });
 
 export type Call = { url: string; method: string; body: Record<string, unknown> | null };
-export type Reply = { status?: number; body: unknown };
+export type Reply = { status?: number; body: unknown; headers?: Record<string, string> };
 
 export async function withBridge(reply: (call: Call) => Reply, run: () => Promise<void>): Promise<Call[]> {
   const original = globalThis.fetch;
@@ -38,8 +38,8 @@ export async function withBridge(reply: (call: Call) => Reply, run: () => Promis
   globalThis.fetch = (async (input: string, init?: RequestInit) => {
     const call = { url: String(input), method: init?.method ?? "GET", body: typeof init?.body === "string" ? JSON.parse(init.body) : null };
     calls.push(call);
-    const { status = 200, body } = reply(call);
-    return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+    const { status = 200, body, headers = {} } = reply(call);
+    return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } });
   }) as typeof fetch;
   try { await run(); } finally { globalThis.fetch = original; }
   return calls;
