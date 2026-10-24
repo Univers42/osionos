@@ -155,7 +155,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   },
   {
     id: "page_settings", group: "workspace", label: "Page settings", title: "Page settings",
-    subtitle: "Actions, style switches, analytics and connections from settings_page.md", icon: FileText,
+    subtitle: "Settings for the page you have open", icon: FileText,
     anchors: [
       { id: "style", label: "Page style", keywords: ["font", "default", "serif", "mono"] },
       { id: "actions", label: "Page actions", keywords: ["copy", "duplicate", "trash", "present", "translate", "export"] },
@@ -193,6 +193,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     anchors: [
       { id: "personal-access-tokens", label: "Personal access tokens", keywords: ["token", "pat", "api key", "secret", "credential", "scope", "developer"] },
       { id: "authorized-apps", label: "Authorized apps", keywords: ["authorized", "apps", "mcp", "claude", "token", "access", "revoke"] },
+      { id: "ssh-gpg-keys", label: "SSH and GPG keys", keywords: ["ssh", "gpg", "key", "fingerprint", "git", "signing", "deploy"] },
     ],
   },
   {
@@ -202,13 +203,16 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   },
   {
     id: "library", group: "features", label: "Emoji & Library", title: "Emoji & Library",
-    subtitle: "Emoji + photo things that we upload", icon: Palette,
+    subtitle: "Emoji and images you uploaded", icon: Palette,
     anchors: [{ id: "library", label: "Emoji and library", keywords: ["emoji", "assets", "photos", "uploads", "library"] }],
   },
   {
     id: "teamspaces", group: "access", label: "Teamspaces", title: "Teamspaces",
     subtitle: "Manage teamspaces in this workspace", icon: Shield,
-    anchors: [{ id: "teamspaces", label: "Teamspaces", keywords: ["teamspace", "owner", "access", "security"] }],
+    anchors: [
+      { id: "teams", label: "Teams", keywords: ["team", "teams", "group", "members"] },
+      { id: "teamspaces", label: "Teamspaces", keywords: ["teamspace", "owner", "access", "security"] },
+    ],
   },
   {
     id: "permissions", group: "access", label: "Permissions", title: "Permissions",

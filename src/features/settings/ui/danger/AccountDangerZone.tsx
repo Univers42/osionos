@@ -42,7 +42,8 @@ function failureMessage(outcome: AccountSecurityOutcome<unknown>): string {
 /**
  * The delete-account gesture: the typed username, then sudo (the server refuses without
  * it and the shared prompt opens), then the request. The user stays signed in; while a
- * request is open the zone shows the grace date and Cancel.
+ * request is open the zone shows the grace date and Cancel, and once the server reports
+ * the erasure has begun (`inProgress`) it shows that instead, with no Cancel.
  */
 export const AccountDangerZone: React.FC<{ username?: string | null; email?: string | null }> = ({ username, email }) => {
   const toast = useToastStore((state) => state.push);
@@ -77,6 +78,8 @@ export const AccountDangerZone: React.FC<{ username?: string | null; email?: str
     if (outcome.ok) {
       setPending(null);
       toast({ kind: 'success', title: 'Deletion cancelled' });
+    } else if (outcome.reason === 'refused' && outcome.code === 'deletion_in_progress') {
+      setPending((current) => current && { ...current, inProgress: true });
     } else {
       toast({ kind: 'error', title: 'Could not cancel the deletion', description: failureMessage(outcome) });
     }
@@ -84,7 +87,13 @@ export const AccountDangerZone: React.FC<{ username?: string | null; email?: str
 
   return (
     <DangerZone>
-      {pending ? (
+      {pending?.inProgress ? (
+        <SettingRow
+          danger
+          title="Deletion is running"
+          description="Your account is being erased now. This can no longer be cancelled."
+        />
+      ) : pending ? (
         <SettingRow
           danger
           title="Your account is scheduled for deletion"

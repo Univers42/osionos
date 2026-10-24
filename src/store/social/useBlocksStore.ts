@@ -15,6 +15,7 @@ import { persist } from 'zustand/middleware';
 
 import { blockUser, listBlocks, unblockUser } from '@/shared/social/blockApi';
 import { errorMessage, pushSettingsError } from '@/store/settings/settingsStoreUtils';
+import { shareInFlight } from '@/store/social/sharedHydrate';
 import type { BlockedUser } from '@/store/social/types';
 
 interface BlocksStore {
@@ -36,16 +37,15 @@ export const useBlocksStore = create<BlocksStore>()(
       loading: false,
       error: null,
       rowErrors: {},
-      hydrate: async () => {
+      hydrate: shareInFlight(async () => {
         set({ loading: true, error: null });
         try {
           const blocks = await listBlocks();
           set({ data: blocks, loading: false, error: null });
         } catch (error) {
           set({ loading: false, error: errorMessage(error) });
-          pushSettingsError('Blocked list unavailable', error);
         }
-      },
+      }),
       block: async (userId, reason) => {
         const optimistic: BlockedUser = { userId, reason: reason ?? null };
         set({ data: [optimistic, ...get().data.filter((item) => item.userId !== userId)] });

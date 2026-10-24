@@ -158,6 +158,7 @@ const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.filter(
 
 /** The template-only placeholder command id; gated to template pages by the menu. */
 export const PLACEHOLDER_COMMAND_ID = "advanced:placeholder";
+export const PROFILE_FIELD_COMMAND_ID = "advanced:profile-field";
 
 const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
   {
@@ -238,6 +239,16 @@ const LOCAL_SLASH_COMMANDS: SlashCommand[] = [
     icon: <PenTool className="h-4 w-4" />,
     description: "New whiteboard board — /whiteboard <name>",
     requiresApp: "osionos.whiteboard",
+  },
+  {
+    // README-only: gated to the owner's README page in SlashCommandMenu and re-checked at dispatch.
+    id: PROFILE_FIELD_COMMAND_ID,
+    kind: "profile-field",
+    section: "advanced",
+    label: "Profile field",
+    aliases: ["profile", "field", "bind", "bio", "name", "headline"],
+    icon: "@",
+    description: "Show a field of your public profile — always current",
   },
   {
     id: "advanced:diagram",

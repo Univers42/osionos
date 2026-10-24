@@ -24,6 +24,7 @@ import { ConfirmModal } from "@/features/settings/ui/ConfirmModals";
 import { DataTable, EmptyState, PanelStatus, Section, SettingRow, type PanelStatusState } from "@/features/settings/ui/settingsKit";
 
 import { CreateTokenModal } from "./CreateTokenModal";
+import { KeysSection } from "./KeysSection";
 import { listTokens, revokeAllTokens, revokeToken } from "./patApi";
 import { dateLabel, expiryLabel, kindLabel, lastUsedLabel, patErrorMessage, permissionSummary, type PatCatalog, type PatToken } from "./patModel";
 
@@ -112,6 +113,7 @@ export const DeveloperPanel: React.FC = () => {
           <button type="button" className="rounded-[var(--osio-control-radius)] underline" onClick={() => openSettings("ai_connections", "ai-access-tokens")}>AI connections</button>.
         </p>
       </Section>
+      <KeysSection />
       {creating && <CreateTokenModal catalog={catalog} onClose={() => setCreating(false)} onCreated={(token) => setTokens((current) => [token, ...current])} />}
       {pendingRevoke && (
         <ConfirmModal

@@ -11,7 +11,6 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useState } from 'react';
-import { startRegistration } from '@simplewebauthn/browser';
 import { Copy, KeyRound } from 'lucide-react';
 
 import { useUserStore, type StaticPersona } from '@/features/auth';
@@ -25,7 +24,10 @@ import { runAsync } from '../model/settingsCalls';
 import { SessionsSettings } from './SessionsSettings';
 import { PublicProfileSection } from './PublicProfileSection';
 import { signInRows } from './signInMethods';
-import { EmailManagerModal, PasskeyManagerModal, PasswordModal, TwoFactorModal, UsernameModal } from './ProfileSecurityModals';
+import { EmailManagerModal, PasskeyManagerModal, PasswordModal, UsernameModal } from './ProfileSecurityModals';
+import { LinkedIdentitiesRow } from './LinkedIdentitiesRow';
+import { TwoFactorModal } from './TwoFactorModal';
+import { useTwoStepStatus } from './twoStepClient';
 
 type SettingsModalName =
   | 'email-manager'
@@ -50,13 +52,12 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   const username = useAccountProfileStore((state) => state.profile?.username ?? null);
   const passkeys = useAccountPasskeysStore((state) => state.data);
   const hydratePasskeys = useAccountPasskeysStore((state) => state.hydrate);
-  const registerPasskeyOptions = useAccountPasskeysStore((state) => state.registerOptions);
-  const verifyPasskeyRegistration = useAccountPasskeysStore((state) => state.verifyRegistration);
   const renamePasskey = useAccountPasskeysStore((state) => state.rename);
   const removePasskey = useAccountPasskeysStore((state) => state.remove);
   const emails = useAccountEmailsStore((state) => state.data);
   const hydrateEmails = useAccountEmailsStore((state) => state.hydrate);
   const [modal, setModal] = useState<ActiveSettingsModal | null>(null);
+  const twoStep = useTwoStepStatus();
 
   useEffect(() => {
     runAsync(hydrateAccount(userId));
@@ -71,17 +72,6 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
   const passwordRow = rows.find((row) => row.id === 'password');
   const passkeysReported = rows.some((row) => row.id === 'passkeys');
 
-  async function handleRegisterPasskey(nickname = 'osionos passkey') {
-    const options = await registerPasskeyOptions(nickname);
-    if (!options) {
-      toast({ kind: 'info', title: "Passkeys aren't available on this server yet" });
-      return;
-    }
-    const response = await startRegistration({ optionsJSON: options as unknown as Parameters<typeof startRegistration>[0]['optionsJSON'] });
-    await verifyPasskeyRegistration(response, nickname);
-    toast({ kind: 'success', title: 'Passkey added' });
-  }
-
   return (
     <>
       <PublicProfileSection />
@@ -89,10 +79,11 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
         <SettingRow title="Email" description={primaryEmail} action={<Button onClick={() => setModal({ name: 'email-manager' })}>Manage emails</Button>} />
         {username && <SettingRow title="Username" description={`@${username}`} action={<Button onClick={() => setModal({ name: 'username' })}>Change</Button>} />}
         {passwordRow && <SettingRow title="Password" description={security.hasPassword ? 'Password sign-in is available for this account.' : 'Add a password to keep another sign-in option available.'} action={<Button onClick={() => setModal({ name: 'password' })}>{passwordRow.label}</Button>} />}
-        <SettingRow title="Two-step verification" description="Add another layer of security to your account" action={<Button onClick={() => setModal({ name: 'two-factor' })}>{security.twoStepEnabled ? 'Manage' : 'Add verification method'}</Button>} />
+        <SettingRow title="Two-step verification" description="Add another layer of security to your account" action={<Button onClick={() => setModal({ name: 'two-factor' })}>{twoStep.state.phase === 'ready' && twoStep.state.status.enabled ? 'Manage' : 'Add verification method'}</Button>} />
         {passkeysReported
-          ? <SettingRow title="Passkeys" description={`${activePasskeys.length} passkey${activePasskeys.length === 1 ? '' : 's'} configured`} action={<Button onClick={() => setModal({ name: 'passkeys' })}><KeyRound size={14} /> Add passkey</Button>} />
+          ? <SettingRow title="Passkeys" description={`${activePasskeys.length} passkey${activePasskeys.length === 1 ? '' : 's'} configured`} action={<Button onClick={() => setModal({ name: 'passkeys' })}><KeyRound size={14} /> Manage passkeys</Button>} />
           : <SettingRow title="Passkeys" description="Passkeys aren't available on this server yet." />}
+        <LinkedIdentitiesRow />
       </Section>
       {isAccountDeleteEnabled() && <AccountDangerZone username={username} email={primaryEmail} />}
       <SessionsSettings userId={userId} onSignOutAll={() => setModal({ name: 'sign-out-all' })} />
@@ -106,8 +97,8 @@ export const ProfilePanel: React.FC<{ persona: StaticPersona | null }> = ({ pers
 
       {modal?.name === 'email-manager' && <EmailManagerModal userId={userId} fallbackEmail={persona?.email} onClose={() => setModal(null)} />}
       {modal?.name === 'password' && <PasswordModal hasPassword={security.hasPassword === true} onSaved={() => updateAccount({ security: { ...security, hasPassword: true } })} onClose={() => setModal(null)} />}
-      {modal?.name === 'two-factor' && <TwoFactorModal enabled={Boolean(security.twoStepEnabled)} onEnabled={(enabled) => updateAccount({ security: { ...security, twoStepEnabled: enabled } })} onClose={() => setModal(null)} />}
-      {modal?.name === 'passkeys' && <PasskeyManagerModal passkeys={activePasskeys} onAdd={() => runAsync(handleRegisterPasskey())} onRename={renamePasskey} onRemove={(id) => runAsync(removePasskey(id))} onClose={() => setModal(null)} />}
+      {modal?.name === 'two-factor' && <TwoFactorModal userId={userId} state={twoStep.state} preferred={security.preferredMfaMethod} onPreferred={(method) => updateAccount({ security: { ...security, preferredMfaMethod: method } })} onChanged={twoStep.refresh} onClose={() => setModal(null)} />}
+      {modal?.name === 'passkeys' && <PasskeyManagerModal passkeys={activePasskeys} onRename={(id, nickname) => runAsync(renamePasskey(id, nickname))} onRemove={(id) => runAsync(removePasskey(id))} onClose={() => setModal(null)} />}
       {modal?.name === 'username' && username && <UsernameModal current={username} onClose={() => setModal(null)} />}
       {modal?.name === 'sign-out-all' && <ConfirmModal title="Log out all devices" message="This signs you out on every device, including this one." danger actionLabel="Log out of all devices" onConfirm={() => { setModal(null); runAsync(logoutUser(userId)); }} onClose={() => setModal(null)} />}
     </>
