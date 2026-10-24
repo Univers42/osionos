@@ -20,9 +20,8 @@
  * Caveat: the GoTrue admin PUT has no duplicate check of its own, so the promote-time lookup
  * is read-then-write; the loser of a race gets GoTrue's 23505, answered as `email_taken`. An
  * address added to OSIONOS_ADMIN_EMAILS AFTER it became someone's primary promotes that account
- * at its next sign-in, as for any account. Other sign-ins end through the password-change
- * path, so the revoke row carries that reason (no make-primary reason exists). A process kill
- * between the PUT and the row removal leaves a secondary equal to the primary; the GET hides it.
+ * at its next sign-in, as for any account. A process kill between the PUT and the row removal
+ * leaves a secondary equal to the primary; the GET hides it.
  */
 
 import { writeAudit, grantSudo } from './bridge-guard.mjs';
@@ -122,7 +121,7 @@ async function finish(ctx, session, request, response, { row, address, kept }) {
 	await ctx.rows.remove(session.userId, row.id).catch(logged('account_email_primary_remove_failed'));
 	await writeAudit(ctx.pg, { session, meta: clientMetaOf(request, ctx.config), eventType: 'account.email_primary_changed', details: {} }).catch(logged('account_email_primary_audit_failed'));
 	try {
-		await endOtherSignIns(ctx, session, response);
+		await endOtherSignIns(ctx, session, response, 'logout_all');
 	} catch {
 		throw accountError(503, 'email_changed_signout_failed', 'Your primary address HAS changed, but other devices could not be signed out. Sign them out from your sessions list.');
 	}

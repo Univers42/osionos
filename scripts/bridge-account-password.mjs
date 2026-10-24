@@ -107,12 +107,12 @@ async function signEveryoneOut({ config, fetchImpl }, userId, response) {
 }
 
 /** Ends the other sign-ins; the cut-off is the fallback, and the last resort is an honest 503. */
-export async function endOtherSignIns(deps, session, response) {
+export async function endOtherSignIns(deps, session, response, reason = 'password_change') {
 	const { config } = deps;
 	if (config.sessionRecords?.enabled) {
 		try {
 			const own = String(session.raw.jti).toLowerCase();
-			await revokeOtherFamilies(deps, { userId: session.userId, keepFamilyId: String((await sessionRowOf(deps.pg, { sessionId: own, userId: session.userId }))?.family_id ?? own).toLowerCase(), keepRowId: own, reason: 'password_change' });
+			await revokeOtherFamilies(deps, { userId: session.userId, keepFamilyId: String((await sessionRowOf(deps.pg, { sessionId: own, userId: session.userId }))?.family_id ?? own).toLowerCase(), keepRowId: own, reason });
 			return;
 		} catch { /* the cut-off below is the fallback: it signs the caller out too, which beats a live thief */ }
 	}
