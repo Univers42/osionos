@@ -21,7 +21,9 @@
  * is read-then-write; the loser of a race gets GoTrue's 23505, answered as `email_taken`. An
  * address added to OSIONOS_ADMIN_EMAILS AFTER it became someone's primary promotes that account
  * at its next sign-in, as for any account. A process kill between the PUT and the row removal
- * leaves a secondary equal to the primary; the GET hides it.
+ * leaves a secondary equal to the primary; the GET hides it. The lock release is a plain `del`
+ * (kv has no compare-and-delete): a run that outlives the lock's TTL can delete the lock a
+ * later run took, letting a third run in; the promote-time lookup and GoTrue's 23505 still hold.
  */
 
 import { writeAudit, grantSudo } from './bridge-guard.mjs';
