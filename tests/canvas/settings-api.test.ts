@@ -89,6 +89,13 @@ test("classifySettingsError: 404 -> unavailable", () => {
   assert.equal(classifySettingsError(404), "unavailable");
 });
 
+test("classifySettingsError: 404 by code (missing and API_ERROR are a missing route; any other code is an answer)", () => {
+  assert.equal(classifySettingsError(404, "API_ERROR"), "unavailable");
+  assert.equal(classifySettingsError(404, null), "unavailable");
+  assert.equal(classifySettingsError(404, "team_not_found"), "failed");
+  assert.equal(classifySettingsError(404, "workspace_not_found"), "failed");
+});
+
 test("classifySettingsError: 501 -> unavailable", () => {
   assert.equal(classifySettingsError(501), "unavailable");
 });
@@ -126,7 +133,11 @@ test("classifySettingsError: 200 -> failed (a success is not a failure)", () => 
 });
 
 test("isSettingsEndpointUnavailable: true for 404", () => {
-  assert.equal(isSettingsEndpointUnavailable(new ApiError("Not found", 404, "NOT_FOUND")), true);
+  assert.equal(isSettingsEndpointUnavailable(new ApiError("Not found", 404)), true);
+});
+
+test("isSettingsEndpointUnavailable: false for a 404 with a server code", () => {
+  assert.equal(isSettingsEndpointUnavailable(new ApiError("Team not found", 404, "team_not_found")), false);
 });
 
 test("isSettingsEndpointUnavailable: true for 501", () => {

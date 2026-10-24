@@ -19,7 +19,7 @@ import test from "node:test";
 import { registerHooks } from "node:module";
 
 const CLIENT = new URL("../../src/shared/api/client.ts", import.meta.url).href;
-const UI_STUB = `export const useToastStore = { getState: () => ({ push() {} }) };`;
+const UI_STUB = `export const useToastStore = { getState: () => ({ push(toast) { (globalThis.__toasts ??= []).push(toast); } }) };`;
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -140,4 +140,16 @@ test("deleteTeam removes the team and its members", async () => {
   );
   assert.ok(!useTeamspacesStore.getState().teams[WS].some((team) => team.id === "t3"));
   assert.equal(useTeamspacesStore.getState().teamMembers.t3, undefined);
+});
+
+test("createTeam rejected with a coded 404 keeps no local team and reports the server's message", async () => {
+  const base = `/api/workspaces/w2/teams`;
+  const created = await withRoutes(
+    { [`POST ${base}`]: [json({ code: "workspace_not_found", message: "No such workspace." }, 404)] },
+    () => useTeamspacesStore.getState().createTeam("w2", { name: "Ghost" }),
+  );
+  assert.equal(created, null);
+  assert.ok(!(useTeamspacesStore.getState().teams.w2 ?? []).some((team) => team.name === "Ghost"));
+  const toasts = Reflect.get(globalThis, "__toasts") as Array<{ kind: string; description: string }>;
+  assert.deepEqual(toasts.map((toast) => [toast.kind, toast.description]), [["error", "No such workspace."]]);
 });
