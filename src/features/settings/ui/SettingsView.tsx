@@ -120,7 +120,7 @@ export const SettingsView: React.FC = () => {
           {/* cqw, not vw: the padding follows the PANE, so a 555px split pane
               does not keep a 1440px viewport's 60px gutters. The @container
               wrapper above is the reference container. */}
-          <div className="h-full overflow-y-auto px-[clamp(18px,5cqw,60px)] py-9">
+          <div className="h-full overflow-y-auto px-[clamp(18px,5cqw,60px)] pb-20 pt-9">
             <div className="mx-auto flex w-full max-w-[800px] flex-col gap-9">
               <header className="space-y-2">
                 <h1 className="text-2xl font-semibold leading-8 text-[var(--osio-fg-default)]">{section.title}</h1>

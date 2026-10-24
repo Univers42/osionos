@@ -26,7 +26,8 @@ function anchorFromTitle(value: string): string {
 export const Section: React.FC<{ title: string; anchor?: string; children: React.ReactNode; className?: string }> = ({ title, anchor, children, className = '' }) => (
   <section className={`space-y-4 ${className}`} data-settings-anchor={anchor ?? anchorFromTitle(title)}>
     {/* h2 (not h3): the tab view's heading is the h1, so the document outline keeps no gap. */}
-    <h2 className="text-base font-medium text-[var(--osio-fg-default)]">{title}</h2>
+    {/* font-sans: the base heading rule is serif; only the page h1 keeps it. */}
+    <h2 className="font-sans text-base font-semibold text-[var(--osio-fg-default)]">{title}</h2>
     <div>{children}</div>
   </section>
 );
@@ -47,17 +48,17 @@ export const SettingRow: React.FC<{
   </div>
 );
 
-export const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][]; empty?: React.ReactNode; className?: string }> = ({ headers, rows, empty, className = '' }) => (
+export const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][]; empty?: React.ReactNode; className?: string }> = ({ headers, rows, empty, className = '' }) => {
+  // The empty state is its own bordered card; inside the 560px table it was clipped and double-framed on a phone.
+  if (rows.length === 0 && empty) return <div className={`min-w-0 w-full ${className}`}>{empty}</div>;
+  return (
   <div className={`overflow-x-auto rounded-[var(--osio-radius-panel)] border border-[var(--osio-db-line)] ${className}`}>
     <table className="w-full min-w-[560px] table-fixed text-sm">
       <thead className="bg-[var(--osio-bg-subtle)] text-left text-xs font-medium text-[var(--osio-fg-muted)]">
         <tr>{headers.map((header) => <th key={header} className="border-b border-[var(--osio-db-line)] px-3 py-2">{header}</th>)}</tr>
       </thead>
       <tbody className="divide-y divide-[var(--osio-db-line-soft)]">
-        {rows.length === 0 && empty ? (
-          // One row across the whole table: an empty table says so, it never shows a fake line.
-          <tr><td colSpan={headers.length} className="px-3 py-2">{empty}</td></tr>
-        ) : rows.map((row) => {
+        {rows.map((row) => {
           const firstCell = row[0];
           const rowKey = React.isValidElement(firstCell) && firstCell.key ? String(firstCell.key) : row.map(String).join('|');
           return (
@@ -69,7 +70,8 @@ export const DataTable: React.FC<{ headers: string[]; rows: React.ReactNode[][];
       </tbody>
     </table>
   </div>
-);
+  );
+};
 
 export const MiniTabs: React.FC<{ tabs: Array<{ label: string; count?: number }>; active?: string; onChange?: (value: string) => void }> = ({ tabs, active, onChange }) => {
   const options = useMemo(() => tabs.map((tab) => ({ value: tab.label, label: tab.label, count: tab.count })), [tabs]);
@@ -88,13 +90,13 @@ export const Avatar: React.FC<{ value?: string; label?: string; size?: number }>
 
 export const FeatureCard: React.FC<{ icon?: React.ReactNode; title: string; description: string; action?: React.ReactNode; className?: string }> = ({ icon, title, description, action, className }) => (
   <Card className={className}>
-    <div className="flex items-start gap-3">
+    <div className="flex flex-wrap items-start gap-3">
       {icon && <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-subtle)] text-[var(--osio-accent)]">{icon}</span>}
-      <div className="min-w-0 flex-1">
-        <h4 className="text-sm font-medium text-[var(--osio-fg-default)]">{title}</h4>
+      <div className="min-w-0 flex-1 basis-48">
+        <h4 className="font-sans text-sm font-semibold text-[var(--osio-fg-default)]">{title}</h4>
         <p className="mt-1 text-sm leading-[18px] text-[var(--osio-fg-muted)]">{description}</p>
       </div>
-      {action && <div className="shrink-0">{action}</div>}
+      {action && <div className="shrink-0 max-sm:basis-full">{action}</div>}
     </div>
   </Card>
 );
