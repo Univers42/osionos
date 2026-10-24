@@ -106,6 +106,15 @@ async function listEmails(ctx, session, response) {
 	return sendJson(response, 200, list, ctx.config);
 }
 
+/** A malformed percent-escape names no email: a 404, never a 500. */
+function decodedId(raw) {
+	try {
+		return decodeURIComponent(raw);
+	} catch {
+		throw accountError(404, 'not_found', 'There is no email on that path.');
+	}
+}
+
 export function createAccountEmailsRoutes({ config, kv, pg, verifySession, env = process.env, fetchImpl = fetch, now = null, track = () => {}, log = (...parts) => console.error(...parts) }) {
 	const shared = sharedKeyNames(env);
 	if (shared.length > 0) log('account_emails_keys_shared', shared.join(','));
@@ -129,7 +138,7 @@ export function createAccountEmailsRoutes({ config, kv, pg, verifySession, env =
 			const match = ID_ROUTE.exec(url.pathname);
 			const [verb, action] = ACTIONS[match?.[2] ?? ''] ?? [];
 			if (!match || verb !== method) throw accountError(404, 'not_found', 'There is no email on that path.');
-			return await action(ctx, session, request, response, decodeURIComponent(match[1]));
+			return await action(ctx, session, request, response, decodedId(match[1]));
 		} catch (error) {
 			respondWithError(response, error, config);
 		}

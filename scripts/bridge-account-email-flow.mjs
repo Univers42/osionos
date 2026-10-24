@@ -74,6 +74,17 @@ function scheduleMail(ctx, { userId, address, hmac, mailAllowed }) {
 	});
 }
 
+/** Two racing adds lose to the unique (user_id, email_hmac) index: the loser reuses the winner's row. */
+async function insertOrReuse(ctx, userId, address, hmac) {
+	try {
+		return await ctx.rows.insert(userId, address);
+	} catch (error) {
+		const winner = error?.code === 'unique_violation' ? await ctx.rows.own(userId, hmac) : null;
+		if (!winner) throw error;
+		return winner;
+	}
+}
+
 export async function addEmail(ctx, session, request, response) {
 	const userId = session.userId;
 	await guardMutation(ctx, session);
@@ -86,7 +97,7 @@ export async function addEmail(ctx, session, request, response) {
 	let row = await ctx.rows.own(userId, hmac);
 	if (!row && (await ctx.rows.pendingCount(userId)) >= MAX_PENDING) throw accountError(409, 'too_many_pending', 'Verify or remove a pending address first.');
 	await audit(ctx, session, request, 'account.email_add_requested');
-	row ??= await ctx.rows.insert(userId, address);
+	row ??= await insertOrReuse(ctx, userId, address, hmac);
 	sendJson(response, 202, { id: row.id, sentTo: maskAddress(address) }, ctx.config);
 	scheduleMail(ctx, { userId, address, hmac, mailAllowed: mailAllowed && !row.verified_at });
 }
