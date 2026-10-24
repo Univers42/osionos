@@ -16,8 +16,9 @@ export function parseResizeFrame(data) {
   if (data.length > 26) return null;
   const text = data.toString('latin1');
   if (!text.startsWith(ESC) || !text.endsWith(`${ESC}\\`)) return null;
-  const match = RESIZE_RE.exec(text.slice(1, -2));
-  return match ? { cols: Number(match[1]), rows: Number(match[2]) } : null;
+  const payload = text.slice(1, -2);
+  const match = RESIZE_RE.exec(payload);
+  return match && match[0].length === payload.length ? { cols: Number(match[1]), rows: Number(match[2]) } : null;
 }
 
 /** Auth rides the WS subprotocol (`osio-token.<jwt>` alongside `osio-ide.v1`)
