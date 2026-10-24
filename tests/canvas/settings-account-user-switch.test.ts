@@ -132,3 +132,20 @@ test("C10 a hydrate in flight for user A writes nothing after the active user be
   assert.ok(bothStoresEmpty(), JSON.stringify([useAccountSettingsStore.getState().data, useAccountEmailsStore.getState().data]));
   assert.ok(showsNothingOf("u-a"));
 });
+
+test("C10b a hydrate for user A that fails after the active user became B writes nothing", async () => {
+  resetWorld();
+  signIn("u-a");
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  globalThis.fetch = (async () => {
+    await held;
+    throw new Error("offline");
+  }) as typeof fetch;
+  const pending = [useAccountSettingsStore.getState().hydrate("u-a"), useAccountEmailsStore.getState().hydrate("u-a", "u-a@example.test")];
+  signIn("u-b");
+  release();
+  await Promise.all(pending);
+  assert.ok(bothStoresEmpty(), JSON.stringify([useAccountSettingsStore.getState().data, useAccountEmailsStore.getState().data]));
+  assert.ok(showsNothingOf("u-a"));
+});
