@@ -72,7 +72,7 @@ test.describe("Manage emails (bridge stub)", () => {
     await openProfile(page, baseURL);
     await region(page).getByRole("button", { name: "Manage emails", exact: true }).click();
     const dialog = emailsDialog(page);
-    await dialog.getByRole("button", { name: "Make second@example.com primary" }).click();
+    await dialog.getByRole("button", { name: "Make primary, second@example.com" }).click();
     await expect(dialog).toContainText("You'll sign in with second@example.com from now on. e2e@example.com stays on your account as a secondary address.");
     await dialog.getByRole("group", { name: "Confirm new primary address" }).getByRole("button", { name: "Make primary" }).click();
     await expect(dialog).toContainText("second@example.com is now your primary address. Other devices were signed out.");
