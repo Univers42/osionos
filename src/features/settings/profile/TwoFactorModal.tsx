@@ -15,7 +15,7 @@ import React, { useState } from 'react';
 import { Button, Modal, useToastStore } from '@/shared/ui';
 import type { PreferredMfaMethod } from '@/store/settings/types';
 import { accountActionNotice, runAsync, type AccountActionOutcome } from '../model/settingsCalls';
-import { adoptSessionToken, confirmEnrolment, createRecoveryCodes, disableTwoStep, startEnrolment, type TwoStepState } from './twoStepClient';
+import { RECORD_UNAVAILABLE, SIGNED_OUT_NOTICE, adoptSessionToken, confirmEnrolment, createRecoveryCodes, disableTwoStep, dropSessionAfterStepUp, startEnrolment, type TwoStepState } from './twoStepClient';
 import { METHOD_LABELS, orderedMethods } from './twoStepMethods';
 
 const FIELD = 'w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]';
@@ -40,12 +40,18 @@ export const TwoFactorModal: React.FC<Props> = ({ userId, state, preferred, onPr
   const [problem, setProblem] = useState('');
 
   /** Runs one action; returns its data, or null after saying why it did not happen. */
-  async function attempt<T>(run: () => Promise<AccountActionOutcome<T>>, label: string): Promise<T | null> {
+  async function attempt<T>(run: () => Promise<AccountActionOutcome<T>>, label: string, endsSession = false): Promise<T | null> {
     setBusy(true);
     setProblem('');
     const outcome = await run();
     setBusy(false);
     if (outcome.ok) return outcome.data;
+    if (endsSession && outcome.code === RECORD_UNAVAILABLE) {
+      // The factor changed and the server cut every session off but could not start a new one.
+      setProblem(SIGNED_OUT_NOTICE);
+      dropSessionAfterStepUp(userId);
+      return null;
+    }
     if (outcome.reason === 'sudo_required') setProblem(SUDO_HINT);
     else setProblem(accountActionNotice(outcome, label)?.description ?? `${label} isn't available on this server yet.`);
     return null;
@@ -59,10 +65,10 @@ export const TwoFactorModal: React.FC<Props> = ({ userId, state, preferred, onPr
   }
 
   async function confirm() {
-    const done = await attempt(() => confirmEnrolment(code), 'Verifying the code');
+    const done = await attempt(() => confirmEnrolment(code), 'Verifying the code', true);
     if (!done) return;
     // The server retired the old token when it confirmed; the next call must carry the new one.
-    adoptSessionToken(userId, done.accessToken);
+    adoptSessionToken(userId, done.accessToken, done.refreshToken);
     const made = await attempt(createRecoveryCodes, 'Creating recovery codes');
     setCode('');
     await onChanged();
@@ -77,9 +83,9 @@ export const TwoFactorModal: React.FC<Props> = ({ userId, state, preferred, onPr
   }
 
   async function disable() {
-    const done = await attempt(disableTwoStep, 'Turning off two-step verification');
+    const done = await attempt(disableTwoStep, 'Turning off two-step verification', true);
     if (!done) return;
-    adoptSessionToken(userId, done.accessToken);
+    adoptSessionToken(userId, done.accessToken, done.refreshToken);
     await onChanged();
     toast({ kind: 'success', title: 'Two-step verification turned off' });
     onClose();
