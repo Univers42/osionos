@@ -16,13 +16,14 @@
  * serve it. `classifySettingsError` stays the one place that decides "unavailable".
  */
 
+import { EMAILS_TEMPORARILY_DOWN } from '@/shared/api/accountEmailsApi';
 import type { AccountSecurityOutcome } from '@/shared/api/accountSecurityApi';
 import { sudoSentence } from '../ui/sudo/sudoPromptModel';
 
 type Failed = Extract<AccountSecurityOutcome<unknown>, { ok: false }>;
 
 export const SUDO_FIRST = "Confirm it's you first, then press Try again.";
-export const TEMPORARILY_DOWN = 'Email changes are temporarily unavailable. Try again later.';
+export const TEMPORARILY_DOWN = EMAILS_TEMPORARILY_DOWN;
 export const NOT_ON_SERVER = "Email changes aren't available on this server.";
 export const TAKEN = "That address can't be added to this account.";
 

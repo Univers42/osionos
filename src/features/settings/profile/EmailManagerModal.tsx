@@ -19,6 +19,7 @@ import { defaultEmail } from '@/store/settings/defaults';
 import { useSudoPromptStore } from '../ui/sudo/sudoPromptModel';
 import { EmailManagerBody } from './EmailManagerBody';
 import { emailProblem } from './emailCopy';
+import { runBusy } from './runBusy';
 
 interface EmailManagerModalProps {
   userId: string;
@@ -40,11 +41,9 @@ export const EmailManagerModal: React.FC<EmailManagerModalProps> = ({ userId, fa
 
   // A refused sudo keeps the action to run again once the prompt grants; nothing re-sends by itself.
   async function attempt<T>(act: () => Promise<AccountSecurityOutcome<T>>, onOk: (data: T) => void): Promise<boolean> {
-    setBusy(true);
     setProblem('');
     setNotice('');
-    const outcome = await act();
-    setBusy(false);
+    const outcome = await runBusy(setBusy, act);
     if (outcome.ok) {
       setNeedsSudo(false);
       onOk(outcome.data);

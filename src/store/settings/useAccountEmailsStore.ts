@@ -13,12 +13,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { addEmail, removeEmail, resendEmailCode, verifyEmail, type CodeRequested } from '@/shared/api/accountEmailsApi';
+import { addEmail, EMAILS_TEMPORARILY_DOWN, listEmails, removeEmail, resendEmailCode, verifyEmail, type CodeRequested } from '@/shared/api/accountEmailsApi';
 import type { AccountSecurityOutcome } from '@/shared/api/accountSecurityApi';
 
 import { currentAccountEpoch } from './accountEpoch';
 import { defaultEmail } from './defaults';
-import { errorMessage, pushSettingsError, trySettingsGet } from './settingsStoreUtils';
+import { errorMessage, pushSettingsError } from './settingsStoreUtils';
 import type { EmailRecord } from './types';
 
 interface AccountEmailsStore {
@@ -63,17 +63,27 @@ export const useAccountEmailsStore = create<AccountEmailsStore>()(
           set({ data: mine, loading: true, error: null });
           const epoch = currentAccountEpoch();
           const sessionRow = email ? [defaultEmail(userId, email)] : [];
-          try {
-            const remote = await trySettingsGet<EmailRecord[]>('/api/account/emails');
-            if (epoch !== currentAccountEpoch()) return;
-            set({ data: remote ?? sessionRow, loading: false, error: null });
-          } catch (error) {
-            if (epoch !== currentAccountEpoch()) return;
-            set({ data: [...sessionRow, ...mine.filter((record) => !isPrimary(record))], loading: false, error: errorMessage(error) });
-            pushSettingsError('Emails unavailable', error);
+          const held = mine.filter((record) => !isPrimary(record));
+          const outcome = await listEmails();
+          // Dropped, not applied: the next hydrate owns `loading` for the new user.
+          if (epoch !== currentAccountEpoch()) { set({ loading: false }); return; }
+          if (outcome.ok) {
+            const down = outcome.data.secondariesUnavailable;
+            set({ data: down ? [...outcome.data.rows, ...held] : outcome.data.rows, loading: false, error: down ? EMAILS_TEMPORARILY_DOWN : null });
+          } else if (outcome.reason === 'unavailable') {
+            set(outcome.temporary
+              ? { data: [...sessionRow, ...held], loading: false, error: EMAILS_TEMPORARILY_DOWN }
+              : { data: sessionRow, loading: false, error: null });
+          } else {
+            const failed = new Error('message' in outcome ? outcome.message : 'The request failed.');
+            set({ data: [...sessionRow, ...held], loading: false, error: errorMessage(failed) });
+            pushSettingsError('Emails unavailable', failed);
           }
         },
-        reset: (userId, email) => set({ data: email ? [defaultEmail(userId || 'anonymous', email)] : [], error: null }),
+        reset: (userId, email) => {
+          hydratedFor = null;
+          set({ data: email ? [defaultEmail(userId || 'anonymous', email)] : [], error: null });
+        },
         add: async (email) => refreshAfter(await addEmail(email)),
         resend: async (id) => refreshAfter(await resendEmailCode(id)),
         verify: async (id, code) => refreshAfter(await verifyEmail(id, code)),

@@ -21,21 +21,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { withBridge, type Reply } from "./support/stub-bridge.ts";
 
-const memory = new Map<string, string>();
-Reflect.set(globalThis, "window", globalThis);
-Object.defineProperty(globalThis, "localStorage", {
-  configurable: true,
-  value: {
-    getItem: (key: string) => memory.get(key) ?? null,
-    setItem: (key: string, value: string) => void memory.set(key, String(value)),
-    removeItem: (key: string) => void memory.delete(key),
-    clear: () => memory.clear(),
-  },
-});
-Reflect.set(globalThis, "__playgroundUserStore", {
-  getState: () => ({ activeJwt: () => "gotrue.jwt", activePageJwt: () => "osionos_v1.tok", handleSessionRevoked: () => undefined }),
-  subscribe: () => () => undefined,
-});
+import { memory } from "./support/emails-env.ts";
 
 const { useAccountEmailsStore } = await import("../../src/store/settings/useAccountEmailsStore.ts");
 const { emailProblem, NOT_ON_SERVER, TEMPORARILY_DOWN, maskEmail } = await import("../../src/features/settings/profile/emailCopy.ts");

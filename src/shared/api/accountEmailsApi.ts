@@ -18,6 +18,7 @@
  * delivery claim, because the bridge answers 202 whether or not a mail was sent.
  */
 
+import type { EmailRecord } from '@/store/settings/types';
 import { call, type AccountSecurityOutcome } from './accountSecurityApi';
 
 export interface CodeRequested {
@@ -26,6 +27,7 @@ export interface CodeRequested {
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+export const EMAILS_TEMPORARILY_DOWN = 'Email changes are temporarily unavailable. Try again later.';
 const ROUTE = '/api/account/emails';
 const rowPath = (id: string, action = ''): string => `${ROUTE}/${encodeURIComponent(id)}${action}`;
 
@@ -42,3 +44,15 @@ export const verifyEmail = (id: string, code: string): Promise<AccountSecurityOu
 
 export const removeEmail = (id: string): Promise<AccountSecurityOutcome<true>> =>
   call('DELETE', rowPath(id), undefined, () => true as const);
+
+export interface EmailListing {
+  rows: EmailRecord[];
+  /** The bridge could not read the secondaries this time: `rows` holds the primary only. */
+  secondariesUnavailable: boolean;
+}
+
+export const listEmails = (): Promise<AccountSecurityOutcome<EmailListing>> =>
+  call('GET', ROUTE, undefined, (payload, response) => ({
+    rows: Array.isArray(payload.rows) ? payload.rows as EmailRecord[] : [],
+    secondariesUnavailable: response.headers.get('x-emails-secondaries') === 'unavailable',
+  }));

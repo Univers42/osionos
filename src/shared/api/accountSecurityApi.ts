@@ -67,7 +67,8 @@ function text(value: unknown): string | null {
 async function bodyOf(response: Response): Promise<Record<string, unknown>> {
   try {
     const parsed = await response.json();
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    if (Array.isArray(parsed)) return { rows: parsed };
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
   } catch {
     return {};
   }
@@ -96,7 +97,7 @@ export async function call<T>(
   method: 'GET' | 'POST' | 'DELETE',
   path: string,
   body: unknown,
-  read: (payload: Record<string, unknown>) => T,
+  read: (payload: Record<string, unknown>, response: Response) => T,
   missing?: T,
 ): Promise<AccountSecurityOutcome<T>> {
   const jwt = settingsJwt();
@@ -110,7 +111,7 @@ export async function call<T>(
     return { ok: false, reason: 'failed', code: 'network', message: error instanceof Error ? error.message : 'The request failed.' };
   }
   const payload = await bodyOf(response);
-  if (response.ok) return { ok: true, data: read(payload) };
+  if (response.ok) return { ok: true, data: read(payload, response) };
   if (missing !== undefined && response.status === 404) return { ok: true, data: missing };
   return failure(response, payload);
 }
