@@ -26,6 +26,17 @@ const PERSON = { id: "44444444-4444-4444-8444-444444444444", email: "ada@example
 
 async function fakeShareBridge(page, { teamRules }) {
   const stored = [];
+  const sharing = { visibility: "private", collaborators: [] };
+  await page.route("**/api/workspaces/*/members**", (route) => route.fulfill({ json: {
+    members: [{ userId: PERSON.id, name: PERSON.name, role: "viewer" }],
+  } }));
+  await page.route("**/api/pages/*", async (route) => {
+    if (route.request().method() === "PATCH") {
+      Object.assign(sharing, route.request().postDataJSON());
+      return route.fulfill({ json: { ok: true } });
+    }
+    return route.fulfill({ json: sharing });
+  });
   await page.route("**/api/perms/people**", (route) => route.fulfill({ json: { people: [PERSON] } }));
   await page.route("**/api/workspaces/*/teams**", (route) => route.fulfill({ json: { teams: [TEAM], nextCursor: null } }));
   await page.route("**/api/perms/rules**", async (route) => {
@@ -73,4 +84,26 @@ test("the Teams group stays hidden while the server does not enforce team rules"
   await dialog.getByPlaceholder(/Add people by name/).fill("design");
   await expect(dialog.getByRole("button", { name: /Ada Design/ })).toBeVisible();
   await expect(dialog.getByText("Teams", { exact: true })).toHaveCount(0);
+});
+
+
+test("a page collaborator and a team rule survive reopening the same dialog", async ({ page, baseURL }) => {
+  const stored = await fakeShareBridge(page, { teamRules: true });
+  let dialog = await openShare(page, baseURL);
+  await dialog.getByPlaceholder(/Add teams or people/).fill("ada");
+  await dialog.getByRole("button", { name: /Ada Design/ }).click();
+  await expect(dialog.getByRole("button", { name: "Remove access for Ada Design" })).toBeVisible();
+  await dialog.getByPlaceholder(/Add teams or people/).fill("design");
+  await dialog.getByRole("button", { name: /Design\s*3 members/ }).click();
+  await expect(dialog.getByText("Team · 3 members")).toBeVisible();
+  expect(stored[0].target).toEqual({ type: "team", teamId: TEAM.id });
+
+  await dialog.getByRole("button", { name: "Close share dialog" }).click();
+  await page.getByRole("button", { name: "Share page" }).click();
+  dialog = page.getByRole("dialog", { name: "Share" });
+  await expect(dialog.getByRole("button", { name: "Remove access for Ada Design" })).toBeVisible();
+  await expect(dialog.getByText("Team · 3 members")).toBeVisible();
+  await dialog.getByRole("button", { name: "Remove access for Ada Design" }).click();
+  await expect(dialog.getByRole("button", { name: "Remove access for Ada Design" })).toHaveCount(0);
+  await expect(dialog.getByText("Team · 3 members")).toBeVisible();
 });

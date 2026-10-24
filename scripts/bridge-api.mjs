@@ -921,6 +921,32 @@ function mayModifyPage(existing, access, level = null) {
 	return role === 'editor' || role === 'owner'; // explicit page collaborator
 }
 
+const COLLABORATOR_ROLES = new Set(['viewer', 'editor']);
+
+/**
+ * A page is shared only with members of its workspace: the read path runs the workspace
+ * gate after the collaborator check, so anyone else would be listed and still refused.
+ * Only collaborators the PATCH adds are checked; one already on the page stays as it is,
+ * so an older share never blocks an unrelated edit.
+ */
+async function requireNewCollaboratorsAreMembers(payload, existing, config, fetchImpl) {
+	if (!hasOwn(payload, 'collaborators')) return;
+	const present = new Set(safeJsonArray(existing.collaborators).map((entry) => String(entry?.userId ?? '').toLowerCase()));
+	const added = safeJsonArray(payload.collaborators).filter((entry) => !present.has(String(entry?.userId ?? '').toLowerCase()));
+	if (added.some((entry) => !UUID_REGEX.test(String(entry?.userId ?? '')) || !COLLABORATOR_ROLES.has(entry.role))) {
+		throw Object.assign(new Error('A collaborator is { userId: <uuid>, role: "viewer" | "editor" }.'), { status: 422 });
+	}
+	if (added.length === 0) return;
+	const workspaceId = hasOwn(payload, 'workspaceId') ? payload.workspaceId : existing.workspace_id;
+	const ids = added.map((entry) => entry.userId.toLowerCase());
+	const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${postgrestQuery({ workspace_id: `eq.${workspaceId}`, user_id: `in.(${ids.join(',')})`, select: 'user_id' })}`);
+	const members = new Set((Array.isArray(rows) ? rows : []).map((row) => String(row.user_id).toLowerCase()));
+	const outsider = ids.find((id) => !members.has(id));
+	if (outsider) {
+		throw Object.assign(new Error(`User ${outsider} is not a member of this page's workspace. Add them to the workspace before sharing the page with them.`), { status: 422 });
+	}
+}
+
 /** The 403 a page write refuses with. The message names the page, never the caller's role. */
 function pageWriteDenied() {
 	return Object.assign(new Error('You do not have permission to modify this page.'), { status: 403 });
@@ -3125,7 +3151,7 @@ async function workspaceMembers(authContext, workspaceIds, config, fetchImpl) {
  */
 async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
+	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl, { required: true });
 	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
 	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
 	const candidates = mounts.filter((row) => row && row.db_id === dbId);
@@ -3149,7 +3175,7 @@ async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
  * because the token module must not import bridge-api.mjs: it would be a cycle.
  */
 async function hasAccessibleMount(session, dbId, config, fetchImpl) {
-	const memberIds = await memberWorkspaceIds(session.userId, config, fetchImpl);
+	const memberIds = await memberWorkspaceIds(session.userId, config, fetchImpl, { required: true });
 	const accessible = [...new Set([...session.workspaceIds, ...memberIds])];
 	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
 	const candidates = mounts.filter((row) => row && row.db_id === dbId);
@@ -3166,7 +3192,7 @@ async function hasAccessibleMount(session, dbId, config, fetchImpl) {
  */
 async function accessibleMountIds(request, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
+	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl, { required: true });
 	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
 	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
 	const members = await workspaceMembers(authContext, [...new Set(mounts.map((row) => row && row.workspace_id).filter(Boolean))], config, fetchImpl);
@@ -3750,15 +3776,16 @@ async function handlePagesGet(url, request, response, config, fetchImpl) {
 	return handlePageRead(url, request, response, config, fetchImpl);
 }
 
-/** Workspace ids where the user has a members row (best-effort: [] on failure). */
-async function memberWorkspaceIds(userId, config, fetchImpl) {
+/** Workspace ids with a members row; required mount checks answer 503 on a failed read. */
+async function memberWorkspaceIds(userId, config, fetchImpl, { required = false } = {}) {
 	try {
 		const query = postgrestQuery({ user_id: `eq.${userId}`, select: 'workspace_id' });
 		const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`);
 		return (Array.isArray(rows) ? rows : [])
 			.map((row) => String(row.workspace_id))
 			.filter((id) => UUID_REGEX.test(id));
-	} catch {
+	} catch (cause) {
+		if (required) throw Object.assign(new Error('Workspace access could not be verified.', { cause }), { status: 503 });
 		return [];
 	}
 }
@@ -3991,6 +4018,7 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	if (hasOwn(payload, 'workspaceId') && payload.workspaceId !== existing.workspace_id) {
 		await requireWorkspaceAccess(request, payload.workspaceId, 'create', config, fetchImpl);
 	}
+	await requireNewCollaboratorsAreMembers(payload, existing, config, fetchImpl);
 	// Strict mode (OSIONOS_PAGE_STRICT_VERSION=1): a content-bearing PATCH without a
 	// baseVersion is compared against the stored content and refused when the two
 	// differ. Off until every client sends a version.
