@@ -47,6 +47,7 @@ import {
   sendJson,
   workspaceMembership,
 } from './bridge-social-core.mjs';
+import { findAccountByEmail } from './bridge-gotrue-user.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import {
   TOKEN_SHAPE,
@@ -74,7 +75,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const INVITE_BUCKET = { capacity: 20, refillPerSec: 1 / 30 };
 // Accept is the only route a token holder reaches: 10 a minute per session bounds guessing.
 const ACCEPT_BUCKET = { capacity: 10, refillPerSec: 10 / 60 };
-const ACCOUNT_LOOKUP_TIMEOUT_MS = 5_000;
 
 const coded = (status, code, message) => Object.assign(httpError(message, status), { code });
 
@@ -89,33 +89,6 @@ function inviteEmail(value) {
   const email = safeText(value, 320).trim().toLowerCase();
   if (!EMAIL_RE.test(email)) throw httpError('email must be a valid address.', 422);
   return email;
-}
-
-/**
- * Resolve one account by email through GoTrue's admin list endpoint. The filter
- * is a containment search, so the EXACT case-insensitive match is kept here — a
- * `xdylan@gmail.com` row never answers an invite for `dylan@gmail.com`. Any
- * transport/status/body failure is a 502 (fail closed).
- */
-async function lookupAccountByEmail(config, fetchImpl, email) {
-  let response;
-  try {
-    response = await fetchImpl(`${config.baasUrl}/auth/v1/admin/users?filter=${encodeURIComponent(email)}`, {
-      headers: { Accept: 'application/json', apikey: config.serviceKey, Authorization: `Bearer ${config.serviceKey}` },
-      signal: AbortSignal.timeout(ACCOUNT_LOOKUP_TIMEOUT_MS),
-    });
-  } catch {
-    throw httpError('Could not look up that account.', 502);
-  }
-  if (!response?.ok) throw httpError('Could not look up that account.', 502);
-  let payload;
-  try {
-    payload = await response.json();
-  } catch {
-    throw httpError('Could not look up that account.', 502);
-  }
-  const users = Array.isArray(payload) ? payload : Array.isArray(payload?.users) ? payload.users : [];
-  return users.find((user) => String(user?.email ?? '').trim().toLowerCase() === email) ?? null;
 }
 
 async function publishMembership(deps, topic, payload) {
@@ -145,7 +118,10 @@ async function invitePerson(deps, session, request, workspaceId, response, confi
   if (role.name === 'admin' && actorRole !== 'owner') throw httpError('Only the workspace owner may invite an admin.', 403);
   takeToken(`workspace-invite:${session.userId}`, INVITE_BUCKET);
 
-  const account = await lookupAccountByEmail(config, deps.fetchImpl, email);
+  // Fail closed: a lookup that cannot be answered is not "no such account".
+  const { account } = await findAccountByEmail({ config, fetchImpl: deps.fetchImpl }, email).catch(() => {
+    throw httpError('Could not look up that account.', 502);
+  });
   if (!account) throw coded(404, 'no_account', 'No osionos account uses that email yet. Ask them to sign up first, then invite them again.');
   const inviteeId = safeText(account.id, 80);
   if (!inviteeId) throw httpError('The invited account has no usable id.', 502);
