@@ -38,7 +38,7 @@ import { MODERATION_SECTION, normaliseModerationPatch } from './bridge-moderatio
 
 const ALL_METHODS = ['GET', 'PATCH', 'PUT'];
 const SECTIONS = new Map([
-	['/api/preferences', { section: 'preferences', prepare: normaliseVigilantMode }],
+	['/api/preferences', { section: 'preferences', prepare: normalisePreferences }],
 	['/api/account/notification-settings', { section: 'notifications' }],
 	['/api/account/moderation-settings', { section: MODERATION_SECTION, methods: ['GET', 'PATCH'], prepare: normaliseModerationPatch }],
 ]);
@@ -46,11 +46,16 @@ const SECTION_BODY_LIMIT = 16 * 1024;
 const SETTINGS_LIMIT = 120;
 const SETTINGS_WINDOW_MS = 60_000;
 
-/** `vigilantMode` is the only preferences key this checks (boolean or null to clear); every other key passes untouched. */
-function normaliseVigilantMode(body) {
-	const value = body.vigilantMode;
-	if (value !== undefined && value !== null && typeof value !== 'boolean') {
-		throw accountError(422, 'invalid_body', 'vigilantMode must be true or false.');
+/**
+ * `vigilantMode` and `activity_tracking` are the only preferences keys this checks (boolean, or
+ * null to clear); every other key passes untouched. An absent `activity_tracking` reads as off.
+ */
+function normalisePreferences(body) {
+	for (const key of ['vigilantMode', 'activity_tracking']) {
+		const value = body[key];
+		if (value !== undefined && value !== null && typeof value !== 'boolean') {
+			throw accountError(422, 'invalid_body', `${key} must be true or false.`);
+		}
 	}
 	return body;
 }
