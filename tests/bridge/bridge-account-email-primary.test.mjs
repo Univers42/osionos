@@ -115,6 +115,7 @@ describe('make primary: refusals before any write', () => {
 		await world.add(USER_A, S);
 		const result = await primary(world, rowsOf(world)[0].id);
 		assert.deepEqual([result.status, result.body.code, rowsOf(world).length, world.directory.puts.length], [409, 'email_unverified', 1, 0]);
+		assert.equal(world.kv.has(`email-primary:${USER_A}`), false, 'the lock is released');
 	});
 
 	for (const confirmed of [true, false]) {
@@ -124,6 +125,7 @@ describe('make primary: refusals before any write', () => {
 			const result = await primary(world, row.id);
 			assert.deepEqual([result.status, result.body.code, rowsOf(world).length], [409, 'email_taken', 1]);
 			untouched(world);
+			assert.equal(world.kv.has(`email-primary:${USER_A}`), false, 'the lock is released');
 		});
 	}
 
@@ -174,22 +176,37 @@ describe('make primary: refusals before any write', () => {
 
 describe('make primary: the GoTrue write and its compensation', () => {
 	const cases = [
-		['P5 a 23505 is email_taken', () => reply({ code: '23505' }, 500), [409, 'email_taken']],
-		['a 422 email_exists is email_taken', () => reply({ error_code: 'email_exists' }, 422), [409, 'email_taken']],
-		['a 429 with a JSON body is still unknown, and the re-read shows P', () => reply({ msg: 'slow down' }, 429), [503, 'email_unavailable']],
-		['P6 a definite 4xx is 503', () => reply({ msg: 'bad' }, 400), [503, 'email_unavailable']],
-		['P6\'\' an unparseable 503 that left P is 503', () => reply('<html>bad gateway', 503), [503, 'email_unavailable']],
-		['P8 a timeout that left P is 503', () => { throw new Error('timeout'); }, [503, 'email_unavailable']],
+		['P5 a 23505 is email_taken', () => reply({ code: '23505' }, 500), [409, 'email_taken'], false],
+		['a 422 email_exists is email_taken', () => reply({ error_code: 'email_exists' }, 422), [409, 'email_taken'], false],
+		['a 429 with a JSON body is still unknown, and the re-read shows P', () => reply({ msg: 'slow down' }, 429), [503, 'email_unavailable'], true],
+		['P6 a definite 4xx is 503', () => reply({ msg: 'bad' }, 400), [503, 'email_unavailable'], false],
+		['P6\'\' an unparseable 503 that left P is 503', () => reply('<html>bad gateway', 503), [503, 'email_unavailable'], true],
+		['P8 a timeout that left P is 503', () => { throw new Error('timeout'); }, [503, 'email_unavailable'], true],
 	];
-	for (const [name, onPut, [status, code]] of cases) {
-		it(`${name}: the created P row is deleted, S intact, the grant restored`, async () => {
+	for (const [name, onPut, [status, code], unknown] of cases) {
+		it(`${name}: ${unknown ? 'the created P row is KEPT (a late PUT may still land)' : 'the created P row is deleted'}, S intact, the grant restored`, async () => {
 			const { world, row } = await setup();
 			world.directory.onPut = onPut;
 			const result = await primary(world, row.id);
 			assert.deepEqual([result.status, result.body.code, world.directory.puts.length], [status, code, 1]);
-			assert.deepEqual([addressesOf(world), sudoKeys(world).length, world.events.includes('delete')], [[S], 1, true]);
+			assert.deepEqual([addressesOf(world), sudoKeys(world).length, world.events.includes('delete')], [unknown ? [P, S] : [S], 1, !unknown]);
+			assert.equal(world.kv.has(`email-primary:${USER_A}`), false, 'the lock is released');
 		});
 	}
+
+	it('P8b a PUT that lands AFTER the re-read loses nothing: both addresses are listed and a retry works', async () => {
+		const { world, row } = await setup();
+		world.directory.onPut = () => { throw new Error('timeout'); };
+		assert.equal((await primary(world, row.id)).status, 503);
+		world.directory.onPut = null;
+		applied(world, USER_A);
+		const listed = await world.call(USER_A);
+		assert.deepEqual(listed.body.map((entry) => [entry.email, entry.isPrimary]), [[S, true], [P, false]]);
+		const kept = rowsOf(world).find((entry) => addressOf(world, entry) === P);
+		const retried = await world.call(USER_A, { method: 'POST', path: `${PATH}/${kept.id}/primary` });
+		assert.deepEqual([retried.status, retried.body.primary.email], [200, P]);
+		assert.equal(retried.body.previous, rowsOf(world).find((entry) => addressOf(world, entry) === S)?.id);
+	});
 
 	it('P6\' an unparseable 503 that LANDED is a success: S goes, P stays', async () => {
 		const { world, row } = await setup();
@@ -224,8 +241,11 @@ describe('make primary: what is kept as the old primary', () => {
 	it('P10 keeps nothing when another user verified P', async () => {
 		const { world, row } = await setup();
 		await rowsApi(world).insertVerified(USER_B, P, '2026-10-01T00:00:00Z');
+		world.table.calls.length = 0;
 		const result = await primary(world, row.id);
 		assert.deepEqual([result.status, result.body.previous, rowsOf(world).length], [200, null, 0]);
+		assert.ok(world.table.calls.some((call) => call.op === 'get' && call.path.includes('verified_at=not.is.null') && call.path.includes('user_id=neq.')), 'the other-user check was read');
+		assert.equal(world.table.calls.some((call) => call.op === 'post'), false, 'no row for P was written');
 	});
 
 	it('P11 reuses the caller\'s own unverified P row and does not delete it on compensation', async () => {
@@ -277,10 +297,26 @@ describe('make primary: sudo, lock and budget', () => {
 		assert.equal(world.kv.has(`email-primary:${USER_A}`), false, 'the lock is released');
 	});
 
+	it('P24 a failing requested-audit undoes the kept row, writes nothing to GoTrue and gives the grant back', async () => {
+		const { world, row } = await setup();
+		world.table.failAudit = (body) => body.event_type === 'account.email_primary_requested';
+		const result = await primary(world, row.id);
+		assert.deepEqual([result.status >= 500, world.directory.puts.length, addressesOf(world), sudoKeys(world).length], [true, 0, [S], 1]);
+		assert.equal(world.kv.has(`email-primary:${USER_A}`), false, 'the lock is released');
+	});
+
+	it('P25 answers 503 email_unavailable, writing nothing, when the kv fails on the spend', async () => {
+		const { world, row } = await setup();
+		world.kv.getDel = async () => { throw new Error('kv down'); };
+		const result = await primary(world, row.id);
+		assert.deepEqual([result.status, result.body.code, world.directory.puts.length, addressesOf(world)], [503, 'email_unavailable', 0, [S]]);
+	});
+
 	it('P19 answers 429 on the sixth call in the window, with no PUT', async () => {
 		const world = createEmailWorld();
 		const statuses = [];
 		for (let call = 0; call < 6; call += 1) statuses.push((await primary(world, NOBODY)).status);
 		assert.deepEqual([statuses, world.directory.puts.length], [[404, 404, 404, 404, 404, 429], 0]);
+		assert.equal(world.kv.has(`email-primary:${USER_A}`), false, 'the lock is released');
 	});
 });

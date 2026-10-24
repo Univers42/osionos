@@ -205,6 +205,13 @@ describe('the admin flag is bound to the identity, not to the address (F-3b2)', 
 		assert.ok(adminReads(stub).length > 0, 'the fake saw an admin read');
 	});
 
+	it('A5 answers the env-only value without any request when the provider is blank', async () => {
+		const stub = createSigninStub({});
+		const claims = await readRefreshClaims({ sub: SUBJECT, provider: '', email: 'boss@example.com', workspace_ids: [] }, { config: signinConfig(), pg: noFactorPg(), fetchImpl: stub.fetchImpl });
+		assert.equal(stub.log.filter((entry) => entry.name === 'osionos_bridge_identities').length, 0);
+		assert.equal(claims.isAdmin, false);
+	});
+
 	it('answers the env-only value without any request when the subject is missing', async () => {
 		const stub = createSigninStub({});
 		const claims = await readRefreshClaims({ sub: undefined, provider: 'prismatica', email: 'boss@example.com', workspace_ids: [] }, { config: signinConfig(), pg: noFactorPg(), fetchImpl: stub.fetchImpl });
