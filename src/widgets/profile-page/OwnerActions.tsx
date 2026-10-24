@@ -21,7 +21,8 @@ import React, { useState } from "react";
 import { useUserStore } from "@/features/auth";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { ApiError, api } from "@/shared/api/client";
-import { fetchAccountProfile, saveAccountProfile } from "@/shared/api/accountProfileApi";
+import { fetchAccountProfile, saveAccountProfile, type AccountProfilePatch } from "@/shared/api/accountProfileApi";
+import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
 import { usePageStore } from "@/store/usePageStore";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
@@ -41,11 +42,19 @@ function openLinked(pageId: string, jwt: string): Promise<LinkedPage> {
   });
 }
 
+// The row the save returns goes into the account store, so the Profile field slash item
+// (gated on the store's readmePageId) shows on the README at once, not after the next hydrate.
+async function saveAndSync(patch: AccountProfilePatch, version: number) {
+  const outcome = await saveAccountProfile(patch, version);
+  if (outcome.ok) useAccountProfileStore.setState({ status: "ready", profile: outcome.profile, version: outcome.version, error: null });
+  return outcome;
+}
+
 function readmeDeps(jwt: string): CustomizeDeps {
   const store = usePageStore.getState();
   return {
     loadProfile: fetchAccountProfile,
-    saveProfile: saveAccountProfile,
+    saveProfile: saveAndSync,
     openLinked: (pageId) => openLinked(pageId, jwt),
     createPage: (id) => store.addPage(id, "README", jwt, undefined, { surface: "page" }),
   };
