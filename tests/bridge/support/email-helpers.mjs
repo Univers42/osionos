@@ -41,10 +41,10 @@ export function counterShape(kv) {
 		if (key.includes('email-target')) shape.targets.push(Number(value));
 		else shape[key.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, 'U')] = Number(value);
 	}
-	shape.targets.sort();
+	shape.targets.sort((left, right) => left - right);
 	return shape;
 }
 
 /** What an observer of the answer sees: status, body keys, the mask and every header. */
-export const observable = (result) => JSON.stringify([result.status, Object.keys(result.body).sort(), result.body.sentTo, Object.entries(result.headers).filter(([name]) => name !== 'content-length')]);
+export const observable = (result) => JSON.stringify([result.status, Object.keys(result.body).sort((left, right) => left.localeCompare(right)), result.body.sentTo, Object.entries(result.headers).filter(([name]) => name !== 'content-length')]);
 export const addressOf = (world, row) => openAddress(row, world.env);
