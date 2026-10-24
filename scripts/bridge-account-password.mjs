@@ -55,7 +55,7 @@
 import { accountError, accountAddress, callerSession, clientMetaOf, noContent, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { grantSudo, rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { timestampMicros, writeSessionCutoff } from './bridge-session-cutoff.mjs';
-import { revokeOtherFamilies, sessionClock } from './bridge-sessions.mjs';
+import { revokeOtherFamilies, sessionClock, sessionRowOf } from './bridge-sessions.mjs';
 
 const PATH = '/api/account/password';
 const LIMIT = { limit: 5, windowMs: 3_600_000 };
@@ -98,12 +98,6 @@ async function writePassword({ config, fetchImpl }, userId, password) {
 	if (!response.ok) throw accountError(503, 'account_plane_unavailable', UNAVAILABLE);
 }
 
-/** The caller's family: its own row's family_id, or its own id for a legacy row. */
-async function ownFamily({ pg }, session, own) {
-	const rows = await pg.asService().get(`osionos_sessions?${new URLSearchParams({ id: `eq.${own}`, user_id: `eq.${session.userId}`, select: 'family_id', limit: '1' })}`);
-	return String((Array.isArray(rows) ? rows[0]?.family_id : null) ?? own).toLowerCase();
-}
-
 async function signEveryoneOut({ config, fetchImpl }, userId, response) {
 	const atMs = sessionClock(config);
 	await writeSessionCutoff(config, fetchImpl, userId, atMs);
@@ -118,7 +112,7 @@ async function endOtherSignIns(deps, session, response) {
 	if (config.sessionRecords?.enabled) {
 		try {
 			const own = String(session.raw.jti).toLowerCase();
-			await revokeOtherFamilies(deps, { userId: session.userId, keepFamilyId: await ownFamily(deps, session, own), keepRowId: own, reason: 'password_change' });
+			await revokeOtherFamilies(deps, { userId: session.userId, keepFamilyId: String((await sessionRowOf(deps.pg, { sessionId: own, userId: session.userId }))?.family_id ?? own).toLowerCase(), keepRowId: own, reason: 'password_change' });
 			return;
 		} catch { /* the cut-off below is the fallback: it signs the caller out too, which beats a live thief */ }
 	}

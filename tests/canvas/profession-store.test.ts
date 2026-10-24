@@ -187,7 +187,7 @@ test("a pick the server refuses names the field it refused", async () => {
 test("a pick on a server that does not serve the route stays local and says nothing", async () => {
   reset("designer");
   await withBridge(
-    (call) => (call.init?.method === "PATCH" ? json(404, { ok: false, code: "user_not_found" }) : json(404, { ok: false, code: "user_not_found" })),
+    (call) => (call.init?.method === "PATCH" ? json(404, { ok: false, message: "Not found." }) : json(404, { ok: false, message: "Not found." })),
     () => useProfessionStore.getState().pick("teacher"),
   );
   assert.equal(useProfessionStore.getState().profession, "teacher", "the offline build keeps the pick");
@@ -209,7 +209,7 @@ test("a pick whose save is unavailable after a version is held stays local with 
   reset("designer");
   useAccountProfileStore.setState({ status: "ready", profile: PROFILE_ROW, version: 7, error: null });
   const { calls } = await withBridge(
-    (call) => (call.init?.method === "PATCH" ? json(404, { ok: false, code: "user_not_found" }) : json(200, PROFILE_ROW)),
+    (call) => (call.init?.method === "PATCH" ? json(404, { ok: false, message: "Not found." }) : json(200, PROFILE_ROW)),
     () => useProfessionStore.getState().pick("teacher"),
   );
   assert.equal(useProfessionStore.getState().profession, "teacher", "the offline server keeps the pick");

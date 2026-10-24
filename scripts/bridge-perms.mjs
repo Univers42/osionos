@@ -281,7 +281,10 @@ function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply,
 			const workspace = await access(ctx, rule.workspace_id, 'update').then((w) => w, () => null);
 			const allowed = await mayChangeRule(ctx, rule, { fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace) });
 			if (!allowed) return fail(response, 403);
-			return reply(response, 200, { rule: await ruleStore.upsert(requestConfig, rule) });
+			const saved = await ruleStore.upsert(requestConfig, rule);
+			reply(response, 200, { rule: saved });
+			if (workspace) requestConfig.activity?.emit({ userId: workspace.userId }, 'share', 'editor', rule.workspace_id);
+			return true;
 		}
 		if (method === 'DELETE' && tail.startsWith('rules/')) return deleteRule(ctx, decodeURIComponent(tail.slice('rules/'.length)));
 		return undefined;

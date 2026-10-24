@@ -41,7 +41,19 @@ export interface SysSource {
   /** Technical columns the default view hides; they stay in the schema. */
   hiddenColumns: string[];
   columnTypes: Record<string, SysColumnType>;
+  /** Views shipped with the source beside the default table; only my-activity has one. */
+  builtInViews?: SysBuiltInView[];
 }
+
+export interface SysBuiltInView {
+  id: string;
+  name: string;
+  type: "chart";
+  settings: Record<string, unknown>;
+}
+
+/** Every view id the app owns for a source: never saved to or deleted from the bridge. */
+export const sysBuiltInViewIds = (entry: SysSource): string[] => [entry.defaultViewId, ...(entry.builtInViews ?? []).map((view) => view.id)];
 
 export const SYS_VIEW_TYPE: KnownDatabaseViewType = "table";
 
@@ -94,6 +106,16 @@ export const SYS_SOURCES: SysSource[] = [
       created_at: "created_time", expires_at: "date", last_seen_at: "date",
       auth_method: "select", current: "checkbox",
     },
+  }),
+  source({
+    source: "my-activity", label: "My activity", icon: "📈",
+    description: "Your last 200 events, kept only while activity tracking is on.",
+    titleColumn: "event", hiddenColumns: ["workspace_id"],
+    columnTypes: { ts: "date", surface: "select", workspace_id: "text" },
+    builtInViews: [{
+      id: "my-activity-chart", name: "Events by type", type: "chart",
+      settings: { chartType: "vertical_bar", xAxisProperty: "event", yAxisAggregation: "count" },
+    }],
   }),
 ];
 

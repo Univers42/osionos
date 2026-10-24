@@ -193,10 +193,20 @@ export const SELF_SOURCES = [
 			{ column: 'expires_at', op: 'gt.now' },
 		],
 	},
+	{
+		id: 'my-activity',
+		label: 'My activity',
+		table: 'osionos_activity_events',
+		scope: { kind: 'owner', column: 'user_id' },
+		order: 'ts.desc',
+		columns: ['ts', 'event', 'surface', 'workspace_id'],
+	},
 ];
 
 /** The source of an id, or null: the id is never taken from the request as anything else. */
-export function selfSourceById(id) {
+export function selfSourceById(id, env = process.env) {
 	if (typeof id !== 'string') return null;
+	// Unregistered, not forbidden: with tracking off the source is an unknown id like any other.
+	if (id === 'my-activity' && env.OSIONOS_ACTIVITY !== '1') return null;
 	return SELF_SOURCES.find((source) => source.id === id) ?? null;
 }
