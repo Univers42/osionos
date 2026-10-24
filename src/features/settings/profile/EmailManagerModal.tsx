@@ -18,7 +18,7 @@ import { useAccountEmailsStore } from '@/store/settings';
 import { defaultEmail } from '@/store/settings/defaults';
 import { useSudoPromptStore } from '../ui/sudo/sudoPromptModel';
 import { EmailManagerBody } from './EmailManagerBody';
-import { emailProblem } from './emailCopy';
+import { emailProblem, madePrimaryNotice } from './emailCopy';
 import { runBusy } from './runBusy';
 
 interface EmailManagerModalProps {
@@ -34,6 +34,7 @@ export const EmailManagerModal: React.FC<EmailManagerModalProps> = ({ userId, fa
   const [problem, setProblem] = useState('');
   const [notice, setNotice] = useState('');
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [primaryConfirmingId, setPrimaryConfirmingId] = useState<string | null>(null);
   const [needsSudo, setNeedsSudo] = useState(false);
   const [grantsAtRefusal, setGrantsAtRefusal] = useState(grants);
   const retry = useRef<(() => Promise<boolean>) | null>(null);
@@ -73,6 +74,7 @@ export const EmailManagerModal: React.FC<EmailManagerModalProps> = ({ userId, fa
         loadError={store.error}
         busy={busy}
         confirmingId={confirmingId}
+        primaryConfirmingId={primaryConfirmingId}
         problem={problem}
         notice={notice}
         needsSudo={needsSudo}
@@ -83,11 +85,17 @@ export const EmailManagerModal: React.FC<EmailManagerModalProps> = ({ userId, fa
         onResend={(id) => { void attempt(() => store.resend(id), (sent) => codeSent(id, sent.sentTo)); }}
         onVerify={(id, code) => { void attempt(() => store.verify(id, code), () => setNotice('Email verified')); }}
         onRemove={(id, verified) => {
-          if (verified) setConfirmingId(id);
+          if (verified) { setPrimaryConfirmingId(null); setConfirmingId(id); }
           else void attempt(() => store.remove(id), () => undefined);
         }}
         onConfirmRemove={(id) => { void attempt(() => store.remove(id), () => setConfirmingId(null)); }}
         onKeep={() => setConfirmingId(null)}
+        onMakePrimary={(id) => { setConfirmingId(null); setPrimaryConfirmingId(id); }}
+        onKeepPrimary={() => setPrimaryConfirmingId(null)}
+        onConfirmPrimary={(id) => {
+          const address = records.find((record) => record._id === id)?.email ?? 'The address';
+          void attempt(() => store.makePrimary(id), (made) => { setPrimaryConfirmingId(null); setNotice(madePrimaryNotice(address, made.previous !== null)); });
+        }}
       />
     </Modal>
   );

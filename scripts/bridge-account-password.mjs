@@ -107,7 +107,7 @@ async function signEveryoneOut({ config, fetchImpl }, userId, response) {
 }
 
 /** Ends the other sign-ins; the cut-off is the fallback, and the last resort is an honest 503. */
-async function endOtherSignIns(deps, session, response) {
+export async function endOtherSignIns(deps, session, response) {
 	const { config } = deps;
 	if (config.sessionRecords?.enabled) {
 		try {

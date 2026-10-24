@@ -50,6 +50,41 @@ export async function readGotrueUser({ config, fetchImpl }, userId) {
 	}
 }
 
+const writeFailure = (code, upstreamStatus) => Object.assign(new Error('The account directory refused the change.'), { status: 503, code, upstreamStatus });
+
+/**
+ * Sets the primary address through the admin route with `email_confirm`, which GoTrue applies at
+ * once and mails nobody. Every failure carries a `code` that says whether the write is KNOWN
+ * not to have happened: `gotrue_email_taken` (the address is held), `gotrue_write_failed` (a
+ * definite 4xx with a GoTrue body), or `gotrue_write_unknown` (a proxy 5xx, a timeout, a
+ * non-JSON body: the write may have landed, so the caller must re-read before it decides).
+ *
+ * Caveat: a 4xx with a JSON body is trusted to come from GoTrue and not from a proxy; a gateway
+ * that answers a JSON 4xx for a request it forwarded anyway would be misread as "not applied".
+ */
+export async function updateGotrueEmail({ config, fetchImpl }, userId, address) {
+	if (!config.baasUrl || !config.serviceKey) throw writeFailure('gotrue_write_unknown', null);
+	let upstream;
+	let payload = null;
+	try {
+		upstream = await fetchImpl(`${config.baasUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+			method: 'PUT',
+			headers: { ...gotrueAdminHeaders(config), 'content-type': 'application/json' },
+			body: JSON.stringify({ email: address, email_confirm: true }),
+			signal: AbortSignal.timeout(TIMEOUT_MS),
+		});
+		if (upstream.ok) return;
+		payload = JSON.parse(await upstream.text());
+	} catch {
+		payload = null; // a network error, a timeout or a non-JSON body is not provably a GoTrue answer
+	}
+	const { status } = upstream ?? {};
+	const named = payload && typeof payload === 'object' ? [payload.code, payload.error_code].map(String) : [];
+	if ((status === 500 && named.includes('23505')) || (status === 422 && named.includes('email_exists'))) throw writeFailure('gotrue_email_taken', status);
+	const definite = payload && typeof payload === 'object' && status >= 400 && status < 500 && status !== 408 && status !== 429;
+	throw writeFailure(definite ? 'gotrue_write_failed' : 'gotrue_write_unknown', status ?? null);
+}
+
 const LOOKUP_TIMEOUT_MS = 5_000;
 const LOOKUP_PER_PAGE = 50;
 

@@ -46,6 +46,12 @@ export function emailProblem(outcome: Failed): string {
   return BY_CODE[outcome.code] ?? sudoSentence(outcome);
 }
 
+export const makePrimaryQuestion = (address: string, current: string): string =>
+  `You'll sign in with ${address} from now on. ${current} stays on your account as a secondary address.`;
+
+export const madePrimaryNotice = (address: string, kept: boolean): string =>
+  `${address} is now your primary address. ${kept ? '' : 'The old address was not kept. '}Other devices were signed out.`;
+
 /** `d•••@g•••.com`: enough to recognise the address, not enough to read it aloud. */
 export function maskEmail(address: string): string {
   const at = address.lastIndexOf('@');
