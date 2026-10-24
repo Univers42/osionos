@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/24 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,7 +29,7 @@ const SCHEMA: DatabaseSchema = {
   properties: {
     [GUEST.email]: { id: GUEST.email, name: "Email", type: "title" },
     [GUEST.role]: { id: GUEST.role, name: "Role", type: "select", options: selectOptions(["admin", "member", "guest"]) },
-    [GUEST.status]: { id: GUEST.status, name: "Status", type: "select", options: selectOptions(["pending", "accepted"]) },
+    [GUEST.status]: { id: GUEST.status, name: "Status", type: "select", options: selectOptions(["pending", "accepted", "revoked"]) },
     [GUEST.since]: { id: GUEST.since, name: "Invited", type: "date" },
   },
 };
@@ -42,16 +42,20 @@ const VIEWS = [
   }),
 ];
 
-/** Build the Guests state from active (non-revoked) workspace invites. */
+function inviteStatus(invite: { acceptedAt?: string | null; revokedAt?: string | null }): string {
+  if (invite.revokedAt) return "revoked";
+  return invite.acceptedAt ? "accepted" : "pending";
+}
+
+/** Build the Guests state from every workspace invite; a revoked one stays listed as Revoked. */
 export async function buildGuestsState(ctx: PeopleCtx): Promise<NotionState> {
   const invites = useWorkspaceInvitesStore.getState().data[ctx.workspaceId] ?? [];
   const pages = invites
-    .filter((invite) => !invite.revokedAt)
     .map((invite) =>
       personPage(PEOPLE_DB.guests, invite._id, {
         [GUEST.email]: invite.email,
         [GUEST.role]: invite.role,
-        [GUEST.status]: invite.acceptedAt ? "accepted" : "pending",
+        [GUEST.status]: inviteStatus(invite),
         [GUEST.since]: invite.createdAt,
       }));
   return singleDatabaseState(SCHEMA, VIEWS, pages);

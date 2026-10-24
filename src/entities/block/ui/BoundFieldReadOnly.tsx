@@ -10,10 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
+import React, { useContext } from "react";
 import type { Block } from "@/entities/block";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
-import { useBoundRecord, resolveBoundField } from "../model/binding";
+import { useBoundRecord, boundFieldText, BoundFieldEmptyText } from "../model/binding";
 
 /**
  * Renders one user-record field bound via `recordRef: "$viewedUser"`. The text
@@ -22,15 +22,16 @@ import { useBoundRecord, resolveBoundField } from "../model/binding";
  * (e.g. dragged into an ordinary page) it renders a subtle placeholder — never
  * crashes, never fetches.
  */
-export function BoundFieldReadOnly({ block }: { block: Block }): React.ReactElement {
+export function BoundFieldReadOnly({ block }: { block: Block }): React.ReactElement | null {
   const record = useBoundRecord();
+  const emptyText = useContext(BoundFieldEmptyText);
   const surface = getBlockSurfaceStyle(block);
   const cls = headingClass(block.headingLevel);
   if (record === null) {
     return <span className={`${cls} italic text-[var(--osio-fg-subtle)]`}>{block.fieldBind ?? "field"}</span>;
   }
-  const value = resolveBoundField(record, block.fieldBind);
-  const text = value === null || value === undefined || value === "" ? "—" : String(value);
+  const text = boundFieldText(record, block.fieldBind) ?? emptyText;
+  if (text === null) return null;
   return <span className={`${cls} text-[var(--osio-fg-default)]`} style={surface}>{text}</span>;
 }
 

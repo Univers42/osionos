@@ -20,14 +20,18 @@ import {
   groupSlashCommands,
   parseSlashQuery,
   PLACEHOLDER_COMMAND_ID,
+  PROFILE_FIELD_COMMAND_ID,
 } from "@/features/slash-commands/model/slashMenuCatalog";
 import { useWholeRowScroll } from "@/shared/lib/dom/useWholeRowScroll";
 import { isSlashCommandAvailable } from "@/features/slash-commands/model/slashAvailability";
 import { isBuiltInAppReady } from "@/features/whiteboard/model/whiteboardAvailability";
+import { isReadmePage } from "@/features/profile-binding/model/readmePage";
+import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
 import { usePageStore } from "@/store/usePageStore";
 import type {
   SlashAiCommand,
   SlashAiImageCommand,
+  SlashProfileFieldCommand,
   SlashCreatePageCommand,
   SlashDatabaseViewCommand,
   SlashBlockCommand,
@@ -58,7 +62,7 @@ interface SlashCommandMenuProps {
   position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (
-    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand | SlashAiCommand | SlashDictateCommand | SlashAiImageCommand | SlashLinkBlockCommand,
+    item: SlashBlockCommand | SlashTurnIntoCommand | SlashCreatePageCommand | SlashInlineCommand | SlashDatabaseViewCommand | SlashWhiteboardCommand | SlashProfileFieldCommand | SlashAiCommand | SlashDictateCommand | SlashAiImageCommand | SlashLinkBlockCommand,
   ) => void;
   onMediaSelect: (kind: MediaBlockType, value: string) => void;
   onClose: () => void;
@@ -84,9 +88,11 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 
   // `/placeholder` is template-only: hide it unless this editor's page is a template.
   const isTemplatePage = usePageStore((s) => (pageId ? Boolean(s.pageById(pageId)?.isTemplate) : false));
+  // `/profile field` is README-only: hide it on every page but the owner's README.
+  const isReadme = useAccountProfileStore((s) => isReadmePage(pageId, s.profile));
   const filtered = useMemo(
-    () => filterSlashCommands(filter).filter((c) => (c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage) && isSlashCommandAvailable(c, AVAILABILITY)),
-    [filter, isTemplatePage],
+    () => filterSlashCommands(filter).filter((c) => (c.id !== PLACEHOLDER_COMMAND_ID || isTemplatePage) && (c.id !== PROFILE_FIELD_COMMAND_ID || isReadme) && isSlashCommandAvailable(c, AVAILABILITY)),
+    [filter, isTemplatePage, isReadme],
   );
   // Typing a query → one flat, relevance-ranked list so the best match sits on top
   // and arrow-to-pick is predictable. No query → the sectioned catalog.

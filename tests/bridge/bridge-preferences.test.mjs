@@ -170,3 +170,37 @@ describe('the settings rate limit', () => {
 		assert.equal(limited.body.retryAfterSeconds, 60);
 	});
 });
+
+describe('the vigilantMode preference', () => {
+	for (const value of ['yes', 1, 'true', {}, []]) {
+		it(`refuses PATCH vigilantMode ${JSON.stringify(value)} with 422 and merges nothing`, async (t) => {
+			const { base, token, store } = await world(t);
+			const response = await send(base, '/api/preferences', { method: 'PATCH', token, body: { vigilantMode: value } });
+			assert.equal(response.status, 422);
+			assert.equal(response.body.code, 'invalid_body');
+			assert.equal(store.callsTo(MERGE_RPC).length, 0);
+		});
+	}
+
+	it('refuses PUT vigilantMode "yes" too', async (t) => {
+		const { base, token, store } = await world(t);
+		const response = await send(base, '/api/preferences', { method: 'PUT', token, body: { vigilantMode: 'yes' } });
+		assert.equal(response.status, 422);
+		assert.equal(store.callsTo(MERGE_RPC).length, 0);
+	});
+
+	for (const value of [true, false]) {
+		it(`accepts the boolean ${value}`, async (t) => {
+			const { base, token, store } = await world(t);
+			const response = await send(base, '/api/preferences', { method: 'PATCH', token, body: { vigilantMode: value } });
+			assert.equal(response.status, 200);
+			assert.equal(store.callsTo(MERGE_RPC).length, 1);
+		});
+	}
+
+	it('leaves every other preference key unchecked', async (t) => {
+		const { base, token } = await world(t);
+		const response = await send(base, '/api/preferences', { method: 'PATCH', token, body: { theme: 'light', anything: 'yes' } });
+		assert.equal(response.status, 200);
+	});
+});

@@ -35,6 +35,7 @@
 
 import { rateLimit } from './bridge-guard.mjs';
 import { bearerToken, blockedViewerBy, readJsonBody, safeText, sendJson } from './bridge-social-core.mjs';
+import { neutraliseBindings } from './bridge-readme-bindings.mjs';
 import { STATUS_COLUMNS, statusOf } from './bridge-status.mjs';
 
 const PROFILE_PATH = '/api/account/profile';
@@ -64,7 +65,7 @@ const OWNER_COLUMNS = [
 // Deviation from P1-2a contract 3 (docs/account-platform/wp/P1-2a.md:44-49): the full
 // card gains `profession`. It is additive — no field, status or shape changes — and ADR
 // 0004 records it. The reduced card below is unchanged.
-const CARD_COLUMNS = [
+export const CARD_COLUMNS = [
 	'user_id', 'username', 'display_name', 'pronouns', 'headline', 'bio', 'location', 'company',
 	'website', 'links', 'timezone', 'orcid', 'patreon', 'avatar_url', 'banner_url', 'profession',
 ];
@@ -307,7 +308,7 @@ async function projectReadme(pg, row) {
 		return null;
 	}
 	if (!Array.isArray(pages) || pages.length === 0) return null;
-	const blocks = Array.isArray(pages[0].content) ? pages[0].content : [];
+	const blocks = neutraliseBindings(pages[0].content);
 	if (Buffer.byteLength(JSON.stringify(blocks)) > README_BYTE_CAP) return { pageId, truncated: true };
 	return { pageId, blocks };
 }

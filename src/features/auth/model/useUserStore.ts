@@ -436,6 +436,17 @@ function applyRefreshed(userId: string, tokens: RefreshedTokens) {
   if (live) useUserStore.setState((state) => ({ sessions: { ...state.sessions, [userId]: session } }));
 }
 
+/** A step-up (2FA verify or disable) answered a new access token for this sign-in; the server cut
+ *  the old one off, so it is written to the saved record too, or a reload would bring the old back. */
+export function adoptStepUpToken(userId: string, accessToken: string): void {
+  const live = useUserStore.getState().sessions[userId];
+  if (!live) return;
+  const session: UserSession = { ...live, accessToken };
+  const record = readPersistedBridgeSessions()[userId];
+  if (record) savePersistedBridgeSession({ ...record, session });
+  useUserStore.setState((state) => ({ sessions: { ...state.sessions, [userId]: session } }));
+}
+
 function dropRefreshed(userId: string, code: string) {
   // At boot the store holds no session yet; clearing through it would reset the saved active account.
   if (useUserStore.getState().sessions[userId]) clearLocalSession(userId);

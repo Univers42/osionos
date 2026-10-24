@@ -172,3 +172,42 @@ describe('nothing throws, and a malformed rule grants nothing', () => {
 		assert.equal(bestShareLevel(rules, CTX, PAGE), 'can_edit');
 	});
 });
+
+describe('a team target matches the callers in the team and nobody else', () => {
+	const TEAM = '88888888-8888-4888-8888-888888888888';
+	const OTHER_TEAM = '99999999-9999-4999-8999-999999999999';
+	const teamRule = (permission) => rule({ target: { type: 'team', teamId: TEAM }, permission });
+	const inTeam = { ...CTX, teamIds: [TEAM] };
+
+	it('matches a caller whose teams hold the id, case-insensitively', () => {
+		assert.equal(ruleMatchesCaller(teamRule('can_edit'), inTeam), true);
+		assert.equal(ruleMatchesCaller(teamRule('can_edit'), { ...CTX, teamIds: [TEAM.toUpperCase()] }), true);
+	});
+
+	it('matches nobody else: another team, no teams, a team rule without an id', () => {
+		assert.equal(ruleMatchesCaller(teamRule('can_edit'), { ...CTX, teamIds: [OTHER_TEAM] }), false);
+		assert.equal(ruleMatchesCaller(teamRule('can_edit'), { ...CTX, teamIds: [] }), false);
+		assert.equal(ruleMatchesCaller(rule({ target: { type: 'team' } }), { ...CTX, teamIds: [''] }), false);
+		assert.equal(bestShareLevel([teamRule('can_edit')], { ...CTX, teamIds: [OTHER_TEAM] }, PAGE), null);
+	});
+
+	it('gives the team level to a member and a no_access team rule beats a can_edit user rule', () => {
+		assert.equal(bestShareLevel([teamRule('can_view')], inTeam, PAGE), 'can_view');
+		const rules = [rule({ permission: 'can_edit' }), teamRule('no_access')];
+		assert.equal(bestShareLevel(rules, inTeam, PAGE), 'no_access');
+		assert.equal(bestShareLevel(rules, { ...CTX, teamIds: [] }, PAGE), 'can_edit');
+	});
+
+	it('fails closed when the team read failed (C21): a deny still blocks, a grant grants nothing', () => {
+		for (const teamIds of [undefined, null, 'oops']) {
+			const ctx = { ...CTX, teamIds };
+			assert.equal(bestShareLevel([rule({ permission: 'can_edit' }), teamRule('no_access')], ctx, PAGE), 'no_access', String(teamIds));
+			assert.equal(bestShareLevel([teamRule('can_edit')], ctx, PAGE), null, String(teamIds));
+		}
+	});
+
+	it('loses the grant the moment the caller leaves the team (C22): the answer follows ctx, nothing is cached', () => {
+		assert.equal(bestShareLevel([teamRule('can_edit')], inTeam, PAGE), 'can_edit');
+		assert.equal(bestShareLevel([teamRule('can_edit')], { ...CTX, teamIds: [] }, PAGE), null);
+	});
+});

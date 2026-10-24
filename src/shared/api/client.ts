@@ -100,5 +100,5 @@ export const api = createHttpClient({
     revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
     refreshOwnerOf,
   )),
-  missingBaseUrlMessage: 'VITE_API_URL is not configured.',
+  missingBaseUrlMessage: 'This version of osionos is not connected to a server.',
 });
