@@ -34,8 +34,9 @@ const exportPanel = (page) => region(page).getByTestId("account-export");
 
 async function stubAccount(page, state) {
   await stubBridge(page, (url, request) => {
-    // 404 reads as "not served yet" to the preferences store, which then falls back to its defaults.
-    if (url.pathname === "/api/preferences") return { status: 404, json: { code: "not_found" } };
+    // A 404 with no code is "not served yet" to the preferences store, which then falls back to
+    // its defaults; a 404 carrying a server code is an answer and would show the load error.
+    if (url.pathname === "/api/preferences") return { status: 404, json: {} };
     if (url.pathname === "/api/account/export" && request.method() === "GET") return state.list ?? { json: { exports: state.jobs } };
     if (url.pathname === "/api/account/export" && request.method() === "POST") {
       state.posts.push(request.postDataJSON());
