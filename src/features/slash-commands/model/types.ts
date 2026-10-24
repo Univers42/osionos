@@ -79,6 +79,11 @@ export interface SlashWhiteboardCommand extends SlashCommandBase {
   kind: "whiteboard";
 }
 
+/** `/profile field`: a README block bound to a field of the owner's public profile. */
+export interface SlashProfileFieldCommand extends SlashCommandBase {
+  kind: "profile-field";
+}
+
 /** An AI action: the service's command, run on the block the menu was opened on. */
 export interface SlashAiCommand extends SlashCommandBase {
   kind: "ai";
@@ -112,6 +117,7 @@ export type SlashCommand =
   | SlashDatabaseViewCommand
   | SlashMediaPickerCommand
   | SlashWhiteboardCommand
+  | SlashProfileFieldCommand
   | SlashAiCommand
   | SlashDictateCommand
   | SlashAiImageCommand

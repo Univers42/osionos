@@ -27,6 +27,7 @@ import {
 } from "@osionos/markdown-engine/dom";
 import { getCalloutIconForKind } from "@osionos/markdown-engine/terminal";
 import { useSlashAiImageSelect, useSlashSelect, useSlashWhiteboardSelect } from "@/features/slash-commands";
+import { useSlashProfileFieldSelect } from "@/features/slash-commands/model/useSlashProfileFieldSelect";
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";
 import { useUserStore } from "@/features/auth";
@@ -2085,6 +2086,14 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     insertBlock,
     getBlocks: () => contentRef.current,
   });
+  const handleSlashProfileFieldSelect = useSlashProfileFieldSelect({
+    pageId,
+    slashMenu,
+    setSlashMenu,
+    updateBlock,
+    insertBlock,
+    getBlocks: () => contentRef.current,
+  });
   const handleSlashAiImageSelect = useSlashAiImageSelect({
     pageId,
     slashMenu,
@@ -2250,6 +2259,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     handleSlashCreatePageSelect,
     handleSlashInlineSelect,
     handleSlashWhiteboardSelect,
+    handleSlashProfileFieldSelect,
     handleSlashAiImageSelect,
     handlePageSelectorSelect,
     handlePageSelectorCreate,
