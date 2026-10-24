@@ -144,3 +144,41 @@ describe('last_seen_at', () => {
 		assert.doesNotThrow(() => store.touchSeen(rec.agent_id));
 	});
 });
+
+for (const field of ['name', 'os_user']) {
+	for (const value of [undefined, null, 123, true, ['laptop']]) {
+		it(`rejects ${field}=${JSON.stringify(value)} on add and load`, () => {
+			const rec = record({ [field]: value });
+			assert.throws(() => openAgentStore({ path }).add(rec), StoreError);
+			realFs.mkdirSync(join(dir, 'state'), { recursive: true });
+			writeFileSync(path, JSON.stringify({ v: 1, agents: [rec] }));
+			assert.throws(() => openAgentStore({ path }), StoreError);
+		});
+	}
+}
+it('invalid rotations preserve memory and the registry file', () => {
+	const rec = record();
+	const store = openAgentStore({ path });
+	store.add(rec);
+	const before = readFileSync(path, 'utf8');
+	for (const update of [{ pubkey: 'bad' }, { fp: 'bad' }, { at: 'bad' }, { at: undefined }]) {
+		assert.throws(() => store.rotate(rec.agent_id, { pubkey: rec.pubkey, fp: rec.fp, at: new Date(0).toISOString(), ...update }), StoreError);
+		assert.deepEqual(store.get(rec.agent_id), rec);
+		assert.equal(readFileSync(path, 'utf8'), before);
+	}
+});
+it('completes partial writes before publishing the registry', () => {
+	const rec = record();
+	let writes = 0;
+	const fsImpl = { ...realFs, writeFileSync(fd, text) {
+		const bytes = Buffer.from(text);
+		let offset = 0;
+		while (offset < bytes.length) {
+			offset += realFs.writeSync(fd, bytes, offset, Math.min(7, bytes.length - offset));
+			writes += 1;
+		}
+	} };
+	openAgentStore({ path, fsImpl }).add(rec);
+	assert.ok(writes > 1);
+	assert.deepEqual(openAgentStore({ path }).get(rec.agent_id), rec);
+});

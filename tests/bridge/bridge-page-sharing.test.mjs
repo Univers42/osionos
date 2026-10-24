@@ -254,3 +254,46 @@ describe('marketplace edit and publish answer an app the caller cannot read like
 		});
 	});
 });
+
+describe('collaborator role changes', () => {
+	for (const role of ['owner', 'admin', '', null]) {
+		it(`rejects promotion of an existing collaborator to ${role}`, async () => {
+			const world = teamWorld();
+			world.osionos_pages.find((p) => p.id === IDS.sharedA).collaborators = [{ userId: IDS.userB, role: 'viewer' }];
+			const mock = createPostgrestMock(world);
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const result = await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ collaborators: [{ userId: IDS.userB.toUpperCase(), role }] }));
+				assert.equal(result.status, 422, result.text);
+				assert.equal(mock.page(IDS.sharedA).collaborators[0].role, 'viewer');
+			});
+		});
+	}
+	it('keeps unchanged legacy roles and accepts changes to supported roles', async () => {
+		const world = teamWorld();
+		world.osionos_pages.find((p) => p.id === IDS.sharedA).collaborators = [{ userId: IDS.userB, role: 'owner' }];
+		const mock = createPostgrestMock(world);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			assert.equal((await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ collaborators: [{ userId: IDS.userB, role: 'owner' }], title: 'Legacy' }))).status, 200);
+			assert.equal((await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ collaborators: [{ userId: IDS.userB, role: 'editor' }] }))).status, 200);
+		});
+	});
+});
+
+it('a versioned sharing PATCH preserves a concurrent grant', async () => {
+  const world = teamWorld();
+  world.osionos_pages.find((p) => p.id === IDS.sharedA).version = 4;
+  const mock = createPostgrestMock(world);
+  const concurrent = [{ userId: IDS.userB, role: 'editor' }];
+  const fetchImpl = async (url, init = {}) => {
+    if (init.method === 'PATCH' && String(url).includes('/rest/v1/osionos_pages')) {
+      mock.page(IDS.sharedA).version = 5;
+      mock.page(IDS.sharedA).collaborators = concurrent;
+    }
+    return mock.fetchImpl(url, init);
+  };
+  await withBridge(config, fetchImpl, async (base) => {
+    const result = await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ baseVersion: 4, collaborators: [] }));
+    assert.equal(result.status, 409, result.text);
+    assert.deepEqual(mock.page(IDS.sharedA).collaborators, concurrent);
+  });
+});

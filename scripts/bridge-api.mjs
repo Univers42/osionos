@@ -926,14 +926,17 @@ const COLLABORATOR_ROLES = new Set(['viewer', 'editor']);
 /**
  * A page is shared only with members of its workspace: the read path runs the workspace
  * gate after the collaborator check, so anyone else would be listed and still refused.
- * Only collaborators the PATCH adds are checked; one already on the page stays as it is,
- * so an older share never blocks an unrelated edit.
+ * Membership is checked for additions; roles for additions and changes. An unchanged
+ * legacy share never blocks an unrelated edit.
  */
 async function requireNewCollaboratorsAreMembers(payload, existing, config, fetchImpl) {
 	if (!hasOwn(payload, 'collaborators')) return;
-	const present = new Set(safeJsonArray(existing.collaborators).map((entry) => String(entry?.userId ?? '').toLowerCase()));
-	const added = safeJsonArray(payload.collaborators).filter((entry) => !present.has(String(entry?.userId ?? '').toLowerCase()));
-	if (added.some((entry) => !UUID_REGEX.test(String(entry?.userId ?? '')) || !COLLABORATOR_ROLES.has(entry.role))) {
+	const present = new Map(safeJsonArray(existing.collaborators).map((entry) => [String(entry?.userId ?? '').toLowerCase(), entry?.role]));
+	const submitted = safeJsonArray(payload.collaborators);
+	const added = submitted.filter((entry) => !present.has(String(entry?.userId ?? '').toLowerCase()));
+	const changed = submitted.filter((entry) => !present.has(String(entry?.userId ?? '').toLowerCase())
+		|| entry?.role !== present.get(String(entry?.userId ?? '').toLowerCase()));
+	if (changed.some((entry) => !UUID_REGEX.test(String(entry?.userId ?? '')) || !COLLABORATOR_ROLES.has(entry?.role))) {
 		throw Object.assign(new Error('A collaborator is { userId: <uuid>, role: "viewer" | "editor" }.'), { status: 422 });
 	}
 	if (added.length === 0) return;
@@ -4951,7 +4954,14 @@ export function createBridgeServer(options = {}) {
 		moderationConsole: createModerationConsoleHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		recsHealth: createRecsHealthHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv }),
-		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env,
+			authorizeBlocks: async (request, pageId, workspaceId) => {
+				const context = await pageWriteContext(request, pageId, config, fetchImpl);
+				requireReadablePage(context.row, context.token.userId, context.level);
+				if (!sameId(context.row.workspace_id, workspaceId)) throw pageNotFound();
+				requirePageWrite(context, 'update');
+			},
+		}),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		realtimeToken: createRealtimeTokenHandler({
 			config,

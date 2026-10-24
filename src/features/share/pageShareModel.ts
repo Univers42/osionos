@@ -19,6 +19,8 @@ import type { PageCollaborator, PageCollaboratorRole, PageVisibility } from '@/e
 import type { ShareEntry, ShareLevel, SharePerson } from './types';
 
 export interface PageSharing {
+  /** Revision read with the grants, required for an atomic sharing write. */
+  version?: number;
   visibility: PageVisibility;
   collaborators: PageCollaborator[];
 }

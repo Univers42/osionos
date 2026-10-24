@@ -37,7 +37,8 @@ const isIsoOrNull = (value) => value === null || (typeof value === 'string' && !
 function isValidRecord(r) {
 	return r !== null && typeof r === 'object'
 		&& AGENT_ID_RE.test(r.agent_id) && UUID_RE.test(r.sub) && isRawKey(r.pubkey) && FINGERPRINT_RE.test(r.fp)
-		&& NAME_RE.test(r.name) && OS_USER_RE.test(r.os_user) && PLATFORM_RE.test(r.platform)
+		&& typeof r.name === 'string' && NAME_RE.test(r.name)
+		&& typeof r.os_user === 'string' && OS_USER_RE.test(r.os_user) && PLATFORM_RE.test(r.platform)
 		&& isIsoOrNull(r.created_at) && isIsoOrNull(r.rotated_at) && isIsoOrNull(r.last_seen_at);
 }
 
@@ -63,7 +64,7 @@ function writeAtomically(path, records, fs) {
 	const temp = join(dirname(path), `.agents.${process.pid}.tmp`);
 	const fd = fs.openSync(temp, 'w', 0o600);
 	try {
-		fs.writeSync(fd, JSON.stringify({ v: 1, agents: [...records.values()] }));
+		fs.writeFileSync(fd, JSON.stringify({ v: 1, agents: [...records.values()] }));
 		fs.fsyncSync(fd);
 	} finally { fs.closeSync(fd); }
 	try {
@@ -104,7 +105,9 @@ export function openAgentStore({ path, fsImpl = nodeFs, now = Date.now }) {
 		rotate(agentId, { pubkey, fp, at }) {
 			const before = records.get(agentId);
 			if (!before) throw new StoreError('unknown agent');
-			commit(() => records.set(agentId, { ...before, pubkey, fp, rotated_at: at }), () => records.set(agentId, before));
+			const rotated = { ...before, pubkey, fp, rotated_at: at };
+			if (!isValidRecord(rotated)) throw new StoreError('refusing a malformed rotation');
+			commit(() => records.set(agentId, rotated), () => records.set(agentId, before));
 		},
 		remove(agentId) {
 			const before = records.get(agentId);

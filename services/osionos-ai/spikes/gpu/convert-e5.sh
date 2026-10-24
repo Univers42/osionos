@@ -51,6 +51,11 @@ docker run --rm --network none \
 	node:22-bookworm-slim node /s/patch-llama-converter.mjs /tools
 
 echo "[convert] 3. the conversion itself"
+docker run --rm --network none -v "$OUT_VOLUME:/out" alpine:3.20 \
+	sh -c 'rm -f -- "/out/$1"' sh "$OUT_NAME"
+conversion_log=$(mktemp)
+trap 'rm -f "$conversion_log"' EXIT
+status=0
 docker run --rm --network none --entrypoint python3 \
 	-e OMP_NUM_THREADS=4 -e PYTHONPATH=/tools/gguf-py \
 	-v "$TOOLS_VOLUME:/tools" \
@@ -59,7 +64,9 @@ docker run --rm --network none --entrypoint python3 \
 	"$IMAGE" \
 	/tools/convert_hf_to_gguf.py /model \
 	--outfile "/out/$OUT_NAME" \
-	--outtype "$TYPE" 2>&1 | tail -12
+	--outtype "$TYPE" > "$conversion_log" 2>&1 || status=$?
+tail -12 "$conversion_log"
+[ "$status" -eq 0 ] || exit "$status"
 
 echo "[convert] 4. the result"
 docker run --rm --network none -v "$OUT_VOLUME:/out" alpine:3.20 \

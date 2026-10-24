@@ -14,7 +14,7 @@
  *  `visibility` alongside the enforced access rules (including teams); live
  *  database pages persist permission-engine policies (sharePermissionBridge.ts). */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { commitPageSharing, fetchPageSharing, fetchPeople, fetchWorkspacePeople, deleteRule, fetchRules, fetchTeams, saveRule } from './shareApi';
 import { createPolicy, deletePolicy, fetchPolicies, fetchRoles } from './sharePolicyApi';
 import { toAccessRule, toEnginePolicy } from './sharePermissionBridge';
@@ -51,17 +51,31 @@ export function useShareModel(resource: ShareResource): ShareModel {
   const [roles, setRoles] = useState<EngineRole[]>([]);
   const [liveEntries, setEntries] = useState<ShareEntry[]>([]);
   const [sharing, setSharing] = useState<PageSharing | null>(null);
+  const generation = useRef(0);
+  const resourceKey = JSON.stringify([resource.workspaceId, resource.resourceId, resource.liveResourceName]);
+  const [loadedResource, setLoadedResource] = useState<string | null>(null);
 
   const entries = useMemo(() => (isLive ? liveEntries : sharing ? entriesFromPageAccess(sharing, people, ruleEntries) : []), [isLive, liveEntries, people, ruleEntries, sharing]);
 
   const refresh = useCallback(async () => {
+    const request = ++generation.current;
+    const currentRequest = () => request === generation.current;
     setLoading(true);
+    setLoadedResource(null);
     setError(null);
+    setPeople([]);
+    setTeams([]);
+    setRoles([]);
+    setRuleEntries([]);
+    setEntries([]);
+    setSharing(null);
     try {
       if (isLive) {
         const roster = await fetchPeople(resource.workspaceId);
+        if (!currentRequest()) return;
         setPeople(roster);
         const [roleRows, policyRows] = await Promise.all([fetchRoles(resource.workspaceId), fetchPolicies(resource.workspaceId)]);
+        if (!currentRequest()) return;
         setRoles(roleRows);
         setEntries(entriesFromPolicies(policyRows, roleRows, roster, resource.liveResourceName ?? ''));
       } else {
@@ -69,19 +83,23 @@ export function useShareModel(resource: ShareResource): ShareModel {
           fetchWorkspacePeople(resource.workspaceId), fetchPageSharing(resource.resourceId), fetchRules(resource.workspaceId, resource.resourceId),
         ]);
         const teamList = read.teamRules ? await fetchTeams(resource.workspaceId).catch(() => []) : [];
+        if (!currentRequest()) return;
         setTeams(teamList);
         setRuleEntries(entriesFromRules(read.rules, roster, teamList));
         setPeople(roster);
         setSharing(current);
       }
     } catch (cause) {
-      setError(errorText(cause, 'Could not load sharing state.'));
+      if (currentRequest()) setError(errorText(cause, 'Could not load sharing state.'));
     } finally {
-      setLoading(false);
+      if (currentRequest()) { setLoadedResource(resourceKey); setLoading(false); }
     }
-  }, [isLive, resource.liveResourceName, resource.resourceId, resource.workspaceId]);
+  }, [isLive, resource.liveResourceName, resource.resourceId, resource.workspaceId, resourceKey]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    return () => { generation.current += 1; };
+  }, [refresh]);
 
   const run = useCallback(async (work: () => Promise<void>, fallback: string) => {
     setBusy(true);
@@ -99,8 +117,7 @@ export function useShareModel(resource: ShareResource): ShareModel {
   const changePageSharing = useCallback(async (next: (current: PageSharing) => PageSharing) => {
     if (!sharing) throw new Error('Sharing is still loading.');
     const after = next(sharing);
-    await commitPageSharing(resource.resourceId, sharing, after);
-    setSharing(after);
+    setSharing(await commitPageSharing(resource.resourceId, sharing, after));
   }, [resource.resourceId, sharing]);
 
   const setLivePolicy = useCallback(async (target: ShareEntry['target'], level: ShareLevel) => {
@@ -145,5 +162,5 @@ export function useShareModel(resource: ShareResource): ShareModel {
     setEntries((current) => current.filter((existing) => existing.key !== entry.key));
   }, 'Could not remove access.'), [changePageSharing, isLive, run, sharing?.visibility]);
 
-  return { loading, busy, error, isLive, people, teams, roles, entries, setLevel, removeEntry, refresh };
+  return { loading: loading || loadedResource !== resourceKey, busy, error, isLive, people, teams, roles, entries, setLevel, removeEntry, refresh };
 }

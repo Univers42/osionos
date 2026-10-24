@@ -51,6 +51,7 @@ import { useEffect } from 'react';
 import { getActivePageJwt } from '@/shared/api/client';
 import { usePageStore } from '@/store/usePageStore';
 import { hydrateWorkspace } from '@/store/sync/hydratePages';
+import { broadcastsSuppressed, withoutBroadcast } from '@/store/sync/broadcastGuard';
 import type { Block } from '@/entities/block';
 import type { BlockOp, CollabEvent, RealtimeChannel } from '../model/realtimeTransport.port';
 import {
@@ -81,7 +82,7 @@ const tables = new Map<string, BlockRegisterTable>();
 const lastLocalEdit = new Map<string, Map<string, number>>();
 
 /**
- * Guard flag around applyRemoteContent: the page-store write below fires our
+ * Shared guard around remote and server writes: the page-store write below fires our
  * own outbound subscriber synchronously, and it must not diff/broadcast the
  * very content it just applied.
  *
@@ -89,14 +90,14 @@ const lastLocalEdit = new Map<string, Map<string, number>>();
  * set the store subscriber returns before it can queue a diff OR arm a pages
  * nudge, so a remote apply can never be echoed back onto the channel.
  */
-let applyingRemote = false;
+const tabSuffix = crypto.randomUUID();
 
 export function useLiveBlockSync(spaceId: string | null, selfId: string | null): void {
   // Re-subscribe whenever the channel appears (join is async) or drops.
   const channel = useCollabStore((state) => state.channel);
   useEffect(() => {
     if (!spaceId || !selfId || !channel) return undefined;
-    return startLiveBlockSync(spaceId, selfId, channel);
+    return startLiveBlockSync(spaceId, `${selfId}:${tabSuffix}`, channel);
   }, [spaceId, selfId, channel]);
 }
 
@@ -145,7 +146,7 @@ function startLiveBlockSync(spaceId: string, selfId: string, channel: RealtimeCh
     // The guard comes FIRST: while a remote event is being applied, this
     // subscriber must not queue a diff nor arm a pages nudge — nothing this
     // client did locally, so nothing may leave the channel.
-    if (applyingRemote) return;
+    if (broadcastsSuppressed()) return;
     const list = state.pages[spaceId];
     const prevList = prev.pages[spaceId];
     if (!list || list === prevList) return;
@@ -172,11 +173,10 @@ function startLiveBlockSync(spaceId: string, selfId: string, channel: RealtimeCh
         structural = true;
       }
       // Content plane: only a content-reference change while NOT applying a
-      // remote event goes out (the remote applies carry the guard flag). A
-      // structural change does not swallow the content sync below — a page
-      // can be added AND filled in the same store write.
-      if (page.content === undefined) continue;
-      if (before === page || before?.content === page.content) continue;
+      // remote event goes out (the remote applies carry the guard flag).
+      // Initial loads and new pages already persist through their server write.
+      if (!before || before.content === undefined || page.content === undefined) continue;
+      if (before === page || before.content === page.content) continue;
       if (caretBlockId) markLastLocalEdit(page._id, caretBlockId);
       const pending = pendingOut.get(page._id);
       if (pending) {
@@ -184,7 +184,7 @@ function startLiveBlockSync(spaceId: string, selfId: string, channel: RealtimeCh
         continue;
       }
       pendingOut.set(page._id, {
-        prev: before?.content, // state at the last flush — the last broadcast truth
+        prev: before.content, // state at the last flush — the last broadcast truth
         next: page.content,
         timer: setTimeout(() => flushPage(page._id), BROADCAST_COALESCE_MS),
       });
@@ -206,12 +206,9 @@ function startLiveBlockSync(spaceId: string, selfId: string, channel: RealtimeCh
     const result = applyBlockOps(page?.content, ops, actor, tables.get(pageId) ?? {});
     tables.set(pageId, result.registers); // even a lost op advances the register clock
     if (!result.changed || result.blocks === undefined) return;
-    applyingRemote = true;
-    try {
-      usePageStore.getState().applyRemoteContent(pageId, result.blocks);
-    } finally {
-      applyingRemote = false;
-    }
+    withoutBroadcast(() => {
+      usePageStore.getState().applyRemoteContent(pageId, result.blocks!);
+    });
   };
 
   const releaseHold = (pageId: string, entry: { op: BlockOp; actor: string }): void => {

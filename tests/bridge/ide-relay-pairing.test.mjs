@@ -75,7 +75,7 @@ describe('start', () => {
 	});
 	it('rejects malformed fields before any state is created', () => {
 		const body = agent().startBody();
-		for (const bad of [{ pubkey: 'AAAA' }, { name: '../etc' }, { os_user: '' }, { platform: 'plan9-mips' }, { version: 5 }]) {
+		for (const bad of [{ pubkey: 'AAAA' }, { name: '../etc' }, { os_user: '' }, { platform: 'plan9-mips' }, { version: 5 }, ...['name', 'os_user'].flatMap((field) => [undefined, null, 123, true, ['laptop']].map((value) => ({ [field]: value })))]) {
 			assert.equal(pairing.start({ ...body, ...bad }, {}).status, 400, JSON.stringify(bad));
 		}
 		assert.equal(pairing.pendingCount, 0);

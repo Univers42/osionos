@@ -90,8 +90,9 @@ baseline (0.88), so swapping the embedder is safe.
 
 ## Part C — sharing one GPU
 
-LLM (config 3) and the GPU embedder (official f16) running together. Peak VRAM of the two together: 4.74 GiB
-(under the 7.4 GiB rule). GPU busy 95.1 %, loadavg 4.59.
+LLM (config 3) and the GPU embedder (official f16) were run together. The partial sampler recorded
+4.74 GiB, GPU busy 95.1 %, loadavg 4.59, but did not cover the full workloads. Co-location VRAM is
+unknown; these samples cannot establish compliance with the 7.4 GiB rule (see the review note).
 
 | measurement | value |
 |---|---|
@@ -132,9 +133,9 @@ vs 27–1242 ms) and a better TTFT p95 at the lightest load (4.28 s vs 5.72 s at
   chunks/s (7.4×), agreement with TEI is 0.9998 (min 0.9995), and the golden set stays at recall@5 = 0.88
   with 0 leaks. Under its own backfill the GPU embedder's query p95 degrades to 0.88 s worst case vs TEI's
   2.27 s.
-- **Co-location**: both the LLM (config 3) and the GPU embedder fit on the card together (peak 4.74 GiB),
-  with a small TTFT penalty for the LLM (41.23 s vs 38.29 s p95 at λ = 1) and a usable query latency
-  (21.34 ms). Backfill on the GPU while the LLM serves traffic is therefore viable.
+- **Co-location**: recommendation withdrawn. The sampler did not cover the full workloads, so capacity
+  and viability remain unknown. A full-duration measurement is required before recommending shared
+  GPU serving or claiming that both models stay within the 7.4 GiB limit.
 
 ## Caveat
 

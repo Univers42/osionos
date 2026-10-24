@@ -89,7 +89,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
           people={model.people}
           teams={model.teams}
           excludedKeys={model.entries.map((entry) => entry.key)}
-          disabled={model.busy}
+          disabled={model.busy || model.loading}
           onPick={(person) => { void model.setLevel({ type: 'user', person }, 'can_view'); }}
           onPickTeam={(team) => { void model.setLevel({ type: 'team', team }, 'can_view'); }}
         />
@@ -107,7 +107,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
             key={entry.key}
             entry={entry}
             levels={model.isLive || entry.sourceId ? undefined : PAGE_SHARE_LEVELS}
-            busy={model.busy}
+            busy={model.busy || model.loading}
             onLevel={(level) => { void model.setLevel(entry.target, level); }}
             onRemove={() => { void model.removeEntry(entry); }}
           />
@@ -120,7 +120,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
           {generalEntries.length === 0 && (
             <button
               type="button"
-              disabled={model.busy}
+              disabled={model.busy || model.loading}
               className="osio-menu-item"
               data-tone="muted"
               onClick={() => { void model.setLevel({ type: 'workspace' }, 'can_view'); }}
@@ -133,7 +133,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
               key={entry.key}
               entry={entry}
               levels={entry.sourceId ? undefined : WORKSPACE_SHARE_LEVELS}
-              busy={model.busy}
+              busy={model.busy || model.loading}
               onLevel={(level) => { void model.setLevel(entry.target, level); }}
               onRemove={() => { void model.removeEntry(entry); }}
             />
