@@ -2637,6 +2637,7 @@ async function handlePageSearch(url, request, response, config, fetchImpl) {
 	const query = raw.toLowerCase();
 	const limit = Math.min(Math.max(Number.parseInt(url.searchParams.get('limit') || '12', 10) || 12, 1), PAGE_SEARCH_MAX);
 	if (!raw) { json(response, 200, [], config); return true; }
+	config.activity?.emit({ userId }, 'search', 'search', workspaceId);
 	const path = `osionos_pages?workspace_id=eq.${workspaceId}&archived_at=is.null`
 		+ `&search_doc=wfts(english).${encodeURIComponent(raw)}`
 		+ `&select=*&order=updated_at.desc&limit=${PAGE_SEARCH_MAX}`;
@@ -4716,6 +4717,7 @@ async function handleAuthProxy(url, request, response, config, kv, pg, fetchImpl
 		...(consumed.session.mfaRequired ? { mfaRequired: true } : {}),
 		session: consumed.session,
 	}, config);
+	config.activity?.emit(consumed.session, 'login', 'settings', null);
 }
 
 /** Reads the request to its end and refuses any byte: logout names its subject only through the token. */
@@ -4926,6 +4928,8 @@ export function createBridgeServer(options = {}) {
 	let revocationPoller = null;
 	const activityEmitter = createActivityEmitter({ pg, env, now: options.now, isTracked: createActivityConsent({ pg, now: options.now }).isTracked });
 	let activityTimer = null;
+	// Routes emit and the health route reads through the config object, which every request copy spreads.
+	if (env.OSIONOS_ACTIVITY === '1') Object.assign(config, { activity: activityEmitter, activityStats: () => ({ ...activityEmitter.stats(), ...activityTimer?.stats() }) });
 	server.on('listening', () => {
 		activityTimer = startActivityMaintenance({ pg, env });
 		cutoffPoller = startSessionCutoffPoller(sessionCutoffs, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionCutoffPoll);

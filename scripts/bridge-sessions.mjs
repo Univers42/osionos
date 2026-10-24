@@ -113,6 +113,8 @@ export function bridgeHealthState(config) {
 		session_revocations: revocations?.status() ?? 'off',
 		session_revocations_age_ms: revocations?.ageMs() ?? null,
 		kv: kvState(config),
+		// Counts only, and only when OSIONOS_ACTIVITY=1 set the stats function on the config.
+		...(config.activityStats ? { activity: config.activityStats() } : {}),
 	};
 }
 

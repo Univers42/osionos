@@ -172,7 +172,7 @@ describe('saved views on a sys: source', () => {
 
 	it('answers 404 for an unknown source, 401 without a session, 405 for other methods', async (t) => {
 		const { base, token } = await world(t);
-		const unknown = await send(base, url('my-activity'), { token });
+		const unknown = await send(base, url('my-nothing'), { token });
 		assert.equal(unknown.status, 404);
 		assert.equal(unknown.body.code, 'unknown_self_source');
 		assert.equal((await put(base, token, 'nope', 'v', VIEW)).status, 404);

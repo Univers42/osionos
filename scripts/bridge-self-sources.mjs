@@ -193,6 +193,14 @@ export const SELF_SOURCES = [
 			{ column: 'expires_at', op: 'gt.now' },
 		],
 	},
+	{
+		id: 'my-activity',
+		label: 'My activity',
+		table: 'osionos_activity_events',
+		scope: { kind: 'owner', column: 'user_id' },
+		order: 'ts.desc',
+		columns: ['ts', 'event', 'surface', 'workspace_id'],
+	},
 ];
 
 /** The source of an id, or null: the id is never taken from the request as anything else. */
