@@ -15,7 +15,7 @@
  * disable each answer a refresh token, retire the old family, carry a running sudo window,
  * and fail closed. Every spec runs the real handler on a running bridge.
  * Caveat: the kv double ignores TTLs, so a carried sudo window is proved by the TTL passed to
- * `kv.set`, not by a clock that moves past it.
+ * `kv.set`, read against the moving bridge clock (`liveAfter`), not by the store expiring it.
  */
 
 import { describe, it } from 'node:test';
@@ -161,6 +161,15 @@ describe('step-up family: assurance, listing, single use (B5, B6, B7, B8)', () =
 		assert.equal(world.sessions.rows(SESSIONS).length, before);
 	});
 
+	for (const kind of CUT_OFF_KINDS) {
+		it(`${kind}: a row revoked meanwhile answers the signed-out code the refresh path uses, with no token`, async (t) => {
+			const { world, session, run } = await arrange(t, kind);
+			Object.assign(world.sessions.rows(SESSIONS).find((row) => row.id === session.claims.jti), { revoked_at: new Date(world.clock.at).toISOString(), revoked_reason: 'user' });
+			const answer = await run();
+			assert.deepEqual([answer.status, answer.body.code, answer.body.accessToken, answer.body.refreshToken], [401, 'session_revoked', undefined, undefined]);
+		});
+	}
+
 	it('still mints for a legacy token that never had a row (B7)', async (t) => {
 		const { world, session, run } = await arrange(t, 'verify');
 		const rows = world.sessions.rows(SESSIONS);
@@ -180,23 +189,27 @@ describe('step-up family: assurance, listing, single use (B5, B6, B7, B8)', () =
 });
 
 describe('step-up family: the sudo window (B9)', () => {
-	async function sudoCase(t, { grant, expires, failCopy = false }) {
+	async function sudoCase(t, { grant, expires, failCopy = false, grantFor }) {
 		const { world, session, run } = await arrange(t, 'verify');
 		const writes = [];
+		const dies = new Map();
 		const set = world.kv.set;
 		let armed = false;
 		world.kv.set = async (key, value, ttl) => {
 			if (armed && failCopy && key.includes('sudo')) throw new Error('kv down');
 			writes.push([key, value, ttl]);
+			dies.set(key, world.clock.at + ttl);
 			return set(key, value, ttl);
 		};
 		if (grant) await world.sudo(session.accessToken);
+		if (grantFor) await world.kv.set(`sudo:${session.claims.jti}`, grantFor, 600_000);
 		if (expires !== undefined) await world.kv.set(`sudo-expires:${session.claims.jti}`, new Date(world.clock.at + expires).toISOString(), 600_000);
 		writes.length = 0;
 		armed = true;
 		const answer = await run();
 		const fresh = tokenClaims(answer.body.accessToken ?? session.accessToken).jti;
-		return { world, answer, writes, fresh, old: session.claims.jti };
+		const liveAfter = (ms, key) => world.kv.has(key) && dies.get(key) > world.clock.at + ms;
+		return { world, answer, writes, fresh, old: session.claims.jti, liveAfter };
 	}
 
 	it('no grant: nothing is carried (a)', async (t) => {
@@ -210,6 +223,18 @@ describe('step-up family: the sudo window (B9)', () => {
 		assert.equal(await world.kv.get(`sudo:${fresh}`), USER_A);
 		assert.equal(await world.kv.get(`sudo-expires:${fresh}`), await world.kv.get(`sudo-expires:${old}`));
 		assert.deepEqual(writes.map(([key, , ttl]) => [key.split(':')[0], ttl]), [['sudo', 120_000], ['sudo-expires', 120_000]]);
+	});
+
+	it("a grant that belongs to another user is not carried (a)", async (t) => {
+		const { world, fresh, writes } = await sudoCase(t, { grant: false, grantFor: 'someone-else', expires: 120_000 });
+		assert.equal(world.kv.has(`sudo:${fresh}`), false);
+		assert.deepEqual(writes, []);
+	});
+
+	it('once the clock passes the original expiry both new keys are gone (c)', async (t) => {
+		const { fresh, liveAfter } = await sudoCase(t, { grant: true, expires: 120_000 });
+		assert.deepEqual([liveAfter(119_000, `sudo:${fresh}`), liveAfter(119_000, `sudo-expires:${fresh}`)], [true, true]);
+		assert.deepEqual([liveAfter(121_000, `sudo:${fresh}`), liveAfter(121_000, `sudo-expires:${fresh}`)], [false, false]);
 	});
 
 	it('a grant with no expiry key is not carried (c)', async (t) => {
@@ -257,6 +282,7 @@ describe('step-up family: failures close (B10)', () => {
 			assert.deepEqual([answer.body.accessToken, answer.body.refreshToken], [undefined, undefined]);
 			const fresh = world.sessions.rows(SESSIONS).filter((row) => row.family_id !== family);
 			assert.ok(fresh.length >= 1 && fresh.every((row) => row.revoked_at), JSON.stringify(fresh));
+			assert.ok(world.sessions.rows(SESSIONS).filter((row) => row.family_id === family).every((row) => !row.revoked_at), 'the old family stays live');
 		});
 	}
 });
