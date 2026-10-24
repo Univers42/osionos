@@ -7,13 +7,16 @@ import { closeFrame } from './ide-ws.mjs';
 // APC-wrapped PTY-resize control frame: `ESC _ osio-resize:COLS,ROWS ESC \`.
 // Strict FULL-frame match — prefix-only matching let pasted bytes that happen
 // to start with the magic trigger a bogus resize.
-const RESIZE_RE = /^\x1b_osio-resize:(\d{1,4}),(\d{1,4})\x1b\\$/;
+const ESC = String.fromCharCode(27);
+const RESIZE_RE = /^_osio-resize:(\d{1,4}),(\d{1,4})$/;
 
 /** Parse a complete resize control frame; null for anything else (incl. paste
  *  noise). Exported pure for tests. */
 export function parseResizeFrame(data) {
   if (data.length > 26) return null;
-  const match = RESIZE_RE.exec(data.toString('latin1'));
+  const text = data.toString('latin1');
+  if (!text.startsWith(ESC) || !text.endsWith(`${ESC}\\`)) return null;
+  const match = RESIZE_RE.exec(text.slice(1, -2));
   return match ? { cols: Number(match[1]), rows: Number(match[2]) } : null;
 }
 
