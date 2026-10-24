@@ -35,6 +35,8 @@ export interface SlashCommandBase {
   description: string;
   section: string;
   calloutIcon?: string;
+  /** Built-in app identifier that must be ready (flag on, URL configured) for this command to exist. */
+  requiresApp?: string;
 }
 
 export interface SlashBlockCommand extends SlashCommandBase {
@@ -73,13 +75,53 @@ export interface SlashMediaPickerCommand extends SlashCommandBase {
   mediaKind: MediaBlockType;
 }
 
+export interface SlashWhiteboardCommand extends SlashCommandBase {
+  kind: "whiteboard";
+}
+
+/** `/profile field`: a README block bound to a field of the owner's public profile. */
+export interface SlashProfileFieldCommand extends SlashCommandBase {
+  kind: "profile-field";
+}
+
+/** An AI action: the service's command, run on the block the menu was opened on. */
+export interface SlashAiCommand extends SlashCommandBase {
+  kind: "ai";
+  /** The name of the command the service knows (`ask`, `summarize`, …). */
+  command: string;
+}
+
+/** The dictation: the voice of the user, written at the caret. */
+export interface SlashDictateCommand extends SlashCommandBase {
+  kind: "dictate";
+}
+
+/** An AI image: `/imagine <prompt>` inserts an image block the engine fills. */
+export interface SlashAiImageCommand extends SlashCommandBase {
+  kind: "ai-image";
+}
+
+/** `/embed`, `/bookmark` and the provider shortcuts: an empty embed or bookmark block
+ *  whose link dialog opens at once, with `hintId` naming the provider it waits for. */
+export interface SlashLinkBlockCommand extends SlashCommandBase {
+  kind: "link-block";
+  blockType: "embed" | "bookmark";
+  hintId?: string;
+}
+
 export type SlashCommand =
   | SlashBlockCommand
   | SlashTurnIntoCommand
   | SlashCreatePageCommand
   | SlashInlineCommand
   | SlashDatabaseViewCommand
-  | SlashMediaPickerCommand;
+  | SlashMediaPickerCommand
+  | SlashWhiteboardCommand
+  | SlashProfileFieldCommand
+  | SlashAiCommand
+  | SlashDictateCommand
+  | SlashAiImageCommand
+  | SlashLinkBlockCommand;
 
 export interface SlashCommandSection {
   id: string;

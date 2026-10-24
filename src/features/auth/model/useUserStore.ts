@@ -11,11 +11,15 @@
 /* ************************************************************************** */
 
 import { create } from 'zustand';
+import { resetOnUserChange } from '@/store/settings/accountStoresIsolation';
+import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { api } from '@/shared/api/client';
 import type { UserSession, UserStore, Workspace } from '@/entities/user';
 import {
   INITIAL_PERSONAS,
   ALLOW_OFFLINE_MODE,
+  API_BASE,
+  isBridgeAppToken,
   REQUIRE_BRIDGE_SESSION,
   isPortalMode,
   type BridgeSessionImport,
@@ -28,10 +32,28 @@ import {
   isBridgeSession,
   loginPersona,
   partition,
+  platformRoleFromSessionToken,
   seededWorkspaceSession,
   signupPersona,
 } from '@/features/auth/model/userStore.helpers';
+import {
+  REVOKED_NOTICE,
+  requestBridgeLogout,
+  signOutEverywhere,
+  type BridgeLogoutOutcome,
+  type LogoutNotice,
+} from '@/features/auth/model/bridgeLogout';
 import { selectActivatedSessions } from '@/features/auth/model/sessionSelect';
+import {
+  createSingleFlight,
+  isoExpiry,
+  needsRefresh,
+  noticeForRefreshFailure,
+  refreshBridgeSession,
+  runRefresh,
+  type RefreshOutcome,
+  type RefreshedTokens,
+} from '@/features/auth/model/sessionRefresh';
 
 export type { StaticPersona, Workspace } from '@/entities/user';
 
@@ -136,7 +158,9 @@ function readPersistedBridgeSessions(): Record<string, PersistedBridgeSession> {
     const out: Record<string, PersistedBridgeSession> = {};
     for (const record of records) {
       if (!record?.session?.userId || !record?.persona?.id) continue;
-      if (record.expiresAt && Date.parse(record.expiresAt) <= Date.now()) continue;
+      // A record that can still be refreshed outlives its access token; the refresh decides.
+      const expiry = isoExpiry(record.expiresAt);
+      if (!record.session.refreshToken && expiry && Date.parse(expiry) <= Date.now()) continue;
       out[record.session.userId] = record;
     }
     return out;
@@ -226,7 +250,7 @@ function activateBridgeSessions(records: PersistedBridgeSession[], preferredActi
       session: bridgeSession,
       // Guarantee a real expiry so a stale cross-account record ages out of the
       // switcher (readPersistedBridgeSessions drops expired records).
-      expiresAt: record.expiresAt || new Date(Date.now() + BRIDGE_SESSION_TTL_MS).toISOString(),
+      expiresAt: isoExpiry(record.expiresAt) || new Date(Date.now() + BRIDGE_SESSION_TTL_MS).toISOString(),
     };
   }
   const nextPersonas = uniquePersonas(personas);
@@ -338,6 +362,7 @@ async function connectedOrOfflineState(personas: typeof INITIAL_PERSONAS) {
 }
 
 async function resolveInitialState() {
+  await refreshPersistedRecords();
   const fromUrl = await consumeBridgeSessionFromLocation().catch(() => null);
   // A fresh handoff REPLACES the account set (fresh primary login never inherits
   // a different person's session); the in-app "Add another account" intent flag
@@ -355,8 +380,150 @@ async function resolveInitialState() {
   return connectedOrOfflineState(personas);
 }
 
+/** Drop one persona locally: persisted session, persisted persona, and the active-account fallback. */
+function signedOutState(state: UserStore, userId: string): Partial<UserStore> {
+  clearPersistedBridgeSession(userId);
+  const sessions = { ...state.sessions };
+  delete sessions[userId];
+  const personas = state.personas.filter((persona) => persona.id !== userId || persona.persistInSessions);
+  savePersistedPersonas(personas.filter((persona) => persona.id !== userId));
+  const nextActiveUserId = state.activeUserId === userId
+    ? Object.keys(sessions)[0] ?? ''
+    : state.activeUserId;
+  savePersistedWorkspaces(sessions);
+  savePersistedContext({ activeUserId: nextActiveUserId, activeWorkspaceByUser: state.activeWorkspaceByUser });
+  return { sessions, personas, activeUserId: nextActiveUserId };
+}
+
+const clearLocalSession = (userId: string) => useUserStore.setState((state) => signedOutState(state, userId));
+
+/** Forgets this device's session without calling the server: the server already ended it. */
+export const dropLocalSession = clearLocalSession;
+const pushNotice = (notice: LogoutNotice) => useToastStore.getState().push(notice);
+
+type RefreshingUserStore = UserStore & {
+  /** Rotates the account's refresh token; never throws and never touches another account. */
+  refreshAccount: (userId: string) => Promise<RefreshOutcome>;
+};
+
+const REFRESH_TICK_MS = 60_000;
+const refreshFlight = createSingleFlight<RefreshOutcome>();
+
+function refreshStorage() {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+/** The tokens with the persisted record first: another tab may have rotated since this one loaded. */
+function currentTokens(userId: string): { accessToken: string; refreshToken?: string } | null {
+  const live = useUserStore.getState().sessions[userId];
+  const stored = readPersistedBridgeSessions()[userId]?.session;
+  const source = stored?.refreshToken ? stored : live;
+  return source ? { accessToken: source.accessToken, refreshToken: source.refreshToken } : null;
+}
+
+function persistRefreshed(session: UserSession, tokens: RefreshedTokens) {
+  const record = readPersistedBridgeSessions()[session.userId];
+  if (!record) return;
+  savePersistedBridgeSession({ ...record, session, expiresAt: isoExpiry(tokens.expiresAt) ?? record.expiresAt });
+}
+
+function applyRefreshed(userId: string, tokens: RefreshedTokens) {
+  const live = useUserStore.getState().sessions[userId];
+  const base = live ?? readPersistedBridgeSessions()[userId]?.session;
+  if (!base) return;
+  const session: UserSession = { ...base, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken };
+  persistRefreshed(session, tokens);
+  if (live) useUserStore.setState((state) => ({ sessions: { ...state.sessions, [userId]: session } }));
+}
+
+/** A step-up (2FA verify or disable) answered a new access token, and a refresh token of a NEW
+ *  family; the server ended the old family, so both are written to the saved record too, or a
+ *  reload would bring the dead pair back. Without a refresh token (records off) the old one stays. */
+export function adoptStepUpToken(userId: string, accessToken: string, refreshToken?: string): void {
+  const live = useUserStore.getState().sessions[userId];
+  if (!live) return;
+  const session: UserSession = refreshToken ? { ...live, accessToken, refreshToken } : { ...live, accessToken };
+  const record = readPersistedBridgeSessions()[userId];
+  if (record) savePersistedBridgeSession({ ...record, session });
+  useUserStore.setState((state) => ({ sessions: { ...state.sessions, [userId]: session } }));
+}
+
+function dropRefreshed(userId: string, code: string) {
+  // At boot the store holds no session yet; clearing through it would reset the saved active account.
+  if (useUserStore.getState().sessions[userId]) clearLocalSession(userId);
+  else clearPersistedBridgeSession(userId);
+  pushNotice(noticeForRefreshFailure(code));
+}
+
+/**
+ * Caveat: the guard compares the refresh token the rotation actually sent (re-read after any wait
+ * for another tab's lease) with the stored one when the answer lands. A step-up that swapped the
+ * pair mid-flight wins, so a late answer for the old family neither overwrites the new pair nor
+ * signs the device out; the tick after retries.
+ */
+const refreshOne = (userId: string): Promise<RefreshOutcome> => {
+  let rotatedFrom = currentTokens(userId)?.refreshToken;
+  const unchanged = () => currentTokens(userId)?.refreshToken === rotatedFrom;
+  return runRefresh({
+    userId,
+    storage: refreshStorage(),
+    readTokens: () => currentTokens(userId),
+    rotate: (refreshToken) => {
+      rotatedFrom = refreshToken;
+      return refreshBridgeSession({ apiBase: API_BASE, refreshToken });
+    },
+    adopt: (tokens) => { if (unchanged()) applyRefreshed(userId, tokens); },
+    signOut: (code) => { if (unchanged()) dropRefreshed(userId, code); },
+  });
+};
+
+/** Refreshes every persisted record whose token is due, before the records are restored. */
+async function refreshPersistedRecords() {
+  const due = Object.values(readPersistedBridgeSessions()).filter((record) => needsRefresh(record.session.accessToken));
+  await Promise.all(due.map((record) => refreshFlight(record.session.userId, () => refreshOne(record.session.userId))));
+}
+
+/** The timer's tick: the active account, only when its token is inside the skew. */
+export async function refreshActiveIfDue(): Promise<void> {
+  const { sessions, activeUserId, refreshAccount } = useUserStore.getState();
+  if (needsRefresh(sessions[activeUserId]?.accessToken)) await refreshAccount(activeUserId);
+}
+
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+function syncRefreshTimer(state: UserStore) {
+  const hasBridgeSession = Object.values(state.sessions).some((session) => isBridgeSession(session) && !!session.refreshToken);
+  if (hasBridgeSession && !refreshTimer) {
+    refreshTimer = setInterval(() => void refreshActiveIfDue(), REFRESH_TICK_MS);
+    (refreshTimer as unknown as { unref?: () => void }).unref?.();
+  } else if (!hasBridgeSession && refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+/**
+ * Another tab rotated the tokens: take them without a reload.
+ * Caveat: any record with a different refresh token wins, so a tab that is itself mid-rotation
+ * can briefly adopt a token the route has not answered for yet; the lease serializes the route call.
+ */
+function adoptStoredTokens(event: StorageEvent) {
+  if (event.key !== BRIDGE_SESSION_STORAGE_KEY) return;
+  const { sessions } = useUserStore.getState();
+  for (const record of Object.values(readPersistedBridgeSessions())) {
+    const live = sessions[record.session.userId];
+    if (live && record.session.refreshToken && record.session.refreshToken !== live.refreshToken) {
+      applyRefreshed(live.userId, { accessToken: record.session.accessToken, refreshToken: record.session.refreshToken });
+    }
+  }
+}
+
 /** Zustand store managing multi-user authentication and workspace access. */
-export const useUserStore = create<UserStore>((set, get) => ({
+export const useUserStore = create<RefreshingUserStore>((set, get) => ({
   personas:     isPortalMode() ? [] : uniquePersonas([...INITIAL_PERSONAS.map(p => ({ ...p })), ...readPersistedPersonas()]),
   sessions:     {},
   activeUserId: '',
@@ -469,20 +636,21 @@ export const useUserStore = create<UserStore>((set, get) => ({
     return true;
   },
 
-  logoutUser: (userId: string) => {
-    set((state) => {
-      clearPersistedBridgeSession(userId);
-      const sessions = { ...state.sessions };
-      delete sessions[userId];
-      const personas = state.personas.filter((persona) => persona.id !== userId || persona.persistInSessions);
-      savePersistedPersonas(personas.filter((persona) => persona.id !== userId));
-      const nextActiveUserId = state.activeUserId === userId
-        ? Object.keys(sessions)[0] ?? ''
-        : state.activeUserId;
-      savePersistedWorkspaces(sessions);
-      savePersistedContext({ activeUserId: nextActiveUserId, activeWorkspaceByUser: state.activeWorkspaceByUser });
-      return { sessions, personas, activeUserId: nextActiveUserId };
-    });
+  logoutUser: (userId: string) => signOutEverywhere(userId, get().sessions, {
+    request: (token) => (API_BASE && isBridgeAppToken(token)
+      ? requestBridgeLogout(API_BASE, token)
+      : Promise.resolve<BridgeLogoutOutcome>({ kind: 'not_applicable' })),
+    clearLocal: clearLocalSession,
+    notify: pushNotice,
+  }),
+
+  refreshAccount: (userId: string): Promise<RefreshOutcome> => refreshFlight(userId, () => refreshOne(userId)),
+
+  handleSessionRevoked: (token: string) => {
+    const revoked = Object.values(get().sessions).find((session) => session.accessToken === token);
+    if (!revoked) return;
+    clearLocalSession(revoked.userId);
+    pushNotice(REVOKED_NOTICE);
   },
 
   refreshWorkspaces: async (userId: string) => {
@@ -574,13 +742,25 @@ export const useUserStore = create<UserStore>((set, get) => ({
     const state = get();
     const uid = state.activeUserId;
     const session = state.sessions[uid];
-    if (!session) return false;
+    if (!session) return { ok: false };
     const allWorkspaces = [...session.privateWorkspaces, ...session.sharedWorkspaces];
-    if (allWorkspaces.length <= 1) return false;
+    if (allWorkspaces.length <= 1) return { ok: false, message: 'You need at least one workspace.' };
 
-    const jwt = get().activeJwt();
+    // The page-API token: activeJwt() is '' for osionos_v1 bridge sessions, which would skip the call
+    // and drop the workspace locally while the server still has it.
+    const jwt = get().activePageJwt();
     if (jwt) {
-      await api.delete(`/api/workspaces/${workspaceId}`, jwt).catch(() => undefined);
+      // The bridge only schedules the delete (14-day grace); a refusal such as
+      // sudo_required leaves the workspace in place and reaches the panel via `error`.
+      try {
+        await api.delete(`/api/workspaces/${workspaceId}`, jwt);
+      } catch (failure) {
+        const code = (failure as { code?: unknown } | null)?.code;
+        const message = failure instanceof Error && failure.message.trim() ? failure.message : 'The workspace could not be deleted.';
+        // sudo_required is not an error: the prompt is open and the dialog offers Try again.
+        if (code !== 'sudo_required') set({ error: message });
+        return { ok: false, code: typeof code === 'string' ? code : undefined, message };
+      }
     }
 
     set((currentState) => {
@@ -601,7 +781,7 @@ export const useUserStore = create<UserStore>((set, get) => ({
       return { sessions, activeWorkspaceByUser };
     });
 
-    return true;
+    return { ok: true };
   },
 
   importBridgeSession: (session, persona, expiresAt) => set((state) => {
@@ -646,8 +826,15 @@ export const useUserStore = create<UserStore>((set, get) => ({
 
   isAdmin: () => isAdminFromSessionToken(get().activeSession()?.accessToken),
 
+  platformRole: () => platformRoleFromSessionToken(get().activeSession()?.accessToken),
+
   personaById: (id: string) => get().personas.find(p => p.id === id),
 }));
+
+useUserStore.subscribe(syncRefreshTimer);
+// Both account stores persist under one global key; a user switch must not show the previous user's data.
+resetOnUserChange(useUserStore);
+globalThis.addEventListener?.('storage', adoptStoredTokens);
 
 // Expose on globalThis so usePageStore can access JWT without circular imports
 (globalThis as unknown as Record<string, unknown>).__playgroundUserStore = useUserStore;

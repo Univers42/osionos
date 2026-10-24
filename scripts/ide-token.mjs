@@ -16,6 +16,7 @@
 // credential verifies as the other.
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { UUID_REGEX } from './bridge-social-core.mjs';
+import { isValidIdeUsername, usernameFromToken } from './ide-username.mjs';
 
 export const IDE_TOKEN_VERSION = 'osionos_ide1';
 export const PREVIEW_CAP_VERSION = 'pc1';
@@ -96,7 +97,7 @@ export function ideTokenSecret(env) {
 	return value;
 }
 
-export function signIdeToken({ userId, workspaceId, secret, now = Date.now(), ttlSeconds = 900, jti = randomUUID() }) {
+export function signIdeToken({ userId, workspaceId, secret, username, now = Date.now(), ttlSeconds = 900, jti = randomUUID() }) {
 	requireIds(userId, workspaceId);
 	const key = requireKey(secret);
 	const iat = Math.floor(now / 1000);
@@ -104,19 +105,21 @@ export function signIdeToken({ userId, workspaceId, secret, now = Date.now(), tt
 		? Math.min(Math.max(1, Math.floor(ttlSeconds)), IDE_TOKEN_MAX_TTL_SECONDS)
 		: IDE_TOKEN_MAX_TTL_SECONDS;
 	const exp = iat + ttl;
-	const token = encode(IDE_TOKEN_VERSION, key, { iss: ISSUER, aud: AUDIENCE, sub: userId, ws: workspaceId, iat, exp, jti });
+	// `un` rides only when it is already valid; an old reader ignores it and a new reader falls back to coder.
+	const un = isValidIdeUsername(username) ? { un: username } : {};
+	const token = encode(IDE_TOKEN_VERSION, key, { iss: ISSUER, aud: AUDIENCE, sub: userId, ws: workspaceId, ...un, iat, exp, jti });
 	return { token, expiresAt: new Date(exp * 1000).toISOString(), exp };
 }
 
 export function verifyIdeToken(token, { secret }, now = Date.now()) {
 	const nowSec = Math.floor(now / 1000);
 	const payload = decodeVerified(token, IDE_TOKEN_VERSION, requireKey(secret), TOKEN_INVALID);
-	const { iss, aud, sub, ws, iat, exp } = payload;
+	const { iss, aud, sub, ws, iat, exp, un } = payload;
 	if (iss !== ISSUER || aud !== AUDIENCE || !isUuid(sub) || !isUuid(ws)) throw fail(TOKEN_INVALID, 401);
 	if (!Number.isInteger(iat) || !Number.isInteger(exp) || iat > nowSec) throw fail(TOKEN_INVALID, 401);
 	if (exp - iat < 1 || exp - iat > IDE_TOKEN_MAX_TTL_SECONDS) throw fail(TOKEN_INVALID, 401);
 	if (exp <= nowSec) throw fail('IDE token has expired.', 401);
-	return { userId: sub, workspaceIds: [ws], roles: {}, isAdmin: false, exp };
+	return { userId: sub, workspaceIds: [ws], roles: {}, isAdmin: false, exp, username: usernameFromToken(un) };
 }
 
 export function signPreviewCap({ userId, workspaceId, port, secret, parentExp, now = Date.now() }) {

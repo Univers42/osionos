@@ -15,6 +15,7 @@ import test from "node:test";
 
 import {
   LiveRealtime,
+  resolveLiveRealtimeToken,
   type LiveRealtimeDeps,
 } from "../../src/shared/notion-database-sys/src/store/live/liveRealtime.ts";
 import {
@@ -143,6 +144,54 @@ test("no token → no socket, poll-only fallback emits on real change", async ()
   assert.ok(h.fetchCount > 0);
   assert.deepEqual(h.emitted, [{ type: "state-replaced" }]); // once — baseline then converged
   h.realtime.stop();
+});
+
+test("with no token and a registered factory it opens exactly one socket through it", () => {
+  const calls: Array<{ url: string; topic: string }> = [];
+  let started = 0;
+  const global = globalThis as Record<string, unknown>;
+  global.__osionosTopicSocket = (options: { url: string; topic: string }) => {
+    calls.push({ url: options.url, topic: options.topic });
+    return { start: () => { started += 1; }, stop: () => undefined };
+  };
+  try {
+    const h = makeOrchestrator({ token: undefined });
+    h.realtime.start();
+    assert.equal(calls.length, 1, "one socket, opened through the factory");
+    assert.equal(calls[0].topic, "table:db-1:orders");
+    assert.equal(calls[0].url, "ws://kong/realtime/v1/ws");
+    assert.equal(started, 1, "the socket the factory handed over is started");
+    assert.equal(h.socketsCreated, 0, "the direct socket is not used");
+    h.realtime.stop();
+  } finally {
+    delete global.__osionosTopicSocket;
+  }
+});
+
+test("with neither a token nor a factory it opens no socket and keeps polling", async () => {
+  const global = globalThis as Record<string, unknown>;
+  delete global.__osionosTopicSocket;
+  const h = makeOrchestrator({ token: undefined, pollIntervalMs: 5 });
+  h.realtime.start();
+  assert.equal(h.socketsCreated, 0);
+  h.realtime.noteBaseline([{ id: 1, name: "A" }], ["id"]);
+  h.rows = [{ id: 1, name: "CHANGED" }];
+  await tick(25);
+  assert.ok(h.fetchCount > 0, "the poll still covers the database");
+  h.realtime.stop();
+});
+
+test("resolveLiveRealtimeToken refuses a bridge session jwt but keeps another jwt", () => {
+  const global = globalThis as Record<string, unknown>;
+  const jwt = (iss: string) => `v1.${Buffer.from(JSON.stringify({ iss, sub: "user-1" })).toString("base64url")}.sig`;
+  try {
+    global.__playgroundUserStore = { getState: () => ({ activePageJwt: () => jwt("osionos-bridge") }) };
+    assert.equal(resolveLiveRealtimeToken(), null, "the gateway would answer AUTH_FAILED");
+    global.__playgroundUserStore = { getState: () => ({ activePageJwt: () => jwt("other-issuer") }) };
+    assert.equal(resolveLiveRealtimeToken(), `v1.${Buffer.from(JSON.stringify({ iss: "other-issuer", sub: "user-1" })).toString("base64url")}.sig`);
+  } finally {
+    delete global.__playgroundUserStore;
+  }
 });
 
 test("pk-less events coalesce into one refresh; equal hash emits nothing", async () => {

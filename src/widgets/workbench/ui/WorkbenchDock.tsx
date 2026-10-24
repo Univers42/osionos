@@ -11,9 +11,13 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { Columns2, Plus, X } from "lucide-react";
+import { Columns2, Plus, RotateCcw, ShieldCheck, Trash2, X } from "lucide-react";
 
+import { Tooltip } from "@/shared/ui";
+import { useUserStore } from "@/features/auth";
 import { useIdeDockStore } from "@/features/ide/model/ideDockStore";
+import { restartSandbox } from "@/features/ide/model/restartSandbox";
+import { useIdeOutputBus } from "@/features/ide/model/ideOutputBus";
 import { useIdeSyncConflicts, conflictCount } from "@/features/ide/model/ideSyncConflicts";
 import { IdeOutputPanel } from "@/features/ide/ui/IdeOutputPanel";
 import { IdePortsPanel } from "@/features/ide/ui/IdePortsPanel";
@@ -39,8 +43,8 @@ const TAB_LABEL: Record<DockTab, string> = {
   ports: "Ports",
 };
 
-const ICON_BTN =
-  "flex h-5 w-5 items-center justify-center rounded hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-code-fg)]";
+// 24px is the smallest target WCAG 2.2 allows; the glyph stays small inside it.
+const ICON_BTN = "osio-code-btn h-6 w-6 shrink-0";
 
 function nextTabIndex(key: string, index: number): number | null {
   const count = DOCK_TABS.length;
@@ -54,16 +58,17 @@ function nextTabIndex(key: string, index: number): number | null {
 const TerminalPane: React.FC = () => {
   const primary = useIdeDockStore((s) => s.primary);
   const secondary = useIdeDockStore((s) => s.secondary);
+  const safeTerms = useIdeDockStore((s) => s.safeTerms);
   return (
     <React.Suspense
-      fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-[12px] text-[var(--osio-code-fg-muted)]">Starting terminal…</div>}
+      fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Starting terminal…</div>}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <IdeTerminal key={primary} termId={primary} />
+        <IdeTerminal key={primary} termId={primary} safe={safeTerms.includes(primary)} />
       </div>
       {secondary && (
         <div className="flex min-h-0 min-w-0 flex-1 flex-col border-l border-[var(--osio-code-border)]">
-          <IdeTerminal key={secondary} termId={secondary} />
+          <IdeTerminal key={secondary} termId={secondary} safe={safeTerms.includes(secondary)} />
         </div>
       )}
     </React.Suspense>
@@ -74,17 +79,45 @@ const TerminalActions: React.FC = () => {
   const secondary = useIdeDockStore((s) => s.secondary);
   const dock = useIdeDockStore.getState;
   const splitLabel = secondary ? "Close split" : "Split terminal";
+  const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
+  const restartBox = (): void => {
+    void restartSandbox(workspaceId).then((restarted) => {
+      if (restarted) dock().newTerminal();
+    });
+  };
   return (
     <>
-      <button type="button" title="New terminal (fresh session)" aria-label="New terminal" onClick={() => dock().newTerminal()} className={ICON_BTN}>
-        <Plus size={13} />
-      </button>
-      <button type="button" title={splitLabel} aria-label={splitLabel} onClick={() => (secondary ? dock().closeSecondary() : dock().splitTerminal())} className={ICON_BTN}>
-        <Columns2 size={13} />
-      </button>
+      <Tooltip label="New terminal (fresh session)" side="bottom">
+        <button type="button" aria-label="New terminal" onClick={() => dock().newTerminal()} className={ICON_BTN}>
+          <Plus size={14} />
+        </button>
+      </Tooltip>
+      <Tooltip label="Safe terminal (no ~/.bashrc or ~/.profile)" side="bottom">
+        <button type="button" aria-label="Safe terminal" onClick={() => dock().newSafeTerminal()} className={ICON_BTN}>
+          <ShieldCheck size={14} />
+        </button>
+      </Tooltip>
+      <Tooltip label="Restart box (clears /tmp; your files are kept)" side="bottom">
+        <button type="button" aria-label="Restart box" onClick={restartBox} className={ICON_BTN}>
+          <RotateCcw size={14} />
+        </button>
+      </Tooltip>
+      <Tooltip label={splitLabel} side="bottom">
+        <button type="button" aria-label={splitLabel} onClick={() => (secondary ? dock().closeSecondary() : dock().splitTerminal())} className={ICON_BTN}>
+          <Columns2 size={14} />
+        </button>
+      </Tooltip>
     </>
   );
 };
+
+const OutputActions: React.FC = () => (
+  <Tooltip label="Clear output" side="bottom">
+    <button type="button" aria-label="Clear output" onClick={() => useIdeOutputBus.getState().clear()} className={ICON_BTN}>
+      <Trash2 size={14} />
+    </button>
+  </Tooltip>
+);
 
 const DockTabs: React.FC<{ active: DockTab; conflicts: number }> = ({ active, conflicts }) => {
   const setTab = useWorkbenchStore((s) => s.setDockTab);
@@ -100,7 +133,7 @@ const DockTabs: React.FC<{ active: DockTab; conflicts: number }> = ({ active, co
   };
 
   return (
-    <div role="tablist" aria-label="Panel tabs" className="flex items-center gap-1">
+    <div role="tablist" aria-label="Panel tabs" className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
       {DOCK_TABS.map((id, index) => (
         <button
           key={id}
@@ -114,13 +147,11 @@ const DockTabs: React.FC<{ active: DockTab; conflicts: number }> = ({ active, co
           data-dock-tab={id}
           onClick={() => setTab(id)}
           onKeyDown={(e) => onKeyDown(e, index)}
-          className={`rounded px-2 py-1 hover:text-[var(--osio-code-fg)] ${
-            active === id ? "text-[var(--osio-code-fg)] underline decoration-[var(--osio-accent)] underline-offset-4" : ""
-          }`}
+          className="osio-code-btn h-7 shrink-0 px-2 text-xs sm:px-3"
         >
           {TAB_LABEL[id]}
           {id === "output" && conflicts > 0 && (
-            <span className="ml-1 rounded bg-[var(--osio-warning)] px-1 text-[10px] text-[var(--osio-warning-fg)]">{conflicts}</span>
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-[var(--osio-chip-radius)] bg-[var(--osio-warning)] px-1 text-3xs text-[var(--osio-warning-fg)]">{conflicts}</span>
           )}
         </button>
       ))}
@@ -141,16 +172,23 @@ export const WorkbenchDock: React.FC = () => {
       aria-label="Panel"
       data-testid="workbench-dock"
       data-code-theme="dark"
+      data-osio-code-chrome
       style={{ height: clampDockHeight(height, globalThis.innerHeight), minHeight: "var(--osio-dock-min-h)" }}
-      className="flex shrink-0 flex-col bg-[var(--osio-code-bg)]"
+      // A card like a pane: it clips the terminal to its corners, sits the same
+      // gutter in from the canvas, and the splitter above it is the gap.
+      className="mx-[var(--osio-frame-gap)] mb-[var(--osio-frame-gap)] flex shrink-0 flex-col overflow-hidden rounded-[var(--osio-radius-pane)] border-[length:var(--osio-dock-border-width)] border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] shadow-[var(--osio-dock-shadow)]"
     >
-      <div className="flex h-8 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] px-2 text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]">
+      {/* The tabs scroll sideways when the actions would otherwise be pushed out of the card (phone width). */}
+      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-2 text-xs text-[var(--osio-code-fg-muted)]">
         <DockTabs active={active} conflicts={conflicts} />
         <span className="flex-1" />
         {active === "terminal" && <TerminalActions />}
-        <button type="button" title="Hide panel" aria-label="Hide panel" onClick={closeDock} className={ICON_BTN}>
-          <X size={13} />
-        </button>
+        {active === "output" && <OutputActions />}
+        <Tooltip label="Hide panel" side="bottom">
+          <button type="button" aria-label="Hide panel" onClick={closeDock} className={ICON_BTN}>
+            <X size={14} />
+          </button>
+        </Tooltip>
       </div>
       <div
         role="tabpanel"
@@ -167,7 +205,7 @@ export const WorkbenchDock: React.FC = () => {
           {active === "output" && <IdeOutputPanel />}
           {active === "debug" && (
             <React.Suspense
-              fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-[12px] text-[var(--osio-code-fg-muted)]">Loading debugger…</div>}
+              fallback={<div className="min-h-0 flex-1 px-3 py-2 font-mono text-xs text-[var(--osio-code-fg-muted)]">Loading debugger…</div>}
             >
               <DebugPanel />
             </React.Suspense>

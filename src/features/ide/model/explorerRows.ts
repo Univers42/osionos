@@ -121,7 +121,8 @@ export function visibleItemOf(dir: string, row: ExplorerRow, index: number, setS
 export type RenderRow =
   | { type: "item"; item: VisibleItem }
   | { type: "create"; parent: string; level: number; kind: "file" | "dir" }
-  | { type: "status"; dir: string; level: number };
+  | { type: "status"; dir: string; level: number }
+  | { type: "hint"; dir: string; level: number; text: string };
 
 export type PendingCreate = { parent: string; kind: "file" | "dir" };
 
@@ -163,19 +164,26 @@ export function flattenVisible(
   return out;
 }
 
+const NO_HINTS: Readonly<Record<string, string>> = {};
+
 /** Every line the tree draws, in flattenVisible's order: an expanded folder that is
  *  not loaded shows one status line where its rows will be, and a pending create
- *  shows its input first among its folder's rows (as the nested tree did). */
+ *  shows its input first among its folder's rows (as the nested tree did). A folder named in
+ *  `emptyHints` that is expanded, loaded and empty shows its hint line instead. */
 export function flattenForRender(
   dirs: Readonly<Record<string, DirState>>,
   expanded: ReadonlySet<string>,
   creating: PendingCreate | null,
+  emptyHints: Readonly<Record<string, string>> = NO_HINTS,
 ): RenderRow[] {
   const out: RenderRow[] = [];
   walkRows(dirs, expanded, {
     item: (item) => out.push({ type: "item", item }),
     enter: (dir, level) => {
       if (creating?.parent === dir) out.push({ type: "create", parent: dir, level, kind: creating.kind });
+      const state = dirs[dir];
+      const text = emptyHints[dir];
+      if (text && !creating && state?.status === "ready" && state.rows.length === 0) out.push({ type: "hint", dir, level, text });
     },
     unready: (dir, level) => out.push({ type: "status", dir, level }),
   });
@@ -188,6 +196,7 @@ export function flattenForRender(
 export function renderRowKey(row: RenderRow): string {
   if (row.type === "item") return `i:${row.item.rel}`;
   if (row.type === "create") return `c:${row.parent}`;
+  if (row.type === "hint") return `h:${row.dir}`;
   return `s:${row.dir}`;
 }
 

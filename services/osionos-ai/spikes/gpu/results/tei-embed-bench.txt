@@ -1,0 +1,15 @@
+the corpus has 40 pages and 291 chunks
+
+== (a) QUERY LATENCY (sequential, n=300) ==
+query p50=7.01 ms  p95=8.49 ms  p99=10.13 ms  mean=7.09 ms  n=300
+
+== (b) BACKFILL (1000 passages, batch=32, concurrency=4) ==
+  ... 10/29 batches, 54.5 chunks/s
+  ... 20/29 batches, 55.6 chunks/s
+  ... 30/30 batches, 55.9 chunks/s
+backfill: 17.82 s -> 56.10 chunks/s
+
+== (c) QUERY LATENCY WHILE THE BACKFILL RUNS ==
+query under load: p50=1560.72 ms  p95=2270.52 ms  n=13  (the backfill of the same run: 56.10 chunks/s, 17.96 s)
+
+{"base":"http://127.0.0.1:4911","style":"tei","model":"intfloat/multilingual-e5-small","queries":300,"passages":1000,"batch":32,"concurrency":4,"corpusChunks":291,"queryP50":7.012833999999998,"queryP95":8.486691999999948,"queryP99":10.131516999999803,"queryMean":7.092773296666665,"backfillS":17.824540004,"chunksPerSecond":56.10242955922511,"queryUnderLoadP50":1560.7249149999989,"queryUnderLoadP95":2270.521409000001,"queryUnderLoadN":13}

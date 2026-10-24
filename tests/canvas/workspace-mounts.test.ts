@@ -61,7 +61,8 @@ test("watch: an earlier listener calling current() cannot hide the flip from thi
   setHealth("unavailable");
   await new Promise((resolve) => setImmediate(resolve));
 
-  assert.equal(control.pageStoreSubscribes, 1, "the watch moved onto the page-file backend");
+  // Two store subscriptions per page-backed watch: the tree itself and the Private / Shared section signature.
+  assert.equal(control.pageStoreSubscribes, 2, "the watch moved onto the page-file backend");
   early();
   stop.abort();
   await watching;

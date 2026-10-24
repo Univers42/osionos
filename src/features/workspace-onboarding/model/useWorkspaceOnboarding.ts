@@ -12,8 +12,10 @@
 
 import { create } from "zustand";
 import { useUserStore } from "@/features/auth";
+import { useProfessionStore } from "@/features/professions/model/useProfessionStore";
 import { usePageStore } from "@/store/usePageStore";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { calendarAppUrl } from "@/shared/config/appUrls";
 import { calendarTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { STARTER_KITS, type WorkspaceIntent } from "./starterKits";
 
@@ -43,6 +45,14 @@ async function seedStarterPages(intent: WorkspaceIntent, workspaceId: string, jw
   return first;
 }
 
+/** The profession picker opens for a member who has not picked one yet. The server
+ *  knows the answer; a member who already has one is never asked again. */
+async function offerProfession(): Promise<void> {
+  await useProfessionStore.getState().hydrate();
+  if (useProfessionStore.getState().profession) return;
+  useProfessionStore.getState().setOpen(true);
+}
+
 /** Create a workspace for `intent`, seed its per-intent starter pages, open the
  *  first one (+ the Calendar tab). Returns false if creation failed. */
 export async function createWorkspaceWithIntent(intent: WorkspaceIntent): Promise<boolean> {
@@ -54,8 +64,9 @@ export async function createWorkspaceWithIntent(intent: WorkspaceIntent): Promis
     const jwt = useUserStore.getState().activeSession()?.accessToken ?? "";
     usePageStore.getState().clearWorkspace(workspace._id);
     const first = await seedStarterPages(intent, workspace._id, jwt);
-    if (kit.withCalendar) useWorkspaceLayout.getState().openTab(calendarTab());
+    if (kit.withCalendar && calendarAppUrl() !== "") useWorkspaceLayout.getState().openTab(calendarTab());
     if (first) usePageStore.getState().openPage({ id: first.id, workspaceId: workspace._id, kind: "page", title: first.title });
+    await offerProfession();
     return true;
   } finally {
     useWorkspaceOnboarding.setState({ busy: false, open: false });

@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
 import { lucideIconChunks } from './scripts/vite/lucideIconChunks';
+import { siblingSelectors } from './scripts/vite/siblingSelectors';
 import { vendorChunkOf } from './scripts/vite/vendorChunks';
 
 // Single source of truth for where the markdown engine lives on disk. Relocating
@@ -60,6 +61,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       bundleAnalyzer(),
       lucide.plugin,
+      siblingSelectors(),
     ],
     define: {
       __OBJECT_DATABASE_DISABLE_WASM__: JSON.stringify(
@@ -102,14 +104,6 @@ export default defineConfig(({ mode }) => {
         {
           find: /^@osionos\/legacy-graph-engine\//,
           replacement: `${path.resolve(root, 'packages/legacy-graph-engine/src')}/`,
-        },
-        {
-          find: /^@osionos\/draw-engine$/,
-          replacement: path.resolve(root, 'packages/draw-engine/src/index.ts'),
-        },
-        {
-          find: /^@osionos\/draw-engine\//,
-          replacement: `${path.resolve(root, 'packages/draw-engine/src')}/`,
         },
         // markdown-engine subpaths. These MUST stay above the '@' catch-all
         // below: that entry is a bare STRING, which Vite prefix-matches, so it

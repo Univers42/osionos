@@ -20,19 +20,30 @@ import { readdir, readFile } from "node:fs/promises";
  * inference path or any provider completion/streaming API. The bridge broker's
  * non-completion validate (scripts/bridge-connector.mjs → GET /v1/models) is out
  * of scope here — it is the server-side credential probe, not client inference.
+ *
+ * The AI client (`src/features/ai`) is fenced too: the browser never talks to a
+ * provider, the service owns them.
  */
-const FENCED_DIRS = ["../../src/features/connectors/", "../../src/features/chat/", "../../src/widgets/chat-shell/"];
+const FENCED_DIRS = [
+  "../../src/features/connectors/",
+  "../../src/features/chat/",
+  "../../src/features/ai/",
+  "../../src/widgets/chat-shell/",
+];
 const FORBIDDEN: Array<{ re: RegExp; why: string }> = [
   { re: /useAgentStream/, why: "reuse inference only behind the Phase-2 adapter" },
   { re: /\/api\/agent\b/, why: "the agent completion endpoint is Phase-2" },
   { re: /api\.anthropic\.com/, why: "no direct provider API in the client subsystem" },
   { re: /@anthropic-ai/, why: "no provider SDK in the client subsystem" },
+  { re: /from ["']ai["']/, why: "no provider SDK in the browser; the service owns providers" },
+  { re: /@ai-sdk\//, why: "no provider SDK in the browser; the service owns providers" },
+  { re: /from ["']openai["']/, why: "no provider SDK in the browser; the service owns providers" },
 ];
 
 async function tsFiles(dirUrl: URL): Promise<string[]> {
   const entries = await readdir(dirUrl, { recursive: true, withFileTypes: true });
   return entries
-    .filter((e) => e.isFile() && e.name.endsWith(".ts"))
+    .filter((e) => e.isFile() && (e.name.endsWith(".ts") || e.name.endsWith(".tsx")))
     .map((e) => `${e.parentPath}/${e.name}`);
 }
 

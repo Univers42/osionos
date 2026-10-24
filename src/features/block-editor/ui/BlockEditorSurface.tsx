@@ -10,13 +10,17 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
 
 import type { Block } from "@/entities/block";
-import { flattenColumns, isParentable, selfRendersChildren } from "@/entities/block";
+import { flattenColumns, findBlockInTree, isParentable, selfRendersChildren } from "@/entities/block";
+import { dictationSession } from "@/features/voice/model/useDictation";
+import { insertTranscript } from "@/features/voice/model/insertTranscript";
+import { dictationLanguage } from "@/features/voice/model/language";
+import { useVoiceSettingsStore } from "@/store/settings";
 import {
 	estimateBlockHeight,
 	measureScrollMargin,
@@ -24,8 +28,12 @@ import {
 	ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
+import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
+import { complete as completeRoute } from "@/features/ai/api/aiClient";
+import { registerInlineAiDeps, useInlineAiStore } from "@/features/ai/model/inlineAiStore";
+import { parseMarkdownClipboard } from "@/services/page-actions/blockClipboardSerialize";
 import { resolveColorName } from "@osionos/ui/molecules/IconPicker/ColorSwatches";
 import {
 	usePlaygroundBlockEditor,
@@ -33,18 +41,21 @@ import {
 } from "@/features/block-editor/model/usePlaygroundBlockEditor";
 import { BlockContextMenu } from "./BlockContextMenu";
 import { PageSelectorMenu } from "./PageSelectorMenu";
+import { PasteLinkMenu } from "./PasteLinkMenu";
 import { EmojiPicker } from "@/shared/ui";
 import { ColorMenu } from "./ColorMenu";
 import { getBlockSurfaceStyle } from "../model/blockColors";
 import { appendBlockToColumn, insertColumnForTarget } from "../model/columnLayout";
 import { insertBlockRelative } from "../model/blockContextMenu.helpers";
 import { VIRTUAL_BLOCK_FOCUS_EVENT } from "../model/blockDomFocus";
-import { commitBlockDraft, useBlockDraftContent } from "../model/blockDraftStore";
+import { commitBlockDraft, getBlockDraftContent, useBlockDraftContent } from "../model/blockDraftStore";
 import { useSurfaceMarquee } from "../model/useSurfaceMarquee";
 import { useCrossTextSelection } from "../model/useCrossTextSelection";
 import { useBlockSelection, selectIdsForSurface } from "../model/blockSelectionStore";
 import { useEditorCommandBus, type EditorHandle } from "../model/editorCommandBus";
 import { isTextEntryTarget } from "../model/marqueeGeometry";
+import { EditorSurfaceIdContext } from "../model/editorSurfaceId";
+import { requestLinkDialog } from "../model/linkDialogRequests";
 import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities/block/model/blockTreeUtils";
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
@@ -344,7 +355,7 @@ function getVirtualFocusBlockId(event: Event): string | null {
 	return typeof detail?.blockId === "string" ? detail.blockId : null;
 }
 
-export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
+const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	pageId,
 	source,
 	locked = false,
@@ -353,6 +364,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	emptyPlaceholder = "Click here to start writing...",
 	renderBlockEditor,
 }) => {
+	const surfaceId = useContext(EditorSurfaceIdContext);
 	const {
 		slashMenu,
 		setSlashMenu,
@@ -361,6 +373,9 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		emojiMenu,
 		setEmojiMenu,
 		handleEmojiSelect,
+		pasteMenu,
+		choosePaste,
+		dismissPasteMenu,
 		colorMenu,
 		setColorMenu,
 		handleColorSelect,
@@ -377,6 +392,9 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		handleSlashMediaSelect,
 		handleSlashCreatePageSelect,
 		handleSlashInlineSelect,
+		handleSlashWhiteboardSelect,
+		handleSlashProfileFieldSelect,
+		handleSlashAiImageSelect,
 		handlePageSelectorSelect,
 		handlePageSelectorCreate,
 		handleAddBlock,
@@ -387,6 +405,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		source: resolvedSource,
 		sourceKey,
 		updateBlock,
+		insertBlock,
 		deleteBlock,
 		updateContent,
 		commitContent,
@@ -401,6 +420,10 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	} = usePlaygroundBlockEditor(source ?? pageId);
 	const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
 	const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+	// The dictation: its state, and the language of the settings.
+	const voiceSettings = useVoiceSettingsStore((state) => state.data);
+	const [dictation, setDictation] = useState(() => dictationSession.getState());
+	useEffect(() => dictationSession.subscribe(setDictation), []);
 	const selectionRootRef = useRef<HTMLDivElement | null>(null);
 	const blocksRef = useRef<Block[]>(blocks);
 	// Pointer-down position on the bottom append zone, to tell a click from a drag.
@@ -502,6 +525,26 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 			if (surfaceRegistry.get(sourceKey) === entry) surfaceRegistry.delete(sourceKey);
 		};
 	}, [flushPendingDrafts, sourceKey, updateContent]);
+
+	// The inline AI writes through THIS editor: its tree, its drafts. The
+	// bundle is keyed by page, so a second editor on another page never
+	// answers for this one.
+	useEffect(() => {
+		return registerInlineAiDeps(pageId, {
+			complete: completeRoute,
+			updateBlock,
+			insertBlock,
+			flushPendingDrafts,
+			markdownToBlocks: parseMarkdownClipboard,
+			getBlockSource: (_pid, blockId) => {
+				const block = findBlockInTree(blocksRef.current, blockId);
+				// null: this editor does not hold that block (another editor of
+				// the same page does).
+				if (!block) return null;
+				return getBlockDraftContent(sourceKey, blockId, block.content);
+			},
+		});
+	}, [flushPendingDrafts, insertBlock, pageId, sourceKey, updateBlock]);
 
 	useEffect(() => {
 		const syncFocusedBlock = () => {
@@ -773,6 +816,17 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 				</button>
 			)}
 
+			{dictation.status === "recording" ? (
+				<div
+					role="status"
+					data-testid="dictation-recording"
+					className="mx-auto mb-2 flex w-fit items-center gap-2 rounded-md border border-[var(--osio-accent)] px-2 py-1 text-2xs text-[var(--osio-fg-default)]"
+				>
+					<span className="h-1.5 w-1.5 rounded-full bg-[var(--osio-accent)] animate-pulse" />
+					Listening… {dictation.secondsLeft}s left
+				</div>
+			) : null}
+
 			{slashMenu ? (
 				<SlashCommandMenu
 					key={slashMenu.blockId}
@@ -782,6 +836,10 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 					onSelect={(item) => {
 						const currentBlocks = flushPendingDrafts("shortcut");
 						blocksRef.current = currentBlocks;
+						if (item.kind === "link-block") {
+							handleSlashMediaSelect(item.blockType, "", currentBlocks, (id) => requestLinkDialog(surfaceId, id, item.hintId));
+							return;
+						}
 						if (item.kind === "turn-into") {
 							handleSlashTurnIntoSelect(item.blockType, currentBlocks, {
 								calloutIcon: item.calloutIcon,
@@ -792,6 +850,38 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 						}
 						if (item.kind === "create-page") {
 							runEditorAction(handleSlashCreatePageSelect(currentBlocks));
+							return;
+						}
+						if (item.kind === "ai") {
+							const trigger = slashMenu;
+							// The "/summarize" the user just typed is text in the block:
+							// take it out before the AI reads the block.
+							handleSlashInlineSelect("", currentBlocks);
+							if (trigger) {
+								useInlineAiStore.getState().open({ pageId, blockId: trigger.blockId }, item.command);
+								// "ask" opens the panel with its input focused; every other
+								// command runs at once.
+								if (item.command !== "ask") {
+									void useInlineAiStore.getState().run(item.command);
+								}
+							}
+							return;
+						}
+						if (item.kind === "dictate") {
+							// The dictation writes at the caret: the "/dictate" leaves
+							// the block, and the transcript lands where it was.
+							const trigger = slashMenu;
+							handleSlashInlineSelect("", currentBlocks);
+							if (trigger) {
+								const anchor = trigger.anchor ?? 0;
+								void dictationSession.start((text) => {
+									const block = findBlockInTree(blocksRef.current, trigger.blockId);
+									if (!block) return;
+									const content = insertTranscript(block.content ?? "", text, anchor);
+									updateBlock(pageId, trigger.blockId, { content });
+									focusBlock(trigger.blockId, true);
+								}, dictationLanguage(voiceSettings));
+							}
 							return;
 						}
 						if (item.kind === "inline") {
@@ -817,6 +907,18 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 								return;
 							}
 							handleSlashInlineSelect(item.insertText, currentBlocks);
+							return;
+						}
+						if (item.kind === "whiteboard") {
+							handleSlashWhiteboardSelect(parseSlashQuery(slashMenu.filter).arg, currentBlocks);
+							return;
+						}
+						if (item.kind === "profile-field") {
+							handleSlashProfileFieldSelect();
+							return;
+						}
+						if (item.kind === "ai-image") {
+							handleSlashAiImageSelect(parseSlashQuery(slashMenu.filter).arg, currentBlocks);
 							return;
 						}
 						if (item.kind === "database-view") {
@@ -883,6 +985,15 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 					position={colorMenu.position}
 					onPick={handleColorSelect}
 					onClose={() => setColorMenu(null)}
+				/>
+			) : null}
+
+			{pasteMenu ? (
+				<PasteLinkMenu
+					position={pasteMenu.position}
+					initialChoice={pasteMenu.initialChoice}
+					onChoose={choosePaste}
+					onDismiss={dismissPasteMenu}
 				/>
 			) : null}
 
@@ -1176,6 +1287,10 @@ function isMediaHandleBlock(type: Block["type"]): boolean {
 		case "database_full_page":
 		case "graph_view":
 		case "draw":
+		case "whiteboard":
+		case "diagram":
+		case "embed":
+		case "bookmark":
 			return true;
 		default:
 			return false;
@@ -1202,7 +1317,11 @@ function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleT
 		case "database_inline":
 		case "database_full_page":
 		case "graph_view":
-		case "draw":      return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
+		case "draw":
+		case "whiteboard":
+		case "diagram":
+		case "embed":
+		case "bookmark":  return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
 		// Boxed blocks: medium.
 		case "callout":
 		case "quote":     return { pt: "pt-2",   pb: "pb-1",   handleTop: "top-3" };
@@ -1373,7 +1492,11 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		block.type === "database_inline" ||
 		block.type === "database_full_page" ||
 		block.type === "graph_view" ||
-		block.type === "draw";
+		block.type === "draw" ||
+		block.type === "whiteboard" ||
+		block.type === "diagram" ||
+		block.type === "embed" ||
+		block.type === "bookmark";
 	const shellChrome = isEmbedBlock ? "" : "rounded-md";
 
 	return (
@@ -1650,7 +1773,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	}, [block.children, block.id, block.type, bulletDepth, draggedBlockId, focusBlock, isHighlighted, moveBlock, moveBlockAcrossTree, numberedDepth, onBeforeStructuralEdit, onChange, onContextMenu, onDeleteBlock, onKeyDown, onPaste, onRequestSlashMenu, onUpdateBlock, pageId, registerRef, renderBlockEditor, rootBlocks, selectedBlockIds, setDraggedBlockId, source, sourceKey, updateContent]);
 
 	return (
-		<div data-block-id={block.id} data-block-type={block.type} ref={refCb} onKeyDown={handleVoidNavKey} className="-mx-1 rounded-md px-1 focus:outline-none focus:ring-1 focus:ring-[var(--osio-accent)]" style={getBlockSurfaceStyle(block)}>
+		<div data-block-id={block.id} data-block-type={block.type} data-page-id={pageId} ref={refCb} onKeyDown={handleVoidNavKey} className="-mx-1 rounded-md px-1 focus:outline-none focus:ring-1 focus:ring-[var(--osio-accent)]" style={getBlockSurfaceStyle(block)}>
 			{renderBlockEditor({
 				pageId,
 				block: editorBlock,
@@ -1818,3 +1941,14 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
 		</div>
 	);
 };
+
+/** Every block this surface renders, editable or locked, belongs to a page the viewer
+ *  opened on purpose, so embeds play. Hover previews and other `static` surfaces never
+ *  mount this component. */
+export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = (props) => (
+	<EditorSurfaceIdContext.Provider value={useId()}>
+		<ReadOnlyEmbedModeContext.Provider value="live">
+			<BlockEditorSurfaceBody {...props} />
+		</ReadOnlyEmbedModeContext.Provider>
+	</EditorSurfaceIdContext.Provider>
+);

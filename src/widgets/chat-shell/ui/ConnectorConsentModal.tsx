@@ -38,7 +38,7 @@ export const ConnectorConsentModal: React.FC<{
         <ul className="flex flex-col gap-1.5">
           {(descriptor.scopes ?? []).map((scope) => (
             <li key={scope} className="flex items-center gap-2 text-sm text-[var(--osio-fg-default)]">
-              <ShieldCheck size={15} className="shrink-0 text-[var(--osio-accent)]" />
+              <ShieldCheck size={16} className="shrink-0 text-[var(--osio-accent)]" />
               {SCOPE_LABELS[scope] ?? scope}
             </li>
           ))}

@@ -20,6 +20,8 @@ import {
   X,
 } from "lucide-react";
 
+import { useWorkspaceInvitesStore } from "@/store/settings";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import { SidebarNavItem } from "./SidebarNavItem";
 
 // Parity gate: the BaaS console nav item only exists when a project is
@@ -42,6 +44,13 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   showInviteCTA,
   onDismissInvite,
 }) => {
+
+  // The People section consumes the invite request to open its invite modal.
+  const openInviteSettings = () => {
+    useWorkspaceInvitesStore.getState().requestInvite();
+    openSettings("people");
+  };
+
   return (
     <>
       <div
@@ -82,7 +91,17 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
       {showInviteCTA && (
         <div className="mx-2 mb-2 mt-1.5 relative">
           <div
-            className="relative p-2 rounded-lg overflow-hidden cursor-pointer hover:bg-[var(--osio-bg-hover)] transition-colors duration-100"
+            role="button"
+            tabIndex={0}
+            aria-label="Invite members"
+            onClick={openInviteSettings}
+            onKeyDown={(event) => {
+              if (event.target !== event.currentTarget) return;
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              openInviteSettings();
+            }}
+            className="relative p-2 rounded-lg overflow-hidden cursor-pointer hover:bg-[var(--osio-bg-hover)] transition-colors duration-(--osio-dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
             style={{ boxShadow: "var(--osio-border-default) 0 0 0 1px" }}
           >
             <div className="flex items-start gap-2">
@@ -107,7 +126,8 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
                 e.stopPropagation();
                 onDismissInvite();
               }}
-              className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-md text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)]"
+              onKeyDown={(e) => e.stopPropagation()}
+              className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-md text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)]"
             >
               <X size={14} />
             </button>

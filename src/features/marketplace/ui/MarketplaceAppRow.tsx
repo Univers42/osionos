@@ -23,22 +23,25 @@ interface Props {
   app: PageEntry;
   installed: boolean;
   isDraft?: boolean;
+  /** Shipped with osionos: labelled instead of offering Install. */
+  isBuiltIn?: boolean;
   onOpen: () => void;
   onInstall?: () => void;
   onConfig?: () => void;
 }
 
-/** One marketplace list row: icon · title (+ Draft pill) · description · company✓ + install count / Install. */
-export const MarketplaceAppRow: React.FC<Props> = ({ app, installed, isDraft, onOpen, onInstall, onConfig }) => {
+/** One marketplace list row: icon · title (+ Draft / Built in pill) · description · company✓ + install count / Install. */
+export const MarketplaceAppRow: React.FC<Props> = ({ app, installed, isDraft, isBuiltIn, onOpen, onInstall, onConfig }) => {
   const meta = readAppMeta(app);
   return (
     <div className="group flex items-start gap-2 rounded-md px-2 py-2 hover:bg-[var(--osio-bg-hover)]">
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-start gap-2 text-left">
-        <IconValueView value={app.icon} size={32} className="mt-0.5 shrink-0 rounded" />
+        <IconValueView value={app.icon} size={32} className="mt-0.5 shrink-0 rounded-xs" />
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span className="truncate text-sm font-medium text-[var(--osio-fg-default)]">{app.title}</span>
-            {isDraft ? <span className="shrink-0 rounded bg-[var(--osio-block-tint-yellow-bg)] px-1 py-0.5 text-[10px] font-semibold uppercase text-[var(--osio-block-tint-yellow-fg)]">Draft</span> : null}
+            {isDraft ? <span className="shrink-0 rounded-xs bg-[var(--osio-block-tint-yellow-bg)] px-1 py-0.5 text-3xs font-semibold uppercase text-[var(--osio-block-tint-yellow-fg)]">Draft</span> : null}
+            {isBuiltIn ? <span className="shrink-0 rounded-xs bg-[var(--osio-bg-subtle)] px-1 py-0.5 text-3xs font-semibold uppercase text-[var(--osio-fg-muted)]">Built in</span> : null}
           </span>
           <span className="block truncate text-xs text-[var(--osio-fg-muted)]">{meta.description}</span>
           <span className="mt-0.5 flex items-center gap-1 text-xs text-[var(--osio-fg-subtle)]">
@@ -55,7 +58,7 @@ export const MarketplaceAppRow: React.FC<Props> = ({ app, installed, isDraft, on
           </Button>
         ) : null}
         {onConfig ? (
-          <button type="button" onClick={onConfig} aria-label="Configure" className="rounded p-1 text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-default)]">
+          <button type="button" onClick={onConfig} aria-label="Configure" className="rounded-xs p-1 text-[var(--osio-fg-subtle)] hover:text-[var(--osio-fg-default)]">
             <Settings size={14} />
           </button>
         ) : null}

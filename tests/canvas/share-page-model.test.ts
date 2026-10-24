@@ -21,13 +21,14 @@ import {
   PAGE_SHARE_LEVELS,
   assertSharingApplied,
   entriesFromPageSharing,
+  entriesFromPageAccess,
   membersToPeople,
   sharingPatch,
   sharingWith,
   sharingWithout,
   type PageSharing,
 } from "../../src/features/share/pageShareModel.ts";
-import type { SharePerson } from "../../src/features/share/types.ts";
+import type { ShareEntry, SharePerson } from "../../src/features/share/types.ts";
 
 const ALICE = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
 const BOB = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb";
@@ -111,4 +112,25 @@ test("treats sharing keys the bridge ignored as a refusal, not a save", () => {
   assert.doesNotThrow(() => assertSharingApplied(null));
   assert.throws(() => assertSharingApplied({ ok: true, ignored: ["collaborators"] }), /Only the page owner/);
   assert.throws(() => assertSharingApplied({ ok: true, ignored: ["visibility"] }), /Only the page owner/);
+});
+
+// Both branches' persisted grants may coexist after merging.
+test("explicit rules override matching page grants while preserving teams and other collaborators", () => {
+  const sharing: PageSharing = { visibility: "shared", collaborators: [{ userId: BOB.toUpperCase(), role: "editor" }, { userId: ALICE, role: "viewer" }] };
+  const rules: ShareEntry[] = [
+    { key: `user:${BOB}`, target: { type: "user", person: members[1] }, level: "no_access", sourceId: "deny-bob" },
+    { key: "team:design", target: { type: "team", team: { id: "design", name: "Design", memberCount: 3 } }, level: "can_edit", sourceId: "team-design" },
+  ];
+  const entries = entriesFromPageAccess(sharing, members, rules);
+  assert.deepEqual(entries.map((entry) => [entry.key, entry.level, entry.sourceId]), [
+    [`user:${ALICE}`, "can_view", undefined], ["workspace", "can_view", undefined],
+    [`user:${BOB}`, "no_access", "deny-bob"], ["team:design", "can_edit", "team-design"],
+  ]);
+  assert.deepEqual(sharing.collaborators[0], { userId: BOB.toUpperCase(), role: "editor" });
+});
+
+test("teams use access rules rather than being coerced to individual collaborators", () => {
+  const target = { type: "team" as const, team: { id: "design", name: "Design", memberCount: 3 } };
+  assert.throws(() => sharingWith(privatePage, target, "can_view", members), /people in its workspace/);
+  assert.throws(() => sharingWithout(privatePage, target), /people in its workspace/);
 });

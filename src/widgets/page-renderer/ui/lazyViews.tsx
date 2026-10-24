@@ -81,14 +81,15 @@ export const LazyAdminSpaceView = lazy(() =>
   import("@/widgets/admin-space").then((m) => ({ default: m.AdminSpaceView })),
 );
 
-export const LazyChatShell = lazy(() =>
-  import("@/widgets/chat-shell").then((m) => ({ default: m.ChatShell })),
+// The settings body is reached only for kind==='settings' tabs: the modal (and
+// its ~600 KiB of heavy deps) is gone — the view plus one panel per section now
+// split across their own chunks.
+export const LazySettingsView = lazy(() =>
+  import("@/features/settings/ui/SettingsView").then((m) => ({ default: m.SettingsView })),
 );
 
-// Deep import (never a barrel): the Draw surface pulls @osionos/draw-engine, a
-// large canvas chunk that must never leak onto the warm pane path.
-export const LazyDrawView = lazy(() =>
-  import("@/widgets/draw-canvas/ui/DrawCanvasView").then((m) => ({ default: m.DrawCanvasView })),
+export const LazyChatShell = lazy(() =>
+  import("@/widgets/chat-shell").then((m) => ({ default: m.ChatShell })),
 );
 
 // Deep import (never a barrel): the code editor pulls the Monaco core + its

@@ -30,13 +30,12 @@ import {
   LazyAdminSpaceView,
   LazyChatShell,
   LazyCodeFileView,
-  LazyDrawView,
   LazyOsionosPage,
   LazyProfilePageView,
+  LazySettingsView,
   LazyTrashView,
   LazyWorkspaceDatabaseBlock,
 } from "./lazyViews";
-import { isDrawEnabled } from "@/shared/config/featureFlags";
 // Deep path, NOT the barrel: `@/widgets/database-view` has a side-effect
 // `import './model/dataSourceProvider'` that pulls knownDatabaseState (and its
 // ~458KB seed JSON) onto this warm pane path. The constants module is leaf-pure.
@@ -136,24 +135,24 @@ const PaneContentImpl: React.FC<PaneContentProps> = ({ tab, paneId, chrome }) =>
     );
   }
 
-  if (tab.kind === "draw" && isDrawEnabled()) {
-    return (
-      <ErrorBoundary>
-        <Suspense fallback={<LoadingPane />}>
-          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
-            <LazyDrawView />
-          </div>
-        </Suspense>
-      </ErrorBoundary>
-    );
-  }
-
   if (tab.kind === "admin") {
     return (
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
           <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
             <LazyAdminSpaceView />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "settings") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
+            <LazySettingsView />
           </div>
         </Suspense>
       </ErrorBoundary>
@@ -221,6 +220,15 @@ const PaneContentImpl: React.FC<PaneContentProps> = ({ tab, paneId, chrome }) =>
           </div>
         </Suspense>
       </ErrorBoundary>
+    );
+  }
+
+  // A kind this build no longer renders (a tab persisted by a newer or older build).
+  if (tab.kind !== "page") {
+    return (
+      <div role="status" className="flex h-full items-center justify-center p-6 text-sm text-[var(--osio-fg-muted)]">
+        This tab can no longer be shown. Close it to continue.
+      </div>
     );
   }
 

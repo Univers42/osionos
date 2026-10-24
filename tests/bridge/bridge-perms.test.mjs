@@ -60,13 +60,16 @@ function memoryRuleStore(seed) {
 
 function setup({
   isAdmin = false, access = {}, rules = [], people = "missing", secretUnset = false,
-  upstreamDown = false, upstreamStatus = 200, serviceApikey = "svc-key",
+  upstreamDown = false, upstreamStatus = 200, serviceApikey = "svc-key", members = [USER],
+  roster = [USER], pageRows = [],
 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "perms-"));
   const ruleStore = memoryRuleStore(rules);
   const peopleEnv = join(dir, "people.env");
   if (people === "dir") mkdirSync(peopleEnv);
-  if (people === "file") writeFileSync(peopleEnv, `AGENCY_PERSON_1=${USER}|a@b.c|Ann|analyst|intel|secret|eu|member\n`);
+  if (people === "file") {
+    writeFileSync(peopleEnv, roster.map((id, i) => `AGENCY_PERSON_${i + 1}=${id}|${i === 0 ? "a" : i}@b.c|${i === 0 ? "Ann" : `P${i}`}|analyst|intel|secret|eu|member`).join("\n") + "\n");
+  }
   const upstream = [];
   const handler = createPermsHandler({
     verifySession: (token) => {
@@ -81,6 +84,14 @@ function setup({
       return { userId: USER, workspaceId };
     },
     fetchImpl: async (url, init) => {
+      if (String(url).includes("osionos_workspace_members")) return Response.json(members.map((user_id) => ({ user_id })));
+      if (String(url).includes("osionos_pages")) {
+        const parsed = new URL(String(url));
+        const idParam = parsed.searchParams.get("id");
+        const wanted = idParam ? String(idParam).replace(/^eq\./, "") : "";
+        const found = pageRows.filter((row) => !wanted || String(row.id).toLowerCase() === wanted.toLowerCase());
+        return Response.json(found);
+      }
       upstream.push({ url, init });
       if (upstreamDown) throw new Error("connect ECONNREFUSED 10.0.0.7:8002");
       return new Response(JSON.stringify({ ok: upstreamStatus < 400, message: "Unauthorized", request_id: "kong-1" }), { status: upstreamStatus });
@@ -147,26 +158,38 @@ test("engine-policy writes need an admin; the engine is never called otherwise",
   assert.equal(admin.upstream[0].init.headers["X-Service-Token"], "svc-token");
 });
 
-test("reads for any signed-in user are proxied", async () => {
-  const { call, upstream } = setup();
-  for (const path of ["/api/perms/roles", "/api/perms/policies", "/api/perms/bundle"]) {
-    assert.equal((await call("GET", path)).status, 200, path);
+test("reads for a member of the workspace they name are proxied", async () => {
+  const { call, upstream } = setup({ isAdmin: true, access: { [WS_A]: ["read"] } });
+  for (const path of ["/api/perms/roles", "/api/perms/policies", "/api/perms/bundle", "/api/perms/people"]) {
+    assert.equal((await call("GET", `${path}?workspaceId=${WS_A}`)).status, 200, path);
   }
-  assert.equal((await call("POST", "/api/perms/decide", { body: { action: "read" } })).status, 200);
+  assert.equal((await call("POST", `/api/perms/decide?workspaceId=${WS_A}`, { body: { action: "read" } })).status, 200);
   assert.equal(upstream.length, 4);
 });
 
+// G6 F6: these routes answer with the bridge's service identity, so naming a workspace and
+// being able to read it is the only way in.
+test("engine reads and decide need a workspace the caller can read, and never reach the engine otherwise", async () => {
+  const { call, upstream } = setup({ access: { [WS_A]: ["read"] } });
+  const engineReads = [["GET", "/api/perms/people"], ["GET", "/api/perms/roles"], ["GET", "/api/perms/policies"], ["GET", "/api/perms/bundle"], ["POST", "/api/perms/decide"]];
+  for (const [method, path] of engineReads) {
+    assert.equal((await call(method, path, { body: {} })).status, 422, `${method} ${path} without a workspaceId`);
+    assert.equal((await call(method, `${path}?workspaceId=${WS_B}`, { body: {} })).status, 403, `${method} ${path} on a foreign workspace`);
+  }
+  assert.equal(upstream.length, 0);
+});
+
 test("an unreachable engine is a 502 without the error text", async () => {
-  const { call } = setup({ upstreamDown: true });
-  const res = await call("GET", "/api/perms/roles");
+  const { call } = setup({ isAdmin: true, upstreamDown: true, access: { [WS_A]: ["read"] } });
+  const res = await call("GET", `/api/perms/roles?workspaceId=${WS_A}`);
   assert.equal(res.status, 502);
   assert.doesNotMatch(JSON.stringify(res.body), /ECONNREFUSED|10\.0\.0\.7/);
 });
 
 test("an engine that refuses the bridge's own credentials is a 503, never the caller's 401", async () => {
   for (const upstreamStatus of [401, 403]) {
-    const { call } = setup({ upstreamStatus });
-    const res = await call("GET", "/api/perms/roles");
+    const { call } = setup({ isAdmin: true, upstreamStatus, access: { [WS_A]: ["read"] } });
+    const res = await call("GET", `/api/perms/roles?workspaceId=${WS_A}`);
     assert.equal(res.status, 503, `upstream ${upstreamStatus}`);
     assert.doesNotMatch(JSON.stringify(res.body), /request_id|kong/i);
   }
@@ -175,8 +198,8 @@ test("an engine that refuses the bridge's own credentials is a 503, never the ca
 test("engine validation errors pass through; engine crashes are a 502", async () => {
   const invalid = setup({ isAdmin: true, upstreamStatus: 422 });
   assert.equal((await invalid.call("POST", "/api/perms/policies", { body: {} })).status, 422);
-  const crashed = setup({ upstreamStatus: 500 });
-  const res = await crashed.call("GET", "/api/perms/bundle");
+  const crashed = setup({ isAdmin: true, upstreamStatus: 500, access: { [WS_A]: ["read"] } });
+  const res = await crashed.call("GET", `/api/perms/bundle?workspaceId=${WS_A}`);
   assert.equal(res.status, 502);
   assert.doesNotMatch(JSON.stringify(res.body), /request_id/);
 });
@@ -231,12 +254,12 @@ test("replacing a rule keeps its stored id", async () => {
 });
 
 test("a roster path that is a directory (docker-created) means no roster", async () => {
-  const { call } = setup({ people: "dir" });
-  const res = await call("GET", "/api/perms/people");
+  const { call } = setup({ people: "dir", access: { [WS_A]: ["read"] } });
+  const res = await call("GET", `/api/perms/people?workspaceId=${WS_A}`);
   assert.equal(res.status, 200);
   assert.deepEqual(res.body.people, []);
-  const withFile = setup({ people: "file" });
-  assert.equal((await withFile.call("GET", "/api/perms/people")).body.people[0].email, "a@b.c");
+  const withFile = setup({ people: "file", access: { [WS_A]: ["read"] } });
+  assert.equal((await withFile.call("GET", `/api/perms/people?workspaceId=${WS_A}`)).body.people[0].email, "a@b.c");
 });
 
 test("a malformed body is a generic 400", async () => {
@@ -249,8 +272,8 @@ test("a malformed body is a generic 400", async () => {
 // then "Missing verified identity envelope"). With the copies blank the proxy uses the
 // bridge's own service identity — the key every other BaaS call of the bridge uses.
 test("a blank PERMS_SERVICE_APIKEY uses the bridge's own service key", async () => {
-  const { call, upstream } = setup({ serviceApikey: "" });
-  assert.equal((await call("GET", "/api/perms/roles")).status, 200);
+  const { call, upstream } = setup({ isAdmin: true, serviceApikey: "", access: { [WS_A]: ["read"] } });
+  assert.equal((await call("GET", `/api/perms/roles?workspaceId=${WS_A}`)).status, 200);
   assert.equal(upstream[0].init.headers.apikey, CONFIG.serviceKey);
 });
 
@@ -268,4 +291,95 @@ test("an invalid rule is a 400 before any access check or write", async () => {
   const res = await call("POST", "/api/perms/rules", { body: { workspaceId: WS_A, permission: "owner" } });
   assert.equal(res.status, 400);
   assert.deepEqual(storedRules(), []);
+});
+
+const OTHER = "55555555-5555-4555-8555-555555555555"; // a member of A's workspace, not of the caller's
+const OTHER_WS = "77777777-7777-4777-8777-777777777777";
+
+test("G6 F6: people lists only the members of the named workspace, for a non-admin", async () => {
+  const { call } = setup({ people: "file", access: { [OTHER_WS]: ["read"] }, roster: [USER, OTHER], members: [USER] });
+  const res = await call("GET", `/api/perms/people?workspaceId=${OTHER_WS}`);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.people.map((p) => p.id), [USER], "a colleague of another workspace is not listed");
+});
+
+test("G6 F6: an admin still gets the whole roster", async () => {
+  const { call } = setup({ isAdmin: true, people: "file", access: { [WS_A]: ["read"] }, roster: [USER, OTHER], members: [USER] });
+  const res = await call("GET", `/api/perms/people?workspaceId=${WS_A}`);
+  assert.deepEqual(res.body.people.map((p) => p.id), [USER, OTHER]);
+});
+
+test("G6 F6: roles, policies and bundle are tenant-wide config, admin-only; the engine is not reached otherwise", async () => {
+  const member = setup({ access: { [WS_A]: ["read"] } });
+  for (const tail of ["roles", "policies", "bundle"]) {
+    assert.equal((await member.call("GET", `/api/perms/${tail}?workspaceId=${WS_A}`)).status, 403, tail);
+  }
+  assert.equal(member.upstream.length, 0);
+  const admin = setup({ isAdmin: true, access: { [WS_A]: ["read"] } });
+  for (const tail of ["roles", "policies", "bundle"]) {
+    assert.equal((await admin.call("GET", `/api/perms/${tail}?workspaceId=${WS_A}`)).status, 200, tail);
+  }
+  assert.equal(admin.upstream.length, 3);
+});
+
+test("G6 F6: a non-admin cannot ask decide about another user; about themselves it passes", async () => {
+  const { call, upstream } = setup({ access: { [WS_A]: ["read"] } });
+  const path = `/api/perms/decide?workspaceId=${WS_A}`;
+  const body = { resource_type: "table", resource_name: "t", op: "get" };
+  assert.equal((await call("POST", path, { body: { ...body, user: { id: OTHER } } })).status, 403);
+  assert.equal((await call("POST", path, { body })).status, 200);
+  assert.equal((await call("POST", path, { body: { ...body, user: { id: USER.toUpperCase() } } })).status, 200);
+  assert.equal(upstream.length, 2);
+  for (const call2 of upstream) assert.equal(JSON.parse(call2.init.body).user.id, USER);
+});
+
+test("G6 F6: an admin may decide about any user", async () => {
+  const { call, upstream } = setup({ isAdmin: true, access: { [WS_A]: ["read"] } });
+  const res = await call("POST", `/api/perms/decide?workspaceId=${WS_A}`, { body: { user: { id: OTHER }, op: "get" } });
+  assert.equal(res.status, 200);
+  assert.equal(JSON.parse(upstream[0].init.body).user.id, OTHER);
+});
+
+test('page owner who is only a viewer may post a page-scoped rule', async () => {
+  const PAGE = '77777777-7777-4777-8777-777777777777';
+  const { call } = setup({
+    isAdmin: false,
+    access: { [WS_A]: ['read'] },
+    pageRows: [{ id: PAGE, owner_id: USER }],
+  });
+  const res = await call('POST', '/api/perms/rules', {
+    body: { workspaceId: WS_A, resourceType: 'page', resourceId: PAGE, permission: 'no_access', target: { type: 'user', userId: '99999999-9999-4999-8999-999999999999' } },
+  });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.ok(res.body?.rule);
+});
+
+test('a non-owner viewer is refused a page-scoped rule', async () => {
+  const PAGE = '88888888-8888-4888-8888-888888888888';
+  const { call } = setup({
+    isAdmin: false,
+    access: { [WS_A]: ['read'] },
+    pageRows: [{ id: PAGE, owner_id: '99999999-9999-4999-8999-999999999999' }],
+  });
+  const res = await call('POST', '/api/perms/rules', {
+    body: { workspaceId: WS_A, resourceType: 'page', resourceId: PAGE, permission: 'no_access', target: { type: 'user', userId: '11111111-2222-3333-4444-555555555555' } },
+  });
+  assert.equal(res.status, 403, JSON.stringify(res.body));
+});
+
+test("sharing records one 'share' event for the caller, after a stored rule, and none for a refused write", async () => {
+  const seen = [];
+  CONFIG.activity = { emit: (...args) => seen.push(args) };
+  try {
+    const { call } = setup({ access: { [WS_A]: ["read", "update"] } });
+    const other = "cccccccc-3333-4333-8333-cccccccccccc";
+    const saved = await call("POST", "/api/perms/rules", { body: { workspaceId: WS_A, resourceId: "p", target: { type: "user", userId: other }, permission: "can_view" } });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(seen, [[{ userId: USER }, "share", "editor", WS_A]]);
+    const refused = setup({ access: { [WS_A]: ["read"] } });
+    assert.equal((await refused.call("POST", "/api/perms/rules", { body: { workspaceId: WS_A, resourceId: "p", permission: "can_view" } })).status, 403);
+    assert.equal(seen.length, 1);
+  } finally {
+    delete CONFIG.activity;
+  }
 });

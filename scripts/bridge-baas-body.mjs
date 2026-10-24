@@ -21,6 +21,9 @@
  * httpError(message, 502)); this module only decides which outcome a body gets and
  * words the message. A non-2xx stays with the caller: each reader maps that status
  * itself, and several need the body text to map it.
+ *
+ * It also owns the one BaaS call budget, because bridge-api.mjs and bridge-social-core.mjs
+ * both import this leaf and social-core must never import bridge-api.mjs.
  */
 export async function readBaasJson(response, { service, empty, fail }) {
 	let readFailed = false;
@@ -36,3 +39,8 @@ export async function readBaasJson(response, { service, empty, fail }) {
 		throw fail(`BaaS response body was not valid JSON (${Buffer.byteLength(text)} bytes).`);
 	}
 }
+
+// Caveat: sized for a cold TLS relay + Tailscale Funnel hop, not for a healthy link. Measured live
+// 2026-10-18: the first 2 of 12 REST calls after idle took 3743 ms and 3501 ms, the rest 199-734 ms,
+// so the old 2_500 aborted every cold call. The cost: a dead BaaS now takes up to 8 s to fail each call.
+export const BAAS_FETCH_TIMEOUT_MS = 8_000;

@@ -19,6 +19,7 @@ import { useUserStore } from "@/features/auth";
 import { openDm } from "@/shared/chat/channelApi";
 import { genId } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { OwnerActions } from "./OwnerActions";
 
 /**
  * Shared profile chrome — the Message / Connect / More actions row, shown only
@@ -29,7 +30,7 @@ export function ProfileActions({ userId, name }: { userId: string; name: string 
   const activeUserId = useUserStore((s) => s.activeUserId);
   const moreRef = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  if (userId === activeUserId) return null;
+  if (userId === activeUserId) return <OwnerActions />;
 
   const startDm = () => {
     openDm(userId)

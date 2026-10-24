@@ -15,23 +15,31 @@ import { Settings, CircleUser } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { useUIStore } from "@/shared/config/uiStore";
 import { isAutomationsEnabled } from "@/shared/config/featureFlags";
-import { useUserStore } from "@/features/auth";
+import { usePlatformRole, useUserStore } from "@/features/auth";
 import { useAutomationStore } from "@/features/automations/model/useAutomationStore";
 import { shortcutLabel } from "@/features/automations/model/shortcutLabel";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
-import { mailTab, calendarTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
+import { mailTab, calendarTab, whiteboardTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useUnreadStore } from "@/store/chat/useUnreadStore";
 import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps";
-import { installedTab } from "@/features/marketplace/model/installedAppLauncher";
+import { isListableApp } from "@/features/marketplace/model/launchPolicy";
+import { installedTab, railInstalledApps } from "@/features/marketplace/model/installedAppLauncher";
 import { RailIcon } from "./RailIcon";
 import { RailHomeButton } from "./RailHomeButton";
 import { prefetchPanel } from "./panelLoaders";
-import { RAIL_GROUPS, type RailItem } from "../model/railItems";
+import { RAIL_GROUPS, visibleRailItems, type RailApp, type RailItem } from "../model/railItems";
 import { useConnectionNotifications, useIncomingInviteCount } from "@/widgets/notifications/model/useConnectionNotifications";
 
 interface Props {
   onOpenSettings?: () => void;
 }
+
+const APP_TABS: Record<RailApp, () => WorkspaceTab> = {
+  mail: mailTab,
+  calendar: calendarTab,
+  whiteboard: whiteboardTab,
+};
 
 const Separator: React.FC = () => <div aria-hidden className="my-1 h-px w-6 shrink-0 bg-[var(--osio-border-default)]" />;
 
@@ -48,6 +56,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
   const unread = useUnreadStore((s) => Object.values(s.counts).reduce((sum, count) => sum + (count > 0 ? count : 0), 0));
   const listRef = useRef<HTMLDivElement>(null);
   const showKeys = isAutomationsEnabled();
+  const platformRole = usePlatformRole();
 
   // Live connection-invitation notifications: hydrate + realtime; badge = incoming count.
   useConnectionNotifications();
@@ -55,7 +64,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
 
   useEffect(() => useInstalledApps.getState().load(), []);
   const installedApps = useMemo(
-    () => Object.values(installedMap).filter((e) => e.active),
+    () => railInstalledApps(installedMap).filter((entry) => isListableApp(entry.identifier, entry.launchUrl)),
     [installedMap],
   );
 
@@ -65,7 +74,11 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
         selectPanel(item.action.panel);
         return;
       }
-      useWorkspaceLayout.getState().openTab(item.action.app === "mail" ? mailTab() : calendarTab());
+      if (item.action.kind === "workspaceTab") {
+        useWorkspaceLayout.getState().openTab(item.action.makeTab());
+        return;
+      }
+      useWorkspaceLayout.getState().openTab(APP_TABS[item.action.app]());
     },
     [selectPanel],
   );
@@ -98,13 +111,13 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
       aria-orientation="vertical"
       aria-label="Activity bar"
       onKeyDown={onKeyDown}
-      className="flex h-full w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden bg-[var(--osio-bg-subtle)] py-2"
+      className="flex h-full w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto overflow-x-hidden py-2"
     >
       <RailHomeButton />
       {RAIL_GROUPS.map((group) => (
         <React.Fragment key={group.id}>
           <Separator />
-          {group.items.map((item) => {
+          {visibleRailItems(group, platformRole).map((item) => {
             const panel = item.action.kind === "panel" ? item.action.panel : null;
             return (
               <RailIcon

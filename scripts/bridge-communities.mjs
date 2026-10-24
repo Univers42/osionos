@@ -23,24 +23,37 @@
  *   GET  /api/communities/:id             one community + its channels (member)
  *   POST /api/communities/:id/channels    {channelId} (owner/admin)
  *   POST /api/communities/:id/join        self-join (creates a member row)
+ *
+ * L0 runs BEFORE a community is created and before a channel is linked into
+ * one (bridge-moderation-gate.mjs): the words are the community's name and
+ * description, and the channel's name, and a warning is the author's question
+ * (409) — nothing is written until they answer it with acknowledgeWarning:
+ * true. WARN-ONLY: neither table has a moderation_state column, so nothing is
+ * ever written held and no audit row is ever written.
  */
 
 import {
 	UUID_REGEX,
 	bearerToken,
 	httpError,
+	readInChunks,
+	moderationWarningBody,
 	readJsonBody,
 	requireUuid,
 	rest,
 	safeText,
 	sendJson,
 } from './bridge-social-core.mjs';
+import { inFilter } from './bridge-paging.mjs';
+import { requireChannelAccess } from './bridge-chat.mjs';
+import { publicIconAvatar } from './bridge-avatar.mjs';
+import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 
-function communityEntry(row, role = null) {
+function communityEntry(row, role = null, config = null) {
 	return {
 		id: row.id,
 		name: row.name,
-		avatar: row.avatar ?? null,
+		avatar: publicIconAvatar(row.avatar ?? null, config),
 		description: row.description ?? null,
 		creatorId: row.creator_id ?? null,
 		role,
@@ -58,12 +71,17 @@ async function createCommunity(deps, session, request, response, config) {
 	const payload = await readJsonBody(request);
 	const name = safeText(payload.name, 80);
 	if (!name) throw httpError('Community name is required.', 422);
+	const description = safeText(payload.description, 500) || null;
+	// L0 asks BEFORE the community is written: its name and its description are
+	// the words that are checked, and a warning is the author's question (409).
+	const decision = askBeforeWrite({ text: `${name}\n${description ?? ''}`, surface: 'community', env: deps.env, payload });
+	if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
 	const rows = await rest(config, deps.fetchImpl, 'osionos_communities', {
 		method: 'POST',
 		body: {
 			name,
-			description: safeText(payload.description, 500) || null,
-			avatar: safeText(payload.avatar, 1024) || null,
+			description,
+			avatar: publicIconAvatar(safeText(payload.avatar, 1024), config),
 			creator_id: session.userId,
 		},
 		prefer: 'return=representation',
@@ -75,7 +93,7 @@ async function createCommunity(deps, session, request, response, config) {
 		body: { community_id: row.id, user_id: session.userId, role: 'owner' },
 		prefer: 'resolution=ignore-duplicates,return=minimal',
 	});
-	return sendJson(response, 201, { ok: true, community: communityEntry(row, 'owner') }, config);
+	return sendJson(response, 201, { ok: true, community: communityEntry(row, 'owner', config) }, config);
 }
 
 async function listCommunities(deps, session, response, config) {
@@ -83,8 +101,14 @@ async function listCommunities(deps, session, response, config) {
 	const roleById = new Map((Array.isArray(memberRows) ? memberRows : []).map((row) => [row.community_id, row.role]));
 	const ids = [...roleById.keys()].filter((id) => UUID_REGEX.test(String(id)));
 	if (ids.length === 0) return sendJson(response, 200, { ok: true, communities: [] }, config);
-	const rows = await rest(config, deps.fetchImpl, `osionos_communities?id=in.(${ids.join(',')})&select=*&order=created_at.desc`);
-	const communities = (Array.isArray(rows) ? rows : []).map((row) => communityEntry(row, roleById.get(row.id) ?? null));
+	const rows = await readInChunks(ids, async (chunk) => {
+		const part = await rest(config, deps.fetchImpl, `osionos_communities?${inFilter('id', chunk)}&select=*&order=created_at.desc`);
+		return Array.isArray(part) ? part : [];
+	});
+	// The merged rows keep the order the read asked for: newest community first.
+	const communities = rows
+		.sort((left, right) => String(right.created_at ?? '').localeCompare(String(left.created_at ?? '')))
+		.map((row) => communityEntry(row, roleById.get(row.id) ?? null, config));
 	return sendJson(response, 200, { ok: true, communities }, config);
 }
 
@@ -98,10 +122,16 @@ async function getCommunity(deps, session, communityId, response, config) {
 	const channelIds = (Array.isArray(linkRows) ? linkRows : []).map((link) => link.channel_id).filter((id) => UUID_REGEX.test(String(id)));
 	let channels = [];
 	if (channelIds.length > 0) {
-		const chanRows = await rest(config, deps.fetchImpl, `osionos_channels?id=in.(${channelIds.join(',')})&select=id,workspace_id,kind,name,topic&order=created_at.asc`);
-		channels = (Array.isArray(chanRows) ? chanRows : []).map((c) => ({ id: c.id, workspaceId: c.workspace_id, kind: c.kind, name: c.name, topic: c.topic ?? null }));
+		const chanRows = await readInChunks(channelIds, async (chunk) => {
+			const part = await rest(config, deps.fetchImpl, `osionos_channels?${inFilter('id', chunk)}&select=id,workspace_id,kind,name,topic,created_at&order=created_at.asc`);
+			return Array.isArray(part) ? part : [];
+		});
+		// The merged rows keep the order the read asked for: oldest channel first.
+		channels = chanRows
+			.sort((left, right) => String(left.created_at ?? '').localeCompare(String(right.created_at ?? '')))
+			.map((c) => ({ id: c.id, workspaceId: c.workspace_id, kind: c.kind, name: c.name, topic: c.topic ?? null }));
 	}
-	return sendJson(response, 200, { ok: true, community: communityEntry(row, member.role), channels }, config);
+	return sendJson(response, 200, { ok: true, community: communityEntry(row, member.role, config), channels }, config);
 }
 
 async function addCommunityChannel(deps, session, request, communityId, response, config) {
@@ -109,6 +139,12 @@ async function addCommunityChannel(deps, session, request, communityId, response
 	if (!member || (member.role !== 'owner' && member.role !== 'admin')) throw httpError('Only an owner or admin can add channels.', 403);
 	const payload = await readJsonBody(request);
 	const channelId = requireUuid(payload.channelId, 'channelId');
+	// G6 F4: getCommunity shows every linked channel's metadata to all members.
+	const { channel } = await requireChannelAccess(config, deps.fetchImpl, session.userId, channelId);
+	// L0 asks BEFORE the link is written: the channel's NAME is the word that is
+	// checked — it is shown to every member of the community.
+	const decision = askBeforeWrite({ text: String(channel?.name ?? ''), surface: 'community', env: deps.env, payload });
+	if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
 	await rest(config, deps.fetchImpl, 'osionos_community_channels?on_conflict=community_id,channel_id', {
 		method: 'POST',
 		body: { community_id: communityId, channel_id: channelId },

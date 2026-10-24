@@ -28,7 +28,7 @@ export const PageFavoriteButton: React.FC<{ pageId: string }> = ({ pageId }) => 
       title={isFav ? "Remove from favorites" : "Add to favorites"}
       aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
       aria-pressed={isFav}
-      className="flex h-7 w-7 items-center justify-center rounded text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
+      className="flex h-7 w-7 items-center justify-center rounded-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
     >
       <Star size={16} fill={isFav ? "currentColor" : "none"} className={isFav ? "text-[var(--osio-accent)]" : undefined} />
     </button>

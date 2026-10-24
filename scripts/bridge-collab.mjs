@@ -40,6 +40,10 @@ import { readRawBody } from './bridge-chat-media.mjs';
 import { ensureChatBucket, extFromMime, storageObjectKey, storagePut } from './bridge-storage-core.mjs';
 import { REALTIME_TOKEN_ISSUER, signRealtimeJwt } from './bridge-realtime-socket.mjs';
 
+// Caveat: this token lives 1 h. The client does not re-mint it before expiry
+// (fetchSharedSpaceToken in src/features/collab/api/grobaseTransport.factory.ts is
+// called once at join, with no refresh path), so lowering it to 900 s would drop
+// live Shared-space sockets every 15 min. Left at 3600 s accordingly (C129).
 const REALTIME_TOKEN_TTL_SECONDS = 3600;
 
 /**
@@ -49,13 +53,13 @@ const REALTIME_TOKEN_TTL_SECONDS = 3600;
  * entry must equal the topic's namespace; an empty list grants nothing), so the
  * token's reach is precisely the namespaces passed in — never a wildcard.
  */
-export function mintRealtimeToken({ secret, userId, namespaces, ttlSeconds = REALTIME_TOKEN_TTL_SECONDS, now = Date.now() }) {
+export function mintRealtimeToken({ secret, userId, namespaces, ttlSeconds = REALTIME_TOKEN_TTL_SECONDS, canPublish = true, now = Date.now() }) {
 	if (!secret) throw httpError('Realtime signing secret (JWT_SECRET) is not configured.', 503);
 	const issuedAt = Math.floor(now / 1000);
 	const exp = issuedAt + Math.min(Math.max(Number(ttlSeconds) || REALTIME_TOKEN_TTL_SECONDS, 60), 86400);
 	// The gateway refuses a token without `iss` (REALTIME_JWT_ALLOW_NO_ISSUER off): without it
 	// every collab socket got AUTH_FAILED (measured live 2026-10-14).
-	const payload = { iss: REALTIME_TOKEN_ISSUER, sub: String(userId), iat: issuedAt, exp, namespaces, can_subscribe: true, can_publish: true };
+	const payload = { iss: REALTIME_TOKEN_ISSUER, sub: String(userId), iat: issuedAt, exp, namespaces, can_subscribe: true, can_publish: canPublish === true };
 	return { token: signRealtimeJwt(payload, secret), expiresAt: new Date(exp * 1000).toISOString() };
 }
 
@@ -203,12 +207,10 @@ async function listJoinRequests(deps, session, workspaceId, response, config) {
 
 /** GET /api/workspaces/:id/members — owner OR member may read the roster. */
 async function listWorkspaceMembers(deps, session, workspaceId, response, config) {
-	const workspace = await fetchWorkspace(config, deps.fetchImpl, workspaceId);
-	if (!workspace) throw httpError('Workspace not found.', 404);
+	// G6 F9: decide membership before the roster is read, not from the roster itself.
+	await requireSpaceMembership(config, deps.fetchImpl, session.userId, workspaceId);
 	const rows = await rest(config, deps.fetchImpl, `osionos_workspace_members?workspace_id=eq.${workspaceId}&select=user_id,role&order=role.asc`);
 	const list = Array.isArray(rows) ? rows : [];
-	const isMember = list.some((row) => row.user_id === session.userId);
-	if (workspace.owner_id !== session.userId && !isMember) throw httpError('You are not a member of this workspace.', 403);
 	const identities = await identitySummaries(config, deps.fetchImpl, list.map((row) => row.user_id));
 	const members = list.map((row) => ({
 		userId: row.user_id,

@@ -12,6 +12,7 @@
 
 import { createViewShowcaseCells } from "@/widgets/database-view/model/databaseViewShowcase";
 import type { Block, LayoutCell } from "@/entities/block";
+import { createInsightsCells } from "./insightsTemplate";
 import { migrate } from "./migration";
 import type { CanvasCell, CanvasGridConfig } from "./types";
 
@@ -19,13 +20,14 @@ import type { CanvasCell, CanvasGridConfig } from "./types";
 // converted into canvas frames through the migration path — one source of
 // geometry truth.
 
-export type CanvasTemplateKind = "dashboard" | "tracker" | "notes" | "kanban";
+export type CanvasTemplateKind = "dashboard" | "tracker" | "notes" | "kanban" | "insights";
 
 export const CANVAS_TEMPLATES: { kind: CanvasTemplateKind; label: string; description: string; glyph: string }[] = [
   { kind: "dashboard", label: "Dashboard", description: "Cross-database view showcase", glyph: "▦" },
   { kind: "tracker", label: "Tracker", description: "Sidebar, now, status and risks", glyph: "▥" },
   { kind: "notes", label: "Two-column notes", description: "Notes beside references", glyph: "▤" },
   { kind: "kanban", label: "Kanban", description: "Backlog, doing, review, done", glyph: "▮" },
+  { kind: "insights", label: "Insights", description: "Your last 200 events, as a chart and a table", glyph: "◔" },
 ];
 
 function legacyTemplateCell(partial: Omit<LayoutCell, "id" | "type" | "content" | "blocks"> & { blocks?: Block[] }): LayoutCell {
@@ -67,6 +69,8 @@ function buildLegacyTemplate(kind: CanvasTemplateKind): LayoutCell[] {
         label,
         blocks: headingBlocks(label),
       }));
+    case "insights":
+      return createInsightsCells();
     default:
       return [];
   }

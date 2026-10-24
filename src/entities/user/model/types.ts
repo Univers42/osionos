@@ -38,6 +38,16 @@ export interface Workspace {
   role?: string;
   /** The caller's own workspace permissions (the strings the bridge's ACL compares). */
   permissions?: string[];
+  /** Set by the bridge's workspace list while a delete is staged: the owner may cancel until `deleteAfter`. */
+  pendingDeleteAt?: string | null;
+  deleteAfter?: string | null;
+}
+
+/** What `deleteWorkspace` did: `code` is the bridge's machine code (e.g. `sudo_required`) on a refusal. */
+export interface DeleteWorkspaceOutcome {
+  ok: boolean;
+  code?: string;
+  message?: string;
 }
 
 export interface UserSession {
@@ -47,6 +57,10 @@ export interface UserSession {
   privateWorkspaces: Workspace[];  // workspaces owned by this user
   sharedWorkspaces: Workspace[];   // workspaces where user is member but not owner
 }
+
+/** The platform role of a signed-in user — the session claim's vocabulary (ADR 0005).
+ *  The bridge is the authority: this only decides which surfaces the app offers. */
+export type PlatformRole = 'admin' | 'moderator' | 'user' | 'guest';
 
 export interface UserStore {
   personas: StaticPersona[];
@@ -67,11 +81,14 @@ export interface UserStore {
     mode: "login" | "signup",
     name?: string,
   ) => Promise<boolean>;
-  logoutUser: (userId: string) => void;
+  /** Signs the persona out of every device (bridge), then locally whatever the bridge said. */
+  logoutUser: (userId: string) => Promise<unknown>;
+  /** The bridge refused this token as signed out: drop the session that owns it. */
+  handleSessionRevoked: (token: string) => void;
   refreshWorkspaces: (userId: string) => Promise<void>;
   createWorkspace: (name: string, slug: string) => Promise<Workspace | null>;
   renameWorkspace: (workspaceId: string, name: string, icon?: string) => void;
-  deleteWorkspace: (workspaceId: string) => Promise<boolean>;
+  deleteWorkspace: (workspaceId: string) => Promise<DeleteWorkspaceOutcome>;
   importBridgeSession: (session: UserSession, persona: StaticPersona, expiresAt?: string) => void;
 
   // Selectors
@@ -81,5 +98,7 @@ export interface UserStore {
   activeJwt: () => string | null;
   activePageJwt: () => string | null;
   isAdmin: () => boolean;
+  /** The platform role the active session claims; null when the session claims none. */
+  platformRole: () => PlatformRole | null;
   personaById: (id: string) => StaticPersona | undefined;
 }

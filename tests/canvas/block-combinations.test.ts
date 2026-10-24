@@ -39,13 +39,9 @@ test("acceptsHeadingLevel is false for non-container blocks", () => {
   }
 });
 
-// Each heading level maps to a distinct, increasingly large text size so the
-// summary of a container reads like the heading it stands in for.
-test("getToggleHeadingClass sizes each level distinctly and larger toward 1", () => {
-  assert.match(getToggleHeadingClass(1), /text-2xl/);
-  assert.match(getToggleHeadingClass(2), /text-xl/);
-  assert.match(getToggleHeadingClass(3), /text-lg/);
-  assert.match(getToggleHeadingClass(4), /text-base/);
+// Levels 1-4 come from the shared heading utilities (tests/canvas/toggle-heading.test.ts);
+// 5 and 6 are too small to be a heading and keep the UI text.
+test("getToggleHeadingClass keeps levels 5 and 6 at the UI text size", () => {
   assert.match(getToggleHeadingClass(5), /text-sm/);
   assert.match(getToggleHeadingClass(6), /text-sm/);
 });

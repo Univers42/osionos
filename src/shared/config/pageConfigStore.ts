@@ -141,19 +141,24 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
   versions: [],
   translations: [],
   cssTokens: {
-    fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontFamily: 'var(--osio-font-ui)',
     fontSizeScale: 1,
     contentMaxWidth: '900px',
     contentPaddingInline: 'clamp(16px, 11%, 96px)',
   },
 };
 
+// The page font option is a pointer to a type token, resolved by the browser at
+// render time, so a stored 'serif' follows the design system and no page data
+// needs migrating.
+const PAGE_FONT_FAMILY: Record<PageFont, string> = {
+  default: 'var(--osio-font-ui)',
+  serif: 'var(--osio-font-heading)',
+  mono: 'var(--osio-font-family-mono)',
+};
+
 function buildCssTokens(config: PageConfig): PageCssTokens {
-  let fontFamily = DEFAULT_PAGE_CONFIG.cssTokens.fontFamily;
-  if (config.font === 'serif') fontFamily = 'Georgia, "Times New Roman", serif';
-  if (config.font === 'mono') {
-    fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace';
-  }
+  const fontFamily = PAGE_FONT_FAMILY[config.font] ?? PAGE_FONT_FAMILY.default;
 
   return {
     fontFamily,

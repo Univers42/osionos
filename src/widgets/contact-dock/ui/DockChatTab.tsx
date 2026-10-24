@@ -72,11 +72,11 @@ export const DockChatTab: React.FC<DockChatTabProps> = ({
         >
           {tab.title}
         </button>
-        <IconButton size="sm" aria-label={minimized ? 'Expand conversation' : 'Minimize conversation'} onClick={onMinimize}>
-          <Minus size={15} aria-hidden="true" />
+        <IconButton size="sm" label={minimized ? 'Expand conversation' : 'Minimize conversation'} onClick={onMinimize}>
+          <Minus size={16} aria-hidden="true" />
         </IconButton>
-        <IconButton size="sm" aria-label="Close conversation" onClick={onClose}>
-          <X size={15} aria-hidden="true" />
+        <IconButton size="sm" label="Close conversation" onClick={onClose}>
+          <X size={16} aria-hidden="true" />
         </IconButton>
       </header>
       {expanded && (

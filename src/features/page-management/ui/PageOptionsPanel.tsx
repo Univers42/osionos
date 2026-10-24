@@ -48,7 +48,7 @@ import { PAGE_DEBUG_TOOLS, usePageDebugStore } from "@/shared/debug/pageDebugSto
 import { getAllDescendantIds } from "@/store/pageStore.helpers";
 import type { PageEntry } from "@/entities/page";
 
-import styles from "./PageOptionsMenu.module.scss";
+import { MENU_PANEL_CLASS, MENU_ROW_CLASS } from "./menuChrome";
 
 const EMPTY_WORKSPACE_PAGES: PageEntry[] = [];
 const MENU_MARGIN = 12;
@@ -291,7 +291,8 @@ export const PageOptionsPanel: React.FC<Props> = ({
         createPortal(
           <div
             ref={menuRef}
-            className={styles.dropdown}
+            data-testid="page-options-menu"
+            className={`${MENU_PANEL_CLASS} absolute w-[200px]`}
             style={{
               top: menuPosition?.top ?? 0,
               left: menuPosition?.left ?? 0,
@@ -300,7 +301,7 @@ export const PageOptionsPanel: React.FC<Props> = ({
           >
             <button
               type="button"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={handleDuplicateClick}
             >
               <Copy size={14} className="shrink-0" />
@@ -309,7 +310,7 @@ export const PageOptionsPanel: React.FC<Props> = ({
 
             <button
               type="button"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={handleMoveClick}
             >
               <ArrowRight size={14} className="shrink-0" />
@@ -319,7 +320,7 @@ export const PageOptionsPanel: React.FC<Props> = ({
             <button
               type="button"
               data-testid="page-options-export"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={(e) => {
                 e.stopPropagation();
                 setOpen("export");
@@ -331,7 +332,7 @@ export const PageOptionsPanel: React.FC<Props> = ({
 
             <button
               type="button"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={handleConvertClick}
             >
               {isFolder ? (
@@ -344,7 +345,7 @@ export const PageOptionsPanel: React.FC<Props> = ({
 
             <button
               type="button"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={handleConvertWikiClick}
             >
               {isWiki ? (
@@ -357,7 +358,7 @@ export const PageOptionsPanel: React.FC<Props> = ({
 
             <button
               type="button"
-              className={styles.menuItem}
+              className={MENU_ROW_CLASS}
               onClick={(e) => {
                 e.stopPropagation();
                 handleArchiveClick(e);
@@ -369,7 +370,8 @@ export const PageOptionsPanel: React.FC<Props> = ({
 
             <button
               type="button"
-              className={[styles.menuItem, styles.destructive].join(" ")}
+              className={MENU_ROW_CLASS}
+              data-tone="danger"
               onClick={(e) => {
                 e.stopPropagation();
                 handleDeleteClick(e);
@@ -381,9 +383,9 @@ export const PageOptionsPanel: React.FC<Props> = ({
 
             {/* Debug tools: layout/edit diagnostics. Toggles keep the menu open
                 so several can be flipped in one visit; state persists. */}
-            <div className="mx-2 my-1 border-t border-[var(--osio-border-default)]" />
-            <div className="flex items-center gap-1.5 px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">
-              <Bug size={11} className="shrink-0" />
+            <div className="osio-menu-separator" />
+            <div className="osio-menu-label flex items-center gap-1.5">
+              <Bug size={12} className="shrink-0" />
               Tools
             </div>
             {PAGE_DEBUG_TOOLS.map((tool) => (
@@ -391,7 +393,7 @@ export const PageOptionsPanel: React.FC<Props> = ({
                 key={tool.id}
                 type="button"
                 data-testid={`debug-tool-${tool.id}`}
-                className={styles.menuItem}
+                className={MENU_ROW_CLASS}
                 title={tool.hint}
                 onClick={(e) => {
                   e.stopPropagation();

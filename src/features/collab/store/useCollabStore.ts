@@ -97,7 +97,13 @@ export const useCollabStore = create<CollabState>((set, get) => {
           if (myEpoch !== epoch) return;
           const next = applyCollabEvent(get().cursors, event, self.id); // same ref when unchanged
           if (next !== get().cursors) set({ cursors: next });
-          const feed = appendAnnounce(get().feed, event, self.id); // note/file announces only
+          // Feed filter: the CONTENT-plane events ('blocks', 'pages') are data
+          // transfer, not notifications — skip them explicitly so they can
+          // never surface as activity announces (appendAnnounce then only has
+          // to admit the durable 'note'/'file' kinds).
+          const feed = event.t === 'blocks' || event.t === 'pages'
+            ? get().feed
+            : appendAnnounce(get().feed, event, self.id);
           if (feed !== get().feed) set({ feed });
         });
         channel.setPresence({

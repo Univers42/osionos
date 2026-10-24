@@ -16,6 +16,7 @@ import { Dropdown } from '@/shared/ui';
 import { decide, type DecideResponse, type SharePerson } from '@/features/share';
 
 interface ViewAsTesterProps {
+  workspaceId: string;
   people: SharePerson[];
   resources: string[];
 }
@@ -24,7 +25,7 @@ const ACTIONS = ['list', 'create', 'update', 'delete'] as const;
 
 /** "View as" tester: pick a roster person + resource + action, ask the live
  *  /permissions/decide endpoint, render allow/deny + the field mask. */
-export const ViewAsTester: React.FC<ViewAsTesterProps> = ({ people, resources }) => {
+export const ViewAsTester: React.FC<ViewAsTesterProps> = ({ workspaceId, people, resources }) => {
   const [personId, setPersonId] = useState('');
   const [resource, setResource] = useState('');
   const [action, setAction] = useState<string>('list');
@@ -37,7 +38,7 @@ export const ViewAsTester: React.FC<ViewAsTesterProps> = ({ people, resources })
     setPending(true);
     setError(null);
     try {
-      setResult(await decide({ user: { id: personId }, resource_type: 'table', resource_name: resource, op: action }));
+      setResult(await decide(workspaceId, { user: { id: personId }, resource_type: 'table', resource_name: resource, op: action }));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Decision call failed.');
       setResult(null);
@@ -76,7 +77,7 @@ export const ViewAsTester: React.FC<ViewAsTesterProps> = ({ people, resources })
           type="button"
           disabled={pending}
           onClick={() => { void run(); }}
-          className="inline-flex items-center gap-1.5 rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-medium text-[var(--osio-accent-fg)] transition-colors duration-[120ms] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-medium text-[var(--osio-accent-fg)] transition-colors duration-(--osio-dur-fast) hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Eye size={14} /> {pending ? 'Asking…' : 'Test access'}
         </button>
@@ -88,7 +89,7 @@ export const ViewAsTester: React.FC<ViewAsTesterProps> = ({ people, resources })
             {result.allow ? 'ALLOW' : 'DENY'} <span className="font-normal text-[var(--osio-fg-muted)]">— {result.reason} ({result.mode})</span>
           </div>
           {result.mask && (
-            <code className="mt-1 block text-[11px] text-[var(--osio-fg-muted)]">
+            <code className="mt-1 block text-2xs text-[var(--osio-fg-muted)]">
               mask: {JSON.stringify(result.mask)}
             </code>
           )}

@@ -135,6 +135,9 @@ export function layoutCellHasHeavyBlocks(blocks: Block[] | undefined): boolean {
     nestedBlock.type === "database_full_page" ||
     nestedBlock.type === "graph_view" ||
     nestedBlock.type === "draw" ||
+    nestedBlock.type === "whiteboard" ||
+    nestedBlock.type === "diagram" ||
+    nestedBlock.type === "embed" ||
     layoutCellHasHeavyBlocks(nestedBlock.children)
   )));
 }
@@ -454,6 +457,8 @@ export function layoutCellShellEqual(left: LayoutCell, right: LayoutCell): boole
     left.wrap === right.wrap &&
     left.padding === right.padding &&
     left.fontSize === right.fontSize &&
+    left.measuredHeight === right.measuredHeight &&
+    left.visibilityFormula === right.visibilityFormula &&
     layoutOffsetsEqual(left.offset, right.offset);
 }
 

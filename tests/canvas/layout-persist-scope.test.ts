@@ -21,7 +21,7 @@ const storage = makeStorage();
 (globalThis as Record<string, unknown>).window = globalThis;
 (globalThis as Record<string, unknown>).localStorage = storage;
 
-const { freshLayout, layoutScope, loadLayout, saveLayout } = await import(
+const { freshLayout, layoutScope, loadLayout, migrateLegacyTabs, saveLayout } = await import(
   "../../src/widgets/workspace-grid/model/layoutPersist.ts"
 );
 
@@ -61,4 +61,28 @@ test("legacy v1 slots (cross-contamination risk) are wiped on load", () => {
   loadLayout(layoutScope("u1", "w1"));
   assert.equal("osionos.workspace.layout.v1" in storage, false);
   assert.equal("osionos.workspace.layout.v1.some-user" in storage, false);
+});
+
+test("a persisted draw tab loads as the whiteboard tab and keeps its tabId", () => {
+  const layout = freshLayout();
+  const pane = layout.root as { tabs: Record<string, unknown>[]; activeTabId: string | null };
+  pane.tabs.push({ tabId: "tab-draw-1", pageId: "__draw__", workspaceId: "", kind: "draw", title: "Draw" });
+  pane.activeTabId = "tab-draw-1";
+  const scope = layoutScope("u-draw", "w-draw");
+  saveLayout(layout, scope);
+
+  const loaded = loadLayout(scope).root as { tabs: { tabId: string; kind: string; url?: string }[]; activeTabId: string | null };
+  const migrated = loaded.tabs.find((tab) => tab.tabId === "tab-draw-1");
+  assert.equal(migrated?.kind, "embed");
+  assert.match(migrated?.url ?? "", /^https?:\/\//);
+  assert.equal(loaded.activeTabId, "tab-draw-1");
+  assert.equal(loaded.tabs.some((tab) => tab.kind === "draw"), false);
+});
+
+test("migrateLegacyTabs is idempotent and returns the same tree when nothing is retired", () => {
+  const layout = freshLayout();
+  assert.equal(migrateLegacyTabs(layout.root), layout.root);
+  const legacy = { type: "pane", id: "p", activeTabId: null, tabs: [{ tabId: "t", pageId: "__draw__", workspaceId: "", kind: "draw", title: "Draw" }] };
+  const once = migrateLegacyTabs(legacy as never);
+  assert.equal(migrateLegacyTabs(once), once);
 });

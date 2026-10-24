@@ -49,13 +49,13 @@ export const DevicePicker: React.FC<{ room: Room | null }> = ({ room }) => {
       </button>
       {open && (
         <div className="absolute bottom-full left-1/2 mb-2 w-60 -translate-x-1/2 overflow-hidden rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 shadow-[var(--osio-shadow-menu)]">
-          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">Microphone</p>
+          <p className="px-2 py-1 text-3xs font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">Microphone</p>
           {mics.map((mic) => (
-            <button key={mic.deviceId} type="button" onClick={() => pick('audioinput', mic.deviceId)} className="block w-full truncate rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--osio-bg-hover)]">{mic.label || 'Microphone'}</button>
+            <button key={mic.deviceId} type="button" onClick={() => pick('audioinput', mic.deviceId)} className="block w-full truncate rounded-xs px-2 py-1.5 text-left text-sm hover:bg-[var(--osio-bg-hover)]">{mic.label || 'Microphone'}</button>
           ))}
-          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">Camera</p>
+          <p className="px-2 py-1 text-3xs font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">Camera</p>
           {cams.map((cam) => (
-            <button key={cam.deviceId} type="button" onClick={() => pick('videoinput', cam.deviceId)} className="block w-full truncate rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--osio-bg-hover)]">{cam.label || 'Camera'}</button>
+            <button key={cam.deviceId} type="button" onClick={() => pick('videoinput', cam.deviceId)} className="block w-full truncate rounded-xs px-2 py-1.5 text-left text-sm hover:bg-[var(--osio-bg-hover)]">{cam.label || 'Camera'}</button>
           ))}
         </div>
       )}

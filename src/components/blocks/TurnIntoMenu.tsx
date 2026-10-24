@@ -65,7 +65,7 @@ export const TurnIntoMenu: React.FC<TurnIntoMenuProps> = ({ blockType, onTurnInt
       {open && (
         <div
           role="menu"
-          className="absolute left-0 top-full z-[var(--osio-z-max)] mt-1.5 w-44 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 shadow-xl"
+          className="absolute left-0 top-full z-[var(--osio-z-max)] mt-1.5 w-44 osio-surface-overlay"
           onMouseDown={(event) => event.preventDefault()}
         >
           {TURN_INTO_OPTIONS.map((option) => (
@@ -73,11 +73,8 @@ export const TurnIntoMenu: React.FC<TurnIntoMenuProps> = ({ blockType, onTurnInt
               key={option.type}
               type="button"
               role="menuitem"
-              className={`flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-[var(--osio-bg-hover)] ${
-                option.type === blockType
-                  ? "text-[var(--osio-accent-text)]"
-                  : "text-[var(--osio-fg-default)]"
-              }`}
+              className="osio-menu-item justify-between"
+              data-tone={option.type === blockType ? "accent" : undefined}
               onClick={() => {
                 onTurnInto(option.type);
                 setOpen(false);

@@ -40,19 +40,15 @@ export const PageOptionsMenu: React.FC<Props> = ({ pageId, pageTitle, workspaceI
         ref={triggerRef}
         size="xs"
         tone="muted"
-        className={[
-          "rounded-md transition-colors duration-[120ms]",
-          isMenuOpen
-            ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
-            : "hover:bg-[var(--osio-bg-hover)]",
-        ].join(" ")}
+        className={isMenuOpen ? "bg-[var(--osio-bg-muted)]" : undefined}
+        aria-expanded={isMenuOpen}
         onClick={(e) => {
           e.stopPropagation();
           setOpen(isMenuOpen ? null : "menu");
         }}
-        title="Page options"
+        label="Page options" title="Page options"
       >
-        <MoreHorizontal size={13} />
+        <MoreHorizontal size={12} />
       </IconButton>
       {open && (
         <PageOptionsPanel

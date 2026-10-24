@@ -24,12 +24,15 @@ import { reportUnsplashDownload, searchUnsplashPickerAssets } from "@/shared/lib
 import { searchRefusalNotice } from "@/shared/lib/media/searchRefusal";
 import { giphyEnabled } from "@/shared/chat/giphyApi";
 import { GifPicker } from "@/widgets/channel-messages/ui/composer/GifPicker";
+import type { EmbedSnapshot } from "@/shared/lib/embed/embedInfo";
+import { LinkUrlForm } from "./LinkUrlForm";
 
 type EmbedTab = "upload" | "link" | "unsplash" | "giphy";
 
 interface MediaEmbedDialogProps {
   kind: MediaBlockType;
-  onSelect: (value: string) => void;
+  /** `embed` is the provider snapshot of a video/audio/file link, when it is one. */
+  onSelect: (value: string, embed?: EmbedSnapshot) => void;
   onClose: () => void;
 }
 
@@ -45,6 +48,12 @@ const UPLOAD_LABEL: Record<MediaBlockType, string> = {
   video: "Choose a video",
   audio: "Choose audio",
   file: "Choose a file",
+};
+
+const LINK_HINT: Partial<Record<MediaBlockType, string>> = {
+  video: "A video file, or a YouTube, Vimeo, Loom, TikTok or Twitch link.",
+  audio: "An audio file, or a Spotify, SoundCloud or Apple Podcasts link.",
+  file: "A file link, a PDF, or a Google Drive or Docs link.",
 };
 
 const LINK_LABEL: Record<MediaBlockType, string> = {
@@ -74,7 +83,6 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
   }, [kind]);
   const [tab, setTab] = useState<EmbedTab>(tabs[0]);
 
-  const [urlDraft, setUrlDraft] = useState("");
   const [unsplashQuery, setUnsplashQuery] = useState("");
   const [unsplash, setUnsplash] = useState<Array<{ ref: string; previewUrl: string; downloadLocation?: string }>>([]);
   const [unsplashNotice, setUnsplashNotice] = useState<string | null>(null);
@@ -85,8 +93,8 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
   // blow the localStorage quota and the sync body cap, so cap them hard.
   const MAX_INLINE_BYTES = 4 * 1024 * 1024;
 
-  function commit(value: string) {
-    onSelect(value);
+  function commit(value: string, embed?: EmbedSnapshot) {
+    onSelect(value, embed);
     onClose();
   }
 
@@ -126,13 +134,15 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
     }
   }
 
-  function handleLink() {
-    const trimmed = urlDraft.trim();
-    if (!trimmed) return;
+  async function handleLink(trimmed: string) {
     // Shared normalizer: unwraps Google-Images-style viewer URLs to the real
     // image (embedding the wrapper can never render — the browser ORB-blocks
     // an HTML page loaded as media). Odd-but-direct inputs pass through.
-    commit(`url:${normalizeExternalUrl(trimmed) ?? trimmed}`);
+    const source = normalizeExternalUrl(trimmed) ?? trimmed;
+    if (kind === "image") return commit(`url:${source}`);
+    // Lazy: the provider table and the bridge client stay out of the editor's warm chunk.
+    const { snapshotForMediaLink } = await import("../model/mediaLinkSnapshot");
+    commit(`url:${source}`, await snapshotForMediaLink(source));
   }
 
   async function runUnsplash(query: string) {
@@ -181,17 +191,12 @@ export const MediaEmbedDialog: React.FC<MediaEmbedDialogProps> = ({ kind, onSele
         ) : null}
 
         {tab === "link" ? (
-          <div className="flex flex-col gap-2">
-            <input
-              type="url"
-              value={urlDraft}
-              onChange={(e) => setUrlDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleLink(); }}
-              placeholder={`Paste the ${kind} link…`}
-              className="h-[var(--osio-control-h-md)] w-full rounded-[var(--osio-radius-control)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2.5 text-sm text-[var(--osio-fg-default)] placeholder:text-[var(--osio-fg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-page)]"
-            />
-            <Button tone="primary" disabled={!urlDraft.trim()} onClick={handleLink}>{LINK_LABEL[kind]}</Button>
-          </div>
+          <LinkUrlForm
+            placeholder={`Paste the ${kind} link…`}
+            submitLabel={LINK_LABEL[kind]}
+            hint={LINK_HINT[kind]}
+            onSubmit={handleLink}
+          />
         ) : null}
 
         {tab === "unsplash" ? (

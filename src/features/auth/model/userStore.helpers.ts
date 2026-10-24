@@ -10,9 +10,11 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { IS_DEV } from '@/shared/config/appUrls';
 import { api } from '@/shared/api/client';
 import seedUsers from '@/data/seedUsers.json';
-import type { StaticPersona, UserSession, Workspace } from '@/entities/user';
+import type { PlatformRole, StaticPersona, UserSession, Workspace } from '@/entities/user';
+import { isPlatformRole } from '@/features/auth/model/platformRole';
 
 type SeedUsersFile = {
   users?: StaticPersona[];
@@ -34,7 +36,7 @@ export const API_BASE: string = ((import.meta.env as Record<string, string>)['VI
 const TEST_MODE = (import.meta.env as Record<string, string>)['MODE'] === 'test';
 export const REQUIRE_BRIDGE_SESSION = ((import.meta.env as Record<string, string>)['VITE_REQUIRE_BRIDGE_SESSION'] ?? (TEST_MODE ? 'false' : 'true')) !== 'false';
 export const ALLOW_OFFLINE_MODE = ((import.meta.env as Record<string, string>)['VITE_ALLOW_OFFLINE_MODE'] ?? (TEST_MODE ? 'true' : 'false')) === 'true';
-export const PRISMATICA_URL = ((import.meta.env as Record<string, string>)['VITE_PRISMATICA_URL'] ?? 'http://localhost:4322').trim();
+export const PRISMATICA_URL = ((import.meta.env as Record<string, string>)['VITE_PRISMATICA_URL'] ?? (IS_DEV ? 'http://localhost:4322' : '')).trim();
 export const AUTH_MODE = ((import.meta.env as Record<string, string>)['VITE_AUTH_MODE'] ?? '').trim();
 /** Portal mode: the app shows its own login/sign-up portal (no mock, no website redirect). */
 export function isPortalMode(): boolean { return AUTH_MODE === 'portal'; }
@@ -90,7 +92,30 @@ export function pageApiJwtFromSessionToken(token: string | null | undefined): st
  *  from the session; false for non-bridge or expired tokens. */
 export function isAdminFromSessionToken(token: string | null | undefined): boolean {
   if (isBridgeAppTokenExpired(token)) return false;
-  return decodeBridgeAppTokenPayload(token)?.is_admin === true;
+  const payload = decodeBridgeAppTokenPayload(token);
+  const claim = payload?.platform_role;
+  // The claim is the authority: a valid platform_role decides admin-ness, so a token that
+  // claims 'user' is never admin even if it also carries is_admin: true. The legacy is_admin
+  // bit is honoured only for tokens with no platform_role at all (rolling deploy) or an
+  // unknown one (treated as absent). (C2, C6)
+  if (isPlatformRole(claim)) return claim === 'admin';
+  return payload?.is_admin === true;
+}
+
+/** The platform role the session claims: the signed `platform_role`, or 'admin' for a token
+ *  minted before the claim existed (the rolling deploy keeps the admin space reachable).
+ *  The legacy is_admin fallback applies only to tokens with no platform_role (rolling deploy);
+ *  contradictory tokens (a valid non-admin platform_role alongside is_admin: true) are
+ *  normalized so the role wins and isAdmin is false (C2, C6).
+ *  Null when the token says nothing — the client only offers a surface, the bridge decides. */
+export function platformRoleFromSessionToken(token: string | null | undefined): PlatformRole | null {
+  if (isBridgeAppTokenExpired(token)) return null;
+  const payload = decodeBridgeAppTokenPayload(token);
+  const claim = payload?.platform_role;
+  if (isPlatformRole(claim)) return claim;
+  // is_admin applies only to tokens with no platform_role (rolling deploy). (C6)
+  if ((claim === undefined || claim === null) && payload?.is_admin === true) return 'admin';
+  return null;
 }
 
 export function isBridgeSession(session: UserSession | null | undefined): boolean {
@@ -117,7 +142,19 @@ export function clearBridgeTokenFromLocation() {
   globalThis.history.replaceState(globalThis.history.state, document.title, url.toString());
 }
 
+// A page the viewer embedded can redirect its own frame to `<this app>/#bridge_token=<attacker's>`;
+// the app then boots same-origin inside the frame, and consuming that token would replace the
+// viewer's account set. Reading `top` throws when a cross-origin ancestor owns it, which is also framed.
+function isFramed(): boolean {
+  try {
+    return globalThis.top !== globalThis.self;
+  } catch {
+    return true;
+  }
+}
+
 export async function consumeBridgeSessionFromLocation(): Promise<BridgeSessionImport | null> {
+  if (isFramed()) return null;
   const token = bridgeTokenFromLocation();
   if (!token || !API_BASE) return null;
   const response = await fetch(`${API_BASE}/api/auth/bridge/consume`, {

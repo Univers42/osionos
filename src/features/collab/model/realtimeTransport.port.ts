@@ -48,6 +48,18 @@ export type ActivityKind =
 export type NoteOp = 'created' | 'resolved' | 'deleted';
 export type FileOp = 'seeded' | 'removed';
 
+/**
+ * One last-writer-wins operation on a page's block tree (content plane). TWO
+ * register kinds share (v, actor) tie-breaking: `put`/`del` write register
+ * `b:<id>` (the block's own fields minus `children` + its `parentId`, a delete
+ * being a tombstone), `order` writes register `o:<parentId|root>` (one parent's
+ * ordered child-id list). `parentId: null` = the page's top level.
+ */
+export type BlockOp =
+  | { k: 'put'; id: string; parentId: string | null; block: Record<string, unknown>; v: number }
+  | { k: 'del'; id: string; v: number }
+  | { k: 'order'; parentId: string | null; ids: string[]; v: number };
+
 /** Every realtime message is exactly one of these (AOC §5 + R-P1). */
 export type CollabEvent =
   | { t: 'caret';     actor: string; seq: number; caret: CaretState }
@@ -56,7 +68,13 @@ export type CollabEvent =
   | { t: 'activity';  actor: string; seq: number; kind: ActivityKind; targetId: string }
   | { t: 'nav';       actor: string; seq: number; route: string }
   | { t: 'note';      actor: string; noteId: string; op: NoteOp; anchor: Anchor }
-  | { t: 'file';      actor: string; fileId: string; op: FileOp; name: string };
+  | { t: 'file';      actor: string; fileId: string; op: FileOp; name: string }
+  // Content plane: block-tree registers for one page, folded by the pure engine
+  // (model/blockSync.ts). Never a feed item; validated at the boundary.
+  | { t: 'blocks';    actor: string; seq: number; pageId: string; ops: BlockOp[] }
+  // A sidebar-tree nudge: "this workspace's page list changed" — receivers
+  // re-hydrate it, which merges additively and never drops local work.
+  | { t: 'pages';     actor: string; seq: number; workspaceId: string };
 
 export interface SummonReq { kind: 'summon'; route: string; anchor?: Anchor; message?: string; }
 export interface SummonRes { accepted: boolean; }

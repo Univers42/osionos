@@ -75,7 +75,7 @@ export const HomeViewsBlock: React.FC = () => {
                 {VIEW_TYPE_ICONS[view.type]}
               </span>
               <span className="min-w-0 flex-1 truncate text-sm text-[var(--osio-fg-default)]">{view.name}</span>
-              <span className="shrink-0 rounded-full bg-[var(--osio-bg-hover)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">
+              <span className="shrink-0 rounded-full bg-[var(--osio-bg-hover)] px-2 py-0.5 text-3xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">
                 {VIEW_TYPE_LABELS[view.type]}
               </span>
             </button>

@@ -1,0 +1,7 @@
+# The linter for osionos-ml. The gates run `ruff check services/osionos-ml`
+# and `ruff format --check services/osionos-ml`.
+line-length = 120
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "I", "B", "UP"]

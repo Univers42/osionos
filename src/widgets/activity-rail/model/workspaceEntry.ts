@@ -12,6 +12,7 @@
 
 import type { PageEntry } from "@/entities/page";
 import { pageIndexFor } from "@/features/page-file/model/pageIndexCache";
+import { realRelOf } from "@/features/page-file/model/pageSections";
 
 /**
  * Normalise a workspace-relative path: strip leading/trailing "/" and collapse "//".
@@ -20,6 +21,13 @@ import { pageIndexFor } from "@/features/page-file/model/pageIndexCache";
  */
 function normaliseRelPath(relPath: string): string {
   return relPath.replace(/^\/+|\/+$/g, "").replace(/\/+/g, "/");
+}
+
+/** The explorer's display path -> the page index's real path. `sectioned` = the explorer shows
+ *  the Private / Shared folders (page-backed mode); a section folder itself maps to "". */
+function realPathOf(relPath: string, sectioned: boolean): string {
+  const normalised = normaliseRelPath(relPath);
+  return sectioned ? realRelOf(normalised) : normalised;
 }
 
 /**
@@ -32,8 +40,9 @@ export function pageIdForEntry(
   workspaceId: string,
   pages: readonly PageEntry[],
   relPath: string,
+  sectioned = false,
 ): string | undefined {
-  const normalised = normaliseRelPath(relPath);
+  const normalised = realPathOf(relPath, sectioned);
   if (normalised === "") return undefined;
   const index = pageIndexFor(workspaceId, pages);
   return index.idForPath(normalised);
@@ -49,8 +58,9 @@ export function pageIdForDir(
   workspaceId: string,
   pages: readonly PageEntry[],
   relDir: string,
+  sectioned = false,
 ): string | undefined {
-  const normalised = normaliseRelPath(relDir);
+  const normalised = realPathOf(relDir, sectioned);
   if (normalised === "") return undefined;
   const index = pageIndexFor(workspaceId, pages);
   return index.ownerOfDir(normalised);

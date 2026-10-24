@@ -13,6 +13,8 @@
 import type { Block, BlockType } from "@/entities/block";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
 
+import { BOOKMARK_BLOCK_ESTIMATED_HEIGHT, EMBED_BLOCK_ESTIMATED_HEIGHT } from "./linkBlocks";
+
 export const ROOT_BLOCK_VIRTUALIZATION_THRESHOLD = 60;
 export const ROOT_BLOCK_VIRTUALIZATION_OVERSCAN = 12;
 
@@ -45,7 +47,11 @@ export const BLOCK_HEIGHT_ESTIMATE_BY_TYPE: Record<BlockType, number> = {
   database_inline: 260,
   database_full_page: 560,
   graph_view: 360,
-  draw: 420,
+  draw: 96,
+  whiteboard: 540,
+  diagram: 360,
+  embed: EMBED_BLOCK_ESTIMATED_HEIGHT,
+  bookmark: BOOKMARK_BLOCK_ESTIMATED_HEIGHT,
   home_views: 280,
   placeholder: 36,
 };

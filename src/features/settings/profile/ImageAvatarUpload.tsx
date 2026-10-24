@@ -6,44 +6,54 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /**
- * Image avatar upload: file → canvas downscale (≤256px, JPEG/WebP-quality
- * dataUrl ≤200KB) → POST /api/profile/avatar (bridge persists it into
- * osionos_bridge_identities.profile). Silent no-op when the bridge is
- * unavailable (offline runs keep the emoji avatar picker).
+ * Image avatar upload: file → three square WebP variants (64 / 160 / 460) →
+ * POST /api/profile/avatar. The bridge checks the bytes, strips their metadata,
+ * stores them in the `avatars` bucket and writes the path into
+ * `osionos_profiles.avatar_url`; the response carries the URL to show.
+ *
+ * The body is exactly `{ variants: { "64": b64, "160": b64, "460": b64 } }`
+ * (WebP or JPEG, each square at its size, under its cap) — the same shape the
+ * route reads.
+ *
+ * Silent no-op when the bridge is unavailable (offline runs keep the emoji
+ * avatar picker).
  */
 
 import React, { useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
 
 import { api, getActivePageJwt } from '@/shared/api/client';
-
-const MAX_EDGE = 256;
-const MAX_DATA_URL_BYTES = 200 * 1024;
-
-async function downscaleToDataUrl(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-  const context = canvas.getContext('2d');
-  if (!context) throw new Error('Canvas is unavailable.');
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  for (const quality of [0.85, 0.7, 0.5, 0.3]) {
-    const dataUrl = canvas.toDataURL('image/jpeg', quality);
-    if (dataUrl.length <= MAX_DATA_URL_BYTES) return dataUrl;
-  }
-  throw new Error('Image is too large even after downscaling.');
-}
+import { buildAvatarVariants, type EncodedAvatar } from './avatarVariants';
 
 interface ImageAvatarUploadProps {
-  onUploaded?: (dataUrl: string) => void;
+  onUploaded?: (avatarUrl: string) => void;
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), type, quality));
+}
+
+/**
+ * Draws the centre square of the source into a `size` canvas. The crop keeps
+ * the avatar square whatever the source is — the bridge refuses a variant that
+ * is not.
+ */
+async function drawSquare(bitmap: ImageBitmap, size: number, type: string, quality: number): Promise<EncodedAvatar | null> {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  const side = Math.min(bitmap.width, bitmap.height);
+  context.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, size, size);
+  const blob = await canvasToBlob(canvas, type, quality);
+  if (!blob) return null;
+  return { type: blob.type, bytes: new Uint8Array(await blob.arrayBuffer()) };
 }
 
 export const ImageAvatarUpload: React.FC<ImageAvatarUploadProps> = ({ onUploaded }) => {
@@ -55,10 +65,15 @@ export const ImageAvatarUpload: React.FC<ImageAvatarUploadProps> = ({ onUploaded
     if (!file || !jwt) return;
     setStatus('busy');
     try {
-      const dataUrl = await downscaleToDataUrl(file);
-      await api.post('/api/profile/avatar', { dataUrl }, jwt);
-      setStatus('done');
-      onUploaded?.(dataUrl);
+      const bitmap = await createImageBitmap(file);
+      try {
+        const variants = await buildAvatarVariants((size, type, quality) => drawSquare(bitmap, size, type, quality));
+        const response = await api.post<{ avatar?: string }>('/api/profile/avatar', { variants }, jwt);
+        setStatus('done');
+        onUploaded?.(response?.avatar ?? '');
+      } finally {
+        bitmap.close();
+      }
     } catch {
       setStatus('error');
     }
@@ -77,7 +92,7 @@ export const ImageAvatarUpload: React.FC<ImageAvatarUploadProps> = ({ onUploaded
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={status === 'busy'}
-        className="inline-flex items-center gap-1.5 rounded-md border border-[var(--osio-border-default)] px-2.5 py-1.5 text-xs font-medium text-[var(--osio-fg-muted)] transition-colors duration-[120ms] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-md border border-[var(--osio-border-default)] px-2.5 py-1.5 text-xs font-medium text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] disabled:cursor-not-allowed disabled:opacity-60"
       >
         <Upload size={14} /> {status === 'busy' ? 'Uploading…' : 'Upload photo'}
       </button>

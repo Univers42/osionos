@@ -70,12 +70,18 @@ export function entriesFromPageSharing(sharing: PageSharing, members: SharePerso
   return entries;
 }
 
+/** Explicit rules override the page's legacy grants, just as the bridge evaluates them. */
+export function entriesFromPageAccess(sharing: PageSharing, members: SharePerson[], rules: ShareEntry[]): ShareEntry[] {
+  const ruled = new Set(rules.map((entry) => entry.key.toLowerCase()));
+  return [...entriesFromPageSharing(sharing, members).filter((entry) => !ruled.has(entry.key.toLowerCase())), ...rules];
+}
+
 /** The sharing after giving `target` `level`. Throws the message the dialog shows for a target the bridge would refuse. */
 export function sharingWith(sharing: PageSharing, target: ShareEntry['target'], level: ShareLevel, members: SharePerson[]): PageSharing {
   if (level === 'no_access') return sharingWithout(sharing, target);
   if (target.type === 'workspace') return { ...sharing, visibility: 'shared' };
   if (target.type === 'public') throw new Error(PUBLISH_HINT);
-  if (target.type === 'role') throw new Error(PAGE_TARGET_HINT);
+  if (target.type === 'role' || target.type === 'team') throw new Error(PAGE_TARGET_HINT);
   const { person } = target;
   if (!members.some((member) => sameId(member.id, person.id))) {
     throw new Error(`${person.name} is not a member of this workspace. Add them to the workspace before sharing this page with them.`);
@@ -90,7 +96,7 @@ export function sharingWith(sharing: PageSharing, target: ShareEntry['target'], 
 
 export function sharingWithout(sharing: PageSharing, target: ShareEntry['target']): PageSharing {
   if (target.type === 'public') throw new Error(PUBLISH_HINT);
-  if (target.type === 'role') throw new Error(PAGE_TARGET_HINT);
+  if (target.type === 'role' || target.type === 'team') throw new Error(PAGE_TARGET_HINT);
   if (target.type === 'workspace') return { ...sharing, visibility: sharing.visibility === 'shared' ? 'private' : sharing.visibility };
   const { person } = target;
   return { ...sharing, collaborators: sharing.collaborators.filter((collaborator) => !sameId(collaborator.userId, person.id)) };

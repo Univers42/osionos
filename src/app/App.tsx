@@ -22,6 +22,7 @@ import { useNotifyLive } from "@/store/chat/useNotifyLive";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { QuickCaptureModal } from "@/features/quick-capture/ui/QuickCaptureModal";
 import { WorkspaceIntentModal } from "@/features/workspace-onboarding/ui/WorkspaceIntentModal";
+import { ProfessionPickerModal } from "@/features/professions/ui/ProfessionPickerModal";
 import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { useZenMode } from "@/shared/config/useZenMode";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
@@ -33,23 +34,17 @@ import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPage
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
 import { LazyCanvasDebugRoute, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
-import { applyStoredAppearance } from "@/shared/config/theme";
+import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
-import {
-  applyWorkspaceAppearance,
-  clearWorkspaceAppearance,
-  resolveWorkspaceConfig,
-  useWorkspaceConfigStore,
-  workspaceConfigKey,
-} from "@/shared/config/workspaceConfigStore";
-import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
+import { openSettings } from "@/features/settings/model/settingsNav";
+import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
-import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
 import { ExportHost } from "@/features/page-export/ui/ExportHost";
+import { AiInlinePanel } from "@/features/ai/ui/AiInlinePanel";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
 
@@ -161,15 +156,11 @@ const App: React.FC = () => {
   const initialized = useUserStore((s) => s.initialized);
   const error = useUserStore((s) => s.error);
   const activeUserId = useUserStore((s) => s.activeUserId);
-  const activeWorkspace = useUserStore((s) => s.activeWorkspace());
-  const workspaceKey = workspaceConfigKey(activeUserId || "anonymous", activeWorkspace?._id ?? "workspace");
-  const storedWorkspaceConfig = useWorkspaceConfigStore((s) => s.configs[workspaceKey]);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
-  const openSettings = (tab?: SettingsTab) => {
-    setSettingsTab(tab ?? "general");
-    setSettingsOpen(true);
-  };
+  // The way back from OpenRouter: the app comes back with ?code&state, and the
+  // panel that finishes the sign-in opens right away.
+  useEffect(() => {
+    if (readOAuthReturn(globalThis.location?.href ?? "")) openSettings("ai_connections");
+  }, []);
   // Captured once at first render, before init effects can reset activePage,
   // so a refresh can reopen the page the user was last on.
   const [persistedActivePage] = useState(() => loadActivePage());
@@ -278,15 +269,7 @@ const App: React.FC = () => {
     }
   }, [seeded, persistedActivePage]);
 
-  useEffect(() => {
-    if (!activeWorkspace?._id) return;
-    const appearance = resolveWorkspaceConfig(storedWorkspaceConfig).appearance;
-    if (appearance) {
-      applyWorkspaceAppearance(appearance);
-      return;
-    }
-    clearWorkspaceAppearance();
-  }, [activeWorkspace?._id, storedWorkspaceConfig]);
+  useEffect(() => watchSystemTheme(), []);
 
   if (isDevCanvasDebugRoute()) {
     return <LazyCanvasDebugRoute />;
@@ -314,7 +297,7 @@ const App: React.FC = () => {
   if (error === "bridge-session-required" || !activeUserId) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[var(--osio-bg-page)] px-6 text-[var(--osio-fg-default)]">
-        <section className="w-full max-w-md rounded-md border border-[var(--osio-border)] bg-[var(--osio-bg-panel)] p-6 shadow-sm">
+        <section className="w-full max-w-md rounded-md border border-[var(--osio-border)] bg-[var(--osio-bg-panel)] p-6 shadow-osio-e1">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">Private workspace</p>
           <h1 className="mt-3 text-2xl font-semibold">Open osionos from Prismatica</h1>
           <p className="mt-3 text-sm leading-6 text-[var(--osio-fg-muted)]">
@@ -336,7 +319,7 @@ const App: React.FC = () => {
     <div
       data-testid="app-shell"
       data-zen={zen ? "1" : undefined}
-      className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-page)]"
+      className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
     >
       {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
       <TopBar onOpenSettings={openSettings} />
@@ -363,13 +346,16 @@ const App: React.FC = () => {
       </div>
 
       <WorkspaceThemePanel />
-      {settingsOpen && <LazySettingsCenter initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />}
       <ToastViewport />
       <ShareHost />
       <ExportHost />
+      <AiInlinePanel />
       <ContactDock />
       <QuickCaptureModal />
       <WorkspaceIntentModal />
+      {/* The profession picker: the Modal primitive returns null until the store's
+          `open` flag is set, so the warm path renders nothing. */}
+      <ProfessionPickerModal />
     </div>
   );
 };

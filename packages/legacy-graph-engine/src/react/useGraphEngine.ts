@@ -68,7 +68,10 @@ export function useGraphEngine(args: UseGraphEngineArgs): GraphEngineRefs {
       // tokens through it (shared/config/theme.ts sets root.dataset.palette). Leaving it
       // out meant a palette change never re-resolved the theme — the graph kept the old
       // colours until a hard refresh remounted the engine.
-      attributeFilter: ["data-theme", "data-palette", "class", "style"],
+      // The appearance attributes (accent, density, corners, text size) are listed by name:
+      // the engine's core may not import the host's theme.ts. `style` carries the custom
+      // accent hue. Keep in step with APPEARANCE_ATTRIBUTES in src/shared/config/theme.ts.
+      attributeFilter: ["data-theme", "data-palette", "class", "style", "data-accent", "data-density", "data-radius", "data-ui-scale"],
     });
     args.onReady?.(engine);
 

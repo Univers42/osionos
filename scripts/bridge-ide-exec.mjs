@@ -25,13 +25,17 @@
 // the frontend can say WHY instead of "[connection closed]".
 
 import { handshake, encodeFrame, closeFrame, createFrameDecoder } from './ide-ws.mjs';
+import { parseResizeFrame, extractWsAuth, armTokenExpiry, rejectUpgrade } from './ide-ws-auth.mjs';
 import { createDockerClient } from './ide-docker.mjs';
 import { requireSandboxIdentity, buildShellExecSpec, buildFsAgentExecSpec } from './ide-sandbox-spec.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import {
   bumpContainerSockets, containerHasActivity, getOrCreateSession, attachClient, detachClient, writeStdin,
 } from './ide-term-sessions.mjs';
-import { ensureSandbox, sandboxNames } from './bridge-ide-sandbox.mjs';
+import { ensureSandbox, isUserFacingRefusal, sandboxNames } from './bridge-ide-sandbox.mjs';
+
+// The pure seams moved to ide-ws-auth.mjs; re-exported so existing importers keep working.
+export { parseResizeFrame, extractWsAuth, armTokenExpiry };
 
 // Each live socket pins bridge FDs; cap churn AND simultaneous streams per
 // user so one tenant can't exhaust the shared bridge. (PTY SESSIONS outlive
@@ -42,33 +46,6 @@ const activeExecByUser = new Map();
 /** Whether this container has live sockets or recent session activity. */
 export function hasActiveExec(containerName) {
   return containerHasActivity(containerName, 0);
-}
-
-// APC-wrapped PTY-resize control frame: `ESC _ osio-resize:COLS,ROWS ESC \`.
-// Strict FULL-frame match — prefix-only matching let pasted bytes that happen
-// to start with the magic trigger a bogus resize.
-const RESIZE_RE = /^_osio-resize:(\d{1,4}),(\d{1,4})\\$/;
-
-/** Parse a complete resize control frame; null for anything else (incl. paste
- *  noise). Exported pure for tests. */
-export function parseResizeFrame(data) {
-  if (data.length > 26) return null;
-  const match = RESIZE_RE.exec(data.toString('latin1'));
-  return match ? { cols: Number(match[1]), rows: Number(match[2]) } : null;
-}
-
-/** Auth rides the WS subprotocol (`osio-token.<jwt>` alongside `osio-ide.v1`)
- *  so the token stays out of URLs/access logs. The token comes ONLY from the
- *  subprotocol entry; a missing entry yields undefined, which the existing
- *  verify step already refuses. Exported pure for tests. */
-export function extractWsAuth(request) {
-  const offered = String(request.headers['sec-websocket-protocol'] ?? '')
-    .split(',').map((s) => s.trim()).filter(Boolean);
-  const tokenEntry = offered.find((p) => p.startsWith('osio-token.'));
-  return {
-    token: tokenEntry ? tokenEntry.slice('osio-token.'.length) : undefined,
-    protocol: offered.includes('osio-ide.v1') ? 'osio-ide.v1' : undefined,
-  };
 }
 
 /** Demux docker's non-TTY exec stream (8-byte [type,0,0,0,len] frames) into raw
@@ -89,13 +66,6 @@ export function createStdStreamDemux() {
     }
     return payloads;
   };
-}
-
-/** Refuse a WS upgrade before the handshake: a plain HTTP status the browser
- *  surfaces in devtools (a close code needs a completed handshake first). */
-function rejectUpgrade(socket, status, text) {
-  socket.write(`HTTP/1.1 ${status} ${text}\r\nConnection: close\r\n\r\n`);
-  socket.destroy();
 }
 
 // The only language servers we relay to (P5). Adding one = one line here + the
@@ -131,12 +101,12 @@ export function serverCommand(table, lang) {
 
 function lspExecSpec(lang) {
   const cmd = serverCommand(LSP_SERVERS, lang);
-  return { User: '10001:10001', WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
+  return { WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
 }
 
 function dapExecSpec(lang) {
   const cmd = serverCommand(DAP_SERVERS, lang);
-  return { User: '10001:10001', WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
+  return { WorkingDir: '/workspace', AttachStdin: true, AttachStdout: true, AttachStderr: true, Cmd: cmd };
 }
 
 /** Map an LSP process exit code to a WS close frame. Exit 137 = OOM kill → 4137 with a named
@@ -146,26 +116,15 @@ export function lspCloseFor(exitCode) {
   return { code: 1000, reason: 'process ended' };
 }
 
-/** An IDE token lives at most 15 minutes; a socket opened with one must not outlive it. App tokens
- *  carry no `exp` here, so nothing is armed for them. `exp` is in seconds, `now` in ms.
- *  Ponytail: the timer is wall-clock; a host clock stepped backwards after arming closes the
- *  socket late (by the step), never early. */
-export function armTokenExpiry(socket, exp, now = Date.now()) {
-  if (!Number.isFinite(exp)) return;
-  const timer = setTimeout(() => {
-    if (!socket.destroyed) socket.end(closeFrame(4011, 'token expired'));
-  }, Math.max(0, exp * 1000 - now));
-  timer.unref();
-  socket.once('close', () => clearTimeout(timer));
-}
-
 // A refusal the user can act on (every box in use: 503) goes out as the close reason; anything
 // else stays generic on the wire and goes to the log. Both catches below used to swallow the
 // error, so a full box cap and a refused create both read as "sandbox unavailable" with nothing
 // logged, and the UI blamed docker-ide (2026-10-14).
+const OTHER_WORKSPACE_NOTICE = '\r\n[osionos] processes in your other workspace were stopped\r\n';
+
 function sandboxRefusal(kind, names, error, fallback) {
   console.warn(`[osionos-ide] ${kind} could not reach ${names.containerName}: ${error?.message ?? error}`);
-  return error?.status === 503 && typeof error.message === 'string' ? error.message.slice(0, 120) : fallback;
+  return isUserFacingRefusal(error) && typeof error.message === 'string' ? error.message.slice(0, 120) : fallback;
 }
 
 /** Returns an upgrade handler `(request, socket) => boolean` — true when it owns
@@ -178,6 +137,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     const isLsp = url.pathname === '/api/ide/lsp';
     const isDap = url.pathname === '/api/ide/debug';
     const isFsync = url.pathname === '/api/ide/fsync';
+    const isSafe = url.searchParams.get('safe') === '1';
     if (!isPty && !isLsp && !isDap && !isFsync) return false;
 
     if (env.OSIONOS_IDE_SANDBOX !== '1' || !env.OSIONOS_IDE_DOCKER_HOST) { rejectUpgrade(socket, 404, 'Not Found'); return true; }
@@ -187,12 +147,13 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
     if (origin && !allowOrigin(origin)) { rejectUpgrade(socket, 403, 'Forbidden'); return true; }
 
     const auth = extractWsAuth(request);
-    let userId, names, tokenExp;
+    let userId, names, tokenExp, username;
     try {
       const session = verifySession(auth.token, config);
       const identity = requireSandboxIdentity(session, url.searchParams.get('workspaceId'), env);
       userId = identity.userId;
       tokenExp = session.exp;
+      username = session.username;
       names = sandboxNames(identity);
     } catch (error) {
       // The status tells an unlisted account apart; the reason stays generic.
@@ -215,7 +176,7 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
 
     let spec;
     try {
-      if (isPty) spec = buildShellExecSpec();
+      if (isPty) spec = buildShellExecSpec({ safe: isSafe, username, tz: url.searchParams.get('tz') });
       else if (isFsync) spec = buildFsAgentExecSpec();
       else if (isDap) spec = dapExecSpec(url.searchParams.get('lang'));
       else spec = lspExecSpec(url.searchParams.get('lang'));
@@ -249,9 +210,11 @@ export function createIdeExecUpgradeHandler({ config, verifySession, env = proce
       // shell, attach this socket as one of its clients. A reload reattaches
       // to the SAME shell and receives the replay ring first.
       const termId = /^\d{1,2}$/.test(url.searchParams.get('term') ?? '') ? url.searchParams.get('term') : '0';
-      const sessionKey = `${userId}|${names.containerName}|${termId}`;
+      // A safe terminal is its own session: it must never reattach to the login shell of the same id.
+      const sessionKey = `${userId}|${names.containerName}|${termId}${isSafe ? '|safe' : ''}`;
       (async () => {
-        await ensureSandbox(env, names);
+        const ensured = await ensureSandbox(env, names);
+        if (ensured.stoppedOtherWorkspaces > 0 && !socket.destroyed) socket.write(encodeFrame(Buffer.from(OTHER_WORKSPACE_NOTICE), 2));
         return getOrCreateSession({
           key: sessionKey,
           containerName: names.containerName,
