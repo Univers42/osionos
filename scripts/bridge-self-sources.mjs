@@ -204,7 +204,9 @@ export const SELF_SOURCES = [
 ];
 
 /** The source of an id, or null: the id is never taken from the request as anything else. */
-export function selfSourceById(id) {
+export function selfSourceById(id, env = process.env) {
 	if (typeof id !== 'string') return null;
+	// Unregistered, not forbidden: with tracking off the source is an unknown id like any other.
+	if (id === 'my-activity' && env.OSIONOS_ACTIVITY !== '1') return null;
 	return SELF_SOURCES.find((source) => source.id === id) ?? null;
 }

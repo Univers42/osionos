@@ -26,6 +26,9 @@ import { accountConfig, send, sessionToken, startAccountWorld, USER_A, USER_B } 
 import { kvStub } from './support/kv-stub.mjs';
 import { SELF_SOURCES } from '../../scripts/bridge-self-sources.mjs';
 
+// my-activity is registered only while the activity flag is on; the flag-off case is tested explicitly.
+process.env.OSIONOS_ACTIVITY = '1';
+
 const MERGE = 'rpc/osionos_user_settings_merge';
 const VIEW = { name: 'Recent', type: 'table', filters: [{ property: 'title', op: 'contains', value: 'a' }], sorts: [{ property: 'updated_at', direction: 'desc' }], visibleProperties: ['title', 'updated_at'], settings: { showRowNumbers: true } };
 

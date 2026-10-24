@@ -59,10 +59,15 @@ const badQuery = (message) => insightsError(400, 'bad_query', message);
 
 /** The validated filter; every key is checked against an allowlist and a closed vocabulary. */
 export function parseInsightsQuery(url) {
-	for (const key of url.searchParams.keys()) if (!ALLOWED_KEYS.has(key)) throw badQuery('This query parameter is not accepted.');
+	const seen = new Set();
+	for (const key of url.searchParams.keys()) {
+		if (!ALLOWED_KEYS.has(key)) throw badQuery('This query parameter is not accepted.');
+		if (seen.has(key)) throw badQuery('Each query parameter may appear once.');
+		seen.add(key);
+	}
 	const rawDays = url.searchParams.get('days');
 	const days = rawDays === null ? DEFAULT_DAYS : Number(rawDays);
-	if (!/^\d{1,3}$/.test(rawDays ?? '30') || days < MIN_DAYS || days > MAX_DAYS) throw badQuery(`days must be a whole number from ${MIN_DAYS} to ${MAX_DAYS}.`);
+	if (!/^[1-9]\d{0,2}$/.test(rawDays ?? '30') || days < MIN_DAYS || days > MAX_DAYS) throw badQuery(`days must be a whole number from ${MIN_DAYS} to ${MAX_DAYS}.`);
 	const granularity = url.searchParams.get('granularity');
 	if (granularity !== null && granularity !== 'day') throw badQuery('Only the day granularity is available.');
 	const event = url.searchParams.get('event');

@@ -18,6 +18,9 @@
  * counts nothing and issues no query); `isTracked` defaults to "nobody", so the flag alone records
  * nothing.
  *
+ * On a consent miss the event waits for the fill (`awaitTracked`) with the timestamp of the action.
+ * One numbers-only line goes to `log` on the first failed flush of a streak and one on recovery.
+ *
  * Caveat: the queue is memory only. A crash or SIGKILL loses up to one flush interval plus one
  * batch, and a failed batch is dropped (counted as dropped.store), not re-queued: under a long
  * outage a retry buffer would fill the cap and drop anyway while competing with fresh events.
@@ -36,7 +39,7 @@ const intFrom = (value, fallback) => {
 	return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-export function createActivityEmitter({ pg, env = process.env, now = Date.now, isTracked = () => false }) {
+export function createActivityEmitter({ pg, env = process.env, now = Date.now, isTracked = () => false, awaitTracked = isTracked, log = () => {} }) {
 	const enabled = env.OSIONOS_ACTIVITY === '1';
 	const queueMax = intFrom(env.ACTIVITY_QUEUE_MAX, 5000);
 	const userPerMin = intFrom(env.ACTIVITY_USER_PER_MIN, 50);
@@ -73,10 +76,18 @@ export function createActivityEmitter({ pg, env = process.env, now = Date.now, i
 			counters.dropped.invalid += 1;
 			return;
 		}
-		if (!isTracked(session)) {
-			counters.dropped.untracked += 1;
-			return;
-		}
+		const ts = new Date(now()).toISOString();
+		const tracked = awaitTracked(session);
+		if (tracked === true) enqueue(ts, userId, workspaceId, event, surface);
+		else if (typeof tracked?.then === 'function') {
+			tracked.then(
+				(yes) => (yes === true ? enqueue(ts, userId, workspaceId, event, surface) : void (counters.dropped.untracked += 1)),
+				() => void (counters.dropped.untracked += 1),
+			);
+		} else counters.dropped.untracked += 1;
+	}
+
+	function enqueue(ts, userId, workspaceId, event, surface) {
 		if (queue.length >= queueMax) {
 			counters.dropped.overflow += 1;
 			return;
@@ -85,7 +96,7 @@ export function createActivityEmitter({ pg, env = process.env, now = Date.now, i
 			counters.dropped.user_rate += 1;
 			return;
 		}
-		queue.push({ ts: new Date(now()).toISOString(), user_id: userId, workspace_id: workspaceId ?? null, event, surface });
+		queue.push({ ts, user_id: userId, workspace_id: workspaceId ?? null, event, surface });
 		startTimer();
 		if (queue.length >= batchSize) void flush();
 	}
@@ -109,11 +120,13 @@ export function createActivityEmitter({ pg, env = process.env, now = Date.now, i
 		try {
 			await pg.asService().post(TABLE, batch, { prefer: 'return=minimal' });
 			counters.emitted += batch.length;
+			if (failures > 0) log(`activity flush recovered after ${failures} failed batches, dropped_store=${counters.dropped.store}`);
 			failures = 0;
 			backoffUntil = 0;
 			lastFlushOk = true;
 		} catch {
 			counters.dropped.store += batch.length;
+			if (failures === 0) log(`activity flush failed: batch=${batch.length}, dropped_store=${counters.dropped.store}`);
 			failures += 1;
 			backoffUntil = now() + backoffMs();
 			lastFlushOk = false;
