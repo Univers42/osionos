@@ -54,6 +54,8 @@ import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
 import { BoundFieldEditor } from "@/features/profile-binding/ui/BoundFieldEditor";
+import { isReadmePage } from "@/features/profile-binding/model/readmePage";
+import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
 import { ButtonBlockEditor } from "@/features/button-program/ui/ButtonSettingsPopover";
 import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
@@ -477,7 +479,10 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     [block.language, block.id, block.fileName, block.codeTheme, codeShowLineNumbers, showLangPicker, langQuery, isRenderable, codeView, copiedCode, handleLangSelect, commitBlockUpdate, handleCopyCode, langPickerRef],
   );
 
-  if (block.recordRef && block.fieldBind) return <BoundFieldEditor block={block} onKeyDown={onKeyDown} />;
+  // Only the owner's README binds to the profile; marketplace and profession templates bind
+  // `$record` to other records (app title, `custom:*`) and keep their plain editor.
+  const isProfileBound = useAccountProfileStore((s) => Boolean(block.recordRef && block.fieldBind) && isReadmePage(pageId, s.profile));
+  if (isProfileBound) return <BoundFieldEditor block={block} onKeyDown={onKeyDown} />;
 
   switch (block.type) {
     case "heading_1":
