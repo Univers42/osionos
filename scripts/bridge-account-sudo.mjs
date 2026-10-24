@@ -37,8 +37,8 @@
  * busy stack refuses every step-up with 503, not only the one that filled the window.
  */
 
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { clientMeta, grantSudo, rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
+import { createOtpClient } from './bridge-account-otp.mjs';
 import { readGotrueUser } from './bridge-gotrue-user.mjs';
 import { bearerToken, readJsonBody, sendJson } from './bridge-social-core.mjs';
 
@@ -49,18 +49,17 @@ const POST_ONLY = new Set([EMAIL_PATH, VERIFY_PATH]);
 const SEND_LIMIT = 5;
 const SEND_WINDOW_MS = 600_000;
 const SUDO_TTL_MS = 600_000;
-const PROOF_AUDIENCE = 'otp-proof';
-const OTP_TIMEOUT_MS = 8_000;
 const BODY_LIMIT = 4 * 1024;
 const CODE_SHAPE = /^[0-9]{6}$/;
 const ADDRESS_SHAPE = /^[^\s@]+@[^\s@]+$/;
 const UNAVAILABLE = 'The step-up service is unavailable; try again shortly.';
-const BAD_PROOF = 'The step-up could not be verified; ask for a new code.';
 const NO_ADDRESS = 'This account has no address to send a code to.';
 // The fields an error may carry besides its code, so a route that knows more can say it.
 const EXTRA_FIELDS = ['retryAfterSeconds', 'requestedAt', 'scheduledFor'];
 
 export const accountError = (status, code, message, extra) => Object.assign(new Error(message), { status, code }, extra);
+
+const { requestCode, verifyCode, checkProof, spendProof } = createOtpClient({ fail: accountError, codes: { unavailable: 'sudo_unavailable', proofInvalid: 'sudo_proof_invalid' } });
 
 export function respondWithError(response, error, config) {
 	const status = Number.isInteger(error?.status) ? error.status : 500;
@@ -125,18 +124,6 @@ function proofSecret(env) {
 	return secret;
 }
 
-/** One call to grobase, or the failure that says the step-up is unavailable. */
-async function grobase(config, fetchImpl, path, { method = 'GET', body, headers = {} } = {}) {
-	try {
-		return await fetchImpl(`${config.baasUrl}${path}`, {
-			method,
-			headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...headers },
-			body: body === undefined ? undefined : JSON.stringify(body),
-			signal: AbortSignal.timeout(OTP_TIMEOUT_MS),
-		});
-	} catch { throw accountError(503, 'sudo_unavailable', UNAVAILABLE); }
-}
-
 /** The address GoTrue holds for this user, or the failure that says there is none. */
 export async function accountAddress(deps, userId) {
 	let payload;
@@ -149,71 +136,6 @@ export async function accountAddress(deps, userId) {
 	const address = typeof payload?.email === 'string' ? payload.email.trim().toLowerCase() : '';
 	if (!address || !ADDRESS_SHAPE.test(address)) throw accountError(409, 'no_email', NO_ADDRESS);
 	return address;
-}
-
-/** Ask grobase to mail the code. Its own throttling (Kong) is not the user's limit. */
-async function requestCode({ config, fetchImpl }, address) {
-	const response = await grobase(config, fetchImpl, '/v1/auth/otp/request', {
-		method: 'POST',
-		body: { email: address },
-		headers: { apikey: config.serviceKey, Authorization: `Bearer ${config.serviceKey}` },
-	});
-	if (response.status === 429) {
-		const retryAfter = Number(response.headers.get('retry-after'));
-		throw accountError(503, 'sudo_unavailable', UNAVAILABLE, Number.isFinite(retryAfter) ? { retryAfterSeconds: retryAfter } : {});
-	}
-	if (!response.ok) throw accountError(503, 'sudo_unavailable', UNAVAILABLE);
-	const payload = await response.json().catch(() => null);
-	if (payload?.sent !== true) throw accountError(503, 'sudo_unavailable', UNAVAILABLE);
-}
-
-/** The proof grobase answers with, or the failure that says the code was not accepted. */
-async function verifyCode({ config, fetchImpl }, address, code) {
-	const response = await grobase(config, fetchImpl, '/v1/auth/otp/verify', { method: 'POST', body: { email: address, code } });
-	// 401 is the wrong code, not a session problem: the client reads a 401 as "sign in
-	// again", and the session is fine.
-	if (response.status === 401) throw accountError(422, 'code_invalid', 'That code is not the right one.');
-	if (response.status === 410) throw accountError(410, 'code_expired', 'That code has expired; ask for a new one.');
-	if (response.status === 429) throw accountError(429, 'code_locked', 'Too many attempts; ask for a new code.');
-	if (!response.ok) throw accountError(503, 'sudo_unavailable', UNAVAILABLE);
-	const payload = await response.json().catch(() => null);
-	return typeof payload?.proof === 'string' ? payload.proof : '';
-}
-
-/**
- * The proof is CHECKED, not trusted: the algorithm is exactly HS256, the signature
- * verifies against the GoTrue secret, the audience is the proof one, the expiry is in
- * the future and the address is the one the code went to. A failure is a fault of
- * grobase or of the secret, never of the user's, so it is a 502.
- */
-function checkProof(proof, { secret, address, now }) {
-	const parts = String(proof ?? '').split('.');
-	if (parts.length !== 3) return null;
-	let header;
-	let claims;
-	try {
-		header = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
-		claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-	} catch {
-		return null;
-	}
-	if (!header || typeof header !== 'object' || Array.isArray(header)) return null;
-	if (!claims || typeof claims !== 'object' || Array.isArray(claims)) return null;
-	if (header.alg !== 'HS256') return null;
-	let expected;
-	let given;
-	try {
-		expected = createHmac('sha256', secret).update(`${parts[0]}.${parts[1]}`).digest();
-		given = Buffer.from(parts[2], 'base64url');
-	} catch {
-		return null;
-	}
-	if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
-	if (claims.aud !== PROOF_AUDIENCE) return null;
-	const exp = Number(claims.exp);
-	if (!Number.isFinite(exp) || exp * 1000 <= now) return null;
-	if (String(claims.otp ?? '').toLowerCase() !== address.toLowerCase()) return null;
-	return { exp };
 }
 
 /** The audit row of an attempt. The address is never in it. */
@@ -244,15 +166,7 @@ async function verifySudo({ config, kv, fetchImpl, now, pg, secret }, session, r
 	const proof = await verifyCode({ config, fetchImpl }, address, code);
 	const checked = checkProof(proof, { secret, address, now });
 	// The proof is spent before the grant: a replay is refused even if the grant failed.
-	const marker = `otp-proof:${createHash('sha256').update(proof).digest('hex')}`;
-	let fresh;
-	try {
-		fresh = checked ? await kv.setNx(marker, '1', Math.max(1, Math.floor(checked.exp * 1000 - now))) : false;
-	} catch {
-		throw accountError(503, 'sudo_unavailable', UNAVAILABLE);
-	}
-	await auditSudo(pg, session, request, config, fresh ? 'sudo.granted' : 'sudo.proof_rejected');
-	if (!fresh) throw accountError(502, 'sudo_proof_invalid', BAD_PROOF);
+	await spendProof(kv, proof, checked, now, (fresh) => auditSudo(pg, session, request, config, fresh ? 'sudo.granted' : 'sudo.proof_rejected'));
 	try {
 		await grantSudo(kv, session, SUDO_TTL_MS);
 	} catch {
