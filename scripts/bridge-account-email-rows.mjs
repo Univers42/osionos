@@ -39,7 +39,7 @@ import { createSeal } from './bridge-seal.mjs';
 const TABLE = 'osionos_user_emails';
 export const SEAL_ENV = 'OSIONOS_EMAIL_SEAL_KEY';
 export const LOOKUP_ENV = 'OSIONOS_EMAIL_LOOKUP_KEY';
-const COLUMNS = 'id,user_id,email_enc,email_hmac,created_at,verified_at';
+export const COLUMNS = 'id,user_id,email_enc,email_hmac,created_at,verified_at';
 const UNAVAILABLE = 'Email changes are unavailable; try again shortly.';
 const MAX_ADDRESS = 254;
 const LOCAL_ATOM = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+$/;
@@ -85,6 +85,27 @@ export function openAddress(row, env) {
 	} catch {
 		return null;
 	}
+}
+
+const sealedUnavailable = () => Object.assign(new Error('The sealed addresses cannot be opened.'), { status: 503, code: 'export_sealed_unavailable' });
+
+/**
+ * The data-export table of a user's addresses, opened from the seal: `{ name, columns, rows }`.
+ * Throws export_sealed_unavailable when rows exist and the keys are malformed or none opens,
+ * so an export never ships as done with every address unreadable.
+ *
+ * Caveat: a wrong key and a corrupted row both come out as `readable: false`, and a mix of
+ * good and bad rows passes, so a partly rotated-away key is reported per row, not as a failure.
+ */
+export function emailExportTable(rows, env) {
+	const columns = ['id', 'email', 'readable', 'created_at', 'verified_at'];
+	if (rows.length > 0 && !keysUsable(env)) throw sealedUnavailable();
+	const mapped = rows.map((row) => {
+		const email = openAddress(row, env);
+		return { id: row.id, email, readable: email !== null, created_at: row.created_at, verified_at: row.verified_at };
+	});
+	if (mapped.length > 0 && !mapped.some((row) => row.readable)) throw sealedUnavailable();
+	return { name: TABLE, columns, rows: mapped };
 }
 
 async function run(call) {
