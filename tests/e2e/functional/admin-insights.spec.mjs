@@ -81,6 +81,15 @@ test.describe("the Insights section", () => {
     expect(CELLS.flatMap(Object.keys).filter((key) => /^user(_?id)?$/i.test(key))).toEqual([]);
   });
 
+  test("at 375 px the section strip scrolls inside itself and the page stays in view", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await openInsights(page, baseURL, "admin", { ok: true, cells: CELLS, totalOfShownCells: 65 });
+    await gotoInsights(page);
+    const heading = await page.getByRole("heading", { name: "Admin space" }).boundingBox();
+    expect(heading.x).toBeGreaterThanOrEqual(0);
+    await expect(page.getByText(NOTICE)).toBeInViewport({ ratio: 1 });
+  });
+
   test("a moderator does not get the Insights section", async ({ page, baseURL }) => {
     const requests = await openInsights(page, baseURL, "moderator", { ok: true, cells: CELLS, totalOfShownCells: 65 });
     await page.getByRole("tab", { name: "Admin", exact: true }).click();
