@@ -31,11 +31,12 @@ export const daysAgo = (n) => new Date(Math.floor(Date.now() / DAY_MS) * DAY_MS 
 export const cell = (ago, event, surface, events, distinct_users) => ({ day: daysAgo(ago), event, surface, events, distinct_users });
 
 export async function insightsWorld(t, { cells = [], grants, refuse, failReads } = {}) {
+	const wasSet = Object.hasOwn(process.env, 'OSIONOS_ACTIVITY');
 	const before = process.env.OSIONOS_ACTIVITY;
 	process.env.OSIONOS_ACTIVITY = '1';
 	t.after(() => {
-		if (before === undefined) delete process.env.OSIONOS_ACTIVITY;
-		else process.env.OSIONOS_ACTIVITY = before;
+		if (wasSet) process.env.OSIONOS_ACTIVITY = before;
+		else delete process.env.OSIONOS_ACTIVITY;
 	});
 	const tables = { ...roleTables(grants), [DAILY]: cells, [AUDIT]: [] };
 	return startAdminWorld(t, { path: INSIGHTS, tables, refuse, failReads });
