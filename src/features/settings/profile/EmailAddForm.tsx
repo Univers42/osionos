@@ -33,8 +33,8 @@ export const EmailAddForm: React.FC<EmailAddFormProps> = ({ busy, onAdd }) => {
     >
       <label htmlFor="account-email-add" className="block text-sm font-medium text-[var(--osio-fg-default)]">Add an email</label>
       <div className="flex gap-2">
-        <Input id="account-email-add" type="email" autoComplete="email" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="name@example.com" />
-        <Button type="submit" tone="primary" disabled={busy || !address}>Send code</Button>
+        <Input className="min-w-0 flex-1" id="account-email-add" type="email" autoComplete="email" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="name@example.com" />
+        <Button className="shrink-0 whitespace-nowrap" type="submit" tone="primary" disabled={busy || !address}>Send code</Button>
       </div>
     </form>
   );

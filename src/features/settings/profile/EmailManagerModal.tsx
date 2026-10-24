@@ -73,6 +73,7 @@ export const EmailManagerModal: React.FC<EmailManagerModalProps> = ({ userId, fa
         loading={store.loading}
         loadError={store.error}
         busy={busy}
+        onClose={onClose}
         confirmingId={confirmingId}
         primaryConfirmingId={primaryConfirmingId}
         problem={problem}
