@@ -53,6 +53,7 @@ import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
+import { BoundFieldEditor } from "@/features/profile-binding/ui/BoundFieldEditor";
 import { ButtonBlockEditor } from "@/features/button-program/ui/ButtonSettingsPopover";
 import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
@@ -475,6 +476,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     ),
     [block.language, block.id, block.fileName, block.codeTheme, codeShowLineNumbers, showLangPicker, langQuery, isRenderable, codeView, copiedCode, handleLangSelect, commitBlockUpdate, handleCopyCode, langPickerRef],
   );
+
+  if (block.recordRef && block.fieldBind) return <BoundFieldEditor block={block} onKeyDown={onKeyDown} />;
 
   switch (block.type) {
     case "heading_1":
