@@ -62,7 +62,7 @@ const stub = (body: unknown, fail = false) => ({
   },
 });
 
-test("the catalog has the six sources, ids match the bridge fixture", () => {
+test("the catalog has the seven sources, ids match the bridge fixture", () => {
   assert.deepEqual(catalog.SYS_SOURCES.map((s: { source: string }) => s.source).sort(), fixture.map((f) => f.id).sort());
   for (const s of catalog.SYS_SOURCES) {
     const cols = fixture.find((f) => f.id === s.source)!.columns;
@@ -75,7 +75,7 @@ test("the catalog has the six sources, ids match the bridge fixture", () => {
 
 test("isSysDatabaseId accepts only sys: + a shipped source", () => {
   assert.equal(catalog.isSysDatabaseId("sys:my-pages"), true);
-  for (const bad of ["sys:", "sys:nope", "sys:my-activity", "my-pages", "", null, undefined, "SYS:my-pages"]) {
+  for (const bad of ["sys:", "sys:nope", "my-pages", "", null, undefined, "SYS:my-pages"]) {
     assert.equal(catalog.isSysDatabaseId(bad as string), false, String(bad));
   }
 });
@@ -157,9 +157,9 @@ test("a session change drops the cached rows and asks for a reload", async () =>
   off();
 });
 
-test("the My data slash group lists the six sources as database views", () => {
+test("the My data slash group lists the seven sources as database views", () => {
   const commands = slash.buildSysSlashCommands();
-  assert.equal(commands.length, 6);
+  assert.equal(commands.length, 7);
   for (const c of commands) {
     assert.equal(c.kind, "database-view");
     assert.equal(c.section, "my-data");
