@@ -45,9 +45,6 @@ async function openOwnReadme(page, baseURL, profileFields) {
 	await page.getByRole("option").filter({ hasText: "Me Myself" }).first().click();
 	await page.getByRole("button", { name: "Customize", exact: true }).click();
 	await expect(page.getByTitle("README", { exact: true }).last()).toBeVisible();
-	// Customize saves through the API client, not the account store; nothing in that flow hydrates it, so the store learns
-	// the README id only when the settings panels or the profession picker do.
-	await page.evaluate(async () => (await import("/src/store/settings/useAccountProfileStore.ts")).useAccountProfileStore.getState().hydrate());
 	await activateFirstEditor(page);
 	return mine;
 }
