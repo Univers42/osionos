@@ -46,6 +46,16 @@ test.describe("settings use the kit", () => {
     await expect(page.getByRole("switch", { name: "Use Enter to add a new line" })).toHaveAttribute("aria-checked", after);
   });
 
+  // An unlayered heading rule once beat the font-sans utility, so kit titles rendered in the serif.
+  test("a section title takes the UI face while the page title keeps the heading face", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await openSettings(page, "Billing");
+
+    const sans = await resolvedToken(page, "font-family", "--font-sans");
+    await expect(region(page).getByRole("heading", { name: "Payment details" })).toHaveCSS("font-family", sans);
+    await expect(region(page).getByRole("heading", { level: 1 }).first()).not.toHaveCSS("font-family", sans);
+  });
+
   test("a primary button is the accent colour at the kit's control height", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await openSettings(page, "osionos AI");
