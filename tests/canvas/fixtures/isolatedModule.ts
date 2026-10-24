@@ -1,15 +1,18 @@
-import { readFileSync } from 'node:fs';
-import ts from 'typescript';
+import { randomUUID } from 'node:crypto';
+import { mock } from 'node:test';
 
-/** Run the real module with explicit boundary doubles, without loading the UI app graph. */
-export function isolatedModule(path: string, bindings: Record<string, unknown>, exports: string[] = []): Record<string, any> {
-  const source = readFileSync(new URL(`../../../${path}`, import.meta.url), 'utf8');
-  const parsed = ts.createSourceFile(path, `${source}\nexport { ${exports.join(', ')} };`, ts.ScriptTarget.Latest, true);
-  const stripped = ts.factory.updateSourceFile(parsed, parsed.statements.filter((s) => !ts.isImportDeclaration(s)));
-  const compiled = ts.transpileModule(ts.createPrinter().printFile(stripped), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-  });
-  const output = {};
-  new Function('exports', ...Object.keys(bindings), compiled.outputText)(output, ...Object.values(bindings));
-  return output;
+const repoRoot = new URL('../../../', import.meta.url);
+
+/** Import the real module with boundary doubles; preserve its imports and module semantics. */
+export async function isolatedModule(path: string, dependencies: Record<string, Record<string, unknown>>): Promise<Record<string, any>> {
+  const mocks = [];
+  try {
+    for (const [dependency, namedExports] of Object.entries(dependencies)) {
+      const specifier = dependency === 'react' ? dependency : new URL(dependency, repoRoot).href;
+      mocks.push(mock.module(specifier, { namedExports }));
+    }
+    return await import(`${new URL(path, repoRoot).href}?test=${randomUUID()}`);
+  } finally {
+    for (const boundary of mocks.reverse()) boundary.restore();
+  }
 }

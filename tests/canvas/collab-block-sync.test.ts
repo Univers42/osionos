@@ -292,6 +292,15 @@ test("an order op alone reorders; live blocks missing from its list append sorte
   assert.deepEqual((result.blocks as Block[]).map((entry) => entry.id), ["z", "x", "p1", "y"]);
 });
 
+test("unlisted block IDs use the same code-unit order on every replica", () => {
+  const ids = ["ä", "a", "Z", "10", "2"];
+  const ops = ids.map((id) => ({ k: "put" as const, id, parentId: null, block: { id, type: "paragraph", content: id }, v: 1 }));
+  const left = applyBlockOps([], ops, "A", {});
+  const right = applyBlockOps([], [...ops].reverse(), "A", {});
+  assert.deepEqual(left.blocks?.map((block) => block.id), ["10", "2", "Z", "a", "ä"]);
+  assert.deepEqual(left.blocks, right.blocks, "arrival order and user locale must not change the tree");
+});
+
 test("convergence: both editing the SAME block — higher (v, actor) wins on both", () => {
   const base = baseTree();
   const nextA = structuredClone(base);

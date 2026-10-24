@@ -352,7 +352,9 @@ function materialize(blocks: Block[] | undefined, winners: BlockOp[]): Block[] |
     else missing.set(parent, [id]);
   }
   for (const [parent, ids] of missing) {
-    ids.sort();
+    // Identifiers use code-unit order on every replica, independent of browser locale.
+    // Sonar S2871's localeCompare would make convergence depend on the user's locale.
+    ids.sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
     const list = nextChildren.get(parent);
     if (list) list.push(...ids);
     else nextChildren.set(parent, ids);
