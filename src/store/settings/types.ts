@@ -118,6 +118,8 @@ export interface WorkspaceMember {
   _id: string;
   workspaceId: string;
   userId: string;
+  /** The bridge's display name; absent on local and legacy rows. */
+  name?: string;
   role: WorkspaceMemberRole;
   invitedBy?: string;
   joinedAt: string;

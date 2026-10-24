@@ -50,8 +50,8 @@ test.describe("the teams block of the Teamspaces settings page", () => {
     await seedSession(page);
     await page.evaluate((id) => {
       globalThis.__playgroundUserStore.setState({ personas: [{ id: "user-grace", email: "g@x.test", password: "", name: "Grace Hopper", emoji: "G", roleBadge: "" }] });
-      const member = (userId) => ({ _id: `wm-${userId}`, workspaceId: id, userId, role: "member", joinedAt: "", createdAt: "", updatedAt: "", removedAt: null });
-      localStorage.setItem("osionos:settings:workspace-members", JSON.stringify({ state: { data: { [id]: [member("user-ada"), member("user-grace")] } }, version: 0 }));
+      const member = (userId, name) => ({ _id: `wm-${userId}`, workspaceId: id, userId, name, role: "member", joinedAt: "", createdAt: "", updatedAt: "", removedAt: null });
+      localStorage.setItem("osionos:settings:workspace-members", JSON.stringify({ state: { data: { [id]: [member("user-ada"), member("user-grace"), member("user-lin", "Lin Clark")] } }, version: 0 }));
     }, workspaceId);
     await page.reload();
     await seedSession(page);
@@ -67,5 +67,6 @@ test.describe("the teams block of the Teamspaces settings page", () => {
     await expect(roster.getByText("user-ada")).toHaveCount(0);
     await expect(roster.getByRole("option", { name: "Grace Hopper" })).toHaveCount(1);
     await expect(roster.getByRole("option", { name: "user-grace" })).toHaveCount(0);
+    await expect(roster.getByRole("option", { name: "Lin Clark" })).toHaveCount(1);
   });
 });
