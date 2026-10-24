@@ -82,7 +82,7 @@ describe('add: effects and order', () => {
 		assert.equal(new Set(seen).size, 1, seen.join('\n'));
 	});
 
-	it('B3t answers 202 for each state while grobase and the GoTrue list never answer, then settles', async () => {
+	it('B3t answers 202 for each state while grobase and the GoTrue list never answer, then settles', { timeout: 5000 }, async () => {
 		for (const { name, address, setup } of CASES) {
 			const world = createEmailWorld();
 			await setup(world);

@@ -138,4 +138,11 @@ describe('verify', () => {
 		assert.deepEqual([result.status, result.body.code], [503, 'email_unavailable']);
 		assert.equal(world.table.rows[0].email_hmac, hmacOf('target@example.com', world.env));
 	});
+
+	it('M34 does not treat the caller\'s own confirmed account as another owner of the address', async () => {
+		const world = createEmailWorld();
+		const id = await pending(world, USER_A, 'moved@example.com');
+		world.directory.users[USER_A].email = 'moved@example.com';
+		assert.equal((await verify(world, USER_A, id)).status, 200);
+	});
 });
