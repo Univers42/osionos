@@ -39,6 +39,7 @@
 
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { clientMeta, grantSudo, rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
+import { readGotrueUser } from './bridge-gotrue-user.mjs';
 import { bearerToken, readJsonBody, sendJson } from './bridge-social-core.mjs';
 
 const EMAIL_PATH = '/api/account/sudo/email';
@@ -137,14 +138,14 @@ async function grobase(config, fetchImpl, path, { method = 'GET', body, headers 
 }
 
 /** The address GoTrue holds for this user, or the failure that says there is none. */
-export async function accountAddress({ config, fetchImpl }, userId) {
-	if (!config.baasUrl || !config.serviceKey) throw accountError(503, 'sudo_unavailable', UNAVAILABLE);
-	const response = await grobase(config, fetchImpl, `/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
-		headers: { apikey: config.serviceKey, Authorization: `Bearer ${config.serviceKey}` },
-	});
-	if (response.status === 404) throw accountError(409, 'no_email', NO_ADDRESS);
-	if (!response.ok) throw accountError(503, 'sudo_unavailable', UNAVAILABLE);
-	const payload = await response.json().catch(() => null);
+export async function accountAddress(deps, userId) {
+	let payload;
+	try {
+		payload = await readGotrueUser(deps, userId);
+	} catch (error) {
+		if (error?.upstreamStatus === 404) throw accountError(409, 'no_email', NO_ADDRESS);
+		throw accountError(503, 'sudo_unavailable', UNAVAILABLE);
+	}
 	const address = typeof payload?.email === 'string' ? payload.email.trim().toLowerCase() : '';
 	if (!address || !ADDRESS_SHAPE.test(address)) throw accountError(409, 'no_email', NO_ADDRESS);
 	return address;
