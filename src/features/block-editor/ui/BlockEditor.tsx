@@ -482,7 +482,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   // Only the owner's README binds to the profile; marketplace and profession templates bind
   // `$record` to other records (app title, `custom:*`) and keep their plain editor.
   const isProfileBound = useAccountProfileStore((s) => Boolean(block.recordRef && block.fieldBind) && isReadmePage(pageId, s.profile));
-  if (isProfileBound) return <BoundFieldEditor block={block} onKeyDown={onKeyDown} />;
+  if (isProfileBound) return <BoundFieldEditor block={block} onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)} onKeyDown={onKeyDown} />;
 
   switch (block.type) {
     case "heading_1":
