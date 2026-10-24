@@ -31,9 +31,9 @@ const OTP_TIMEOUT_MS = 8_000;
 const UNAVAILABLE = 'The step-up service is unavailable; try again shortly.';
 const BAD_PROOF = 'The step-up could not be verified; ask for a new code.';
 
-/** @param {{ fail: (status: number, code: string, message: string, extra?: object) => Error, codes: { unavailable: string, proofInvalid: string } }} options */
+/** @param {{ fail: (status: number, code: string, message: string, extra?: object) => Error, codes: { unavailable: string, proofInvalid: string, unavailableMessage?: string } }} options */
 export function createOtpClient({ fail, codes }) {
-	const unavailable = (extra) => fail(503, codes.unavailable, UNAVAILABLE, extra);
+	const unavailable = (extra) => fail(503, codes.unavailable, codes.unavailableMessage ?? UNAVAILABLE, extra);
 
 	/** One call to grobase, or the failure that says the step-up is unavailable. */
 	async function grobase(config, fetchImpl, path, { method = 'GET', body, headers = {} } = {}) {
