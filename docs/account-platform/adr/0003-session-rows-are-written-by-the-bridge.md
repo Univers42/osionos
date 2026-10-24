@@ -32,4 +32,4 @@ replica at once, from the rows the `PATCH` returned.
    90 s handoff expiry).
 2. Records, enforcement and the session routes are on or off together; off answers 503
    `session_records_off`, never a 204 for a revoke nobody enforces.
-3. Nothing but `bridge-sessions.mjs` writes `osionos_sessions`.
+3. Nothing but `bridge-sessions.mjs` writes `osionos_sessions`; the 2FA step-up (`bridge-session-stepup.mjs`) inserts its new family only by calling `recordSession` and revokes only by calling `revokeFamily`.

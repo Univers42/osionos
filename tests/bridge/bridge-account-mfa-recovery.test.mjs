@@ -40,7 +40,8 @@ async function steppedUp(t, extra = {}) {
 	const first = await world.signIn();
 	const stepped = await world.api('POST', '/api/account/2fa/verify', first.accessToken, { body: { code: hotp(secret, stepAt(world.clock.at)) } });
 	assert.equal(stepped.status, 200, stepped.text);
-	return { world, aal1: first.accessToken, aal2: stepped.body.accessToken, secret };
+	// The first token died with the step-up (its family was replaced), so the gated token the specs probe is a fresh sign-in.
+	return { world, aal1: (await world.signIn()).accessToken, aal2: stepped.body.accessToken, secret };
 }
 
 const generate = (world, token) => world.api('POST', GENERATE, token, { body: {} });
@@ -215,13 +216,16 @@ describe('recovery codes: verify', () => {
 	it('upgrades an aal1 token to aal2 with the same jti and expiry, and spends the code', async (t) => {
 		const { world, codes } = await withCodes(t);
 		const { accessToken, claims } = await world.signIn();
+		const gated = (await world.signIn()).accessToken;
 		const answer = await recover(world, accessToken, codes[0]);
 		assert.equal(answer.status, 200, answer.text);
 		const upgraded = tokenClaims(answer.body.accessToken);
-		assert.deepEqual([upgraded.jti, upgraded.exp, upgraded.aal, upgraded.mfa_req], [claims.jti, claims.exp, 2, undefined]);
+		assert.notEqual(upgraded.jti, claims.jti, 'a step-up starts a new family');
+		assert.deepEqual([upgraded.exp, upgraded.aal, upgraded.mfa_req], [claims.exp, 2, undefined]);
 		assert.equal(answer.body.remaining, 9);
 		assert.equal(world.mfa.rows(CODES_TABLE).filter((row) => row.used_at).length, 1);
-		assert.equal((await world.api('GET', '/api/account/sessions', accessToken)).body.code, 'mfa_required', 'the aal1 token stays gated');
+		assert.equal((await world.api('GET', '/api/account/sessions', gated)).body.code, 'mfa_required', 'another aal1 token stays gated');
+		assert.equal((await world.api('GET', '/api/account/sessions', accessToken)).status, 401, 'the replaced family is dead');
 		assert.equal((await world.api('GET', '/api/account/sessions', answer.body.accessToken)).status, 200);
 	});
 
@@ -234,14 +238,15 @@ describe('recovery codes: verify', () => {
 	it('spends a code once: a replay is refused', async (t) => {
 		const { world, codes } = await withCodes(t);
 		const { accessToken } = await world.signIn();
-		assert.equal((await recover(world, accessToken, codes[0])).status, 200);
-		assert.equal((await recover(world, accessToken, codes[0])).status, 422);
+		const first = await recover(world, accessToken, codes[0]);
+		assert.equal(first.status, 200);
+		assert.equal((await recover(world, first.body.accessToken, codes[0])).status, 422);
 	});
 
 	it('lets exactly one of two concurrent requests with one code through, through a conditional write', async (t) => {
 		const { world, codes } = await withCodes(t);
-		const { accessToken } = await world.signIn();
-		const answers = await Promise.all([recover(world, accessToken, codes[0]), recover(world, accessToken, codes[0])]);
+		const [one, two] = [await world.signIn(), await world.signIn()];
+		const answers = await Promise.all([recover(world, one.accessToken, codes[0]), recover(world, two.accessToken, codes[0])]);
 		assert.deepEqual(answers.map((answer) => answer.status).sort(), [200, 422]);
 		const spend = world.mfa.calls.filter((call) => call.method === 'PATCH' && call.table === CODES_TABLE);
 		assert.ok(spend.length >= 1 && spend.every((call) => call.params.get('used_at') === 'is.null' && call.params.get('user_id') === `eq.${USER_A}` && call.prefer.includes('return=representation')));
@@ -250,10 +255,11 @@ describe('recovery codes: verify', () => {
 	it('answers unknown, used and malformed codes with byte-identical 422 bodies', async (t) => {
 		const { world, codes } = await withCodes(t);
 		const { accessToken } = await world.signIn();
-		assert.equal((await recover(world, accessToken, codes[0])).status, 200);
+		const first = await recover(world, accessToken, codes[0]);
+		assert.equal(first.status, 200);
 		const bodies = [];
 		for (const code of ['zzzz-zzzz', codes[0], 'not a code', 42, undefined]) {
-			const answer = await recover(world, accessToken, code);
+			const answer = await recover(world, first.body.accessToken, code);
 			assert.equal(answer.status, 422);
 			bodies.push(answer.text);
 		}

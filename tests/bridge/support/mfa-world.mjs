@@ -106,7 +106,7 @@ export const verifiedRow = (userId, secretEnc, extra = {}) => ({ user_id: userId
  * `signIn` goes through the handoff and consume the way the app does; `sudo` opens the
  * sudo window of a token; `advance` moves the bridge clock.
  */
-export async function startMfaWorld(t, { env = { OSIONOS_MFA_SECRET_KEY: MFA_KEY }, totp = [], recovery = [], cutoffRows = [], ipHeader = 'x-forwarded-for' } = {}) {
+export async function startMfaWorld(t, { env = { OSIONOS_MFA_SECRET_KEY: MFA_KEY }, totp = [], recovery = [], cutoffRows = [], ipHeader = 'x-forwarded-for', records = 'on' } = {}) {
 	const clock = { at: Date.now() };
 	const mfa = createMfaStore({ totp, recovery });
 	const sessions = createSessionStore();
@@ -135,7 +135,7 @@ export async function startMfaWorld(t, { env = { OSIONOS_MFA_SECRET_KEY: MFA_KEY
 		cutoffs.rows = [...cutoffs.rows.filter((row) => row.user_id !== body.user_id), body];
 		return new Response(null, { status: 201 });
 	};
-	const config = sessionConfig({ now: () => clock.at, ipHeader });
+	const config = sessionConfig({ now: () => clock.at, ipHeader, records });
 	config.sessionCutoffs = new SessionCutoffs({ enforced: true, now: () => clock.at, log: quietLog });
 	config.sessionCutoffs.completeLoad(new Map(), config.sessionCutoffs.beginLoad());
 	config.gatewayUrl = GATEWAY;
