@@ -51,6 +51,7 @@ export interface MemberProfile {
   patreon?: string | null;
   avatarUrl?: string | null;
   bannerUrl?: string | null;
+  profession?: string | null;
   readme?: ReadmeProjection | null;
 }
 
@@ -58,7 +59,7 @@ export interface MemberProfile {
 // ever adds there must not reach the page by accident.
 export const PUBLIC_FIELD_KEYS = [
   'pronouns', 'headline', 'bio', 'location', 'company', 'website', 'links',
-  'timezone', 'orcid', 'patreon', 'avatarUrl', 'bannerUrl', 'readme',
+  'timezone', 'orcid', 'patreon', 'avatarUrl', 'bannerUrl', 'profession', 'readme',
 ] as const;
 
 export function mergePublicFields(base: MemberProfile, pub: Record<string, unknown>): MemberProfile {

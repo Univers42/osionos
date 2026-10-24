@@ -393,6 +393,7 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 		handleSlashCreatePageSelect,
 		handleSlashInlineSelect,
 		handleSlashWhiteboardSelect,
+		handleSlashProfileFieldSelect,
 		handleSlashAiImageSelect,
 		handlePageSelectorSelect,
 		handlePageSelectorCreate,
@@ -910,6 +911,10 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 						}
 						if (item.kind === "whiteboard") {
 							handleSlashWhiteboardSelect(parseSlashQuery(slashMenu.filter).arg, currentBlocks);
+							return;
+						}
+						if (item.kind === "profile-field") {
+							handleSlashProfileFieldSelect();
 							return;
 						}
 						if (item.kind === "ai-image") {

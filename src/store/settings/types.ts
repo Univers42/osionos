@@ -10,12 +10,15 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+export type PreferredMfaMethod = 'totp' | 'recovery';
+
 export interface AccountSettings {
   userId: string;
   security: {
     hasPassword?: boolean;
-    twoStepEnabled?: boolean;
     passkeysEnabled?: boolean;
+    /** Only orders the options the two-step modal offers; the server never trusts it. */
+    preferredMfaMethod?: PreferredMfaMethod;
     passwordUpdatedAt?: string;
   };
   supportAccessGrantedUntil?: string | null;
@@ -28,13 +31,11 @@ export interface AccountSettings {
 export interface PasskeyRecord {
   _id: string;
   userId: string;
-  credentialId: string;
-  publicKey: string;
-  counter: number;
   transports: string[];
   nickname?: string;
   createdAt: string;
   updatedAt: string;
+  lastUsedAt?: string | null;
   removedAt?: string | null;
 }
 
@@ -265,6 +266,28 @@ export interface TeamspaceRecord {
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
+}
+
+export type WorkspaceTeamRole = 'member' | 'lead';
+
+/** A named group of workspace members, as `GET /api/workspaces/:id/teams` answers it. */
+export interface WorkspaceTeam {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  memberCount: number;
+  /** The caller's own role in the team, `null` when they are not in it. */
+  myRole: WorkspaceTeamRole | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface WorkspaceTeamMember {
+  userId: string;
+  name: string;
+  role: WorkspaceTeamRole;
+  addedAt: string | null;
 }
 
 /** One signed-in device as `GET /api/account/sessions` answers it: one row per sign-in family. */

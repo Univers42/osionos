@@ -42,7 +42,7 @@ export function createGroup(workspaceId: string, name: string, kind: "chat" | "c
 }
 
 /** Invite a guest by email (reuses the workspace-invites store). */
-export function inviteGuest(workspaceId: string, email: string, role: Exclude<WorkspaceMemberRole, "owner">, invitedBy: string): Promise<unknown> {
+export function inviteGuest(workspaceId: string, email: string, role: Exclude<WorkspaceMemberRole, "owner">, invitedBy: string): Promise<{ _id: string } | null> {
   return useWorkspaceInvitesStore.getState().invite(workspaceId, { email, role, invitedBy });
 }
 

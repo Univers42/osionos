@@ -21,6 +21,7 @@ import {
   transitionConnection,
 } from '@/shared/social/connectionApi';
 import { errorMessage, pushSettingsError } from '@/store/settings/settingsStoreUtils';
+import { shareInFlight } from '@/store/social/sharedHydrate';
 import type { ContactEdge } from '@/store/social/types';
 
 interface ContactsStore {
@@ -55,7 +56,7 @@ export const useContactsStore = create<ContactsStore>()(
       requests: [],
       loading: false,
       error: null,
-      hydrate: async () => {
+      hydrate: shareInFlight(async () => {
         // No bridge configured (offline/local-only build): every other settings
         // store no-ops silently in this case (trySettingsGet's `!API_BASE` guard).
         // This mount-time hydrate should match — not surface a scary "Connections
@@ -67,9 +68,8 @@ export const useContactsStore = create<ContactsStore>()(
           set({ ...partition(edges), loading: false, error: null });
         } catch (error) {
           set({ loading: false, error: errorMessage(error) });
-          pushSettingsError('Connections unavailable', error);
         }
-      },
+      }),
       sendRequest: async (userId, note) => {
         try {
           const edge = await createConnection(userId, note);

@@ -52,7 +52,9 @@ export function toAccessRule(resource: ShareResource, entry: ShareEntry): ShareA
     ? { type: 'user' as const, userId: entry.target.person.id }
     : entry.target.type === 'role'
       ? { type: 'role' as const, role: entry.target.role }
-      : { type: entry.target.type };
+      : entry.target.type === 'team'
+        ? { type: 'team' as const, teamId: entry.target.team.id }
+        : { type: entry.target.type };
   return {
     _id: entry.sourceId,
     workspaceId: resource.workspaceId,

@@ -269,7 +269,7 @@ function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply,
 			const workspaceId = url.searchParams.get('workspaceId');
 			if (!workspaceId) return fail(response, 400);
 			await access(ctx, workspaceId, 'read');
-			return reply(response, 200, { rules: await ruleStore.list(requestConfig, workspaceId, url.searchParams.get('resourceId')) });
+			return reply(response, 200, { rules: await ruleStore.list(requestConfig, workspaceId, url.searchParams.get('resourceId')), teamRules: true });
 		}
 		if (method === 'POST' && tail === 'rules') {
 			const rule = normalizeShareRule(await readJsonBody(ctx.request));

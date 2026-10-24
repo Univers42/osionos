@@ -18,6 +18,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { assertIdeSubject } from "./ide-access.mjs";
 import { isValidIdeUsername } from "./ide-username.mjs";
+import { parseSshPublicKey } from "./bridge-key-parse.mjs";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -167,9 +168,18 @@ export function buildGitExecSpec(argv, gitPat) {
     AttachStdout: true,
     AttachStderr: true,
     Tty: true,
-    Env: gitPat ? [`GIT_PAT=${gitPat}`] : [],
+    Env: [...(gitPat ? [`GIT_PAT=${gitPat}`] : []), ...signatureCheckEnv(argv)],
     Cmd: argv,
   };
+}
+
+// A `git log` that asks for a signature field (%G?) needs to know whose SSH signatures to trust.
+// Env config is per exec and read-only: `git config` stays denied and nothing is persisted.
+// Caveat: any `log` argv containing "%G" gets it, which is harmless; a box whose keys were never
+// synced has no such file and git reports every signed commit as unverified.
+function signatureCheckEnv(argv) {
+  if (argv[1] !== "log" || !argv.some((arg) => arg.includes("%G"))) return [];
+  return ["GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=gpg.ssh.allowedSignersFile", "GIT_CONFIG_VALUE_0=/home/coder/.ssh/allowed_signers"];
 }
 
 /** A search exec spec: ripgrep with fixed flags; the query + optional path are
@@ -454,4 +464,38 @@ export function buildFsAgentExecSpec() {
     Tty: false,
     Cmd: ["node", "--max-semi-space-size=1", "/usr/local/lib/osio-fs-agent.mjs"],
   };
+}
+
+export const MAX_SYNC_KEYS = 50;
+// The target is fixed here, never taken from input. The whole file is written to a temp name and
+// moved over the old one, so a sync REPLACES (a revoked key disappears; an empty list empties the
+// file) and a reader never sees half a file. Each argv item is one base64 line.
+const KEY_SYNC_SCRIPT = `d=/home/coder/.ssh; umask 077
+mkdir -p "$d" && chmod 700 "$d" || exit 1
+t="$d/.allowed_signers.tmp$$"; : > "$t" || exit 1
+for l do printf %s "$l" | base64 -d >> "$t" && printf '\\n' >> "$t" || { rm -f "$t"; exit 1; }; done
+chmod 600 "$t" && mv "$t" "$d/allowed_signers" || { rm -f "$t"; exit 1; }`;
+
+/** The exec that rewrites ~/.ssh/allowed_signers from `items` ({type, blob} public SSH keys).
+ *  Every item is re-parsed here, so a forged call cannot put an option, a private key or a second
+ *  line in the file; lines are `* <type> <blob>` sorted by fingerprint, so two syncs of one set
+ *  write the same bytes. Key text only ever rides argv (base64), never the script.
+ *  Caveat: `*` trusts a key for any signer identity, which is right for "my own keys" and wrong
+ *  if this file ever holds another person's key. */
+export function buildKeySyncSpec(items) {
+  if (!Array.isArray(items) || items.length > MAX_SYNC_KEYS) {
+    throw Object.assign(new Error(`keys sync takes at most ${MAX_SYNC_KEYS} keys`), { status: 400 });
+  }
+  const byFingerprint = new Map();
+  for (const item of items) {
+    let parsed;
+    try {
+      parsed = parseSshPublicKey(`${item?.type} ${item?.blob}`);
+    } catch {
+      throw Object.assign(new Error("invalid key in sync"), { status: 400 });
+    }
+    byFingerprint.set(parsed.fingerprint, `* ${parsed.line}`);
+  }
+  const lines = [...byFingerprint.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, line]) => line);
+  return { ...FS_OP_COMMON, Cmd: ["sh", "-c", KEY_SYNC_SCRIPT, "sh", ...lines.map((line) => Buffer.from(line).toString("base64"))] };
 }
