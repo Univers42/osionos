@@ -155,7 +155,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   },
   {
     id: "page_settings", group: "workspace", label: "Page settings", title: "Page settings",
-    subtitle: "Actions, style switches, analytics and connections from settings_page.md", icon: FileText,
+    subtitle: "Settings for the page you have open", icon: FileText,
     anchors: [
       { id: "style", label: "Page style", keywords: ["font", "default", "serif", "mono"] },
       { id: "actions", label: "Page actions", keywords: ["copy", "duplicate", "trash", "present", "translate", "export"] },
@@ -203,7 +203,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   },
   {
     id: "library", group: "features", label: "Emoji & Library", title: "Emoji & Library",
-    subtitle: "Emoji + photo things that we upload", icon: Palette,
+    subtitle: "Emoji and images you uploaded", icon: Palette,
     anchors: [{ id: "library", label: "Emoji and library", keywords: ["emoji", "assets", "photos", "uploads", "library"] }],
   },
   {
