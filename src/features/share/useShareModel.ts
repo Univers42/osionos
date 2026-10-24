@@ -15,13 +15,13 @@
  *  The translation itself lives in sharePermissionBridge.ts. */
 
 import { useCallback, useEffect, useState } from 'react';
-import { deleteRule, fetchPeople, fetchRules, saveRule } from './shareApi';
+import { deleteRule, fetchPeople, fetchRules, fetchTeams, saveRule } from './shareApi';
 import { createPolicy, deletePolicy, fetchPolicies, fetchRoles } from './sharePolicyApi';
 import { toAccessRule, toEnginePolicy } from './sharePermissionBridge';
 import {
   engineRoleName, entriesFromPolicies, entriesFromRules, entryKey, upsertEntry,
 } from './shareModel.helpers';
-import type { EngineRole, ShareEntry, ShareLevel, SharePerson, ShareResource } from './types';
+import type { EngineRole, ShareEntry, ShareLevel, SharePerson, ShareResource, ShareTeam } from './types';
 
 export interface ShareModel {
   loading: boolean;
@@ -29,6 +29,8 @@ export interface ShareModel {
   error: string | null;
   isLive: boolean;
   people: SharePerson[];
+  /** Empty unless the server enforces team rules: the dialog never offers a grant it would not honour. */
+  teams: ShareTeam[];
   roles: EngineRole[];
   entries: ShareEntry[];
   setLevel: (target: ShareEntry['target'], level: ShareLevel) => Promise<void>;
@@ -42,6 +44,7 @@ export function useShareModel(resource: ShareResource): ShareModel {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [people, setPeople] = useState<SharePerson[]>([]);
+  const [teams, setTeams] = useState<ShareTeam[]>([]);
   const [roles, setRoles] = useState<EngineRole[]>([]);
   const [entries, setEntries] = useState<ShareEntry[]>([]);
 
@@ -56,7 +59,11 @@ export function useShareModel(resource: ShareResource): ShareModel {
         setRoles(roleRows);
         setEntries(entriesFromPolicies(policyRows, roleRows, roster, resource.liveResourceName ?? ''));
       } else {
-        setEntries(entriesFromRules(await fetchRules(resource.workspaceId, resource.resourceId), roster));
+        const read = await fetchRules(resource.workspaceId, resource.resourceId);
+        // A teams list that fails to load only hides the Teams group; it never blocks the dialog.
+        const teamList = read.teamRules ? await fetchTeams(resource.workspaceId).catch(() => []) : [];
+        setTeams(teamList);
+        setEntries(entriesFromRules(read.rules, roster, teamList));
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load sharing state.');
@@ -105,5 +112,5 @@ export function useShareModel(resource: ShareResource): ShareModel {
     }
   }, [isLive]);
 
-  return { loading, busy, error, isLive, people, roles, entries, setLevel, removeEntry, refresh };
+  return { loading, busy, error, isLive, people, teams, roles, entries, setLevel, removeEntry, refresh };
 }

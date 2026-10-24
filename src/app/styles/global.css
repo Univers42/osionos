@@ -627,9 +627,13 @@ body {
 
 /* Editorial serif headings: the same stack and tracking as osio-h1..h4. One
    :where() per tag so each is filed under its tag (pane zoom, below). */
-:where(h1), :where(h2), :where(h3), :where(h4) {
-  font-family: var(--osio-font-heading);
-  letter-spacing: var(--osio-letter-spacing-heading);
+@layer base {
+  /* In @layer base, not unlayered: unlayered CSS beats every utility, so a
+     heading could never take font-sans. */
+  :where(h1), :where(h2), :where(h3), :where(h4) {
+    font-family: var(--osio-font-heading);
+    letter-spacing: var(--osio-letter-spacing-heading);
+  }
 }
 
 /* Scrollbar styling */
@@ -839,6 +843,29 @@ body {
   outline-offset: 1px;
 }
 
+/* External link mention: favicon + title chip. Stays an `a.editor-link` so Ctrl-click
+   link editing still maps the Nth anchor to the Nth link in the block source. */
+.editor-link.editor-link-mention {
+  color: var(--osio-fg-strong) !important;
+  text-decoration: none !important;
+  background-color: var(--osio-accent-subtle);
+  font-weight: 500;
+  padding: 0 var(--osio-space-1);
+  border-radius: var(--osio-radius-sm);
+}
+
+.editor-link-favicon {
+  width: 1em;
+  height: 1em;
+  margin-right: 0.3em;
+  vertical-align: -0.125em;
+  border-radius: var(--osio-radius-xs);
+}
+
+.editor-link-favicon[hidden] {
+  display: none;
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;
@@ -892,19 +919,36 @@ body {
   opacity: 1;
 }
 
-/* Accessibility baseline: honor the OS "reduce motion" preference. Defensive-only —
-   it activates solely when the user has asked for reduced motion, collapsing CSS
-   transitions/animations to near-instant so the UI never induces motion sickness.
+/* Accessibility baseline: honor the OS "reduce motion" preference — or the
+   person's own choice, which wins over the OS in both directions.
+   data-motion="reduce" collapses the motion whatever the OS says;
+   data-motion="full" keeps it whatever the OS says. One reset, two triggers:
+   the media query carries the OS, the attribute carries the choice.
+   Defensive-only — it collapses CSS transitions/animations to near-instant so
+   the UI never induces motion sickness.
    (The Canvas graph/aurora loops throttle themselves separately.) */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  :root:not([data-motion="full"]) *,
+  :root:not([data-motion="full"])::before,
+  :root:not([data-motion="full"])::after,
+  :root:not([data-motion="full"]) *::before,
+  :root:not([data-motion="full"]) *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"]::before,
+:root[data-motion="reduce"]::after,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 /* ==========================================================================

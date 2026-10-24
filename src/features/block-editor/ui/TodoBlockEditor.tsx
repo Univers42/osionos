@@ -28,7 +28,9 @@ export const TodoBlockEditor: React.FC<{
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
-}> = ({ block, pageId, style, onUpdateBlock, onChange, onKeyDown, onRequestSlashMenu }) => {
+  /** Open the AI panel on the selection (the selection toolbar). */
+  onAskAI?: (selectionText: string) => void;
+}> = ({ block, pageId, style, onUpdateBlock, onChange, onKeyDown, onRequestSlashMenu, onAskAI }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const page = usePageStore((s) => s.activePage);
 
@@ -100,6 +102,7 @@ export const TodoBlockEditor: React.FC<{
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
+          onAskAI={onAskAI}
         />
         {isTasksEnabled() && <TodoDueDate dueAt={block.dueAt} checked={block.checked} onChange={setDueAt} />}
       </div>

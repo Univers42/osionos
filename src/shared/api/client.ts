@@ -25,12 +25,16 @@
  */
 
 import { ApiError, createHttpClient } from '@osionos/http-gate';
+import { refreshAwareFetch } from './sessionRefreshAware';
 import { revocationAwareFetch } from './sessionRevocation';
+import { sudoRequiredAwareFetch } from './sudoRequired';
 
 export { ApiError };
 export type { ApiErrorBody } from '@osionos/http-gate';
 
-export const API_BASE = ((import.meta.env as Record<string, string>)['VITE_API_URL'] ?? '').trim();
+// `import.meta.env` is Vite's; under plain node (the canvas tests) it is not
+// there at all, and reading a property of it would throw on import.
+export const API_BASE = (((import.meta.env ?? {}) as Record<string, string>)['VITE_API_URL'] ?? '').trim();
 
 /**
  * The user store publishes itself on `globalThis` as a decoupling seam (it is
@@ -66,15 +70,35 @@ export function getActivePageJwt(): string | null {
   });
 }
 
+/** The id of the workspace in use, when a session has one. */
+export function getActiveWorkspaceId(): string | null {
+  return userStore((state) => {
+    const workspace = (state.activeWorkspace as (() => { _id?: string } | null) | undefined)?.();
+    return workspace?._id ?? null;
+  });
+}
+
 /** Tells the user store a bridge call came back 401 session_revoked, so it drops the session that owned the token. */
-function reportRevokedSession(token: string): void {
+export function reportRevokedSession(token: string): void {
   userStore((state) => (state.handleSessionRevoked as ((token: string) => void) | undefined)?.(token));
+}
+
+/** The token that replaces `token` after the user store rotated the session that owns it, or null. */
+async function refreshOwnerOf(token: string): Promise<string | null> {
+  const owner = userStore((state) => Object.values((state.sessions ?? {}) as Record<string, { userId: string; accessToken: string }>)
+    .find((session) => session.accessToken === token)?.userId);
+  if (!owner) return null;
+  await userStore((state) => (state.refreshAccount as ((userId: string) => Promise<unknown>) | undefined)?.(owner));
+  return userStore((state) => (state.sessions as Record<string, { accessToken: string }>)[owner]?.accessToken ?? null);
 }
 
 /** Thin fetch wrapper exposing typed GET/POST/PATCH/DELETE helpers. */
 export const api = createHttpClient({
   baseUrl: API_BASE,
   maxConcurrent: 6,
-  fetchImpl: revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
-  missingBaseUrlMessage: 'VITE_API_URL is not configured.',
+  fetchImpl: sudoRequiredAwareFetch(refreshAwareFetch(
+    revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
+    refreshOwnerOf,
+  )),
+  missingBaseUrlMessage: 'This version of osionos is not connected to a server.',
 });

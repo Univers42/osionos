@@ -32,6 +32,9 @@
  *   GET    /api/perms/rules?workspaceId&resourceId → AccessRules      (workspace `read`)
  *   POST   /api/perms/rules         → upsert an AccessRule             (workspace `update`)
  *   DELETE /api/perms/rules/:id     → delete an AccessRule             (workspace `update`)
+ * A rule ABOUT a page is the page owner's to change (the workspace owner/admin may change
+ * any rule): the workspace gate alone would let any member carrying `update` rewrite who
+ * may read somebody else's page.
  * Workspace checks use the bridge's requireWorkspaceAccess (live membership, not the list
  * frozen into the token at login). Rules live in public.osionos_share_rules
  * (bridge-perms-rules.mjs); their ids are database-minted. Error bodies are generic; details
@@ -52,6 +55,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bearerToken, httpError, rest } from './bridge-social-core.mjs';
 import { createShareRuleStore, normalizeShareRule } from './bridge-perms-rules.mjs';
+import { mayChangeRule } from './bridge-perms-rule-owners.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
@@ -252,7 +256,10 @@ function createEngineProxy(settings, fetchImpl, reply, fail) {
 
 /** Share-rule routes; resolves undefined when `tail` is not a rules route. A rule is validated
  *  and rebuilt before any query; DELETE touches a rule only after its workspace passes
- *  `update` (a rule the caller may not change reads as not found). */
+ *  `update` (a rule the caller may not change reads as not found). Who may change a rule
+ *  ABOUT a page is decided in bridge-perms-rule-owners.mjs: a rule is an access grant, so
+ *  the workspace gate alone would let any member carrying `update` rewrite who may read
+ *  somebody else's page. */
 function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply, fail }) {
 	const access = (ctx, workspaceId, permission) =>
 		requireWorkspaceAccess(ctx.request, workspaceId, permission, ctx.requestConfig, fetchImpl);
@@ -262,12 +269,22 @@ function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply,
 			const workspaceId = url.searchParams.get('workspaceId');
 			if (!workspaceId) return fail(response, 400);
 			await access(ctx, workspaceId, 'read');
-			return reply(response, 200, { rules: await ruleStore.list(requestConfig, workspaceId, url.searchParams.get('resourceId')) });
+			return reply(response, 200, { rules: await ruleStore.list(requestConfig, workspaceId, url.searchParams.get('resourceId')), teamRules: true });
 		}
 		if (method === 'POST' && tail === 'rules') {
 			const rule = normalizeShareRule(await readJsonBody(ctx.request));
-			await access(ctx, rule.workspace_id, 'update');
-			return reply(response, 200, { rule: await ruleStore.upsert(requestConfig, rule) });
+			// A page owner may change the rules about their own page even when the
+			// workspace membership alone would not (an owner who is only a viewer there);
+			// a workspace-wide rule still needs the workspace owner/admin. The workspace
+			// gate is therefore consulted but never allowed to throw before mayChangeRule
+			// has had its say — mirrors DELETE below.
+			const workspace = await access(ctx, rule.workspace_id, 'update').then((w) => w, () => null);
+			const allowed = await mayChangeRule(ctx, rule, { fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace) });
+			if (!allowed) return fail(response, 403);
+			const saved = await ruleStore.upsert(requestConfig, rule);
+			reply(response, 200, { rule: saved });
+			if (workspace) requestConfig.activity?.emit({ userId: workspace.userId }, 'share', 'editor', rule.workspace_id);
+			return true;
 		}
 		if (method === 'DELETE' && tail.startsWith('rules/')) return deleteRule(ctx, decodeURIComponent(tail.slice('rules/'.length)));
 		return undefined;
@@ -276,8 +293,12 @@ function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply,
 	async function deleteRule(ctx, id) {
 		const rule = await ruleStore.byId(ctx.requestConfig, id);
 		if (!rule) return fail(ctx.response, 404);
-		const allowed = await access(ctx, rule.workspaceId, 'update').then(() => true, () => false);
-		if (!allowed || !(await ruleStore.remove(ctx.requestConfig, id, rule.workspaceId))) return fail(ctx.response, 404);
+		// The page owner may change the rules about their page even when the workspace
+		// membership alone would not (an owner who is only a viewer there).
+		const workspace = await access(ctx, rule.workspaceId, 'update').then((w) => w, () => null);
+		const allowed = await mayChangeRule(ctx, rule, { fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace) });
+		if (!allowed) return fail(ctx.response, 404);
+		if (!(await ruleStore.remove(ctx.requestConfig, id, rule.workspaceId))) return fail(ctx.response, 404);
 		return reply(ctx.response, 200, { deleted: true });
 	}
 }

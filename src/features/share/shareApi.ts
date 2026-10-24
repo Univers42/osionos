@@ -15,10 +15,11 @@
 
 import { api, getActivePageJwt } from '@/shared/api/client';
 import { permsPathFor } from './permsPath';
-import type { ShareAccessRule, SharePerson } from './types';
+import type { ShareAccessRule, SharePerson, ShareTeam } from './types';
 
 interface PeopleResponse { people: SharePerson[] }
-interface RulesResponse { rules: Array<ShareAccessRule & { _id: string }> }
+interface RulesResponse { rules: Array<ShareAccessRule & { _id: string }>; teamRules?: boolean }
+interface TeamsResponse { teams?: Array<{ id?: unknown; name?: unknown; memberCount?: unknown }> }
 interface RuleResponse { rule: ShareAccessRule & { _id: string } }
 
 /** The app-session bearer every /api/perms route requires (the bridge answers 401 without it). */
@@ -32,11 +33,30 @@ export async function fetchPeople(workspaceId: string): Promise<SharePerson[]> {
   return body.people ?? [];
 }
 
-/** Stored AccessRules for one resource. */
-export async function fetchRules(workspaceId: string, resourceId: string): Promise<Array<ShareAccessRule & { _id: string }>> {
+async function fetchRulesRead(workspaceId: string, resourceId: string): Promise<RulesResponse> {
   const query = `workspaceId=${encodeURIComponent(workspaceId)}&resourceId=${encodeURIComponent(resourceId)}`;
-  const body = await api.get<RulesResponse>(`/api/perms/rules?${query}`, permsBearer());
-  return body.rules ?? [];
+  return api.get<RulesResponse>(`/api/perms/rules?${query}`, permsBearer());
+}
+
+/**
+ * The workspace's teams for the picker: the first page of the route every member may read.
+ * Caveat: a workspace with more than 50 teams offers the first 50 (the picker also shows only a
+ * few matches); narrowing the search does not reach the rest.
+ */
+export async function fetchTeams(workspaceId: string): Promise<ShareTeam[]> {
+  const body = await api.get<TeamsResponse>(`/api/workspaces/${encodeURIComponent(workspaceId)}/teams?limit=50`, permsBearer());
+  return (body.teams ?? []).flatMap((team) => (typeof team.id === 'string' && typeof team.name === 'string'
+    ? [{ id: team.id, name: team.name, memberCount: typeof team.memberCount === 'number' ? team.memberCount : 0 }]
+    : []));
+}
+
+/**
+ * Stored AccessRules for one resource only — the Share dialog's own view — and whether the server
+ * says it enforces team rules. An absent flag means it does not: the dialog then hides Teams.
+ */
+export async function fetchRules(workspaceId: string, resourceId: string): Promise<{ rules: Array<ShareAccessRule & { _id: string }>; teamRules: boolean }> {
+  const read = await fetchRulesRead(workspaceId, resourceId);
+  return { rules: (read.rules ?? []).filter((rule) => rule.resourceId?.toLowerCase() === resourceId.toLowerCase()), teamRules: read.teamRules === true };
 }
 
 /** Upsert one AccessRule (same workspace/resource/target replaces). */

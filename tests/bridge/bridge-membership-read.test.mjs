@@ -26,6 +26,7 @@ import {
 
 const NOT_SCOPED = 'App session is not scoped to this workspace.';
 const PERMISSION_DENIED = 'Workspace permission denied.';
+const PAGE_NOT_FOUND = 'Page not found.';
 const pageRead = (id) => `/api/pages/${id}`;
 const asRequest = (headers) => ({ headers });
 const ownerRow = { user_id: IDS.userA, role: 'owner', permissions: ALL_PERMISSIONS };
@@ -38,7 +39,10 @@ afterEach(() => {
 });
 
 describe('read: the member row comes with the page', () => {
-	it('GET /api/pages/:id makes exactly 1 BaaS call, for a page owner and for a member', async () => {
+	it('GET /api/pages/:id makes one BaaS call for the page, plus the share rules for a member', async () => {
+		// ADR 0004: the page and the caller's member row come in ONE statement. The share
+		// rules (P3-6-c) are a second read: the page's own rules and the workspace-wide
+		// ones, so a workspace full of rules about other pages cannot truncate a deny.
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			const owned = await send(base, pageRead(IDS.sharedA), asA());
 			assert.equal(owned.status, 200);
@@ -46,8 +50,11 @@ describe('read: the member row comes with the page', () => {
 			const shared = await send(base, pageRead(IDS.sharedA), asB());
 			assert.equal(shared.status, 200);
 			assert.equal(shared.body._id, IDS.sharedA);
-			assert.equal(mock.calls.length, 2);
-			assert.equal(mock.calls.filter((call) => call.table !== 'osionos_pages').length, 0, 'no rpc and no bare members read');
+			assert.equal(mock.calls.length, 4);
+			assert.deepEqual(mock.calls.map((call) => call.table), [
+				'osionos_pages', 'osionos_pages', 'osionos_share_rules', 'osionos_share_rules',
+			]);
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_workspace_members').length, 0, 'no bare members read');
 		});
 	});
 
@@ -69,11 +76,13 @@ describe('read: the member row comes with the page', () => {
 		});
 	});
 
-	it('comments list makes 2 calls (page and member, then comments)', async () => {
+	it('comments list reads the page, its member and the share rules, then the comments', async () => {
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			const listed = await send(base, `/api/comments?pageId=${IDS.sharedA}`, asB());
 			assert.equal(listed.status, 200);
-			assert.deepEqual(mock.calls.map((call) => call.table), ['osionos_pages', 'osionos_page_comments']);
+			assert.deepEqual(mock.calls.map((call) => call.table), [
+				'osionos_pages', 'osionos_share_rules', 'osionos_share_rules', 'osionos_page_comments',
+			]);
 		});
 	});
 
@@ -98,8 +107,8 @@ describe('read: find the caller\'s row, never index', () => {
 		await inMembershipWorld(world, { failWhen }, async (base) => {
 			for (const memberWorkspaces of [[], [IDS.team]]) {
 				const denied = await send(base, pageRead(IDS.sharedA), asOutsider(memberWorkspaces));
-				assert.equal(denied.status, 403);
-				assert.equal(denied.body.message, memberWorkspaces.length ? PERMISSION_DENIED : NOT_SCOPED);
+				assert.equal(denied.status, 404);
+				assert.equal(denied.body.message, PAGE_NOT_FOUND);
 				assertNoPageIds(denied, world);
 			}
 		});
@@ -117,7 +126,7 @@ describe('read: find the caller\'s row, never index', () => {
 		const world = membershipWorld();
 		const failWhen = sharedWith(world, [{ role: 'owner', permissions: ALL_PERMISSIONS }]);
 		await inMembershipWorld(world, { failWhen }, async (base) => {
-			assert.equal((await send(base, pageRead(IDS.sharedA), asB())).status, 403);
+			assert.equal((await send(base, pageRead(IDS.sharedA), asB())).status, 404);
 		});
 	});
 });
@@ -129,7 +138,7 @@ describe('read: 404 before 403, owner kept', () => {
 			for (const asNobody of [asOutsider(), asOutsider([IDS.team]), asA()]) {
 				const missing = await send(base, pageRead(IDS.pageB), asNobody);
 				assert.equal(missing.status, 404);
-				assert.equal(missing.body.message, 'Page not found.');
+				assert.equal(missing.body.message, PAGE_NOT_FOUND);
 			}
 			const absent = await send(base, pageRead(IDS.missing), asOutsider());
 			assert.equal(absent.status, 404);
@@ -156,24 +165,24 @@ describe('read: 404 before 403, owner kept', () => {
 
 describe('read: denial, in the next request', () => {
 	for (const [label, memberWorkspaces, message] of [['token-scoped workspace', [IDS.team], PERMISSION_DENIED], ['workspace outside the token', [], NOT_SCOPED]]) {
-		it(`removed member: next GET /api/pages/:id of a shared page is 403 (${label})`, async () => {
+		it(`removed member: next GET /api/pages/:id of a shared page is the 404 of a missing id (${label})`, async () => {
 			const world = membershipWorld();
 			await inMembershipWorld(world, {}, async (base, mock) => {
 				assert.equal((await send(base, pageRead(IDS.sharedA), asB(memberWorkspaces))).status, 200);
 				removeMember(mock, IDS.team, IDS.userB);
 				const denied = await send(base, pageRead(IDS.sharedA), asB(memberWorkspaces));
-				assert.equal(denied.status, 403);
-				assert.equal(denied.body.message, message);
+				assert.equal(denied.status, 404);
+				assert.equal(denied.body.message, PAGE_NOT_FOUND);
 				assertNoPageIds(denied, world);
 			});
 		});
 
-		it(`non-member 403 on a shared page (${label})`, async () => {
+		it(`non-member 404 on a shared page (${label})`, async () => {
 			const world = membershipWorld();
 			await inMembershipWorld(world, {}, async (base) => {
 				const denied = await send(base, pageRead(IDS.sharedA), asOutsider(memberWorkspaces));
-				assert.equal(denied.status, 403);
-				assert.equal(denied.body.message, message);
+				assert.equal(denied.status, 404);
+				assert.equal(denied.body.message, PAGE_NOT_FOUND);
 				assertNoPageIds(denied, world);
 			});
 		});
@@ -217,7 +226,7 @@ describe('read: denial, in the next request', () => {
 			for (const [id, headers] of [[IDS.sharedA, asOutsider()], [IDS.pageB, asOutsider()], [IDS.missing, asB()]]) {
 				statuses.push((await send(base, pageRead(id), headers)).status);
 			}
-			assert.deepEqual(statuses, [403, 404, 404]);
+			assert.deepEqual(statuses, [404, 404, 404]);
 		});
 	});
 });
@@ -243,7 +252,7 @@ describe('read: the access context is the one requireWorkspaceAccess builds', ()
 	it('readablePageAccess refuses with 403 or 404 itself', async () => {
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			const attempt = (id, headers) => readablePageAccess(asRequest(headers), id, 'read', config, mock.fetchImpl).catch((error) => error.status);
-			assert.equal(await attempt(IDS.sharedA, asOutsider()), 403);
+			assert.equal(await attempt(IDS.sharedA, asOutsider()), 404);
 			assert.equal(await attempt(IDS.pageB, asOutsider()), 404);
 		});
 	});

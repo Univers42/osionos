@@ -120,7 +120,7 @@ describe('cascades reach only the descendants the caller can read', () => {
 			assert.equal(mock.page(CHILD.mine).archived_at, null);
 			assert.deepEqual(mock.page(CHILD.foreign), foreign);
 			assert.deepEqual(writesTouching(mock, CHILD.foreign), []);
-			assert.deepEqual(authFetch(mock).params.get('id').slice(4, -1).split(',').sort(), [CHILD.mine, CHILD.foreign].sort());
+			assert.deepEqual(authFetch(mock).params.get('id').slice(4, -1).split(',').map((id) => id.replace(/^"(.*)"$/, '$1')).sort(), [CHILD.mine, CHILD.foreign].sort());
 		});
 	});
 

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/08 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,6 +19,10 @@ import {
   HOME_DASHBOARD_PAGE_TITLE,
   KNOWN_DATABASE_VIEWS,
 } from "@/widgets/database-view/model/databaseViewCatalog.meta";
+import { fingerprintHomeBlock, mergeHomeContent } from "@/widgets/page-renderer/model/homeContentMerge";
+import { isProfessionId } from "@/data/professions/professions";
+import { createProfessionHomeContent } from "@/widgets/database-view/model/professionHomeContent";
+import { useProfessionStore } from "@/features/professions/model/useProfessionStore";
 import { WorkspaceGrid } from "@/widgets/workspace-grid";
 import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
@@ -28,26 +32,18 @@ import type { PageEntry } from "@/entities/page";
 const HOME_DASHBOARD_VERSION = 10;
 const HOME_DASHBOARD_FOCUS_VIEW_ID = "v-prod-table";
 
-function getHomeDashboardFocusViewId(page: PageEntry | undefined): string | undefined {
-  const value = page?.properties?.find((property) => property.key === "focus_view")?.value;
-  return typeof value === "string" ? value : undefined;
+function getHomeProfession(page: PageEntry | undefined): string | null {
+  return page?.homeProfession ?? null;
 }
 
-function hasHomeDashboardSections(page: PageEntry | undefined): boolean {
-  // The redesigned Home is a flat vertical stack (greeting heading + titled NDS
-  // sections), NOT a full_page canvas. A stale canvas seed (which overlapped) or
-  // a too-short body is treated as stale → re-seed.
-  const content = page?.content ?? [];
-  if (content.some((block) => block.type === "layout")) return false;
-  const sectionCount = content.filter(
-    (block) => block.type === "database_inline" || block.type === "home_views",
-  ).length;
-  return sectionCount >= 4;
-}
-
-function homeDashboardNeedsRefresh(page: PageEntry | undefined, focusViewId: string | undefined): boolean {
-  if (page?.homeDashboardVersion !== HOME_DASHBOARD_VERSION || !hasHomeDashboardSections(page)) return true;
-  return Boolean(focusViewId && getHomeDashboardFocusViewId(page) !== focusViewId);
+function homeDashboardNeedsRefresh(page: PageEntry | undefined, currentProfession: string | null): boolean {
+  // A stale seed is caught by the version alone: every change to the seed's
+  // structure bumps HOME_DASHBOARD_VERSION. The user's own edits (a deleted
+  // section, a paragraph they added) are NOT a reason to re-seed — reading
+  // them as one is what used to eat them.
+  if (!page) return true;
+  if (page.homeDashboardVersion !== HOME_DASHBOARD_VERSION) return true;
+  return getHomeProfession(page) !== currentProfession;
 }
 
 type HomeLayoutContentBuilder =
@@ -100,10 +96,11 @@ export const MainContent: React.FC = () => {
   const homeDashboardPage = usePageStore((s) => (
     firstWsId ? s.pages[firstWsId]?.find((page) => page._id === homeDashboardPageId && !page.archivedAt) : undefined
   ));
-
+  const profession = useProfessionStore((s) => s.profession);
   useEffect(() => {
     if (!firstWsId) return;
-    if (!homeDashboardNeedsRefresh(homeDashboardPage, HOME_DASHBOARD_FOCUS_VIEW_ID)) return;
+    const currentProfession = isProfessionId(profession) ? profession : null;
+    if (!homeDashboardNeedsRefresh(homeDashboardPage, currentProfession)) return;
 
     // The home builder drags in the seeded database state (~600KB JSON), so it
     // is loaded on demand: only when the dashboard needs (re)seeding — the
@@ -112,29 +109,45 @@ export const MainContent: React.FC = () => {
     void import("@/widgets/database-view/model/databaseViewCatalog").then(({ createHomeLayoutContent }) => {
       if (cancelled) return;
       const greetingName = useUserStore.getState().activePersona()?.name;
-      const nextHomePage = createHomeDashboardPage(createHomeLayoutContent, firstWsId, activeUserId || null, greetingName);
+      // A profession change is a deliberate template switch: it replaces the
+      // content instead of merging, because the user asked for a different seed.
+      // A version bump (or any other re-seed) keeps merging, so edits survive.
+      const createContent = currentProfession
+        ? (_greetingName: string | undefined, options?: { idScope?: string }) =>
+            createProfessionHomeContent(currentProfession, { idScope: options?.idScope ?? getHomeDashboardPageId(firstWsId) })
+        : createHomeLayoutContent;
+      const nextHomePage = createHomeDashboardPage(createContent, firstWsId, activeUserId || null, greetingName);
+      const seedContent = nextHomePage.content ?? [];
       usePageStore.setState((state) => {
         const existingPages = state.pages[firstWsId] ?? [];
         const existingIndex = existingPages.findIndex((page) => page._id === nextHomePage._id && !page.archivedAt);
-        if (existingIndex >= 0) {
-          const existingHomePage = existingPages[existingIndex];
-          const migratedHomePage: PageEntry = {
-            ...nextHomePage,
-            title: existingHomePage.title || nextHomePage.title,
-            icon: existingHomePage.icon ?? nextHomePage.icon,
-            cover: existingHomePage.cover ?? nextHomePage.cover,
-          };
-          const pages = { ...state.pages, [firstWsId]: existingPages.map((page, index) => index === existingIndex ? migratedHomePage : page) };
-          savePagesCache(pages);
-          return derivePageState(pages, state.pageIdsByWorkspace);
-        }
-        const pages = { ...state.pages, [firstWsId]: [nextHomePage, ...existingPages] };
+        const existingHomePage = existingIndex >= 0 ? existingPages[existingIndex] : undefined;
+        const professionChanged = getHomeProfession(existingHomePage) !== currentProfession;
+        const merged = professionChanged
+          ? { content: seedContent, fingerprints: Object.fromEntries(seedContent.map((block) => [block.id, fingerprintHomeBlock(block)])) }
+          : mergeHomeContent(
+              existingHomePage?.content ?? [],
+              seedContent,
+              existingHomePage?.homeSeedFingerprints,
+            );
+        const homePage: PageEntry = {
+          ...nextHomePage,
+          content: merged.content,
+          homeSeedFingerprints: merged.fingerprints,
+          title: existingHomePage?.title || nextHomePage.title,
+          icon: existingHomePage?.icon ?? nextHomePage.icon,
+          cover: existingHomePage?.cover ?? nextHomePage.cover,
+          homeProfession: currentProfession,
+        };
+        const pages = existingIndex >= 0
+          ? { ...state.pages, [firstWsId]: existingPages.map((page, index) => (index === existingIndex ? homePage : page)) }
+          : { ...state.pages, [firstWsId]: [homePage, ...existingPages] };
         savePagesCache(pages);
         return derivePageState(pages, state.pageIdsByWorkspace);
       });
     });
     return () => { cancelled = true; };
-  }, [activeUserId, firstWsId, homeDashboardPage]);
+  }, [activeUserId, firstWsId, homeDashboardPage, profession]);
 
   return <WorkspaceGrid />;
 };

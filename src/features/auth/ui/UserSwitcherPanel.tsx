@@ -18,10 +18,10 @@ import { IconValueView } from '@osionos/ui/atoms/IconValueView';
 import { useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 import { useUserStore } from '@/features/auth';
 import { useWorkspaceOnboarding } from '@/features/workspace-onboarding/model/useWorkspaceOnboarding';
+import { openSettings } from '@/features/settings/model/settingsNav';
 import {
   COLLECTION_ROLE_BADGES,
 } from '@/shared/ui/assets/collectionEmoji';
-import { LazySettingsCenter } from '@/features/settings/LazySettingsCenter';
 import { AuthDialog } from './AuthDialog';
 
 interface Props {
@@ -29,7 +29,7 @@ interface Props {
   anchorElement?: HTMLElement | null;
 }
 
-// SettingsPanel removed — use `SettingsCenter` component instead.
+// SettingsPanel removed — use the settings tab view (`ui/SettingsView.tsx`) instead.
 
 /**
  * Floating dropdown that lists all 3 pre-logged-in personas.
@@ -48,15 +48,14 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
   const activeSession = useUserStore(s => s.activeSession());
   const selectedWorkspace = useUserStore(s => s.activeWorkspace());
   const [authOpen, setAuthOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'settings' | 'people' | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [position, setPosition] = useState({ top: 48, left: 8 });
 
   // Track whether a modal is open to prevent outside-click from closing the panel
   const modalOpenRef = useRef(false);
   useEffect(() => {
-    modalOpenRef.current = authOpen || settingsTab !== null;
-  }, [authOpen, settingsTab]);
+    modalOpenRef.current = authOpen;
+  }, [authOpen]);
 
   const workspaces = useMemo(
     () => activeSession ? [...activeSession.privateWorkspaces, ...activeSession.sharedWorkspaces] : [],
@@ -100,17 +99,16 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [onClose, anchorElement]);
 
-  // Close on Escape (but only close sub-modal first if one is open)
+  // Close on Escape (but only close the sub-modal first if one is open)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
       if (authOpen) { setAuthOpen(false); return; }
-      if (settingsTab) { setSettingsTab(null); return; }
       onClose();
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, authOpen, settingsTab]);
+  }, [onClose, authOpen]);
 
   function handleNewWorkspace() {
     onClose();
@@ -148,10 +146,10 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
           </div>
         </div>
         <div className="mt-3 flex gap-2">
-          <Button size="sm" className="flex-1" onClick={() => setSettingsTab('settings')}>
+          <Button size="sm" className="flex-1" onClick={() => { openSettings('general'); onClose(); }}>
             <Settings size={12} aria-hidden /> Settings
           </Button>
-          <Button size="sm" className="flex-1" onClick={() => setSettingsTab('people')}>
+          <Button size="sm" className="flex-1" onClick={() => { openSettings('people'); onClose(); }}>
             <Users size={12} aria-hidden /> People
           </Button>
         </div>
@@ -281,7 +279,6 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
       </footer>
       </div>
       {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} />}
-      {settingsTab && <LazySettingsCenter initialTab={settingsTab === 'people' ? 'people' : 'general'} onClose={() => setSettingsTab(null)} />}
     </>
   );
 

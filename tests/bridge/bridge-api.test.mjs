@@ -17,6 +17,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
 	bridgeSignature,
+	claimBridgeReplay,
 	configFromEnv,
 	consumeHandoffToken,
 	createBridgeServer,
@@ -34,6 +35,7 @@ import {
 	verifyAppSessionToken,
 	verifyBridgeRequest,
 } from '../../scripts/bridge-api.mjs';
+import { handoffKeys, kvStub } from './support/kv-stub.mjs';
 
 const subject = '3f6d2a70-5b3f-4c92-8f06-8f4644fd1209';
 const jti = '1c76c7f0-f07e-442d-96fd-77d601764c3b';
@@ -52,6 +54,7 @@ const childPageId = 'bb44cf14-84df-4f08-8b02-97dc84727744';
 
 function testConfig() {
 	return configFromEnv({
+		OSIONOS_BAAS_URL: '',
 		OSIONOS_SESSION_CUTOFFS: 'off',
 		OSIONOS_APP_URL: 'http://localhost:3001',
 		OSIONOS_BRIDGE_SHARED_SECRET: secret,
@@ -63,6 +66,7 @@ function testConfig() {
 function testBaasConfig() {
 	return configFromEnv({
 		OSIONOS_SESSION_CUTOFFS: 'off',
+		OSIONOS_SESSION_RECORDS: 'off',
 		OSIONOS_APP_URL: 'http://localhost:3001',
 		OSIONOS_BRIDGE_SHARED_SECRET: secret,
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
@@ -97,7 +101,8 @@ function jsonResponse(value, status = 200) {
 }
 
 function idsFromFilter(idFilter) {
-	if (idFilter.startsWith('in.')) return idFilter.slice(4, -1).split(',').filter(Boolean);
+	// The bridge quotes the ids of its `in` lists (inFilter), so the quotes come off here.
+	if (idFilter.startsWith('in.')) return idFilter.slice(4, -1).split(',').filter(Boolean).map((id) => id.replace(/^"(.*)"$/, '$1'));
 	if (idFilter.startsWith('eq.')) return [idFilter.slice(3)];
 	return [];
 }
@@ -218,7 +223,6 @@ describe('osionos bridge receiver', () => {
 			payload,
 			secret,
 			now,
-			replayStore: new Map(),
 		});
 		assert.equal(result.subject, subject);
 		assert.equal(result.email, 'owner@example.com');
@@ -241,14 +245,15 @@ describe('osionos bridge receiver', () => {
 		}), /timestamp is outside/);
 	});
 
-	it('rejects replayed jti values', () => {
-		const replayStore = new Map();
+	it('rejects replayed jti values', async () => {
+		const kv = kvStub();
 		const timestamp = String(now);
 		const normalized = validateBridgePayload(payload);
 		const signature = bridgeSignature(secret, timestamp, normalized);
-		const request = { headers: { 'x-prismatica-bridge-timestamp': timestamp, 'x-prismatica-bridge-signature': signature }, payload, secret, now, replayStore };
+		const request = { headers: { 'x-prismatica-bridge-timestamp': timestamp, 'x-prismatica-bridge-signature': signature }, payload, secret, now };
 		verifyBridgeRequest(request);
-		assert.throws(() => verifyBridgeRequest(request), /replay rejected/);
+		await claimBridgeReplay(kv, normalized.jti, 600_000);
+		await assert.rejects(() => claimBridgeReplay(kv, normalized.jti, 600_000), /replay rejected/);
 	});
 
 	it('rejects unexpected sensitive fields', () => {
@@ -360,7 +365,7 @@ describe('osionos bridge receiver', () => {
 		await assert.rejects(() => createBridgeHandoff({
 			payload: validateBridgePayload(payload),
 			config,
-			handoffStore: new Map(),
+			kv: kvStub(),
 			now,
 			fetchImpl: async () => {
 				fetchCalled = true;
@@ -371,15 +376,16 @@ describe('osionos bridge receiver', () => {
 	});
 
 	it('creates a one-time handoff token for the frontend', async () => {
-		const handoffStore = new Map();
-		const handoff = await createBridgeHandoff({ payload: validateBridgePayload(payload), config: testConfig(), handoffStore, now });
+		const kv = kvStub();
+		const config = testConfig();
+		const handoff = await createBridgeHandoff({ payload: validateBridgePayload(payload), config, kv, now });
 		const bridgeToken = new URL(handoff.redirectUrl).hash.replace('#bridge_token=', '');
 		assert.equal(handoff.ok, true);
-		assert.equal(handoffStore.size, 1);
-		const imported = consumeHandoffToken(decodeURIComponent(bridgeToken), handoffStore, now + 1000);
+		assert.equal(handoffKeys(kv).length, 1);
+		const imported = await consumeHandoffToken(decodeURIComponent(bridgeToken), kv, now + 1000, config.appSessionSecret);
 		assert.equal(imported.session.userId, subject);
-		assert.equal(handoffStore.size, 0);
-		assert.throws(() => consumeHandoffToken(decodeURIComponent(bridgeToken), handoffStore, now + 1000), /invalid/);
+		assert.deepEqual(handoffKeys(kv), [], 'the consumed handoff is gone from the store');
+		await assert.rejects(() => consumeHandoffToken(decodeURIComponent(bridgeToken), kv, now + 1000, config.appSessionSecret), /invalid/);
 	});
 
 	it('serves scoped workspace list and read routes from the bridge', async () => {

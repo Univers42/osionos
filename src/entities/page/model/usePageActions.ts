@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,8 +28,10 @@ import {
   copyPageLink,
   exportPage as exportPageFile,
   importPageFile,
+  loadDashboardCells,
   syncPageActionEvent,
   translatePage,
+  turnIntoDashboardContent,
   type PageActionName,
 } from '@/services/page-actions';
 
@@ -92,6 +94,28 @@ function textWordCount(value: string | undefined): number {
 
 function wordCountFromPage(page: { content?: Array<{ content?: string; children?: Array<{ content?: string }> }> } | null | undefined): number {
   return (page?.content ?? []).reduce((count, block) => count + textWordCount(block.content) + (block.children ?? []).reduce((total, child) => total + textWordCount(child.content), 0), 0);
+}
+
+export interface ProgramPageActionOutcome {
+  status: 'ok' | 'failed';
+  detail?: string;
+}
+
+const programPageRunners = new Map<string, (name: string) => Promise<ProgramPageActionOutcome>>();
+
+/**
+ * Run a page action by name for a button program, through the same callbacks
+ * the page menu uses (snapshot and logAction included). The runner exists only
+ * while a menu or settings panel is mounted for that page.
+ *
+ * Caveat: translate, import, export, updates_analytics and version_history open
+ * UI or need input, so a program cannot run them; a callback that returns
+ * early (no workspace, no page) is reported ok because the menu has no signal.
+ */
+export async function runProgramPageAction(pageId: string, name: string): Promise<ProgramPageActionOutcome> {
+  const runner = programPageRunners.get(pageId);
+  if (!runner) return { status: 'failed', detail: 'page actions are not available for this page right now' };
+  return runner(name);
 }
 
 export function usePageActions(pageId: string | null, workspaceId?: string) {
@@ -329,9 +353,58 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     await logAction('remove_header', 'Header removed — content restored');
   }, [logAction, page?.cover, pageId, snapshot]);
 
+  // "Turn this page into a dashboard": a full-page layout band in front of the
+  // page's blocks. The snapshot is the undo point — the version history brings
+  // the previous body back. The store refuses the write for anyone who may not
+  // edit the body, so the menu item is only a shortcut.
+  const turnIntoDashboard = useCallback(async () => {
+    if (!page || !pageId) return;
+    await snapshot('Before turning into dashboard');
+    const cells = await loadDashboardCells(pageId);
+    updatePageContent(pageId, turnIntoDashboardContent(page, cells));
+    await logAction('turn_into_dashboard', 'Page turned into a dashboard');
+  }, [logAction, page, pageId, snapshot, updatePageContent]);
+
+  const programActions: Record<string, () => unknown> = {
+    copy_link: copyLink,
+    copy_page_contents: copyContents,
+    duplicate,
+    move_to_trash: moveToTrash,
+    present,
+    small_text: toggleSmallText,
+    full_width: toggleFullWidth,
+    lock_page: toggleLock,
+    notify_me: toggleNotifications,
+    connections: manageConnections,
+    remove_header: removeHeaderCanvas,
+    turn_into_dashboard: turnIntoDashboard,
+  };
+  const programActionsRef = useRef(programActions);
+  useEffect(() => {
+    programActionsRef.current = programActions;
+  });
+  useEffect(() => {
+    if (!pageId) return undefined;
+    const runner = async (name: string): Promise<ProgramPageActionOutcome> => {
+      const action = programActionsRef.current[name];
+      if (!action) return { status: 'failed', detail: `page action "${name}" cannot run from a button` };
+      try {
+        await action();
+        return { status: 'ok' };
+      } catch (error) {
+        return { status: 'failed', detail: error instanceof Error ? error.message : 'page action failed' };
+      }
+    };
+    programPageRunners.set(pageId, runner);
+    return () => {
+      if (programPageRunners.get(pageId) === runner) programPageRunners.delete(pageId);
+    };
+  }, [pageId]);
+
   return {
     hasRemovableHeader,
     removeHeaderCanvas,
+    turnIntoDashboard,
     actionMessage,
     config,
     detailPanel,

@@ -12,6 +12,19 @@
 
 /** Chat Shell domain model (§5). Local-first; persisted via useChatStore. */
 
+import type { AiPart } from "@/features/ai/api/aiClient";
+
+import type { ToolActivityPart } from "./toolActivity";
+import type { PermissionPart } from "./approvalParts";
+import type { MemoryProposalPart } from "./memoryParts";
+
+/**
+ * The parts of a message: the service's own (the sources of the answer), the
+ * calls the assistant made to its tools, and the cards of the writes it asked
+ * for, and the memories it proposed.
+ */
+export type ChatMessagePart = AiPart | ToolActivityPart | PermissionPart | MemoryProposalPart;
+
 export type MessageRole = "user" | "assistant" | "system";
 
 export interface ChatMessage {
@@ -22,6 +35,20 @@ export interface ChatMessage {
   createdAt: string;
   connectorId?: string;
   model?: string;
+  /** The connection the answer was paid for — the user's own, or the platform's. */
+  connectionId?: string;
+  /** The agent that shaped the answer — the built-in the reader picked. */
+  agentId?: string;
+  /** The message parts, in the service's shape, and the calls of the tools. */
+  parts?: ChatMessagePart[];
+  /** The run that produced this message, once the service answered. */
+  runId?: string;
+  /** Where the answer stands: streaming, done, or failed. */
+  status?: "streaming" | "done" | "error";
+  /** The service's code when the answer failed. */
+  errorCode?: string;
+  /** The seconds the service asked the client to wait, when it did. */
+  retryAfterSeconds?: number | null;
 }
 
 export interface Conversation {
@@ -32,6 +59,8 @@ export interface Conversation {
   /** Selected default connector + model for this conversation. */
   connectorId?: string;
   model?: string;
+  /** The conversation on the AI service, once it has one. */
+  serverConversationId?: string;
   createdAt: string;
   updatedAt: string;
 }
