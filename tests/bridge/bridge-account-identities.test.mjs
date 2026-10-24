@@ -96,6 +96,32 @@ describe('GET /api/account/identities', () => {
 	});
 });
 
+describe('the GoTrue read behind the route', () => {
+	it('answers 503 account_plane_unavailable on an upstream 500 and when fetch throws', async () => {
+		for (const gotrue of [() => ({ status: 500, body: {} }), () => new Error('connection refused')]) {
+			const result = await build({ gotrue }).call({ method: 'GET', path: PATH });
+			assert.equal(result.status, 503);
+			assert.equal(result.body.code, 'account_plane_unavailable');
+		}
+	});
+
+	it('makes no fetch when the service key is unset', async () => {
+		const { call, calls } = build({ config: { ...accountConfig(), serviceKey: '' } });
+		const result = await call({ method: 'GET', path: PATH });
+		assert.equal(result.status, 503);
+		assert.equal(result.body.code, 'account_plane_unavailable');
+		assert.equal(calls.length, 0);
+	});
+
+	it('sends the encoded id with the service key as apikey and bearer', async () => {
+		const { call, calls } = build({ session: { userId: 'a/b c', jti: 'j' } });
+		await call({ method: 'GET', path: PATH });
+		assert.equal(calls[0].url, 'https://baas.local/auth/v1/admin/users/a%2Fb%20c');
+		assert.equal(calls[0].init.headers.apikey, 'service-role-test-key');
+		assert.equal(calls[0].init.headers.Authorization, 'Bearer service-role-test-key');
+	});
+});
+
 describe('other verbs and paths', () => {
 	it('answers 405 to every verb but GET, and to any sub-path, before any GoTrue call', async () => {
 		const { call, calls } = build();
