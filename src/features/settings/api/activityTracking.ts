@@ -20,7 +20,7 @@
  * silent success, so the switch can go back to where the server has it.
  */
 
-import { api, getActiveJwt } from "@/shared/api/client";
+import { api, getActivePageJwt } from "@/shared/api/client";
 
 const ROUTE = "/api/preferences";
 
@@ -36,7 +36,7 @@ const isOn = (body: unknown): boolean =>
 
 export async function readActivityTracking(): Promise<ActivityTrackingResult> {
   try {
-    return { ok: true, enabled: isOn(await api.get<unknown>(ROUTE, getActiveJwt() ?? undefined)) };
+    return { ok: true, enabled: isOn(await api.get<unknown>(ROUTE, getActivePageJwt() ?? undefined)) };
   } catch (error) {
     return failure(error);
   }
@@ -46,7 +46,7 @@ export async function readActivityTracking(): Promise<ActivityTrackingResult> {
  *  confirmation: the reply body is not trusted to echo the key. */
 export async function writeActivityTracking(enabled: boolean): Promise<ActivityTrackingResult> {
   try {
-    await api.patch<unknown>(ROUTE, { activity_tracking: enabled }, getActiveJwt() ?? undefined);
+    await api.patch<unknown>(ROUTE, { activity_tracking: enabled }, getActivePageJwt() ?? undefined);
     return { ok: true, enabled };
   } catch (error) {
     return failure(error);
