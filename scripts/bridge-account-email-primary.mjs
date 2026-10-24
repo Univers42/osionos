@@ -21,7 +21,10 @@
  * is read-then-write; the loser of a race gets GoTrue's 23505, answered as `email_taken`. An
  * address added to OSIONOS_ADMIN_EMAILS AFTER it became someone's primary promotes that account
  * at its next sign-in, as for any account. A process kill between the PUT and the row removal
- * leaves a secondary equal to the primary; the GET hides it. The lock release is a plain `del`
+ * leaves a secondary equal to the primary; the GET hides it. A PUT that times out can still land
+ * after the re-read; the kept row and the GET mask make that harmless, other sign-ins are not ended
+ * in that case. Ends bridge sessions only: GoTrue refresh tokens issued before the change stay
+ * valid (probe 2026-10-24). The lock release is a plain `del`
  * (kv has no compare-and-delete): a run that outlives the lock's TTL can delete the lock a
  * later run took, letting a third run in; the promote-time lookup and GoTrue's 23505 still hold.
  */
@@ -98,23 +101,26 @@ async function undo(ctx, session, kept) {
 	await grantSudo(ctx.kv, session).catch(() => {}); // best effort: a lost grant only costs a new code
 }
 
-/** `rollback` is true only when the PUT is known not to have landed. */
+/**
+ * `rollback` (delete the kept row, give the grant back) is true only when the PUT is known not
+ * to have landed. After an unknown outcome the kept row stays; `restoreSudo` alone gives the grant back.
+ */
 async function writeAddress(ctx, userId, address, previous) {
 	let code = null;
 	try {
 		await updateGotrueEmail(ctx, userId, address);
-		return { failure: null, rollback: false };
+		return { failure: null, rollback: false, restoreSudo: false };
 	} catch (error) {
 		code = error?.code;
 	}
-	if (code === 'gotrue_email_taken') return { failure: taken(), rollback: true };
-	if (code === 'gotrue_write_failed') return { failure: emailUnavailable(), rollback: true };
+	if (code === 'gotrue_email_taken') return { failure: taken(), rollback: true, restoreSudo: true };
+	if (code === 'gotrue_write_failed') return { failure: emailUnavailable(), rollback: true, restoreSudo: true };
 	try {
 		const current = lower((await readGotrueUser(ctx, userId))?.email);
-		if (current === address) return { failure: null, rollback: false };
-		return { failure: emailUnavailable(), rollback: current === previous };
+		if (current === address) return { failure: null, rollback: false, restoreSudo: false };
+		return { failure: emailUnavailable(), rollback: false, restoreSudo: current === previous };
 	} catch {
-		return { failure: emailUnavailable(), rollback: false };
+		return { failure: emailUnavailable(), rollback: false, restoreSudo: true };
 	}
 }
 
@@ -144,7 +150,13 @@ async function promote(ctx, session, request, response, id) {
 	const previous = lower(user?.email);
 	if (address === previous) throw accountError(409, 'already_primary', 'That is already your primary address.');
 	await assertPromotable(ctx, userId, address);
-	if ((await ctx.kv.getDel(`sudo:${jtiOf(session)}`)) !== userId) throw accountError(403, 'sudo_required', 'Sudo is required for this action.');
+	let granted;
+	try {
+		granted = await ctx.kv.getDel(`sudo:${jtiOf(session)}`);
+	} catch (error) {
+		throw emailUnavailable(error);
+	}
+	if (granted !== userId) throw accountError(403, 'sudo_required', 'Sudo is required for this action.');
 	let kept = { id: null, created: false };
 	let outcome;
 	try {
@@ -158,6 +170,7 @@ async function promote(ctx, session, request, response, id) {
 	}
 	if (outcome.failure) {
 		if (outcome.rollback) await undo(ctx, session, kept);
+		else if (outcome.restoreSudo) await grantSudo(ctx.kv, session).catch(() => {});
 		throw outcome.failure;
 	}
 	return finish(ctx, session, request, response, { row, address, kept });
