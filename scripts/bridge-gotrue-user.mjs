@@ -29,6 +29,8 @@ export function gotrueAdminHeaders(config) {
 
 const readFailed = (upstreamStatus) => Object.assign(new Error(FAILED), { status: 503, code: 'gotrue_read_failed', upstreamStatus });
 
+const lookupFailed = (upstreamStatus) => Object.assign(new Error(FAILED), { status: 503, code: 'gotrue_lookup_failed', upstreamStatus });
+
 export async function readGotrueUser({ config, fetchImpl }, userId) {
 	if (!config.baasUrl || !config.serviceKey) throw readFailed(null);
 	let upstream;
@@ -46,4 +48,42 @@ export async function readGotrueUser({ config, fetchImpl }, userId) {
 	} catch {
 		throw readFailed(upstream.status);
 	}
+}
+
+const LOOKUP_TIMEOUT_MS = 5_000;
+const LOOKUP_PER_PAGE = 50;
+
+/**
+ * Resolve one account by email through GoTrue's admin list. The filter is a containment
+ * search, so the EXACT case-insensitive match is kept here: `xdylan@gmail.com` never
+ * answers for `dylan@gmail.com`. `complete` is false when the page was full, because a
+ * full page with no exact match cannot prove the address is absent.
+ *
+ * Caveat: assumes GoTrue keeps one account per lowercased email and honours `per_page`;
+ * neither is read from GoTrue's source. A failure of any kind throws `gotrue_lookup_failed`.
+ * @returns {Promise<{ account: { id: string, emailConfirmed: boolean } | null, complete: boolean }>}
+ */
+export async function findAccountByEmail({ config, fetchImpl }, address, { perPage = LOOKUP_PER_PAGE } = {}) {
+	if (!config.baasUrl || !config.serviceKey) throw lookupFailed(null);
+	const wanted = String(address ?? '').trim().toLowerCase();
+	let upstream;
+	try {
+		upstream = await fetchImpl(`${config.baasUrl}/auth/v1/admin/users?filter=${encodeURIComponent(wanted)}&per_page=${perPage}`, {
+			headers: gotrueAdminHeaders(config),
+			signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+		});
+	} catch {
+		throw lookupFailed(null);
+	}
+	if (!upstream?.ok) throw lookupFailed(upstream?.status ?? null);
+	let payload;
+	try {
+		payload = await upstream.json();
+	} catch {
+		throw lookupFailed(upstream.status);
+	}
+	const users = Array.isArray(payload) ? payload : Array.isArray(payload?.users) ? payload.users : [];
+	const match = users.find((user) => String(user?.email ?? '').trim().toLowerCase() === wanted);
+	const account = match ? { id: String(match.id ?? ''), emailConfirmed: typeof match.email_confirmed_at === 'string' && match.email_confirmed_at !== '' } : null;
+	return { account, complete: users.length < perPage };
 }
