@@ -395,6 +395,9 @@ function signedOutState(state: UserStore, userId: string): Partial<UserStore> {
 }
 
 const clearLocalSession = (userId: string) => useUserStore.setState((state) => signedOutState(state, userId));
+
+/** Forgets this device's session without calling the server: the server already ended it. */
+export const dropLocalSession = clearLocalSession;
 const pushNotice = (notice: LogoutNotice) => useToastStore.getState().push(notice);
 
 type RefreshingUserStore = UserStore & {
@@ -436,12 +439,13 @@ function applyRefreshed(userId: string, tokens: RefreshedTokens) {
   if (live) useUserStore.setState((state) => ({ sessions: { ...state.sessions, [userId]: session } }));
 }
 
-/** A step-up (2FA verify or disable) answered a new access token for this sign-in; the server cut
- *  the old one off, so it is written to the saved record too, or a reload would bring the old back. */
-export function adoptStepUpToken(userId: string, accessToken: string): void {
+/** A step-up (2FA verify or disable) answered a new access token, and a refresh token of a NEW
+ *  family; the server ended the old family, so both are written to the saved record too, or a
+ *  reload would bring the dead pair back. Without a refresh token (records off) the old one stays. */
+export function adoptStepUpToken(userId: string, accessToken: string, refreshToken?: string): void {
   const live = useUserStore.getState().sessions[userId];
   if (!live) return;
-  const session: UserSession = { ...live, accessToken };
+  const session: UserSession = refreshToken ? { ...live, accessToken, refreshToken } : { ...live, accessToken };
   const record = readPersistedBridgeSessions()[userId];
   if (record) savePersistedBridgeSession({ ...record, session });
   useUserStore.setState((state) => ({ sessions: { ...state.sessions, [userId]: session } }));
@@ -454,14 +458,27 @@ function dropRefreshed(userId: string, code: string) {
   pushNotice(noticeForRefreshFailure(code));
 }
 
-const refreshOne = (userId: string): Promise<RefreshOutcome> => runRefresh({
-  userId,
-  storage: refreshStorage(),
-  readTokens: () => currentTokens(userId),
-  rotate: (refreshToken) => refreshBridgeSession({ apiBase: API_BASE, refreshToken }),
-  adopt: (tokens) => applyRefreshed(userId, tokens),
-  signOut: (code) => dropRefreshed(userId, code),
-});
+/**
+ * Caveat: the guard compares the refresh token the rotation actually sent (re-read after any wait
+ * for another tab's lease) with the stored one when the answer lands. A step-up that swapped the
+ * pair mid-flight wins, so a late answer for the old family neither overwrites the new pair nor
+ * signs the device out; the tick after retries.
+ */
+const refreshOne = (userId: string): Promise<RefreshOutcome> => {
+  let rotatedFrom = currentTokens(userId)?.refreshToken;
+  const unchanged = () => currentTokens(userId)?.refreshToken === rotatedFrom;
+  return runRefresh({
+    userId,
+    storage: refreshStorage(),
+    readTokens: () => currentTokens(userId),
+    rotate: (refreshToken) => {
+      rotatedFrom = refreshToken;
+      return refreshBridgeSession({ apiBase: API_BASE, refreshToken });
+    },
+    adopt: (tokens) => { if (unchanged()) applyRefreshed(userId, tokens); },
+    signOut: (code) => { if (unchanged()) dropRefreshed(userId, code); },
+  });
+};
 
 /** Refreshes every persisted record whose token is due, before the records are restored. */
 async function refreshPersistedRecords() {

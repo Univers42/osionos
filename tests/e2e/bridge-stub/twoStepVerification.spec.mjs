@@ -19,7 +19,7 @@ import { test, expect } from "@playwright/test";
 
 import { region } from "../support/settingsHelpers.mjs";
 import { openProfile } from "../support/sessionsStub.mjs";
-import { NEW_TOKEN, OTPAUTH, RECOVERY_CODES, passkeyRow, stubTwoStep } from "../support/twoStepStub.mjs";
+import { NEW_REFRESH, NEW_TOKEN, OTPAUTH, RECOVERY_CODES, passkeyRow, stubTwoStep } from "../support/twoStepStub.mjs";
 
 const dialog = (page) => page.getByRole("dialog", { name: "Two-step verification" });
 const openModal = (page, name) => region(page).getByRole("button", { name, exact: true }).click();
@@ -57,25 +57,56 @@ test.describe("Two-step verification modal (bridge stub)", () => {
     await expect(dialog(page)).toContainText("Two-step verification is on");
   });
 
-  test("the token a verify returns replaces the saved one, so a reload keeps the upgraded sign-in", async ({ page, baseURL }) => {
-    await stubTwoStep(page);
+  /** Seeds a saved bridge record holding the OLD pair, as a reload would find it. */
+  async function seedSavedPair(page, baseURL) {
     await openProfile(page, baseURL, { bridgeToken: "osionos_v1.e2e-old.sig" });
-    const userId = await page.evaluate(() => {
+    return page.evaluate(() => {
       const { activeUserId, sessions } = globalThis.__playgroundUserStore.getState();
-      const record = { session: sessions[activeUserId], persona: { id: activeUserId }, expiresAt: "2099-01-01T00:00:00.000Z" };
+      const session = { ...sessions[activeUserId], refreshToken: "osb_rt.e2e-old.sig" };
+      globalThis.__playgroundUserStore.setState({ sessions: { ...sessions, [activeUserId]: session } });
+      const record = { session, persona: { id: activeUserId }, expiresAt: "2099-01-01T00:00:00.000Z" };
       localStorage.setItem("osionos:bridge-session", JSON.stringify({ [activeUserId]: record }));
       return activeUserId;
     });
+  }
+  const readPair = (page, id) => page.evaluate((userId) => {
+    const pick = (session) => ({ accessToken: session?.accessToken, refreshToken: session?.refreshToken });
+    return { saved: pick(JSON.parse(localStorage.getItem("osionos:bridge-session") ?? "{}")[userId]?.session), live: pick(globalThis.__playgroundUserStore.getState().sessions[userId]) };
+  }, id);
+  const NEW_PAIR = { accessToken: NEW_TOKEN, refreshToken: NEW_REFRESH };
+
+  test("E1: the pair a verify returns replaces the saved one, so a reload keeps the new family", async ({ page, baseURL }) => {
+    await stubTwoStep(page);
+    const userId = await seedSavedPair(page, baseURL);
     await openModal(page, "Add verification method");
     await dialog(page).getByRole("button", { name: "Set up authenticator app" }).click();
     await dialog(page).getByLabel("6-digit code").fill("123456");
     await dialog(page).getByRole("button", { name: "Verify", exact: true }).click();
     await expect(dialog(page).getByRole("list", { name: "Recovery codes" })).toBeVisible();
-    const tokens = await page.evaluate((id) => ({
-      saved: JSON.parse(localStorage.getItem("osionos:bridge-session"))[id].session.accessToken,
-      live: globalThis.__playgroundUserStore.getState().sessions[id].accessToken,
-    }), userId);
-    expect(tokens).toEqual({ saved: NEW_TOKEN, live: NEW_TOKEN });
+    expect(await readPair(page, userId)).toEqual({ saved: NEW_PAIR, live: NEW_PAIR });
+  });
+
+  test("E2: Turn off adopts the pair the disable returned", async ({ page, baseURL }) => {
+    await stubTwoStep(page, { enabled: true, recoveryRemaining: 4 });
+    const userId = await seedSavedPair(page, baseURL);
+    await openModal(page, "Manage");
+    await dialog(page).getByRole("button", { name: "Turn off" }).click();
+    await expect(region(page).getByRole("button", { name: "Add verification method", exact: true })).toBeVisible();
+    expect(await readPair(page, userId)).toEqual({ saved: NEW_PAIR, live: NEW_PAIR });
+  });
+
+  test("E3: a 503 session_record_unavailable on confirm drops the local session without a logout call", async ({ page, baseURL }) => {
+    await stubTwoStep(page, { sessionRecordDown: true });
+    const userId = await seedSavedPair(page, baseURL);
+    const logouts = [];
+    page.on("request", (request) => { if (/logout/.test(request.url())) logouts.push(request.url()); });
+    await openModal(page, "Add verification method");
+    await dialog(page).getByRole("button", { name: "Set up authenticator app" }).click();
+    await dialog(page).getByLabel("6-digit code").fill("123456");
+    await dialog(page).getByRole("button", { name: "Verify", exact: true }).click();
+    await expect.poll(() => page.evaluate((id) => globalThis.__playgroundUserStore.getState().sessions[id], userId)).toBeUndefined();
+    expect(await page.evaluate((id) => JSON.parse(localStorage.getItem("osionos:bridge-session") ?? "{}")[id], userId)).toBeUndefined();
+    expect(logouts).toEqual([]);
   });
 
   test("the preferred method orders the options", async ({ page, baseURL }) => {

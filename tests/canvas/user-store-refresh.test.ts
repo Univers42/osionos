@@ -47,7 +47,7 @@ Object.defineProperty(globalThis, "localStorage", {
   },
 });
 
-const { useUserStore, refreshActiveIfDue } = await import("../../src/features/auth/model/useUserStore.ts");
+const { useUserStore, refreshActiveIfDue, adoptStepUpToken, dropLocalSession } = await import("../../src/features/auth/model/useUserStore.ts");
 const { useToastStore } = await import("@osionos/ui/primitives/useToastStore");
 
 const STORAGE_KEY = "osionos:bridge-session";
@@ -237,4 +237,74 @@ test("the 60 s timer runs while a bridge session exists and stops when none is l
   } finally {
     mock.timers.reset();
   }
+});
+
+const STEP_AT = "osb_rt.stepped.sig";
+const stepToken = () => token(3600, "stepped");
+
+test("K1: a step-up writes the new pair to memory and to the saved record; without a refresh token the old one stays", () => {
+  reset();
+  signIn("u1");
+  adoptStepUpToken("u1", stepToken(), STEP_AT);
+  assert.deepEqual([useUserStore.getState().sessions.u1.refreshToken, persisted().u1.session.refreshToken], [STEP_AT, STEP_AT]);
+  assert.equal(persisted().u1.session.accessToken, stepToken());
+  adoptStepUpToken("u1", token(3600, "again"));
+  assert.equal(useUserStore.getState().sessions.u1.refreshToken, STEP_AT);
+  assert.equal(persisted().u1.session.refreshToken, STEP_AT);
+});
+
+/** Holds the rotation's answer until the step-up has landed, like a refresh racing a 2FA confirm. */
+async function rotationRacedByStepUp(answer: Response) {
+  reset();
+  signIn("u1");
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  globalThis.fetch = (async () => { await held; return answer; }) as typeof fetch;
+  const rotation = useUserStore.getState().refreshAccount("u1");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  adoptStepUpToken("u1", stepToken(), STEP_AT);
+  release();
+  await rotation;
+}
+
+test("K2: a late rotation answer for the replaced family does not overwrite the new pair", async () => {
+  await rotationRacedByStepUp(ok("late"));
+  assert.equal(useUserStore.getState().sessions.u1.refreshToken, STEP_AT);
+  assert.equal(persisted().u1.session.refreshToken, STEP_AT);
+  assert.equal(useUserStore.getState().sessions.u1.accessToken, stepToken());
+});
+
+test("K3: a late refusal for the replaced family does not sign the device out", async () => {
+  await rotationRacedByStepUp(refused(401, "session_revoked"));
+  assert.ok(useUserStore.getState().sessions.u1);
+  assert.equal(persisted().u1.session.refreshToken, STEP_AT);
+  assert.equal(useToastStore.getState().toasts.length, 0);
+});
+
+test("K4: a step-up that lands while this tab waits for another tab's lease is rotated, not discarded", async () => {
+  reset();
+  signIn("u1");
+  const leaseKey = "osionos:refresh-lease:u1";
+  memory.set(leaseKey, JSON.stringify({ owner: "other-tab", until: Date.now() + 60_000 }));
+  const calls = stubBridge(() => ok("after-wait", "osb_rt.rotated.sig"));
+  const rotation = useUserStore.getState().refreshAccount("u1");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  adoptStepUpToken("u1", stepToken(), STEP_AT);
+  memory.delete(leaseKey);
+  assert.equal(await rotation, "refreshed");
+  assert.deepEqual(calls, [STEP_AT]);
+  assert.equal(useUserStore.getState().sessions.u1.refreshToken, "osb_rt.rotated.sig");
+  assert.equal(persisted().u1.session.refreshToken, "osb_rt.rotated.sig");
+  assert.equal(useToastStore.getState().toasts.length, 0);
+});
+
+test("dropLocalSession ends the local session without calling the server", () => {
+  reset();
+  signIn("u1");
+  let called = false;
+  globalThis.fetch = (async () => { called = true; return new Response("{}"); }) as typeof fetch;
+  dropLocalSession("u1");
+  assert.equal(useUserStore.getState().sessions.u1, undefined);
+  assert.equal(persisted().u1, undefined);
+  assert.equal(called, false);
 });
