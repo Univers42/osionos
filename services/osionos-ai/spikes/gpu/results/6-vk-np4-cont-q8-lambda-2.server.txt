@@ -1,0 +1,1097 @@
+warn: LLAMA_ARG_HOST environment variable is set, but will be overwritten by command line argument --host
+warn: LLAMA_ARG_PORT environment variable is set, but will be overwritten by command line argument --port
+0.00.028.002 I srv  llama_server: initializing ...
+0.00.028.014 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.028.238 W srv  llama_server: security: no API key is set and CORS allows all origins (see https://github.com/ggml-org/llama.cpp/pull/25655)
+0.00.029.778 I srv    load_model: loading model '/models/models--unsloth--Qwen3-4B-Instruct-2507-GGUF/snapshots/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q4_K_M.gguf'
+0.00.216.550 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 99, abort
+0.00.302.370 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+0.01.134.787 I cmn          init: llama threadpool init, n_threads = 4
+0.01.438.469 I srv    load_model: initializing, n_slots = 4, n_ctx_slot = 4096, kv_unified = 'true'
+0.01.443.413 I srv  llama_server: model loaded
+0.01.443.417 I srv  llama_server: listening on http://0.0.0.0:8080
+0.03.408.938 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+0.03.409.214 I slot launch_slot_: id  3 | task 0 | processing task, is_child = 0
+0.06.614.171 I slot print_timing: id  3 | task 0 | prompt eval time =    2804.30 ms /  2312 tokens (    1.21 ms per token,   824.45 tokens per second)
+0.06.614.173 I slot print_timing: id  3 | task 0 |        eval time =     400.62 ms /    26 tokens (   16.02 ms per token,    62.40 tokens per second)
+0.06.614.174 I slot print_timing: id  3 | task 0 |       total time =    3204.92 ms /  2338 tokens
+0.06.614.178 I slot print_timing: id  3 | task 0 |    graphs reused =         25
+0.06.614.178 I slot print_timing: id  3 | task 0 |   graph reallocs =          0    /     0        (same size) / (changed size)
+0.06.614.335 I slot      release: id  3 | task 0 | stop processing: n_tokens = 2337, truncated = 0
+0.06.621.684 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, f_sim_best = 1.000 (> 0.100 thold), f_keep = 0.989
+0.06.621.848 I slot launch_slot_: id  3 | task 28 | processing task, is_child = 0
+0.06.621.865 W slot   operator(): id  3 | task 28 | need to evaluate at least 1 token for each active slot (n_past = 2312, task.n_tokens() = 2312)
+0.06.621.865 W slot   operator(): id  3 | task 28 | n_past was set to 2311
+0.06.957.988 I slot print_timing: id  3 | task 28 | prompt eval time =      17.58 ms /     1 tokens (   17.58 ms per token,    56.89 tokens per second)
+0.06.957.990 I slot print_timing: id  3 | task 28 |        eval time =     318.53 ms /    21 tokens (   15.93 ms per token,    62.79 tokens per second)
+0.06.957.991 I slot print_timing: id  3 | task 28 |       total time =     336.11 ms /    22 tokens
+0.06.957.991 I slot print_timing: id  3 | task 28 |    graphs reused =         46
+0.06.957.992 I slot print_timing: id  3 | task 28 |   graph reallocs =          0    /     0        (same size) / (changed size)
+0.06.958.058 I slot      release: id  3 | task 28 | stop processing: n_tokens = 2332, truncated = 0
+0.06.969.285 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, f_sim_best = 1.000 (> 0.100 thold), f_keep = 0.991
+0.06.969.460 I slot launch_slot_: id  3 | task 52 | processing task, is_child = 0
+0.06.969.479 W slot   operator(): id  3 | task 52 | need to evaluate at least 1 token for each active slot (n_past = 2312, task.n_tokens() = 2312)
+0.06.969.481 W slot   operator(): id  3 | task 52 | n_past was set to 2311
+0.07.303.804 I slot print_timing: id  3 | task 52 | prompt eval time =      18.88 ms /     1 tokens (   18.88 ms per token,    52.96 tokens per second)
+0.07.303.806 I slot print_timing: id  3 | task 52 |        eval time =     315.43 ms /    21 tokens (   15.77 ms per token,    63.40 tokens per second)
+0.07.303.807 I slot print_timing: id  3 | task 52 |       total time =     334.32 ms /    22 tokens
+0.07.303.807 I slot print_timing: id  3 | task 52 |    graphs reused =         67
+0.07.303.808 I slot print_timing: id  3 | task 52 |   graph reallocs =          0    /     0        (same size) / (changed size)
+0.07.303.878 I slot      release: id  3 | task 52 | stop processing: n_tokens = 2332, truncated = 0
+0.07.399.168 I slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, f_sim_best = 0.610 (> 0.100 thold), f_keep = 0.615
+0.07.399.340 I slot launch_slot_: id  3 | task 74 | processing task, is_child = 0
+0.08.595.565 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = -1
+0.08.595.720 I slot launch_slot_: id  2 | task 77 | processing task, is_child = 0
+0.08.595.735 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = -1
+0.08.595.847 I slot launch_slot_: id  1 | task 78 | processing task, is_child = 0
+0.08.595.852 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+0.08.595.962 I slot launch_slot_: id  0 | task 79 | processing task, is_child = 0
+0.08.596.947 W decode: failed to find a memory slot for batch of size 2048
+0.08.596.983 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.09.712.308 W decode: failed to find a memory slot for batch of size 1024
+0.09.712.338 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1024, n_batch = 1024, ret = 1
+0.09.712.744 W decode: failed to find a memory slot for batch of size 1024
+0.09.712.752 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1024, n_batch = 512, ret = 1
+0.09.722.881 W decode: failed to find a memory slot for batch of size 512
+0.09.722.893 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1536, n_batch = 1024, ret = 1
+0.09.723.030 W decode: failed to find a memory slot for batch of size 512
+0.09.723.036 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1536, n_batch = 512, ret = 1
+0.09.723.163 W decode: failed to find a memory slot for batch of size 512
+0.09.723.169 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1536, n_batch = 256, ret = 1
+0.09.723.266 W decode: failed to find a memory slot for batch of size 256
+0.09.723.273 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1536, n_batch = 128, ret = 1
+0.10.346.568 W decode: failed to find a memory slot for batch of size 384
+0.10.346.577 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1664, n_batch = 1024, ret = 1
+0.10.346.708 W decode: failed to find a memory slot for batch of size 384
+0.10.346.715 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1664, n_batch = 512, ret = 1
+0.10.346.829 W decode: failed to find a memory slot for batch of size 384
+0.10.346.835 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1664, n_batch = 256, ret = 1
+0.10.346.927 W decode: failed to find a memory slot for batch of size 256
+0.10.346.933 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1664, n_batch = 128, ret = 1
+0.10.347.008 W decode: failed to find a memory slot for batch of size 128
+0.10.347.015 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1664, n_batch = 64, ret = 1
+0.10.537.547 W decode: failed to find a memory slot for batch of size 320
+0.10.537.556 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1728, n_batch = 1024, ret = 1
+0.10.537.690 W decode: failed to find a memory slot for batch of size 320
+0.10.537.697 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1728, n_batch = 512, ret = 1
+0.10.537.809 W decode: failed to find a memory slot for batch of size 320
+0.10.537.815 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1728, n_batch = 256, ret = 1
+0.10.537.921 W decode: failed to find a memory slot for batch of size 256
+0.10.537.929 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1728, n_batch = 128, ret = 1
+0.10.538.014 W decode: failed to find a memory slot for batch of size 128
+0.10.538.021 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1728, n_batch = 64, ret = 1
+0.10.538.081 W decode: failed to find a memory slot for batch of size 64
+0.10.538.087 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1728, n_batch = 32, ret = 1
+0.10.538.146 W decode: failed to find a memory slot for batch of size 32
+0.10.538.152 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1728, n_batch = 16, ret = 1
+0.10.752.704 W decode: failed to find a memory slot for batch of size 304
+0.10.752.714 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 1024, ret = 1
+0.10.752.822 W decode: failed to find a memory slot for batch of size 304
+0.10.752.828 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 512, ret = 1
+0.10.752.936 W decode: failed to find a memory slot for batch of size 304
+0.10.752.942 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 256, ret = 1
+0.10.753.040 W decode: failed to find a memory slot for batch of size 256
+0.10.753.063 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 128, ret = 1
+0.10.753.148 W decode: failed to find a memory slot for batch of size 128
+0.10.753.155 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 64, ret = 1
+0.10.753.220 W decode: failed to find a memory slot for batch of size 64
+0.10.753.226 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 32, ret = 1
+0.10.753.283 W decode: failed to find a memory slot for batch of size 32
+0.10.753.290 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 16, ret = 1
+0.10.753.340 W decode: failed to find a memory slot for batch of size 16
+0.10.753.348 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 8, ret = 1
+0.10.753.399 W decode: failed to find a memory slot for batch of size 8
+0.10.753.408 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 4, ret = 1
+0.10.753.459 W decode: failed to find a memory slot for batch of size 4
+0.10.753.468 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 2, ret = 1
+0.10.753.518 W decode: failed to find a memory slot for batch of size 2
+0.10.753.527 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 1744, n_batch = 1, ret = 1
+0.10.753.577 W decode: failed to find a memory slot for batch of size 1
+0.10.753.586 E srv        decode: Context size has been exceeded. off = 1744, n_batch = 1, ret = 1
+0.10.753.587 E srv    send_error: task id = 79, error: Context size has been exceeded.
+0.10.753.595 I slot      release: id  0 | task 79 | stop processing: n_tokens = 2047, truncated = 0
+0.10.753.607 W srv          stop: cancel task, id_task = 79
+0.10.753.756 E srv    send_error: task id = 78, error: Context size has been exceeded.
+0.10.753.758 I slot      release: id  1 | task 78 | stop processing: n_tokens = 0, truncated = 0
+0.10.753.761 E srv    send_error: task id = 77, error: Context size has been exceeded.
+0.10.753.764 I slot      release: id  2 | task 77 | stop processing: n_tokens = 0, truncated = 0
+0.10.753.767 E srv    send_error: task id = 74, error: Context size has been exceeded.
+0.10.753.769 I slot      release: id  3 | task 74 | stop processing: n_tokens = 2353, truncated = 0
+0.10.753.772 W srv          stop: cancel task, id_task = 77
+0.10.753.775 W srv          stop: cancel task, id_task = 78
+0.10.753.778 W srv          stop: cancel task, id_task = 74
+0.10.753.965 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.10.753.974 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90513269646
+0.10.754.111 I slot launch_slot_: id  0 | task 82 | processing task, is_child = 0
+0.10.754.117 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90513269809
+0.10.754.205 I slot launch_slot_: id  1 | task 84 | processing task, is_child = 0
+0.12.454.431 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90513269814
+0.12.454.592 I slot launch_slot_: id  2 | task 90 | processing task, is_child = 0
+0.12.454.601 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90513269819
+0.12.454.695 I slot launch_slot_: id  3 | task 92 | processing task, is_child = 0
+0.15.466.231 I slot print_timing: id  1 | task 84 | prompt processing, n_tokens =   1784, progress = 0.74, t =   3.01 s / 592.50 tokens per second
+0.15.466.947 W decode: failed to find a memory slot for batch of size 2048
+0.15.466.960 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.15.467.257 W decode: failed to find a memory slot for batch of size 1024
+0.15.467.266 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+0.15.467.425 W decode: failed to find a memory slot for batch of size 512
+0.15.467.444 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+0.15.467.569 W decode: failed to find a memory slot for batch of size 256
+0.15.467.583 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+0.15.467.666 W decode: failed to find a memory slot for batch of size 128
+0.15.467.673 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+0.15.467.733 W decode: failed to find a memory slot for batch of size 64
+0.15.467.739 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+0.15.467.793 W decode: failed to find a memory slot for batch of size 32
+0.15.467.801 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+0.15.467.852 W decode: failed to find a memory slot for batch of size 16
+0.15.467.857 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+0.15.467.907 W decode: failed to find a memory slot for batch of size 8
+0.15.467.913 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+0.15.467.964 W decode: failed to find a memory slot for batch of size 4
+0.15.467.969 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+0.15.468.017 W decode: failed to find a memory slot for batch of size 2
+0.15.468.023 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+0.15.468.071 W decode: failed to find a memory slot for batch of size 1
+0.15.468.077 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+0.15.468.078 E srv    send_error: task id = 82, error: Context size has been exceeded.
+0.15.468.088 I slot      release: id  0 | task 82 | stop processing: n_tokens = 2313, truncated = 0
+0.15.468.116 W srv          stop: cancel task, id_task = 82
+0.15.468.245 E srv    send_error: task id = 84, error: Context size has been exceeded.
+0.15.468.254 I slot      release: id  1 | task 84 | stop processing: n_tokens = 2403, truncated = 0
+0.15.468.273 W srv          stop: cancel task, id_task = 84
+0.15.468.372 E srv    send_error: task id = 90, error: Context size has been exceeded.
+0.15.468.378 I slot      release: id  2 | task 90 | stop processing: n_tokens = 1428, truncated = 0
+0.15.468.388 W srv          stop: cancel task, id_task = 90
+0.15.468.391 E srv    send_error: task id = 92, error: Context size has been exceeded.
+0.15.468.396 I slot      release: id  3 | task 92 | stop processing: n_tokens = 0, truncated = 0
+0.15.468.406 W srv          stop: cancel task, id_task = 92
+0.15.468.421 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.15.468.426 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90517984139
+0.15.468.590 I slot launch_slot_: id  0 | task 97 | processing task, is_child = 0
+0.15.468.597 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90517984305
+0.15.468.684 I slot launch_slot_: id  1 | task 95 | processing task, is_child = 0
+0.15.468.688 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90517984429
+0.15.468.766 I slot launch_slot_: id  2 | task 94 | processing task, is_child = 0
+0.15.468.769 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90517984448
+0.15.468.845 I slot launch_slot_: id  3 | task 93 | processing task, is_child = 0
+0.20.127.800 I slot print_timing: id  1 | task 95 | prompt processing, n_tokens =   1908, progress = 0.79, t =   3.02 s / 631.12 tokens per second
+0.20.128.617 W decode: failed to find a memory slot for batch of size 2048
+0.20.128.630 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.20.128.918 W decode: failed to find a memory slot for batch of size 1024
+0.20.128.927 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+0.20.129.090 W decode: failed to find a memory slot for batch of size 512
+0.20.129.098 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+0.20.129.199 W decode: failed to find a memory slot for batch of size 256
+0.20.129.205 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+0.20.129.605 W decode: failed to find a memory slot for batch of size 128
+0.20.129.617 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+0.20.129.692 W decode: failed to find a memory slot for batch of size 64
+0.20.129.697 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+0.20.129.753 W decode: failed to find a memory slot for batch of size 32
+0.20.129.758 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+0.20.129.811 W decode: failed to find a memory slot for batch of size 16
+0.20.129.816 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+0.20.129.865 W decode: failed to find a memory slot for batch of size 8
+0.20.129.871 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+0.20.129.919 W decode: failed to find a memory slot for batch of size 4
+0.20.129.924 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+0.20.129.979 W decode: failed to find a memory slot for batch of size 2
+0.20.129.984 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+0.20.130.032 W decode: failed to find a memory slot for batch of size 1
+0.20.130.038 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+0.20.130.039 E srv    send_error: task id = 97, error: Context size has been exceeded.
+0.20.130.050 I slot      release: id  0 | task 97 | stop processing: n_tokens = 2189, truncated = 0
+0.20.130.064 W srv          stop: cancel task, id_task = 97
+0.20.130.209 E srv    send_error: task id = 95, error: Context size has been exceeded.
+0.20.130.217 I slot      release: id  1 | task 95 | stop processing: n_tokens = 2414, truncated = 0
+0.20.130.236 W srv          stop: cancel task, id_task = 95
+0.20.130.360 E srv    send_error: task id = 94, error: Context size has been exceeded.
+0.20.130.368 I slot      release: id  2 | task 94 | stop processing: n_tokens = 1541, truncated = 0
+0.20.130.374 E srv    send_error: task id = 93, error: Context size has been exceeded.
+0.20.130.380 I slot      release: id  3 | task 93 | stop processing: n_tokens = 0, truncated = 0
+0.20.130.381 W srv          stop: cancel task, id_task = 94
+0.20.130.385 W srv          stop: cancel task, id_task = 93
+0.20.130.408 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.20.130.412 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90522646101
+0.20.130.560 I slot launch_slot_: id  0 | task 105 | processing task, is_child = 0
+0.20.130.567 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90522646268
+0.20.130.663 I slot launch_slot_: id  1 | task 104 | processing task, is_child = 0
+0.20.130.667 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90522646418
+0.20.130.754 I slot launch_slot_: id  2 | task 101 | processing task, is_child = 0
+0.20.130.757 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90522646431
+0.20.130.838 I slot launch_slot_: id  3 | task 99 | processing task, is_child = 0
+0.24.783.250 I slot print_timing: id  1 | task 104 | prompt processing, n_tokens =   1819, progress = 0.81, t =   3.01 s / 603.49 tokens per second
+0.24.784.012 W decode: failed to find a memory slot for batch of size 2048
+0.24.784.026 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.24.784.321 W decode: failed to find a memory slot for batch of size 1024
+0.24.784.329 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+0.24.784.486 W decode: failed to find a memory slot for batch of size 512
+0.24.784.493 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+0.24.784.595 W decode: failed to find a memory slot for batch of size 256
+0.24.784.601 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+0.24.784.676 W decode: failed to find a memory slot for batch of size 128
+0.24.784.682 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+0.24.784.744 W decode: failed to find a memory slot for batch of size 64
+0.24.784.750 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+0.24.784.805 W decode: failed to find a memory slot for batch of size 32
+0.24.784.810 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+0.24.784.862 W decode: failed to find a memory slot for batch of size 16
+0.24.784.868 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+0.24.784.918 W decode: failed to find a memory slot for batch of size 8
+0.24.784.924 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+0.24.784.978 W decode: failed to find a memory slot for batch of size 4
+0.24.784.986 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+0.24.785.033 W decode: failed to find a memory slot for batch of size 2
+0.24.785.039 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+0.24.785.088 W decode: failed to find a memory slot for batch of size 1
+0.24.785.095 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+0.24.785.095 E srv    send_error: task id = 105, error: Context size has been exceeded.
+0.24.785.110 I slot      release: id  0 | task 105 | stop processing: n_tokens = 2278, truncated = 0
+0.24.785.126 W srv          stop: cancel task, id_task = 105
+0.24.785.269 E srv    send_error: task id = 104, error: Context size has been exceeded.
+0.24.785.278 I slot      release: id  1 | task 104 | stop processing: n_tokens = 2240, truncated = 0
+0.24.785.288 W srv          stop: cancel task, id_task = 104
+0.24.785.406 E srv    send_error: task id = 101, error: Context size has been exceeded.
+0.24.785.416 I slot      release: id  2 | task 101 | stop processing: n_tokens = 1626, truncated = 0
+0.24.785.424 E srv    send_error: task id = 99, error: Context size has been exceeded.
+0.24.785.429 I slot      release: id  3 | task 99 | stop processing: n_tokens = 0, truncated = 0
+0.24.785.437 W srv          stop: cancel task, id_task = 101
+0.24.785.442 W srv          stop: cancel task, id_task = 99
+0.24.785.452 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.24.785.459 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90527301162
+0.24.785.619 I slot launch_slot_: id  0 | task 119 | processing task, is_child = 0
+0.24.785.626 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90527301328
+0.24.785.723 I slot launch_slot_: id  1 | task 117 | processing task, is_child = 0
+0.24.785.728 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90527301467
+0.24.785.810 I slot launch_slot_: id  2 | task 116 | processing task, is_child = 0
+0.24.785.814 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90527301479
+0.24.785.888 I slot launch_slot_: id  3 | task 112 | processing task, is_child = 0
+0.29.451.841 I slot print_timing: id  1 | task 117 | prompt processing, n_tokens =   1775, progress = 0.76, t =   3.03 s / 585.65 tokens per second
+0.29.452.577 W decode: failed to find a memory slot for batch of size 2048
+0.29.452.589 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.29.452.882 W decode: failed to find a memory slot for batch of size 1024
+0.29.452.905 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+0.29.453.174 W decode: failed to find a memory slot for batch of size 512
+0.29.453.185 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+0.29.453.332 W decode: failed to find a memory slot for batch of size 256
+0.29.453.606 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+0.29.453.724 W decode: failed to find a memory slot for batch of size 128
+0.29.453.736 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+0.29.453.822 W decode: failed to find a memory slot for batch of size 64
+0.29.453.831 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+0.29.453.903 W decode: failed to find a memory slot for batch of size 32
+0.29.453.912 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+0.29.453.984 W decode: failed to find a memory slot for batch of size 16
+0.29.453.993 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+0.29.454.057 W decode: failed to find a memory slot for batch of size 8
+0.29.454.066 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+0.29.454.129 W decode: failed to find a memory slot for batch of size 4
+0.29.454.137 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+0.29.454.203 W decode: failed to find a memory slot for batch of size 2
+0.29.454.211 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+0.29.454.285 W decode: failed to find a memory slot for batch of size 1
+0.29.454.293 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+0.29.454.294 E srv    send_error: task id = 119, error: Context size has been exceeded.
+0.29.454.318 I slot      release: id  0 | task 119 | stop processing: n_tokens = 2322, truncated = 0
+0.29.454.346 W srv          stop: cancel task, id_task = 119
+0.29.454.549 E srv    send_error: task id = 117, error: Context size has been exceeded.
+0.29.454.573 I slot      release: id  1 | task 117 | stop processing: n_tokens = 2341, truncated = 0
+0.29.454.607 W srv          stop: cancel task, id_task = 117
+0.29.454.740 E srv    send_error: task id = 116, error: Context size has been exceeded.
+0.29.454.754 I slot      release: id  2 | task 116 | stop processing: n_tokens = 1481, truncated = 0
+0.29.454.766 E srv    send_error: task id = 112, error: Context size has been exceeded.
+0.29.454.769 W srv          stop: cancel task, id_task = 116
+0.29.454.774 I slot      release: id  3 | task 112 | stop processing: n_tokens = 0, truncated = 0
+0.29.454.786 W srv          stop: cancel task, id_task = 112
+0.29.454.800 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.29.454.808 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90531970369
+0.29.455.044 I slot launch_slot_: id  0 | task 124 | processing task, is_child = 0
+0.29.455.056 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90531970625
+0.29.455.195 I slot launch_slot_: id  1 | task 123 | processing task, is_child = 0
+0.29.455.203 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90531970805
+0.29.455.342 I slot launch_slot_: id  2 | task 121 | processing task, is_child = 0
+0.29.455.348 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90531970826
+0.29.455.475 I slot launch_slot_: id  3 | task 120 | processing task, is_child = 0
+0.34.117.053 I slot print_timing: id  1 | task 123 | prompt processing, n_tokens =   1784, progress = 0.73, t =   3.02 s / 590.90 tokens per second
+0.34.118.412 W decode: failed to find a memory slot for batch of size 2048
+0.34.118.496 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.34.118.934 W decode: failed to find a memory slot for batch of size 1024
+0.34.118.948 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+0.34.119.212 W decode: failed to find a memory slot for batch of size 512
+0.34.119.224 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+0.34.119.381 W decode: failed to find a memory slot for batch of size 256
+0.34.119.391 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+0.34.119.507 W decode: failed to find a memory slot for batch of size 128
+0.34.119.517 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+0.34.119.607 W decode: failed to find a memory slot for batch of size 64
+0.34.119.617 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+0.34.119.696 W decode: failed to find a memory slot for batch of size 32
+0.34.119.706 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+0.34.119.782 W decode: failed to find a memory slot for batch of size 16
+0.34.119.791 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+0.34.119.863 W decode: failed to find a memory slot for batch of size 8
+0.34.119.873 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+0.34.119.942 W decode: failed to find a memory slot for batch of size 4
+0.34.119.959 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+0.34.120.029 W decode: failed to find a memory slot for batch of size 2
+0.34.120.284 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+0.34.120.371 W decode: failed to find a memory slot for batch of size 1
+0.34.120.388 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+0.34.120.391 E srv    send_error: task id = 124, error: Context size has been exceeded.
+0.34.120.440 I slot      release: id  0 | task 124 | stop processing: n_tokens = 2313, truncated = 0
+0.34.120.480 W srv          stop: cancel task, id_task = 124
+0.34.120.743 E srv    send_error: task id = 123, error: Context size has been exceeded.
+0.34.120.764 I slot      release: id  1 | task 123 | stop processing: n_tokens = 2451, truncated = 0
+0.34.120.787 W srv          stop: cancel task, id_task = 123
+0.34.121.036 E srv    send_error: task id = 121, error: Context size has been exceeded.
+0.34.121.057 I slot      release: id  2 | task 121 | stop processing: n_tokens = 1380, truncated = 0
+0.34.121.076 E srv    send_error: task id = 120, error: Context size has been exceeded.
+0.34.121.082 W srv          stop: cancel task, id_task = 121
+0.34.121.091 I slot      release: id  3 | task 120 | stop processing: n_tokens = 0, truncated = 0
+0.34.121.109 W srv          stop: cancel task, id_task = 120
+0.34.121.140 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.34.121.154 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90536636492
+0.34.121.483 I slot launch_slot_: id  0 | task 147 | processing task, is_child = 0
+0.34.121.495 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90536636815
+0.34.121.655 I slot launch_slot_: id  1 | task 139 | processing task, is_child = 0
+0.34.121.667 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90536637108
+0.34.121.816 I slot launch_slot_: id  2 | task 136 | processing task, is_child = 0
+0.34.121.826 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90536637142
+0.34.121.977 I slot launch_slot_: id  3 | task 125 | processing task, is_child = 0
+0.38.787.484 I slot print_timing: id  1 | task 139 | prompt processing, n_tokens =   1794, progress = 0.78, t =   3.03 s / 592.71 tokens per second
+0.38.788.675 W decode: failed to find a memory slot for batch of size 2048
+0.38.788.701 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.38.789.005 W decode: failed to find a memory slot for batch of size 1024
+0.38.789.028 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+0.38.789.191 W decode: failed to find a memory slot for batch of size 512
+0.38.789.213 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+0.38.789.321 W decode: failed to find a memory slot for batch of size 256
+0.38.789.327 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+0.38.789.403 W decode: failed to find a memory slot for batch of size 128
+0.38.789.409 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+0.38.789.470 W decode: failed to find a memory slot for batch of size 64
+0.38.789.475 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+0.38.789.529 W decode: failed to find a memory slot for batch of size 32
+0.38.789.535 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+0.38.789.585 W decode: failed to find a memory slot for batch of size 16
+0.38.789.594 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+0.38.789.644 W decode: failed to find a memory slot for batch of size 8
+0.38.789.654 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+0.38.789.702 W decode: failed to find a memory slot for batch of size 4
+0.38.789.710 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+0.38.789.758 W decode: failed to find a memory slot for batch of size 2
+0.38.789.765 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+0.38.789.814 W decode: failed to find a memory slot for batch of size 1
+0.38.789.821 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+0.38.789.823 E srv    send_error: task id = 147, error: Context size has been exceeded.
+0.38.789.852 I slot      release: id  0 | task 147 | stop processing: n_tokens = 2303, truncated = 0
+0.38.789.902 W srv          stop: cancel task, id_task = 147
+0.38.790.032 E srv    send_error: task id = 139, error: Context size has been exceeded.
+0.38.790.054 I slot      release: id  1 | task 139 | stop processing: n_tokens = 2290, truncated = 0
+0.38.790.083 W srv          stop: cancel task, id_task = 139
+0.38.790.184 E srv    send_error: task id = 136, error: Context size has been exceeded.
+0.38.790.206 I slot      release: id  2 | task 136 | stop processing: n_tokens = 1551, truncated = 0
+0.38.790.214 E srv    send_error: task id = 125, error: Context size has been exceeded.
+0.38.790.219 I slot      release: id  3 | task 125 | stop processing: n_tokens = 0, truncated = 0
+0.38.790.224 W srv          stop: cancel task, id_task = 125
+0.38.790.245 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.38.790.246 W srv          stop: cancel task, id_task = 136
+0.38.790.252 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90541305903
+0.38.790.397 I slot launch_slot_: id  0 | task 154 | processing task, is_child = 0
+0.38.790.403 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90541306106
+0.38.790.491 I slot launch_slot_: id  1 | task 153 | processing task, is_child = 0
+0.38.790.495 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90541306257
+0.38.790.576 I slot launch_slot_: id  2 | task 152 | processing task, is_child = 0
+0.38.790.579 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90541306270
+0.38.790.657 I slot launch_slot_: id  3 | task 150 | processing task, is_child = 0
+0.43.454.634 I slot print_timing: id  1 | task 153 | prompt processing, n_tokens =   1743, progress = 0.74, t =   3.03 s / 575.96 tokens per second
+0.43.455.884 W decode: failed to find a memory slot for batch of size 2048
+0.43.455.901 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.43.456.332 W decode: failed to find a memory slot for batch of size 1024
+0.43.456.343 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+0.43.456.588 W decode: failed to find a memory slot for batch of size 512
+0.43.456.597 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+0.43.456.751 W decode: failed to find a memory slot for batch of size 256
+0.43.456.760 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+0.43.456.871 W decode: failed to find a memory slot for batch of size 128
+0.43.456.880 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+0.43.456.971 W decode: failed to find a memory slot for batch of size 64
+0.43.456.980 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+0.43.457.057 W decode: failed to find a memory slot for batch of size 32
+0.43.457.066 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+0.43.457.138 W decode: failed to find a memory slot for batch of size 16
+0.43.457.146 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+0.43.457.217 W decode: failed to find a memory slot for batch of size 8
+0.43.457.226 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+0.43.457.296 W decode: failed to find a memory slot for batch of size 4
+0.43.457.307 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+0.43.457.374 W decode: failed to find a memory slot for batch of size 2
+0.43.457.382 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+0.43.457.449 W decode: failed to find a memory slot for batch of size 1
+0.43.457.458 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+0.43.457.459 E srv    send_error: task id = 154, error: Context size has been exceeded.
+0.43.457.493 I slot      release: id  0 | task 154 | stop processing: n_tokens = 2354, truncated = 0
+0.43.457.504 W srv          stop: cancel task, id_task = 154
+0.43.457.693 E srv    send_error: task id = 153, error: Context size has been exceeded.
+0.43.457.718 I slot      release: id  1 | task 153 | stop processing: n_tokens = 2349, truncated = 0
+0.43.457.760 W srv          stop: cancel task, id_task = 153
+0.43.457.850 E srv    send_error: task id = 152, error: Context size has been exceeded.
+0.43.457.877 I slot      release: id  2 | task 152 | stop processing: n_tokens = 1441, truncated = 0
+0.43.457.884 E srv    send_error: task id = 150, error: Context size has been exceeded.
+0.43.457.890 I slot      release: id  3 | task 150 | stop processing: n_tokens = 0, truncated = 0
+0.43.457.902 W srv          stop: cancel task, id_task = 152
+0.43.457.914 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.43.457.919 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90545973544
+0.43.457.921 W srv          stop: cancel task, id_task = 150
+0.43.458.104 I slot launch_slot_: id  0 | task 160 | processing task, is_child = 0
+0.43.458.111 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90545973769
+0.43.458.203 I slot launch_slot_: id  1 | task 159 | processing task, is_child = 0
+0.43.458.208 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90545973928
+0.43.458.289 I slot launch_slot_: id  2 | task 157 | processing task, is_child = 0
+0.43.458.292 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90545973941
+0.43.458.373 I slot launch_slot_: id  3 | task 156 | processing task, is_child = 0
+0.48.122.394 I slot print_timing: id  1 | task 159 | prompt processing, n_tokens =   1908, progress = 0.79, t =   3.02 s / 631.24 tokens per second
+0.48.123.239 W decode: failed to find a memory slot for batch of size 2048
+0.48.123.253 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.48.123.541 W decode: failed to find a memory slot for batch of size 1024
+0.48.123.552 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+0.48.123.761 W decode: failed to find a memory slot for batch of size 512
+0.48.123.773 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+0.48.123.880 W decode: failed to find a memory slot for batch of size 256
+0.48.123.888 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+0.48.123.984 W decode: failed to find a memory slot for batch of size 128
+0.48.123.991 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+0.48.124.052 W decode: failed to find a memory slot for batch of size 64
+0.48.124.058 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+0.48.124.112 W decode: failed to find a memory slot for batch of size 32
+0.48.124.122 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+0.48.124.175 W decode: failed to find a memory slot for batch of size 16
+0.48.124.185 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+0.48.124.239 W decode: failed to find a memory slot for batch of size 8
+0.48.124.246 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+0.48.124.304 W decode: failed to find a memory slot for batch of size 4
+0.48.124.311 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+0.48.124.363 W decode: failed to find a memory slot for batch of size 2
+0.48.124.369 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+0.48.124.416 W decode: failed to find a memory slot for batch of size 1
+0.48.124.423 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+0.48.124.424 E srv    send_error: task id = 160, error: Context size has been exceeded.
+0.48.124.461 I slot      release: id  0 | task 160 | stop processing: n_tokens = 2189, truncated = 0
+0.48.124.502 W srv          stop: cancel task, id_task = 160
+0.48.124.676 E srv    send_error: task id = 159, error: Context size has been exceeded.
+0.48.124.699 I slot      release: id  1 | task 159 | stop processing: n_tokens = 2414, truncated = 0
+0.48.124.743 W srv          stop: cancel task, id_task = 159
+0.48.124.848 E srv    send_error: task id = 157, error: Context size has been exceeded.
+0.48.124.877 I slot      release: id  2 | task 157 | stop processing: n_tokens = 1541, truncated = 0
+0.48.124.886 E srv    send_error: task id = 156, error: Context size has been exceeded.
+0.48.124.893 I slot      release: id  3 | task 156 | stop processing: n_tokens = 0, truncated = 0
+0.48.124.922 W srv          stop: cancel task, id_task = 156
+0.48.124.924 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.48.124.930 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90550640512
+0.48.124.941 W srv          stop: cancel task, id_task = 157
+0.48.125.106 I slot launch_slot_: id  0 | task 173 | processing task, is_child = 0
+0.48.125.114 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90550640751
+0.48.125.204 I slot launch_slot_: id  1 | task 170 | processing task, is_child = 0
+0.48.125.209 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90550640929
+0.48.125.292 I slot launch_slot_: id  2 | task 169 | processing task, is_child = 0
+0.48.125.296 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90550640945
+0.48.125.396 I slot launch_slot_: id  3 | task 168 | processing task, is_child = 0
+0.52.782.295 I slot print_timing: id  1 | task 170 | prompt processing, n_tokens =   1819, progress = 0.81, t =   3.02 s / 601.81 tokens per second
+0.52.783.122 W decode: failed to find a memory slot for batch of size 2048
+0.52.783.131 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.52.783.417 W decode: failed to find a memory slot for batch of size 1024
+0.52.783.424 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+0.52.783.582 W decode: failed to find a memory slot for batch of size 512
+0.52.783.587 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+0.52.783.689 W decode: failed to find a memory slot for batch of size 256
+0.52.783.694 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+0.52.783.768 W decode: failed to find a memory slot for batch of size 128
+0.52.783.773 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+0.52.783.835 W decode: failed to find a memory slot for batch of size 64
+0.52.783.839 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+0.52.783.894 W decode: failed to find a memory slot for batch of size 32
+0.52.783.899 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+0.52.783.957 W decode: failed to find a memory slot for batch of size 16
+0.52.783.962 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+0.52.784.012 W decode: failed to find a memory slot for batch of size 8
+0.52.784.017 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+0.52.784.064 W decode: failed to find a memory slot for batch of size 4
+0.52.784.068 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+0.52.784.114 W decode: failed to find a memory slot for batch of size 2
+0.52.784.119 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+0.52.784.164 W decode: failed to find a memory slot for batch of size 1
+0.52.784.169 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+0.52.784.170 E srv    send_error: task id = 173, error: Context size has been exceeded.
+0.52.784.203 I slot      release: id  0 | task 173 | stop processing: n_tokens = 2278, truncated = 0
+0.52.784.235 W srv          stop: cancel task, id_task = 173
+0.52.784.389 E srv    send_error: task id = 170, error: Context size has been exceeded.
+0.52.784.423 I slot      release: id  1 | task 170 | stop processing: n_tokens = 2240, truncated = 0
+0.52.784.471 W srv          stop: cancel task, id_task = 170
+0.52.784.567 E srv    send_error: task id = 169, error: Context size has been exceeded.
+0.52.784.594 I slot      release: id  2 | task 169 | stop processing: n_tokens = 1626, truncated = 0
+0.52.784.602 E srv    send_error: task id = 168, error: Context size has been exceeded.
+0.52.784.610 I slot      release: id  3 | task 168 | stop processing: n_tokens = 0, truncated = 0
+0.52.784.632 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.52.784.637 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90555300255
+0.52.784.649 W srv          stop: cancel task, id_task = 169
+0.52.784.653 W srv          stop: cancel task, id_task = 168
+0.52.784.835 I slot launch_slot_: id  0 | task 180 | processing task, is_child = 0
+0.52.784.842 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90555300474
+0.52.784.934 I slot launch_slot_: id  1 | task 177 | processing task, is_child = 0
+0.52.784.938 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90555300645
+0.52.785.033 I slot launch_slot_: id  2 | task 175 | processing task, is_child = 0
+0.52.785.036 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90555300660
+0.52.785.116 I slot launch_slot_: id  3 | task 174 | processing task, is_child = 0
+0.57.488.824 I slot print_timing: id  1 | task 177 | prompt processing, n_tokens =   1775, progress = 0.76, t =   3.03 s / 585.07 tokens per second
+0.57.489.703 W decode: failed to find a memory slot for batch of size 2048
+0.57.489.721 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+0.57.490.032 W decode: failed to find a memory slot for batch of size 1024
+0.57.490.041 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+0.57.490.197 W decode: failed to find a memory slot for batch of size 512
+0.57.490.213 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+0.57.490.426 W decode: failed to find a memory slot for batch of size 256
+0.57.490.437 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+0.57.490.554 W decode: failed to find a memory slot for batch of size 128
+0.57.490.565 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+0.57.490.658 W decode: failed to find a memory slot for batch of size 64
+0.57.490.668 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+0.57.490.750 W decode: failed to find a memory slot for batch of size 32
+0.57.490.759 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+0.57.490.834 W decode: failed to find a memory slot for batch of size 16
+0.57.490.850 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+0.57.490.927 W decode: failed to find a memory slot for batch of size 8
+0.57.490.938 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+0.57.491.013 W decode: failed to find a memory slot for batch of size 4
+0.57.491.026 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+0.57.491.098 W decode: failed to find a memory slot for batch of size 2
+0.57.491.136 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+0.57.491.213 W decode: failed to find a memory slot for batch of size 1
+0.57.491.225 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+0.57.491.227 E srv    send_error: task id = 180, error: Context size has been exceeded.
+0.57.491.318 I slot      release: id  0 | task 180 | stop processing: n_tokens = 2322, truncated = 0
+0.57.491.428 W srv          stop: cancel task, id_task = 180
+0.57.491.650 E srv    send_error: task id = 177, error: Context size has been exceeded.
+0.57.491.707 I slot      release: id  1 | task 177 | stop processing: n_tokens = 2341, truncated = 0
+0.57.491.773 W srv          stop: cancel task, id_task = 177
+0.57.491.959 E srv    send_error: task id = 175, error: Context size has been exceeded.
+0.57.492.006 I slot      release: id  2 | task 175 | stop processing: n_tokens = 1481, truncated = 0
+0.57.492.023 E srv    send_error: task id = 174, error: Context size has been exceeded.
+0.57.492.039 I slot      release: id  3 | task 174 | stop processing: n_tokens = 0, truncated = 0
+0.57.492.074 E srv  update_slots: decode() failed: Context size has been exceeded.
+0.57.492.084 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90560007369
+0.57.492.095 W srv          stop: cancel task, id_task = 174
+0.57.492.355 I slot launch_slot_: id  0 | task 191 | processing task, is_child = 0
+0.57.492.366 W srv          stop: cancel task, id_task = 175
+0.57.492.373 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90560007760
+0.57.492.536 I slot launch_slot_: id  1 | task 190 | processing task, is_child = 0
+0.57.492.548 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90560008059
+0.57.492.693 I slot launch_slot_: id  2 | task 189 | processing task, is_child = 0
+0.57.492.701 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90560008090
+0.57.492.846 I slot launch_slot_: id  3 | task 187 | processing task, is_child = 0
+1.02.170.428 I slot print_timing: id  1 | task 190 | prompt processing, n_tokens =   1784, progress = 0.73, t =   3.04 s / 587.72 tokens per second
+1.02.171.190 W decode: failed to find a memory slot for batch of size 2048
+1.02.171.202 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.02.171.499 W decode: failed to find a memory slot for batch of size 1024
+1.02.171.507 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.02.171.671 W decode: failed to find a memory slot for batch of size 512
+1.02.171.679 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.02.171.783 W decode: failed to find a memory slot for batch of size 256
+1.02.171.791 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.02.171.868 W decode: failed to find a memory slot for batch of size 128
+1.02.171.875 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.02.171.940 W decode: failed to find a memory slot for batch of size 64
+1.02.171.944 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.02.172.001 W decode: failed to find a memory slot for batch of size 32
+1.02.172.006 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.02.172.057 W decode: failed to find a memory slot for batch of size 16
+1.02.172.061 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.02.172.110 W decode: failed to find a memory slot for batch of size 8
+1.02.172.115 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.02.172.163 W decode: failed to find a memory slot for batch of size 4
+1.02.172.167 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.02.172.213 W decode: failed to find a memory slot for batch of size 2
+1.02.172.217 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.02.172.263 W decode: failed to find a memory slot for batch of size 1
+1.02.172.268 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.02.172.269 E srv    send_error: task id = 191, error: Context size has been exceeded.
+1.02.172.305 I slot      release: id  0 | task 191 | stop processing: n_tokens = 2313, truncated = 0
+1.02.172.365 W srv          stop: cancel task, id_task = 191
+1.02.172.479 E srv    send_error: task id = 190, error: Context size has been exceeded.
+1.02.172.513 I slot      release: id  1 | task 190 | stop processing: n_tokens = 2451, truncated = 0
+1.02.172.558 W srv          stop: cancel task, id_task = 190
+1.02.172.648 E srv    send_error: task id = 189, error: Context size has been exceeded.
+1.02.172.680 I slot      release: id  2 | task 189 | stop processing: n_tokens = 1380, truncated = 0
+1.02.172.687 E srv    send_error: task id = 187, error: Context size has been exceeded.
+1.02.172.692 I slot      release: id  3 | task 187 | stop processing: n_tokens = 0, truncated = 0
+1.02.172.715 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.02.172.719 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90564688356
+1.02.172.754 W srv          stop: cancel task, id_task = 189
+1.02.172.757 W srv          stop: cancel task, id_task = 187
+1.02.172.880 I slot launch_slot_: id  0 | task 197 | processing task, is_child = 0
+1.02.172.889 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90564688564
+1.02.172.989 I slot launch_slot_: id  1 | task 195 | processing task, is_child = 0
+1.02.172.994 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90564688730
+1.02.173.073 I slot launch_slot_: id  2 | task 194 | processing task, is_child = 0
+1.02.173.076 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90564688743
+1.02.173.154 I slot launch_slot_: id  3 | task 192 | processing task, is_child = 0
+1.06.840.708 I slot print_timing: id  1 | task 195 | prompt processing, n_tokens =   1794, progress = 0.78, t =   3.03 s / 592.97 tokens per second
+1.06.841.588 W decode: failed to find a memory slot for batch of size 2048
+1.06.841.606 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.06.841.938 W decode: failed to find a memory slot for batch of size 1024
+1.06.841.959 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.06.842.152 W decode: failed to find a memory slot for batch of size 512
+1.06.842.162 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.06.842.266 W decode: failed to find a memory slot for batch of size 256
+1.06.842.274 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.06.842.351 W decode: failed to find a memory slot for batch of size 128
+1.06.842.360 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.06.842.423 W decode: failed to find a memory slot for batch of size 64
+1.06.842.430 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.06.842.484 W decode: failed to find a memory slot for batch of size 32
+1.06.842.490 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.06.842.541 W decode: failed to find a memory slot for batch of size 16
+1.06.842.547 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.06.842.597 W decode: failed to find a memory slot for batch of size 8
+1.06.842.603 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.06.842.652 W decode: failed to find a memory slot for batch of size 4
+1.06.842.658 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.06.842.706 W decode: failed to find a memory slot for batch of size 2
+1.06.842.711 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.06.842.759 W decode: failed to find a memory slot for batch of size 1
+1.06.842.766 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.06.842.766 E srv    send_error: task id = 197, error: Context size has been exceeded.
+1.06.842.821 I slot      release: id  0 | task 197 | stop processing: n_tokens = 2303, truncated = 0
+1.06.842.929 W srv          stop: cancel task, id_task = 197
+1.06.843.002 E srv    send_error: task id = 195, error: Context size has been exceeded.
+1.06.843.042 I slot      release: id  1 | task 195 | stop processing: n_tokens = 2290, truncated = 0
+1.06.843.087 W srv          stop: cancel task, id_task = 195
+1.06.843.200 E srv    send_error: task id = 194, error: Context size has been exceeded.
+1.06.843.235 I slot      release: id  2 | task 194 | stop processing: n_tokens = 1551, truncated = 0
+1.06.843.245 E srv    send_error: task id = 192, error: Context size has been exceeded.
+1.06.843.254 I slot      release: id  3 | task 192 | stop processing: n_tokens = 0, truncated = 0
+1.06.843.267 W srv          stop: cancel task, id_task = 192
+1.06.843.279 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.06.843.288 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90569358872
+1.06.843.316 W srv          stop: cancel task, id_task = 194
+1.06.843.507 I slot launch_slot_: id  0 | task 202 | processing task, is_child = 0
+1.06.843.520 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90569359093
+1.06.843.664 I slot launch_slot_: id  1 | task 201 | processing task, is_child = 0
+1.06.843.672 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90569359287
+1.06.843.808 I slot launch_slot_: id  2 | task 200 | processing task, is_child = 0
+1.06.843.814 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90569359306
+1.06.843.939 I slot launch_slot_: id  3 | task 198 | processing task, is_child = 0
+1.11.581.503 I slot print_timing: id  1 | task 201 | prompt processing, n_tokens =   1743, progress = 0.74, t =   3.10 s / 562.20 tokens per second
+1.11.582.784 W decode: failed to find a memory slot for batch of size 2048
+1.11.582.815 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.11.583.262 W decode: failed to find a memory slot for batch of size 1024
+1.11.583.277 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.11.583.524 W decode: failed to find a memory slot for batch of size 512
+1.11.583.534 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.11.583.690 W decode: failed to find a memory slot for batch of size 256
+1.11.583.705 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.11.583.817 W decode: failed to find a memory slot for batch of size 128
+1.11.583.826 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.11.583.918 W decode: failed to find a memory slot for batch of size 64
+1.11.583.926 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.11.584.019 W decode: failed to find a memory slot for batch of size 32
+1.11.584.027 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.11.584.102 W decode: failed to find a memory slot for batch of size 16
+1.11.584.110 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.11.584.181 W decode: failed to find a memory slot for batch of size 8
+1.11.584.189 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.11.584.257 W decode: failed to find a memory slot for batch of size 4
+1.11.584.264 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.11.584.333 W decode: failed to find a memory slot for batch of size 2
+1.11.584.340 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.11.584.407 W decode: failed to find a memory slot for batch of size 1
+1.11.584.416 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.11.584.418 E srv    send_error: task id = 202, error: Context size has been exceeded.
+1.11.584.475 I slot      release: id  0 | task 202 | stop processing: n_tokens = 2354, truncated = 0
+1.11.584.572 W srv          stop: cancel task, id_task = 202
+1.11.584.771 E srv    send_error: task id = 201, error: Context size has been exceeded.
+1.11.584.817 I slot      release: id  1 | task 201 | stop processing: n_tokens = 2349, truncated = 0
+1.11.584.852 W srv          stop: cancel task, id_task = 201
+1.11.585.054 E srv    send_error: task id = 200, error: Context size has been exceeded.
+1.11.585.104 I slot      release: id  2 | task 200 | stop processing: n_tokens = 1441, truncated = 0
+1.11.585.116 E srv    send_error: task id = 198, error: Context size has been exceeded.
+1.11.585.202 I slot      release: id  3 | task 198 | stop processing: n_tokens = 0, truncated = 0
+1.11.585.207 W srv          stop: cancel task, id_task = 200
+1.11.585.233 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.11.585.241 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90574100526
+1.11.585.257 W srv          stop: cancel task, id_task = 198
+1.11.585.508 I slot launch_slot_: id  0 | task 215 | processing task, is_child = 0
+1.11.585.527 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90574100869
+1.11.585.690 I slot launch_slot_: id  1 | task 213 | processing task, is_child = 0
+1.11.585.697 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90574101155
+1.11.585.821 I slot launch_slot_: id  2 | task 212 | processing task, is_child = 0
+1.11.585.826 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90574101253
+1.11.585.944 I slot launch_slot_: id  3 | task 203 | processing task, is_child = 0
+1.16.324.326 I slot print_timing: id  1 | task 213 | prompt processing, n_tokens =   1908, progress = 0.79, t =   3.07 s / 621.46 tokens per second
+1.16.325.174 W decode: failed to find a memory slot for batch of size 2048
+1.16.325.186 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.16.325.552 W decode: failed to find a memory slot for batch of size 1024
+1.16.325.565 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.16.325.756 W decode: failed to find a memory slot for batch of size 512
+1.16.325.763 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.16.325.864 W decode: failed to find a memory slot for batch of size 256
+1.16.325.869 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.16.325.946 W decode: failed to find a memory slot for batch of size 128
+1.16.325.953 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.16.326.016 W decode: failed to find a memory slot for batch of size 64
+1.16.326.021 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.16.326.076 W decode: failed to find a memory slot for batch of size 32
+1.16.326.080 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.16.326.132 W decode: failed to find a memory slot for batch of size 16
+1.16.326.137 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.16.326.187 W decode: failed to find a memory slot for batch of size 8
+1.16.326.191 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.16.326.240 W decode: failed to find a memory slot for batch of size 4
+1.16.326.245 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.16.326.293 W decode: failed to find a memory slot for batch of size 2
+1.16.326.298 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.16.326.346 W decode: failed to find a memory slot for batch of size 1
+1.16.326.352 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.16.326.352 E srv    send_error: task id = 215, error: Context size has been exceeded.
+1.16.326.393 I slot      release: id  0 | task 215 | stop processing: n_tokens = 2189, truncated = 0
+1.16.326.478 W srv          stop: cancel task, id_task = 215
+1.16.326.553 E srv    send_error: task id = 213, error: Context size has been exceeded.
+1.16.326.587 I slot      release: id  1 | task 213 | stop processing: n_tokens = 2414, truncated = 0
+1.16.326.691 W srv          stop: cancel task, id_task = 213
+1.16.326.738 E srv    send_error: task id = 212, error: Context size has been exceeded.
+1.16.326.769 I slot      release: id  2 | task 212 | stop processing: n_tokens = 1541, truncated = 0
+1.16.326.775 E srv    send_error: task id = 203, error: Context size has been exceeded.
+1.16.326.784 I slot      release: id  3 | task 203 | stop processing: n_tokens = 0, truncated = 0
+1.16.326.807 W srv          stop: cancel task, id_task = 203
+1.16.326.813 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.16.326.817 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90578842444
+1.16.326.833 W srv          stop: cancel task, id_task = 212
+1.16.326.976 I slot launch_slot_: id  0 | task 221 | processing task, is_child = 0
+1.16.326.983 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90578842638
+1.16.327.070 I slot launch_slot_: id  1 | task 220 | processing task, is_child = 0
+1.16.327.074 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90578842820
+1.16.327.157 I slot launch_slot_: id  2 | task 219 | processing task, is_child = 0
+1.16.327.160 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90578842835
+1.16.327.238 I slot launch_slot_: id  3 | task 217 | processing task, is_child = 0
+1.21.072.194 I slot print_timing: id  1 | task 220 | prompt processing, n_tokens =   1819, progress = 0.81, t =   3.08 s / 591.28 tokens per second
+1.21.072.982 W decode: failed to find a memory slot for batch of size 2048
+1.21.072.990 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.21.073.284 W decode: failed to find a memory slot for batch of size 1024
+1.21.073.298 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.21.073.457 W decode: failed to find a memory slot for batch of size 512
+1.21.073.462 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.21.073.563 W decode: failed to find a memory slot for batch of size 256
+1.21.073.568 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.21.073.643 W decode: failed to find a memory slot for batch of size 128
+1.21.073.647 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.21.073.708 W decode: failed to find a memory slot for batch of size 64
+1.21.073.713 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.21.073.767 W decode: failed to find a memory slot for batch of size 32
+1.21.073.772 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.21.073.823 W decode: failed to find a memory slot for batch of size 16
+1.21.073.827 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.21.073.876 W decode: failed to find a memory slot for batch of size 8
+1.21.073.881 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.21.073.929 W decode: failed to find a memory slot for batch of size 4
+1.21.073.934 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.21.073.986 W decode: failed to find a memory slot for batch of size 2
+1.21.073.991 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.21.074.038 W decode: failed to find a memory slot for batch of size 1
+1.21.074.043 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.21.074.043 E srv    send_error: task id = 221, error: Context size has been exceeded.
+1.21.074.072 I slot      release: id  0 | task 221 | stop processing: n_tokens = 2278, truncated = 0
+1.21.074.080 W srv          stop: cancel task, id_task = 221
+1.21.074.235 E srv    send_error: task id = 220, error: Context size has been exceeded.
+1.21.074.261 I slot      release: id  1 | task 220 | stop processing: n_tokens = 2240, truncated = 0
+1.21.074.292 W srv          stop: cancel task, id_task = 220
+1.21.074.396 E srv    send_error: task id = 219, error: Context size has been exceeded.
+1.21.074.420 I slot      release: id  2 | task 219 | stop processing: n_tokens = 1626, truncated = 0
+1.21.074.426 E srv    send_error: task id = 217, error: Context size has been exceeded.
+1.21.074.433 I slot      release: id  3 | task 217 | stop processing: n_tokens = 0, truncated = 0
+1.21.074.453 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.21.074.458 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90583590123
+1.21.074.459 W srv          stop: cancel task, id_task = 217
+1.21.074.480 W srv          stop: cancel task, id_task = 219
+1.21.074.644 I slot launch_slot_: id  0 | task 226 | processing task, is_child = 0
+1.21.074.652 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90583590312
+1.21.074.743 I slot launch_slot_: id  1 | task 225 | processing task, is_child = 0
+1.21.074.748 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90583590471
+1.21.074.828 I slot launch_slot_: id  2 | task 224 | processing task, is_child = 0
+1.21.074.832 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90583590483
+1.21.074.907 I slot launch_slot_: id  3 | task 222 | processing task, is_child = 0
+1.25.830.543 I slot print_timing: id  1 | task 225 | prompt processing, n_tokens =   1775, progress = 0.76, t =   3.09 s / 575.07 tokens per second
+1.25.831.303 W decode: failed to find a memory slot for batch of size 2048
+1.25.831.312 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.25.831.595 W decode: failed to find a memory slot for batch of size 1024
+1.25.831.602 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.25.831.759 W decode: failed to find a memory slot for batch of size 512
+1.25.831.766 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.25.831.868 W decode: failed to find a memory slot for batch of size 256
+1.25.831.875 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.25.831.957 W decode: failed to find a memory slot for batch of size 128
+1.25.831.963 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.25.832.027 W decode: failed to find a memory slot for batch of size 64
+1.25.832.033 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.25.832.090 W decode: failed to find a memory slot for batch of size 32
+1.25.832.096 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.25.832.148 W decode: failed to find a memory slot for batch of size 16
+1.25.832.154 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.25.832.205 W decode: failed to find a memory slot for batch of size 8
+1.25.832.211 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.25.832.261 W decode: failed to find a memory slot for batch of size 4
+1.25.832.267 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.25.832.316 W decode: failed to find a memory slot for batch of size 2
+1.25.832.322 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.25.832.370 W decode: failed to find a memory slot for batch of size 1
+1.25.832.376 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.25.832.377 E srv    send_error: task id = 226, error: Context size has been exceeded.
+1.25.832.406 I slot      release: id  0 | task 226 | stop processing: n_tokens = 2322, truncated = 0
+1.25.832.436 W srv          stop: cancel task, id_task = 226
+1.25.832.567 E srv    send_error: task id = 225, error: Context size has been exceeded.
+1.25.832.590 I slot      release: id  1 | task 225 | stop processing: n_tokens = 2341, truncated = 0
+1.25.832.634 W srv          stop: cancel task, id_task = 225
+1.25.832.715 E srv    send_error: task id = 224, error: Context size has been exceeded.
+1.25.832.740 I slot      release: id  2 | task 224 | stop processing: n_tokens = 1481, truncated = 0
+1.25.832.747 E srv    send_error: task id = 222, error: Context size has been exceeded.
+1.25.832.752 I slot      release: id  3 | task 222 | stop processing: n_tokens = 0, truncated = 0
+1.25.832.772 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.25.832.777 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90588348457
+1.25.832.806 W srv          stop: cancel task, id_task = 224
+1.25.832.808 W srv          stop: cancel task, id_task = 222
+1.25.832.927 I slot launch_slot_: id  0 | task 240 | processing task, is_child = 0
+1.25.832.936 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90588348641
+1.25.833.036 I slot launch_slot_: id  1 | task 237 | processing task, is_child = 0
+1.25.833.042 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90588348791
+1.25.833.126 I slot launch_slot_: id  2 | task 236 | processing task, is_child = 0
+1.25.833.129 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90588348802
+1.25.833.206 I slot launch_slot_: id  3 | task 234 | processing task, is_child = 0
+1.30.580.468 I slot print_timing: id  1 | task 237 | prompt processing, n_tokens =   1784, progress = 0.73, t =   3.08 s / 579.41 tokens per second
+1.30.581.266 W decode: failed to find a memory slot for batch of size 2048
+1.30.581.276 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.30.581.565 W decode: failed to find a memory slot for batch of size 1024
+1.30.581.571 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.30.581.728 W decode: failed to find a memory slot for batch of size 512
+1.30.581.735 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.30.581.839 W decode: failed to find a memory slot for batch of size 256
+1.30.581.846 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.30.581.922 W decode: failed to find a memory slot for batch of size 128
+1.30.581.928 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.30.581.996 W decode: failed to find a memory slot for batch of size 64
+1.30.582.003 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.30.582.058 W decode: failed to find a memory slot for batch of size 32
+1.30.582.062 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.30.582.112 W decode: failed to find a memory slot for batch of size 16
+1.30.582.116 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.30.582.166 W decode: failed to find a memory slot for batch of size 8
+1.30.582.171 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.30.582.220 W decode: failed to find a memory slot for batch of size 4
+1.30.582.226 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.30.582.273 W decode: failed to find a memory slot for batch of size 2
+1.30.582.279 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.30.582.327 W decode: failed to find a memory slot for batch of size 1
+1.30.582.334 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.30.582.335 E srv    send_error: task id = 240, error: Context size has been exceeded.
+1.30.582.363 I slot      release: id  0 | task 240 | stop processing: n_tokens = 2313, truncated = 0
+1.30.582.420 W srv          stop: cancel task, id_task = 240
+1.30.582.525 E srv    send_error: task id = 237, error: Context size has been exceeded.
+1.30.582.548 I slot      release: id  1 | task 237 | stop processing: n_tokens = 2451, truncated = 0
+1.30.582.594 W srv          stop: cancel task, id_task = 237
+1.30.582.680 E srv    send_error: task id = 236, error: Context size has been exceeded.
+1.30.582.704 I slot      release: id  2 | task 236 | stop processing: n_tokens = 1380, truncated = 0
+1.30.582.711 E srv    send_error: task id = 234, error: Context size has been exceeded.
+1.30.582.717 I slot      release: id  3 | task 234 | stop processing: n_tokens = 0, truncated = 0
+1.30.582.737 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.30.582.741 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90593098413
+1.30.582.749 W srv          stop: cancel task, id_task = 236
+1.30.582.762 W srv          stop: cancel task, id_task = 234
+1.30.582.912 I slot launch_slot_: id  0 | task 246 | processing task, is_child = 0
+1.30.582.921 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90593098599
+1.30.583.023 I slot launch_slot_: id  1 | task 244 | processing task, is_child = 0
+1.30.583.028 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90593098755
+1.30.583.109 I slot launch_slot_: id  2 | task 243 | processing task, is_child = 0
+1.30.583.112 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90593098768
+1.30.583.188 I slot launch_slot_: id  3 | task 242 | processing task, is_child = 0
+1.35.340.377 I slot print_timing: id  1 | task 244 | prompt processing, n_tokens =   1794, progress = 0.78, t =   3.09 s / 580.67 tokens per second
+1.35.341.221 W decode: failed to find a memory slot for batch of size 2048
+1.35.341.232 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.35.341.539 W decode: failed to find a memory slot for batch of size 1024
+1.35.341.548 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.35.341.709 W decode: failed to find a memory slot for batch of size 512
+1.35.341.716 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.35.341.821 W decode: failed to find a memory slot for batch of size 256
+1.35.341.827 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.35.341.906 W decode: failed to find a memory slot for batch of size 128
+1.35.341.915 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.35.341.984 W decode: failed to find a memory slot for batch of size 64
+1.35.341.989 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.35.342.042 W decode: failed to find a memory slot for batch of size 32
+1.35.342.048 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.35.342.099 W decode: failed to find a memory slot for batch of size 16
+1.35.342.106 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.35.342.157 W decode: failed to find a memory slot for batch of size 8
+1.35.342.163 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.35.342.210 W decode: failed to find a memory slot for batch of size 4
+1.35.342.216 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.35.342.265 W decode: failed to find a memory slot for batch of size 2
+1.35.342.270 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.35.342.317 W decode: failed to find a memory slot for batch of size 1
+1.35.342.322 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.35.342.323 E srv    send_error: task id = 246, error: Context size has been exceeded.
+1.35.342.357 I slot      release: id  0 | task 246 | stop processing: n_tokens = 2303, truncated = 0
+1.35.342.416 W srv          stop: cancel task, id_task = 246
+1.35.342.546 E srv    send_error: task id = 244, error: Context size has been exceeded.
+1.35.342.578 I slot      release: id  1 | task 244 | stop processing: n_tokens = 2290, truncated = 0
+1.35.342.631 W srv          stop: cancel task, id_task = 244
+1.35.342.746 E srv    send_error: task id = 243, error: Context size has been exceeded.
+1.35.342.772 I slot      release: id  2 | task 243 | stop processing: n_tokens = 1551, truncated = 0
+1.35.342.784 E srv    send_error: task id = 242, error: Context size has been exceeded.
+1.35.342.794 I slot      release: id  3 | task 242 | stop processing: n_tokens = 0, truncated = 0
+1.35.342.819 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.35.342.826 W srv          stop: cancel task, id_task = 243
+1.35.342.832 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90597858409
+1.35.342.839 W srv          stop: cancel task, id_task = 242
+1.35.343.070 I slot launch_slot_: id  0 | task 259 | processing task, is_child = 0
+1.35.343.082 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90597858629
+1.35.343.234 I slot launch_slot_: id  1 | task 257 | processing task, is_child = 0
+1.35.343.242 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90597858823
+1.35.343.381 I slot launch_slot_: id  2 | task 256 | processing task, is_child = 0
+1.35.343.387 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90597858845
+1.35.343.523 I slot launch_slot_: id  3 | task 254 | processing task, is_child = 0
+1.40.131.723 I slot print_timing: id  1 | task 257 | prompt processing, n_tokens =   1743, progress = 0.74, t =   3.11 s / 559.68 tokens per second
+1.40.132.450 W decode: failed to find a memory slot for batch of size 2048
+1.40.132.458 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.40.132.753 W decode: failed to find a memory slot for batch of size 1024
+1.40.132.760 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.40.132.919 W decode: failed to find a memory slot for batch of size 512
+1.40.132.925 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.40.133.027 W decode: failed to find a memory slot for batch of size 256
+1.40.133.032 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.40.133.108 W decode: failed to find a memory slot for batch of size 128
+1.40.133.113 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.40.133.175 W decode: failed to find a memory slot for batch of size 64
+1.40.133.181 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.40.133.236 W decode: failed to find a memory slot for batch of size 32
+1.40.133.241 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.40.133.292 W decode: failed to find a memory slot for batch of size 16
+1.40.133.297 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.40.133.345 W decode: failed to find a memory slot for batch of size 8
+1.40.133.350 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.40.133.397 W decode: failed to find a memory slot for batch of size 4
+1.40.133.402 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.40.133.448 W decode: failed to find a memory slot for batch of size 2
+1.40.133.453 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.40.133.500 W decode: failed to find a memory slot for batch of size 1
+1.40.133.505 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.40.133.506 E srv    send_error: task id = 259, error: Context size has been exceeded.
+1.40.133.527 I slot      release: id  0 | task 259 | stop processing: n_tokens = 2354, truncated = 0
+1.40.133.561 W srv          stop: cancel task, id_task = 259
+1.40.133.702 E srv    send_error: task id = 257, error: Context size has been exceeded.
+1.40.133.722 I slot      release: id  1 | task 257 | stop processing: n_tokens = 2349, truncated = 0
+1.40.133.757 W srv          stop: cancel task, id_task = 257
+1.40.133.842 E srv    send_error: task id = 256, error: Context size has been exceeded.
+1.40.133.858 I slot      release: id  2 | task 256 | stop processing: n_tokens = 1441, truncated = 0
+1.40.133.866 E srv    send_error: task id = 254, error: Context size has been exceeded.
+1.40.133.872 I slot      release: id  3 | task 254 | stop processing: n_tokens = 0, truncated = 0
+1.40.133.890 W srv          stop: cancel task, id_task = 254
+1.40.133.892 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.40.133.902 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90602649578
+1.40.133.913 W srv          stop: cancel task, id_task = 256
+1.40.134.052 I slot launch_slot_: id  0 | task 265 | processing task, is_child = 0
+1.40.134.058 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90602649773
+1.40.134.146 I slot launch_slot_: id  1 | task 264 | processing task, is_child = 0
+1.40.134.152 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90602649909
+1.40.134.229 I slot launch_slot_: id  2 | task 262 | processing task, is_child = 0
+1.40.134.232 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90602649923
+1.40.134.309 I slot launch_slot_: id  3 | task 261 | processing task, is_child = 0
+1.44.901.368 I slot print_timing: id  1 | task 264 | prompt processing, n_tokens =   1908, progress = 0.79, t =   3.09 s / 617.85 tokens per second
+1.44.902.169 W decode: failed to find a memory slot for batch of size 2048
+1.44.902.177 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.44.902.470 W decode: failed to find a memory slot for batch of size 1024
+1.44.902.475 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.44.902.632 W decode: failed to find a memory slot for batch of size 512
+1.44.902.637 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.44.902.742 W decode: failed to find a memory slot for batch of size 256
+1.44.902.747 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.44.902.823 W decode: failed to find a memory slot for batch of size 128
+1.44.902.829 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.44.902.891 W decode: failed to find a memory slot for batch of size 64
+1.44.902.896 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.44.902.963 W decode: failed to find a memory slot for batch of size 32
+1.44.902.968 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.44.903.018 W decode: failed to find a memory slot for batch of size 16
+1.44.903.022 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.44.903.070 W decode: failed to find a memory slot for batch of size 8
+1.44.903.075 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.44.903.122 W decode: failed to find a memory slot for batch of size 4
+1.44.903.126 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.44.903.172 W decode: failed to find a memory slot for batch of size 2
+1.44.903.177 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.44.903.225 W decode: failed to find a memory slot for batch of size 1
+1.44.903.230 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.44.903.230 E srv    send_error: task id = 265, error: Context size has been exceeded.
+1.44.903.263 I slot      release: id  0 | task 265 | stop processing: n_tokens = 2189, truncated = 0
+1.44.903.296 W srv          stop: cancel task, id_task = 265
+1.44.903.425 E srv    send_error: task id = 264, error: Context size has been exceeded.
+1.44.903.454 I slot      release: id  1 | task 264 | stop processing: n_tokens = 2414, truncated = 0
+1.44.903.470 W srv          stop: cancel task, id_task = 264
+1.44.903.601 E srv    send_error: task id = 262, error: Context size has been exceeded.
+1.44.903.623 I slot      release: id  2 | task 262 | stop processing: n_tokens = 1541, truncated = 0
+1.44.903.631 E srv    send_error: task id = 261, error: Context size has been exceeded.
+1.44.903.634 W srv          stop: cancel task, id_task = 262
+1.44.903.663 I slot      release: id  3 | task 261 | stop processing: n_tokens = 0, truncated = 0
+1.44.903.687 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.44.903.690 W srv          stop: cancel task, id_task = 261
+1.44.903.692 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90607419314
+1.44.903.885 I slot launch_slot_: id  0 | task 269 | processing task, is_child = 0
+1.44.903.894 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90607419505
+1.44.904.005 I slot launch_slot_: id  1 | task 268 | processing task, is_child = 0
+1.44.904.010 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90607419674
+1.44.904.095 I slot launch_slot_: id  2 | task 267 | processing task, is_child = 0
+1.44.904.099 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90607419714
+1.44.904.180 I slot launch_slot_: id  3 | task 266 | processing task, is_child = 0
+1.49.654.319 I slot print_timing: id  1 | task 268 | prompt processing, n_tokens =   1819, progress = 0.81, t =   3.08 s / 590.24 tokens per second
+1.49.655.080 W decode: failed to find a memory slot for batch of size 2048
+1.49.655.100 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1024, ret = 1
+1.49.655.409 W decode: failed to find a memory slot for batch of size 1024
+1.49.655.416 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 512, ret = 1
+1.49.655.577 W decode: failed to find a memory slot for batch of size 512
+1.49.655.589 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 256, ret = 1
+1.49.655.717 W decode: failed to find a memory slot for batch of size 256
+1.49.655.724 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 128, ret = 1
+1.49.655.800 W decode: failed to find a memory slot for batch of size 128
+1.49.655.805 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 64, ret = 1
+1.49.655.867 W decode: failed to find a memory slot for batch of size 64
+1.49.655.873 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 32, ret = 1
+1.49.655.928 W decode: failed to find a memory slot for batch of size 32
+1.49.655.932 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 16, ret = 1
+1.49.655.990 W decode: failed to find a memory slot for batch of size 16
+1.49.655.995 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 8, ret = 1
+1.49.656.045 W decode: failed to find a memory slot for batch of size 8
+1.49.656.050 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 4, ret = 1
+1.49.656.099 W decode: failed to find a memory slot for batch of size 4
+1.49.656.103 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 2, ret = 1
+1.49.656.152 W decode: failed to find a memory slot for batch of size 2
+1.49.656.158 W srv        decode: failed to find free space in the KV cache, retrying with smaller batch size, off = 0, n_batch = 1, ret = 1
+1.49.656.206 W decode: failed to find a memory slot for batch of size 1
+1.49.656.212 E srv        decode: Context size has been exceeded. off = 0, n_batch = 1, ret = 1
+1.49.656.212 E srv    send_error: task id = 269, error: Context size has been exceeded.
+1.49.656.242 I slot      release: id  0 | task 269 | stop processing: n_tokens = 2278, truncated = 0
+1.49.656.280 W srv          stop: cancel task, id_task = 269
+1.49.656.429 E srv    send_error: task id = 268, error: Context size has been exceeded.
+1.49.656.450 I slot      release: id  1 | task 268 | stop processing: n_tokens = 2240, truncated = 0
+1.49.656.470 W srv          stop: cancel task, id_task = 268
+1.49.656.581 E srv    send_error: task id = 267, error: Context size has been exceeded.
+1.49.656.600 I slot      release: id  2 | task 267 | stop processing: n_tokens = 1626, truncated = 0
+1.49.656.607 E srv    send_error: task id = 266, error: Context size has been exceeded.
+1.49.656.624 W srv          stop: cancel task, id_task = 267
+1.49.656.654 I slot      release: id  3 | task 266 | stop processing: n_tokens = 0, truncated = 0
+1.49.656.686 E srv  update_slots: decode() failed: Context size has been exceeded.
+1.49.656.693 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = 90612172293
+1.49.656.720 W srv          stop: cancel task, id_task = 266
+1.49.656.919 I slot launch_slot_: id  0 | task 281 | processing task, is_child = 0
+1.49.656.932 I slot get_availabl: id  1 | task -1 | selected slot by LRU, t_last = 90612172501
+1.49.657.084 I slot launch_slot_: id  1 | task 280 | processing task, is_child = 0
+1.49.657.094 I slot get_availabl: id  2 | task -1 | selected slot by LRU, t_last = 90612172652
+1.49.657.230 I slot launch_slot_: id  2 | task 279 | processing task, is_child = 0
+1.49.657.237 I slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = 90612172705
+1.49.657.371 I slot launch_slot_: id  3 | task 277 | processing task, is_child = 0
