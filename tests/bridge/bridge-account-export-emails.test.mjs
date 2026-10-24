@@ -92,6 +92,14 @@ describe('the export of secondary addresses', () => {
 		assert.equal(job.error_code, 'export_sealed_unavailable');
 		assert.deepEqual([world.store.puts, world.store.buckets, world.store.objects.size], [0, 0, 0]);
 	});
+	it('E4b fails when the keys are malformed even though the rows still open', async (t) => {
+		const short = { ...EMAIL_KEYS, [LOOKUP_ENV]: 'short' };
+		const world = await setup(t, { rows: [await sealedEmailRow(USER_A, 'ada@example.com', { env: short })] });
+		world.env[LOOKUP_ENV] = short[LOOKUP_ENV];
+		const job = await runOne(world);
+		assert.equal(job.error_code, 'export_sealed_unavailable');
+		assert.equal(world.store.puts, 0);
+	});
 	it('E5 exports an empty table, and succeeds, when there are no rows and no keys', async (t) => {
 		const world = await setup(t);
 		delete world.env[SEAL_ENV];
