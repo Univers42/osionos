@@ -16,13 +16,19 @@
  * the artifact, stores it with ONE put and only then marks the job done. A failure
  * at any step marks it failed with a stable code; a partial result is never done.
  * A second sweep deletes the object of every job past its expiry and marks it expired.
+ * The secondary addresses are read outside the registry (their columns are sealed, so
+ * the registry may not list them) and exported opened, as osionos_user_emails.
  *
  * Caveat: a job claimed by a process that then dies stays running until the database
  * lease (30 minutes) lets another process claim it again; the artifact is built in
  * memory, so the peak is about twice the byte cap for one job at a time per process;
  * the 15 s storage timeout is the practical ceiling for an artifact upload; rows are
  * read page by page without a snapshot, so a row written during the read may or may
- * not be in the archive; the caps are unmeasured defaults.
+ * not be in the archive; the caps are unmeasured defaults. A sealed address that no
+ * longer opens (a key rotated away without _PREVIOUS, or a corrupted row) is exported
+ * as unreadable, not left out, and a wrong key looks the same as a corrupted row. The
+ * opened addresses sit in clear in the stored artifact until it expires (7 days), and
+ * the download needs a session, not sudo.
  */
 
 import { ensureBucket, storageDelete, storagePut } from './bridge-storage-core.mjs';
