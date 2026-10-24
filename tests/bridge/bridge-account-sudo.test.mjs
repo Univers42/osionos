@@ -148,6 +148,48 @@ describe('POST /api/account/sudo/email', () => {
 	});
 });
 
+/** The admin read answered by `answer`, or thrown when it is an Error; the OTP fake does the rest. */
+function withAdminAnswer(answer) {
+	const otp = createOtpService({ email: ADDRESS, secret: ACCOUNT_JWT_SECRET });
+	const real = otp.fetchImpl;
+	otp.fetchImpl = async (url, init) => {
+		if (!new URL(String(url)).pathname.startsWith('/auth/v1/admin/users/')) return real(url, init);
+		otp.calls.push({ path: new URL(String(url)).pathname, method: 'GET', headers: { ...(init?.headers ?? {}) } });
+		if (answer instanceof Error) throw answer;
+		return answer;
+	};
+	return otp;
+}
+
+describe('the GoTrue read behind the sudo email', () => {
+	const cases = [
+		['an upstream 404', new Response('{}', { status: 404 }), 409, 'no_email'],
+		['an upstream 500', new Response('{}', { status: 500 }), 503, 'sudo_unavailable'],
+		['a fetch that throws', new Error('connection refused'), 503, 'sudo_unavailable'],
+		['an empty email', Response.json({ email: '' }), 409, 'no_email'],
+		['a malformed email', Response.json({ email: 'not-an-address' }), 409, 'no_email'],
+		['a non-string email', Response.json({ email: 7 }), 409, 'no_email'],
+		['a 2xx body that is not JSON', new Response('<html>', { status: 200 }), 503, 'sudo_unavailable'],
+	];
+	for (const [name, answer, status, code] of cases) {
+		it(`answers ${status} ${code} on ${name}`, async (t) => {
+			const { base, token } = await world(t, { otp: withAdminAnswer(answer) });
+			const response = await send(base, '/api/account/sudo/email', { method: 'POST', token });
+			assert.equal(response.status, status);
+			assert.equal(response.body.code, code);
+		});
+	}
+
+	it('sends the encoded id with the service key as apikey and bearer', async (t) => {
+		const { base, token, otp } = await world(t);
+		await send(base, '/api/account/sudo/email', { method: 'POST', token });
+		const read = otp.calls.find((call) => call.path.startsWith('/auth/v1/admin/users/'));
+		assert.equal(read.path, `/auth/v1/admin/users/${encodeURIComponent(USER_A)}`);
+		assert.equal(read.headers.apikey, 'service-role-test-key');
+		assert.equal(read.headers.Authorization, 'Bearer service-role-test-key');
+	});
+});
+
 describe('POST /api/account/sudo/verify', () => {
 	it('grants sudo on the session, and the state route reports it', async (t) => {
 		const { base, token } = await world(t);

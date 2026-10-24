@@ -15,38 +15,25 @@ import React, { useState } from 'react';
 import { changeUsername } from '@/shared/api/accountSecurityApi';
 import { Button, Modal, useToastStore } from '@/shared/ui';
 import { useAccountEmailsStore, useAccountProfileStore } from '@/store/settings';
+import { defaultEmail, emailVerificationLabel } from '@/store/settings/defaults';
 import { useSudoPromptStore } from '../ui/sudo/sudoPromptModel';
 import { DataTable } from '../ui/settingsKit';
 import { accountActionNotice, runAccountAction, runAsync } from '../model/settingsCalls';
 
 export const EmailManagerModal: React.FC<{ userId: string; fallbackEmail?: string; onClose: () => void }> = ({ userId, fallbackEmail, onClose }) => {
   const emails = useAccountEmailsStore((state) => state.data);
-  const addEmail = useAccountEmailsStore((state) => state.add);
-  const verifyEmail = useAccountEmailsStore((state) => state.verify);
-  const removeEmail = useAccountEmailsStore((state) => state.remove);
-  const makePrimaryEmail = useAccountEmailsStore((state) => state.makePrimary);
-  const [emailDraft, setEmailDraft] = useState('');
-  const displayedEmails = emails.length ? emails : [];
-  if (!displayedEmails.length && fallbackEmail) {
-    displayedEmails.push({ _id: 'fallback-email', userId, email: fallbackEmail, isPrimary: true, verifiedAt: new Date().toISOString(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), removedAt: null });
-  }
+  // Read-only until the server serves email edits (F-3b); the fallback never claims verification.
+  const displayedEmails = emails.length || !fallbackEmail ? emails : [defaultEmail(userId, fallbackEmail)];
   const rows = displayedEmails.map((email) => [
     <span key={`${email._id}-email`} className="font-medium">{email.email}</span>,
     email.isPrimary ? 'Primary' : 'Secondary',
-    email.verifiedAt ? 'Verified' : <Button key={`${email._id}-verify`} onClick={() => runAsync(verifyEmail(email._id))}>Verify</Button>,
-    <div key={`${email._id}-actions`} className="flex gap-2">
-      {!email.isPrimary && <Button onClick={() => runAsync(makePrimaryEmail(email._id))}>Make primary</Button>}
-      {!email.isPrimary && <Button tone="danger-subtle" onClick={() => runAsync(removeEmail(email._id))}>Remove</Button>}
-    </div>,
+    emailVerificationLabel(email),
   ]);
   return (
     <Modal open onClose={onClose} title="Manage emails" size="md">
       <div className="space-y-4">
-        <DataTable headers={['Email', 'Role', 'Status', '']} rows={rows} />
-        <div className="flex gap-2">
-          <input className="min-w-0 flex-1 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={emailDraft} onChange={(event) => setEmailDraft(event.target.value)} placeholder="name@example.com" />
-          <Button tone="primary" onClick={() => { if (emailDraft.includes('@')) { runAsync(addEmail(emailDraft, userId)); setEmailDraft(''); } }}>Add email</Button>
-        </div>
+        <DataTable headers={['Email', 'Role', 'Status']} rows={rows} />
+        <p className="text-sm text-[var(--osio-fg-muted)]">Adding or changing addresses isn&apos;t available yet.</p>
       </div>
     </Modal>
   );

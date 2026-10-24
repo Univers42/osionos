@@ -15,14 +15,14 @@
  * `enabled` is whatever GET /api/account/2fa/status says, and the preferred method only
  * orders the options the modal shows; the server never reads it.
  *
- * Caveat: the new token (after verify or disable) carries no refresh token, and the cut-off
- * also refuses the refresh family issued before it (bridge-sessions.mjs assertSessionNotCutOff
- * on fam_iat_ms), so this device signs in again when that access token expires.
+ * Caveat: confirm and disable cut off every session issued before them, so the answer's new
+ * refresh token (a new family, bridge-session-stepup.mjs) is the only way this device stays in.
+ * A server with session records off answers no refresh token; then the old pair stays.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { adoptStepUpToken } from '@/features/auth';
+import { adoptStepUpToken, dropLocalSession } from '@/features/auth';
 import { trySettingsGet, errorMessage } from '@/store/settings/settingsStoreUtils';
 import { runAccountAction } from '../model/settingsCalls';
 
@@ -57,12 +57,18 @@ export function useTwoStepStatus(): { state: TwoStepState; refresh: () => Promis
   return { state, refresh };
 }
 
-/** Uses the token a verify or disable returned, because the server just retired the old one. */
-export function adoptSessionToken(userId: string, accessToken: string | undefined): void {
-  if (accessToken) adoptStepUpToken(userId, accessToken);
+/** Uses the tokens a verify or disable returned, because the server just retired the old family. */
+export function adoptSessionToken(userId: string, accessToken: string | undefined, refreshToken?: string): void {
+  if (accessToken) adoptStepUpToken(userId, accessToken, refreshToken);
 }
 
+export const RECORD_UNAVAILABLE = 'session_record_unavailable';
+export const SIGNED_OUT_NOTICE = 'Two-step verification changed and you are signed out; sign in again.';
+
+/** The server changed the factor but could not start the new session: it is signed out, so is this device. */
+export const dropSessionAfterStepUp = (userId: string): void => dropLocalSession(userId);
+
 export const startEnrolment = () => runAccountAction<{ otpauthUrl?: string }>('/api/account/2fa/enroll', {});
-export const confirmEnrolment = (code: string) => runAccountAction<{ accessToken?: string }>('/api/account/2fa/verify', { code });
+export const confirmEnrolment = (code: string) => runAccountAction<{ accessToken?: string; refreshToken?: string }>('/api/account/2fa/verify', { code });
 export const createRecoveryCodes = () => runAccountAction<{ codes?: string[] }>('/api/account/2fa/recovery/generate', {});
-export const disableTwoStep = () => runAccountAction<{ accessToken?: string }>('/api/account/2fa/disable', {});
+export const disableTwoStep = () => runAccountAction<{ accessToken?: string; refreshToken?: string }>('/api/account/2fa/disable', {});

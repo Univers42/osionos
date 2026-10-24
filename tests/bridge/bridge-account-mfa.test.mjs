@@ -105,7 +105,7 @@ describe('two-step verification: enrol and confirm', () => {
 		const fresh = await world.api('GET', '/api/account/sessions', done.body.accessToken);
 		assert.equal(fresh.status, 200, fresh.text);
 		assert.deepEqual([tokenClaims(done.body.accessToken).aal, tokenClaims(done.body.accessToken).mfa_req], [2, undefined]);
-		assert.ok(world.sessions.calls.some((call) => call.method === 'PATCH' && call.body?.created_at), 'the session row is re-dated');
+		assert.ok(!world.sessions.calls.some((call) => call.method === 'PATCH' && call.body?.created_at), 'a new root row replaces the re-date');
 	});
 
 	it('keeps the factor pending and answers 503 when the cut-off cannot be written', async (t) => {
@@ -127,8 +127,8 @@ describe('two-step verification: enrol and confirm', () => {
 		assert.equal(patch.params.get('user_id'), `eq.${USER_A}`);
 	});
 
-	it('still confirms when the session row cannot be re-dated', async (t) => {
-		const world = await startMfaWorld(t);
+	it('still confirms when the session row cannot be re-dated (records off)', async (t) => {
+		const world = await startMfaWorld(t, { records: 'off' });
 		const { accessToken, secret } = await enrol(world);
 		world.failSessionPatch = true;
 		assert.equal((await verify(world, accessToken, hotp(secret, stepAt(world.clock.at)))).status, 200);
@@ -136,23 +136,27 @@ describe('two-step verification: enrol and confirm', () => {
 });
 
 describe('two-step verification: step-up, replay and the window', () => {
-	it('upgrades an aal1 token to aal2 with the same jti and expiry, and the aal1 token stays gated', async (t) => {
+	it('upgrades an aal1 token to aal2 in a new family with the same expiry, and another aal1 token stays gated', async (t) => {
 		const { world, secret } = await enrolledWorld(t);
 		const { accessToken, claims } = await world.signIn();
+		const gated = (await world.signIn()).accessToken;
 		const done = await verify(world, accessToken, hotp(secret, stepAt(world.clock.at)));
 		assert.equal(done.status, 200, done.text);
 		const upgraded = tokenClaims(done.body.accessToken);
-		assert.deepEqual([upgraded.jti, upgraded.exp, upgraded.aal, upgraded.mfa_req], [claims.jti, claims.exp, 2, undefined]);
+		assert.notEqual(upgraded.jti, claims.jti);
+		assert.deepEqual([upgraded.exp, upgraded.aal, upgraded.mfa_req], [claims.exp, 2, undefined]);
 		assert.equal((await world.api('GET', '/api/account/sessions', done.body.accessToken)).status, 200);
-		assert.equal((await world.api('GET', '/api/account/sessions', accessToken)).body.code, 'mfa_required');
+		assert.equal((await world.api('GET', '/api/account/sessions', gated)).body.code, 'mfa_required');
+		assert.equal((await world.api('GET', '/api/account/sessions', accessToken)).status, 401, 'the replaced family is dead');
 	});
 
 	it('refuses a replayed code and sends the atomic last_step filter', async (t) => {
 		const { world, secret } = await enrolledWorld(t);
 		const { accessToken } = await world.signIn();
 		const code = hotp(secret, stepAt(world.clock.at));
-		assert.equal((await verify(world, accessToken, code)).status, 200);
-		const replay = await verify(world, accessToken, code);
+		const first = await verify(world, accessToken, code);
+		assert.equal(first.status, 200);
+		const replay = await verify(world, first.body.accessToken, code);
 		assert.deepEqual([replay.status, replay.body.code], [422, 'code_invalid']);
 		const claim = world.mfa.calls.filter((call) => call.method === 'PATCH' && call.params.has('last_step'));
 		assert.ok(claim.every((call) => /^lt\.\d+$/.test(call.params.get('last_step')) && call.params.get('status') === 'eq.verified' && call.prefer.includes('return=representation')));
@@ -161,10 +165,10 @@ describe('two-step verification: step-up, replay and the window', () => {
 
 	it('lets exactly one of two concurrent requests with the same code through', async (t) => {
 		const { world, secret } = await enrolledWorld(t);
-		const { accessToken } = await world.signIn();
+		const [one, two] = [await world.signIn(), await world.signIn()];
 		const code = hotp(secret, stepAt(world.clock.at));
 		world.mfa.frozenReads = structuredClone(world.mfa.rows(TOTP_TABLE));
-		const answers = await Promise.all([verify(world, accessToken, code), verify(world, accessToken, code)]);
+		const answers = await Promise.all([verify(world, one.accessToken, code), verify(world, two.accessToken, code)]);
 		assert.deepEqual(answers.map((answer) => answer.status).sort(), [200, 422]);
 	});
 
@@ -173,7 +177,7 @@ describe('two-step verification: step-up, replay and the window', () => {
 		const { accessToken } = await world.signIn();
 		const early = await verify(world, accessToken, hotp(secret, stepAt(world.clock.at, 1)));
 		assert.equal(early.status, 200, early.text);
-		const late = await verify(world, accessToken, hotp(secret, stepAt(world.clock.at)));
+		const late = await verify(world, early.body.accessToken, hotp(secret, stepAt(world.clock.at)));
 		assert.deepEqual([late.status, late.body.code], [422, 'code_invalid']);
 	});
 

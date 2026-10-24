@@ -22,10 +22,9 @@ export interface AccountSettings {
     passwordUpdatedAt?: string;
   };
   supportAccessGrantedUntil?: string | null;
-  pendingDeletionAt?: string | null;
   removedAt?: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PasskeyRecord {
@@ -118,6 +117,8 @@ export interface WorkspaceMember {
   _id: string;
   workspaceId: string;
   userId: string;
+  /** The bridge's display name; absent on local and legacy rows. */
+  name?: string;
   role: WorkspaceMemberRole;
   invitedBy?: string;
   joinedAt: string;

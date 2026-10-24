@@ -28,7 +28,7 @@ import type { ChangeEvent, NotionState, Page, PageQuery, PropertyType, SchemaPro
 import { useUserStore } from "@/features/auth";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
-import { sysSourceById, SYS_VIEW_TYPE, type SysColumnType, type SysSource } from "./sysDataSources";
+import { sysBuiltInViewIds, sysSourceById, SYS_VIEW_TYPE, type SysColumnType, type SysSource } from "./sysDataSources";
 import type { SysTransport } from "./sysDatabaseTransport";
 import { deleteSavedView, diffViews, fetchSavedViews, saveSavedView } from "./sysDatabaseViews";
 import { synthOptions } from "./workspaceDatabaseMappers";
@@ -85,6 +85,14 @@ function timeOf(row: Row): string {
   return UNKNOWN_TIME;
 }
 
+/** The source's built-in views (a chart beside the default table), empty filters and sorts. */
+const builtInViews = (source: SysSource, databaseId: string): NotionState["views"] => Object.fromEntries(
+  (source.builtInViews ?? []).map((view) => [view.id, {
+    id: view.id, databaseId, name: view.name, type: view.type,
+    filters: [], filterConjunction: "and", sorts: [], visibleProperties: [], settings: view.settings,
+  }]),
+) as NotionState["views"];
+
 /** Throws on an unknown source, a failed request or a malformed answer: never an empty state. */
 export async function loadSysSourceState(sourceId: string, transport: SysTransport): Promise<SysLoaded> {
   const source = sysSourceById(sourceId);
@@ -129,7 +137,7 @@ export async function loadSysSourceState(sourceId: string, transport: SysTranspo
         titlePropertyId: source.titleColumn, properties,
       } },
       pages,
-      views: { [source.defaultViewId]: {
+      views: { ...builtInViews(source, sourceId), [source.defaultViewId]: {
         id: source.defaultViewId, databaseId: sourceId, name: source.label, type: SYS_VIEW_TYPE,
         filters: [], filterConjunction: "and", sorts: [],
         visibleProperties: body.columns.filter((column) => !hidden.has(column)),
@@ -225,8 +233,8 @@ class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
     // loadLimit already folded in) must not be mistaken for an edit.
     const source = sysSourceById(this.sourceId);
     if (!source || !previous) return;
-    const edit = diffViews(next.views, previous.views, source.defaultViewId);
-    const unsent = diffViews(next.views, this.held, source.defaultViewId);
+    const edit = diffViews(next.views, previous.views, sysBuiltInViewIds(source));
+    const unsent = diffViews(next.views, this.held, sysBuiltInViewIds(source));
     const sendable = new Set(unsent.saved.map(([id]) => id));
     const goneable = new Set(unsent.removed);
     for (const [id, view] of edit.saved.filter(([id]) => sendable.has(id))) {

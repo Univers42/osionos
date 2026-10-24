@@ -159,10 +159,17 @@ test("saveAccountProfile: a 422 -> an invalid carrying the field it names", asyn
   assert.equal(result.ok === false && result.reason === "invalid" && result.field, "profession");
 });
 
-test("saveAccountProfile: a 404 -> unavailable", async () => {
+test("saveAccountProfile: a 404 with a server code -> failed with the server's message", async () => {
   useSession("osionos_v1.tok");
-  const { result } = await withFetch(() => json(404, { ok: false, code: "user_not_found" }), () => saveAccountProfile({ profession: "teacher" }, 7));
+  const { result } = await withFetch(() => json(404, { ok: false, code: "user_not_found", message: "No such user." }), () => saveAccountProfile({ profession: "teacher" }, 7));
   assert.equal(result.ok, false);
+  assert.equal(result.ok === false && result.reason, "failed");
+  assert.equal(result.ok === false && result.reason === "failed" && result.message, "No such user.");
+});
+
+test("saveAccountProfile: a codeless 404 -> unavailable", async () => {
+  useSession("osionos_v1.tok");
+  const { result } = await withFetch(() => json(404, { ok: false, message: "Not found." }), () => saveAccountProfile({ profession: "teacher" }, 7));
   assert.equal(result.ok === false && result.reason, "unavailable");
 });
 

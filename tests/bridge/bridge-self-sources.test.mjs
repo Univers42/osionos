@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 /**
- * The registry of the self sources: the six shipped ids, the ordered allowlist of each,
+ * The registry of the self sources: the seven shipped ids, the ordered allowlist of each,
  * and the allowlist against the real columns of the table it reads.
  *
  * The root SQL lives in the root repo, a sibling checkout that the app container does not
@@ -30,9 +30,12 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SELF_SOURCES, selfSourceById } from '../../scripts/bridge-self-sources.mjs';
 
+// my-activity is registered only while the activity flag is on; the flag-off case is tested explicitly.
+process.env.OSIONOS_ACTIVITY = '1';
+
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-// The columns of the tables the six sources read, as the root migrations create them.
+// The columns of the tables the seven sources read, as the root migrations create them.
 const TABLE_COLUMNS = {
 	osionos_pages: [
 		'id', 'workspace_id', 'parent_page_id', 'owner_id', 'title', 'icon', 'cover', 'database_id',
@@ -52,6 +55,7 @@ const TABLE_COLUMNS = {
 		'ip_hash', 'user_agent', 'sudo_until', 'refresh_hash', 'family_id', 'parent_id',
 		'revoked_at', 'revoked_reason',
 	],
+	osionos_activity_events: ['id', 'ts', 'user_id', 'workspace_id', 'event', 'surface'],
 	osionos_people_directory: [
 		'user_id', 'display_name', 'username', 'profile', 'last_seen_at', 'directory_opt_out',
 		'search_doc', 'headline',
@@ -110,9 +114,9 @@ function grantFromSql(dir) {
 }
 
 describe('the self source registry', () => {
-	it('holds exactly the six shipped sources, and nothing else', () => {
+	it('holds exactly the seven shipped sources, and nothing else', () => {
 		assert.deepEqual(SELF_SOURCES.map((source) => source.id), [
-			'my-pages', 'my-tasks', 'my-published', 'my-connections', 'my-workspaces', 'my-sessions',
+			'my-pages', 'my-tasks', 'my-published', 'my-connections', 'my-workspaces', 'my-sessions', 'my-activity',
 		]);
 		for (const source of SELF_SOURCES) {
 			assert.equal(selfSourceById(source.id), source, `${source.id} is found by its id`);
@@ -121,7 +125,7 @@ describe('the self source registry', () => {
 			assert.equal(typeof source.table, 'string');
 			assert.ok(source.table.startsWith('osionos_'), `${source.id} names a table`);
 		}
-		assert.equal(selfSourceById('my-activity'), null, 'a source without a table is not in the registry');
+		assert.equal(selfSourceById('my-nothing'), null, 'a source without a table is not in the registry');
 		assert.equal(selfSourceById(''), null);
 		assert.equal(selfSourceById(null), null);
 		assert.equal(selfSourceById('MY-PAGES'), null, 'the id is the one of the source');
