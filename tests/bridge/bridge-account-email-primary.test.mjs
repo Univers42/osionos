@@ -63,6 +63,21 @@ describe('make primary: the happy path', () => {
 		assert.deepEqual([result.status, world.cutoffs.map((entry) => entry.user_id), result.headers['x-session-revoked']], [200, [USER_A], 'all']);
 	});
 
+	it('P17 on the session-records path revokes the other family as logout_all and touches no one else', async () => {
+		const { world, row } = await setup();
+		const token = await world.token(USER_A);
+		const jti = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')).jti;
+		const live = (id, userId) => ({ id, user_id: userId, family_id: id, revoked_at: null, revoked_reason: null, expires_at: '2099-01-01T00:00:00Z', created_at: '2026-10-24T09:00:00Z' });
+		const [other, stranger] = ['cccccccc-0000-4000-8000-000000000001', 'cccccccc-0000-4000-8000-000000000002'];
+		const store = world.recordSessions([live(jti, USER_A), live(other, USER_A), live(stranger, USER_B)]);
+		const result = await world.callWith(token, { path: `${PATH}/${row.id}/primary` });
+		const byId = (id) => store.rows().find((entry) => entry.id === id);
+		assert.deepEqual([result.status, world.cutoffs.length], [200, 0]);
+		assert.deepEqual([byId(other).revoked_reason, Boolean(byId(other).revoked_at)], ['logout_all', true]);
+		assert.equal(byId(jti).revoked_at, null);
+		assert.equal(byId(stranger).revoked_at, null);
+	});
+
 	it('P17 answers 503 email_changed_signout_failed, saying the address HAS changed, when the cut-off fails too', async () => {
 		const { world, row } = await setup();
 		world.cutoffStatus = 500;

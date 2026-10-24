@@ -22,6 +22,8 @@
 import { randomUUID } from 'node:crypto';
 import { verifyAppSessionToken } from '../../../scripts/bridge-api.mjs';
 import { createAccountHandler } from '../../../scripts/bridge-account-mounts.mjs';
+import { createPg } from '../../../scripts/bridge-pg.mjs';
+import { createSessionStore } from './session-postgrest.mjs';
 import { ACCOUNT_JWT_SECRET, accountConfig, sessionToken, sudoToken, USER_A, USER_B } from './account-world.mjs';
 import { otpProof } from './account-otp.mjs';
 import { kvStub } from './kv-stub.mjs';
@@ -189,6 +191,17 @@ export function createEmailWorld({ env = goodEnv(), users = [] } = {}) {
 	/** A call that reuses one session across calls, so budgets and sudo share a jti. */
 	world.token = (userId) => sudoToken(config, kv, userId);
 	world.callWith = (token, { method = 'POST', path, body } = {}) => callRoute(handler, { method, path, body, headers: { authorization: `Bearer ${token}` } });
+	/** Turns the session-records path on over these rows; the email table keeps serving its own paths. */
+	world.recordSessions = (rows) => {
+		const store = createSessionStore({ rows });
+		const sessions = createPg({ config, env: { JWT_SECRET: ACCOUNT_JWT_SECRET }, fetchImpl: store.fetchImpl }).asService();
+		const emails = table.pg.asService();
+		const routed = (verb) => (path, ...rest) => (path.startsWith('osionos_sessions') ? sessions : emails)[verb](path, ...rest);
+		const client = { get: routed('get'), post: routed('post'), patch: routed('patch'), del: routed('del') };
+		table.pg.asService = () => client;
+		config.sessionRecords = { enabled: true };
+		return store;
+	};
 	world.add = (userId, email) => world.call(userId, { method: 'POST', body: { email } });
 	return world;
 }
