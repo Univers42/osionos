@@ -18,6 +18,7 @@ import test from "node:test";
 import { memberLabel } from "../../src/features/settings/model/memberLabel.ts";
 import { buildMembersState } from "../../src/features/settings/people/membersSource.ts";
 import { useWorkspaceMembersStore } from "../../src/store/settings/index.ts";
+import { workspaceMembersFromWire } from "../../src/store/settings/workspaceMembersWire.ts";
 
 const names = new Map([["u1", "Persona"]]);
 
@@ -33,8 +34,8 @@ for (const [title, userId, wire, expected] of CASES) {
 }
 
 test("M1: a member with a wire name and no persona is titled with that name", async () => {
-  const row = { workspaceId: "ws-1", role: "member" as const, joinedAt: "", createdAt: "", updatedAt: "", removedAt: null };
-  useWorkspaceMembersStore.setState({ data: { "ws-1": [{ ...row, _id: "a", userId: "u-ada", name: "Ada" }, { ...row, _id: "b", userId: "u-bare" }] } });
+  const data = workspaceMembersFromWire("ws-1", { ok: true, members: [{ userId: "u-ada", name: "Ada", role: "editor" }, { userId: "u-bare", role: "viewer" }] });
+  useWorkspaceMembersStore.setState({ data: { "ws-1": data ?? [] } });
   const state = await buildMembersState({ workspaceId: "ws-1", activeUserId: "x", personas: [], query: "" });
   const titles = JSON.stringify(state);
   assert.ok(titles.includes("Ada"));
