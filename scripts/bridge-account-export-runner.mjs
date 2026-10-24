@@ -27,6 +27,7 @@
 
 import { ensureBucket, storageDelete, storagePut } from './bridge-storage-core.mjs';
 import { UUID_REGEX } from './bridge-social-core.mjs';
+import { COLUMNS as EMAIL_COLUMNS, emailExportTable } from './bridge-account-email-rows.mjs';
 import { EXPORT_MAX_BYTES, EXPORT_MAX_ROWS, buildArtifact, planTables } from './bridge-account-export-archive.mjs';
 
 export const EXPORT_BUCKET = 'account-exports';
@@ -75,12 +76,30 @@ async function readTable(db, plan, userId, budget) {
 	return { name: plan.table, columns: plan.columns, rows };
 }
 
-async function buildJobArtifact(db, job, now) {
+const EMAIL_PLAN = { table: 'osionos_user_emails', columns: EMAIL_COLUMNS.split(','), scope: ['user_id'], filter: null };
+
+/** The raw address rows; a database without the table (404 / PGRST205) has none to export. */
+async function readEmailRows(db, userId, budget) {
+	try {
+		return (await readTable(db, EMAIL_PLAN, userId, budget)).rows;
+	} catch (error) {
+		if (error?.upstreamStatus !== 404 && error?.upstreamCode !== 'PGRST205') throw error;
+		console.warn(`[osionos-bridge] account export: the addresses table is missing (status ${error.upstreamStatus ?? 'none'})`);
+		return [];
+	}
+}
+
+async function buildJobArtifact(db, job, env, now) {
 	if (!UUID_REGEX.test(String(job.user_id))) throw Object.assign(new Error('The job has no valid owner.'), { code: 'export_bad_owner' });
 	const registry = await db.get('osionos_account_data_map?export_columns=not.is.null&select=table_name,column_name,role,export_columns&limit=1000');
 	const budget = { rows: 0, bytes: 0 };
 	const tables = [];
-	for (const plan of planTables(registry)) tables.push(await readTable(db, plan, job.user_id, budget));
+	const plans = planTables(registry);
+	// The registry must never become a second door to the sealed table.
+	if (plans.some((plan) => plan.table === EMAIL_PLAN.table)) throw Object.assign(new Error('The registry may not export the addresses table.'), { code: 'export_forbidden_column' });
+	for (const plan of plans) tables.push(await readTable(db, plan, job.user_id, budget));
+	tables.push(emailExportTable(await readEmailRows(db, job.user_id, budget), env));
+	tables.sort((left, right) => left.name.localeCompare(right.name));
 	return buildArtifact(job.format, tables, new Date(now()).toISOString());
 }
 
@@ -88,7 +107,7 @@ async function runJob(db, job, { env, fetchImpl, now }) {
 	const startedAt = now();
 	let stored = false;
 	try {
-		const artifact = await buildJobArtifact(db, job, now);
+		const artifact = await buildJobArtifact(db, job, env, now);
 		await ensureBucket(job.user_id, EXPORT_BUCKET, fetchImpl, env);
 		await storagePut(job.user_id, EXPORT_KEY_FOR(job), artifact.contentType, artifact.bytes, fetchImpl, env, EXPORT_BUCKET);
 		stored = true;
