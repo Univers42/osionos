@@ -41,7 +41,7 @@ export const EmailManagerModal: React.FC<EmailManagerModalProps> = ({ userId, fa
   const records = store.data.length || !fallbackEmail ? store.data : [defaultEmail(userId, fallbackEmail)];
 
   // A refused sudo keeps the action to run again once the prompt grants; nothing re-sends by itself.
-  async function attempt<T>(act: () => Promise<AccountSecurityOutcome<T>>, onOk: (data: T) => void): Promise<boolean> {
+  async function attempt<T>(act: () => Promise<AccountSecurityOutcome<T>>, onOk: (data: T) => void, action: 'add' | 'primary' = 'add'): Promise<boolean> {
     setProblem('');
     setNotice('');
     const outcome = await runBusy(setBusy, act);
@@ -53,11 +53,13 @@ export const EmailManagerModal: React.FC<EmailManagerModalProps> = ({ userId, fa
     if (outcome.reason === 'sudo_required') {
       setNeedsSudo(true);
       setGrantsAtRefusal(grants);
-      retry.current = () => attempt(act, onOk);
+      retry.current = () => attempt(act, onOk, action);
       return false;
     }
     setNeedsSudo(false);
-    setProblem(emailProblem(outcome));
+    setProblem(emailProblem(outcome, action));
+    // The address changed although the sign-outs failed: the question is answered.
+    if (outcome.reason === 'failed' && outcome.code === 'email_changed_signout_failed') setPrimaryConfirmingId(null);
     return false;
   }
 
@@ -95,7 +97,7 @@ export const EmailManagerModal: React.FC<EmailManagerModalProps> = ({ userId, fa
         onKeepPrimary={() => setPrimaryConfirmingId(null)}
         onConfirmPrimary={(id) => {
           const address = records.find((record) => record._id === id)?.email ?? 'The address';
-          void attempt(() => store.makePrimary(id), (made) => { setPrimaryConfirmingId(null); setNotice(madePrimaryNotice(address, made.previous !== null)); });
+          void attempt(() => store.makePrimary(id), (made) => { setPrimaryConfirmingId(null); setNotice(madePrimaryNotice(address, made.previous !== null)); }, 'primary');
         }}
       />
     </Modal>

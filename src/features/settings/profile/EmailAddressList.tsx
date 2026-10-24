@@ -94,7 +94,7 @@ export const EmailAddressList: React.FC<EmailAddressListProps> = (props) => {
             <RowStatus record={record} />
             {!record.isPrimary && record.verifiedAt && props.confirmingId !== record._id && props.primaryConfirmingId !== record._id && (
               <>
-                <Button className="min-h-11" tone="ghost" disabled={props.busy} aria-label={`Make ${record.email} primary`} onClick={() => props.onMakePrimary(record._id)}>Make primary</Button>
+                <Button className="min-h-11" tone="ghost" disabled={props.busy} aria-label={`Make primary, ${record.email}`} onClick={() => props.onMakePrimary(record._id)}>Make primary</Button>
                 <Button className="min-h-11" tone="ghost" disabled={props.busy} onClick={() => props.onRemove(record._id, true)}>Remove</Button>
               </>
             )}

@@ -47,7 +47,7 @@ export const EmailManagerBody: React.FC<EmailManagerBodyProps> = (props) => {
       {/* The Modal's own sr-only <h2> names the dialog; this row is the visible copy of it. */}
       <div className="flex items-center justify-between gap-2">
         <span aria-hidden="true" className="osio-h4">Manage emails</span>
-        <IconButton label="Close" size="md" onClick={props.onClose}><X size={18} /></IconButton>
+        <IconButton label="Close" size="md" className="min-h-11 min-w-11" onClick={props.onClose}><X size={18} /></IconButton>
       </div>
       {loadError && (
         <div role="alert" className="flex items-center justify-between gap-2 text-sm text-[var(--osio-danger)]">

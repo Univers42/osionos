@@ -91,7 +91,12 @@ export const useAccountEmailsStore = create<AccountEmailsStore>()(
         remove: async (id) => refreshAfter(await removeEmail(id)),
         // Caveat: only this list is re-read. The persona's cached email (the user store) still
         // shows the old address until the next sign-in; the Emails list is the source of truth.
-        makePrimary: async (id) => refreshAfter(await makePrimaryEmail(id)),
+        makePrimary: async (id) => {
+          const outcome = await makePrimaryEmail(id);
+          // The address HAS changed even though the answer is a failure: show the list as it is now.
+          if (!outcome.ok && 'code' in outcome && outcome.code === 'email_changed_signout_failed' && hydratedFor) await get().hydrate(hydratedFor.userId, hydratedFor.email);
+          return refreshAfter(outcome);
+        },
       };
     },
     {
