@@ -47,10 +47,11 @@ const WORKSPACES = 'osionos_workspaces';
 const MEMBERS = 'osionos_workspace_members';
 const SESSIONS = 'osionos_sessions';
 const DIRECTORY = 'osionos_people_directory';
+const ACTIVITY = 'osionos_activity_events';
 
 // The self-source tables answer the WHOLE row, not the projection: a route that spreads
 // a row must leak here, so the test sees the leak instead of trusting the select.
-const WHOLE_ROW_TABLES = new Set([PAGES, TASKS, PUBLISHED, CONNECTIONS, WORKSPACES, MEMBERS, SESSIONS, DIRECTORY]);
+const WHOLE_ROW_TABLES = new Set([PAGES, TASKS, PUBLISHED, CONNECTIONS, WORKSPACES, MEMBERS, SESSIONS, DIRECTORY, ACTIVITY]);
 
 // The column that holds the owner of a row: the account role reads its own rows only,
 // and the two account-plane tables name their owner differently.
@@ -200,7 +201,7 @@ function stripNulls(value) {
 	return out;
 }
 
-export function createAccountStore({ profiles = [], settings = [], blocks = [], history = [], notifications = [], identities = [], deletions = [], audit = [], pages = [], tasks = [], published = [], connections = [], workspaces = [], members = [], sessions = [], directory = [], fail = null } = {}) {
+export function createAccountStore({ profiles = [], settings = [], blocks = [], history = [], notifications = [], identities = [], deletions = [], audit = [], pages = [], tasks = [], published = [], connections = [], workspaces = [], members = [], sessions = [], directory = [], activity = [], fail = null } = {}) {
 	const calls = [];
 	const tables = new Map([
 		[PROFILES, profiles.map((row) => ({ ...row }))],
@@ -219,6 +220,7 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 		[MEMBERS, members.map((row) => ({ ...row }))],
 		[SESSIONS, sessions.map((row) => ({ ...row }))],
 		[DIRECTORY, directory.map((row) => ({ ...row }))],
+		[ACTIVITY, activity.map((row) => ({ ...row }))],
 	]);
 	const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 

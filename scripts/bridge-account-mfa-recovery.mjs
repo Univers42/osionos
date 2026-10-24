@@ -37,7 +37,8 @@ import { randomInt, createHmac } from 'node:crypto';
 import { accountError, callerSession, clientMetaOf, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { sendJson } from './bridge-social-core.mjs';
-import { VERIFY_LIMIT, issueAal2, assertNotBlocked, clearFailures, countAttempt, CODES_TABLE, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
+import { stepUpTokens } from './bridge-session-stepup.mjs';
+import { VERIFY_LIMIT, assertNotBlocked, clearFailures, countAttempt, CODES_TABLE, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
 
 const ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz';
 const HALF = 4;
@@ -183,8 +184,8 @@ async function verify(ctx, request, response) {
 	const remaining = Math.max(0, before - 1);
 	await auditSpend(ctx, session, meta, remaining);
 	await clearFailures(ctx.kv, session.userId, meta);
-	const { token, expiresAt } = issueAal2(session, ctx.config, { nowMs: ctx.clock() });
-	return sendJson(response, 200, { ok: true, accessToken: token, expiresAt, aal: 2, remaining }, ctx.config);
+	const tokens = await stepUpTokens(ctx, request, session, ctx.clock());
+	return sendJson(response, 200, { ok: true, ...tokens, aal: 2, remaining }, ctx.config);
 }
 
 const ROUTES = new Map([

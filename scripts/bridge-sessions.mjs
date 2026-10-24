@@ -113,6 +113,8 @@ export function bridgeHealthState(config) {
 		session_revocations: revocations?.status() ?? 'off',
 		session_revocations_age_ms: revocations?.ageMs() ?? null,
 		kv: kvState(config),
+		// Counts only, and only when OSIONOS_ACTIVITY=1 set the stats function on the config.
+		...(config.activityStats ? { activity: config.activityStats() } : {}),
 	};
 }
 
@@ -340,7 +342,7 @@ async function stampRevoked({ config, pg }, params, reason) {
 }
 
 /** Revokes a family (or the one named row when it has no family). */
-async function revokeFamily({ config, pg }, { userId, familyId, rowId, reason }) {
+export async function revokeFamily({ config, pg }, { userId, familyId, rowId, reason }) {
 	const params = new URLSearchParams({ user_id: `eq.${userId}`, revoked_at: 'is.null', select: 'id,expires_at' });
 	if (familyId) params.set('family_id', `eq.${familyId}`);
 	else params.set('id', `eq.${rowId}`);
@@ -364,12 +366,12 @@ export async function revokeOtherFamilies({ config, pg }, { userId, keepFamilyId
 	return stampRevoked({ config, pg }, params, reason);
 }
 
-async function liveRowOf(pg, { sessionId, userId }) {
+/** The one read of a row the user owns, in any state; callers decide what a revoked row means. */
+export async function sessionRowOf(pg, { sessionId, userId }) {
 	const params = new URLSearchParams({
 		id: `eq.${sessionId}`,
 		user_id: `eq.${userId}`,
-		revoked_at: 'is.null',
-		select: 'id,family_id',
+		select: 'id,family_id,revoked_at',
 		limit: '1',
 	});
 	const rows = await pg.asService().get(`osionos_sessions?${params}`);
@@ -380,7 +382,8 @@ async function revokeSession({ config, pg, kv, session, meta, sessionId }, respo
 	await rateLimit(kv, ['session-revoke', session.userId], { limit: REVOKE_LIMIT, windowMs: REVOKE_WINDOW_MS });
 	await writeAudit(pg, { session, meta, eventType: 'session_revoke', details: { sessionId } });
 	// "Not yours" and "already revoked" are the same 404: the read carries the caller's id.
-	const row = await liveRowOf(pg, { sessionId, userId: session.userId });
+	const found = await sessionRowOf(pg, { sessionId, userId: session.userId });
+	const row = found?.revoked_at ? null : found;
 	const revoked = row ? await revokeFamily({ config, pg }, { userId: session.userId, familyId: row.family_id, rowId: row.id, reason: 'user' }) : 0;
 	if (revoked === 0) throw sessionError(404, 'session_not_found', 'Session not found.');
 	response.writeHead(204, {
