@@ -13,6 +13,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { currentAccountEpoch } from './accountEpoch';
 import { defaultEmail, primaryEmailId } from './defaults';
 import { errorMessage, pushSettingsError, trySettingsGet } from './settingsStoreUtils';
 import type { EmailRecord } from './types';
@@ -39,11 +40,14 @@ export const useAccountEmailsStore = create<AccountEmailsStore>()(
         if (!userId) return;
         // Drops another user's rows and the fake `email-*` rows older builds persisted.
         set({ data: get().data.filter((record) => record._id === primaryEmailId(userId)), loading: true, error: null });
+        const epoch = currentAccountEpoch();
         const sessionRow = email ? [defaultEmail(userId, email)] : [];
         try {
           const remote = await trySettingsGet<EmailRecord[]>('/api/account/emails');
+          if (epoch !== currentAccountEpoch()) return;
           set({ data: remote ?? sessionRow, loading: false, error: null });
         } catch (error) {
+          if (epoch !== currentAccountEpoch()) return;
           set({ data: sessionRow, loading: false, error: errorMessage(error) });
           pushSettingsError('Emails unavailable', error);
         }

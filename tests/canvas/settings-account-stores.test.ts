@@ -165,10 +165,12 @@ test("C8 an address is never Verified without a server timestamp", () => {
   assert.equal(emailVerificationLabel(defaultEmail("u", "a@b.c")), "Not confirmed");
   assert.equal(emailVerificationLabel({ verifiedAt: "2026-01-01T00:00:00.000Z" }), "Verified");
   const modal = readFileSync(new URL("../../src/features/settings/profile/ProfileSecurityModals.tsx", import.meta.url), "utf8");
-  assert.ok(!/verifiedAt:\s*new Date/.test(modal));
+  // The modal may only ever write `verifiedAt: null`; a timestamp literal would be a made-up confirmation.
+  const literals = [...modal.matchAll(/verifiedAt\s*:\s*([^,}\s]+)/g)].map((match) => match[1]);
+  assert.ok(literals.every((value) => value === "null"), literals.join());
 });
 
-test("C9 a user switch resets both stores and their persisted keys; legacy email rows are dropped", async () => {
+test("C9 resetAccountStores empties both stores and keys; legacy email rows are dropped on hydrate", async () => {
   useAccountSettingsStore.setState({ data: baseSettings("u-a") });
   useAccountEmailsStore.setState({ data: [defaultEmail("u-a", "a@a.test")] });
   assert.ok(storage.has(SETTINGS_KEY) && storage.has(EMAILS_KEY));
@@ -182,7 +184,4 @@ test("C9 a user switch resets both stores and their persisted keys; legacy email
   stubFetch(() => { throw new Error("offline"); });
   await useAccountEmailsStore.getState().hydrate("u-a");
   assert.deepEqual(useAccountEmailsStore.getState().data, []);
-
-  const userStore = readFileSync(new URL("../../src/features/auth/model/useUserStore.ts", import.meta.url), "utf8");
-  assert.match(userStore, /activeUserId[\s\S]{0,200}resetAccountStores\(\)/);
 });

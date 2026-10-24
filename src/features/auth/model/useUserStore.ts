@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import { create } from 'zustand';
-import { resetAccountStores } from '@/store/settings/accountStoresIsolation';
+import { resetOnUserChange } from '@/store/settings/accountStoresIsolation';
 import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { api } from '@/shared/api/client';
 import type { UserSession, UserStore, Workspace } from '@/entities/user';
@@ -816,12 +816,7 @@ export const useUserStore = create<RefreshingUserStore>((set, get) => ({
 
 useUserStore.subscribe(syncRefreshTimer);
 // Both account stores persist under one global key; a user switch must not show the previous user's data.
-let lastActiveUserId = useUserStore.getState().activeUserId;
-useUserStore.subscribe((state) => {
-  if (state.activeUserId === lastActiveUserId) return;
-  lastActiveUserId = state.activeUserId;
-  resetAccountStores();
-});
+resetOnUserChange(useUserStore);
 globalThis.addEventListener?.('storage', adoptStoredTokens);
 
 // Expose on globalThis so usePageStore can access JWT without circular imports
