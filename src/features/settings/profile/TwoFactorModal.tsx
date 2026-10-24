@@ -95,7 +95,7 @@ export const TwoFactorModal: React.FC<Props> = ({ userId, state, preferred, onPr
 
   return (
     <Modal open onClose={onClose} title="Two-step verification" size="sm">
-      <div className="space-y-4">
+      <div className="space-y-4 p-6">
         {state.phase === 'loading' && <p className="text-sm text-[var(--osio-fg-muted)]">Checking your two-step verification…</p>}
         {state.phase === 'unavailable' && <p className="text-sm text-[var(--osio-fg-muted)]">Two-step verification isn&apos;t available on this server yet.</p>}
         {step.name === 'codes' && (

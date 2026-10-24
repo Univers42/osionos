@@ -52,7 +52,7 @@ const PromptBody: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-6">
       {sentTo === null ? (
         <>
           <p className="text-sm text-[var(--osio-fg-muted)]">For your safety, we email you a six-digit code before this change.</p>
