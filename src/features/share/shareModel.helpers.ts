@@ -24,7 +24,12 @@ export function entryKey(target: ShareEntry['target']): string {
   return target.type;
 }
 
-/** Stored AccessRules → dialog entries (normal page mode). */
+/**
+ * Stored AccessRules → dialog entries (normal page mode).
+ * Caveat: a team deny is not mirrored client-side (shared/lib/auth/pageAccess.ts does not know
+ * the team target and fails open on it); the server decides, so a denied page may show until
+ * the next read.
+ */
 export function entriesFromRules(
   rules: Array<ShareAccessRule & { _id: string }>,
   people: SharePerson[],

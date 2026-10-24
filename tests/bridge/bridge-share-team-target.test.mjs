@@ -19,6 +19,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createShareRuleStore, normalizeShareRule } from '../../scripts/bridge-perms-rules.mjs';
+import { createPostgrestMock, harnessConfig, patch, send, sessionHeaders, withBridge } from './support/bridge-harness.mjs';
 
 const WS = '33333333-3333-4333-8333-333333333333';
 const OTHER_WS = '77777777-7777-4777-8777-777777777777';
@@ -130,5 +131,75 @@ describe('teamIdsFor is read per request and fails closed (C21, C22)', () => {
 		const broken = createShareRuleStore({ log: () => {}, fetchImpl: async () => new Response('', { status: 200 }) });
 		assert.equal(await broken.teamIdsFor(CONFIG, WS, CALLER), null);
 		assert.equal(await createShareRuleStore({ log: () => {} }).teamIdsFor({}, WS, CALLER), null);
+	});
+});
+
+// The real bridge over a seeded world: the team read feeds the evaluator on reads, writes and favorites.
+const HTTP_CONFIG = harnessConfig();
+const OWNER = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+const MEMBER = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
+const OUTSIDER = 'cccccccc-3333-4333-8333-cccccccccccc';
+const HOME = 'f0000000-1111-4111-8111-f00000000f00';
+const HWS = 'a1000000-1111-4111-8111-a10000000f01';
+const HTEAM = '88888888-8888-4888-8888-888888888888';
+const PAGES = ['c3000000-1111-4111-8111-c30000000f03', 'e5000000-1111-4111-8111-e50000000f05', 'f6000000-1111-4111-8111-f60000000f06'];
+const EDITOR = { role: 'editor', permissions: ['create', 'read', 'update', 'delete'] };
+
+const pageRow = (id) => ({
+	id, workspace_id: HWS, owner_id: OWNER, visibility: 'private', title: 'Plan', collaborators: [], properties: [],
+	content: [], parent_page_id: null, archived_at: null, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z',
+});
+const storedRule = (permission, target, resourceId = PAGES[0]) => ({
+	id: crypto.randomUUID(), workspace_id: HWS, resource_type: 'page', resource_id: resourceId, target, permission, explicit: true,
+});
+const onTeam = (permission, resourceId) => storedRule(permission, { type: 'team', teamId: HTEAM }, resourceId);
+
+async function askBridge(route, { as, rules, inTeam = [MEMBER], failMembers = false }) {
+	const mock = createPostgrestMock({
+		osionos_workspace_members: [HOME, HWS].flatMap((workspace_id) => [MEMBER, OUTSIDER, OWNER].map((user_id) => ({ workspace_id, user_id, ...EDITOR }))),
+		osionos_pages: PAGES.map(pageRow),
+		osionos_share_rules: rules,
+		osionos_team_members: inTeam.map((user_id) => ({ workspace_id: HWS, user_id, team_id: HTEAM })),
+		osionos_page_favorites: PAGES.map((page_id) => ({ user_id: as, page_id })),
+	}, { realWorkspaceRpc: true, failWhen: (call) => failMembers && call.table === 'osionos_team_members' ? { status: 500, body: {} } : null });
+	const headers = sessionHeaders(HTTP_CONFIG, as, HOME, [HWS]);
+	const answer = await withBridge(HTTP_CONFIG, mock.fetchImpl, (base) => route(base, headers));
+	return { ...answer, teamReads: mock.calls.filter((call) => call.table === 'osionos_team_members').length };
+}
+const readPage = (base, headers) => send(base, `/api/pages/${PAGES[0]}`, headers);
+const writePage = (base, headers) => send(base, `/api/pages/${PAGES[0]}`, headers, patch({ title: 'changed' }));
+
+describe('the bridge evaluates a team rule on page reads, writes and favorites', () => {
+	it('a team grant reads and writes for a member, and does nothing for a non-member', async () => {
+		const rules = [onTeam('can_edit')];
+		assert.equal((await askBridge(readPage, { as: MEMBER, rules })).status, 200);
+		assert.equal((await askBridge(writePage, { as: MEMBER, rules })).status, 200);
+		assert.equal((await askBridge(readPage, { as: OUTSIDER, rules })).status, 404);
+		assert.equal((await askBridge(writePage, { as: OUTSIDER, rules })).status, 404);
+	});
+
+	it('a no_access team rule blocks a member and leaves a non-member existing grant alone', async () => {
+		const rules = [onTeam('no_access'), storedRule('can_view', { type: 'user', userId: MEMBER }), storedRule('can_view', { type: 'user', userId: OUTSIDER })];
+		assert.equal((await askBridge(readPage, { as: MEMBER, rules })).status, 404);
+		assert.equal((await askBridge(readPage, { as: OUTSIDER, rules })).status, 200);
+	});
+
+	it('fails closed when the team read fails: a team deny blocks, a team grant gives nothing', async () => {
+		assert.equal((await askBridge(readPage, { as: MEMBER, rules: [onTeam('no_access')], failMembers: true })).status, 404);
+		assert.equal((await askBridge(readPage, { as: MEMBER, rules: [onTeam('can_view')], failMembers: true })).status, 404);
+	});
+
+	it('does not read teams when no rule names one', async () => {
+		const { teamReads } = await askBridge(readPage, { as: MEMBER, rules: [storedRule('can_view', { type: 'user', userId: MEMBER })] });
+		assert.equal(teamReads, 0);
+	});
+
+	it('favorites over 3 pages read the caller teams once and keep only the granted pages', async () => {
+		const rules = [onTeam('can_view', PAGES[0]), onTeam('can_view', PAGES[1]), onTeam('can_view', PAGES[2])];
+		const list = (base, headers) => send(base, '/api/favorites', headers);
+		const member = await askBridge(list, { as: MEMBER, rules });
+		assert.deepEqual([...member.body.pageIds].sort(), [...PAGES].sort());
+		assert.equal(member.teamReads, 1);
+		assert.deepEqual((await askBridge(list, { as: OUTSIDER, rules })).body.pageIds, []);
 	});
 });
