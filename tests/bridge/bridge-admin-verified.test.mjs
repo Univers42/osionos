@@ -26,6 +26,7 @@ import { kvStub } from './support/kv-stub.mjs';
 import { noFactorPg } from './support/no-factor-pg.mjs';
 
 import { PRIVATE_ID, SUBJECT, createSigninStub, hashOf, signIn, signinConfig } from './support/signin-world.mjs';
+import { readRefreshClaims } from '../../scripts/bridge-api.mjs';
 
 const secret = 'test-bridge-secret-that-is-long-enough';
 const now = 1_768_000_000_000;
@@ -162,3 +163,52 @@ async function bootWarnings(t, env) {
 		warn.mock.restore();
 	}
 }
+
+describe('the admin flag is bound to the identity, not to the address (F-3b2)', () => {
+	const OTHER = '9a9a9a9a-1111-4111-8111-9a9a9a9a9a9a';
+	const row = (subject, email, isAdmin) => ({ provider: 'prismatica', subject, email_hash: hashOf(email), is_admin: isAdmin, workspace_id: PRIVATE_ID });
+	const plain = signinConfig({ OSIONOS_ADMIN_EMAILS: '' });
+	const adminReads = (stub) => stub.log.filter((entry) => entry.kind === 'get-admin');
+
+	it('A1 never lets another subject\'s row decide the flag, and the read is keyed by identity', async () => {
+		const stub = createSigninStub({ identities: [row(OTHER, 'x@example.com', true)] });
+		const { claims } = await signIn(stub, { email: 'x@example.com', emailVerified: true, config: plain });
+		assert.equal(claims.isAdmin, false);
+		const reads = adminReads(stub);
+		assert.ok(reads.length > 0, 'the fake saw an admin read');
+		assert.ok(reads.every((entry) => entry.query.includes('provider=eq.') && entry.query.includes('subject=eq.') && !entry.query.includes('email_hash')));
+		const control = createSigninStub({ identities: [row(SUBJECT, 'x@example.com', true)] });
+		assert.equal((await signIn(control, { email: 'x@example.com', emailVerified: true, config: plain })).claims.isAdmin, true);
+	});
+
+	it('A2 keeps the caller\'s own admin row whatever its email_hash says', async () => {
+		const stub = createSigninStub({ identities: [row(SUBJECT, 'old@example.com', true)] });
+		const { claims } = await signIn(stub, { email: 'new@example.com', emailVerified: true, config: plain });
+		assert.equal(claims.isAdmin, true);
+		assert.ok(adminReads(stub).length > 0, 'the fake saw an admin read');
+	});
+
+	it('A3 scopes the promotion PATCH by provider and subject, never by hash', async () => {
+		const stub = createSigninStub({ identities: [row(SUBJECT, 'boss@example.com', false)] });
+		const { claims } = await signIn(stub, { email: 'boss@example.com', emailVerified: true });
+		assert.equal(claims.isAdmin, true);
+		const patches = stub.log.filter((entry) => entry.kind === 'patch-admin');
+		assert.equal(patches.length, 1);
+		assert.ok(patches[0].query.includes('provider=eq.') && patches[0].query.includes('subject=eq.') && !patches[0].query.includes('email_hash'));
+		assert.equal(stub.identityRows[0].is_admin, true);
+	});
+
+	it('A4 a refresh whose token carries a stale email still reads the admin row', async () => {
+		const stub = createSigninStub({ identities: [row(SUBJECT, 'old@example.com', true)] });
+		const claims = await readRefreshClaims({ sub: SUBJECT, provider: 'prismatica', email: 'stale@example.com', workspace_ids: [PRIVATE_ID] }, { config: plain, pg: noFactorPg(), fetchImpl: stub.fetchImpl });
+		assert.equal(claims.isAdmin, true);
+		assert.ok(adminReads(stub).length > 0, 'the fake saw an admin read');
+	});
+
+	it('answers the env-only value without any request when the subject is missing', async () => {
+		const stub = createSigninStub({});
+		const claims = await readRefreshClaims({ sub: undefined, provider: 'prismatica', email: 'boss@example.com', workspace_ids: [] }, { config: signinConfig(), pg: noFactorPg(), fetchImpl: stub.fetchImpl });
+		assert.equal(stub.log.filter((entry) => entry.name === 'osionos_bridge_identities').length, 0);
+		assert.equal(claims.isAdmin, false);
+	});
+});

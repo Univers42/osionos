@@ -19,6 +19,7 @@ import { region } from "../support/settingsHelpers.mjs";
 import { openProfile } from "../support/sessionsStub.mjs";
 import { GOOD_CODE } from "../support/emailsStub.mjs";
 import { stubTwoStep } from "../support/twoStepStub.mjs";
+import { BRIDGE_STUB_ORIGIN } from "../support/bridgeStub.mjs";
 
 const emailsDialog = (page) => page.getByRole("dialog", { name: "Manage emails" });
 
@@ -63,5 +64,37 @@ test.describe("Manage emails (bridge stub)", () => {
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog.getByText("other@example.com")).toHaveCount(0);
     await expect(dialog).toContainText("No other addresses");
+  });
+
+  test("make a verified secondary the primary", async ({ page, baseURL }) => {
+    const stamp = "2026-10-01T00:00:00Z";
+    const row = (_id, email, isPrimary) => ({ _id, userId: "u", email, isPrimary, verifiedAt: stamp, createdAt: stamp, updatedAt: stamp, removedAt: null });
+    let rows = [row("primary-u", "e2e@example.com", true), row("row-1", "second@example.com", false)];
+    const posts = [];
+    await stubTwoStep(page);
+    // Registered after the shared stub, so it answers first; everything else falls back to it.
+    await page.route((url) => url.origin === BRIDGE_STUB_ORIGIN && url.pathname.startsWith("/api/account/emails"), (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      const headers = { "access-control-allow-origin": request.headers().origin ?? "*", "access-control-allow-credentials": "true", "access-control-allow-headers": "*" };
+      if (request.method() === "GET" && url.pathname === "/api/account/emails") return route.fulfill({ headers, json: rows });
+      if (request.method() === "POST" && url.pathname === "/api/account/emails/row-1/primary") {
+        posts.push(url.pathname);
+        rows = [row("row-1", "second@example.com", true), row("row-2", "e2e@example.com", false)];
+        return route.fulfill({ headers, json: { previous: "row-2" } });
+      }
+      return route.fallback();
+    });
+    await openProfile(page, baseURL);
+    await region(page).getByRole("button", { name: "Manage emails", exact: true }).click();
+    const dialog = emailsDialog(page);
+    await dialog.getByRole("button", { name: "Make second@example.com primary" }).click();
+    await expect(dialog).toContainText("You'll sign in with second@example.com from now on. e2e@example.com stays on your account as a secondary address.");
+    await dialog.getByRole("group", { name: "Confirm new primary address" }).getByRole("button", { name: "Make primary" }).click();
+    await expect(dialog).toContainText("second@example.com is now your primary address. Other devices were signed out.");
+    const items = dialog.getByRole("listitem");
+    await expect(items.filter({ hasText: "second@example.com" })).toContainText("Primary");
+    await expect(items.filter({ hasText: "e2e@example.com" })).toContainText("Verified");
+    expect(posts).toHaveLength(1);
   });
 });

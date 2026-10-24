@@ -136,7 +136,7 @@ const STATES: Array<[string, Record<string, unknown>, RegExp[], RegExp[]]> = [
   ["empty", { records: [PRIMARY] }, [/No other addresses/, />Primary</], [/aria-busy/]],
   ["error", { records: [PRIMARY], loadError: "Settings request failed." }, [/role="alert"[^>]*>.*Settings request failed\./, />Retry</], []],
   ["pending row", { records: [PRIMARY, PENDING] }, [/>Not verified</, /Resend code/, /maxLength="6"/, /one-time-code/, /Wait a few minutes, then Resend/, /sign-in code/, />Cancel</], [/>Verified</, /Make primary/]],
-  ["verified row", { records: [PRIMARY, VERIFIED] }, [/>Verified</, />Remove</], [/Not verified/, /Make primary/]],
+  ["verified row", { records: [PRIMARY, VERIFIED] }, [/>Verified</, />Remove</, />Make primary</], [/Not verified/]],
 ];
 
 for (const [label, props, present, absent] of STATES) {
