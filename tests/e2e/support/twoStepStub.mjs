@@ -15,6 +15,7 @@
 // assert what the browser sent and in what order.
 
 import { stubBridge } from "./bridgeStub.mjs";
+import { emailRoutes } from "./emailsStub.mjs";
 
 export const OTPAUTH = "otpauth://totp/osionos:e2e@example.com?secret=JBSWY3DPEHPK3PXP&issuer=osionos";
 export const RECOVERY_CODES = ["aaaa-1111", "bbbb-2222", "cccc-3333", "dddd-4444"];
@@ -26,7 +27,7 @@ const route = (url, method) => `${method} ${url.pathname}`;
 
 /** `enabled` is the server's answer to the status route; `passkeys` its rows. */
 export async function stubTwoStep(page, { enabled = false, recoveryRemaining = 0, passkeys = [], preferred = "totp", sessionRecordDown = false, emailsDown = false } = {}) {
-  const state = { enabled, recoveryRemaining, passkeys: [...passkeys], preferred, calls: [], bodies: {}, patches: [] };
+  const state = { enabled, recoveryRemaining, passkeys: [...passkeys], preferred, calls: [], bodies: {}, patches: [], emails: [] };
   await stubBridge(page, (url, request) => {
     const key = route(url, request.method());
     if (url.pathname.startsWith("/api/account/")) state.calls.push(key);
@@ -43,7 +44,8 @@ export async function stubTwoStep(page, { enabled = false, recoveryRemaining = 0
       state.preferred = method;
       return { json: settings() };
     }
-    if (key === "GET /api/account/emails") return emailsDown ? { status: 503, json: { ok: false, code: "settings_read_failed", message: "Could not read the address." } } : { json: [{ _id: "primary-u", userId: "u", email: "e2e@example.com", isPrimary: true, verifiedAt: "2026-10-01T00:00:00Z", createdAt: "2026-10-01T00:00:00Z", updatedAt: "2026-10-01T00:00:00Z", removedAt: null }] };
+    const emailAnswer = emailRoutes(state, url, request.method(), body, { down: emailsDown });
+    if (emailAnswer) return emailAnswer;
     if (key === "GET /api/account/2fa/status") return { json: { enabled: state.enabled, methods: ["totp"], recoveryRemaining: state.recoveryRemaining, aal: 2 } };
     if (key === "POST /api/account/2fa/enroll") return { json: { otpauthUrl: OTPAUTH } };
     if ((key === "POST /api/account/2fa/verify" || key === "POST /api/account/2fa/disable") && sessionRecordDown) return { status: 503, json: { ok: false, code: "session_record_unavailable", message: SIGNED_OUT } };
