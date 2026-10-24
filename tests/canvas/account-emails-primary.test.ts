@@ -24,7 +24,7 @@ import { memory } from "./support/emails-env.ts";
 
 const { useAccountEmailsStore } = await import("../../src/store/settings/useAccountEmailsStore.ts");
 const { EmailManagerBody } = await import("../../src/features/settings/profile/EmailManagerBody.tsx");
-const { makePrimaryQuestion, madePrimaryNotice } = await import("../../src/features/settings/profile/emailCopy.ts");
+const { makePrimaryQuestion, madePrimaryNotice, emailProblem } = await import("../../src/features/settings/profile/emailCopy.ts");
 
 const stamp = "2026-10-01T00:00:00Z";
 const record = (id: string, email: string, isPrimary: boolean, verifiedAt: string | null) =>
@@ -87,11 +87,33 @@ test("M3 the control exists on a verified secondary only, and the confirm names 
     ...extra,
   }));
   const html = view({});
-  assert.equal(html.match(/aria-label="Make [^"]+ primary"/g)?.length, 1, html);
-  assert.match(html, /aria-label="Make verified@example\.com primary"/);
-  assert.doesNotMatch(html, /Make (me|pending)@example\.com primary/);
+  assert.equal(html.match(/aria-label="Make primary[^"]*"/g)?.length, 1, html);
+  assert.match(html, /aria-label="Make primary[^"]*verified@example\.com"/);
+  assert.doesNotMatch(html, /Make primary, (me|pending)@example\.com/);
+  assert.match(html, /aria-label="Close"[^>]*min-h-11[^>]*min-w-11|min-h-11[^>]*min-w-11[^>]*aria-label="Close"/);
   const confirming = view({ primaryConfirmingId: "row-2" });
   assert.ok(confirming.includes(makePrimaryQuestion("verified@example.com", "me@example.com").replace(/'/g, "&#x27;")), confirming);
   assert.match(madePrimaryNotice("a@b.co", false), /old address was not kept/);
   assert.doesNotMatch(madePrimaryNotice("a@b.co", true), /not kept/);
+});
+
+test("M4 a signout failure after the swap re-reads the list and says the address HAS changed", async () => {
+  reset();
+  const seen = await recording((call) => (call.method === "GET" ? { body: [{ ...VERIFIED, isPrimary: true }] } : { status: 503, body: { code: "email_changed_signout_failed" } }), async () => {
+    await useAccountEmailsStore.getState().hydrate("u1", "me@example.com");
+    const outcome = await useAccountEmailsStore.getState().makePrimary("row-2");
+    assert.equal(outcome.ok, false);
+    assert.match(emailProblem(outcome as never, "primary"), /HAS changed/);
+    assert.equal(useAccountEmailsStore.getState().data[0].isPrimary, true);
+  });
+  assert.deepEqual(seen.map((call) => call.method), ["GET", "POST", "GET"]);
+});
+
+test("M5 the new codes and the make-primary email_taken have their own copy", () => {
+  const failed = (code: string) => ({ ok: false, reason: "failed", code, message: "x" }) as never;
+  assert.match(emailProblem(failed("primary_busy"), "primary"), /Another change/);
+  assert.match(emailProblem(failed("email_unverified"), "primary"), /Verify this address first/);
+  assert.match(emailProblem(failed("email_changed_signout_failed"), "primary"), /HAS changed/);
+  assert.match(emailProblem(failed("email_taken"), "primary"), /made primary on this account/);
+  assert.doesNotMatch(emailProblem(failed("email_taken")), /made primary on this account/);
 });
