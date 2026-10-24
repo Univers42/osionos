@@ -11,8 +11,9 @@
 /* ************************************************************************** */
 
 import React from 'react';
+import { X } from 'lucide-react';
 
-import { Button } from '@/shared/ui';
+import { Button, IconButton } from '@/shared/ui';
 import { EmailAddForm } from './EmailAddForm';
 import { EmailAddressList, type EmailAddressListProps } from './EmailAddressList';
 import { SUDO_FIRST } from './emailCopy';
@@ -29,6 +30,7 @@ export interface EmailManagerBodyProps extends EmailAddressListProps {
   onTryAgain: () => void;
   onReload: () => void;
   onAdd: (email: string) => Promise<boolean>;
+  onClose: () => void;
 }
 
 const Skeleton: React.FC = () => (
@@ -41,7 +43,12 @@ export const EmailManagerBody: React.FC<EmailManagerBodyProps> = (props) => {
   const { records, loading, loadError, problem, notice, needsSudo, canRetry, busy } = props;
   const showSkeleton = loading && records.length === 0;
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-4 sm:p-6">
+      {/* The Modal's own sr-only <h2> names the dialog; this row is the visible copy of it. */}
+      <div className="flex items-center justify-between gap-2">
+        <span aria-hidden="true" className="osio-h4">Manage emails</span>
+        <IconButton label="Close" size="md" onClick={props.onClose}><X size={18} /></IconButton>
+      </div>
       {loadError && (
         <div role="alert" className="flex items-center justify-between gap-2 text-sm text-[var(--osio-danger)]">
           <span>{loadError}</span>
@@ -60,7 +67,7 @@ export const EmailManagerBody: React.FC<EmailManagerBodyProps> = (props) => {
         </div>
       )}
       <p className="text-xs text-[var(--osio-fg-muted)]">
-        Extra addresses are kept on your account. You can&apos;t sign in with them yet. An address such as name+tag@ counts as a different address.
+        Extra addresses are kept on your account. Make a verified address primary to sign in with it. An address such as name+tag@ counts as a different address.
       </p>
     </div>
   );

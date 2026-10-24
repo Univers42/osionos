@@ -124,7 +124,7 @@ test("C5 a sudo refusal is typed, and the manager offers Try again only after a 
   const base = { records: [PRIMARY], loading: false, loadError: null, busy: false, confirmingId: null, problem: "", notice: "", needsSudo: true } as const;
   const noop = () => undefined;
   const view = (canRetry: boolean) => renderToStaticMarkup(React.createElement(EmailManagerBody, {
-    ...base, canRetry, onTryAgain: noop, onReload: noop, onAdd: async () => true, onVerify: noop, onResend: noop, onRemove: noop, onConfirmRemove: noop, onKeep: noop,
+    ...base, canRetry, onTryAgain: noop, onReload: noop, onAdd: async () => true, onClose: noop, onVerify: noop, onResend: noop, onRemove: noop, onConfirmRemove: noop, onKeep: noop,
   }));
   assert.match(view(false), /Confirm it&#x27;s you first, then press Try again\./);
   assert.match(view(false), /disabled=""[^>]*>Try again</);
@@ -144,12 +144,14 @@ for (const [label, props, present, absent] of STATES) {
     const noop = () => undefined;
     const html = renderToStaticMarkup(React.createElement(EmailManagerBody, {
       loading: false, loadError: null, busy: false, confirmingId: null, problem: "", notice: "", needsSudo: false, canRetry: false,
-      onTryAgain: noop, onReload: noop, onAdd: async () => true, onVerify: noop, onResend: noop, onRemove: noop, onConfirmRemove: noop, onKeep: noop,
+      onTryAgain: noop, onReload: noop, onAdd: async () => true, onClose: noop, onVerify: noop, onResend: noop, onRemove: noop, onConfirmRemove: noop, onKeep: noop,
       records: [], ...props,
     } as never));
     for (const pattern of present) assert.match(html, pattern);
     for (const pattern of absent) assert.doesNotMatch(html, pattern);
-    assert.match(html, /Extra addresses are kept on your account\. You can&#x27;t sign in with them yet\./);
+    assert.match(html, /Extra addresses are kept on your account\. Make a verified address primary to sign in with it\./);
+    assert.match(html, /aria-label="Close"/);
+    assert.match(html, /class="space-y-4 p-4 sm:p-6"/);
   });
 }
 

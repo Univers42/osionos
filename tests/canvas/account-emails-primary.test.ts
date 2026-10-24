@@ -82,7 +82,7 @@ test("M3 the control exists on a verified secondary only, and the confirm names 
   const noop = () => undefined;
   const view = (extra: Record<string, unknown>) => renderToStaticMarkup(React.createElement(EmailManagerBody, {
     records: [PRIMARY, PENDING, VERIFIED], loading: false, loadError: null, busy: false, confirmingId: null, primaryConfirmingId: null,
-    problem: "", notice: "", needsSudo: false, canRetry: false, onTryAgain: noop, onReload: noop, onAdd: async () => true,
+    problem: "", notice: "", needsSudo: false, canRetry: false, onTryAgain: noop, onReload: noop, onAdd: async () => true, onClose: noop,
     onVerify: noop, onResend: noop, onRemove: noop, onConfirmRemove: noop, onKeep: noop, onMakePrimary: noop, onConfirmPrimary: noop, onKeepPrimary: noop,
     ...extra,
   }));
