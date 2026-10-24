@@ -26,10 +26,10 @@
  */
 
 import { accountError, callerSession, respondWithError } from './bridge-account-sudo.mjs';
+import { readGotrueUser } from './bridge-gotrue-user.mjs';
 import { sendJson } from './bridge-social-core.mjs';
 
 const PATH = /^\/api\/account\/identities(?:\/[^/]*)?$/;
-const TIMEOUT_MS = 8_000;
 const UNAVAILABLE = 'Sign-in methods are unavailable right now; try again shortly.';
 
 const text = (value) => (typeof value === 'string' && value !== '' ? value : null);
@@ -45,16 +45,10 @@ export function projectIdentity(identity) {
 	};
 }
 
-async function readIdentities({ config, fetchImpl }, userId) {
-	if (!config.baasUrl || !config.serviceKey) throw accountError(503, 'account_plane_unavailable', UNAVAILABLE);
+async function readIdentities(deps, userId) {
 	let payload;
 	try {
-		const upstream = await fetchImpl(`${config.baasUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
-			headers: { Accept: 'application/json', apikey: config.serviceKey, Authorization: `Bearer ${config.serviceKey}` },
-			signal: AbortSignal.timeout(TIMEOUT_MS),
-		});
-		if (!upstream.ok) throw new Error(`gotrue ${upstream.status}`);
-		payload = await upstream.json();
+		payload = await readGotrueUser(deps, userId);
 	} catch {
 		throw accountError(503, 'account_plane_unavailable', UNAVAILABLE);
 	}
