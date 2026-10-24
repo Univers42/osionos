@@ -10,13 +10,16 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useUserStore } from "@/features/auth";
+import { useUserPreferencesStore } from "@/store/settings";
 
 import { ideFetch } from "../api/ideTransport";
 
 import { parseGitStatus, type GitFileStatus } from "./gitBranch";
+import { fetchSshKeys, syncIdeKeys } from "./ideKeys";
+import { parseSignedLog, vigilantOf, VIGILANT_LOG_ARGV, type SignedCommit } from "./ideVigilant";
 
 export { parseGitStatus, type GitFileStatus } from "./gitBranch";
 
@@ -54,6 +57,17 @@ export function useIdeGit() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState<boolean | null>(null);
+  const [commits, setCommits] = useState<SignedCommit[]>([]);
+  const [keyCount, setKeyCount] = useState(0);
+  const vigilant = useUserPreferencesStore((s) => vigilantOf(s.data));
+  const hasPreferences = useUserPreferencesStore((s) => s.data !== null);
+  const activeUserId = useUserStore((s) => s.activeUserId);
+  const syncedFor = useRef("");
+
+  // The flag lives in the preferences section; a fresh browser has none cached yet.
+  useEffect(() => {
+    if (!hasPreferences && activeUserId) void useUserPreferencesStore.getState().hydrate(activeUserId);
+  }, [hasPreferences, activeUserId]);
 
   const call = useCallback(
     async (argv: string[], pat?: string): Promise<{ ok: boolean; output: string } | null> => {
@@ -65,12 +79,30 @@ export function useIdeGit() {
     [workspaceId],
   );
 
+  // Sync once per workspace, then read the log. A failed key fetch or sync leaves the badge off
+  // (no keys known) rather than claiming a check that did not happen.
+  const refreshSignatures = useCallback(async () => {
+    try {
+      if (syncedFor.current !== workspaceId) {
+        const keys = await fetchSshKeys();
+        if (keys.length === 0 || !(await syncIdeKeys(workspaceId, keys))) return;
+        setKeyCount(keys.length);
+        syncedFor.current = workspaceId;
+      }
+      const log = await call([...VIGILANT_LOG_ARGV]);
+      if (log?.ok) setCommits(parseSignedLog(log.output));
+    } catch {
+      setKeyCount(0);
+    }
+  }, [call, workspaceId]);
+
   const refresh = useCallback(async () => {
     setBusy(true); setError(null);
     const result = await call(["git", "status", "--porcelain", "-b"]);
     if (result) setFiles(parseGitStatus(result.output));
+    if (result && vigilant) await refreshSignatures();
     setBusy(false);
-  }, [call]);
+  }, [call, vigilant, refreshSignatures]);
 
   const commit = useCallback(async (message: string) => {
     setBusy(true); setError(null);
@@ -87,5 +119,5 @@ export function useIdeGit() {
     setBusy(false);
   }, [call]);
 
-  return { files, busy, error, connected, refresh, commit, push };
+  return { files, busy, error, connected, refresh, commit, push, vigilant, keyCount, commits };
 }

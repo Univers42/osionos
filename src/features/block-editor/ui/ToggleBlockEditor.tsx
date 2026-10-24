@@ -29,6 +29,8 @@ interface ToggleBlockEditorProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
   onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
+  /** Open the AI panel on the selection (the selection toolbar). */
+  onAskAI?: (selectionText: string) => void;
 }
 
 /* ── Component ──────────────────────────────────────────────────────── */
@@ -51,6 +53,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   onKeyDown,
   focusBlock,
   onRequestSlashMenu,
+  onAskAI,
 }) => {
   const [expanded, setExpanded] = useState(!block.collapsed);
   const updateBlock = usePageStore((s) => s.updateBlock);
@@ -155,6 +158,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
             onChange={onChange}
             onKeyDown={handleSummaryKeyDown}
             onRequestSlashMenu={onRequestSlashMenu}
+            onAskAI={onAskAI}
           />
         </div>
       </div>

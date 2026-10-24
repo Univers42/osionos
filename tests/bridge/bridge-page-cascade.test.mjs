@@ -63,7 +63,8 @@ function callerWorld(member, pages) {
 function cascadeIds(mock, method) {
 	return mock.calls
 		.filter((call) => call.method === method && call.table === 'osionos_pages' && String(call.params.get('id')).startsWith('in.('))
-		.flatMap((call) => call.params.get('id').slice(4, -1).split(','));
+		// The bridge quotes the ids of its `in` lists (inFilter), so the quotes come off here.
+		.flatMap((call) => call.params.get('id').slice(4, -1).split(',').map((id) => id.replace(/^"(.*)"$/, '$1')));
 }
 
 async function run(world, pageId, init, headers = asCaller) {

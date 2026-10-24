@@ -40,6 +40,12 @@ import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getLiveDatabaseAdapter, isLiveDatabaseId } from '../model/liveDatabaseAdapter';
+import { toRecordPageId } from '../model/recordPageId';
+import {
+  projectRecordProperties,
+  recordPropertyEdits,
+  type RecordValueResolver,
+} from '../model/recordPageProperties';
 import { useHealedLiveDatabaseId } from '../model/useHealedLiveDatabaseId';
 // Side effect: registers the account-wide data-source catalog with NDS (the
 // Source picker). Lives here (not only the barrel) because lazyViews imports
@@ -60,8 +66,11 @@ import { getRecentsDatabaseAdapter } from '../model/recentsDatabaseState';
 import { getTemplatesDatabaseAdapter } from '../model/templatesDatabaseState';
 import { withRecordLimit } from '../model/recordLimitAdapter';
 import { useDatabaseHostAdapters } from '../model/databaseHostAdapters';
+import { rememberDatabaseWorkspace } from '../model/objectDatabaseWorkspaces';
 import { WorkspaceDatabaseBlock, WorkspaceRecordPeek } from './WorkspaceDatabaseBlock';
 import { RecordSubItemsPanel } from './RecordSubItemsPanel';
+import { SysDatabaseBlock } from './SysDatabaseBlock';
+import { isSysDatabaseId } from '../model/sysDataSources';
 import './databaseBlockEmbed.css';
 
 // Async boundary: the full osionos page (and its editor tree) loads only when
@@ -188,6 +197,31 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     );
   }
 
+  // `sys:` = the caller's own data, read-only. Before the Home and known/fallback
+  // branches, so an unknown or unreachable source never shows the demo seed.
+  if (isSysDatabaseId(resolvedDatabaseId)) {
+    return (
+      <SysDatabaseBlock
+        databaseId={resolvedDatabaseId}
+        initialViewId={resolvedInitialView}
+        mode={mode}
+        recordLimit={recordLimit}
+        renderDatabase={({ adapter, initialView, renderPage: peek, key }) => (
+          <HostedObjectDatabase
+            key={key}
+            adapter={adapter}
+            databaseId={resolvedDatabaseId}
+            initialView={initialView}
+            mode={resolvedMode}
+            renderPage={peek}
+            className={mode === 'full' ? 'h-full' : undefined}
+            chrome={mode === 'full' ? 'full' : 'inline'}
+          />
+        )}
+      />
+    );
+  }
+
   // Home live carousels (Recently visited / Templates): their records are real
   // osionos pages, so the card-open seam reuses WorkspaceRecordPeek (open the
   // existing page) exactly like the workspace databases.
@@ -303,21 +337,37 @@ const OPEN_IN_LAYOUT = {
 } as const;
 
 const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, onClose, openIn }) => {
+  // Engine row ids are UUIDs; a UUID-shaped projection id is published to /api/pages and 404s.
+  const recordPageId = toRecordPageId(pageId);
   const databasePage = state.pages[pageId];
   const database = databasePage ? state.databases[databasePage.databaseId] : null;
   const title = databasePage ? String(state.getPageTitle(databasePage) || 'Untitled') : 'Page unavailable';
   const activePage = usePageStore(s => s.activePage);
-  const osionosPage = usePageStore(s => s.pageById(pageId));
+  const osionosPage = usePageStore(s => s.pageById(recordPageId));
   const activeUserId = useUserStore(s => s.activeUserId);
   const activeWorkspace = useUserStore(s => s.activeWorkspace());
   const workspaceId = activePage?.workspaceId ?? activeWorkspace?._id;
 
   React.useEffect(() => {
     if (!databasePage || !workspaceId) return;
+    // Opening a record names the database's workspace for the next push (C138).
+    rememberDatabaseWorkspace(databasePage.databaseId, workspaceId);
+    const resolver: RecordValueResolver = {
+      formula: (property) => state.resolveFormula(
+        databasePage.databaseId,
+        databasePage,
+        property.formulaConfig?.expression ?? '',
+      ),
+      rollup: (property) => state.resolveRollup(
+        databasePage.databaseId,
+        databasePage,
+        property.id,
+      ),
+    };
     const nextEntry: PageEntry = {
-      _id: pageId,
+      _id: recordPageId,
       title,
-      icon: databasePage.icon ?? database?.icon ?? '📄',
+      icon: databasePage.icon,
       cover: databasePage.cover,
       updatedAt: databasePage.updatedAt,
       workspaceId,
@@ -327,7 +377,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
       parentPageId: activePage?.id ?? '__database_rows__',
       databaseId: databasePage.databaseId,
       archivedAt: null,
-      properties: database ? toOsionosPageProperties(database, databasePage) : [],
+      properties: database ? projectRecordProperties(database, databasePage, resolver) : [],
       content: toOsionosBlocks(databasePage.content),
     };
 
@@ -335,7 +385,30 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
       upsertOsionosDatabasePage(current.pages, workspaceId, nextEntry),
       current.pageIdsByWorkspace,
     ));
-  }, [activePage?.id, activeUserId, database, databasePage, pageId, title, workspaceId]);
+  }, [activePage?.id, activeUserId, database, databasePage, recordPageId, state, title, workspaceId]);
+
+  // The engine row can change while this page is open (a board drag): the
+  // projection effect's setState lands a render later, so reading the row from
+  // deps would compare NEW raw values with OLD osionos ones and revert the drag.
+  // Fire only when the osionos properties themselves change; read the row from refs.
+  const engineRef = React.useRef({ database, databasePage });
+  // Keep the ref current AFTER commit: lint forbids writing it during render,
+  // and that ordering still guarantees the write-back below sees this render's row.
+  React.useEffect(() => {
+    engineRef.current = { database, databasePage };
+  });
+  const osionosPropertiesKey = JSON.stringify(osionosPage?.properties ?? null);
+  const updatePageProperty = state.updatePageProperty;
+
+  React.useEffect(() => {
+    const { database: engineDatabase, databasePage: enginePage } = engineRef.current;
+    if (!engineDatabase || !enginePage) return;
+    const entries = JSON.parse(osionosPropertiesKey) as PagePropertyEntry[] | null;
+    if (!entries) return;
+    for (const edit of recordPropertyEdits(engineDatabase, enginePage, entries)) {
+      updatePageProperty(pageId, edit.propertyId, edit.value);
+    }
+  }, [osionosPropertiesKey, pageId, updatePageProperty]);
 
   React.useEffect(() => {
     if (!databasePage || !database || !osionosPage) return;
@@ -420,7 +493,7 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
               </div>
             )}
           >
-            <OsionosPage pageId={pageId} chrome="bar" />
+            <OsionosPage pageId={recordPageId} chrome="bar" />
           </React.Suspense>
         ) : (
           <div className="mx-auto max-w-3xl px-10 py-10 text-sm text-[var(--osio-fg-muted)]">
@@ -435,8 +508,6 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
 };
 
 type DatabasePageContent = DatabaseObjectPageProps['state']['pages'][string]['content'];
-type DatabaseSchema = DatabaseObjectPageProps['state']['databases'][string];
-type DatabasePage = DatabaseObjectPageProps['state']['pages'][string];
 
 function toOsionosBlocks(blocks: DatabasePageContent | undefined): Block[] {
   return (blocks ?? []).map((block) => ({
@@ -489,65 +560,4 @@ function resolveCoverForEngine(cover: string): string {
   if (cover.startsWith('linear-gradient') || cover.startsWith('radial-gradient')) return cover;
   const resolved = resolveCollectionMediaAsset(cover);
   return normalizeMediaSource(resolved?.url ?? cover) ?? cover;
-}
-
-function toOsionosPageProperties(database: DatabaseSchema, page: DatabasePage): PagePropertyEntry[] {
-  return Object.values(database.properties).map((property) => ({
-    key: property.id,
-    label: property.name,
-    type: toOsionosPropertyType(property.type),
-    value: toOsionosPropertyValue(page.properties[property.id], property.type),
-    options: property.options?.map((option) => option.value),
-    relationTarget: property.type === 'relation' ? 'page' : undefined,
-  }));
-}
-
-function toOsionosPropertyType(type: DatabaseSchema['properties'][string]['type']): PagePropertyEntry['type'] {
-  if (type === 'number') return 'number';
-  if (type === 'checkbox') return 'checkbox';
-  if (type === 'date' || type === 'created_time' || type === 'last_edited_time' || type === 'due_date') return 'date';
-  if (type === 'select' || type === 'status') return 'select';
-  if (type === 'url') return 'url';
-  if (type === 'relation') return 'relation';
-  return 'text';
-}
-
-function toOsionosPropertyValue(value: unknown, type: DatabaseSchema['properties'][string]['type']): PagePropertyEntry['value'] {
-  if (type === 'relation') return toStringArray(value);
-  // A place value is `{address, lat?, lng?}` — show the address name, not the raw
-  // object (otherwise the opened record's property reads `{"address":"Reims"}`).
-  if (type === 'place') {
-    if (value && typeof value === 'object' && 'address' in value) {
-      const addr = (value as { address?: unknown }).address;
-      return typeof addr === 'string' ? addr : '';
-    }
-    return typeof value === 'string' ? value : '';
-  }
-  if (type === 'checkbox') return Boolean(value);
-  if (type === 'number') return toNumber(value);
-  if (Array.isArray(value)) return value.map(toSafeString).filter(Boolean).join(', ');
-  if (value == null) return null;
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return JSON.stringify(value);
-}
-
-function toNumber(value: unknown): number {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
-
-function toStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(toSafeString).filter(Boolean);
-  const item = toSafeString(value);
-  return item ? [item] : [];
-}
-
-function toSafeString(value: unknown): string {
-  if (value == null) return '';
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return JSON.stringify(value);
 }

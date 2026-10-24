@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { Buffer } from "node:buffer";
 import process from "node:process";
 import { expect } from "@playwright/test";
 
@@ -515,11 +516,33 @@ export async function createCodeBlock(page) {
   await getCodeTextarea(page).waitFor();
 }
 
-/** Deterministic, offline-safe fixture URL for embedding a media asset via the
- *  "Link" tab (no network fetch, no upload — see embedMediaViaLink). */
+/** Fixture URL for embedding a media asset via the "Link" tab; stubMediaFixtures
+ *  answers it, so no upload and no real network fetch (see embedMediaViaLink). */
 function mediaFixtureUrl(kind, index = 0) {
   const ext = { image: "png", video: "mp4", audio: "mp3", file: "pdf" }[kind] ?? "bin";
   return `https://example.com/fixtures/${kind}-${index}.${ext}`;
+}
+
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  "base64",
+);
+const stubbedPages = new WeakSet();
+
+/** The browser does fetch an embedded image: without this, CI (which has a network)
+ *  fetched example.com while the local run (no DNS) failed fast, and the image
+ *  picker tests failed only in CI shard 1 (PRs #131 and #132, 2026-10-23). */
+async function stubMediaFixtures(page) {
+  if (stubbedPages.has(page)) return;
+  stubbedPages.add(page);
+  await page.route("https://example.com/fixtures/**", (route) => {
+    const isImage = route.request().url().endsWith(".png");
+    return route.fulfill({
+      status: 200,
+      contentType: isImage ? "image/png" : "application/octet-stream",
+      body: isImage ? ONE_PIXEL_PNG : Buffer.alloc(0),
+    });
+  });
 }
 
 /** Embed a media asset through the current MediaEmbedDialog contract
@@ -528,6 +551,7 @@ function mediaFixtureUrl(kind, index = 0) {
  *  so the Link tab (deterministic, offline) is the only tab that never depends on
  *  network fetches or a real file. */
 export async function embedMediaViaLink(page, kind, url = mediaFixtureUrl(kind)) {
+  await stubMediaFixtures(page);
   await mediaBlockPicker(page).waitFor();
   await page.getByRole("tab", { name: "Link" }).click();
   await page.getByPlaceholder(`Paste the ${kind} link…`).fill(url);

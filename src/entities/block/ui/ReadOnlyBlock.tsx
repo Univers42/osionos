@@ -29,6 +29,7 @@ import { timed } from '@osionos/perf-probe';
 import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 import { usePageStore } from "@/store/usePageStore";
+import { runButtonBlock } from "@/services/button-program/runProgram";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 
 // Async boundary: database blocks are rare in rendered pages. Loading the
@@ -47,9 +48,20 @@ const LegacyDrawNotice = lazy(() =>
   import("@/features/whiteboard/ui/LegacyDrawNotice").then((m) => ({ default: m.LegacyDrawNotice })),
 );
 
+// Embeds/bookmarks pull in the iframe and card UI — kept off the warm chunk.
+const ReadOnlyLinkBlock = lazy(() =>
+  import("./ReadOnlyLinkBlock").then((m) => ({ default: m.ReadOnlyLinkBlock })),
+);
+
 // The Home "view launcher" (home_views block) — lazy, same discipline.
 const HomeViewsBlock = lazy(() =>
   import("@/widgets/database-view/ui/HomeViewsBlock").then((m) => ({ default: m.HomeViewsBlock })),
+);
+
+// The diagram block: the stored SPEC drawn live. On a public page it draws
+// nothing (devil C110) — the component itself knows the route.
+const DiagramBlock = lazy(() =>
+  import("@/features/diagram/ui/DiagramBlock").then((m) => ({ default: m.DiagramBlock })),
 );
 
 const databaseLoadingFallback = (
@@ -63,6 +75,7 @@ interface BlockProps {
   index: number;
   bulletDepth?: number;
   numberedDepth?: number;
+  properties?: readonly import("@/entities/page/model/types").PagePropertyEntry[] | Record<string, unknown>;
 }
 
 const INLINE_MARKDOWN_CACHE_LIMIT = 2000;
@@ -167,11 +180,12 @@ function areReadOnlyBlockPropsEqual(previous: BlockProps, next: BlockProps): boo
     previous.block === next.block &&
     previous.index === next.index &&
     (previous.bulletDepth ?? 0) === (next.bulletDepth ?? 0) &&
-    (previous.numberedDepth ?? 0) === (next.numberedDepth ?? 0)
+    (previous.numberedDepth ?? 0) === (next.numberedDepth ?? 0) &&
+    previous.properties === next.properties
   );
 }
 
-const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0 }) => {
+const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0, properties }) => {
   // Per-block text/background colour set via the block colour menu; mirrors the
   // editable BlockEditor (getBlockSurfaceStyle), so read-only matches editing.
   const surface = getBlockSurfaceStyle(block);
@@ -489,11 +503,30 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         </div>
       );
 
+    case "diagram":
+      return (
+        <div className="my-3">
+          <Suspense fallback={null}>
+            <DiagramBlock block={block} />
+          </Suspense>
+        </div>
+      );
+
+    case "embed":
+    case "bookmark":
+      return (
+        <div className="my-3">
+          <Suspense fallback={databaseLoadingFallback}>
+            <ReadOnlyLinkBlock block={block} />
+          </Suspense>
+        </div>
+      );
+
     case "toggle":
       return <ToggleBlockReadOnly block={block} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />;
 
     case "layout":
-      return <LayoutBlockReadOnly block={block} />;
+      return <LayoutBlockReadOnly block={block} properties={properties} />;
 
     default:
       return (
@@ -571,14 +604,27 @@ function buttonPageRef(href: string | undefined): string | null {
  * Read-only CTA/link button. Presentational + safe — never renders raw user HTML.
  * `page://<id>` opens the workspace page; a `/...` path is an anchor; anything
  * else (or empty) renders a plain styled button with no navigation.
+ * A block carrying a `buttonProgram` runs it on click and ignores the href: the
+ * program is the button's behaviour (an invalid one toasts and does nothing).
+ * `hostPageId` is given by the editor; read-only callers do not know their page.
  */
-const ButtonBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
+export const ButtonBlockReadOnly: React.FC<{ block: Block; hostPageId?: string }> = ({ block, hostPageId }) => {
   const label = block.buttonLabel || block.content || "Button";
   const href = block.buttonHref;
   const className = `${BUTTON_BASE_CLASS} ${buttonVariantClass(block.buttonVariant)}`;
   const pageId = buttonPageRef(href);
   const openPage = usePageStore((s) => s.openPage);
   const page = usePageStore((s) => (pageId ? s.pageById(pageId) : undefined));
+
+  if (block.buttonProgram !== undefined) {
+    return (
+      <div className="py-1">
+        <button type="button" className={className} onClick={() => void runButtonBlock(block, hostPageId)}>
+          {label}
+        </button>
+      </div>
+    );
+  }
 
   if (pageId) {
     return (

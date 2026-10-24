@@ -14,57 +14,39 @@ import type {
   AccountSettings,
   BillingState,
   ConnectionRecord,
-  DeviceRecord,
   EmailRecord,
   NotificationSettings,
   UserPreferences,
+  VoiceSettings,
   WorkspaceMember,
   WorkspaceSettings,
 } from './types';
 import { nowIso } from './settingsStoreUtils';
 
-export function defaultAccountSettings(userId: string, name?: string): AccountSettings {
-  const timestamp = nowIso();
-  return {
-    userId,
-    profile: { preferredName: name },
-    security: { hasPassword: true, twoStepEnabled: false, passkeysEnabled: false },
-    supportAccessGrantedUntil: null,
-    pendingDeletionAt: null,
-    removedAt: null,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
+/** What the client knows when the server has not answered: the user and no claim about them. */
+export function unknownAccountSettings(userId: string): AccountSettings {
+  return { userId, security: {} };
 }
 
-export function defaultDevice(userId: string): DeviceRecord {
-  const timestamp = nowIso();
-  return {
-    _id: 'current-device',
-    userId,
-    deviceFingerprint: 'current-device',
-    userAgent: typeof navigator === 'undefined' ? 'This device' : navigator.userAgent,
-    location: 'This device',
-    lastActiveAt: timestamp,
-    revokedAt: null,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
-}
+export const primaryEmailId = (userId: string): string => `primary-${userId}`;
 
+/** The session's own address; `verifiedAt` stays null because only the server can confirm it. */
 export function defaultEmail(userId: string, email: string): EmailRecord {
   const timestamp = nowIso();
   return {
-    _id: `primary-${userId}`,
+    _id: primaryEmailId(userId),
     userId,
     email,
     isPrimary: true,
-    verifiedAt: timestamp,
+    verifiedAt: null,
     createdAt: timestamp,
     updatedAt: timestamp,
     removedAt: null,
   };
 }
+
+/** "Verified" only when the server stated a confirmation time. */
+export const emailVerificationLabel = (record: Pick<EmailRecord, 'verifiedAt'>): string => (record.verifiedAt ? 'Verified' : 'Not confirmed');
 
 export function defaultPreferences(userId: string): UserPreferences {
   const timestamp = nowIso();
@@ -74,7 +56,8 @@ export function defaultPreferences(userId: string): UserPreferences {
     language: 'en-US',
     weekStart: 'monday',
     dateFormat: 'relative',
-    timezone: 'Europe/Madrid',
+    // Caveat: the device zone, not the user's chosen one; wrong on a shared or travelling device.
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     autoTimezone: false,
     numberFormat: 'default',
     enterAddsNewline: false,
@@ -84,6 +67,18 @@ export function defaultPreferences(userId: string): UserPreferences {
     createdAt: timestamp,
     updatedAt: timestamp,
     removedAt: null,
+  };
+}
+
+/** The voice settings, as they are before the user touches them. */
+export function defaultVoiceSettings(): VoiceSettings {
+  return {
+    dictationLanguage: 'auto',
+    readAloudVoiceURI: '',
+    readAloudRate: 1,
+    // The online voices are OFF: the text read aloud stays on the device.
+    allowOnlineVoices: false,
+    updatedAt: nowIso(),
   };
 }
 
@@ -102,13 +97,9 @@ export function defaultNotifications(userId: string): NotificationSettings {
   };
 }
 
-export function defaultConnections(userId: string, email?: string): ConnectionRecord[] {
-  const timestamp = nowIso();
-  const address = email ?? 'account@example.com';
-  return [
-    { _id: `conn-mail-${userId}`, userId, provider: 'mail', label: `osionos Mail · ${address}`, scopes: ['mail.read'], status: 'connected', connectedAt: timestamp, lastSyncAt: null, error: null, createdAt: timestamp, updatedAt: timestamp, removedAt: null },
-    { _id: `conn-calendar-${userId}`, userId, provider: 'calendar', label: `osionos Calendar · ${address}`, scopes: ['calendar.read'], status: 'connected', connectedAt: timestamp, lastSyncAt: null, error: null, createdAt: timestamp, updatedAt: timestamp, removedAt: null },
-  ];
+export function defaultConnections(_userId: string, _email?: string): ConnectionRecord[] {
+  // User with no bridge sees nothing connected.
+  return [];
 }
 
 export function defaultWorkspaceSettings(workspaceId: string, name?: string): WorkspaceSettings {
@@ -145,7 +136,7 @@ export function defaultBillingState(workspaceId: string): BillingState {
   const timestamp = nowIso();
   return {
     workspaceId,
-    plan: 'Education Plus',
+    plan: 'Free',
     paymentMethod: null,
     billedTo: null,
     billingEmail: null,

@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef } from "react";
 import { ExternalLink, Maximize2 } from "lucide-react";
 
 import { WHITEBOARD_BLOCK_DEFAULT_HEIGHT, WHITEBOARD_MIN_HEIGHT, type Block } from "@/entities/block";
+import { useHasBeenNearViewport } from "@/shared/lib/dom/useHasBeenNearViewport";
+import { useHeightResizeGrip } from "@/shared/lib/dom/useHeightResizeGrip";
 import { embeddableUrl } from "@/widgets/embed-app/model/embeddableUrl";
 import { EmbedFrame } from "@/widgets/embed-app/ui/EmbedFrame";
 import { whiteboardBoardTab } from "@/widgets/workspace-grid/model/layoutPersist";
@@ -10,6 +12,7 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { isBoardSlug, normalizeBoardTitle } from "../model/boardRefs";
 import { startBoardCreation, usePendingBoards } from "../model/pendingBoards";
 import { boardUrl } from "../model/whiteboardClient";
+import { JsonCanvasImport } from "./JsonCanvasImport";
 
 interface Props {
   block: Block;
@@ -21,25 +24,8 @@ const HEADER_BUTTON =
 const ACTION_BUTTON =
   "rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2.5 py-1 text-xs text-[var(--osio-fg-default)] transition-colors hover:bg-[var(--osio-bg-hover)]";
 
-/** True once the element has come within 200px of the viewport. The iframe is mounted only
- *  then: its stall timer starts at mount, and a frame the browser has deliberately not
- *  loaded yet (offscreen, `loading="lazy"`) would otherwise be reported as not responding. */
-function useHasBeenNearViewport(ref: React.RefObject<HTMLElement | null>): boolean {
-  const [isNear, setIsNear] = useState(() => typeof IntersectionObserver === "undefined");
-  useEffect(() => {
-    const element = ref.current;
-    if (isNear || !element) return undefined;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) setIsNear(true);
-      },
-      { rootMargin: "200px" },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [isNear, ref]);
-  return isNear;
-}
+// grip -> block root -> the height-owning wrapper in BlockEditor
+const resolveHeightOwner = (grip: HTMLElement): HTMLElement | null => grip.parentElement?.parentElement ?? null;
 
 /** The inline whiteboard: header, the board in a sandboxed iframe, and a bottom-edge
  *  resize grip. The sized element is the PARENT div (BlockEditor owns the height style), so
@@ -49,9 +35,6 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const isNear = useHasBeenNearViewport(rootRef);
   const pending = usePendingBoards((state) => state.byBlockId[block.id]);
-  const [isDragging, setIsDragging] = useState(false);
-  const resizeRef = useRef<{ startY: number; startHeight: number; latest: number | null } | null>(null);
-
   const title = normalizeBoardTitle(block.content ?? "");
   const slug = block.boardSlug;
   const hasSlug = slug !== undefined && slug !== "";
@@ -63,31 +46,22 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
     void startBoardCreation(block.id, title, (boardSlug) => onUpdateBlock({ boardSlug }));
   }, [block.id, title, onUpdateBlock]);
 
-  const onResizeStart = useCallback(
-    (event: React.PointerEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      resizeRef.current = { startY: event.clientY, startHeight: height, latest: null };
-      event.currentTarget.setPointerCapture(event.pointerId);
-      setIsDragging(true);
+  /** An imported canvas is a board of its own: the block binds to it and takes its
+   *  title. Offered only while the block has no board, so an import never replaces a
+   *  drawing someone already made. */
+  const onImported = useCallback(
+    (board: { slug: string; title: string }) => {
+      onUpdateBlock({ boardSlug: board.slug, content: board.title });
     },
-    [height],
+    [onUpdateBlock],
   );
-  const onResizeMove = useCallback((event: React.PointerEvent) => {
-    const drag = resizeRef.current;
-    if (!drag) return;
-    const next = Math.max(WHITEBOARD_MIN_HEIGHT, Math.round(drag.startHeight + (event.clientY - drag.startY)));
-    drag.latest = next;
-    // grip -> block root -> the height-owning wrapper in BlockEditor
-    const wrapper = event.currentTarget.parentElement?.parentElement;
-    if (wrapper) wrapper.style.height = `${next}px`;
-  }, []);
-  const onResizeEnd = useCallback(() => {
-    const drag = resizeRef.current;
-    resizeRef.current = null;
-    setIsDragging(false);
-    if (drag && drag.latest !== null) onUpdateBlock({ whiteboardHeight: drag.latest });
-  }, [onUpdateBlock]);
+
+  const { isDragging, gripProps } = useHeightResizeGrip({
+    height,
+    min: WHITEBOARD_MIN_HEIGHT,
+    resolveTarget: resolveHeightOwner,
+    onCommit: (whiteboardHeight) => onUpdateBlock({ whiteboardHeight }),
+  });
 
   let body: React.ReactNode;
   if (hasSlug && !isValidSlug) {
@@ -110,10 +84,13 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
   } else {
     body = (
       <Message>
-        This whiteboard has no board yet.
-        <button type="button" className={ACTION_BUTTON} onClick={createBoard}>
-          Create board
-        </button>
+        <span>This whiteboard has no board yet.</span>
+        <span className="flex flex-wrap items-center justify-center gap-2">
+          <button type="button" className={ACTION_BUTTON} onClick={createBoard}>
+            Create board
+          </button>
+          <JsonCanvasImport onImported={onImported} />
+        </span>
       </Message>
     );
   }
@@ -145,10 +122,7 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
       <div
         role="separator"
         aria-label="Resize whiteboard"
-        onPointerDown={onResizeStart}
-        onPointerMove={onResizeMove}
-        onPointerUp={onResizeEnd}
-        onPointerCancel={onResizeEnd}
+        {...gripProps}
         className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize opacity-0 transition-opacity group-hover/whiteboard:opacity-100"
       >
         <div className="mx-auto h-1 w-10 rounded-full bg-[var(--osio-border-strong)]" />

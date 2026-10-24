@@ -1,0 +1,45 @@
+/* ************************************************************************** */
+
+/** The Home page's cached `updatedAt`: the seed stamps it with `new Date()`, so a
+ *  re-seed moves it and a no-op reload leaves it alone. Content alone cannot tell
+ *  (the merge is idempotent), so this is how "not re-seeded" is measured. */
+export async function cachedHomeUpdatedAt(page) {
+  return page.evaluate(() => {
+    for (const [key, value] of Object.entries(localStorage)) {
+      if (!key.startsWith("osio:pages:")) continue;
+      let pages;
+      try {
+        pages = JSON.parse(value);
+      } catch {
+        continue;
+      }
+      if (!Array.isArray(pages)) continue;
+      const home = pages.find((entry) => typeof entry?._id === "string" && entry._id.startsWith("home-dashboard:"));
+      if (home) return home.updatedAt ?? null;
+    }
+    return null;
+  });
+}
+
+/** Lands the page cache's debounced, idle-scheduled write now, through the same
+ *  `pagehide` flush a reload runs. Under CPU load that write lagged the two reads
+ *  below by seconds (CI-136), so the reload's own flush wrote the typed note's
+ *  stamp and the reload was blamed for it. */
+const flushPendingCacheWrites = (page) => page.evaluate(() => globalThis.dispatchEvent(new Event("pagehide")));
+
+/** The stamp once the user's own edits have stopped moving it. An edit touches
+ *  `updatedAt` too, so reading it right after typing would blame the reload for
+ *  the edit's own write. Caveat: "settled" is two equal reads 1.2s apart after a
+ *  flush, so a draft commit that lands later than that would still be blamed. */
+export async function settledHomeUpdatedAt(page) {
+  await flushPendingCacheWrites(page);
+  let previous = await cachedHomeUpdatedAt(page);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await page.waitForTimeout(1200);
+    await flushPendingCacheWrites(page);
+    const current = await cachedHomeUpdatedAt(page);
+    if (current === previous) return current;
+    previous = current;
+  }
+  throw new Error("the Home page's updatedAt never settled");
+}

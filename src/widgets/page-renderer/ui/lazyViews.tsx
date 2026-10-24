@@ -81,6 +81,13 @@ export const LazyAdminSpaceView = lazy(() =>
   import("@/widgets/admin-space").then((m) => ({ default: m.AdminSpaceView })),
 );
 
+// The settings body is reached only for kind==='settings' tabs: the modal (and
+// its ~600 KiB of heavy deps) is gone — the view plus one panel per section now
+// split across their own chunks.
+export const LazySettingsView = lazy(() =>
+  import("@/features/settings/ui/SettingsView").then((m) => ({ default: m.SettingsView })),
+);
+
 export const LazyChatShell = lazy(() =>
   import("@/widgets/chat-shell").then((m) => ({ default: m.ChatShell })),
 );

@@ -35,12 +35,14 @@ export function messagePerson(peerId: string, workspaceId?: string): Promise<unk
 
 /** Create a new group — a group chat channel or a community. */
 export function createGroup(workspaceId: string, name: string, kind: "chat" | "community"): Promise<unknown> {
+  // A moderation warning on a community rejects like any error here: this
+  // action has no room for a notice, so the author answers it in the modal.
   if (kind === "community") return createCommunity({ name });
   return createChannel({ workspaceId, name, kind: "group" });
 }
 
 /** Invite a guest by email (reuses the workspace-invites store). */
-export function inviteGuest(workspaceId: string, email: string, role: Exclude<WorkspaceMemberRole, "owner">, invitedBy: string): Promise<unknown> {
+export function inviteGuest(workspaceId: string, email: string, role: Exclude<WorkspaceMemberRole, "owner">, invitedBy: string): Promise<{ _id: string } | null> {
   return useWorkspaceInvitesStore.getState().invite(workspaceId, { email, role, invitedBy });
 }
 
@@ -60,6 +62,12 @@ export function removeMember(workspaceId: string, userId: string): Promise<void>
 }
 
 /** Transfer ownership to another member (the destructive owner cutover). */
-export function transferOwnership(workspaceId: string, userId: string): Promise<void> {
-  return useWorkspaceMembersStore.getState().transferOwnership(workspaceId, userId);
+export async function transferOwnership(workspaceId: string, userId: string): Promise<void> {
+  const store = useWorkspaceMembersStore.getState();
+  await store.transferOwnership(workspaceId, userId);
+  // The store reverts and records `error` instead of rejecting, so a refusal (sudo, not the
+  // owner) would otherwise look like success to the caller.
+  const after = useWorkspaceMembersStore.getState();
+  const transferred = after.data[workspaceId]?.some((member) => member.userId === userId && member.role === "owner");
+  if (!transferred) throw Object.assign(new Error(after.error[workspaceId] ?? "Could not transfer ownership"), { code: after.errorCode[workspaceId] ?? undefined });
 }

@@ -22,6 +22,7 @@ import { useNotifyLive } from "@/store/chat/useNotifyLive";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { QuickCaptureModal } from "@/features/quick-capture/ui/QuickCaptureModal";
 import { WorkspaceIntentModal } from "@/features/workspace-onboarding/ui/WorkspaceIntentModal";
+import { ProfessionPickerModal } from "@/features/professions/ui/ProfessionPickerModal";
 import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { useZenMode } from "@/shared/config/useZenMode";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
@@ -36,13 +37,14 @@ import { LazyCanvasDebugRoute, LazyStyleGuideRoute, LazyWorkbench } from "./lazy
 import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
-import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
+import { openSettings } from "@/features/settings/model/settingsNav";
+import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
-import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
 import { ExportHost } from "@/features/page-export/ui/ExportHost";
+import { AiInlinePanel } from "@/features/ai/ui/AiInlinePanel";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
 
@@ -154,12 +156,11 @@ const App: React.FC = () => {
   const initialized = useUserStore((s) => s.initialized);
   const error = useUserStore((s) => s.error);
   const activeUserId = useUserStore((s) => s.activeUserId);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
-  const openSettings = (tab?: SettingsTab) => {
-    setSettingsTab(tab ?? "general");
-    setSettingsOpen(true);
-  };
+  // The way back from OpenRouter: the app comes back with ?code&state, and the
+  // panel that finishes the sign-in opens right away.
+  useEffect(() => {
+    if (readOAuthReturn(globalThis.location?.href ?? "")) openSettings("ai_connections");
+  }, []);
   // Captured once at first render, before init effects can reset activePage,
   // so a refresh can reopen the page the user was last on.
   const [persistedActivePage] = useState(() => loadActivePage());
@@ -345,13 +346,16 @@ const App: React.FC = () => {
       </div>
 
       <WorkspaceThemePanel />
-      {settingsOpen && <LazySettingsCenter initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />}
       <ToastViewport />
       <ShareHost />
       <ExportHost />
+      <AiInlinePanel />
       <ContactDock />
       <QuickCaptureModal />
       <WorkspaceIntentModal />
+      {/* The profession picker: the Modal primitive returns null until the store's
+          `open` flag is set, so the warm path renders nothing. */}
+      <ProfessionPickerModal />
     </div>
   );
 };

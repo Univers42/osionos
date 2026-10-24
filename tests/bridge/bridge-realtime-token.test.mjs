@@ -249,9 +249,9 @@ describe('POST /api/realtime/token through the real bridge', () => {
 		process.env.JWT_SECRET = SECRET; // the bridge signs the realtime token with it
 		try {
 			const mock = createPostgrestMock({
-				osionos_workspace_members: [{ user_id: IDS.userB, workspace_id: IDS.team, role: 'member' }],
+				osionos_workspace_members: [{ user_id: IDS.userB, workspace_id: IDS.team, role: 'editor', permissions: ['read', 'update'] }],
 				osionos_workspace_databases: [{ workspace_id: IDS.team, db_id: MOUNTED_DB }],
-			});
+			}, { realWorkspaceRpc: true });
 			await withBridge(config, mock.fetchImpl, async (base) => {
 				const member = sessionHeaders(config, IDS.userB, IDS.homeB, [IDS.team]);
 				const granted = await send(base, '/api/realtime/token', member, post({ kind: 'table', dbId: MOUNTED_DB, table: 'transactions' }));
@@ -270,6 +270,33 @@ describe('POST /api/realtime/token through the real bridge', () => {
 			else process.env.JWT_SECRET = previous;
 		}
 	});
+
+	for (const [label, member, expected] of [
+		['a membership without read permission', { role: 'viewer', permissions: [] }, 403],
+		['a read-only membership', { role: 'viewer', permissions: ['read'] }, 200],
+	]) {
+		it(`uses database read permission for ${label}`, async () => {
+			const previous = process.env.JWT_SECRET;
+			process.env.JWT_SECRET = SECRET;
+			try {
+				const mock = createPostgrestMock({
+					osionos_workspace_members: [{ user_id: IDS.userB, workspace_id: IDS.team, ...member }],
+					osionos_workspace_databases: [{ workspace_id: IDS.team, db_id: MOUNTED_DB }],
+				}, { realWorkspaceRpc: true });
+				await withBridge(config, mock.fetchImpl, async (base) => {
+					const headers = sessionHeaders(config, IDS.userB, IDS.homeB, [IDS.team]);
+					const result = await send(base, '/api/realtime/token', headers, post({ kind: 'table', dbId: MOUNTED_DB, table: 'transactions' }));
+					assert.equal(result.status, expected, result.text);
+					if (expected === 403) assert.equal(result.body.token, undefined);
+					else assert.deepEqual(decodeVerified(result.body.token).namespaces, [`table:${MOUNTED_DB}:transactions`]);
+				});
+			} finally {
+				if (previous === undefined) delete process.env.JWT_SECRET;
+				else process.env.JWT_SECRET = previous;
+			}
+		});
+	}
+
 });
 
 describe('mintRealtimeToken canPublish', () => {

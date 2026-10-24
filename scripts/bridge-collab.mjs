@@ -40,6 +40,10 @@ import { readRawBody } from './bridge-chat-media.mjs';
 import { ensureChatBucket, extFromMime, storageObjectKey, storagePut } from './bridge-storage-core.mjs';
 import { REALTIME_TOKEN_ISSUER, signRealtimeJwt } from './bridge-realtime-socket.mjs';
 
+// Caveat: this token lives 1 h. The client does not re-mint it before expiry
+// (fetchSharedSpaceToken in src/features/collab/api/grobaseTransport.factory.ts is
+// called once at join, with no refresh path), so lowering it to 900 s would drop
+// live Shared-space sockets every 15 min. Left at 3600 s accordingly (C129).
 const REALTIME_TOKEN_TTL_SECONDS = 3600;
 
 /**

@@ -10,49 +10,31 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+export type PreferredMfaMethod = 'totp' | 'recovery';
+
 export interface AccountSettings {
   userId: string;
-  profile: {
-    preferredName?: string;
-    avatar?: string;
-    locale?: string;
-  };
   security: {
     hasPassword?: boolean;
-    twoStepEnabled?: boolean;
     passkeysEnabled?: boolean;
+    /** Only orders the options the two-step modal offers; the server never trusts it. */
+    preferredMfaMethod?: PreferredMfaMethod;
     passwordUpdatedAt?: string;
   };
   supportAccessGrantedUntil?: string | null;
-  pendingDeletionAt?: string | null;
   removedAt?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface DeviceRecord {
-  _id: string;
-  userId: string;
-  deviceFingerprint: string;
-  userAgent?: string;
-  ipHash?: string;
-  location?: string;
-  lastActiveAt: string;
-  revokedAt?: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PasskeyRecord {
   _id: string;
   userId: string;
-  credentialId: string;
-  publicKey: string;
-  counter: number;
   transports: string[];
   nickname?: string;
   createdAt: string;
   updatedAt: string;
+  lastUsedAt?: string | null;
   removedAt?: string | null;
 }
 
@@ -135,6 +117,8 @@ export interface WorkspaceMember {
   _id: string;
   workspaceId: string;
   userId: string;
+  /** The bridge's display name; absent on local and legacy rows. */
+  name?: string;
   role: WorkspaceMemberRole;
   invitedBy?: string;
   joinedAt: string;
@@ -220,6 +204,24 @@ export interface AiSettings {
   updatedAt: string;
 }
 
+/**
+ * The voice settings of a user: the dictation and the read-aloud.
+ *
+ * `allowOnlineVoices` is OFF by default: a voice that is not local sends the
+ * text that is read aloud to the browser's vendor.
+ */
+export interface VoiceSettings {
+  /** The language of the dictation: `auto` or a language code. */
+  dictationLanguage: string;
+  /** The voice of the read-aloud: the URI of a voice of the browser. */
+  readAloudVoiceURI: string;
+  /** The rate of the read-aloud. */
+  readAloudRate: number;
+  /** The voices that are not local: OFF until the user says otherwise. */
+  allowOnlineVoices: boolean;
+  updatedAt: string;
+}
+
 export type McpAllowedTool = 'status' | 'search' | 'read' | 'create' | 'update' | 'archive';
 
 // How members are allowed to connect external AI apps through osionos MCP.
@@ -265,4 +267,38 @@ export interface TeamspaceRecord {
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
+}
+
+export type WorkspaceTeamRole = 'member' | 'lead';
+
+/** A named group of workspace members, as `GET /api/workspaces/:id/teams` answers it. */
+export interface WorkspaceTeam {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string;
+  memberCount: number;
+  /** The caller's own role in the team, `null` when they are not in it. */
+  myRole: WorkspaceTeamRole | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface WorkspaceTeamMember {
+  userId: string;
+  name: string;
+  role: WorkspaceTeamRole;
+  addedAt: string | null;
+}
+
+/** One signed-in device as `GET /api/account/sessions` answers it: one row per sign-in family. */
+export interface SessionRow {
+  id: string;
+  createdAt: string;
+  expiresAt: string;
+  lastSeenAt: string | null;
+  authMethod: string;
+  ipPrefix: string | null;
+  userAgent: string | null;
+  current: boolean;
 }

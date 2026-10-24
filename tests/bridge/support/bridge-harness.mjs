@@ -16,15 +16,12 @@
 // Ponytail: eq/in/gt compare case-insensitively (right for uuid columns, wrong for text
 // columns differing only by case); `order` is honoured only as `id.asc`, every other value
 // is ignored (insertion order); wfts is a substring match over title+content, not stemming.
-// Unknown operators throw, so a new query shape fails the test instead of silently
-// matching every row.
 // Ponytail: every GET whose `select` contains an embed goes to the strict embed stub
 // (embed-postgrest.mjs), which honours `updated_at.desc` and throws on any other order.
-// Every mock world gets a synthesized `osionos_workspaces {id}` row, so a "workspace row
-// missing" case cannot be written through this harness.
 
 import { randomUUID } from 'node:crypto';
 import { isEmbedRead, readEmbed } from './embed-postgrest.mjs';
+import { EDGE_RPCS } from './bridge-harness-rpcs.mjs';
 import { configFromEnv, createBridgeServer, createUserSession, validateBridgePayload } from '../../../scripts/bridge-api.mjs';
 
 const BAAS_URL = 'http://baas.local';
@@ -55,15 +52,44 @@ function sameText(value, text) {
 	return value != null && String(value).toLowerCase() === String(text).toLowerCase();
 }
 
+/**
+ * The value of a column for a filter. moderation_state has DEFAULT 'visible':
+ * a row that does not carry it (written before the migration) is visible.
+ */
+function columnValue(row, key) {
+	if (key === 'moderation_state' && row[key] === undefined) return 'visible';
+	return row[key];
+}
+
 function matchesFilter(row, key, expr) {
 	if (key === 'search_doc' && expr.startsWith('wfts(english).')) {
 		const needle = expr.slice('wfts(english).'.length).replaceAll('"', '').toLowerCase();
 		return `${row.title ?? ''} ${JSON.stringify(row.content ?? [])}`.toLowerCase().includes(needle);
 	}
 	if (expr === 'is.null') return row[key] == null;
-	if (expr.startsWith('eq.')) return sameText(row[key], expr.slice(3));
+	if (expr === 'not.is.null') return row[key] != null;
+	// ilike: case-insensitive; PostgREST writes the wildcard as * (SQL %), a literal otherwise.
+	if (expr.startsWith('ilike.')) {
+		const pattern = expr.slice(6).replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '.*').replaceAll('%', '.*');
+		return new RegExp(`^${pattern}$`, 'i').test(String(row[key] ?? ''));
+	}
+	if (expr.startsWith('eq.')) return sameText(columnValue(row, key), expr.slice(3));
+	if (expr.startsWith('neq.')) return !sameText(columnValue(row, key), expr.slice(4));
 	if (expr.startsWith('gt.')) return String(row[key] ?? '').toLowerCase() > expr.slice(3).toLowerCase();
-	if (expr.startsWith('in.(') && expr.endsWith(')')) return expr.slice(4, -1).split(',').some((item) => sameText(row[key], item));
+	if (expr.startsWith('in.(') && expr.endsWith(')')) {
+		// The bridge quotes the ids of its `in` lists (inFilter), so the quotes come off here.
+		return expr.slice(4, -1).split(',').map((item) => item.replace(/^"(.*)"$/, '$1')).some((item) => sameText(row[key], item));
+	}
+	// A PostgREST `or=(a.eq.b,c.eq.d)` group: the row matches when ANY clause does.
+	if (key === 'or' && expr.startsWith('(') && expr.endsWith(')')) {
+		return expr.slice(1, -1).split(',').some((clause) => {
+			const [column, ...rest] = clause.split('.');
+			return matchesFilter(row, column, rest.join('.'));
+		});
+	}
+	if (expr.startsWith('not.in.(') && expr.endsWith(')')) {
+		return !expr.slice(8, -1).split(',').map((item) => item.replace(/^"(.*)"$/, '$1')).some((item) => sameText(row[key], item));
+	}
 	throw new Error(`postgrest mock: unsupported filter ${key}=${expr}`);
 }
 
@@ -74,6 +100,13 @@ function matchingRows(rows, params) {
 function project(row, select) {
 	if (!select || select === '*') return { ...row };
 	return Object.fromEntries(select.split(',').filter((key) => Object.hasOwn(row, key)).map((key) => [key, row[key]]));
+}
+
+/** JSON with every object's keys sorted: two contents that differ only in key order are the same content. */
+function canonical(value) {
+	if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+	if (value && typeof value === 'object') return `{${Object.keys(value).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+	return JSON.stringify(value ?? null);
 }
 
 function readRows(rows, params) {
@@ -88,8 +121,12 @@ function readRows(rows, params) {
 	return params.has('limit') ? ordered.slice(0, Number(params.get('limit'))) : ordered;
 }
 
-function upsertRows(rows, body, params, prefer) {
-	const conflictKeys = (params.get('on_conflict') ?? 'id').split(',');
+// The unique key a plain insert collides on when it names no on_conflict (real PostgREST
+// answers 409 / 23505 from the table's unique index).
+const UNIQUE_KEYS = { osionos_object_databases: 'owner_id,db_key' };
+
+function upsertRows(rows, body, params, prefer, tableName) {
+	const conflictKeys = (params.get('on_conflict') ?? UNIQUE_KEYS[tableName] ?? 'id').split(',');
 	const written = [];
 	for (const item of Array.isArray(body) ? body : [body]) {
 		const row = { id: randomUUID(), ...item };
@@ -103,10 +140,19 @@ function upsertRows(rows, body, params, prefer) {
 	return written;
 }
 
-function writeRows(rows, method, params, body, prefer) {
-	if (method === 'POST') return upsertRows(rows, body, params, prefer);
+function writeRows(rows, method, params, body, prefer, tableName) {
+	if (method === 'POST') return upsertRows(rows, body, params, prefer, tableName);
 	const hits = matchingRows(rows, params);
-	if (method === 'PATCH') hits.forEach((row) => Object.assign(row, body));
+	if (method === 'PATCH') {
+		hits.forEach((row) => {
+			const before = row.content;
+			Object.assign(row, body);
+			// The content-scoped version bump the migration's trigger does: a row that
+			// carries a version and whose content changed moves one step forward. A row
+			// without the column is left alone (the column may not be there yet).
+			if (Object.hasOwn(row, 'version') && canonical(before) !== canonical(row.content)) row.version = Number(row.version) + 1;
+		});
+	}
 	if (method === 'DELETE') hits.forEach((row) => rows.splice(rows.indexOf(row), 1));
 	return hits;
 }
@@ -134,8 +180,42 @@ function workspaceMemberRpc(body, table) {
 		}));
 }
 
+/**
+ * public.osionos_workspace_transfer_ownership: validated first, then the owner_id and both
+ * member rows move in one synchronous step, so a reader never sees two owners or none.
+ * Returns false (nothing written) when the preconditions fail, like the SQL function.
+ */
+function transferOwnershipRpc(body, { table }) {
+	const members = table('osionos_workspace_members');
+	const inWorkspace = (userId) => members.find((row) => sameText(row.workspace_id, body.p_workspace) && sameText(row.user_id, userId));
+	const workspace = table('osionos_workspaces').find((row) => sameText(row.id, body.p_workspace));
+	const target = inWorkspace(body.p_to);
+	if (!workspace || !sameText(workspace.owner_id, body.p_from) || workspace.pending_delete_at || !target) return false;
+	const previous = inWorkspace(body.p_from);
+	if (previous) previous.role = 'admin';
+	else members.push({ workspace_id: body.p_workspace, user_id: body.p_from, role: 'admin', permissions: ALL_PERMISSIONS });
+	Object.assign(target, { role: 'owner', permissions: ALL_PERMISSIONS });
+	workspace.owner_id = body.p_to;
+	return true;
+}
+
+/**
+ * public.osionos_workspace_mark_delete: the owner check, the last-live-workspace count and the
+ * mark are one synchronous step, as the SQL function does them under its row locks.
+ */
+function markDeleteRpc(body, { table }) {
+	const workspaces = table('osionos_workspaces');
+	const target = workspaces.find((row) => sameText(row.id, body.p_workspace));
+	if (!target || !sameText(target.owner_id, body.p_owner)) return 'not_owner';
+	if (target.pending_delete_at && Date.parse(target.delete_after) > Date.parse(body.p_now)) return 'already_pending';
+	const others = workspaces.filter((row) => sameText(row.owner_id, body.p_owner) && !sameText(row.id, body.p_workspace) && !row.pending_delete_at);
+	if (others.length < 1) return 'last_workspace';
+	Object.assign(target, { pending_delete_at: body.p_now, delete_after: body.p_after });
+	return 'marked';
+}
+
 /** seed: { table: rows[] }, records: { 'dbId/table': rows[] }, failWhen(call) → { status, body } | null. */
-export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null, realWorkspaceRpc = false } = {}) {
+export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => null, realWorkspaceRpc = false, rpc = {} } = {}) {
 	const tables = new Map(Object.entries(seed).map(([name, rows]) => [name, rows.map((row) => structuredClone(row))]));
 	const table = (name) => tables.get(name) ?? tables.set(name, []).get(name);
 	// The FKs of osionos_workspace_members / osionos_pages guarantee their workspace exists, so a
@@ -163,12 +243,32 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		}
 		const name = parsed.pathname.replace('/rest/v1/', '');
 		const prefer = String(init.headers?.Prefer ?? '');
-		const call = { method, table: name, params: parsed.searchParams, body };
+		const call = { method, table: name, params: parsed.searchParams, body, prefer, headers: init.headers ?? {} };
 		calls.push(call);
 		const failure = failWhen(call);
 		if (failure) return jsonResponse(failure.body, failure.status);
 		if (name === 'rpc/osionos_bridge_list_workspaces') {
 			return jsonResponse(realWorkspaceRpc ? workspaceMemberRpc(body, table) : workspaceRpc(body));
+		}
+		// The feed counts function (P0-5a): the four numbers a post card shows.
+		if (name === 'rpc/osionos_feed_page_counts') {
+			const pageId = body?.p_page_id;
+			const viewer = body?.p_viewer;
+			const likes = table('osionos_feed_likes').filter((row) => row.page_id === pageId);
+			return jsonResponse([{
+				likes: likes.length,
+				liked_by_viewer: likes.some((row) => row.user_id === viewer),
+				comments: table('osionos_feed_comments').filter((row) => row.page_id === pageId).length,
+				shares: table('osionos_feed_shares').filter((row) => row.page_id === pageId).length,
+			}]);
+		}
+		// A registered RPC answers with its own body (the append function returns
+		// table(version bigint, content jsonb)); an unregistered one keeps the row path.
+		// The two edge reads are always registered: a test that seeds no link must
+		// still get an empty answer, not a table named after the RPC.
+		const rpcs = { osionos_workspace_transfer_ownership: transferOwnershipRpc, osionos_workspace_mark_delete: markDeleteRpc, ...EDGE_RPCS, ...rpc };
+		if (method === 'POST' && Object.hasOwn(rpcs, name.slice(4))) {
+			return jsonResponse(rpcs[name.slice(4)](body, { table }), 200);
 		}
 		if (method === 'GET' && isEmbedRead(parsed.searchParams)) {
 			try {
@@ -181,24 +281,33 @@ export function createPostgrestMock(seed = {}, { records = {}, failWhen = () => 
 		if (method === 'GET') {
 			const rows = readRows(table(name), parsed.searchParams);
 			// PostgREST answers Content-Range `first-last/total` (or `*/0`) when asked for count=exact; the total
-			// ignores `limit`, so it is counted with the limit and the keyset cursor lifted.
-			const counted = new URLSearchParams([...parsed.searchParams].filter(([key]) => key !== 'limit' && key !== 'user_id'));
+			// ignores `limit`, so it is counted with the limit lifted.
+			const counted = new URLSearchParams([...parsed.searchParams].filter(([key]) => key !== 'limit' && key !== 'offset'));
 			const total = matchingRows(table(name), counted).length;
 			const range = rows.length === 0 ? '*/0' : `0-${rows.length - 1}/${total}`;
 			return jsonResponse(rows, 200, prefer.includes('count=exact') ? { 'content-range': range } : {});
 		}
-		const written = writeRows(table(name), method, parsed.searchParams, body, prefer);
+		const written = writeRows(table(name), method, parsed.searchParams, body, prefer, name);
 		if (!written) return jsonResponse({ code: '23505', message: 'duplicate key' }, 409);
-		return prefer.includes('return=representation') ? jsonResponse(written, method === 'POST' ? 201 : 200) : new Response(null, { status: 204 });
+		// A PATCH answers with the columns its select names (PostgREST projects the
+		// written rows), so `select=version` really answers [{"version":n}] — and a
+		// write that matched no row answers [].
+		const answered = method === 'PATCH' ? written.map((row) => project(row, parsed.searchParams.get('select'))) : written;
+		return prefer.includes('return=representation') ? jsonResponse(answered, method === 'POST' ? 201 : 200) : new Response(null, { status: 204 });
 	}
 	return { fetchImpl, calls, outbound, stubErrors, rows: table, page: (id) => table('osionos_pages').find((row) => row.id === id) };
 }
 
 // Revocation enforcement is off unless a test asks for it ({ sessionCutoffs: 'on' }): with it on, every
 // request answers 503 until the poller's first load, which unrelated route tests must not wait for.
-export function harnessConfig({ sessionCutoffs = 'off' } = {}) {
+// The session rows and the per-session revocations are off for the same reason: with them on, every
+// request answers 503 until the tracker has loaded public.osionos_sessions.
+// The administrator list is set explicitly: with it unset the bridge has no account administrator
+// and says so at start-up, which the boot-line test counts.
+export function harnessConfig({ sessionCutoffs = 'off', sessionRecords = 'off', env = {} } = {}) {
 	return configFromEnv({
 		OSIONOS_SESSION_CUTOFFS: sessionCutoffs,
+		OSIONOS_SESSION_RECORDS: sessionRecords,
 		OSIONOS_APP_URL: 'http://localhost:3001',
 		OSIONOS_BRIDGE_SHARED_SECRET: 'test-bridge-secret-that-is-long-enough',
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
@@ -206,17 +315,21 @@ export function harnessConfig({ sessionCutoffs = 'off' } = {}) {
 		KONG_SERVICE_API_KEY: 'service-role-test-key',
 		OSIONOS_QUERY_ROUTER_URL: QUERY_ROUTER_URL,
 		OSIONOS_BAAS_API_KEY: 'tenant-test-key',
+		OSIONOS_ADMIN_EMAILS: 'admin@example.test',
+		...env,
 	});
 }
 
 /**
  * JSON request headers carrying an app session for `userId`, whose private workspace is
  * `homeWorkspaceId`; `memberWorkspaceIds` ride along in the token as shared workspaces.
+ * `isAdmin` mints the token WITH the administrator claim — the claim alone is not a
+ * permission (the console re-reads the row), but a console needs a token that claims it.
  */
-export function sessionHeaders(config, userId, homeWorkspaceId, memberWorkspaceIds = []) {
+export function sessionHeaders(config, userId, homeWorkspaceId, memberWorkspaceIds = [], isAdmin = false) {
 	const payload = validateBridgePayload({ provider: 'prismatica', subject: userId, email: 'member@example.com', name: 'Member', jti: randomUUID() });
 	const persisted = { workspaceId: homeWorkspaceId, workspaceName: 'Home', workspaceSlug: 'home' };
-	const session = createUserSession(payload, config, persisted, Date.now(), memberWorkspaceIds.map((id) => ({ _id: id, role: 'member' })));
+	const session = createUserSession(payload, config, persisted, Date.now(), memberWorkspaceIds.map((id) => ({ _id: id, role: 'member' })), isAdmin);
 	return { authorization: `Bearer ${session.session.accessToken}`, 'content-type': 'application/json' };
 }
 

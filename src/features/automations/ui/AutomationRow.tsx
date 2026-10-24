@@ -37,7 +37,7 @@ export function AutomationRow(props: AutomationRowProps): React.JSX.Element {
   const combo = automation.trigger.combo;
 
   return (
-    <div className="flex items-center gap-2 border-b border-[var(--osio-border-soft)] py-2 text-sm">
+    <div className="flex flex-wrap items-center gap-2 border-b border-[var(--osio-border-soft)] py-2 text-sm @min-[560px]:flex-nowrap">
       <button
         type="button"
         onClick={onToggle}
@@ -51,23 +51,23 @@ export function AutomationRow(props: AutomationRowProps): React.JSX.Element {
         />
       </button>
 
-      <span className="w-36 shrink-0 truncate text-[var(--osio-fg-default)]">{automation.name}</span>
+      <span className="min-w-0 flex-1 truncate text-[var(--osio-fg-default)] @min-[560px]:w-36 @min-[560px]:flex-none">{automation.name}</span>
 
       <button
         type="button"
         onClick={recorder.recording ? recorder.stop : recorder.start}
-        className="w-36 shrink-0 rounded-xs border border-[var(--osio-border-default)] px-2 py-1 text-left font-mono text-xs text-[var(--osio-fg-muted)] hover:border-[var(--osio-accent)]"
+        className="w-full rounded-xs border border-[var(--osio-border-default)] px-2 py-1 text-left font-mono text-xs text-[var(--osio-fg-muted)] hover:border-[var(--osio-accent)] @min-[560px]:w-36 @min-[560px]:shrink-0"
       >
         {recorder.recording ? "Press keys…" : combo ? formatCombo(combo) : "Set shortcut"}
       </button>
 
-      <select value={automation.actions[0]?.commandId} onChange={(event) => onCommand(event.target.value as CommandId)} className={`flex-1 ${SELECT_CLASS}`}>
+      <select value={automation.actions[0]?.commandId} onChange={(event) => onCommand(event.target.value as CommandId)} className={`flex-1 basis-0 ${SELECT_CLASS}`}>
         {ALL_COMMANDS.map((command) => (
           <option key={command.id} value={command.id}>{command.title}</option>
         ))}
       </select>
 
-      <select value={automation.trigger.when} onChange={(event) => onWhen(event.target.value as WhenName)} className={`w-40 shrink-0 ${SELECT_CLASS}`}>
+      <select value={automation.trigger.when} onChange={(event) => onWhen(event.target.value as WhenName)} className={`flex-1 basis-0 @min-[560px]:w-40 @min-[560px]:flex-none ${SELECT_CLASS}`}>
         {WHEN_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>
         ))}

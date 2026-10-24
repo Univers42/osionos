@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/19 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/19 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,36 +28,57 @@
 // enforced up to 10 s plus one query late on a bridge replica that did not take the write, and
 // up to 60 s during a poll outage. The row-count check (Content-Range) can fail a healthy tick
 // when a row is inserted between pages; that only delays a load by one tick.
+//
+// The state, the freshness threshold, the announce, the paged reload, the local writes and the
+// poller loop live in bridge-session-tracker.mjs: the revoked session ids are polled the same
+// way, and two copies of this machinery would drift apart on what "fresh" means.
 
 import { BAAS_FETCH_TIMEOUT_MS } from './bridge-baas-body.mjs';
+import {
+	LARGE_TABLE_ROWS,
+	PAGE_SIZE,
+	POLL_INTERVAL_MS,
+	RETRY_AFTER_SECONDS,
+	STALE_AFTER_MS,
+	PolledSessionSet,
+	readPagedRows,
+	startPolledSessionPoller,
+	timestampMicros,
+} from './bridge-session-tracker.mjs';
 
-export const POLL_INTERVAL_MS = 10_000;
-export const STALE_AFTER_MS = 60_000;
-export const RETRY_AFTER_SECONDS = 5;
-const PAGE_SIZE = 500;
-const LARGE_TABLE_ROWS = 5_000;
+export { POLL_INTERVAL_MS, RETRY_AFTER_SECONDS, STALE_AFTER_MS, timestampMicros };
+
+/**
+ * The cut-off tracker of one process: the whole table lives in a Map that the
+ * poller replaces every 10 s, so a verification never touches the network.
+ *
+ * The bridge and the osionos-ai service both hold one, and the token verifier
+ * reads it (assertSessionNotCutOff), so the shape below is the one both code
+ * paths see. It is written in JSDoc, in the module that owns the behaviour:
+ * a copy of it somewhere else is a copy that drifts.
+ *
+ * @typedef {object} SessionCutoffTracker
+ * @property {boolean} enforced whether the cut-offs are enforced at all
+ * @property {() => string} status off | loading | fresh | stale
+ * @property {(userId: string) => number | undefined} cutoffMicros the cut-off of one user, in microseconds
+ * @property {() => number} beginLoad the sequence number of the writes this process made
+ * @property {(loaded: Map<string, number>, startSequence: number) => void} completeLoad
+ * @property {(error: unknown) => void} failLoad
+ */
+
+/**
+ * The log the tracker writes its warnings to: the bridge's and the service's
+ * console.
+ *
+ * @typedef {object} SessionCutoffLog
+ * @property {(message: string) => void} info
+ * @property {(message: string) => void} warn
+ */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const TIMESTAMPTZ = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}(?::?\d{2})?)$/;
 const TABLE_HINT = 'public.auth_session_cutoffs must exist and be readable by the service role (apply models/auth-session-cutoffs.sql)';
 
 function httpError(message, status, code) {
 	return Object.assign(new Error(message), { status, code });
-}
-
-function isoOffset(offset) {
-	if (offset === 'Z') return 'Z';
-	const digits = offset.slice(1).replace(':', '');
-	return `${offset[0]}${digits.slice(0, 2)}:${digits.slice(2) || '00'}`;
-}
-
-/** A timestamptz as PostgREST renders it → integer microseconds since the epoch, or null. */
-export function timestampMicros(text) {
-	const match = typeof text === 'string' ? TIMESTAMPTZ.exec(text) : null;
-	if (!match) return null;
-	const [, date, time, fraction = '', offset] = match;
-	const wholeMs = Date.parse(`${date}T${time}${isoOffset(offset)}`);
-	if (!Number.isFinite(wholeMs)) return null;
-	return wholeMs * 1000 + Number(fraction.padEnd(6, '0').slice(0, 6));
 }
 
 /** iat_ms when the token has one; a token minted before it counts as issued at the start of its iat second. */
@@ -70,101 +91,56 @@ export function tokenIssuedAtMs(payload) {
 	return Number.isFinite(iat) ? iat * 1000 : 0;
 }
 
-export class SessionCutoffs {
-	/** `offReason` is set exactly when `enforced` is false. */
+export class SessionCutoffs extends PolledSessionSet {
 	constructor({ enforced, offReason = '', now = Date.now, log = console } = {}) {
-		this.enforced = enforced;
-		this.offReason = offReason;
-		this.now = now;
-		this.log = log;
-		this.cutoffs = null;
-		this.loadedAt = null;
-		this.observedState = enforced ? 'loading' : 'off';
-		this.failureStreak = null;
-		this.warnedLarge = false;
-		this.writeSequence = 0;
-		this.localWrites = new Map();
-	}
-
-	/** One of off | loading | fresh | stale; a change is logged once, whoever observes it first. */
-	status() {
-		const state = this.#state();
-		if (state !== this.observedState) {
-			this.#announce(state);
-			this.observedState = state;
-		}
-		return state;
-	}
-
-	ageMs() {
-		return this.loadedAt === null ? null : this.now() - this.loadedAt;
+		super({
+			enforced,
+			offReason,
+			now,
+			log,
+			label: 'session cutoffs',
+			table: 'public.auth_session_cutoffs',
+			hint: TABLE_HINT,
+			offEffect: 'signed-out app sessions stay valid until they expire.',
+			caveat: 'see the Caveat in bridge-session-cutoff.mjs',
+			largeTableRows: LARGE_TABLE_ROWS,
+			// The later of two instants wins: a cut-off never moves backwards for a user.
+			merge: (target, userId, micros) => target.set(userId, Math.max(target.get(userId) ?? micros, micros)),
+		});
 	}
 
 	/** Cut-off in microseconds for a lower-case user id, or undefined. */
 	cutoffMicros(userId) {
-		return this.cutoffs?.get(userId);
+		return this.entries?.get(userId);
 	}
 
-	/** A write this process just made applies at once and survives a swap from a poll that began earlier. */
-	applyLocal(userId, micros) {
-		this.writeSequence += 1;
-		this.localWrites.set(userId, { micros, sequence: this.writeSequence });
-		if (this.cutoffs) this.cutoffs.set(userId, Math.max(this.cutoffs.get(userId) ?? micros, micros));
-	}
-
-	/** Mark the start of a poll; hand the result to completeLoad. */
-	beginLoad() {
-		return this.writeSequence;
-	}
-
-	completeLoad(loaded, startSequence) {
-		for (const [userId, write] of this.localWrites) {
-			if (write.sequence > startSequence) loaded.set(userId, Math.max(loaded.get(userId) ?? write.micros, write.micros));
-		}
-		this.localWrites.clear();
-		this.cutoffs = loaded;
-		this.loadedAt = this.now();
-		this.failureStreak = null;
-		if (loaded.size > LARGE_TABLE_ROWS && !this.warnedLarge) {
-			this.warnedLarge = true;
-			this.log.warn(`[osionos-bridge] session cutoffs: ${loaded.size} rows; a full reload every ${POLL_INTERVAL_MS / 1000} s now moves more than 500 KB (see the Caveat in bridge-session-cutoff.mjs).`);
-		}
-		this.status();
-	}
-
-	failLoad(error) {
-		const message = error instanceof Error ? error.message : String(error);
-		if (this.failureStreak !== message) this.log.warn(`[osionos-bridge] session cutoffs: load failed (${message}); ${TABLE_HINT}.`);
-		this.failureStreak = message;
-		this.status();
-	}
-
-	bootLine() {
-		return this.enforced
-			? `[osionos-bridge] session cutoffs: enforcing; every token request answers 503 until the first load of public.auth_session_cutoffs.`
-			: `[osionos-bridge] session cutoffs: OFF (${this.offReason}); signed-out app sessions stay valid until they expire.`;
-	}
-
-	#state() {
-		if (!this.enforced) return 'off';
-		if (this.loadedAt === null) return 'loading';
-		return this.now() - this.loadedAt > STALE_AFTER_MS ? 'stale' : 'fresh';
-	}
-
-	#announce(state) {
-		if (state === 'fresh') this.log.info('[osionos-bridge] session cutoffs: fresh, serving tokens.');
-		else this.log.warn(`[osionos-bridge] session cutoffs: ${state}; every token request answers 503 until a load succeeds. ${TABLE_HINT}.`);
+	/** The loaded table, under the name the cut-off suites read it by. */
+	get cutoffs() {
+		return this.entries;
 	}
 }
 
-/** Enforcement is on when the bridge can reach the table, unless the operator turned it off. */
+/**
+ * Enforcement is on when the bridge can reach the table, unless the operator turned it off.
+ *
+ * @param {{ sessionCutoffsMode?: string, serviceKey?: string, baasUrl?: string }} config the bridge's config
+ * @param {{ now?: () => number, log?: SessionCutoffLog }} [options] the clock and the log of the tracker
+ * @returns {SessionCutoffTracker}
+ */
 export function sessionCutoffsFromConfig(config, options = {}) {
 	if (config.sessionCutoffsMode === 'off') return new SessionCutoffs({ ...options, enforced: false, offReason: 'OSIONOS_SESSION_CUTOFFS=off' });
 	if (!config.serviceKey || !config.baasUrl) return new SessionCutoffs({ ...options, enforced: false, offReason: 'no service key or BaaS URL' });
 	return new SessionCutoffs({ ...options, enforced: true });
 }
 
-/** Synchronous: 503 unless the table is loaded and recent, 401 for a token issued before its user's cut-off. */
+/**
+ * Synchronous: 503 unless the table is loaded and recent, 401 for a token issued before its user's cut-off.
+ *
+ * @param {SessionCutoffTracker | undefined | null} tracker the tracker of the process, nothing when there is none
+ * @param {string} userId the lower-case id of the user the token belongs to
+ * @param {number} issuedAtMs the moment the token was minted, in milliseconds
+ * @returns {void}
+ */
 export function assertSessionNotCutOff(tracker, userId, issuedAtMs) {
 	if (!tracker) return;
 	const state = tracker.status();
@@ -178,33 +154,6 @@ export function assertSessionNotCutOff(tracker, userId, issuedAtMs) {
 	}
 }
 
-function contentRangeTotal(header) {
-	const total = /\/(\d+)$/.exec(header ?? '')?.[1];
-	if (total === undefined) throw new Error(`Content-Range carried no total (${header ?? 'header missing'})`);
-	return Number(total);
-}
-
-function withDeadline(run, timeoutMs) {
-	const controller = new AbortController();
-	let timer;
-	const deadline = new Promise((_, reject) => {
-		timer = setTimeout(() => { controller.abort(); reject(new Error(`timed out after ${timeoutMs} ms`)); }, timeoutMs);
-	});
-	return Promise.race([run(controller.signal), deadline]).finally(() => clearTimeout(timer));
-}
-
-async function readPage({ fetchImpl, baasUrl, serviceKey }, cursor, signal) {
-	const params = new URLSearchParams({ select: 'user_id,sessions_valid_after', order: 'user_id.asc', limit: String(PAGE_SIZE) });
-	if (cursor !== null) params.set('user_id', `gt.${cursor}`);
-	const headers = { Accept: 'application/json', apikey: serviceKey, Authorization: `Bearer ${serviceKey}` };
-	if (cursor === null) headers.Prefer = 'count=exact';
-	const response = await fetchImpl(`${baasUrl}/rest/v1/auth_session_cutoffs?${params}`, { headers, signal });
-	if (!response.ok) throw new Error(`HTTP ${response.status}: ${(await response.text().catch(() => '')).slice(0, 160)}`);
-	const rows = JSON.parse(await response.text());
-	if (!Array.isArray(rows)) throw new Error('the answer was not a row list');
-	return { rows, contentRange: response.headers.get('content-range') };
-}
-
 function addRows(loaded, rows) {
 	for (const row of rows) {
 		const micros = timestampMicros(row?.sessions_valid_after);
@@ -215,45 +164,59 @@ function addRows(loaded, rows) {
 
 /** The whole table by keyset pages on user_id; throws unless every row the first page counted arrived. */
 export async function loadAllCutoffs(source, timeoutMs) {
+	const rows = await readPagedRows(source, {
+		table: 'auth_session_cutoffs',
+		select: 'user_id,sessions_valid_after',
+		orderColumn: 'user_id',
+		pageSize: PAGE_SIZE,
+		timeoutMs,
+	});
 	const loaded = new Map();
-	let received = 0;
-	let total = null;
-	let cursor = null;
-	for (;;) {
-		const page = await withDeadline((signal) => readPage(source, cursor, signal), timeoutMs);
-		if (cursor === null) total = contentRangeTotal(page.contentRange);
-		addRows(loaded, page.rows);
-		received += page.rows.length;
-		if (page.rows.length < PAGE_SIZE) break;
-		const last = page.rows.at(-1).user_id.toLowerCase();
-		if (cursor !== null && last <= cursor) throw new Error('the keyset cursor did not advance');
-		cursor = last;
-	}
-	if (received !== total) throw new Error(`received ${received} rows but Content-Range counted ${total} (truncated by max-rows, or rows changed between pages)`);
+	addRows(loaded, rows);
 	return loaded;
 }
 
 /**
  * Polls with a setTimeout chain (a tick never overlaps the next) and unref'd timers. A tick
  * never rejects: every failure becomes failLoad. `stop()` ends the chain.
+ *
+ * @param {SessionCutoffTracker} tracker the tracker the loaded table goes into
+ * @param {{ fetchImpl?: typeof fetch, baasUrl: string, serviceKey: string }} source where the table is read from
+ * @param {{ intervalMs?: number, timeoutMs?: number }} [options] the interval between two ticks, the deadline of one read
+ * @returns {{ tick: () => Promise<void>, stop: () => void }}
  */
 export function startSessionCutoffPoller(tracker, source, { intervalMs = POLL_INTERVAL_MS, timeoutMs = BAAS_FETCH_TIMEOUT_MS } = {}) {
-	let timer = null;
-	let stopped = false;
-	async function tick() {
-		const startSequence = tracker.beginLoad();
-		try {
-			tracker.completeLoad(await loadAllCutoffs(source, timeoutMs), startSequence);
-		} catch (error) {
-			tracker.failLoad(error);
+	return startPolledSessionPoller(tracker, () => loadAllCutoffs(source, timeoutMs), { intervalMs });
+}
+
+/**
+ * Records that every token issued before `writtenAtMs` stops verifying. The timestamp is
+ * explicit (a column DEFAULT would leave an existing row untouched on conflict). Moved here
+ * from bridge-api.mjs so the sign-out and the password change share one write.
+ */
+export async function writeSessionCutoff(config, fetchImpl, userId, writtenAtMs) {
+	try {
+		if (!config.baasUrl || !config.serviceKey) throw new Error('service-role access is not configured');
+		const response = await fetchImpl(`${config.baasUrl}/rest/v1/auth_session_cutoffs?on_conflict=user_id`, {
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				apikey: config.serviceKey,
+				Authorization: `Bearer ${config.serviceKey}`,
+				Prefer: 'resolution=merge-duplicates',
+			},
+			body: JSON.stringify({ user_id: userId, sessions_valid_after: new Date(writtenAtMs).toISOString() }),
+			signal: AbortSignal.timeout(BAAS_FETCH_TIMEOUT_MS),
+		});
+		if (!response.ok) {
+			const text = await response.text().catch(() => '');
+			throw Object.assign(new Error(`BaaS request failed with ${response.status}`), { upstreamStatus: response.status, upstreamText: text.slice(0, 160) });
 		}
+	} catch (error) {
+		if (error?.upstreamStatus === 409 && /23503/.test(error.upstreamText ?? '')) {
+			throw Object.assign(new Error('No account matches this session.'), { status: 409, code: 'user_not_found' });
+		}
+		throw Object.assign(new Error('Sign-out could not be recorded; try again shortly.'), { status: 503, code: 'session_cutoffs_unavailable', retryAfterSeconds: 5 });
 	}
-	async function run() {
-		await tick();
-		if (stopped) return;
-		timer = setTimeout(run, intervalMs);
-		timer.unref();
-	}
-	if (tracker.enforced) run();
-	return { tick, stop() { stopped = true; clearTimeout(timer); } };
 }

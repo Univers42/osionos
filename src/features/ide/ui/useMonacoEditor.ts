@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React from "react";
+import { prefersReducedMotion } from "@/entities/page/ui/coverMedia";
 import { editor, KeyCode, KeyMod } from "../model/monacoRuntime";
 import { acquireModel, releaseModel } from "../model/monacoModels";
 import { loadMonacoLanguage } from "../model/monacoLanguages";
@@ -125,7 +126,7 @@ export function useMonacoEditor(
     // refused it (2026-10-14). A file whose own text holds CRLF keeps it.
     if (!current.readInitialText().includes("\r\n")) model.setEOL(editor.EndOfLineSequence.LF);
     const stopTheme = watchEditorTheme(host);
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reducedMotion = prefersReducedMotion();
     const instance = editor.create(host, {
       ...EDITOR_OPTIONS,
       model,
