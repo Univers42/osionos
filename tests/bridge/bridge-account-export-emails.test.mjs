@@ -155,4 +155,13 @@ describe('the export of secondary addresses', () => {
 		assert.equal(job.status, 'done');
 		assert.deepEqual(tableOf(world, job), []);
 	});
+
+	it('E11 fails the job, and stores nothing, when the addresses read fails for another reason', async (t) => {
+		const world = await setup(t, { rows: [await sealedEmailRow(USER_A, 'ada@example.com')] });
+		world.store.fail.table = TABLE;
+		const job = await runOne(world);
+		assert.ok(world.store.calls.some((call) => call.path.endsWith(TABLE)), 'the addresses table was read');
+		assert.equal(job.status, 'failed');
+		assert.equal(world.store.puts, 0);
+	});
 });

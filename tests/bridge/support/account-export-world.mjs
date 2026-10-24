@@ -83,7 +83,7 @@ function select(rows, params, cap = Infinity) {
 	return hits.map((row) => (columns[0] === '*' ? { ...row } : Object.fromEntries(columns.filter((c) => c in row).map((c) => [c, row[c]]))));
 }
 
-/** The fake fetch and its state. `fail.audit`, `fail.putAfter` (n puts then 500), `fail.donePatch` and `fail.pageCap` (rows per response) are the switches. */
+/** The fake fetch and its state. `fail.audit`, `fail.putAfter` (n puts then 500), `fail.donePatch`, `fail.pageCap` (rows per response) and `fail.table` (that table answers 500) are the switches. */
 export function createExportStore({ exports = [], registry = [], data = {} } = {}) {
 	const tables = new Map([[EXPORTS, exports.map((row) => ({ ...row }))], [AUDIT, []], ['osionos_account_data_map', registry], ['osionos_user_emails', []], ...Object.entries(data)]);
 	const store = { calls: [], objects: new Map(), puts: 0, buckets: 0, fail: {}, tables, order: [] };
@@ -100,6 +100,7 @@ export function createExportStore({ exports = [], registry = [], data = {} } = {
 		}
 		if (table === AUDIT && store.fail.audit) return json({ message: 'down' }, 500);
 		if (table === AUDIT) store.order.push(`audit:${body.event_type}`);
+		if (table === store.fail.table) return json({ message: 'down' }, 500);
 		const rows = tables.get(table);
 		if (!rows) return json({ message: `no table ${table}` }, 404);
 		if (method === 'GET') {
