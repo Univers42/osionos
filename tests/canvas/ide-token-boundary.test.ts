@@ -26,6 +26,7 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "model/formatCode.ts": "POST /api/ide/format on API_BASE, which stays on the app token",
   "model/pageStoreFacade.ts": "page store fetchPageContent(id, jwt): bridge page API, not an IDE route",
   "model/inboundLive.ts": "pageStore restorePage(pageId, workspaceId, jwt): bridge page API, not an IDE route",
+  "model/ideKeys.ts": "account keys GET on the main bridge (/api/account/keys), not an IDE route; the plane call uses ideFetch",
 };
 
 function sourceFiles(dir: string): string[] {

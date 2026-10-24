@@ -38,13 +38,22 @@ import { MODERATION_SECTION, normaliseModerationPatch } from './bridge-moderatio
 
 const ALL_METHODS = ['GET', 'PATCH', 'PUT'];
 const SECTIONS = new Map([
-	['/api/preferences', { section: 'preferences' }],
+	['/api/preferences', { section: 'preferences', prepare: normaliseVigilantMode }],
 	['/api/account/notification-settings', { section: 'notifications' }],
 	['/api/account/moderation-settings', { section: MODERATION_SECTION, methods: ['GET', 'PATCH'], prepare: normaliseModerationPatch }],
 ]);
 const SECTION_BODY_LIMIT = 16 * 1024;
 const SETTINGS_LIMIT = 120;
 const SETTINGS_WINDOW_MS = 60_000;
+
+/** `vigilantMode` is the only preferences key this checks (boolean or null to clear); every other key passes untouched. */
+function normaliseVigilantMode(body) {
+	const value = body.vigilantMode;
+	if (value !== undefined && value !== null && typeof value !== 'boolean') {
+		throw accountError(422, 'invalid_body', 'vigilantMode must be true or false.');
+	}
+	return body;
+}
 
 function accountError(status, code, message, extra) {
 	return Object.assign(new Error(message), { status, code }, extra);
@@ -107,8 +116,9 @@ async function patchSection(pg, session, { section, prepare }, request, response
 	return sendJson(response, 200, await mergeSection(pg, session, section, patch), config);
 }
 
-async function putSection(pg, session, section, request, response, config) {
-	const body = await readSectionBody(request);
+async function putSection(pg, session, { section, prepare }, request, response, config) {
+	const sent = await readSectionBody(request);
+	const body = prepare ? prepare(sent) : sent;
 	const current = await readSection(pg, session, section);
 	const patch = { ...body };
 	for (const key of Object.keys(current)) if (!Object.hasOwn(patch, key)) patch[key] = null;
@@ -134,7 +144,7 @@ export function createPreferencesRoutes({ config, pg, kv, verifySession }) {
 			if (!(entry.methods ?? ALL_METHODS).includes(method)) throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
 			if (method === 'GET') return await getSection(pg, session, section, response, config);
 			if (method === 'PATCH') return await patchSection(pg, session, entry, request, response, config);
-			if (method === 'PUT') return await putSection(pg, session, section, request, response, config);
+			if (method === 'PUT') return await putSection(pg, session, entry, request, response, config);
 			throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
 		} catch (error) {
 			return respondWithError(response, error, config);
