@@ -23,6 +23,7 @@ import {
   openSlashMenuFromEditor,
   slashCommandEntry,
 } from "../../browser/core/app.mjs";
+import { giveTheAppABridgeOrigin, stubRestOfTheBridge } from "../support/bridgeSession.mjs";
 import { seedPage } from "../support/embedSeed.mjs";
 
 const BRIDGED = !!process.env.PLAYWRIGHT_API_URL;
@@ -59,8 +60,8 @@ test.describe("sys data sources", () => {
   });
 
   test("a sys: id that is not a shipped source falls through to today's behaviour", async ({ page }) => {
-    await seedPage(page, "/", [{ id: "sys-unknown", type: "database_inline", content: "", databaseId: "sys:my-activity", viewId: "my-activity-default" }]);
-    await expect(page.locator('.osionos-database-block[data-database-id="sys:my-activity"]')).toHaveCount(0);
+    await seedPage(page, "/", [{ id: "sys-unknown", type: "database_inline", content: "", databaseId: "sys:nope", viewId: "nope-default" }]);
+    await expect(page.locator('.osionos-database-block[data-database-id="sys:nope"]')).toHaveCount(0);
   });
 
   test("no sys: key reaches the known-database store", async ({ page }) => {
@@ -96,5 +97,19 @@ test.describe("sys data sources", () => {
     });
     await insertMyPages(page);
     await expect(block(page, "sys:my-pages").getByText("Showing your 200 most recent.")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("a my-activity block on the chart view draws a chart from the stubbed answer, not a table", async ({ page, baseURL }) => {
+    const rows = ["page.open", "page.open", "page.edit"].map((event, i) => ({ ts: `2026-10-0${i + 1}T00:00:00Z`, event, surface: "editor", workspace_id: "w" }));
+    await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);
+    await stubRestOfTheBridge(page);
+    await page.route("**/api/account/self-data/my-activity", (route) => route.fulfill({
+      json: { ok: true, source: "my-activity", columns: ["ts", "event", "surface", "workspace_id"], rows, truncated: false },
+    }));
+    await seedPage(page, "/", [{ id: "sys-chart", type: "database_inline", content: "", databaseId: "sys:my-activity", viewId: "my-activity-chart" }]);
+    const inserted = block(page, "sys:my-activity");
+    await expect(inserted).toHaveAttribute("data-database-view-id", "my-activity-chart", { timeout: 15_000 });
+    await expect(inserted.locator(".recharts-surface, canvas, svg[role='img']").first()).toBeVisible({ timeout: 15_000 });
+    await expect(inserted.locator("table, [role=grid]")).toHaveCount(0);
   });
 });
