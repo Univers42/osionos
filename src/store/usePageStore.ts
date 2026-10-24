@@ -12,7 +12,9 @@
 
 import { create } from "zustand";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { loadLedger } from "@osionos/outbox-ledger";
 import { withPendingPages } from "./sync/pendingPages";
+import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./sync/pageStamp";
 import {
   loadRecents,
   saveRecents,
@@ -71,6 +73,17 @@ import { timed } from "@osionos/perf-probe";
 
 // Re-export types so existing imports from this module still work
 export type { PageEntry, ActivePageKind, ActivePage } from "@/entities/page";
+
+/**
+ * The page store plus the live-content seam. `applyRemoteContent` is owned by
+ * THIS store (not the entity type) because it is a sync action: it must reach
+ * the outbox ledger and the cache scheduler without the collab layer ever
+ * importing those internals.
+ */
+interface LivePageStore extends PageStore {
+  /** Replace one LOADED page's content from a remote live `blocks` event. */
+  applyRemoteContent: (pageId: string, blocks: NonNullable<PageEntry["content"]>) => void;
+}
 
 /** Zustand store managing page tree, active page, recents, and block-level CRUD. */
 const cachedPages = withPendingPages(loadPagesCache());
@@ -153,7 +166,7 @@ function notifyTabsOfPagePatch(pageId: string, patch: { title?: string; icon?: s
     .catch(() => undefined);
 }
 
-export const usePageStore = create<PageStore>((set, get) => ({
+export const usePageStore = create<LivePageStore>((set, get) => ({
   ...cachedPageState,
   pageRevisions: {},
   activePage: null,
@@ -365,6 +378,41 @@ export const usePageStore = create<PageStore>((set, get) => ({
       });
       debouncePersistContent(pageId);
     });
+  },
+
+  // WHY live sync: a browser that only applied a remote `blocks` event must NOT
+  // drive the outbox into a fifth identical PATCH — the author's own outbox
+  // persists the text. So this action replaces the loaded content, bumps the
+  // revision (renderers re-render), schedules the cache persist, and never
+  // touches updatedAt. It also skips canEditBody: a viewer still sees the
+  // update (it just never publishes it).
+  //
+  // The outbox ledger is advanced to the received copy ONLY when the page was
+  // clean before the apply (`ledger === pageStamp(page)`). A page with an
+  // unpublished local title/icon/content change keeps its old ledger entry, so
+  // the next flush still publishes that local work — seeding unconditionally
+  // would mark it confirmed and silently drop it.
+  applyRemoteContent: (pageId, blocks) => {
+    const page = get().pageById(pageId);
+    if (!page || page.content === undefined || page.content === blocks) return;
+    const ledger = loadLedger(PAGE_OUTBOX_KEY);
+    const wasClean = ledger[pageId] === pageStamp(page);
+    const received = { ...page, content: blocks };
+    set((s) => {
+      const next = replacePage(s, pageId, (current) => ({ ...current, content: blocks }));
+      schedulePagesCachePersist(next.pages, page.workspaceId);
+      return {
+        ...next,
+        pageRevisions: bumpPageRevision(s.pageRevisions, pageId),
+      };
+    });
+    // Re-read after the notification round: only seed when nothing else
+    // changed the page, or the stamp would confirm unrelated pending edits.
+    const after = get().pageById(pageId);
+    if (wasClean && after && pageStamp(after) === pageStamp(received)) {
+      ledger[pageId] = pageStamp(received);
+      saveOutboxLedger(PAGE_OUTBOX_KEY, ledger);
+    }
   },
 
   setPageContentVersion: (pageId, version) => {
