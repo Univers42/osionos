@@ -183,6 +183,13 @@ describe('make primary: the GoTrue write and its compensation', () => {
 		assert.deepEqual([result.status, addressesOf(world), result.body.previous === rowsOf(world)[0].id], [200, [P], true]);
 	});
 
+	it('P6\'\' a 502 with a JSON body that LANDED is a success: only a 4xx is a definite refusal', async () => {
+		const { world, row } = await setup();
+		world.directory.onPut = (id) => { applied(world, id); return reply({ msg: 'upstream reset' }, 502); };
+		const result = await primary(world, row.id);
+		assert.deepEqual([result.status, addressesOf(world), world.directory.puts.length], [200, [P], 1]);
+	});
+
 	it('P7 a timeout that LANDED is a success', async () => {
 		const { world, row } = await setup();
 		world.directory.onPut = (id) => { applied(world, id); throw new Error('timeout'); };
