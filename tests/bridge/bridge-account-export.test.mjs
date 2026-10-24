@@ -195,7 +195,7 @@ describe('the worker', () => {
 		assert.equal(object.owner, USER_A);
 		assert.equal(object.buffer.length, job.bytes);
 		const { manifest, tables } = JSON.parse(object.buffer);
-		assert.deepEqual(manifest.tables, { osionos_connections: 1, osionos_notes: 1, osionos_profiles: 1 });
+		assert.deepEqual(manifest.tables, { osionos_connections: 1, osionos_notes: 1, osionos_profiles: 1, osionos_user_emails: 0 });
 		assert.doesNotMatch(object.buffer.toString(), /bob private|Bob/);
 		assert.equal(tables.osionos_connections[0].addressee_id, USER_A);
 	});
