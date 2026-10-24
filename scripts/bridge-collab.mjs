@@ -273,8 +273,36 @@ async function mintCollabRealtimeToken(deps, session, workspaceId, response, con
 		secret: deps.env.JWT_SECRET ?? deps.env.REALTIME_JWT_SECRET,
 		userId: session.userId,
 		namespaces: [topic],
+		canPublish: false, // Publishing goes through the page-authorized bridge route.
 	});
 	return sendJson(response, 200, { ok: true, token, expiresAt, topic, spaceId: workspaceId }, config);
+}
+
+/** Publish ephemeral events only after authenticating their sender and page write access. */
+async function publishCollabEvent(deps, session, request, workspaceId, response, config) {
+	await requireSpaceMembership(config, deps.fetchImpl, session.userId, workspaceId);
+	const body = await readJsonBody(request);
+	if (!['collab', 'collab.req', 'collab.res'].includes(body?.event) || !body?.payload || typeof body.payload !== 'object') {
+		throw httpError('Invalid collaboration event.', 422);
+	}
+	if (Buffer.byteLength(JSON.stringify(body)) > 65_536) throw httpError('Collaboration event is too large.', 413);
+	const payload = body.payload;
+	if (body.event === 'collab') {
+		const actor = payload.actor;
+		if (typeof actor !== 'string' || !(actor.toLowerCase() === session.userId.toLowerCase()
+			|| actor.toLowerCase().startsWith(`${session.userId.toLowerCase()}:`))) throw httpError('Invalid event actor.', 403);
+		if (payload.t === 'blocks') {
+			const pageId = requireUuid(payload.pageId, 'pageId');
+			if (!Array.isArray(payload.ops) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
+			await deps.authorizeBlocks(request, pageId, workspaceId);
+		}
+		if (payload.t === 'pages' && payload.workspaceId?.toLowerCase() !== workspaceId.toLowerCase()) throw httpError('Invalid event workspace.', 403);
+	} else if (body.event === 'collab.req') {
+		payload.from = session.userId;
+	}
+	const published = await publishRealtime({ topic: `collab:${workspaceId}`, eventType: 'broadcast', payload: body, fetchImpl: deps.fetchImpl, env: deps.env });
+	if (!published) throw httpError('Collaboration publish failed.', 503);
+	return sendJson(response, 200, { ok: true }, config);
 }
 
 /**
@@ -316,8 +344,8 @@ async function inviteMember(deps, session, request, workspaceId, response, confi
  * Build the collaboration dispatcher: `await handler(url, request, response)` →
  * true when handled. deps: { config, verifySession, fetchImpl?, env? }.
  */
-export function createCollabHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
-	const deps = { fetchImpl, env };
+export function createCollabHandler({ config, verifySession, fetchImpl = fetch, env = process.env, authorizeBlocks }) {
+	const deps = { fetchImpl, env, authorizeBlocks };
 	return async function handleCollabRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		const wsPatch = /^\/api\/workspaces\/([0-9a-f-]{36})$/i.exec(pathname);
@@ -326,14 +354,16 @@ export function createCollabHandler({ config, verifySession, fetchImpl = fetch, 
 		const collabId = /^\/api\/collaboration\/([0-9a-f-]{36})$/i.exec(pathname);
 		const collabJoin = /^\/api\/collaboration\/([0-9a-f-]{36})\/join$/i.exec(pathname);
 		const rtToken = /^\/api\/collaboration\/([0-9a-f-]{36})\/realtime-token$/i.exec(pathname);
+		const events = /^\/api\/collaboration\/([0-9a-f-]{36})\/events$/i.exec(pathname);
 		const uploads = /^\/api\/collaboration\/([0-9a-f-]{36})\/uploads$/i.exec(pathname);
 		const invite = /^\/api\/collaboration\/([0-9a-f-]{36})\/invite$/i.exec(pathname);
 		const decideReq = /^\/api\/join-requests\/([0-9a-f-]{36})$/i.exec(pathname);
-		const owns = pathname === '/api/collaboration' || wsRequests || wsMembers || collabId || collabJoin || rtToken || uploads || invite || decideReq || (wsPatch && (request.method || '').toUpperCase() === 'PATCH');
+		const owns = pathname === '/api/collaboration' || wsRequests || wsMembers || collabId || collabJoin || rtToken || events || uploads || invite || decideReq || (wsPatch && (request.method || '').toUpperCase() === 'PATCH');
 		if (!owns) return false;
 		const method = (request.method || 'GET').toUpperCase();
 		try {
 			const session = verifySession(bearerToken(request), requestConfig);
+			if (events && method === 'POST') return await publishCollabEvent(deps, session, request, requireUuid(events[1], 'workspaceId'), response, requestConfig);
 			if (wsPatch && method === 'PATCH') return await patchWorkspace(deps, session, request, requireUuid(wsPatch[1], 'workspaceId'), response, requestConfig);
 			if (wsMembers && method === 'GET') return await listWorkspaceMembers(deps, session, requireUuid(wsMembers[1], 'workspaceId'), response, requestConfig);
 			if (wsRequests && method === 'GET') return await listJoinRequests(deps, session, requireUuid(wsRequests[1], 'workspaceId'), response, requestConfig);

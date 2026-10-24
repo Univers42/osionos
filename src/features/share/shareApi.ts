@@ -80,15 +80,20 @@ export async function fetchWorkspacePeople(workspaceId: string): Promise<SharePe
 }
 
 export async function fetchPageSharing(pageId: string): Promise<PageSharing> {
-  const page = await api.get<Pick<PageEntry, 'visibility' | 'collaborators'>>(`/api/pages/${encodeURIComponent(pageId)}`, permsBearer());
-  return { visibility: page.visibility ?? 'private', collaborators: page.collaborators ?? [] };
+  const page = await api.get<Pick<PageEntry, 'visibility' | 'collaborators' | 'contentVersion'>>(`/api/pages/${encodeURIComponent(pageId)}`, permsBearer());
+  return { visibility: page.visibility ?? 'private', collaborators: page.collaborators ?? [], version: page.contentVersion };
 }
 
 /** Writes what changed, then mirrors it into the page store: the outbox resends the store's
  *  `visibility` with every edit, so a stale copy there would undo the share. */
-export async function commitPageSharing(pageId: string, before: PageSharing, after: PageSharing): Promise<void> {
+export async function commitPageSharing(pageId: string, before: PageSharing, after: PageSharing): Promise<PageSharing> {
   const patch = sharingPatch(before, after);
-  if (Object.keys(patch).length === 0) return;
-  assertSharingApplied(await api.patch<unknown>(`/api/pages/${encodeURIComponent(pageId)}`, patch, permsBearer()));
+  if (Object.keys(patch).length === 0) return before;
+  if (!Number.isSafeInteger(before.version) || (before.version ?? -1) < 0) {
+    throw new Error('Sharing requires a page revision. Reload the page and try again.');
+  }
+  const reply = await api.patch<{ version?: number }>(`/api/pages/${encodeURIComponent(pageId)}`, { ...patch, baseVersion: before.version }, permsBearer());
+  assertSharingApplied(reply);
   usePageStore.getState().patchPage(pageId, patch);
+  return { ...after, version: reply.version };
 }

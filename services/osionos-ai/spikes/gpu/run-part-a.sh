@@ -50,7 +50,7 @@ wait_for_quiet_cpu() {
 		fi
 		if [ "$(date +%s)" -ge "$deadline" ]; then
 			echo "[part-a] the load average stayed at $load after 15 minutes; the measurement goes on anyway" >&2
-			return 1
+			return 0
 		fi
 		echo "[part-a] the load average is $load, waiting for a quiet CPU"
 		sleep 60
@@ -183,7 +183,16 @@ run_config() {
 		# run of this spike was contaminated by two client containers of the
 		# benchmark that were still running.
 		sh "$SPIKE_DIR/guard.sh" "part-a ($name, lambda=$lambda)" "$port" || exit 1
-		start_server "$container" "$image" "$@" || return 0
+		# Run in a subshell with errexit active; only status 2 is a capacity skip.
+		server_status=0
+		( set -e; start_server "$container" "$image" "$@" ) &
+		server_pid=$!
+		wait "$server_pid" || server_status=$?
+		case "$server_status" in
+			0) ;;
+			2) return 0 ;;
+			*) exit "$server_status" ;;
+		esac
 		wait_for_quiet_cpu "${CPU_WAIT}"
 		run_bench "$lambda" "${name}-lambda-$lambda"
 		docker logs "$container" > "$OUT_DIR/${name}-lambda-$lambda.server.txt" 2>&1 || true
@@ -250,6 +259,6 @@ all_configs | while IFS= read -r entry; do
 	fi
 	export DURATION
 	# shellcheck disable=SC2086
-	run_config "$name" "$image" $flags || true
+	run_config "$name" "$image" $flags
 done
 echo "[part-a] the results are in $JSONL"

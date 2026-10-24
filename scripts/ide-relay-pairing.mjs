@@ -36,7 +36,8 @@ function validStart(body) {
 	if (body === null || typeof body !== 'object') return null;
 	const { pubkey, name, os_user: osUser, platform, version, ts, sig } = body;
 	const raw = typeof pubkey === 'string' ? fromB64url(pubkey) : null;
-	const ok = raw?.length === 32 && b64url(raw) === pubkey && NAME_RE.test(name) && OS_USER_RE.test(osUser)
+	const ok = raw?.length === 32 && b64url(raw) === pubkey
+		&& typeof name === 'string' && NAME_RE.test(name) && typeof osUser === 'string' && OS_USER_RE.test(osUser)
 		&& PLATFORM_RE.test(platform) && typeof version === 'string' && VERSION_RE.test(version)
 		&& Number.isFinite(ts) && typeof sig === 'string';
 	return ok ? { raw, pubkey, name, osUser, platform, version, ts, sig } : null;

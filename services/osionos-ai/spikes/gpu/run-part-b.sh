@@ -76,7 +76,22 @@ trap cleanup EXIT
 # The guard: no client of the benchmark may run, and the ports of the part
 # must be free. The first run of this spike was contaminated by two client
 # containers of the benchmark that were still running.
-sh "$SPIKE_DIR/guard.sh" "part-b" "$TEI_PORT" "$LLAMA_PORT" || exit 1
+STEP="${1:-all}"
+if [ "$STEP" = agree ]; then
+	# Existing named services are supported; step_agree verifies their health.
+	sh "$SPIKE_DIR/guard.sh" "part-b agreement" || exit 1
+else
+	sh "$SPIKE_DIR/guard.sh" "part-b" "$TEI_PORT" "$LLAMA_PORT" || exit 1
+fi
+
+# Preserve the client's status and truncate logs before every invocation.
+run_logged() {
+	log="$1"; lines="$2"; shift 2
+	status=0
+	"$@" > "$log" 2>&1 || status=$?
+	tail -n "$lines" "$log"
+	[ "$status" -eq 0 ] || exit "$status"
+}
 
 # summarize <label> <bench.json> [loadavg]: the line of the table of the
 # report. The load average is the one that opened the measurement.
@@ -87,7 +102,7 @@ summarize() {
 }
 
 # ---------------------------------------------------------------- 1. the CPU baseline (TEI)
-step_tei() {
+start_tei() {
 	echo "[part-b] === the CPU baseline: TEI ==="
 	docker rm -f "$TEI_CONTAINER" >/dev/null 2>&1 || true
 	docker run -d --name "$TEI_CONTAINER" --cpus 8 --memory 6g \
@@ -97,27 +112,31 @@ step_tei() {
 		--model-id "$TEI_MODEL" --json-output >/dev/null
 	wait_for_url "http://127.0.0.1:$TEI_PORT/health"
 	echo "[part-b] TEI is ready"
+}
 
+step_tei() {
+	start_tei
 	wait_for_quiet_cpu
 	echo "[part-b] the benchmark of P0c (tei-bench.mjs), the load average is $LOAD_START"
-	docker run --rm --network host \
+	run_logged "$OUT_DIR/tei-bench-p0c.txt" 20 docker run --rm --network host \
 		-v "$SERVICE_DIR:/s" -w /s \
 		-e "TEI_URL=http://127.0.0.1:$TEI_PORT" -e "PASSAGES=2000" \
-		node:22-bookworm-slim node spikes/local-models/tei-bench.mjs 2>&1 | tee "$OUT_DIR/tei-bench-p0c.txt" | tail -20
+		node:22-bookworm-slim node spikes/local-models/tei-bench.mjs
 	printf '{"label":"tei-p0c-bench","kind":"p0c-bench","passages":2000,"loadavgStart":%s}\n' "$LOAD_START" >> "$JSONL"
 
 	wait_for_quiet_cpu
 	echo "[part-b] the three numbers of the brief, on TEI, the load average is $LOAD_START"
-	docker run --rm --network host \
+	rm -f "$OUT_DIR/tei-embed-bench.json"
+	run_logged "$OUT_DIR/tei-embed-bench.txt" 12 docker run --rm --network host \
 		-v "$SERVICE_DIR:/s" -v "$OUT_DIR:/out" -w /s \
 		-e "EMBED_URL=http://127.0.0.1:$TEI_PORT" -e "EMBED_STYLE=tei" \
 		-e "MODEL=$TEI_MODEL" -e "OUT=/out/tei-embed-bench.json" \
-		node:22-bookworm-slim node spikes/gpu/embed-bench-gpu.mjs 2>&1 | tee "$OUT_DIR/tei-embed-bench.txt" | tail -12
+		node:22-bookworm-slim node spikes/gpu/embed-bench-gpu.mjs
 	summarize "tei-cpu" "tei-embed-bench.json" "$LOAD_START"
 }
 
 # ---------------------------------------------------------------- 2. the GPU embedder
-step_gpu() {
+start_gpu() {
 	echo "[part-b] === the GPU embedder: llama.cpp on Vulkan ==="
 	docker rm -f "$EMBED_CONTAINER" >/dev/null 2>&1 || true
 	before=$(vram_used)
@@ -131,28 +150,40 @@ step_gpu() {
 	wait_for_url "http://127.0.0.1:$LLAMA_PORT/health"
 	after=$(vram_used)
 	echo "[part-b] the VRAM of the embedder: before=$before after=$after"
+}
 
+step_gpu() {
+	start_gpu
 	for batch in 32 64 128; do
 		wait_for_quiet_cpu
 		echo "[part-b] the three numbers, on the GPU, batch=$batch"
-		docker run --rm --network host \
+		rm -f "$OUT_DIR/llama-embed-bench-b$batch.json"
+		run_logged "$OUT_DIR/llama-embed-bench-b$batch.txt" 10 docker run --rm --network host \
 			-v "$SERVICE_DIR:/s" -v "$OUT_DIR:/out" -w /s \
 			-e "EMBED_URL=http://127.0.0.1:$LLAMA_PORT" -e "EMBED_STYLE=openai" \
 			-e "MODEL=e5-small" -e "BATCH=$batch" -e "OUT=/out/llama-embed-bench-b$batch.json" \
-			node:22-bookworm-slim node spikes/gpu/embed-bench-gpu.mjs 2>&1 | tee "$OUT_DIR/llama-embed-bench-b$batch.txt" | tail -10
+			node:22-bookworm-slim node spikes/gpu/embed-bench-gpu.mjs
 		summarize "llama-gpu-b$batch" "llama-embed-bench-b$batch.json" "$LOAD_START"
 	done
 }
 
 # ---------------------------------------------------------------- 3. the agreement
 step_agree() {
+	if [ "$(docker inspect -f '{{.State.Running}}' "$TEI_CONTAINER" 2>/dev/null || true)" != true ]; then start_tei; fi
+	if [ "$(docker inspect -f '{{.State.Running}}' "$EMBED_CONTAINER" 2>/dev/null || true)" != true ] \
+		|| ! docker inspect -f '{{json .Config.Cmd}}' "$EMBED_CONTAINER" | grep -F -q -- "$GGUF"; then
+		start_gpu
+	fi
+	wait_for_url "http://127.0.0.1:$TEI_PORT/health"
+	wait_for_url "http://127.0.0.1:$LLAMA_PORT/health"
 	echo "[part-b] === the agreement of the two embedders ==="
 	wait_for_quiet_cpu
-	docker run --rm --network host \
+	rm -f "$OUT_DIR/embed-agree-official.json"
+	run_logged "$OUT_DIR/embed-agree-official.txt" 12 docker run --rm --network host \
 		-v "$SERVICE_DIR:/s" -v "$OUT_DIR:/out" -w /s \
 		-e "TEI_URL=http://127.0.0.1:$TEI_PORT" -e "LLAMA_URL=http://127.0.0.1:$LLAMA_PORT" \
 		-e "OUT=/out/embed-agree-official.json" \
-		node:22-bookworm-slim node spikes/gpu/embed-agree.mjs 2>&1 | tee "$OUT_DIR/embed-agree-official.txt" | tail -12
+		node:22-bookworm-slim node spikes/gpu/embed-agree.mjs
 	summarize "agree-official" "embed-agree-official.json" "$LOAD_START"
 
 	# The two GGUFs of the community, for the comparison: they are not the
@@ -168,16 +199,16 @@ step_agree() {
 			-m "/models/$community.gguf" --alias e5-small --host 0.0.0.0 --port 8080 \
 			--embedding --pooling mean -ub 512 -np 8 -ngl 99 -t 4 -c 8192 >/dev/null
 		wait_for_url "http://127.0.0.1:$LLAMA_PORT/health"
-		docker run --rm --network host \
+		rm -f "$OUT_DIR/embed-agree-$community.json"
+		run_logged "$OUT_DIR/embed-agree-$community.txt" 12 docker run --rm --network host \
 			-v "$SERVICE_DIR:/s" -v "$OUT_DIR:/out" -w /s \
 			-e "TEI_URL=http://127.0.0.1:$TEI_PORT" -e "LLAMA_URL=http://127.0.0.1:$LLAMA_PORT" \
 			-e "OUT=/out/embed-agree-$community.json" \
-			node:22-bookworm-slim node spikes/gpu/embed-agree.mjs 2>&1 | tee "$OUT_DIR/embed-agree-$community.txt" | grep -E 'chunks|questions'
+			node:22-bookworm-slim node spikes/gpu/embed-agree.mjs
 		summarize "agree-$community" "embed-agree-$community.json" "$LOAD_START"
 	done
 }
 
-STEP="${1:-all}"
 case "$STEP" in
 tei) step_tei ;;
 gpu) step_gpu ;;

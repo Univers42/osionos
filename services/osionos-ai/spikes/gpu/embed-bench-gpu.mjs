@@ -24,9 +24,12 @@
 //   BATCH        the passages per request          (default 32)
 //   CONC         the requests in flight of the backfill (default 4)
 //   MODEL        the model id, for the report
+//   READY_FILE   optional marker written when backfill starts
+//   STOP_FILE    optional marker: repeat backfill batches until it exists
+//   LLM_ACTIVE_FILE optional arrival-window marker required during query measurements
 //   OUT          a file to write the JSON to
 
-import { writeFileSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
 import { corpusChunks } from './requests.mjs';
 import { readGolden } from '../../eval/lib.mjs';
 
@@ -94,15 +97,23 @@ for (let index = 0; backfillInputs.length < PASSAGES; index += 1) {
 	backfillInputs.push(passages[index % passages.length]);
 }
 
+function requireLlmActive() {
+	if (process.env.LLM_ACTIVE_FILE && !existsSync(process.env.LLM_ACTIVE_FILE)) {
+		throw new Error('LLM arrival window ended before the query measurement finished');
+	}
+}
+
 // ---------------------------------------------------------------- (a) the query p95
 console.log(`\n== (a) QUERY LATENCY (sequential, n=${QUERIES}) ==`);
 for (let index = 0; index < 10; index += 1) await embed([questions[index % questions.length]]);
 const queryLat = [];
 for (let index = 0; index < QUERIES; index += 1) {
+	requireLlmActive();
 	const input = questions[index % questions.length];
 	const started = performance.now();
 	await embed([input]);
 	queryLat.push(performance.now() - started);
+	requireLlmActive();
 }
 const sortedQuery = [...queryLat].sort((a, b) => a - b);
 console.log(
@@ -115,13 +126,21 @@ console.log(`\n== (b) BACKFILL (${PASSAGES} passages, batch=${BATCH}, concurrenc
 const batches = [];
 for (let index = 0; index < PASSAGES; index += BATCH) batches.push(backfillInputs.slice(index, index + BATCH));
 let done = 0;
+let repeatIndex = 0;
+let passagesDone = 0;
 const backfillStarted = performance.now();
 await Promise.all(
 	Array.from({ length: CONC }, async () => {
 		for (;;) {
-			const batch = batches.shift();
+			let batch = batches.shift();
+			if (!batch && process.env.STOP_FILE && !existsSync(process.env.STOP_FILE)) {
+				batch = Array.from({ length: BATCH }, () => backfillInputs[repeatIndex++ % backfillInputs.length]);
+			}
 			if (!batch) return;
-			await embed(batch);
+			const pending = embed(batch);
+			if (process.env.READY_FILE) writeFileSync(process.env.READY_FILE, 'ready\n');
+			await pending;
+			passagesDone += batch.length;
 			done += 1;
 			if (done % 10 === 0) {
 				const elapsed = (performance.now() - backfillStarted) / 1000;
@@ -131,7 +150,7 @@ await Promise.all(
 	}),
 );
 const backfillMs = performance.now() - backfillStarted;
-const chunksPerSecond = PASSAGES / (backfillMs / 1000);
+const chunksPerSecond = passagesDone / (backfillMs / 1000);
 console.log(`backfill: ${fmt(backfillMs / 1000)} s -> ${fmt(chunksPerSecond, 2)} chunks/s`);
 
 // ---------------------------------------------------------------- (c) the query p95 under the backfill
@@ -179,6 +198,7 @@ const report = {
 	model: MODEL,
 	queries: QUERIES,
 	passages: PASSAGES,
+	backfillPassages: passagesDone,
 	batch: BATCH,
 	concurrency: CONC,
 	corpusChunks: passages.length,

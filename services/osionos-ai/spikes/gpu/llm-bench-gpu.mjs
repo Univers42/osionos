@@ -28,9 +28,10 @@
 //   REQUESTS     how many different prompts to cycle (default 24)
 //   RANDOMIZE_PREFIX  1 defeats the prefix cache (default 0)
 //   LABEL        the name of the run, for the report
+//   READY_FILE   optional marker present only during the arrival window
 //   OUT          a file to write the JSON to (default: stdout)
 
-import { writeFileSync } from 'node:fs';
+import { unlinkSync, writeFileSync } from 'node:fs';
 import { buildRequests } from './requests.mjs';
 
 const BASE = (process.env.LLM_URL || 'http://127.0.0.1:18080').replace(/\/$/, '');
@@ -67,26 +68,33 @@ async function* sseObjects(res) {
 	const reader = res.body.getReader();
 	const decoder = new TextDecoder();
 	let buffer = '';
-	for (;;) {
-		const { value, done } = await reader.read();
-		if (done) break;
-		buffer += decoder.decode(value, { stream: true });
-		let index;
-		while ((index = buffer.indexOf('\n\n')) !== -1) {
-			const block = buffer.slice(0, index);
-			buffer = buffer.slice(index + 2);
-			for (const line of block.split('\n')) {
-				const text = line.trim();
-				if (!text.startsWith('data:')) continue;
-				const payload = text.slice(5).trim();
-				if (payload === '[DONE]') continue;
-				try {
-					yield JSON.parse(payload);
-				} catch {
-					/* keepalive */
+	try {
+		for (;;) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+			let index;
+			while ((index = buffer.search(/\r?\n\r?\n/)) !== -1) {
+				const block = buffer.slice(0, index);
+				buffer = buffer.slice(index + (buffer[index] === '\r' ? 4 : 2));
+				if (/^event:\s*error\s*$/m.test(block)) { yield { error: block }; continue; }
+				for (const line of block.split('\n')) {
+					const text = line.trim();
+					if (!text.startsWith('data:')) continue;
+					const payload = text.slice(5).trim();
+					if (payload === '[DONE]') { yield { done: true }; continue; }
+					try {
+						const parsed = JSON.parse(payload);
+						yield parsed;
+					} catch {
+						/* keepalive */
+					}
 				}
 			}
 		}
+	} finally {
+		await reader.cancel().catch(() => undefined);
+		reader.releaseLock();
 	}
 }
 
@@ -116,22 +124,30 @@ async function runOne(body) {
 	let usage = null;
 	let finishReason = null;
 	const contentTimes = [];
-	for await (const object of sseObjects(res)) {
-		const now = performance.now();
-		if (object.timings) timings = object.timings;
-		if (object.usage) usage = object.usage;
-		const choice = object.choices?.[0];
-		if (!choice) continue;
-		if (choice.finish_reason) finishReason = choice.finish_reason;
-		const delta = choice.delta?.content;
-		if (typeof delta === 'string' && delta.length > 0) {
-			if (firstAt === null) firstAt = now;
-			contentTimes.push(now);
-			contentChunks += 1;
-			contentChars += delta.length;
-			lastAt = now;
+	let completed = false;
+	try {
+		for await (const object of sseObjects(res)) {
+			if (object?.error !== undefined) return { error: `stream_error: ${JSON.stringify(object.error).slice(0, 300)}` };
+			if (object.done) completed = true;
+			const now = performance.now();
+			if (object.timings) timings = object.timings;
+			if (object.usage) usage = object.usage;
+			const choice = object.choices?.[0];
+			if (!choice) continue;
+			if (choice.finish_reason) { finishReason = choice.finish_reason; completed = true; }
+			const delta = choice.delta?.content;
+			if (typeof delta === 'string' && delta.length > 0) {
+				if (firstAt === null) firstAt = now;
+				contentTimes.push(now);
+				contentChunks += 1;
+				contentChars += delta.length;
+				lastAt = now;
+			}
 		}
+	} catch (error) {
+		return { error: `stream_failed: ${error.message}` };
 	}
+	if (!completed) return { error: 'stream_incomplete: ended without completion' };
 	const ended = performance.now();
 	const itl = [];
 	for (let index = 1; index < contentTimes.length; index += 1) itl.push(contentTimes[index] - contentTimes[index - 1]);
@@ -217,6 +233,8 @@ const poller = (async () => {
 	}
 })();
 
+if (process.env.READY_FILE) writeFileSync(process.env.READY_FILE, 'ready\n');
+
 // The window: the arrivals are Poisson, the seed is fixed.
 const results = [];
 const started = performance.now();
@@ -241,6 +259,7 @@ while (true) {
 	);
 }
 const windowEnd = performance.now();
+if (process.env.READY_FILE) unlinkSync(process.env.READY_FILE);
 // The drain: the window is over, but the requests that are still running are
 // waited for, at most DRAIN_MS. A server that cannot keep up leaves a backlog,
 // and the backlog is the answer, not a reason to wait for minutes.
