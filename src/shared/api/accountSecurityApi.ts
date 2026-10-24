@@ -79,9 +79,10 @@ function retryAfter(response: Response, body: Record<string, unknown>): number |
 }
 
 function failure<T>(response: Response, body: Record<string, unknown>): AccountSecurityOutcome<T> {
-  const code = text(body.code) ?? 'request_failed';
+  const rawCode = text(body.code);
+  const code = rawCode ?? 'request_failed';
   if (response.status === 429) return { ok: false, reason: 'rate_limited', code, retryAfterSeconds: retryAfter(response, body) };
-  const kind = classifySettingsError(response.status, code);
+  const kind = classifySettingsError(response.status, rawCode);
   if (kind === 'sudo_required') return { ok: false, reason: 'sudo_required' };
   // sudo_unavailable has its own sentence in the prompt, so it stays a refusal with its code.
   if (kind === 'unavailable' && code !== 'sudo_unavailable') return { ok: false, reason: 'unavailable' };
