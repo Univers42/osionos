@@ -65,7 +65,7 @@ const NewTeamspaceModal: React.FC<{ onCreate: (name: string) => void; onClose: (
   const [name, setName] = useState('New teamspace');
   return (
     <Modal open onClose={onClose} title="New teamspace" size="sm">
-      <div className="space-y-4">
+      <div className="space-y-4 p-6">
         <label htmlFor="new-teamspace-name" className="block text-sm font-medium text-[var(--osio-fg-default)]">Teamspace name</label>
         <input id="new-teamspace-name" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={name} onChange={(event) => setName(event.target.value)} />
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onCreate(name.trim() || 'New teamspace')}>Create</Button></div>
