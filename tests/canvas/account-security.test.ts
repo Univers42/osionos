@@ -136,6 +136,16 @@ test("deletion: status 404 is 'no request', 201 carries the date, cancel is 204"
   assert.equal(cancelled.result.ok, true);
 });
 
+test("a codeless 404 is a missing route; a 404 with a server code is a refusal with its message", async () => {
+  useSession("osionos_v1.tok");
+  const missing = await withFetch(() => json(404, { ok: false, message: "Not found." }), () => api.requestSudoCode());
+  assert.equal(missing.result.ok === false && missing.result.reason, "unavailable");
+  const answered = await withFetch(() => json(404, { code: "key_not_found", message: "No such key." }), () => api.requestSudoCode());
+  assert.equal(answered.result.ok === false && answered.result.reason, "refused");
+  assert.equal(answered.result.ok === false && answered.result.code, "key_not_found");
+  assert.equal(answered.result.ok === false && answered.result.reason === "refused" && answered.result.message, "No such key.");
+});
+
 test("without a session or a bridge the client says unavailable", async () => {
   useSession(null);
   const { result, calls } = await withFetch(() => json(200, {}), () => api.deletionStatus());
