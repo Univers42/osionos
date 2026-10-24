@@ -23,6 +23,7 @@ import { PanelStatus, Section, SettingRow } from '../ui/settingsKit';
 import { runAsync } from '../model/settingsCalls';
 import { useSettingsHydration } from '../model/settingsHydration';
 import { AccessibilitySettings } from './AccessibilitySettings';
+import { AccountExportSection } from '../ui/AccountExportSection';
 import { RecommendationPrivacy } from '../ui/RecommendationPrivacy';
 
 const FALLBACK_TIMEZONES = ['UTC', 'Europe/Madrid', 'Europe/Paris', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo'];
@@ -97,6 +98,7 @@ export const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUse
         <SettingRow title="Profile discoverability" description="Users who know your email will see your profile when inviting you." action={<Toggle checked={privacy?.profileDiscoverability ?? true} onChange={(checked) => update({ privacy: { ...preferences?.privacy, profileDiscoverability: checked } })} label="Profile discoverability" />} />
         <Button className="mt-3" onClick={() => setModal({ name: 'reset-preferences' })}>Reset to defaults</Button>
         <RecommendationPrivacy />
+        <AccountExportSection />
       </Section>
 
       {modal?.name === 'cookies' && <CookieSettingsModal mode={cookies?.mode ?? 'customize'} onSave={(mode) => { update({ cookies: { ...preferences?.cookies, mode } }); setModal(null); }} onClose={() => setModal(null)} />}

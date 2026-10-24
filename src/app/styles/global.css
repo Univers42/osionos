@@ -627,9 +627,13 @@ body {
 
 /* Editorial serif headings: the same stack and tracking as osio-h1..h4. One
    :where() per tag so each is filed under its tag (pane zoom, below). */
-:where(h1), :where(h2), :where(h3), :where(h4) {
-  font-family: var(--osio-font-heading);
-  letter-spacing: var(--osio-letter-spacing-heading);
+@layer base {
+  /* In @layer base, not unlayered: unlayered CSS beats every utility, so a
+     heading could never take font-sans. */
+  :where(h1), :where(h2), :where(h3), :where(h4) {
+    font-family: var(--osio-font-heading);
+    letter-spacing: var(--osio-letter-spacing-heading);
+  }
 }
 
 /* Scrollbar styling */

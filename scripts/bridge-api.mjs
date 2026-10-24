@@ -68,6 +68,9 @@ import { createFeedHandler } from './bridge-feed.mjs';
 import { createPersonalizationHandler } from './bridge-personalization.mjs';
 import { createRecsHandler } from './bridge-recs.mjs';
 import { createEventsHandler } from './bridge-events.mjs';
+import { createActivityEmitter } from './bridge-activity.mjs';
+import { createActivityConsent } from './bridge-activity-consent.mjs';
+import { startActivityMaintenance } from './bridge-activity-maintenance.mjs';
 import { createModerationConsoleHandler } from './bridge-moderation-console.mjs';
 import { createRecsHealthHandler } from './bridge-recs-health.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
@@ -930,8 +933,21 @@ function pageWriteDenied() {
  * itself holds no state.
  */
 async function shareLevelForPage(config, workspaceId, pageId, userId, role, fetchImpl) {
-	const rules = await createShareRuleStore({ fetchImpl }).listForPage(config, workspaceId, pageId);
-	return bestShareLevel(rules, { userId, role, workspaceId }, pageId);
+	const store = createShareRuleStore({ fetchImpl });
+	const rules = await store.listForPage(config, workspaceId, pageId);
+	const teamIds = await teamIdsWhenRuled(store, config, workspaceId, userId, [rules]);
+	return bestShareLevel(rules, { userId, role, workspaceId, teamIds }, pageId);
+}
+
+/**
+ * The caller's team ids, read once per request and only when a rule names a team (no team
+ * rule, no extra read). A failed read stays null, which the evaluator treats as fail closed.
+ * Caveat: it trusts the rule lists already read; when none names a team, null is returned
+ * and never consulted.
+ */
+async function teamIdsWhenRuled(store, config, workspaceId, userId, ruleLists) {
+	const ruled = ruleLists.some((list) => (list ?? []).some((rule) => rule?.target?.type === 'team'));
+	return ruled ? store.teamIdsFor(config, workspaceId, userId) : null;
 }
 
 /** osionos_workspace_members row for (user, workspace) — org/teamspace membership. */
@@ -1125,9 +1141,9 @@ function mayMutatePage(row, userId, memberAccess) {
  * `rules` are the share rules for the page (scripts/bridge-share-rules.mjs): a can_edit
  * rule grants the write the membership did not carry, a no_access rule takes it away.
  */
-export function canWritePageRow(row, userId, member, permission, rules = null) {
+export function canWritePageRow(row, userId, member, permission, rules = null, teamIds = null) {
 	if (sameId(row?.owner_id, userId)) return true;
-	const level = bestShareLevel(rules ?? [], { userId, role: member?.role, workspaceId: row?.workspace_id }, row?.id);
+	const level = bestShareLevel(rules ?? [], { userId, role: member?.role, workspaceId: row?.workspace_id, teamIds }, row?.id);
 	if (shareDenies(level)) return false;
 	if (!canReadPageRow(row, userId) && !shareGrantsRead(level)) return false;
 	if (shareGrantsWrite(level)) return true;
@@ -3543,7 +3559,7 @@ async function favoriteAuthRows(favoriteIds, config, fetchImpl) {
 	return byId;
 }
 
-/** workspace_id → { role, exempt, rules } for the workspaces the caller is a member of; a throwing read omits the workspace (fail closed). */
+/** workspace_id → { role, exempt, rules, teamIds } for the workspaces the caller is a member of; a throwing read omits the workspace (fail closed). */
 async function favoriteWorkspaceAccess(rowsToCheck, authContext, config, fetchImpl) {
 	const idsByWorkspace = new Map();
 	for (const row of rowsToCheck) {
@@ -3562,7 +3578,8 @@ async function favoriteWorkspaceAccess(rowsToCheck, authContext, config, fetchIm
 			if (!exempt) {
 				for (const chunk of idChunks(pageIds)) for (const [id, list] of await store.listForPages(config, workspaceId, chunk)) rules.set(id, list);
 			}
-			access.set(workspaceId, { role, exempt, rules });
+			const teamIds = exempt ? null : await teamIdsWhenRuled(store, config, workspaceId, authContext.userId, [...rules.values()]);
+			access.set(workspaceId, { role, exempt, rules, teamIds });
 		} catch { /* fail closed: every page of this workspace stays absent */ }
 	}));
 	return access;
@@ -3590,7 +3607,7 @@ async function handleFavoritesList(request, response, config, fetchImpl) {
 			if (!workspace.exempt) {
 				const rules = workspace.rules.get(String(row.id).toLowerCase());
 				if (!rules) continue;
-				level = bestShareLevel(rules, { userId: authContext.userId, role: workspace.role, workspaceId: row.workspace_id }, pageId);
+				level = bestShareLevel(rules, { userId: authContext.userId, role: workspace.role, workspaceId: row.workspace_id, teamIds: workspace.teamIds }, pageId);
 			}
 		}
 		try { requireReadablePage(row, authContext.userId, level); readableIds.push(pageId); } catch { /* hidden or unreadable */ }
@@ -4907,13 +4924,16 @@ export function createBridgeServer(options = {}) {
 	server.on('close', () => transport?.close());
 	let cutoffPoller = null;
 	let revocationPoller = null;
+	const activityEmitter = createActivityEmitter({ pg, env, now: options.now, isTracked: createActivityConsent({ pg, now: options.now }).isTracked });
+	let activityTimer = null;
 	server.on('listening', () => {
+		activityTimer = startActivityMaintenance({ pg, env });
 		cutoffPoller = startSessionCutoffPoller(sessionCutoffs, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionCutoffPoll);
 		revocationPoller = startSessionRevocationPoller(sessionRevocations, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionRevocationPoll);
 		server.sessionRevocationPoller = revocationPoller;
 	});
-	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); if (!options.kv) kv.close(); });
-	Object.assign(server, { sessionCutoffs, sessionRevocations, sessionRecords, kv, kvRequired });
+	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); activityTimer?.stop(); if (!options.kv) kv.close(); });
+	Object.assign(server, { activityEmitter, sessionCutoffs, sessionRevocations, sessionRecords, kv, kvRequired });
 	return server;
 }
 
@@ -4928,6 +4948,14 @@ export function startBridgeServer(config = configFromEnv()) {
 	// No administrator configured: nobody is promoted to is_admin at login, so
 	// an account-admin workspace has no admin until the operator sets one.
 	if (!config.adminEmails.length) console.warn('[bridge] no account administrators configured (OSIONOS_ADMIN_EMAILS unset)');
+	// A handler removes Node's default SIGTERM exit, so the exit is part of this contract.
+	if (process.env.OSIONOS_ACTIVITY === '1') {
+		process.once('SIGTERM', async () => {
+			const { flushed, lost } = await server.activityEmitter.close({ deadlineMs: 2000 });
+			console.info(`[osionos-bridge] activity: flushed ${flushed}, lost ${lost}`);
+			process.exit(0);
+		});
+	}
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
 	});

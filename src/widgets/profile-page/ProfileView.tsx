@@ -17,12 +17,13 @@
  * which owns the presence heartbeat.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 
 import { ProfileActions } from './profileChrome';
 import { ProfileFacts } from './profileFields';
 import { ProfileSharedPosts } from './ProfileSharedPosts';
 import { ReadmeBlocks } from './ReadmeBlocks';
+import { toReadmeRecord } from './model/binding';
 import { useProfile } from './useProfile';
 
 interface ProfileViewProps {
@@ -31,6 +32,7 @@ interface ProfileViewProps {
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
   const { profile, error } = useProfile(userId);
+  const readmeRecord = useMemo(() => toReadmeRecord(profile), [profile]);
 
   if (error) {
     return (
@@ -84,7 +86,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ userId }) => {
 
         <ProfileActions userId={userId} name={profile.name} />
 
-        <ReadmeBlocks readme={profile.readme} />
+        <ReadmeBlocks readme={profile.readme} record={readmeRecord} />
 
         <ProfileSharedPosts userId={userId} />
       </div>

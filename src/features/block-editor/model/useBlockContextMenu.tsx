@@ -39,6 +39,9 @@ import {
 } from "./blockColors";
 import { copyBlocks } from "./blockClipboard";
 import { getBlockDraftContent } from "./blockDraftStore";
+import { bindBlock, isBindableType, styleOf } from "@/features/profile-binding/model/bindingEdit";
+import { isReadmePage, PROFILE_FIELD_SETTINGS_EVENT } from "@/features/profile-binding/model/readmePage";
+import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
 import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
 import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
 import { BLOCK_TRANSFORM_OPTIONS } from "./blockTransformOptions";
@@ -207,6 +210,14 @@ function createButtonContextMenuSections(block: Block, onOpenSettings: () => voi
   ];
 }
 
+function createProfileFieldContextMenuSections(block: Block, isReadme: boolean, onOpen: (bind: boolean) => void): BlockContextMenuSection[] {
+  if (!isReadme) return [];
+  const isBound = Boolean(block.recordRef && block.fieldBind);
+  if (!isBound && !isBindableType(block)) return [];
+  const label = isBound ? "Profile field settings" : "Bind to profile field…";
+  return [{ label: "Profile field", items: [{ icon: <Settings2 size={16} />, label, onClick: () => onOpen(!isBound) }] }];
+}
+
 export function useBlockContextMenu({
   pageId,
   content,
@@ -219,6 +230,7 @@ export function useBlockContextMenu({
     null,
   );
   const colorProfiles = useBlockColorProfileStore((state) => state.profiles);
+  const isReadme = useAccountProfileStore((state) => isReadmePage(pageId, state.profile));
 
   const blockLocation = useMemo(() => {
     if (!contextMenu) return null;
@@ -420,6 +432,17 @@ export function useBlockContextMenu({
     );
     closeContextMenu();
   }, [closeContextMenu, contextMenu, pageId]);
+
+  const handleProfileFieldSettings = useCallback((bind: boolean) => {
+    if (!contextMenu || !blockLocation) return;
+    const { blockId } = contextMenu;
+    if (bind) {
+      const patch = bindBlock(blockLocation.block, "displayName", styleOf(blockLocation.block));
+      if (patch) updatePageContent(pageId, updateBlockInTree(content, blockId, (current) => ({ ...current, ...patch })));
+    }
+    globalThis.dispatchEvent(new CustomEvent(PROFILE_FIELD_SETTINGS_EVENT, { detail: { pageId, blockId } }));
+    closeContextMenu();
+  }, [blockLocation, closeContextMenu, content, contextMenu, pageId, updatePageContent]);
 
   const handleUnavailable = useCallback(() => {
     closeContextMenu();
@@ -657,6 +680,8 @@ export function useBlockContextMenu({
 
     const buttonSections = createButtonContextMenuSections(blockLocation.block, handleButtonSettings);
 
+    const profileFieldSections = createProfileFieldContextMenuSections(blockLocation.block, isReadme, handleProfileFieldSettings);
+
     const actionItems = [
       {
         icon: <Copy size={16} />,
@@ -704,6 +729,7 @@ export function useBlockContextMenu({
       transformSection,
       ...tableSections,
       ...buttonSections,
+      ...profileFieldSections,
       { label: "Actions", items: actionItems },
       {
         items: [
@@ -764,6 +790,8 @@ export function useBlockContextMenu({
     handleSetTableConfig,
     handleToggleHeading,
     handleButtonSettings,
+    handleProfileFieldSettings,
+    isReadme,
     handleUnavailable,
     handleAskAI,
   ]);

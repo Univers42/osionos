@@ -25,6 +25,8 @@ import { httpError } from './bridge-social-core.mjs';
 import { readBaasJson } from './bridge-baas-body.mjs';
 
 const TABLE = 'osionos_share_rules';
+const TEAMS_TABLE = 'osionos_teams';
+const TEAM_MEMBERS_TABLE = 'osionos_team_members';
 const MIGRATION = 'models/osionos-share-rules-migration.sql';
 const LEVELS = new Set(['no_access', 'can_view', 'can_comment', 'can_edit', 'full_access']);
 const RESOURCE_TYPES = new Set(['workspace', 'page', 'database', 'block']);
@@ -46,7 +48,7 @@ function boundedText(value, limit, field) {
 	return text;
 }
 
-/** The rule target rebuilt from its known shapes only: {user,userId} {role,role} {workspace} {public}. */
+/** The rule target rebuilt from its known shapes only: {user,userId} {role,role} {team,teamId} {workspace} {public}. */
 function normalizeTarget(target) {
 	const type = target?.type;
 	if (type === 'workspace' || type === 'public') return { type };
@@ -60,7 +62,27 @@ function normalizeTarget(target) {
 		if (!role) throw httpError('target.role is required', 400);
 		return { type, role };
 	}
+	if (type === 'team') {
+		const teamId = boundedText(target.teamId, 64, 'target.teamId').toLowerCase();
+		if (!teamId) throw httpError('target.teamId is required', 400);
+		return { type, teamId };
+	}
 	throw httpError('target.type is invalid', 400);
+}
+
+/** The 422 for a team that is not in the rule's workspace — absent, deleted, archived or foreign alike. */
+function teamNotFound() {
+	return Object.assign(httpError('Team not found in this workspace.', 422), { code: 'team_not_found' });
+}
+
+/**
+ * The rule identity within a resource. Only a team key grows a fourth segment: user and role keys
+ * keep their stored 3-part form, so re-saving an existing rule still replaces it instead of
+ * adding a twin.
+ */
+function targetKey(target) {
+	const base = `${target.type}:${target.userId ?? ''}:${target.role ?? ''}`;
+	return target.teamId ? `${base}:${target.teamId}` : base;
 }
 
 /** A client AccessRule → the row the bridge writes. Client ids and keys are never trusted. */
@@ -82,7 +104,7 @@ export function normalizeShareRule(input) {
 		resource_type: resourceType,
 		resource_id: resourceId,
 		target,
-		target_key: `${target.type}:${target.userId ?? ''}:${target.role ?? ''}`,
+		target_key: targetKey(target),
 		permission,
 		explicit: input?.explicit !== false,
 	};
@@ -105,12 +127,12 @@ export function toApiRule(row) {
 
 /** PostgREST-backed rule store; every method takes the per-request bridge config. */
 export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = console.error } = {}) {
-	async function call(config, query, { method = 'GET', body, prefer, empty = [] } = {}) {
+	async function call(config, query, { method = 'GET', body, prefer, empty = [], from = table } = {}) {
 		if (!config?.baasUrl || !config?.serviceKey) throw httpError('rule storage is not configured', 503);
 		const headers = { Accept: 'application/json', apikey: config.serviceKey, Authorization: `Bearer ${config.serviceKey}` };
 		if (body !== undefined) headers['Content-Type'] = 'application/json';
 		if (prefer) headers.Prefer = prefer;
-		const response = await fetchImpl(`${config.baasUrl}/rest/v1/${table}?${query}`, {
+		const response = await fetchImpl(`${config.baasUrl}/rest/v1/${from}?${query}`, {
 			method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(TIMEOUT_MS),
 		});
 		// A non-2xx is classified by its status and its error code, so that body is read
@@ -220,9 +242,39 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		}
 	};
 
+	/**
+	 * The caller's team ids in ONE workspace, read per request and never cached, or null when
+	 * the read cannot be trusted. null is not []: the evaluator reads it as "unknown" and lets a
+	 * team no_access rule still block, where [] would silently drop that deny.
+	 * Caveat: an archived team still counts — archiving keeps its member rows.
+	 */
+	const teamIdsFor = async (config, workspaceId, userId) => {
+		try {
+			const rows = await call(config, query({
+				select: 'team_id', workspace_id: `eq.${workspaceId}`, user_id: `eq.${userId}`, limit: String(LIST_LIMIT),
+			}), { from: TEAM_MEMBERS_TABLE, empty: null });
+			// A full page may be a truncated set: the same fail-closed rule as the rules read.
+			if (!Array.isArray(rows) || rows.length >= LIST_LIMIT) return null;
+			return rows.map((row) => String(row.team_id).toLowerCase());
+		} catch {
+			return null;
+		}
+	};
+
+	/** A team rule is written only for a live team of the rule's own workspace (service-role read). */
+	async function requireTeamInWorkspace(config, rule) {
+		const teamId = rule.target.teamId;
+		if (!UUID.test(teamId)) throw teamNotFound();
+		const rows = await call(config, query({
+			select: 'id', id: `eq.${teamId}`, workspace_id: `eq.${rule.workspace_id}`, archived_at: 'is.null', limit: '1',
+		}), { from: TEAMS_TABLE });
+		if (!rows[0]) throw teamNotFound();
+	}
+
 	return {
 		listForPage,
 		listForPages,
+		teamIdsFor,
 		async list(config, workspaceId, resourceId) {
 			const params = { select: SELECT, workspace_id: `eq.${workspaceId}`, order: 'created_at.asc', limit: String(LIST_LIMIT) };
 			if (resourceId == null) return (await call(config, query(params))).map(toApiRule);
@@ -235,6 +287,7 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 			return [...own, ...wide].map(toApiRule);
 		},
 		async upsert(config, rule) {
+			if (rule.target.type === 'team') await requireTeamInWorkspace(config, rule);
 			const body = { ...rule, updated_at: new Date().toISOString() };
 			const rows = await call(config, query({ on_conflict: 'workspace_id,resource_type,resource_id,target_key', select: SELECT }), {
 				method: 'POST', body, prefer: 'resolution=merge-duplicates,return=representation',

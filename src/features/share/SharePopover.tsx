@@ -63,7 +63,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
   }, [centered]);
 
   const generalEntries = model.entries.filter((entry) => entry.target.type === 'workspace' || entry.target.type === 'public');
-  const peopleEntries = model.entries.filter((entry) => entry.target.type === 'user' || entry.target.type === 'role');
+  const peopleEntries = model.entries.filter((entry) => entry.target.type === 'user' || entry.target.type === 'role' || entry.target.type === 'team');
 
   return (
     <div
@@ -86,9 +86,11 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
       <div className="px-2">
         <SharePeoplePicker
           people={model.people}
+          teams={model.teams}
           excludedKeys={model.entries.map((entry) => entry.key)}
           disabled={model.busy}
           onPick={(person) => { void model.setLevel({ type: 'user', person }, 'can_view'); }}
+          onPickTeam={(team) => { void model.setLevel({ type: 'team', team }, 'can_view'); }}
         />
       </div>
 

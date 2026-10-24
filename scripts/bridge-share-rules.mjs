@@ -22,13 +22,18 @@
  * The bridge owns the exemptions: the page owner and the workspace owner/admin keep their
  * access whatever the rules say, so they never reach this module.
  *
- * Caveat: a rule is read as it is stored — the row shape (resource_id, resource_type) or
+ * Caveat: a team target needs ctx.teamIds; a caller that never reads it makes every team
+ * no_access rule block every non-exempt caller (fail closed) and every team grant inert.
+ * A rule is read as it is stored — the row shape (resource_id, resource_type) or
  * the API shape the store answers (resourceId, resourceType). The store maps a
  * workspace-wide rule ('') to a null resource, so both spellings of "the whole workspace"
  * are matched here.
  */
 
 import { sameId } from './bridge-page-read.mjs';
+
+/** Advertised on the rules read so the Share dialog offers teams only where the server honours them. */
+export const TEAM_RULES_CAPABILITY = 'teamRules';
 
 export const SHARE_LEVELS = ['no_access', 'can_view', 'can_comment', 'can_edit', 'full_access'];
 
@@ -58,13 +63,14 @@ function ruleResourceId(rule) {
 	return raw === null ? '' : String(raw);
 }
 
-/** The target of a rule, rebuilt from its known shapes only: {type} {userId} {role}. */
+/** The target of a rule, rebuilt from its known shapes only: {type} {userId} {role} {teamId}. */
 function ruleTarget(rule) {
 	const target = rule?.target;
 	if (!target || typeof target !== 'object') return null;
 	const type = typeof target.type === 'string' ? target.type : '';
 	if (type === 'user') return { type, userId: typeof target.userId === 'string' ? target.userId : '' };
 	if (type === 'role') return { type, role: typeof target.role === 'string' ? target.role : '' };
+	if (type === 'team') return { type, teamId: typeof target.teamId === 'string' ? target.teamId : '' };
 	if (type === 'workspace' || type === 'public') return { type };
 	return null;
 }
@@ -75,8 +81,20 @@ function sameText(left, right) {
 }
 
 /**
+ * A team target names the caller when ctx.teamIds (their teams in the rule's workspace, read
+ * once per request) holds its id. When ctx.teamIds is not an array the read failed or was never
+ * made: a grant then matches nobody, but a no_access rule still matches, because an empty set
+ * would drop the deny the caller is under.
+ */
+function teamRuleMatches(rule, target, ctx) {
+	if (!target.teamId) return false;
+	if (Array.isArray(ctx?.teamIds)) return ctx.teamIds.some((id) => sameText(id, target.teamId));
+	return rulePermission(rule) === 'no_access';
+}
+
+/**
  * Whether a rule is about the caller: a user target names them, a role target names their
- * role, a workspace target names their workspace, a public target names everyone. A rule
+ * role, a team target names a team they are in, a workspace target names their workspace, a public target names everyone. A rule
  * about another resource type is not a page rule and never matches.
  */
 export function ruleMatchesCaller(rule, ctx) {
@@ -86,6 +104,7 @@ export function ruleMatchesCaller(rule, ctx) {
 	if (!target) return false;
 	if (target.type === 'user') return sameId(target.userId, ctx?.userId);
 	if (target.type === 'role') return sameText(target.role, ctx?.role);
+	if (target.type === 'team') return teamRuleMatches(rule, target, ctx);
 	if (target.type === 'workspace') return sameId(field(rule, 'workspace_id', 'workspaceId'), ctx?.workspaceId);
 	return target.type === 'public';
 }
