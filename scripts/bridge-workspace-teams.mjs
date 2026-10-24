@@ -146,7 +146,7 @@ async function updateTeam(ctx, service, session, request, workspaceId, teamId, r
 	await loadTeam(service, workspaceId, teamId);
 	const fields = teamFields(await readBody(request), { partial: true });
 	if (Object.keys(fields).length === 0) throw accountError(422, 'invalid_field', 'Send a name or a description.');
-	if (fields.name !== undefined) await requireFreeName(service, workspaceId, fields.name, teamId);
+	if (Object.hasOwn(fields, 'name')) await requireFreeName(service, workspaceId, fields.name, teamId);
 	const patched = first(await writeTeam(() => service.patch(`osionos_teams?id=eq.${teamId}&workspace_id=eq.${workspaceId}&select=${TEAM_COLUMNS}`, { ...fields, updated_at: new Date().toISOString() }, { prefer: 'return=representation' })));
 	if (!patched) throw teamNotFound();
 	const counted = await service.get(`osionos_team_members?team_id=eq.${teamId}&select=user_id`);
