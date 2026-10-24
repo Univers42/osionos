@@ -14,12 +14,13 @@
 
 import { policyToLevel } from './sharePermissionBridge';
 import type {
-  EnginePolicyRow, EngineRole, ShareAccessRule, ShareEntry, SharePerson,
+  EnginePolicyRow, EngineRole, ShareAccessRule, ShareEntry, SharePerson, ShareTeam,
 } from './types';
 
 export function entryKey(target: ShareEntry['target']): string {
   if (target.type === 'user') return `user:${target.person.id}`;
   if (target.type === 'role') return `role:${target.role}`;
+  if (target.type === 'team') return `team:${target.team.id}`;
   return target.type;
 }
 
@@ -27,6 +28,7 @@ export function entryKey(target: ShareEntry['target']): string {
 export function entriesFromRules(
   rules: Array<ShareAccessRule & { _id: string }>,
   people: SharePerson[],
+  teams: ShareTeam[] = [],
 ): ShareEntry[] {
   const entries: ShareEntry[] = [];
   for (const rule of rules) {
@@ -36,6 +38,11 @@ export function entriesFromRules(
       if (person) target = { type: 'user', person };
     } else if (rule.target.type === 'role') {
       target = { type: 'role', role: (rule.target as { role?: string }).role ?? '' };
+    } else if (rule.target.type === 'team') {
+      // A rule naming a team the list does not hold (deleted, or the list is hidden) shows no row.
+      const teamId = (rule.target as { teamId?: string }).teamId?.toLowerCase();
+      const team = teams.find((candidate) => candidate.id.toLowerCase() === teamId);
+      if (team) target = { type: 'team', team };
     } else {
       target = { type: rule.target.type };
     }

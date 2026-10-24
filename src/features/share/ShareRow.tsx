@@ -30,6 +30,10 @@ function rowIdentity(entry: ShareEntry): { title: string; subtitle: string; icon
   if (entry.target.type === 'role') {
     return { title: entry.target.role, subtitle: 'Role', icon: <Shield size={14} /> };
   }
+  if (entry.target.type === 'team') {
+    const { team } = entry.target;
+    return { title: team.name, subtitle: `Team · ${team.memberCount} ${team.memberCount === 1 ? 'member' : 'members'}`, icon: <Users size={14} /> };
+  }
   if (entry.target.type === 'public') {
     return { title: 'Anyone with the link', subtitle: 'Public', icon: <Globe size={14} /> };
   }
