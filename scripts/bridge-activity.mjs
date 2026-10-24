@@ -139,14 +139,13 @@ export function createActivityEmitter({ pg, env = process.env, now = Date.now, i
 		const pending = queue.length + inFlightSize;
 		const before = counters.emitted;
 		let expiry;
-		let late = false;
+		const timedOut = Symbol('timed-out');
 		const timeout = new Promise((resolve) => {
-			expiry = setTimeout(() => {
-				late = true;
-				resolve();
-			}, deadlineMs);
+			expiry = setTimeout(() => resolve(timedOut), deadlineMs);
 		});
-		while (!late && (queue.length > 0 || inFlight)) await Promise.race([flush({ force: true }), timeout]);
+		while (queue.length > 0 || inFlight) {
+			if ((await Promise.race([flush({ force: true }), timeout])) === timedOut) break;
+		}
 		clearTimeout(expiry);
 		const flushed = counters.emitted - before;
 		queue.length = 0;
