@@ -118,6 +118,7 @@ test.describe("Two-step verification modal (bridge stub)", () => {
     await methods.nth(1).getByRole("button", { name: "Make preferred" }).click();
     await expect(methods.first()).toContainText("Recovery code (preferred)");
     await expect.poll(() => bridge.preferred).toBe("recovery");
+    expect(bridge.patches).toEqual([{ security: { preferredMfaMethod: "recovery" } }]);
   });
 
   test("Turn off calls disable and the row goes back to Add verification method", async ({ page, baseURL }) => {
@@ -127,6 +128,27 @@ test.describe("Two-step verification modal (bridge stub)", () => {
     await dialog(page).getByRole("button", { name: "Turn off" }).click();
     await expect(region(page).getByRole("button", { name: "Add verification method", exact: true })).toBeVisible();
     expect(bridge.calls).toContain("POST /api/account/2fa/disable");
+  });
+});
+
+test.describe("Manage emails modal (bridge stub)", () => {
+  const emailsDialog = (page) => page.getByRole("dialog", { name: "Manage emails" });
+
+  test("is read-only: the one address, no edit controls, and the unavailable line", async ({ page, baseURL }) => {
+    await stubTwoStep(page);
+    await openProfile(page, baseURL);
+    await openModal(page, "Manage emails");
+    await expect(emailsDialog(page)).toContainText("e2e@example.com");
+    await expect(emailsDialog(page).getByRole("button", { name: /Add email|Remove|Make primary|Verify/ })).toHaveCount(0);
+    await expect(emailsDialog(page).getByPlaceholder("name@example.com")).toHaveCount(0);
+    await expect(emailsDialog(page)).toContainText("Adding or changing addresses isn't available yet.");
+  });
+
+  test("a failed read never shows Verified", async ({ page, baseURL }) => {
+    await stubTwoStep(page, { emailsDown: true });
+    await openProfile(page, baseURL);
+    await openModal(page, "Manage emails");
+    await expect(emailsDialog(page)).not.toContainText("Verified");
   });
 });
 
