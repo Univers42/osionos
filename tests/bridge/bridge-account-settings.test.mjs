@@ -107,6 +107,7 @@ describe('PATCH /api/account/settings', () => {
 		['a mixed top level', { security: { preferredMfaMethod: 'totp' }, extra: 1 }],
 		['a non-object body', [1]],
 		['__proto__', '{"security":{"__proto__":{"x":1}}}'],
+		['__proto__ beside a valid method', '{"security":{"preferredMfaMethod":"totp","__proto__":{"x":1}}}'],
 		['constructor', '{"security":{"constructor":{}}}'],
 		['a duplicate key whose last value is invalid', '{"security":{"preferredMfaMethod":"totp","preferredMfaMethod":"sms"}}'],
 	];
