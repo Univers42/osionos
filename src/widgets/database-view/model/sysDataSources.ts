@@ -95,6 +95,12 @@ export const SYS_SOURCES: SysSource[] = [
       auth_method: "select", current: "checkbox",
     },
   }),
+  source({
+    source: "my-activity", label: "My activity", icon: "📈",
+    description: "Your last 200 events, kept only while activity tracking is on.",
+    titleColumn: "event", hiddenColumns: ["workspace_id"],
+    columnTypes: { ts: "date", surface: "select", workspace_id: "text" },
+  }),
 ];
 
 /** Only `sys:` + a shipped source id: an unknown `sys:x` falls through to today's behaviour. */

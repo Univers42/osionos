@@ -59,8 +59,8 @@ test.describe("sys data sources", () => {
   });
 
   test("a sys: id that is not a shipped source falls through to today's behaviour", async ({ page }) => {
-    await seedPage(page, "/", [{ id: "sys-unknown", type: "database_inline", content: "", databaseId: "sys:my-activity", viewId: "my-activity-default" }]);
-    await expect(page.locator('.osionos-database-block[data-database-id="sys:my-activity"]')).toHaveCount(0);
+    await seedPage(page, "/", [{ id: "sys-unknown", type: "database_inline", content: "", databaseId: "sys:nope", viewId: "nope-default" }]);
+    await expect(page.locator('.osionos-database-block[data-database-id="sys:nope"]')).toHaveCount(0);
   });
 
   test("no sys: key reaches the known-database store", async ({ page }) => {
