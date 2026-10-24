@@ -36,7 +36,7 @@ export type AccountActionFailure = 'unavailable' | 'sudo_required' | 'failed';
 
 export type AccountActionOutcome<T> =
   | { ok: true; data: T }
-  | { ok: false; reason: AccountActionFailure; message: string };
+  | { ok: false; reason: AccountActionFailure; message: string; code?: string };
 
 /** What the user is told. `null` means: say nothing (the sudo prompt speaks). */
 export interface AccountActionNotice {
@@ -63,13 +63,15 @@ export async function runAccountAction<T>(path: string, body: unknown): Promise<
     if (error instanceof ApiError) {
       const reason = classifySettingsError(error.status, error.code);
       if (reason === 'unavailable') {
-        return { ok: false, reason, message: 'This server does not offer this action yet.' };
+        // The code survives: a 503 `*_unavailable` is also how the step-up says it signed the user out.
+        return { ok: false, reason, message: 'This server does not offer this action yet.', ...(error.code ? { code: error.code } : {}) };
       }
       if (reason === 'sudo_required') {
         return { ok: false, reason, message: 'This action needs a fresh sign-in.' };
       }
     }
-    return { ok: false, reason: 'failed', message: error instanceof Error ? error.message : 'The request failed.' };
+    const message = error instanceof Error ? error.message : 'The request failed.';
+    return error instanceof ApiError && error.code ? { ok: false, reason: 'failed', message, code: error.code } : { ok: false, reason: 'failed', message };
   }
 }
 

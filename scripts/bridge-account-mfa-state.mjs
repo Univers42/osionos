@@ -89,11 +89,12 @@ export async function readFactor(pg, userId) {
 export const verifyStepUp = (token, config) => verifyAppSessionToken(token, config, undefined, { allowPendingMfa: true });
 
 /**
- * The same session at aal 2: same jti and expiry, so a step-up neither extends nor forks the
- * session and sudo (keyed on the jti) carries over. Workspaces and roles come from the token
+ * The same session at aal 2 with the same expiry, so a step-up never extends it. The jti is
+ * the old one unless the caller names a new one (a step-up that starts a new refresh family
+ * needs its own row id). Workspaces and roles come from the token
  * being upgraded, not from a fresh read, so nothing is re-granted.
  */
-export function issueAal2(session, config, { nowMs }) {
+export function issueAal2(session, config, { nowMs, jti = session.raw.jti }) {
 	const raw = session.raw;
 	const [privateWorkspace, ...others] = session.workspaceIds;
 	return signAppSessionToken({
@@ -101,7 +102,7 @@ export function issueAal2(session, config, { nowMs }) {
 		workspace: { _id: privateWorkspace },
 		config,
 		now: nowMs,
-		jti: raw.jti,
+		jti,
 		memberWorkspaces: others.map((id) => ({ _id: id, role: raw.roles?.[id] })),
 		platformRole: session.platformRole,
 		isAdmin: session.isAdmin,

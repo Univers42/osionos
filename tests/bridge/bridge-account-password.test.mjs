@@ -254,7 +254,7 @@ describe('POST /api/account/password: the change', () => {
 		const { base, change, grantSudo, store, faults } = await world(t);
 		const caller = await signIn(base);
 		await grantSudo(caller.claims);
-		faults.fail = (call) => (call.table === SESSIONS && call.method === 'GET' && call.params.get('select') === 'family_id' ? { status: 500 } : null);
+		faults.fail = (call) => (call.table === SESSIONS && call.method === 'GET' && String(call.params.get('select')).includes('family_id') ? { status: 500 } : null);
 		const answer = await change(caller.accessToken, { nextPassword: FAKE_PASSWORD });
 		assert.equal(answer.status, 204, answer.text);
 		assert.equal(answer.headers.get('x-session-revoked'), 'all');

@@ -17,11 +17,11 @@
  * from verify flips it to `verified`. A pending factor gates nothing, so a user who abandons
  * the dialog is never locked out. Confirming (and disabling) first writes a session cut-off,
  * so every token minted before the change dies, and only then changes the factor row; the
- * caller gets back a fresh aal2 token for its own session.
- * Caveat: the cut-off also ends the refresh family of the session that enrolled, so that
- * browser signs in again at its next refresh (and is born aal1). A cut-off written before a
- * failed row flip, or a failed revoke of the personal access tokens, leaves the user signed out
- * everywhere with the factor still pending.
+ * caller gets back a fresh aal2 token and a refresh token of a NEW family (bridge-session-stepup.mjs),
+ * because the cut-off ends the family it came in with.
+ * Caveat: a cut-off written before a failed row flip, a failed revoke of the personal access
+ * tokens, or a failed mint of the new family leaves the user signed out everywhere (the factor
+ * pending, flipped or deleted); a failed mint says so plainly.
  * Caveat: the cut-off reaches this instance at once but other instances only through their
  * poller (every 10 s), so a token minted before the change still verifies there for up to that
  * long, the same window as a sign-out.
@@ -34,7 +34,8 @@ import { revokeAllPats } from './bridge-pat-store.mjs';
 import { accountError, callerSession, clientMetaOf, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
 import { sendJson } from './bridge-social-core.mjs';
-import { CODES_TABLE, TOTP_TABLE, VERIFY_LIMIT, assertNotBlocked, clearFailures, countAttempt, issueAal2, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
+import { stepUpTokens } from './bridge-session-stepup.mjs';
+import { CODES_TABLE, TOTP_TABLE, VERIFY_LIMIT, assertNotBlocked, clearFailures, countAttempt, mfaUnavailable, readFactor, recordFailure, verifyStepUp } from './bridge-account-mfa-state.mjs';
 import { recoveryRemaining } from './bridge-account-mfa-recovery.mjs';
 import { matchStep, newSecret, openSecret, otpauthUrl, sealSecret } from './bridge-account-mfa-totp.mjs';
 
@@ -57,8 +58,9 @@ async function cutAllSessions({ config, fetchImpl }, userId, atMs) {
 }
 
 /**
- * The session list hides rows older than the cut-off, so the session that was just upgraded
- * is re-dated to the cut-off.
+ * Records-off path only: the session list hides rows older than the cut-off, so the session
+ * that was just upgraded is re-dated to the cut-off. With records on, the step-up's new root
+ * row is born at the cut-off and needs no re-date.
  * Caveat: best effort; on failure the session works but is missing from the sessions list.
  */
 async function redateSession({ pg }, session, atMs) {
@@ -69,9 +71,23 @@ async function redateSession({ pg }, session, atMs) {
 	}
 }
 
-function upgraded(ctx, session, atMs, response) {
-	const { token, expiresAt } = issueAal2(session, ctx.config, { nowMs: atMs });
-	return sendJson(response, 200, { ok: true, accessToken: token, expiresAt, aal: 2 }, ctx.config);
+const SIGNED_OUT = 'Two-step verification changed and you are signed out; sign in again.';
+
+/**
+ * The answer of an accepted code. After confirm and disable the cut-off has already refused
+ * the old family, so a failed mint there signs this device out and says so; on a plain verify
+ * the old session is still live and the caller just retries.
+ */
+async function upgraded(ctx, request, session, atMs, response, { cutOff }) {
+	let tokens;
+	try {
+		tokens = await stepUpTokens(ctx, request, session, atMs);
+	} catch (error) {
+		if (cutOff && error?.code === 'session_record_unavailable') throw accountError(503, error.code, SIGNED_OUT);
+		throw error;
+	}
+	if (cutOff && !tokens.refreshToken) await redateSession(ctx, session, atMs);
+	return sendJson(response, 200, { ok: true, ...tokens, aal: 2 }, ctx.config);
 }
 
 async function status(ctx, request, response) {
@@ -111,7 +127,6 @@ async function confirm(ctx, request, session, step, meta) {
 		{ prefer: 'return=representation' },
 	));
 	if (!Array.isArray(flipped) || flipped.length === 0) throw accountError(409, 'enrolment_changed', 'The enrolment changed while you were verifying; start again.');
-	await redateSession(ctx, session, atMs);
 	return atMs;
 }
 
@@ -142,9 +157,10 @@ async function verify(ctx, request, response) {
 		await recordFailure({ kv: ctx.kv, pg: ctx.pg, session, meta });
 		throw accountError(422, 'code_invalid', 'That code is not valid.');
 	}
-	const atMs = row.status === 'pending' ? await confirm(ctx, request, session, step, meta) : ctx.clock();
+	const confirming = row.status === 'pending';
+	const atMs = confirming ? await confirm(ctx, request, session, step, meta) : ctx.clock();
 	await clearFailures(ctx.kv, session.userId, meta);
-	return upgraded(ctx, session, atMs, response);
+	return upgraded(ctx, request, session, atMs, response, { cutOff: confirming });
 }
 
 async function disable(ctx, request, response) {
@@ -158,8 +174,7 @@ async function disable(ctx, request, response) {
 		await ctx.pg.asService().del(`${CODES_TABLE}?${rowFilter(session.userId)}`);
 		await ctx.pg.asService().del(`${TOTP_TABLE}?${rowFilter(session.userId)}`);
 	});
-	await redateSession(ctx, session, atMs);
-	return upgraded(ctx, session, atMs, response);
+	return upgraded(ctx, request, session, atMs, response, { cutOff: true });
 }
 
 const ROUTES = new Map([
