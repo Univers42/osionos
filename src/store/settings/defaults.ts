@@ -23,34 +23,30 @@ import type {
 } from './types';
 import { nowIso } from './settingsStoreUtils';
 
-export function defaultAccountSettings(userId: string): AccountSettings {
-  const timestamp = nowIso();
-  return {
-    userId,
-    // The sign-in methods are only what the server reports, never a guess; the preferred
-    // two-step method is the one choice the user makes, and the authenticator is the default.
-    security: { preferredMfaMethod: 'totp' },
-    supportAccessGrantedUntil: null,
-    pendingDeletionAt: null,
-    removedAt: null,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  };
+/** What the client knows when the server has not answered: the user and no claim about them. */
+export function unknownAccountSettings(userId: string): AccountSettings {
+  return { userId, security: {} };
 }
 
+export const primaryEmailId = (userId: string): string => `primary-${userId}`;
+
+/** The session's own address; `verifiedAt` stays null because only the server can confirm it. */
 export function defaultEmail(userId: string, email: string): EmailRecord {
   const timestamp = nowIso();
   return {
-    _id: `primary-${userId}`,
+    _id: primaryEmailId(userId),
     userId,
     email,
     isPrimary: true,
-    verifiedAt: timestamp,
+    verifiedAt: null,
     createdAt: timestamp,
     updatedAt: timestamp,
     removedAt: null,
   };
 }
+
+/** "Verified" only when the server stated a confirmation time. */
+export const emailVerificationLabel = (record: Pick<EmailRecord, 'verifiedAt'>): string => (record.verifiedAt ? 'Verified' : 'Not confirmed');
 
 export function defaultPreferences(userId: string): UserPreferences {
   const timestamp = nowIso();
