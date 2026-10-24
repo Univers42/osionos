@@ -16,7 +16,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { giveTheAppABridgeOrigin, stubRestOfTheBridge } from "../support/bridgeSession.mjs";
+import { giveTheAppABridgeOrigin, seedSession, stubRestOfTheBridge } from "../support/bridgeSession.mjs";
 import { openSettings, region } from "../support/settingsHelpers.mjs";
 
 const ROUTE = "**/api/preferences";
@@ -24,17 +24,20 @@ const SENTENCE = /Turning it off stops new events within a minute\. It does not 
 
 async function openPrivacy(page, baseURL, onPatch) {
   const patches = [];
+  const authorizations = [];
   await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);
+  await seedSession(page, {});
   await stubRestOfTheBridge(page);
   await page.route(ROUTE, (route) => {
     const request = route.request();
     if (request.method() === "GET") return route.fulfill({ json: { beacon_consent: true } });
     patches.push({ method: request.method(), body: request.postDataJSON() });
+    authorizations.push(request.headers().authorization ?? "");
     return onPatch(route);
   });
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await openSettings(page, "Preferences");
-  return { patches, toggle: region(page).getByRole("switch", { name: "Record my activity" }) };
+  return { patches, authorizations, toggle: region(page).getByRole("switch", { name: "Record my activity" }) };
 }
 
 test.describe("the activity tracking switch", () => {
@@ -46,10 +49,12 @@ test.describe("the activity tracking switch", () => {
   });
 
   test("turning it on sends only activity_tracking and leaves the beacon alone", async ({ page, baseURL }) => {
-    const { patches, toggle } = await openPrivacy(page, baseURL, (route) => route.fulfill({ json: { activity_tracking: true } }));
+    const { patches, authorizations, toggle } = await openPrivacy(page, baseURL, (route) => route.fulfill({ json: { activity_tracking: true } }));
     await toggle.click();
     await expect(toggle).toBeChecked();
     expect(patches).toEqual([{ method: "PATCH", body: { activity_tracking: true } }]);
+    // The bridge app-session token; the session-only getter answers null for it, and the real bridge then refuses.
+    expect(authorizations).toEqual([expect.stringMatching(/^Bearer osionos_v1\./)]);
   });
 
   test("a failed save puts the switch back and says why", async ({ page, baseURL }) => {
