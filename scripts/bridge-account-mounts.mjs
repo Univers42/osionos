@@ -80,7 +80,7 @@ export function createAccountHandler(deps) {
 		createPasskeyRoutes({ config: deps.config, pg: deps.pg, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env }),
 		createAccountIdentitiesRoutes({ config: deps.config, verifySession: deps.verifySession, fetchImpl: deps.mfaFetch ?? fetch }),
 		createAccountSettingsRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env }),
-		createAccountEmailsRoutes({ config: deps.config, kv: deps.kv, verifySession: deps.verifySession, fetchImpl: deps.mfaFetch ?? fetch }),
+		createAccountEmailsRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env, fetchImpl: deps.mfaFetch ?? fetch, now: deps.mfaNow ?? null, track: deps.emailTrack ?? undefined }),
 	];
 	// Off unless OSIONOS_ACCOUNT_DELETION_EXECUTOR=1 (and, in production, a dry run or a verdict).
 	createAccountErasureRunner({ config: deps.config, pg: deps.pg, kv: deps.kv, fetchImpl: deps.erasureFetch ?? deps.mfaFetch ?? fetch, env: deps.erasureEnv ?? deps.mfaEnv ?? process.env }).start();

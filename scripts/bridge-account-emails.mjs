@@ -11,26 +11,38 @@
 /* ************************************************************************** */
 
 /**
- * GET /api/account/emails: the caller's primary address and whether GoTrue confirmed it.
+ * /api/account/emails: the caller's primary address (GoTrue's, read as before) plus the
+ * secondaries of osionos_user_emails, and the routes that add, resend, verify and remove a
+ * secondary. Primary changes (make-primary) are not routed here: they answer 404.
  *
- * Read-only on purpose: adding, removing and changing the primary address need a
- * mail-verification flow and a table (osionos_user_emails) that do not exist yet (F-3b),
- * so POST on this path answers 405 and the `:id` sub-paths answer 404 `not_found`.
+ * The router owns module setup: the keys check (seal, lookup, and the refusal to share one
+ * key between purposes) and the dispatch. The table is in bridge-account-email-rows.mjs, the
+ * flows in bridge-account-email-flow.mjs, the budgets in bridge-account-email-send.mjs.
  *
- * Caveat: the list is the primary address only, so a user who added a second address
- * elsewhere would not see it here. `verifiedAt` is GoTrue's `email_confirmed_at` and is
- * null when GoTrue states none, which the client shows as "Not confirmed", never as
- * "Verified". An outage answers 503 `settings_read_failed`, never an `_unavailable` code.
+ * Without usable keys, or when the table is missing, every mutating route answers 503
+ * `email_unavailable` and the GET lists the primary with `x-emails-secondaries: unavailable`.
+ *
+ * Caveat: the list is the primary plus the secondaries that open and match their keyed
+ * hash; a row that does not is skipped and counted in `x-emails-skipped`, never a 500.
+ * `verifiedAt` of the primary is GoTrue's `email_confirmed_at`, null when it states none.
+ * Equal keys are compared as raw env strings once at setup: two different strings that
+ * decode to the same bytes are not caught.
  */
 
 import { accountError, callerSession, respondWithError } from './bridge-account-sudo.mjs';
+import { createOtpClient } from './bridge-account-otp.mjs';
 import { limitOrFail, settingsFailure } from './bridge-account-settings.mjs';
+import { addEmail, recordOf, removeEmail, resendEmail, verifyEmail } from './bridge-account-email-flow.mjs';
+import { LOOKUP_ENV, SEAL_ENV, createEmailRows, keysUsable, openAddress } from './bridge-account-email-rows.mjs';
 import { readGotrueUser } from './bridge-gotrue-user.mjs';
 import { sendJson } from './bridge-social-core.mjs';
 
 const PATH = /^\/api\/account\/emails(?:\/.*)?$/;
 const ROUTE = '/api/account/emails';
+const ID_ROUTE = /^\/api\/account\/emails\/([^/]+)(?:\/(code|verify))?$/;
 const LIMIT = { limit: 30, windowMs: 60_000 };
+const MFA_ENV = 'OSIONOS_MFA_SECRET_KEY';
+const ACTIONS = { '': ['DELETE', removeEmail], code: ['POST', resendEmail], verify: ['POST', verifyEmail] };
 
 const text = (value) => (typeof value === 'string' && value !== '' ? value : null);
 
@@ -60,16 +72,73 @@ async function readPrimary(deps, userId) {
 	}
 }
 
-export function createAccountEmailsRoutes({ config, kv, verifySession, fetchImpl = fetch }) {
+/** The pairs of key variables holding the same raw string; keys must not be shared between purposes. */
+function sharedKeyNames(env) {
+	const names = [SEAL_ENV, LOOKUP_ENV, MFA_ENV];
+	const shared = new Set();
+	for (const [i, a] of names.entries()) {
+		for (const b of names.slice(i + 1)) {
+			if (env[a] && env[a] === env[b]) { shared.add(a); shared.add(b); }
+		}
+	}
+	return [...shared];
+}
+
+async function listEmails(ctx, session, response) {
+	const { userId } = session;
+	await limitOrFail(ctx.kv, ['account-emails', userId], LIMIT);
+	const list = await readPrimary(ctx, userId);
+	let unavailable = !ctx.keysUsable;
+	let skipped = 0;
+	if (!unavailable) {
+		try {
+			for (const row of await ctx.rows.list(userId)) {
+				const address = openAddress(row, ctx.env);
+				if (address) list.push(recordOf(row, address)); else skipped += 1;
+			}
+		} catch {
+			unavailable = true;
+		}
+	}
+	if (unavailable) response.setHeader('x-emails-secondaries', 'unavailable');
+	if (skipped > 0) response.setHeader('x-emails-skipped', String(skipped));
+	if (unavailable || skipped > 0) response.setHeader('access-control-expose-headers', 'x-emails-secondaries, x-emails-skipped');
+	return sendJson(response, 200, list, ctx.config);
+}
+
+/** A malformed percent-escape names no email: a 404, never a 500. */
+function decodedId(raw) {
+	try {
+		return decodeURIComponent(raw);
+	} catch {
+		throw accountError(404, 'not_found', 'There is no email on that path.');
+	}
+}
+
+export function createAccountEmailsRoutes({ config, kv, pg, verifySession, env = process.env, fetchImpl = fetch, now = null, track = () => {}, log = (...parts) => console.error(...parts) }) {
+	const shared = sharedKeyNames(env);
+	if (shared.length > 0) log('account_emails_keys_shared', shared.join(','));
+	const ctx = {
+		config, kv, pg, env, fetchImpl, track, log, now: typeof now === 'function' ? now : Date.now,
+		keysUsable: shared.length === 0 && keysUsable(env),
+		secret: String(env.JWT_SECRET ?? '').trim(),
+		rows: createEmailRows({ pg, env }),
+		otp: createOtpClient({ fail: accountError, codes: { unavailable: 'email_unavailable', proofInvalid: 'email_proof_invalid', unavailableMessage: 'Email verification is unavailable; try again shortly.' } }),
+	};
 	return async function handleEmailsRequest(url, request, response) {
 		if (!PATH.test(url.pathname)) return false;
 		try {
 			const session = callerSession(request, config, verifySession);
-			if (url.pathname !== ROUTE) throw accountError(404, 'not_found', 'There is no email on that path.');
 			const method = (request.method || 'GET').toUpperCase();
-			if (method !== 'GET') throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
-			await limitOrFail(kv, ['account-emails', session.userId], LIMIT);
-			sendJson(response, 200, await readPrimary({ config, fetchImpl }, session.userId), config);
+			if (url.pathname === ROUTE) {
+				if (method === 'GET') return await listEmails(ctx, session, response);
+				if (method !== 'POST') throw accountError(405, 'method_not_allowed', `Method ${method} is not supported on this route.`);
+				return await addEmail(ctx, session, request, response);
+			}
+			const match = ID_ROUTE.exec(url.pathname);
+			const [verb, action] = ACTIONS[match?.[2] ?? ''] ?? [];
+			if (!match || verb !== method) throw accountError(404, 'not_found', 'There is no email on that path.');
+			return await action(ctx, session, request, response, decodedId(match[1]));
 		} catch (error) {
 			respondWithError(response, error, config);
 		}
