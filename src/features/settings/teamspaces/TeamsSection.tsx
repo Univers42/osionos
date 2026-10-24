@@ -20,16 +20,11 @@ import { Button } from '@/shared/ui';
 import { ConfirmModal } from '../ui/ConfirmModals';
 import { DataTable, EmptyState, Section } from '../ui/settingsKit';
 import { runAsync } from '../model/settingsCalls';
+import { memberLabel } from '../model/memberLabel';
 
 // Stable empties: a fresh `?? []` inside a zustand-v5 selector loops the render.
 const NO_TEAMS: WorkspaceTeam[] = [];
 const NO_MEMBERS: never[] = [];
-
-/** A person's name from the personas the People panel resolves names with, else the id. */
-function labelFor(userId: string, names: Map<string, string>, wireName?: string): string {
-  const named = wireName && wireName !== userId ? wireName : names.get(userId);
-  return named || userId;
-}
 
 const FIELD = 'rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]';
 
@@ -40,9 +35,11 @@ const TeamMembers: React.FC<{ workspaceId: string; team: WorkspaceTeam }> = ({ w
   const addMember = useTeamspacesStore((state) => state.addTeamMember);
   const removeMember = useTeamspacesStore((state) => state.removeTeamMember);
   const personas = useUserStore((state) => state.personas);
+  const activeUserId = useUserStore((state) => state.activeUserId);
   const names = useMemo(() => new Map(personas.filter((persona) => persona.id && persona.name).map((persona) => [persona.id, persona.name])), [personas]);
   const [pick, setPick] = useState('');
   useEffect(() => { runAsync(hydrateMembers(workspaceId, team.id)); }, [hydrateMembers, workspaceId, team.id]);
+  useEffect(() => { runAsync(useWorkspaceMembersStore.getState().hydrate(workspaceId, activeUserId)); }, [workspaceId, activeUserId]);
   const taken = new Set(members.map((member) => member.userId));
   const candidates = workspaceMembers.filter((member) => !member.removedAt && !taken.has(member.userId));
   return (
@@ -50,7 +47,7 @@ const TeamMembers: React.FC<{ workspaceId: string; team: WorkspaceTeam }> = ({ w
       <ul className="space-y-1">
         {members.map((member) => (
           <li key={member.userId} className="flex items-center justify-between gap-2 text-sm">
-            <span>{labelFor(member.userId, names, member.name)} <span className="text-[var(--osio-fg-muted)]">({member.role})</span></span>
+            <span>{memberLabel(member.userId, names, member.name)} <span className="text-[var(--osio-fg-muted)]">({member.role})</span></span>
             <Button tone="danger-subtle" onClick={() => runAsync(removeMember(workspaceId, team.id, member.userId))}>Remove</Button>
           </li>
         ))}
@@ -58,9 +55,9 @@ const TeamMembers: React.FC<{ workspaceId: string; team: WorkspaceTeam }> = ({ w
       <div className="flex gap-2">
         <select aria-label={`Add a member to ${team.name}`} className={FIELD} value={pick} onChange={(event) => setPick(event.target.value)}>
           <option value="">Choose a workspace member</option>
-          {candidates.map((member) => <option key={member.userId} value={member.userId}>{labelFor(member.userId, names)}</option>)}
+          {candidates.map((member) => <option key={member.userId} value={member.userId}>{memberLabel(member.userId, names, member.name)}</option>)}
         </select>
-        <Button disabled={!pick} onClick={() => { runAsync(addMember(workspaceId, team.id, { userId: pick, name: labelFor(pick, names) })); setPick(''); }}>Add member</Button>
+        <Button disabled={!pick} onClick={() => { runAsync(addMember(workspaceId, team.id, { userId: pick, name: memberLabel(pick, names, workspaceMembers.find((member) => member.userId === pick)?.name) })); setPick(''); }}>Add member</Button>
       </div>
     </div>
   );
