@@ -54,7 +54,9 @@ describe('search', () => {
 		const broken = { status: 500, body: { code: 'XX000', message: 'boom' } };
 		const mock = createPostgrestMock(teamWorld(), { failWhen: (call) => (call.params.has('search_doc') ? broken : null) });
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			assert.ok((await send(base, path, asOwner(config))).status >= 500);
+			const answer = await send(base, path, asOwner(config));
+			assert.ok(answer.status >= 500, answer.text);
+			assert.ok(mock.calls.some((call) => call.params.has('search_doc')), 'the failure came from the search read');
 			assert.equal(activity.calls.length, 0);
 		});
 	});
