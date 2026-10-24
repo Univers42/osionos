@@ -16,17 +16,24 @@
  * the artifact, stores it with ONE put and only then marks the job done. A failure
  * at any step marks it failed with a stable code; a partial result is never done.
  * A second sweep deletes the object of every job past its expiry and marks it expired.
+ * The secondary addresses are read outside the registry (their columns are sealed, so
+ * the registry may not list them) and exported opened, as osionos_user_emails.
  *
  * Caveat: a job claimed by a process that then dies stays running until the database
  * lease (30 minutes) lets another process claim it again; the artifact is built in
  * memory, so the peak is about twice the byte cap for one job at a time per process;
  * the 15 s storage timeout is the practical ceiling for an artifact upload; rows are
  * read page by page without a snapshot, so a row written during the read may or may
- * not be in the archive; the caps are unmeasured defaults.
+ * not be in the archive; the caps are unmeasured defaults. A sealed address that no
+ * longer opens (a key rotated away without _PREVIOUS, or a corrupted row) is exported
+ * as unreadable, not left out, and a wrong key looks the same as a corrupted row. The
+ * opened addresses sit in clear in the stored artifact until it expires (7 days), and
+ * the download needs a session, not sudo.
  */
 
 import { ensureBucket, storageDelete, storagePut } from './bridge-storage-core.mjs';
 import { UUID_REGEX } from './bridge-social-core.mjs';
+import { COLUMNS as EMAIL_COLUMNS, emailExportTable } from './bridge-account-email-rows.mjs';
 import { EXPORT_MAX_BYTES, EXPORT_MAX_ROWS, buildArtifact, planTables } from './bridge-account-export-archive.mjs';
 
 export const EXPORT_BUCKET = 'account-exports';
@@ -75,12 +82,30 @@ async function readTable(db, plan, userId, budget) {
 	return { name: plan.table, columns: plan.columns, rows };
 }
 
-async function buildJobArtifact(db, job, now) {
+const EMAIL_PLAN = { table: 'osionos_user_emails', columns: EMAIL_COLUMNS.split(','), scope: ['user_id'], filter: null };
+
+/** The raw address rows; a database without the table (404 / PGRST205) has none to export. */
+async function readEmailRows(db, userId, budget) {
+	try {
+		return (await readTable(db, EMAIL_PLAN, userId, budget)).rows;
+	} catch (error) {
+		if (error?.upstreamStatus !== 404 && error?.upstreamCode !== 'PGRST205') throw error;
+		console.warn(`[osionos-bridge] account export: the addresses table is missing (status ${error.upstreamStatus ?? 'none'})`);
+		return [];
+	}
+}
+
+async function buildJobArtifact(db, job, env, now) {
 	if (!UUID_REGEX.test(String(job.user_id))) throw Object.assign(new Error('The job has no valid owner.'), { code: 'export_bad_owner' });
 	const registry = await db.get('osionos_account_data_map?export_columns=not.is.null&select=table_name,column_name,role,export_columns&limit=1000');
 	const budget = { rows: 0, bytes: 0 };
 	const tables = [];
-	for (const plan of planTables(registry)) tables.push(await readTable(db, plan, job.user_id, budget));
+	const plans = planTables(registry);
+	// The registry must never become a second door to the sealed table.
+	if (plans.some((plan) => plan.table === EMAIL_PLAN.table)) throw Object.assign(new Error('The registry may not export the addresses table.'), { code: 'export_forbidden_column' });
+	for (const plan of plans) tables.push(await readTable(db, plan, job.user_id, budget));
+	tables.push(emailExportTable(await readEmailRows(db, job.user_id, budget), env));
+	tables.sort((left, right) => left.name.localeCompare(right.name));
 	return buildArtifact(job.format, tables, new Date(now()).toISOString());
 }
 
@@ -88,7 +113,7 @@ async function runJob(db, job, { env, fetchImpl, now }) {
 	const startedAt = now();
 	let stored = false;
 	try {
-		const artifact = await buildJobArtifact(db, job, now);
+		const artifact = await buildJobArtifact(db, job, env, now);
 		await ensureBucket(job.user_id, EXPORT_BUCKET, fetchImpl, env);
 		await storagePut(job.user_id, EXPORT_KEY_FOR(job), artifact.contentType, artifact.bytes, fetchImpl, env, EXPORT_BUCKET);
 		stored = true;
