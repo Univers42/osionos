@@ -15,9 +15,7 @@
  * both bound to the `sys:my-activity` source.
  *
  * Caveat: the source is capped at 200 rows, so the chart covers the last 200 events and not
- * a time range; the cell titles say so. The chart view id has no definition in the sys
- * state yet (it ships only the default table view), so the block asks for it by name and the
- * host decides what to draw.
+ * a time range; the cell titles say so.
  */
 
 import type { Block, LayoutCell } from "@/entities/block";
