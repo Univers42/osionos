@@ -40,6 +40,7 @@ import { createWorkspaceLifecycleRoutes } from './bridge-workspace-lifecycle.mjs
 import { createWorkspaceTeamsRoutes } from './bridge-workspace-teams.mjs';
 import { createAdminUsersRoutes } from './bridge-account-users.mjs';
 import { createAdminAuditRoutes } from './bridge-account-audit.mjs';
+import { createAdminInsightsRoutes } from './bridge-account-insights.mjs';
 import { createAdminModerationRoutes } from './bridge-account-moderation.mjs';
 import { createMfaRoutes } from './bridge-account-mfa.mjs';
 import { createMfaRecoveryRoutes } from './bridge-account-mfa-recovery.mjs';
@@ -68,6 +69,7 @@ export function createAccountHandler(deps) {
 		createAccountKeysRoutes(deps),
 		createAdminUsersRoutes(deps),
 		createAdminAuditRoutes(deps),
+		createAdminInsightsRoutes({ ...deps, env: deps.mfaEnv ?? process.env }),
 		createAdminModerationRoutes(deps),
 		createAccountStatusRoutes(deps),
 		createMfaRoutes({ config: deps.config, pg: deps.pg, kv: deps.kv, verifySession: deps.verifySession, env: deps.mfaEnv ?? process.env, fetchImpl: deps.mfaFetch ?? fetch, now: deps.mfaNow ?? null }),

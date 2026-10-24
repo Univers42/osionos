@@ -89,7 +89,9 @@ async function requestExport({ pg, kv, config }, session, request, response) {
 	await writeAudit(pg, { session, meta: clientMetaOf(request, config), eventType: 'account.export_requested', details: { format } });
 	try {
 		const rows = await pg.asUser(session).post('osionos_account_exports', { user_id: session.userId, format }, { prefer: 'return=representation' });
-		return sendJson(response, 202, { id: rows?.[0]?.id ?? null, status: 'queued' }, config);
+		sendJson(response, 202, { id: rows?.[0]?.id ?? null, status: 'queued' }, config);
+		config.activity?.emit(session, 'export', 'settings', null);
+		return true;
 	} catch (error) {
 		if (String(error?.upstreamCode) !== '23505') throw accountError(503, 'account_plane_unavailable', PLANE_DOWN);
 	}
