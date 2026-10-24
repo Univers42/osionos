@@ -38,12 +38,14 @@ function canonical(value: unknown): string {
     : v);
 }
 
-/** What to PUT and what to DELETE to turn `previous` into `next`. The default view is skipped. */
-export function diffViews(next: Views, previous: Views | undefined, defaultViewId: string): { saved: [string, ViewConfig][]; removed: string[] } {
+/** What to PUT and what to DELETE to turn `previous` into `next`. The default view and any
+ *  built-in view (the app's, not the user's) are skipped. */
+export function diffViews(next: Views, previous: Views | undefined, builtIn: string | readonly string[]): { saved: [string, ViewConfig][]; removed: string[] } {
   const before = previous ?? {};
+  const owned = new Set(typeof builtIn === "string" ? [builtIn] : builtIn);
   const saved = Object.entries(next).filter(([id, view]) =>
-    id !== defaultViewId && (!(id in before) || canonical(before[id]) !== canonical(view)));
-  const removed = Object.keys(before).filter((id) => id !== defaultViewId && !(id in next));
+    !owned.has(id) && (!(id in before) || canonical(before[id]) !== canonical(view)));
+  const removed = Object.keys(before).filter((id) => !owned.has(id) && !(id in next));
   return { saved, removed };
 }
 

@@ -189,3 +189,46 @@ test("DatabaseBlock routes sys: ids before the Home and known branches", () => {
   assert.ok(sys > 0, "an unconditional sys: branch exists");
   assert.ok(home > sys, "the sys: branch precedes the Home and known/fallback branches");
 });
+
+test("my-activity carries the built-in chart view the Insights template asks for", async () => {
+  const result = await state.loadSysSourceState("sys:my-activity", stub(answer("my-activity", ["ts", "event", "surface", "workspace_id"], [
+    { ts: "2026-10-01T00:00:00Z", event: "page.open", surface: "editor", workspace_id: "w" },
+  ])));
+  const chart = result.state.views["my-activity-chart"];
+  assert.equal(chart.type, "chart");
+  assert.equal(chart.name, "Events by type");
+  assert.equal(chart.databaseId, "sys:my-activity");
+  assert.equal(chart.settings.xAxisProperty, "event");
+  assert.equal(chart.settings.yAxisAggregation, "count");
+  assert.equal(result.state.views["my-activity-default"].type, "table");
+  assert.equal(result.state.views["my-pages-chart"], undefined);
+});
+
+test("a built-in view is never PUT or DELETEd as a user view", async () => {
+  const views = await import("../../src/widgets/database-view/model/sysDatabaseViews.ts");
+  const ids = catalog.sysBuiltInViewIds(catalog.sysSourceById("sys:my-activity"));
+  assert.deepEqual(ids, ["my-activity-default", "my-activity-chart"]);
+  const view = (id: string) => ({ id, databaseId: "sys:my-activity", name: id, type: "chart", filters: [], filterConjunction: "and", sorts: [], visibleProperties: [], settings: {} });
+  const held = { [ids[1]]: view(ids[1]) };
+  assert.deepEqual(views.diffViews({ [ids[1]]: { ...view(ids[1]), name: "renamed" } }, held, ids), { saved: [], removed: [] });
+  assert.deepEqual(views.diffViews({}, held, ids), { saved: [], removed: [] });
+  assert.deepEqual(views.diffViews({ mine: view("mine") }, held, ids).saved.map(([id]: [string]) => id), ["mine"]);
+});
+
+test("the adapter never sends a built-in view to the bridge, even renamed or removed", async () => {
+  state.clearSysSourceStateCache();
+  const writes: string[] = [];
+  const t = {
+    ...stub(answer("my-activity", ["ts", "event", "surface", "workspace_id"], [])),
+    async put<T>(path: string): Promise<T> { writes.push(`PUT ${path}`); return { ok: true, views: {} } as T; },
+    async delete<T>(path: string): Promise<T> { writes.push(`DELETE ${path}`); return { ok: true, views: {} } as T; },
+  };
+  const adapter = state.getSysDatabaseAdapter("sys:my-activity", t);
+  const before = await adapter.loadState();
+  const renamed = { ...before, views: { ...before.views, "my-activity-chart": { ...before.views["my-activity-chart"], name: "renamed" } } };
+  adapter.persistState(renamed, before);
+  const { "my-activity-chart": _gone, ...rest } = before.views;
+  adapter.persistState({ ...before, views: rest }, before);
+  await sleep();
+  assert.deepEqual(writes, []);
+});
