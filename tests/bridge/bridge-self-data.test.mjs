@@ -27,6 +27,9 @@ import { accountConfig, send, sessionToken, startAccountWorld, startBridgeWorld,
 import { kvStub } from './support/kv-stub.mjs';
 import { SELF_SOURCES, selfSourceById, dedupeEdgesByPeer } from '../../scripts/bridge-self-sources.mjs';
 
+// my-activity is registered only while the activity flag is on; the flag-off case is tested explicitly.
+process.env.OSIONOS_ACTIVITY = '1';
+
 const WORKSPACE = 'cccccccc-3333-4333-8333-cccccccccccc';
 const PAGE_A = '11111111-1111-4111-8111-111111111111';
 const PAGE_B = '22222222-2222-4222-8222-222222222222';
@@ -437,5 +440,18 @@ describe('GET /api/account/self-data/<source>', () => {
 		assert.equal(response.body.source, 'my-pages');
 		const preferences = await send(built.base, '/api/preferences', { token });
 		assert.equal(preferences.status, 200, 'the other module of the seam still answers its own path');
+	});
+});
+
+describe('my-activity with the activity flag off', () => {
+	it('is an unknown source and no request reaches osionos_activity_events', async (t) => {
+		delete process.env.OSIONOS_ACTIVITY;
+		t.after(() => { process.env.OSIONOS_ACTIVITY = '1'; });
+		const { base, store, token } = await world(t);
+		const response = await read(base, 'my-activity', { token });
+		assert.equal(response.status, 404);
+		assert.equal(response.body.code, 'unknown_self_source');
+		assert.equal(store.callsTo('osionos_activity_events').length, 0);
+		assert.equal(selfSourceById('my-activity'), null);
 	});
 });

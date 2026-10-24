@@ -30,6 +30,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SELF_SOURCES, selfSourceById } from '../../scripts/bridge-self-sources.mjs';
 
+// my-activity is registered only while the activity flag is on; the flag-off case is tested explicitly.
+process.env.OSIONOS_ACTIVITY = '1';
+
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 // The columns of the tables the seven sources read, as the root migrations create them.

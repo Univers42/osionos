@@ -27,6 +27,9 @@ import { send } from './support/account-world.mjs';
 import { startAdminWorld } from './support/admin-route-world.mjs';
 import { AUDIT, DAILY, USER_A, USER_B, cell, daysAgo, insightsWorld, tokenFor } from './support/insights-world.mjs';
 
+// my-activity is registered only while the activity flag is on.
+process.env.OSIONOS_ACTIVITY = '1';
+
 const GRANTS = [{ userId: USER_A, role: 'admin' }, { userId: USER_B, role: 'user' }];
 const CELLS = [cell(1, 'login', 'settings', 40, 12), cell(2, 'search', 'search', 9, 5), cell(3, 'export', 'settings', 3, 4), cell(3, 'share', 'editor', 1, 1)];
 
@@ -88,7 +91,7 @@ describe('the gates', () => {
 });
 
 describe('the query', () => {
-	const refused = ['?from=2026-01-01', '?to=2026-01-02', '?granularity=week', '?granularity=month', '?days=6', '?days=91', '?days=abc', '?days=7.5', '?event=nope', '?surface=nope', '?foo=1', '?workspace_id=aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', '?scope=workspace'];
+	const refused = ['?from=2026-01-01', '?to=2026-01-02', '?granularity=week', '?granularity=month', '?days=6', '?days=91', '?days=abc', '?days=7.5', '?days=007', '?days=7.0', '?event=login&event=x', '?days=7&days=7', '?event=nope', '?surface=nope', '?foo=1', '?workspace_id=aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa', '?scope=workspace'];
 	for (const query of refused) {
 		it(`refuses ${query} with 400 bad_query and writes no audit row`, async (t) => {
 			const { call, store } = await insightsWorld(t, { cells: CELLS });
