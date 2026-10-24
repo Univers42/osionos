@@ -11,20 +11,46 @@
 /* ************************************************************************** */
 
 import React from "react";
-import { GitCommitHorizontal, RefreshCw, Upload } from "lucide-react";
+import { GitCommitHorizontal, RefreshCw, ShieldCheck, Upload } from "lucide-react";
 
+import { showVigilantBadge, type SignedCommit } from "../model/ideVigilant";
 import { useIdeGit } from "../model/useIdeGit";
+
+type GitState = ReturnType<typeof useIdeGit>;
+
+const FLAG_COPY = { unsigned: "Unsigned", unverified: "Unverified signature" } as const;
+
+/** Per-commit flags for vigilant mode. Signed commits get no flag: only the odd ones stand out. */
+const VigilantCommits: React.FC<{ commits: readonly SignedCommit[] }> = ({ commits }) => (
+  <div className="pb-1">
+    <div className="px-2 py-0.5 text-2xs font-medium text-[var(--osio-code-fg-muted)]">Recent commits</div>
+    {commits.map((commit) => (
+      <div key={commit.hash} className="flex items-center gap-2 px-2 py-0.5">
+        <span className="font-mono text-[var(--osio-code-fg-muted)]">{commit.hash}</span>
+        <span className="truncate">{commit.subject}</span>
+        {commit.state !== "signed" && (
+          <span data-commit-flag={commit.state} className="ml-auto shrink-0 text-2xs text-[var(--osio-danger)]">{FLAG_COPY[commit.state]}</span>
+        )}
+      </div>
+    ))}
+  </div>
+);
 
 /** Source Control (P6): status → commit → push over the sandbox git. Shows a
  *  clear "no sandbox" state offline (the routes 404/409 until a workspace
  *  sandbox is running). PAT is entered here and sent only with the push. */
 export const IdeSourceControl: React.FC = () => {
-  const { files, busy, error, connected, refresh, commit, push } = useIdeGit();
+  const git = useIdeGit();
+  // Refresh on mount and on workspace change (refresh's identity is keyed to it).
+  const { refresh } = git;
+  React.useEffect(() => { void refresh(); }, [refresh]);
+  return <IdeSourceControlView git={git} />;
+};
+
+export const IdeSourceControlView: React.FC<{ git: GitState }> = ({ git }) => {
+  const { files, busy, error, connected, refresh, commit, push, vigilant, keyCount, commits } = git;
   const [message, setMessage] = React.useState("");
   const [pat, setPat] = React.useState("");
-
-  // Refresh on mount and on workspace change (refresh's identity is keyed to it).
-  React.useEffect(() => { void refresh(); }, [refresh]);
 
   if (connected === false) {
     return (
@@ -73,6 +99,11 @@ export const IdeSourceControl: React.FC = () => {
         placeholder="Personal access token (for push)"
         className="mx-2 mb-2 rounded-xs border border-[var(--osio-code-border)] bg-[var(--osio-code-bg)] px-2 py-1 text-xs outline-none focus:border-[var(--osio-accent)]"
       />
+      {showVigilantBadge(vigilant, connected, keyCount) && (
+        <p data-vigilant-badge className="mx-2 mb-2 inline-flex items-center gap-1 text-2xs text-[var(--osio-code-fg-muted)]">
+          <ShieldCheck size={12} /> Vigilant mode
+        </p>
+      )}
       {error && <p className="px-3 pb-1 text-2xs text-[var(--osio-danger)]">{error}</p>}
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-2">
         <div className="px-2 py-0.5 text-2xs font-medium text-[var(--osio-code-fg-muted)]">
@@ -84,6 +115,7 @@ export const IdeSourceControl: React.FC = () => {
             <span className="truncate">{file.path}</span>
           </div>
         ))}
+        {showVigilantBadge(vigilant, connected, keyCount) && commits.length > 0 && <VigilantCommits commits={commits} />}
         {files.length === 0 && !busy && (
           <p className="px-3 py-4 text-center text-2xs text-[var(--osio-code-fg-muted)]">No changes.</p>
         )}
