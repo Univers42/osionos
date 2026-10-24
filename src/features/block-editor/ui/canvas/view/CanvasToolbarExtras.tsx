@@ -72,16 +72,16 @@ export const CanvasAlignControls: React.FC<{
     <div className="osio-canvas-tb-group" role="group" aria-label="Align and distribute">
       {ALIGN_BUTTONS.map(({ edge, Icon, label }) => (
         <button key={edge} type="button" className="osio-canvas-tb-btn" title={label} aria-label={label} onClick={() => apply(alignFrames(cells, ids, edge))}>
-          <Icon size={15} strokeWidth={1.75} aria-hidden />
+          <Icon size={16} strokeWidth={1.75} aria-hidden />
         </button>
       ))}
       {ids.size >= 3 ? (
         <>
           <button type="button" className="osio-canvas-tb-btn" title="Distribute horizontally" aria-label="Distribute horizontally" onClick={() => apply(distributeFrames(cells, ids, "x"))}>
-            <AlignHorizontalDistributeCenter size={15} strokeWidth={1.75} aria-hidden />
+            <AlignHorizontalDistributeCenter size={16} strokeWidth={1.75} aria-hidden />
           </button>
           <button type="button" className="osio-canvas-tb-btn" title="Distribute vertically" aria-label="Distribute vertically" onClick={() => apply(distributeFrames(cells, ids, "y"))}>
-            <AlignVerticalDistributeCenter size={15} strokeWidth={1.75} aria-hidden />
+            <AlignVerticalDistributeCenter size={16} strokeWidth={1.75} aria-hidden />
           </button>
         </>
       ) : null}

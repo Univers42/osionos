@@ -98,7 +98,7 @@ export const CoverGalleryTab: React.FC<CoverGalleryTabProps> = ({ value, onSelec
                 key={cat.id}
                 type="button"
                 className={[
-                  "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium",
+                  "shrink-0 rounded-full px-2.5 py-1 text-2xs font-medium",
                   activeCat === cat.id
                     ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
                     : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]",
@@ -115,7 +115,7 @@ export const CoverGalleryTab: React.FC<CoverGalleryTabProps> = ({ value, onSelec
           ) : (
             categories.map((cat) => (
               <div key={cat.id} className="space-y-1.5">
-                <p className="px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">
+                <p className="px-1 text-3xs font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">
                   {cat.label}
                 </p>
                 <Grid items={cat.items} value={value} video={cat.kind === "video"} onSelect={onSelect} />

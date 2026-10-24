@@ -49,9 +49,12 @@ export const HEALTH_REASONS = Object.freeze({
   unexpected: "Unexpected sandbox response.",
   closedDisabled: "The IDE sandbox is not enabled on this server.",
   closedUnavailable: "The sandbox is not running on this server.",
+  busy: "All sandboxes are busy, retry in a minute",
+  createRate: "Too many sandboxes started recently; retry later.",
 });
 
-/** Map a bridge response to a health verdict; "keep" (429) leaves it unchanged. O(1). */
+/** Map a bridge response to a health verdict; a plain 429 ("keep") leaves it unchanged, but the
+ *  capacity refusals (SANDBOX_BUSY, CREATE_RATE) are a real "cannot start now". O(1). */
 export function stateFromResponse(
   status: number,
   body: unknown,
@@ -64,7 +67,12 @@ export function stateFromResponse(
   }
   if (status === 404) return { state: "disabled", reason: HEALTH_REASONS.disabled };
   if (status === 401 || status === 403) return { state: "disabled", reason: HEALTH_REASONS.forbidden };
-  if (status === 429) return { state: "keep", reason: null };
+  if (status === 429) {
+    const code = (body as { code?: unknown } | undefined)?.code;
+    if (code === "SANDBOX_BUSY") return { state: "unavailable", reason: HEALTH_REASONS.busy };
+    if (code === "CREATE_RATE") return { state: "unavailable", reason: HEALTH_REASONS.createRate };
+    return { state: "keep", reason: null };
+  }
   if (status >= 500) return { state: "unavailable", reason: `Sandbox backend unavailable (HTTP ${status}).` };
   return { state: "unavailable", reason: `Unexpected sandbox response (HTTP ${status}).` };
 }

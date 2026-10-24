@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/15 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,6 +32,13 @@ export interface SharePerson {
   wsRole?: string;
 }
 
+/** A workspace team offered as a share target (`GET /api/workspaces/:id/teams`). */
+export interface ShareTeam {
+  id: string;
+  name: string;
+  memberCount: number;
+}
+
 /** An engine role row (`GET /api/perms/roles`). */
 export interface EngineRole {
   id: string;
@@ -55,11 +62,23 @@ export interface ShareEntry {
   target:
     | { type: 'user'; person: SharePerson }
     | { type: 'role'; role: string }
+    | { type: 'team'; team: ShareTeam }
     | { type: 'workspace' }
     | { type: 'public' };
   level: ShareLevel;
-  /** Policy id backing this entry (live mode); a page entry has none. */
+  /** Rule or live policy id; page collaborators and visibility have none. */
   sourceId?: string;
+}
+
+/** AbacEngine AccessRule shape (packages/core/src/abac + accessRule.model). */
+export interface ShareAccessRule {
+  _id?: string;
+  workspaceId: string;
+  resourceId: string | null;
+  resourceType: 'workspace' | 'page' | 'database' | 'block';
+  target: { type: 'user'; userId: string } | { type: 'role'; role: string } | { type: 'team'; teamId: string } | { type: 'workspace' } | { type: 'public' };
+  permission: ShareLevel;
+  explicit: boolean;
 }
 
 /** permission-engine CreatePolicyDto payload (live database pages). */

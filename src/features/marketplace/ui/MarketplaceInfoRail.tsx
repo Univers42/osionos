@@ -19,7 +19,7 @@ import { readAppMeta } from "../model/appMeta";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="border-b border-[var(--osio-border-subtle)] pb-3">
+    <div className="border-b border-[var(--osio-border-default)] pb-3">
       <p className="pb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--osio-fg-subtle)]">{title}</p>
       {children}
     </div>

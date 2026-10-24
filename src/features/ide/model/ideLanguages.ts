@@ -114,6 +114,19 @@ export function fileExtension(fileName: string): string {
   return (dot > 0 ? base.slice(dot + 1) : base).toLowerCase();
 }
 
+// Makefiles have no highlighter in the table above but are unmistakably code files.
+const EXTRA_CODE_EXTENSIONS = new Set(["makefile", "gnumakefile", "mk"]);
+
+/** True when the name's extension (or whole extension-less name) is a language we
+ *  know. Plain-text extensions count: `notes.txt` stays a text file, only names with
+ *  no recognised extension ("My notes", "Meeting 10.18") are not code files.
+ *  Caveat: a dotfile such as `.gitignore` is not recognised (its "extension" is the
+ *  whole name), so the Explorer treats it as a page name. */
+export function isCodeFileName(name: string): boolean {
+  const ext = fileExtension(name);
+  return BY_EXT.has(ext) || PLAINTEXT_LANGUAGE.extensions.includes(ext) || EXTRA_CODE_EXTENSIONS.has(ext);
+}
+
 /** Resolve a file name to its language (by extension, else plaintext). */
 export function languageForFileName(fileName: string): IdeLanguage {
   return BY_EXT.get(fileExtension(fileName)) || PLAINTEXT_LANGUAGE;

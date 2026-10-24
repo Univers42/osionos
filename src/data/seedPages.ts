@@ -54,7 +54,7 @@ const teamWiki: SeedPage = {
     numbered('Clone the repo and stay on the Docker-only workflow'),
     numbered('Generate runtime env files with Dockerized Node'),
     numbered('Run docker compose up -d --build from the repository root'),
-    numbered('Open http://localhost:4322 and sign in to reach osionos'),
+    numbered('Open the osionos address your team shares and sign in'),
     callout('The normal flow starts at the website and opens this workspace through the bridge.', getCollectionEmojiValue('idea')),
     h2('Architecture'),
     p('The project has two main parts:'),

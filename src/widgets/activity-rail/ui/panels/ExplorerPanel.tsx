@@ -20,6 +20,8 @@ import { ExplorerViewSwitch } from "./ExplorerViewSwitch";
 import { useExplorerView } from "../../model/explorerView";
 import { useFetchActiveWorkspacePages } from "../../model/useFetchActiveWorkspacePages";
 import { pageIdForEntry, pageIdForDir } from "../../model/workspaceEntry";
+import { SECTION_EMPTY_HINT, SECTION_NAME } from "@/features/page-file/model/pageSections";
+import { isPageBacked } from "@/features/ide/vfs/workspaceMounts";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { useToastStore } from "@osionos/ui/primitives";
@@ -36,6 +38,11 @@ interface Props {
 }
 
 const NOOP_OPEN = (): void => undefined;
+const OPEN_SECTIONS = [SECTION_NAME.private, SECTION_NAME.shared];
+const SECTION_HINTS = {
+  [SECTION_NAME.private]: SECTION_EMPTY_HINT.private,
+  [SECTION_NAME.shared]: SECTION_EMPTY_HINT.shared,
+};
 
 /** Explorer rail panel hosting the VFS explorer: the VFS tree plus
  *  a compact Recents strip. */
@@ -88,11 +95,15 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
     }
   }, [exportProject, workspaceName]);
 
+  // Read during render: the panel re-renders when the sandbox flips because useWorkspaceFileOps hands out new ops.
+  const sectioned = isPageBacked(activeWorkspaceId);
+
   const pageIdOf = useCallback(
     (rel: string, kind: ExplorerRowKind): string | undefined => {
       const pages = usePageStore.getState().pages[activeWorkspaceId] ?? [];
-      if (kind === "dir") return pageIdForDir(activeWorkspaceId, pages, rel);
-      return pageIdForEntry(activeWorkspaceId, pages, rel);
+      const sectioned = isPageBacked(activeWorkspaceId);
+      if (kind === "dir") return pageIdForDir(activeWorkspaceId, pages, rel, sectioned);
+      return pageIdForEntry(activeWorkspaceId, pages, rel, sectioned);
     },
     [activeWorkspaceId],
   );
@@ -105,7 +116,7 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
           overflow-y-auto container loses the press to scroll-arbitration and its
           `dragstart` never fires (rows higher up, with scroll headroom, still
           grab fine — the scroll-position-dependent "can't grab lower" bug). */}
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-1.5 pb-5" style={{ touchAction: "pan-y" }}>
+      <nav className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden px-2 pt-1.5 pb-5" style={{ touchAction: "pan-y" }}>
         {explorerView === "gallery" ? (
           <FolderRail />
         ) : (
@@ -115,6 +126,8 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
               ops={ops}
               onOpen={onOpenFile}
               pageIdOf={pageIdOf}
+              defaultExpanded={sectioned ? OPEN_SECTIONS : undefined}
+              emptyHints={sectioned ? SECTION_HINTS : undefined}
               onImportFolder={() => importRef.current?.click()}
               onExportZip={onExportZip}
               onRowMenu={setMenu}

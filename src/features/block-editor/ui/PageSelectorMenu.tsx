@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { FilePlus2, FileText, Database } from "lucide-react";
+import { FilePlus2, FileText, Database, Layers } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import {
   canReadPage,
@@ -22,17 +22,26 @@ import {
 const MENU_MARGIN = 8;
 const MENU_GAP = 6;
 const MENU_WIDTH = 288; // w-72
-const MENU_MAX_HEIGHT = 416; // max-h-[26rem]
+const MENU_MAX_HEIGHT = 416;
 
 interface PageSelectorMenuProps {
   position: { x: number; y: number; top: number };
   filter: string;
   onSelect: (pageId: string) => void;
-  onCreate: (title: string) => void;
+  /** When it is not given, the menu never offers to create a page. */
+  onCreate?: (title: string) => void;
   onClose: () => void;
+  /** An extra first item — the AI composer puts "Whole workspace" there. */
+  leading?: { label: string; onSelect: () => void };
+  /** The label above the list. */
+  heading?: string;
 }
 
 type SelectorOption =
+  | {
+      kind: "leading";
+      label: string;
+    }
   | {
       kind: "page";
       pageId: string;
@@ -51,6 +60,8 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
   onSelect,
   onCreate,
   onClose,
+  leading,
+  heading = "Link to page",
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -72,6 +83,10 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
     const query = filter.trim();
     const loweredQuery = query.toLowerCase();
 
+    const leadingOptions: SelectorOption[] = leading
+      ? [{ kind: "leading", label: leading.label }]
+      : [];
+
     const pageOptions: SelectorOption[] = filteredPages.map((page) => ({
       kind: "page",
       pageId: page._id,
@@ -80,8 +95,8 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
       isDatabase: Boolean(page.databaseId),
     }));
 
-    if (!query) {
-      return pageOptions;
+    if (!query || !onCreate) {
+      return [...leadingOptions, ...pageOptions];
     }
 
     const hasExactMatch = pages.some((page) => {
@@ -91,17 +106,18 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
     });
 
     if (hasExactMatch) {
-      return pageOptions;
+      return [...leadingOptions, ...pageOptions];
     }
 
     return [
+      ...leadingOptions,
       ...pageOptions,
       {
         kind: "create",
         title: query,
       },
     ];
-  }, [filter, filteredPages, pages]);
+  }, [filter, filteredPages, pages, leading, onCreate]);
 
   const effectiveActiveIdx = Math.min(
     activeIdx,
@@ -145,18 +161,23 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
         const option = selectorOptions[effectiveActiveIdx];
         if (!option) return;
 
+        if (option.kind === "leading") {
+          leading?.onSelect();
+          return;
+        }
+
         if (option.kind === "page") {
           onSelect(option.pageId);
           return;
         }
 
-        onCreate(option.title);
+        onCreate?.(option.title);
       }
     };
 
     document.addEventListener("keydown", handler, true);
     return () => document.removeEventListener("keydown", handler, true);
-  }, [effectiveActiveIdx, selectorOptions, onSelect, onCreate, onClose]);
+  }, [effectiveActiveIdx, selectorOptions, onSelect, onCreate, onClose, leading]);
 
   const menuStyle = useMemo<React.CSSProperties>(() => {
     const vw = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1024;
@@ -190,66 +211,67 @@ export const PageSelectorMenu: React.FC<PageSelectorMenuProps> = ({
   return createPortal(
     <div
       ref={ref}
-      className="fixed z-[var(--osio-z-popover)] flex w-72 overflow-hidden rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-2xl"
+      data-testid="page-selector-menu"
+      className="osio-surface-overlay fixed z-[var(--osio-z-popover)] flex w-72 flex-col overflow-hidden"
       style={menuStyle}
     >
-      <div className="flex flex-1 flex-col">
-        <div className="max-h-[26rem] overflow-y-auto py-1.5">
-          <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
-            Link to page
-          </p>
-          {selectorOptions.map((option, idx) => {
-            const isActive = idx === effectiveActiveIdx;
-            let Icon = FileText;
-            if (option.kind === "create") {
-              Icon = FilePlus2;
-            } else if (option.isDatabase) {
-              Icon = Database;
-            }
-            const label =
-              option.kind === "create"
-                ? `Create page "${option.title}"`
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <p className="osio-menu-label">{heading}</p>
+        {selectorOptions.map((option, idx) => {
+          const isActive = idx === effectiveActiveIdx;
+          let Icon = FileText;
+          if (option.kind === "create") {
+            Icon = FilePlus2;
+          } else if (option.kind === "leading") {
+            Icon = Layers;
+          } else if (option.isDatabase) {
+            Icon = Database;
+          }
+          const label =
+            option.kind === "create"
+              ? `Create page "${option.title}"`
+              : option.kind === "leading"
+                ? option.label
                 : option.title;
 
-            return (
-              <button
-                key={
-                  option.kind === "create"
-                    ? `create:${option.title}`
+          return (
+            <button
+              key={
+                option.kind === "create"
+                  ? `create:${option.title}`
+                  : option.kind === "leading"
+                    ? "leading"
                     : option.pageId
+              }
+              type="button"
+              className="osio-menu-item"
+              data-active={isActive}
+              onMouseEnter={() => setActiveIdx(idx)}
+              onClick={() => {
+                if (option.kind === "create") {
+                  onCreate?.(option.title);
+                  return;
                 }
-                type="button"
-                className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors ${
-                  isActive
-                    ? "bg-[var(--osio-bg-hover)]"
-                    : "hover:bg-[var(--osio-bg-hover)]"
-                }`}
-                onMouseEnter={() => setActiveIdx(idx)}
-                onClick={() => {
-                  if (option.kind === "create") {
-                    onCreate(option.title);
-                    return;
-                  }
 
-                  onSelect(option.pageId);
-                }}
-              >
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--osio-bg-subtle)] text-base">
-                  {option.kind === "page" && option.icon ? (
-                    option.icon
-                  ) : (
-                    <Icon className="h-3.5 w-3.5 text-[var(--osio-fg-muted)]" />
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm text-[var(--osio-fg-default)]">
-                    {label}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                if (option.kind === "leading") {
+                  leading?.onSelect();
+                  return;
+                }
+
+                onSelect(option.pageId);
+              }}
+            >
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--osio-radius-sm)] bg-[var(--osio-bg-subtle)] text-sm">
+                {option.kind === "page" && option.icon ? (
+                  option.icon
+                ) : (
+                  <Icon className="h-3.5 w-3.5 text-[var(--osio-fg-muted)]" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>,
     document.body,

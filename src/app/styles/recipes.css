@@ -1,0 +1,216 @@
+/* Component tokens and the shared surface recipes.
+ *
+ * Component tokens give each kind of surface one set of knobs, aliased onto
+ * the semantic tokens, so a palette or a radius setting restyles every menu,
+ * field and chip at once. The kit (@osionos/ui) reads the same tokens, which
+ * is why each one is also declared in packages/osionos-ui/tokens.css.
+ *
+ * The `osio-*` utilities are for host markup that is not a kit component.
+ * They carry no colour of their own: take the colours from the tokens above,
+ * and do not add a second utility for the same property on the same element —
+ * Tailwind settles that by stylesheet order, not class order.
+ *
+ * The focus outlines below are the fallback, not what a keyboard user sees on a
+ * native button or input today: global.css has an unlayered :focus-visible rule
+ * for those, and an unlayered rule beats every utility whatever its specificity.
+ */
+
+:root,
+[data-theme] {
+  /* Floating surfaces: menus, popovers, dropdown lists, dialogs. */
+  --osio-overlay-bg: var(--osio-bg-elevated);
+  --osio-overlay-border: var(--osio-border-default);
+  --osio-overlay-radius: var(--osio-radius-overlay);
+  --osio-overlay-shadow: var(--osio-e3);
+  --osio-overlay-padding: 4px;
+  /* A translucent foreground mix, not --osio-bg-hover: dark palettes put the
+   * elevated panel one step above bg-hover, so the solid fill vanishes there. */
+  --osio-menu-item-hover-bg: color-mix(in srgb, var(--osio-fg-default) 10%, transparent);
+  --osio-menu-separator: var(--osio-border-strong);
+  --osio-scroll-fade-size: 16px;
+
+  /* Buttons and icon buttons. */
+  --osio-control-radius: var(--osio-radius-control);
+  --osio-control-bg-hover: var(--osio-bg-hover);
+  --osio-control-border: var(--osio-border-default);
+  /* The danger-subtle button's hover: a tint of the danger hue, not a fill. */
+  --osio-danger-subtle-bg-hover: color-mix(in srgb, var(--osio-danger) 10%, transparent);
+
+  /* Text, date and select fields. */
+  --osio-field-bg: var(--osio-bg-surface);
+  --osio-field-border: var(--osio-border-strong);
+  --osio-field-border-focus: var(--osio-accent);
+  --osio-field-radius: var(--osio-radius-control);
+  --osio-field-h: var(--osio-control-h-md);
+
+  /* Option and tag chips are pills. */
+  --osio-chip-radius: var(--osio-radius-full);
+  --osio-chip-h: 22px;
+  --osio-chip-px: 8px;
+
+  /* The off track is the only boundary of an off switch, so it takes the
+   * subtle text colour (4.5:1 on every surface) rather than a fill. */
+  --osio-toggle-off-bg: var(--osio-fg-subtle);
+
+  --osio-tooltip-bg: var(--osio-fg-strong);
+  --osio-tooltip-fg: var(--osio-bg-surface);
+  --osio-tooltip-radius: var(--osio-radius-sm);
+}
+
+@utility osio-surface-overlay {
+  background-color: var(--osio-overlay-bg);
+  border: 1px solid var(--osio-overlay-border);
+  border-radius: var(--osio-overlay-radius);
+  box-shadow: var(--osio-overlay-shadow);
+  padding: var(--osio-overlay-padding);
+}
+
+@utility osio-control {
+  height: var(--osio-control-h-md);
+  border-radius: var(--osio-control-radius);
+  transition:
+    background-color var(--osio-dur-fast) var(--osio-ease-standard),
+    border-color var(--osio-dur-fast) var(--osio-ease-standard);
+
+  &:hover:not(:disabled) {
+    background-color: var(--osio-control-bg-hover);
+  }
+
+  &:focus-visible {
+    outline: var(--osio-focus-ring-width) solid var(--osio-focus-ring-color);
+    outline-offset: var(--osio-focus-ring-offset);
+  }
+}
+
+@utility osio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--osio-space-1);
+  height: var(--osio-chip-h);
+  padding-inline: var(--osio-chip-px);
+  border-radius: var(--osio-chip-radius);
+  background-color: var(--osio-bg-muted);
+  color: var(--osio-fg-default);
+  font-size: var(--osio-font-size-xs);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@utility osio-field {
+  height: var(--osio-field-h);
+  background-color: var(--osio-field-bg);
+  border: 1px solid var(--osio-field-border);
+  border-radius: var(--osio-field-radius);
+  color: var(--osio-fg-default);
+  color-scheme: inherit;
+  transition: border-color var(--osio-dur-fast) var(--osio-ease-standard);
+
+  &:focus-visible {
+    border-color: var(--osio-field-border-focus);
+    outline: var(--osio-focus-ring-width) solid var(--osio-focus-ring-color);
+    outline-offset: var(--osio-focus-ring-offset);
+  }
+}
+
+/* Rows, section labels and separators inside a menu panel. `data-tone` carries
+ * the few colour variants because two colour utilities on one element are
+ * settled by stylesheet order, not class order. `aria-selected` is the
+ * keyboard-active row of a listbox whose focus stays elsewhere (the slash
+ * menu), so it gets an accent bar on top of the hover fill. */
+@utility osio-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--osio-space-2);
+  width: 100%;
+  height: var(--osio-control-h-sm);
+  padding-inline: 8px;
+  border-radius: var(--osio-radius-sm);
+  color: var(--osio-fg-default);
+  font-size: var(--osio-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--osio-dur-fast) var(--osio-ease-standard);
+
+  &:hover,
+  &[data-active="true"],
+  &[aria-selected="true"] {
+    background-color: var(--osio-menu-item-hover-bg);
+  }
+
+  &[aria-selected="true"] {
+    box-shadow: inset 2px 0 0 0 var(--osio-accent);
+  }
+
+  &:focus-visible {
+    outline: var(--osio-focus-ring-width) solid var(--osio-focus-ring-color);
+    outline-offset: calc(var(--osio-focus-ring-width) * -1);
+  }
+
+  &[data-tone="danger"] {
+    color: var(--osio-danger);
+  }
+
+  &[data-tone="accent"] {
+    color: var(--osio-accent-text);
+  }
+
+  &[data-tone="muted"] {
+    color: var(--osio-fg-muted);
+  }
+
+  &:disabled,
+  &[aria-disabled="true"] {
+    background-color: transparent;
+    color: var(--osio-fg-subtle);
+    cursor: default;
+  }
+}
+
+@utility osio-menu-label {
+  padding: 4px 8px;
+  color: var(--osio-fg-muted);
+  font-size: var(--osio-font-size-xs);
+  font-weight: 500;
+}
+
+@utility osio-menu-separator {
+  height: 1px;
+  margin-block: 4px;
+  background-color: var(--osio-menu-separator);
+}
+
+/* A scroll region that still has rows out of sight fades the edge they are
+ * behind. `useWholeRowScroll` sets `data-fade-top` / `data-fade-bottom`; when
+ * everything fits neither is set and the region is not masked at all. */
+@utility osio-scroll-fade {
+  --osio-fade-top: 0px;
+  --osio-fade-bottom: 0px;
+
+  &[data-fade-top] {
+    --osio-fade-top: var(--osio-scroll-fade-size);
+  }
+
+  &[data-fade-bottom] {
+    --osio-fade-bottom: var(--osio-scroll-fade-size);
+  }
+
+  &[data-fade-top],
+  &[data-fade-bottom] {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black var(--osio-fade-top),
+      black calc(100% - var(--osio-fade-bottom)),
+      transparent 100%
+    );
+  }
+}
+
+/* The static surface for a card that sits inside a pane. A floating panel uses
+   osio-surface-overlay instead: that one is lifted (e3), this one rests (e1). */
+@utility osio-surface-panel {
+  background-color: var(--osio-bg-surface);
+  border: 1px solid var(--osio-border-default);
+  border-radius: var(--osio-radius-panel);
+  box-shadow: var(--osio-e1);
+}

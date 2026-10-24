@@ -44,7 +44,7 @@ export const ConversationFilters: React.FC<ConversationFiltersProps> = ({
   <div className="grid gap-2 px-3 py-2">
     <div className="relative">
       <Search
-        size={15}
+        size={16}
         className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--osio-fg-subtle)]"
       />
       <input

@@ -39,7 +39,7 @@ export const DockContactRow: React.FC<DockContactRowProps> = ({
     type="button"
     onClick={onOpen}
     aria-label={`Open conversation with ${name}`}
-    className="flex w-full min-h-11 items-center gap-[var(--osio-space-3)] rounded-md px-[var(--osio-space-2)] py-[var(--osio-space-2)] text-left transition-colors duration-150 ease-out hover:bg-[var(--osio-bg-hover)]"
+    className="flex w-full min-h-11 items-center gap-[var(--osio-space-3)] rounded-md px-[var(--osio-space-2)] py-[var(--osio-space-2)] text-left transition-colors duration-(--osio-dur-fast) ease-out hover:bg-[var(--osio-bg-hover)]"
   >
     <span className="relative shrink-0">
       <span className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[var(--osio-bg-subtle)] text-xs font-medium text-[var(--osio-fg-muted)]">

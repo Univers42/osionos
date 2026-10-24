@@ -92,7 +92,7 @@ export const CoverTile: React.FC<CoverTileProps> = ({ item, selected, video, onS
       <span className="flex min-h-8 items-center justify-between gap-2 px-2 py-1.5">
         <span className="truncate text-xs font-medium text-[var(--osio-fg-default)]">{item.label}</span>
         {item.credit ? (
-          <span className="shrink-0 truncate text-[10px] text-[var(--osio-fg-subtle)]">{item.credit}</span>
+          <span className="shrink-0 truncate text-3xs text-[var(--osio-fg-subtle)]">{item.credit}</span>
         ) : null}
       </span>
     </button>

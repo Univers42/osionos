@@ -1,0 +1,64 @@
+# the output check on the generated images, the model onnx-community/nsfw_image_detection-ONNX, the file model.onnx
+host_uptime 140662.20 2199277.89
+host_loadavg 19.05 14.34 9.86 1/6714 107
+
+model onnx-community/nsfw_image_detection-ONNX
+dtype fp32
+sets /mnt/storage/nsfw
+
+label model.onnx
+dtype fp32
+model onnx-community/nsfw_image_detection-ONNX
+localModelPath /mnt/storage/nsfw/models
+allowRemoteModels false
+manifest /mnt/storage/nsfw/manifest.tsv
+images 352
+node v22.23.4
+platform linux x64
+uptime_s 140662.3
+load_ms 539.6
+rss_after_load_mb 460.3
+warmup_images 3
+sequential_ms {"n":352,"min":45.32947200000126,"p50":61.62463750000006,"p95":104.53272870000036,"max":366.5203290000027,"mean":70.38292900852281}
+decode_ms {"n":352,"min":1.3905469999999696,"p50":4.877574000000095,"p95":11.49402475000054,"max":41.72824199999923,"mean":5.906959985795493}
+infer_ms {"n":352,"min":42.258309000000736,"p50":55.93807199999992,"p95":99.26230175000049,"max":363.1121860000021,"mean":64.47596902272731}
+concurrent_ms {"n":352,"min":48.13638699999865,"p50":156.0853010000028,"p95":220.64773729999888,"max":392.51441200000045,"mean":146.56067433806814}
+rss_after_run_mb 756.8
+scores 352
+out /results/nsfw-falconsai-model.onnx/scores.tsv
+== the scores of the safe images, nsfw-falconsai-model.onnx
+set    images       min       p50       p95       max
+gen        50    0.0001    0.0001    0.0009    0.0084
+a1          2    0.0001    0.0001    0.0001    0.0001
+coco      300    0.0001    0.0001    0.0002    0.0015
+
+== the false positives, nsfw-falconsai-model.onnx
+set    threshold  flagged  images     rate   wilson 95 %
+gen         0.50        0      50   0.00%   [0.00%, 7.14%]
+gen         0.70        0      50   0.00%   [0.00%, 7.14%]
+gen         0.90        0      50   0.00%   [0.00%, 7.14%]
+a1          0.50        0       2   0.00%   [0.00%, 65.76%]
+a1          0.70        0       2   0.00%   [0.00%, 65.76%]
+a1          0.90        0       2   0.00%   [0.00%, 65.76%]
+coco        0.50        0     300   0.00%   [0.00%, 1.26%]
+coco        0.70        0     300   0.00%   [0.00%, 1.26%]
+coco        0.90        0     300   0.00%   [0.00%, 1.26%]
+
+== the five highest of every set, nsfw-falconsai-model.onnx
+gen     1  93261             0.0084
+gen     2  139077            0.0025
+gen     3  555972            0.0010
+gen     4  292060            0.0006
+gen     5  410934            0.0004
+a1      1  03.png            0.0001
+a1      2  01.png            0.0001
+coco    1  000000093261      0.0015
+coco    2  000000376365      0.0005
+coco    3  000000536343      0.0004
+coco    4  000000140439      0.0004
+coco    5  000000078404      0.0003
+
+== the time of one image, nsfw-falconsai-model.onnx
+ images       p50       p95       max
+    352      61.7     104.5     366.5
+

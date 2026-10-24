@@ -5,56 +5,80 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/10/15 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/15 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Created: 2026/10/19 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-// Session cut-off: a password reset sets public.auth_session_cutoffs.sessions_valid_after,
-// and an osionos_v1 token issued before it is refused. The verifier is synchronous and has
-// ~50 callers, so the per-user row is fetched before dispatch (refreshSessionCutoff) and read
-// synchronously inside the verifier (assertSessionNotCutOff).
+// Server-side revocation of osionos_v1 app sessions. public.auth_session_cutoffs holds one
+// sessions_valid_after per user (a password reset writes it, so does POST /api/auth/bridge/logout);
+// a token issued before it is refused. The verifier is synchronous and has ~50 callers, so the
+// whole table lives in a bridge-wide Map that a poller replaces every 10 s. Nothing here touches
+// the network on the request path.
 //
-// Caveat: the row is cached per process for `ttlMs` (5 s), dated from the start of the
-// lookup, so a cut-off written at T is enforced on requests whose lookup starts after
-// T + ttlMs; each bridge replica caches on its own. Cut-off and iat_ms come from two clocks
-// (Postgres now() and the bridge's Date.now()); skew between them moves the boundary by
-// the skew. A restart forgets every known row, so a lookup outage right after one fails
-// open for every user (with an audit line each).
+// Fail-closed: until the first full load, and when the last load is older than 60 s, EVERY
+// verification answers 503 (a token minted after the last poll can belong to a user whose
+// sign-out we have not seen, so no token can be vouched for).
 //
-// On a failed lookup: a user with a cut-off on record is refused (503, retryable) unless the
-// token is already older than that cut-off (401). A user with none is served, and an audit
-// line is written. Reason: the row only exists after a reset, the event that signals a
-// possible compromise, so those users take the strict rule; failing closed for everyone
-// would turn a PostgREST blip into an outage of every bridge route for a revocation that, for
-// a user who never reset, does not exist.
+// Caveat: a full reload costs about 112 B/row every 10 s (1k rows = 112 KB, measured 2026-10-19
+// on PostgREST v12.2.3), so the cost grows with the table and not with traffic; a warning fires
+// past 5,000 rows. The reopen point is a delta poll on a DB-assigned updated_at with a lookback
+// window plus a periodic full reload (a cursor on sessions_valid_after itself misses rows:
+// now() is the transaction START, so a slow writer commits behind the cursor). A revocation is
+// enforced up to 10 s plus one query late on a bridge replica that did not take the write, and
+// up to 60 s during a poll outage. The row-count check (Content-Range) can fail a healthy tick
+// when a row is inserted between pages; that only delays a load by one tick.
+//
+// The state, the freshness threshold, the announce, the paged reload, the local writes and the
+// poller loop live in bridge-session-tracker.mjs: the revoked session ids are polled the same
+// way, and two copies of this machinery would drift apart on what "fresh" means.
 
-const DEFAULT_TTL_MS = 5_000;
-const DEFAULT_MAX_ENTRIES = 10_000;
-const TIMESTAMPTZ = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}(?::?\d{2})?)$/;
+import { BAAS_FETCH_TIMEOUT_MS } from './bridge-baas-body.mjs';
+import {
+	LARGE_TABLE_ROWS,
+	PAGE_SIZE,
+	POLL_INTERVAL_MS,
+	RETRY_AFTER_SECONDS,
+	STALE_AFTER_MS,
+	PolledSessionSet,
+	readPagedRows,
+	startPolledSessionPoller,
+	timestampMicros,
+} from './bridge-session-tracker.mjs';
 
-function httpError(message, status) {
-	return Object.assign(new Error(message), { status });
-}
+export { POLL_INTERVAL_MS, RETRY_AFTER_SECONDS, STALE_AFTER_MS, timestampMicros };
 
-export function createSessionCutoffCache({ ttlMs = DEFAULT_TTL_MS, maxEntries = DEFAULT_MAX_ENTRIES, audit = (line) => console.warn(line) } = {}) {
-	return { ttlMs, maxEntries, audit, entries: new Map(), inflight: new Map() };
-}
+/**
+ * The cut-off tracker of one process: the whole table lives in a Map that the
+ * poller replaces every 10 s, so a verification never touches the network.
+ *
+ * The bridge and the osionos-ai service both hold one, and the token verifier
+ * reads it (assertSessionNotCutOff), so the shape below is the one both code
+ * paths see. It is written in JSDoc, in the module that owns the behaviour:
+ * a copy of it somewhere else is a copy that drifts.
+ *
+ * @typedef {object} SessionCutoffTracker
+ * @property {boolean} enforced whether the cut-offs are enforced at all
+ * @property {() => string} status off | loading | fresh | stale
+ * @property {(userId: string) => number | undefined} cutoffMicros the cut-off of one user, in microseconds
+ * @property {() => number} beginLoad the sequence number of the writes this process made
+ * @property {(loaded: Map<string, number>, startSequence: number) => void} completeLoad
+ * @property {(error: unknown) => void} failLoad
+ */
 
-function isoOffset(offset) {
-	if (offset === 'Z') return 'Z';
-	const digits = offset.slice(1).replace(':', '');
-	return `${offset[0]}${digits.slice(0, 2)}:${digits.slice(2) || '00'}`;
-}
+/**
+ * The log the tracker writes its warnings to: the bridge's and the service's
+ * console.
+ *
+ * @typedef {object} SessionCutoffLog
+ * @property {(message: string) => void} info
+ * @property {(message: string) => void} warn
+ */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TABLE_HINT = 'public.auth_session_cutoffs must exist and be readable by the service role (apply models/auth-session-cutoffs.sql)';
 
-/** A timestamptz as PostgREST renders it → integer microseconds since the epoch, or null. */
-export function timestampMicros(text) {
-	const match = typeof text === 'string' ? TIMESTAMPTZ.exec(text) : null;
-	if (!match) return null;
-	const [, date, time, fraction = '', offset] = match;
-	const wholeMs = Date.parse(`${date}T${time}${isoOffset(offset)}`);
-	if (!Number.isFinite(wholeMs)) return null;
-	return wholeMs * 1000 + Number(fraction.padEnd(6, '0').slice(0, 6));
+function httpError(message, status, code) {
+	return Object.assign(new Error(message), { status, code });
 }
 
 /** iat_ms when the token has one; a token minted before it counts as issued at the start of its iat second. */
@@ -67,48 +91,132 @@ export function tokenIssuedAtMs(payload) {
 	return Number.isFinite(iat) ? iat * 1000 : 0;
 }
 
-function pruneUnrevoked(cache, now) {
-	if (cache.entries.size <= cache.maxEntries) return;
-	for (const [userId, entry] of cache.entries) {
-		if (entry.validAfterMicros === null && entry.expiresAt <= now) cache.entries.delete(userId);
+export class SessionCutoffs extends PolledSessionSet {
+	constructor({ enforced, offReason = '', now = Date.now, log = console } = {}) {
+		super({
+			enforced,
+			offReason,
+			now,
+			log,
+			label: 'session cutoffs',
+			table: 'public.auth_session_cutoffs',
+			hint: TABLE_HINT,
+			offEffect: 'signed-out app sessions stay valid until they expire.',
+			caveat: 'see the Caveat in bridge-session-cutoff.mjs',
+			largeTableRows: LARGE_TABLE_ROWS,
+			// The later of two instants wins: a cut-off never moves backwards for a user.
+			merge: (target, userId, micros) => target.set(userId, Math.max(target.get(userId) ?? micros, micros)),
+		});
+	}
+
+	/** Cut-off in microseconds for a lower-case user id, or undefined. */
+	cutoffMicros(userId) {
+		return this.entries?.get(userId);
+	}
+
+	/** The loaded table, under the name the cut-off suites read it by. */
+	get cutoffs() {
+		return this.entries;
 	}
 }
 
-async function settle(cache, userId, lookup, startedAt) {
-	const expiresAt = startedAt + cache.ttlMs;
+/**
+ * Enforcement is on when the bridge can reach the table, unless the operator turned it off.
+ *
+ * @param {{ sessionCutoffsMode?: string, serviceKey?: string, baasUrl?: string }} config the bridge's config
+ * @param {{ now?: () => number, log?: SessionCutoffLog }} [options] the clock and the log of the tracker
+ * @returns {SessionCutoffTracker}
+ */
+export function sessionCutoffsFromConfig(config, options = {}) {
+	if (config.sessionCutoffsMode === 'off') return new SessionCutoffs({ ...options, enforced: false, offReason: 'OSIONOS_SESSION_CUTOFFS=off' });
+	if (!config.serviceKey || !config.baasUrl) return new SessionCutoffs({ ...options, enforced: false, offReason: 'no service key or BaaS URL' });
+	return new SessionCutoffs({ ...options, enforced: true });
+}
+
+/**
+ * Synchronous: 503 unless the table is loaded and recent, 401 for a token issued before its user's cut-off.
+ *
+ * @param {SessionCutoffTracker | undefined | null} tracker the tracker of the process, nothing when there is none
+ * @param {string} userId the lower-case id of the user the token belongs to
+ * @param {number} issuedAtMs the moment the token was minted, in milliseconds
+ * @returns {void}
+ */
+export function assertSessionNotCutOff(tracker, userId, issuedAtMs) {
+	if (!tracker) return;
+	const state = tracker.status();
+	if (state === 'off') return;
+	if (state !== 'fresh') {
+		throw Object.assign(httpError('The session revocation check is not ready; try again shortly.', 503, 'session_cutoffs_unavailable'), { retryAfterSeconds: RETRY_AFTER_SECONDS });
+	}
+	const cutoff = tracker.cutoffMicros(userId);
+	if (cutoff !== undefined && issuedAtMs * 1000 < cutoff) {
+		throw httpError('App session was signed out.', 401, 'session_revoked');
+	}
+}
+
+function addRows(loaded, rows) {
+	for (const row of rows) {
+		const micros = timestampMicros(row?.sessions_valid_after);
+		if (typeof row?.user_id !== 'string' || !UUID.test(row.user_id) || micros === null) throw new Error('a row had no valid user_id and sessions_valid_after');
+		loaded.set(row.user_id.toLowerCase(), micros);
+	}
+}
+
+/** The whole table by keyset pages on user_id; throws unless every row the first page counted arrived. */
+export async function loadAllCutoffs(source, timeoutMs) {
+	const rows = await readPagedRows(source, {
+		table: 'auth_session_cutoffs',
+		select: 'user_id,sessions_valid_after',
+		orderColumn: 'user_id',
+		pageSize: PAGE_SIZE,
+		timeoutMs,
+	});
+	const loaded = new Map();
+	addRows(loaded, rows);
+	return loaded;
+}
+
+/**
+ * Polls with a setTimeout chain (a tick never overlaps the next) and unref'd timers. A tick
+ * never rejects: every failure becomes failLoad. `stop()` ends the chain.
+ *
+ * @param {SessionCutoffTracker} tracker the tracker the loaded table goes into
+ * @param {{ fetchImpl?: typeof fetch, baasUrl: string, serviceKey: string }} source where the table is read from
+ * @param {{ intervalMs?: number, timeoutMs?: number }} [options] the interval between two ticks, the deadline of one read
+ * @returns {{ tick: () => Promise<void>, stop: () => void }}
+ */
+export function startSessionCutoffPoller(tracker, source, { intervalMs = POLL_INTERVAL_MS, timeoutMs = BAAS_FETCH_TIMEOUT_MS } = {}) {
+	return startPolledSessionPoller(tracker, () => loadAllCutoffs(source, timeoutMs), { intervalMs });
+}
+
+/**
+ * Records that every token issued before `writtenAtMs` stops verifying. The timestamp is
+ * explicit (a column DEFAULT would leave an existing row untouched on conflict). Moved here
+ * from bridge-api.mjs so the sign-out and the password change share one write.
+ */
+export async function writeSessionCutoff(config, fetchImpl, userId, writtenAtMs) {
 	try {
-		const text = await lookup(userId);
-		const validAfterMicros = text == null ? null : timestampMicros(text);
-		if (text != null && validAfterMicros === null) throw new Error('sessions_valid_after is not a timestamp');
-		cache.entries.set(userId, { validAfterMicros, failed: false, expiresAt });
+		if (!config.baasUrl || !config.serviceKey) throw new Error('service-role access is not configured');
+		const response = await fetchImpl(`${config.baasUrl}/rest/v1/auth_session_cutoffs?on_conflict=user_id`, {
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				apikey: config.serviceKey,
+				Authorization: `Bearer ${config.serviceKey}`,
+				Prefer: 'resolution=merge-duplicates',
+			},
+			body: JSON.stringify({ user_id: userId, sessions_valid_after: new Date(writtenAtMs).toISOString() }),
+			signal: AbortSignal.timeout(BAAS_FETCH_TIMEOUT_MS),
+		});
+		if (!response.ok) {
+			const text = await response.text().catch(() => '');
+			throw Object.assign(new Error(`BaaS request failed with ${response.status}`), { upstreamStatus: response.status, upstreamText: text.slice(0, 160) });
+		}
 	} catch (error) {
-		const known = cache.entries.get(userId)?.validAfterMicros ?? null;
-		cache.entries.set(userId, { validAfterMicros: known, failed: true, expiresAt });
-		const outcome = known === null ? 'no cut-off on record, serving its tokens' : 'cut-off on record, refusing its tokens';
-		cache.audit(`[osionos-bridge] audit: session cut-off lookup failed for user ${userId} (${error?.message ?? 'unknown error'}); ${outcome} for ${cache.ttlMs} ms`);
-	}
-	pruneUnrevoked(cache, startedAt);
-}
-
-/** Make the cached cut-off for `userId` at most `ttlMs` old; concurrent callers share one lookup. Never rejects. */
-export function refreshSessionCutoff(cache, userId, lookup, now = Date.now()) {
-	const current = cache.entries.get(userId);
-	if (current && current.expiresAt > now) return Promise.resolve();
-	const pending = cache.inflight.get(userId);
-	if (pending) return pending;
-	const run = settle(cache, userId, lookup, now).finally(() => cache.inflight.delete(userId));
-	cache.inflight.set(userId, run);
-	return run;
-}
-
-/** Synchronous: throws 401 for a token issued before the cached cut-off, 503 when the lookup failed for a user who has one. */
-export function assertSessionNotCutOff(cache, userId, issuedAtMs) {
-	const entry = cache?.entries.get(userId);
-	if (!entry) return;
-	if (entry.validAfterMicros !== null && issuedAtMs * 1000 < entry.validAfterMicros) {
-		throw httpError('App session token was revoked; sign in again.', 401);
-	}
-	if (entry.failed && entry.validAfterMicros !== null) {
-		throw httpError('The session revocation check is unavailable; try again shortly.', 503);
+		if (error?.upstreamStatus === 409 && /23503/.test(error.upstreamText ?? '')) {
+			throw Object.assign(new Error('No account matches this session.'), { status: 409, code: 'user_not_found' });
+		}
+		throw Object.assign(new Error('Sign-out could not be recorded; try again shortly.'), { status: 503, code: 'session_cutoffs_unavailable', retryAfterSeconds: 5 });
 	}
 }

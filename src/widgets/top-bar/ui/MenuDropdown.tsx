@@ -22,7 +22,7 @@ interface MenuDropdownProps {
 export const MenuDropdown: React.FC<MenuDropdownProps> = ({ items, onSelect }) => (
   <div
     role="menu"
-    className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-1 min-w-[210px] overflow-hidden rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] py-1 shadow-[var(--osio-shadow-menu)]"
+    className="osio-surface-overlay absolute left-0 top-full z-[var(--osio-z-popover)] mt-1 min-w-[210px]"
   >
     {items.map((item) => (
       <React.Fragment key={item.id}>
@@ -30,14 +30,14 @@ export const MenuDropdown: React.FC<MenuDropdownProps> = ({ items, onSelect }) =
           type="button"
           role="menuitem"
           onClick={() => onSelect(item)}
-          className="flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-sm text-[var(--osio-fg-default)] transition-colors hover:bg-[var(--osio-bg-hover)] focus-visible:bg-[var(--osio-bg-hover)] focus-visible:outline-none"
+          className="osio-menu-item justify-between"
         >
           <span>{item.label}</span>
           {item.accelerator && (
-            <span className="font-mono text-xs text-[var(--osio-fg-subtle)]">{item.accelerator}</span>
+            <span className="pl-6 font-mono text-xs text-[var(--osio-fg-subtle)]">{item.accelerator}</span>
           )}
         </button>
-        {item.separatorAfter && <div className="my-1 h-px bg-[var(--osio-border-default)]" aria-hidden />}
+        {item.separatorAfter && <div className="osio-menu-separator" aria-hidden />}
       </React.Fragment>
     ))}
   </div>

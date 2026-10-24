@@ -45,13 +45,13 @@ interface LegacyNodeInspectorProps {
 export const LegacyNodeInspector: React.FC<LegacyNodeInspectorProps> = ({ node, properties, consistency, onCommit, onPromote, onDemote, promoteAvailable }) => (
   <div className="flex flex-col gap-3">
     <div>
-      <span className="text-[11px] uppercase tracking-wide text-[var(--osio-fg-subtle)]">
+      <span className="text-2xs uppercase tracking-wide text-[var(--osio-fg-subtle)]">
         {node.kind === "note" ? "Note" : node.databaseId ?? node.kind}
       </span>
       <h2 className="text-base font-semibold text-[var(--osio-fg-default)]">{node.label}</h2>
       {node.group ? <p className="text-[var(--osio-fg-muted)]">{node.group}</p> : null}
       {consistency ? (
-        <p className="mt-1 text-[10px] uppercase tracking-wide text-[var(--osio-fg-subtle)]">
+        <p className="mt-1 text-3xs uppercase tracking-wide text-[var(--osio-fg-subtle)]">
           writes: {consistency === "atomic" ? "atomic · same mount" : consistency}
         </p>
       ) : null}
@@ -118,7 +118,7 @@ const EditableField: React.FC<{ label: string; value: string; onCommit: (value: 
       defaultValue={value}
       onBlur={(event) => { if (event.target.value !== value) onCommit(event.target.value); }}
       onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
-      className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-right text-[var(--osio-fg-default)] outline-none hover:border-[var(--osio-border-default)] focus:border-[var(--osio-accent)]"
+      className="min-w-0 flex-1 rounded-xs border border-transparent bg-transparent px-1 py-0.5 text-right text-[var(--osio-fg-default)] outline-none hover:border-[var(--osio-border-default)] focus:border-[var(--osio-accent)]"
     />
   </div>
 );

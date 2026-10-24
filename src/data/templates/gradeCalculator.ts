@@ -22,7 +22,6 @@ export const gradeCalculator: SeedPage = {
   workspaceId: 'mock-ws-private-0',
   ownerId: 'mock-user-0',
   isTemplate: true,
-  templateSurface: 'grade-calculator',
   content: [
     h1('Grade Calculator'),
     callout('Enter each component\'s weight (as a percent) and your score (0–100). The Weighted column multiplies them, and the weights add up to 100%.', '🧮'),

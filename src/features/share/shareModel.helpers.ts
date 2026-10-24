@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/15 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,13 +14,46 @@
 
 import { policyToLevel } from './sharePermissionBridge';
 import type {
-  EnginePolicyRow, EngineRole, ShareEntry, SharePerson,
+  EnginePolicyRow, EngineRole, ShareAccessRule, ShareEntry, SharePerson, ShareTeam,
 } from './types';
 
 export function entryKey(target: ShareEntry['target']): string {
   if (target.type === 'user') return `user:${target.person.id}`;
   if (target.type === 'role') return `role:${target.role}`;
+  if (target.type === 'team') return `team:${target.team.id}`;
   return target.type;
+}
+
+/**
+ * Stored AccessRules → dialog entries (normal page mode).
+ * Caveat: a team deny is not mirrored client-side (shared/lib/auth/pageAccess.ts does not know
+ * the team target and fails open on it); the server decides, so a denied page may show until
+ * the next read.
+ */
+export function entriesFromRules(
+  rules: Array<ShareAccessRule & { _id: string }>,
+  people: SharePerson[],
+  teams: ShareTeam[] = [],
+): ShareEntry[] {
+  const entries: ShareEntry[] = [];
+  for (const rule of rules) {
+    let target: ShareEntry['target'] | null = null;
+    if (rule.target.type === 'user') {
+      const person = people.find((candidate) => candidate.id === (rule.target as { userId?: string }).userId);
+      if (person) target = { type: 'user', person };
+    } else if (rule.target.type === 'role') {
+      target = { type: 'role', role: (rule.target as { role?: string }).role ?? '' };
+    } else if (rule.target.type === 'team') {
+      // A rule naming a team the list does not hold (deleted, or the list is hidden) shows no row.
+      const teamId = (rule.target as { teamId?: string }).teamId?.toLowerCase();
+      const team = teams.find((candidate) => candidate.id.toLowerCase() === teamId);
+      if (team) target = { type: 'team', team };
+    } else {
+      target = { type: rule.target.type };
+    }
+    if (target) entries.push({ key: entryKey(target), target, level: rule.permission, sourceId: rule._id });
+  }
+  return entries;
 }
 
 /** Engine policies on one table → dialog entries (live database page mode).

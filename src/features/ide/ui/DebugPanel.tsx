@@ -13,13 +13,21 @@
 import React from "react";
 import { ArrowDown, ArrowRight, ArrowUp, Play, Square } from "lucide-react";
 
+import { Tooltip } from "@/shared/ui";
+
 import { continueRun, stepIn, stepOut, stepOver, stopDebug } from "../model/debugController";
 import { useDebugStore } from "../model/debugStore";
 
-const BTN =
-  "flex h-6 w-6 items-center justify-center rounded text-[var(--osio-code-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-code-fg)] disabled:opacity-40";
-const HEADING = "py-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-code-fg-muted)]";
-const ROW = "truncate px-1 py-0.5 font-mono text-[12px] text-[var(--osio-code-fg-muted)]";
+const BTN = "osio-code-btn h-6 w-6 shrink-0 disabled:opacity-40";
+const HEADING = "px-1 pb-1 pt-2 text-2xs font-medium text-[var(--osio-code-fg-muted)]";
+const ROW = "truncate px-1 py-0.5 font-mono text-xs text-[var(--osio-code-fg-muted)]";
+
+const STEPS = [
+  { label: "Continue", icon: Play, run: continueRun },
+  { label: "Step over", icon: ArrowRight, run: stepOver },
+  { label: "Step into", icon: ArrowDown, run: stepIn },
+  { label: "Step out", icon: ArrowUp, run: stepOut },
+] as const;
 
 /** Resume/step/stop toolbar. The step buttons need a stopped thread (the
  *  controller no-ops them while running); Stop needs a live session. O(1). */
@@ -29,21 +37,18 @@ const DebugToolbar: React.FC = () => {
   const stoppable = status !== "idle" && status !== "ended";
   return (
     <div className="flex h-8 shrink-0 items-center gap-1 border-b border-[var(--osio-code-border)] px-2">
-      <button type="button" aria-label="Continue" title="Continue" disabled={!halted} onClick={continueRun} className={BTN}>
-        <Play size={14} />
-      </button>
-      <button type="button" aria-label="Step Over" title="Step Over" disabled={!halted} onClick={stepOver} className={BTN}>
-        <ArrowRight size={14} />
-      </button>
-      <button type="button" aria-label="Step Into" title="Step Into" disabled={!halted} onClick={stepIn} className={BTN}>
-        <ArrowDown size={14} />
-      </button>
-      <button type="button" aria-label="Step Out" title="Step Out" disabled={!halted} onClick={stepOut} className={BTN}>
-        <ArrowUp size={14} />
-      </button>
-      <button type="button" aria-label="Stop" title="Stop" disabled={!stoppable} onClick={() => void stopDebug()} className={BTN}>
-        <Square size={14} />
-      </button>
+      {STEPS.map(({ label, icon: Icon, run }) => (
+        <Tooltip key={label} label={label} side="bottom">
+          <button type="button" aria-label={label} disabled={!halted} onClick={run} className={BTN}>
+            <Icon size={14} />
+          </button>
+        </Tooltip>
+      ))}
+      <Tooltip label="Stop" side="bottom">
+        <button type="button" aria-label="Stop" disabled={!stoppable} onClick={() => void stopDebug()} className={BTN}>
+          <Square size={14} />
+        </button>
+      </Tooltip>
     </div>
   );
 };
@@ -54,7 +59,7 @@ const DebugStatusLine: React.FC = () => {
   const stoppedReason = useDebugStore((s) => s.stoppedReason);
   const error = useDebugStore((s) => s.error);
   return (
-    <div role="status" className="shrink-0 border-b border-[var(--osio-code-border)] px-3 py-1 font-mono text-[11px] text-[var(--osio-code-fg-muted)]">
+    <div role="status" className="shrink-0 border-b border-[var(--osio-code-border)] px-3 py-1 font-mono text-2xs text-[var(--osio-code-fg-muted)]">
       {status}
       {status === "stopped" && stoppedReason ? ` — ${stoppedReason}` : null}
       {error ? ` — ${error}` : null}
@@ -66,8 +71,8 @@ const DebugStatusLine: React.FC = () => {
 const DebugStack: React.FC = () => {
   const frames = useDebugStore((s) => s.frames);
   return (
-    <section aria-label="Call Stack">
-      <h3 className={HEADING}>Call Stack</h3>
+    <section aria-label="Call stack">
+      <h3 className={HEADING}>Call stack</h3>
       {frames.length === 0 ? (
         <p className={ROW}>No frames.</p>
       ) : (
@@ -111,7 +116,7 @@ const DebugOutput: React.FC = () => {
   return (
     <section aria-label="Output">
       <h3 className={HEADING}>Output</h3>
-      <pre className="whitespace-pre-wrap break-all px-1 py-0.5 font-mono text-[12px] text-[var(--osio-code-fg)]">
+      <pre className="whitespace-pre-wrap break-all px-1 py-0.5 font-mono text-xs text-[var(--osio-code-fg)]">
         {output.slice(-200).join("\n")}
       </pre>
     </section>
@@ -125,7 +130,7 @@ export const DebugPanel: React.FC = () => {
   const status = useDebugStore((s) => s.status);
   if (status === "idle") {
     return (
-      <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">
+      <p className="osio-code-empty">
         Open a Python file, click the gutter to set breakpoints, then press F5 or choose Terminal → Debug Python File.
       </p>
     );

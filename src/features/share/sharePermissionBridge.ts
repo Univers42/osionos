@@ -6,15 +6,18 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/15 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /**
  * THE single translation point between the Share dialog's 5-level model and
- * the permission engine, for live DB pages: policy payloads (CreatePolicyDto),
- * persisted via /api/perms/policies. (A normal page shares through its own
- * collaborators and visibility: pageShareModel.ts.) Level→actions contract:
+ * the two permission engines:
+ *
+ *  - normal pages   → AbacEngine AccessRule objects (notion-database-sys
+ *    packages/core/src/abac shapes), persisted via /api/perms/rules;
+ *  - live DB pages  → permission-engine policy payloads (CreatePolicyDto),
+ *    persisted via /api/perms/policies. Level→actions contract:
  *      can_view    → ["select"]
  *      can_comment → ["select"]
  *      can_edit    → ["select","insert","update"]
@@ -23,7 +26,7 @@
  */
 
 import type {
-  EnginePolicyPayload, EnginePolicyRow, ShareEntry, ShareLevel, ShareResource,
+  EnginePolicyPayload, EnginePolicyRow, ShareAccessRule, ShareEntry, ShareLevel, ShareResource,
 } from './types';
 import { SHARE_LEVELS } from './types';
 
@@ -41,6 +44,26 @@ const SHARE_DENY_PRIORITY = 110;
 
 export function levelToActions(level: ShareLevel): string[] {
   return [...LEVEL_ACTIONS[level]];
+}
+
+/** Share entry → AbacEngine AccessRule (normal page path). */
+export function toAccessRule(resource: ShareResource, entry: ShareEntry): ShareAccessRule {
+  const target = entry.target.type === 'user'
+    ? { type: 'user' as const, userId: entry.target.person.id }
+    : entry.target.type === 'role'
+      ? { type: 'role' as const, role: entry.target.role }
+      : entry.target.type === 'team'
+        ? { type: 'team' as const, teamId: entry.target.team.id }
+        : { type: entry.target.type };
+  return {
+    _id: entry.sourceId,
+    workspaceId: resource.workspaceId,
+    resourceId: resource.resourceId,
+    resourceType: resource.resourceType,
+    target,
+    permission: entry.level,
+    explicit: true,
+  };
 }
 
 /** Share entry → permission-engine policy payload (live database page path). */

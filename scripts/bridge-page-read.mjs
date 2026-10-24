@@ -24,6 +24,17 @@
 const PAGE_VISIBILITIES = new Set(['private', 'shared', 'public']);
 const SHARING_KEYS = ['visibility', 'collaborators', 'workspaceId'];
 
+/**
+ * The read rule of a page for a member of its workspace. The row carries the
+ * raw columns: workspace_id, visibility, owner_id and collaborators.
+ *
+ * @typedef {object} PageReadRow
+ * @property {unknown} [workspace_id]
+ * @property {unknown} [visibility]
+ * @property {unknown} [owner_id]
+ * @property {unknown} [collaborators]
+ */
+
 export function pageVisibility(value) {
 	return PAGE_VISIBILITIES.has(value) ? value : 'private';
 }
@@ -62,6 +73,11 @@ export function canReadPageRow(row, userId) {
  * Readable on a surface that spans workspaces (feed, profile gallery, graph): the caller
  * belongs to the row's workspace AND canReadPageRow allows it, so a page shared with one
  * workspace never reaches someone outside it. `memberWorkspaceIds`: the caller's workspaces.
+ *
+ * @param {PageReadRow | null | undefined} row the raw row of the page
+ * @param {string} userId the caller
+ * @param {readonly string[]} memberWorkspaceIds the workspaces the caller is a member of
+ * @returns {boolean}
  */
 export function canReadPageRowAsMember(row, userId, memberWorkspaceIds) {
 	return [...memberWorkspaceIds].some((workspaceId) => sameId(workspaceId, row?.workspace_id)) && canReadPageRow(row, userId);

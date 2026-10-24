@@ -53,11 +53,11 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
           <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
           <span className="h-3 w-3 rounded-full bg-[#28c840]" />
         </span>
-        <span className="shrink-0 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] px-2 py-0.5 font-mono text-[11px] font-medium tracking-wide text-[var(--osio-code-fg-muted)]">
+        <span className="shrink-0 rounded-md border border-[var(--osio-code-border)] bg-[var(--osio-code-chip-bg)] px-2 py-0.5 font-mono text-2xs font-medium tracking-wide text-[var(--osio-code-fg-muted)]">
           {lang}
         </span>
         {block.fileName ? (
-          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[var(--osio-code-fg-muted)]">
+          <span className="min-w-0 flex-1 truncate font-mono text-2xs text-[var(--osio-code-fg-muted)]">
             {block.fileName}
           </span>
         ) : (
@@ -67,12 +67,12 @@ export const CodeBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
           type="button"
           title="Copy code"
           className={[
-            "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11px] font-medium transition-colors hover:bg-[var(--osio-code-btn-hover)]",
+            "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-2xs font-medium transition-colors hover:bg-[var(--osio-code-btn-hover)]",
             copied ? "text-[var(--osio-success)]" : "text-[var(--osio-code-fg-muted)] hover:text-[var(--osio-code-fg)]",
           ].join(" ")}
           onClick={handleCopy}
         >
-          {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+          {copied ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
         </button>
       </div>
       {isMermaid ? (

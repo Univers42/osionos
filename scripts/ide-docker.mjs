@@ -23,17 +23,28 @@ import http from "node:http";
 // broad search from OOMing the shared bridge (review finding).
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
+/** Longest any single docker API call may stay silent. An exec whose user cannot be resolved can
+ *  block runc for good (a FIFO at /etc/passwd's target, docs/adr/0009), so no call may wait
+ *  without a bound; the env override can only lower it.
+ *  Caveat: this is socket inactivity, not total time: a daemon that trickles bytes is not cut. */
+export const DOCKER_REQUEST_TIMEOUT_MS = 20_000;
+
+function requestTimeoutMs(env) {
+  const asked = Number(env.OSIONOS_IDE_DOCKER_TIMEOUT_MS);
+  return Number.isInteger(asked) && asked >= 50 ? Math.min(asked, DOCKER_REQUEST_TIMEOUT_MS) : DOCKER_REQUEST_TIMEOUT_MS;
+}
+
 /** One JSON request to the docker API via the socket-proxy. Resolves
  *  { status, body } — the caller decides what a status means (404 is normal
  *  for "container absent"). */
-function dockerRequest({ host, port }, method, path, body) {
+function dockerRequest({ timeoutMs, ...target }, method, path, body) {
   return new Promise((resolve, reject) => {
     const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
     const req = http.request(
-      { host, port, method, path, headers: {
+      { ...target, method, path, headers: {
         "content-type": "application/json",
         ...(payload ? { "content-length": payload.length } : {}),
-      }, timeout: 20_000 },
+      }, timeout: timeoutMs },
       (res) => {
         const chunks = [];
         let size = 0;
@@ -61,10 +72,48 @@ function dockerRequest({ host, port }, method, path, body) {
   });
 }
 
+const isInitContainer = (container) => (container?.Names ?? []).some((n) => n.startsWith("/ideinit-"));
+
+/** Sizes behind OSIONOS_IDE_VOLUME_QUOTA=on: the local driver's `size` option, which needs the volume
+ *  directory on an xfs mount with pquota. The socket proxy admits these two literals and nothing else
+ *  (ide-socket-proxy/create-shape.mjs), so a bridge bug cannot ask for a different size. */
+export const HOME_VOLUME_SIZE = "2G";
+export const WORKSPACE_VOLUME_SIZE = "5G";
+
+/** DriverOpts for a managed volume, or undefined (flag off, or a name that is neither prefix). */
+export function volumeDriverOpts(name, env = process.env) {
+  if (env.OSIONOS_IDE_VOLUME_QUOTA !== "on") return undefined;
+  if (name.startsWith("osio-ide-home-")) return { size: HOME_VOLUME_SIZE };
+  if (name.startsWith("osio-ide-vol-")) return { size: WORKSPACE_VOLUME_SIZE };
+  return undefined;
+}
+
+// A unix socket or an absolute path in OSIONOS_IDE_DOCKER_HOST would hand the relay or the
+// ide-server the daemon itself, which is root; only the proxy's TCP port is ever allowed here.
+const isSocketSpelling = (value) => value.startsWith("/") || value.startsWith("unix:") || value.endsWith(".sock");
+
+/** The server-side client: TCP to the socket proxy only, and it refuses a socket path. */
 export function createDockerClient(env = process.env) {
-  const [host, portRaw] = String(env.OSIONOS_IDE_DOCKER_HOST || "").split(":");
-  const port = Number(portRaw || 2375);
-  const endpoint = { host, port };
+  const configured = String(env.OSIONOS_IDE_DOCKER_HOST || "");
+  if (isSocketSpelling(configured)) {
+    throw new Error("OSIONOS_IDE_DOCKER_HOST must be host:port; a socket path is agent-only");
+  }
+  const [host, portRaw] = configured.split(":");
+  return buildDockerClient({ host, port: Number(portRaw || 2375) }, env);
+}
+
+/** The agent-side client: the user's own Engine socket, an absolute path. Only the osio-agent
+ *  calls this; the exec specs it sends are agent-fixed, never taken from the relay. */
+export function createAgentDockerClient({ socketPath, env = process.env } = {}) {
+  if (typeof socketPath !== "string" || !socketPath.startsWith("/")) {
+    throw new Error("socketPath must be an absolute path");
+  }
+  return buildDockerClient({ socketPath }, env);
+}
+
+function buildDockerClient(target, env) {
+  const timeoutMs = requestTimeoutMs(env);
+  const endpoint = { ...target, timeoutMs };
   const call = (method, path, body) => dockerRequest(endpoint, method, path, body);
 
   return {
@@ -80,7 +129,8 @@ export function createDockerClient(env = process.env) {
       return created.body?.Id;
     },
     async ensureVolume(name) {
-      const created = await call("POST", "/volumes/create", { Name: name, Driver: "local", Labels: { "osio.ide.managed": "1" } });
+      const driverOpts = volumeDriverOpts(name, env);
+      const created = await call("POST", "/volumes/create", { Name: name, Driver: "local", Labels: { "osio.ide.managed": "1" }, ...(driverOpts ? { DriverOpts: driverOpts } : {}) });
       if (created.status >= 300) throw new Error(`volume create failed (${created.status})`);
       return created.body?.Name;
     },
@@ -107,11 +157,26 @@ export function createDockerClient(env = process.env) {
       const res = await call("DELETE", `/containers/${name}?force=true&v=false`);
       if (res.status >= 300 && res.status !== 404) throw new Error(`remove failed (${res.status})`);
     },
-    /** Managed sandboxes, for the idle reaper. Filtered by our label server-side. */
+    /** The owner's uid, allocated and remembered by the socket proxy (ADR 0011). The proxy, not this
+     *  process, is the authority: it refuses a box create whose uid disagrees with its ledger. */
+    async allocateUid(owner) {
+      const res = await call("POST", "/osio/v1/uid", { owner });
+      const uid = res.body?.uid;
+      if (res.status !== 200 || !Number.isInteger(uid)) throw new Error(`uid allocation failed (${res.status})`);
+      return uid;
+    },
+    /** Block until the container stops and return its exit code. The wait sends no bytes until then,
+     *  so the request's silence bound is the total bound (rejects on timeout; the caller removes it). */
+    async waitStopped(name, waitMs) {
+      const res = await dockerRequest({ ...endpoint, timeoutMs: waitMs }, "POST", `/containers/${name}/wait?condition=not-running`);
+      if (res.status !== 200 || !Number.isInteger(res.body?.StatusCode)) throw new Error(`wait failed (${res.status})`);
+      return res.body.StatusCode;
+    },
+    /** Managed sandboxes, for the idle reaper. Init containers carry the managed label too and are not boxes. Filtered by our label server-side. */
     async listManaged() {
       const filters = encodeURIComponent(JSON.stringify({ label: ["osio.ide.managed=1"] }));
       const res = await call("GET", `/containers/json?all=true&filters=${filters}`);
-      return res.status === 200 && Array.isArray(res.body) ? res.body : [];
+      return res.status === 200 && Array.isArray(res.body) ? res.body.filter((c) => !isInitContainer(c)) : [];
     },
     /** Run a non-interactive exec (git op / search / probe) on a SERVER-derived
      *  container name and collect its output. Powers git (P6) + search (P7). */
@@ -147,14 +212,13 @@ export function createDockerClient(env = process.env) {
      *  `{ stream, execId }`: write = process stdin, data = process stdout; the
      *  execId lets the caller resizeExec the PTY. The socket proxy passes the
      *  upgrade through; the caller bridges it to a WS.
-     *  ponytail: exercised only against a live sandbox — no unit test, the relay
-     *  glue is trivial and the exec engine is covered by runExec's live test. */
+     *  Both requests are bounded by the docker timeout (tests/bridge/ide-exec-timeout.test.mjs). */
     attachExec(name, execSpec) {
       return new Promise((resolve, reject) => {
         const body = Buffer.from(JSON.stringify(execSpec));
         const createReq = http.request(
-          { host, port, method: "POST", path: `/containers/${name}/exec`,
-            headers: { "content-type": "application/json", "content-length": body.length } },
+          { ...target, method: "POST", path: `/containers/${name}/exec`,
+            headers: { "content-type": "application/json", "content-length": body.length }, timeout: timeoutMs },
           (res) => {
             const chunks = [];
             res.on("data", (c) => chunks.push(c));
@@ -164,12 +228,15 @@ export function createDockerClient(env = process.env) {
               if (!execId) return reject(new Error("exec create failed"));
               const startBody = Buffer.from(JSON.stringify({ Detach: false, Tty: Boolean(execSpec.Tty) }));
               const startReq = http.request({
-                host, port, method: "POST", path: `/exec/${execId}/start`,
+                ...target, method: "POST", path: `/exec/${execId}/start`,
                 headers: { "content-type": "application/json", "content-length": startBody.length, Connection: "Upgrade", Upgrade: "tcp" },
+                timeout: timeoutMs,
               });
+              startReq.on("timeout", () => startReq.destroy(new Error("docker exec start timeout")));
               // Bytes that came in the 101's own segment are handed over as `head`, not read
               // again from the socket: dropped, they were the exec's first output.
               startReq.on("upgrade", (_res, socket, head) => {
+                socket.setTimeout(0); // the bound is for the start, not for a shell that sits idle
                 if (head.length > 0) socket.unshift(head);
                 resolve({ stream: socket, execId });
               });
@@ -178,6 +245,7 @@ export function createDockerClient(env = process.env) {
             });
           },
         );
+        createReq.on("timeout", () => createReq.destroy(new Error("docker exec create timeout")));
         createReq.on("error", reject);
         createReq.end(body);
       });

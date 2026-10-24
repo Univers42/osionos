@@ -105,6 +105,8 @@ export interface PageMenuAction {
   scope: "file" | "dir" | "both";
   /** Group key — actions sharing a section render together (divider between). */
   section?: string;
+  /** Destructive: the row is drawn in the danger tone. */
+  danger?: boolean;
   /** When false, the item renders disabled. Defaults to enabled. */
   enabled?: (ctx: MenuActionCtx) => boolean;
   /** Perform the action. Stubs may just push a toast. */

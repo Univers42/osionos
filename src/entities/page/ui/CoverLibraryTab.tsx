@@ -58,7 +58,7 @@ export const CoverLibraryTab: React.FC<CoverLibraryTabProps> = ({
           <button
             type="button"
             title="Remove asset"
-            className="absolute right-1 top-1 hidden h-7 w-7 items-center justify-center rounded bg-[var(--osio-bg-surface)] text-[var(--osio-danger)] shadow group-hover:flex"
+            className="absolute right-1 top-1 hidden h-7 w-7 items-center justify-center rounded-xs bg-[var(--osio-bg-surface)] text-[var(--osio-danger)] shadow-osio-e1 group-hover:flex"
             onClick={() => onRemove(asset.id)}
           >
             <Trash2 size={14} />

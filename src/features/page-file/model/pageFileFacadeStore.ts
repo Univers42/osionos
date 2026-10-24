@@ -18,6 +18,8 @@ import { sanitizeSegment } from "@/features/ide/model/idePaths";
 import type { PageFacade } from "@/features/ide/vfs/pageProvider";
 
 import { createPageFileFacade, type NewPage, type PageFileStore } from "./pageFileFacade";
+import { createSectionDeps } from "./sectionDeps";
+import { createSectionedFacade } from "./sectionedFacade";
 
 /** The REAL PageFacade over usePageStore — wires the live store like
  *  pageStoreFacade (store access, per-call jwt, lazy fetchPageContent) plus the
@@ -27,6 +29,22 @@ import { createPageFileFacade, type NewPage, type PageFileStore } from "./pageFi
  *  (pageFileFacade.ts) stays importable by the canvas tests and the bench. */
 export function pageFileFacade(workspaceId: string): PageFacade {
   return createPageFileFacade(pageFileStoreDeps(workspaceId));
+}
+
+/** The explorer's facade: the page-file tree under the virtual Private and Shared folders.
+ *  Sync, the writer and the ledger keep using pageFileFacade / pageFileStoreDeps (real paths). */
+export function sectionedPageFileFacade(workspaceId: string): PageFacade {
+  const deps = pageFileStoreDeps(workspaceId);
+  return createSectionedFacade(
+    createPageFileFacade(deps),
+    createSectionDeps({
+      pages: deps.pages,
+      currentUserId: () => getCurrentPageAccessContext()?.userId ?? null,
+      mayChangeSharing: deps.canChangeSharing,
+      patchPage: deps.patchPage,
+      subscribe: deps.subscribe,
+    }),
+  );
 }
 
 /** The live store as the facade's dependency set — shared by the facade above and
@@ -50,6 +68,7 @@ export function pageFileStoreDeps(workspaceId: string): PageFileStore {
     addPage: (input: NewPage) => store().addPage(workspaceId, input.title, jwt(), input.parentId ?? undefined, {
       surface: input.surface,
       content: input.content,
+      visibility: input.visibility,
     }),
     patchPage: (pageId, patch) => store().patchPage(pageId, patch),
     updatePageContent: (pageId, blocks) => store().updatePageContent(pageId, blocks),

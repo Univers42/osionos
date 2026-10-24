@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 10:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 10:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 15:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,10 +19,12 @@
 import React from 'react';
 import { X } from 'lucide-react';
 
-import type { Attachment, ChatMessage } from '@/shared/chat/messageApi';
+import type { ChatMessage } from '@/shared/chat/messageApi';
 import { MessageRow } from './MessageRow';
 import { MessageComposer } from './composer/MessageComposer';
 import { useThread } from '../model/useThread';
+import type { SendOutcome } from '../model/channelWrites';
+import type { ComposerSend } from './composer/useComposerWarning';
 
 interface ThreadPanelProps {
   root: ChatMessage;
@@ -31,10 +33,15 @@ interface ThreadPanelProps {
   userId: string;
   canInteract: boolean;
   onReply: (message: ChatMessage) => void;
-  onEdit: (id: string, content: string) => void;
+  /** Saves an edit. The answer is typed: a warning is not a failure. */
+  onEdit: (
+    id: string,
+    content: string,
+    options?: { acknowledgeWarning?: boolean },
+  ) => Promise<SendOutcome> | SendOutcome;
   onDelete: (id: string) => void;
   onReact: (id: string, emoji: string, add: boolean) => void;
-  onSend: (text: string, attachments?: Attachment[]) => Promise<unknown> | unknown;
+  onSend: ComposerSend;
   onClose: () => void;
 }
 
@@ -48,7 +55,7 @@ export const ThreadPanel: React.FC<ThreadPanelProps> = ({
     <aside className="flex h-full w-96 shrink-0 flex-col border-l border-[var(--osio-border-default)] bg-[var(--osio-bg-page)]">
       <header className="flex min-h-14 items-center justify-between border-b border-[var(--osio-border-default)] px-4">
         <h2 className="text-sm font-semibold">Thread · {list.length - 1} {list.length - 1 === 1 ? 'reply' : 'replies'}</h2>
-        <button type="button" aria-label="Close thread" onClick={onClose} className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"><X size={16} /></button>
+        <button type="button" aria-label="Close thread" onClick={onClose} className="rounded-xs p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"><X size={16} /></button>
       </header>
       <div className="flex-1 overflow-y-auto px-3 py-3">
         {loading && <div className="py-4 text-sm text-[var(--osio-fg-muted)]">Loading thread…</div>}

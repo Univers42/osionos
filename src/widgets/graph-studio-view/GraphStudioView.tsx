@@ -11,11 +11,12 @@ import type { PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
 import {
   type Dropped,
+  type IngestDoc,
   type GraphScope,
-  GRAPH_SCOPES,
   GRAPH_STUDIO_TAG,
   HOST_API,
   fetchBridgeGraph,
+  filterEdges,
   loadGraphScope,
   loadStudio,
   pageIdOf,
@@ -24,6 +25,10 @@ import {
   takeGraphFocus,
   toIngestDoc,
 } from "@/features/graph-studio";
+// The toggles are components: the feature's barrel carries the model, not the
+// view (the node tests read the barrel, and node strips no JSX).
+import { EdgeKindToggles, useEdgeKinds } from "@/features/graph-studio/ui/EdgeKindToggles";
+import { ScopeToggles } from "@/features/graph-studio/ui/ScopeToggles";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { usePageStore } from "@/store/usePageStore";
 // Deep path, not the barrel: the database view's barrel has side effects this view does not need.
@@ -58,8 +63,7 @@ interface LoadBook {
   seen: string | null;
 }
 
-const SCOPE_LABELS: Record<GraphScope, string> = { workspace: "Workspace", all: "All pages", "all-data": "Everything" };
-const EMPTY_DOC = { version: 1, nodes: [], edges: [] };
+const EMPTY_DOC: IngestDoc = { version: 1, nodes: [], edges: [] };
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -133,6 +137,7 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
   const [element, setElement] = useState<StudioElement | null>(null);
   const [view, setView] = useState<ViewState>({ phase: "loading" });
   const [chosenScope, setChosenScope] = useState<GraphScope>(loadGraphScope);
+  const [chosenKinds, pickKind] = useEdgeKinds();
   const [attempt, setAttempt] = useState(0);
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const scope = fixedScope ?? chosenScope;
@@ -213,12 +218,14 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
       if (droppedTotal(dropped) > 0) {
         console.info(`[graph-studio] dropped ${dropped.dupNodes} duplicate node(s), ${dropped.dupEdges} duplicate edge(s), ${dropped.dangling} dangling edge(s)`);
       }
+      // The kinds the user chose: a VIEW choice, the store keeps every edge.
+      const chosen = filterEdges(doc, chosenKinds);
       // A refusal's twin graph-error from an earlier load is no longer expected.
       ledger.refused = null;
       ledger.inFlight += 1;
       let refusal: string | null = null;
       try {
-        const result = await element.loadGraph(doc);
+        const result = await element.loadGraph(chosen);
         if (import.meta.env.DEV && result.notes.length > 0) {
           console.error("[graph-studio] the element filled in our document", result.notes);
         }
@@ -246,7 +253,7 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
     return () => {
       ledger.token += 1;
     };
-  }, [element, scope, workspaceId, attempt, fixedScope]);
+  }, [element, scope, workspaceId, attempt, fixedScope, chosenKinds]);
 
   const pickScope = useCallback((next: GraphScope) => {
     saveGraphScope(next);
@@ -269,19 +276,8 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
     >
       {fixedScope ? null : (
         <div className="flex items-center gap-2 border-b border-[var(--osio-border-default)] px-3 py-1.5 text-xs text-[var(--osio-fg-muted)]">
-          <div role="group" aria-label="Graph scope" className="flex gap-1">
-            {GRAPH_SCOPES.map((option) => (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={scope === option}
-                onClick={() => pickScope(option)}
-                className={`rounded px-1.5 py-0.5 transition-colors ${scope === option ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]" : "hover:bg-[var(--osio-bg-hover)]"}`}
-              >
-                {SCOPE_LABELS[option]}
-              </button>
-            ))}
-          </div>
+          <ScopeToggles scope={scope} onPick={pickScope} />
+          <EdgeKindToggles kinds={chosenKinds} onPick={pickKind} />
           {view.phase === "ready" ? (
             <span>
               {view.nodes} nodes · {view.edges} links
@@ -301,7 +297,7 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
             <button
               type="button"
               onClick={retry}
-              className="pointer-events-auto rounded border border-[var(--osio-border-default)] px-2 py-0.5 text-xs hover:bg-[var(--osio-bg-hover)]"
+              className="pointer-events-auto rounded-xs border border-[var(--osio-border-default)] px-2 py-0.5 text-xs hover:bg-[var(--osio-bg-hover)]"
             >
               Retry
             </button>

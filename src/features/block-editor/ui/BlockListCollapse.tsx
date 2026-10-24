@@ -31,13 +31,13 @@ export const BlockListCollapse: React.FC<{
     data-list-collapse=""
     onMouseDown={(e) => e.preventDefault()}
     onClick={onToggle}
-    className={`absolute left-0 top-0 flex h-6 w-4 items-center justify-center rounded text-[var(--osio-fg-subtle)] transition-opacity duration-100 hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] ${
+    className={`absolute left-0 top-0 flex h-6 w-4 items-center justify-center rounded-xs text-[var(--osio-fg-subtle)] transition-opacity duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] ${
       collapsed ? "opacity-100" : "opacity-0 group-hover:opacity-100"
     }`}
   >
     <ChevronRight
       size={12}
-      className={`transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`}
+      className={`transition-transform duration-(--osio-dur-fast) ${collapsed ? "" : "rotate-90"}`}
     />
   </button>
 );

@@ -9,7 +9,7 @@ import type { Automation } from "../model/types";
 import { AutomationRow } from "./AutomationRow";
 
 const TOOLBAR_BUTTON =
-  "flex items-center gap-1 rounded border border-[var(--osio-border-default)] px-2 py-1 text-xs text-[var(--osio-fg-muted)] hover:border-[var(--osio-accent)] hover:text-[var(--osio-fg-default)]";
+  "flex items-center gap-1 rounded-xs border border-[var(--osio-border-default)] px-2 py-1 text-xs text-[var(--osio-fg-muted)] hover:border-[var(--osio-accent)] hover:text-[var(--osio-fg-default)]";
 
 /**
  * The editable shortcut table (Settings → Keyboard shortcuts, and reachable via
@@ -46,15 +46,15 @@ export function AutomationManagerPanel(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold text-[var(--osio-fg-strong)]">Keyboard shortcuts</h2>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 basis-full @min-[560px]:basis-0 @min-[560px]:flex-1">
+          <h2 className="font-sans text-base font-semibold text-[var(--osio-fg-strong)]">Keyboard shortcuts</h2>
           <p className="text-xs text-[var(--osio-fg-subtle)]">
             Each shortcut is a keyboard automation — a key-combo triggers a command.
             {isAutomationsEnabled() ? "" : " Enable with ?osio.automations=1 to activate them."}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
           <button type="button" className={TOOLBAR_BUTTON} onClick={() => store.addAutomation()}><Plus size={14} /> Add</button>
           <button type="button" className={TOOLBAR_BUTTON} onClick={exportConfig}><Download size={14} /> Export</button>
           <button type="button" className={TOOLBAR_BUTTON} onClick={() => fileRef.current?.click()}><Upload size={14} /> Import</button>

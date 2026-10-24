@@ -58,12 +58,12 @@ export const ConditionEditor: React.FC<ConditionEditorProps> = ({ policy, saving
         </label>
       </div>
       <div className="flex items-center justify-between">
-        <code className="truncate text-[10px] text-[var(--osio-fg-subtle)]">{JSON.stringify(policy.conditions ?? {})}</code>
+        <code className="truncate text-3xs text-[var(--osio-fg-subtle)]">{JSON.stringify(policy.conditions ?? {})}</code>
         <button
           type="button"
           disabled={saving}
           onClick={() => onSave(buildConditions())}
-          className="shrink-0 rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-medium text-[var(--osio-accent-fg)] transition-colors duration-[120ms] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="shrink-0 rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-xs font-medium text-[var(--osio-accent-fg)] transition-colors duration-(--osio-dur-fast) hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Save conditions
         </button>

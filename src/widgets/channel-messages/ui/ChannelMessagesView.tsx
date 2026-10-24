@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:22 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 10:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 15:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,6 +19,10 @@
  * Scroll discipline: stick to the bottom only when the reader is already there;
  * a new message while scrolled up surfaces a "N new" jump pill instead of
  * yanking the viewport. Rows are grouped by author + date (model/messageGrouping).
+ *
+ * Writes answer a TYPED outcome: a moderation warning from L0 is the author's
+ * question (the composer answers it), not a connection error — so only a plain
+ * failure is toasted.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -32,7 +36,7 @@ import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { useUnreadStore } from "@/store/chat/useUnreadStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { postChannelRead } from "@/shared/chat/unreadApi";
-import { useChannelActions } from "../model/useChannelActions";
+import { useChannelActions, type SendOutcome } from "../model/useChannelActions";
 import { useChannelHistory } from "../model/useChannelHistory";
 import { useChannelInfo } from "../model/useChannelInfo";
 import { useChannelLive } from "../model/useChannelLive";
@@ -64,7 +68,7 @@ const DateDivider: React.FC<{ label: string }> = ({ label }) => (
 const UnreadDivider: React.FC = () => (
   <div className="my-2 flex items-center gap-3" role="separator" aria-label="New messages">
     <span className="h-px flex-1 bg-[var(--osio-accent)]" />
-    <span className="rounded-full bg-[var(--osio-accent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-accent-fg)]">New</span>
+    <span className="rounded-full bg-[var(--osio-accent)] px-2 py-0.5 text-3xs font-semibold uppercase tracking-wide text-[var(--osio-accent-fg)]">New</span>
     <span className="h-px flex-1 bg-[var(--osio-accent)]" />
   </div>
 );
@@ -136,8 +140,10 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   // Destructured because the individual fns are useCallback'd in useChannelActions
   // (stable), while the wrapping `actions` object is rebuilt every render.
   const { edit: editMessage, remove: removeMessage, react: reactMessage } = actions;
+  // The edit answer is passed through, not swallowed: the row's form stays
+  // open until the write really happened.
   const handleEdit = useCallback(
-    (id: string, content: string) => { void editMessage(id, content).catch(() => undefined); },
+    (id: string, content: string, options?: { acknowledgeWarning?: boolean }) => editMessage(id, content, options),
     [editMessage],
   );
   const handleDelete = useCallback(
@@ -148,6 +154,19 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
     (id: string, emoji: string, add: boolean) => { void reactMessage(id, emoji, add).catch(() => undefined); },
     [reactMessage],
   );
+  // The send answer: the reply target is cleared only when the message was
+  // really written, and only a plain failure is toasted — a warning from L0
+  // is the author's question, and the composer answers it.
+  const handleSendOutcome = useCallback((outcome: SendOutcome): SendOutcome => {
+    if (outcome.ok) {
+      setReplyTarget(null);
+      return outcome;
+    }
+    if (!("warning" in outcome)) {
+      useToastStore.getState().push({ kind: "error", title: "Couldn't send message", description: "Check your connection and try again." });
+    }
+    return outcome;
+  }, []);
 
   const jumpToBottom = () => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -310,15 +329,8 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
         compact={compact}
         replyTo={replyTarget ? { authorName: replyTarget.authorName, content: replyTarget.content } : null}
         onClearReply={() => setReplyTarget(null)}
-        onSend={(text, attachments) =>
-          Promise.resolve(actions.send(text, attachments, replyTarget?.id)).then((ok) => {
-            if (ok) setReplyTarget(null);
-            else useToastStore.getState().push({ kind: "error", title: "Couldn't send message", description: "Check your connection and try again." });
-            return ok;
-          }).catch(() => {
-            useToastStore.getState().push({ kind: "error", title: "Couldn't send message", description: "Check your connection and try again." });
-            return false;
-          })
+        onSend={(text, attachments, options) =>
+          actions.send(text, attachments, replyTarget?.id, options).then(handleSendOutcome)
         }
       />
       </div>
@@ -330,10 +342,10 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
           userId={activeUserId}
           canInteract={history.mode === "bridge"}
           onReply={setReplyTarget}
-          onEdit={(id, content) => { void actions.edit(id, content).catch(() => undefined); }}
+          onEdit={(id, content, options) => actions.edit(id, content, options)}
           onDelete={(id) => { void actions.remove(id).catch(() => undefined); }}
           onReact={(id, emoji, add) => { void actions.react(id, emoji, add).catch(() => undefined); }}
-          onSend={(text, attachments) => actions.send(text, attachments, threadRoot.id)}
+          onSend={(text, attachments, options) => actions.send(text, attachments, threadRoot.id, options)}
           onClose={() => setThreadRoot(null)}
         />
       )}

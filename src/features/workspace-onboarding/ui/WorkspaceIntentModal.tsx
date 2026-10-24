@@ -43,9 +43,9 @@ export const WorkspaceIntentModal: React.FC = () => {
             type="button"
             disabled={busy}
             onClick={() => void pick(key)}
-            className="group flex items-center gap-4 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 text-left transition-[border-color,background-color] duration-200 hover:border-[var(--osio-accent)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="group flex items-center gap-4 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 text-left transition-[border-color,background-color] duration-(--osio-dur-base) hover:border-[var(--osio-accent)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-subtle)] text-[var(--osio-accent)] transition-colors duration-200 group-hover:bg-[var(--osio-accent)] group-hover:text-[var(--osio-accent-fg)]">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--osio-bg-subtle)] text-[var(--osio-accent)] transition-colors duration-(--osio-dur-base) group-hover:bg-[var(--osio-accent)] group-hover:text-[var(--osio-accent-fg)]">
               <Icon size={22} />
             </span>
             <span className="min-w-0">

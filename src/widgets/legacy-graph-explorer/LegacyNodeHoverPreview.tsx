@@ -78,8 +78,8 @@ export const LegacyNodeHoverPreview: React.FC<Props> = ({ pageId, x, y }) => {
           <span className="text-[var(--osio-fg-muted)]">{loading ? "Loading…" : "Empty note"}</span>
         )}
       </div>
-      <div className="flex items-center gap-1 border-t border-[var(--osio-border-default)] px-4 py-1.5 text-[11px] text-[var(--osio-fg-subtle)]">
-        <kbd className="rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-1 font-mono text-[10px]">Ctrl</kbd>
+      <div className="flex items-center gap-1 border-t border-[var(--osio-border-default)] px-4 py-1.5 text-2xs text-[var(--osio-fg-subtle)]">
+        <kbd className="rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-1 font-mono text-3xs">Ctrl</kbd>
         + click to open
       </div>
     </div>

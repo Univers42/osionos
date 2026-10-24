@@ -14,6 +14,7 @@ import React, { useState, useMemo } from "react";
 import { Archive, Redo2, Trash, AlertTriangle } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
+import { IconValueView } from "@/shared/ui";
 import {
   canReadPage,
   getCurrentPageAccessContext,
@@ -149,7 +150,7 @@ export const TrashView: React.FC = () => {
                 e.target.value === "" ? undefined : e.target.value,
               )
             }
-            className="w-full px-3 py-2 text-sm rounded border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:border-[var(--osio-border-strong)] focus:outline-none focus:border-[var(--osio-accent)]"
+            className="w-full px-3 py-2 text-sm rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] hover:border-[var(--osio-border-strong)] focus:outline-none focus:border-[var(--osio-accent)]"
           >
             <option value="">Select a workspace</option>
             {userWorkspaces.map((ws) => (
@@ -176,7 +177,7 @@ export const TrashView: React.FC = () => {
                 <div className="trash-page-info">
                   <div className="flex items-center gap-2 mb-1">
                     {page.icon && (
-                      <span className="text-lg flex-shrink-0">{page.icon}</span>
+                      <span className="text-lg flex-shrink-0"><IconValueView value={page.icon} size={18} /></span>
                     )}
                     <h3 className="text-sm font-medium text-[var(--osio-fg-default)] truncate">
                       {page.title}

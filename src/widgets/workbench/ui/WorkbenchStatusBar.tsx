@@ -13,6 +13,7 @@
 import React from "react";
 import { AlertCircle, GitBranch, PanelBottom } from "lucide-react";
 
+import { Tooltip } from "@/shared/ui";
 import { useDiagnosticsStore } from "@/features/ide/model/diagnosticsStore";
 import {
   isSandboxOnline,
@@ -31,15 +32,16 @@ const STATE_LABEL: Record<SandboxHealthState, string> = {
 };
 
 const DOT_CLASS: Record<SandboxHealthState, string> = {
-  unknown: "bg-[var(--osio-text-muted)]",
+  unknown: "bg-[var(--osio-fg-subtle)]",
   online: "bg-[var(--osio-success)]",
   stopped: "bg-[var(--osio-warning)]",
-  disabled: "bg-[var(--osio-text-muted)]",
+  disabled: "bg-[var(--osio-fg-subtle)]",
   unavailable: "bg-[var(--osio-danger)]",
 };
 
-const CHIP_BASE = "inline-flex items-center gap-1.5 rounded px-1.5";
-const CHIP = `${CHIP_BASE} hover:bg-[var(--osio-bg-hover)]`;
+// Chips are control-sized (24px) pills on the canvas; the read-only branch has no hover fill.
+const CHIP_BASE = "inline-flex h-[var(--osio-control-h-xs)] items-center gap-1.5 rounded-[var(--osio-control-radius)] px-2";
+const CHIP = `${CHIP_BASE} transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-control-bg-hover)]`;
 
 /** Read-only, so no hover affordance. Renders nothing until the sandbox answers with a branch. */
 const BranchChip: React.FC = () => {
@@ -49,11 +51,13 @@ const BranchChip: React.FC = () => {
   if (info === null || (info.branch === null && !info.detached)) return null;
   const drift = `${info.ahead > 0 ? ` ↑${info.ahead}` : ""}${info.behind > 0 ? ` ↓${info.behind}` : ""}`;
   return (
-    <span data-testid="branch-chip" title="Git branch (sandbox)" className={CHIP_BASE}>
-      <GitBranch size={12} aria-hidden />
-      {info.detached ? "detached" : info.branch}
-      {drift}
-    </span>
+    <Tooltip label="Git branch (sandbox)" side="top">
+      <span data-testid="branch-chip" className={CHIP_BASE}>
+        <GitBranch size={12} aria-hidden />
+        {info.detached ? "detached" : info.branch}
+        {drift}
+      </span>
+    </Tooltip>
   );
 };
 
@@ -63,17 +67,18 @@ const SandboxChip: React.FC = () => {
   const retry = useSandboxHealthStore((s) => s.retry);
   const online = isSandboxOnline(state);
   return (
-    <button
-      type="button"
-      data-testid="sandbox-chip"
-      onClick={online ? undefined : () => void retry()}
-      disabled={online}
-      title={online ? "Sandbox is running" : `${reason ?? STATE_LABEL[state]} - click to retry`}
-      className={`${CHIP} disabled:cursor-default disabled:hover:bg-transparent`}
-    >
-      <span aria-hidden className={`h-2 w-2 rounded-full ${DOT_CLASS[state]}`} />
-      {STATE_LABEL[state]}
-    </button>
+    <Tooltip label={online ? "Sandbox is running" : `${reason ?? STATE_LABEL[state]} - click to retry`} side="top">
+      <button
+        type="button"
+        data-testid="sandbox-chip"
+        onClick={online ? undefined : () => void retry()}
+        disabled={online}
+        className={`${CHIP} disabled:cursor-default disabled:hover:bg-transparent`}
+      >
+        <span aria-hidden className={`h-2 w-2 rounded-full ${DOT_CLASS[state]}`} />
+        {STATE_LABEL[state]}
+      </button>
+    </Tooltip>
   );
 };
 
@@ -83,15 +88,11 @@ const ProblemsChip: React.FC = () => {
   );
   const openDock = useWorkbenchStore((s) => s.openDock);
   return (
-    <button
-      type="button"
-      onClick={() => openDock("problems")}
-      aria-label={`${problems} problems`}
-      title="Problems"
-      className={CHIP}
-    >
-      <AlertCircle size={12} aria-hidden /> {problems}
-    </button>
+    <Tooltip label="Problems" side="top">
+      <button type="button" onClick={() => openDock("problems")} aria-label={`${problems} problems`} className={CHIP}>
+        <AlertCircle size={12} aria-hidden /> {problems}
+      </button>
+    </Tooltip>
   );
 };
 
@@ -99,22 +100,18 @@ const PanelToggleChip: React.FC = () => {
   const dockOpen = useWorkbenchStore((s) => s.dockOpen);
   const toggleDock = useWorkbenchStore((s) => s.toggleDock);
   return (
-    <button
-      type="button"
-      onClick={toggleDock}
-      aria-pressed={dockOpen}
-      title="Toggle panel (Ctrl+J)"
-      className={CHIP}
-    >
-      <PanelBottom size={12} aria-hidden /> Panel
-    </button>
+    <Tooltip label="Toggle panel (Ctrl+J)" side="top">
+      <button type="button" onClick={toggleDock} aria-pressed={dockOpen} className={CHIP}>
+        <PanelBottom size={12} aria-hidden /> Panel
+      </button>
+    </Tooltip>
   );
 };
 
 export const WorkbenchStatusBar: React.FC = () => (
   <footer
     data-testid="workbench-statusbar"
-    className="flex shrink-0 items-center gap-3 border-t border-[var(--osio-border-default)] bg-[var(--osio-topbar-bg)] px-2 text-[11px] text-[var(--osio-text-secondary)]"
+    className="flex shrink-0 items-center gap-1 bg-transparent pl-[var(--osio-statusbar-px)] pr-[var(--osio-statusbar-end)] text-2xs text-[var(--osio-fg-muted)]"
     style={{ height: "var(--osio-statusbar-h)" }}
   >
     <BranchChip />

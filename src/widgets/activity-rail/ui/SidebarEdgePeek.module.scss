@@ -30,13 +30,16 @@
 
 .overlay {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
+  top: var(--osio-frame-gap);
+  bottom: var(--osio-frame-gap);
+  left: var(--osio-frame-gap);
   z-index: var(--osio-z-popover);
   display: flex;
-  box-shadow: var(--osio-shadow-modal);
-  transform: translateX(-100%);
+  overflow: hidden;
+  border: 1px solid var(--osio-pane-border);
+  border-radius: var(--osio-radius-pane);
+  box-shadow: var(--osio-e4);
+  transform: translateX(calc(-100% - var(--osio-frame-gap)));
   opacity: 0;
   pointer-events: none;
   transition:

@@ -43,7 +43,7 @@ export const MessageTicks: React.FC<MessageTicksProps> = ({ messageId }) => {
       aria-label={LABEL[status]}
       title={LABEL[status]}
     >
-      {status === 'sent' ? <Check size={13} /> : <CheckCheck size={13} />}
+      {status === 'sent' ? <Check size={12} /> : <CheckCheck size={12} />}
     </span>
   );
 };

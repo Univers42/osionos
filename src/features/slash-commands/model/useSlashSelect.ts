@@ -13,15 +13,19 @@
 import { useCallback } from "react";
 
 import {
+  createLinkBlock,
   createMediaBlock,
+  DEFAULT_DIAGRAM_SPEC,
+  isLinkBlockType,
   type Block,
   type BlockType,
   type LayoutMode,
+  type LinkBlockType,
   type MediaBlockType,
   findBlockInTree,
 } from "@/entities/block";
 import { createDefaultTableBlock } from "@/entities/block/model/tableBlocks";
-import { createDefaultDrawBlock } from "@/entities/block/model/drawBlocks";
+import { stripSlashQuery as stripSlashQueryText } from "./slashQueryText";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
 import { createViewShowcaseLayoutContent } from "@/widgets/database-view/model/databaseViewShowcase";
 import { createProfileHeaderContent, PROFILE_HEADER_COVER } from "./profileHeaderPreset";
@@ -52,9 +56,8 @@ interface UseSlashSelectOptions {
   focusBlock: (blockId: string, end?: boolean) => void;
 }
 
-function stripSlashQuery(content: string): string {
-  const slashIdx = content.lastIndexOf("/");
-  return slashIdx >= 0 ? content.slice(0, slashIdx) : content;
+export function stripSlashQuery(content: string, anchor?: number): string {
+  return stripSlashQueryText(content, anchor);
 }
 
 function appendInternalPageLink(content: string, pageId: string): string {
@@ -63,8 +66,8 @@ function appendInternalPageLink(content: string, pageId: string): string {
   return `${trimmed}${separator}[[page:${pageId}]] `;
 }
 
-function appendInlineText(content: string, insertText: string): string {
-  const cleanContent = stripSlashQuery(content);
+function appendInlineText(content: string, insertText: string, anchor?: number): string {
+  const cleanContent = stripSlashQuery(content, anchor);
   const separator = cleanContent.length > 0 && cleanContent === cleanContent.trimEnd() ? " " : "";
   return `${cleanContent}${separator}${insertText}`;
 }
@@ -98,7 +101,7 @@ export function useSlashSelect({
       setSlashMenu(null);
 
       const block = findBlockInTree(content, blockId);
-      const cleanContent = stripSlashQuery(block?.content ?? "");
+      const cleanContent = stripSlashQuery(block?.content ?? "", slashMenu.anchor);
       if (block) {
         updateBlock(pageId, blockId, {
           content: cleanContent,
@@ -142,12 +145,6 @@ export function useSlashSelect({
 
       if (selectedType === "table_block") {
         const newBlock = createDefaultTableBlock();
-        insertBlock(pageId, blockId, newBlock);
-        return;
-      }
-
-      if (selectedType === "draw") {
-        const newBlock = createDefaultDrawBlock();
         insertBlock(pageId, blockId, newBlock);
         return;
       }
@@ -257,6 +254,12 @@ export function useSlashSelect({
         updateBlock(pageId, blockId, { content: cleanContent || "E = mc^2" });
       }
 
+      // A diagram block holds a SPEC, never the rendered output: it starts with
+      // the default spec, and the block draws it from there.
+      if (selectedType === "diagram") {
+        updateBlock(pageId, blockId, { content: "", diagramSpec: DEFAULT_DIAGRAM_SPEC });
+      }
+
       // A new type re-mounts the editable (a list marker, a toggle wrapper): refocus it on the
       // next frame, at the START: placing it at the end left "/quote" in the converted block's
       // DOM (blockCreation.spec "pressing Enter on /quote" failed that way on 2026-10-13).
@@ -299,14 +302,14 @@ export function useSlashSelect({
   );
 
   const handleSlashMediaSelect = useCallback(
-    (mediaType: MediaBlockType, asset: string, content: Block[]) => {
+    (mediaType: MediaBlockType | LinkBlockType, asset: string, content: Block[], onTarget?: (blockId: string) => void) => {
       if (!slashMenu) return;
       const { blockId } = slashMenu;
 
       setSlashMenu(null);
 
       const block = findBlockInTree(content, blockId);
-      const cleanContent = stripSlashQuery(block?.content ?? "");
+      const cleanContent = stripSlashQuery(block?.content ?? "", slashMenu.anchor);
 
       if (block) {
         updateBlock(pageId, blockId, {
@@ -316,18 +319,24 @@ export function useSlashSelect({
       }
 
       if (!block || cleanContent.trim().length > 0) {
-        const newBlock = createMediaBlock(mediaType, asset);
+        const newBlock = isLinkBlockType(mediaType) ? createLinkBlock(mediaType, asset) : createMediaBlock(mediaType, asset);
         insertBlock(pageId, blockId, newBlock);
+        onTarget?.(newBlock.id);
         focusBlock(newBlock.id);
         return;
       }
 
       changeBlockType(pageId, blockId, mediaType);
-      updateBlock(pageId, blockId, {
-        content: "",
-        asset,
-        placeholderText: undefined,
-      });
+      updateBlock(pageId, blockId, isLinkBlockType(mediaType)
+        ? { content: asset, placeholderText: undefined }
+        : {
+            content: "",
+            asset,
+            // The user's own file replaces the image: the "AI-generated" label goes.
+            aiGenerated: undefined,
+            placeholderText: undefined,
+          });
+      onTarget?.(blockId);
       focusBlock(blockId);
     },
     [
@@ -349,7 +358,7 @@ export function useSlashSelect({
       setSlashMenu(null);
 
       const block = findBlockInTree(content, blockId);
-      const cleanContent = stripSlashQuery(block?.content ?? "");
+      const cleanContent = stripSlashQuery(block?.content ?? "", slashMenu.anchor);
 
       if (!block || cleanContent.trim().length > 0) {
         if (block) {
@@ -400,7 +409,7 @@ export function useSlashSelect({
       const block = findBlockInTree(content, blockId);
       if (!block) return;
 
-      const cleanContent = stripSlashQuery(block.content ?? "");
+      const cleanContent = stripSlashQuery(block.content ?? "", slashMenu.anchor);
       const createdPage = await createPageInPrivateWorkspace();
       const nextContent = createdPage
         ? appendInternalPageLink(cleanContent, createdPage.id)
@@ -431,7 +440,7 @@ export function useSlashSelect({
       const block = findBlockInTree(content, blockId);
       if (!block) return;
 
-      const nextContent = appendInlineText(block.content ?? "", insertText);
+      const nextContent = appendInlineText(block.content ?? "", insertText, slashMenu.anchor);
       updateBlock(pageId, blockId, {
         content: nextContent,
         placeholderText: undefined,

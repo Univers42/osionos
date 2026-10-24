@@ -23,7 +23,7 @@ test("fs-op specs: argv shape, sh placeholder, no client string in the script", 
   assert.deepEqual(spec.Cmd.slice(4), ["src/main.c", "2", "3"]);
   assert.ok(!spec.Cmd[2].includes("main.c"), "path must never be interpolated into the script");
   assert.equal(spec.AttachStderr, false);
-  assert.equal(spec.User, "10001:10001");
+  assert.equal("User" in spec, false); // an exec with no User inherits the box's (ADR 0011)
 });
 
 test("fs-op specs: traversal, absolute paths and parse-breaking characters are refused", () => {
@@ -73,7 +73,7 @@ test("hashes spec: every path rides argv after the sh placeholder; 1-1000 valid 
   const spec = buildFsOpSpec("hashes", { paths: ["a.c", "src/with space.c", "-n.c"] });
   assert.deepEqual(spec.Cmd.slice(0, 2), ["sh", "-c"]);
   assert.deepEqual(spec.Cmd.slice(3), ["sh", "a.c", "src/with space.c", "-n.c"]);
-  assert.equal(spec.User, "10001:10001");
+  assert.equal("User" in spec, false); // an exec with no User inherits the box's (ADR 0011)
   assert.ok(!spec.Cmd[2].includes("a.c"), "no client string in the script");
   const refused = (paths) => assert.throws(() => buildFsOpSpec("hashes", { paths }), (e) => e.status === 400, JSON.stringify(paths)?.slice(0, 40));
   refused(undefined);

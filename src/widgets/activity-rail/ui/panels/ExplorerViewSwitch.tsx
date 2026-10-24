@@ -25,7 +25,9 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { homeTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useExplorerView, type ExplorerView } from "../../model/explorerView";
 
-const BTN = "flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors duration-[120ms]";
+// The MiniTabs segmented look (track, raised selected segment), kept as toggle buttons:
+// the two views are a pressed state, not tabs of one panel.
+const BTN = "flex h-[var(--osio-control-h-sm)] flex-1 items-center justify-center gap-1.5 rounded-[var(--osio-radius-control)] px-2 text-xs font-medium transition-[color,background-color,box-shadow] duration-(--osio-dur-fast) ease-[var(--osio-ease-standard)]";
 
 export const ExplorerViewSwitch: React.FC = () => {
   const view = useExplorerView((s) => s.view);
@@ -50,16 +52,16 @@ export const ExplorerViewSwitch: React.FC = () => {
       onClick={() => select(id)}
       className={`${BTN} ${
         view === id
-          ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
+          ? "bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-[var(--osio-e1)]"
           : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
       }`}
     >
-      <Icon size={13} aria-hidden="true" /> {label}
+      <Icon size={12} aria-hidden="true" /> {label}
     </button>
   );
 
   return (
-    <div className="mx-2 mt-2 flex items-center gap-1 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1">
+    <div className="mx-2 mt-2 flex items-center gap-1 rounded-[var(--osio-radius-panel)] bg-[var(--osio-bg-subtle)] p-1">
       {tab("tree", List, "Tree")}
       {tab("gallery", LayoutGrid, "Gallery")}
     </div>

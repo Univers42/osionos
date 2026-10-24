@@ -13,6 +13,7 @@
 import React, { useState } from "react";
 
 import { useUserStore } from "@/features/auth";
+import { Button } from "@osionos/ui/atoms/Button";
 import { Modal, Toggle, useToastStore } from "@osionos/ui/primitives";
 import { DEFAULT_EXPORT_OPTIONS, type ExportContent, type ExportDbViews, type ExportFormat, type ExportOptions, type ExportStyling } from "../model/exportTypes";
 import { runPageExport } from "../model/runExport";
@@ -90,7 +91,8 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ open, pageId, worksp
 
   return (
     <Modal open={open} onClose={onClose} title="Export" size="sm">
-      <div data-testid="export-dialog" className="w-full space-y-1 text-sm" style={{ maxWidth: 320 }}>
+      <div data-testid="export-dialog" className="space-y-1 p-4 text-sm">
+        <p aria-hidden className="osio-h4 pb-2 text-[var(--osio-fg-default)]">Export</p>
         <ExportSelectRow
           label="Export format"
           value={options.format}
@@ -134,22 +136,12 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ open, pageId, worksp
         </Row>
 
         <div className="flex items-center justify-end gap-2 pt-4">
-          <button
-            type="button"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-            onClick={onClose}
-          >
+          <Button tone="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
-            data-testid="export-confirm"
-            disabled={busy}
-            className="rounded-md bg-[var(--osio-accent)] px-3.5 py-1.5 text-sm font-medium text-[var(--osio-accent-fg)] hover:opacity-90 disabled:opacity-60"
-            onClick={() => void handleExport()}
-          >
+          </Button>
+          <Button tone="primary" data-testid="export-confirm" disabled={busy} onClick={() => void handleExport()}>
             {busy ? "Exporting…" : "Export"}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

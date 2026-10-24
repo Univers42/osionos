@@ -28,7 +28,7 @@ export const PaneDropOverlay: React.FC<{ zone: DropZone | null }> = ({ zone }) =
     <div className="pointer-events-none absolute inset-0 z-20">
       <div
         className={[
-          "absolute rounded-sm border-2 border-[var(--osio-accent)] bg-[var(--osio-accent)]/20 transition-all duration-75",
+          "absolute rounded-sm border-2 border-[var(--osio-accent)] bg-[var(--osio-accent)]/20 transition-all duration-(--osio-dur-fast)",
           ZONE_BOX[zone],
         ].join(" ")}
       />

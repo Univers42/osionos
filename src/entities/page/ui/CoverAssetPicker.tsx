@@ -111,7 +111,7 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
     <div className="osionos-cover-picker w-[min(560px,calc(100vw-48px))] rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-menu)]">
       <div className="border-b border-[var(--osio-border-default)] px-3 py-2">
         <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-          <Image size={15} />
+          <Image size={16} />
           <span>{label}</span>
         </div>
         <div className="flex gap-1 overflow-x-auto">
@@ -153,7 +153,7 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
         {activeTab === "url" ? (
           <div className="space-y-3">
             <div className="flex items-center gap-2 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2">
-              <Link size={15} className="text-[var(--osio-fg-muted)]" />
+              <Link size={16} className="text-[var(--osio-fg-muted)]" />
               <input
                 value={urlDraft}
                 onChange={(event) => setUrlDraft(event.target.value)}

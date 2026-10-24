@@ -30,6 +30,11 @@ interface PageTitleProps {
   readOnly?: boolean;
 }
 
+function fitToContent(textarea: HTMLTextAreaElement) {
+  textarea.style.height = '0px';
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
 /**
  * Editable page title matching osionos's styling.
  * Pressing Enter moves focus to the first content block.
@@ -47,9 +52,43 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
 
   useLayoutEffect(() => {
     if (TITLE_SIZES_ITSELF || !ref.current) return;
-    ref.current.style.height = '0px';
-    ref.current.style.height = `${ref.current.scrollHeight}px`;
+    fitToContent(ref.current);
   }, [title]);
+
+  // Without field-sizing the height is pinned inline, so two more cases need a
+  // re-measure. Small text and the page font change the glyphs, not the
+  // textarea's box, so the observer below never hears of them. The page
+  // re-renders this component when they change, so compare after each render;
+  // fitting changes the height only, so it cannot retrigger this.
+  // Ponytail: a font change that reaches the title without re-rendering it (a
+  // root attribute or a CSS variable alone) leaves it at the old height, clipped
+  // or loose, until the next keystroke or width change.
+  const fittedFont = useRef('');
+  useLayoutEffect(() => {
+    const textarea = ref.current;
+    if (TITLE_SIZES_ITSELF || !textarea) return;
+    const { fontSize, fontFamily } = getComputedStyle(textarea);
+    const font = `${fontSize} ${fontFamily}`;
+    if (font === fittedFont.current) return;
+    fittedFont.current = font;
+    fitToContent(textarea);
+  });
+
+  // A narrower window wraps the title onto more lines without changing its text.
+  // Only a width change re-measures: setting the height fires the observer again
+  // with the same width, which would otherwise loop.
+  useEffect(() => {
+    const textarea = ref.current;
+    if (TITLE_SIZES_ITSELF || !textarea || typeof ResizeObserver === 'undefined') return undefined;
+    let lastWidth = textarea.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (textarea.clientWidth === lastWidth) return;
+      lastWidth = textarea.clientWidth;
+      fitToContent(textarea);
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, []);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (readOnly) return;
@@ -105,7 +144,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
         rows={1}
         value={title}
         placeholder="Untitled"
-        className="osionos-page-title"
+        className="osionos-page-title osio-display"
         readOnly={readOnly}
         aria-readonly={readOnly}
         onChange={handleChange}

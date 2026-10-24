@@ -62,7 +62,7 @@ export const ImageFullscreen: React.FC<ImageFullscreenProps> = ({ url, alt, onCl
       onClick={onClose}
       className={[
         "fixed inset-0 z-[10050] flex items-center justify-center bg-[var(--osio-overlay)] p-6",
-        "transition-opacity duration-150 motion-reduce:transition-none",
+        "transition-opacity duration-(--osio-dur-fast) motion-reduce:transition-none",
         visible ? "opacity-100" : "opacity-0",
       ].join(" ")}
     >
@@ -79,7 +79,7 @@ export const ImageFullscreen: React.FC<ImageFullscreenProps> = ({ url, alt, onCl
         src={url}
         alt={alt}
         onClick={stop}
-        className="max-h-[92vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
+        className="max-h-[92vh] max-w-[92vw] rounded-lg object-contain shadow-osio-e5"
       />
     </div>,
     document.body,

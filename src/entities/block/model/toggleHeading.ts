@@ -12,22 +12,25 @@
 
 import type { Block } from "./types";
 
-/** Tailwind classes that size a toggle's summary as a heading of the given
- *  level (shared by the editable and read-only toggle renderers). */
+/** Classes that set a toggle's summary like a heading of the given level, shared
+ *  by the editable and read-only renderers. Levels 1-4 use the heading
+ *  utilities, which already carry the line height: callers must not add a
+ *  `leading-*` of their own next to them. Levels 5-6 are too small for a
+ *  heading and stay UI text, so they carry the line height themselves. */
 export function getToggleHeadingClass(headingLevel: Block["headingLevel"]): string {
   switch (headingLevel) {
     case 1:
-      return "text-2xl font-bold";
+      return "osio-h1";
     case 2:
-      return "text-xl font-semibold";
+      return "osio-h2";
     case 3:
-      return "text-lg font-semibold";
+      return "osio-h3";
     case 4:
-      return "text-base font-semibold";
+      return "osio-h4";
     case 5:
     case 6:
-      return "text-sm font-semibold";
+      return "text-sm font-semibold leading-relaxed";
     default:
-      return "text-sm";
+      return "text-sm leading-relaxed";
   }
 }

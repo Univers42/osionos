@@ -68,7 +68,7 @@ export const MediaSettingsBar: React.FC<MediaSettingsBarProps> = ({
     ) : null}
 
     <div className="flex items-center gap-2 rounded-md border border-[var(--osio-border-default)] px-2 py-1 text-xs text-[var(--osio-fg-muted)]">
-      <SlidersHorizontal size={13} />
+      <SlidersHorizontal size={12} />
       <input
         type="range"
         min={25}
@@ -101,7 +101,7 @@ export const MediaSettingsBar: React.FC<MediaSettingsBarProps> = ({
       className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--osio-border-default)] text-[var(--osio-fg-default)] transition-colors hover:bg-[var(--osio-bg-hover)]"
       onClick={onChangeAsset}
     >
-      <ImagePlus size={15} />
+      <ImagePlus size={16} />
     </button>
   </div>
 );

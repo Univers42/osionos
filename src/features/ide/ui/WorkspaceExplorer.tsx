@@ -39,7 +39,7 @@ export const WorkspaceExplorer: React.FC<WorkspaceExplorerProps> = (props) => {
         onKeyDown={onKeyDown}
         onDragOver={(event) => { if (event.dataTransfer.types.includes(EXPLORER_DRAG_MIME)) event.preventDefault(); }}
         onDrop={onRootDrop}
-        className="flex h-full min-h-0 flex-col bg-[var(--osio-code-bg)]"
+        className="flex min-h-32 flex-1 flex-col"
       >
         <ExplorerToolbar
           onNewFile={newIn("file")}

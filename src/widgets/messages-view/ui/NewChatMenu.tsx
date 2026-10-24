@@ -39,7 +39,7 @@ const ActionRow: React.FC<{ icon: React.ReactNode; label: string; onClick: () =>
   <button
     type="button"
     onClick={onClick}
-    className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm font-medium hover:bg-[var(--osio-bg-hover)]"
+    className="flex w-full items-center gap-3 rounded-[var(--osio-radius-sm)] px-2 py-2 text-left text-sm font-medium hover:bg-[var(--osio-bg-hover)]"
   >
     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--osio-accent-subtle)] text-[var(--osio-accent-text)]">
       {icon}

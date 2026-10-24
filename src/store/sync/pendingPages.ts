@@ -24,11 +24,13 @@
 // (an outage while hundreds of files are cloned) are warned about once, and the browser asks
 // before the tab is left; a tab killed hard then loses them all. The key is one per origin: an
 // open tab with nothing unconfirmed clears it, erasing what a closed tab kept at pagehide (devil
-// B1). A kept page restored at load is published over whatever the server holds, so an edit made
-// on another device meanwhile is overwritten (the bridge PATCH has no base-version precondition).
+// B1). A kept page restored at load is published over whatever the server holds — but the record
+// carries the version the edit was made against (`contentVersion`), so the replay is pinned to it
+// and a server copy that moved in the meantime is MERGED instead of overwritten (the 409 path).
 
 import type { PageEntry } from "@/entities/page";
 import { setItemEvictingPageCaches, type PageCacheStorage } from "@/store/pageStore.helpers";
+import { baseVersionOf } from "./pageBase";
 
 /** Outside the page cache's `osio:pages:` prefix, which its loader reads as workspaces. */
 export const PENDING_PAGES_KEY = "osio:pending-pages.v1";
@@ -43,9 +45,20 @@ function browserStorage(): PendingStorage | null {
   }
 }
 
+/**
+ * The record kept on disk: the page, plus the version of its content the edit was made
+ * against — so a reload still knows which version to PATCH against, and a server copy
+ * that moved in the meantime is a conflict to merge, not a copy to overwrite.
+ */
+function pendingRecord(page: PageEntry): PageEntry {
+  const version = baseVersionOf(page);
+  if (version === null) return page;
+  return { ...page, contentVersion: version };
+}
+
 function byWorkspace(pages: readonly PageEntry[]): Record<string, PageEntry[]> {
   const grouped: Record<string, PageEntry[]> = {};
-  for (const page of pages) (grouped[page.workspaceId] ??= []).push(page);
+  for (const page of pages) (grouped[page.workspaceId] ??= []).push(pendingRecord(page));
   return grouped;
 }
 

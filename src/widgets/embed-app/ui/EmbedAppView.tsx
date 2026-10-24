@@ -14,24 +14,12 @@ import React from "react";
 import { ExternalLink } from "lucide-react";
 
 import { embeddableUrl } from "../model/embeddableUrl";
+import { EmbedFrame } from "./EmbedFrame";
 
 interface Props {
   url: string;
   title: string;
 }
-
-/** How long the iframe may stay blank before the pane says so. A cross-origin frame
- *  reports neither its status code nor a reliable `error` event, and a probe `fetch`
- *  would only trade a silent failure for browser network noise in the console. So the
- *  signal used here is the one the embedder is actually allowed to observe: whether
- *  `load` fired at all.
- *
- *  Ponytail: the window covers the FIRST document only. A navigation the user makes
- *  inside the frame (opening a board from the Whiteboard list) is invisible to the
- *  embedder, so a second document that hangs shows the stale first one rather than this
- *  message. Under-reporting, deliberately: the alternative re-arms a deadline on every
- *  `load` and declares a working pane dead, which is the bug this comment replaces. */
-const LOAD_GRACE_MS = 8000;
 
 /**
  * Hosts a separate osionos app (Mail / Calendar / Whiteboard) inside a pane via a
@@ -41,24 +29,6 @@ const LOAD_GRACE_MS = 8000;
  */
 export const EmbedAppView: React.FC<Props> = ({ url: rawUrl, title }) => {
   const url = embeddableUrl(rawUrl);
-  const [stalled, setStalled] = React.useState(false);
-  // A ref, not state: the timer below reads it after the fact, and re-rendering on
-  // `load` would only re-run an effect that must not restart its own deadline.
-  const hasLoaded = React.useRef(false);
-
-  React.useEffect(() => {
-    if (!url) {
-      return undefined;
-    }
-    hasLoaded.current = false;
-    setStalled(false);
-    const timer = globalThis.setTimeout(() => {
-      if (!hasLoaded.current) {
-        setStalled(true);
-      }
-    }, LOAD_GRACE_MS);
-    return () => globalThis.clearTimeout(timer);
-  }, [url]);
 
   if (!url) {
     return (
@@ -80,30 +50,7 @@ export const EmbedAppView: React.FC<Props> = ({ url: rawUrl, title }) => {
           Open externally <ExternalLink size={12} />
         </button>
       </div>
-      {stalled ? (
-        <div
-          data-testid="embed-unavailable"
-          className="flex h-full flex-1 flex-col items-center justify-center gap-2 px-6 text-center"
-        >
-          <span className="text-sm font-semibold text-[var(--osio-fg-default)]">
-            {title} is not responding
-          </span>
-          <span className="max-w-md text-xs text-[var(--osio-fg-subtle)]">
-            Nothing answered at {url}. The service may still be starting, or it may not be
-            running. The rest of osionos is unaffected.
-          </span>
-        </div>
-      ) : null}
-      <iframe
-        src={url}
-        title={title}
-        onLoad={() => {
-          hasLoaded.current = true;
-          setStalled(false);
-        }}
-        className={`w-full flex-1 border-0 bg-[var(--osio-bg-page)] ${stalled ? "hidden" : "h-full"}`}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
-      />
+      <EmbedFrame url={url} title={title} />
     </div>
   );
 };

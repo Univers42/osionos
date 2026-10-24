@@ -53,9 +53,6 @@ export const PublicSwitcherPanel: React.FC = () => {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       <div className="px-2 pt-2 pb-1">
-        <p className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
-          Shared
-        </p>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -80,7 +77,7 @@ export const PublicSwitcherPanel: React.FC = () => {
                   onClick={() => select(ws)}
                   style={{ position: "absolute", top: 0, left: 0, width: "100%", height: v.size, transform: `translateY(${v.start}px)` }}
                   className={[
-                    "flex items-center gap-2 rounded-md px-2 text-left text-sm transition-colors duration-[120ms]",
+                    "flex items-center gap-2 rounded-md px-2 text-left text-sm transition-colors duration-(--osio-dur-fast)",
                     active
                       ? "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
                       : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",

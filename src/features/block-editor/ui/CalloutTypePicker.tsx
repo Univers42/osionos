@@ -45,7 +45,7 @@ export const CalloutTypePicker: React.FC<Props> = ({ current, onSelect, onClose 
     <div
       role="menu"
       aria-label="Callout type"
-      className="absolute left-0 top-full z-50 mt-1 w-52 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-panel)] p-1 shadow-[var(--osio-shadow-menu)]"
+      className="absolute left-0 top-full z-50 mt-1 w-52 osio-surface-overlay"
     >
       {CALLOUT_TYPES.map((type) => (
         <button
@@ -54,19 +54,20 @@ export const CalloutTypePicker: React.FC<Props> = ({ current, onSelect, onClose 
           role="menuitemradio"
           aria-checked={type.id === active.id}
           onClick={() => { onSelect(type.icon); onClose(); }}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-[var(--osio-bg-hover)]"
+          className="osio-menu-item"
         >
           <span className="text-base" style={{ color: calloutAccent(type) }} aria-hidden="true">{type.icon}</span>
-          <span className="flex-1 text-[var(--osio-fg-default)]">{type.label}</span>
+          <span className="flex-1">{type.label}</span>
           {type.id === active.id ? <Check size={14} className="text-[var(--osio-accent)]" /> : null}
         </button>
       ))}
-      <div className="my-1 h-px bg-[var(--osio-border-default)]" />
+      <div className="osio-menu-separator" />
       <button
         type="button"
         role="menuitem"
         onClick={() => setCustomOpen(true)}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
+        className="osio-menu-item"
+        data-tone="muted"
       >
         <Smile size={16} />
         <span>Custom emoji…</span>

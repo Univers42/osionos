@@ -27,6 +27,7 @@ import { genId } from '@/widgets/workspace-grid/model/layoutTree';
 import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
 import { useUnreadStore } from '@/store/chat/useUnreadStore';
 import { UnreadBadge } from '@/shared/chat/UnreadBadge';
+import { PanelSectionLabel } from '@/shared/ui';
 import { CreateChannelModal } from './CreateChannelModal';
 import { useWorkspaceChannels } from './useWorkspaceChannels';
 
@@ -56,13 +57,13 @@ export const ChannelList: React.FC<{ filter?: string }> = ({ filter = "" }) => {
   return (
     <section className="px-2 py-1" data-channel-list>
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-xs font-semibold uppercase text-[var(--osio-fg-subtle)]">Channels</h2>
+        <PanelSectionLabel as="h2">Channels</PanelSectionLabel>
         <button
           type="button"
           aria-label="Create channel"
           title="Create channel"
           onClick={() => setCreateOpen(true)}
-          className="rounded p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+          className="rounded-xs p-1 text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
         >
           <Plus size={14} />
         </button>

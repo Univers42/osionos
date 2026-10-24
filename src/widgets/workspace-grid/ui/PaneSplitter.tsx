@@ -73,8 +73,13 @@ export const PaneSplitter: React.FC<Props> = ({ direction, onResizeStart, onResi
       aria-orientation={direction === "row" ? "vertical" : "horizontal"}
       onPointerDown={onPointerDown}
       className={[
-        "shrink-0 z-20 bg-[var(--osio-border-default)] hover:bg-[var(--osio-accent)]/60 transition-colors duration-[120ms]",
-        direction === "row" ? "w-1.5 cursor-col-resize" : "h-1.5 cursor-row-resize",
+        // The splitter IS the gap between two cards. Its hit area is never under
+        // --osio-splitter-hit-min (the ::before) even when the gap is 0; the hairline
+        // (::after) is the seam at gap 0 and otherwise shows on hover or drag.
+        "relative shrink-0 z-20 bg-transparent before:absolute after:absolute after:bg-[var(--osio-pane-seam)] hover:after:bg-[var(--osio-accent)]/60 active:after:bg-[var(--osio-accent)]/60 after:transition-colors after:duration-(--osio-dur-fast)",
+        direction === "row"
+          ? "w-[var(--osio-frame-gap)] cursor-col-resize before:inset-y-0 before:left-1/2 before:w-[max(100%,var(--osio-splitter-hit-min))] before:-translate-x-1/2 after:inset-y-0 after:left-1/2 after:w-px"
+          : "h-[var(--osio-frame-gap)] cursor-row-resize before:inset-x-0 before:top-1/2 before:h-[max(100%,var(--osio-splitter-hit-min))] before:-translate-y-1/2 after:inset-x-0 after:top-1/2 after:h-px",
         dragActive ? "pointer-events-none" : "",
       ].join(" ")}
     />

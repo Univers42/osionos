@@ -53,16 +53,20 @@ export type ExplorerControllerProps = {
   /** Optional callback fired when a row requests its context menu. When absent,
    *  openMenu in the context value is a no-op. */
   onRowMenu?: (request: ExplorerMenuRequest) => void;
+  /** Folders open (and listed) from the first paint. Keep the array identity stable. */
+  defaultExpanded?: readonly string[];
+  /** One muted line shown in an expanded, empty folder, by folder path. Keep stable too. */
+  emptyHints?: Readonly<Record<string, string>>;
 };
 
 /** Wires tree state, focus, mutations and keys into the context value the rows
  *  read plus the root-level handlers. No JSX: WorkspaceExplorer only lays out. */
-export function useExplorerController({ ops, onOpen, pageIdOf, onRowMenu }: ExplorerControllerProps) {
-  const tree = useExplorerTree(ops);
+export function useExplorerController({ ops, onOpen, pageIdOf, onRowMenu, defaultExpanded, emptyHints }: ExplorerControllerProps) {
+  const tree = useExplorerTree(ops, defaultExpanded);
   const actions = useExplorerActions({ ops, tree, onOpen });
   const { pending, setPending } = actions;
   const creating = pending?.type === "create" ? pending : null;
-  const rows = React.useMemo(() => flattenForRender(tree.dirs, tree.expanded, creating), [tree.dirs, tree.expanded, creating]);
+  const rows = React.useMemo(() => flattenForRender(tree.dirs, tree.expanded, creating, emptyHints), [tree.dirs, tree.expanded, creating, emptyHints]);
   const visible = React.useMemo(() => rows.flatMap((row) => (row.type === "item" ? [row.item] : [])), [rows]);
   const rowIndex = React.useMemo(() => indexByRel(rows), [rows]);
   const { rootRef, tabbableRel, focusRow } = useExplorerFocus(rowIndex, visible[0]?.rel ?? "");

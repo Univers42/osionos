@@ -60,10 +60,10 @@ export const MessagesView: React.FC = () => {
         <header className="flex min-h-14 items-center gap-2 border-b border-[var(--osio-border-default)] px-4">
           <MessageSquare size={18} className="text-[var(--osio-fg-muted)]" />
           <h1 className="flex-1 text-base font-semibold">Messages</h1>
-          <IconButton aria-label="Communities" onClick={() => useWorkspaceLayout.getState().openTab(communityTab())}>
+          <IconButton label="Communities" onClick={() => useWorkspaceLayout.getState().openTab(communityTab())}>
             <Users size={18} />
           </IconButton>
-          <IconButton ref={newChatRef} aria-label="New chat" onClick={() => setNewChatOpen(true)}>
+          <IconButton ref={newChatRef} label="New chat" onClick={() => setNewChatOpen(true)}>
             <SquarePen size={18} />
           </IconButton>
         </header>
@@ -78,7 +78,7 @@ export const MessagesView: React.FC = () => {
           <>
             <div className="relative min-w-0 flex-1">
               <IconButton
-                aria-label="Contact info"
+                label="Contact info"
                 aria-pressed={showInfo}
                 onClick={() => setShowInfo((value) => !value)}
                 className="absolute right-3 top-3 z-10"

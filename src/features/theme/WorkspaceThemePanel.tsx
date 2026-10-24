@@ -11,7 +11,8 @@
 /* ************************************************************************** */
 
 /**
- * Appearance controls: a light/dark/system mode toggle + a grid of named color
+ * Appearance controls: a light/dark/system mode toggle, the accent and
+ * density/corner/text-size axes (AppearanceControls), and a grid of named color
  * palettes (Warm, Nord, Monochrome, …). The palette drives the global
  * `data-palette` axis (theme.ts) — orthogonal to light/dark — so a theme is one
  * click and re-skins the whole app. Picking a palette also clears any legacy
@@ -32,10 +33,9 @@ import {
   readStoredThemeMode,
   type ThemeMode,
 } from '@/shared/config/theme';
-import {
-  clearWorkspaceAppearance,
-  useWorkspaceConfigStore,
-} from '@/shared/config/workspaceConfigStore';
+import { useWorkspaceConfigStore } from '@/shared/config/workspaceConfigStore';
+
+import { AccentControl, ShapeControls, useAppearance } from './AppearanceControls';
 
 interface WorkspaceThemeControlsProps {
   compact?: boolean;
@@ -49,7 +49,7 @@ const MODES: { id: ThemeMode; label: string; Icon: typeof Sun }[] = [
 
 /** A small window-chrome mock painted in the palette's own colors. */
 const PalettePreview: React.FC<{ swatches: readonly string[] }> = ({ swatches }) => {
-  const [bg, surface, accent, update, ink] = swatches;
+  const [bg, surface, accent, ink] = swatches;
   return (
     <div className="flex h-14 w-full overflow-hidden rounded-md" style={{ background: bg }}>
       <div className="flex w-7 flex-col gap-1 p-1.5" style={{ borderRight: `1px solid ${surface}` }}>
@@ -61,10 +61,7 @@ const PalettePreview: React.FC<{ swatches: readonly string[] }> = ({ swatches })
         <div className="rounded-sm px-1.5 py-1" style={{ background: surface }}>
           <span className="block h-1.5 w-2/3 rounded-full" style={{ background: ink, opacity: 0.7 }} />
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="h-3 w-8 rounded-full" style={{ background: accent }} />
-          <span className="h-3 w-3 rounded-full" style={{ background: update }} />
-        </div>
+        <span className="h-3 w-8 rounded-full" style={{ background: accent }} />
       </div>
     </div>
   );
@@ -73,6 +70,7 @@ const PalettePreview: React.FC<{ swatches: readonly string[] }> = ({ swatches })
 export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ compact = false }) => {
   const [mode, setMode] = useState<ThemeMode>(() => readStoredThemeMode());
   const [palette, setPalette] = useState<string>(() => readStoredPalette());
+  const [appearance, changeAppearance] = useAppearance();
   const activeUserId = useUserStore((s) => s.activeUserId);
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const clearAppearance = useWorkspaceConfigStore((s) => s.clearAppearance);
@@ -87,9 +85,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
     applyPalette(id);
     persistPalette(id);
     setPalette(id);
-    // A per-workspace inline override would mask the palette — drop it so the
-    // chosen palette is what the user actually sees.
-    clearWorkspaceAppearance();
+    // Drop a per-workspace appearance still stored from before palettes existed.
     const workspaceId = activeWorkspace?._id;
     if (activeUserId && workspaceId) void clearAppearance(activeUserId, workspaceId).catch(() => {});
   };
@@ -105,7 +101,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
               type="button"
               aria-pressed={mode === id}
               onClick={() => selectMode(id)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-[120ms] ${
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-(--osio-dur-fast) ${
                 mode === id
                   ? 'bg-[var(--osio-bg-surface)] text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-sm)]'
                   : 'text-[var(--osio-fg-muted)] hover:text-[var(--osio-fg-default)]'
@@ -116,6 +112,9 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
           ))}
         </div>
       </div>
+
+      <AccentControl appearance={appearance} paletteId={palette} onChange={changeAppearance} />
+      <ShapeControls appearance={appearance} onChange={changeAppearance} />
 
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">Color theme</p>
@@ -128,7 +127,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
                 key={preset.id}
                 aria-pressed={selected}
                 onClick={() => selectPalette(preset.id)}
-                className={`group rounded-xl border p-2 text-left transition-all duration-[140ms] ${
+                className={`group rounded-xl border p-2 text-left transition-all duration-(--osio-dur-fast) ${
                   selected
                     ? 'border-[var(--osio-accent)] ring-2 ring-[var(--osio-accent)] ring-offset-1 ring-offset-[var(--osio-bg-surface)]'
                     : 'border-[var(--osio-border-default)] hover:border-[var(--osio-border-strong)]'

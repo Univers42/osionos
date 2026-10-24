@@ -36,7 +36,7 @@ function Avatar({ member, onSummon }: { member: PresenceState; onSummon?: Collab
     ? <img src={member.avatarRef} alt="" className="h-full w-full object-cover" />
     : memberInitials(member.displayName);
   const ring = { ...RING, outline: `2px solid ${member.color}` };
-  const cls = '-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-[var(--osio-bg-elevated)] bg-[var(--osio-bg-subtle)] text-[11px] font-medium text-[var(--osio-fg-muted)] first:ml-0';
+  const cls = '-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-[var(--osio-bg-elevated)] bg-[var(--osio-bg-subtle)] text-2xs font-medium text-[var(--osio-fg-muted)] first:ml-0';
   if (!onSummon) {
     return <span title={member.displayName} aria-label={`${member.displayName} is here`} style={ring} className={cls}>{face}</span>;
   }
@@ -47,7 +47,7 @@ function Avatar({ member, onSummon }: { member: PresenceState; onSummon?: Collab
       aria-label={`Summon ${member.displayName} to this page`}
       onClick={() => onSummon(member.memberId, member.displayName)}
       style={ring}
-      className={`${cls} transition-transform duration-150 hover:z-10 motion-safe:hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--osio-bg-elevated)]`}
+      className={`${cls} transition-transform duration-(--osio-dur-fast) hover:z-10 motion-safe:hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--osio-bg-elevated)]`}
     >
       {face}
     </button>
@@ -72,7 +72,7 @@ export const CollabRoster: React.FC<CollabRosterProps> = ({ onSummon }) => {
       {overflow > 0 && (
         <span
           title={names}
-          className="-ml-1.5 flex h-7 min-w-7 items-center justify-center rounded-full border border-[var(--osio-bg-elevated)] bg-[var(--osio-bg-muted)] px-1 text-[11px] font-semibold text-[var(--osio-fg-muted)]"
+          className="-ml-1.5 flex h-7 min-w-7 items-center justify-center rounded-full border border-[var(--osio-bg-elevated)] bg-[var(--osio-bg-muted)] px-1 text-2xs font-semibold text-[var(--osio-fg-muted)]"
         >
           +{overflow}
         </span>

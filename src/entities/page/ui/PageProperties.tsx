@@ -12,6 +12,8 @@
 
 import React from 'react';
 
+import { Dropdown } from '@/shared/ui';
+
 import type { PagePropertyEntry } from '../model/types';
 
 export type PageProperty = PagePropertyEntry;
@@ -65,15 +67,14 @@ const PagePropertyValue: React.FC<{
 
   if (property.type === 'select' && property.options?.length) {
     return (
-      <select
-        aria-label={property.key}
-        name={property.key}
+      <Dropdown
+        variant="inline"
+        width="auto"
+        label={property.key}
         value={stringValue(property.value)}
-        onChange={(event) => onChangeProperty(property.key, event.target.value)}
-        className="w-full bg-transparent outline-none text-sm text-[var(--osio-fg-default)]"
-      >
-        {property.options.map((option) => <option key={option} value={option}>{option}</option>)}
-      </select>
+        options={property.options.map((option) => ({ value: option, label: option }))}
+        onChange={(option) => onChangeProperty(property.key, option)}
+      />
     );
   }
 
@@ -94,7 +95,7 @@ const PagePropertyValue: React.FC<{
       type={propertyInputType(property.type)}
       value={stringValue(property.value)}
       onChange={(event) => onChangeProperty(property.key, property.type === 'number' ? Number(event.target.value) : event.target.value)}
-      className="w-full bg-transparent outline-none text-sm text-[var(--osio-fg-default)]"
+      className={property.type === 'date' ? 'osio-field w-auto px-2 text-sm' : 'w-full bg-transparent outline-none text-sm text-[var(--osio-fg-default)]'}
     />
   );
 };

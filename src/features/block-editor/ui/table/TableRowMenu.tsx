@@ -61,7 +61,7 @@ export function TableRowMenu({ x, y, canDeleteRow, canDeleteColumn, onSelect, on
       role="menu"
       aria-label="Table row and column actions"
       style={{ top: y, left: x }}
-      className="fixed z-[var(--osio-z-popover)] min-w-44 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 shadow-[var(--osio-shadow-menu)]"
+      className="fixed z-[var(--osio-z-popover)] min-w-44 osio-surface-overlay"
     >
       {ITEMS.map(({ action, label, Icon, danger }) => (
         <button
@@ -70,7 +70,8 @@ export function TableRowMenu({ x, y, canDeleteRow, canDeleteColumn, onSelect, on
           role="menuitem"
           disabled={isDisabled(action)}
           onClick={() => { onSelect(action); onClose(); }}
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-60 ${danger ? "text-[var(--osio-danger)] hover:bg-[var(--osio-bg-hover)]" : "text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]"}`}
+          className="osio-menu-item"
+          data-tone={danger ? "danger" : undefined}
         >
           <Icon size={14} aria-hidden />
           {label}

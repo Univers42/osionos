@@ -76,28 +76,28 @@ export const CanvasSelectionToolbar: React.FC<{
     >
       <div className="osio-canvas-tb-bar">
         <button type="button" className="osio-canvas-tb-btn" data-on={panel === "fill" || undefined} title="Fill" aria-label="Fill" onClick={() => setPanel((value) => (value === "fill" ? "none" : "fill"))}>
-          <Palette size={15} strokeWidth={1.75} aria-hidden />
+          <Palette size={16} strokeWidth={1.75} aria-hidden />
         </button>
         {multi ? <CanvasAlignControls cells={cells} ids={ids} onFrames={onFrames} /> : null}
         <div className="osio-canvas-tb-group">
           <button type="button" className="osio-canvas-tb-btn" title="Bring to front" aria-label="Bring to front" onClick={() => dispatch({ type: "setCellsZ", zs: bringToFront(store.getState().cells, ids) })}>
-            <BringToFront size={15} strokeWidth={1.75} aria-hidden />
+            <BringToFront size={16} strokeWidth={1.75} aria-hidden />
           </button>
           <button type="button" className="osio-canvas-tb-btn" title="Send to back" aria-label="Send to back" onClick={() => dispatch({ type: "setCellsZ", zs: sendToBack(store.getState().cells, ids) })}>
-            <SendToBack size={15} strokeWidth={1.75} aria-hidden />
+            <SendToBack size={16} strokeWidth={1.75} aria-hidden />
           </button>
         </div>
         <div className="osio-canvas-tb-group">
           <button type="button" className="osio-canvas-tb-btn" title="Duplicate" aria-label="Duplicate" onClick={duplicate}>
-            <Copy size={15} strokeWidth={1.75} aria-hidden />
+            <Copy size={16} strokeWidth={1.75} aria-hidden />
           </button>
           {!multi ? (
             <button type="button" className="osio-canvas-tb-btn" data-on={panel === "advanced" || undefined} title="More options" aria-label="More options" onClick={() => setPanel((value) => (value === "advanced" ? "none" : "advanced"))}>
-              <SlidersHorizontal size={15} strokeWidth={1.75} aria-hidden />
+              <SlidersHorizontal size={16} strokeWidth={1.75} aria-hidden />
             </button>
           ) : null}
           <button type="button" className="osio-canvas-tb-btn osio-canvas-tb-btn--danger" title="Delete" aria-label="Delete" onClick={() => dispatch({ type: "removeCells", ids: selectedIds })}>
-            <Trash2 size={15} strokeWidth={1.75} aria-hidden />
+            <Trash2 size={16} strokeWidth={1.75} aria-hidden />
           </button>
         </div>
       </div>

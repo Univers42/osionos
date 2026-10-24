@@ -30,9 +30,10 @@ export type FeatureFlagName =
   | "osio.comments"
   | "osio.sqlrun"
   | "osio.publish"
-  | "osio.draw"
   | "osio.whiteboard"
-  | "osio.panezoom";
+  | "osio.panezoom"
+  | "osio.ai.images"
+  | "osio.account.delete";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -60,11 +61,13 @@ export function isProfileTemplateEnabled(): boolean {
   return isFeatureFlagEnabled("osio.profile.template", false);
 }
 
-/** Shared-space live co-presence (AOC). Default OFF: the realtime channel is
- *  membership-gated at the bridge, but server-side namespace isolation is not
- *  fully enforced until the gateway `REALTIME_NAMESPACE_FALLBACK=deny` cutover
- *  (which first needs chat/feed/live-DB migrated to scoped tokens). Until then
- *  presence stays opt-in via `?osio.collab.shared=1` for dev/demo only. */
+/** Shared-space live co-presence (AOC). Default OFF. The precondition is a
+ *  DEPLOYMENT one, not build-time: the realtime gateway must run with
+ *  `REALTIME_NAMESPACE_FALLBACK=deny` (or `SECURITY_MODE=max`) so `collab:*`
+ *  topics are namespace-isolated server-side — until that cutover, presence
+ *  topics were reachable across spaces. A client build turns the flag ON with
+ *  `VITE_OSIO_COLLAB_SHARED=1` (`?osio.collab.shared=1` overrides per tab);
+ *  flipping it against a fallback-permissive gateway stays forbidden. */
 export function isSharedCollabEnabled(): boolean {
   return isFeatureFlagEnabled("osio.collab.shared", false);
 }
@@ -163,19 +166,12 @@ export function isPublishEnabled(): boolean {
   return isFeatureFlagEnabled("osio.publish", false);
 }
 
-/** The Draw whiteboard app (marketplace `osionos.draw`, `tab.kind === "draw"`).
- *  Default ON — the surface is only reachable once installed from the marketplace
- *  or via the View menu, so the flag is a kill-switch. Disable via `?osio.draw=0`,
- *  the `osio.draw` localStorage key, or `VITE_OSIO_DRAW=0`. */
-export function isDrawEnabled(): boolean {
-  return isFeatureFlagEnabled("osio.draw", true);
-}
-
 /** The Whiteboard tab: drawnosaurus embedded in an iframe (`tab.kind === "embed"`).
- *  Distinct from `osio.draw` above — that is the in-app canvas, this is a separate
- *  service that must be running. Default ON: drawnosaurus is part of the default
+ *  A separate service that must be running; it also backs the inline `whiteboard` block
+ *  and the built-in `osionos.whiteboard` app (rail icon, `/whiteboard`), which every account
+ *  has without installing anything. Default ON: drawnosaurus is part of the default
  *  `make all` pipeline, so the service is up on the standard path. The flag is a
- *  kill-switch, and the tab is additionally hidden when no URL is configured
+ *  kill-switch, and the app is additionally hidden when no URL is configured
  *  (`whiteboardAppUrl()`), so a build without `VITE_WHITEBOARD_APP_URL` never shows a
  *  tab that cannot load. Disable via `?osio.whiteboard=0`, the `osio.whiteboard`
  *  localStorage key, or `VITE_OSIO_WHITEBOARD=0`. */
@@ -193,4 +189,23 @@ export function isWhiteboardEnabled(): boolean {
  *  `VITE_OSIO_PANEZOOM=0`. */
 export function isPaneZoomEnabled(): boolean {
   return supportsCssZoom() && isFeatureFlagEnabled("osio.panezoom", true);
+}
+
+/** AI image generation: `/imagine <prompt>` drops an image block the engine
+ *  fills, and the block carries the "AI-generated" label. Default OFF: the
+ *  service refuses images when ITS own flag is off (it answers 404
+ *  `not_found`), so a stack without the engine must not offer the entry.
+ *  Enable client via `?osio.ai.images=1`, the `osio.ai.images` localStorage
+ *  key, or `VITE_OSIO_AI_IMAGES=1`. */
+export function isAiImagesEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.ai.images", false);
+}
+
+/** The "Delete my account" row and its grace-period banner in Profile. Default OFF:
+ *  the bridge route exists, but the purge that follows the grace period belongs to a
+ *  later package, so a request would schedule a deletion nothing executes yet. Enable
+ *  via `?osio.account.delete=1`, the `osio.account.delete` localStorage key, or
+ *  `VITE_OSIO_ACCOUNT_DELETE=1`. */
+export function isAccountDeleteEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.account.delete", false);
 }

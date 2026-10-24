@@ -16,20 +16,15 @@
 // security logic is unit-tested without a daemon.
 
 import { createHash, randomBytes } from "node:crypto";
+import { assertIdeSubject } from "./ide-access.mjs";
+import { isValidIdeUsername } from "./ide-username.mjs";
+import { parseSshPublicKey } from "./bridge-key-parse.mjs";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** A sandbox is a shell on a shared machine — access is opt-in per account.
- *  Unset, empty, or only-commas in OSIONOS_IDE_ALLOWED_SUBJECTS → everyone refused. */
-export function requireIdeSubject(userId, env) {
-  const list = String(env?.OSIONOS_IDE_ALLOWED_SUBJECTS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  if (!list.includes(String(userId).toLowerCase())) {
-    throw Object.assign(new Error("The IDE is not enabled for this account."), { status: 403, code: "not-allowed" });
-  }
-}
+/** A sandbox is a shell on a shared machine: access is opt-in. The rule (allowlist by default) lives
+ *  in ide-access.mjs, the same on the host and the plane. */
+export const requireIdeSubject = assertIdeSubject;
 
 /** Owner is the session `sub`; workspace must be one the session already holds.
  *  Both are UUIDs — this throws (403/400) before any name is derived so a
@@ -63,6 +58,16 @@ export function deriveNames(userId, workspaceId) {
   return { digest, containerName, volumeName };
 }
 
+/** The per-USER home volume, shared by all of a user's workspaces. Derived from the userId
+ *  alone and mounted at the constant /home/coder, so no username ever enters a path or a name. */
+export function deriveHomeVolume(userId) {
+  const homeVolumeName = `osio-ide-home-${createHash("sha256").update(String(userId)).digest("hex").slice(0, 32)}`;
+  if (!/^osio-ide-home-[0-9a-f]{32}$/.test(homeVolumeName)) {
+    throw new Error("derived home volume name failed validation"); // unreachable; defense in depth
+  }
+  return homeVolumeName;
+}
+
 /** Under host-wide memory pressure the kernel kills the highest oom_score_adj first: a box,
  *  never the databases that share the host (they run at the default 0). */
 export const SANDBOX_OOM_SCORE_ADJ = 500;
@@ -72,14 +77,17 @@ const PROXY_URL = "http://ide-egress:8080";
 /** The fixed container-create body. Hardening (conditions 5,14,15) is baked in;
  *  the ONLY inputs are the validated identity + server config. GIT_PAT is NOT in
  *  the container env — it is injected per git op via exec (condition 13). */
-export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, volumeName, memoryBytes = 1073741824, nanoCpus = 1_000_000_000, pidsLimit = 512, diskSize = "" }) {
+export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, volumeName, uid, memoryBytes = 1073741824, nanoCpus = 1_000_000_000, pidsLimit = 512, diskSize = "" }) {
   // Per-container block quota. overlay2 StorageOpt.size ONLY works over xfs+pquota
   // (NOT ext4-prjquota), so it's opt-in via OSIONOS_IDE_STORAGE_QUOTA — omitted by
   // default. The host is already blast-bounded by the docker-ide loopback data-root.
+  // The proxy refuses any other User; the uid comes from its ledger (ADR 0011). Execs carry no User: an
+  // exec with none inherits this one, and a User on an exec would be a way to pick another uid.
+  if (!Number.isInteger(uid) || uid < 20000 || uid > 59999) throw new Error("buildContainerSpec needs the owner's uid (20000-59999)");
   const storageOpt = diskSize ? { StorageOpt: { size: diskSize } } : {};
   return {
     Image: image,
-    User: "10001:10001",
+    User: `${uid}:10001`,
     WorkingDir: "/workspace",
     Cmd: ["sleep", "infinity"],
     Env: [
@@ -87,19 +95,35 @@ export function buildContainerSpec({ userId, workspaceId, image, sandboxNet, vol
       `http_proxy=${PROXY_URL}`, `https_proxy=${PROXY_URL}`,
       "NO_PROXY=localhost,127.0.0.1", "no_proxy=localhost,127.0.0.1",
       "GIT_TERMINAL_PROMPT=0",
+      // Pinned once here, not per exec: runc takes HOME from /etc/passwd otherwise, and that file is a
+      // user-writable tmpfs symlink (ADR 0009). The socket proxy requires this entry and refuses any other HOME=.
+      "HOME=/home/coder",
     ],
     Labels: {
       "osio.ide.managed": "1",
       "osio.ide.owner": userId,
       "osio.ide.workspace": workspaceId,
+      "osio.ide.uid": String(uid),
     },
     HostConfig: {
       NetworkMode: sandboxNet,
       CapDrop: ["ALL"],
       SecurityOpt: ["no-new-privileges:true"],
       ReadonlyRootfs: true,
-      Mounts: [{ Type: "volume", Source: volumeName, Target: "/workspace" }],
-      Tmpfs: { "/tmp": "size=64m,mode=1777", "/home/coder": "size=64m,mode=0700,uid=10001,gid=10001" },
+      // Fixed order [workspace, home]: the socket proxy checks it positionally. The home is a
+      // volume (not a tmpfs) so dotfiles and ~/.local installs outlive the box. Unbounded like
+      // /workspace: diskSize is a rw-layer StorageOpt and does not apply to volumes.
+      // NoCopy: the copy-up that resets a volume root to the image dir's owner belongs to the init
+      // (ide-volume-init.mjs), never to the box's first mount (verdict G1).
+      Mounts: [
+        { Type: "volume", Source: volumeName, Target: "/workspace", VolumeOptions: { NoCopy: true } },
+        { Type: "volume", Source: deriveHomeVolume(userId), Target: "/home/coder", VolumeOptions: { NoCopy: true } },
+      ],
+      // exec: with docker's default noexec, `go run`, dlopen of a /tmp library and installers
+      // failed (measured 2026-10-17). Docker still prepends nosuid,nodev, and the proxy admits only
+      // this exact string, because `,suid` or `,dev` would drop them. The boundary does not rest on
+      // noexec: every writer of /tmp can already run code from /workspace (ADR 0010).
+      Tmpfs: { "/tmp": "size=64m,mode=1777,exec" },
       PidsLimit: pidsLimit,
       Memory: memoryBytes,
       MemorySwap: memoryBytes, // no swap headroom beyond mem
@@ -140,14 +164,22 @@ export function buildGitExecSpec(argv, gitPat) {
     throw Object.assign(new Error("git argv must be strings"), { status: 400 });
   }
   return {
-    User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdout: true,
     AttachStderr: true,
     Tty: true,
-    Env: gitPat ? [`GIT_PAT=${gitPat}`] : [],
+    Env: [...(gitPat ? [`GIT_PAT=${gitPat}`] : []), ...signatureCheckEnv(argv)],
     Cmd: argv,
   };
+}
+
+// A `git log` that asks for a signature field (%G?) needs to know whose SSH signatures to trust.
+// Env config is per exec and read-only: `git config` stays denied and nothing is persisted.
+// Caveat: any `log` argv containing "%G" gets it, which is harmless; a box whose keys were never
+// synced has no such file and git reports every signed commit as unverified.
+function signatureCheckEnv(argv) {
+  if (argv[1] !== "log" || !argv.some((arg) => arg.includes("%G"))) return [];
+  return ["GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=gpg.ssh.allowedSignersFile", "GIT_CONFIG_VALUE_0=/home/coder/.ssh/allowed_signers"];
 }
 
 /** A search exec spec: ripgrep with fixed flags; the query + optional path are
@@ -158,7 +190,6 @@ export function buildSearchExecSpec(query, maxCount = 200) {
     throw Object.assign(new Error("invalid search query"), { status: 400 });
   }
   return {
-    User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdout: true,
     AttachStderr: false,
@@ -179,7 +210,7 @@ export function assertRelPath(relPath) {
   }
 }
 
-const FS_OP_COMMON = { User: "10001:10001", WorkingDir: "/workspace", AttachStdout: true, AttachStderr: false, Tty: true };
+const FS_OP_COMMON = { WorkingDir: "/workspace", AttachStdout: true, AttachStderr: false, Tty: true };
 export const READ_CAP_BYTES = 512 * 1024;
 // A write's content rides one argv item, and Linux refuses an exec whose single
 // argument passes 128 KiB (MAX_ARG_STRLEN): a 400 KB file failed to save with
@@ -372,7 +403,6 @@ export function buildPortTunnelExecSpec(port) {
     throw Object.assign(new Error("invalid preview port"), { status: 400 });
   }
   return {
-    User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdin: true,
     AttachStdout: true,
@@ -381,18 +411,37 @@ export function buildPortTunnelExecSpec(port) {
   };
 }
 
+/** The shell a persistent home can never lock: no profile, no rc, so a broken ~/.bashrc or
+ *  ~/.profile (or an rc hook pointing at a crashing binary) still leaves a way in. Never routed
+ *  through the login launcher, which reads the home. */
+export const SAFE_SHELL_ARGV = Object.freeze(["/bin/bash", "--noprofile", "--norc"]);
+export const LOGIN_LAUNCHER_ARGV = Object.freeze(["/usr/local/bin/osio-login"]);
+
 /** An interactive-shell exec spec — a FIXED argv, no GIT_PAT, TTY on. The
- *  container is resolved by the derived name at the call site, never a client id. */
-export function buildShellExecSpec() {
+ *  container is resolved by the derived name at the call site, never a client id.
+ *  `safe` picks the fixed rc-free bash; anything but `true` gets the login launcher. */
+const TIME_ZONE_PATTERN = /^[A-Za-z0-9_+/-]{1,64}$/;
+
+/** null when the client sent no zone, the zone when it fits the pattern, else "UTC". The pattern only
+ *  bounds the characters (no shell metacharacter, no newline); it does not check the zone exists, and
+ *  an unknown zone makes tzdata fall back to UTC inside the box. */
+export function normalizeTimeZone(raw) {
+  if (raw === null || raw === undefined) return null;
+  return typeof raw === "string" && TIME_ZONE_PATTERN.test(raw) ? raw : "UTC";
+}
+
+export function buildShellExecSpec({ safe = false, username, tz = null } = {}) {
+  // OSIO_USER reaches only the launcher: the safe shell never reads it, and it is re-validated in the box.
+  const identityEnv = safe === true || !isValidIdeUsername(username) ? [] : [`OSIO_USER=${username}`];
+  const zone = normalizeTimeZone(tz);
   return {
-    User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdin: true,
     AttachStdout: true,
     AttachStderr: true,
     Tty: true,
-    Env: ["TERM=xterm-256color"],
-    Cmd: ["/bin/bash", "-l"],
+    Env: ["TERM=xterm-256color", ...identityEnv, ...(zone ? [`TZ=${zone}`] : [])],
+    Cmd: [...(safe === true ? SAFE_SHELL_ARGV : LOGIN_LAUNCHER_ARGV)],
   };
 }
 
@@ -408,7 +457,6 @@ export function buildShellExecSpec() {
  *  33,051-delete bulk test still lost none (s5j6, 2026-10-14). */
 export function buildFsAgentExecSpec() {
   return {
-    User: "10001:10001",
     WorkingDir: "/workspace",
     AttachStdin: true,
     AttachStdout: true,
@@ -416,4 +464,38 @@ export function buildFsAgentExecSpec() {
     Tty: false,
     Cmd: ["node", "--max-semi-space-size=1", "/usr/local/lib/osio-fs-agent.mjs"],
   };
+}
+
+export const MAX_SYNC_KEYS = 50;
+// The target is fixed here, never taken from input. The whole file is written to a temp name and
+// moved over the old one, so a sync REPLACES (a revoked key disappears; an empty list empties the
+// file) and a reader never sees half a file. Each argv item is one base64 line.
+const KEY_SYNC_SCRIPT = `d=/home/coder/.ssh; umask 077
+mkdir -p "$d" && chmod 700 "$d" || exit 1
+t="$d/.allowed_signers.tmp$$"; : > "$t" || exit 1
+for l do printf %s "$l" | base64 -d >> "$t" && printf '\\n' >> "$t" || { rm -f "$t"; exit 1; }; done
+chmod 600 "$t" && mv "$t" "$d/allowed_signers" || { rm -f "$t"; exit 1; }`;
+
+/** The exec that rewrites ~/.ssh/allowed_signers from `items` ({type, blob} public SSH keys).
+ *  Every item is re-parsed here, so a forged call cannot put an option, a private key or a second
+ *  line in the file; lines are `* <type> <blob>` sorted by fingerprint, so two syncs of one set
+ *  write the same bytes. Key text only ever rides argv (base64), never the script.
+ *  Caveat: `*` trusts a key for any signer identity, which is right for "my own keys" and wrong
+ *  if this file ever holds another person's key. */
+export function buildKeySyncSpec(items) {
+  if (!Array.isArray(items) || items.length > MAX_SYNC_KEYS) {
+    throw Object.assign(new Error(`keys sync takes at most ${MAX_SYNC_KEYS} keys`), { status: 400 });
+  }
+  const byFingerprint = new Map();
+  for (const item of items) {
+    let parsed;
+    try {
+      parsed = parseSshPublicKey(`${item?.type} ${item?.blob}`);
+    } catch {
+      throw Object.assign(new Error("invalid key in sync"), { status: 400 });
+    }
+    byFingerprint.set(parsed.fingerprint, `* ${parsed.line}`);
+  }
+  const lines = [...byFingerprint.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, line]) => line);
+  return { ...FS_OP_COMMON, Cmd: ["sh", "-c", KEY_SYNC_SCRIPT, "sh", ...lines.map((line) => Buffer.from(line).toString("base64"))] };
 }

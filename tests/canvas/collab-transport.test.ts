@@ -53,6 +53,24 @@ class FakeGateway {
     const frame = JSON.stringify({ type: "PRESENCE", topic, members });
     for (const socket2 of this.byTopic.get(topic) ?? []) socket2.deliver(frame);
   }
+
+  // The realtime-agnostic gateway delivers presence as an EVENT with
+  // event_type "presence" and a {topic, members} payload
+  // (realtime-gateway/src/ws_handler/connection.rs publish_presence_snapshot)
+  // — captured from the wire on 2026-10-21, four members, nobody visible.
+  presenceSnapshot(topic: string, members: unknown): void {
+    const frame = JSON.stringify({
+      type: "EVENT",
+      sub_id: "collab",
+      event: { event_id: "e", topic, event_type: "presence", sequence: 68, timestamp: "t", payload: { topic, members } },
+    });
+    for (const socket of this.byTopic.get(topic) ?? []) socket.deliver(frame);
+  }
+
+  /** Deliver any raw frame verbatim — for malformed-shape tests. */
+  rawFrame(topic: string, frame: unknown): void {
+    for (const socket of this.byTopic.get(topic) ?? []) socket.deliver(JSON.stringify(frame));
+  }
 }
 
 class FakeSocket implements LiveWebSocketLike {
@@ -97,8 +115,95 @@ async function joinTwo(requestTimeoutMs?: number) {
   const b = new GrobaseRealtimeTransport({ url: "ws://test", selfId: "B", webSocketCtor: ctor, requestTimeoutMs });
   const chA = await a.join("demo", "token-A");
   const chB = await b.join("demo", "token-B");
-  return { chA, chB };
+  return { gateway, chA, chB };
 }
+
+/** A wire member shaped exactly like the 2026-10-21 capture (meta + user_id). */
+function wireMember(memberId: string, displayName: string, userId?: string) {
+  const member: { conn_id: string; user_id?: string; meta: Record<string, string> } = {
+    conn_id: `conn-${memberId}`,
+    meta: { memberId, displayName, color: "var(--collab-2)" },
+  };
+  if (userId !== undefined) member.user_id = userId;
+  return member;
+}
+
+// ── Presence EVENT (the realtime-agnostic gateway shape) ─────────────────────
+test("a presence EVENT shaped like the wire capture reaches onPresence handlers", async () => {
+  const { gateway, chA } = await joinTwo();
+  const snapshots: unknown[][] = [];
+  chA.onPresence((members) => snapshots.push(members));
+
+  gateway.presenceSnapshot("collab:demo", [
+    wireMember("180057de-0001", "e01.reed", "180057de-0001"),
+  ]);
+  await flush();
+
+  assert.equal(snapshots.length, 1, "the EVENT/presence snapshot is delivered");
+  const member = snapshots[0][0] as { memberId: string; displayName: string; color: string };
+  assert.equal(member.memberId, "180057de-0001");
+  assert.equal(member.displayName, "e01.reed");
+  assert.equal(member.color, "var(--collab-2)", "the member's meta state arrives intact");
+  chA.leave();
+});
+
+test("a member whose stamped user_id disagrees with meta.memberId is dropped; a missing user_id is kept", async () => {
+  const { gateway, chA } = await joinTwo();
+  const snapshots: unknown[][] = [];
+  chA.onPresence((members) => snapshots.push(members));
+
+  gateway.presenceSnapshot("collab:demo", [
+    wireMember("spoofed", "impostor", "someone-else"), // TRACKed identity ≠ token sub → dropped
+    wireMember("older-gateway", "legacy"),             // older gateway: no user_id → kept
+    wireMember("ABC", "case-insensitive", "abc"),      // case-only difference → kept
+    { conn_id: "conn-x" },                             // no meta at all → dropped
+    "not-a-record",                                    // non-record member → dropped (never throws)
+  ]);
+  await flush();
+
+  assert.equal(snapshots.length, 1);
+  const memberIds = snapshots[0].map((member) => (member as { memberId: string }).memberId);
+  assert.deepEqual(memberIds, ["older-gateway", "ABC"], "only verified or unstamped members survive");
+  chA.leave();
+});
+
+test("a malformed presence EVENT (members not an array, null payload) is ignored without throwing", async () => {
+  const { gateway, chA } = await joinTwo();
+  const snapshots: unknown[][] = [];
+  chA.onPresence((members) => snapshots.push(members));
+
+  gateway.presenceSnapshot("collab:demo", { members: "not-an-array" }); // payload.members not an array
+  await flush();
+  assert.equal(snapshots.length, 0, "a non-array members payload never reaches handlers");
+
+  gateway.presenceSnapshot("collab:demo", null); // members: null on the wire
+  await flush();
+  assert.equal(snapshots.length, 0, "a null members payload is ignored");
+
+  gateway.rawFrame("collab:demo", { // the snapshot object itself null
+    type: "EVENT",
+    sub_id: "collab",
+    event: { event_id: "e", topic: "collab:demo", event_type: "presence", sequence: 1, timestamp: "t", payload: null },
+  });
+  await flush();
+  assert.equal(snapshots.length, 0, "a null presence payload is ignored");
+  chA.leave();
+});
+
+// ── Presence frame (the older top-level shape) ───────────────────────────────
+test("the top-level PRESENCE frame path still delivers member meta", async () => {
+  const { chA, chB } = await joinTwo();
+  const snapshots: unknown[][] = [];
+  chA.onPresence((members) => snapshots.push(members));
+
+  chB.setPresence({ displayName: "B", color: "var(--collab-3)", route: "/p", lastSeen: 0 }); // TRACK → PRESENCE fan-out
+  await flush();
+
+  assert.equal(snapshots.length, 1, "the PRESENCE frame is still delivered");
+  assert.equal((snapshots[0][0] as { memberId: string }).memberId, "B");
+  assert.equal((snapshots[0][0] as { displayName: string }).displayName, "B");
+  chA.leave(); chB.leave();
+});
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 test("two clients exchange exactly one validated CollabEvent over the adapter", async () => {

@@ -13,6 +13,7 @@
 // A mount linked to a workspace is readable by every member of it, and writable only by
 // an editor, admin or owner: a viewer gets list/get/aggregate/schema/sql-ro/record reads,
 // and 403 on insert/update/delete/upsert/batch/ddl/txn, before the query-router is called.
+// DDL is reserved for workspace owners/admins, including when the caller is an editor.
 
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -43,6 +44,7 @@ function mountWorld(role, { failMembers = false } = {}) {
 	world.osionos_workspace_members[1].role = role;
 	world.osionos_workspace_databases = [{ workspace_id: IDS.team, db_id: DB, engine: 'postgresql', tables: ['tasks'], edges_table: null, label: 'Tasks' }];
 	const mock = createPostgrestMock(world, {
+		realWorkspaceRpc: true,
 		failWhen: (call) => (failMembers && call.table === 'osionos_workspace_members' ? { status: 503, body: { message: 'down' } } : null),
 	});
 	const routed = [];
@@ -77,7 +79,7 @@ for (const role of ['owner', 'admin', 'editor', 'viewer']) {
 			});
 		}
 		for (const write of WRITES) {
-			const allowed = role !== 'viewer';
+			const allowed = role !== 'viewer' && (write[0] !== 'ddl' || role === 'owner' || role === 'admin');
 			it(`${allowed ? 'may' : 'may not'} ${write[0]}`, async () => {
 				const result = await statusFor(role, write);
 				if (allowed) {
@@ -85,7 +87,7 @@ for (const role of ['owner', 'admin', 'editor', 'viewer']) {
 					return;
 				}
 				assert.equal(result.status, 403, result.text);
-				assert.match(JSON.parse(result.text).message, /read-only/);
+				assert.equal(JSON.parse(result.text).code, 'database_permission_denied');
 				assert.deepEqual(result.routed, [], 'a refused write never reaches the query-router');
 			});
 		}

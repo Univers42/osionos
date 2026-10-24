@@ -1,0 +1,67 @@
+/* Stock Tailwind utilities, and chart axis text, in the vendored database (src/shared/notion-database-sys).
+   Tailwind copies shadow and radius values into each class when the vendored
+   code is compiled, so no variable can reach them; these rules point the
+   classes the vendored markup uses at the app's elevation and radius tokens.
+
+   Specificity (0,1,1): above the vendored (0,1,0) utilities, below their
+   (0,2,0) hover variants, so a card that grows a shadow on hover still does
+   (the hover:shadow-* classes get their own rules below). The shadow goes
+   through --tw-shadow, not box-shadow, so a ring on the same element survives.
+
+   rounded-sm, -md, -lg and -l/-r-md already read the app's --radius-* theme and
+   are left alone.
+
+   Ponytail: delete this file once the vendored code reads --osio-e* and
+   --osio-radius-*. Menus the vendored code portals into <body> sit outside
+   .notion-object-database and keep their stock shadow; so does any class the
+   vendored markup gains later, until it is listed here.
+
+   Axis ticks: Recharts writes fill="#666" on every tick label (2.1:1 on Nord
+   dark). Only the cartesian axes are listed because the vendored charts draw no
+   polar ones; a radar chart added later needs .recharts-polar-angle-axis-tick-value. */
+
+@layer utilities {
+  html :where(.notion-object-database) {
+    & .shadow-sm,
+    & .shadow {
+      --tw-shadow: var(--osio-e1);
+    }
+    & .shadow-md {
+      --tw-shadow: var(--osio-e2);
+    }
+    & .shadow-lg {
+      --tw-shadow: var(--osio-e3);
+    }
+    & .shadow-xl {
+      --tw-shadow: var(--osio-e4);
+    }
+    & .shadow-2xl {
+      --tw-shadow: var(--osio-e5);
+    }
+    & .rounded {
+      border-radius: var(--osio-radius-xs);
+    }
+    & .rounded-t {
+      border-top-left-radius: var(--osio-radius-xs);
+      border-top-right-radius: var(--osio-radius-xs);
+    }
+    & .rounded-xl {
+      border-radius: var(--osio-radius-lg);
+    }
+    & .rounded-2xl {
+      border-radius: var(--osio-radius-card);
+    }
+    & .hover\:shadow-sm:hover {
+      --tw-shadow: var(--osio-e1);
+    }
+    & .hover\:shadow-md:hover {
+      --tw-shadow: var(--osio-e2);
+    }
+    & .hover\:shadow-lg:hover {
+      --tw-shadow: var(--osio-e3);
+    }
+    & .recharts-cartesian-axis-tick-value {
+      fill: var(--osio-fg-muted);
+    }
+  }
+}

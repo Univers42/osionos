@@ -252,8 +252,8 @@ try {
     }
   }
   // S1b: UI — people search through the ContactDock's "Start a new chat" picker
-  // (the reachable people-search surface in this workspace layout; the topbar
-  // SidebarTopNav search button is not mounted here). Assert no blank-page crash
+  // (the reachable people-search surface in this workspace layout; the top bar
+  // has no people-search button). Assert no blank-page crash
   // and that results render.
   try {
     const page = dev.page;

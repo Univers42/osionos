@@ -35,6 +35,7 @@ run_inside_container() {
     test-e2e) exec pnpm exec playwright test "$@" ;;
     test-e2e-serial) exec pnpm exec playwright test --workers=1 "$@" ;;
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
+    tokens) exec node scripts/build-tokens.mjs "$@" ;;
     test-e2e-perf) PLAYWRIGHT_PERF=1 exec pnpm exec playwright test tests/e2e/perf --workers=1 "$@" ;;
     test-canvas) exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test tests/canvas/*.test.ts "$@" ;;
     test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
@@ -47,7 +48,7 @@ run_inside_container() {
     test-bench)
       [ $# -gt 0 ] || set -- tests/bench/*.bench.ts
       exec node --experimental-strip-types --expose-gc --experimental-loader ./tests/canvas/ts-extension-loader.mjs tests/bench/run.ts "$@" ;;
-    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && exec bash scripts/check-style-tokens.sh ;;
+    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && node scripts/check-token-refs.mjs && node scripts/build-tokens.mjs --check && exec bash scripts/check-style-tokens.sh ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac
 }
@@ -92,6 +93,9 @@ case "${COMMAND}" in
   test-e2e-smoke)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps browser-tests pnpm exec playwright test tests/e2e/smoke "$@"
     ;;
+  tokens)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh tokens "$@"
+    ;;
   test-e2e-perf)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e PLAYWRIGHT_PERF=1 browser-tests pnpm exec playwright test tests/e2e/perf --workers=1 "$@"
     ;;
@@ -120,7 +124,7 @@ case "${COMMAND}" in
     OSIONOS_MCP_BRIDGE_URL="${OSIONOS_MCP_BRIDGE_URL:-http://host.docker.internal:4000}" \
     OSIONOS_MCP_API_URL="${OSIONOS_MCP_API_URL:-http://host.docker.internal:4000}" \
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm -T --no-deps \
-      -e OSIONOS_MCP_BRIDGE_URL -e OSIONOS_MCP_API_URL \
+      -e OSIONOS_MCP_BRIDGE_URL -e OSIONOS_MCP_API_URL -e OSIONOS_MCP_TOKEN \
       playground bash scripts/docker-run.sh mcp-claude "$@"
     ;;
   *)

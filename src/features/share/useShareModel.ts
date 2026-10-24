@@ -11,16 +11,16 @@
 /* ************************************************************************** */
 
 /** Share dialog state + persistence. A page persists its own `collaborators` and
- *  `visibility`, the fields the bridge's read rule enforces (pageShareModel.ts); live
+ *  `visibility` alongside the enforced access rules (including teams); live
  *  database pages persist permission-engine policies (sharePermissionBridge.ts). */
 
-import { useCallback, useEffect, useState } from 'react';
-import { commitPageSharing, fetchPageSharing, fetchPeople, fetchWorkspacePeople } from './shareApi';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { commitPageSharing, fetchPageSharing, fetchPeople, fetchWorkspacePeople, deleteRule, fetchRules, fetchTeams, saveRule } from './shareApi';
 import { createPolicy, deletePolicy, fetchPolicies, fetchRoles } from './sharePolicyApi';
-import { toEnginePolicy } from './sharePermissionBridge';
-import { engineRoleName, entriesFromPolicies, entryKey, upsertEntry } from './shareModel.helpers';
-import { entriesFromPageSharing, sharingWith, sharingWithout, type PageSharing } from './pageShareModel';
-import type { EngineRole, ShareEntry, ShareLevel, SharePerson, ShareResource } from './types';
+import { toAccessRule, toEnginePolicy } from './sharePermissionBridge';
+import { engineRoleName, entriesFromPolicies, entriesFromRules, entryKey, upsertEntry } from './shareModel.helpers';
+import { entriesFromPageAccess, sharingWith, sharingWithout, type PageSharing } from './pageShareModel';
+import type { EngineRole, ShareEntry, ShareLevel, SharePerson, ShareResource, ShareTeam } from './types';
 
 export interface ShareModel {
   loading: boolean;
@@ -28,6 +28,7 @@ export interface ShareModel {
   error: string | null;
   isLive: boolean;
   people: SharePerson[];
+  teams: ShareTeam[];
   roles: EngineRole[];
   entries: ShareEntry[];
   setLevel: (target: ShareEntry['target'], level: ShareLevel) => Promise<void>;
@@ -45,25 +46,33 @@ export function useShareModel(resource: ShareResource): ShareModel {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [people, setPeople] = useState<SharePerson[]>([]);
+  const [teams, setTeams] = useState<ShareTeam[]>([]);
+  const [ruleEntries, setRuleEntries] = useState<ShareEntry[]>([]);
   const [roles, setRoles] = useState<EngineRole[]>([]);
-  const [entries, setEntries] = useState<ShareEntry[]>([]);
+  const [liveEntries, setEntries] = useState<ShareEntry[]>([]);
   const [sharing, setSharing] = useState<PageSharing | null>(null);
+
+  const entries = useMemo(() => (isLive ? liveEntries : sharing ? entriesFromPageAccess(sharing, people, ruleEntries) : []), [isLive, liveEntries, people, ruleEntries, sharing]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       if (isLive) {
-        const roster = await fetchPeople();
+        const roster = await fetchPeople(resource.workspaceId);
         setPeople(roster);
-        const [roleRows, policyRows] = await Promise.all([fetchRoles(), fetchPolicies()]);
+        const [roleRows, policyRows] = await Promise.all([fetchRoles(resource.workspaceId), fetchPolicies(resource.workspaceId)]);
         setRoles(roleRows);
         setEntries(entriesFromPolicies(policyRows, roleRows, roster, resource.liveResourceName ?? ''));
       } else {
-        const [roster, current] = await Promise.all([fetchWorkspacePeople(resource.workspaceId), fetchPageSharing(resource.resourceId)]);
+        const [roster, current, read] = await Promise.all([
+          fetchWorkspacePeople(resource.workspaceId), fetchPageSharing(resource.resourceId), fetchRules(resource.workspaceId, resource.resourceId),
+        ]);
+        const teamList = read.teamRules ? await fetchTeams(resource.workspaceId).catch(() => []) : [];
+        setTeams(teamList);
+        setRuleEntries(entriesFromRules(read.rules, roster, teamList));
         setPeople(roster);
         setSharing(current);
-        setEntries(entriesFromPageSharing(current, roster));
       }
     } catch (cause) {
       setError(errorText(cause, 'Could not load sharing state.'));
@@ -92,8 +101,7 @@ export function useShareModel(resource: ShareResource): ShareModel {
     const after = next(sharing);
     await commitPageSharing(resource.resourceId, sharing, after);
     setSharing(after);
-    setEntries(entriesFromPageSharing(after, people));
-  }, [people, resource.resourceId, sharing]);
+  }, [resource.resourceId, sharing]);
 
   const setLivePolicy = useCallback(async (target: ShareEntry['target'], level: ShareLevel) => {
     if (target.type !== 'user') throw new Error('Live databases share per person (role-backed).');
@@ -107,19 +115,35 @@ export function useShareModel(resource: ShareResource): ShareModel {
     setEntries((current) => upsertEntry(current, entry));
   }, [entries, resource, roles]);
 
-  const setLevel = useCallback((target: ShareEntry['target'], level: ShareLevel) => run(
-    () => (isLive ? setLivePolicy(target, level) : changePageSharing((current) => sharingWith(current, target, level, people))),
-    'Could not update access.',
-  ), [changePageSharing, isLive, people, run, setLivePolicy]);
+  const setLevel = useCallback((target: ShareEntry['target'], level: ShareLevel) => run(async () => {
+    if (isLive) {
+      await setLivePolicy(target, level);
+      return;
+    }
+    const previous = ruleEntries.find((entry) => entry.key === entryKey(target));
+    if (previous || target.type === 'team' || target.type === 'role') {
+      const saved = await saveRule(toAccessRule(resource, { key: entryKey(target), target, level, sourceId: previous?.sourceId }));
+      setRuleEntries((current) => upsertEntry(current, { key: entryKey(target), target, level, sourceId: saved._id }));
+    } else {
+      await changePageSharing((current) => sharingWith(current, target, level, people));
+    }
+  }, 'Could not update access.'), [changePageSharing, isLive, people, resource, ruleEntries, run, setLivePolicy]);
 
   const removeEntry = useCallback((entry: ShareEntry) => run(async () => {
     if (!isLive) {
-      await changePageSharing((current) => sharingWithout(current, entry.target));
+      // Remove the underlying page grant as well, so deleting a rule cannot reveal it again.
+      if (entry.target.type === 'user' || entry.target.type === 'workspace') {
+        await changePageSharing((current) => sharingWithout(current, entry.target));
+      } else if (!entry.sourceId || (entry.target.type === 'public' && sharing?.visibility === 'public')) {
+        throw new Error('A public page is managed from the Publish section.');
+      }
+      if (entry.sourceId) await deleteRule(entry.sourceId);
+      setRuleEntries((current) => current.filter((existing) => existing.key !== entry.key));
       return;
     }
     if (entry.sourceId) await deletePolicy(entry.sourceId);
     setEntries((current) => current.filter((existing) => existing.key !== entry.key));
-  }, 'Could not remove access.'), [changePageSharing, isLive, run]);
+  }, 'Could not remove access.'), [changePageSharing, isLive, run, sharing?.visibility]);
 
-  return { loading, busy, error, isLive, people, roles, entries, setLevel, removeEntry, refresh };
+  return { loading, busy, error, isLive, people, teams, roles, entries, setLevel, removeEntry, refresh };
 }

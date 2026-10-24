@@ -47,12 +47,13 @@ export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onCl
       onClick={onSelect}
       title={title}
       data-tab-id={tab.tabId}
+      data-active={active ? "" : undefined}
       className={[
-        "group/tab relative flex items-center gap-1.5 h-9 pl-3 pr-1.5 max-w-[200px] shrink-0 cursor-pointer select-none",
-        "border-r border-[var(--osio-border-default)] text-xs transition-[background-color,color] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)]",
+        "group/tab relative my-1 flex items-center gap-1.5 h-7 pl-3 pr-1.5 max-w-[200px] shrink-0 cursor-pointer select-none rounded-[var(--osio-radius-chip)]",
+        "text-xs transition-[background-color,color] duration-[var(--osio-dur-fast)] ease-[var(--osio-ease-standard)]",
         active
-          ? "bg-[var(--osio-bg-surface)] text-[var(--osio-fg-strong)] shadow-[inset_0_-2px_0_var(--osio-accent)]"
-          : "bg-[var(--osio-bg-page)] text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
+          ? "bg-[var(--osio-bg-hover)] text-[var(--osio-fg-default)]"
+          : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]",
         replaceTarget ? "ring-2 ring-inset ring-[var(--osio-accent)] bg-[var(--osio-accent-subtle)]" : "",
       ].join(" ")}
     >
@@ -63,7 +64,7 @@ export const TabButton: React.FC<Props> = ({ tab, paneId, active, onSelect, onCl
       <button
         type="button"
         aria-label={`Close ${title}`}
-        className="shrink-0 rounded-[var(--osio-radius-chip)] p-1 text-[var(--osio-fg-muted)] opacity-0 transition-[opacity,background-color,color] duration-[var(--osio-dur-fast)] group-hover/tab:opacity-100 focus-visible:opacity-100 hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)]"
+        className="shrink-0 rounded-[var(--osio-radius-chip)] p-1 text-[var(--osio-fg-muted)] opacity-0 transition-[opacity,background-color,color] duration-[var(--osio-dur-fast)] group-hover/tab:opacity-100 focus-visible:opacity-100 hover:bg-[var(--osio-bg-muted)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)]"
         onClick={(e) => { e.stopPropagation(); onClose(); }}
         title="Close tab"
       >

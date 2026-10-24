@@ -194,7 +194,7 @@ export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageI
           ))}</tbody>
         </table>
       </div>
-      {dropY != null && <div className="pointer-events-none absolute left-0 right-0 z-[var(--osio-z-popover)] h-0.5 -translate-y-1/2 rounded-full bg-[var(--osio-accent)] shadow-[0_0_0_1px_var(--osio-accent)] transition-[top] duration-100 ease-out" style={{ top: dropY }} />}
+      {dropY != null && <div className="pointer-events-none absolute left-0 right-0 z-[var(--osio-z-popover)] h-0.5 -translate-y-1/2 rounded-full bg-[var(--osio-accent)] shadow-[0_0_0_1px_var(--osio-accent)] transition-[top] duration-(--osio-dur-fast) ease-out" style={{ top: dropY }} />}
       <AddAxisButton axis="column" onAdd={addAxis} />
       <AddAxisButton axis="row" onAdd={addAxis} />
       {rowMenu && <TableRowMenu x={rowMenu.x} y={rowMenu.y} canDeleteRow={data.length > 1} canDeleteColumn={columnCount > 1} onSelect={handleRowMenuAction} onClose={() => setRowMenu(null)} />}

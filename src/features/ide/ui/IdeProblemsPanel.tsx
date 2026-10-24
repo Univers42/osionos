@@ -24,9 +24,9 @@ const EMPTY: never[] = [];
 const URI_PREFIX = "file:///workspace/";
 
 function severityIcon(severity: number) {
-  if (severity === 1) return <AlertCircle size={13} className="text-[var(--osio-danger,#f87171)]" />;
-  if (severity === 2) return <AlertTriangle size={13} className="text-[var(--osio-warning,#fbbf24)]" />;
-  return <Info size={13} className="text-[var(--osio-code-fg-muted)]" />;
+  if (severity === 1) return <AlertCircle size={12} className="text-[var(--osio-danger)]" />;
+  if (severity === 2) return <AlertTriangle size={12} className="text-[var(--osio-warning)]" />;
+  return <Info size={12} className="text-[var(--osio-code-fg-muted)]" />;
 }
 
 /** Diagnostics/Problems panel (P5): every LSP diagnostic across open documents,
@@ -69,21 +69,21 @@ export const IdeProblemsPanel: React.FC = () => {
   );
 
   if (groups.length === 0) {
-    return <p className="px-3 py-6 text-center text-[11px] leading-5 text-[var(--osio-code-fg-muted)]">No problems detected.</p>;
+    return <p className="osio-code-empty">No problems detected.</p>;
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto py-1 text-[12px]">
+    <div className="min-h-0 flex-1 overflow-auto py-1 text-xs">
       {groups.map((group) => (
         <div key={group.uri}>
           <button
             type="button"
             onClick={() => open(group.rel)}
-            className="flex w-full items-center gap-1.5 px-3 py-1 text-left font-medium text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))]"
+            className="flex min-h-6 w-full items-baseline gap-1.5 px-3 py-1 text-left font-medium text-[var(--osio-code-fg)] hover:bg-[var(--osio-code-btn-hover)]"
           >
             <span className="truncate">{group.rel.split("/").pop()}</span>
-            <span className="text-[var(--osio-code-fg-muted)]">{group.rel}</span>
-            <span className="ml-auto text-[10px] text-[var(--osio-code-fg-muted)]">{group.diags.length}</span>
+            <span className="min-w-0 truncate text-2xs text-[var(--osio-code-fg-muted)]">{group.rel}</span>
+            <span className="ml-auto text-2xs tabular-nums text-[var(--osio-code-fg-muted)]">{group.diags.length}</span>
           </button>
           {group.diags
             .slice()
@@ -94,11 +94,11 @@ export const IdeProblemsPanel: React.FC = () => {
                 type="button"
                 onClick={() => open(group.rel, { line: d.line, character: d.character })}
                 title={d.message}
-                className="flex w-full items-start gap-1.5 py-0.5 pl-6 pr-3 text-left hover:bg-[var(--osio-code-btn-hover,rgba(127,127,127,0.12))]"
+                className="flex min-h-6 w-full items-center gap-1.5 py-0.5 pl-8 pr-3 text-left hover:bg-[var(--osio-code-btn-hover)]"
               >
-                <span className="mt-0.5 shrink-0">{severityIcon(d.severity)}</span>
+                <span className="shrink-0">{severityIcon(d.severity)}</span>
                 <span className="min-w-0 flex-1 truncate text-[var(--osio-code-fg-muted)]">{d.message}</span>
-                <span className="shrink-0 text-[10px] text-[var(--osio-code-fg-muted)]">
+                <span className="shrink-0 text-2xs tabular-nums text-[var(--osio-code-fg-muted)]">
                   {d.line + 1}:{d.character + 1}
                 </span>
               </button>

@@ -14,17 +14,13 @@
 //
 //   node scripts/pane-resize-bench.mjs [baseUrl] [--panes=12] [--cpu=1]
 //
-// Seeds a 12-pane (3 rows x 4 cols) layout of REAL seeded pages into
-// localStorage, then drags a vertical splitter back and forth with true
-// pointer events while sampling requestAnimationFrame deltas. Reports avg
+// Builds a 12-pane (3 rows x 4 cols) grid of a REAL seeded page through the pane
+// header's Split down / Split right buttons, then drags a vertical splitter back and
+// forth with true pointer events while sampling requestAnimationFrame deltas. Reports avg
 // FPS, p95 frame time, and dropped-frame share during the drag — run it
 // against a `vite preview` build before/after a change to compare.
 
 import { chromium } from "playwright";
-
-const rid = () => Math.random().toString(36).slice(2, 9);
-const pageTab = (pid, ws) => ({ tabId: `tab-${rid()}`, pageId: pid, workspaceId: ws, kind: "page", title: "Page", icon: "icon:doc" });
-const pane = (tab) => ({ type: "pane", id: `pane-${rid()}`, tabs: [tab], activeTabId: tab.tabId });
 
 function parseArgs(argv) {
   const base = (argv.find((a) => /^https?:\/\//.test(a)) ?? process.env.LH_URL ?? "http://127.0.0.1:4173").replace(/\/$/, "");
@@ -34,20 +30,35 @@ function parseArgs(argv) {
   return { base, panes, cpu, tab };
 }
 
-const homeTab = () => ({ tabId: `tab-${rid()}`, pageId: "__home__", workspaceId: "", kind: "home", title: "Home", icon: "icon:home" });
+/** Widest pane of grid row `row` (panes grouped by their top edge; a tie goes left), so
+ *  splitting it each time leaves equal columns. */
+async function widestPaneInRow(page, row) {
+  const index = await page.$$eval("[data-osio-pane]", (els, r) => {
+    const boxes = els.map((el, i) => { const b = el.getBoundingClientRect(); return { i, top: Math.round(b.top), left: b.left, width: Math.round(b.width) }; });
+    const tops = [...new Set(boxes.map((b) => b.top))].sort((a, b) => a - b);
+    return boxes.filter((b) => b.top === tops[r]).sort((a, b) => b.width - a.width || a.left - b.left)[0].i;
+  }, row);
+  return page.locator("[data-osio-pane]").nth(index);
+}
 
-/** rows x cols nested split tree (column of row-splits), like a real heavy workspace. */
-function gridLayout(pid, ws, paneCount, tabKind) {
-  const cell = () => (tabKind === "home" ? pane(homeTab()) : pane(pageTab(pid, ws)));
+// The app persists a layout only for a signed-in user (layoutPersist.ts layoutScope), so the
+// offline build is given its grid the way a user builds one: rows first, then each row split
+// right. A split copies the active tab, so every pane shows the page the first one showed.
+async function buildGrid(page, paneCount) {
   const cols = Math.min(4, paneCount);
   const rows = Math.ceil(paneCount / cols);
-  const rowNodes = Array.from({ length: rows }, () => {
-    const cells = Array.from({ length: cols }, cell);
-    return { type: "split", id: `split-${rid()}`, direction: "row", children: cells, sizes: cells.map(() => 100 / cols) };
-  });
-  const root = rows === 1 ? rowNodes[0] : { type: "split", id: `split-${rid()}`, direction: "column", children: rowNodes, sizes: rowNodes.map(() => 100 / rows) };
-  return { root, activePaneId: rowNodes[0].children?.[0]?.id ?? rowNodes[0].id };
+  for (let r = 1; r < rows; r++) await page.locator('button[title="Split down"]').first().click();
+  for (let r = 0; r < rows; r++) {
+    for (let c = 1; c < cols; c++) await (await widestPaneInRow(page, r)).locator('button[title="Split right"]').click();
+  }
 }
+
+/** Widths of the first grid row's panes, in px — what a drag must change. */
+const firstRowWidths = (page) => page.$$eval("[data-osio-pane]", (els) => {
+  const boxes = els.map((el) => el.getBoundingClientRect());
+  const top = Math.min(...boxes.map((b) => Math.round(b.top)));
+  return boxes.filter((b) => Math.round(b.top) === top).sort((a, b) => a.left - b.left).map((b) => Math.round(b.width));
+});
 
 async function main() {
   const { base, panes, cpu, tab } = parseArgs(process.argv.slice(2));
@@ -55,31 +66,38 @@ async function main() {
   const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 } });
   const page = await ctx.newPage();
 
-  // Seed visit: let offline mode create the workspace + pages, grab a real page id.
+  // Seed visit: offline mode creates the workspace + pages; the heaviest page the Explorer
+  // shows (the active workspace's) is the one every pane opens.
   await page.goto(`${base}/`, { waitUntil: "load", timeout: 30000 });
   await page.waitForFunction(() => Object.keys(localStorage).some((k) => k.startsWith("osio:pages:")), { timeout: 25000 }).catch(() => {});
-  const { ws, pid, blocks } = await page.evaluate(() => {
-    const key = Object.keys(localStorage).find((k) => k.startsWith("osio:pages:"));
-    let p = ""; let n = 0;
-    try {
-      const a = JSON.parse(localStorage.getItem(key) || "[]");
-      // heaviest page = most serialized content
-      const best = a.filter((x) => !x.archivedAt && x.surface !== "folder")
-        .sort((l, r) => JSON.stringify(r.content ?? []).length - JSON.stringify(l.content ?? []).length)[0];
-      p = best?._id || ""; n = best?.content?.length ?? 0;
-    } catch { /* */ }
-    return { ws: key ? key.slice("osio:pages:".length) : "", pid: p, blocks: n };
+  await page.getByRole("treeitem").first().waitFor({ timeout: 25000 });
+  const pick = await page.evaluate(() => {
+    const blocksByTitle = new Map();
+    for (const key of Object.keys(localStorage).filter((k) => k.startsWith("osio:pages:"))) {
+      try {
+        for (const p of JSON.parse(localStorage.getItem(key) || "[]")) {
+          if (!p.archivedAt && p.surface !== "folder" && p.title) blocksByTitle.set(p.title, Math.max(blocksByTitle.get(p.title) ?? 0, JSON.stringify(p.content ?? []).length));
+        }
+      } catch { /* not a page list */ }
+    }
+    const rows = [...document.querySelectorAll('[role="treeitem"]')].map((el, index) => ({ index, text: el.textContent.trim() }));
+    let best = null;
+    for (const row of rows) for (const [title, size] of blocksByTitle) {
+      if (row.text.endsWith(title) && (!best || size > best.size)) best = { index: row.index, title, size };
+    }
+    return best;
   });
-  console.error(`[bench] seeded ws=${ws || "?"} page=${pid || "(none)"} (${blocks} blocks) panes=${panes} cpu=${cpu}x tab=${tab}`);
-
-  await page.evaluate(({ k, v }) => localStorage.setItem(k, v), {
-    k: "osionos.workspace.layout.v1", v: JSON.stringify(gridLayout(pid, ws, panes, tab)),
-  });
+  console.error(`[bench] page="${pick?.title ?? ""}" (${pick?.size ?? 0} bytes of content) panes=${panes} cpu=${cpu}x tab=${tab}`);
+  if (tab !== "home") {
+    if (!pick) { console.error("[bench] the Explorer shows no seeded page to open"); process.exit(1); }
+    await page.getByRole("treeitem").nth(pick.index).click();
+    await page.waitForTimeout(1500);
+  }
+  await buildGrid(page, panes);
   if (cpu > 1) {
     const cdp = await ctx.newCDPSession(page);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: cpu });
   }
-  await page.goto(`${base}/`, { waitUntil: "load", timeout: 60000 });
   await page.waitForTimeout(6000); // let all panes hydrate
 
   // data-pane-splitter distinguishes the grid dividers from the database
@@ -89,8 +107,10 @@ async function main() {
   const handle = splitters.first();
   const box = await handle.boundingBox();
   if (!box) { console.error("[bench] no splitter found"); process.exit(1); }
-  const sizesBefore = await page.evaluate(() => JSON.parse(localStorage.getItem("osionos.workspace.layout.v1") || "{}")?.root?.children?.[0]?.sizes ?? null);
-  console.error(`[bench] splitters=${splitterCount} firstRowSizes=${JSON.stringify(sizesBefore)}`);
+  const paneCount = await page.locator("[data-osio-pane]").count();
+  if (paneCount !== panes) { console.error(`[bench] built ${paneCount} panes, wanted ${panes}`); process.exit(1); }
+  const widthsBefore = await firstRowWidths(page);
+  console.error(`[bench] panes=${paneCount} splitters=${splitterCount} firstRowWidths=${JSON.stringify(widthsBefore)}`);
 
   // Frame sampler: rAF deltas + long tasks, started right before the drag.
   await page.evaluate(() => {
@@ -123,9 +143,9 @@ async function main() {
     await page.mouse.up();
   }
 
-  const sizesAfter = await page.evaluate(() => JSON.parse(localStorage.getItem("osionos.workspace.layout.v1") || "{}")?.root?.children?.[0]?.sizes ?? null);
-  const moved = JSON.stringify(sizesBefore) !== JSON.stringify(sizesAfter);
-  console.error(`[bench] resize ${moved ? "APPLIED" : "DID NOT APPLY"} firstRowSizes=${JSON.stringify(sizesAfter?.map((n) => Math.round(n)))}`);
+  const widthsAfter = await firstRowWidths(page);
+  const moved = JSON.stringify(widthsBefore) !== JSON.stringify(widthsAfter);
+  console.error(`[bench] resize ${moved ? "APPLIED" : "DID NOT APPLY"} firstRowWidths=${JSON.stringify(widthsAfter)}`);
 
   const stats = await page.evaluate(() => { const s = globalThis.__frames; s.running = false; return { deltas: s.deltas, long: s.long }; });
   const d = stats.deltas.filter((x) => x > 0);

@@ -9,10 +9,13 @@
 /*                                                +#+#+#+#+#+   +#+           */
 /* ************************************************************************** */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { LayoutGrid, Search } from "lucide-react";
 
 import { MiniTabs } from "@/shared/ui";
+import { ConfirmModal } from "../ui/ConfirmModals";
+import { PanelStatus } from "../ui/settingsKit";
+import { useSettingsHydration } from "../model/settingsHydration";
 import { useConnectionsStore } from "@/store/settings";
 import type { ConnectionRecord } from "@/store/settings";
 import { CONNECTIONS_CATALOG, CONNECTIONS_CATEGORIES, ConnIcon, findConnApp, type ConnApp } from "./connectionsCatalog";
@@ -26,7 +29,7 @@ const AppCard: React.FC<{ app: ConnApp; connected: boolean; busy: boolean; onCon
     <div className="min-w-0 flex-1">
       <div className="flex items-center gap-1.5">
         <span className="truncate text-sm font-medium text-[var(--osio-fg-default)]">{app.name}</span>
-        {app.live && <span className="rounded-full bg-[var(--osio-accent)]/12 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-[var(--osio-accent-text)]">Live</span>}
+        {app.live && <span className="rounded-full bg-[var(--osio-accent)]/12 px-1.5 py-px text-3xs font-semibold uppercase tracking-wide text-[var(--osio-accent-text)]">Live</span>}
       </div>
       <p className="mt-0.5 line-clamp-2 text-xs leading-[16px] text-[var(--osio-fg-muted)]">{app.description}</p>
     </div>
@@ -56,7 +59,7 @@ const DiscoverGrid: React.FC<{ isConnected: (id: string) => boolean; busyId: str
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2.5">
-        <Search size={15} className="text-[var(--osio-fg-subtle)]" />
+        <Search size={16} className="text-[var(--osio-fg-subtle)]" />
         <input
           type="search"
           value={query}
@@ -113,8 +116,13 @@ export const ConnectionsPanel: React.FC<{ activeUserId: string; personaEmail?: s
   const disconnect = useConnectionsStore((s) => s.disconnect);
   const [tab, setTab] = useState<TabId>("discover");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState<ConnApp | null>(null);
 
-  useEffect(() => { void hydrate(userId, personaEmail); }, [hydrate, personaEmail, userId]);
+  const hydration = useSettingsHydration(async () => {
+    await hydrate(userId, personaEmail);
+    const failure = useConnectionsStore.getState().error;
+    if (failure) throw new Error(failure);
+  }, [hydrate, personaEmail, userId]);
 
   const installed = useMemo(() => connections.filter((c) => !c.removedAt && findConnApp(c.provider)), [connections]);
   const isConnected = (id: string) => installed.some((c) => c.provider === id);
@@ -134,6 +142,7 @@ export const ConnectionsPanel: React.FC<{ activeUserId: string; personaEmail?: s
   }
 
   return (
+    <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
     <section className="space-y-5" data-testid="connections-panel">
       <div className="rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4">
         <div className="flex items-start gap-3">
@@ -152,8 +161,19 @@ export const ConnectionsPanel: React.FC<{ activeUserId: string; personaEmail?: s
       />
 
       {tab === "discover"
-        ? <DiscoverGrid isConnected={isConnected} busyId={busyId} onConnect={onConnect} onDisconnect={onDisconnect} />
-        : <InstalledList records={installed} onDisconnect={onDisconnect} />}
+        ? <DiscoverGrid isConnected={isConnected} busyId={busyId} onConnect={onConnect} onDisconnect={setLeaving} />
+        : <InstalledList records={installed} onDisconnect={setLeaving} />}
+      {leaving && (
+        <ConfirmModal
+          title={`Disconnect ${leaving.name}?`}
+          message={`${leaving.name} stops working in osionos until you connect it again.`}
+          actionLabel="Disconnect"
+          danger
+          onConfirm={() => onDisconnect(leaving)}
+          onClose={() => setLeaving(null)}
+        />
+      )}
     </section>
+    </PanelStatus>
   );
 };

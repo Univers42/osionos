@@ -1,0 +1,14 @@
+# the chat template of the guard, the GGUF of the third party against the original of Qwen
+
+ 04:27:26 up 1 day, 12:54,  1 user,  load average: 12.44, 14.39, 12.40
+
+== the 0.6B: the template of the GGUF against the tokenizer_config.json of the original
+   python3 template-check.py --gguf /mnt/storage/guard/Qwen3Guard-Gen-0.6B.Q8_0.gguf --original /mnt/storage/guard/tokenizer_config.json
+
+template: identical
+
+== the 4B: the template of the GGUF against the tokenizer_config.json of the original
+   python3 template-check.py --gguf /mnt/storage/guard/Qwen3Guard-Gen-4B.Q4_K_M.gguf --original /mnt/storage/guard/tokenizer_config-4b.json
+
+template: identical
+

@@ -8,6 +8,7 @@ import test from "node:test";
 import {
   getChartTypeDef, chartTypesByFamily, FALLBACK_CHART_TYPE,
 } from "../../src/shared/notion-database-sys/src/lib/chart/chartTypeRegistry.ts";
+import { wrapAxisLabel } from "../../src/shared/notion-database-sys/src/components/views/chart/echarts/echartsBuildersCore.ts";
 import { CHART_TYPE_PRESETS } from "../../src/shared/notion-database-sys/src/lib/chart/chartTypePresets.ts";
 import {
   matrixGrid, percentGrid, heatmapCells, hierarchyData, sankeyData,
@@ -113,4 +114,90 @@ test("echarts-builders: stacking/percent/horizontal variants are wired", () => {
   const percent = make("percent_bar").series as { data: number[] }[];
   const colSum = percent[0].data[0] + percent[1].data[0];
   assert.ok(Math.abs(colSum - 100) < 0.51);
+});
+
+test("echarts-builders: the funnel keeps option colours and drops empty stages", () => {
+  const funnelResult: ChartResult = {
+    categories: [
+      { key: "won", label: "Won", color: "var(--color-success)", values: {}, pageIds: {}, total: 5 },
+      { key: "lead", label: "Lead", color: "", values: {}, pageIds: {}, total: 9 },
+      { key: "lost", label: "Lost", color: "var(--color-danger)", values: {}, pageIds: {}, total: 0 },
+    ],
+    series: [],
+    total: 14,
+    truncatedGroups: false,
+    truncatedSeries: false,
+  };
+  const funnel = buildEChartsOption({
+    result: funnelResult, settings: {}, def: getChartTypeDef("funnel"),
+    colors: ["#111111"],
+  }).series as { data: { name: string; value: number; itemStyle?: { color: string } }[] }[];
+  assert.equal(funnel[0].data.length, 2, "zero-total stage dropped");
+  assert.ok(!funnel[0].data.some((item) => item.name === "Lost"), "no Lost stage");
+  const won = funnel[0].data.find((item) => item.name === "Won");
+  assert.equal(won?.itemStyle?.color, "var(--color-success)");
+  const lead = funnel[0].data.find((item) => item.name === "Lead");
+  assert.equal(lead?.itemStyle, undefined, "colourless Lead keeps the palette");
+});
+
+test("echarts-builders: long category names wrap onto two lines at the middle space", () => {
+  assert.equal(wrapAxisLabel("Won"), "Won");
+  assert.equal(wrapAxisLabel("Kenji Watanabe"), "Kenji\nWatanabe");
+  assert.equal(wrapAxisLabel("Middle East & Africa"), "Middle East\n& Africa");
+  assert.equal(wrapAxisLabel("Supercalifragilistic"), "Supercalifragilistic", "no space to split on");
+  assert.equal(wrapAxisLabel("Amara Diallo"), "Amara\nDiallo");
+});
+
+test("echarts-builders: a bar chart shows every one of a few category names", () => {
+  const owners = ["Amara Diallo", "Lucas Martin", "Sofia Rossi", "Kenji Watanabe", "Priya Nair"];
+  const workload: ChartResult = {
+    categories: owners.map((name, index) => ({
+      key: `owner-${index}`, label: name, color: "",
+      values: { a: index + 1, b: 5 - index }, pageIds: {}, total: 6,
+    })),
+    series: [
+      { key: "a", label: "Alpha", color: "" },
+      { key: "b", label: "Beta", color: "" },
+    ],
+    total: 30,
+    truncatedGroups: false,
+    truncatedSeries: false,
+  };
+  const vertical = buildEChartsOption({
+    result: workload, settings: {}, def: getChartTypeDef("stacked_bar"),
+    colors: ["#111111"],
+  }) as {
+    xAxis: { axisLabel: { interval: number | string; lineHeight: number; formatter: (label: string) => string } };
+    grid: { bottom: number };
+  };
+  assert.equal(vertical.xAxis.axisLabel.interval, 0, "few categories: show every label");
+  assert.equal(vertical.xAxis.axisLabel.lineHeight, 14, "wrapped second line is 14px tall");
+  assert.equal(vertical.xAxis.axisLabel.formatter("Kenji Watanabe"), "Kenji\nWatanabe");
+  assert.equal(vertical.grid.bottom, 62, "one extra 14px label line over the legend");
+
+  const horizontal = buildEChartsOption({
+    result: workload, settings: {}, def: getChartTypeDef("stacked_bar_h"),
+    colors: ["#111111"],
+  }) as { yAxis: { axisLabel: { formatter?: unknown } } };
+  assert.equal(horizontal.yAxis.axisLabel.formatter, undefined, "horizontal case stays as today");
+
+  const thirteen: ChartResult = {
+    categories: Array.from({ length: 13 }, (_, index) => ({
+      key: `c${index}`, label: `C${index + 1}`, color: "",
+      values: { a: 1, b: 2 }, pageIds: {}, total: 3,
+    })),
+    series: [
+      { key: "a", label: "Alpha", color: "" },
+      { key: "b", label: "Beta", color: "" },
+    ],
+    total: 39,
+    truncatedGroups: false,
+    truncatedSeries: false,
+  };
+  const grouped = buildEChartsOption({
+    result: thirteen, settings: {}, def: getChartTypeDef("grouped_bar"),
+    colors: ["#111111"],
+  }) as { xAxis: { axisLabel: { interval: number | string } }; grid: { bottom: number } };
+  assert.equal(grouped.xAxis.axisLabel.interval, "auto", "13+ categories keep ECharts spacing");
+  assert.equal(grouped.grid.bottom, 48, "short labels never wrap: no extra bottom slot");
 });

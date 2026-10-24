@@ -20,6 +20,8 @@
 // `data-code-theme` card toggle) all flow through unchanged. Pure so the canvas
 // suite can test it under node.
 
+import { resolveCssColor } from "@/shared/lib/color/resolveCssColor";
+
 export const SYNTAX_KEYS = ["keyword", "string", "comment", "function", "number", "literal", "property", "type", "tag", "attr"] as const;
 export type SyntaxKey = (typeof SYNTAX_KEYS)[number];
 
@@ -60,7 +62,9 @@ function channel(n: number): string {
 }
 
 /** `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()`/`rgba()` (comma or space syntax) →
- *  `#RRGGBB` or `#RRGGBBAA`. Null for anything else, including a transparent value. */
+ *  `#RRGGBB` or `#RRGGBBAA`. Any other opaque CSS colour (the custom accent's
+ *  oklch()) is converted by the browser (resolveCssColor); null for the rest,
+ *  including a transparent value. */
 export function normalizeColor(css: string | null | undefined): string | null {
   const value = (css ?? "").trim();
   if (!value) return null;
@@ -72,7 +76,7 @@ export function normalizeColor(css: string | null | undefined): string | null {
     return out.length === 9 && out.endsWith("00") ? null : out;
   }
   const rgb = RGB.exec(value);
-  if (!rgb) return null;
+  if (!rgb) return resolveCssColor(value);
   const alphaRaw = rgb[4];
   const alpha = alphaRaw === undefined ? 1 : alphaRaw.endsWith("%") ? Number(alphaRaw.slice(0, -1)) / 100 : Number(alphaRaw);
   if (alpha <= 0) return null;

@@ -13,8 +13,8 @@
 import React, { useState } from 'react';
 
 import { useTenantConsoleStore } from '../model/useTenantConsoleStore';
-import { Badge } from '@/shared/ui';
-import { ConsoleSection, ConsoleButton, ConsoleEmpty } from './consolePrimitives';
+import { Badge, Button } from '@/shared/ui';
+import { ConsoleSection, ConsoleEmpty } from './consolePrimitives';
 
 /** Manifest order of the known plan tiers (server validates the change). */
 const PLAN_TIERS = ['nano', 'basic', 'essential', 'pro', 'max'] as const;
@@ -59,7 +59,7 @@ export function PlanPanel() {
               key={tier}
               disabled={loading}
               onClick={() => setPending(tier)}
-              className={`flex items-center justify-between rounded-md border p-3 text-left text-sm transition-colors duration-[120ms] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${
+              className={`flex items-center justify-between rounded-md border p-3 text-left text-sm transition-colors duration-(--osio-dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] disabled:cursor-not-allowed disabled:opacity-60 ${
                 isSelected
                   ? 'border-[var(--osio-accent)] bg-[var(--osio-bg-muted)] font-medium text-[var(--osio-fg-strong)]'
                   : 'border-[var(--osio-border-default)] text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]'
@@ -77,13 +77,13 @@ export function PlanPanel() {
       )}
 
       <div className="mt-3 flex justify-end">
-        <ConsoleButton
+        <Button
           tone="primary"
           disabled={loading || unchanged || selected === null}
           onClick={() => { if (selected) void changePlan(selected); }}
         >
           {loading ? 'Changing…' : 'Change plan'}
-        </ConsoleButton>
+        </Button>
       </div>
     </ConsoleSection>
   );

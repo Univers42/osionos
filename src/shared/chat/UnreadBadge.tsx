@@ -19,7 +19,7 @@ export const UnreadBadge: React.FC<{ count: number }> = ({ count }) => {
   return (
     <span
       aria-label={`${count} unread`}
-      className="ml-auto inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-[var(--osio-accent)] px-1 text-[10px] font-semibold text-[var(--osio-accent-fg)]"
+      className="ml-auto inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-[var(--osio-accent)] px-1 text-3xs font-semibold text-[var(--osio-accent-fg)]"
     >
       {count > 99 ? '99+' : count}
     </span>

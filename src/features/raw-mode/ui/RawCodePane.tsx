@@ -55,7 +55,7 @@ function RawCodePaneImpl({ initialSource, onChange, showLineNumbers }: Readonly<
   );
 
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-[var(--osio-bg-surface)] font-mono text-[13px] leading-6">
+    <div className="flex h-full min-h-0 overflow-hidden bg-[var(--osio-bg-surface)] font-mono text-sm leading-6">
       {showLineNumbers && (
         <div ref={gutterRef} aria-hidden className="select-none overflow-hidden border-r border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-3 text-right text-[var(--osio-fg-subtle)]">
           {gutterNumbers}

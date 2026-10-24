@@ -33,7 +33,7 @@ const FlagButton: React.FC<{ active: boolean; title: string; onClick: () => void
     title={title}
     onClick={onClick}
     className={cx(
-      "grid h-6 w-6 place-items-center rounded transition-colors",
+      "grid h-6 w-6 place-items-center rounded-xs transition-colors",
       active
         ? "bg-[var(--osio-accent-subtle)] text-[var(--osio-accent)]"
         : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]",
@@ -129,7 +129,7 @@ export const SearchPanel: React.FC = () => {
           />
           <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
             <FlagButton active={s.preserveCase} title="Preserve case" onClick={() => s.patch({ preserveCase: !s.preserveCase })}>
-              <span className="text-[10px] font-bold">AB</span>
+              <span className="text-3xs font-bold">AB</span>
             </FlagButton>
             <FlagButton
               active={false}
@@ -156,7 +156,7 @@ export const SearchPanel: React.FC = () => {
         ) : null}
       </div>
 
-      <div className="px-3 py-1 text-[11px] text-[var(--osio-fg-subtle)]">
+      <div className="px-3 py-1 text-2xs text-[var(--osio-fg-subtle)]">
         {s.status === "error" && s.error ? <span className="text-[var(--osio-danger)]">{s.error}</span>
           : s.status === "searching" ? "Searching…"
           : s.query ? `${totalMatches} result(s) in ${s.results.length} page(s)`
@@ -164,7 +164,7 @@ export const SearchPanel: React.FC = () => {
       </div>
 
       {summary ? (
-        <div className="mx-2 mb-1 flex items-center justify-between rounded-md bg-[var(--osio-bg-muted)] px-2 py-1 text-[11px] text-[var(--osio-fg-default)]">
+        <div className="mx-2 mb-1 flex items-center justify-between rounded-md bg-[var(--osio-bg-muted)] px-2 py-1 text-2xs text-[var(--osio-fg-default)]">
           <span className="min-w-0 flex-1 truncate">{summary}</span>
           {hasUndo ? (
             <button type="button" onClick={() => { undo(); setSummary(null); runSearch(); }} className="ml-2 shrink-0 font-medium text-[var(--osio-accent)] hover:underline">Undo</button>
@@ -176,7 +176,7 @@ export const SearchPanel: React.FC = () => {
 
       {confirm ? (
         <div className="absolute inset-0 z-[var(--osio-z-modal)] flex items-center justify-center bg-[var(--osio-overlay)] p-4">
-          <div className="w-full max-w-xs rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 shadow-xl">
+          <div className="w-full max-w-xs rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-4 shadow-osio-e4">
             <p className="text-sm font-medium text-[var(--osio-fg-default)]">Replace all?</p>
             <p className="mt-1 text-xs text-[var(--osio-fg-muted)]">
               Replace {confirm.matches} occurrence(s) across {confirm.pages} page(s). This writes to the workspace and can be undone once.

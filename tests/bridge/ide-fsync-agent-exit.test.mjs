@@ -45,7 +45,7 @@ function fakeDocker(answerAfterMs = 0) {
     request.on("end", () => {
       response.setHeader("content-type", "application/json");
       if (request.method === "GET" && request.url.endsWith("/json")) {
-        response.end(JSON.stringify({ State: { Running: true } }));
+        response.end(JSON.stringify({ Config: { Labels: { "osio.ide.uid": "20000" } }, State: { Running: true } }));
       } else if (request.method === "POST" && request.url.endsWith("/exec")) {
         seen.specs.push(JSON.parse(Buffer.concat(chunks).toString()));
         response.statusCode = 201;

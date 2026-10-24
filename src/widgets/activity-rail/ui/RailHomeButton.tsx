@@ -24,6 +24,7 @@ import { Database, Home, Images, LayoutDashboard, Network } from "lucide-react";
 import { useHomeVariantStore, type HomeVariant } from "@/widgets/home-variants/model/homeVariantStore";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { homeTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { useEscapeKey } from "@/shared/ui";
 import { RailIcon } from "./RailIcon";
 
 const HOME_VARIANTS: Array<{ id: HomeVariant; label: string; Icon: typeof Home }> = [
@@ -50,6 +51,12 @@ export const RailHomeButton: React.FC = () => {
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
+  // Escape returns focus to the rail icon so keyboard users resume where they were.
+  useEscapeKey(() => {
+    setOpen(false);
+    ref.current?.querySelector("button")?.focus();
+  }, open);
+
   const toggle = () => {
     // The rail clips an in-flow dropdown; anchor with position:fixed to its right.
     if (!open && ref.current) {
@@ -74,22 +81,19 @@ export const RailHomeButton: React.FC = () => {
           data-rail-home-menu
           role="menu"
           style={{ position: "fixed", top: pos.top, left: pos.left }}
-          className="z-[var(--osio-z-modal)] min-w-[184px] rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1.5 shadow-[var(--osio-shadow-menu)]"
+          className="osio-surface-overlay z-[var(--osio-z-modal)] min-w-[184px]"
         >
-          <div className="px-2.5 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">Home</div>
+          <div className="osio-menu-label">Home</div>
           {HOME_VARIANTS.map((item) => (
             <button
               key={item.id}
               type="button"
               role="menuitem"
               onClick={() => pick(item.id)}
-              className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${
-                variant === item.id
-                  ? "bg-[var(--osio-accent-subtle)] text-[var(--osio-accent-text)]"
-                  : "text-[var(--osio-fg-default)] hover:bg-[var(--osio-accent-subtle)] hover:text-[var(--osio-accent-text)]"
-              }`}
+              data-tone={variant === item.id ? "accent" : undefined}
+              className={`osio-menu-item ${variant === item.id ? "bg-[var(--osio-accent-subtle)]" : ""}`}
             >
-              <item.Icon size={15} aria-hidden="true" />
+              <item.Icon size={16} aria-hidden="true" />
               <span>{item.label}</span>
             </button>
           ))}
