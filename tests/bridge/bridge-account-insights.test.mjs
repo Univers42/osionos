@@ -55,10 +55,11 @@ describe('the gates', () => {
 	});
 
 	it('re-reads the role: a grant revoked between two requests turns the second into 403', async (t) => {
-		const { call, store } = await insightsWorld(t, { cells: CELLS });
-		assert.equal((await call('')).status, 200);
+		const { call, store, config } = await insightsWorld(t, { cells: CELLS });
+		const token = tokenFor(config, USER_A, true);
+		assert.equal((await call('', { token })).status, 200);
 		store.rows('user_roles').length = 0;
-		assert.equal((await call('')).status, 403);
+		assert.equal((await call('', { token })).status, 403, 'the token still claims admin');
 	});
 
 	it('answers 429 after 30 reads in a minute', async (t) => {
