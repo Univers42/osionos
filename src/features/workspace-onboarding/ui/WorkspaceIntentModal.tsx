@@ -36,7 +36,7 @@ export const WorkspaceIntentModal: React.FC = () => {
 
   return (
     <Modal open={open} onClose={() => { if (!busy) setOpen(false); }} title="What is this space for?" description="Just a few more steps to unlock your new workspace" size="md">
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 p-6">
         {INTENTS.map(({ key, Icon, title, desc }) => (
           <button
             key={key}

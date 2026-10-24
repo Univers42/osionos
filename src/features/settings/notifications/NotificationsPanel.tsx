@@ -97,7 +97,7 @@ const PageNotificationOverridesModal: React.FC<{ onClose: () => void }> = ({ onC
 
   return (
     <Modal open onClose={onClose} title="Page notification settings" size="md">
-      <div className="space-y-2">
+      <div className="space-y-2 p-6">
         {pages.length === 0 ? <p className="text-sm text-[var(--osio-fg-muted)]">No pages available yet.</p> : pages.map((page) => (
           <SettingRow key={page._id} title={page.title || 'Untitled'} description={page.updatedAt ? new Date(page.updatedAt).toLocaleString() : 'No updates yet'} action={<Toggle checked={isNotified(page)} onChange={(checked) => setNotified(page, checked)} label={`Notify me about ${page.title || 'Untitled'}`} />} />
         ))}

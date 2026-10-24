@@ -42,7 +42,7 @@ export const ProfessionPickerModal: React.FC = () => {
       description="Your profession shapes your profile and your Home dashboard. You can change it later."
       size="md"
     >
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 p-6">
         {PROFESSIONS.map((profession) => (
           <button
             key={profession.id}
