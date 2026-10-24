@@ -14,30 +14,12 @@ import React, { useState } from 'react';
 
 import { changeUsername } from '@/shared/api/accountSecurityApi';
 import { Button, Modal, useToastStore } from '@/shared/ui';
-import { useAccountEmailsStore, useAccountProfileStore } from '@/store/settings';
-import { defaultEmail, emailVerificationLabel } from '@/store/settings/defaults';
+import { useAccountProfileStore } from '@/store/settings';
 import { useSudoPromptStore } from '../ui/sudo/sudoPromptModel';
 import { DataTable } from '../ui/settingsKit';
 import { accountActionNotice, runAccountAction, runAsync } from '../model/settingsCalls';
 
-export const EmailManagerModal: React.FC<{ userId: string; fallbackEmail?: string; onClose: () => void }> = ({ userId, fallbackEmail, onClose }) => {
-  const emails = useAccountEmailsStore((state) => state.data);
-  // Read-only until the server serves email edits (F-3b); the fallback never claims verification.
-  const displayedEmails = emails.length || !fallbackEmail ? emails : [defaultEmail(userId, fallbackEmail)];
-  const rows = displayedEmails.map((email) => [
-    <span key={`${email._id}-email`} className="font-medium">{email.email}</span>,
-    email.isPrimary ? 'Primary' : 'Secondary',
-    emailVerificationLabel(email),
-  ]);
-  return (
-    <Modal open onClose={onClose} title="Manage emails" size="md">
-      <div className="space-y-4">
-        <DataTable headers={['Email', 'Role', 'Status']} rows={rows} />
-        <p className="text-sm text-[var(--osio-fg-muted)]">Adding or changing addresses isn&apos;t available yet.</p>
-      </div>
-    </Modal>
-  );
-};
+export { EmailManagerModal } from './EmailManagerModal';
 
 // The bridge's rule (P1-1): 3-32 characters, a letter, digit or underscore first.
 export const USERNAME_SHAPE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{2,31}$/;

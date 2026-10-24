@@ -134,14 +134,15 @@ test.describe("Two-step verification modal (bridge stub)", () => {
 test.describe("Manage emails modal (bridge stub)", () => {
   const emailsDialog = (page) => page.getByRole("dialog", { name: "Manage emails" });
 
-  test("is read-only: the one address, no edit controls, and the unavailable line", async ({ page, baseURL }) => {
+  test("offers the add form for the one address, no Make primary, and not the old unavailable copy", async ({ page, baseURL }) => {
     await stubTwoStep(page);
     await openProfile(page, baseURL);
     await openModal(page, "Manage emails");
     await expect(emailsDialog(page)).toContainText("e2e@example.com");
-    await expect(emailsDialog(page).getByRole("button", { name: /Add email|Remove|Make primary|Verify/ })).toHaveCount(0);
-    await expect(emailsDialog(page).getByPlaceholder("name@example.com")).toHaveCount(0);
-    await expect(emailsDialog(page)).toContainText("Adding or changing addresses isn't available yet.");
+    await expect(emailsDialog(page).getByPlaceholder("name@example.com")).toBeVisible();
+    await expect(emailsDialog(page).getByRole("button", { name: "Send code" })).toBeVisible();
+    await expect(emailsDialog(page).getByRole("button", { name: /Make primary|Remove/ })).toHaveCount(0);
+    await expect(emailsDialog(page)).not.toContainText("isn't available yet");
   });
 
   test("a failed read never shows Verified", async ({ page, baseURL }) => {
