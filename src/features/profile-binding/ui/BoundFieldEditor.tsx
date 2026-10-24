@@ -48,7 +48,7 @@ export function BoundFieldEditor({ block, onUpdateBlock, onKeyDown }: BoundField
       <div
         ref={groupRef}
         role="group"
-        tabIndex={0}
+        tabIndex={-1}
         aria-label={`Profile field: ${label}`}
         data-bound-field={block.fieldBind}
         onKeyDown={onKeyDown}
