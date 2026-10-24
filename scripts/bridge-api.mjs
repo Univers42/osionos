@@ -68,6 +68,9 @@ import { createFeedHandler } from './bridge-feed.mjs';
 import { createPersonalizationHandler } from './bridge-personalization.mjs';
 import { createRecsHandler } from './bridge-recs.mjs';
 import { createEventsHandler } from './bridge-events.mjs';
+import { createActivityEmitter } from './bridge-activity.mjs';
+import { createActivityConsent } from './bridge-activity-consent.mjs';
+import { startActivityMaintenance } from './bridge-activity-maintenance.mjs';
 import { createModerationConsoleHandler } from './bridge-moderation-console.mjs';
 import { createRecsHealthHandler } from './bridge-recs-health.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
@@ -4907,13 +4910,16 @@ export function createBridgeServer(options = {}) {
 	server.on('close', () => transport?.close());
 	let cutoffPoller = null;
 	let revocationPoller = null;
+	const activityEmitter = createActivityEmitter({ pg, env, now: options.now, isTracked: createActivityConsent({ pg, now: options.now }).isTracked });
+	let activityTimer = null;
 	server.on('listening', () => {
+		activityTimer = startActivityMaintenance({ pg, env });
 		cutoffPoller = startSessionCutoffPoller(sessionCutoffs, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionCutoffPoll);
 		revocationPoller = startSessionRevocationPoller(sessionRevocations, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionRevocationPoll);
 		server.sessionRevocationPoller = revocationPoller;
 	});
-	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); if (!options.kv) kv.close(); });
-	Object.assign(server, { sessionCutoffs, sessionRevocations, sessionRecords, kv, kvRequired });
+	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); activityTimer?.stop(); if (!options.kv) kv.close(); });
+	Object.assign(server, { activityEmitter, sessionCutoffs, sessionRevocations, sessionRecords, kv, kvRequired });
 	return server;
 }
 
@@ -4928,6 +4934,14 @@ export function startBridgeServer(config = configFromEnv()) {
 	// No administrator configured: nobody is promoted to is_admin at login, so
 	// an account-admin workspace has no admin until the operator sets one.
 	if (!config.adminEmails.length) console.warn('[bridge] no account administrators configured (OSIONOS_ADMIN_EMAILS unset)');
+	// A handler removes Node's default SIGTERM exit, so the exit is part of this contract.
+	if (process.env.OSIONOS_ACTIVITY === '1') {
+		process.once('SIGTERM', async () => {
+			const { flushed, lost } = await server.activityEmitter.close({ deadlineMs: 2000 });
+			console.info(`[osionos-bridge] activity: flushed ${flushed}, lost ${lost}`);
+			process.exit(0);
+		});
+	}
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
 	});
