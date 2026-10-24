@@ -30,7 +30,9 @@ import { classifySettingsError, settingsJwt } from '@/store/settings/settingsSto
 
 export type AccountSecurityOutcome<T> =
   | { ok: true; data: T }
-  | { ok: false; reason: 'sudo_required' | 'unavailable' }
+  | { ok: false; reason: 'sudo_required' }
+  /** `temporary` is a 503 (the feature is on but down); otherwise the server does not serve the route. */
+  | { ok: false; reason: 'unavailable'; temporary?: boolean }
   | { ok: false; reason: 'rate_limited'; code: string; retryAfterSeconds: number | null }
   | { ok: false; reason: 'refused' | 'failed'; code: string; message: string };
 
@@ -85,12 +87,12 @@ function failure<T>(response: Response, body: Record<string, unknown>): AccountS
   const kind = classifySettingsError(response.status, rawCode);
   if (kind === 'sudo_required') return { ok: false, reason: 'sudo_required' };
   // sudo_unavailable has its own sentence in the prompt, so it stays a refusal with its code.
-  if (kind === 'unavailable' && code !== 'sudo_unavailable') return { ok: false, reason: 'unavailable' };
+  if (kind === 'unavailable' && code !== 'sudo_unavailable') return { ok: false, reason: 'unavailable', temporary: response.status === 503 };
   const message = text(body.message) ?? `The request failed (${response.status}).`;
   return { ok: false, reason: response.status >= 500 ? 'failed' : 'refused', code, message };
 }
 
-async function call<T>(
+export async function call<T>(
   method: 'GET' | 'POST' | 'DELETE',
   path: string,
   body: unknown,
