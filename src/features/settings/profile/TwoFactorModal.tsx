@@ -12,6 +12,7 @@
 
 import React, { useState } from 'react';
 
+import { SESSION_REVOKED_CODE } from '@/shared/api/sessionRevocation';
 import { Button, Modal, useToastStore } from '@/shared/ui';
 import type { PreferredMfaMethod } from '@/store/settings/types';
 import { accountActionNotice, runAsync, type AccountActionOutcome } from '../model/settingsCalls';
@@ -46,8 +47,9 @@ export const TwoFactorModal: React.FC<Props> = ({ userId, state, preferred, onPr
     const outcome = await run();
     setBusy(false);
     if (outcome.ok) return outcome.data;
-    if (endsSession && outcome.code === RECORD_UNAVAILABLE) {
-      // The factor changed and the server cut every session off but could not start a new one.
+    if (endsSession && (outcome.code === RECORD_UNAVAILABLE || outcome.code === SESSION_REVOKED_CODE)) {
+      // The factor changed and the server cut every session off but could not start a new one
+      // (or this session was revoked meanwhile, so it started none).
       setProblem(SIGNED_OUT_NOTICE);
       dropSessionAfterStepUp(userId);
       return null;

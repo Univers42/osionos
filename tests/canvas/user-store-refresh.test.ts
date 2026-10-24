@@ -281,6 +281,23 @@ test("K3: a late refusal for the replaced family does not sign the device out", 
   assert.equal(useToastStore.getState().toasts.length, 0);
 });
 
+test("K4: a step-up that lands while this tab waits for another tab's lease is rotated, not discarded", async () => {
+  reset();
+  signIn("u1");
+  const leaseKey = "osionos:refresh-lease:u1";
+  memory.set(leaseKey, JSON.stringify({ owner: "other-tab", until: Date.now() + 60_000 }));
+  const calls = stubBridge(() => ok("after-wait", "osb_rt.rotated.sig"));
+  const rotation = useUserStore.getState().refreshAccount("u1");
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  adoptStepUpToken("u1", stepToken(), STEP_AT);
+  memory.delete(leaseKey);
+  assert.equal(await rotation, "refreshed");
+  assert.deepEqual(calls, [STEP_AT]);
+  assert.equal(useUserStore.getState().sessions.u1.refreshToken, "osb_rt.rotated.sig");
+  assert.equal(persisted().u1.session.refreshToken, "osb_rt.rotated.sig");
+  assert.equal(useToastStore.getState().toasts.length, 0);
+});
+
 test("dropLocalSession ends the local session without calling the server", () => {
   reset();
   signIn("u1");
