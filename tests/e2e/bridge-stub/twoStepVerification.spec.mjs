@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/23 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/23 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/25 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -177,5 +177,29 @@ test.describe("Passkeys modal (bridge stub)", () => {
     await modal.getByRole("button", { name: "Remove" }).last().click();
     await expect(modal.getByLabel("Passkey name")).toHaveCount(1);
     expect(bridge.calls).toContain(`DELETE /api/account/passkeys/${PASSKEYS[1]._id}`);
+  });
+
+  test("at 375px every Remove button is on screen with no sideways scroll", async ({ page, baseURL }) => {
+    await stubTwoStep(page, { passkeys: PASSKEYS });
+    await openProfile(page, baseURL);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await openModal(page, "Manage passkeys");
+    const modal = page.getByRole("dialog", { name: "Passkeys" });
+    const dialogBox = await modal.boundingBox();
+    const removes = modal.getByRole("button", { name: "Remove" });
+    await expect(removes).toHaveCount(PASSKEYS.length);
+    for (let index = 0; index < PASSKEYS.length; index += 1) {
+      const remove = removes.nth(index);
+      await expect(remove).toBeVisible();
+      const box = await remove.boundingBox();
+      expect(box.x + box.width).toBeLessThanOrEqual(dialogBox.x + dialogBox.width);
+    }
+    const sideways = await modal.evaluate((dialog) => Array.from(dialog.querySelectorAll("*"))
+      .filter((node) => {
+        const overflowX = getComputedStyle(node).overflowX;
+        return (overflowX === "auto" || overflowX === "scroll") && node.scrollWidth > node.clientWidth + 1;
+      })
+      .map((node) => `${node.tagName.toLowerCase()}.${node.className}`));
+    expect(sideways).toEqual([]);
   });
 });
