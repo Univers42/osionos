@@ -2,7 +2,7 @@
 
 Project: rebuild every settings section from the app's own blocks (design: `docs/superpowers/specs/2026-10-25-self-built-ui-design.md` §5 "Visibility" and §11 item 4). Settings sections show and hide parts by state: the 2FA recovery codes only once 2FA is on, the billing card only on a paid plan. Canvas cells already do this with a formula (`visibilityFormula`, evaluated by the Rust/WASM engine). This package gives every block the same rule, `visibleWhen`, and evaluates it only when a value it reads changes.
 
-Depends on SB-1b (merged): the registry, `frame`, and the hooks in `ReadOnlyBlock`/`BlockEditor`.
+Base: the integration tip, **without SB-1b** (re-planned 2026-10-25 20:55 to run in parallel). Put the gate at the very top of `ReadOnlyBlockImpl` and of the `BlockEditor` render, before the first early return. SB-1b's registry lookup will land after yours, and the reviewer resolves the merge. Leave `frame` out of your tests.
 
 **OWNS:**
 - move `src/features/block-editor/ui/canvas/model/visibility.ts` → `src/entities/block/model/visibility.ts` (`git mv`). Update its four importers (`LayoutBlockReadOnly.tsx`, `CanvasCellView.tsx`, `CanvasRoot.tsx`, `tests/canvas/cell-visibility-formula.test.ts`). Leave no re-export at the old path. `LayoutBlockReadOnly` (an entity) importing a feature is a layering bug this move fixes;

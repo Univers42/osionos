@@ -2,7 +2,7 @@
 
 Project: rebuild every settings section from the app's own blocks (design: `docs/superpowers/specs/2026-10-25-self-built-ui-design.md` §5 and §11 item 2). A settings page made of blocks needs blocks that read and write real settings: a switch bound to "reduce motion" must call the same store action the Preferences panel calls today. This package adds the mechanism. Later packages plug the real settings into it (SB-2b) and build on it (`field` in SB-2c, `collection` in SB-4a).
 
-Depends on SB-1d (merged).
+Base: the integration tip. Nothing here needs SB-1b or SB-1d, so it runs in parallel with them (re-planned 2026-10-25 20:55 to widen the critical path).
 
 ## One binding vocabulary: extend `recordRef` / `fieldBind`, don't add `bind`
 
