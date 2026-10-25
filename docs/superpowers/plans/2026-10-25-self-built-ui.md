@@ -52,13 +52,14 @@ Integration branch: `feat/self-built-ui` (from develop `3be8dc71b`). One worktre
 | SB-1d | S1 | system-document format, generated schema (`--check` in gate), loader with unknown-block placeholder, fixpoint test | SB-1b | every doc round-trips byte-identically |
 | SB-1e | S1 | system-page host in `SETTINGS_PANELS` (lazy per doc) + `/__styleguide` demo | SB-1d | a demo doc renders in the Settings tab |
 | SB-2a | S2 | source registry: record + list sources, per-field `useSyncExternalStore`, viewer-scoped, unavailable states | SB-1d | one bound field re-renders alone (React Profiler count = 1) |
-| SB-2b | S2 | settings record sources over existing stores (preferences, notifications, profile, AI, voice, moderation, page settings) | SB-2a | each source's read/write calls the same function as today's panel (spy test) |
+| SB-2b | S2 | settings record sources over existing stores (preferences, accessibility, notifications, voice, AI) | SB-2a | each source's read/write calls the same function as today's panel (spy test) |
+| SB-2d | S2 | profile draft source + `profile.save` action (If-Match), page-settings source over the active page (extract `usePageActions`' write into a plain function) | SB-2b, SB-3a | profile and page settings save through the same calls as today (spy test) |
 | SB-2c | S2 | `field` block, every display, on `@osionos/ui` (+ Segmented, Radio, Textarea in the package); `/input` `/select` `/toggle` `/checkbox` | SB-2a | labels, helper, error, on-blur validation; a11y names as today |
 | SB-3a 👹 | S3 | action registry + `app_action` step + runner guards (confirm, typed, sudo, single-flight) + action state | SB-2a | a page cannot weaken a guard (test edits the doc, guard still runs) |
 | SB-3b | S3 | `button` on `@osionos/ui` Button: every tone/size, icon, icon-only label, loading | SB-3a | old `buttonVariant` pages render unchanged |
 | SB-3c | S3 | `chip`, `avatar`, `meter`, `status`, `secret`; heading `anchor` | SB-3a | deep link `?settings=<id>#<anchor>` scrolls to a doc heading |
 | SB-4a | S4 | `collection`: list/table/grid, virtual rows, empty slot, `$row`, row actions, inline edit | SB-2a, SB-3a | 10,000-row scroll with no long task over 50 ms |
-| SB-4b | S4 | list sources for every settings list (sessions exists) | SB-4a | each list matches today's rows from the same stub |
+| SB-4b | S4 | list sources for every settings list (sessions exists), incl. moderation limits and per-page notification overrides | SB-4a | each list matches today's rows from the same stub |
 | SB-4c | S4 | `tabs`, `dialog` containers | SB-1b | keyboard per WAI-ARIA (shadcn reference) |
 | SB-4d | S4 | `collection` display `matrix` (rows × columns sources, a choice field per cell) | SB-4a, SB-2c | the permission matrix's cells and saves match today's panel |
 | SB-4h 👹 | S4b | `steps` container + `qr` block + guarded 2FA enrol/verify actions | SB-3a, SB-3c | enrol → scan → verify → recovery codes, every guard intact |
