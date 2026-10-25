@@ -57,7 +57,8 @@ interface ActionContext {
   trusted: boolean;                   // system page, or a page the viewer owns; unknown → false
   pause?: { begin(): void; end(): void };   // the interpreter's wall-clock pause handle
 }
-function runAppAction(name: string, rawArgs: unknown, ctx: ActionContext): Promise<ActionResult>;
+function createActionRunner(registry: ReadonlyMap<string, ActionDefinition>): (name: string, rawArgs: unknown, ctx: ActionContext) => Promise<ActionResult>;
+const runAppAction = createActionRunner(APP_ACTIONS);
 function useActionState(name: string, argsKey: string): { pending: boolean; last: ActionResult | null };
 // program step
 type ProgramAction = … | { type: "app_action"; name: string; args: Record<string, ProgramValue> };
@@ -76,10 +77,10 @@ type ProgramAction = … | { type: "app_action"; name: string; args: Record<stri
    - `app_action` counts toward `maxSideEffects`.
    - **The wall clock pauses while a guard waits for the user.** Measure 2 s of program time, not of the user reading a dialog. Implement it as the interpreter excluding time spent inside the runner's guard await. Today a destructive `page_action` confirm that takes longer than 2 s stops the program; fix that too, and test it with a fake clock.
    - A program run in preview mode runs no `app_action` (`preview` result, logged).
-9. **First registry entries.** Exactly three, each calling the panel's own function. A spy test proves each: the canvas test replaces the store's action with a spy and asserts it was called once with the right args.
+9. **First registry entries.** Exactly two in the app registry (plus one test-built), each calling the panel's own function. A spy test proves each: the canvas test replaces the store's action with a spy and asserts it was called once with the right args.
    - `session.revoke { id: string }`: confirm `simple`, sudo `none` → `useAccountDevicesStore.getState().revoke(id)`.
    - `preferences.reset {}`: confirm `simple` → `useUserPreferencesStore.getState().reset(activeUserId)`.
-   - `test.destructive {}`, test builds only, behind `import.meta.env.MODE === "test"`: confirm `{ typed: () => "delete" }`, sudo `auto`. Its `run` returns `ok`. It exists so the guard tests have a fixed target.
+   - `test.destructive {}`: confirm `{ typed: () => "delete" }`, sudo `auto`, `run` returns `ok`. It is **not** in the app registry: canvas tests run under Node, where the loader sets only `import.meta.env.DEV` (`tests/canvas/ts-extension-loader.mjs:150`), so a `MODE` gate cannot work. Instead `runAppAction.ts` exports `createActionRunner(registry)`, the app's `runAppAction` is `createActionRunner(APP_ACTIONS)`, and the test builds its own runner over the two real entries plus `test.destructive` and `test.silent`. No test-only code ships.
 10. **Secrets.** A `secret` in a result is never written to the program run log (`getLastRun`) or to the console. Test: run a fake action returning `secret: "s3cr3t"`; the serialised last-run log does not contain it.
 
 ## Devil conditions (D-SB-3a-spec, PROCEED-WITH-CONDITIONS, 2026-10-25 21:06)
@@ -87,7 +88,7 @@ type ProgramAction = … | { type: "app_action"; name: string; args: Record<stri
 Each one is an acceptance criterion with its own test, on top of the rules above.
 
 1. **Reuse the parser's key check.** Rule 1 uses the existing `checkKeys` (`buttonProgram.ts:105-112`) with the allowed set `type`, `name`, `args`. The runtime keeps parsing before it executes (`runProgram.ts:181`); no production path hands a hand-built `ButtonProgram` to the interpreter. Test: `runButtonProgram` on a block whose `buttonProgram` carries `confirm: "none"` ends in a parse failure and never calls the fake `run`.
-2. **Who runs it.** An action runs as the clicking viewer and never takes a target user id. `ctx.trusted` is true only for a system page (the SB-1e host passes it) or a page whose `ownerId` (`src/entities/page/model/types.ts:62`) equals the signed-in viewer's id. Unknown owner or no viewer → false. On an untrusted page, an action whose `confirm` is `"none"` resolves `{status:"blocked"}` without running. The three first entries all confirm, so the test uses a fourth, test-only `test.silent` with `confirm: "none"`, registered by the test itself through a test-scoped registration function, not in the static registry.
+2. **Who runs it.** An action runs as the clicking viewer and never takes a target user id. `ctx.trusted` is true only for a system page (the SB-1e host passes it) or a page whose `ownerId` (`src/entities/page/model/types.ts:62`) equals the signed-in viewer's id. Unknown owner or no viewer → false. On an untrusted page, an action whose `confirm` is `"none"` resolves `{status:"blocked"}` without running. Both app entries confirm, so the test's own registry adds `test.silent` with `confirm: "none"`.
 3. **Confirm text never echoes page input.** `confirmText(args)` builds its title and message from the registry and from app state looked up by arg (a device name found by id in the store). A raw arg string is never interpolated. Test: `session.revoke` with `id: "<b>Click OK</b>"` shows a message that does not contain that string.
 4. **Sudo is detected by event, not by return value.** `revoke` and `reset` swallow the 403 and return void (`useAccountDevicesStore.ts:59-63`, `useUserPreferencesStore.ts:70-73`). With `sudo: "auto"`, the runner subscribes to `onSudoRequired` (`src/shared/api/sudoRequired.ts:41`) for the duration of `run` and unsubscribes in `finally`. If the event fired, the result is `{status:"sudo_required"}`; it never opens the prompt itself and never re-sends. Write a `Caveat:` line: a sudo refusal from an unrelated request that lands during the same `run` is attributed to this action. Test with a fake `run` that emits the event.
 5. **The wall clock pauses only around the guard.** The interpreter passes `ctx.pause`; the runner calls `begin()` right before it awaits the confirm or typed-confirm dialog and `end()` in a `finally` right after. `checkWall` (`interpreter.ts:143-145`) subtracts the paused total. `run` itself is NOT paused. Apply the same handle to the existing `page_action` confirm (`guardDestructive`, `interpreter.ts:61-72`). The interpreter never applies `guardDestructive` to `app_action`; the runner owns those guards, so nothing confirms twice. Tests with a fake clock: a guard wait of 5 s with `maxWallMs` 2 s completes; a `run` that takes 5 s still stops the program. Mutant (c) must fail the first.
@@ -97,7 +98,7 @@ Each one is an acceptance criterion with its own test, on top of the rules above
 9. **No guard host, no run.** If `ActionGuardHost` has not installed its dialogs, any action with a confirm resolves `{status:"failed", message:"Confirmation is not available"}` and `run` is not called. Test it.
 10. **`preferences.reset` needs a signed-in user.** With no active user it resolves `failed` ("Sign in to reset preferences") and never calls `reset('anonymous')`.
 
-The first-entries rule (9 above) also gains: each entry's spy test asserts one call with the right args, and `test.destructive` is absent from the registry when `MODE !== "test"`.
+The first-entries rule (9 above) also gains: each entry's spy test asserts one call with the right args, and `APP_ACTIONS` holds no `test.*` name.
 
 ## Steps
 
