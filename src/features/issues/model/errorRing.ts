@@ -80,13 +80,6 @@ export function isErrorRingDeveloper(role: unknown, developerMode: unknown): boo
   return roleAtLeast(role as never, "moderator") || developerMode === true;
 }
 
-// Aliases that a test or caller may use for the same predicate.
-export const isDeveloperForErrorRing = isErrorRingDeveloper;
-export const isDeveloper = isErrorRingDeveloper;
-export const shouldStartErrorRing = isErrorRingDeveloper;
-export const errorRingShouldStart = isErrorRingDeveloper;
-export const errorRingDeveloper = isErrorRingDeveloper;
-
 export function useErrorRingForDeveloper(): void {
   const role = usePlatformRole();
   const activeWorkspaceId = useUserStore((state) => state.activeWorkspace()?._id ?? null);

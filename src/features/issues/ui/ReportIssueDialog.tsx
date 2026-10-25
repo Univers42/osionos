@@ -42,11 +42,6 @@ export function validateScreenshotFile(file: { size: number; type: string }): Sc
   return { ok: true };
 }
 
-// Aliases a test or caller may use for the same validator.
-export const validateScreenshot = validateScreenshotFile;
-export const checkScreenshot = validateScreenshotFile;
-export const isScreenshotAllowed = (file: { size: number; type: string }) => validateScreenshotFile(file).ok;
-
 export interface ReportIssueDialogProps {
   open?: boolean;
   onClose?: () => void;
@@ -66,8 +61,7 @@ function activeTabKind(): string | undefined {
 }
 
 export const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ open: openProp, onClose, title: titleProp, description: descriptionProp }) => {
-  const requestFromHook = useIssueReportRequest((state) => state.request);
-  const request = requestFromHook ?? useIssueReportRequest.getState().request;
+  const request = useIssueReportRequest((state) => state.request);
   const isOpen = openProp ?? request !== null;
 
   const initialTitle = titleProp ?? request?.title ?? "";
@@ -144,8 +138,9 @@ export const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ open: open
   const captureScreen = async () => {
     const mediaDevices = (globalThis.navigator as { mediaDevices?: { getDisplayMedia?: (constraints: unknown) => Promise<MediaStream> } })?.mediaDevices;
     if (!mediaDevices?.getDisplayMedia) return;
+    let stream: MediaStream | null = null;
     try {
-      const stream = await mediaDevices.getDisplayMedia({ video: true });
+      stream = await mediaDevices.getDisplayMedia({ video: true });
       const video = document.createElement("video");
       video.srcObject = stream;
       await video.play();
@@ -155,13 +150,15 @@ export const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ open: open
       const context = canvas.getContext("2d");
       context?.drawImage(video, 0, 0, canvas.width, canvas.height);
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((result) => resolve(result), "image/png"));
-      stream.getTracks().forEach((track) => track.stop());
       if (!blob) throw new Error("The screen could not be captured.");
       const file = new File([blob], "screenshot.png", { type: "image/png" });
       pickFile(file);
       setCaptured("Screen captured");
     } catch (captureError) {
       setError(captureError instanceof Error ? captureError.message : "The screen could not be captured.");
+    } finally {
+      // A failed play() or toBlob() must not leave the browser sharing the screen.
+      stream?.getTracks().forEach((track) => track.stop());
     }
   };
 
