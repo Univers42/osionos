@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { judgeClaims, parseClaims, quoteFound } from '../eval/answers/claimJudge.ts';
+import { judgeClaims, judgeClaimsTraced, parseClaims, quoteFound, quoteNear } from '../eval/answers/claimJudge.ts';
 
 // A fake complete: the queued answers, in order, with no model behind it.
 function completer(responses: string[]): (prompt: string) => Promise<string> {
@@ -35,6 +35,40 @@ describe('quoteFound', () => {
 
 	it('a quote that is not there is not found', () => {
 		assert.equal(quoteFound('twelve weeks', 'The frame ships in eight weeks.'), false);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// quoteNear
+// ---------------------------------------------------------------------------
+
+describe('quoteNear', () => {
+	it('exact text passes at ratio 0.8', () => {
+		assert.equal(quoteNear('The frame ships in eight weeks', 'The frame ships in eight weeks.', 0.8), true);
+	});
+
+	it('one changed word in a ten-word quote passes at 0.8 and fails at 1.0', () => {
+		const quote = 'The frame kit ships in eight weeks from Vejle today';
+		const source = 'The frame kit ships in eight weeks from Vejle tomorrow.';
+		assert.equal(quoteNear(quote, source, 0.8), true);
+		assert.equal(quoteNear(quote, source, 1), false);
+	});
+
+	it('a changed number fails at any ratio', () => {
+		const quote = 'The frame kit ships in 12 weeks';
+		const source = 'The frame kit ships in 8 weeks.';
+		assert.equal(quoteNear(quote, source, 0.5), false);
+		assert.equal(quoteNear(quote, source, 0.8), false);
+		assert.equal(quoteNear(quote, source, 1), false);
+	});
+
+	it('unrelated text fails', () => {
+		assert.equal(quoteNear('The frame kit ships in eight weeks', 'It comes from the Vejle workshop.', 0.5), false);
+	});
+
+	it('an empty quote fails', () => {
+		assert.equal(quoteNear('', 'The frame ships in eight weeks.', 0.8), false);
+		assert.equal(quoteNear('   ', 'The frame ships in eight weeks.', 0.8), false);
 	});
 });
 
@@ -145,5 +179,45 @@ describe('judgeClaims', () => {
 		const complete = completer(['I could not do that.']);
 		const verdict = await judgeClaims('question', 'answer', ['source'], complete);
 		assert.equal(verdict, null);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// judgeClaimsTraced
+// ---------------------------------------------------------------------------
+
+describe('judgeClaimsTraced', () => {
+	it('traces every claim and calls entailment only for a found quote', async () => {
+		let first = true;
+		let entailCalls = 0;
+		const complete = async (): Promise<string> => {
+			if (first) {
+				first = false;
+				return claimsJson(false, 4, [
+					{ claim: 'The kit ships in eight weeks.', source: 1, quote: 'ships in eight weeks' },
+					{ claim: 'It is made in Copenhagen.', source: 2, quote: 'made in Copenhagen' },
+					{ claim: 'It weighs five kilos.', source: 1, quote: 'weighs five kilos' },
+				]);
+			}
+			entailCalls++;
+			return 'yes';
+		};
+
+		const traced = await judgeClaimsTraced(
+			'What is the lead time?',
+			'The kit ships in eight weeks, is made in Copenhagen, and weighs five kilos.',
+			['The frame kit ships in eight weeks and weighs five kilos.', 'It comes from the Vejle workshop.'],
+			complete,
+		);
+
+		assert.equal(traced?.claims.length, 3);
+		assert.equal(traced?.claims[0].quoteFound, true);
+		assert.equal(traced?.claims[0].entailed, true);
+		assert.equal(traced?.claims[1].quoteFound, false);
+		assert.equal(traced?.claims[1].entailed, null);
+		assert.equal(traced?.claims[2].quoteFound, true);
+		assert.equal(traced?.claims[2].entailed, true);
+		assert.equal(entailCalls, 2);
+		assert.deepEqual(traced?.verdict, { faithful: false, relevant: 4, abstained: false });
 	});
 });
