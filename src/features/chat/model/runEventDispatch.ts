@@ -31,6 +31,7 @@ import { permissionFromEvent } from "./approvalParts";
 import type { PermissionPart } from "./approvalParts";
 import { memoryProposalFromEvent } from "./memoryParts";
 import type { MemoryProposalPart } from "./memoryParts";
+import { applyViewAction } from "@/features/ai/model/viewActions";
 
 /** What the dispatch needs from the store. */
 export interface RunEventActions {
@@ -53,6 +54,9 @@ export interface RunEventActions {
   /** The assistant proposes a fact to remember: the chip that asks the user. */
   proposeMemory(proposal: MemoryProposalPart): void;
 }
+
+/** Applied view-action tool call ids, bounded to the last 500. */
+const appliedViewActionIds = new Set<string>();
 
 /**
  * One frame of a run, and what it does.
@@ -103,6 +107,25 @@ export function dispatchRunEvent(
   }
   if (event === "tool.result") {
     actions.appendToolResult(data);
+    const toolName = typeof data.toolName === "string" ? data.toolName : "";
+    const ok = data.ok === true;
+    const toolCallId = typeof data.toolCallId === "string" ? data.toolCallId : "";
+    const view = data.view;
+    if (
+      ok &&
+      view !== undefined &&
+      toolCallId !== "" &&
+      (toolName === "open_page" || toolName === "open_panel" || toolName === "open_issue_report")
+    ) {
+      if (!appliedViewActionIds.has(toolCallId)) {
+        appliedViewActionIds.add(toolCallId);
+        if (appliedViewActionIds.size > 500) {
+          const oldest = appliedViewActionIds.values().next().value;
+          if (oldest !== undefined) appliedViewActionIds.delete(oldest);
+        }
+        applyViewAction(view);
+      }
+    }
     return;
   }
   if (event === "permission.asked") {

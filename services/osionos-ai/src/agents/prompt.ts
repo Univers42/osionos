@@ -62,6 +62,6 @@ export function systemPromptFor(agent: BuiltinAgent | null, index?: SkillIndex):
 	if (agent && agent.instructions.length > AGENT_INSTRUCTIONS_MAX) {
 		throw new Error('the instructions of the agent are over the cap');
 	}
-	const [identity, language, boundary, style] = SYSTEM_PROMPT_LINES;
-	return [identity, language, style, ...(agent ? [agentBlock(agent)] : []), ...(skills ? [skills] : []), boundary].join('\n');
+	const [identity, language, style, accountLine, boundary] = SYSTEM_PROMPT_LINES;
+	return [identity, language, style, accountLine, ...(agent ? [agentBlock(agent)] : []), ...(skills ? [skills] : []), boundary].join('\n');
 }

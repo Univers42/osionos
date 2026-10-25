@@ -12,6 +12,7 @@
 
 import {
   Bell,
+  Bug,
   CalendarRange,
   CircleAlert,
   Database,
@@ -98,6 +99,7 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
       { id: "scm", label: "Source Control", Icon: GitBranch, action: { kind: "panel", panel: "scm" } },
       { id: "run", label: "Run", Icon: Play, action: { kind: "panel", panel: "run" } },
       { id: "problems", label: "Problems", Icon: CircleAlert, action: { kind: "panel", panel: "problems" } },
+      { id: "issues", label: "Issues", Icon: Bug, action: { kind: "panel", panel: "issues" } },
     ],
   },
   {

@@ -42,7 +42,44 @@ const startRunSchema = z.object({
 			// pages that answer the question, and the client gets them as
 			// `citation` events.
 			workspace: z.boolean().optional(),
+			// The account block: who is asking. True adds it; absent or false does not.
+			account: z.boolean().optional(),
+			// What the caller has open.
+			view: z
+				.object({
+					route: z.string().min(1).max(200),
+					layout: z.enum(['single', 'split']),
+					activePage: z
+						.object({
+							id: z.string().regex(UUID, 'activePage.id must be a uuid'),
+							title: z.string().max(120),
+						})
+						.strict()
+						.optional(),
+					tabs: z
+						.array(
+							z
+								.object({
+									title: z.string().max(120),
+									kind: z.enum(['page', 'database', 'app', 'other']),
+									pageId: z.string().regex(UUID, 'tabs.pageId must be a uuid').optional(),
+								})
+								.strict(),
+						)
+						.max(8)
+						.optional(),
+					panel: z
+						.enum([
+							'files', 'search', 'marketplace', 'agents', 'conversations',
+							'notifications', 'tasks', 'public', 'database', 'scm', 'run',
+							'problems', 'issues',
+						])
+						.optional(),
+				})
+				.strict()
+				.optional(),
 		})
+		.strict()
 		.optional(),
 }).strict();
 
@@ -149,6 +186,8 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		sessionToken,
 		agent,
 		workspaceId: conversation.workspace_id,
+		account: body.context?.account,
+		view: body.context?.view,
 		emit: (event) => writeSseFrame(ctx.response, event),
 	});
 	if (outcome.kind === 'refused') {

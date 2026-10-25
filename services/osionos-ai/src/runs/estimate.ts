@@ -26,14 +26,16 @@ export function promptCharCount({
 	pageChars = 0,
 	sourceChars = 0,
 	systemChars = SYSTEM_PROMPT.length,
+	contextChars = 0,
 }: {
 	text: string;
 	historyChars: number;
 	pageChars?: number;
 	sourceChars?: number;
 	systemChars?: number;
+	contextChars?: number;
 }): number {
-	return text.length + historyChars + pageChars + sourceChars + systemChars;
+	return text.length + historyChars + pageChars + sourceChars + systemChars + contextChars;
 }
 
 /**
@@ -62,15 +64,17 @@ export function estimateMicroUsd(
 		pageChars = 0,
 		sourceChars = 0,
 		systemChars = SYSTEM_PROMPT.length,
+		contextChars = 0,
 	}: {
 		text: string;
 		historyChars: number;
 		pageChars?: number;
 		sourceChars?: number;
 		systemChars?: number;
+		contextChars?: number;
 	},
 ): number {
-	const estimatedInputTokens = estimateTokens(promptCharCount({ text, historyChars, pageChars, sourceChars, systemChars }));
+	const estimatedInputTokens = estimateTokens(promptCharCount({ text, historyChars, pageChars, sourceChars, systemChars, contextChars }));
 	return costMicroUsd(model, { inputTokens: estimatedInputTokens, outputTokens: config.maxOutputTokens });
 }
 
@@ -145,14 +149,16 @@ export function estimateRunMicroUsd(
 		pageChars = 0,
 		sourceChars = 0,
 		systemChars = SYSTEM_PROMPT.length,
+		contextChars = 0,
 	}: {
 		text: string;
 		historyChars: number;
 		pageChars?: number;
 		sourceChars?: number;
 		systemChars?: number;
+		contextChars?: number;
 	},
 ): number {
-	const base = promptCharCount({ text, historyChars, pageChars, sourceChars, systemChars });
+	const base = promptCharCount({ text, historyChars, pageChars, sourceChars, systemChars, contextChars });
 	return stepCeilingsMicroUsd(model, { baseChars: base }).needed;
 }

@@ -8,6 +8,7 @@ import { buildSkillIndex } from '../skills/runSkills.ts';
 import type { SkillIndex } from '../skills/runSkills.ts';
 import { loadListedVersion, recordSkillPin } from '../skills/repo.ts';
 import { readToolSet } from '../tools/index.ts';
+import { VIEW_TOOLS } from '../tools/viewTools.ts';
 import type { ToolOutcome, ToolPool } from '../tools/index.ts';
 import { writeToolSet } from '../approvals/toolSet.ts';
 import type { ApprovalContext, PermissionAsked } from '../approvals/types.ts';
@@ -155,7 +156,7 @@ export function buildRunTools(input: {
 
 	run.tools = user
 		? {
-				...readToolSet({ db, user }, hooks, pool, [...skillTools, ...proposalTools]),
+				...readToolSet({ db, user }, hooks, pool, [...skillTools, ...proposalTools, ...VIEW_TOOLS]),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
 		: undefined;
@@ -167,7 +168,7 @@ export function buildRunTools(input: {
 		const allowed = new Set(agent.tools);
 		const kept: ToolSet = {};
 		for (const [name, tool] of Object.entries(run.tools)) {
-			if (allowed.has(name) || name === 'load_skill' || name === 'remember') kept[name] = tool;
+			if (allowed.has(name) || name === 'load_skill' || name === 'remember' || name === 'open_page' || name === 'open_panel' || name === 'open_issue_report') kept[name] = tool;
 		}
 		run.tools = kept;
 	}
