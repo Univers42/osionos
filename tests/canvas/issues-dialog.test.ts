@@ -41,12 +41,15 @@ test("opening the dialog does not call getDisplayMedia", async () => {
   assert.equal(called, false);
 });
 
-test("prefilled request fills the fields", async () => {
+// Server rendering reads a store's initial state, so the request is checked in the
+// store and the fields through the props the host passes from it.
+test("a prefilled request reaches the store, and its fields fill the dialog", async () => {
   shimLocalStorage();
   const { useIssueReportRequest } = await import("@/features/issues/model/issueReportRequest");
   useIssueReportRequest.getState().open({ title: "Blank page", description: "Stays white." });
+  assert.deepEqual(useIssueReportRequest.getState().request, { title: "Blank page", description: "Stays white." });
   const { ReportIssueDialog } = await import("@/features/issues/ui/ReportIssueDialog");
-  const html = renderToStaticMarkup(React.createElement(ReportIssueDialog));
+  const html = renderToStaticMarkup(React.createElement(ReportIssueDialog, { open: true, title: "Blank page", description: "Stays white." }));
   assert.match(html, /Blank page/);
   assert.match(html, /Stays white\./);
 });

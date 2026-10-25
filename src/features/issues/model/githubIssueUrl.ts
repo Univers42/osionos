@@ -10,84 +10,44 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-export interface GithubIssueReport {
-  id?: string;
-  title?: string;
-  body?: string;
-  description?: string;
-  route_kind?: string;
-  routeKind?: string;
-  app_version?: string | null;
-  appVersion?: string | null;
-  user_agent?: string | null;
-  userAgent?: string | null;
-  errors?: readonly string[] | null;
-  screenshot_path?: string | null;
-  screenshotPath?: string | null;
-}
+import type { IssueRow } from "@/features/issues/api/issuesApi";
 
-export interface BuildGithubIssueUrlOptions {
-  repo?: string;
-}
+/**
+ * What a prefilled GitHub issue may carry (devil C222): the report's own text,
+ * the kind of screen, the app version, the browser and the attached errors.
+ * Never the screenshot's URL, a page id or title, or the workspace: the
+ * issue is public, the report is not.
+ */
+export type GithubIssueReport = Pick<IssueRow, "id" | "title" | "body" | "route_kind" | "app_version" | "user_agent" | "errors" | "screenshot_path">;
 
+/** GitHub refuses a longer new-issue URL with a 414. */
 const MAX_URL = 8000;
 
-function field(report: GithubIssueReport, ...keys: string[]): string {
-  for (const key of keys) {
-    const value = (report as Record<string, unknown>)[key];
-    if (value !== undefined && value !== null) return String(value);
-  }
-  return "";
-}
-
-function buildBody(description: string, routeKind: string, appVersion: string, userAgent: string, errors: string[], hasScreenshot: boolean, id: string): string {
-  const lines: string[] = [description, "", `Route: ${routeKind}`, `App version: ${appVersion}`, `Browser: ${userAgent}`];
-  if (errors.length > 0) {
-    lines.push("", "```", ...errors, "```");
-  }
-  if (hasScreenshot && id) {
-    lines.push("", `Screenshot: attached in osionos (report ${id})`);
-  }
+function buildBody(report: GithubIssueReport, description: string, errors: readonly string[]): string {
+  const lines = [description, "", `Route: ${report.route_kind}`, `App version: ${report.app_version ?? ""}`, `Browser: ${report.user_agent ?? ""}`];
+  if (errors.length > 0) lines.push("", "```", ...errors, "```");
+  if (report.screenshot_path) lines.push("", `Screenshot: attached in osionos (report ${report.id})`);
   return lines.join("\n");
 }
 
-export function buildGithubIssueUrl(report: GithubIssueReport, options: BuildGithubIssueUrlOptions = {}): string {
-  const repo = options.repo ?? "Univers42/osionos";
-  const title = field(report, "title") || "Issue report";
-  const id = field(report, "id");
-  const routeKind = field(report, "route_kind", "routeKind") || "other";
-  const appVersion = field(report, "app_version", "appVersion");
-  const userAgent = field(report, "user_agent", "userAgent");
-  const hasScreenshot = Boolean(field(report, "screenshot_path", "screenshotPath"));
-  const description = field(report, "body", "description");
-
-  const errors = Array.isArray(report.errors) ? [...report.errors].map(String) : [];
-
-  const makeUrl = (desc: string, errs: string[]) => {
-    const body = buildBody(desc, routeKind, appVersion, userAgent, errs, hasScreenshot, id);
-    const params = new URLSearchParams();
-    params.set("title", title);
-    params.set("body", body);
+export function buildGithubIssueUrl(report: GithubIssueReport, repo = "Univers42/osionos"): string {
+  const makeUrl = (description: string, errors: readonly string[]) => {
+    const params = new URLSearchParams({ title: report.title || "Issue report", body: buildBody(report, description, errors) });
     return `https://github.com/${repo}/issues/new?${params.toString()}`;
   };
 
-  // Drop errors from the end first.
-  while (errors.length > 0 && makeUrl(description, errors).length > MAX_URL) {
-    errors.pop();
-  }
+  // Drop errors from the end first, then cut the description.
+  const errors = [...report.errors];
+  while (errors.length > 0 && makeUrl(report.body, errors).length > MAX_URL) errors.pop();
+  if (makeUrl(report.body, errors).length <= MAX_URL) return makeUrl(report.body, errors);
 
-  let desc = description;
-  if (makeUrl(desc, errors).length > MAX_URL) {
-    // Binary search the largest prefix that fits, with the ellipsis.
-    let lo = 0;
-    let hi = desc.length;
-    while (lo < hi) {
-      const mid = Math.ceil((lo + hi) / 2);
-      if (makeUrl(desc.slice(0, mid) + "…", errors).length <= MAX_URL) lo = mid;
-      else hi = mid - 1;
-    }
-    desc = lo >= desc.length ? desc : desc.slice(0, lo) + (lo < desc.length ? "…" : "");
+  // The largest prefix of the description that fits with its ellipsis.
+  let lo = 0;
+  let hi = report.body.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (makeUrl(`${report.body.slice(0, mid)}…`, errors).length <= MAX_URL) lo = mid;
+    else hi = mid - 1;
   }
-
-  return makeUrl(desc, errors);
+  return makeUrl(`${report.body.slice(0, lo)}…`, errors);
 }

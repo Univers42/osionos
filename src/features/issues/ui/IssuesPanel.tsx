@@ -10,23 +10,15 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useIsAdmin } from "@/features/auth/model/useIsAdmin";
 import { useIssueReportRequest } from "@/features/issues/model/issueReportRequest";
-import { listIssues, updateIssue, type IssueRow } from "@/features/issues/api/issuesApi";
+import { listIssues, updateIssue, type IssueRow, type IssueStatus } from "@/features/issues/api/issuesApi";
 import { buildGithubIssueUrl } from "@/features/issues/model/githubIssueUrl";
 import { API_BASE } from "@/shared/api/client";
 
 const GITHUB_URL_RE = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/[0-9]+$/;
 const STATUSES = ["", "open", "triaged", "sent", "closed"] as const;
-
-function field(row: IssueRow, ...keys: string[]): string {
-  for (const key of keys) {
-    const value = (row as unknown as Record<string, unknown>)[key];
-    if (value !== undefined && value !== null) return String(value);
-  }
-  return "";
-}
 
 function relativeDate(value: string): string {
   const date = new Date(value);
@@ -55,7 +47,7 @@ export const IssuesPanel: React.FC = () => {
 
   const effectiveScope = isAdmin ? scope : "mine";
 
-  const load = async (before?: string, append = false) => {
+  const load = useCallback(async (before?: string, append = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -68,12 +60,11 @@ export const IssuesPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [effectiveScope, status]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveScope, status]);
+  }, [load]);
 
   const selected = issues.find((row) => row.id === selectedId) ?? null;
 
@@ -108,7 +99,7 @@ export const IssuesPanel: React.FC = () => {
   const changeStatus = async (nextStatus: string) => {
     if (!selected || !isAdmin) return;
     try {
-      const result = await updateIssue(selected.id, { status: nextStatus });
+      const result = await updateIssue(selected.id, { status: nextStatus as IssueStatus });
       const updated = result?.issue;
       if (updated) {
         setIssues((previous) => previous.map((row) => (row.id === selected.id ? updated : row)));
@@ -118,7 +109,7 @@ export const IssuesPanel: React.FC = () => {
     }
   };
 
-  const lastCreatedAt = issues.length > 0 ? field(issues[issues.length - 1], "created_at", "createdAt") : "";
+  const lastCreatedAt = issues.length > 0 ? issues[issues.length - 1].created_at : "";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -157,10 +148,10 @@ export const IssuesPanel: React.FC = () => {
             <p className="p-3 text-sm">{status ? "Nothing matches this filter." : "No reports yet."}</p>
           ) : null}
           {issues.map((row) => {
-            const rowStatus = field(row, "status");
-            const rowTitle = field(row, "title");
-            const reporter = field(row, "reporterName");
-            const created = field(row, "created_at", "createdAt");
+            const rowStatus = row.status;
+            const rowTitle = row.title;
+            const reporter = row.reporterName ?? "";
+            const created = row.created_at;
             return (
               <button
                 key={row.id}
@@ -188,25 +179,25 @@ export const IssuesPanel: React.FC = () => {
           {!selected ? <p className="text-sm">Select a report.</p> : null}
           {selected ? (
             <div className="flex flex-col gap-3">
-              <h3 className="text-sm font-semibold">{field(selected, "title")}</h3>
+              <h3 className="text-sm font-semibold">{selected.title}</h3>
               <p className="text-xs text-[var(--osio-fg-subtle)]">
-                {field(selected, "status")} · {relativeDate(field(selected, "created_at", "createdAt"))}
-                {isAdmin && field(selected, "reporterName") ? ` · ${field(selected, "reporterName")}` : ""}
+                {selected.status} · {relativeDate(selected.created_at)}
+                {isAdmin && selected.reporterName ? ` · ${selected.reporterName}` : ""}
               </p>
-              <p className="whitespace-pre-wrap text-sm">{field(selected, "body")}</p>
-              <p className="text-xs text-[var(--osio-fg-subtle)]">Route: {field(selected, "route_kind", "routeKind")}</p>
-              <p className="text-xs text-[var(--osio-fg-subtle)]">Browser: {field(selected, "user_agent", "userAgent")}</p>
-              {Array.isArray(selected.errors) && selected.errors.length > 0 ? (
+              <p className="whitespace-pre-wrap text-sm">{selected.body}</p>
+              <p className="text-xs text-[var(--osio-fg-subtle)]">Route: {selected.route_kind}</p>
+              <p className="text-xs text-[var(--osio-fg-subtle)]">Browser: {selected.user_agent}</p>
+              {selected.errors.length > 0 ? (
                 <pre className="max-h-40 overflow-auto rounded-md border p-2 text-xs">{selected.errors.join("\n")}</pre>
               ) : null}
-              {field(selected, "screenshot_path", "screenshotPath") ? (
+              {selected.screenshot_path ? (
                 <div className="flex flex-col gap-2">
                   <img
-                    src={`${API_BASE}${field(selected, "screenshot_path", "screenshotPath")}`}
+                    src={`${API_BASE}${selected.screenshot_path}`}
                     alt="Screenshot attached to the report"
                     className="max-h-64 rounded-md border"
                   />
-                  <a href={`${API_BASE}${field(selected, "screenshot_path", "screenshotPath")}`} download className="text-sm text-[var(--osio-accent)]">
+                  <a href={`${API_BASE}${selected.screenshot_path}`} download className="text-sm text-[var(--osio-accent)]">
                     Download screenshot
                   </a>
                 </div>
@@ -218,7 +209,7 @@ export const IssuesPanel: React.FC = () => {
                     <span>Status</span>
                     <select
                       aria-label="Status"
-                      value={field(selected, "status")}
+                      value={selected.status}
                       onChange={(event) => void changeStatus(event.target.value)}
                       className="rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1 text-sm"
                     >
