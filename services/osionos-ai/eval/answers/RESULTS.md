@@ -62,6 +62,22 @@ sh eval/answers/rejudge.sh osionos_ai_models_llm 'Qwen3-4B-Instruct-2507-Q4_K_M.
   claims failed the verbatim quote check or the entailment question, which is the over-strict direction its
   `Caveat:` names.
 
+- Afterwards, having seen the 4B numbers, the same two judges were run with a larger model,
+  `Qwen2.5-14B-Instruct` Q4_K_M (`LLM_MEMORY=12g sh eval/answers/rejudge.sh <volume> 'Qwen2.5-14B-Instruct-Q4_K_M.gguf'
+  <judge> <out>`). Because the model was chosen after the first results, this is a post-hoc comparison:
+
+  | judge | model | kappa (faithful) | Spearman (relevant) | unfaithful caught | faithful flagged |
+  |---|---|---|---|---|---|
+  | whole | Qwen3-4B | −0.087 | 0.785 | 0 / 3 | 2 / 27 |
+  | claims | Qwen3-4B | 0.412 | 0.727 | 3 / 3 | 6 / 27 |
+  | whole | Qwen2.5-14B | 0.000 | 0.721 | 0 / 3 | 0 / 27 |
+  | claims | Qwen2.5-14B | 0.322 | 0.173 | 3 / 3 | 8 / 27 |
+
+  What catches the unfaithful answers is splitting the answer into claims, not the size of the model: the one-shot
+  judge misses all three at either size. What keeps every variant below 0.6 is over-strictness, faithful paraphrases
+  that fail the verbatim quote check. No variant passes `calibrate.ts`. The next lever is the one the
+  `quoteFound` caveat names, a looser quote match. Testing it needs a labelled set the prompts were never run on.
+
 Caveat: only 3 of the 30 labels are unfaithful, so one verdict moves kappa a lot, and a kappa near 0.6 on this set
 does not prove much. Both prompts were written once from the brief and each variant ran once, with no tuning on
 these rows.
