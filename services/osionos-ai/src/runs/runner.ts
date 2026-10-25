@@ -10,12 +10,15 @@ import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
 import type { RunEvent } from './upstream.ts';
 import {
+	accountBlock,
 	historyChars,
 	loadHistory,
 	loadPageContext,
 	memoryChars,
 	quotedPageChars,
+	viewBlock,
 } from './prompt.ts';
+import { loadAccountContext } from './account.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
 import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
@@ -95,6 +98,10 @@ export interface StartRunInput {
 	agent?: BuiltinAgent | null;
 	/** The workspace of the conversation: its skills join the prompt, when the caller is a live member. */
 	workspaceId?: string;
+	/** Whether the account block is included in the prompt. */
+	account?: boolean;
+	/** The view the caller has open, as the client reports it. */
+	view?: import('./prompt.ts').RunView;
 	/** Where the model is called, and who pays for it. */
 	target: ResolvedTarget;
 	emit: (event: RunEvent) => void;
@@ -270,6 +277,18 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const memories = await memoriesForRun(db, input.user, input.workspaceId);
 	await recordMemoryPins(db, runId, memories);
 	const day = today();
+	// The account block, when the client asks for it: who is asking.
+	let accountBlockText: string | undefined;
+	if (input.account === true && input.user) {
+		const accountCtx = await loadAccountContext(db, input.user, input.workspaceId ?? input.user.workspaceId);
+		accountBlockText = accountBlock(accountCtx, new Date());
+	}
+	// The view block, when the client reports one.
+	let viewBlockText: string | undefined;
+	if (input.view) {
+		viewBlockText = viewBlock(input.view);
+	}
+	const contextChars = (accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0);
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
@@ -281,6 +300,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		// The system prompt of THIS run: the base one, or the longer one of
 		// the agent. The reservation counts what the call really sends.
 		systemChars: systemPromptFor(agent, skillIndex).length,
+		contextChars,
 	});
 	const imageMicroUsd = Math.ceil(
 		(images.length * config.visionTokensPerImage * target.pricing.inputMicroUsdPerMTok) / 1e6,
@@ -340,6 +360,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			skillIndex,
 			memories,
 			workspaceId: input.workspaceId,
+			...(accountBlockText ? { accountBlock: accountBlockText } : {}),
+			...(viewBlockText ? { viewBlock: viewBlockText } : {}),
 		});
 	};
 	return { kind: 'started', run: (await getRun(db, runId)) as RunRow, execute };
