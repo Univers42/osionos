@@ -4,6 +4,8 @@
 #
 # Usage: sh eval/answers/rejudge.sh <model-volume> <gguf-name-glob> <judge> <out.jsonl>
 #   judge: whole (judge.ts) or claims (claimJudge.ts)
+#   CLAIM_QUOTE_RATIO (default 1) how much of a claim's quote must appear in its
+#     source, in (0, 1]; only the claims judge uses it.
 #   LLM_MEMORY (default 6g) caps the model container; a 14B Q4_K_M needs about 11g.
 #
 # It never writes labels.jsonl: the new rows go to <out.jsonl>.
@@ -93,6 +95,7 @@ docker run --rm --network "$NETWORK" \
 	-v "$OUT_DIR:$OUT_DIR" \
 	-w /app/services/osionos-ai \
 	-e JUDGE="$JUDGE" \
+	-e CLAIM_QUOTE_RATIO="${CLAIM_QUOTE_RATIO:-1}" \
 	-e OSIONOS_AI_LLM_URL="http://$LLM_CONTAINER:8080" \
 	-e OSIONOS_AI_LLM_MODEL="$LLM_MODEL_ALIAS" \
 	-e OUT_PATH="$OUT" \

@@ -174,14 +174,141 @@ export function parseEntail(text: string): boolean | null {
 	return match[1].toLowerCase() === 'yes';
 }
 
+/** The punctuation stripped before quoteNear compares word tokens. */
+const PUNCTUATION = /[^\p{L}\p{N}\s]/gu;
+
+/** Lowercase, strip punctuation, collapse whitespace, and split on spaces. */
+function wordTokens(text: string): string[] {
+	return normalise(text)
+		.replace(PUNCTUATION, ' ')
+		.replace(/\s+/g, ' ')
+		.trim()
+		.split(' ')
+		.filter((token) => token.length > 0);
+}
+
 /**
- * Judge the answer claim by claim.
+ * Is the quote close enough to a run of the source?
+ *
+ * Both texts are lowercased, punctuation-stripped and split into word tokens.
+ * A window of ceil(quoteTokens * 1.5) source tokens passes when at least
+ * `ratio` of the quote's tokens appear in it (counted as a multiset) and every
+ * quote token containing a digit appears exactly.
+ *
+ * Caveat: word order is ignored inside the window, so a quote that swaps who
+ * did what can still pass; the entailment step is the only guard against that.
+ * A number written in words is not protected by rule (b).
+ */
+export function quoteNear(quote: string, source: string, ratio: number): boolean {
+	const quoteTokens = wordTokens(quote);
+	if (quoteTokens.length === 0) return false;
+	const sourceTokens = wordTokens(source);
+	if (sourceTokens.length === 0) return false;
+
+	const quoteCounts = new Map<string, number>();
+	for (const token of quoteTokens) {
+		quoteCounts.set(token, (quoteCounts.get(token) ?? 0) + 1);
+	}
+	const digitTokens = [...quoteCounts.entries()].filter(([token]) => /\d/.test(token));
+	const needed = ratio * quoteTokens.length;
+	const windowSize = Math.min(Math.ceil(quoteTokens.length * 1.5), sourceTokens.length);
+
+	for (let start = 0; start + windowSize <= sourceTokens.length; start++) {
+		const windowCounts = new Map<string, number>();
+		for (let index = start; index < start + windowSize; index++) {
+			const token = sourceTokens[index];
+			windowCounts.set(token, (windowCounts.get(token) ?? 0) + 1);
+		}
+
+		let matched = 0;
+		for (const [token, count] of quoteCounts) {
+			matched += Math.min(count, windowCounts.get(token) ?? 0);
+		}
+		if (matched < needed) continue;
+
+		let numbersExact = true;
+		for (const [token, count] of digitTokens) {
+			if ((windowCounts.get(token) ?? 0) < count) {
+				numbersExact = false;
+				break;
+			}
+		}
+		if (numbersExact) return true;
+	}
+
+	return false;
+}
+
+/** One claim as the judge checked it: what ran and what it found. */
+export interface ClaimTrace {
+	claim: string;
+	source: number;
+	quote: string;
+	inRange: boolean;
+	quoteFound: boolean;
+	entailed: boolean | null;
+}
+
+/** Options for judgeClaimsTraced; quoteRatio defaults to 1 (exact quote). */
+export interface ClaimJudgeOptions {
+	quoteRatio?: number;
+}
+
+/**
+ * Judge the answer claim by claim, and trace every claim.
  *
  * A parse failure is null. An abstention with no claims is faithful.
  * Otherwise the answer is faithful iff every claim has a source in range, its
  * quote is found in that source, and the entailment call says yes (a null
  * entailment counts as unsupported). Relevant and abstained come from the
  * first call.
+ *
+ * It visits every claim rather than stopping at the first failure, so the
+ * trace is complete; the entailment call runs only for a claim in range whose
+ * quote was found. A failing answer can therefore cost more calls than before,
+ * never a different verdict.
+ */
+export async function judgeClaimsTraced(
+	question: string,
+	answer: string,
+	sources: string[],
+	complete: (prompt: string) => Promise<string>,
+	options?: ClaimJudgeOptions,
+): Promise<{ verdict: Verdict; claims: ClaimTrace[] } | null> {
+	const parsed = parseClaims(await complete(claimsPrompt(question, answer, sources)));
+	if (parsed === null) return null;
+
+	const ratio = options?.quoteRatio ?? 1;
+	const { abstained, relevant, claims } = parsed;
+	const traces: ClaimTrace[] = [];
+	let faithful = true;
+
+	if (!(abstained && claims.length === 0)) {
+		for (const claim of claims) {
+			const inRange = claim.source >= 1 && claim.source <= sources.length;
+			const source = inRange ? sources[claim.source - 1] : '';
+			const found =
+				inRange && (quoteFound(claim.quote, source) || (ratio < 1 && quoteNear(claim.quote, source, ratio)));
+			const entailed = inRange && found ? parseEntail(await complete(entailPrompt(claim.claim, claim.quote))) : null;
+
+			traces.push({
+				claim: claim.claim,
+				source: claim.source,
+				quote: claim.quote,
+				inRange,
+				quoteFound: found,
+				entailed,
+			});
+
+			if (!(inRange && found && entailed === true)) faithful = false;
+		}
+	}
+
+	return { verdict: { faithful, relevant, abstained }, claims: traces };
+}
+
+/**
+ * Judge the answer claim by claim; the verdict alone, without the trace.
  */
 export async function judgeClaims(
 	question: string,
@@ -189,29 +316,5 @@ export async function judgeClaims(
 	sources: string[],
 	complete: (prompt: string) => Promise<string>,
 ): Promise<Verdict | null> {
-	const parsed = parseClaims(await complete(claimsPrompt(question, answer, sources)));
-	if (parsed === null) return null;
-
-	const { abstained, relevant, claims } = parsed;
-	let faithful = true;
-
-	if (!(abstained && claims.length === 0)) {
-		for (const claim of claims) {
-			if (claim.source < 1 || claim.source > sources.length) {
-				faithful = false;
-				break;
-			}
-			if (!quoteFound(claim.quote, sources[claim.source - 1])) {
-				faithful = false;
-				break;
-			}
-			const entailed = parseEntail(await complete(entailPrompt(claim.claim, claim.quote)));
-			if (entailed !== true) {
-				faithful = false;
-				break;
-			}
-		}
-	}
-
-	return { faithful, relevant, abstained };
+	return (await judgeClaimsTraced(question, answer, sources, complete))?.verdict ?? null;
 }

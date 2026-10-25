@@ -9,6 +9,8 @@
 /*                                                                            */
 /*   Environment:                                                             */
 /*     JUDGE                whole | claims                                     */
+/*     CLAIM_QUOTE_RATIO    how much of a claim's quote must appear in its     */
+/*                          source, in (0, 1]; default 1 (exact quote)         */
 /*     OSIONOS_AI_LLM_URL   the local llama.cpp server                         */
 /*     OSIONOS_AI_LLM_MODEL the model that server loads                        */
 /*                                                                            */
@@ -20,8 +22,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readGolden } from '../../eval/lib.mjs';
 import { judge } from './judge.ts';
-import { judgeClaims } from './claimJudge.ts';
+import { judgeClaimsTraced } from './claimJudge.ts';
 import type { Verdict } from './judge.ts';
+import type { ClaimTrace } from './claimJudge.ts';
 import type { LabelRow } from './labels.ts';
 
 interface QuestionRow {
@@ -37,6 +40,7 @@ const LABELS_PATH = path.join(ANSWERS_DIR, 'labels.jsonl');
 const llmUrl = process.env.OSIONOS_AI_LLM_URL ?? '';
 const llmModel = process.env.OSIONOS_AI_LLM_MODEL ?? 'qwen3-4b';
 const judgeName = process.env.JUDGE ?? 'whole';
+const quoteRatio = Number(process.env.CLAIM_QUOTE_RATIO ?? '1');
 
 if (llmUrl.length === 0) {
 	console.error('[rejudge] refusing to start: OSIONOS_AI_LLM_URL is needed');
@@ -44,6 +48,12 @@ if (llmUrl.length === 0) {
 }
 if (judgeName !== 'whole' && judgeName !== 'claims') {
 	console.error(`[rejudge] JUDGE must be whole or claims, not "${judgeName}"`);
+	process.exit(2);
+}
+if (!Number.isFinite(quoteRatio) || quoteRatio <= 0 || quoteRatio > 1) {
+	console.error(
+		`[rejudge] CLAIM_QUOTE_RATIO must be a number in (0, 1], not "${process.env.CLAIM_QUOTE_RATIO ?? ''}"`,
+	);
 	process.exit(2);
 }
 
@@ -97,24 +107,39 @@ async function main() {
 		process.exit(2);
 	}
 
-	const runner = judgeName === 'claims' ? judgeClaims : judge;
 	const labels = readLabels();
 	const questions = loadQuestions();
 	const rows: string[] = [];
+	const traceRows: string[] = [];
 
 	for (const row of labels) {
 		let verdict: Verdict | null = null;
+		let claims: ClaimTrace[] = [];
 		if (row.answer !== null && row.sources !== null) {
 			const question = questions.get(row.id);
 			if (question === undefined) throw new Error(`no question for ${row.id}`);
-			verdict = await runner(question, row.answer, row.sources, callLlm);
+			if (judgeName === 'claims') {
+				const traced = await judgeClaimsTraced(question, row.answer, row.sources, callLlm, { quoteRatio });
+				verdict = traced?.verdict ?? null;
+				claims = traced?.claims ?? [];
+			} else {
+				verdict = await judge(question, row.answer, row.sources, callLlm);
+			}
 		}
 		rows.push(JSON.stringify({ ...row, judge: verdict }));
+		if (judgeName === 'claims') {
+			traceRows.push(JSON.stringify({ id: row.id, faithful: verdict?.faithful ?? null, claims }));
+		}
 		console.log(`[rejudge] ${row.id} ${verdict ? (verdict.faithful ? 'faithful' : 'unfaithful') : 'null'}`);
 	}
 
 	writeFileSync(outPath, rows.join('\n') + '\n', 'utf8');
 	console.log(`[rejudge] wrote ${rows.length} rows to ${outPath}`);
+	if (judgeName === 'claims') {
+		const tracePath = `${outPath}.trace.jsonl`;
+		writeFileSync(tracePath, traceRows.join('\n') + '\n', 'utf8');
+		console.log(`[rejudge] wrote ${traceRows.length} trace rows to ${tracePath}`);
+	}
 }
 
 main().catch((error: unknown) => {
