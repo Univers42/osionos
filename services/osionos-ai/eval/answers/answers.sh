@@ -3,6 +3,7 @@
 # llama.cpp model, and node:22 that answers, judges and writes RESULTS.md.
 #
 # Usage: sh eval/answers/answers.sh <migration> <rag-migration>
+# ANSWERS_CHECKPOINT=<path inside the repo>: save each finished question as it ends, resume next run.
 set -eu
 
 MIGRATION=""
@@ -25,6 +26,25 @@ fi
 
 SERVICE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SERVICE_DIR/../.." && pwd)
+
+# Only the repo is mounted into the node container, so a checkpoint outside it
+# would be written nowhere. Refuse it here rather than lose the run.
+CHECKPOINT_MOUNT=""
+if [ -n "${ANSWERS_CHECKPOINT:-}" ]; then
+	REPO_ABS=$(realpath -m -- "$REPO_ROOT")
+	case "$ANSWERS_CHECKPOINT" in
+	/*) CHECKPOINT_ABS=$(realpath -m -- "$ANSWERS_CHECKPOINT") ;;
+	*) CHECKPOINT_ABS=$(realpath -m -- "$REPO_ROOT/$ANSWERS_CHECKPOINT") ;;
+	esac
+	case "$CHECKPOINT_ABS" in
+	"$REPO_ABS"/*) CHECKPOINT_MOUNT="/app/${CHECKPOINT_ABS#"$REPO_ABS"/}" ;;
+	*)
+		echo "[answers] ANSWERS_CHECKPOINT must be inside the repo ($REPO_ROOT): $ANSWERS_CHECKPOINT" >&2
+		exit 2
+		;;
+	esac
+fi
+
 HARNESS_LABEL=answers
 HARNESS_DIR="$SERVICE_DIR/eval"
 . "$HARNESS_DIR/harness.sh"
@@ -122,7 +142,7 @@ harness_apply_fixture "$DB_CONTAINER" osionos_ai_test postgres
 harness_apply_migrations "$DB_CONTAINER" osionos_ai_test postgres "$MIGRATION" "$RAG_MIGRATION"
 
 echo "[answers] running the measurement"
-docker run --rm --network "$NETWORK" \
+set -- --rm --network "$NETWORK" \
 	--user "$(id -u):$(id -g)" \
 	-v "$REPO_ROOT:/app" -w /app/services/osionos-ai \
 	-e OSIONOS_AI_DATABASE_URL="postgres://postgres:ai_test_password@$DB_CONTAINER:5432/osionos_ai_test" \
@@ -130,5 +150,8 @@ docker run --rm --network "$NETWORK" \
 	-e OSIONOS_AI_EMBED_MODEL="$MODEL" \
 	-e OSIONOS_AI_LLM_URL="http://$LLM_CONTAINER:8080" \
 	-e OSIONOS_AI_LLM_MODEL="$LLM_MODEL_ALIAS" \
-	-e ANSWER_JUDGE="$ANSWER_JUDGE" \
-	"$NODE_IMAGE" sh -c 'node --experimental-strip-types eval/answers/answers.ts'
+	-e ANSWER_JUDGE="$ANSWER_JUDGE"
+if [ -n "$CHECKPOINT_MOUNT" ]; then
+	set -- "$@" -e ANSWERS_CHECKPOINT="$CHECKPOINT_MOUNT"
+fi
+docker run "$@" "$NODE_IMAGE" sh -c 'node --experimental-strip-types eval/answers/answers.ts'
