@@ -98,11 +98,11 @@ describe('make primary: the happy path', () => {
 	});
 
 	it('P31 a failing GoTrue logout still runs the bridge sweep and answers 503 with the new sentence', async () => {
-		for (const failure of [500, 'reject']) {
+		for (const failure of [{ gotrueLogoutStatus: 500 }, { gotrueLogoutRejects: true }]) {
 			const { world, row } = await setup();
-			world.gotrueLogoutFail = failure;
+			Object.assign(world, failure);
 			const result = await primary(world, row.id);
-			assert.deepEqual([result.status, result.body.code, /Change your password to sign them out\.$/.test(result.body.message), /HAS changed/.test(result.body.message)], [503, 'email_changed_signout_failed', true, true], String(failure));
+			assert.deepEqual([result.status, result.body.code, /Change your password to sign them out\.$/.test(result.body.message), /HAS changed/.test(result.body.message)], [503, 'email_changed_signout_failed', true, true], JSON.stringify(failure));
 			assert.deepEqual([world.cutoffs.length, rowsOf(world).every((entry) => entry.id !== row.id), world.table.audits.some((entry) => entry.event_type === 'account.email_primary_changed'), world.directory.users[USER_A].email], [1, true, true, S]);
 		}
 	});
