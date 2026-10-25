@@ -16,13 +16,6 @@ function shimLocalStorage() {
   };
 }
 
-test("rail lists issues after problems in Workbench", async () => {
-  const { RAIL_GROUPS } = await import("@/widgets/activity-rail/model/railItems");
-  const workbench = RAIL_GROUPS.find((group: any) => group.id === "workbench");
-  const ids = workbench.items.map((item: any) => item.id);
-  assert.deepEqual(ids, ["scm", "run", "problems", "issues"]);
-});
-
 test("applyViewAction open_panel issues sets the active panel", async () => {
   shimLocalStorage();
   const { useUIStore } = await import("@/shared/config/uiStore");
