@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/22 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/25 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,6 @@ import { changeUsername } from '@/shared/api/accountSecurityApi';
 import { Button, Modal, useToastStore } from '@/shared/ui';
 import { useAccountProfileStore } from '@/store/settings';
 import { useSudoPromptStore } from '../ui/sudo/sudoPromptModel';
-import { DataTable } from '../ui/settingsKit';
 import { accountActionNotice, runAccountAction, runAsync } from '../model/settingsCalls';
 
 export { EmailManagerModal } from './EmailManagerModal';
@@ -125,12 +124,15 @@ export const PasskeyManagerModal: React.FC<{ passkeys: Array<{ _id: string; nick
     <div className="space-y-4 p-6">
       <p className="text-sm text-[var(--osio-fg-muted)]">You can rename or remove passkeys here; new passkeys are added when you sign in on a device that offers one.</p>
       {passkeys.length === 0 && <p className="text-sm text-[var(--osio-fg-muted)]">No passkeys yet.</p>}
-      {passkeys.length > 0 && <div className="overflow-x-auto"><DataTable headers={['Name', 'Created', 'Last used', '']} rows={passkeys.map((passkey) => [
-        <input key={`${passkey._id}-name`} aria-label="Passkey name" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={passkey.nickname ?? 'Passkey'} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== (passkey.nickname ?? 'Passkey')) onRename(passkey._id, next); }} />,
-        new Date(passkey.createdAt).toLocaleDateString(),
-        passkey.lastUsedAt ? new Date(passkey.lastUsedAt).toLocaleDateString() : 'Never',
-        <Button key={`${passkey._id}-remove`} tone="danger-subtle" onClick={() => onRemove(passkey._id)}>Remove</Button>,
-      ])} /></div>}
+      {passkeys.length > 0 && <ul aria-label="Your passkeys" className="divide-y divide-[var(--osio-db-line-soft)] rounded-[var(--osio-radius-panel)] border border-[var(--osio-db-line)]">
+        {passkeys.map((passkey) => (
+          <li key={passkey._id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+            <input aria-label="Passkey name" className="min-w-0 flex-1 basis-40 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={passkey.nickname ?? 'Passkey'} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== (passkey.nickname ?? 'Passkey')) onRename(passkey._id, next); }} />
+            <span className="text-xs text-[var(--osio-fg-muted)]">Created {new Date(passkey.createdAt).toLocaleDateString()} · Last used {passkey.lastUsedAt ? new Date(passkey.lastUsedAt).toLocaleDateString() : 'Never'}</span>
+            <Button tone="danger-subtle" className="ml-auto" onClick={() => onRemove(passkey._id)}>Remove</Button>
+          </li>
+        ))}
+      </ul>}
       <div className="flex justify-end"><Button onClick={onClose}>Done</Button></div>
     </div>
   </Modal>
