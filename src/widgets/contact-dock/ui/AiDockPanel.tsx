@@ -27,6 +27,7 @@ import { Send, Sparkles, X } from 'lucide-react';
 
 import { isAiConfigured } from '@/features/ai/api/aiClient';
 import { PLATFORM_CONNECTION_ID, readAiSelection } from '@/features/ai/model/aiSelection';
+import { withAccountContext } from '@/features/ai/model/viewContext';
 import { ANSWER_TABLE_CLASS, renderAssistantMarkdown } from '@/features/chat/model/assistantMarkdown';
 import { IconButton } from '@/shared/ui';
 import { errorWords } from '@/widgets/chat-shell/ui/errorWords';
@@ -81,6 +82,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
     const text = { value: '' };
     // The choice the user made in the Assistant: the same connection and model.
     const selection = readAiSelection();
+    const dockContext = withAccountContext(undefined);
     try {
       await runAiDockTurn({
         port: aiDockPort(),
@@ -89,6 +91,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
         connectionId: selection?.connectionId ?? PLATFORM_CONNECTION_ID,
         ...(selection?.model ? { model: selection.model } : {}),
         ...(serverConversationId.current ? { serverConversationId: serverConversationId.current } : {}),
+        ...(dockContext ? { context: dockContext } : {}),
         onServerConversationId: (id) => { serverConversationId.current = id; },
         onDelta: (chunk) => {
           text.value += chunk;
