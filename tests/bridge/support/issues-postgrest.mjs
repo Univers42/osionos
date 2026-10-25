@@ -50,8 +50,8 @@ const SHAPES = [
 function matches(shape, method, table, params) {
   if (shape.method!==method || shape.table!==table) return false;
   if (shape.keys===null) return true; // loose for list
-  const names=[...params.keys()].sort();
-  const expected=[...shape.keys].sort();
+  const names=[...params.keys()].sort((a, b) => a.localeCompare(b));
+  const expected=[...shape.keys].sort((a, b) => a.localeCompare(b));
   if (JSON.stringify(names)!==JSON.stringify(expected)) return false;
   return Object.entries(shape.fixed).every(([k,v])=> params.get(k)===v);
 }

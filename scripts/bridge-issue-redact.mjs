@@ -29,7 +29,8 @@ export function redactIssueText(text) {
 	out = out.replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]');
 	// 3. Sensitive query-string values.
 	out = out.replace(/(token|key|apikey|access_token|secret|password|code)=([^&#\s]+)/gi, '$1=[redacted]');
-	// 4. Email addresses.
-	out = out.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[email]');
+	// 4. Email addresses. Labels exclude the dot, so a domain splits one way only: the
+	// first pattern let `[A-Za-z0-9.-]+` and `\.` trade dots (SonarCloud: super-linear).
+	out = out.replace(/[\w.%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g, '[email]');
 	return out;
 }
