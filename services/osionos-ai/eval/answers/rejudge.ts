@@ -2,19 +2,21 @@
 /*                                                                            */
 /*   rejudge.ts                    re-judge the stored label answers          */
 /*                                                                            */
-/*   Reads labels.jsonl, re-judges each row's answer and sources with the       */
+/*   Reads LABELS_FILE, re-judges each row's answer and sources with the       */
 /*   judge named by JUDGE (whole = judge.ts, claims = claimJudge.ts), and       */
 /*   writes the same rows with the new judge field to argv[2]. It never        */
-/*   writes labels.jsonl.                                                      */
+/*   writes either label file.                                                 */
 /*                                                                            */
 /*   Environment:                                                             */
+/*     LABELS_FILE          labels.jsonl (default, calibration) or             */
+/*                          heldout.jsonl                                      */
 /*     JUDGE                whole | claims                                     */
 /*     CLAIM_QUOTE_RATIO    how much of a claim's quote must appear in its     */
 /*                          source, in (0, 1]; default 1 (exact quote)         */
 /*     CLAIM_ABSTAIN_RULE   0 (default) or 1: treat a short not-in-sources     */
 /*                          answer as an abstention, whatever claims it lists   */
 /*     CLAIM_SOURCE_FALLBACK 0 (default) or 1: ask whether the source supports */
-/*                          a claim whose quote is not found                    */
+/*                          a claim whose quote check fails                    */
 /*     OSIONOS_AI_LLM_URL   the local llama.cpp server                         */
 /*     OSIONOS_AI_LLM_MODEL the model that server loads                        */
 /*                                                                            */
@@ -39,7 +41,13 @@ interface QuestionRow {
 
 const EVAL_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ANSWERS_DIR = EVAL_DIR; // this file is in eval/answers/
-const LABELS_PATH = path.join(ANSWERS_DIR, 'labels.jsonl');
+const LABEL_FILES = ['labels.jsonl', 'heldout.jsonl'];
+const labelsFile = process.env.LABELS_FILE ?? 'labels.jsonl';
+if (!LABEL_FILES.includes(labelsFile)) {
+	console.error(`[rejudge] LABELS_FILE must be labels.jsonl or heldout.jsonl, not "${labelsFile}"`);
+	process.exit(2);
+}
+const LABELS_PATH = path.join(ANSWERS_DIR, labelsFile);
 
 const llmUrl = process.env.OSIONOS_AI_LLM_URL ?? '';
 const llmModel = process.env.OSIONOS_AI_LLM_MODEL ?? 'qwen3-4b';
@@ -118,8 +126,8 @@ async function main() {
 		console.error('usage: node eval/answers/rejudge.ts <out.jsonl>');
 		process.exit(2);
 	}
-	if (path.resolve(outPath) === path.resolve(LABELS_PATH)) {
-		console.error('[rejudge] refusing to write labels.jsonl');
+	if (LABEL_FILES.some((name) => path.resolve(outPath) === path.join(ANSWERS_DIR, name))) {
+		console.error('[rejudge] refusing to write a label file');
 		process.exit(2);
 	}
 

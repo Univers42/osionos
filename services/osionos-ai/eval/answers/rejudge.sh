@@ -8,12 +8,13 @@
 #     source, in (0, 1]; only the claims judge uses it.
 #   CLAIM_ABSTAIN_RULE (default 0) 1 treats a short not-in-sources answer as an
 #     abstention, whatever claims it lists; only the claims judge uses it.
-#   CLAIM_SOURCE_FALLBACK (default 0) 1 asks whether the source supports a claim
-#     whose quote is not found; only the claims judge uses it.
+#   CLAIM_SOURCE_FALLBACK (default 0) 1 asks whether the whole source supports a
+#     claim whose quote check fails; only the claims judge uses it.
 #   LLM_MEMORY (default 6g) caps the model container; a 14B Q4_K_M needs about 11g.
 #   LLM_BACKEND (default cpu) the llama.cpp backend: cpu or vulkan (the host GPU).
+#   LABELS_FILE (default labels.jsonl) the rows to re-judge: labels.jsonl or heldout.jsonl.
 #
-# It never writes labels.jsonl: the new rows go to <out.jsonl>.
+# It never writes a label file: the new rows go to <out.jsonl>.
 set -eu
 
 if [ "$#" -ne 4 ]; then
@@ -95,6 +96,7 @@ docker run --rm --network "$NETWORK" \
 	-v "$OUT_DIR:$OUT_DIR" \
 	-w /app/services/osionos-ai \
 	-e JUDGE="$JUDGE" \
+	-e LABELS_FILE="${LABELS_FILE:-labels.jsonl}" \
 	-e CLAIM_QUOTE_RATIO="${CLAIM_QUOTE_RATIO:-1}" \
 	-e CLAIM_ABSTAIN_RULE="${CLAIM_ABSTAIN_RULE:-0}" \
 	-e CLAIM_SOURCE_FALLBACK="${CLAIM_SOURCE_FALLBACK:-0}" \
