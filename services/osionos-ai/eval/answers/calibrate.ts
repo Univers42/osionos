@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { cohenKappa, spearman } from './score.ts';
 
 const EVAL_DIR = path.dirname(fileURLToPath(import.meta.url));
-const LABELS_PATH = path.join(EVAL_DIR, 'labels.jsonl');
+const LABELS_PATH = process.argv[2] ?? path.join(EVAL_DIR, 'labels.jsonl');
 
 interface Label {
 	id: string;
