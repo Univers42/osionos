@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync, readFileSync, mkdtempSync, rmSync, copyFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdtempSync, rmSync, copyFileSync, appendFileSync } from 'node:fs';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseVerdict, judgePrompt } from '../eval/answers/judge.ts';
 import { score, cohenKappa, spearman } from '../eval/answers/score.ts';
 import { refreshLabel, fillLabelFile } from '../eval/answers/labels.ts';
+import { openCheckpoint, appendCheckpoint } from '../eval/answers/checkpoint.ts';
+import type { CheckpointHeader, CheckpointRow } from '../eval/answers/checkpoint.ts';
 
 const NODE = 'node';
 import { fileURLToPath } from 'node:url';
@@ -298,6 +300,101 @@ describe('fillLabelFile', () => {
 			assert.deepEqual(row.human, { faithful: null, relevant: null });
 			assert.equal('labeller' in row, false);
 			assert.equal(row.answer, 'Ten weeks [1].');
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+});
+
+// ---------------------------------------------------------------------------
+// checkpoint
+// ---------------------------------------------------------------------------
+
+describe('checkpoint', () => {
+	const header: CheckpointHeader = {
+		judge: 'whole',
+		llmModel: 'qwen3-4b',
+		embedModel: 'intfloat/multilingual-e5-small',
+		questionCount: 200,
+	};
+
+	const row = (id: string): CheckpointRow => ({
+		id,
+		answer: `answer ${id}`,
+		sources: [`source ${id}`],
+		verdict: { faithful: true, relevant: 4, abstained: false },
+		answerable: true,
+		origin: 'human',
+	});
+
+	it('a new file gets the header and returns an empty map', () => {
+		const dir = mkdtempSync(path.join(tmpdir(), 'answers-checkpoint-'));
+		const file = path.join(dir, '.checkpoint.jsonl');
+		try {
+			const rows = openCheckpoint(file, header);
+			assert.equal(rows.size, 0);
+			const lines = readFileSync(file, 'utf8').trim().split('\n');
+			assert.equal(lines.length, 1);
+			assert.deepEqual(JSON.parse(lines[0]), header);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('rows that were appended come back', () => {
+		const dir = mkdtempSync(path.join(tmpdir(), 'answers-checkpoint-'));
+		const file = path.join(dir, '.checkpoint.jsonl');
+		try {
+			openCheckpoint(file, header);
+			appendCheckpoint(file, row('q1'));
+			appendCheckpoint(file, row('q2'));
+			const rows = openCheckpoint(file, header);
+			assert.equal(rows.size, 2);
+			assert.deepEqual(rows.get('q1'), row('q1'));
+			assert.deepEqual(rows.get('q2'), row('q2'));
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('a different header throws', () => {
+		const dir = mkdtempSync(path.join(tmpdir(), 'answers-checkpoint-'));
+		const file = path.join(dir, '.checkpoint.jsonl');
+		try {
+			openCheckpoint(file, header);
+			assert.throws(
+				() => openCheckpoint(file, { ...header, judge: 'claims' }),
+				/delete the file to start over/,
+			);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('a cut-off last line is dropped', () => {
+		const dir = mkdtempSync(path.join(tmpdir(), 'answers-checkpoint-'));
+		const file = path.join(dir, '.checkpoint.jsonl');
+		try {
+			openCheckpoint(file, header);
+			appendCheckpoint(file, row('q1'));
+			appendFileSync(file, '{"id":"q2","answer":');
+			const rows = openCheckpoint(file, header);
+			assert.equal(rows.size, 1);
+			assert.deepEqual(rows.get('q1'), row('q1'));
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('a bad line in the middle throws', () => {
+		const dir = mkdtempSync(path.join(tmpdir(), 'answers-checkpoint-'));
+		const file = path.join(dir, '.checkpoint.jsonl');
+		try {
+			openCheckpoint(file, header);
+			appendCheckpoint(file, row('q1'));
+			appendFileSync(file, 'not json\n');
+			appendCheckpoint(file, row('q2'));
+			assert.throws(() => openCheckpoint(file, header), /bad row on line 3/);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

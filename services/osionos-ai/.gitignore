@@ -4,3 +4,5 @@ node_modules/
 # The scratch of the output check (C73): the models of the classifiers are
 # fetched on the disk of a volume, never in the repository.
 .scratch*/
+# The answer run's checkpoint, when ANSWERS_CHECKPOINT is not set.
+eval/answers/.checkpoint*.jsonl
