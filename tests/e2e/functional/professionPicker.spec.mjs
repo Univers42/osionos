@@ -67,6 +67,15 @@ test("the onboarding path opens the profession picker, and the pick is kept offl
     await expect(picker(page).getByRole("button", { name: new RegExp(`^${label}\\b`) })).toBeVisible();
   }
 
+  // The last profession is reachable on a phone-sized screen: the list scrolls inside the
+  // dialog instead of running past the viewport. Resized only now: the sidebar that
+  // hosts the workspace switcher is hidden at this width.
+  await page.setViewportSize({ width: 375, height: 667 });
+  const teacher = picker(page).getByRole("button", { name: /^Teacher\b/ });
+  await teacher.scrollIntoViewIfNeeded();
+  const box = await teacher.boundingBox();
+  expect(box.y + box.height).toBeLessThanOrEqual(667);
+
   // Picking one closes the picker and keeps the value: offline there is no account
   // plane to write to, so the store holds it locally.
   await picker(page).getByRole("button", { name: /^Teacher\b/ }).click();

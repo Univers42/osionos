@@ -36,15 +36,27 @@ const BY_CODE: Record<string, string> = {
   email_busy: 'Verification is busy right now. Try again later.',
   email_proof_invalid: 'That code could not be confirmed. Resend it and try again.',
   email_unavailable: TEMPORARILY_DOWN,
+  email_changed_signout_failed: 'Your primary address HAS changed, but other devices could not be signed out. Change your password to sign them out.',
+  primary_busy: 'Another change of your primary address is running. Try again in a minute.',
+  email_unverified: 'Verify this address first.',
 };
 
+export const TAKEN_AS_PRIMARY = "That address can't be made primary on this account.";
+
 /** The sentence for a failed call; a refused sudo is handled by the caller, not here. */
-export function emailProblem(outcome: Failed): string {
+export function emailProblem(outcome: Failed, action: 'add' | 'primary' = 'add'): string {
   if (outcome.reason === 'unavailable') return outcome.temporary ? TEMPORARILY_DOWN : NOT_ON_SERVER;
   if (outcome.reason === 'sudo_required') return SUDO_FIRST;
   if (outcome.reason === 'rate_limited') return sudoSentence(outcome);
+  if (action === 'primary' && outcome.code === 'email_taken') return TAKEN_AS_PRIMARY;
   return BY_CODE[outcome.code] ?? sudoSentence(outcome);
 }
+
+export const makePrimaryQuestion = (address: string, current: string): string =>
+  `You'll sign in with ${address} from now on. ${current} stays on your account as a secondary address.`;
+
+export const madePrimaryNotice = (address: string, kept: boolean): string =>
+  `${address} is now your primary address. ${kept ? '' : 'The old address was not kept. '}Other devices were signed out.`;
 
 /** `d•••@g•••.com`: enough to recognise the address, not enough to read it aloud. */
 export function maskEmail(address: string): string {

@@ -105,7 +105,7 @@ export const MailCalendarPanel: React.FC<{ activeUserId: string; personaEmail?: 
 
 const ProviderPickerModal: React.FC<{ title: string; providers: string[]; onSelect: (provider: string) => void; onClose: () => void }> = ({ title, providers, onSelect, onClose }) => (
   <Modal open onClose={onClose} title={title} size="sm">
-    <div className="grid gap-2">
+    <div className="grid gap-2 p-6">
       {providers.map((provider) => {
         const manifest = connectionProvider(provider);
         return <Button key={provider} onClick={() => onSelect(provider)}>{manifest.label}</Button>;

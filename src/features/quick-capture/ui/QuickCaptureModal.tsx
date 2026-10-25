@@ -59,7 +59,7 @@ export const QuickCaptureModal: React.FC = () => {
 
   return (
     <Modal open={open} onClose={close} title="Quick capture" description="Append a note to today's daily note." size="sm" initialFocusRef={textareaRef as React.RefObject<HTMLElement>}>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 p-6">
         <textarea
           ref={textareaRef}
           value={text}

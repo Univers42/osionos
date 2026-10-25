@@ -67,7 +67,7 @@ export const UsernameModal: React.FC<{ current: string; onClose: () => void }> =
 
   return (
     <Modal open onClose={onClose} title="Change username" size="sm">
-      <div className="space-y-3">
+      <div className="space-y-3 p-6">
         <div className="space-y-1">
           <label htmlFor="account-username-input" className="block text-sm font-medium text-[var(--osio-fg-default)]">Username</label>
           <input
@@ -99,7 +99,7 @@ export const PasswordModal: React.FC<{ hasPassword: boolean; onSaved: () => void
   const canSave = nextPassword.length >= 8 && nextPassword === confirmPassword && (!hasPassword || currentPassword.length > 0);
   return (
     <Modal open onClose={onClose} title={hasPassword ? 'Update password' : 'Add password'} size="sm">
-      <div className="space-y-3">
+      <div className="space-y-3 p-6">
         {hasPassword && <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} placeholder="Current password" />}
         <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} placeholder="New password" />
         <input type="password" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm password" />
@@ -122,15 +122,15 @@ export const PasswordModal: React.FC<{ hasPassword: boolean; onSaved: () => void
 
 export const PasskeyManagerModal: React.FC<{ passkeys: Array<{ _id: string; nickname?: string | null; createdAt: string; lastUsedAt?: string | null }>; onRename: (id: string, nickname: string) => void; onRemove: (id: string) => void; onClose: () => void }> = ({ passkeys, onRename, onRemove, onClose }) => (
   <Modal open onClose={onClose} title="Passkeys" size="md">
-    <div className="space-y-4">
+    <div className="space-y-4 p-6">
       <p className="text-sm text-[var(--osio-fg-muted)]">You can rename or remove passkeys here; new passkeys are added when you sign in on a device that offers one.</p>
       {passkeys.length === 0 && <p className="text-sm text-[var(--osio-fg-muted)]">No passkeys yet.</p>}
-      {passkeys.length > 0 && <DataTable headers={['Name', 'Created', 'Last used', '']} rows={passkeys.map((passkey) => [
+      {passkeys.length > 0 && <div className="overflow-x-auto"><DataTable headers={['Name', 'Created', 'Last used', '']} rows={passkeys.map((passkey) => [
         <input key={`${passkey._id}-name`} aria-label="Passkey name" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={passkey.nickname ?? 'Passkey'} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== (passkey.nickname ?? 'Passkey')) onRename(passkey._id, next); }} />,
         new Date(passkey.createdAt).toLocaleDateString(),
         passkey.lastUsedAt ? new Date(passkey.lastUsedAt).toLocaleDateString() : 'Never',
         <Button key={`${passkey._id}-remove`} tone="danger-subtle" onClick={() => onRemove(passkey._id)}>Remove</Button>,
-      ])} />}
+      ])} /></div>}
       <div className="flex justify-end"><Button onClick={onClose}>Done</Button></div>
     </div>
   </Modal>

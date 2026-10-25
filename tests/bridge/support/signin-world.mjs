@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 // A BaaS for the sign-in tests: the identity upsert (it rewrites email_hash, as the SQL does),
-// the is_admin read/promotion on osionos_bridge_identities, the members upsert keyed on
+// the is_admin read/promotion on osionos_bridge_identities (filtered by provider, subject and an optional email_hash), the members upsert keyed on
 // (workspace_id, user_id), and osionos_bridge_list_workspaces as the plain JOIN the migration
 // defines (members of p_user_id, restricted to p_workspace_ids, newest updated_at first).
 // Everything else (member reads, embeds) goes to the strict harness stub, so a sign-in query
@@ -97,8 +97,8 @@ export function createSigninStub(seed = {}, options = {}) {
 	}
 
 	function identities_(entry) {
-		const hash = entry.params.get('email_hash')?.replace(/^eq\./, '');
-		const hit = identityRows.filter((row) => row.email_hash === hash);
+		const wanted = Object.fromEntries(['provider', 'subject', 'email_hash'].map((key) => [key, entry.params.get(key)?.replace(/^eq\./, '')]));
+		const hit = identityRows.filter((row) => Object.entries(wanted).every(([key, value]) => value === undefined || row[key] === value));
 		if (entry.method === 'PATCH') {
 			for (const row of hit.filter((candidate) => candidate.is_admin === false)) Object.assign(row, entry.body);
 			return new Response(null, { status: 204 });

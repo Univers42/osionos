@@ -100,7 +100,7 @@ export const CreateTokenModal: React.FC<{ catalog: PatCatalog; onClose: () => vo
   return (
     <Modal open onClose={onClose} title={secret ? "Token created" : "New personal access token"} description={secret ? "Store this token somewhere safe." : "A token lets an app act as you, with only the permissions you pick."} size="md">
       {secret ? <SecretView secret={secret} onClose={onClose} /> : (
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} className="space-y-4 p-6">
           <div className="space-y-1">
             <Button onClick={applyPreset} disabled={!presetAvailable}>osionos MCP (Claude Code)</Button>
             <p className={hintClass}>

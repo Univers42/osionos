@@ -64,4 +64,22 @@ test.describe("Manage emails (bridge stub)", () => {
     await expect(dialog.getByText("other@example.com")).toHaveCount(0);
     await expect(dialog).toContainText("No other addresses");
   });
+
+  test("make a verified secondary the primary", async ({ page, baseURL }) => {
+    const bridge = await stubTwoStep(page);
+    const stamp = "2026-10-01T00:00:00Z";
+    bridge.emails.push({ _id: "row-1", userId: "u", email: "second@example.com", isPrimary: false, verifiedAt: stamp, createdAt: stamp, updatedAt: stamp, removedAt: null });
+    await openProfile(page, baseURL);
+    await region(page).getByRole("button", { name: "Manage emails", exact: true }).click();
+    const dialog = emailsDialog(page);
+    await dialog.getByRole("button", { name: "Make primary, second@example.com" }).click();
+    await expect(dialog).toContainText("You'll sign in with second@example.com from now on. e2e@example.com stays on your account as a secondary address.");
+    await dialog.getByRole("group", { name: "Confirm new primary address" }).getByRole("button", { name: "Make primary" }).click();
+    await expect(dialog).toContainText("second@example.com is now your primary address. Other devices were signed out.");
+    const items = dialog.getByRole("listitem");
+    await expect(items.filter({ hasText: "second@example.com" })).toContainText("Primary");
+    await expect(items.filter({ hasText: "e2e@example.com" })).toContainText("Verified");
+    expect(bridge.calls.filter((call) => call.endsWith("/primary"))).toHaveLength(1);
+    expect(bridge.bodies.makePrimary).toBe("row-1");
+  });
 });
