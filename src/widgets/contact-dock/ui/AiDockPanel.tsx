@@ -27,9 +27,7 @@ import { Send, Sparkles, X } from 'lucide-react';
 
 import { isAiConfigured } from '@/features/ai/api/aiClient';
 import { PLATFORM_CONNECTION_ID, readAiSelection } from '@/features/ai/model/aiSelection';
-import { useRunView } from '@/features/ai/model/viewContext';
-import { useAiSettingsStore } from '@/store/settings';
-import { useUserStore } from '@/features/auth';
+import { withAccountContext } from '@/features/ai/model/viewContext';
 import { ANSWER_TABLE_CLASS, renderAssistantMarkdown } from '@/features/chat/model/assistantMarkdown';
 import { IconButton } from '@/shared/ui';
 import { errorWords } from '@/widgets/chat-shell/ui/errorWords';
@@ -61,7 +59,6 @@ const DockAnswer: React.FC<{ body: string }> = ({ body }) => {
 };
 
 export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
-  const runView = useRunView();
   const [draft, setDraft] = useState('');
   const [messages, setMessages] = useState<AiMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -85,9 +82,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
     const text = { value: '' };
     // The choice the user made in the Assistant: the same connection and model.
     const selection = readAiSelection();
-    const workspaceId = useUserStore.getState().activeWorkspace()?._id ?? "local-workspace";
-    const aiSettings = useAiSettingsStore.getState().getData(workspaceId);
-    const dockContext = aiSettings.accountContext ? { account: true, view: runView() } : undefined;
+    const dockContext = withAccountContext(undefined);
     try {
       await runAiDockTurn({
         port: aiDockPort(),

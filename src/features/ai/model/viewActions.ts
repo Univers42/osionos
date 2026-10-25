@@ -17,6 +17,8 @@ import { findPane } from "@/widgets/workspace-grid/model/layoutTree";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
 import { useUserStore } from "@/features/auth";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
@@ -28,7 +30,7 @@ export function applyViewAction(view: unknown): boolean {
     const pageId = view.pageId;
     const title = view.title;
     const target = view.target;
-    if (typeof pageId !== "string" || typeof title !== "string") return false;
+    if (typeof pageId !== "string" || !UUID_RE.test(pageId) || typeof title !== "string") return false;
     if (target !== "current" && target !== "tab" && target !== "split") return false;
 
     const layout = useWorkspaceLayout.getState();
@@ -68,7 +70,8 @@ export function applyViewAction(view: unknown): boolean {
     const panel = view.panel;
     if (typeof panel !== "string") return false;
     if (!isActivePanel(panel)) return false;
-    useUIStore.getState().setActivePanel(panel);
+    // expandToPanel, not setActivePanel: a hidden or railed sidebar must show it.
+    useUIStore.getState().expandToPanel(panel);
     return true;
   }
 
