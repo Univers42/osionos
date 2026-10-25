@@ -10,6 +10,10 @@
 #     abstention, whatever claims it lists; only the claims judge uses it.
 #   CLAIM_SOURCE_FALLBACK (default 0) 1 asks whether the whole source supports a
 #     claim whose quote check fails; only the claims judge uses it.
+#   CLAIM_ANY_SOURCE (default 0) 1 makes a claim faithful if any of its listed
+#     sources passes; only the claims judge uses it.
+#   CLAIM_LENIENT_WORDING (default 0) 1 uses wording-tolerant prompts; only the
+#     claims judge uses it.
 #   LLM_MEMORY (default 6g) caps the model container; a 14B Q4_K_M needs about 11g.
 #   LLM_BACKEND (default cpu) the llama.cpp backend: cpu or vulkan (the host GPU).
 #   LABELS_FILE (default labels.jsonl) the rows to re-judge: labels.jsonl or heldout.jsonl.
@@ -100,6 +104,8 @@ docker run --rm --network "$NETWORK" \
 	-e CLAIM_QUOTE_RATIO="${CLAIM_QUOTE_RATIO:-1}" \
 	-e CLAIM_ABSTAIN_RULE="${CLAIM_ABSTAIN_RULE:-0}" \
 	-e CLAIM_SOURCE_FALLBACK="${CLAIM_SOURCE_FALLBACK:-0}" \
+	-e CLAIM_ANY_SOURCE="${CLAIM_ANY_SOURCE:-0}" \
+	-e CLAIM_LENIENT_WORDING="${CLAIM_LENIENT_WORDING:-0}" \
 	-e OSIONOS_AI_LLM_URL="http://$LLM_CONTAINER:8080" \
 	-e OSIONOS_AI_LLM_MODEL="$LLM_MODEL_ALIAS" \
 	-e OUT_PATH="$OUT" \
