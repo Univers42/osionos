@@ -5,6 +5,8 @@
 # Usage: sh eval/answers/answers.sh <migration> <rag-migration>
 # ANSWERS_CHECKPOINT=<path inside the repo>: save each finished question as it ends, resume next run.
 # LLM_BACKEND=cpu (default) or vulkan: the backend of the llama.cpp model.
+# ANSWERS_LLM_VOLUME (default osionos_ai_models_llm) and ANSWERS_LLM_GLOB (default *Q4_K_M*.gguf):
+#   another answer model, e.g. to build a label set the judge was never tuned on.
 set -eu
 
 MIGRATION=""
@@ -59,7 +61,8 @@ TEI_IMAGE="ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4"
 NODE_IMAGE="node:22-bookworm-slim"
 MODEL="intfloat/multilingual-e5-small"
 MODEL_VOLUME="osionos_ai_models_tei"
-LLM_MODEL_VOLUME="osionos_ai_models_llm"
+LLM_MODEL_VOLUME="${ANSWERS_LLM_VOLUME:-osionos_ai_models_llm}"
+LLM_MODEL_GLOB="${ANSWERS_LLM_GLOB:-*Q4_K_M*.gguf}"
 LLM_MODEL_ALIAS="qwen3-4b"
 ANSWER_JUDGE="${ANSWER_JUDGE:-whole}"
 
@@ -88,9 +91,9 @@ docker run -d --name "$TEI_CONTAINER" --network "$NETWORK" \
 	"$TEI_IMAGE" --model-id "$MODEL" >/dev/null
 
 echo "[answers] looking for the model of the LLM"
-LLM_MODEL=$(docker run --rm -v "$LLM_MODEL_VOLUME:/models:ro" alpine find /models -name '*Q4_K_M*.gguf' | head -n 1)
+LLM_MODEL=$(docker run --rm -v "$LLM_MODEL_VOLUME:/models:ro" alpine find /models -name "$LLM_MODEL_GLOB" | head -n 1)
 if [ -z "$LLM_MODEL" ]; then
-	echo "[answers] no Q4_K_M model in $LLM_MODEL_VOLUME" >&2
+	echo "[answers] no $LLM_MODEL_GLOB model in $LLM_MODEL_VOLUME" >&2
 	exit 2
 fi
 echo "[answers] the model: $LLM_MODEL"
