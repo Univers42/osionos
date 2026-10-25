@@ -216,10 +216,12 @@ export const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ open: open
 
   if (!isOpen) return null;
 
+  const redactedDescription = redactIssueText(description);
   const hasDisplayMedia = typeof navigator !== "undefined" && Boolean((navigator as { mediaDevices?: { getDisplayMedia?: unknown } }).mediaDevices?.getDisplayMedia);
 
   const content = (
     <div className="flex flex-col gap-4 p-6" onPaste={onPaste}>
+        <p aria-hidden className="osio-h4 text-[var(--osio-fg-default)]">Report an issue</p>
         <label className="flex flex-col gap-1 text-sm">
           <span>Title</span>
           <input
@@ -288,7 +290,9 @@ export const ReportIssueDialog: React.FC<ReportIssueDialogProps> = ({ open: open
         <p className="text-xs text-[var(--osio-fg-subtle)]">
           Sent to osionos staff. They see your name, this text, the screenshot and the kind of screen you were on (not its content).
         </p>
-        <p className="text-xs text-[var(--osio-fg-subtle)]">Preview: {redactIssueText(description)}</p>
+        {redactedDescription !== description ? (
+          <p className="text-xs text-[var(--osio-fg-subtle)]">Sent with secrets and addresses removed: {redactedDescription}</p>
+        ) : null}
 
         {error ? <div role="alert" className="text-sm text-red-600">{error}</div> : null}
 
