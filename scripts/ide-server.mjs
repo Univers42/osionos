@@ -21,42 +21,9 @@ import { createIdeSandboxHandler, scheduleSandboxReaper } from './bridge-ide-san
 import { createIdeOpsHandler } from './bridge-ide-ops.mjs';
 import { createIdePreviewHandler, parseExactOrigin } from './ide-preview.mjs';
 import { createIdeExecUpgradeHandler } from './bridge-ide-exec.mjs';
+import { sendJson, routeIdeApi } from './ide-http-edge.mjs';
 
 const DEFAULT_PORT = 4100;
-const PREFLIGHT_MAX_AGE_SECONDS = '600';
-
-function sendJson(response, status, body) {
-	response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-	response.end(JSON.stringify(body));
-}
-
-function sendPreflight(response, allowedOrigin) {
-	response.writeHead(204, {
-		'access-control-allow-origin': allowedOrigin,
-		'access-control-allow-methods': 'GET, POST, DELETE',
-		'access-control-allow-headers': 'authorization, content-type',
-		'access-control-max-age': PREFLIGHT_MAX_AGE_SECONDS,
-		vary: 'Origin',
-	});
-	response.end();
-}
-
-async function routeIdeApi(url, request, response, ctx) {
-	const origin = request.headers.origin;
-	if (origin !== undefined && origin !== ctx.allowedOrigin) {
-		sendJson(response, 403, { ok: false, message: 'Origin not allowed.' });
-		return;
-	}
-	if (request.method === 'OPTIONS') {
-		if (origin === ctx.allowedOrigin) sendPreflight(response, ctx.allowedOrigin);
-		else sendJson(response, 404, { ok: false });
-		return;
-	}
-	for (const handler of ctx.handlers) {
-		if (await handler(url, request, response, ctx.requestConfig)) return;
-	}
-	sendJson(response, 404, { ok: false });
-}
 
 async function dispatch(request, response, ctx) {
 	const url = new URL(request.url ?? '/', 'http://ide.local');

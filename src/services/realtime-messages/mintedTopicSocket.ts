@@ -14,6 +14,8 @@
  * Realtime sockets for a build that ships no VITE_BAAS_REALTIME_TOKEN: the
  * gateway refuses user session JWTs, so each topic asks the bridge
  * (POST /api/realtime/token) for a subscribe-only token naming just that topic.
+ * The bridge grants four kinds — chat, user, table (a mounted live database) and
+ * objectdb (the caller's own object-database stream) — and refuses the rest.
  * One socket per topic, so every AUTH carries the token minted for the one
  * topic it then subscribes to; the gateway replaces a socket's claims on a
  * second AUTH, which is why topics are never multiplexed over one socket here.
@@ -29,7 +31,9 @@ import type { LiveRealtimeEventFrame, LiveSocketOptions } from '@/shared/notion-
 
 export type TopicTokenRequest =
   | { kind: 'chat'; channelId: string }
-  | { kind: 'user'; subject: string };
+  | { kind: 'user'; subject: string }
+  | { kind: 'table'; dbId: string; table: string }
+  | { kind: 'objectdb' };
 
 export type TopicTokenFetcher = (topic: string) => Promise<string | null>;
 
@@ -38,12 +42,25 @@ interface StoppableSocket {
   stop(): void;
 }
 
-/** Only these two topic shapes can be granted; the bridge refuses the rest. */
+/** A live database id is a UUID; the bridge refuses anything else. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Only these topic shapes can be granted; the bridge refuses the rest. */
 export function tokenRequestForTopic(topic: string): TopicTokenRequest | null {
   const chat = /^chat:[^:]+:([^:]+)$/.exec(topic);
   if (chat) return { kind: 'chat', channelId: chat[1] };
   const user = /^user:([^:]+)$/.exec(topic);
   if (user) return { kind: 'user', subject: user[1] };
+  // A mounted live database: `table:<dbId>:<table>`. The bridge re-checks both
+  // (UUID + table name) and grants only a database the caller may read.
+  const table = /^table:([^:]+):([^:]+)$/.exec(topic);
+  if (table) {
+    if (!UUID_RE.test(table[1])) return null;
+    return { kind: 'table', dbId: table[1], table: table[2] };
+  }
+  // The caller's own object-database stream: the bridge names the owner, never us.
+  const objectdb = /^objectdb:([^:]+)$/.exec(topic);
+  if (objectdb) return { kind: 'objectdb' };
   return null;
 }
 
@@ -71,6 +88,10 @@ interface MintedSocketDeps {
   url: string;
   topic: string;
   onEvent: (frame: LiveRealtimeEventFrame) => void;
+  /** Subscription is live — called AFTER this module's own bookkeeping. */
+  onUp?: () => void;
+  /** Connection dropped — called AFTER this module's own bookkeeping. */
+  onDown?: () => void;
   fetchToken: TopicTokenFetcher;
   createSocket: (options: LiveSocketOptions) => StoppableSocket;
   /** Runs `run` after `ms`; returns the canceller. Injectable for tests. */
@@ -118,8 +139,8 @@ export function openMintedSocket(deps: MintedSocketDeps): { stop: () => void } {
       topic: deps.topic,
       onEvent: deps.onEvent,
       get token() { return token; },
-      onUp: () => { failures = 0; },
-      onDown: () => { void refresh(); },
+      onUp: () => { failures = 0; deps.onUp?.(); },
+      onDown: () => { void refresh(); deps.onDown?.(); },
       onPermanentFailure: () => {
         socket?.stop();
         socket = null;

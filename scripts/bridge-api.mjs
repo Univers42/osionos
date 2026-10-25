@@ -27,7 +27,7 @@ import { pageContentText, pagePublishText } from './bridge-page-text.mjs';
 import { liveReadableWorkspaces, privateWorkspaceOf } from './bridge-live-workspaces.mjs';
 import { bestShareLevel, shareDenies, shareGrantsRead, shareGrantsWrite } from './bridge-share-rules.mjs';
 import { createShareRuleStore } from './bridge-perms-rules.mjs';
-import { moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
+import { QUERY_ROUTER_TABLE, moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge-auth-exchange.mjs';
@@ -921,6 +921,35 @@ function mayModifyPage(existing, access, level = null) {
 	return role === 'editor' || role === 'owner'; // explicit page collaborator
 }
 
+const COLLABORATOR_ROLES = new Set(['viewer', 'editor']);
+
+/**
+ * A page is shared only with members of its workspace: the read path runs the workspace
+ * gate after the collaborator check, so anyone else would be listed and still refused.
+ * Membership is checked for additions; roles for additions and changes. An unchanged
+ * legacy share never blocks an unrelated edit.
+ */
+async function requireNewCollaboratorsAreMembers(payload, existing, config, fetchImpl) {
+	if (!hasOwn(payload, 'collaborators')) return;
+	const present = new Map(safeJsonArray(existing.collaborators).map((entry) => [String(entry?.userId ?? '').toLowerCase(), entry?.role]));
+	const submitted = safeJsonArray(payload.collaborators);
+	const added = submitted.filter((entry) => !present.has(String(entry?.userId ?? '').toLowerCase()));
+	const changed = submitted.filter((entry) => !present.has(String(entry?.userId ?? '').toLowerCase())
+		|| entry?.role !== present.get(String(entry?.userId ?? '').toLowerCase()));
+	if (changed.some((entry) => !UUID_REGEX.test(String(entry?.userId ?? '')) || !COLLABORATOR_ROLES.has(entry?.role))) {
+		throw Object.assign(new Error('A collaborator is { userId: <uuid>, role: "viewer" | "editor" }.'), { status: 422 });
+	}
+	if (added.length === 0) return;
+	const workspaceId = hasOwn(payload, 'workspaceId') ? payload.workspaceId : existing.workspace_id;
+	const ids = added.map((entry) => entry.userId.toLowerCase());
+	const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${postgrestQuery({ workspace_id: `eq.${workspaceId}`, user_id: `in.(${ids.join(',')})`, select: 'user_id' })}`);
+	const members = new Set((Array.isArray(rows) ? rows : []).map((row) => String(row.user_id).toLowerCase()));
+	const outsider = ids.find((id) => !members.has(id));
+	if (outsider) {
+		throw Object.assign(new Error(`User ${outsider} is not a member of this page's workspace. Add them to the workspace before sharing the page with them.`), { status: 422 });
+	}
+}
+
 /** The 403 a page write refuses with. The message names the page, never the caller's role. */
 function pageWriteDenied() {
 	return Object.assign(new Error('You do not have permission to modify this page.'), { status: 403 });
@@ -1694,14 +1723,16 @@ function isEnvAdminEmail(payload, config) {
 async function resolveAdminFlag(payload, config, fetchImpl) {
 	const isAdminEmail = isEnvAdminEmail(payload, config);
 	if (!config.serviceKey || !config.baasUrl) return isAdminEmail;
-	const hash = encodeURIComponent(emailHash(payload.email, config));
+	if (typeof payload.provider !== 'string' || payload.provider === '' || typeof payload.subject !== 'string' || payload.subject === '') return isAdminEmail;
+	// Keyed by identity, never by address hash: an address can change hands (make-primary), a (provider, subject) cannot.
+	const who = `provider=eq.${encodeURIComponent(payload.provider)}&subject=eq.${encodeURIComponent(payload.subject)}`;
 	try {
 		if (isAdminEmail) {
-			await baasRest(config, fetchImpl, `osionos_bridge_identities?email_hash=eq.${hash}&is_admin=is.false`, {
+			await baasRest(config, fetchImpl, `osionos_bridge_identities?${who}&is_admin=is.false`, {
 				method: 'PATCH', body: { is_admin: true }, prefer: 'return=minimal',
 			});
 		}
-		const rows = await baasRest(config, fetchImpl, `osionos_bridge_identities?email_hash=eq.${hash}&select=is_admin&limit=1`);
+		const rows = await baasRest(config, fetchImpl, `osionos_bridge_identities?${who}&select=is_admin&limit=1`);
 		const row = Array.isArray(rows) ? rows[0] : null;
 		return row?.is_admin === true || isAdminEmail;
 	} catch {
@@ -1786,9 +1817,8 @@ async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
  * a rejected read degrades as it always did (no admin, no extras).
  * A flag that comes back true re-runs today's tail: ensure unconditionally, then the member read
  * again, and the first read is discarded (the ensure upsert resets the admin row's role).
- * Caveat: the flag read can run before persist rewrites email_hash, so a DB-recorded admin whose
- * email changed signs in with is_admin false for one session. That fails closed; the next sign-in
- * corrects it. Nothing here can widen a claim.
+ * Caveat: the column email_hash is now written and never read; a DB admin stays admin across email
+ * changes. Nothing here can widen a claim.
  */
 async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
 	const [persistence, adminRead, memberRead, roleRead, refusal] = await Promise.allSettled([
@@ -3125,7 +3155,7 @@ async function workspaceMembers(authContext, workspaceIds, config, fetchImpl) {
  */
 async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
+	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl, { required: true });
 	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
 	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
 	const candidates = mounts.filter((row) => row && row.db_id === dbId);
@@ -3143,6 +3173,21 @@ async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
 }
 
 /**
+ * The realtime-token grant's mount check — the SAME rule as resolveAccessibleMount:
+ * the session's own workspaces ∪ the workspaces the user is a member of, then the
+ * dbId must appear in a mount whose membership may read the database. Kept here
+ * because the token module must not import bridge-api.mjs: it would be a cycle.
+ */
+async function hasAccessibleMount(session, dbId, config, fetchImpl) {
+	const memberIds = await memberWorkspaceIds(session.userId, config, fetchImpl, { required: true });
+	const accessible = [...new Set([...session.workspaceIds, ...memberIds])];
+	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
+	const candidates = mounts.filter((row) => row && row.db_id === dbId);
+	const members = await workspaceMembers(session, candidates.map((row) => row.workspace_id), config, fetchImpl);
+	return candidates.some((row) => canReadDatabase(members.get(row.workspace_id) ?? null));
+}
+
+/**
  * Set of db_ids the caller may READ — every mount linked to a workspace the user owns
  * or is a member of (the user→workspace→database M2M relation), narrowed to the mounts
  * whose membership may read a database. Verifies the app session (401 on a
@@ -3151,7 +3196,7 @@ async function resolveAccessibleMount(request, dbId, config, fetchImpl) {
  */
 async function accessibleMountIds(request, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
-	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl);
+	const memberIds = await memberWorkspaceIds(authContext.userId, config, fetchImpl, { required: true });
 	const accessible = [...new Set([...authContext.workspaceIds, ...memberIds])];
 	const mounts = await fetchWorkspaceDatabases(accessible, config, fetchImpl);
 	const members = await workspaceMembers(authContext, [...new Set(mounts.map((row) => row && row.workspace_id).filter(Boolean))], config, fetchImpl);
@@ -3164,7 +3209,8 @@ async function accessibleMountIds(request, config, fetchImpl) {
 }
 
 // Hyphens and dots stay (Mongo-style names: og-notes, a.b); `.`, `..` and a leading dot do not.
-const QUERY_ROUTER_TABLE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}$/;
+// The pattern itself lives in bridge-social-core.mjs (QUERY_ROUTER_TABLE): the query-router
+// path builder and the realtime token grant must accept the same table names.
 
 /**
  * G6 F3: `table` comes from the URL but the mount ACL only vouches for `dbId`, so a segment
@@ -3734,15 +3780,16 @@ async function handlePagesGet(url, request, response, config, fetchImpl) {
 	return handlePageRead(url, request, response, config, fetchImpl);
 }
 
-/** Workspace ids where the user has a members row (best-effort: [] on failure). */
-async function memberWorkspaceIds(userId, config, fetchImpl) {
+/** Workspace ids with a members row; required mount checks answer 503 on a failed read. */
+async function memberWorkspaceIds(userId, config, fetchImpl, { required = false } = {}) {
 	try {
 		const query = postgrestQuery({ user_id: `eq.${userId}`, select: 'workspace_id' });
 		const rows = await baasRest(config, fetchImpl, `osionos_workspace_members?${query}`);
 		return (Array.isArray(rows) ? rows : [])
 			.map((row) => String(row.workspace_id))
 			.filter((id) => UUID_REGEX.test(id));
-	} catch {
+	} catch (cause) {
+		if (required) throw Object.assign(new Error('Workspace access could not be verified.', { cause }), { status: 503 });
 		return [];
 	}
 }
@@ -3975,6 +4022,7 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	if (hasOwn(payload, 'workspaceId') && payload.workspaceId !== existing.workspace_id) {
 		await requireWorkspaceAccess(request, payload.workspaceId, 'create', config, fetchImpl);
 	}
+	await requireNewCollaboratorsAreMembers(payload, existing, config, fetchImpl);
 	// Strict mode (OSIONOS_PAGE_STRICT_VERSION=1): a content-bearing PATCH without a
 	// baseVersion is compared against the stored content and refused when the two
 	// differ. Off until every client sends a version.
@@ -4907,9 +4955,23 @@ export function createBridgeServer(options = {}) {
 		moderationConsole: createModerationConsoleHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		recsHealth: createRecsHealthHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv }),
-		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env,
+			authorizeBlocks: async (request, pageId, workspaceId) => {
+				const context = await pageWriteContext(request, pageId, config, fetchImpl);
+				requireReadablePage(context.row, context.token.userId, context.level);
+				if (!sameId(context.row.workspace_id, workspaceId)) throw pageNotFound();
+				requirePageWrite(context, 'update');
+			},
+		}),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		realtimeToken: createRealtimeTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		realtimeToken: createRealtimeTokenHandler({
+			config,
+			verifySession: verifyAppSessionToken,
+			fetchImpl,
+			// The live-database grant: only a workspace the caller owns or is a member
+			// of may mount the dbId the token names.
+			mountAccess: (session, dbId) => hasAccessibleMount(session, dbId, config, fetchImpl),
+		}),
 		account: createAccountHandler({ config, pg, kv, mfaEnv: env, mfaFetch: fetchImpl, mfaNow: options.now, verifySession: verifyAppSessionToken, readRefreshClaims: (identity) => readRefreshClaims(identity, { config, pg, fetchImpl }) }),
 	};
 	const patGate = createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, now: options.now, rateLimit: options.patRateLimit });

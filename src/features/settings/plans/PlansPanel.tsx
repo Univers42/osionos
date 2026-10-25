@@ -58,7 +58,7 @@ export const PlansPanel: React.FC<{ workspaceId?: string }> = ({ workspaceId = '
 
 const UpgradePlanModal: React.FC<{ plan: string; onConfirm: () => void; onClose: () => void }> = ({ plan, onConfirm, onClose }) => (
   <Modal open onClose={onClose} title="Upgrade plan" size="sm">
-    <div className="space-y-4">
+    <div className="space-y-4 p-6">
       <p className="text-sm text-[var(--osio-fg-muted)]">Upgrade this workspace to {plan}.</p>
       <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={onConfirm}>Upgrade</Button></div>
     </div>

@@ -117,7 +117,7 @@ const CookieSettingsModal: React.FC<{ mode: string; onSave: (mode: string) => vo
   else if (analytics) nextMode = 'customize';
   return (
     <Modal open onClose={onClose} title="Cookie settings" size="sm">
-      <div className="space-y-3">
+      <div className="space-y-3 p-6">
         <SettingRow title="Essential cookies" description="Required for login, security, and workspace routing." action={<Toggle checked disabled label="Essential cookies" onChange={() => undefined} />} />
         <SettingRow title="Analytics cookies" description="Help us understand performance and reliability." action={<Toggle checked={analytics} onChange={setAnalytics} label="Analytics cookies" />} />
         <SettingRow title="Personalization cookies" description="Remember richer preferences across devices." action={<Toggle checked={personalization} onChange={setPersonalization} label="Personalization cookies" />} />

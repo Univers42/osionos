@@ -66,7 +66,7 @@ export interface ShareEntry {
     | { type: 'workspace' }
     | { type: 'public' };
   level: ShareLevel;
-  /** AccessRule _id (page mode) or policy id (live mode) backing this entry. */
+  /** Rule or live policy id; page collaborators and visibility have none. */
   sourceId?: string;
 }
 
