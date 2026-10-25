@@ -19,26 +19,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import "./support/memory-local-storage.ts";
+
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 import type { RunEventActions } from "@/features/chat/model/runEventDispatch";
 
-function shimLocalStorage() {
-  const store = new Map<string, string>();
-  (globalThis as unknown as { localStorage: Storage }).localStorage = {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-    removeItem: (k: string) => void store.delete(k),
-    clear: () => void store.clear(),
-    key: () => null,
-    length: 0,
-  };
-}
 
 const PAGE = "00000001-0000-4000-8000-000000000000";
 
 /** Replaces the layout and panel actions with recorders. */
 async function recordStores() {
-  shimLocalStorage();
   const { useWorkspaceLayout } = await import("@/widgets/workspace-grid/model/workspaceLayout");
   const { useUIStore } = await import("@/shared/config/uiStore");
   const calls: string[] = [];
