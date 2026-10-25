@@ -1,6 +1,8 @@
 # Self-built UI — the app's own screens made from its own blocks
 
-Status: design, waiting for the owner's approval (2026-10-25). Nothing here is built yet.
+Status: design v2, waiting for the owner's approval (2026-10-25). Nothing here is built yet.
+v2 adds the bootstrapping ladder, the authoring loop, components, and the performance architecture.
+The plan: `docs/superpowers/plans/2026-10-25-self-built-ui.md`.
 
 ## Intent
 
@@ -24,6 +26,35 @@ So:
 Settings is the first app surface to go through this, because it is the largest set of plain UI
 patterns (23 sections, 45 anchors, 83 files, 9,335 lines). The rest of the app shell (sidebar, top
 bar, chat) is a later project.
+
+## The bootstrapping ladder
+
+A compiler becomes self-hosting in stages. A first compiler written in another language compiles
+a second compiler written in the new language. The second one then compiles itself, and its
+output stops changing (the fixpoint). The app follows the same ladder:
+
+| Stage | What is code | What is a document | Proof it holds |
+|---|---|---|---|
+| 0. Kernel | `@osionos/ui` components, block renderers, the runtime (bindings, actions, formula VM, layout) | — | the existing gates |
+| 1. Screens | the kernel only | every settings section | the section renders from its document, matches today's screenshots, and its document round-trips through the editor unchanged |
+| 2. The builder | the kernel only | the style inspector, the slash catalogue, the settings shell (nav, search) | the inspector edits its own document and re-renders with the change |
+| 3. The app | the kernel only | the sidebar, top bar, rail, Home; components and presets shared through the marketplace | the app shell renders from documents |
+
+The kernel stays small and stable. Everything above it is data the app itself can edit. This
+document designs stage 1 in full and fixes the interfaces stage 2 needs. Stages 2 and 3 are
+roadmap: each gets its own design when stage 1 ships.
+
+**The authoring loop** is what makes the app build itself rather than merely render JSON.
+Shipped documents are authored **in the editor**:
+
+1. Open the system document in the editor.
+2. Edit it with the same blocks, inspector and components users have.
+3. Export it into the repo as canonical JSON.
+4. CI validates the document and the parity screenshots.
+5. It ships.
+
+A document written by hand or by a script must survive the same path: load → editor → export
+gives byte-identical JSON. That round-trip is the fixpoint test.
 
 ## What exists today (measured 2026-10-25 on develop 3be8dc71b)
 
@@ -72,6 +103,16 @@ spot-checked against the code.
   copy, and reset it to the shipped version.
 - **G6. Figma-grade editing**: an auto-layout frame block, a style inspector, drag to reorder.
 - **G7. The same blocks on any page** through `/`.
+- **G8. The authoring loop**: shipped documents are authored in the editor and exported. Every
+  document round-trips byte-identically. At least one section is authored end to end through
+  the editor UI.
+- **G10. Edit and View on every page** (§12). Edit arranges and restyles. Clicking Edit again
+  returns to View, where the page is fully usable: fields write, buttons run, lists act.
+- **G11. Any page can become a settings page** (§13): a switch in the page's own settings puts
+  it in the Settings nav, in the group the user picks.
+- **G9. Interactions stay under one frame of app cost at any size** (budgets in §11): a toggle,
+  a keystroke or an inspector change costs the same whether the page holds 10 blocks or 2,000,
+  and whether a list holds 10 rows or 10,000.
 
 ## Non-goals
 
@@ -156,7 +197,29 @@ Presets are the reusable style collection.
   reference.
 - A preset belongs to one block type: frame presets apply to frames, button presets to buttons.
 
-### 4. Layout: the auto-layout frame (new) next to the canvas grid (kept)
+### 4. Layout: the grid canvas for the page, frames inside cells
+
+The owner's picture is a base editor in a strategy game such as Clash of Clans. The page is a
+grid of cells. You take a component from a tray, drop it on a free spot, drag it around (it can't
+overlap another one) and resize it. When you leave edit mode, everything you placed works. That
+is the existing canvas `layout` block (grid, cells, drag and resize with collision checks,
+per-cell constraints, `visibilityFormula`) promoted to be the page skeleton of every system
+page. Four upgrades make it able to hold settings:
+
+1. **Fine rows.** A row unit from 8 px (today the minimum row height is 96 px,
+   `layout.constants.ts:37-42`), so a 44 px setting row is one cell and not a 96 px box.
+2. **Hug cells push.** A cell sized to its content grows with it (a list that gets rows) and pushes
+   the cells below it down instead of overlapping them. The cell sizing mode and `measuredHeight`
+   exist; reflow on growth is the new part.
+3. **A narrow layout.** Today the grid collapses to one column at 768 px (`notionPage.css:1087`).
+   Instead each cell gets a second placement for narrow panes, by default derived from reading
+   order and adjustable in Edit at narrow width.
+4. **The component tray.** In Edit, the component and preset library opens as a tray. Drag a
+   component onto the grid to place it, as you place a building.
+
+Inside a cell, content flows in a **frame**, described below.
+
+#### The auto-layout frame (new)
 
 A new `frame` block is a flexbox container, like Figma's auto layout: direction (row/column),
 wrap, gap, padding, align, justify, dividers between children (today's `divide-y`), child sizing
@@ -165,10 +228,10 @@ fixed breakpoints (480, 720, 1024): change direction, hide, change gap. Today's 
 uses a 720 px container query (`SettingsView.tsx:116`), so pane width rather than viewport width
 is a requirement, not a preference.
 
-Frames nest freely and may hold any block, including the existing canvas `layout` block. Every
-settings layout in the inventory — stack, row, two-column, card, setting row, button group,
-sidebar+content — is a frame with a preset. The canvas grid stays as it is for dashboards; this
-project changes it only where a settings page needs it.
+Frames nest freely and may hold any block, including a nested canvas. The grid places things
+on the page. Frames lay out what flows inside a cell: a setting row, a card's contents, a
+button group, the rows of a list. Every layout in the inventory (stack, row, two-column, card,
+setting row, button group, sidebar+content) is a grid placement, a frame with a preset, or both.
 
 ### 5. Data binding (read and write) and actions
 
@@ -229,7 +292,7 @@ the target is to shrink the list over time.
 
 ### 7. System pages: shipped, customizable, resettable
 
-- Each settings section has a shipped block tree in code, versioned with the same
+- Each settings section has a shipped system document (§10), versioned with the same
   version-and-fingerprint scheme as the Home dashboard. The settings tab renders the viewer's
   copy if one exists, otherwise the shipped page.
 - **Edit this page** creates the user's copy. **Reset to default** deletes it. A new shipped
@@ -267,6 +330,129 @@ the target is to shrink the list over time.
 - **Keyboard.** Every inspector control is reachable by keyboard. Drag has keyboard move
   commands.
 
+### 9. Components (reusable structure)
+
+Presets reuse one block's look. **Components** reuse structure: a named block subtree with
+**slots** (where an instance puts its own blocks), **props** (texts, bindings and style values
+an instance may override) and **variants** (named override sets). An `instance` block references
+a component by id and version, and editing the component updates every instance, as with Figma
+components or WordPress synced patterns.
+
+- Shipped components: Section, Setting row, Toggle row, Field row, Item list, Danger zone,
+  Empty state, Feature card, Secret box.
+- Shipped documents use components instead of copying subtrees. This is library-first applied
+  to documents: today `SettingRow` sits in dozens of places, and 23 documents with copied
+  subtrees would be the same duplication moved into JSON.
+- Instances expand at render time, memoised by (component id, component version, instance
+  props), so a hundred setting rows share one expansion path.
+
+### 10. System documents and the authoring loop
+
+- **Format.** One canonical JSON file per document under `src/system-docs/<kind>/<id>.json`
+  (kinds: `settings`, `components`, `presets`). Keys are sorted, ids are stable, and no runtime
+  field is stored.
+- **One schema** is generated from the block registry by `scripts/build-system-doc-schema.mjs`
+  into `src/system-docs/schema.generated.json`. Like `build-tokens.mjs --check`, the gate fails
+  when the file is stale. The app's loader, the dev export, the CI check and the bridge's
+  user-copy validation all read this one file.
+- **Loading.** Each settings document is its own lazy chunk, the same per-section split the
+  panels have today. It is parsed and validated once and then cached.
+- **Unknown content.** A block type or style value the running app does not know renders as an
+  inert "Unsupported block" placeholder in the editor and nothing in read-only. It never
+  crashes, and it is kept on save so a newer app can read it again.
+- **Dev export.** A dev-server-only middleware (`vite.config.ts`, `apply: 'serve'`) accepts the
+  editor's "Export as system document". It validates against the schema and writes canonical
+  JSON under `src/system-docs/`. It does not exist in any build.
+- **Fixpoint test.** For every file in `src/system-docs/`: load → normalise through the editor
+  model → serialise gives identical bytes.
+
+### 11. Performance architecture
+
+The measurement comes first. The existing harness (`tests/e2e/perf/perfHarness.mjs`) measures
+input → second animation frame. In this Docker environment with software rendering, its floor is
+30–32 ms median (`interactions.spec.mjs:34`), already above 20 ms. So "under 20 ms per
+interaction" is defined as **app cost**: the p95 minus the floor median, at most 16 ms (one
+frame). JavaScript work (handler plus React commit, read with the perf probe's `timed()`) must
+stay at most 8 ms p95.
+
+| Interaction | Budget (app cost, p95) | Scale case |
+|---|---|---|
+| toggle a bound switch | ≤ 16 ms | page with 300 bound fields |
+| keystroke in a bound field | ≤ 16 ms | same |
+| click a row action (optimistic) | ≤ 16 ms | collection of 10,000 rows |
+| scroll a collection one screen | no long task > 50 ms | 10,000 rows |
+| inspector change on the selected block | ≤ 16 ms | page of 2,000 blocks |
+| drag a block one slot | ≤ 16 ms per frame | frame of 200 children |
+| open a settings section | ≤ today's p95 (51.1 ms measured, budget 61) | the largest section |
+| scaling | p95 at the large case − p95 at the small case ≤ 2 ms | every row above |
+
+How the design meets these numbers:
+
+1. **Structural sharing and per-block memo.** An edit replaces only the path to the changed block.
+   `ReadOnlyBlock` already compares block identity (`ReadOnlyBlock.tsx:180`), so a change
+   re-renders O(depth) blocks, not O(page).
+2. **Per-field subscriptions.** Each bound block subscribes to exactly one (source, field) through
+   `useSyncExternalStore` and a per-field listener map. A toggle re-renders one block. React
+   context carries only the stable runtime handle, never values.
+3. **Style compiled once.** `resolveBlockStyle` turns (preset, overrides) into data attributes and
+   CSS custom properties, memoised by identity and preset version. The CSS is static, so no
+   stylesheet is injected at runtime and no document-wide style recalculation happens.
+4. **Formulas compiled once.** Each `visibleWhen` is compiled once, cached by its source text, and
+   re-evaluated only when a field it reads changes.
+5. **Virtual lists.** A collection renders only visible rows through `@tanstack/react-virtual`,
+   which is already a dependency. Rows come from keyset pages of the list source and are
+   memoised by row id and version.
+6. **The editor overlay.** Selection and drag render in one overlay positioned with transforms.
+   The selected block does not re-render, and a drag commits once, on drop.
+7. **Heavy work off the interaction path.** Validating a large import, merging a new shipped
+   version into a user copy and building the settings search index run at load, at idle or in
+   a worker, with an in-process fallback, as the graph engine already does
+   (`layoutBridge.ts:createWorker`).
+8. **Chunks.** No new block may grow the warm chunk. Rarely used blocks and every widget load
+   lazily. `ANALYZE=1` measures the chunks before and after.
+
+Caveat: these budgets are measured in this Docker environment with software rendering, so a
+real GPU machine is faster and a low-end phone is slower. The scaling rows are the part that
+transfers, because a cost that stays flat with N stays flat on every machine.
+
+### 12. Edit and View, on every page
+
+Each page already has a view-only state: the page lock (`locked` in the page config, toggled by
+the `lock_page` action, `usePageActions.ts:211`). A locked page renders through `ReadOnlyBlock`
+(`BlockEditorSurface.tsx:737-745`), and the canvas has its own `preview` flag
+(`types.ts:94`, `LayoutBlockEditor.tsx:1164`). This project makes that state the **View** mode
+the owner describes, on every page:
+
+- **One Edit button** in the page header switches between Edit and View. Edit shows the grid,
+  handles, the tray and the inspector. View hides them all, and the page works.
+- **View is live, not inert.** In View, registered blocks render through their read-only renderer
+  in `live` mode: a field writes its setting, a button runs its action, a collection's row actions
+  work. The same renderer in `preview` mode (hover cards, marketplace thumbnails, profile previews
+  through `PageBlocksRenderer`) is inert and never writes. The mode comes from context, so a
+  preview can never trigger a write.
+- **Who may edit.** On a normal page, Edit follows the page's edit permission as today. On a
+  settings page, Edit edits the viewer's own copy (§7), and View is the default.
+- **Per page.** Each page's own settings panel (the page menu and page settings) holds its tools:
+  lock, Edit, grid options (columns, row unit, narrow layout) and "Show in Settings" (§13).
+
+### 13. Any page can be a settings page
+
+- **The switch.** "Show in Settings" in a page's own settings takes a group (an existing one or a
+  new one), a label, an icon and a position. The page then appears in the Settings nav next to
+  the shipped sections and opens in the Settings tab like them.
+- **One registry.** The Settings nav, settings search, the `>` palette and deep links read one
+  list: the shipped sections from `sections.ts` plus the pages flagged for this viewer. There is
+  no second list (memory `extend-existing-settings`: extend, never duplicate).
+- **Who sees it.**
+  - "Only me" is open to anyone who can edit the page.
+  - "Everyone in this workspace" is for workspace owners and admins only, checked on the server
+    as page sharing is today.
+  - Readers see a flagged page only if they can read it.
+- **Never mistaken for the real thing.** A custom settings page carries a small "Custom · by
+  <author>" mark under its title, and it cannot take a shipped section's id or anchor. Its
+  bindings resolve for the viewer (§5), so a custom page can only show and change the viewer's
+  own settings, through the same guarded actions.
+
 ## Verification (the finish line)
 
 | Check | How | Pass |
@@ -276,7 +462,9 @@ the target is to shrink the list over time.
 | Visual parity | Playwright with the stub bridge and a frozen clock: 23 sections × 375/1440 × light/dark = 92 screenshots, baselines taken from the pre-migration commit in the same container | ≤ 0.1% differing pixels per shot; a larger diff needs a written reason in the PR |
 | Behaviour | the existing settings e2e specs (`tests/e2e/bridge-stub/*` and the rest, 46 files mention settings) pass with their assertions unchanged | green, no assertion edits |
 | Gates | `npm run test:quality`, `test:canvas`, `test:bridge` | rc 0 |
-| Speed | the perf harness opens each section 20 times, before and after | p95 within +10% |
+| Speed | `tests/e2e/perf/selfBuilt.spec.mjs` (`PLAYWRIGHT_PERF=1`), the cases in §11, with numbers recorded in the spec as `interactions.spec.mjs` does | every §11 budget |
+| Fixpoint | `tests/canvas/system-doc-roundtrip.test.ts` over every file in `src/system-docs/` | byte-identical |
+| Authoring | at least one section document authored through the editor UI and exported, with the session recorded | done |
 | Users | e2e: Edit this page → restyle a block → reload → persisted → Reset → shipped look; a required block refuses delete | green |
 | On any page | e2e: `/input` bound to a preference on a normal page toggles the real setting | green |
 
@@ -286,15 +474,33 @@ the same container run. Font hinting differences between machines are invisible 
 
 ## Phases
 
+The work packages and their order are in the plan. In short:
+
 | Phase | Delivers |
 |---|---|
-| S0 Baseline | parity screenshots from develop, the conformance script and its first ratchet, the "built with blocks" test (expected red list) |
-| S1 Foundations | block registry, `BlockStyle` + presets + static CSS, `frame`, `visibleWhen` on any block, the system-page host (render shipped page, storage, reset, merge) |
-| S2 Fields | source registry, `field` with all displays, `@osionos/ui` field components |
-| S3 Actions | `button` on `@osionos/ui` Button with all tones, the `app_action` registry with runner guards, `status`, `secret`, `chip`, `avatar`, `meter` |
-| S4 Data | `collection` with list/table/grid displays and row actions, new list sources, `tabs`, `dialog`, `widget` |
-| S5 Migration | one package per section, simplest first (preferences, accessibility & voice, notifications, shortcuts, library, plans …) and hardest last (permissions, people, AI connections, developer). Each package deletes the old panel and passes parity, e2e and the ratchet |
-| S6 Editing | style inspector, drag, Edit/Reset, required blocks, user presets, every block in `/` on any page; then `osio.settings.edit` turns on |
+| S0 Baseline | parity harness and baselines, conformance ratchet, perf baseline of today's settings |
+| S1 Kernel | block registry, `BlockStyle` + static CSS, `frame`, `visibleWhen` on any block, system-document format + schema + fixpoint test, the system-page host |
+| S2 Fields | source registry with per-field subscriptions, settings record sources, `field` with every display |
+| S3 Actions | 👹 action registry + `app_action` + runner guards, `button` on `@osionos/ui`, `chip`, `avatar`, `meter`, `status`, `secret`, heading anchors |
+| S4 Data and reuse | `collection` (virtual), list sources, `tabs`, `dialog`, `widget`, components, the shipped preset library, the dev authoring loop |
+| S5 Migration | one package per section, simplest first, each deleting its old panel |
+| S6 Editing | Edit/View on every page with live vs preview rendering, grid upgrades (fine rows, hug push, narrow layout, tray), overlay selection, style inspector, drag, 👹 user copies (table, route, Reset, merge, required blocks), user presets and components, 👹 "Show in Settings", every block in `/` on any page; then `osio.settings.edit` turns on |
+| S7 Stage 2 | the inspector, the slash catalogue and the settings shell as documents (own design first) |
+
+## Quality toolkit (what each tool is for)
+
+| Tool | Used for | Not used for |
+|---|---|---|
+| `ui-ux-pro-max` skill | its UX rules and pre-delivery checklist (focus, 44 px targets, contrast, reduced motion, form feedback, inline validation on blur) reviewed on every block and every migrated section | its palette and font suggestion (violet, Plus Jakarta Sans), which conflicts with our generated palettes and is rejected |
+| `frontend-design` skill | the new surfaces only: style inspector, component library, Edit/Reset | restyling existing settings (parity rules) |
+| shadcn MCP | the WAI-ARIA keyboard and ARIA behaviour of tabs, dialog, select, switch, radio and checkbox, as a reference | new dependencies: `@osionos/ui` and the Radix packages already installed come first |
+| magicui / uiverse MCP | ideas for the shipped preset library, re-expressed in our tokens | copied CSS (raw colours fail the token gates) |
+| `motion` skill + MCP | motion tokens for the inspector, drag and dialog; the MotionScore jank audit; reduced motion | decorative animation |
+| `dataviz` skill | `meter` and any chart block: marks, palette, accessibility | — |
+| chrome-devtools (docker) MCP | performance traces and Lighthouse accessibility/performance audits per migrated section, driving the editor for the authoring-loop proof | replacing the Playwright gates |
+| devil gate, `/security-review` | 👹 packages: the action runner, the user-copy storage and validation | — |
+| `code-review`, `ponytail-review`, `simplify` | every package before merge: correctness, then over-engineering | — |
+| opencode workers + `oc-review.sh` | implementation and mutant-checked reviews, one worktree per package | — |
 
 ## Left to the builder
 
