@@ -67,3 +67,44 @@ harness_wait_postgres() {
 		sleep 1
 	done
 }
+
+# Start the llama.cpp server both runners use.
+#
+# usage: harness_start_llm <container> <network> <volume> <model-path> <memory> <context>
+#   LLM_BACKEND=cpu (default) or vulkan.
+#
+# Caveat: Vulkan and CPU outputs can differ slightly at temperature 0
+# (floating-point order), so a judge measured on one backend is re-measured on
+# the other before its numbers are compared.
+harness_start_llm() {
+	container=$1
+	network=$2
+	volume=$3
+	model=$4
+	memory=$5
+	context=$6
+	backend=${LLM_BACKEND:-cpu}
+
+	if [ "$backend" = cpu ]; then
+		docker run -d --name "$container" --network "$network" \
+			-v "$volume:/models:ro" \
+			--cpus 8 --memory "$memory" \
+			ghcr.io/ggml-org/llama.cpp:server-b11580 \
+			-m "$model" --host 0.0.0.0 --port 8080 -c "$context" -t 8 --jinja >/dev/null
+		return
+	fi
+	if [ "$backend" != vulkan ]; then
+		echo "[$HARNESS_LABEL] LLM_BACKEND must be cpu or vulkan, not $backend" >&2
+		exit 2
+	fi
+
+	docker run -d --name "$container" --network "$network" \
+		--device /dev/dri \
+		--group-add "$(getent group render | cut -d: -f3)" \
+		--group-add "$(getent group video | cut -d: -f3)" \
+		-v "$volume:/models:ro" \
+		--cpus 8 --memory "$memory" \
+		ghcr.io/ggml-org/llama.cpp:server-vulkan-b11580 \
+		-m "$model" --host 0.0.0.0 --port 8080 -c "$context" -t 8 --jinja \
+		-ngl 99 -fa on -np 1 >/dev/null
+}
