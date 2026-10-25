@@ -21,6 +21,7 @@ import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
 import { isPageClean, mergeServerPages } from "./mergeServerPages";
 import { OUTBOX_RECOVERING_KEY, recoveringIds } from "./outboxRecovery";
 import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./pageStamp";
+import { withoutBroadcast } from "./broadcastGuard";
 
 type SetPageState = (update: (state: PageStore) => Partial<PageStore>) => void;
 
@@ -46,7 +47,7 @@ export function applyServerPages(
   const isClean = (page: PageEntry) =>
     isPageClean(page, ledger, context !== null && canEditPage(page, context));
   let taken = 0;
-  setState((state) => {
+  withoutBroadcast(() => setState((state) => {
     const merged = mergeServerPages(state.pages[workspaceId] ?? [], rows, { authoritative, isClean, recovering });
     const pages: Record<string, PageEntry[]> = { ...state.pages, [workspaceId]: merged.pages };
     // Stamped from the post-merge pages inside the update, so the ledger matches the store.
@@ -54,7 +55,7 @@ export function applyServerPages(
     taken = merged.serverWon.length;
     if (taken > 0 || authoritative) savePagesCache(pages, workspaceId);
     return derivePageState(pages, state);
-  });
+  }));
   if (taken > 0) saveOutboxLedger(PAGE_OUTBOX_KEY, ledger);
   return taken;
 }

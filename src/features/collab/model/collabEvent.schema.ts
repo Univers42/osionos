@@ -32,6 +32,41 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+/** A plain (non-array) record — the shape of a `put` block payload. */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && !Array.isArray(value);
+}
+
+/** String identifiers on the content plane are capped so a frame cannot carry megabytes of ids. */
+function isShortId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 128;
+}
+
+/** `v` and `seq` must be real numbers — a NaN/±Infinity stamp would poison the LWW compare. */
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+/** One `blocks` op: exactly one of the three kinds, every id capped, `v` finite. */
+function isBlockOp(value: unknown): boolean {
+  if (!isPlainRecord(value)) return false;
+  switch (value.k) {
+    case 'put':
+      return isShortId(value.id) && (value.parentId === null || isShortId(value.parentId))
+        && isPlainRecord(value.block) && !('children' in value.block)
+        && isFiniteNumber(value.v);
+    case 'del':
+      return isShortId(value.id) && isFiniteNumber(value.v);
+    case 'order':
+      return (value.parentId === null || isShortId(value.parentId))
+        && isFiniteNumber(value.v)
+        && Array.isArray(value.ids) && value.ids.length <= 2000
+        && value.ids.every((id) => isShortId(id));
+    default:
+      return false;
+  }
+}
+
 function isCaret(value: unknown): value is CaretState {
   return isRecord(value) && typeof value.blockId === 'string' && typeof value.offset === 'number';
 }
@@ -64,6 +99,16 @@ export function validateCollabEvent(value: unknown): CollabEvent | null {
       return typeof value.actor === 'string' && typeof value.fileId === 'string'
         && typeof value.op === 'string' && FILE_OPS.has(value.op) && typeof value.name === 'string'
         ? (value as CollabEvent) : null;
+    case 'blocks':
+      if (!seqOk) return null;
+      if (!isShortId(value.pageId)) return null;
+      if (!Array.isArray(value.ops) || value.ops.length < 1 || value.ops.length > 500) return null;
+      for (const op of value.ops) {
+        if (!isBlockOp(op)) return null; // one bad op drops the whole event (R-P1)
+      }
+      return value as CollabEvent;
+    case 'pages':
+      return seqOk && isShortId(value.workspaceId) ? (value as CollabEvent) : null;
     default:
       return null; // unknown discriminant (incl. 'mouse'/'pointer') → dropped (R-A1)
   }

@@ -114,10 +114,9 @@ test("C3 a 422 rolls the local value back and sets the error", async () => {
   assert.ok(useAccountSettingsStore.getState().error);
 });
 
-test("C4 the emails store has no make-primary, and a failed read never claims verification", async () => {
+test("C4 the emails store exposes its five actions, and a failed read never claims verification", async () => {
   const state = useAccountEmailsStore.getState() as unknown as Record<string, unknown>;
-  assert.equal(state.makePrimary, undefined, "makePrimary");
-  for (const name of ["add", "resend", "verify", "remove"]) assert.equal(typeof state[name], "function", name);
+  for (const name of ["add", "resend", "verify", "remove", "makePrimary"]) assert.equal(typeof state[name], "function", name);
   for (const [status, code] of [[404, undefined], [503, "settings_read_failed"], [503, "account_plane_unavailable"]] as const) {
     stubFetch(() => json(status, { ok: false, code, message: "x" }));
     await useAccountEmailsStore.getState().hydrate("u-a", "a@b.c");

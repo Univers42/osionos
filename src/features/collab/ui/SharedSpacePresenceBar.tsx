@@ -41,6 +41,7 @@ import { CollabCaretLayer } from './CollabCaretLayer';
 import { SummonPrompt } from './SummonPrompt';
 import { useSharedSpacePresence } from './useSharedSpacePresence';
 import { useBroadcastLocalCaret } from './useBroadcastLocalCaret';
+import { useLiveBlockSync } from './useLiveBlockSync';
 import { useBroadcastLocalActivity } from './useBroadcastLocalActivity';
 import { useSummonInbox } from './useSummonInbox';
 import { useSharedAnnounceToasts } from './useSharedAnnounceToasts';
@@ -83,6 +84,9 @@ export const SharedSpacePresenceBar: React.FC = () => {
   const fileInput = useRef<HTMLInputElement>(null);
   useSharedSpacePresence(spaceId, self);
   useBroadcastLocalCaret(!!spaceId);
+  // Live block sync rides the same channel the roster rides: page edits reach
+  // every member block by block within a frame instead of the outbox debounce.
+  useLiveBlockSync(spaceId, self?.id ?? null);
   useBroadcastLocalActivity(!!spaceId, route);
   useSummonInbox(!!spaceId);
   useSharedAnnounceToasts(!!spaceId);

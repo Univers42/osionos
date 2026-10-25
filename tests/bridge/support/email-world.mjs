@@ -22,6 +22,8 @@
 import { randomUUID } from 'node:crypto';
 import { verifyAppSessionToken } from '../../../scripts/bridge-api.mjs';
 import { createAccountHandler } from '../../../scripts/bridge-account-mounts.mjs';
+import { createPg } from '../../../scripts/bridge-pg.mjs';
+import { createSessionStore } from './session-postgrest.mjs';
 import { ACCOUNT_JWT_SECRET, accountConfig, sessionToken, sudoToken, USER_A, USER_B } from './account-world.mjs';
 import { otpProof } from './account-otp.mjs';
 import { kvStub } from './kv-stub.mjs';
@@ -69,7 +71,7 @@ export function createEmailTable({ events, now }) {
 		async get(path) { guard('get', path); return select(path).hits.map((row) => ({ ...row })); },
 		async post(path, body) {
 			if (path === 'osionos_bridge_audit_events') {
-				if (table.failAudit) throw new Error('audit down');
+				if (table.failAudit === true || table.failAudit?.(body)) throw new Error('audit down');
 				table.audits.push(body);
 				events.push(`audit:${body.event_type}`);
 				return null;
@@ -105,9 +107,10 @@ export function createEmailTable({ events, now }) {
 
 /** GoTrue's admin routes: read one user, list by containment filter capped at per_page. */
 export function createDirectory(users) {
-	const directory = { users, calls: [], hold: null, fail: false };
-	directory.handle = async (url) => {
-		directory.calls.push(`${url.pathname}${url.search}`);
+	const directory = { users, calls: [], puts: [], hold: null, fail: false, onPut: null };
+	directory.handle = async (url, init = {}) => {
+		directory.calls.push(`${init.method ?? 'GET'} ${url.pathname}${url.search}`);
+		if (init.method === 'PUT') return directory.put(url, JSON.parse(init.body));
 		if (directory.hold && url.pathname === '/auth/v1/admin/users') await directory.hold;
 		if (directory.fail) return json({}, 500);
 		if (url.pathname === '/auth/v1/admin/users') {
@@ -117,6 +120,16 @@ export function createDirectory(users) {
 		}
 		const user = directory.users[decodeURIComponent(url.pathname.split('/').pop())];
 		return user ? json(user) : json({}, 404);
+	};
+	/** The admin PUT: GoTrue's behaviour when `onPut` does not override it (measured 2026-10-24: applies, confirms, lower-cases). */
+	directory.put = async (url, body) => {
+		const id = decodeURIComponent(url.pathname.split('/').pop());
+		directory.puts.push({ id, body });
+		if (directory.onPut) { const custom = await directory.onPut(id, body); if (custom) return custom; }
+		const email = String(body.email).toLowerCase();
+		if (Object.values(directory.users).some((other) => other.id !== id && other.email.toLowerCase() === email)) return json({ code: '23505', msg: 'duplicate' }, 500);
+		Object.assign(directory.users[id], { email, email_confirmed_at: body.email_confirm ? '2026-10-24T10:00:00Z' : null });
+		return json(directory.users[id]);
 	};
 	return directory;
 }
@@ -153,22 +166,49 @@ export function createEmailWorld({ env = goodEnv(), users = [] } = {}) {
 	const now = () => clock.at;
 	const config = accountConfig();
 	const kv = kvStub();
+	kv.del = async (key) => { kv.values.delete(`osb:${key}`); };
 	const table = createEmailTable({ events, now });
 	const directory = createDirectory({ [USER_A]: user(USER_A, 'a@example.com'), [USER_B]: user(USER_B, 'b@example.com'), ...Object.fromEntries(users.map((entry) => [entry.id, entry])) });
 	const grobase = createGrobase({ events, now });
 	const tracked = [];
 	const fetchImpl = async (input, init = {}) => {
 		const url = new URL(String(input));
-		return url.pathname.startsWith('/v1/auth/otp/') ? grobase.handle(url, JSON.parse(init.body)) : directory.handle(url);
+		if (url.pathname.startsWith('/v1/auth/otp/')) return grobase.handle(url, JSON.parse(init.body));
+		if (url.pathname === '/rest/v1/auth_session_cutoffs') {
+			world.cutoffs.push(JSON.parse(init.body));
+			return json({}, world.cutoffStatus);
+		}
+		if (url.pathname === '/auth/v1/logout') {
+			world.gotrueLogouts.push({ url: String(input), headers: init.headers });
+			events.push('gotrue_logout');
+			if (world.gotrueLogoutRejects) throw new Error('network down');
+			const status = world.gotrueLogoutStatus;
+			return status === 204 ? new Response(null, { status }) : json({}, status);
+		}
+		if (init.method === 'PUT') events.push('put');
+		return directory.handle(url, init);
 	};
 	const handler = createAccountHandler({ config, pg: table.pg, kv, verifySession: verifyAppSessionToken, mfaEnv: env, mfaFetch: fetchImpl, mfaNow: now, emailTrack: (promise) => tracked.push(promise) });
-	const world = { events, clock, config, kv, table, directory, grobase, env, tracked, user };
+	const world = { gotrueLogouts: [], gotrueLogoutStatus: 204, gotrueLogoutRejects: false, cutoffs: [], cutoffStatus: 201, events, clock, config, kv, table, directory, grobase, env, tracked, user };
 	world.drain = async () => { while (tracked.length) await Promise.allSettled(tracked.splice(0)); };
 	world.call = async (userId, { method = 'GET', path = PATH, body, sudo = true } = {}) => {
 		const token = sudo ? await sudoToken(config, kv, userId) : sessionToken(config, userId);
 		return callRoute(handler, { method, path, body, headers: { authorization: `Bearer ${token}` } });
 	};
 	/** A call that reuses one session across calls, so budgets and sudo share a jti. */
+	world.token = (userId) => sudoToken(config, kv, userId);
+	world.callWith = (token, { method = 'POST', path, body } = {}) => callRoute(handler, { method, path, body, headers: { authorization: `Bearer ${token}` } });
+	/** Turns the session-records path on over these rows; the email table keeps serving its own paths. */
+	world.recordSessions = (rows) => {
+		const store = createSessionStore({ rows });
+		const sessions = createPg({ config, env: { JWT_SECRET: ACCOUNT_JWT_SECRET }, fetchImpl: store.fetchImpl }).asService();
+		const emails = table.pg.asService();
+		const routed = (verb) => (path, ...rest) => (path.startsWith('osionos_sessions') ? sessions : emails)[verb](path, ...rest);
+		const client = { get: routed('get'), post: routed('post'), patch: routed('patch'), del: routed('del') };
+		table.pg.asService = () => client;
+		config.sessionRecords = { enabled: true };
+		return store;
+	};
 	world.add = (userId, email) => world.call(userId, { method: 'POST', body: { email } });
 	return world;
 }
