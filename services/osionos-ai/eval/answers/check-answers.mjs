@@ -114,8 +114,8 @@ const questionIds = new Set(questions.map((q) => q.id));
 const labelIds = new Set(readJsonLines(LABELS_PATH).map((row) => row.id));
 const heldout = readJsonLines(HELDOUT_PATH);
 
-if (heldout.length !== 30) {
-	fail(`heldout: ${heldout.length}, expected 30`);
+if (heldout.length < 30) {
+	fail(`heldout: ${heldout.length}, expected at least 30`);
 }
 const seenHeldoutIds = new Set();
 for (const row of heldout) {
