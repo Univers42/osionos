@@ -57,6 +57,7 @@ export function authEnv(extra = {}) {
 /**
  * options.env       env overrides (TURNSTILE_*, ...)
  * options.gotrue    (token) => Response for GET /auth/v1/user; default: accepts any token for USER_ID
+ * options.gateway   ({ route, body, headers }) => Response | undefined; undefined falls back to the default gateway script
  * options.siteverify (form) => Response | throws, for Cloudflare
  */
 export async function startAuthWorld(t, options = {}) {
@@ -81,6 +82,8 @@ export async function startAuthWorld(t, options = {}) {
 			const route = target.slice(GATEWAY.length);
 			const body = init.body ? JSON.parse(init.body) : {};
 			calls.gateway.push({ route, body, headers: init.headers });
+			const scripted = options.gateway?.({ route, body, headers: init.headers });
+			if (scripted) return scripted;
 			if (route === '/api/auth/register') return reply({ ok: true });
 			if (route === '/api/auth/login') return reply({ access_token: 'gw-token', refresh_token: 'gw-refresh', user: { id: subject } });
 			const handoff = await createBridgeHandoff({
