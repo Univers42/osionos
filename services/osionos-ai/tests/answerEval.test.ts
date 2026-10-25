@@ -6,6 +6,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseVerdict, judgePrompt } from '../eval/answers/judge.ts';
 import { score, cohenKappa, spearman } from '../eval/answers/score.ts';
+import { refreshLabel } from '../eval/answers/labels.ts';
 
 const NODE = 'node';
 import { fileURLToPath } from 'node:url';
@@ -202,5 +203,29 @@ describe('check-answers.mjs', () => {
 		} finally {
 			writeFileSync(questionsPath, backup);
 		}
+	});
+});
+describe('refreshLabel', () => {
+	const labelled = {
+		id: 'q1',
+		answer: 'Eight weeks [1].',
+		sources: ['s'],
+		judge: { faithful: true, relevant: 5, abstained: false },
+		human: { faithful: true, relevant: 5 },
+		labeller: 'someone',
+	};
+
+	it('a new answer clears the label given to the old one', () => {
+		const row = refreshLabel(labelled, { answer: 'Ten weeks [1].', sources: ['t'], judge: null });
+		assert.deepEqual(row.human, { faithful: null, relevant: null });
+		assert.equal('labeller' in row, false);
+		assert.equal(row.answer, 'Ten weeks [1].');
+	});
+
+	it('the same answer keeps its label', () => {
+		const row = refreshLabel(labelled, { answer: 'Eight weeks [1].', sources: ['t'], judge: null });
+		assert.deepEqual(row.human, { faithful: true, relevant: 5 });
+		assert.equal(row.labeller, 'someone');
+		assert.deepEqual(row.sources, ['t']);
 	});
 });
