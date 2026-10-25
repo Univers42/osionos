@@ -54,7 +54,6 @@ export const IssuesPanel: React.FC = () => {
       const result = await listIssues({ scope: effectiveScope, status: status || undefined, before, limit: 50 });
       const rows = Array.isArray(result?.issues) ? result.issues : [];
       setIssues((previous) => (append ? [...previous, ...rows] : rows));
-      if (!append && rows.length > 0) setSelectedId(rows[0].id);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load reports.");
     } finally {
@@ -113,8 +112,7 @@ export const IssuesPanel: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between border-b border-[var(--osio-border-default)] px-3 py-2">
-        <h2 className="text-sm font-medium">Issues</h2>
+      <div className="flex items-center justify-end border-b border-[var(--osio-border-default)] px-3 py-2">
         <button type="button" onClick={() => openReport({ title: "", description: "" })} aria-label="Report an issue" className="rounded-md bg-[var(--osio-accent)] px-3 py-1.5 text-sm font-medium text-[var(--osio-accent-fg)]">
           Report an issue
         </button>
@@ -141,8 +139,9 @@ export const IssuesPanel: React.FC = () => {
         </select>
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        <div className="w-1/2 overflow-auto border-r border-[var(--osio-border-default)]">
+      <div className="min-h-0 flex-1 overflow-auto">
+        {!selected ? (
+        <div>
           {loading && issues.length === 0 ? <p className="p-3 text-sm">Loading…</p> : null}
           {!loading && issues.length === 0 ? (
             <p className="p-3 text-sm">{status ? "Nothing matches this filter." : "No reports yet."}</p>
@@ -175,10 +174,13 @@ export const IssuesPanel: React.FC = () => {
           ) : null}
         </div>
 
-        <div className="w-1/2 overflow-auto p-3">
-          {!selected ? <p className="text-sm">Select a report.</p> : null}
+        ) : (
+        <div className="p-3">
           {selected ? (
             <div className="flex flex-col gap-3">
+              <button type="button" onClick={() => setSelectedId(null)} className="self-start text-sm text-[var(--osio-fg-subtle)] hover:underline">
+                ← All reports
+              </button>
               <h3 className="text-sm font-semibold">{selected.title}</h3>
               <p className="text-xs text-[var(--osio-fg-subtle)]">
                 {selected.status} · {relativeDate(selected.created_at)}
@@ -242,6 +244,7 @@ export const IssuesPanel: React.FC = () => {
             </div>
           ) : null}
         </div>
+        )}
       </div>
 
       {error ? <div className="border-t border-[var(--osio-border-default)] px-3 py-2 text-sm text-red-600">{error}</div> : null}
