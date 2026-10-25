@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/15 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,6 +17,7 @@ import { SharePeoplePicker } from './SharePeoplePicker';
 import { useShareModel } from './useShareModel';
 import { PublishSection } from './PublishSection';
 import { isPublishEnabled } from '@/shared/config/featureFlags';
+import { PAGE_SHARE_LEVELS, WORKSPACE_SHARE_LEVELS } from './pageShareModel';
 import type { ShareResource } from './types';
 
 const ANCHORED = 'fixed inset-x-[var(--osio-space-4)] mt-2 sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:w-[380px]';
@@ -88,7 +89,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
           people={model.people}
           teams={model.teams}
           excludedKeys={model.entries.map((entry) => entry.key)}
-          disabled={model.busy}
+          disabled={model.busy || model.loading}
           onPick={(person) => { void model.setLevel({ type: 'user', person }, 'can_view'); }}
           onPickTeam={(team) => { void model.setLevel({ type: 'team', team }, 'can_view'); }}
         />
@@ -97,13 +98,16 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
       <div className="mt-3 max-h-[260px] space-y-0.5 overflow-y-auto">
         {model.loading && <p className="px-2 py-3 text-xs text-[var(--osio-fg-muted)]">Loading access…</p>}
         {!model.loading && peopleEntries.length === 0 && (
-          <p className="px-2 py-3 text-xs text-[var(--osio-fg-muted)]">Only workspace defaults apply. Add people above.</p>
+          <p className="px-2 py-3 text-xs text-[var(--osio-fg-muted)]">
+            {model.isLive ? 'Only workspace defaults apply. Add people above.' : 'Add members of this workspace above.'}
+          </p>
         )}
         {peopleEntries.map((entry) => (
           <ShareRow
             key={entry.key}
             entry={entry}
-            busy={model.busy}
+            levels={model.isLive || entry.sourceId ? undefined : PAGE_SHARE_LEVELS}
+            busy={model.busy || model.loading}
             onLevel={(level) => { void model.setLevel(entry.target, level); }}
             onRemove={() => { void model.removeEntry(entry); }}
           />
@@ -116,7 +120,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
           {generalEntries.length === 0 && (
             <button
               type="button"
-              disabled={model.busy}
+              disabled={model.busy || model.loading}
               className="osio-menu-item"
               data-tone="muted"
               onClick={() => { void model.setLevel({ type: 'workspace' }, 'can_view'); }}
@@ -128,7 +132,8 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
             <ShareRow
               key={entry.key}
               entry={entry}
-              busy={model.busy}
+              levels={entry.sourceId ? undefined : WORKSPACE_SHARE_LEVELS}
+              busy={model.busy || model.loading}
               onLevel={(level) => { void model.setLevel(entry.target, level); }}
               onRemove={() => { void model.removeEntry(entry); }}
             />
@@ -139,7 +144,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
       <div data-testid="share-footer" className="mt-2 flex items-center justify-between border-t border-[var(--osio-border-default)] px-2 pt-2">
         {model.error
           ? <span className="truncate text-xs text-[var(--osio-danger)]">{model.error}</span>
-          : <span className="text-xs text-[var(--osio-fg-subtle)]">{model.isLive ? 'Levels persist as engine policies.' : 'Levels persist as access rules.'}</span>}
+          : <span className="text-xs text-[var(--osio-fg-subtle)]">{model.isLive ? 'Levels persist as engine policies.' : 'Only the page owner can change access.'}</span>}
         <button
           type="button"
           className="inline-flex h-[var(--osio-control-h-sm)] shrink-0 items-center gap-1 rounded-[var(--osio-radius-sm)] px-2 text-xs text-[var(--osio-fg-muted)] transition-colors duration-[var(--osio-dur-fast)] hover:bg-[var(--osio-bg-hover)]"

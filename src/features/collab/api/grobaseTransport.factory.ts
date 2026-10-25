@@ -14,7 +14,8 @@
  * App-side wiring that turns the membership-gated bridge token into a live
  * Shared-space channel (AOC §Sec1). The bridge mints a realtime token whose
  * `namespaces` is exactly `collab:<spaceId>` after verifying membership, so the
- * gateway authorizes per-space — a non-member is denied at the bridge (no token)
+ * gateway authorizes subscriptions per-space. Publishing goes through the bridge,
+ * which checks target-page edit access for every blocks event. A non-member is denied at the bridge (no token)
  * AND would be denied at the gateway (no namespace). The WS URL + framing come
  * from the one adapter; only this factory knows the bridge token endpoint.
  */
@@ -46,6 +47,10 @@ export async function joinSharedSpace(spaceId: string, selfId: string): Promise<
   const url = liveRealtimeUrl();
   if (!url) throw new Error('Realtime is not configured (VITE_BAAS_URL).');
   const token = await fetchSharedSpaceToken(spaceId);
-  const transport = new GrobaseRealtimeTransport({ url, selfId });
+  const transport = new GrobaseRealtimeTransport({ url, selfId,
+    publish: async (id, event, payload) => {
+      await api.post(`/api/collaboration/${encodeURIComponent(id)}/events`, { event, payload }, getActivePageJwt() ?? undefined);
+    },
+  });
   return transport.join(spaceId, token);
 }

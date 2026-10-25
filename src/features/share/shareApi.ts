@@ -10,13 +10,17 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-/** Bridge calls for the Share dialog: roster + page AccessRules (normal pages).
- *  All paths are bridge-relative under /api/perms/* (scripts/bridge-perms.mjs). */
+/** Bridge calls for page collaborators, visibility and enforced access rules.
+ *  Page sharing uses the workspace members; live policies use the engine roster. */
 
 import { api, getActivePageJwt } from '@/shared/api/client';
+import type { PageEntry } from '@/entities/page';
+import { usePageStore } from '@/store/usePageStore';
+import { assertSharingApplied, membersToPeople, sharingPatch, type PageSharing, type WorkspaceMember } from './pageShareModel';
 import { permsPathFor } from './permsPath';
 import type { ShareAccessRule, SharePerson, ShareTeam } from './types';
 
+interface MembersResponse { members?: WorkspaceMember[] }
 interface PeopleResponse { people: SharePerson[] }
 interface RulesResponse { rules: Array<ShareAccessRule & { _id: string }>; teamRules?: boolean }
 interface TeamsResponse { teams?: Array<{ id?: unknown; name?: unknown; memberCount?: unknown }> }
@@ -68,4 +72,28 @@ export async function saveRule(rule: ShareAccessRule): Promise<ShareAccessRule &
 /** Delete a stored AccessRule by id. */
 export async function deleteRule(ruleId: string): Promise<void> {
   await api.delete<{ deleted: boolean }>(`/api/perms/rules/${encodeURIComponent(ruleId)}`, permsBearer());
+}
+
+export async function fetchWorkspacePeople(workspaceId: string): Promise<SharePerson[]> {
+  const body = await api.get<MembersResponse>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members`, permsBearer());
+  return membersToPeople(body.members ?? []);
+}
+
+export async function fetchPageSharing(pageId: string): Promise<PageSharing> {
+  const page = await api.get<Pick<PageEntry, 'visibility' | 'collaborators' | 'contentVersion'>>(`/api/pages/${encodeURIComponent(pageId)}`, permsBearer());
+  return { visibility: page.visibility ?? 'private', collaborators: page.collaborators ?? [], version: page.contentVersion };
+}
+
+/** Writes what changed, then mirrors it into the page store: the outbox resends the store's
+ *  `visibility` with every edit, so a stale copy there would undo the share. */
+export async function commitPageSharing(pageId: string, before: PageSharing, after: PageSharing): Promise<PageSharing> {
+  const patch = sharingPatch(before, after);
+  if (Object.keys(patch).length === 0) return before;
+  if (!Number.isSafeInteger(before.version) || (before.version ?? -1) < 0) {
+    throw new Error('Sharing requires a page revision. Reload the page and try again.');
+  }
+  const reply = await api.patch<{ version?: number }>(`/api/pages/${encodeURIComponent(pageId)}`, { ...patch, baseVersion: before.version }, permsBearer());
+  assertSharingApplied(reply);
+  usePageStore.getState().patchPage(pageId, patch);
+  return { ...after, version: reply.version };
 }

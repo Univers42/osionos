@@ -29,6 +29,14 @@ test("parseResizeFrame rejects paste noise that merely starts with the magic", (
   assert.equal(parseResizeFrame(Buffer.alloc(64, 0x41)), null); // oversized
 });
 
+test("parseResizeFrame rejects line breaks inside or after the APC envelope", () => {
+  const esc = String.fromCharCode(27);
+  for (const newline of ["\n", "\r\n", "\r", "\u2028", "\u2029"]) {
+    assert.equal(parseResizeFrame(Buffer.from(`${esc}_osio-resize:120,32${newline}${esc}\\`, "utf8")), null);
+    assert.equal(parseResizeFrame(Buffer.from(`${esc}_osio-resize:120,32${esc}\\${newline}`, "utf8")), null);
+  }
+});
+
 test("extractWsAuth prefers the subprotocol token and reports the app protocol", () => {
   const request = { headers: { "sec-websocket-protocol": "osio-ide.v1, osio-token.osionos_v1.abc.def" } };
   assert.deepEqual(extractWsAuth(request), { token: "osionos_v1.abc.def", protocol: "osio-ide.v1" });
