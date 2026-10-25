@@ -46,7 +46,12 @@ export function migratePanelId(panel: unknown): ActivePanel {
 
 const KNOWN_PANELS = new Set<ActivePanel>([
   'files', 'search', 'marketplace', 'agents', 'conversations', 'notifications', 'tasks', 'public', 'database',
+  'scm', 'run', 'problems',
 ]);
+
+export function isActivePanel(value: unknown): value is ActivePanel {
+  return typeof value === "string" && KNOWN_PANELS.has(value as ActivePanel);
+}
 
 export const PANEL_MIN_WIDTH = 160;
 export const PANEL_MAX_WIDTH = 480;

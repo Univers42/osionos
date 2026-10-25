@@ -214,7 +214,13 @@ export interface StartRunInput {
    * What the answer is read from: the pages it may use (at most three), and
    * whether the caller's whole workspace is searched.
    */
-  context?: { pageIds?: string[]; workspace?: boolean };
+  context?: { pageIds?: string[]; workspace?: boolean; account?: boolean; view?: {
+    route: string;
+    layout: "single" | "split";
+    activePage?: { id: string; title: string };
+    tabs?: { title: string; kind: "page" | "database" | "app" | "other"; pageId?: string }[];
+    panel?: string;
+  } };
 }
 
 /** The body of `POST /complete` — an inline editor action, never persisted. */
