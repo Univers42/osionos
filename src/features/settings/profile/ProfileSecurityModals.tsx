@@ -125,12 +125,12 @@ export const PasskeyManagerModal: React.FC<{ passkeys: Array<{ _id: string; nick
     <div className="space-y-4 p-6">
       <p className="text-sm text-[var(--osio-fg-muted)]">You can rename or remove passkeys here; new passkeys are added when you sign in on a device that offers one.</p>
       {passkeys.length === 0 && <p className="text-sm text-[var(--osio-fg-muted)]">No passkeys yet.</p>}
-      {passkeys.length > 0 && <DataTable headers={['Name', 'Created', 'Last used', '']} rows={passkeys.map((passkey) => [
+      {passkeys.length > 0 && <div className="overflow-x-auto"><DataTable headers={['Name', 'Created', 'Last used', '']} rows={passkeys.map((passkey) => [
         <input key={`${passkey._id}-name`} aria-label="Passkey name" className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" defaultValue={passkey.nickname ?? 'Passkey'} onBlur={(event) => { const next = event.target.value.trim(); if (next && next !== (passkey.nickname ?? 'Passkey')) onRename(passkey._id, next); }} />,
         new Date(passkey.createdAt).toLocaleDateString(),
         passkey.lastUsedAt ? new Date(passkey.lastUsedAt).toLocaleDateString() : 'Never',
         <Button key={`${passkey._id}-remove`} tone="danger-subtle" onClick={() => onRemove(passkey._id)}>Remove</Button>,
-      ])} />}
+      ])} /></div>}
       <div className="flex justify-end"><Button onClick={onClose}>Done</Button></div>
     </div>
   </Modal>
