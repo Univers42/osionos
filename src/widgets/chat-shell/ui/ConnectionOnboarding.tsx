@@ -45,7 +45,7 @@ export const ConnectionOnboarding: React.FC<{
   return (
     <Modal open={open} onClose={onClose} title="Connect the assistant">
       {step === "ask" ? (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 p-6">
           <p className="text-sm text-[var(--osio-fg-default)]">
             You&apos;re trying to talk to the AI, but you haven&apos;t set up a connection yet.
           </p>
@@ -60,7 +60,7 @@ export const ConnectionOnboarding: React.FC<{
           </div>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 p-6">
           <p className="text-sm text-[var(--osio-fg-muted)]">Which provider do you want to connect with?</p>
           {FUNCTIONAL_CONNECTORS.map((d) => {
             const state = snapshots[d.providerKey]?.state ?? "disconnected";

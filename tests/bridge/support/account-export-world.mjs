@@ -27,8 +27,17 @@ import { createServer } from 'node:http';
 import { createAccountHandler } from '../../../scripts/bridge-account-mounts.mjs';
 import { verifyAppSessionToken } from '../../../scripts/bridge-api.mjs';
 import { createExportRunner } from '../../../scripts/bridge-account-export-runner.mjs';
+import { createEmailRows, LOOKUP_ENV, SEAL_ENV } from '../../../scripts/bridge-account-email-rows.mjs';
 import { createPg } from '../../../scripts/bridge-pg.mjs';
 import { ACCOUNT_JWT_SECRET, accountConfig } from './account-world.mjs';
+
+export const EMAIL_KEYS = { [SEAL_ENV]: Buffer.alloc(32, 7).toString('base64'), [LOOKUP_ENV]: 'l'.repeat(40) };
+
+/** A row sealed through the real insert path; `verifiedAt` null makes it pending. */
+export async function sealedEmailRow(userId, address, { env = EMAIL_KEYS, verifiedAt = null } = {}) {
+	const capture = { asService: () => ({ post: async (_table, row) => [{ id: randomUUID(), created_at: '2026-10-20T00:00:00.000Z', verified_at: verifiedAt, ...row }] }) };
+	return createEmailRows({ pg: capture, env }).insert(userId, address);
+}
 
 export const EXPORTS = 'osionos_account_exports';
 export const AUDIT = 'osionos_bridge_audit_events';
@@ -74,9 +83,9 @@ function select(rows, params, cap = Infinity) {
 	return hits.map((row) => (columns[0] === '*' ? { ...row } : Object.fromEntries(columns.filter((c) => c in row).map((c) => [c, row[c]]))));
 }
 
-/** The fake fetch and its state. `fail.audit`, `fail.putAfter` (n puts then 500), `fail.donePatch` and `fail.pageCap` (rows per response) are the switches. */
+/** The fake fetch and its state. `fail.audit`, `fail.putAfter` (n puts then 500), `fail.donePatch`, `fail.pageCap` (rows per response) and `fail.table` (that table answers 500) are the switches. */
 export function createExportStore({ exports = [], registry = [], data = {} } = {}) {
-	const tables = new Map([[EXPORTS, exports.map((row) => ({ ...row }))], [AUDIT, []], ['osionos_account_data_map', registry], ...Object.entries(data)]);
+	const tables = new Map([[EXPORTS, exports.map((row) => ({ ...row }))], [AUDIT, []], ['osionos_account_data_map', registry], ['osionos_user_emails', []], ...Object.entries(data)]);
 	const store = { calls: [], objects: new Map(), puts: 0, buckets: 0, fail: {}, tables, order: [] };
 	const open = (userId) => tables.get(EXPORTS).find((row) => row.user_id === userId && (row.status === 'queued' || row.status === 'running'));
 
@@ -91,6 +100,7 @@ export function createExportStore({ exports = [], registry = [], data = {} } = {
 		}
 		if (table === AUDIT && store.fail.audit) return json({ message: 'down' }, 500);
 		if (table === AUDIT) store.order.push(`audit:${body.event_type}`);
+		if (table === store.fail.table) return json({ message: 'down' }, 500);
 		const rows = tables.get(table);
 		if (!rows) return json({ message: `no table ${table}` }, 404);
 		if (method === 'GET') {
@@ -145,7 +155,7 @@ export function createExportStore({ exports = [], registry = [], data = {} } = {
 /** The mounted handler on a server, plus a runner that shares the same fake. */
 export async function startExportWorld(t, { kv, store = createExportStore(), clock = { at: Date.now() } } = {}) {
 	const config = accountConfig();
-	const env = { JWT_SECRET: ACCOUNT_JWT_SECRET, STORAGE_ROUTER_URL: 'https://storage.local/storage/v1' };
+	const env = { JWT_SECRET: ACCOUNT_JWT_SECRET, STORAGE_ROUTER_URL: 'https://storage.local/storage/v1', ...EMAIL_KEYS };
 	const pg = createPg({ config, env, fetchImpl: store.fetchImpl });
 	const handler = createAccountHandler({
 		config, pg, kv, verifySession: verifyAppSessionToken, env, fetchImpl: store.fetchImpl,

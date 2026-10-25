@@ -59,7 +59,7 @@ async function primaryAddress(ctx, userId) {
 }
 
 /** A row of the caller that opens and matches its hash; anything else is a 404 with no oracle. */
-async function ownRow(ctx, session, id) {
+export async function ownRow(ctx, session, id) {
 	if (id === `primary-${session.userId}`) throw accountError(409, 'primary_email', 'The primary address is changed, not removed.');
 	if (!isUuid(id)) throw notFound();
 	const row = await ctx.rows.get(session.userId, id);

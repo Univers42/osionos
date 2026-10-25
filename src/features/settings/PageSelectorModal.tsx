@@ -11,7 +11,7 @@ const CHOICE_IDLE = 'border-[var(--osio-control-border)] bg-[var(--osio-bg-surfa
 
 export const PageSelectorModal: React.FC<{ pages: PageEntry[]; selectedId: string | null; onSelect: (pageId: string | null) => void; onClose: () => void }> = ({ pages, selectedId, onSelect, onClose }) => (
   <Modal open onClose={onClose} title="Select landing page" size="md">
-    <div className="space-y-2">
+    <div className="space-y-2 p-6">
       <Button className="w-full justify-start" onClick={() => onSelect(null)}>No landing page</Button>
       {pages.slice(0, 20).map((page) => {
         const selected = selectedId === page._id;

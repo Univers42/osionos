@@ -38,7 +38,7 @@ PG_CONTAINER="ai-test-pg-$$"
 REDIS_CONTAINER="ai-test-redis-$$"
 
 cleanup() {
-	docker rm -f "$PG_CONTAINER" "$REDIS_CONTAINER" >/dev/null 2>&1 || true
+	docker rm -f -v "$PG_CONTAINER" "$REDIS_CONTAINER" >/dev/null 2>&1 || true
 	docker network rm "$NETWORK" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
