@@ -96,6 +96,13 @@ describe('saysNotInSources', () => {
 		);
 	});
 
+	it('recognises "the provided sources do not specify"', () => {
+		assert.equal(
+			saysNotInSources('The provided sources do not specify who approves discounts over fifty thousand on the SIERRA programme. [n]'),
+			true,
+		);
+	});
+
 	it('recognises a French phrasing', () => {
 		assert.equal(saysNotInSources("Le délai de livraison n'est pas précisé dans les sources."), true);
 	});

@@ -208,7 +208,7 @@ export function supportPrompt(claim: string, source: string, lenient = false): s
 const NOT_IN_SOURCES: RegExp[] = [
 	/not found in (your|the) workspace/i,
 	/not (specified|mentioned|provided|given|stated|found|available) in the (provided |given )?(sources|documents|context|workspace)/i,
-	/the sources do not (say|mention|specify|contain)/i,
+	/the (provided |given )?sources do not (say|mention|specify|contain)/i,
 	/n['’]est pas (précisé|mentionné|indiqué)/i,
 	/ne (précisent|mentionnent|contiennent) pas/i,
 	/pas trouvé dans votre espace/i,
