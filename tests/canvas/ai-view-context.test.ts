@@ -20,23 +20,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import "./support/memory-local-storage.ts";
+
 import type { InferencePort, StreamInferenceRequest } from "@/features/chat/model/inferencePort";
 import type { LayoutNode, PaneNode, WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 
-function shimLocalStorage() {
-  const store = new Map<string, string>();
-  (globalThis as unknown as { localStorage: Storage }).localStorage = {
-    getItem: (k: string) => store.get(k) ?? null,
-    setItem: (k: string, v: string) => void store.set(k, v),
-    removeItem: (k: string) => void store.delete(k),
-    clear: () => void store.clear(),
-    key: () => null,
-    length: 0,
-  };
-}
-
-// Before any store is imported: a persisted store created without storage has no `persist` API.
-shimLocalStorage();
 
 const uuid = (n: number) => `${String(n).padStart(8, "0")}-0000-4000-8000-000000000000`;
 
