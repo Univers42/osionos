@@ -36,7 +36,7 @@ const BY_CODE: Record<string, string> = {
   email_busy: 'Verification is busy right now. Try again later.',
   email_proof_invalid: 'That code could not be confirmed. Resend it and try again.',
   email_unavailable: TEMPORARILY_DOWN,
-  email_changed_signout_failed: 'Your primary address HAS changed, but other devices could not be signed out. Sign them out from your sessions list.',
+  email_changed_signout_failed: 'Your primary address HAS changed, but other devices could not be signed out. Change your password to sign them out.',
   primary_busy: 'Another change of your primary address is running. Try again in a minute.',
   email_unverified: 'Verify this address first.',
 };
