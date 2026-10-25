@@ -19,6 +19,9 @@ import { useConnectorStore } from "@/features/connectors/model/useConnectorStore
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/features/ai/model/aiSelection";
 import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
+import { useRunView } from "@/features/ai/model/viewContext";
+import { useAiSettingsStore } from "@/store/settings";
+import { useUserStore } from "@/features/auth";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { MAX_ATTACHMENTS } from "./AttachImageButton";
 import { ChatComposer } from "./ChatComposer";
@@ -49,6 +52,7 @@ export const ChatShell: React.FC = () => {
   // the whole workspace is searched.
   const [chips, setChips] = useState<ContextChip[]>([]);
   const [attachments, setAttachments] = useState<string[]>([]);
+  const runView = useRunView();
   // The agent of the next run: none is the general assistant.
   const [agentId, setAgentId] = useState<string | null>(null);
 
@@ -89,6 +93,12 @@ export const ChatShell: React.FC = () => {
     const value = (explicit ?? text).trim();
     if (!active || !value) return;
     if (needsConnection && !hasConnection) { setText(value); setOnboarding("ask"); return; } // ask to connect, keep the message
+    const workspaceId = useUserStore.getState().activeWorkspace()?._id ?? "local-workspace";
+    const aiSettings = useAiSettingsStore.getState().getData(workspaceId);
+    const baseContext = chips.length > 0 ? buildRunContext(chips) : undefined;
+    const context = aiSettings.accountContext
+      ? { ...(baseContext ?? {}), account: true, view: runView() }
+      : baseContext;
     void send(active.id, value, {
       connectorId: fallbackConnector,
       model: selection.model || "auto",
@@ -100,8 +110,8 @@ export const ChatShell: React.FC = () => {
           if (path.startsWith("/api/media/")) return { kind: "media" as const, path };
           return { kind: "chat" as const, id: path.split("/").pop() ?? "" };
         }),
-      // What the answer may read: the pages the reader pointed at.
-      ...(chips.length > 0 ? { context: buildRunContext(chips) } : {}),
+      // What the answer may read: the pages the reader pointed at, plus account/view.
+      ...(context ? { context } : {}),
     });
     setText("");
     setAttachments([]);
@@ -114,10 +124,16 @@ export const ChatShell: React.FC = () => {
     const value = text.trim();
     if (!active || !value) return;
     const connected = Object.values(useConnectorStore.getState().snapshots).find((x) => x.state === "connected");
+    const workspaceId = useUserStore.getState().activeWorkspace()?._id ?? "local-workspace";
+    const aiSettings = useAiSettingsStore.getState().getData(workspaceId);
+    const onConnectedContext = aiSettings.accountContext
+      ? { account: true, view: runView() }
+      : undefined;
     void send(active.id, value, {
       connectorId: connected?.providerKey ?? fallbackConnector,
       model: selection.model || "auto",
       connectionId: selection.connectionId,
+      ...(onConnectedContext ? { context: onConnectedContext } : {}),
     });
     setText("");
   };
@@ -189,7 +205,13 @@ export const ChatShell: React.FC = () => {
         ) : (
           <>
             <div className="flex-1 overflow-y-auto">
-              <ChatThread messages={messages} onRetry={(retryText) => { if (active) void send(active.id, retryText); }} />
+              <ChatThread messages={messages} onRetry={(retryText) => {
+                if (!active) return;
+                const workspaceId = useUserStore.getState().activeWorkspace()?._id ?? "local-workspace";
+                const aiSettings = useAiSettingsStore.getState().getData(workspaceId);
+                const retryContext = aiSettings.accountContext ? { account: true, view: runView() } : undefined;
+                void send(active.id, retryText, retryContext ? { context: retryContext } : undefined);
+              }} />
             </div>
             <div className="mx-auto w-full max-w-3xl px-4 pb-4"><ChatComposer {...composerProps} /></div>
           </>
