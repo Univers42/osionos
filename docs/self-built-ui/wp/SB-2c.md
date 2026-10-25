@@ -17,6 +17,7 @@ Base: the integration tip with SB-1b, SB-2a and SB-6a merged (registry, binding 
 - `packages/osionos-ui/src/primitives/{RadioGroup,Textarea}.tsx` (new) + their exports. This is a submodule commit on a local branch `feat/sb-SB-2c`, never pushed; report both SHAs. They use the existing `--osio-field-*` and `--osio-control-*` tokens. No new colour;
 - slash entries `/input`, `/select`, `/toggle`, `/checkbox`;
 - a render counter for the field block in the existing perf harness (`src/shared/lib/perf/`, on only when `osio:perf` is set). Add a named counter there if none fits;
+- `src/entities/block/ui/ReadOnlyBlock.tsx` and `src/features/block-editor/ui/BlockEditor.tsx`: the dispatch order only (Rule 8);
 - tests: `tests/canvas/field-block.test.ts` (new), `tests/e2e/functional/fieldBlock.spec.mjs` (new).
 
 **MUST NOT TOUCH:** the settings panels and stores, `bindingSources.ts`, the existing controls' behaviour (new optional props are fine).
@@ -47,6 +48,7 @@ field?: {
    - A read-only spec → disabled.
 6. **Edit mode.** The block shows the live control (still writing when live, so authors test it) and a small "settings:preferences › Start week" caption. An unbound field shows a "Choose a field" button that opens `FieldBindingPicker`: a searchable list of `source.label › field.label` from `listRecordSources()`. The slash command that inserted the block filters it (`/toggle` → switch and checkbox fields; `/select` → option fields; `/input` → text-like; `/checkbox` → checkbox and checkbox-list). Choosing writes `recordRef` + `fieldBind` through `onUpdate`.
 7. **Renders alone.** Changing one bound field re-renders only that field block. e2e: two field blocks bound to two preferences, perf harness on; toggling one raises its render counter by exactly one and leaves the other's unchanged.
+8. **A registered block owns its binding.** Today `ReadOnlyBlock` sends every block with `recordRef && fieldBind` to `BoundFieldReadOnly` (`ReadOnlyBlock.tsx:194-195`), and `BlockEditor` has the same `isProfileBound` branch (:484). Both run before SB-1b's registry lookup, so a bound `field` block would render as plain text. Move the registry lookup above both bound branches: a registered type renders through its definition, binding or not. A bound paragraph or heading (not registered) still goes to `BoundFieldReadOnly`, so the profile README e2e (`profilePagePublic.spec.mjs`, `profileBinding`) stays green unchanged. The perf cases of Step 5 cover the reorder.
 
 ## Steps
 
@@ -58,7 +60,8 @@ field?: {
 - [ ] **Step 4: Mutants** (scratch copies under `target/mutants`, never committed). Paste the failing test name for each:
   - (a) a text field writes on every keystroke;
   - (b) preview mode calls `set`;
-  - (c) the override lets `password` become `text`.
+  - (c) the override lets `password` become `text`;
+  - (d) the bound branch runs before the registry again (a bound field renders as text).
 - [ ] **Step 5: Gates.** `npm run test:canvas` rc 0; `npm run test:quality` rc 0; the `settingsKit` e2e unchanged; perf `interactions.spec.mjs` `enter`, `slash`, `longPage` p95 lines against `BUDGET`. Report each.
 - [ ] **Step 6: Commit** with the message above (the submodule commit first). No trailer, no push.
 
