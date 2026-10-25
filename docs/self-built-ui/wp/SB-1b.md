@@ -40,7 +40,7 @@ Project: rebuild every settings section from the app's own blocks (design §2 an
   - Children render through `ReadOnlyBlock` in View and `renderChildren()` in Edit (dependency inversion: entities never import features).
   - With a `narrow` rule, a wrapper gets `container-type: inline-size`. Caveat in the file: a frame with a narrow rule must be `width: fill`, because the wrapper has no intrinsic width.
 - [ ] **Step 6: Hook the registry into the renderers, slash menu and exporters.**
-  - In `ReadOnlyBlock`, after the bound-field check: `const def = getBlockDefinition(block.type); if (def) return <def.View block={block} mode="live" />;` (SB-6a replaces the constant with the render-mode context).
+  - In `ReadOnlyBlock`, after the bound-field check: `const def = getBlockDefinition(block.type); if (def) return <def.View block={block} mode={mode} />;`. `mode` comes from `useRenderMode()` (`src/entities/block/ui/renderMode.tsx`, SB-6a) when that file is in your base, called once at the top of `ReadOnlyBlockImpl` before any early return. Otherwise it is the constant `"live"` and the reviewer swaps it at merge.
   - In `BlockEditor`, after `isProfileBound`, the same with `def.Edit`, `onUpdate` mapped to `commitBlockUpdate(block.id, …)` and the existing `renderChildren`.
   - `SLASH_COMMANDS` appends `{ kind: "block", id: \`block:${def.type}\`, label, aliases, description, section, icon: def.slash.icon(), blockType: def.type }` for each definition with `slash`.
   - Each exporter calls `def.toMarkdown` / `def.toHtml` before its switch, and joins the children by default.

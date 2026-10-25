@@ -4,14 +4,14 @@ Project: rebuild every settings section from the app's own blocks (design: `docs
 - makes that state the visible **Edit / View** switch;
 - gives every block renderer a render mode, so a block shown as a preview (hover cards, marketplace, profile README, public page, all through `PageBlocksRenderer`) can never write.
 
-Depends on SB-1b (merged): the registry's `View` takes a `mode`, which SB-1b passes as the constant `"live"`.
+Base: the integration tip, **without SB-1b** (re-planned 2026-10-25 20:55 to run in parallel). The block registry does not exist in your base: provide the context and `useRenderMode`, and skip any registry line. SB-1b reads the mode from your hook when it lands.
 
 **A defect this fixes today:** `ButtonBlockReadOnly` (`src/entities/block/ui/ReadOnlyBlock.tsx:611-626`) runs a button's program on click wherever it renders, previews included. A visitor clicking a button inside a marketplace preview or someone's profile README starts that program with the visitor's own permissions. In `preview` mode a program button must do nothing.
 
 **OWNS:**
 - `src/entities/block/ui/renderMode.tsx` (new): `RenderMode`, `RenderModeProvider`, `useRenderMode`;
 - `src/entities/block/model/buttonEffect.ts` (new): the pure click decision;
-- `src/entities/block/ui/ReadOnlyBlock.tsx`: read the mode once at the top of `ReadOnlyBlockImpl`, pass it to the registry `View` (replacing the constant), and use `buttonEffect` in `ButtonBlockReadOnly`;
+- `src/entities/block/ui/ReadOnlyBlock.tsx`: use `useRenderMode()` + `buttonEffect` in `ButtonBlockReadOnly` (the only consumer in your base);
 - `src/features/block-editor/ui/BlockEditorSurface.tsx`: wrap in `RenderModeProvider mode="live"`;
 - `src/widgets/page-renderer/ui/PageBlocksRenderer.tsx`: wrap in `RenderModeProvider mode="preview"`;
 - `src/entities/page/ui/PageEditToggle.tsx` (new) and one line in `PageHeaderBar.tsx` to mount it before `PageShareButton`;
@@ -38,7 +38,7 @@ Depends on SB-1b (merged): the registry's `View` takes a `mode`, which SB-1b pas
 1. In `preview`, a program button stays visible and focusable but gets `aria-disabled="true"` and `title="Buttons run on the page itself"`, and a click does nothing: no program, no toast.
 2. `live` is the mode of the page itself, in both Edit and View: a locked page is still live, and its buttons and (later) fields work. That is the owner's "totally usable".
 3. A preview nested inside a live surface stays a preview: `PageBlocksRenderer` sets `preview` explicitly.
-4. Hooks: `useRenderMode()` is called once at the top of `ReadOnlyBlockImpl`, before any early return. `areReadOnlyBlockPropsEqual` is unchanged (context changes re-render through React, as they should).
+4. Hooks: `useRenderMode()` is called inside `ButtonBlockReadOnly`, so blocks other than buttons pay nothing. `areReadOnlyBlockPropsEqual` is unchanged.
 5. Performance: one `useContext` per read-only block. Run `tests/e2e/perf/interactions.spec.mjs` cases `enter`, `slash` and `longPage` and paste their p95 lines against `BUDGET`.
 
 ## Steps
