@@ -178,11 +178,17 @@ export function createEmailWorld({ env = goodEnv(), users = [] } = {}) {
 			world.cutoffs.push(JSON.parse(init.body));
 			return json({}, world.cutoffStatus);
 		}
+		if (url.pathname === '/auth/v1/logout') {
+			world.gotrueLogouts.push({ url: String(input), headers: init.headers });
+			events.push('gotrue_logout');
+			if (world.gotrueLogoutFail === 'reject') throw new Error('network down');
+			return world.gotrueLogoutFail ? json({}, world.gotrueLogoutFail) : new Response(null, { status: 204 });
+		}
 		if (init.method === 'PUT') events.push('put');
 		return directory.handle(url, init);
 	};
 	const handler = createAccountHandler({ config, pg: table.pg, kv, verifySession: verifyAppSessionToken, mfaEnv: env, mfaFetch: fetchImpl, mfaNow: now, emailTrack: (promise) => tracked.push(promise) });
-	const world = { cutoffs: [], cutoffStatus: 201, events, clock, config, kv, table, directory, grobase, env, tracked, user };
+	const world = { gotrueLogouts: [], gotrueLogoutFail: null, cutoffs: [], cutoffStatus: 201, events, clock, config, kv, table, directory, grobase, env, tracked, user };
 	world.drain = async () => { while (tracked.length) await Promise.allSettled(tracked.splice(0)); };
 	world.call = async (userId, { method = 'GET', path = PATH, body, sudo = true } = {}) => {
 		const token = sudo ? await sudoToken(config, kv, userId) : sessionToken(config, userId);

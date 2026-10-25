@@ -31,7 +31,7 @@
 
 import { writeAudit, grantSudo } from './bridge-guard.mjs';
 import { accountError, clientMetaOf } from './bridge-account-sudo.mjs';
-import { findAccountByEmail, readGotrueUser, updateGotrueEmail } from './bridge-gotrue-user.mjs';
+import { endGotrueSessions, findAccountByEmail, readGotrueUser, updateGotrueEmail } from './bridge-gotrue-user.mjs';
 import { userBudget } from './bridge-account-email-send.mjs';
 import { endOtherSignIns } from './bridge-account-password.mjs';
 import { guardMutation, ownRow, recordOf } from './bridge-account-email-flow.mjs';
@@ -124,15 +124,17 @@ async function writeAddress(ctx, userId, address, previous) {
 	}
 }
 
+const SIGNOUT_FAILED = 'Your primary address HAS changed, but other devices could not be signed out. Change your password to sign them out.';
+
 async function finish(ctx, session, request, response, { row, address, kept }) {
 	const logged = (what) => (error) => ctx.log(what, error?.code ?? 'unknown');
 	await ctx.rows.remove(session.userId, row.id).catch(logged('account_email_primary_remove_failed'));
 	await writeAudit(ctx.pg, { session, meta: clientMetaOf(request, ctx.config), eventType: 'account.email_primary_changed', details: {} }).catch(logged('account_email_primary_audit_failed'));
-	try {
-		await endOtherSignIns(ctx, session, response, 'logout_all');
-	} catch {
-		throw accountError(503, 'email_changed_signout_failed', 'Your primary address HAS changed, but other devices could not be signed out. Sign them out from your sessions list.');
-	}
+	// Both always run: GoTrue first, so no website session can mint a new bridge session before the sweep.
+	const failed = (work) => work.then(() => false, () => true);
+	const goTrueFailed = await failed(endGotrueSessions(ctx, session.userId));
+	const bridgeFailed = await failed(endOtherSignIns(ctx, session, response, 'logout_all'));
+	if (goTrueFailed || bridgeFailed) throw accountError(503, 'email_changed_signout_failed', SIGNOUT_FAILED);
 	const at = new Date(ctx.now()).toISOString();
 	return sendJson(response, 200, { primary: { ...recordOf(row, address), isPrimary: true, verifiedAt: at, updatedAt: at }, previous: kept.id }, ctx.config);
 }
