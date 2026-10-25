@@ -34,7 +34,8 @@ export type CommandId =
   | "italic"
   | "underline"
   | "inlineCode"
-  | "link";
+  | "link"
+  | "reportIssue";
 
 /** Context-predicate names (the VSCode `when`-clause). */
 export type WhenName =
