@@ -4,6 +4,7 @@
 #
 # Usage: sh eval/answers/answers.sh <migration> <rag-migration>
 # ANSWERS_CHECKPOINT=<path inside the repo>: save each finished question as it ends, resume next run.
+# LLM_BACKEND=cpu (default) or vulkan: the backend of the llama.cpp model.
 set -eu
 
 MIGRATION=""
@@ -55,7 +56,6 @@ TEI_CONTAINER="ai-answers-tei"
 LLM_CONTAINER="ai-answers-llm"
 DB_IMAGE="pgvector/pgvector:0.8.0-pg16"
 TEI_IMAGE="ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.4"
-LLM_IMAGE="ghcr.io/ggml-org/llama.cpp:server-b11580"
 NODE_IMAGE="node:22-bookworm-slim"
 MODEL="intfloat/multilingual-e5-small"
 MODEL_VOLUME="osionos_ai_models_tei"
@@ -95,11 +95,7 @@ if [ -z "$LLM_MODEL" ]; then
 fi
 echo "[answers] the model: $LLM_MODEL"
 
-docker run -d --name "$LLM_CONTAINER" --network "$NETWORK" \
-	-v "$LLM_MODEL_VOLUME:/models:ro" \
-	--cpus 8 --memory 6g \
-	"$LLM_IMAGE" \
-	-m "$LLM_MODEL" --host 0.0.0.0 --port 8080 -c 4096 -t 8 --jinja >/dev/null
+harness_start_llm "$LLM_CONTAINER" "$NETWORK" "$LLM_MODEL_VOLUME" "$LLM_MODEL" 6g 4096
 
 harness_wait_postgres "$DB_CONTAINER" osionos_ai_test postgres
 echo "[answers] postgres is ready"
