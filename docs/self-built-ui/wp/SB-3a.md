@@ -2,7 +2,7 @@
 
 Project: rebuild every settings section from the app's own blocks (design: `docs/superpowers/specs/2026-10-25-self-built-ui-design.md` §5 "Actions" and "Action parameters"). A settings page made of blocks must do what today's panels do: revoke a session, reset preferences, sign out everywhere, delete the account. It must do so behind the **same** guards: confirm, typed confirm, sudo. A page author must never be able to remove a guard. This package adds the action registry, the runner that enforces guards from the registry, and the one program step that calls it. Later blocks (button in SB-3b, collection row actions in SB-4a) go through this runner only.
 
-Base: the integration tip with SB-2a merged.
+Base: the integration tip (re-planned 2026-10-25 21:20 to run in parallel with SB-2a; the only shared file is `src/App.tsx`, one mount each, and the reviewer resolves it).
 
 ## What exists (read these first)
 
@@ -50,8 +50,14 @@ type ActionResult =
   | { status: "cancelled" }
   | { status: "sudo_required" }
   | { status: "busy" }
-  | { status: "preview" };
-function runAppAction(name: string, rawArgs: unknown, ctx: { mode: "live" | "preview" }): Promise<ActionResult>;
+  | { status: "preview" }
+  | { status: "blocked"; message: string };                // untrusted page + confirm-less action
+interface ActionContext {
+  mode: "live" | "preview";
+  trusted: boolean;                   // system page, or a page the viewer owns; unknown → false
+  pause?: { begin(): void; end(): void };   // the interpreter's wall-clock pause handle
+}
+function runAppAction(name: string, rawArgs: unknown, ctx: ActionContext): Promise<ActionResult>;
 function useActionState(name: string, argsKey: string): { pending: boolean; last: ActionResult | null };
 // program step
 type ProgramAction = … | { type: "app_action"; name: string; args: Record<string, ProgramValue> };
@@ -76,6 +82,23 @@ type ProgramAction = … | { type: "app_action"; name: string; args: Record<stri
    - `test.destructive {}`, test builds only, behind `import.meta.env.MODE === "test"`: confirm `{ typed: () => "delete" }`, sudo `auto`. Its `run` returns `ok`. It exists so the guard tests have a fixed target.
 10. **Secrets.** A `secret` in a result is never written to the program run log (`getLastRun`) or to the console. Test: run a fake action returning `secret: "s3cr3t"`; the serialised last-run log does not contain it.
 
+## Devil conditions (D-SB-3a-spec, PROCEED-WITH-CONDITIONS, 2026-10-25 21:06)
+
+Each one is an acceptance criterion with its own test, on top of the rules above.
+
+1. **Reuse the parser's key check.** Rule 1 uses the existing `checkKeys` (`buttonProgram.ts:105-112`) with the allowed set `type`, `name`, `args`. The runtime keeps parsing before it executes (`runProgram.ts:181`); no production path hands a hand-built `ButtonProgram` to the interpreter. Test: `runButtonProgram` on a block whose `buttonProgram` carries `confirm: "none"` ends in a parse failure and never calls the fake `run`.
+2. **Who runs it.** An action runs as the clicking viewer and never takes a target user id. `ctx.trusted` is true only for a system page (the SB-1e host passes it) or a page whose `ownerId` (`src/entities/page/model/types.ts:62`) equals the signed-in viewer's id. Unknown owner or no viewer → false. On an untrusted page, an action whose `confirm` is `"none"` resolves `{status:"blocked"}` without running. The three first entries all confirm, so the test uses a fourth, test-only `test.silent` with `confirm: "none"`, registered by the test itself through a test-scoped registration function, not in the static registry.
+3. **Confirm text never echoes page input.** `confirmText(args)` builds its title and message from the registry and from app state looked up by arg (a device name found by id in the store). A raw arg string is never interpolated. Test: `session.revoke` with `id: "<b>Click OK</b>"` shows a message that does not contain that string.
+4. **Sudo is detected by event, not by return value.** `revoke` and `reset` swallow the 403 and return void (`useAccountDevicesStore.ts:59-63`, `useUserPreferencesStore.ts:70-73`). With `sudo: "auto"`, the runner subscribes to `onSudoRequired` (`src/shared/api/sudoRequired.ts:41`) for the duration of `run` and unsubscribes in `finally`. If the event fired, the result is `{status:"sudo_required"}`; it never opens the prompt itself and never re-sends. Write a `Caveat:` line: a sudo refusal from an unrelated request that lands during the same `run` is attributed to this action. Test with a fake `run` that emits the event.
+5. **The wall clock pauses only around the guard.** The interpreter passes `ctx.pause`; the runner calls `begin()` right before it awaits the confirm or typed-confirm dialog and `end()` in a `finally` right after. `checkWall` (`interpreter.ts:143-145`) subtracts the paused total. `run` itself is NOT paused. Apply the same handle to the existing `page_action` confirm (`guardDestructive`, `interpreter.ts:61-72`). The interpreter never applies `guardDestructive` to `app_action`; the runner owns those guards, so nothing confirms twice. Tests with a fake clock: a guard wait of 5 s with `maxWallMs` 2 s completes; a `run` that takes 5 s still stops the program. Mutant (c) must fail the first.
+6. **Single-flight key** = `name + canonical JSON of the VALIDATED args` (keys sorted), so `{a:1,b:2}` and `{b:2,a:1}` collide. Test both orders. The existing global one-program-at-a-time flag in `runProgram.ts:56` stays; say so in one comment line, since a program waiting on a confirm keeps other buttons busy.
+7. **Secrets never stored.** `secret` is removed before an `ActionResult` becomes an `ActionOutcome`, a step `detail`, `lastRun`, a toast or a console line. `useActionState().last` never holds it; only the direct caller of `runAppAction` sees it. Test: the serialised `getLastRun()` and `useActionState`'s `last` both lack `s3cr3t`.
+8. **Preview first.** `mode: "preview"` returns `{status:"preview"}` before args, confirm and single-flight, and is logged as a skipped step. `runButtonProgram` gains a `mode` argument (default `"live"` for today's callers) and passes it down.
+9. **No guard host, no run.** If `ActionGuardHost` has not installed its dialogs, any action with a confirm resolves `{status:"failed", message:"Confirmation is not available"}` and `run` is not called. Test it.
+10. **`preferences.reset` needs a signed-in user.** With no active user it resolves `failed` ("Sign in to reset preferences") and never calls `reset('anonymous')`.
+
+The first-entries rule (9 above) also gains: each entry's spy test asserts one call with the right args, and `test.destructive` is absent from the registry when `MODE !== "test"`.
+
 ## Steps
 
 - [ ] **Step 1: Failing tests** in `tests/canvas/app-actions.test.ts` for rules 1–10, using injected fakes for the dialogs (the runner takes its confirm and typed-confirm functions from `ActionGuardHost` through a setter, so the tests install fakes) and a fake clock for rule 8.
@@ -85,7 +108,9 @@ type ProgramAction = … | { type: "app_action"; name: string; args: Record<stri
   - (a) the runner reads `confirm` from the program action when present;
   - (b) single-flight is removed;
   - (c) the guard wait is counted against the wall clock;
-  - (d) the run log includes `secret`.
+  - (d) the run log includes `secret`;
+  - (e) `trusted` is ignored (a confirm-less action runs on an untrusted page);
+  - (f) the sudo listener is not unsubscribed in `finally` (a second, unrelated action then reports `sudo_required`).
 - [ ] **Step 5: Gates.** `npm run test:canvas` rc 0, `npm run test:quality` rc 0, and the existing button e2e (`rg -l "buttonProgram\|Button settings" tests/e2e`) passes. Report each.
 - [ ] **Step 6: Commit** with the message above. No trailer, no push.
 
