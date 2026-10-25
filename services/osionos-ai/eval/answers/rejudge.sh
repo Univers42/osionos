@@ -6,6 +6,10 @@
 #   judge: whole (judge.ts) or claims (claimJudge.ts)
 #   CLAIM_QUOTE_RATIO (default 1) how much of a claim's quote must appear in its
 #     source, in (0, 1]; only the claims judge uses it.
+#   CLAIM_ABSTAIN_RULE (default 0) 1 treats a short not-in-sources answer as an
+#     abstention, whatever claims it lists; only the claims judge uses it.
+#   CLAIM_SOURCE_FALLBACK (default 0) 1 asks whether the source supports a claim
+#     whose quote is not found; only the claims judge uses it.
 #   LLM_MEMORY (default 6g) caps the model container; a 14B Q4_K_M needs about 11g.
 #
 # It never writes labels.jsonl: the new rows go to <out.jsonl>.
@@ -96,6 +100,8 @@ docker run --rm --network "$NETWORK" \
 	-w /app/services/osionos-ai \
 	-e JUDGE="$JUDGE" \
 	-e CLAIM_QUOTE_RATIO="${CLAIM_QUOTE_RATIO:-1}" \
+	-e CLAIM_ABSTAIN_RULE="${CLAIM_ABSTAIN_RULE:-0}" \
+	-e CLAIM_SOURCE_FALLBACK="${CLAIM_SOURCE_FALLBACK:-0}" \
 	-e OSIONOS_AI_LLM_URL="http://$LLM_CONTAINER:8080" \
 	-e OSIONOS_AI_LLM_MODEL="$LLM_MODEL_ALIAS" \
 	-e OUT_PATH="$OUT" \
