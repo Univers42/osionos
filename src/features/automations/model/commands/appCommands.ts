@@ -9,6 +9,7 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { startNewPage } from "@/widgets/workspace-grid/model/startActions";
 import { openAndFocusPanel } from "@/widgets/activity-rail/model/panelFocus";
 import { useUIStore } from "@/shared/config/uiStore";
+import { useIssueReportRequest } from "@/features/issues/model/issueReportRequest";
 
 import type { Command } from "../types";
 
@@ -29,6 +30,7 @@ export const APP_COMMANDS: Command[] = [
   { id: "openSearch", title: "Search", category: "App", run: () => usePalette.getState().openSearch() },
   { id: "openPalette", title: "Command palette", category: "App", run: () => usePalette.getState().openCommand() },
   { id: "openSettings", title: "Settings", category: "App", run: () => openSettings() },
+  { id: "reportIssue", title: "Report an issue", category: "App", run: () => useIssueReportRequest.getState().open({ title: "", description: "" }) },
   { id: "newPage", title: "New page", category: "App", run: () => void startNewPage() },
   { id: "toggleSidebar", title: "Show or hide the sidebar", category: "App", run: () => useUIStore.getState().toggleDocked() },
   { id: "openSearchPanel", title: "Search panel", category: "App", run: () => openAndFocusPanel("search") },

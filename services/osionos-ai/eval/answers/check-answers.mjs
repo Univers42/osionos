@@ -27,6 +27,8 @@ import { readGolden } from "../lib.mjs";
 
 const EVAL_DIR = path.dirname(fileURLToPath(import.meta.url));
 const QUESTIONS_PATH = path.join(EVAL_DIR, "questions.jsonl");
+const LABELS_PATH = path.join(EVAL_DIR, "labels.jsonl");
+const HELDOUT_PATH = path.join(EVAL_DIR, "heldout.jsonl");
 
 /** The problems the check found. */
 const failures = [];
@@ -97,6 +99,38 @@ function distinctiveToken(gold) {
 }
 
 const questions = readAnswerQuestions();
+
+// --- Held-out set checks ---
+/** Read a JSONL file into its parsed rows. */
+function readJsonLines(filePath) {
+	const raw = readFileSync(filePath, "utf8");
+	return raw
+		.split(/\r?\n/)
+		.filter((line) => line.trim())
+		.map((line) => JSON.parse(line));
+}
+
+const questionIds = new Set(questions.map((q) => q.id));
+const labelIds = new Set(readJsonLines(LABELS_PATH).map((row) => row.id));
+const heldout = readJsonLines(HELDOUT_PATH);
+
+if (heldout.length < 30) {
+	fail(`heldout: ${heldout.length}, expected at least 30`);
+}
+const seenHeldoutIds = new Set();
+for (const row of heldout) {
+	const id = row.id ?? "?";
+	if (!questionIds.has(row.id)) {
+		fail(`${id}: heldout id not in questions.jsonl`);
+	}
+	if (seenHeldoutIds.has(row.id)) {
+		fail(`${id}: duplicate heldout id`);
+	}
+	seenHeldoutIds.add(row.id);
+	if (labelIds.has(row.id)) {
+		fail(`${id}: heldout id is in labels.jsonl`);
+	}
+}
 
 // --- Count checks ---
 if (questions.length !== 200) {

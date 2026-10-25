@@ -68,6 +68,7 @@ import { createFeedHandler } from './bridge-feed.mjs';
 import { createPersonalizationHandler } from './bridge-personalization.mjs';
 import { createRecsHandler } from './bridge-recs.mjs';
 import { createEventsHandler } from './bridge-events.mjs';
+import { createIssuesHandler } from './bridge-issues.mjs';
 import { createActivityEmitter } from './bridge-activity.mjs';
 import { createActivityConsent } from './bridge-activity-consent.mjs';
 import { startActivityMaintenance } from './bridge-activity-maintenance.mjs';
@@ -4881,6 +4882,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.personalization(url, request, response, context.config)) return;
 	if (await context.social.recs(url, request, response, context.config)) return;
 	if (await context.social.events(url, request, response, context.config)) return;
+	if (await context.social.issues(url, request, response, context.config)) return;
 	if (await context.social.moderationConsole(url, request, response, context.config)) return;
 	if (await context.social.recsHealth(url, request, response, context.config)) return;
 	if (await context.social.social(url, request, response, context.config)) return;
@@ -4965,6 +4967,7 @@ export function createBridgeServer(options = {}) {
 		personalization: createPersonalizationHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		recs: createRecsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		events: createEventsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
+		issues: createIssuesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		moderationConsole: createModerationConsoleHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		recsHealth: createRecsHealthHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv }),

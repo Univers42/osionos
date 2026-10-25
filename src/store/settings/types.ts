@@ -201,6 +201,7 @@ export interface AiSettings {
   customAgentsAllowed: boolean;
   searchEverywhereIndexing: boolean;
   summaries: boolean;
+  accountContext?: boolean;
   updatedAt: string;
 }
 

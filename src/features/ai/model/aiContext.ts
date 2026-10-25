@@ -21,6 +21,8 @@
  * Pure logic: no React, no store. The composer and the store share it.
  */
 
+import type { RunView } from "@/features/ai/model/viewContext";
+
 /** A chip of the composer: one page, or the whole workspace. */
 export interface ContextChip {
   /** A stable id for the chip (the page id, or `workspace`). */
@@ -35,9 +37,13 @@ export interface ContextChip {
 /** The context a run is sent with — the wire contract's `context` body. */
 export interface RunContext {
   /** The pages the service reads: at most three. */
-  pageIds: string[];
+  pageIds?: string[];
   /** True when the service searches the caller's whole workspace. */
-  workspace: boolean;
+  workspace?: boolean;
+  /** True = the server adds who is asking. */
+  account?: boolean;
+  /** The view the assistant may drive. */
+  view?: RunView;
 }
 
 /** How many pages one run may be pointed at. */
