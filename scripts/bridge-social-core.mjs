@@ -37,6 +37,13 @@ import { publicAvatar } from './bridge-avatar.mjs';
 import { moderationMode } from './bridge-moderation.mjs';
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/**
+ * A table name the query-router may address. Hyphens and dots stay (Mongo-style
+ * names: og-notes, a.b); `.`, `..` and a leading dot do not. ONE copy: the
+ * query-router path builder (bridge-api.mjs) and the realtime token grant
+ * (bridge-realtime-token.mjs) must agree on what a table may be called.
+ */
+export const QUERY_ROUTER_TABLE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}$/;
 const PUBLISH_TIMEOUT_MS = 1_500;
 const DEFAULT_BODY_LIMIT = 16_384;
 

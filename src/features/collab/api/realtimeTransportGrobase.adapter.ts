@@ -31,7 +31,8 @@
  * `meta.memberId` case-insensitively — a disagreeing `user_id` means the
  * client TRACKed someone else's identity, so that member is DROPPED.
  * REQUEST/REPLY is NOT native: it is synthesized over BROADCAST with a
- * correlationId convention + a client-side timeout (AOC §7). Durable writes do
+ * correlationId convention + a client-side timeout (AOC §7). The app factory
+ * supplies authenticated bridge publishing; WS fan-out and presence stay here. Durable writes do
  * NOT ride this transport — they go HTTP→bridge (AOC §4 ephemeral/durable split).
  */
 
@@ -54,6 +55,9 @@ export interface GrobaseTransportConfig {
   webSocketCtor?: LiveWebSocketCtor;
   requestTimeoutMs?: number;
   backoff?: BackoffOpts;
+  /** Authenticated bridge publishing; the socket token only subscribes. */
+  publish?: (spaceId: string, event: string, payload: unknown) => Promise<void>;
+  onPublishError?: (error: unknown) => void;
 }
 
 interface GatewayEvent { event_type: string; payload: unknown; }
@@ -291,6 +295,10 @@ class GrobaseChannel implements RealtimeChannel {
   }
 
   private publish(event: string, payload: unknown): void {
+    if (this.config.publish) {
+      void this.config.publish(this.topic.slice('collab:'.length), event, payload).catch((error) => this.config.onPublishError?.(error));
+      return;
+    }
     this.enqueue(JSON.stringify({ type: 'BROADCAST', topic: this.topic, event, payload }));
   }
 

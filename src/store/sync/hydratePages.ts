@@ -30,8 +30,13 @@ import { getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { applyServerPages } from "./applyServerPages";
 import type { PageEntry } from "@/entities/page";
 
-/** Pull one workspace's pages from the BaaS (via the bridge) and merge them in. */
-async function hydrateWorkspace(workspaceId: string, jwt: string): Promise<number> {
+/**
+ * Pull one workspace's pages from the BaaS (via the bridge) and merge them in.
+ * Exported for the live `pages` nudge (useLiveBlockSync): an inbound nudge
+ * re-runs THIS hydrate for the named workspace — the merge is additive and
+ * never drops local work, so a sidebar edit that missed a browser catches up.
+ */
+export async function hydrateWorkspace(workspaceId: string, jwt: string): Promise<number> {
   const rows = await api.get<PageEntry[]>(`/api/pages/all?workspaceId=${encodeURIComponent(workspaceId)}`, jwt);
   return Array.isArray(rows) ? applyServerPages(usePageStore.setState, workspaceId, rows, false) : 0;
 }
