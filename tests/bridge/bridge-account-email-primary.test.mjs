@@ -85,6 +85,35 @@ describe('make primary: the happy path', () => {
 		assert.deepEqual([result.status, result.body.code, /HAS changed/.test(result.body.message), world.cutoffs.length, world.directory.users[USER_A].email], [503, 'email_changed_signout_failed', true, 1, S]);
 	});
 
+	it('P30 ends the GoTrue sessions once, for the caller, before the bridge sweep', async () => {
+		const { world, row } = await setup();
+		const result = await primary(world, row.id);
+		assert.equal(result.status, 200);
+		assert.deepEqual(world.gotrueLogouts.map((call) => call.url), ['https://baas.local/auth/v1/logout?scope=global']);
+		const token = world.gotrueLogouts[0].headers.Authorization.replace(/^Bearer /, '');
+		assert.equal(JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).sub, USER_A);
+		const order = world.events.filter((event) => event === 'gotrue_logout' || event === 'audit:account.email_primary_changed');
+		assert.deepEqual(order, ['audit:account.email_primary_changed', 'gotrue_logout']);
+		assert.deepEqual(world.cutoffs.map((entry) => entry.user_id), [USER_A], 'the bridge sweep ran after it');
+	});
+
+	it('P31 a failing GoTrue logout still runs the bridge sweep and answers 503 with the new sentence', async () => {
+		for (const failure of [500, 'reject']) {
+			const { world, row } = await setup();
+			world.gotrueLogoutFail = failure;
+			const result = await primary(world, row.id);
+			assert.deepEqual([result.status, result.body.code, /Change your password to sign them out\.$/.test(result.body.message), /HAS changed/.test(result.body.message)], [503, 'email_changed_signout_failed', true, true], String(failure));
+			assert.deepEqual([world.cutoffs.length, rowsOf(world).every((entry) => entry.id !== row.id), world.table.audits.some((entry) => entry.event_type === 'account.email_primary_changed'), world.directory.users[USER_A].email], [1, true, true, S]);
+		}
+	});
+
+	it('P32 a failing bridge sweep still ran the GoTrue logout and answers 503', async () => {
+		const { world, row } = await setup();
+		world.cutoffStatus = 500;
+		const result = await primary(world, row.id);
+		assert.deepEqual([result.status, result.body.code, world.gotrueLogouts.length], [503, 'email_changed_signout_failed', 1]);
+	});
+
 	it('P23 stays 200 when the changed audit throws', async () => {
 		const { world, row } = await setup();
 		world.table.failAudit = (body) => body.event_type === 'account.email_primary_changed';
