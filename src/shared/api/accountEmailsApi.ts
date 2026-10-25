@@ -45,6 +45,10 @@ export const verifyEmail = (id: string, code: string): Promise<AccountSecurityOu
 export const removeEmail = (id: string): Promise<AccountSecurityOutcome<true>> =>
   call('DELETE', rowPath(id), undefined, () => true as const);
 
+/** `previous` is the id of the row that now holds the old primary, or null when it was not kept. */
+export const makePrimaryEmail = (id: string): Promise<AccountSecurityOutcome<{ previous: string | null }>> =>
+  call('POST', rowPath(id, '/primary'), {}, (payload) => ({ previous: text(payload.previous) || null }));
+
 export interface EmailListing {
   rows: EmailRecord[];
   /** The bridge could not read the secondaries this time: `rows` holds the primary only. */
