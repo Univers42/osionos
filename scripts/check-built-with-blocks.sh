@@ -47,10 +47,15 @@ if [ "${#positional[@]}" -eq 0 ]; then
 	cd "$ROOT_DIR"
 fi
 
+if [ ! -d "$dir" ]; then
+	printf 'check-built-with-blocks: no such directory %s\n' "$dir" >&2
+	exit 1
+fi
+
 count_pattern() {
 	local pattern="$1" target="$2"
 	# BusyBox grep (the container) has no --include, so select *.tsx via find.
-	find "$target" -type f -name '*.tsx' -exec grep -hoE "$pattern" {} \; 2>/dev/null | wc -l | tr -d '[:space:]'
+	( find "$target" -type f -name '*.tsx' -exec grep -hoE "$pattern" {} + 2>/dev/null || true ) | wc -l | tr -d '[:space:]'
 }
 
 rawButton="$(count_pattern '<button' "$dir")"
