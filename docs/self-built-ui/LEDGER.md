@@ -10,3 +10,6 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | D-SB-1b-spec | devil: PROCEED-WITH-CONDITIONS (blast 4, rev 3, cost 4, conf 2) | — | ses_e8b7d50f0ffeck0l33eF9P22ZZ | — | 9 conditions folded into SB-1b.md (b70ac61a2) |
 | SB-1f | **merged** dd00e16bb (2026-10-25) | feat/sb-SB-1f | ses_e8b70a3d1ffeLBYYWFkZNygzs2 | integration dd00e16bb: quality 0, canvas 3994/0; worker mutants 3/3 killed | clean: `rawSourceToBlocks` = parse → applyOverlay(collectOverlay(current)) |
 | specs | SB-1c, SB-1d, SB-1e, SB-2a, SB-6a written 2026-10-25 (SB-1e now depends on SB-6a too) | — | — | — | — |
+| SB-2a | dispatched 2026-10-25 20:56 (parallel with SB-1b) | feat/sb-SB-2a | | | |
+| SB-6a | dispatched 2026-10-25 20:56 (parallel with SB-1b) | feat/sb-SB-6a | | | |
+| SB-1c | dispatched 2026-10-25 20:56 (parallel with SB-1b) | feat/sb-SB-1c | | | |
