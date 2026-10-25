@@ -86,6 +86,10 @@ export interface UpstreamRunInput {
 	/** The approved memories of the caller, quoted in the user turn (devil C39). */
 	memories?: readonly RunMemory[];
 	workspaceId?: string;
+	/** The account block of the caller, when requested. */
+	accountBlock?: string;
+	/** The view block of the caller, when reported. */
+	viewBlock?: string;
 }
 
 /**
@@ -135,12 +139,16 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	let finishReason = 'stop';
 	// The size of the prompt, for the estimate of a provider that reports
 	// nothing: the reservation reads it from the same place.
+	const accountBlockText = input.accountBlock;
+	const viewBlockText = input.viewBlock;
+	const contextChars = (accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0);
 	const promptChars = promptCharCount({
 		text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(pages) + memoryChars(memories),
 		sourceChars: sourceChars(sources),
 		systemChars: system.length,
+		contextChars,
 	});
 	// The budget of the loop: the money the run holds, and the ceiling of a
 	// step. The loop asks the ledger for what it needs, one extension at a
@@ -194,7 +202,10 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		});
 		const tools = runTools.tools;
 
-		const userText = buildUserTurn(text, pages, sources, memories, abstained);
+		const userText = buildUserTurn(text, pages, sources, memories, abstained, {
+			...(accountBlockText ? { account: accountBlockText } : {}),
+			...(viewBlockText ? { view: viewBlockText } : {}),
+		});
 		const userContent = [
 			{ type: 'text' as const, text: userText },
 			...images.map((image) => ({ type: 'image' as const, image: image.data, mediaType: image.mediaType })),
