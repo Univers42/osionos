@@ -29,6 +29,8 @@ import { readCorpus } from '../../eval/lib.mjs';
 import { judge } from './judge.ts';
 import { score, scoreByOrigin } from './score.ts';
 import type { LabeledAnswer } from './score.ts';
+import { refreshLabel } from './labels.ts';
+import type { LabelRow } from './labels.ts';
 
 interface GoldenQuestion {
 	id: string;
@@ -78,7 +80,8 @@ function loadQuestions() {
 				kind: g.kind,
 				asker: g.asker,
 				expected: g.expected,
-				answerable: !(g.kind === 'negative' || g.kind === 'acl'),
+				// An acl question with expected pages is asked by someone who can read them.
+				answerable: g.expected.length > 0,
 				origin: 'human',
 			};
 		}
@@ -189,10 +192,7 @@ async function main() {
 	const labelMap = new Map(existingLabels.map((l) => [JSON.parse(l).id, l]));
 	for (const ld of labelsData) {
 		if (labelMap.has(ld.id)) {
-			const label = JSON.parse(labelMap.get(ld.id)!);
-			label.answer = ld.answer;
-			label.sources = ld.sources;
-			label.judge = ld.judge;
+			const label = refreshLabel(JSON.parse(labelMap.get(ld.id)!) as LabelRow, ld);
 			labelMap.set(ld.id, JSON.stringify(label));
 		}
 	}

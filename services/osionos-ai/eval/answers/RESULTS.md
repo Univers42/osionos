@@ -20,3 +20,64 @@ calibrated yet: these scores are the judge's, not a measured faithfulness, until
 `OSIONOS_AI_ABSTAIN_THRESHOLD`, which is the product's default on CPU (the reranker is off there, see
 `../wiki/RESULTS-rag.md`). So the low abstention recall (0.10) is the default product's; the rerank-score abstention
 is measured in that file's variant 3, not here.
+
+## Calibration of the judge (2026-10-25)
+
+`node --experimental-strip-types eval/answers/calibrate.ts` on the 30 rows of `labels.jsonl`: **kappa −0.087 on
+faithfulness, Spearman 0.785 on relevance; calibrate.ts exits 1 (kappa < 0.6)**.
+
+- Faithfulness: the judge agrees on 25 of 30, but on none of the hard cases. The three answers labelled unfaithful
+  (q28: the hotel's first payment is inferred from the standard schedule; q46: "two hundred thousand" where the page
+  says two hundred and sixty thousand; q155: a specification rule presented as the leadership decision) were all
+  judged faithful, and two correct abstentions (q41, q171) were judged unfaithful. So the faithfulness figure above
+  (0.890) is not a measurement: with this judge it carries no information beyond the base rate.
+- Relevance: the judge ranks the answers the way the labels do (ρ 0.785); the relevance figure is usable.
+- Two questions (q46 and q48: `acl` questions with expected pages, asked by a reader who has access) were scored
+  as unanswerable in this run; `answers.ts` now counts them as answerable, so the abstention numbers above are off by
+  those two until the next run.
+
+Caveat: the 30 labels were written by Claude (claude-opus-5-5) at the user's request, not by a person; every row says
+so in `labeller`. This measures the 4B judge against a stronger model's reading of the same sources, which is a
+weaker reference than the human labels the plan asks for. A person can overwrite any `human` field; the next run
+clears a label whose answer changed.
+
+## Claim-level judge (2026-10-25)
+
+A second judge (`eval/answers/claimJudge.ts`) checks every claim of the answer against a quote it must copy from
+a source, then asks whether the quote states the claim. `eval/answers/rejudge.sh` re-judges the stored answers and
+calibrates the result:
+
+```sh
+sh eval/answers/rejudge.sh osionos_ai_models_llm 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf' whole  /tmp/rejudge-whole-4b.jsonl
+sh eval/answers/rejudge.sh osionos_ai_models_llm 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf' claims /tmp/rejudge-claims-4b.jsonl
+```
+
+- whole (the control): **kappa −0.087, Spearman 0.785** — the recorded one-shot calibration, so the rejudge path
+  matches `answers.ts`.
+- claims: **kappa 0.412, Spearman 0.727** — better than the one-shot judge, still below the 0.6 bar (`calibrate.ts`
+  exits 1).
+- Where the claims judge disagrees with the labels: it marks all three unfaithful answers (q28, q46, q155) unfaithful,
+  and six faithful ones unfaithful too. Two of those six are "not specified in the provided sources" answers (q41,
+  q171) that the judge did not count as abstentions. The other four (q13, q35, q104, q117) are paraphrases whose
+  claims failed the verbatim quote check or the entailment question, which is the over-strict direction its
+  `Caveat:` names.
+
+- Afterwards, having seen the 4B numbers, the same two judges were run with a larger model,
+  `Qwen2.5-14B-Instruct` Q4_K_M (`LLM_MEMORY=12g sh eval/answers/rejudge.sh <volume> 'Qwen2.5-14B-Instruct-Q4_K_M.gguf'
+  <judge> <out>`). Because the model was chosen after the first results, this is a post-hoc comparison:
+
+  | judge | model | kappa (faithful) | Spearman (relevant) | unfaithful caught | faithful flagged |
+  |---|---|---|---|---|---|
+  | whole | Qwen3-4B | −0.087 | 0.785 | 0 / 3 | 2 / 27 |
+  | claims | Qwen3-4B | 0.412 | 0.727 | 3 / 3 | 6 / 27 |
+  | whole | Qwen2.5-14B | 0.000 | 0.721 | 0 / 3 | 0 / 27 |
+  | claims | Qwen2.5-14B | 0.322 | 0.173 | 3 / 3 | 8 / 27 |
+
+  What catches the unfaithful answers is splitting the answer into claims, not the size of the model: the one-shot
+  judge misses all three at either size. What keeps every variant below 0.6 is over-strictness, faithful paraphrases
+  that fail the verbatim quote check. No variant passes `calibrate.ts`. The next lever is the one the
+  `quoteFound` caveat names, a looser quote match. Testing it needs a labelled set the prompts were never run on.
+
+Caveat: only 3 of the 30 labels are unfaithful, so one verdict moves kappa a lot, and a kappa near 0.6 on this set
+does not prove much. Both prompts were written once from the brief and each variant ran once, with no tuning on
+these rows.
