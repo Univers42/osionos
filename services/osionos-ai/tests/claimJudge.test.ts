@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { judgeClaims, judgeClaimsTraced, parseClaims, quoteFound, quoteNear } from '../eval/answers/claimJudge.ts';
+import {
+	judgeClaims,
+	judgeClaimsTraced,
+	parseClaims,
+	quoteFound,
+	quoteNear,
+	saysNotInSources,
+} from '../eval/answers/claimJudge.ts';
 
 // A fake complete: the queued answers, in order, with no model behind it.
 function completer(responses: string[]): (prompt: string) => Promise<string> {
@@ -69,6 +76,42 @@ describe('quoteNear', () => {
 	it('an empty quote fails', () => {
 		assert.equal(quoteNear('', 'The frame ships in eight weeks.', 0.8), false);
 		assert.equal(quoteNear('   ', 'The frame ships in eight weeks.', 0.8), false);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// saysNotInSources
+// ---------------------------------------------------------------------------
+
+describe('saysNotInSources', () => {
+	it('recognises the English phrasing, with a trailing citation', () => {
+		assert.equal(
+			saysNotInSources(
+				'The delivery timeframe for the NW-ALDER-55 shelf system is not specified in the provided sources. [n]',
+			),
+			true,
+		);
+	});
+
+	it('recognises a French phrasing', () => {
+		assert.equal(saysNotInSources("Le délai de livraison n'est pas précisé dans les sources."), true);
+	});
+
+	it('recognises a Spanish phrasing', () => {
+		assert.equal(saysNotInSources('El plazo de entrega no se especifica en las fuentes.'), true);
+	});
+
+	it('a long answer that mentions one missing detail is not an abstention', () => {
+		assert.equal(
+			saysNotInSources(
+				'The shelf is steel. It ships flat. The lead time is not specified in the sources. Ask sales for a date.',
+			),
+			false,
+		);
+	});
+
+	it('a factual answer is not an abstention', () => {
+		assert.equal(saysNotInSources('The lead time is eight weeks [1].'), false);
 	});
 });
 
@@ -219,5 +262,87 @@ describe('judgeClaimsTraced', () => {
 		assert.equal(traced?.claims[2].entailed, true);
 		assert.equal(entailCalls, 2);
 		assert.deepEqual(traced?.verdict, { faithful: false, relevant: 4, abstained: false });
+	});
+});
+
+describe('judgeClaimsTraced with abstainRule', () => {
+	const answer =
+		'The delivery timeframe for the NW-ALDER-55 shelf system is not specified in the provided sources. [n]';
+	const claims = claimsJson(false, 2, [
+		{ claim: 'The shelf system delivery timeframe is unknown.', source: 1, quote: 'twelve weeks' },
+	]);
+	const sources = ['The NW-ALDER-55 shelf system is made of steel.'];
+
+	it('a short not-in-sources answer is a faithful abstention, whatever claims it lists', async () => {
+		const complete = completer([claims]);
+		const traced = await judgeClaimsTraced(
+			'What is the delivery timeframe of the NW-ALDER-55?',
+			answer,
+			sources,
+			complete,
+			{ abstainRule: true },
+		);
+		assert.deepEqual(traced?.verdict, { faithful: true, relevant: 2, abstained: true });
+		assert.deepEqual(traced?.claims, []);
+	});
+
+	it('without the option the same answer stays unfaithful', async () => {
+		const complete = completer([claims]);
+		const traced = await judgeClaimsTraced(
+			'What is the delivery timeframe of the NW-ALDER-55?',
+			answer,
+			sources,
+			complete,
+		);
+		assert.deepEqual(traced?.verdict, { faithful: false, relevant: 2, abstained: false });
+		assert.equal(traced?.claims[0].quoteFound, false);
+	});
+});
+
+describe('judgeClaimsTraced with sourceFallback', () => {
+	const question = 'What is the lead time?';
+	const answer = 'The kit ships in twelve weeks.';
+	const sources = ['The frame kit ships in eight weeks.'];
+	const claims = claimsJson(false, 4, [
+		{ claim: 'The kit ships in twelve weeks.', source: 1, quote: 'twelve weeks' },
+	]);
+
+	it('a missing quote that the source supports is faithful', async () => {
+		const complete = completer([claims, 'yes']);
+		const traced = await judgeClaimsTraced(question, answer, sources, complete, { sourceFallback: true });
+		assert.deepEqual(traced?.verdict, { faithful: true, relevant: 4, abstained: false });
+		assert.equal(traced?.claims[0].quoteFound, false);
+		assert.equal(traced?.claims[0].entailed, null);
+		assert.equal(traced?.claims[0].supported, true);
+	});
+
+	it('a missing quote that the source does not support is unfaithful', async () => {
+		const complete = completer([claims, 'no']);
+		const traced = await judgeClaimsTraced(question, answer, sources, complete, { sourceFallback: true });
+		assert.deepEqual(traced?.verdict, { faithful: false, relevant: 4, abstained: false });
+		assert.equal(traced?.claims[0].supported, false);
+	});
+
+	it('an out-of-range source index never calls the fallback', async () => {
+		let calls = 0;
+		const complete = async (): Promise<string> => {
+			calls++;
+			if (calls === 1) {
+				return claimsJson(false, 3, [
+					{ claim: 'It ships in eight weeks.', source: 9, quote: 'eight weeks' },
+				]);
+			}
+			return 'yes';
+		};
+		const traced = await judgeClaimsTraced(
+			question,
+			'It ships in eight weeks.',
+			sources,
+			complete,
+			{ sourceFallback: true },
+		);
+		assert.equal(calls, 1);
+		assert.equal(traced?.claims[0].supported, null);
+		assert.deepEqual(traced?.verdict, { faithful: false, relevant: 3, abstained: false });
 	});
 });

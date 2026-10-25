@@ -11,6 +11,10 @@
 /*     JUDGE                whole | claims                                     */
 /*     CLAIM_QUOTE_RATIO    how much of a claim's quote must appear in its     */
 /*                          source, in (0, 1]; default 1 (exact quote)         */
+/*     CLAIM_ABSTAIN_RULE   0 (default) or 1: treat a short not-in-sources     */
+/*                          answer as an abstention, whatever claims it lists   */
+/*     CLAIM_SOURCE_FALLBACK 0 (default) or 1: ask whether the source supports */
+/*                          a claim whose quote is not found                    */
 /*     OSIONOS_AI_LLM_URL   the local llama.cpp server                         */
 /*     OSIONOS_AI_LLM_MODEL the model that server loads                        */
 /*                                                                            */
@@ -41,6 +45,18 @@ const llmUrl = process.env.OSIONOS_AI_LLM_URL ?? '';
 const llmModel = process.env.OSIONOS_AI_LLM_MODEL ?? 'qwen3-4b';
 const judgeName = process.env.JUDGE ?? 'whole';
 const quoteRatio = Number(process.env.CLAIM_QUOTE_RATIO ?? '1');
+
+function readFlag(name: string): boolean {
+	const raw = process.env[name] ?? '0';
+	if (raw !== '0' && raw !== '1') {
+		console.error(`[rejudge] ${name} must be 0 or 1, not "${raw}"`);
+		process.exit(2);
+	}
+	return raw === '1';
+}
+
+const abstainRule = readFlag('CLAIM_ABSTAIN_RULE');
+const sourceFallback = readFlag('CLAIM_SOURCE_FALLBACK');
 
 if (llmUrl.length === 0) {
 	console.error('[rejudge] refusing to start: OSIONOS_AI_LLM_URL is needed');
@@ -119,7 +135,11 @@ async function main() {
 			const question = questions.get(row.id);
 			if (question === undefined) throw new Error(`no question for ${row.id}`);
 			if (judgeName === 'claims') {
-				const traced = await judgeClaimsTraced(question, row.answer, row.sources, callLlm, { quoteRatio });
+				const traced = await judgeClaimsTraced(question, row.answer, row.sources, callLlm, {
+					quoteRatio,
+					abstainRule,
+					sourceFallback,
+				});
 				verdict = traced?.verdict ?? null;
 				claims = traced?.claims ?? [];
 			} else {

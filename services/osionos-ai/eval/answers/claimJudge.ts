@@ -174,6 +174,61 @@ export function parseEntail(text: string): boolean | null {
 	return match[1].toLowerCase() === 'yes';
 }
 
+/**
+ * Build the fallback prompt: one narrow question about one claim and the whole
+ * source it cites, for when the model paraphrased instead of quoting.
+ *
+ * Same wording rules as entailPrompt: every number, name, date, and who
+ * decided or owns something must be present and must agree.
+ */
+export function supportPrompt(claim: string, source: string): string {
+	return [
+		'Read this source alone:',
+		source,
+		'',
+		'Does the source support this claim: ' + claim,
+		'',
+		'Include every number, name, date, and who decided or owns something: if the source leaves one of them out or says something different, the answer is no.',
+		'Reply with yes or no only.',
+	].join('\n');
+}
+
+/** The languages and phrasings abstainRule recognises, and nothing else. */
+const NOT_IN_SOURCES: RegExp[] = [
+	/not found in (your|the) workspace/i,
+	/not (specified|mentioned|provided|given|stated|found|available) in the (provided |given )?(sources|documents|context|workspace)/i,
+	/the sources do not (say|mention|specify|contain)/i,
+	/n['’]est pas (précisé|mentionné|indiqué)/i,
+	/ne (précisent|mentionnent|contiennent) pas/i,
+	/pas trouvé dans votre espace/i,
+	/no se (especifica|menciona|indica)/i,
+	/no (aparece|figura) en las fuentes/i,
+];
+
+/** How many sentences the text has: a run of .!? followed by a space or the end. */
+function sentenceCount(text: string): number {
+	return (text.match(/[.!?]+(?=\s|$)/g) ?? []).length;
+}
+
+/**
+ * Does the answer say, in so many words, that the information was not in the
+ * sources it was given?
+ *
+ * Only a short answer counts: a trailing citation such as `[n]` or `[1]` is
+ * stripped first, and the rest must be at most two sentences.
+ *
+ * Caveat: it covers only the phrasings and languages in NOT_IN_SOURCES, so an
+ * abstention worded otherwise is still judged claim by claim. A short answer
+ * that states a fact and then says one detail is missing counts as an
+ * abstention, and that stated fact is then never checked.
+ */
+export function saysNotInSources(answer: string): boolean {
+	const withoutCitation = answer.replace(/\s*\[[^\]]*\]\s*[.!?]?\s*$/, '').trim();
+	if (withoutCitation.length === 0) return false;
+	if (sentenceCount(withoutCitation) > 2) return false;
+	return NOT_IN_SOURCES.some((pattern) => pattern.test(withoutCitation));
+}
+
 /** The punctuation stripped before quoteNear compares word tokens. */
 const PUNCTUATION = /[^\p{L}\p{N}\s]/gu;
 
@@ -247,11 +302,18 @@ export interface ClaimTrace {
 	inRange: boolean;
 	quoteFound: boolean;
 	entailed: boolean | null;
+	/** The source fallback's answer, or null when the fallback did not run. */
+	supported: boolean | null;
 }
 
-/** Options for judgeClaimsTraced; quoteRatio defaults to 1 (exact quote). */
+/** Options for judgeClaimsTraced; every option is off by default. */
 export interface ClaimJudgeOptions {
+	/** quoteRatio defaults to 1 (exact quote). */
 	quoteRatio?: number;
+	/** Treat a short not-in-sources answer as an abstention, whatever claims it lists. */
+	abstainRule?: boolean;
+	/** Ask whether the source supports a claim whose quote is not found. */
+	sourceFallback?: boolean;
 }
 
 /**
@@ -262,6 +324,11 @@ export interface ClaimJudgeOptions {
  * quote is found in that source, and the entailment call says yes (a null
  * entailment counts as unsupported). Relevant and abstained come from the
  * first call.
+ *
+ * With abstainRule, a short not-in-sources answer is an abstention too, and an
+ * abstention skips the claim checks whatever claims it lists. With
+ * sourceFallback, a claim whose quote is not found but whose source is in range
+ * is decided by supportPrompt instead of failing at once.
  *
  * It visits every claim rather than stopping at the first failure, so the
  * trace is complete; the entailment call runs only for a claim in range whose
@@ -279,16 +346,24 @@ export async function judgeClaimsTraced(
 	if (parsed === null) return null;
 
 	const ratio = options?.quoteRatio ?? 1;
-	const { abstained, relevant, claims } = parsed;
+	const abstainRule = options?.abstainRule === true;
+	const sourceFallback = options?.sourceFallback === true;
+	const { relevant, claims } = parsed;
+	const abstained = parsed.abstained || (abstainRule && saysNotInSources(answer));
 	const traces: ClaimTrace[] = [];
 	let faithful = true;
 
-	if (!(abstained && claims.length === 0)) {
+	const skipClaims = abstainRule ? abstained : abstained && claims.length === 0;
+	if (!skipClaims) {
 		for (const claim of claims) {
 			const inRange = claim.source >= 1 && claim.source <= sources.length;
 			const source = inRange ? sources[claim.source - 1] : '';
 			const found =
 				inRange && (quoteFound(claim.quote, source) || (ratio < 1 && quoteNear(claim.quote, source, ratio)));
+			const supported =
+				inRange && !found && sourceFallback
+					? parseEntail(await complete(supportPrompt(claim.claim, source)))
+					: null;
 			const entailed = inRange && found ? parseEntail(await complete(entailPrompt(claim.claim, claim.quote))) : null;
 
 			traces.push({
@@ -298,9 +373,11 @@ export async function judgeClaimsTraced(
 				inRange,
 				quoteFound: found,
 				entailed,
+				supported,
 			});
 
-			if (!(inRange && found && entailed === true)) faithful = false;
+			const passes = inRange && (found ? entailed === true : sourceFallback && supported === true);
+			if (!passes) faithful = false;
 		}
 	}
 
