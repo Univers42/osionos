@@ -31,6 +31,15 @@ const STATUSES = new Set(['open', 'triaged', 'sent', 'closed']);
 const GITHUB_URL_RE = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/issues\/[0-9]+$/;
 const SCREENSHOT_RE = /^\/api\/media\/uploads\/([^/]+)\/([0-9a-fA-F]{64})\.(png|jpe?g|webp)$/;
 const MAX_BODY_BYTES = 32 * 1024;
+const TITLE_MAX = 120;
+const BODY_MAX = 4000;
+const ERROR_MAX = 500;
+// The table's CHECKs: no control character in a title or a short field, and only
+// the newline in a body. A pasted stack trace brings tabs and CRLF, so those are
+// normalised first instead of refused.
+const ANY_CONTROL = /[\u0000-\u001f\u007f]/;
+const CONTROL_BUT_NEWLINE = /[\u0000-\u0009\u000b-\u001f\u007f]/;
+const normaliseText = (text) => text.replace(/\r\n?/g, '\n').replace(/\t/g, '  ');
 
 const allowedPostKeys = new Set([
 	'title', 'body', 'routeKind', 'appVersion', 'userAgent', 'errors',
@@ -52,13 +61,13 @@ function parsePostBody(body, callerId) {
 		if (!allowedPostKeys.has(key)) throw httpError('Unknown field.', 400);
 	}
 	if (typeof source.title !== 'string') throw httpError('title must be a string.', 400);
-	if (source.title.length < 1 || source.title.length > 120) throw httpError('title must be 1..120 chars.', 400);
-	if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(source.title)) throw httpError('title has control chars.', 400);
-	const title = source.title;
+	const title = normaliseText(source.title);
+	if (title.length < 1 || title.length > TITLE_MAX) throw httpError('title must be 1..120 chars.', 400);
+	if (ANY_CONTROL.test(title)) throw httpError('title has control chars.', 400);
 	if (typeof source.body !== 'string') throw httpError('body must be a string.', 400);
-	if (source.body.length < 1 || source.body.length > 4000) throw httpError('body must be 1..4000 chars.', 400);
-	if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(source.body)) throw httpError('body has control chars.', 400);
-	const text = source.body;
+	const text = normaliseText(source.body);
+	if (text.length < 1 || text.length > BODY_MAX) throw httpError('body must be 1..4000 chars.', 400);
+	if (CONTROL_BUT_NEWLINE.test(text)) throw httpError('body has control chars.', 400);
 	if (typeof source.routeKind !== 'string') throw httpError('routeKind must be a string.', 400);
 	const routeKind = source.routeKind;
 	if (!ROUTE_KINDS.has(routeKind)) throw httpError('routeKind is invalid.', 400);
@@ -66,6 +75,7 @@ function parsePostBody(body, callerId) {
 	if (source.appVersion !== undefined && source.appVersion !== null) {
 		if (typeof source.appVersion !== 'string') throw httpError('appVersion must be a string.', 400);
 		if (source.appVersion.length > 64) throw httpError('appVersion too long.', 400);
+		if (ANY_CONTROL.test(source.appVersion)) throw httpError('appVersion has control chars.', 400);
 		appVersion = source.appVersion;
 		if (appVersion === '') appVersion = null;
 	}
@@ -73,6 +83,7 @@ function parsePostBody(body, callerId) {
 	if (source.userAgent !== undefined && source.userAgent !== null) {
 		if (typeof source.userAgent !== 'string') throw httpError('userAgent must be a string.', 400);
 		if (source.userAgent.length > 300) throw httpError('userAgent too long.', 400);
+		if (ANY_CONTROL.test(source.userAgent)) throw httpError('userAgent has control chars.', 400);
 		userAgent = source.userAgent;
 		if (userAgent === '') userAgent = null;
 	}
@@ -82,7 +93,7 @@ function parsePostBody(body, callerId) {
 		if (source.errors.length > 20) throw httpError('too many errors.', 400);
 		for (const entry of source.errors) {
 			if (typeof entry !== 'string') throw httpError('errors entries must be strings.', 400);
-			if (entry.length > 500) throw httpError('error entry too long.', 400);
+			if (entry.length > ERROR_MAX) throw httpError('error entry too long.', 400);
 			errors.push(entry);
 		}
 	}
@@ -129,9 +140,11 @@ export function createIssuesHandler({ config, verifySession, fetchImpl = fetch, 
 						const member = await workspaceMembership(requestConfig, deps.fetchImpl, session.userId, workspaceId);
 						if (!member) workspaceId = null;
 					}
-					const redactedTitle = redactIssueText(parsed.title);
-					const redactedBody = redactIssueText(parsed.body);
-					const redactedErrors = parsed.errors.map((entry) => redactIssueText(entry));
+					// A redaction can lengthen a short secret ("Bearer x" → "Bearer [redacted]"):
+					// cut again so the row still fits the table's limits.
+					const redactedTitle = redactIssueText(parsed.title).slice(0, TITLE_MAX);
+					const redactedBody = redactIssueText(parsed.body).slice(0, BODY_MAX);
+					const redactedErrors = parsed.errors.map((entry) => redactIssueText(entry).slice(0, ERROR_MAX));
 					try {
 						const rows = await rest(requestConfig, deps.fetchImpl, 'rpc/osionos_issue_report_create', {
 							method: 'POST',
@@ -149,7 +162,7 @@ export function createIssuesHandler({ config, verifySession, fetchImpl = fetch, 
 						});
 						const row = Array.isArray(rows) ? rows[0] ?? null : rows;
 						if (row && typeof row === 'object') delete row.reporter_id;
-						return sendJson(response, 201, row, requestConfig);
+						return sendJson(response, 201, { ok: true, issue: row }, requestConfig);
 					} catch (error) {
 						const state = sqlStateOf(error);
 						if (state === 'P0001' || String(error?.message ?? '').includes('issue_report_daily_cap')) {
@@ -167,10 +180,9 @@ export function createIssuesHandler({ config, verifySession, fetchImpl = fetch, 
 					}
 					const statusFilter = url.searchParams.get('status');
 					if (statusFilter !== null && statusFilter !== '' && !STATUSES.has(statusFilter)) throw httpError('invalid status.', 400);
-					const limitRaw = Number(url.searchParams.get('limit'));
-					let limit = Number.isFinite(limitRaw) ? Math.trunc(limitRaw) : 50;
-					if (limit < 1) limit = 1;
-					if (limit > 100) limit = 100;
+					const limitParam = url.searchParams.get('limit');
+					const limitRaw = limitParam ? Math.trunc(Number(limitParam)) : 50;
+					const limit = Number.isFinite(limitRaw) ? Math.min(100, Math.max(1, limitRaw)) : 50;
 					const before = url.searchParams.get('before');
 					let beforeIso = null;
 					if (before) {
@@ -195,9 +207,9 @@ export function createIssuesHandler({ config, verifySession, fetchImpl = fetch, 
 							nameMap = new Map((Array.isArray(profiles) ? profiles : []).map((p) => [p.user_id, p.display_name ?? null]));
 						}
 						const withNames = list.map((row) => ({ ...row, reporterName: nameMap.has(row.reporter_id) ? (nameMap.get(row.reporter_id) ?? null) : null }));
-						return sendJson(response, 200, withNames, requestConfig);
+						return sendJson(response, 200, { ok: true, issues: withNames }, requestConfig);
 					}
-					return sendJson(response, 200, list, requestConfig);
+					return sendJson(response, 200, { ok: true, issues: list }, requestConfig);
 				}
 				return sendJson(response, 405, { ok: false, code: 'method_not_allowed', message: `Method ${method} is not supported here.` }, requestConfig);
 			}
@@ -236,7 +248,7 @@ export function createIssuesHandler({ config, verifySession, fetchImpl = fetch, 
 				const updated = Array.isArray(rows) ? rows[0] ?? null : rows;
 				if (!updated) throw httpError('Not found.', 404);
 				if (typeof updated === 'object' && updated !== null) delete updated.reporter_id;
-				return sendJson(response, 200, { ok: true, ...updated }, requestConfig);
+				return sendJson(response, 200, { ok: true, issue: updated }, requestConfig);
 			}
 			return sendJson(response, 405, { ok: false, code: 'method_not_allowed', message: `Method ${method} is not supported here.` }, requestConfig);
 		} catch (error) {
