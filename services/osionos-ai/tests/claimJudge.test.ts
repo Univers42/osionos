@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+	claimKey,
+	entailPrompt,
 	judgeClaims,
 	judgeClaimsTraced,
 	parseClaims,
 	quoteFound,
 	quoteNear,
 	saysNotInSources,
+	supportPrompt,
 } from '../eval/answers/claimJudge.ts';
 
 // A fake complete: the queued answers, in order, with no model behind it.
@@ -362,5 +365,111 @@ describe('judgeClaimsTraced with sourceFallback', () => {
 		assert.equal(calls, 1);
 		assert.equal(traced?.claims[0].supported, null);
 		assert.deepEqual(traced?.verdict, { faithful: false, relevant: 3, abstained: false });
+	});
+});
+
+// ---------------------------------------------------------------------------
+// claimKey
+// ---------------------------------------------------------------------------
+describe('claimKey', () => {
+	it('normalises case, spacing and a trailing period', () => {
+		assert.equal(claimKey('The kit ships in eight weeks.'), claimKey('  the kit ships in  eight weeks'));
+		assert.notEqual(claimKey('The kit ships in eight weeks.'), claimKey('The kit ships in nine weeks.'));
+	});
+});
+
+// ---------------------------------------------------------------------------
+// judgeClaimsTraced with anySource
+// ---------------------------------------------------------------------------
+describe('judgeClaimsTraced with anySource', () => {
+	const claims = claimsJson(false, 5, [
+		{ claim: 'The kit ships in eight weeks.', source: 1, quote: 'ships in eight weeks' },
+		{ claim: 'The kit ships in eight weeks.', source: 2, quote: 'ships in eight weeks' },
+	]);
+	const sources = ['The frame kit ships in eight weeks.', 'The kit ships in eight weeks but delayed.'];
+
+	it('one passing source makes the claim faithful, and both entries are traced', async () => {
+		const traced = await judgeClaimsTraced(
+			'What is the lead time?',
+			'The kit ships in eight weeks.',
+			sources,
+			completer([claims, 'yes', 'no']),
+			{ anySource: true },
+		);
+		assert.equal(traced?.verdict.faithful, true);
+		assert.equal(traced?.claims.length, 2);
+		assert.equal(traced?.claims[0].entailed, true);
+		assert.equal(traced?.claims[1].entailed, false);
+	});
+
+	it('without the option the same answer is unfaithful', async () => {
+		const traced = await judgeClaimsTraced(
+			'What is the lead time?',
+			'The kit ships in eight weeks.',
+			sources,
+			completer([claims, 'yes', 'no']),
+		);
+		assert.equal(traced?.verdict.faithful, false);
+	});
+
+	it('two different claims where the second fails is still unfaithful', async () => {
+		const twoClaims = claimsJson(false, 5, [
+			{ claim: 'The kit ships in eight weeks.', source: 1, quote: 'ships in eight weeks' },
+			{ claim: 'It is made in Vejle.', source: 2, quote: 'made in Vejle' },
+		]);
+		const traced = await judgeClaimsTraced(
+			'What is the lead time?',
+			'The kit ships in eight weeks and is made in Vejle.',
+			['The frame kit ships in eight weeks.', 'It comes from the Vejle workshop.'],
+			completer([twoClaims, 'yes', 'no']),
+			{ anySource: true },
+		);
+		assert.equal(traced?.verdict.faithful, false);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// entailPrompt / supportPrompt lenient parameter
+// ---------------------------------------------------------------------------
+describe('lenient prompts', () => {
+	const claim = 'The Brindle chair legs splay four degrees.';
+	const quote = 'The legs splay four degrees.';
+	const source = 'The Brindle chair. The legs splay four degrees.';
+
+	it('defaults match the explicit false', () => {
+		assert.equal(entailPrompt(claim, quote), entailPrompt(claim, quote, false));
+		assert.equal(supportPrompt(claim, source), supportPrompt(claim, source, false));
+	});
+
+	it('true adds the three lines', () => {
+		const ep = entailPrompt(claim, quote, true);
+		const sp = supportPrompt(claim, source, true);
+		const line = 'A number written in digits and the same number written in words are the same number (340,000 = three hundred and forty thousand).';
+		assert.ok(ep.includes(line));
+		assert.ok(sp.includes(line));
+		assert.ok(ep.includes('The source may name its subject only in its heading or in an earlier sentence: a claim about that subject is not unsupported just because this sentence leaves the name out.'));
+		assert.ok(ep.includes('The claim and the source may be in different languages: compare what they mean.'));
+	});
+
+	it('lenientWording passes the digits-and-words line to the fake complete', async () => {
+		const claims = claimsJson(false, 5, [{ claim, source: 1, quote }]);
+		const sources = [source];
+		const prompts: string[] = [];
+		const complete = async (p: string): Promise<string> => {
+			prompts.push(p);
+			if (prompts.length === 1) return claims;
+			return 'yes';
+		};
+		await judgeClaimsTraced('q', 'a', sources, complete, { lenientWording: true });
+		assert.ok(prompts[1].includes('340,000 = three hundred and forty thousand'));
+
+		const prompts2: string[] = [];
+		const complete2 = async (p: string): Promise<string> => {
+			prompts2.push(p);
+			if (prompts2.length === 1) return claims;
+			return 'yes';
+		};
+		await judgeClaimsTraced('q', 'a', sources, complete2);
+		assert.ok(!prompts2[1].includes('340,000 = three hundred and forty thousand'));
 	});
 });

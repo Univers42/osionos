@@ -153,16 +153,24 @@ export function quoteFound(quote: string, source: string): boolean {
 /**
  * Build the second prompt: one narrow question about one claim and its quote.
  */
-export function entailPrompt(claim: string, quote: string): string {
-	return [
+export function entailPrompt(claim: string, quote: string, lenient = false): string {
+	const lines = [
 		'Read this quote alone:',
 		quote,
 		'',
 		'Does the quote state this claim: ' + claim,
 		'',
 		'Include every number, name, date, and who decided or owns something: if the quote leaves one of them out or says something different, the answer is no.',
-		'Reply with yes or no only.',
-	].join('\n');
+	];
+	if (lenient) {
+		lines.push(
+			'The source may name its subject only in its heading or in an earlier sentence: a claim about that subject is not unsupported just because this sentence leaves the name out.',
+			'A number written in digits and the same number written in words are the same number (340,000 = three hundred and forty thousand).',
+			'The claim and the source may be in different languages: compare what they mean.',
+		);
+	}
+	lines.push('Reply with yes or no only.');
+	return lines.join('\n');
 }
 
 /**
@@ -181,16 +189,24 @@ export function parseEntail(text: string): boolean | null {
  * Same wording rules as entailPrompt: every number, name, date, and who
  * decided or owns something must be present and must agree.
  */
-export function supportPrompt(claim: string, source: string): string {
-	return [
+export function supportPrompt(claim: string, source: string, lenient = false): string {
+	const lines = [
 		'Read this source alone:',
 		source,
 		'',
 		'Does the source support this claim: ' + claim,
 		'',
 		'Include every number, name, date, and who decided or owns something: if the source leaves one of them out or says something different, the answer is no.',
-		'Reply with yes or no only.',
-	].join('\n');
+	];
+	if (lenient) {
+		lines.push(
+			'The source may name its subject only in its heading or in an earlier sentence: a claim about that subject is not unsupported just because this sentence leaves the name out.',
+			'A number written in digits and the same number written in words are the same number (340,000 = three hundred and forty thousand).',
+			'The claim and the source may be in different languages: compare what they mean.',
+		);
+	}
+	lines.push('Reply with yes or no only.');
+	return lines.join('\n');
 }
 
 /** The languages and phrasings abstainRule recognises, and nothing else. */
@@ -294,6 +310,16 @@ export function quoteNear(quote: string, source: string, ratio: number): boolean
 	return false;
 }
 
+/**
+ * Caveat: two different claims with the same wording after normalisation are
+ * treated as one, so the weaker one can hide behind the other; and a claim
+ * reworded between its two entries is not grouped, so `anySource` does not
+ * help it.
+ */
+export function claimKey(text: string): string {
+	return text.toLowerCase().replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '');
+}
+
 /** One claim as the judge checked it: what ran and what it found. */
 export interface ClaimTrace {
 	claim: string;
@@ -314,6 +340,10 @@ export interface ClaimJudgeOptions {
 	abstainRule?: boolean;
 	/** Ask whether the whole source supports a claim its quote does not carry. */
 	sourceFallback?: boolean;
+	/** A claim listed with several sources is faithful if any one source passes. */
+	anySource?: boolean;
+	/** Wording-tolerant prompts: names in headings, digits vs words, cross-language. */
+	lenientWording?: boolean;
 }
 
 /**
@@ -331,6 +361,10 @@ export interface ClaimJudgeOptions {
  * found, or it is found but does not entail the claim) is decided by
  * supportPrompt over the whole cited source instead of failing at once: a claim
  * often joins two sentences of one source and quotes only one of them.
+ * With anySource, claims whose claim text is equal after normalisation form one
+ * group, and the answer is faithful if every group has at least one entry that
+ * passes the per-claim rule. With lenientWording, entailPrompt and supportPrompt
+ * add three wording-tolerance lines before their yes-or-no line.
  *
  * It visits every claim rather than stopping at the first failure, so the
  * trace is complete; the entailment call runs only for a claim in range whose
@@ -350,6 +384,8 @@ export async function judgeClaimsTraced(
 	const ratio = options?.quoteRatio ?? 1;
 	const abstainRule = options?.abstainRule === true;
 	const sourceFallback = options?.sourceFallback === true;
+	const anySource = options?.anySource === true;
+	const lenientWording = options?.lenientWording === true;
 	const { relevant, claims } = parsed;
 	const abstained = parsed.abstained || (abstainRule && saysNotInSources(answer));
 	const traces: ClaimTrace[] = [];
@@ -357,16 +393,20 @@ export async function judgeClaimsTraced(
 
 	const skipClaims = abstainRule ? abstained : abstained && claims.length === 0;
 	if (!skipClaims) {
+		const passes: boolean[] = [];
 		for (const claim of claims) {
 			const inRange = claim.source >= 1 && claim.source <= sources.length;
 			const source = inRange ? sources[claim.source - 1] : '';
 			const found =
 				inRange && (quoteFound(claim.quote, source) || (ratio < 1 && quoteNear(claim.quote, source, ratio)));
-			const entailed = inRange && found ? parseEntail(await complete(entailPrompt(claim.claim, claim.quote))) : null;
+			const entailed =
+				inRange && found
+					? parseEntail(await complete(entailPrompt(claim.claim, claim.quote, lenientWording)))
+					: null;
 			const quoteHolds = found && entailed === true;
 			const supported =
 				inRange && !quoteHolds && sourceFallback
-					? parseEntail(await complete(supportPrompt(claim.claim, source)))
+					? parseEntail(await complete(supportPrompt(claim.claim, source, lenientWording)))
 					: null;
 
 			traces.push({
@@ -379,8 +419,19 @@ export async function judgeClaimsTraced(
 				supported,
 			});
 
-			const passes = inRange && (quoteHolds || supported === true);
-			if (!passes) faithful = false;
+			passes.push(inRange && (quoteHolds || supported === true));
+		}
+
+		if (anySource) {
+			const groupPass = new Map<string, boolean>();
+			claims.forEach((claim, index) => {
+				const key = claimKey(claim.claim);
+				if (!groupPass.has(key)) groupPass.set(key, false);
+				if (passes[index]) groupPass.set(key, true);
+			});
+			faithful = [...groupPass.values()].every((value) => value);
+		} else {
+			faithful = passes.every((value) => value);
 		}
 	}
 

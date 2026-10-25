@@ -17,6 +17,9 @@
 /*                          answer as an abstention, whatever claims it lists   */
 /*     CLAIM_SOURCE_FALLBACK 0 (default) or 1: ask whether the source supports */
 /*                          a claim whose quote check fails                    */
+/*     CLAIM_ANY_SOURCE     0 (default) or 1: a claim is faithful if any of    */
+/*                          its listed sources passes                          */
+/*     CLAIM_LENIENT_WORDING 0 (default) or 1: tolerant wording in prompts     */
 /*     OSIONOS_AI_LLM_URL   the local llama.cpp server                         */
 /*     OSIONOS_AI_LLM_MODEL the model that server loads                        */
 /*                                                                            */
@@ -65,6 +68,8 @@ function readFlag(name: string): boolean {
 
 const abstainRule = readFlag('CLAIM_ABSTAIN_RULE');
 const sourceFallback = readFlag('CLAIM_SOURCE_FALLBACK');
+const anySource = readFlag('CLAIM_ANY_SOURCE');
+const lenientWording = readFlag('CLAIM_LENIENT_WORDING');
 
 if (llmUrl.length === 0) {
 	console.error('[rejudge] refusing to start: OSIONOS_AI_LLM_URL is needed');
@@ -147,6 +152,8 @@ async function main() {
 					quoteRatio,
 					abstainRule,
 					sourceFallback,
+					anySource,
+					lenientWording,
 				});
 				verdict = traced?.verdict ?? null;
 				claims = traced?.claims ?? [];
