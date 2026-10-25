@@ -132,3 +132,48 @@ Caveat: the labels are Claude's (claude-opus-5-5), not a person's, and four of t
 (q65, q127, q167, and q34 the other way). With 4 unfaithful rows in 168, kappa moves a lot with one verdict, and
 even a judge that catches all 4 needs about 4 false flags or fewer to reach 0.6. The held-out set has now been
 read for errors, so the next judge needs a fresh set to be confirmed on.
+
+## Tuned on 198 rows, confirmed once on a fresh set (2026-10-25)
+
+Two new options, both off by default: `CLAIM_ANY_SOURCE=1` (a claim listed twice with two sources passes when
+one of them holds) and `CLAIM_LENIENT_WORDING=1` (three lines in the yes/no prompts: a subject named only in the
+heading, digits and words, two languages).
+
+**Dev set** = `labels.jsonl` + `heldout.jsonl` (198 Qwen3-4B answers, 7 unfaithful). One traced run per lenient
+setting (`CLAIM_ABSTAIN_RULE=0 CLAIM_SOURCE_FALLBACK=1`); the other abstain × fallback × anySource combinations are
+derived offline from the trace, checked against the run's own verdict on every row:
+
+| lenient | abstainRule | sourceFallback | anySource | kappa | caught | false flags |
+|---|---|---|---|---|---|---|
+| off | off | on | off | 0.351 | 5/7 | 14 |
+| off | on | on | on | 0.450 | 5/7 | 9 |
+| on | on | on | on | 0.408 | 3/7 | 4 |
+| off, + "the provided sources do not …" counted as an abstention (q179) | on | on | on | **0.476** | 5/7 | 8 |
+
+Lenient wording removes five false flags and loses two of the seven catches, so it stays off. The frozen judge:
+`CLAIM_QUOTE_RATIO=1 CLAIM_ABSTAIN_RULE=1 CLAIM_SOURCE_FALLBACK=1 CLAIM_ANY_SOURCE=1 CLAIM_LENIENT_WORDING=0`.
+
+**Fresh set**: the same questions answered by another model (Qwen2.5-Coder-7B-Instruct, `ANSWER_MODEL`, on the
+GPU), so the answers, their wording and their mistakes are new; 198 rows (q199 and q200 have no stored answer),
+labelled blind before the run and not edited after it, 30 unfaithful. One run:
+
+```sh
+CLAIM_QUOTE_RATIO=1 CLAIM_ABSTAIN_RULE=1 CLAIM_SOURCE_FALLBACK=1 CLAIM_ANY_SOURCE=1 CLAIM_LENIENT_WORDING=0 \
+  LABELS_FILE=<labels.jsonl|heldout.jsonl> LLM_BACKEND=vulkan \
+  sh eval/answers/rejudge.sh osionos_ai_models_llm 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf' claims <out.jsonl>
+```
+
+| | kappa | caught | false flags |
+|---|---|---|---|
+| all 198 rows (a null verdict counts as unfaithful, as in `calibrate.ts`) | **0.615** | 18/30 | 6/168 |
+| without the 2 null verdicts (n = 196) | 0.588 | 16/28 | 6/168 |
+| `labels.jsonl` alone (n = 30) / `heldout.jsonl` alone (n = 168) | 0.516 / 0.630 | | |
+
+Bootstrap 95 % interval of the 0.615 (5000 resamples, seed 42): 0.430 to 0.765.
+
+Caveat: the pass is narrow and rests on the null rule; the interval reaches 0.43. The 12 misses are mostly a
+quoted fact given for the wrong product or project (the q143 and q161 kind) and an unanswerable question answered
+with a confident "no" (q47, q174, q192): a quote check cannot see either. The labels are Claude's
+(claude-opus-5-5), not a person's, and the labeller read the fresh answers while labelling; the only change made
+after that (the abstention pattern) came from a dev row, and the fresh set's other abstention wordings were left
+out on purpose.
