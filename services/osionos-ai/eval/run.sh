@@ -62,7 +62,7 @@ case ",$VARIANTS," in
 esac
 
 cleanup() {
-	docker rm -f "$DB_CONTAINER" "$TEI_CONTAINER" "$LLM_CONTAINER" >/dev/null 2>&1 || true
+	docker rm -f -v "$DB_CONTAINER" "$TEI_CONTAINER" "$LLM_CONTAINER" >/dev/null 2>&1 || true
 	docker network rm "$NETWORK" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -74,7 +74,7 @@ harness_network_create "$NETWORK"
 
 # The names of the containers are fixed, so a run that was killed leaves
 # nothing behind: what is there is removed first.
-docker rm -f "$DB_CONTAINER" "$TEI_CONTAINER" "$LLM_CONTAINER" >/dev/null 2>&1 || true
+docker rm -f -v "$DB_CONTAINER" "$TEI_CONTAINER" "$LLM_CONTAINER" >/dev/null 2>&1 || true
 
 docker run -d --name "$DB_CONTAINER" --network "$NETWORK" \
 	-e POSTGRES_PASSWORD=ai_test_password \

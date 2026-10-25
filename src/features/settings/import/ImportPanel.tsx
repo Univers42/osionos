@@ -126,7 +126,7 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
 
 const TypedImportModal: React.FC<{ kind: string; onChoose: () => void; onClose: () => void }> = ({ kind, onChoose, onClose }) => (
   <Modal open onClose={onClose} title={`${kind} import`} size="sm">
-    <div className="space-y-4">
+    <div className="space-y-4 p-6">
       <p className="text-sm text-[var(--osio-fg-muted)]">Choose a local file and osionos will route it to pages or the asset library based on type.</p>
       <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => { onChoose(); onClose(); }}>Choose file</Button></div>
     </div>

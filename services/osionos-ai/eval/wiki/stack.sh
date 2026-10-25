@@ -66,7 +66,7 @@ HARNESS_DIR="$SERVICE_DIR/eval"
 . "$HARNESS_DIR/harness.sh"
 
 cleanup() {
-	docker rm -f "$INDEXER_CONTAINER" "$TEI_CONTAINER" "$DB_CONTAINER" >/dev/null 2>&1 || true
+	docker rm -f -v "$INDEXER_CONTAINER" "$TEI_CONTAINER" "$DB_CONTAINER" >/dev/null 2>&1 || true
 	docker network rm "$NETWORK" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -80,7 +80,7 @@ psql_query() {
 
 echo "[wiki] network $NETWORK"
 harness_network_create "$NETWORK"
-docker rm -f "$DB_CONTAINER" "$TEI_CONTAINER" "$INDEXER_CONTAINER" >/dev/null 2>&1 || true
+docker rm -f -v "$DB_CONTAINER" "$TEI_CONTAINER" "$INDEXER_CONTAINER" >/dev/null 2>&1 || true
 
 docker run -d --name "$DB_CONTAINER" --network "$NETWORK" \
 	-e POSTGRES_PASSWORD="$DB_PASSWORD" \
