@@ -16,6 +16,7 @@ import type { ChatMessage, Conversation, Project, SharedContextItem } from "./ch
 import { stubInferencePort, type InferencePort } from "./inferencePort";
 import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiSelection";
 import type { RunContext } from "@/features/ai/model/aiContext";
+import { withAccountContext } from "@/features/ai/model/viewContext";
 import { parseAgentPrefix, type AgentSummary } from "@/features/ai/model/aiAgents";
 import { listAgents } from "@/features/ai/api/aiClient";
 import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTurn";
@@ -272,8 +273,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
             title: conversation.title,
             serverConversationId: conversation.serverConversationId,
             attachments: sel?.attachments,
-            // What the answer may read: the pages the reader pointed at.
-            context: sel?.context,
+            // What the answer may read: the pages the reader pointed at, plus
+            // account/view when the setting is on.
+            context: withAccountContext(sel?.context),
             onServerConversationId: rememberServerConversation,
           },
           (event, data) => dispatchRunEvent(event, data, turn),

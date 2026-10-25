@@ -25,6 +25,7 @@
 
 import { getInferencePort } from "@/features/chat/model/useChatStore";
 import type { InferencePort } from "@/features/chat/model/inferencePort";
+import type { RunContext } from "@/features/ai/model/aiContext";
 
 /** The tab shows only when the app can answer: the AI service is configured. */
 export function aiDockTabVisible(configured: boolean): boolean {
@@ -50,6 +51,8 @@ export interface AiDockTurn {
   model?: string;
   /** The server-side conversation, when the local one already has one. */
   serverConversationId?: string;
+  /** What the answer is read from: pages of the workspace, or all of it. */
+  context?: RunContext;
   /** Called once the server-side conversation exists. */
   onServerConversationId?: (id: string) => void;
   /** The answer, as it arrives. */
@@ -89,6 +92,7 @@ export async function runAiDockTurn(turn: AiDockTurn): Promise<void> {
       text: turn.text,
       ...shared,
       ...(turn.serverConversationId ? { serverConversationId: turn.serverConversationId } : {}),
+      ...(turn.context ? { context: turn.context } : {}),
       ...(turn.onServerConversationId ? { onServerConversationId: turn.onServerConversationId } : {}),
     },
     (event, data) => {
