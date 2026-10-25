@@ -27,7 +27,7 @@ import type { Authorship } from '../runs/sources.ts';
  * C42: a `proposal` is a write that has an execute and never asks; what it
  * writes is inert until the user approves it.
  */
-export type ToolKind = 'read' | 'write' | 'proposal';
+export type ToolKind = 'read' | 'write' | 'proposal' | 'view';
 
 /**
  * What a read tool gets: the database of the service, and the caller.
@@ -167,3 +167,18 @@ export interface WriteTool<TArgs> {
  * the work.
  */
 export type AnyWriteTool = WriteTool<unknown>;
+
+/**
+ * A tool that changes only what the user sees: it opens a page, a panel or
+ * the issue report dialog. It carries no source, and never writes.
+ */
+export interface ViewTool<TArgs, TData> extends AssistantTool<TArgs, TData> {
+	kind: 'view';
+	/** A view tool quotes no page. */
+	sources(data: TData): readonly RetrievedChunk[];
+	/** The view change the tool asked for. */
+	view(data: TData): NonNullable<import('./index.ts').ToolOutcome['view']>;
+}
+
+/** A view tool of the registry, whatever its arguments and its data are. */
+export type AnyViewTool = ViewTool<unknown, unknown>;
