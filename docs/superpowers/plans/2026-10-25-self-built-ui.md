@@ -67,7 +67,7 @@ Integration branch: `feat/self-built-ui` (from develop `3be8dc71b`). One worktre
 | SB-4j | S4b | `field` displays `image` (pick, crop, upload) and `file` (drop zone) + avatar/banner/import actions | SB-2c, SB-3a | avatar/banner/import behave as today (existing e2e unchanged) |
 | SB-4e | S4 | components: definition, instance, slots, props, variants; shipped components (§9) | SB-1d | editing a component updates every instance |
 | SB-4f | S4 | shipped preset library reproducing settings looks | SB-1a | each preset's render matches its source class string |
-| SB-4g | S4 | dev authoring loop: "Export as system document" (serve-only middleware) | SB-1d | export of a demo doc = the committed file |
+| SB-4g 👹 | S4 | dev authoring loop: "Export as system document" (serve-only middleware) | SB-1d | export of a demo doc = the committed file |
 | SB-5-* | S5 | one package per section, in this order: accessibility_voice, plans, billing, library, page_settings, notifications, preferences, moderation, mail_calendar, import, connections, contacts, public_pages, general, teamspaces, shortcuts, ai, ai_connections, mcp, developer, profile, people, permissions | S4, S4b | old panel deleted; parity ≤ 0.1 %; existing e2e unchanged and green; ratchet lowered; perf ≤ budget |
 | SB-5-x | S5 | one section (preferences) authored through the editor UI end to end, recorded (chrome-devtools MCP) | SB-4g | exported file = committed file |
 | SB-6a | S6 | Edit/View on every page (lock = View), `live` vs `preview` render mode | SB-1b | View is usable; preview never writes (test) |
