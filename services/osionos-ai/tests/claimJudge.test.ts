@@ -323,6 +323,24 @@ describe('judgeClaimsTraced with sourceFallback', () => {
 		assert.equal(traced?.claims[0].supported, false);
 	});
 
+	it('a found quote that does not carry the whole claim falls back to the source', async () => {
+		const joined = 'The team lead signs the log, which proves the first week happened.';
+		const logSources = ['The log is signed off by the team lead. It proves the first week happened.'];
+		const joinedClaims = claimsJson(false, 5, [
+			{ claim: joined, source: 1, quote: 'It proves the first week happened.' },
+		]);
+		const withFallback = await judgeClaimsTraced(question, joined, logSources, completer([joinedClaims, 'no', 'yes']), {
+			sourceFallback: true,
+		});
+		assert.deepEqual(withFallback?.verdict, { faithful: true, relevant: 5, abstained: false });
+		assert.equal(withFallback?.claims[0].entailed, false);
+		assert.equal(withFallback?.claims[0].supported, true);
+
+		const without = await judgeClaimsTraced(question, joined, logSources, completer([joinedClaims, 'no']));
+		assert.deepEqual(without?.verdict, { faithful: false, relevant: 5, abstained: false });
+		assert.equal(without?.claims[0].supported, null);
+	});
+
 	it('an out-of-range source index never calls the fallback', async () => {
 		let calls = 0;
 		const complete = async (): Promise<string> => {

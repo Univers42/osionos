@@ -312,7 +312,7 @@ export interface ClaimJudgeOptions {
 	quoteRatio?: number;
 	/** Treat a short not-in-sources answer as an abstention, whatever claims it lists. */
 	abstainRule?: boolean;
-	/** Ask whether the source supports a claim whose quote is not found. */
+	/** Ask whether the whole source supports a claim its quote does not carry. */
 	sourceFallback?: boolean;
 }
 
@@ -327,8 +327,10 @@ export interface ClaimJudgeOptions {
  *
  * With abstainRule, a short not-in-sources answer is an abstention too, and an
  * abstention skips the claim checks whatever claims it lists. With
- * sourceFallback, a claim whose quote is not found but whose source is in range
- * is decided by supportPrompt instead of failing at once.
+ * sourceFallback, a claim in range whose quote check fails (the quote is not
+ * found, or it is found but does not entail the claim) is decided by
+ * supportPrompt over the whole cited source instead of failing at once: a claim
+ * often joins two sentences of one source and quotes only one of them.
  *
  * It visits every claim rather than stopping at the first failure, so the
  * trace is complete; the entailment call runs only for a claim in range whose
@@ -360,11 +362,12 @@ export async function judgeClaimsTraced(
 			const source = inRange ? sources[claim.source - 1] : '';
 			const found =
 				inRange && (quoteFound(claim.quote, source) || (ratio < 1 && quoteNear(claim.quote, source, ratio)));
+			const entailed = inRange && found ? parseEntail(await complete(entailPrompt(claim.claim, claim.quote))) : null;
+			const quoteHolds = found && entailed === true;
 			const supported =
-				inRange && !found && sourceFallback
+				inRange && !quoteHolds && sourceFallback
 					? parseEntail(await complete(supportPrompt(claim.claim, source)))
 					: null;
-			const entailed = inRange && found ? parseEntail(await complete(entailPrompt(claim.claim, claim.quote))) : null;
 
 			traces.push({
 				claim: claim.claim,
@@ -376,7 +379,7 @@ export async function judgeClaimsTraced(
 				supported,
 			});
 
-			const passes = inRange && (found ? entailed === true : sourceFallback && supported === true);
+			const passes = inRange && (quoteHolds || supported === true);
 			if (!passes) faithful = false;
 		}
 	}
