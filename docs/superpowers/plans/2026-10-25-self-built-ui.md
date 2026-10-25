@@ -60,11 +60,14 @@ Integration branch: `feat/self-built-ui` (from develop `3be8dc71b`). One worktre
 | SB-4a | S4 | `collection`: list/table/grid, virtual rows, empty slot, `$row`, row actions, inline edit | SB-2a, SB-3a | 10,000-row scroll with no long task over 50 ms |
 | SB-4b | S4 | list sources for every settings list (sessions exists) | SB-4a | each list matches today's rows from the same stub |
 | SB-4c | S4 | `tabs`, `dialog` containers | SB-1b | keyboard per WAI-ARIA (shadcn reference) |
-| SB-4d | S4 | `widget` block + the fixed widget list (§6) | SB-1b | each widget lazy; conformance clean inside |
+| SB-4d | S4 | `collection` display `matrix` (rows × columns sources, a choice field per cell) | SB-4a, SB-2c | the permission matrix's cells and saves match today's panel |
+| SB-4h 👹 | S4b | `steps` container + `qr` block + guarded 2FA enrol/verify actions | SB-3a, SB-3c | enrol → scan → verify → recovery codes, every guard intact |
+| SB-4i 👹 | S4b | guarded `passkey.register` action (WebAuthn in the kernel) | SB-3a | registration from a button block; the page cannot pass options |
+| SB-4j | S4b | `field` displays `image` (pick, crop, upload) and `file` (drop zone) + avatar/banner/import actions | SB-2c, SB-3a | avatar/banner/import behave as today (existing e2e unchanged) |
 | SB-4e | S4 | components: definition, instance, slots, props, variants; shipped components (§9) | SB-1d | editing a component updates every instance |
 | SB-4f | S4 | shipped preset library reproducing settings looks | SB-1a | each preset's render matches its source class string |
 | SB-4g | S4 | dev authoring loop: "Export as system document" (serve-only middleware) | SB-1d | export of a demo doc = the committed file |
-| SB-5-* | S5 | one package per section, in this order: accessibility_voice, plans, billing, library, page_settings, notifications, preferences, moderation, mail_calendar, import, connections, contacts, public_pages, general, teamspaces, shortcuts, ai, ai_connections, mcp, developer, profile, people, permissions | S4 | old panel deleted; parity ≤ 0.1 %; existing e2e unchanged and green; ratchet lowered; perf ≤ budget |
+| SB-5-* | S5 | one package per section, in this order: accessibility_voice, plans, billing, library, page_settings, notifications, preferences, moderation, mail_calendar, import, connections, contacts, public_pages, general, teamspaces, shortcuts, ai, ai_connections, mcp, developer, profile, people, permissions | S4, S4b | old panel deleted; parity ≤ 0.1 %; existing e2e unchanged and green; ratchet lowered; perf ≤ budget |
 | SB-5-x | S5 | one section (preferences) authored through the editor UI end to end, recorded (chrome-devtools MCP) | SB-4g | exported file = committed file |
 | SB-6a | S6 | Edit/View on every page (lock = View), `live` vs `preview` render mode | SB-1b | View is usable; preview never writes (test) |
 | SB-6b | S6 | grid upgrades: 8 px row unit, hug cells push, narrow placement, component tray | SB-6a | settings doc on the grid matches parity |
@@ -72,6 +75,7 @@ Integration branch: `feat/self-built-ui` (from develop `3be8dc71b`). One worktre
 | SB-6d 👹 | S6 | user copies: root migration (`osionos_user_system_pages`), bridge route + validation, Reset, merge, required blocks | SB-1d, SB-6a | Review Focus 5; RLS: A cannot read B's copy |
 | SB-6e | S6 | user presets + components library (save, apply, detach, insert from tray) | SB-4e, SB-6c | saved preset applies across pages |
 | SB-6f 👹 | S6 | "Show in Settings" (§13): one nav registry, "Only me" / "Everyone" (admins), Custom mark | SB-6a | a member cannot flag for the workspace (server test) |
+| SB-6h 👹 | S6 | workspace defaults edited live by owners/admins: root migration (`osionos_workspace_system_pages` + history), bridge route with owner/admin check and audit, three-layer merge, rollback | SB-6d | a member's write is refused (server test); rollback restores a version byte-identically |
 | SB-6g | S6 | every block in `/` on any page; viewer-scoped bindings on shared/public pages; `osio.settings.edit` on | SB-6d | `/input` bound to a preference toggles it from a normal page |
 | SB-7 | S7 | stage 2: inspector, slash catalogue, settings shell as documents | S6 | own design doc first |
 

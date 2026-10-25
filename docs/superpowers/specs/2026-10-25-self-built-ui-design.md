@@ -282,13 +282,18 @@ setting row, button group, sidebar+content) is a grid placement, a frame with a 
 | confirm, typed confirm, sudo | `ConfirmModals`, `SudoPrompt` | **not blocks**: guards run by the action runner (§5) | runner |
 | link | rich text | the existing inline link | reuse |
 | people database | `ObjectDatabase` adapter | the existing database block over a source | reuse |
-| avatar/banner crop upload, 2FA enrolment, passkey registration (WebAuthn), permission matrix, import dropzone, sentiment chart | dedicated React flows | `widget`: a registered app flow placed as a block | widget |
+| avatar and banner upload with crop | `ImageAvatarUpload`, `BannerUpload` | `field` display `image` (pick, crop, upload), bound to the profile avatar or banner action | extend |
+| import dropzone | `ImportPanel` | `field` display `file` (drop zone, type filter), bound to the import action | extend |
+| 2FA enrolment (scan, verify, recovery codes) | `TwoFactorModal` | `steps` container (one frame per step, guarded transitions) + `qr` block (the installed `qrcode` package) + `secret` for recovery codes + guarded enrol/verify actions | **new** |
+| passkey registration (WebAuthn) | passkey modal | a `button` bound to the guarded `passkey.register` action; the WebAuthn call lives in the action (kernel), the page only triggers it | runner |
+| permission matrix | `PermissionsPanel` | `collection` display `matrix`: rows from one list source, columns from another, a `field` (choice) per cell | extend |
+| sentiment chart | `SentimentPulseChart` | the existing database chart view over a list source, with the screen-reader table it has today | reuse |
 
-**Widgets** are the honest boundary. A flow that is inherently code (image crop, WebAuthn,
-TOTP QR and verify, the policy matrix) stays a React flow, built only from `@osionos/ui` and held
-to the same conformance check. As a block, it can be placed, moved, restyled as a container and
-hidden like any other. The widget list is fixed in this document. Adding one needs a reason, and
-the target is to shrink the list over time.
+**No widgets.** The owner decided on 2026-10-25 that every flow becomes blocks too, with no
+escape hatch. Whatever needs a browser API (WebAuthn, reading a file, cropping on a canvas,
+drawing a QR) lives in the kernel as an action or a field display, and the page only places and
+triggers it. That keeps the boundary from the anti-goals: a page arranges and styles, the kernel
+decides what runs.
 
 ### 7. System pages: shipped, customizable, resettable
 
@@ -315,6 +320,23 @@ the target is to shrink the list over time.
   through the devil gate. The bridge validates every stored tree: block-type allowlist, depth,
   size, and style values on their scales. A stored tree is user input on both sides of the
   trust boundary.
+- **Three layers of defaults.** The owner decided on 2026-10-25 that workspace admins can change
+  the default for everyone, live, in the running app. A settings document therefore resolves
+  in three layers:
+  1. the shipped document (repo);
+  2. the workspace default (edited live by a workspace owner or admin);
+  3. the viewer's own copy.
+
+  Each layer merges onto the one below it with the Home-dashboard semantics.
+  - Storage: `osionos_workspace_system_pages(workspace_id, page_id, version, base_version,
+    blocks jsonb, updated_by, updated_at)` plus an append-only history table, so an admin can
+    see every version and roll back.
+  - Writes are checked on the server for owner or admin, and every change is audited with the
+    existing audit write.
+  - Required blocks are enforced at every layer.
+  - A user's Reset returns to the workspace default. An admin's "Restore shipped default"
+    returns the workspace to layer 1.
+  - This is 👹 work: a schema change, plus content shown to every member.
 - Settings editing ships behind the flag `osio.settings.edit` (default off) until G5 is done.
   Rendering settings from blocks has no flag: each migration PR deletes the old panel in the same
   change, and parity plus the existing e2e suites guard it.
@@ -408,8 +430,8 @@ How the design meets these numbers:
    version into a user copy and building the settings search index run at load, at idle or in
    a worker, with an in-process fallback, as the graph engine already does
    (`layoutBridge.ts:createWorker`).
-8. **Chunks.** No new block may grow the warm chunk. Rarely used blocks and every widget load
-   lazily. `ANALYZE=1` measures the chunks before and after.
+8. **Chunks.** No new block may grow the warm chunk. Rarely used blocks (`steps`, `qr`, the
+   `image` and `file` displays, `matrix`) load lazily. `ANALYZE=1` measures the chunks before and after.
 
 Caveat: these budgets are measured in this Docker environment with software rendering, so a
 real GPU machine is faster and a low-end phone is slower. The scaling rows are the part that
@@ -458,7 +480,7 @@ the owner describes, on every page:
 | Check | How | Pass |
 |---|---|---|
 | Built with blocks | a test iterates `sections.ts` and asserts each section id has a system page and no panel component | every section |
-| Conformance | `scripts/check-built-with-blocks.sh` in `test:quality`: raw `<button\|<input\|<select\|<textarea\|<table` and `[var(--osio-` classes in `src/features/settings/**` and widget files, counted against a ratchet file that may only decrease | ends at 0 |
+| Conformance | `scripts/check-built-with-blocks.sh` in `test:quality`: raw `<button\|<input\|<select\|<textarea\|<table` and `[var(--osio-` classes in `src/features/settings/**`, counted against a ratchet file that may only decrease | ends at 0 |
 | Visual parity | Playwright with the stub bridge and a frozen clock: 23 sections × 375/1440 × light/dark = 92 screenshots, baselines taken from the pre-migration commit in the same container | ≤ 0.1% differing pixels per shot; a larger diff needs a written reason in the PR |
 | Behaviour | the existing settings e2e specs (`tests/e2e/bridge-stub/*` and the rest, 46 files mention settings) pass with their assertions unchanged | green, no assertion edits |
 | Gates | `npm run test:quality`, `test:canvas`, `test:bridge` | rc 0 |
@@ -482,9 +504,10 @@ The work packages and their order are in the plan. In short:
 | S1 Kernel | block registry, `BlockStyle` + static CSS, `frame`, `visibleWhen` on any block, system-document format + schema + fixpoint test, the system-page host |
 | S2 Fields | source registry with per-field subscriptions, settings record sources, `field` with every display |
 | S3 Actions | 👹 action registry + `app_action` + runner guards, `button` on `@osionos/ui`, `chip`, `avatar`, `meter`, `status`, `secret`, heading anchors |
-| S4 Data and reuse | `collection` (virtual), list sources, `tabs`, `dialog`, `widget`, components, the shipped preset library, the dev authoring loop |
+| S4 Data and reuse | `collection` (virtual, list/table/grid/matrix), list sources, `tabs`, `dialog`, components, the shipped preset library, the dev authoring loop |
+| S4b Flows | `steps`, `qr`, the `image` and `file` field displays, 👹 guarded flow actions (2FA enrol/verify, passkey register, avatar/banner upload, import) |
 | S5 Migration | one package per section, simplest first, each deleting its old panel |
-| S6 Editing | Edit/View on every page with live vs preview rendering, grid upgrades (fine rows, hug push, narrow layout, tray), overlay selection, style inspector, drag, 👹 user copies (table, route, Reset, merge, required blocks), user presets and components, 👹 "Show in Settings", every block in `/` on any page; then `osio.settings.edit` turns on |
+| S6 Editing | Edit/View on every page with live vs preview rendering, grid upgrades (fine rows, hug push, narrow layout, tray), overlay selection, style inspector, drag, 👹 user copies (table, route, Reset, merge, required blocks), user presets and components, 👹 "Show in Settings", 👹 workspace defaults edited live by admins (versions, rollback, audit), every block in `/` on any page; then `osio.settings.edit` turns on |
 | S7 Stage 2 | the inspector, the slash catalogue and the settings shell as documents (own design first) |
 
 ## Quality toolkit (what each tool is for)
@@ -511,4 +534,5 @@ The work packages and their order are in the plan. In short:
   with headroom.
 - The order of sections inside S5 beyond "simplest first".
 - Opening: shared workspace presets, z-order on the canvas, the shell and the rest of the app as
-  system pages.
+  system pages. Publishing presets and components to the marketplace is stage 3, after this
+  project (owner, 2026-10-25).
