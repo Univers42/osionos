@@ -13,7 +13,7 @@
 /**
  * /api/account/emails: the caller's primary address (GoTrue's, read as before) plus the
  * secondaries of osionos_user_emails, and the routes that add, resend, verify and remove a
- * secondary. Primary changes (make-primary) are not routed here: they answer 404.
+ * secondary, and that make a verified secondary the primary (bridge-account-email-primary.mjs).
  *
  * The router owns module setup: the keys check (seal, lookup, and the refusal to share one
  * key between purposes) and the dispatch. The table is in bridge-account-email-rows.mjs, the
@@ -34,15 +34,16 @@ import { createOtpClient } from './bridge-account-otp.mjs';
 import { limitOrFail, settingsFailure } from './bridge-account-settings.mjs';
 import { addEmail, recordOf, removeEmail, resendEmail, verifyEmail } from './bridge-account-email-flow.mjs';
 import { LOOKUP_ENV, SEAL_ENV, createEmailRows, keysUsable, openAddress } from './bridge-account-email-rows.mjs';
+import { makePrimary } from './bridge-account-email-primary.mjs';
 import { readGotrueUser } from './bridge-gotrue-user.mjs';
 import { sendJson } from './bridge-social-core.mjs';
 
 const PATH = /^\/api\/account\/emails(?:\/.*)?$/;
 const ROUTE = '/api/account/emails';
-const ID_ROUTE = /^\/api\/account\/emails\/([^/]+)(?:\/(code|verify))?$/;
+const ID_ROUTE = /^\/api\/account\/emails\/([^/]+)(?:\/(code|verify|primary))?$/;
 const LIMIT = { limit: 30, windowMs: 60_000 };
 const MFA_ENV = 'OSIONOS_MFA_SECRET_KEY';
-const ACTIONS = { '': ['DELETE', removeEmail], code: ['POST', resendEmail], verify: ['POST', verifyEmail] };
+const ACTIONS = { '': ['DELETE', removeEmail], code: ['POST', resendEmail], verify: ['POST', verifyEmail], primary: ['POST', makePrimary] };
 
 const text = (value) => (typeof value === 'string' && value !== '' ? value : null);
 
@@ -90,11 +91,13 @@ async function listEmails(ctx, session, response) {
 	const list = await readPrimary(ctx, userId);
 	let unavailable = !ctx.keysUsable;
 	let skipped = 0;
+	const primary = list[0]?.email.trim().toLowerCase();
 	if (!unavailable) {
 		try {
 			for (const row of await ctx.rows.list(userId)) {
 				const address = openAddress(row, ctx.env);
-				if (address) list.push(recordOf(row, address)); else skipped += 1;
+				// Mask only: a row equal to the primary is what an interrupted make-primary leaves behind.
+				if (address && address.toLowerCase() !== primary) list.push(recordOf(row, address)); else skipped += 1;
 			}
 		} catch {
 			unavailable = true;

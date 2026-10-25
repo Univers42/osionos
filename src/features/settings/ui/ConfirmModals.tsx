@@ -82,7 +82,7 @@ const ConfirmBody: React.FC<{
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-6">
       {/* The kit's Modal owns the accessible description: `description` is the
           paragraph the dialog's aria-describedby points at. The copy here is
           the one the person reads. */}
