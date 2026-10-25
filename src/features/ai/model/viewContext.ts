@@ -13,6 +13,9 @@
 import type { ActivePanel } from "@/shared/config/uiStore";
 import { useUIStore } from "@/shared/config/uiStore";
 import { usePageStore } from "@/store/usePageStore";
+import { useAiSettingsStore } from "@/store/settings/useAiSettingsStore";
+import { useUserStore } from "@/features/auth";
+import type { RunContext } from "@/features/ai/model/aiContext";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import {
   collectPanes,
@@ -60,7 +63,9 @@ export function buildRunView(input: {
   activePage: { id: string; title: string } | null;
   panel: ActivePanel | null;
 }): RunView {
-  const route = (input.pathname ?? "").slice(0, 200);
+  // The path only: a query string can carry a reset token or an OAuth code, and
+  // this goes to the model provider. Never empty: the service refuses an empty route.
+  const route = ((input.pathname ?? "").split("?")[0] || "/").slice(0, 200);
   const panes = collectPanes(input.layoutRoot);
   const layout: RunView["layout"] = panes.length > 1 ? "split" : "single";
 
@@ -86,7 +91,8 @@ export function buildRunView(input: {
   }
 
   const view: RunView = { route, layout };
-  if (input.activePage) {
+  // A page id that is not a uuid would make the service refuse the whole run.
+  if (input.activePage && isUuid(input.activePage.id)) {
     view.activePage = {
       id: input.activePage.id,
       title: (input.activePage.title ?? "").slice(0, 120),
@@ -112,12 +118,12 @@ export function buildCurrentRunView(): RunView {
   let activePage: { id: string; title: string } | null = null;
   if (activeTab?.pageId && isUuid(activeTab.pageId)) {
     activePage = { id: activeTab.pageId, title: activeTab.title ?? "" };
-  } else if (pageStore.activePage) {
+  } else if (pageStore.activePage && isUuid(pageStore.activePage.id)) {
     activePage = { id: pageStore.activePage.id, title: pageStore.activePage.title ?? "" };
   }
 
   const pathname =
-    typeof window !== "undefined" ? window.location.pathname + window.location.search : "";
+    typeof window !== "undefined" ? window.location.pathname : "/";
 
   return buildRunView({
     pathname,
@@ -128,6 +134,13 @@ export function buildCurrentRunView(): RunView {
   });
 }
 
-export function useRunView(): () => RunView {
-  return () => buildCurrentRunView();
+/**
+ * The run context with who is asking and what is open, when the user's
+ * "Account context" setting is on (default on; devil C205). Off, the context goes
+ * out unchanged, so the service adds neither block.
+ */
+export function withAccountContext(context: RunContext | undefined): RunContext | undefined {
+  const workspaceId = useUserStore.getState().activeWorkspace()?._id ?? "local-workspace";
+  if (!useAiSettingsStore.getState().getData(workspaceId).accountContext) return context;
+  return { ...(context ?? {}), account: true, view: buildCurrentRunView() };
 }
