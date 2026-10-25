@@ -40,3 +40,28 @@ Caveat: the 30 labels were written by Claude (claude-opus-5-5) at the user's req
 so in `labeller`. This measures the 4B judge against a stronger model's reading of the same sources, which is a
 weaker reference than the human labels the plan asks for. A person can overwrite any `human` field; the next run
 clears a label whose answer changed.
+
+## Claim-level judge (2026-10-25)
+
+A second judge (`eval/answers/claimJudge.ts`) checks every claim of the answer against a quote it must copy from
+a source, then asks whether the quote states the claim. `eval/answers/rejudge.sh` re-judges the stored answers and
+calibrates the result:
+
+```sh
+sh eval/answers/rejudge.sh osionos_ai_models_llm 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf' whole  /tmp/rejudge-whole-4b.jsonl
+sh eval/answers/rejudge.sh osionos_ai_models_llm 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf' claims /tmp/rejudge-claims-4b.jsonl
+```
+
+- whole (the control): **kappa −0.087, Spearman 0.785** — the recorded one-shot calibration, so the rejudge path
+  matches `answers.ts`.
+- claims: **kappa 0.412, Spearman 0.727** — better than the one-shot judge, still below the 0.6 bar (`calibrate.ts`
+  exits 1).
+- Where the claims judge disagrees with the labels: it marks all three unfaithful answers (q28, q46, q155) unfaithful,
+  and six faithful ones unfaithful too. Two of those six are "not specified in the provided sources" answers (q41,
+  q171) that the judge did not count as abstentions. The other four (q13, q35, q104, q117) are paraphrases whose
+  claims failed the verbatim quote check or the entailment question, which is the over-strict direction its
+  `Caveat:` names.
+
+Caveat: only 3 of the 30 labels are unfaithful, so one verdict moves kappa a lot, and a kappa near 0.6 on this set
+does not prove much. Both prompts were written once from the brief and each variant ran once, with no tuning on
+these rows.
