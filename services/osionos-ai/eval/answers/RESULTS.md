@@ -1,25 +1,30 @@
 # Answer evaluation results
 
-Overall: faithfulness=0.890, relevance=4.025, abstention_precision=0.571, abstention_recall=0.100
+Overall: faithfulness=0.707, relevance=3.288, abstention_precision=0.652, abstention_recall=0.789
 
 By origin:
-- human: n=68, faithfulness=0.868, relevance=3.985, abstention_precision=1.000, abstention_recall=0.200
-- llm-drafted: n=132, faithfulness=0.902, relevance=4.045, abstention_precision=0.400, abstention_recall=0.067
+- human: n=68, faithfulness=0.712, relevance=3.409, abstention_precision=0.429, abstention_recall=0.750
+- llm-drafted: n=132, faithfulness=0.705, relevance=3.227, abstention_precision=0.750, abstention_recall=0.800
 
 Command: node --experimental-strip-types eval/answers/answers.ts
+Judge: claims
+
 ## Run
 
-- 2026-10-23, 17:43 → 19:01 local (78 min, on a loaded host), osionos `39f3d15bc`, groot migrations at `b9f0f447`:
+- 2026-10-25, 17:21 → 18:44 local, groot migrations at `12dcb1e0`, `ANSWER_JUDGE=claims` with a checkpoint
+  (`ANSWERS_CHECKPOINT`): questions 1–144 on the CPU (17:21 → 18:38), then the run was stopped and resumed from the
+  checkpoint with `LLM_BACKEND=vulkan` for the last 56 (18:39 → 18:44).
   `sh services/osionos-ai/eval/answers/answers.sh <groot>/models/osionos-ai-migration.sql <groot>/models/osionos-ai-rag-migration.sql`
-- Answer model and judge: `unsloth/Qwen3-4B-Instruct-2507-GGUF` Q4_K_M (snapshot `a06e946bb6b655725eafa393f4a9745d460374c9`), llama.cpp `server-b11580`, CPU. Embedder: `intfloat/multilingual-e5-small` on TEI `cpu-1.9.4`.
-- The 30 rows of `labels.jsonl` hold this run's answers, sources and judge verdicts; the `human` fields are empty until a person labels them (`LABELLING.md`).
+- Answer model and judge: `unsloth/Qwen3-4B-Instruct-2507-GGUF` Q4_K_M (snapshot `a06e946bb6b655725eafa393f4a9745d460374c9`),
+  llama.cpp `server-b11580` (CPU) and `server-vulkan-b11580` (RX 6600). Embedder: `intfloat/multilingual-e5-small` on TEI `cpu-1.9.4`.
+- The scores above are the claims judge's with every option off, the over-strict judge measured below; they are not
+  a measured faithfulness. The labels say 164 of the 168 held-out answers are faithful (0.976).
+- `labels.jsonl` keeps the answers its 30 labels were written for (the 2026-10-23 run); this run changed 4 of them
+  (q155, q168, q59, q87), and the file was restored so the calibration set does not move.
 
-Caveat: the judge is the same 4B model that wrote the answers, so it can favour its own wording, and it is not
-calibrated yet: these scores are the judge's, not a measured faithfulness, until `calibrate.ts` compares them with the
-30 human labels. Abstention here is only "retrieval returned nothing": the run has no reranker and no
-`OSIONOS_AI_ABSTAIN_THRESHOLD`, which is the product's default on CPU (the reranker is off there, see
-`../wiki/RESULTS-rag.md`). So the low abstention recall (0.10) is the default product's; the rerank-score abstention
-is measured in that file's variant 3, not here.
+Caveat: the answers come from two backends, which can differ slightly at temperature 0 (`harness.sh`,
+`harness_start_llm`). A label is about one stored answer, so the judge comparisons below are unaffected; the scores
+above mix the two.
 
 ## Calibration of the judge (2026-10-25)
 
@@ -81,3 +86,49 @@ sh eval/answers/rejudge.sh osionos_ai_models_llm 'Qwen3-4B-Instruct-2507-Q4_K_M.
 Caveat: only 3 of the 30 labels are unfaithful, so one verdict moves kappa a lot, and a kappa near 0.6 on this set
 does not prove much. Both prompts were written once from the brief and each variant ran once, with no tuning on
 these rows.
+
+## Judge options and the held-out set (2026-10-25)
+
+All on the GPU (`LLM_BACKEND=vulkan`), claims judge, Qwen3-4B-Instruct-2507 Q4_K_M. A rejudge of the 30
+calibration rows takes 90 s here against about 8 minutes on the CPU, with the same kappa on a repeat run.
+
+```sh
+CLAIM_ABSTAIN_RULE=<0|1> CLAIM_SOURCE_FALLBACK=<0|1> LLM_BACKEND=vulkan \
+  sh eval/answers/rejudge.sh osionos_ai_models_llm 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf' claims <out.jsonl>
+LABELS_FILE=heldout.jsonl CLAIM_SOURCE_FALLBACK=1 LLM_BACKEND=vulkan \
+  sh eval/answers/rejudge.sh osionos_ai_models_llm 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf' claims <out.jsonl>
+```
+
+Calibration rows (`labels.jsonl`, 30 rows, 3 unfaithful):
+
+| abstainRule | sourceFallback | kappa | Spearman |
+|---|---|---|---|
+| off | off | 0.468 | 0.765 |
+| on | off | 0.615 | 0.765 |
+| off | quote not found only (first version) | 0.468 | 0.765 |
+| off | on | 1.000 | 0.765 |
+| on | on | 1.000 | 0.765 |
+
+`sourceFallback` asks whether the whole cited source supports a claim whose quote check failed, because a claim
+often joins two sentences of one source and quotes one of them (q13, q104, q117).
+
+The settings were then frozen by a rule written before any held-out verdict was read: the highest calibration kappa,
+and on a tie the fewer options, so `sourceFallback` on and `abstainRule` off. `heldout.jsonl` holds 168 rows: the 30
+held-out questions plus every other question of this run except q199 and q200, whose stored answers were lost. They
+were labelled blind (question, answer and sources, no verdict); 4 are unfaithful (q65, q75, q127, q167).
+
+**Held-out, run once: kappa 0.168, Spearman 0.741; `calibrate.ts` exits 1.** The judge flags 14 of the 164 faithful
+answers and misses 2 of the 4 unfaithful ones (q75 says the oak is maple, q167 says "twelve per cent or above"
+where the source says above twelve). So the calibration result was fitted to its 30 rows, and no judge here reaches
+0.6 yet. In the traces (`<out>.jsonl.trace.jsonl`), the 14 false flags fall into two groups:
+
+- The yes/no check rejects a claim the quote does state: the product name is only implied by the source
+  (q86 "the Brindle chair legs splay four degrees" against "The legs splay four degrees"), the claim and the source
+  are in different languages (q61, q83, q124), or a number is in digits on one side and words on the other (q154).
+- The claim list: an abstention sentence is listed as a claim and fails (q81, q82, q179), or one claim is listed
+  twice with two sources and fails on the weaker one (q11, q61, q124).
+
+Caveat: the labels are Claude's (claude-opus-5-5), not a person's, and four of the unfaithful calls are close
+(q65, q127, q167, and q34 the other way). With 4 unfaithful rows in 168, kappa moves a lot with one verdict, and
+even a judge that catches all 4 needs about 4 false flags or fewer to reach 0.6. The held-out set has now been
+read for errors, so the next judge needs a fresh set to be confirmed on.
