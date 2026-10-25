@@ -4703,6 +4703,19 @@ async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}',
 	return { res, data };
 }
 
+// A gateway 409/429 is a refusal the user can act on, not an upstream outage, so it keeps its status.
+function gatewaySessionError(res, data) {
+	const status = res.status === 409 || res.status === 429 ? res.status : 502;
+	const error = Object.assign(new Error(data.message || 'Could not establish the app session.'), { status });
+	if (status === 502) return error;
+	if (typeof data.error === 'string') error.code = data.error;
+	if (status === 429) {
+		const seconds = Number(res.headers.get('retry-after'));
+		if (Number.isFinite(seconds) && seconds > 0) error.retryAfterSeconds = Math.trunc(seconds);
+	}
+	return error;
+}
+
 // The gateway mints a one-time handoff for a GoTrue access token; consuming it here makes the
 // osionos session the app uses. The session row is written here, where the request's client
 // metadata is the user's. `expectedUserId` refuses a session minted for someone else before it is recorded.
@@ -4712,7 +4725,7 @@ async function establishAppSession({ request, config, kv, pg, fetchImpl, gateway
 		forwardedFor: forwardedForHeader(request),
 	});
 	const bridgeToken = bridgeTokenFromRedirect(data.redirectUrl);
-	if (!res.ok || !bridgeToken) throw Object.assign(new Error(data.message || 'Could not establish the app session.'), { status: 502 });
+	if (!res.ok || !bridgeToken) throw gatewaySessionError(res, data);
 	const consumed = await consumeHandoffToken(bridgeToken, kv, sessionClock(config), config.appSessionSecret);
 	if (expectedUserId && consumed.session.userId !== expectedUserId) {
 		throw Object.assign(new Error('The sign-in could not be verified; sign in again.'), { status: 401, code: 'invalid_provider_token' });
