@@ -122,6 +122,11 @@ const filter = (userId, extra = '') => `user_id=eq.${userId}${extra}`;
 /** @param {{ pg: object, env: object }} deps */
 export function createEmailRows({ pg, env }) {
 	const service = () => pg.asService();
+	const sealedRow = (userId, address) => ({
+		user_id: userId,
+		email_enc: seal.seal(Buffer.from(address, 'utf8'), userId, env),
+		email_hmac: hmacOf(address, env),
+	});
 	const one = (rows) => (Array.isArray(rows) && rows.length > 0 ? rows[0] : null);
 	return {
 		list: (userId) => run(async () => (await service().get(`${TABLE}?${filter(userId)}&select=${COLUMNS}&order=created_at.asc`)) ?? []),
@@ -136,11 +141,8 @@ export function createEmailRows({ pg, env }) {
 			return Array.isArray(rows) ? rows.length : 0;
 		},
 		sweep: (userId, nowMs) => run(() => service().del(`${TABLE}?${filter(userId, `&verified_at=is.null&created_at=lt.${new Date(nowMs - PENDING_TTL_MS).toISOString()}`)}`)),
-		insert: (userId, address) => run(async () => one(await service().post(TABLE, {
-			user_id: userId,
-			email_enc: seal.seal(Buffer.from(address, 'utf8'), userId, env),
-			email_hmac: hmacOf(address, env),
-		}, { prefer: 'return=representation' }))),
+		insert: (userId, address) => run(async () => one(await service().post(TABLE, sealedRow(userId, address), { prefer: 'return=representation' }))),
+		insertVerified: (userId, address, atIso) => run(async () => one(await service().post(TABLE, { ...sealedRow(userId, address), verified_at: atIso }, { prefer: 'return=representation' }))),
 		async remove(userId, id) {
 			const rows = await run(() => service().del(`${TABLE}?id=eq.${id}&${filter(userId)}`, { prefer: 'return=representation' }));
 			return Array.isArray(rows) && rows.length > 0;
