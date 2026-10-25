@@ -150,6 +150,13 @@ export function quoteFound(quote: string, source: string): boolean {
 	return normalise(source).includes(needle);
 }
 
+/** What lenientWording adds before the yes-or-no line of both check prompts. */
+const LENIENT_LINES = [
+	'The source may name its subject only in its heading or in an earlier sentence: a claim about that subject is not unsupported just because this sentence leaves the name out.',
+	'A number written in digits and the same number written in words are the same number (340,000 = three hundred and forty thousand).',
+	'The claim and the source may be in different languages: compare what they mean.',
+];
+
 /**
  * Build the second prompt: one narrow question about one claim and its quote.
  */
@@ -162,13 +169,7 @@ export function entailPrompt(claim: string, quote: string, lenient = false): str
 		'',
 		'Include every number, name, date, and who decided or owns something: if the quote leaves one of them out or says something different, the answer is no.',
 	];
-	if (lenient) {
-		lines.push(
-			'The source may name its subject only in its heading or in an earlier sentence: a claim about that subject is not unsupported just because this sentence leaves the name out.',
-			'A number written in digits and the same number written in words are the same number (340,000 = three hundred and forty thousand).',
-			'The claim and the source may be in different languages: compare what they mean.',
-		);
-	}
+	if (lenient) lines.push(...LENIENT_LINES);
 	lines.push('Reply with yes or no only.');
 	return lines.join('\n');
 }
@@ -198,13 +199,7 @@ export function supportPrompt(claim: string, source: string, lenient = false): s
 		'',
 		'Include every number, name, date, and who decided or owns something: if the source leaves one of them out or says something different, the answer is no.',
 	];
-	if (lenient) {
-		lines.push(
-			'The source may name its subject only in its heading or in an earlier sentence: a claim about that subject is not unsupported just because this sentence leaves the name out.',
-			'A number written in digits and the same number written in words are the same number (340,000 = three hundred and forty thousand).',
-			'The claim and the source may be in different languages: compare what they mean.',
-		);
-	}
+	if (lenient) lines.push(...LENIENT_LINES);
 	lines.push('Reply with yes or no only.');
 	return lines.join('\n');
 }
