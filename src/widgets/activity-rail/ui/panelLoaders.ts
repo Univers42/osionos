@@ -29,6 +29,7 @@ export const PANEL_LOADERS = {
   scm: () => import("@/features/ide/ui/IdeSourceControl").then((m) => ({ default: m.IdeSourceControl })),
   run: () => import("@/features/ide/ui/IdeRunPanel").then((m) => ({ default: m.IdeRunPanel })),
   problems: () => import("@/features/ide/ui/IdeProblemsPanel").then((m) => ({ default: m.IdeProblemsPanel })),
+  issues: () => import("@/features/issues/ui/IssuesPanel").then((m) => ({ default: m.IssuesPanel })),
 } satisfies Partial<Record<ActivePanel, () => Promise<{ default: React.ComponentType }>>>;
 
 const started = new Set<ActivePanel>();
