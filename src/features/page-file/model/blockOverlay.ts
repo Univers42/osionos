@@ -112,6 +112,8 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   // What "Describe with AI" found in an image: tags and the text in it.
   mediaTags: isMediaTags,
   mediaText: isMediaText,
+  // Typed style overrides (SB-1a): a plain record, validated by sanitize at use.
+  style: isPlainRecord,
 });
 
 /**
