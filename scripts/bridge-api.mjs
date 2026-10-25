@@ -1723,14 +1723,16 @@ function isEnvAdminEmail(payload, config) {
 async function resolveAdminFlag(payload, config, fetchImpl) {
 	const isAdminEmail = isEnvAdminEmail(payload, config);
 	if (!config.serviceKey || !config.baasUrl) return isAdminEmail;
-	const hash = encodeURIComponent(emailHash(payload.email, config));
+	if (typeof payload.provider !== 'string' || payload.provider === '' || typeof payload.subject !== 'string' || payload.subject === '') return isAdminEmail;
+	// Keyed by identity, never by address hash: an address can change hands (make-primary), a (provider, subject) cannot.
+	const who = `provider=eq.${encodeURIComponent(payload.provider)}&subject=eq.${encodeURIComponent(payload.subject)}`;
 	try {
 		if (isAdminEmail) {
-			await baasRest(config, fetchImpl, `osionos_bridge_identities?email_hash=eq.${hash}&is_admin=is.false`, {
+			await baasRest(config, fetchImpl, `osionos_bridge_identities?${who}&is_admin=is.false`, {
 				method: 'PATCH', body: { is_admin: true }, prefer: 'return=minimal',
 			});
 		}
-		const rows = await baasRest(config, fetchImpl, `osionos_bridge_identities?email_hash=eq.${hash}&select=is_admin&limit=1`);
+		const rows = await baasRest(config, fetchImpl, `osionos_bridge_identities?${who}&select=is_admin&limit=1`);
 		const row = Array.isArray(rows) ? rows[0] : null;
 		return row?.is_admin === true || isAdminEmail;
 	} catch {
@@ -1815,9 +1817,8 @@ async function readClaimsInOrder(payload, config, fetchImpl, roleReader) {
  * a rejected read degrades as it always did (no admin, no extras).
  * A flag that comes back true re-runs today's tail: ensure unconditionally, then the member read
  * again, and the first read is discarded (the ensure upsert resets the admin row's role).
- * Caveat: the flag read can run before persist rewrites email_hash, so a DB-recorded admin whose
- * email changed signs in with is_admin false for one session. That fails closed; the next sign-in
- * corrects it. Nothing here can widen a claim.
+ * Caveat: the column email_hash is now written and never read; a DB admin stays admin across email
+ * changes. Nothing here can widen a claim.
  */
 async function readClaimsConcurrently(payload, config, fetchImpl, roleReader) {
 	const [persistence, adminRead, memberRead, roleRead, refusal] = await Promise.allSettled([
@@ -4702,6 +4703,19 @@ async function gatewayCall(fetchImpl, config, path, { headers = {}, body = '{}',
 	return { res, data };
 }
 
+// A gateway 409/429 is a refusal the user can act on, not an upstream outage, so it keeps its status.
+function gatewaySessionError(res, data) {
+	const status = res.status === 409 || res.status === 429 ? res.status : 502;
+	const error = Object.assign(new Error(data.message || 'Could not establish the app session.'), { status });
+	if (status === 502) return error;
+	if (typeof data.error === 'string') error.code = data.error;
+	if (status === 429) {
+		const seconds = Number(res.headers.get('retry-after'));
+		if (Number.isFinite(seconds) && seconds > 0) error.retryAfterSeconds = Math.trunc(seconds);
+	}
+	return error;
+}
+
 // The gateway mints a one-time handoff for a GoTrue access token; consuming it here makes the
 // osionos session the app uses. The session row is written here, where the request's client
 // metadata is the user's. `expectedUserId` refuses a session minted for someone else before it is recorded.
@@ -4711,7 +4725,7 @@ async function establishAppSession({ request, config, kv, pg, fetchImpl, gateway
 		forwardedFor: forwardedForHeader(request),
 	});
 	const bridgeToken = bridgeTokenFromRedirect(data.redirectUrl);
-	if (!res.ok || !bridgeToken) throw Object.assign(new Error(data.message || 'Could not establish the app session.'), { status: 502 });
+	if (!res.ok || !bridgeToken) throw gatewaySessionError(res, data);
 	const consumed = await consumeHandoffToken(bridgeToken, kv, sessionClock(config), config.appSessionSecret);
 	if (expectedUserId && consumed.session.userId !== expectedUserId) {
 		throw Object.assign(new Error('The sign-in could not be verified; sign in again.'), { status: 401, code: 'invalid_provider_token' });

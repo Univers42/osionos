@@ -25,6 +25,7 @@ import { gotrueJwt, startAuthWorld, USER_ID } from './support/auth-world.mjs';
 const PATH = '/api/auth/exchange';
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 const unauthorized = () => new Response('{"msg":"bad jwt"}', { status: 401 });
+const gatewayReply = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 async function exchange(t, accessToken, options) {
 	const world = await startAuthWorld(t, options);
@@ -137,6 +138,20 @@ describe('POST /api/auth/exchange, the refused proofs', () => {
 		assert.equal(response.status, 401);
 		assert.equal(response.body.code, 'invalid_provider_token');
 		assert.deepEqual(world.rows.sessions, []);
+	});
+});
+
+describe('POST /api/auth/exchange, the gateway refusal', () => {
+	it('keeps the gateway 409 sign-in-method collision instead of answering 502', async (t) => {
+		const world = await startAuthWorld(t, {
+			gateway: ({ route }) => (route === '/api/auth/osionos-session'
+				? gatewayReply({ error: 'oauth_email_collision', message: 'This email is already linked to another sign-in method.' }, 409)
+				: undefined),
+		});
+		const response = await world.post(PATH, { accessToken: gotrueJwt() });
+		assert.equal(response.status, 409);
+		assert.equal(response.body.code, 'oauth_email_collision');
+		assert.equal(response.body.message, 'This email is already linked to another sign-in method.');
 	});
 });
 

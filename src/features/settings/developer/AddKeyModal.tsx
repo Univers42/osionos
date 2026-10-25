@@ -56,7 +56,7 @@ export const AddKeyModal: React.FC<{ onClose: () => void; onAdded: (key: Account
 
   return (
     <Modal open onClose={onClose} title="Add a public key" description="Only public keys are accepted. Your private key stays on your machine." size="md">
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="space-y-4 p-6">
         <fieldset className="space-y-1">
           <legend className={labelClass}>Kind</legend>
           {(Object.keys(KIND_COPY) as KeyKind[]).map((option) => (

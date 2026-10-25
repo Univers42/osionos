@@ -102,7 +102,7 @@ const BillingEditModal: React.FC<{ label: string; onSave: (value: string) => voi
   const inputId = useId();
   return (
     <Modal open onClose={onClose} title={label} size="sm">
-      <div className="space-y-4">
+      <div className="space-y-4 p-6">
         <label htmlFor={inputId} className="block text-sm font-medium text-[var(--osio-fg-default)]">{label}</label>
         <input id={inputId} className="w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={value} onChange={(event) => setValue(event.target.value)} placeholder={label} />
         <div className="flex justify-end gap-2"><Button onClick={onClose}>Cancel</Button><Button tone="primary" onClick={() => onSave(value)}>Save</Button></div>

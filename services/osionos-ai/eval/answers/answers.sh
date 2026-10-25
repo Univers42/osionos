@@ -67,7 +67,7 @@ LLM_MODEL_ALIAS="qwen3-4b"
 ANSWER_JUDGE="${ANSWER_JUDGE:-whole}"
 
 cleanup() {
-	docker rm -f "$DB_CONTAINER" "$TEI_CONTAINER" "$LLM_CONTAINER" >/dev/null 2>&1 || true
+	docker rm -f -v "$DB_CONTAINER" "$TEI_CONTAINER" "$LLM_CONTAINER" >/dev/null 2>&1 || true
 	docker network rm "$NETWORK" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -77,7 +77,7 @@ trap 'exit 143' TERM
 echo "[answers] network $NETWORK"
 harness_network_create "$NETWORK"
 
-docker rm -f "$DB_CONTAINER" "$TEI_CONTAINER" "$LLM_CONTAINER" >/dev/null 2>&1 || true
+docker rm -f -v "$DB_CONTAINER" "$TEI_CONTAINER" "$LLM_CONTAINER" >/dev/null 2>&1 || true
 
 docker run -d --name "$DB_CONTAINER" --network "$NETWORK" \
 	-e POSTGRES_PASSWORD=ai_test_password \

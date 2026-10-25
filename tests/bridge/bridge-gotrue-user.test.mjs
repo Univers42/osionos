@@ -16,7 +16,9 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { findAccountByEmail, readGotrueUser } from '../../scripts/bridge-gotrue-user.mjs';
+import { inspect } from 'node:util';
+import { createHmac } from 'node:crypto';
+import { endGotrueSessions, findAccountByEmail, readGotrueUser } from '../../scripts/bridge-gotrue-user.mjs';
 
 const config = { baasUrl: 'http://grobase.test', serviceKey: 'service' };
 const user = (email, extra = {}) => ({ id: `id-${email}`, email, email_confirmed_at: '2026-10-01T00:00:00Z', ...extra });
@@ -62,5 +64,85 @@ describe('findAccountByEmail', () => {
 		}
 		assert.equal((await findAccountByEmail({ config: {}, fetchImpl: listing([]) }, 'a@b.co').catch((e) => e)).code, 'gotrue_lookup_failed');
 		assert.equal((await readGotrueUser({ config, fetchImpl: listing([], { status: 404 }) }, 'u').catch((e) => e)).code, 'gotrue_read_failed');
+	});
+});
+
+const SECRET = 'logout-test-secret';
+const UID = 'AAAAAAAA-1111-4111-8111-AAAAAAAAAAAA';
+const DEPS = { config, env: { JWT_SECRET: SECRET } };
+const answer = (status, body) => async () => new Response(body === undefined ? null : typeof body === 'string' ? body : JSON.stringify(body), { status });
+const logout = (fetchImpl, overrides = {}, userId = UID) => endGotrueSessions({ ...DEPS, ...overrides, fetchImpl }, userId);
+const claimsOf = (token) => JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+
+describe('endGotrueSessions', () => {
+	it('L1 posts scope=global with a 60 s HS256 token of exactly sub, role, aud, iat, exp', async () => {
+		const calls = [];
+		await logout(async (url, init) => { calls.push([String(url), init]); return new Response(null, { status: 204 }); });
+		const [[url, init]] = calls;
+		assert.equal(url, 'http://grobase.test/auth/v1/logout?scope=global');
+		assert.deepEqual([init.method, init.headers.apikey, init.body], ['POST', 'service', undefined]);
+		const token = init.headers.Authorization.replace(/^Bearer /, '');
+		const [header, body, signature] = token.split('.');
+		assert.deepEqual(JSON.parse(Buffer.from(header, 'base64url').toString()), { alg: 'HS256', typ: 'JWT' });
+		assert.equal(signature, createHmac('sha256', SECRET).update(`${header}.${body}`).digest('base64url'));
+		const claims = claimsOf(token);
+		assert.deepEqual(Object.keys(claims).sort(), ['aud', 'exp', 'iat', 'role', 'sub']);
+		assert.deepEqual([claims.sub, claims.role, claims.aud, claims.exp - claims.iat], [UID.toLowerCase(), 'authenticated', 'authenticated', 60]);
+	});
+
+	it('L2 resolves on 204 and 200', async () => {
+		for (const status of [204, 200]) assert.equal(await logout(answer(status, status === 200 ? {} : undefined)), undefined, String(status));
+	});
+
+	it('L3 resolves on a 403 user_not_found in either field, throws on any other 403', async () => {
+		await logout(answer(403, { error_code: 'user_not_found' }));
+		await logout(answer(403, { code: 'user_not_found' }));
+		for (const body of [{ error_code: 'session_not_found' }, 'not json', {}]) {
+			assert.equal((await logout(answer(403, body)).catch((e) => e)).code, 'gotrue_signout_failed');
+		}
+	});
+
+	const FAILURES = {
+		'401': [answer(401, {}), 401],
+		'500': [answer(500, {}), 500],
+		'non-json 502': [answer(502, '<html>'), 502],
+		'network': [async () => { throw new Error('down'); }, null],
+		'timeout': [async () => { throw new DOMException('timed out', 'TimeoutError'); }, null],
+	};
+	const REFUSED = {
+		'blank secret': [{ env: { JWT_SECRET: '  ' } }, UID],
+		'missing secret': [{ env: {} }, UID],
+		'no baasUrl': [{ config: { serviceKey: 'service' } }, UID],
+		'no serviceKey': [{ config: { baasUrl: config.baasUrl } }, UID],
+		'non-uuid user': [{}, 'not-a-uuid'],
+	};
+
+	it('L4 every other failure is gotrue_signout_failed with its upstreamStatus', async () => {
+		for (const [name, [fetchImpl, upstreamStatus]] of Object.entries(FAILURES)) {
+			const error = await logout(fetchImpl).catch((e) => e);
+			assert.deepEqual([error.status, error.code, error.upstreamStatus], [503, 'gotrue_signout_failed', upstreamStatus], name);
+		}
+	});
+
+	it('L5 a missing secret, url or key and a non-uuid user throw before any fetch', async () => {
+		for (const [name, [overrides, userId]] of Object.entries(REFUSED)) {
+			let calls = 0;
+			const error = await logout(async () => { calls += 1; return new Response(null, { status: 204 }); }, overrides, userId).catch((e) => e);
+			assert.deepEqual([error.code, error.status, calls], ['gotrue_signout_failed', 503, 0], name);
+		}
+	});
+
+	it('L6 no failure leaks the minted token or the secret', async () => {
+		let minted = '';
+		const spy = (inner) => async (url, init) => { minted = init.headers.Authorization.replace(/^Bearer /, ''); return inner(url, init); };
+		const cases = [...Object.values(FAILURES).map(([fetchImpl]) => spy(fetchImpl)), spy(answer(403, {}))];
+		for (const fetchImpl of cases) {
+			const error = await logout(fetchImpl).catch((e) => e);
+			for (const text of [JSON.stringify(error), inspect(error, { depth: 5 }), error.message]) {
+				assert.equal(text.includes(minted) || text.includes(SECRET), false);
+			}
+		}
+		const refused = await logout(answer(204), { env: { JWT_SECRET: SECRET }, config: {} }).catch((e) => e);
+		assert.equal(inspect(refused, { depth: 5 }).includes(SECRET), false);
 	});
 });

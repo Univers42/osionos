@@ -22,7 +22,7 @@ NETWORK="ai-measure-$$"
 PG_CONTAINER="ai-measure-pg-$$"
 
 cleanup() {
-	docker rm -f "$PG_CONTAINER" >/dev/null 2>&1 || true
+	docker rm -f -v "$PG_CONTAINER" >/dev/null 2>&1 || true
 	docker network rm "$NETWORK" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT

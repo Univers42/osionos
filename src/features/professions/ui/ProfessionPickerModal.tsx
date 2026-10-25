@@ -42,7 +42,8 @@ export const ProfessionPickerModal: React.FC = () => {
       description="Your profession shapes your profile and your Home dashboard. You can change it later."
       size="md"
     >
-      <div className="flex flex-col gap-3">
+      <div className="p-6">
+        <div className="-m-1 flex max-h-[min(60dvh,32rem)] flex-col gap-3 overflow-y-auto p-1">
         {PROFESSIONS.map((profession) => (
           <button
             key={profession.id}
@@ -63,7 +64,8 @@ export const ProfessionPickerModal: React.FC = () => {
             </span>
           </button>
         ))}
-        {busy && <p className="text-center text-xs text-[var(--osio-fg-subtle)]">Saving your profession…</p>}
+        </div>
+        {busy && <p className="mt-3 text-center text-xs text-[var(--osio-fg-subtle)]">Saving your profession…</p>}
       </div>
     </Modal>
   );
