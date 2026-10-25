@@ -16,7 +16,7 @@
 #     claims judge uses it.
 #   LLM_MEMORY (default 6g) caps the model container; a 14B Q4_K_M needs about 11g.
 #   LLM_BACKEND (default cpu) the llama.cpp backend: cpu or vulkan (the host GPU).
-#   LABELS_FILE (default labels.jsonl) the rows to re-judge: labels.jsonl or heldout.jsonl.
+#   LABELS_FILE (default labels.jsonl) the rows to re-judge: labels.jsonl, heldout.jsonl, or the fresh7b-* pair.
 #
 # It never writes a label file: the new rows go to <out.jsonl>.
 set -eu

@@ -159,7 +159,7 @@ labelled blind before the run and not edited after it, 30 unfaithful. One run:
 
 ```sh
 CLAIM_QUOTE_RATIO=1 CLAIM_ABSTAIN_RULE=1 CLAIM_SOURCE_FALLBACK=1 CLAIM_ANY_SOURCE=1 CLAIM_LENIENT_WORDING=0 \
-  LABELS_FILE=<labels.jsonl|heldout.jsonl> LLM_BACKEND=vulkan \
+  LABELS_FILE=<fresh7b-labels.jsonl|fresh7b-heldout.jsonl> LLM_BACKEND=vulkan \
   sh eval/answers/rejudge.sh osionos_ai_models_llm 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf' claims <out.jsonl>
 ```
 
