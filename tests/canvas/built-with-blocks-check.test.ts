@@ -60,3 +60,15 @@ test("one fewer token class asks to lower the ratchet", () => {
 		rmSync(dir, { recursive: true, force: true });
 	}
 });
+test("a missing directory names itself and exits 1", () => {
+	const dir = join(tmpdir(), "bb-missing-" + String(Date.now()));
+	const ratchet = join(tmpdir(), "bb-ratchet-" + String(Date.now()) + ".json");
+	writeFileSync(ratchet, JSON.stringify({ rawButton: 0, rawInput: 0, rawSelect: 0, rawTextarea: 0, rawTable: 0, tokenClass: 0 }));
+	try {
+		const run = spawnSync("bash", [GUARD, dir, ratchet], { encoding: "utf8" });
+		assert.equal(run.status, 1);
+		assert.match(run.stderr, /no such directory/);
+	} finally {
+		rmSync(ratchet, { force: true });
+	}
+});
