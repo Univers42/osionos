@@ -26,14 +26,18 @@ const PERSON = { id: "44444444-4444-4444-8444-444444444444", email: "ada@example
 
 async function fakeShareBridge(page, { teamRules }) {
   const stored = [];
-  const sharing = { visibility: "private", collaborators: [] };
+  // The bridge reads every page with its content version (the column is NOT NULL since
+  // the page-version migration), and a sharing PATCH lands on the baseVersion it was read at.
+  const sharing = { visibility: "private", collaborators: [], contentVersion: 0 };
   await page.route("**/api/workspaces/*/members**", (route) => route.fulfill({ json: {
     members: [{ userId: PERSON.id, name: PERSON.name, role: "viewer" }],
   } }));
   await page.route("**/api/pages/*", async (route) => {
     if (route.request().method() === "PATCH") {
-      Object.assign(sharing, route.request().postDataJSON());
-      return route.fulfill({ json: { ok: true } });
+      const { baseVersion, ...patch } = route.request().postDataJSON();
+      if (baseVersion !== sharing.contentVersion) return route.fulfill({ status: 409, json: { error: "version conflict" } });
+      Object.assign(sharing, patch, { contentVersion: sharing.contentVersion + 1 });
+      return route.fulfill({ json: { ok: true, version: sharing.contentVersion } });
     }
     return route.fulfill({ json: sharing });
   });
