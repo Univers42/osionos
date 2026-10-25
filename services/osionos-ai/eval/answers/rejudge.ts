@@ -9,7 +9,8 @@
 /*                                                                            */
 /*   Environment:                                                             */
 /*     LABELS_FILE          labels.jsonl (default, calibration) or             */
-/*                          heldout.jsonl                                      */
+/*                          heldout.jsonl, or fresh7b-labels.jsonl /           */
+/*                          fresh7b-heldout.jsonl (the confirmation set)       */
 /*     JUDGE                whole | claims                                     */
 /*     CLAIM_QUOTE_RATIO    how much of a claim's quote must appear in its     */
 /*                          source, in (0, 1]; default 1 (exact quote)         */
@@ -44,10 +45,11 @@ interface QuestionRow {
 
 const EVAL_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ANSWERS_DIR = EVAL_DIR; // this file is in eval/answers/
-const LABEL_FILES = ['labels.jsonl', 'heldout.jsonl'];
+// fresh7b-*: the same questions answered by Qwen2.5-Coder-7B, the set the frozen claim judge was confirmed on.
+const LABEL_FILES = ['labels.jsonl', 'heldout.jsonl', 'fresh7b-labels.jsonl', 'fresh7b-heldout.jsonl'];
 const labelsFile = process.env.LABELS_FILE ?? 'labels.jsonl';
 if (!LABEL_FILES.includes(labelsFile)) {
-	console.error(`[rejudge] LABELS_FILE must be labels.jsonl or heldout.jsonl, not "${labelsFile}"`);
+	console.error(`[rejudge] LABELS_FILE must be one of ${LABEL_FILES.join(', ')}, not "${labelsFile}"`);
 	process.exit(2);
 }
 const LABELS_PATH = path.join(ANSWERS_DIR, labelsFile);
