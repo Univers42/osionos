@@ -29,7 +29,8 @@ export type ActivePanel =
   // Workbench panels (Source Control, Run, Problems).
   | 'scm'
   | 'run'
-  | 'problems';
+  | 'problems'
+  | 'issues';
 
 /** Panel-width bounds (px). The rail itself is a fixed ~48px, set in CSS. */
 /** Where Ctrl+Alt+B goes from `mode`: a docked sidebar (panel or rail) hides,
@@ -46,7 +47,7 @@ export function migratePanelId(panel: unknown): ActivePanel {
 
 const KNOWN_PANELS = new Set<ActivePanel>([
   'files', 'search', 'marketplace', 'agents', 'conversations', 'notifications', 'tasks', 'public', 'database',
-  'scm', 'run', 'problems',
+  'scm', 'run', 'problems', 'issues',
 ]);
 
 export function isActivePanel(value: unknown): value is ActivePanel {

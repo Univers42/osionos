@@ -42,6 +42,7 @@ const PANEL_TITLES: Record<ActivePanel, string> = {
   scm: "Source Control",
   run: "Run",
   problems: "Problems",
+  issues: "Issues",
 };
 
 interface Props {
