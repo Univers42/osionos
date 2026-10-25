@@ -11,9 +11,8 @@
 /* ************************************************************************** */
 
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { parseMarkdownToBlocks } from "@osionos/markdown-engine/blocks";
-import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import { serializeBlocksToMarkdown } from "@/services/page-actions";
+import { rawSourceToBlocks } from "./rawSave";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import { pageConfigKey, usePageConfigStore } from "@/shared/config/pageConfigStore";
@@ -60,7 +59,8 @@ export function useRawMode(pageId: string) {
   const exit = useCallback(() => { void updateConfig(userId, pageId, { rawMode: false }); }, [pageId, updateConfig, userId]);
   const save = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    updatePageContent(pageId, sanitizeLinkBlockFields(parseMarkdownToBlocks(sourceRef.current)));
+    const current = usePageStore.getState().pageById(pageId)?.content ?? [];
+    updatePageContent(pageId, rawSourceToBlocks(sourceRef.current, current));
     setDirty(false);
     exit();
   }, [exit, pageId, updatePageContent]);
