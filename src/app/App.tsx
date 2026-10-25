@@ -47,6 +47,7 @@ import { ExportHost } from "@/features/page-export/ui/ExportHost";
 import { AiInlinePanel } from "@/features/ai/ui/AiInlinePanel";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
+import { BindingSourcesProvider } from "@/features/bindings/ui/BindingSourcesProvider";
 
 type UserSessions = Record<string, UserSession>;
 
@@ -316,8 +317,9 @@ const App: React.FC = () => {
   }
 
   return (
-    <div
-      data-testid="app-shell"
+    <BindingSourcesProvider>
+      <div
+        data-testid="app-shell"
       data-zen={zen ? "1" : undefined}
       className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
     >
@@ -357,6 +359,7 @@ const App: React.FC = () => {
           `open` flag is set, so the warm path renders nothing. */}
       <ProfessionPickerModal />
     </div>
+    </BindingSourcesProvider>
   );
 };
 
