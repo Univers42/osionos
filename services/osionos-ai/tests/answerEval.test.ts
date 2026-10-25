@@ -6,7 +6,7 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { parseVerdict, judgePrompt } from '../eval/answers/judge.ts';
 import { score, cohenKappa, spearman } from '../eval/answers/score.ts';
-import { refreshLabel } from '../eval/answers/labels.ts';
+import { refreshLabel, fillLabelFile } from '../eval/answers/labels.ts';
 
 const NODE = 'node';
 import { fileURLToPath } from 'node:url';
@@ -227,5 +227,79 @@ describe('refreshLabel', () => {
 		assert.deepEqual(row.human, { faithful: true, relevant: 5 });
 		assert.equal(row.labeller, 'someone');
 		assert.deepEqual(row.sources, ['t']);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// fillLabelFile
+// ---------------------------------------------------------------------------
+
+describe('fillLabelFile', () => {
+	function emptyRow(id: string) {
+		return { id, answer: null, sources: null, judge: null, human: { faithful: null, relevant: null } };
+	}
+
+	function withLabelFile(rows: object[]): { dir: string; filePath: string } {
+		const dir = mkdtempSync(path.join(tmpdir(), 'answers-labels-'));
+		const filePath = path.join(dir, 'labels.jsonl');
+		writeFileSync(filePath, rows.map((row) => JSON.stringify(row)).join('\n') + '\n');
+		return { dir, filePath };
+	}
+
+	function readRows(filePath: string) {
+		return readFileSync(filePath, 'utf8')
+			.trim()
+			.split('\n')
+			.map((line) => JSON.parse(line));
+	}
+
+	it('fills a row with a matching id', () => {
+		const { dir, filePath } = withLabelFile([emptyRow('q1')]);
+		try {
+			const fresh = { answer: 'Eight weeks [1].', sources: ['s'], judge: { faithful: true, relevant: 5, abstained: false } };
+			fillLabelFile(filePath, [{ id: 'q1', ...fresh }]);
+
+			const [row] = readRows(filePath);
+			assert.equal(row.answer, 'Eight weeks [1].');
+			assert.deepEqual(row.sources, ['s']);
+			assert.deepEqual(row.judge, fresh.judge);
+			assert.deepEqual(row.human, { faithful: null, relevant: null });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('leaves a row with no matching run row untouched', () => {
+		const { dir, filePath } = withLabelFile([emptyRow('q1')]);
+		const before = readFileSync(filePath, 'utf8');
+		try {
+			fillLabelFile(filePath, [{ id: 'q2', answer: 'Another answer [2].', sources: ['t'], judge: null }]);
+
+			assert.equal(readFileSync(filePath, 'utf8'), before);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it('clears a human label when the answer changed', () => {
+		const labelledRow = {
+			id: 'q1',
+			answer: 'Eight weeks [1].',
+			sources: ['s'],
+			judge: { faithful: true, relevant: 5, abstained: false },
+			human: { faithful: true, relevant: 5 },
+			labeller: 'someone',
+		};
+		const { dir, filePath } = withLabelFile([labelledRow]);
+		try {
+			fillLabelFile(filePath, [{ id: 'q1', answer: 'Ten weeks [1].', sources: ['t'], judge: null }]);
+
+			const [row] = readRows(filePath);
+			assert.deepEqual(row.human, { faithful: null, relevant: null });
+			assert.equal('labeller' in row, false);
+			assert.equal(row.answer, 'Ten weeks [1].');
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 });

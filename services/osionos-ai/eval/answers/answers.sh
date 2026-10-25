@@ -41,6 +41,7 @@ MODEL="intfloat/multilingual-e5-small"
 MODEL_VOLUME="osionos_ai_models_tei"
 LLM_MODEL_VOLUME="osionos_ai_models_llm"
 LLM_MODEL_ALIAS="qwen3-4b"
+ANSWER_JUDGE="${ANSWER_JUDGE:-whole}"
 
 cleanup() {
 	docker rm -f "$DB_CONTAINER" "$TEI_CONTAINER" "$LLM_CONTAINER" >/dev/null 2>&1 || true
@@ -129,4 +130,5 @@ docker run --rm --network "$NETWORK" \
 	-e OSIONOS_AI_EMBED_MODEL="$MODEL" \
 	-e OSIONOS_AI_LLM_URL="http://$LLM_CONTAINER:8080" \
 	-e OSIONOS_AI_LLM_MODEL="$LLM_MODEL_ALIAS" \
+	-e ANSWER_JUDGE="$ANSWER_JUDGE" \
 	"$NODE_IMAGE" sh -c 'node --experimental-strip-types eval/answers/answers.ts'
