@@ -44,9 +44,21 @@ export async function createConversation(
 /** The caller's own conversations in a workspace, the most recently touched first. */
 export async function listConversations(
 	db: Pool,
-	{ ownerId, workspaceId, limit }: { ownerId: string; workspaceId: string; limit: number },
+	{ ownerId, workspaceId, limit, query }: { ownerId: string; workspaceId: string; limit: number; query?: string },
 ): Promise<ConversationRow[]> {
 	const capped = Math.min(Math.max(1, Math.trunc(limit)), 50);
+	if (query) {
+		const filtered = await db.query<ConversationRow>(
+			`select ${CONVERSATION_COLUMNS}
+			 from public.ai_conversations
+			 where owner_id = $1 and workspace_id = $2 and archived_at is null
+			   and title ilike '%' || $4 || '%'
+			 order by updated_at desc, created_at desc
+			 limit $3`,
+			[ownerId, workspaceId, capped, escapeLike(query)],
+		);
+		return filtered.rows;
+	}
 	const result = await db.query<ConversationRow>(
 		`select ${CONVERSATION_COLUMNS}
 		 from public.ai_conversations
@@ -56,6 +68,42 @@ export async function listConversations(
 		[ownerId, workspaceId, capped],
 	);
 	return result.rows;
+}
+
+/** A search text as a literal LIKE pattern (backslash is the default LIKE escape). */
+function escapeLike(text: string): string {
+	return text.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+/**
+ * A new title on a conversation the caller owns and has not archived.
+ * The owner and the archive state sit in the WHERE, so a foreign, a deleted and a
+ * missing conversation all give the same empty answer.
+ */
+export async function renameConversation(
+	db: Pool,
+	{ id, ownerId, title }: { id: string; ownerId: string; title: string },
+): Promise<ConversationRow | null> {
+	const result = await db.query<ConversationRow>(
+		`update public.ai_conversations set title = $3, updated_at = now()
+		 where id = $1 and owner_id = $2 and archived_at is null
+		 returning ${CONVERSATION_COLUMNS}`,
+		[id, ownerId, title],
+	);
+	return result.rows[0] ?? null;
+}
+
+/** Archives a live conversation of the caller: it leaves the list, its rows stay. */
+export async function archiveConversation(
+	db: Pool,
+	{ id, ownerId }: { id: string; ownerId: string },
+): Promise<boolean> {
+	const result = await db.query(
+		`update public.ai_conversations set archived_at = now()
+		 where id = $1 and owner_id = $2 and archived_at is null`,
+		[id, ownerId],
+	);
+	return (result.rowCount ?? 0) > 0;
 }
 
 /** One conversation, but only when the caller owns it. */
