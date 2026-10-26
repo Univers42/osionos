@@ -27,6 +27,7 @@ import { conversationApi } from "./conversationApi";
 import { useUserStore } from "@/features/auth";
 import { withMemoryDecision, type MemoryDecision } from "./memoryParts";
 import { withoutUnreadableMirrors } from "./storedChatRepair";
+import { useSummaryStore } from "./useSummaryStore";
 import { DEFAULT_CONVERSATION_TITLE, isDefaultConversationTitle } from "./conversationTitle";
 
 const STORAGE_KEY = "osionos.chat.v1";
@@ -169,6 +170,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       set((s) => ({ conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, title } : c)) }));
       persist();
     },
+    noteTruncated: (conversationId, truncated) => useSummaryStore.getState().setTruncated(conversationId, truncated),
   };
 
   /**
@@ -326,7 +328,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       if (get().messagesFor(conversationId).length > 0) return;
       transcriptsRequested.add(serverId);
       try {
-        const transcript = await api.messages(serverId);
+        const { messages: transcript, summary } = await api.transcript(serverId);
+        useSummaryStore.getState().setSummary(conversationId, summary);
         const loaded: ChatMessage[] = transcript
           .filter((m) => m.role !== "tool")
           .map((m) => chatMessageFromTranscript(m, conversationId, uid()));
