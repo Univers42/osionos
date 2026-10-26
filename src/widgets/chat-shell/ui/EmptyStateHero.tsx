@@ -147,8 +147,8 @@ export const EmptyStateHero: React.FC<Props> = ({
           </div>
         </div>
 
-        <div className="flex w-full max-w-[640px] flex-col gap-2">
-          <BrainLens working={false}>
+        <div className="w-full max-w-[640px]">
+          <BrainLens working={false} tray={<ConnectorsStrip />}>
             <ChatComposer
               value={value}
               onChange={onChange}
@@ -168,9 +168,6 @@ export const EmptyStateHero: React.FC<Props> = ({
               autoFocus
             />
           </BrainLens>
-          <div className="[&>div]:justify-center">
-            <ConnectorsStrip />
-          </div>
         </div>
 
         <QuickActions onPick={onPick} />
