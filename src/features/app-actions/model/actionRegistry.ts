@@ -34,7 +34,10 @@ export const APP_ACTIONS: Map<string, ActionDefinition> = new Map<string, Action
 			sudo: "none",
 			destructive: true,
 			run: async (args) => {
-				await useAccountDevicesStore.getState().revoke(String(args.id));
+				const store = useAccountDevicesStore.getState();
+				await store.revoke(String(args.id));
+				const error = useAccountDevicesStore.getState().error;
+				if (error) return { status: "failed", message: error };
 				return { status: "ok" };
 			},
 		},
@@ -53,6 +56,8 @@ export const APP_ACTIONS: Map<string, ActionDefinition> = new Map<string, Action
 				const userId = useUserStore.getState().activeUserId;
 				if (!userId) return { status: "failed", message: "Sign in to reset preferences" };
 				await useUserPreferencesStore.getState().reset(userId);
+				const error = useUserPreferencesStore.getState().error;
+				if (error) return { status: "failed", message: error };
 				return { status: "ok" };
 			},
 		},

@@ -54,7 +54,7 @@ export interface LastRun {
 
 type PropertyValue = PagePropertyEntry["value"];
 
-let inFlight = false;
+let inFlight = false; // a program waiting on a confirm keeps every other button busy
 let engineReady: Promise<typeof import("@/shared/notion-database-sys/src/lib/engine/bridge")> | null = null;
 let lastRun: LastRun | null = null;
 const listeners = new Set<() => void>();

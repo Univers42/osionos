@@ -10,88 +10,57 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import React from "react";
+import { useSyncExternalStore } from "react";
+
 import { onSudoRequired } from "@/shared/api/sudoRequired";
 import type { ActionContext, ActionDefinition, ActionResult } from "@/entities/block/model/appActions";
 
+export interface ConfirmRequest {
+	title: string;
+	message: string;
+	actionLabel: string;
+}
+
+export interface TypedConfirmRequest extends ConfirmRequest {
+	confirmText: string;
+}
+
 export type GuardHandlers = {
-	confirm?: ((...args: unknown[]) => Promise<boolean>) | null;
-	typedConfirm?: ((...args: unknown[]) => Promise<boolean>) | null;
+	confirm: ((req: ConfirmRequest) => Promise<boolean>) | null;
+	typedConfirm: ((req: TypedConfirmRequest) => Promise<boolean>) | null;
 };
 
 let guardHandlers: GuardHandlers = { confirm: null, typedConfirm: null };
 
-function normalizeHandlers(input: unknown): GuardHandlers {
-	if (input === null || input === undefined) return { confirm: null, typedConfirm: null };
-	if (typeof input === "function") {
-		// A single combined handler is not expected; ignore.
-		return guardHandlers;
-	}
-	if (typeof input === "object") {
-		const o = input as Record<string, unknown>;
-		const confirm = (o.confirm ?? o.simple ?? o.confirmSimple ?? o.confirmDialog) as GuardHandlers["confirm"];
-		const typedConfirm = (o.typedConfirm ?? o.typed ?? o.confirmTyped ?? o.typedDialog) as GuardHandlers["typedConfirm"];
-		return {
-			confirm: typeof confirm === "function" ? confirm : guardHandlers.confirm,
-			typedConfirm: typeof typedConfirm === "function" ? typedConfirm : guardHandlers.typedConfirm,
-		};
-	}
+export function setActionGuardHandlers(
+	handlers: { confirm: (req: ConfirmRequest) => Promise<boolean>; typedConfirm: (req: TypedConfirmRequest) => Promise<boolean> } | null,
+): GuardHandlers {
+	guardHandlers = handlers ? { confirm: handlers.confirm, typedConfirm: handlers.typedConfirm } : { confirm: null, typedConfirm: null };
 	return guardHandlers;
 }
 
-export function setActionGuardHandlers(...args: unknown[]): GuardHandlers {
-	if (args.length === 0) {
-		guardHandlers = { confirm: null, typedConfirm: null };
-		return guardHandlers;
-	}
-	if (args.length >= 2 && typeof args[0] === "function") {
-		guardHandlers = {
-			confirm: args[0] as GuardHandlers["confirm"],
-			typedConfirm: typeof args[1] === "function" ? (args[1] as GuardHandlers["typedConfirm"]) : guardHandlers.typedConfirm,
-		};
-		return guardHandlers;
-	}
-	guardHandlers = normalizeHandlers(args[0]);
-	return guardHandlers;
+function callConfirm(fn: NonNullable<GuardHandlers["confirm"]>, req: ConfirmRequest): Promise<boolean> {
+	return fn(req);
 }
 
-// Aliases for setter, so tests using any plausible name reach the same store.
-export const setActionGuards = setActionGuardHandlers;
-export const installActionGuards = setActionGuardHandlers;
-export const setGuards = setActionGuardHandlers;
-export const setActionDialogs = setActionGuardHandlers;
-export const setDialogs = setActionGuardHandlers;
-export const setConfirmHandlers = setActionGuardHandlers;
-export const registerActionGuards = setActionGuardHandlers;
-export const installGuards = setActionGuardHandlers;
-export const setGuardHandlers = setActionGuardHandlers;
-export const setGuardFunctions = setActionGuardHandlers;
-
-function callConfirm(fn: NonNullable<GuardHandlers["confirm"]>, params: { title: string; message: string; actionLabel: string }): Promise<boolean> {
-	if (fn.length <= 1) return fn(params);
-	return fn(params.title, params.message, params.actionLabel);
-}
-
-function callTypedConfirm(
-	fn: NonNullable<GuardHandlers["typedConfirm"]>,
-	params: { title: string; message: string; confirmText: string; actionLabel: string },
-): Promise<boolean> {
-	if (fn.length <= 1) return fn(params);
-	if (fn.length === 2) return fn(params.message, params.confirmText);
-	if (fn.length === 3) return fn(params.title, params.message, params.confirmText);
-	return fn(params.title, params.message, params.confirmText, params.actionLabel);
+function callTypedConfirm(fn: NonNullable<GuardHandlers["typedConfirm"]>, req: TypedConfirmRequest): Promise<boolean> {
+	return fn(req);
 }
 
 function validateArgs(def: ActionDefinition, rawArgs: unknown): { ok: true; args: Record<string, unknown> } | { ok: false; message: string } {
-	if (typeof rawArgs !== "object" || rawArgs === null || Array.isArray(rawArgs)) {
+	if (rawArgs === undefined) rawArgs = {};
+	if (rawArgs === null) {
+		const hasRequired = Object.values(def.params).some((spec) => spec.required);
+		if (hasRequired) return { ok: false, message: "Arguments must be an object" };
 		rawArgs = {};
 	}
+	if (typeof rawArgs !== "object" || Array.isArray(rawArgs)) return { ok: false, message: "Arguments must be an object" };
 	const raw = rawArgs as Record<string, unknown>;
 	const args: Record<string, unknown> = {};
-	// Unknown args.
 	for (const key of Object.keys(raw)) {
 		if (!(key in def.params)) return { ok: false, message: `Unknown argument "${key}"` };
 	}
-	// Required / typed.
 	for (const [key, spec] of Object.entries(def.params)) {
 		const present = Object.prototype.hasOwnProperty.call(raw, key);
 		if (!present) {
@@ -117,13 +86,6 @@ function validateArgs(def: ActionDefinition, rawArgs: unknown): { ok: true; args
 		}
 		args[key] = validated;
 	}
-	// Copy unknown? already rejected. Keep provided validated.
-	for (const key of Object.keys(raw)) {
-		if (!(key in args) && key in def.params) {
-			// already handled; ensure presence for optional provided
-		}
-	}
-	// Ensure all provided args validated (optional provided)
 	for (const key of Object.keys(raw)) {
 		if (!(key in args)) args[key] = raw[key];
 	}
@@ -136,74 +98,125 @@ function canonicalArgs(args: Record<string, unknown>): string {
 	return JSON.stringify(sorted);
 }
 
-// Action state store (minimal, framework-agnostic) for useActionState.
 type StateEntry = { pending: boolean; last: ActionResult | null };
+
 const stateStore = new Map<string, StateEntry>();
+const defaultSnapshots = new Map<string, StateEntry>();
 const stateListeners = new Set<() => void>();
+const keySubscribers = new Map<string, Set<() => void>>();
 
 function stateKey(name: string, argsKey: string): string {
 	return `${name}::${argsKey}`;
 }
 
-function getState(name: string, argsKey: string): StateEntry {
+function defaultSnapshot(key: string): StateEntry {
+	if (!defaultSnapshots.has(key)) defaultSnapshots.set(key, { pending: false, last: null });
+	return defaultSnapshots.get(key)!;
+}
+
+export function getActionStateSnapshot(name: string, argsKey: string): StateEntry {
 	const key = stateKey(name, argsKey);
-	if (!stateStore.has(key)) stateStore.set(key, { pending: false, last: null });
-	return stateStore.get(key)!;
+	return stateStore.get(key) ?? defaultSnapshot(key);
+}
+
+export function subscribeActionState(listener: () => void, key?: string): () => void {
+	stateListeners.add(listener);
+	if (key) {
+		if (!keySubscribers.has(key)) keySubscribers.set(key, new Set());
+		keySubscribers.get(key)!.add(listener);
+	}
+	return () => {
+		stateListeners.delete(listener);
+		if (key) {
+			keySubscribers.get(key)?.delete(listener);
+			const entry = stateStore.get(key);
+			if (entry && !entry.pending && (keySubscribers.get(key)?.size ?? 0) === 0) {
+				stateStore.delete(key);
+				defaultSnapshots.delete(key);
+			}
+		}
+	};
+}
+
+function notifyStateListeners(): void {
+	for (const listener of [...stateListeners]) listener();
+}
+
+function trimStateStore(): void {
+	// Caveat: a burst of distinct actions evicts older settled state, so useActionState
+	// may report its initial value for an action that ran earlier but has no subscriber.
+	if (stateStore.size <= 200) return;
+	for (const [key, entry] of stateStore) {
+		if (!entry.pending && (keySubscribers.get(key)?.size ?? 0) === 0) {
+			stateStore.delete(key);
+			defaultSnapshots.delete(key);
+			if (stateStore.size <= 200) return;
+		}
+	}
+	for (const [key, entry] of stateStore) {
+		if (!entry.pending) {
+			stateStore.delete(key);
+			defaultSnapshots.delete(key);
+			if (stateStore.size <= 200) return;
+		}
+	}
 }
 
 function setState(name: string, argsKey: string, patch: Partial<StateEntry>): void {
-	const entry = getState(name, argsKey);
-	Object.assign(entry, patch);
-	for (const l of stateListeners) l();
+	const key = stateKey(name, argsKey);
+	const previous = stateStore.get(key) ?? defaultSnapshot(key);
+	const next: StateEntry = { ...previous, ...patch };
+	stateStore.set(key, next);
+	defaultSnapshots.set(key, next);
+	trimStateStore();
+	notifyStateListeners();
 }
 
 export function useActionState(name: string, argsKey: string): { pending: boolean; last: ActionResult | null } {
-	// React hook semantics: we can't use React here? We'll return a snapshot.
-	// For React components, use a tiny subscription via useState/useEffect is ideal,
-	// but to keep node-testable, return current snapshot.
-	const entry = getState(name, argsKey);
-	return { pending: entry.pending, last: entry.last };
+	const key = stateKey(name, argsKey);
+	const subscribe = React.useCallback((listener: () => void) => subscribeActionState(listener, key), [key]);
+	const getSnapshot = React.useCallback(() => getActionStateSnapshot(name, argsKey), [name, argsKey]);
+	try {
+		return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+	} catch {
+		return getSnapshot();
+	}
 }
 
 const inFlightKeys = new Set<string>();
 
-export function createActionRunner(registry: ReadonlyMap<string, ActionDefinition>) {
+export function createActionRunner(
+	registry: ReadonlyMap<string, ActionDefinition>,
+	deps?: { onSudoRequired?: typeof onSudoRequired },
+) {
+	const sudoSubscribe = deps?.onSudoRequired ?? onSudoRequired;
 	return async function runAction(name: string, rawArgs: unknown, ctx: ActionContext): Promise<ActionResult> {
 		const def = registry.get(name);
 		if (!def) {
-			const res: ActionResult = { status: "failed", message: `Unknown action "${name}"` };
-			return res;
+			return { status: "failed", message: `Unknown action "${name}"` };
 		}
 
-		// 1. preview mode: before args, confirm, single-flight.
 		if (ctx.mode === "preview") {
-			const res: ActionResult = { status: "preview" };
-			updateStateForPreview(name, rawArgs, res);
-			return res;
+			return { status: "preview" };
 		}
 
-		// 2. args.
 		const validated = validateArgs(def, rawArgs);
 		if (!validated.ok) {
-			const res: ActionResult = { status: "failed", message: validated.message };
-			return res;
+			return { status: "failed", message: validated.message };
 		}
 		const args = validated.args;
 
-		// 3. confirm guard from registry only.
 		const confirmGuard = def.confirm;
 		if (confirmGuard === "none") {
 			if (!ctx.trusted) {
-				const res: ActionResult = { status: "blocked", message: "This action is not allowed on this page" };
-				return res;
+				return { status: "blocked", message: "This action is not allowed on this page" };
 			}
 		} else {
 			const handlers = guardHandlers;
 			const text = def.confirmText ? def.confirmText(args) : { title: def.label, message: `Run ${def.label}?`, actionLabel: def.label };
 			if (confirmGuard === "simple") {
 				if (!handlers.confirm) {
-					const res: ActionResult = { status: "failed", message: "Confirmation is not available" };
-					return res;
+					return { status: "failed", message: "Confirmation is not available" };
 				}
 				ctx.pause?.begin();
 				let ok = false;
@@ -213,14 +226,12 @@ export function createActionRunner(registry: ReadonlyMap<string, ActionDefinitio
 					ctx.pause?.end();
 				}
 				if (!ok) {
-					const res: ActionResult = { status: "cancelled" };
-					return res;
+					return { status: "cancelled" };
 				}
 			} else if (typeof confirmGuard === "object" && confirmGuard !== null && "typed" in confirmGuard) {
 				const confirmText = confirmGuard.typed(args);
 				if (!handlers.typedConfirm) {
-					const res: ActionResult = { status: "failed", message: "Confirmation is not available" };
-					return res;
+					return { status: "failed", message: "Confirmation is not available" };
 				}
 				ctx.pause?.begin();
 				let ok = false;
@@ -230,28 +241,26 @@ export function createActionRunner(registry: ReadonlyMap<string, ActionDefinitio
 					ctx.pause?.end();
 				}
 				if (!ok) {
-					const res: ActionResult = { status: "cancelled" };
-					return res;
+					return { status: "cancelled" };
 				}
 			}
 		}
 
-		// 4. single-flight.
 		const key = `${name}::${canonicalArgs(args)}`;
 		if (inFlightKeys.has(key)) {
-			const res: ActionResult = { status: "busy" };
-			return res;
+			return { status: "busy" };
 		}
 		inFlightKeys.add(key);
 
-		// state pending
 		const argsKey = canonicalArgs(args);
 		setState(name, argsKey, { pending: true });
 
 		let sudoFired = false;
 		let unsub: (() => void) | null = null;
 		if (def.sudo === "auto") {
-			unsub = onSudoRequired(() => { sudoFired = true; });
+			// Caveat: a sudo refusal from an unrelated request that lands while run is pending
+			// is attributed to this action.
+			unsub = sudoSubscribe(() => { sudoFired = true; });
 		}
 
 		try {
@@ -260,11 +269,10 @@ export function createActionRunner(registry: ReadonlyMap<string, ActionDefinitio
 			if (def.sudo === "auto" && sudoFired && final.status !== "sudo_required") {
 				final = { status: "sudo_required" };
 			}
-			// remove secret for state storage
-			const forState: ActionResult = { ...final } as ActionResult;
+			const forState: ActionResult = { ...final };
 			if ("secret" in forState) delete (forState as { secret?: string }).secret;
 			setState(name, argsKey, { pending: false, last: forState });
-			return final; // direct caller sees secret
+			return final;
 		} catch (error) {
 			const res: ActionResult = { status: "failed", message: error instanceof Error ? error.message : "Action failed" };
 			setState(name, argsKey, { pending: false, last: res });
@@ -274,17 +282,6 @@ export function createActionRunner(registry: ReadonlyMap<string, ActionDefinitio
 			inFlightKeys.delete(key);
 		}
 	};
-}
-
-function updateStateForPreview(name: string, rawArgs: unknown, _res: ActionResult): void {
-	// best effort: use canonical of raw
-	let argsKey = "";
-	try {
-		argsKey = canonicalArgs((rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs)) ? (rawArgs as Record<string, unknown>) : {});
-	} catch {
-		argsKey = "";
-	}
-	setState(name, argsKey, { pending: false, last: { status: "preview" } });
 }
 
 import { APP_ACTIONS } from "@/features/app-actions/model/actionRegistry";
