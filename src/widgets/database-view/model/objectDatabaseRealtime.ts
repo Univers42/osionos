@@ -48,20 +48,40 @@ function ownerIdFromJwt(): string | null {
   }
 }
 
-/** Subscribe once to this owner's object-DB change stream; each remote nudge runs
- *  `rehydrate` (coalesced). Idempotent — safe to call on every hydration attempt.
- *  Own writes self-nudge too, but re-hydrating our just-pushed state is a clean
- *  no-op (local == server), so no filter is needed for same-account multi-tab. */
+function newWriterId(): string {
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+/** This tab's id, sent with every push and echoed back in the nudge it causes.
+ *  Re-hydrating on our own push re-downloaded every database of the account
+ *  (2.7 MiB for the largest live one) to learn that nothing changed. */
+export const OBJECT_DB_WRITER_ID = newWriterId();
+
+/** A nudge this tab's own push caused. No id (an older bridge) is never ours. */
+export function isOwnObjectDbWrite(payload: unknown): boolean {
+  return typeof payload === 'object' && payload !== null
+    && (payload as { origin?: unknown }).origin === OBJECT_DB_WRITER_ID;
+}
+
+/** The frame handler: another writer's nudge runs `rehydrate` once per burst. */
+export function objectDbNudgeHandler(rehydrate: () => void): (frame: LiveRealtimeEventFrame) => void {
+  return (frame) => {
+    if (frame.event_type !== 'objectdb_changed' || timer || isOwnObjectDbWrite(frame.payload)) return;
+    timer = setTimeout(() => { timer = null; rehydrate(); }, COALESCE_MS);
+  };
+}
+
+/** Subscribe once to this owner's object-DB change stream; each nudge from another
+ *  tab or browser runs `rehydrate` (coalesced). Idempotent — safe to call on every
+ *  hydration attempt. */
 export function startObjectDatabaseRealtime(rehydrate: () => void): void {
   if (unsubscribe) return; // already live — one socket per owner
   const owner = ownerIdFromJwt();
   const url = liveRealtimeUrl();
   if (!owner || !url) return; // no gateway → hydrate-once only
   const topic = `objectdb:${owner}`;
-  const onEvent = (frame: LiveRealtimeEventFrame) => {
-    if (frame.event_type !== 'objectdb_changed' || timer) return;
-    timer = setTimeout(() => { timer = null; rehydrate(); }, COALESCE_MS);
-  };
+  const onEvent = objectDbNudgeHandler(rehydrate);
   const token = resolveLiveRealtimeToken();
   if (token) {
     // A credential the gateway accepts (a baked token): open the socket directly.

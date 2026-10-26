@@ -24,7 +24,7 @@ import { isObjectDatabaseServerSyncEnabled } from "@/shared/config/featureFlags"
 import { emptySlice, hashSlice, sliceAllDatabases, userDatabaseIds } from "./objectDatabaseSlice";
 import { reconcileServerDatabases } from "./objectDatabaseReconcile";
 import { withoutDeletedPages, tombstonesStillNeeded } from "./knownDatabasePersistedState";
-import { startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objectDatabaseRealtime";
+import { OBJECT_DB_WRITER_ID, startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objectDatabaseRealtime";
 import {
   databaseWorkspace,
   rememberDatabaseWorkspace,
@@ -106,6 +106,9 @@ async function fetchServerDatabases(jwt: string): Promise<Map<string, ServerObje
   return map;
 }
 
+/** `origin` is this tab's id: the bridge echoes it so the tab skips its own nudge. */
+type ObjectDatabasePushBody = { dbKey: string; title: string; state: NotionState; origin: string; workspaceId?: string };
+
 /** The exact body of a push. Exported so the test can prove the workspace
  *  comes from the database's map, not from the active workspace. */
 export function objectDatabasePushBody(
@@ -113,8 +116,8 @@ export function objectDatabasePushBody(
   title: string,
   slice: NotionState,
   workspaceId?: string,
-): { dbKey: string; title: string; state: NotionState; workspaceId?: string } {
-  return { dbKey, title, state: slice, ...(workspaceId ? { workspaceId } : {}) };
+): ObjectDatabasePushBody {
+  return { dbKey, title, state: slice, origin: OBJECT_DB_WRITER_ID, ...(workspaceId ? { workspaceId } : {}) };
 }
 
 async function pushDatabaseSlice(jwt: string, dbKey: string, title: string, slice: NotionState): Promise<void> {
@@ -127,7 +130,7 @@ export function objectDatabasePushBodyFor(
   dbKey: string,
   title: string,
   slice: NotionState,
-): { dbKey: string; title: string; state: NotionState; workspaceId?: string } {
+): ObjectDatabasePushBody {
   return objectDatabasePushBody(dbKey, title, slice, databaseWorkspace(dbKey));
 }
 
