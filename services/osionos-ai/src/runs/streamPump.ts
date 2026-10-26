@@ -1,7 +1,7 @@
 import { stepCountIs, streamText } from 'ai';
 import type { LanguageModel, LanguageModelUsage, ModelMessage, ToolSet } from 'ai';
 import { config } from '../config.ts';
-import { MAX_STEPS } from '../tools/loop.ts';
+import { DEFAULT_RUN_LIMITS } from '../tools/limits.ts';
 import type { ToolPool } from '../tools/index.ts';
 import { markOwnError } from './failover.ts';
 import { stepHasTools } from './loopBudget.ts';
@@ -133,6 +133,10 @@ export interface PumpInput {
 	onToolError?: (failure: { toolCallId: string; toolName: string }) => Promise<void>;
 	/** The SDK's retries on a 429 or 5xx; 0 when a next model waits (devil C250). */
 	maxRetries?: number;
+	/** A step is about to run; `hasTools` is false when it is the answer (research C412). */
+	onStepStart?: (step: { stepNumber: number; hasTools: boolean }) => Promise<void>;
+	/** A step ended, after its tool calls and its text (research C402, C407). */
+	onStepFinish?: (step: { stepNumber: number }) => Promise<void>;
 }
 
 export interface PumpOutcome {
@@ -186,11 +190,13 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 	let stepEnded = false;
 	// Set BEFORE a callback is awaited: one that throws has still shown something.
 	let emitted = false;
+	let stepsFinished = 0;
 
 	// The one clock of the loop: the steps. The money never stops it: a step
 	// the run cannot pay for becomes the ANSWER (prepareStep), so a run
 	// never ends with a tool call nobody reads.
-	const stopWhen = [stepCountIs(MAX_STEPS)];
+	const limits = budget?.limits ?? DEFAULT_RUN_LIMITS;
+	const stopWhen = [stepCountIs(limits.maxSteps)];
 
 	// The step that is going to be the LAST one runs without tools: the
 	// model answers with what it has, and the run ends with an answer
@@ -211,6 +217,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 				if (!budget) return undefined;
 				try {
 					const hasTools = await stepHasTools(budget, { stepNumber, steps });
+					await input.onStepStart?.({ stepNumber, hasTools });
 					return hasTools ? undefined : { toolChoice: 'none' as const };
 				} catch (error) {
 					// The ledger failed, not the upstream.
@@ -231,7 +238,9 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 	};
 
 	try {
-		totalTimer = setTimeout(onTimeout, TOTAL_TIMEOUT_MS);
+		// Caveat: a research run that fails over starts the deadline again for
+		// the next model, so it may run up to 8 minutes per attempt.
+		totalTimer = setTimeout(onTimeout, limits.deadlineMs ?? TOTAL_TIMEOUT_MS);
 		touch();
 
 		const result = streamText({
@@ -278,6 +287,8 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 				usage = part.usage;
 				stepEnded = true;
 				emitted = true;
+				await input.onStepFinish?.({ stepNumber: stepsFinished });
+				stepsFinished += 1;
 			} else if (part.type === 'finish') {
 				usage = part.totalUsage;
 				finishReason = part.finishReason;

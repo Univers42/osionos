@@ -17,6 +17,9 @@ import { classifyFailure } from './failover.ts';
 import type { RunEvent, UpstreamRunInput } from './upstreamInput.ts';
 import { citationData, sourceChars } from './sources.ts';
 import { createToolPool } from '../tools/index.ts';
+import { clock, RESEARCH_LIMITS, RESEARCH_WEB_CAPS } from '../tools/limits.ts';
+import { createResearchSession } from '../research/session.ts';
+import type { ResearchSession } from '../research/session.ts';
 import { buildRunTools } from './toolSet.ts';
 import { mcpToolChars } from '../mcpClient/runTools.ts';
 import { config } from '../config.ts';
@@ -112,7 +115,16 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	// time, and the extension is atomic: two runs never share it.
 	const steps = [{ target, amount: reserved }, ...(input.fallbacks ?? [])];
 	const records: AttemptRecord[] = [];
-	const runState = { signal: runController.signal, runId, userId: ownerId, day, promptChars };
+	const limits = input.research ? RESEARCH_LIMITS : undefined;
+	const startedAt = clock.now();
+	const runState = {
+		signal: runController.signal,
+		runId,
+		userId: ownerId,
+		day,
+		promptChars,
+		...(limits ? { limits, startedAt } : {}),
+	};
 	let index = 0;
 	let current = startAttempt(db, runState, steps[0]);
 	// The error of the current attempt: a later failure of OUR code must not hide it.
@@ -120,7 +132,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	// The pool of the tools of THIS run: the tools of a run may not put
 	// more in its context than the reservation of the run counted, and one
 	// step may not add more than a step's share of it.
-	const pool = createToolPool();
+	const pool = limits ? createToolPool(limits.poolChars, limits.stepChars) : createToolPool();
+	let research: ResearchSession | undefined;
 
 	try {
 		await emit('run.started', {
@@ -166,6 +179,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 						conversationId,
 						taint: webTaint,
 						typed: text,
+						...(limits ? { caps: RESEARCH_WEB_CAPS } : {}),
 						read: [
 							...pages.map((page) => page.text),
 							...sources.map((source) => source.snippet),
@@ -189,6 +203,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			...(input.mcpTools && input.mcpTools.length > 0 ? { mcp: { tools: input.mcpTools, redis } } : {}),
 			...(web ? { web } : {}),
 			...(webTaint ? { webTaint } : {}),
+			...(input.research ? { research: true } : {}),
 			emit: (type, data) => emit(type, data),
 		});
 		const tools = runTools.tools;
@@ -209,9 +224,12 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			{ role: 'user', content: userContent } as ModelMessage,
 		];
 
-		const callModel = (attempt: Attempt) => {
+		if (limits) {
+			research = createResearchSession({ emit, counters: () => web?.counters, maxSteps: limits.maxSteps, startedAt });
+		}
+		const callModel = async (attempt: Attempt) => {
 			const providerOptions = providerOptionsFor(attempt.target, images.length, input.effort);
-			return pumpUpstream({
+			const pumped = await pumpUpstream({
 				model: attempt.target.model,
 				system,
 				messages,
@@ -238,7 +256,11 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				onReasoning: async (delta) => {
 					await emit('reasoning.delta', { text: delta });
 				},
+				...(research ? research.hooks : {}),
 			});
+			// Held-back text goes out before the run ends, or fails over.
+			await research?.flush();
+			return pumped;
 		};
 		let outcome = await callModel(current);
 		while (outcome.error !== undefined) {
@@ -247,6 +269,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			if (move.kind === 'stay') break;
 			if (move.kind === 'refused') {
 				// The old money is back and the row holds none: only the end is left.
+				research?.end('budget_exhausted', false);
 				await markRun(db, runId, 'failed', 'budget_exhausted', attemptsUsage(records));
 				await emit('error', { code: 'budget_exhausted', message: failureMessage('budget_exhausted', failure) });
 				return;
@@ -314,6 +337,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			await settleTarget(db, current.target, { userId: ownerId, day, reserved: outcome.reserved, actual: cost });
 		}
 
+		research?.end('done', current.budget.deadlineHit === true);
 		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
 		// The summary is written after `done`, off the run's response, by the
 		// target that answered (context C377, C381).
@@ -337,6 +361,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// The row of the run is closed BEFORE the terminal frame: a client
 		// that reads the row when it sees the frame reads the truth. The
 		// success path does the same.
+		research?.end(code, current.budget.deadlineHit === true);
 		const runStatus: RunStatus = code === 'cancelled' ? 'cancelled' : 'failed';
 		const changed = await markRun(db, runId, runStatus, code, attemptsUsage(records, { target: current.target, outcome: code, billed: cost }));
 		await emit('error', { code, message: failureMessage(code, error) });
@@ -344,6 +369,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			await settleTarget(db, current.target, { userId: ownerId, day, reserved: current.budget.reserved, actual: cost });
 		}
 	} finally {
+		research?.log();
 		runStore.releaseRun(runId);
 	}
 }

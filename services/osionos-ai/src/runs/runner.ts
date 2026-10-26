@@ -10,6 +10,7 @@ import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
 import { loadMcpTools, mcpToolChars } from '../mcpClient/runTools.ts';
 import { webOnForRun, webToolChars } from '../web/runWeb.ts';
+import { RESEARCH_LIMITS } from '../tools/limits.ts';
 import { readRunSummary } from '../summary/repo.ts';
 import type { Effort } from './effort.ts';
 import type { RunEvent } from './upstream.ts';
@@ -117,6 +118,8 @@ export interface StartRunInput {
 	account?: boolean;
 	/** The web toggle of THIS message (C355): one of three layers, never sticky. */
 	web?: boolean;
+	/** Research mode (C396): the route admitted it; needs `web`. */
+	research?: boolean;
 	/** The view the caller has open, as the client reports it. */
 	view?: import('./prompt.ts').RunView;
 	/** Where the model is called, and who pays for it. */
@@ -330,7 +333,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// reservation counts their definitions and the run offers the same list.
 	// Only the general assistant gets them (C308): an agent never does. Flag
 	// off: no query, nothing (C291).
-	const mcpTools = config.mcpClientEnabled && input.user && !agent ? await loadMcpTools(db, ownerId) : [];
+	const mcpTools = config.mcpClientEnabled && input.user && !agent && !input.research ? await loadMcpTools(db, ownerId) : [];
 	// C355 / C369: the web tools, when the flag, the workspace switch and this
 	// message all say so, and never for an agent.
 	const web = await webOnForRun(db, { asked: input.web, user: input.user, agentful: agent !== null, workspaceId: input.workspaceId });
@@ -353,6 +356,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		// the agent. The reservation counts what the call really sends.
 		systemChars: systemPromptFor(agent, skillIndex).length,
 		contextChars,
+		// The answer of a research step reads a larger pool share (C400).
+		...(input.research ? { limits: RESEARCH_LIMITS } : {}),
 	};
 	// A model that keeps failing rests: it is skipped while a later one is
 	// ready (devil C256-C259). The row of the run is pinned to the model that
@@ -423,6 +428,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			memories,
 			mcpTools,
 			web,
+			...(input.research ? { research: true } : {}),
 			workspaceId: input.workspaceId,
 			...(summaryBlockText ? { summaryBlock: summaryBlockText } : {}),
 			...(summary && window.dropped ? { truncated: { summarized: summaryBlockText !== undefined } } : {}),

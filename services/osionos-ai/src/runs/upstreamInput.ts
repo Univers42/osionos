@@ -87,6 +87,8 @@ export interface UpstreamRunInput {
 	workspaceBlock?: string;
 	/** Whether the run offers the web tools: the runner checked the three layers (C355). */
 	web?: boolean;
+	/** A research run (C396): the runner checked the web, the route checked the busy and the quota. */
+	research?: boolean;
 	/** The <conversation_summary> block the run quotes (context C385); absent with the flag off. */
 	summaryBlock?: string;
 	/** The history window left turns out (context C380): the run says so with a `context.truncated` frame. */

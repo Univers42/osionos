@@ -140,7 +140,7 @@ export interface ToolPool {
  * TOOL_OUTPUT_CHARS to the context, whatever the number of the calls it
  * makes.
  */
-export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
+export function createToolPool(chars: number = TOOL_POOL_CHARS, stepChars: number = TOOL_OUTPUT_CHARS): ToolPool {
 	let left = chars;
 	// The share of the step: the tools of ONE step may not add more than
 	// TOOL_OUTPUT_CHARS to the context of the run. It is empty until the
@@ -158,7 +158,7 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
 			return left <= POOL_SPENT.length;
 		},
 		startStep(): void {
-			stepLeft = TOOL_OUTPUT_CHARS;
+			stepLeft = stepChars;
 			step += 1;
 		},
 		get step(): number {
@@ -171,7 +171,7 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
 			// the pool, and the context of the run grows by the notice and by
 			// nothing else.
 			if (stepLeft <= 0) return notice();
-			const room = Math.min(text.length, TOOL_OUTPUT_CHARS, stepLeft, left - POOL_SPENT.length);
+			const room = Math.min(text.length, stepChars, stepLeft, left - POOL_SPENT.length);
 			const cut = text.slice(0, room);
 			left -= cut.length;
 			stepLeft -= cut.length;
