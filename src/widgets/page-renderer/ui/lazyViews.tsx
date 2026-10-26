@@ -92,6 +92,10 @@ export const LazyChatShell = lazy(() =>
   import("@/widgets/chat-shell").then((m) => ({ default: m.ChatShell })),
 );
 
+export const LazyAiHubView = lazy(() =>
+  import("@/widgets/ai-hub").then((m) => ({ default: m.AiHubView })),
+);
+
 // Deep import (never a barrel): the code editor pulls the Monaco core + its
 // language grammars, a large chunk that must never leak onto the warm pane path. Only reached
 // for surface==='code' pages.

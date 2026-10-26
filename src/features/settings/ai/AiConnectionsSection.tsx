@@ -13,22 +13,15 @@
 // The AI connections section of the Settings tab: the user's own model access, and
 // the access tokens of the AI service. The workspaces a token may reach are the ones
 // the user owns and the ones they are a member of (G4a).
-import React, { useMemo } from "react";
-import { useUserStore } from "@/features/auth";
-import { AccessTokensPanel, type AccessTokenWorkspace } from "./AccessTokensPanel";
+import React from "react";
+import { AccessTokensPanel } from "./AccessTokensPanel";
 import { AiConnectionsPanel } from "./AiConnectionsPanel";
 import { WorkspaceSkillsPanel } from "./WorkspaceSkillsPanel";
 import { AiMemoryPanel } from "./AiMemoryPanel";
+import { useAiWorkspaces } from "./useAiWorkspaces";
 
 export const AiConnectionsSection: React.FC = () => {
-  const userSession = useUserStore((s) => s.activeSession());
-  const workspaces = useMemo<AccessTokenWorkspace[]>(
-    () => [
-      ...(userSession?.privateWorkspaces ?? []),
-      ...(userSession?.sharedWorkspaces ?? []),
-    ].map((workspace) => ({ id: workspace._id, name: workspace.name })),
-    [userSession],
-  );
+  const workspaces = useAiWorkspaces();
   return (
     <>
       <AiConnectionsPanel />
