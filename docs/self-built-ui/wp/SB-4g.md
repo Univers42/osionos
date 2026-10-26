@@ -2,7 +2,7 @@
 
 Project: rebuild every settings section from the app's own blocks (design: `docs/superpowers/specs/2026-10-25-self-built-ui-design.md` §10 "Dev export"). A settings page is authored in the editor like any page, then exported into the repo as a canonical system document (`src/system-docs/<kind>/<id>.json`). This package adds the export: a page-menu item in dev, and a Vite middleware that exists only in `vite serve` and writes the file.
 
-👹 because an HTTP request writes into the source tree. Any web page the developer opens can send a request to `localhost`, and the dev server is reachable from the LAN. So the middleware must refuse cross-site and network requests, and confine the path. Devil verdict D-SB-4g-spec (2026-10-26 01:11, kimi-k3): **BLOCK**. Its conditions are folded into the rules below, except the compose change: instead of re-binding the dev server, the token is a pairing code that no route serves (Rule 2). This needs a re-rule before dispatch.
+👹 because an HTTP request writes into the source tree. Any web page the developer opens can send a request to `localhost`, and the dev server is reachable from the LAN. So the middleware must refuse cross-site and network requests, and confine the path. Devil verdict D-SB-4g-spec (2026-10-26 01:11, kimi-k3): **BLOCK**. Its conditions are folded into the rules below, except the compose change: instead of re-binding the dev server, the token is a pairing code that no route serves (Rule 2). Re-rule (01:14, same session): **PROCEED-WITH-CONDITIONS** (blast 2, rev 2, cost 2, conf 2); its 4 conditions are folded in too (e2e reads the code from the token file, Host port tested, `target/` ignored, the Caveat's bearer clause).
 
 Base: the integration tip with SB-1d merged.
 
@@ -14,7 +14,7 @@ Base: the integration tip with SB-1d merged.
 
 **OWNS:**
 - `scripts/vite-system-doc-export.mjs` (new): the plugin factory and its pure request validator;
-- `.gitignore`: `target/system-doc-export.token` if `target/` is not already ignored;
+- `.gitignore`: add `target/` (nothing is tracked there; `git check-ignore` must exit 0 for `target/system-doc-export.token` and a `target/mutants/x` probe);
 - `vite.config.ts`: one plugin entry. Preserve the 42 header;
 - `src/features/system-pages/model/exportSystemDoc.ts` (new): page → `SystemDoc`, then POST;
 - `src/features/system-pages/ui/ExportSystemDocDialog.tsx` (new): kind (`settings` only for now) and id, with a preview of the target path;
@@ -38,7 +38,7 @@ Base: the integration tip with SB-1d merged.
    - `Host` not in that same allowlist. The plugin runs before Vite's own host check, so it does its own.
    - `Content-Type` not `application/json`.
    - `X-Export-Token` wrong. Compare length first, then `crypto.timingSafeEqual`, so a wrong-length token is a 403, not a 500.
-   Tests cover each refusal, and the e2e passes on its real origin `http://127.0.0.1:3004` (`playwright.config.ts:48,60`), so the allowlist is not hard-coded to `:3001`.
+   Tests cover each refusal, including `Host: 127.0.0.1:<bound port + 1>` with a valid Origin and token → 403 (the port is part of the comparison). The e2e passes on its real origin `http://127.0.0.1:3004` (`playwright.config.ts:48,60`), so the allowlist is not hard-coded to `:3001`.
 4. **Confined path.** `kind` must be in `["settings"]` and `id` must match `^[a-z][a-z0-9-]{0,63}$`.
    - First `mkdir -p` the kind directory, then `fs.realpath` both `src/system-docs` and the target directory. Containment is `path.relative(base, dir)`: it must not start with `..` and must not be absolute. A string-prefix check would accept `src/system-docs-evil`.
    - Tests: `../`, an absolute id, an uppercase id, a symlinked kind directory → 403. A symlink AT `<id>.json` is replaced by the rename, and its outside target stays byte-identical.
@@ -50,11 +50,11 @@ Base: the integration tip with SB-1d merged.
    - The response gives the repo-relative path (never `/app/…`) and the byte count. No response or log line contains the token.
    - Exporting the same page twice writes identical bytes (the fixpoint).
 6. **Overwrite is explicit.** An existing file is replaced only when the request says `overwrite: true`; else 409. The dialog asks first, in the page, not with `confirm()`.
-7. **The page side.** The export takes the page's blocks through `normalizeSystemBlocks`, drops runtime-only fields (`runtimeFields` in the schema), and shows the server's answer (path written, or each error). A `Caveat:` line in the plugin: the pairing code and the Origin check stop other sites and other machines without the code, not code already running in the dev page or a person who can read the dev-server log.
+7. **The page side.** The export takes the page's blocks through `normalizeSystemBlocks`, drops runtime-only fields (`runtimeFields` in the schema), and shows the server's answer (path written, or each error). A `Caveat:` line in the plugin: the pairing code and the Origin check stop other sites and other machines without the code, not code already running in the dev page or a person who can read the dev-server log; the code is a secret to paste only into this dialog (a phished code is still refused cross-origin by Rule 3).
 
 ## Steps
 
-- [ ] **Step 1: Failing tests.** Canvas tests on the validator (rules 2–5, with a temp directory for the filesystem cases). An e2e on the dev server: author a heading + frame page, export it as `settings/sb-4g-demo`, read the file back through the dev server (`/src/system-docs/settings/sb-4g-demo.json?raw`) and compare it with `serializeSystemDoc` of the page. Remove the file at the end of the test.
+- [ ] **Step 1: Failing tests.** Canvas tests on the validator (rules 2–5, with a temp directory for the filesystem cases). An e2e on the dev server: read the pairing code from `target/system-doc-export.token` through the shared bind mount, enter it in the dialog (no manual step), author a heading + frame page, export it as `settings/sb-4g-demo`, read the file back through the dev server (`/src/system-docs/settings/sb-4g-demo.json?raw`) and compare it with `serializeSystemDoc` of the page. Remove the file at the end of the test.
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Mutants** (scratch copies under `target/mutants`, never committed). Paste the failing test name for each:
