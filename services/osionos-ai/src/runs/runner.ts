@@ -28,17 +28,14 @@ import type { BuiltinAgent } from '../agents/builtins.ts';
 import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
 import { memoriesForRun } from '../memory/runMemories.ts';
 import { recordMemoryPins } from '../memory/repo.ts';
-import { estimateRunMicroUsd } from './estimate.ts';
+import { chainSteps, reservationOf } from './chain.ts';
 import { sourceChars } from './sources.ts';
 import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
-import { fetchAttachment } from '../vision/fetchAttachment.ts';
-import { classifyAttachment } from '../files/classify.ts';
+import { loadAttachments } from './attachments.ts';
 import { fitFiles } from '../files/excerpt.ts';
 import type { FittedFile } from '../files/excerpt.ts';
-import { readImageHeader } from '../vision/imageHeader.ts';
-import { stripMetadata } from '../vision/stripMetadata.ts';
 
 export type { RunEvent };
 
@@ -117,6 +114,8 @@ export interface StartRunInput {
 	target: ResolvedTarget;
 	/** How hard a reasoning model thinks; ignored by a model that does not reason. */
 	effort?: Effort;
+	/** The models the run moves to, in order, when the target fails before it said anything. */
+	fallbacks?: readonly ResolvedTarget[];
 	emit: (event: RunEvent) => void;
 }
 
@@ -237,46 +236,12 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	}
 	// The attachments are fetched through the bridge with the caller's token of
 	// THIS request. They are validated and stripped before the money moves.
-	const images: { data: Uint8Array; mediaType: string }[] = [];
-	const texts: { name: string; text: string }[] = [];
-	try {
-		for (const attachment of attachments) {
-			const bridgePath =
-				attachment.kind === 'chat' ? `/api/chat/uploads/${attachment.id}` : attachment.path;
-			const fetched = await fetchAttachment(bridgePath, sessionToken);
-			// The type is the one the BYTES say, never the name or the stored type.
-			const classified = classifyAttachment(fetched.bytes);
-			if (classified.kind === 'unsupported') {
-				throw Object.assign(new Error('unsupported_file'), { status: 415, code: 'unsupported_file' });
-			}
-			if (classified.kind === 'text') {
-				texts.push({ name: attachment.kind === 'media' ? attachment.name ?? 'file' : 'file', text: classified.text });
-				continue;
-			}
-			// Only an image needs a model that sees: a text file works on every model.
-			if (!target.vision) {
-				throw Object.assign(new Error('model_no_vision'), { status: 400, code: 'model_no_vision' });
-			}
-			const header = readImageHeader(fetched.bytes);
-			if (header.width * header.height > 16_700_000) {
-				throw Object.assign(new Error('image_too_large'), { status: 422, code: 'image_too_large' });
-			}
-			const stripped = stripMetadata(fetched.bytes);
-			// The type of the image is the one its BYTES say: the bridge
-			// announces the type it stored, and a file that was stored with
-			// the wrong type must not decide what the model sees.
-			images.push({ data: stripped, mediaType: `image/${header.format}` });
-		}
-	} catch (error) {
-		const candidate = error as { status?: unknown; code?: unknown };
-		const status = typeof candidate?.status === 'number' ? candidate.status : 422;
-		const code = typeof candidate?.code === 'string' ? candidate.code : 'invalid_image';
-		// Bridge 403/404 already became attachment_not_found.
-		const finalCode = code === 'attachment_not_found' ? 'attachment_not_found' : code;
-		const finalStatus = code === 'attachment_not_found' ? 404 : status >= 400 ? status : 422;
-		await markRun(db, runId, 'failed', finalCode);
-		return { kind: 'refused', status: finalStatus, code: finalCode };
+	const loaded = await loadAttachments(attachments, sessionToken, target.vision === true);
+	if (loaded.kind === 'refused') {
+		await markRun(db, runId, 'failed', loaded.code);
+		return loaded;
 	}
+	const { images, texts } = loaded;
 
 	// The replaced turns go BEFORE the new user message is written and the
 	// history is read: the model must never receive what the user edited away.
@@ -338,7 +303,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
-	const baseAmount = estimateRunMicroUsd(target.pricing, {
+	const estimateInputs = {
 		text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(context.pages) + memoryChars(memories) + fileChars(files),
@@ -347,11 +312,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		// the agent. The reservation counts what the call really sends.
 		systemChars: systemPromptFor(agent, skillIndex).length,
 		contextChars,
-	});
-	const imageMicroUsd = Math.ceil(
-		(images.length * config.visionTokensPerImage * target.pricing.inputMicroUsdPerMTok) / 1e6,
-	);
-	const amount = baseAmount + imageMicroUsd;
+	};
+	const amount = reservationOf(target, estimateInputs, images.length);
 	// A run on a connection of the user is not ours to pay for: the provider
 	// bills the user, and our ledger stays out of it.
 	const reserved = await reserveTarget(db, target, { userId: ownerId, day, amount });
@@ -394,6 +356,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			emit: input.emit,
 			day,
 			reserved: amount,
+			fallbacks: chainSteps(input.fallbacks ?? [], estimateInputs, images.length),
 			history,
 			pages: context.pages,
 			sources,
