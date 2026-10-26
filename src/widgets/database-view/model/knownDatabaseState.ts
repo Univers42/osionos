@@ -200,8 +200,10 @@ export function flushKnownDatabaseStatePersist() {
   }
 }
 
+// pagehide, not beforeunload: it fires after every beforeunload handler, so a
+// write the database host flushes from its own beforeunload still lands here.
 if (globalThis.window !== undefined) {
-  globalThis.addEventListener("beforeunload", flushKnownDatabaseStatePersist);
+  globalThis.addEventListener("pagehide", flushKnownDatabaseStatePersist);
 }
 
 // Makes room in the page caches when the origin is full (knownDatabaseStorage).
