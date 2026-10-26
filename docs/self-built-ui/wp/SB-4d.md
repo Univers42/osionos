@@ -79,9 +79,25 @@ function CycleButton(props: { label: string; tone: FieldOption["tone"]; strong?:
 6. **Trusted pages only.** A collection over a source with `trustedOnly` renders the unavailable state ("Permission matrix isn't available") unless `useTrustedPage(hostPageId)` is true: a system page (SB-1e) or a page the viewer owns. A page author can restyle the table, but cannot show another viewer a live permission control. Tests: the same collection on a page the viewer owns renders cells; on a page another user owns it renders the unavailable state and calls no `/api/perms/*` route; a stray `trusted: true` in block data changes nothing.
 7. **`perms.refresh`.** `confirm: "none"`, no params, run = the store's `refresh()`; `failed` with the store's error when set after the call.
 
+## Devil conditions (D-SB-4d-spec, 2026-10-26 02:00, kimi-k3: PROCEED-WITH-CONDITIONS)
+
+Acceptance criteria. Each has a test that fails when it is broken; name it in the report.
+
+1. **The page path loads.** `matrix:perms` reads the workspace from `useUserStore`'s `activeWorkspace` (as `SettingsView.tsx:84,94` does) and calls `load` on its first subscriber, the pattern of `bindingSources.ts:125-129`. e2e: a trusted page opened fresh (Settings never visited) calls `/api/perms/roles`, `/policies` and `/people` exactly once with the active workspace id and renders cells; an untrusted page calls none of them.
+2. **The latest load wins.** `load` carries a monotonic id and drops any resolution that is not the latest requested workspace's. Canvas test: a slow `load(A)` and a fast `load(B)` end in B's state, and `cellFor` never returns A's rows.
+3. **A failed save shows the truth.** When `deletePolicy` succeeds and `createPolicy` fails, the store refetches the policies before setting the error, so the cell shows the post-delete state. This changes today's panel too (it shares the store); the parity e2e pins the new behaviour for both: create → 500 shows the glyph change, the error and one extra `fetchPolicies` call. The happy-path request sequence is unchanged.
+4. **Removing a deny asks first.** In the rebuild, a click on a `deny` cell opens a confirm ("Remove the explicit deny for <role> on <resource>? This widens access.", label "Remove deny"), and only a confirm runs `setCellLevel(…, "none")`. Today's panel keeps its one-click behaviour (MUST NOT TOUCH); the difference is recorded under Out of scope. Tests: cancel sends no request; confirm sends today's delete.
+5. **Restyling cannot change the control.** Presets and colours on the collection and its enclosing frames never change a cell's glyph, tone, `title` or `aria-label` (e2e: a heavily restyled page and a plain one give the same values). Rule 6's line is ownership: a page the viewer owns is trusted even when its content was copied from someone else (`duplicatePage`, `usePageActions.ts:229`). That is recorded under Out of scope as a call for the owner to review; the bridge's admin check (`scripts/bridge-perms.mjs:220-224`) stays the security boundary.
+6. **Deny beats priority in the property test.** The seeded generator always includes a class of (role, resource) pairs with a lower-priority deny and a higher-priority allow, whose level must be `deny`. Mutant (f): the index lets the higher-priority allow win.
+7. **Parity names every detail.** The computed-style capture covers the `<table>` (`w-full min-w-[640px] text-sm`, `MatrixGrid.tsx:35`), the header text classes, the resource header's `text-2xs`, and the row `:hover` background (`MatrixGrid.tsx:46`). Deviations recorded under Out of scope: the role cell becomes `<th scope="row">` (today `<td>`, `MatrixGrid.tsx:47`); the error shows on SB-4a's alert line (today a red box, `PermissionsPanel.tsx:53`).
+8. **Busy does not re-render cells.** Cells read `isBusy()` through their own subscription, not a prop, so a click changes no other cell's object or props. The render counter sits on the memoised cell; the Rule 4 test runs a full settled click (busy on, save, refetch, busy off) and asserts net counts: the clicked cell's count rises, no other cell's does.
+
 ## Out of scope (recorded, not fixed here)
 
-- `cycleCell` deletes the policy before creating its replacement: if the create fails, the cell has lost its policy and its conditions. A deny cell goes to `—` in one click, which widens access. Both are today's behaviour; the parity e2e pins them, and the report lists them as findings for the owner.
+- `cycleCell` deletes the policy before creating its replacement, and `payloadForCell` writes priority 50 even when the old policy had another (`matrixModel.ts:86`). Condition 3 makes the failure visible; making the save atomic is a bridge change, listed as a finding for the owner.
+- Today's panel removes a deny in one click; the rebuild asks first (condition 4).
+- A page the viewer owns is trusted, including one duplicated from a stranger's page (condition 5).
+- The role cell is a `<th scope="row">` and the error is SB-4a's alert line (condition 7).
 - The conditions and field-mask editors and the "View as" tester stay React; SB-5-permissions decides their blocks.
 - Today's loading sentence "Loading roles and policies…" becomes SB-4a's skeleton rows in the rebuild (a deviation; the panel itself is unchanged).
 
@@ -95,7 +111,8 @@ function CycleButton(props: { label: string; tone: FieldOption["tone"]; strong?:
   - (b) the cycle control cycles to `deny`;
   - (c) the trust check is skipped for `trustedOnly` sources;
   - (d) `setCell` returns `ok` when the store's `error` is set;
-  - (e) the cell index ignores priority (a lower-priority allow wins over a higher one).
+  - (e) the cell index ignores priority (a lower-priority allow wins over a higher one);
+  - (f) the index lets a higher-priority allow beat a deny.
 - [ ] **Step 5: Gates.** `npm run test:canvas` rc 0; `npm run test:quality` rc 0; both e2e green; `shareRules.spec.mjs` and `shareTeams.spec.mjs` unchanged and green. Report each.
 - [ ] **Step 6: Commit** with the message above. No trailer, no push.
 
