@@ -28,16 +28,10 @@ import {
   complete as completeRoute,
   createConversation,
   isAiConfigured,
-  listModels,
   resumeRun,
   startRun,
 } from "../api/aiClient";
-import {
-  PLATFORM_CONNECTION_ID,
-  readAiSelection,
-  selectionEffort,
-  type AiEffort,
-} from "./aiSelection";
+import { effortFor, PLATFORM_CONNECTION_ID, readAiSelection } from "./aiSelection";
 import { streamRun } from "./runStream";
 import { DEVICE_CONNECTION_ID, readDeviceEngine } from "./deviceEngine";
 import { deviceInferencePort } from "./deviceInferencePort";
@@ -85,21 +79,6 @@ async function ensureServerConversation(request: StreamInferenceRequest): Promis
   return conversation.id;
 }
 
-/**
- * The effort of a run: the stored choice, when it is for this very model and
- * the service says the model reasons. A failed lookup sends none.
- */
-async function runEffort(request: StreamInferenceRequest): Promise<AiEffort | undefined> {
-  const stored = readAiSelection();
-  if (!stored?.effort || stored.connectionId !== (request.connectionId ?? PLATFORM_CONNECTION_ID)) return undefined;
-  if (stored.model !== request.model) return undefined;
-  try {
-    return selectionEffort(stored, { [stored.connectionId]: await listModels(stored.connectionId) });
-  } catch {
-    return undefined;
-  }
-}
-
 /** The port the Assistant pane talks to when the AI service is configured. */
 export const aiInferencePort: InferencePort = {
   /** A one-shot completion — the service's `/complete` route, never persisted. */
@@ -122,7 +101,7 @@ export const aiInferencePort: InferencePort = {
   async stream(request, onEvent, signal): Promise<void> {
     const conversationId = await ensureServerConversation(request);
     const runId = crypto.randomUUID();
-    const effort = await runEffort(request);
+    const effort = effortFor(readAiSelection(), request.connectionId ?? PLATFORM_CONNECTION_ID, request.model);
 
     // A stop is an abort: the run is cancelled on the service too, so it stops
     // burning tokens there.
@@ -143,7 +122,7 @@ export const aiInferencePort: InferencePort = {
               connectionId: request.connectionId,
               // The agent of this run: the one the reader picked, or none.
               ...(request.agentId ? { agentId: request.agentId } : {}),
-              // Only a model that reasons is given an effort.
+              // The service applies it only to a model that reasons.
               ...(effort ? { effort } : {}),
               // What the answer is read from — the pages the reader pointed at.
               context: request.context,
