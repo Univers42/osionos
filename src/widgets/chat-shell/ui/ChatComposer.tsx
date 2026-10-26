@@ -21,6 +21,8 @@ import { AttachButton } from "./AttachButton";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import { WORKSPACE_CHIP, type ContextChip } from "@/features/ai/model/aiContext";
+import { minimalReplacement, type MarkdownMarker, shortcutMarker, wrapSelection } from "@/features/chat/model/composerMarkdown";
+import { PreviewToggle, UserMarkdown } from "@/features/chat/ui/UserMarkdown";
 import { runError } from "@/features/chat/model/runErrors";
 import type { ComposerAttachment } from "@/features/chat/model/assistantHandoff";
 import { PageSelectorMenu } from "@/features/block-editor/ui/PageSelectorMenu";
@@ -86,9 +88,11 @@ export const ChatComposer: React.FC<Props> = ({
   // models, so it is the one that says. Null while the service has not
   // answered: an unknown is not a "no", and a picture waits for the word.
   const [vision, setVision] = useState<boolean | null>(null);
+  // The draft shown rendered, in place of the textarea. Typing leaves it.
+  const [previewing, setPreviewing] = useState(false);
   const pushToast = useToastStore((s) => s.push);
   const grow = (el: HTMLTextAreaElement) => { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 240)}px`; };
-  useEffect(() => { if (ref.current) grow(ref.current); }, [value]);
+  useEffect(() => { if (ref.current) grow(ref.current); }, [value, previewing]);
 
   // A model that cannot see must never receive the images: when the choice
   // moves to a model that cannot see them, the images go — a text file stays,
@@ -122,9 +126,28 @@ export const ChatComposer: React.FC<Props> = ({
   const slash = useSlashPalette({ value, onChange, onSubmit, textarea: ref, root: rootRef, syncPicker: picker.sync });
   const activeCommand = slash.open ? slash.matches[slash.index] : undefined;
 
+  // Applies a markdown shortcut through the textarea, so the browser's undo
+  // stack holds it: select the changed range, then type the replacement.
+  // execCommand is deprecated but is the only way to keep native undo; where it
+  // is missing or refuses, the value goes through onChange (undo is lost).
+  const applyMarkdown = (element: HTMLTextAreaElement, marker: MarkdownMarker) => {
+    const edit = wrapSelection(element.value, element.selectionStart, element.selectionEnd, marker);
+    const { from, to, text } = minimalReplacement(element.value, edit.value);
+    element.focus();
+    element.setSelectionRange(from, to);
+    const typed = typeof document.execCommand === "function"
+      && (text === "" ? document.execCommand("delete") : document.execCommand("insertText", false, text));
+    if (!typed) onChange(edit.value);
+    requestAnimationFrame(() => element.setSelectionRange(edit.selectionStart, edit.selectionEnd));
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // The palette owns the arrows, Enter, Tab and Escape while it is open.
     if (slash.onKeyDown(e)) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const marker = shortcutMarker(e.key, e.shiftKey);
+      if (marker) { e.preventDefault(); applyMarkdown(e.currentTarget, marker); return; }
+    }
     // The picker has the keyboard while it is open: Enter picks, Escape closes.
     if (picker.trigger) {
       if (e.key === "Escape") picker.cancel();
@@ -163,11 +186,16 @@ export const ChatComposer: React.FC<Props> = ({
       {picker.hint ? (
         <p className="px-3 pt-1.5 text-2xs text-[var(--osio-fg-muted)]" data-testid="ai-context-hint">{picker.hint}</p>
       ) : null}
+      {previewing && value.trim() ? (
+        <div className="max-h-60 overflow-y-auto px-4 pt-3 text-sm text-[var(--osio-fg-default)]" data-testid="composer-preview">
+          <UserMarkdown markdown={value} tone="surface" />
+        </div>
+      ) : (
       <textarea
         ref={ref}
         autoFocus={autoFocus}
         value={value}
-        onChange={(e) => { onChange(e.target.value); picker.sync(e.target, e.target.value); slash.sync(e.target, e.target.value); }}
+        onChange={(e) => { setPreviewing(false); onChange(e.target.value); picker.sync(e.target, e.target.value); slash.sync(e.target, e.target.value); }}
         onSelect={(e) => { picker.sync(e.currentTarget, value); slash.sync(e.currentTarget, value); }}
         onKeyDown={onKeyDown}
         rows={1}
@@ -178,6 +206,7 @@ export const ChatComposer: React.FC<Props> = ({
         aria-activedescendant={activeCommand ? slashOptionId(activeCommand.name) : undefined}
         className="block w-full resize-none bg-transparent px-4 pt-3 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
       />
+      )}
       <div className="flex items-center gap-2 px-2 pb-2 pt-1">
         <div data-composer-slot="attach" className="contents">
           <AttachButton
@@ -186,6 +215,9 @@ export const ChatComposer: React.FC<Props> = ({
             onChange={(next) => onAttachmentsChange?.(next)}
           />
         </div>
+        {value.trim() ? (
+          <PreviewToggle pressed={previewing} onToggle={() => setPreviewing((on) => !on)} />
+        ) : null}
         <button
           type="button"
           onClick={onConnect}
