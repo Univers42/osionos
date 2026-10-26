@@ -13,7 +13,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 
-import { useChatStore, getInferencePort } from "@/features/chat/model/useChatStore";
+import { useChatStore, getInferencePort, conversationsOf } from "@/features/chat/model/useChatStore";
 import { mergeAttachments, subscribeAssistantHandoff, toRunAttachments } from "@/features/chat/model/assistantHandoff";
 import type { ComposerAttachment } from "@/features/chat/model/assistantHandoff";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
@@ -22,6 +22,8 @@ import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/fea
 import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { MAX_ATTACHMENTS } from "./AttachButton";
+import { ConversationRow } from "@/features/chat/ui/ConversationRow";
+import { useUserStore } from "@/features/auth";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
 import { EmptyStateHero } from "./EmptyStateHero";
@@ -33,7 +35,9 @@ export const ChatShell: React.FC = () => {
   const initConnectors = useConnectorStore((s) => s.init);
   const snapshots = useConnectorStore((s) => s.snapshots);
   const connectedSnaps = useMemo(() => Object.values(snapshots).filter((x) => x.state === "connected"), [snapshots]);
-  const conversations = useChatStore((s) => s.conversations);
+  const allConversations = useChatStore((s) => s.conversations);
+  const userId = useUserStore((s) => s.activeUserId);
+  const conversations = useMemo(() => conversationsOf(allConversations, userId), [allConversations, userId]);
   const activeId = useChatStore((s) => s.activeConversationId);
   const allMessages = useChatStore((s) => s.messages);
   const createConversation = useChatStore((s) => s.createConversation);
@@ -43,6 +47,9 @@ export const ChatShell: React.FC = () => {
   // The built-in agents the service offers: the shapes a run can take.
   const agents = useChatStore((s) => s.agents);
   const loadAgents = useChatStore((s) => s.loadAgents);
+  const syncServerConversations = useChatStore((s) => s.syncServerConversations);
+  const loadServerTranscript = useChatStore((s) => s.loadServerTranscript);
+  const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
 
   const [text, setText] = useState("");
   const [onboarding, setOnboarding] = useState<null | "ask" | "choose">(null);
@@ -54,9 +61,15 @@ export const ChatShell: React.FC = () => {
   const [agentId, setAgentId] = useState<string | null>(null);
 
   useEffect(() => { initConnectors(); }, [initConnectors]);
-  useEffect(() => { if (!activeId) createConversation(); }, [activeId, createConversation]);
+  // Another account's conversation is never shown: switching accounts starts a new one.
+  const active = conversations.find((c) => c.id === activeId) ?? null;
+  useEffect(() => { if (!active) createConversation(); }, [active, createConversation]);
   // The list of the agents, once: the service owns it.
   useEffect(() => { void loadAgents(); }, [loadAgents]);
+  // The conversations of the account, once: another browser may have started them.
+  useEffect(() => { if (workspaceId && isAiConfigured()) void syncServerConversations(workspaceId); }, [workspaceId, syncServerConversations]);
+  // A conversation that came from the service has no local message until it is opened.
+  useEffect(() => { if (activeId) void loadServerTranscript(activeId); }, [activeId, loadServerTranscript]);
 
   /**
    * The hand-off from a block: the image the user pointed at, waiting for the
@@ -76,7 +89,6 @@ export const ChatShell: React.FC = () => {
     [],
   );
 
-  const active = conversations.find((c) => c.id === activeId) ?? null;
   const messages = allMessages.filter((m) => m.conversationId === activeId);
   const streaming = messages.some((m) => m.status === "streaming");
   const hasConnection = connectedSnaps.length > 0;
@@ -164,17 +176,17 @@ export const ChatShell: React.FC = () => {
         </button>
         <nav className="flex-1 overflow-y-auto px-2 pb-3" aria-label="Conversations">
           {conversations.map((c) => (
-            <button
+            <ConversationRow
               key={c.id}
-              type="button"
-              onClick={() => setActive(c.id)}
-              aria-current={c.id === activeId}
-              className={`mb-0.5 block w-full truncate rounded-md px-3 py-2 text-left text-sm transition-colors ${
+              conversation={c}
+              isCurrent={c.id === activeId}
+              onOpen={() => setActive(c.id)}
+              openClassName={`mb-0.5 block truncate rounded-md px-3 py-2 text-left text-sm transition-colors ${
                 c.id === activeId ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
               }`}
             >
               {c.title}
-            </button>
+            </ConversationRow>
           ))}
         </nav>
       </aside>

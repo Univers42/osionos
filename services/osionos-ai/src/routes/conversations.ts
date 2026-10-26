@@ -2,7 +2,14 @@ import { z } from 'zod';
 import type { AuthUser } from '../auth.ts';
 import { readJson, sendError, sendJson } from '../http.ts';
 import { canAccessWorkspace } from '../workspaceAccess.ts';
-import { createConversation, getOwnedConversation, listConversations, listMessages } from '../conversations/repo.ts';
+import {
+	archiveConversation,
+	createConversation,
+	getOwnedConversation,
+	listConversations,
+	listMessages,
+	renameConversation,
+} from '../conversations/repo.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -17,6 +24,35 @@ const createConversationSchema = z.object({
 	workspaceId: z.string().regex(UUID, 'workspaceId must be a uuid'),
 	title: z.string().max(200).optional(),
 });
+
+const renameSchema = z.object({ title: z.string().trim().min(1).max(200) });
+
+/** The 100-character cap keeps a search text from becoming a scan of arbitrary patterns. */
+const SEARCH_MAX_CHARS = 100;
+
+/** PATCH and DELETE /api/ai/conversations/:id */
+export async function handleConversationItem(ctx: RouteContext): Promise<number> {
+	const user = requireUser(ctx);
+	if (!user) return 401;
+	const id = ctx.params[0] ?? '';
+	let answer: unknown = null;
+	if (UUID.test(id)) {
+		if (ctx.request.method === 'PATCH') {
+			const body = await readJson(ctx.request, renameSchema);
+			answer = await renameConversation(ctx.deps.db, { id, ownerId: user.userId, title: body.title });
+		} else {
+			answer = (await archiveConversation(ctx.deps.db, { id, ownerId: user.userId })) ? { ok: true } : null;
+		}
+	}
+	// Foreign, archived, missing and malformed ids all answer the same 404.
+	if (!answer) {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	const status = 200;
+	sendJson(ctx.response, status, answer);
+	return status;
+}
 
 /** GET /api/ai/conversations/:id/messages */
 export async function handleConversationMessages(ctx: RouteContext): Promise<number> {
@@ -64,12 +100,18 @@ async function handleListConversations(ctx: RouteContext, user: AuthUser): Promi
 		sendError(ctx.response, 400, 'invalid_request');
 		return 400;
 	}
+	const query = (ctx.url.searchParams.get('q') ?? '').trim();
+	if (query.length > SEARCH_MAX_CHARS) {
+		sendError(ctx.response, 400, 'invalid_request');
+		return 400;
+	}
 	// The owner filter is the gate: the answer holds the caller's own
 	// conversations of that workspace, and nothing else.
 	const conversations = await listConversations(ctx.deps.db, {
 		ownerId: user.userId,
 		workspaceId,
 		limit: 50,
+		query,
 	});
 	const status = 200;
 	sendJson(ctx.response, status, { conversations });
