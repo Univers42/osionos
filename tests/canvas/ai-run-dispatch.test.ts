@@ -45,6 +45,7 @@ function seen(): Seen {
     applyServerTitle: (title) => void calls.push(`title:${title}`),
     askPermission: (permission) => void calls.push(`permission:${permission.approvalId}`),
     proposeMemory: (proposal) => void calls.push(`memory:${proposal.memoryId}`),
+    suggestAgent: (handoff) => void calls.push(`handoff:${handoff.agentId}`),
   };
   return { calls, actions };
 }
