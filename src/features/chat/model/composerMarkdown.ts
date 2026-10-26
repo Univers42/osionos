@@ -21,7 +21,7 @@ export interface SelectionEdit {
 /** The placeholder a new link carries: selected, so typing replaces it. */
 const LINK_URL = "url";
 
-/** Ctrl/Cmd + key → marker. Shift+X is the strike-through, written `x`. */
+/** Ctrl/Cmd + key → marker. */
 export const SHORTCUT_MARKERS: Record<string, MarkdownMarker> = {
   b: "**",
   i: "_",
@@ -29,6 +29,20 @@ export const SHORTCUT_MARKERS: Record<string, MarkdownMarker> = {
   x: "~~",
   k: "link",
 };
+
+/**
+ * Keys that need Shift too: Ctrl+Shift+X strikes through, and the link is
+ * Ctrl+Shift+K as in the page editor, because Ctrl+K is Search everywhere
+ * (defaultAutomations "open-search"), on a capture listener that would run first.
+ */
+const SHIFTED_KEYS = new Set(["x", "k"]);
+
+/** The marker a shortcut means, or null when the key is not one of ours. */
+export function shortcutMarker(key: string, shift: boolean): MarkdownMarker | null {
+  const lower = key.toLowerCase();
+  const marker = SHORTCUT_MARKERS[lower];
+  return marker && shift === SHIFTED_KEYS.has(lower) ? marker : null;
+}
 
 function wrapLink(value: string, start: number, end: number): SelectionEdit {
   const selected = value.slice(start, end);

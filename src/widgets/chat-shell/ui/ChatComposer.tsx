@@ -21,7 +21,7 @@ import { AttachButton } from "./AttachButton";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import { WORKSPACE_CHIP, type ContextChip } from "@/features/ai/model/aiContext";
-import { minimalReplacement, type MarkdownMarker, SHORTCUT_MARKERS, wrapSelection } from "@/features/chat/model/composerMarkdown";
+import { minimalReplacement, type MarkdownMarker, shortcutMarker, wrapSelection } from "@/features/chat/model/composerMarkdown";
 import { PreviewToggle, UserMarkdown } from "@/features/chat/ui/UserMarkdown";
 import { runError } from "@/features/chat/model/runErrors";
 import type { ComposerAttachment } from "@/features/chat/model/assistantHandoff";
@@ -145,10 +145,8 @@ export const ChatComposer: React.FC<Props> = ({
     // The palette owns the arrows, Enter, Tab and Escape while it is open.
     if (slash.onKeyDown(e)) return;
     if ((e.ctrlKey || e.metaKey) && !e.altKey) {
-      const key = e.key.toLowerCase();
-      const marker = SHORTCUT_MARKERS[key];
-      // Shift is only for the strike-through; Ctrl+Shift+B etc. stay the browser's.
-      if (marker && e.shiftKey === (key === "x")) { e.preventDefault(); applyMarkdown(e.currentTarget, marker); return; }
+      const marker = shortcutMarker(e.key, e.shiftKey);
+      if (marker) { e.preventDefault(); applyMarkdown(e.currentTarget, marker); return; }
     }
     // The picker has the keyboard while it is open: Enter picks, Escape closes.
     if (picker.trigger) {

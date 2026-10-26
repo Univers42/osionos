@@ -10,7 +10,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { renderAssistantMarkdown } from "@/features/chat/model/assistantMarkdown";
-import { keepLineBreaks, minimalReplacement, SHORTCUT_MARKERS, wrapSelection } from "@/features/chat/model/composerMarkdown";
+import { keepLineBreaks, minimalReplacement, SHORTCUT_MARKERS, shortcutMarker, wrapSelection } from "@/features/chat/model/composerMarkdown";
 import { UserBubble } from "@/features/chat/ui/MessageActions";
 import { PreviewToggle, UserMarkdown } from "@/features/chat/ui/UserMarkdown";
 
@@ -35,6 +35,16 @@ test("wrapSelection unwraps markers inside the selection", () => {
 test("wrapSelection with an empty selection puts the caret between the pair", () => {
   const edit = wrapSelection("ab", 1, 1, "`");
   assert.deepEqual(edit, { value: "a``b", selectionStart: 2, selectionEnd: 2 });
+});
+
+test("Ctrl+K stays Search: the link is Ctrl+Shift+K, the strike-through Ctrl+Shift+X", () => {
+  assert.equal(shortcutMarker("k", false), null);
+  assert.equal(shortcutMarker("K", true), "link");
+  assert.equal(shortcutMarker("x", false), null);
+  assert.equal(shortcutMarker("X", true), "~~");
+  assert.equal(shortcutMarker("b", false), "**");
+  assert.equal(shortcutMarker("B", true), null);
+  assert.equal(shortcutMarker("z", false), null);
 });
 
 test("wrapSelection knows every marker", () => {
