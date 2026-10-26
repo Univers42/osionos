@@ -96,12 +96,7 @@ $border-color-map: (
   }
 }
 
-@each $v in all, top, bottom, x, y {
-  [data-s-borderSides="#{$v}"] {
-  }
-}
-
-// borderSides real rules, applied when a border colour is present
+// A side list only narrows a border that is already on.
 [data-s-border][data-s-borderSides="top"] {
   border-width: var(--osio-border-width, 1px) 0 0 0;
 }
@@ -226,6 +221,3 @@ $shadow-map: (
     box-shadow: $token;
   }
 }
-
-// borderSides all = every side
-// (already covered by all rule above)
