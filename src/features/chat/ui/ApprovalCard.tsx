@@ -41,6 +41,7 @@ import {
   askedByWords,
   decideApprovalCard,
   expiryWords,
+  influencedByWords,
   externalAgentWords,
   previewWords,
   refusalWords,
@@ -61,6 +62,8 @@ export interface ApprovalCardProps {
   agentName?: string;
   /** The pages the request comes from, by title — when they are known. */
   provenanceTitles?: readonly string[];
+  /** What outside content shaped the request: `web:<domain>` or `mcp:<label>`. */
+  influencedBy?: readonly string[];
   /** Opens the page the write touches. */
   onOpenPage?: (pageId: string) => void;
   /** The follow-up of the write: the assistant's answer after it. */
@@ -165,6 +168,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
       : null,
     previewWords(approval?.preview) ? previewLine(previewWords(approval?.preview)) : null,
     titles.length > 0 ? noteLine(`Asked from: ${titles.join(", ")}`) : null,
+    influencedByWords(props.influencedBy) ? noteLine(influencedByWords(props.influencedBy)) : null,
     approvedInRunWords(approval?.approvedInRun ?? 0)
       ? noteLine(approvedInRunWords(approval?.approvedInRun ?? 0))
       : null,

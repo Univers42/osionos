@@ -20,6 +20,8 @@ import { useConnectorStore } from "@/features/connectors/model/useConnectorStore
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/features/ai/model/aiSelection";
 import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
+import { useWebSettings } from "@/features/ai/model/useWebSettings";
+import { useWebToggle } from "@/features/ai/model/webToggle";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { MAX_ATTACHMENTS } from "./AttachButton";
 import { useUserStore } from "@/features/auth";
@@ -57,6 +59,10 @@ export const ChatShell: React.FC = () => {
   const syncServerConversations = useChatStore((s) => s.syncServerConversations);
   const loadServerTranscript = useChatStore((s) => s.loadServerTranscript);
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
+
+  // The workspace switch of the web tools: the toggle is drawn only when the server says it is on.
+  const { view: webView } = useWebSettings(workspaceId, isAiConfigured());
+  const webAvailable = webView.status === "ready" && webView.enabled;
 
   const [text, setText] = useState("");
   const [onboarding, setOnboarding] = useState<null | "ask" | "choose">(null);
@@ -148,6 +154,8 @@ export const ChatShell: React.FC = () => {
     const value = (explicit ?? text).trim();
     if (!active || !value) return;
     if (needsConnection && !hasConnection) { setText(value); setOnboarding("ask"); return; } // ask to connect, keep the message
+    // The toggle is this message's alone: taking it puts it back to off. A switch turned off since drops it.
+    const web = useWebToggle.getState().take() && webAvailable;
     void send(active.id, value, {
       connectorId: fallbackConnector,
       model: selection.model || "auto",
@@ -156,7 +164,7 @@ export const ChatShell: React.FC = () => {
       ...(agentId ? { agentId } : {}),
       attachments: toRunAttachments(attachments),
       // What the answer may read: the pages the reader pointed at.
-      ...(chips.length > 0 ? { context: buildRunContext(chips) } : {}),
+      ...(chips.length > 0 || web ? { context: buildRunContext(chips, web) } : {}),
     });
     setText("");
     setAttachments([]);
@@ -169,10 +177,12 @@ export const ChatShell: React.FC = () => {
     const value = text.trim();
     if (!active || !value) return;
     const connected = Object.values(useConnectorStore.getState().snapshots).find((x) => x.state === "connected");
+    const web = useWebToggle.getState().take() && webAvailable;
     void send(active.id, value, {
       connectorId: connected?.providerKey ?? fallbackConnector,
       model: selection.model || "auto",
       connectionId: selection.connectionId,
+      ...(web ? { context: buildRunContext([], true) } : {}),
     });
     setText("");
   };
@@ -202,6 +212,7 @@ export const ChatShell: React.FC = () => {
     onAgentChange: setAgentId,
     attachments,
     onAttachmentsChange: setAttachments,
+    webAvailable,
     streaming,
     onStop: () => { if (active) stop(active.id); },
   };
