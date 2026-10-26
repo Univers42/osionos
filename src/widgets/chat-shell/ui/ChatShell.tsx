@@ -19,7 +19,8 @@ import type { ComposerAttachment } from "@/features/chat/model/assistantHandoff"
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/features/ai/model/aiSelection";
-import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
+import { addContextChip, buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
+import { usePageStore } from "@/store/usePageStore";
 import { useWebSettings } from "@/features/ai/model/useWebSettings";
 import { useWebToggle } from "@/features/ai/model/webToggle";
 import { openSettings } from "@/features/settings/model/settingsNav";
@@ -112,6 +113,12 @@ export const ChatShell: React.FC = () => {
             MAX_ATTACHMENTS,
           ));
         if (pending.text) setText((current) => (current.trim() ? current : pending.text));
+        // The page the question is about: a chip by id; the service checks the access (C423).
+        const { pageId } = pending;
+        if (pageId) {
+          const title = usePageStore.getState().pageById(pageId)?.title || "Untitled";
+          setChips((current) => addContextChip(current, { id: pageId, kind: "page", label: title, pageId }).chips);
+        }
       }),
     [],
   );
