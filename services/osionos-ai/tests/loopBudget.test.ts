@@ -178,16 +178,20 @@ describe('the money of a run', () => {
 		// The money of the day allows the first step, one extension, and the
 		// answer: the loop stops at the third step, and that step answers.
 		//
-		// The two micro-USD are rounding slack: every figure here is a ceiling
-		// of a few tokens, and the data-boundary line of the system prompt
-		// (eight characters longer with <file>) moved the real reservation
-		// across a rounding step. Two micro-USD is a hundred tokens of this
-		// model less than a fourth step, so the loop still stops at three.
-		await setLeft(RESERVATION + STEP + 2);
+		// A step here reports 2 000 prompt tokens (40 micro-USD), not 100: at
+		// 100 a step cost 2 micro-USD, the size of the rounding of a ceiling,
+		// so whether a fourth step fit depended on where the tool definitions
+		// put the ceilings (suggest_agent's 495 characters let it fit). Half a
+		// step of slack covers what the tool output adds to the ceilings and
+		// stays under the step a fourth call would need; the step stays under
+		// the ceiling of a step, so the settlement stays inside the cap.
+		const wideStep = costMicroUsd(METERED, { inputTokens: 2_000, outputTokens: 0 });
+		assert.ok(wideStep < RESERVATION / 2, 'a reported step stays under the ceiling of a step');
+		await setLeft(RESERVATION + wideStep + wideStep / 2);
 		mock.setOptions({
 			toolCall: { name: 'read_page', arguments: { pageId: 'not-a-uuid' } },
 			toolCallEveryStep: true,
-			usage: { promptTokens: 100, completionTokens: 0 },
+			usage: { promptTokens: 2_000, completionTokens: 0 },
 		});
 		const calls = mock.calls;
 		const conversationId = await createConversation();
