@@ -9,6 +9,7 @@
 import React, { useState } from "react";
 
 import type { ChatMessage } from "../model/chatTypes";
+import { UserMarkdown } from "./UserMarkdown";
 import { copyWord, useCopyFeedback } from "./useCopyFeedback";
 
 const BUTTON =
@@ -99,7 +100,7 @@ export const UserBubble: React.FC<{
   return el(
     React.Fragment,
     null,
-    el("span", { className: "whitespace-pre-wrap" }, content),
+    el(UserMarkdown, { markdown: content, tone: "accent" }),
     canEdit
       ? el(
           "span",
