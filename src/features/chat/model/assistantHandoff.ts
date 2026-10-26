@@ -84,6 +84,46 @@ export interface AssistantHandoff {
   attachments: string[];
   /** The text that comes with them. */
   text: string;
+  /** The page the question is about: a context chip, by id only — the service checks the access (C423). */
+  pageId?: string;
+}
+
+/** One quoted entry: who said it, as the surface already shows it, and what. */
+export interface QuotedEntry {
+  author: string;
+  text: string;
+}
+
+/** The most text an entry point quotes into the composer (C420): under the run's 64 KB body, with room to ask. */
+export const MAX_QUOTE_CHARS = 4000;
+
+/**
+ * The entries as a markdown quote for the composer (C420): each author on its
+ * own line, every line behind `> `, and the whole cut on a line boundary at
+ * {@link MAX_QUOTE_CHARS} with "…". The user reads and edits it before Send.
+ */
+export function quoteForAssistant(entries: readonly QuotedEntry[]): string {
+  const lines = entries.flatMap((entry) => [
+    `> **${entry.author.replace(/[*\n]/g, " ").trim() || "Member"}:**`,
+    ...entry.text.replace(/\r\n/g, "\n").trim().split("\n").map((line) => `> ${line}`),
+    ">",
+  ]);
+  if (lines.at(-1) === ">") lines.pop();
+  // Room for the closing "\n> …" and the blank line after the quote, so the whole stays under the cap.
+  const budget = MAX_QUOTE_CHARS - 6;
+  const kept: string[] = [];
+  let size = 0;
+  for (const line of lines) {
+    if (size + line.length + 1 > budget) {
+      // A line longer than the whole cap is cut inside, so one long message still says something.
+      const room = budget - size - 1;
+      kept.push(line.length >= budget && room > 40 ? `${line.slice(0, room)}…` : "> …");
+      break;
+    }
+    kept.push(line);
+    size += line.length + 1;
+  }
+  return kept.length > 0 ? `${kept.join("\n")}\n\n` : "";
 }
 
 interface AssistantHandoffState {

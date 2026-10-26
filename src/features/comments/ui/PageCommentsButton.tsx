@@ -16,6 +16,10 @@ import { useClickOutside, useEscapeKey } from "@/shared/ui";
 import { useUserStore } from "@/features/auth";
 import { isCommentsEnabled } from "@/shared/config/featureFlags";
 import { useComments } from "../model/useComments";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
+import { quoteForAssistant } from "@/features/chat/model/assistantHandoff";
+import { openAssistantWith } from "@/features/chat/model/openAssistantWith";
+import { threadEntries } from "../model/askAboutThread";
 import { CommentsPanel } from "./CommentsPanel";
 
 /** Page-header comments affordance: a count badge + a dropdown thread. */
@@ -56,6 +60,10 @@ export const PageCommentsButton: React.FC<{ pageId: string }> = ({ pageId }) => 
             onAdd={(content, acknowledgeWarning) => add(content, null, acknowledgeWarning)}
             onResolve={resolve}
             onRemove={remove}
+            onAskAI={isAiConfigured() ? () => {
+              openAssistantWith({ text: quoteForAssistant(threadEntries(comments, meId)), pageId });
+              setOpen(false);
+            } : undefined}
           />
         </div>
       )}

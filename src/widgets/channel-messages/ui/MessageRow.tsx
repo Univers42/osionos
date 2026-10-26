@@ -11,11 +11,14 @@
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
-import { Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react';
+import { Pencil, Reply, SmilePlus, Sparkles, Trash2 } from 'lucide-react';
 
 import { renderInlineToReact } from '@osionos/markdown-engine/react';
 import type { ChatMessage } from '@/shared/chat/messageApi';
 import { Button, IconButton } from '@/shared/ui';
+import { isAiConfigured } from '@/features/ai/api/aiClient';
+import { quoteForAssistant } from '@/features/chat/model/assistantHandoff';
+import { openAssistantWith } from '@/features/chat/model/openAssistantWith';
 
 import type { SendOutcome } from '../model/channelWrites';
 import { MessageAttachments } from './attachments/MessageAttachments';
@@ -167,6 +170,11 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
         <div className="absolute -top-2 right-2 hidden items-center gap-0.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-0.5 shadow-osio-menu group-hover:flex">
           <IconButton size="xs" label="Reply" onClick={() => onReply(message)}><Reply size={14} /></IconButton>
           <IconButton size="xs" label="Add reaction" onClick={() => setPickerOpen((open) => !open)}><SmilePlus size={14} /></IconButton>
+          {isAiConfigured() && (
+            <IconButton size="xs" label="Ask AI about this message" onClick={() => openAssistantWith({ text: quoteForAssistant([{ author: message.authorName, text: message.content }]) })}>
+              <Sparkles size={14} />
+            </IconButton>
+          )}
           {isAuthor && (
             <>
               <IconButton size="xs" label="Edit message" onClick={() => setEditing(true)}><Pencil size={14} /></IconButton>
