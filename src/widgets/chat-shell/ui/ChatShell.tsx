@@ -62,6 +62,7 @@ export const ChatShell: React.FC = () => {
   // The workspace switch of the web tools: the toggle is drawn only when the server says it is on.
   const { view: webView } = useWebSettings(workspaceId, isAiConfigured());
   const webAvailable = webView.status === "ready" && webView.enabled;
+  const researchAvailable = webAvailable && webView.status === "ready" && webView.research === true;
 
   const [text, setText] = useState("");
   const [onboarding, setOnboarding] = useState<null | "ask" | "choose">(null);
@@ -154,7 +155,9 @@ export const ChatShell: React.FC = () => {
     if (!active || !value || panel.isRunning()) return;
     if (needsConnection && !hasConnection) { setText(value); setOnboarding("ask"); return; } // ask to connect, keep the message
     // The toggle is this message's alone: taking it puts it back to off. A switch turned off since drops it.
-    const web = useWebToggle.getState().take() && webAvailable;
+    const toggles = useWebToggle.getState().takeAll();
+    const web = toggles.web && webAvailable;
+    const research = toggles.research && researchAvailable;
     const sel = {
       connectorId: fallbackConnector,
       model: selection.model || "auto",
@@ -163,7 +166,7 @@ export const ChatShell: React.FC = () => {
       ...(agentId ? { agentId } : {}),
       attachments: toRunAttachments(attachments),
       // What the answer may read: the pages the reader pointed at.
-      ...(chips.length > 0 || web ? { context: buildRunContext(chips, web) } : {}),
+      ...(chips.length > 0 || web || research ? { context: buildRunContext(chips, web, research) } : {}),
     };
     void (panel.active ? panel.sendToPanel(active.id, value, sel) : send(active.id, value, sel));
     setText("");
@@ -177,12 +180,14 @@ export const ChatShell: React.FC = () => {
     const value = text.trim();
     if (!active || !value) return;
     const connected = Object.values(useConnectorStore.getState().snapshots).find((x) => x.state === "connected");
-    const web = useWebToggle.getState().take() && webAvailable;
+    const toggles = useWebToggle.getState().takeAll();
+    const web = toggles.web && webAvailable;
+    const research = toggles.research && researchAvailable;
     void send(active.id, value, {
       connectorId: connected?.providerKey ?? fallbackConnector,
       model: selection.model || "auto",
       connectionId: selection.connectionId,
-      ...(web ? { context: buildRunContext([], true) } : {}),
+      ...(web || research ? { context: buildRunContext([], web, research) } : {}),
     });
     setText("");
   };
@@ -215,6 +220,7 @@ export const ChatShell: React.FC = () => {
     attachments,
     onAttachmentsChange: setAttachments,
     webAvailable,
+    researchAvailable,
     streaming,
     onStop: () => { panel.cancel(); if (active) stop(active.id); },
   };
