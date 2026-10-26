@@ -4251,7 +4251,10 @@ async function handleObjectDatabasesUpsert(url, request, response, config, fetch
 	// Nudge the owner's OTHER browsers/tabs to re-hydrate — cross-client realtime for
 	// object DBs, which otherwise only pick up remote writes on a full reload. The
 	// per-owner topic matches the token `sub` the client subscribes with. Best-effort.
-	void publishRealtime({ topic: `objectdb:${authContext.userId}`, eventType: 'objectdb_changed', payload: { dbKey, userId: authContext.userId } });
+	// `origin` is the pushing tab's own id, echoed so that tab skips its own nudge; it
+	// reaches only this owner's topic, so a forged value can only mute the owner's tabs.
+	const origin = typeof payload.origin === 'string' ? safeText(payload.origin, 64) : '';
+	void publishRealtime({ topic: `objectdb:${authContext.userId}`, eventType: 'objectdb_changed', payload: { dbKey, userId: authContext.userId, ...(origin ? { origin } : {}) } });
 	json(response, 200, { ok: true, dbKey, updatedAt: row?.updated_at ?? null }, config);
 	return true;
 }
