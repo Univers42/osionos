@@ -12,7 +12,7 @@
 
 import { test, expect } from "@playwright/test";
 
-const composer = (page) => page.getByPlaceholder("Do anything with AI…");
+const composer = (page) => page.getByPlaceholder("Ask osionos AI…");
 
 async function openAssistant(page) {
   // The assistant lives in the Conversations panel: "New AI chat" opens a fresh one.

@@ -1,6 +1,8 @@
-/* The composer seen through the binocle's lens: a two-tone ring of the accent and the
-   purple tint. The ring turns only while an answer is being written, the one motion of
-   the assistant, and stands still for anyone who asks for reduced motion. */
+/* The composer seen through the binocle's lens: a lit ring of four lights (the accent, violet,
+   pink and amber) with a soft halo of the same light around it. Both are drawn without any
+   motion, so a reader who asks for reduced motion still sees the perimeter lit — that static
+   state is the design, the turning is the extra. The light turns slowly while the composer
+   has the focus, faster while an answer is being written. */
 @property --lens-angle {
   syntax: "<angle>";
   inherits: false;
@@ -8,27 +10,85 @@
 }
 
 .lens {
+  --lens-blue: var(--osio-accent);
+  --lens-violet: var(--osio-block-tint-purple-fg);
+  --lens-pink: var(--osio-block-tint-pink-fg);
+  --lens-amber: var(--osio-block-tint-orange-fg);
   position: relative;
-  padding: 1.5px;
+  isolation: isolate;
+  padding: 2px;
   border-radius: calc(var(--osio-radius-panel) + 4px);
   background: conic-gradient(
     from var(--lens-angle),
-    var(--osio-accent),
-    var(--osio-block-tint-purple-fg),
-    color-mix(in oklab, var(--osio-accent) 25%, var(--osio-border-default)),
-    var(--osio-accent)
+    var(--lens-blue),
+    var(--lens-violet) 22%,
+    var(--lens-pink) 45%,
+    var(--lens-amber) 62%,
+    var(--lens-pink) 76%,
+    var(--lens-violet) 88%,
+    var(--lens-blue)
   );
-  box-shadow: 0 18px 48px -28px color-mix(in oklab, var(--osio-accent) 60%, transparent);
+  box-shadow: 0 10px 34px -14px color-mix(in oklab, var(--lens-violet) 70%, transparent);
+  transition: box-shadow var(--osio-dur-fast) ease;
+}
+
+/* The tints are text colours, quiet on purpose; the ring lifts their chroma so the four
+   lights read as light in both themes. Without relative colours the quiet tints stay. */
+@supports (color: oklch(from white l c h)) {
+  .lens {
+    --lens-blue: oklch(from var(--osio-accent) max(l, 0.62) max(c, 0.17) h);
+    --lens-violet: oklch(from var(--osio-block-tint-purple-fg) max(l, 0.6) max(c, 0.2) h);
+    --lens-pink: oklch(from var(--osio-block-tint-pink-fg) max(l, 0.64) max(c, 0.19) h);
+    --lens-amber: oklch(from var(--osio-block-tint-orange-fg) max(l, 0.74) max(c, 0.15) h);
+  }
+}
+
+/* The halo: the ring's own gradient, blurred, behind the composer. */
+.lens::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  background: inherit;
+  filter: blur(18px);
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity var(--osio-dur-fast) ease;
 }
 
 /* The composer keeps its own surface; inside the lens the ring is its border. */
 .lens > [data-dictation-composer] {
   border-color: transparent;
-  border-radius: calc(var(--osio-radius-panel) + 2.5px);
+  border-radius: calc(var(--osio-radius-panel) + 2px);
+}
+
+.lens:focus-within,
+.lens[data-working="true"] {
+  animation: lens-turn 7s linear infinite;
+  box-shadow: 0 12px 44px -12px color-mix(in oklab, var(--lens-violet) 85%, transparent);
+}
+
+.lens:focus-within::before,
+.lens[data-working="true"]::before {
+  opacity: 0.8;
 }
 
 .lens[data-working="true"] {
-  animation: lens-turn 2.4s linear infinite;
+  animation-duration: 3s;
+}
+
+/* The drawer under the lit composer: it hangs from the ring, narrower than it, so the two
+   read as one object and the light stays the composer's. */
+.tray {
+  position: relative;
+  z-index: 1;
+  margin: 0 14px;
+  padding: 8px 14px 9px;
+  border: 1px solid var(--osio-border-default);
+  border-top: 0;
+  border-radius: 0 0 var(--osio-radius-panel) var(--osio-radius-panel);
+  background: var(--osio-bg-subtle);
 }
 
 @keyframes lens-turn {
@@ -38,6 +98,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .lens:focus-within,
   .lens[data-working="true"] {
     animation: none;
   }
