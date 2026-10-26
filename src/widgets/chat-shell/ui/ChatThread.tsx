@@ -26,6 +26,7 @@ import { ApprovalCard } from "@/features/chat/ui/ApprovalCard";
 import { memoryProposalsFromParts } from "@/features/chat/model/memoryParts";
 import { MemoryProposalChip } from "@/features/chat/ui/MemoryProposalChip";
 import { openSettings } from "@/features/settings/model/settingsNav";
+import { BinocleMascot } from "@/shared/ui/mascot/BinocleMascot";
 import { useChatStore } from "@/features/chat/model/useChatStore";
 import { RunErrorNotice } from "@/features/chat/model/runErrorNotice";
 
@@ -139,8 +140,9 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                 <AssistantAnswer content={m.content} parts={m.parts} conversationId={m.conversationId} messageId={m.id} />
               )}
               {m.status === "streaming" ? (
-                <span className="ml-0.5 animate-pulse text-[var(--osio-fg-muted)]" data-testid="chat-streaming">
-                  …
+                <span className="ml-0.5 inline-flex items-center gap-1 text-[var(--osio-fg-muted)]" data-testid="chat-streaming">
+                  <BinocleMascot mood="thinking" size={24} />
+                  <span className="animate-pulse">…</span>
                 </span>
               ) : null}
               {m.role === "assistant" && m.status !== "streaming" && m.content ? (
