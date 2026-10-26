@@ -25,7 +25,8 @@ test.describe("database-column-drag", () => {
     const nameTh = block.locator("th", { hasText: "Name" }).first();
     const before = (await nameTh.boundingBox()).width;
 
-    const separator = block.locator('[aria-label="Resize column"]').first();
+    // Each handle is named for its column ("Resize Name column").
+    const separator = block.getByRole("separator", { name: /^Resize .+ column$/ }).first();
     const box = await separator.boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();

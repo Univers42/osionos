@@ -12,14 +12,21 @@ function textFullySelected(activeElement: Element | null): boolean {
   return text.length > 0 && selection.toString().length >= text.length;
 }
 
+/** A focused ARIA grid (database table, table block) owns the clipboard and
+ *  Delete like a text field does: block paste / copy / delete must not fire
+ *  over its own cell copy-paste and clearing. */
+function ownsEditingKeys(activeElement: Element | null): boolean {
+  return isTextEntryTarget(activeElement) || Boolean(activeElement?.closest('[role="grid"]'));
+}
+
 /** Each `when` name → a cheap synchronous predicate evaluated at keypress. */
 export const whenPredicates: Record<WhenName, (ctx: CommandContext) => boolean> = {
   always: () => true,
   editorFocused: (ctx) => ctx.handle !== null,
   inTextEntry: (ctx) => isTextEntryTarget(ctx.activeElement),
-  notInText: (ctx) => !isTextEntryTarget(ctx.activeElement),
+  notInText: (ctx) => !ownsEditingKeys(ctx.activeElement),
   hasBlockSelection: (ctx) => ctx.selection.ids.length > 0,
-  blockSelectionActive: (ctx) => ctx.selection.ids.length > 0 && !isTextEntryTarget(ctx.activeElement),
+  blockSelectionActive: (ctx) => ctx.selection.ids.length > 0 && !ownsEditingKeys(ctx.activeElement),
   textFullySelectedOrHasBlockSelection: (ctx) =>
     ctx.selection.ids.length > 0 || textFullySelected(ctx.activeElement),
 };
