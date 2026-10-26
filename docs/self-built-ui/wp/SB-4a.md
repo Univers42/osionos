@@ -41,7 +41,7 @@ interface ListSource {
   id: string;                                 // "list:<name>", ^list:[a-z][a-z0-9-]{0,63}$
   label: string;
   rowKey: string;                             // the field that identifies a row
-  fields: Readonly<Record<string, FieldSpec>>;
+  fields: readonly FieldSpec[];               // the same shape as RecordSource.fields, looked up by `key`
   subscribe(listener: () => void): () => void;
   getSnapshot(): ListSnapshot;                // same object until something changes
   loadMore?(): Promise<void>;                 // keyset paging; absent = everything is loaded
@@ -73,7 +73,7 @@ The row template is every child except `emptyId`. Labels are at most 80 characte
 
 1. **Stable snapshots.** `getSnapshot` returns the same object while nothing changed, and keeps each unchanged row object (the store's own objects, never copies). Test: changing row 3's field gives a new snapshot whose other rows are `===` the old ones.
 2. **One template, one scope per row.** Each row renders the template subtree inside `RowScopeProvider({ source, row })`. React keys are `<rowKey value>:<child id>`. A row component is memoised on its row object, so changing one row re-renders that row only. e2e with the render counter: updating row 5 of 1,000 raises row 5's count by exactly one and no other row's.
-3. **`$row` bindings.** `useBoundField("$row", field)` inside a row returns `{ value: row[field], status: "ready", spec: source.fields[field] }`, and a `set` only when the source has `update` and the spec is writable. `set` calls `source.update(row[rowKey], field, value)`; a failure keeps the old value and shows the error under the control (SB-2c's error path). Outside a row → `"unavailable"`. A `field` block in the template edits the row inline with no change to `FieldBlock`.
+3. **`$row` bindings.** `useBoundField("$row", field)` inside a row returns `{ value: row[field], status: "ready", spec: <the FieldSpec whose key is field> }`, and a `set` only when the source has `update` and the spec is writable. `set` calls `source.update(row[rowKey], field, value)`; a failure keeps the old value and shows the error under the control (SB-2c's error path). Outside a row → `"unavailable"`. A `field` block in the template edits the row inline with no change to `FieldBlock`.
 4. **Displays.**
    - `list`: rows stacked; `dividers` draws `border-top` with `--osio-border-default` between rows, as `SettingRow` does.
    - `table`: a real `<table>` inside an `overflow-x: auto` wrapper, one `<th scope="col">` per column (its `label`, else the field spec's label). A cell shows the row value formatted by the spec's display: switch/checkbox → "Yes"/"No", an option field → the option's label, else `String(value)`. When the template is not empty it renders in a last column whose header is visually hidden text "Actions". The look follows `DataTable` (`settingsKit.tsx:55-66`): the same tokens for border, header background and row hover.
