@@ -23,11 +23,20 @@
  */
 
 import { AiError, toAiError } from "./aiContract";
+import { conversationFromWire, messageFromWire, type ConversationWire, type MessageWire } from "./aiWire";
 import type {
   AiAgent,
+  AiAgentSettings,
+  AiBuiltinAgent,
+  AiCustomAgent,
+  CreateAgentInput,
+  UpdateAgentInput,
   AiAccessScope,
   AiAccessToken,
   AiAccessTokenCreated,
+  AiMcpDiscovery,
+  AiMcpServer,
+  AiMcpTool,
   AiCommand,
   AiConnection,
   AiConversation,
@@ -39,7 +48,9 @@ import type {
   CompleteInput,
   CreateAccessTokenInput,
   CreateConnectionInput,
+  CreateMcpServerInput,
   StartRunInput,
+  UpdateMcpServerInput,
 } from "./aiContract";
 import { bearerFetch } from "@/shared/agent/bearerFetch";
 import { getActivePageJwt, reportRevokedSession } from "@/shared/api/client";
@@ -53,9 +64,17 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 export { AiError };
 export type {
   AiAgent,
+  AiAgentSettings,
+  AiBuiltinAgent,
+  AiCustomAgent,
+  CreateAgentInput,
+  UpdateAgentInput,
   AiAccessScope,
   AiAccessToken,
   AiAccessTokenCreated,
+  AiMcpDiscovery,
+  AiMcpServer,
+  AiMcpTool,
   AiCommand,
   AiConnection,
   AiConversation,
@@ -67,7 +86,9 @@ export type {
   CompleteInput,
   CreateAccessTokenInput,
   CreateConnectionInput,
+  CreateMcpServerInput,
   StartRunInput,
+  UpdateMcpServerInput,
 };
 /* -------------------------------------------------------------------------- */
 /* The transport                                                              */
@@ -197,23 +218,58 @@ export async function listAgents(): Promise<AiAgent[]> {
   return Array.isArray(body) ? body : [];
 }
 
+const agentPath = (id: string) => `/agents/${encodeURIComponent(id)}`;
+const settingsPath = (workspaceId: string) => `/workspaces/${encodeURIComponent(workspaceId)}/agents/settings`;
+
+/** `GET /agents/:id` — one custom agent; `instructions` only when the caller may run it. */
+export async function getAgent(id: string): Promise<AiCustomAgent> {
+  return requestJson<AiCustomAgent>("GET", agentPath(id));
+}
+
+/** `POST /agents` — a custom agent; the answer carries its instructions. */
+export async function createAgent(input: CreateAgentInput): Promise<AiCustomAgent> {
+  return requestJson<AiCustomAgent>("POST", "/agents", input);
+}
+
+/** `PATCH /agents/:id` — a new version; 409 `version_conflict` when somebody saved first. */
+export async function updateAgent(id: string, input: UpdateAgentInput): Promise<AiCustomAgent> {
+  return requestJson<AiCustomAgent>("PATCH", agentPath(id), input);
+}
+
+/** `DELETE /agents/:id` — archives the agent (terminal in v1). */
+export async function archiveAgent(id: string): Promise<void> {
+  await requestNoContent("DELETE", agentPath(id));
+}
+
+/** `GET /workspaces/:ws/agents/settings` — 404 when the feature is off on this deployment. */
+export async function getAgentSettings(workspaceId: string): Promise<AiAgentSettings> {
+  return requestJson<AiAgentSettings>("GET", settingsPath(workspaceId));
+}
+
+/** `PUT /workspaces/:ws/agents/settings` — both keys, admins only (403 otherwise). */
+export async function putAgentSettings(workspaceId: string, settings: AiAgentSettings): Promise<AiAgentSettings> {
+  return requestJson<AiAgentSettings>("PUT", settingsPath(workspaceId), settings);
+}
+
 /** `POST /conversations` — a conversation of the workspace. */
 export async function createConversation(input: { workspaceId: string; title?: string }): Promise<AiConversation> {
-  return requestJson<AiConversation>("POST", "/conversations", input);
+  return conversationFromWire(await requestJson<ConversationWire>("POST", "/conversations", input));
 }
 
 /** `GET /conversations?workspaceId=` — the caller's conversations, newest first. */
 export async function listConversations(workspaceId: string): Promise<AiConversation[]> {
-  const body = await requestJson<{ conversations?: AiConversation[] }>(
+  const body = await requestJson<{ conversations?: ConversationWire[] }>(
     "GET",
     `/conversations?workspaceId=${encodeURIComponent(workspaceId)}`,
   );
-  return body.conversations ?? [];
+  return (body.conversations ?? []).map(conversationFromWire);
 }
 
 /** `PATCH /conversations/:id` — a new title on a conversation the caller owns. */
 export async function renameConversation(id: string, title: string): Promise<AiConversation> {
-  return requestJson<AiConversation>("PATCH", `/conversations/${encodeURIComponent(id)}`, { title });
+  return conversationFromWire(
+    await requestJson<ConversationWire>("PATCH", `/conversations/${encodeURIComponent(id)}`, { title }),
+  );
 }
 
 /** `DELETE /conversations/:id` — archives the conversation: it leaves the list. */
@@ -223,11 +279,11 @@ export async function deleteConversation(id: string): Promise<void> {
 
 /** `GET /conversations/:id/messages` — the transcript, oldest first. */
 export async function listMessages(conversationId: string): Promise<AiMessage[]> {
-  const body = await requestJson<{ messages?: AiMessage[] }>(
+  const body = await requestJson<{ messages?: MessageWire[] }>(
     "GET",
     `/conversations/${encodeURIComponent(conversationId)}/messages`,
   );
-  return body.messages ?? [];
+  return (body.messages ?? []).map(messageFromWire);
 }
 
 /** `POST /runs` — the run's event stream. */
@@ -375,6 +431,46 @@ export async function createAccessToken(
 /** `DELETE /access-tokens/:id` — the token is revoked. */
 export async function revokeAccessToken(id: string): Promise<void> {
   await requestNoContent("DELETE", `/access-tokens/${encodeURIComponent(id)}`);
+}
+
+/* -------------------------------------------------------------------------- */
+/* MCP servers                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** `GET /mcp-servers` — the servers of the user; a 404 means the feature is off (C288). */
+export async function listMcpServers(): Promise<AiMcpServer[]> {
+  const body = await requestJson<{ servers?: AiMcpServer[] }>("GET", "/mcp-servers");
+  return body.servers ?? [];
+}
+
+/** `POST /mcp-servers` — registers a server; the header value is sealed by the service. */
+export async function createMcpServer(input: CreateMcpServerInput): Promise<AiMcpServer> {
+  return requestJson<AiMcpServer>("POST", "/mcp-servers", input);
+}
+
+/** `PATCH /mcp-servers/:id` — a label, or a new address with its header (C270). */
+export async function updateMcpServer(id: string, input: UpdateMcpServerInput): Promise<AiMcpServer> {
+  return requestJson<AiMcpServer>("PATCH", `/mcp-servers/${encodeURIComponent(id)}`, input);
+}
+
+/** `DELETE /mcp-servers/:id` — the server and its tools are gone. */
+export async function deleteMcpServer(id: string): Promise<void> {
+  await requestNoContent("DELETE", `/mcp-servers/${encodeURIComponent(id)}`);
+}
+
+/** `POST /mcp-servers/:id/discover` — lists the tools of the server; each new one is off. */
+export async function discoverMcpServer(id: string): Promise<AiMcpDiscovery> {
+  return requestJson<AiMcpDiscovery>("POST", `/mcp-servers/${encodeURIComponent(id)}/discover`);
+}
+
+/** `PATCH /mcp-servers/:id/tools/:name` — one tool on or off. */
+export async function setMcpToolEnabled(id: string, name: string, enabled: boolean): Promise<boolean> {
+  const body = await requestJson<{ enabled: boolean }>(
+    "PATCH",
+    `/mcp-servers/${encodeURIComponent(id)}/tools/${encodeURIComponent(name)}`,
+    { enabled },
+  );
+  return body.enabled;
 }
 
 /* -------------------------------------------------------------------------- */

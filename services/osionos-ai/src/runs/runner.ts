@@ -8,6 +8,7 @@ import { appendUserTurn, deleteMessagesFromRun, hasMessagesOfRun, touchConversat
 import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
+import { loadMcpTools, mcpToolChars } from '../mcpClient/runTools.ts';
 import type { Effort } from './effort.ts';
 import type { RunEvent } from './upstream.ts';
 import {
@@ -24,7 +25,9 @@ import {
 import { loadAccountContext } from './account.ts';
 import { loadWorkspaceOverview } from './workspace.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
-import type { BuiltinAgent } from '../agents/builtins.ts';
+import type { AgentConfig } from '../agents/config.ts';
+import { isCustomAgent } from '../agents/config.ts';
+import { PREFIX_MAX, prefixCost } from '../agents/prefix.ts';
 import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
 import { memoriesForRun } from '../memory/runMemories.ts';
 import { recordMemoryPins } from '../memory/repo.ts';
@@ -104,7 +107,7 @@ export interface StartRunInput {
 	 * byte. An agent adds its instructions to the prompt and narrows the tools
 	 * to its own list — it never gains one.
 	 */
-	agent?: BuiltinAgent | null;
+	agent?: AgentConfig | null;
 	/** The workspace of the conversation: its skills join the prompt, when the caller is a live member. */
 	workspaceId?: string;
 	/** Whether the account block is included in the prompt. */
@@ -134,6 +137,7 @@ export function today(now: Date = new Date()): string {
 const PREFLIGHT_ERRORS: Record<string, number> = {
 	rate_limited: 429,
 	budget_exhausted: 402,
+	agent_invalid: 409,
 };
 
 /**
@@ -193,8 +197,11 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		conversationId,
 		ownerId,
 		model: target.modelId,
-		agentId: agent?.id ?? null,
-		agentVersion: agent?.version ?? null,
+		// A custom agent pins its own pair of columns; the built-in pair stays NULL (C301).
+		agentId: isCustomAgent(agent) ? null : (agent?.id ?? null),
+		agentVersion: isCustomAgent(agent) ? null : (agent?.version ?? null),
+		customAgentId: isCustomAgent(agent) ? agent.id : null,
+		customAgentVersion: isCustomAgent(agent) ? agent.version : null,
 	});
 	if (inserted.kind === 'conflict') {
 		// The conversation already has a running run: the partial unique index
@@ -277,6 +284,12 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		agent?.skills ?? [],
 		await workspaceSkillsForRun(db, input.user, input.workspaceId),
 	);
+	// C340: the prefix is judged again with the real index, after the row exists
+	// and before any money moves, so a refusal leaves reserved_microusd at 0.
+	if (isCustomAgent(agent) && prefixCost(agent, skillIndex) > PREFIX_MAX) {
+		await markRun(db, runId, 'failed', 'agent_invalid');
+		return { kind: 'refused', status: 409, code: 'agent_invalid' };
+	}
 	// The user's approved memories, loaded ONCE for this run and pinned on its
 	// row (C40): a continuation run loads its own, as skills do. The pin is what
 	// the run was GIVEN, recorded before it executes: a run that fails before
@@ -301,7 +314,13 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	if (input.view) {
 		viewBlockText = viewBlock(input.view);
 	}
-	const contextChars = (accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0) + (workspaceBlockText?.length ?? 0);
+	// C265 / C287: the MCP tools of the caller are loaded once, here, so the
+	// reservation counts their definitions and the run offers the same list.
+	// Only the general assistant gets them (C308): an agent never does. Flag
+	// off: no query, nothing (C291).
+	const mcpTools = config.mcpClientEnabled && input.user && !agent ? await loadMcpTools(db, ownerId) : [];
+	const contextChars =
+		(accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0) + (workspaceBlockText?.length ?? 0) + mcpToolChars(mcpTools);
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
@@ -382,6 +401,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			agent,
 			skillIndex,
 			memories,
+			mcpTools,
 			workspaceId: input.workspaceId,
 			...(accountBlockText ? { accountBlock: accountBlockText } : {}),
 			...(viewBlockText ? { viewBlock: viewBlockText } : {}),
