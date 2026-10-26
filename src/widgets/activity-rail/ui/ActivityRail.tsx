@@ -20,7 +20,7 @@ import { useAutomationStore } from "@/features/automations/model/useAutomationSt
 import { shortcutLabel } from "@/features/automations/model/shortcutLabel";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
-import { mailTab, calendarTab, whiteboardTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { aiHubTab, mailTab, calendarTab, whiteboardTab, profileTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useUnreadStore } from "@/store/chat/useUnreadStore";
 import { useInstalledApps } from "@/features/marketplace/model/useInstalledApps";
 import { isListableApp } from "@/features/marketplace/model/launchPolicy";
@@ -39,6 +39,7 @@ const APP_TABS: Record<RailApp, () => WorkspaceTab> = {
   mail: mailTab,
   calendar: calendarTab,
   whiteboard: whiteboardTab,
+  "ai-hub": aiHubTab,
 };
 
 const Separator: React.FC = () => <div aria-hidden className="my-1 h-px w-6 shrink-0 bg-[var(--osio-border-default)]" />;
