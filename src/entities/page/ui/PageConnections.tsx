@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useMemo } from "react";
-import { Folder, CornerDownRight, Link2, AtSign, Sparkles, Link as LinkIcon } from "lucide-react";
+import { Folder, CornerDownRight, ArrowUpRight, Link2, AtSign, Sparkles, Link as LinkIcon } from "lucide-react";
 
 import { usePageStore } from "@/store/usePageStore";
 import { useBacklinks } from "../model/useBacklinks";
@@ -158,7 +158,7 @@ const ConnRow: React.FC<ConnRowProps> = ({ icon, label, refs, status, onGo, onLi
                 title={`Open ${ref.title || "Untitled"}`}
                 aria-label={`Open ${ref.title || "Untitled"}`}
               >
-                <CornerDownRight size={11} />
+                <ArrowUpRight size={11} />
               </button>
             ) : null}
           </span>
