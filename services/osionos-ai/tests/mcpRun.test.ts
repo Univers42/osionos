@@ -182,7 +182,7 @@ describe('C266 MCP tools exist only for the general assistant, an enabled tool a
 });
 
 describe('C280 every MCP call waits for the user, and the server is called only in the deciding request', () => {
-	it('C280 two MCP calls in one step are two cards and zero requests to the server', async () => {
+	it('C280 C283 two MCP calls in one step: one card, the second refused, zero requests to the server', async () => {
 		const setup = await armed([{ name: 'a', inputSchema: QUERY_SCHEMA }, { name: 'b', inputSchema: QUERY_SCHEMA }]);
 		const before = setup.server.stats.calls.length;
 		const { events } = await runWith(setup.user, {
@@ -191,10 +191,17 @@ describe('C280 every MCP call waits for the user, and the server is called only 
 			also: [{ name: setup.names.b, arguments: { q: 'two' } }],
 		});
 		const asked = askedOf(events);
-		assert.equal(asked.length, 2, 'two cards');
-		assert.deepEqual(asked.map((card) => card.tool), ['mcp_call', 'mcp_call']);
+		assert.equal(asked.length, 1, 'one card');
+		assert.equal(asked[0].tool, 'mcp_call');
+		assert.equal((await rowOf(String(asked[0].approvalId)))?.status, 'pending');
+		const refused = events
+			.filter((event) => event.event === 'tool.result')
+			.map((event) => event.data as Record<string, unknown>)
+			.filter((result) => result.error === 'one outside tool call per step');
+		assert.equal(refused.length, 1, 'the second call is refused');
+		const rows = await db.query("select count(*)::int as n from public.ai_approvals where owner_id = $1 and tool = 'mcp_call'", [setup.user]);
+		assert.equal(rows.rows[0].n, 1, 'one approval stored');
 		assert.equal(setup.server.stats.calls.length, before, 'zero tools/call before a decision');
-		for (const card of asked) assert.equal((await rowOf(String(card.approvalId)))?.status, 'pending');
 	});
 
 	it('C280 decline sends nothing; approving the same row twice sends one request; an expired row sends none', async () => {
