@@ -20,8 +20,11 @@ export interface MessageRow extends QueryResultRow {
 	model: string | null;
 	usage: unknown;
 	created_at: Date;
-	/** The agent that answered: a built-in id or a custom agent uuid; null for the general assistant and for user rows. */
-	agent_id: string | null;
+	/**
+	 * The agent that answered: a built-in id or a custom agent uuid; null for the
+	 * general assistant and for user rows. Only `listMessages` selects it.
+	 */
+	agent_id?: string | null;
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
