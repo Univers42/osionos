@@ -53,6 +53,30 @@
 					if (ds.accent === 'custom') root.style.setProperty('--osio-accent-hue', h >= 0 && h <= 359 ? h : 260);
 				} catch (e) {}
 			})();
+			// The active custom theme (src/shared/config/themeApply.ts): its cached
+			// `--osio-*` map, filtered as readCompiledTheme filters it, so a tampered
+			// cache cannot do more than the app itself could. Skipped by ?theme=safe
+			// and by the osio.themes flag at 0/false/off/no in the URL or storage.
+			// The palette is checked by shape only; App drops an unknown id on mount.
+			(function () {
+				try {
+					var q = location.search;
+					if (/[?&]theme=safe(&|$)/.test(q)) return;
+					var f = new URLSearchParams(q).get('osio.themes');
+					if (f === null) f = localStorage.getItem('osio.themes');
+					if (f !== null && ['0', 'false', 'off', 'no'].indexOf(f.toLowerCase()) > -1) return;
+					var t = JSON.parse(localStorage.getItem('osionos:theme-vars'));
+					if (!t || t.v !== 1 || !t.vars || typeof t.vars !== 'object') return;
+					var root = document.documentElement, ds = root.dataset;
+					if (t.base === 'light' || t.base === 'dark') ds.theme = t.base;
+					if (typeof t.palette === 'string' && /^[a-z-]{1,32}$/.test(t.palette)) ds.palette = t.palette;
+					for (var k in t.vars) {
+						var v = t.vars[k];
+						if (/^--osio-[a-z0-9-]{1,48}$/.test(k) && typeof v === 'string' && v.length > 0 && v.length <= 160
+							&& !/url\(|var\(|expression\(|[;{}<>\\!@]/i.test(v)) root.style.setProperty(k, v);
+					}
+				} catch (e) {}
+			})();
 		</script>
 	</head>
 	<body>
