@@ -14,67 +14,27 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { ConfirmModal, TypedConfirmModal } from "@/features/settings/ui/ConfirmModals";
 import { setActionGuardHandlers } from "@/features/app-actions/model/runAppAction";
-import type { ConfirmRequest, TypedConfirmRequest } from "@/features/app-actions/model/runAppAction";
-
-interface DialogRequest {
-	kind: "simple" | "typed";
-	title: string;
-	message: string;
-	actionLabel: string;
-	confirmText?: string;
-	resolve: (value: boolean) => void;
-}
+import { createGuardDialogController } from "@/features/app-actions/model/guardDialogController";
+import type { DialogRequest } from "@/features/app-actions/model/guardDialogController";
 
 export function ActionGuardHost(): React.ReactElement | null {
 	const [request, setRequest] = useState<DialogRequest | null>(null);
-	const requestRef = useRef<DialogRequest | null>(null);
-	const settledRef = useRef(false);
+	const controllerRef = useRef<ReturnType<typeof createGuardDialogController> | null>(null);
 
 	useEffect(() => {
-		settledRef.current = false;
-	}, [request]);
-
-	useEffect(() => {
-		const confirm = (req: ConfirmRequest) =>
-			new Promise<boolean>((resolve) => {
-				if (requestRef.current) {
-					requestRef.current.resolve(false);
-				}
-				settledRef.current = false;
-				const next: DialogRequest = { kind: "simple", title: req.title, message: req.message, actionLabel: req.actionLabel, resolve };
-				requestRef.current = next;
-				setRequest(next);
-			});
-		const typedConfirm = (req: TypedConfirmRequest) =>
-			new Promise<boolean>((resolve) => {
-				if (requestRef.current) {
-					requestRef.current.resolve(false);
-				}
-				settledRef.current = false;
-				const next: DialogRequest = { kind: "typed", title: req.title, message: req.message, actionLabel: req.actionLabel, confirmText: req.confirmText, resolve };
-				requestRef.current = next;
-				setRequest(next);
-			});
-		setActionGuardHandlers({ confirm, typedConfirm });
+		const controller = createGuardDialogController(setRequest);
+		controllerRef.current = controller;
+		setActionGuardHandlers({ confirm: controller.confirm, typedConfirm: controller.typedConfirm });
 		return () => {
-			if (requestRef.current) {
-				requestRef.current.resolve(false);
-				requestRef.current = null;
-			}
+			controller.dispose();
+			controllerRef.current = null;
 			setActionGuardHandlers(null);
 		};
 	}, []);
 
 	if (!request) return null;
 
-	const settle = (value: boolean) => {
-		if (settledRef.current) return;
-		settledRef.current = true;
-		const current = requestRef.current;
-		requestRef.current = null;
-		if (current) current.resolve(value);
-		setRequest(null);
-	};
+	const settle = (value: boolean) => controllerRef.current?.settle(value);
 
 	if (request.kind === "typed") {
 		return (
