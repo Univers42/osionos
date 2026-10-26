@@ -68,6 +68,7 @@ export function writeToolSet(
 					provenance: { pageIds: [...approval.provenance()] },
 					approvedInRun: await countExecutedInRun(ctx.db, approval.runId),
 					expiresAt: new Date(result.row.expires_at).toISOString(),
+					agent: approval.agent ?? null,
 				};
 				// C286: a write asked after MCP output entered the conversation
 				// says so on its card. Off, or no MCP call: no key at all (C291).

@@ -8,6 +8,8 @@ import { bearerToken } from '../auth.ts';
 import { MEDIA_CAPABILITY_PATH } from '../vision/fetchAttachment.ts';
 import { startRun } from '../runs/runner.ts';
 import { BUILTIN_AGENT_IDS, findBuiltinAgent } from '../agents/builtins.ts';
+import { AgentRefusal, loadRunnableAgent } from '../agents/resolve.ts';
+import { config } from '../config.ts';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import * as runStore from '../runs/runStore.ts';
 import { resolveFallbacks } from './fallbacks.ts';
@@ -31,8 +33,12 @@ const startRunSchema = z.object({
 	replaceFromRunId: z.string().regex(UUID, 'replaceFromRunId must be a uuid').optional(),
 	model: z.string().min(1).optional(),
 	// The agent that shapes the run: one of the built-ins, or none. An id the
-	// service does not know is a bad request — the client never guesses.
-	agentId: z.enum(BUILTIN_AGENT_IDS).optional(),
+	// service does not know is a bad request — the client never guesses. A
+	// uuid is a custom agent, accepted only while OSIONOS_AI_CUSTOM_AGENTS is on (C329).
+	agentId: (config.customAgentsEnabled
+		? z.union([z.enum(BUILTIN_AGENT_IDS), z.string().regex(UUID)])
+		: z.enum(BUILTIN_AGENT_IDS)
+	).optional(),
 	// The connection the run spends: the platform one, or one of the caller's.
 	connectionId: z.string().min(1).max(64).optional(),
 	// The models the run moves to, in order, when the target fails before it
@@ -192,7 +198,18 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 	// The agent of the run: the built-in the client named, or none. The id
 	// came through the schema, so it is one of ours; the agent itself is read
 	// from the registry, never taken from the request.
-	const agent = body.agentId ? findBuiltinAgent(body.agentId) : null;
+	let agent;
+	try {
+		agent = !body.agentId
+			? null
+			: UUID.test(body.agentId)
+				? await loadRunnableAgent(ctx.deps.db, user, body.agentId, conversation.workspace_id)
+				: findBuiltinAgent(body.agentId);
+	} catch (error) {
+		if (!(error instanceof AgentRefusal)) throw error;
+		sendError(ctx.response, error.status, error.code);
+		return error.status;
+	}
 	const outcome = await startRun({
 		db: ctx.deps.db,
 		redis: ctx.deps.redis,
