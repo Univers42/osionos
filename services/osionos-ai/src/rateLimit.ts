@@ -41,15 +41,23 @@ export interface RateLimitResult {
 	retryAfterSeconds: number;
 }
 
-/** The key of a user's window: one counter per minute, per limiter. */
-export function rateLimitKey(userId: string, now: Date, prefix: string = RUN_LIMIT_PREFIX): string {
-	const minute = Math.floor(now.getTime() / (WINDOW_SECONDS * 1000));
-	return `${prefix}:${userId}:${minute}`;
+/** The key of a user's window: one counter per window, per limiter. */
+export function rateLimitKey(
+	userId: string,
+	now: Date,
+	prefix: string = RUN_LIMIT_PREFIX,
+	windowSeconds: number = WINDOW_SECONDS,
+): string {
+	const window = Math.floor(now.getTime() / (windowSeconds * 1000));
+	return `${prefix}:${userId}:${window}`;
 }
 
 /**
  * One call against the user's window. The counter and its expiry move together,
  * so a burst cannot keep a window alive for ever.
+ *
+ * The window is a minute unless the caller names another length (the web
+ * buckets count ten minutes); the key outlives it by ten seconds either way.
  */
 export async function checkRateLimit(
 	redis: Redis,
@@ -57,14 +65,16 @@ export async function checkRateLimit(
 	limit: number,
 	now: Date = new Date(),
 	prefix: string = RUN_LIMIT_PREFIX,
+	windowSeconds: number = WINDOW_SECONDS,
 ): Promise<RateLimitResult> {
-	const key = rateLimitKey(userId, now, prefix);
-	const results = await redis.multi().incr(key).expire(key, KEY_TTL_SECONDS, 'NX').exec();
+	const key = rateLimitKey(userId, now, prefix, windowSeconds);
+	const ttl = windowSeconds === WINDOW_SECONDS ? KEY_TTL_SECONDS : windowSeconds + 10;
+	const results = await redis.multi().incr(key).expire(key, ttl, 'NX').exec();
 	const count = Number(results?.[0]?.[1] ?? 0);
 	const seconds = Math.floor(now.getTime() / 1000);
 	return {
 		allowed: count <= limit,
-		retryAfterSeconds: WINDOW_SECONDS - (seconds % WINDOW_SECONDS),
+		retryAfterSeconds: windowSeconds - (seconds % windowSeconds),
 	};
 }
 
