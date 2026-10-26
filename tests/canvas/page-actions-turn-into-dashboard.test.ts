@@ -21,15 +21,10 @@ import {
   turnIntoDashboardContent,
   type PageActionName,
 } from "../../src/services/page-actions/index.ts";
+import { createViewShowcaseCells } from "../../src/widgets/database-view/model/databaseViewShowcase.ts";
 
-/**
- * The dashboard template (createViewShowcaseCells) builds 4 authored cells
- * (hero, work, growth, coverage) + 12 view cells. The template module pulls the
- * seed-database state, which the strip-only node runner cannot import (it is
- * browser-only), so the count is pinned here: the app injects the template's
- * own cells and the builder must not add or drop any of them.
- */
-const TEMPLATE_CELL_COUNT = 16;
+/** The dashboard template (createViewShowcaseCells): a command-center hero + 12 view cells. */
+const TEMPLATE_CELL_COUNT = 13;
 
 function cell(id: string, label: string): LayoutCell {
   return {
@@ -161,4 +156,28 @@ test("the band id is sanitized: a hostile page id cannot leak a path", () => {
 
   assert.equal(band.id.includes("/"), false);
   assert.equal(band.id.includes(".."), false);
+});
+
+test("the template's cells fill the 19-row grid without overlapping", () => {
+  const cells = createViewShowcaseCells();
+  assert.equal(cells.length, TEMPLATE_CELL_COUNT);
+  const taken = new Set<string>();
+  for (const c of cells) {
+    assert.ok(c.colStart + c.colSpan - 1 <= 12 && c.rowStart + c.rowSpan - 1 <= 19, c.label);
+    for (let r = c.rowStart; r < c.rowStart + c.rowSpan; r++) {
+      for (let k = c.colStart; k < c.colStart + c.colSpan; k++) {
+        assert.ok(!taken.has(`${r}:${k}`), `${c.label} overlaps at ${r}:${k}`);
+        taken.add(`${r}:${k}`);
+      }
+    }
+  }
+});
+
+test("the template's text never freezes a figure — numbers come from the live views", () => {
+  for (const c of createViewShowcaseCells()) {
+    for (const block of c.blocks ?? []) {
+      if (block.type === "database_inline") continue;
+      assert.doesNotMatch(block.content, /\d/, `${c.label}: "${block.content}"`);
+    }
+  }
 });
