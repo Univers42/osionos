@@ -56,6 +56,8 @@ interface Props {
   /** The reader picked another agent. */
   onAgentChange?: (agentId: string | null) => void;
   autoFocus?: boolean;
+  /** Changes when the composer should take the focus back, the caret after the text (a starter was picked). */
+  focusSignal?: number;
   /** True while an answer is streaming: the send button becomes a stop. */
   streaming?: boolean;
   /** Stops the answer in flight. */
@@ -80,6 +82,7 @@ export const ChatComposer: React.FC<Props> = ({
   agentId = null,
   onAgentChange,
   autoFocus,
+  focusSignal,
   streaming,
   onStop,
   attachments = [],
@@ -95,6 +98,12 @@ export const ChatComposer: React.FC<Props> = ({
   const pushToast = useToastStore((s) => s.push);
   const grow = (el: HTMLTextAreaElement) => { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 240)}px`; };
   useEffect(() => { if (ref.current) grow(ref.current); }, [value, previewing]);
+  useEffect(() => {
+    const element = ref.current;
+    if (!focusSignal || !element) return;
+    element.focus();
+    element.setSelectionRange(element.value.length, element.value.length);
+  }, [focusSignal]);
 
   // A model that cannot see must never receive the images: when the choice
   // moves to a model that cannot see them, the images go — a text file stays,
@@ -190,10 +199,11 @@ export const ChatComposer: React.FC<Props> = ({
       ) : null}
       {previewing && value.trim() ? (
         <div className="max-h-60 overflow-y-auto px-4 pt-3 text-sm text-[var(--osio-fg-default)]" data-testid="composer-preview">
-          <UserMarkdown markdown={value} tone="surface" />
+          <UserMarkdown markdown={value} />
         </div>
       ) : (
       <textarea
+        data-writing-surface
         ref={ref}
         autoFocus={autoFocus}
         value={value}

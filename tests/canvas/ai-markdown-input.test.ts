@@ -104,7 +104,7 @@ test("plain multi-line text keeps its line breaks", () => {
 
 test("the preview renders the draft through the shared function", () => {
   const draft = "make this **bold**";
-  const preview = renderToStaticMarkup(React.createElement(UserMarkdown, { markdown: draft, tone: "surface" }));
+  const preview = renderToStaticMarkup(React.createElement(UserMarkdown, { markdown: draft }));
   const direct = renderToStaticMarkup(React.createElement("div", null, renderAssistantMarkdown(draft)));
   assert.ok(preview.includes(direct.slice("<div>".length, -"</div>".length)));
 });
