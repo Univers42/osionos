@@ -34,7 +34,12 @@ const startRunSchema = z.object({
 	effort: z.enum(['low', 'medium', 'high']).optional(),
 	attachments: z.array(z.discriminatedUnion('kind', [
 		z.object({ kind: z.literal('chat'), id: z.string().regex(UUID, 'id must be a uuid') }).strict(),
-		z.object({ kind: z.literal('media'), path: z.string().regex(MEDIA_CAPABILITY_PATH, 'path must match SERVE_RE') }).strict(),
+		z.object({
+			kind: z.literal('media'),
+			path: z.string().regex(MEDIA_CAPABILITY_PATH, 'path must match SERVE_RE'),
+			// Display data for a file: the bytes decide its type, never the name.
+			name: z.string().max(200).optional(),
+		}).strict(),
 	])).max(4).optional(),
 	context: z
 		.object({

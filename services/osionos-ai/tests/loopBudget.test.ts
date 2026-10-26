@@ -177,7 +177,13 @@ describe('the money of a run', () => {
 	it('a loop that wants five steps stops at the three the money of the day allows', async () => {
 		// The money of the day allows the first step, one extension, and the
 		// answer: the loop stops at the third step, and that step answers.
-		await setLeft(RESERVATION + STEP);
+		//
+		// The two micro-USD are rounding slack: every figure here is a ceiling
+		// of a few tokens, and the data-boundary line of the system prompt
+		// (eight characters longer with <file>) moved the real reservation
+		// across a rounding step. Two micro-USD is a hundred tokens of this
+		// model less than a fourth step, so the loop still stops at three.
+		await setLeft(RESERVATION + STEP + 2);
 		mock.setOptions({
 			toolCall: { name: 'read_page', arguments: { pageId: 'not-a-uuid' } },
 			toolCallEveryStep: true,

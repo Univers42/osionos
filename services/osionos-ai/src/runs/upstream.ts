@@ -10,7 +10,8 @@ import { appendMessage } from '../conversations/repo.ts';
 import { markRun } from './repo.ts';
 import type { RunStatus } from './repo.ts';
 import * as runStore from './runStore.ts';
-import { buildUserTurn, historyChars, historyMessages, memoryChars, quotedPageChars } from './prompt.ts';
+import type { FittedFile } from '../files/excerpt.ts';
+import { buildUserTurn, fileChars, historyChars, historyMessages, memoryChars, quotedPageChars } from './prompt.ts';
 import type { RunMemory } from '../memory/repo.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
@@ -57,6 +58,8 @@ export interface UpstreamRunInput {
 	effort?: Effort;
 	/** The images of this run, as bytes. They go only into this run's user message. */
 	images?: readonly { data: Uint8Array; mediaType: string }[];
+	/** The text files of this run, already cut to the budget. Same lifetime as the images. */
+	files?: readonly FittedFile[];
 	emit: (event: RunEvent) => void;
 	/** The day of the ledger, and the money the run holds. */
 	day: string;
@@ -122,6 +125,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		title,
 	} = input;
 	const images = input.images ?? [];
+	const files = input.files ?? [];
 	const memories = input.memories ?? [];
 	// The agent of the run: none is the general assistant.
 	const agent = input.agent ?? null;
@@ -152,7 +156,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const promptChars = promptCharCount({
 		text,
 		historyChars: historyChars(history),
-		pageChars: quotedPageChars(pages) + memoryChars(memories),
+		pageChars: quotedPageChars(pages) + memoryChars(memories) + fileChars(files),
 		sourceChars: sourceChars(sources),
 		systemChars: system.length,
 		contextChars,
@@ -210,6 +214,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		const tools = runTools.tools;
 
 		const userText = buildUserTurn(text, pages, sources, memories, abstained, {
+			files,
 			...(accountBlockText ? { account: accountBlockText } : {}),
 			...(viewBlockText ? { view: viewBlockText } : {}),
 			...(workspaceBlockText ? { workspace: workspaceBlockText } : {}),
