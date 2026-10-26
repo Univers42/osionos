@@ -23,3 +23,4 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | SB-2b | dispatched 2026-10-26 01:34 from 0738c72c5 | feat/sb-SB-2b | | | |
 | SB-1b | dispatched 2026-10-26 01:35 from 27a4870f6 | feat/sb-SB-1b | | | |
 | SB-3a | returned 7025af2a7 (01:33) → devil diff review D-SB-3a-diff running | feat/sb-SB-3a | | worker: quality 0, canvas 0, button e2e 0; mutants c, d, f not caught or not run | mine: `useActionState` is not a hook (no subscription), 10 alias exports + arity dispatch, dead loops in validateArgs, preview writes state with raw args |
+| SB-4i | dropped 2026-10-26 01:38: no passkey registration exists in the app to rebuild (useAccountPasskeysStore.ts header, ProfileSecurityModals.tsx:125); total 59 → 58 | — | — | — | — |
