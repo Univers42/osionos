@@ -30,9 +30,9 @@ import {
   rememberDatabaseWorkspace,
   resetObjectDatabaseWorkspaces,
 } from "./objectDatabaseWorkspaces";
+import { createPushBaseline } from "./objectDatabasePushBaseline";
 import { createSessionWait, type SessionWait } from "./sessionWait";
 
-const PUSHED_HASHES_KEY = "osionos.objectDb.pushed.v1";
 const HYDRATION_JWT_RETRY_MS = 1500;
 const HYDRATION_JWT_MAX_ATTEMPTS = 12;
 
@@ -66,22 +66,7 @@ export function objectDatabaseServerSyncReady(): boolean {
   return globalThis.window !== undefined && Boolean(API_BASE) && isObjectDatabaseServerSyncEnabled();
 }
 
-function loadPushedHashes(): Record<string, string> {
-  try {
-    const parsed = JSON.parse(globalThis.localStorage.getItem(PUSHED_HASHES_KEY) ?? "null");
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function savePushedHashes(map: Record<string, string>): void {
-  try {
-    globalThis.localStorage.setItem(PUSHED_HASHES_KEY, JSON.stringify(map));
-  } catch {
-    // localStorage can be unavailable or quota-limited — dirtiness just recomputes.
-  }
-}
+const pushBaseline = createPushBaseline(() => globalThis.localStorage);
 
 function databaseTitle(state: NotionState, dbKey: string): string {
   const database = state.databases[dbKey] as { name?: string; title?: string } | undefined;
@@ -158,7 +143,7 @@ export function pushDirtyObjectDatabases(
   // the delete for every other client).
   if (deletedPageIds?.size) state = withoutDeletedPages(state, deletedPageIds);
 
-  const pushed = loadPushedHashes();
+  const pushed = pushBaseline.load();
   const userIds = new Set(userDatabaseIds(state, seedIds));
   const slices = sliceAllDatabases(state);
   const dirty = [...userIds]
@@ -170,7 +155,7 @@ export function pushDirtyObjectDatabases(
 
   pushInFlight = true;
   void (async () => {
-    const next = loadPushedHashes();
+    const next = pushBaseline.load();
     try {
       for (const item of dirty) {
         try {
@@ -188,7 +173,7 @@ export function pushDirtyObjectDatabases(
           // leave the hash so the delete retries next flush
         }
       }
-      savePushedHashes(next);
+      pushBaseline.save(next);
     } finally {
       pushInFlight = false;
     }
@@ -213,7 +198,7 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
   const liveState = hooks.getLiveState();
   const live = withoutDeletedPages(liveState, deletedPageIds);
   const server = new Map([...serverMap].map(([dbKey, row]) => [dbKey, serverStateOf(row)] as const));
-  const { merged, changed: reconciled, nextPushed } = reconcileServerDatabases({ live, server, pushed: loadPushedHashes(), deletedPageIds });
+  const { merged, changed: reconciled, nextPushed } = reconcileServerDatabases({ live, server, pushed: pushBaseline.load(), deletedPageIds });
   const changed = reconciled || live !== liveState;
 
   for (const dbKey of userDatabaseIds(merged, seedIds)) {
@@ -229,7 +214,7 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
     tombstonesStillNeeded(deletedPageIds, [...server.values()]),
   );
 
-  savePushedHashes(nextPushed);
+  pushBaseline.save(nextPushed);
   hydrationCompleted = true;
   if (changed) {
     hooks.applyMerged(merged);
@@ -272,9 +257,5 @@ export function resetObjectDatabaseSync(): void {
   hydrationDone = false;
   hydrationCompleted = false;
   resetObjectDatabaseWorkspaces();
-  try {
-    globalThis.localStorage?.removeItem(PUSHED_HASHES_KEY);
-  } catch {
-    // localStorage may be unavailable — the baseline just recomputes.
-  }
+  pushBaseline.reset();
 }
