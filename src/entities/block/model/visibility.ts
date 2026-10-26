@@ -24,9 +24,7 @@
 
 import {
   FORMULA_ENGINE_UNAVAILABLE,
-  compileFormula,
   evalFormula,
-  getDependencies,
   type PropertyMap,
 } from "@/shared/notion-database-sys/src/lib/engine/bridge";
 import type { VisibilityScope } from "./visibilityScope";
@@ -103,44 +101,31 @@ export function filterHiddenCells<T extends { visibilityFormula?: string }>(cell
   return cells.filter((cell) => !evaluateCellVisibility(cell.visibilityFormula, props));
 }
 
-const visibleWhenMemo = new WeakMap<VisibilityScope, Map<string, { snapshot: PropertyMap; visible: boolean }>>();
+const visibleForSnapshotMemo = new WeakMap<VisibilityScope, Map<string, { snapshot: PropertyMap; visible: boolean }>>();
 
 /**
- * Non-React core of `useVisibleWhen`: compiles the formula once, reads its
- * dependencies once per handle, and re-evaluates only when the snapshot object
- * returned by the scope changes. `evaluate` is injectable (defaults to the
- * engine's one-shot evaluator) so the memoisation can be tested without React.
+ * Non-React core of `useVisibleWhen`: memoised per (scope, source) on snapshot
+ * identity, so the injected evaluator runs only when the snapshot object changes.
+ * Truthiness is applied through `isVisibleResult`.
  */
-export function evaluateVisibleWhen(
-  formula: string | undefined,
-  scope: VisibilityScope | null,
-  evaluate: CellVisibilityEvaluator = evalFormula,
-  engineReady: boolean = true,
+export function visibleForSnapshot(
+  scope: VisibilityScope,
+  source: string,
+  snapshot: PropertyMap,
+  evaluate: (props: PropertyMap) => unknown,
 ): boolean {
-  const source = formula?.trim() ?? "";
-  if (!source || !scope || !engineReady) return true;
+  const trimmed = source.trim();
+  if (!trimmed) return true;
 
-  const compiled = compileFormula(source);
-  if (!compiled || !compiled.ok || typeof compiled.handle !== "number") return true;
-
-  const deps = getDependencies(compiled.handle);
-  const snapshot = scope.read(deps);
-
-  let scopeCache = visibleWhenMemo.get(scope);
+  let scopeCache = visibleForSnapshotMemo.get(scope);
   if (!scopeCache) {
     scopeCache = new Map();
-    visibleWhenMemo.set(scope, scopeCache);
+    visibleForSnapshotMemo.set(scope, scopeCache);
   }
-  const cached = scopeCache.get(source);
+  const cached = scopeCache.get(trimmed);
   if (cached && cached.snapshot === snapshot) return cached.visible;
 
-  const result = evaluate(source, snapshot);
-  const visible = isVisibleResult(result);
-  scopeCache.set(source, { snapshot, visible });
+  const visible = isVisibleResult(evaluate(snapshot));
+  scopeCache.set(trimmed, { snapshot, visible });
   return visible;
 }
-
-// Aliases kept for callers/tests that name the helper differently.
-export const computeVisibleWhen = evaluateVisibleWhen;
-export const runVisibleWhen = evaluateVisibleWhen;
-export const visibleWhenResult = evaluateVisibleWhen;
