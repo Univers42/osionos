@@ -63,3 +63,10 @@ test("align start hangs the panel right of the button, and flips to end when it 
   const nearEdge = { top: 100, bottom: 128, left: 1100, right: 1130 };
   assert.equal(anchoredPanelFrame(nearEdge, 292, viewport, "start").left, 1130 - 292);
 });
+
+test("a short panel stays below when it fits, though above has more room", () => {
+  // 198px below, 546 above: a 120px menu fits below, so it hangs there.
+  assert.deepEqual(anchoredPanelFrame(button(560, 900), 292, viewport, "end", 120),
+    { left: 608, top: 594, maxHeight: 198 });
+  assert.equal(anchoredPanelFrame(button(560, 900), 292, viewport, "end", 240).top, undefined);
+});
