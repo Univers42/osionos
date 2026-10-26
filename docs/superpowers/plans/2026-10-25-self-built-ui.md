@@ -59,7 +59,7 @@ Integration branch: `feat/self-built-ui` (from develop `3be8dc71b`). One worktre
 | SB-3b | S3 | `button` on `@osionos/ui` Button: every tone/size, icon, icon-only label, loading | SB-3a | old `buttonVariant` pages render unchanged |
 | SB-3c | S3 | `chip`, `avatar`, `meter`, `status`, `secret`; heading `anchor` | SB-3a | deep link `?settings=<id>#<anchor>` scrolls to a doc heading |
 | SB-4a | S4 | `collection`: list/table/grid, virtual rows, empty slot, `$row`, row actions, inline edit | SB-2c, SB-3b | 10,000-row scroll with no long task over 50 ms |
-| SB-4b | S4 | list sources for every settings list (sessions exists), incl. moderation limits and per-page notification overrides, plus the shipped `item-list` component | SB-4a, SB-4e | each list matches today's rows from the same stub |
+| SB-4b | S4 | the pilot list sources `list:sessions` and `list:passkeys` (row actions, grouping, inline rename), `passkey.remove`, `buttonAriaField`, and the shipped `item-list` component; every other settings list gets its source in its own SB-5 section package | SB-4a, SB-4e | both lists match today's rows, texts and button names from the same stub |
 | SB-4c | S4 | `tabs`, `dialog` containers | SB-1b | keyboard per WAI-ARIA (shadcn reference) |
 | SB-4d | S4 | `collection` display `matrix` (rows × columns sources, a choice field per cell) | SB-4a, SB-2c | the permission matrix's cells and saves match today's panel |
 | SB-4h 👹 | S4b | kernel flows (state machine with its own actions and short-lived secrets) + `steps` container + `qr` block + the `twostep` flow | SB-3b, SB-3c, SB-2c | enrol → scan → verify → recovery codes, every guard intact |
