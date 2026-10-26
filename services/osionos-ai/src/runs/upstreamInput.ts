@@ -4,7 +4,7 @@ import type { ResolvedTarget } from '../gateway/resolve.ts';
 import type { FittedFile } from '../files/excerpt.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
 import type { RunMemory } from '../memory/repo.ts';
-import type { BuiltinAgent } from '../agents/builtins.ts';
+import type { AgentConfig } from '../agents/config.ts';
 import type { SkillIndex } from '../skills/runSkills.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
@@ -70,7 +70,7 @@ export interface UpstreamRunInput {
 	 * None is the general assistant: the base prompt, byte for byte. An agent
 	 * adds its block to the prompt and narrows the tools to its own list.
 	 */
-	agent?: BuiltinAgent | null;
+	agent?: AgentConfig | null;
 	/** The skills the prompt lists (the agent's built-ins and the workspace's), and their workspace. */
 	skillIndex?: SkillIndex;
 	/** The approved memories of the caller, quoted in the user turn (devil C39). */
