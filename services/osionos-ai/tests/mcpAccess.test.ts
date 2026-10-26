@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { after, beforeEach, describe, it } from 'node:test';
-import { READ_TOOLS } from '../src/tools/readTools.ts';
-import { WRITE_TOOLS } from '../src/tools/writeTools.ts';
 import { USER_A, WORKSPACE_A, addMember, app, clearWindows, closeAll, mint, raw, rpc, sessionFor } from './mcpHarness.ts';
 import { awaitWindowRoom } from './harness.ts';
+
+// After the harness: a service module may read the configuration when it is
+// imported, and the harness sets the environment first.
+const { READ_TOOLS } = await import('../src/tools/readTools.ts');
+const { WRITE_TOOLS } = await import('../src/tools/writeTools.ts');
 
 /**
  * Who may speak to the remote MCP endpoint (G4b-1): C112, C114, C116, C118,

@@ -10,13 +10,15 @@ import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
 import { loadMcpTools, mcpToolChars } from '../mcpClient/runTools.ts';
 import { webOnForRun, webToolChars } from '../web/runWeb.ts';
+import { readRunSummary } from '../summary/repo.ts';
 import type { Effort } from './effort.ts';
 import type { RunEvent } from './upstream.ts';
 import {
 	accountBlock,
+	conversationSummaryBlock,
 	fileChars,
 	historyChars,
-	loadHistory,
+	loadHistoryWindow,
 	loadPageContext,
 	memoryChars,
 	quotedPageChars,
@@ -265,7 +267,14 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 
 	// The history is read before the money moves: the reservation estimates the
 	// size of the prompt, so it has to know the prompt.
-	const history = await loadHistory(db, { conversationId, ownerId });
+	const window = await loadHistoryWindow(db, { conversationId, ownerId });
+	const history = window.messages;
+	// The summary of the turns the window dropped, quoted when it ends before
+	// the window starts (context C384). Flag off: no column is read (C389).
+	const summary = config.summaryEnabled
+		? await readRunSummary(db, { conversationId, ownerId, oldestKeptId: window.oldestKeptId, dropped: window.dropped })
+		: null;
+	const summaryBlockText = summary?.quoted ? conversationSummaryBlock(summary.quoted.text, summary.quoted.through) : undefined;
 
 	// (b) The budget, before any upstream call.
 	// The pages are read before the money moves: the reservation estimates the
@@ -330,7 +339,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		(viewBlockText?.length ?? 0) +
 		(workspaceBlockText?.length ?? 0) +
 		mcpToolChars(mcpTools) +
-		webToolChars(web);
+		webToolChars(web) +
+		(summaryBlockText?.length ?? 0);
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
@@ -414,6 +424,9 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			mcpTools,
 			web,
 			workspaceId: input.workspaceId,
+			...(summaryBlockText ? { summaryBlock: summaryBlockText } : {}),
+			...(summary && window.dropped ? { truncated: { summarized: summaryBlockText !== undefined } } : {}),
+			...(summary?.behind && window.oldestKeptId ? { summarizeFrom: { oldestKeptId: window.oldestKeptId } } : {}),
 			...(accountBlockText ? { accountBlock: accountBlockText } : {}),
 			...(viewBlockText ? { viewBlock: viewBlockText } : {}),
 			...(workspaceBlockText ? { workspaceBlock: workspaceBlockText } : {}),

@@ -24,6 +24,7 @@ import { readWebTaint } from '../web/settings.ts';
 import { newWebRun, webToolChars } from '../web/runWeb.ts';
 import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
 import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
+import { scheduleSummary } from '../summary/summarize.ts';
 
 /**
  * The upstream of a run: the model call, the events, the settlement.
@@ -96,7 +97,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		(viewBlockText?.length ?? 0) +
 		(workspaceBlockText?.length ?? 0) +
 		mcpToolChars(input.mcpTools ?? []) +
-		webToolChars(input.web === true);
+		webToolChars(input.web === true) +
+		(input.summaryBlock?.length ?? 0);
 	const promptChars = promptCharCount({
 		text,
 		historyChars: historyChars(history),
@@ -134,6 +136,11 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// which model answers, as after a failed attempt (C260's closed reasons).
 		if (input.restedFrom) {
 			await emit('route', { from: input.restedFrom, to: target.modelId, reason: 'unavailable' });
+		}
+		// The window left earlier turns out: the reader learns it, and whether a
+		// summary of them is in the prompt (context C380). Flag off: never.
+		if (input.truncated) {
+			await emit('context.truncated', { summarized: input.truncated.summarized });
 		}
 
 		// The sources of the answer: one frame each, in the order the model
@@ -191,6 +198,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			...(accountBlockText ? { account: accountBlockText } : {}),
 			...(viewBlockText ? { view: viewBlockText } : {}),
 			...(workspaceBlockText ? { workspace: workspaceBlockText } : {}),
+			...(input.summaryBlock ? { summary: input.summaryBlock } : {}),
 		});
 		const userContent = [
 			{ type: 'text' as const, text: userText },
@@ -307,6 +315,11 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		}
 
 		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
+		// The summary is written after `done`, off the run's response, by the
+		// target that answered (context C377, C381).
+		if (input.summarizeFrom) {
+			scheduleSummary({ db, target: current.target, runId, conversationId, ownerId, oldestKeptId: input.summarizeFrom.oldestKeptId, day });
+		}
 	} catch (error) {
 		const code = abortCode(current.controller.signal) ?? (isDataPolicyRefusal(error) ? 'vision_unavailable' : 'upstream_error');
 		// A cancelled or failed run settles what the upstream reported, or
