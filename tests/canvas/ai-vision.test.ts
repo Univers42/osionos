@@ -33,7 +33,7 @@ import {
   secondsLeft,
 } from "@/features/chat/model/runErrors";
 import { selectionSeesImages } from "@/features/ai/model/aiSelection";
-import { AttachImageButton } from "@/widgets/chat-shell/ui/AttachImageButton";
+import { AttachButton } from "@/widgets/chat-shell/ui/AttachButton";
 import { RunErrorNotice } from "@/features/chat/model/runErrorNotice";
 
 /* -------------------------------------------------------------------------- */
@@ -181,30 +181,20 @@ test("a model of another connection does not lend its sight to this one", () => 
 /* The button that attaches an image                                         */
 /* -------------------------------------------------------------------------- */
 
-test("the attach button is hidden for a model that cannot see images", () => {
-  const hidden = renderToStaticMarkup(
-    React.createElement(AttachImageButton, { vision: false, attachments: [], onChange: () => {} }),
-  );
-  assert.doesNotMatch(hidden, /Attach image/);
-
-  // Not knowing yet (the models are still loading) is "cannot see": the button
-  // never shows before the picker has said so.
-  const unknown = renderToStaticMarkup(
-    React.createElement(AttachImageButton, { attachments: [], onChange: () => {} }),
-  );
-  assert.doesNotMatch(unknown, /Attach image/);
-
-  const shown = renderToStaticMarkup(
-    React.createElement(AttachImageButton, { vision: true, attachments: [], onChange: () => {} }),
-  );
-  assert.match(shown, /aria-label="Attach image"/);
+test("the attach button is shown whether or not the model sees images", () => {
+  for (const props of [{ vision: false }, {}, { vision: true }]) {
+    const shown = renderToStaticMarkup(
+      React.createElement(AttachButton, { ...props, attachments: [], onChange: () => {} }),
+    );
+    assert.match(shown, /aria-label="Attach file"/);
+  }
 });
 
-test("the picker offers only the formats the service reads", () => {
+test("the picker offers the images the service reads and its text formats", () => {
   const shown = renderToStaticMarkup(
-    React.createElement(AttachImageButton, { vision: true, attachments: [], onChange: () => {} }),
+    React.createElement(AttachButton, { vision: true, attachments: [], onChange: () => {} }),
   );
-  assert.match(shown, /accept="image\/png,image\/jpeg,image\/webp"/);
+  assert.match(shown, /accept="image\/png,image\/jpeg,image\/webp,\.txt,/);
 });
 
 /* -------------------------------------------------------------------------- */

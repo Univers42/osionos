@@ -140,16 +140,20 @@ describe('the attachments of a run', () => {
 		const token = tokenFor(USER_A, WORKSPACE_A);
 		const conversationId = await createConversation();
 		const calls = mock.calls;
+		// The bytes decide that it is an image, so the bridge is asked once.
+		const id = randomUUID();
+		bridge.serve(`/api/chat/uploads/${id}`, { bytes: pngBytes(), contentType: 'image/png' });
+		bridge.reset();
 		const response = await postRun(
 			token,
 			runBody(conversationId, {
-				attachments: [{ kind: 'chat', id: randomUUID() }],
+				attachments: [{ kind: 'chat', id }],
 			}),
 		);
 
 		assert.equal(response.status, 400);
 		assert.equal(await codeOf(response), 'model_no_vision');
-		assert.equal(bridge.count, 0);
+		assert.equal(bridge.count, 1);
 		assert.equal(mock.calls, calls);
 	});
 

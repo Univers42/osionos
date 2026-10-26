@@ -12,6 +12,7 @@ import type { Effort } from './effort.ts';
 import type { RunEvent } from './upstream.ts';
 import {
 	accountBlock,
+	fileChars,
 	historyChars,
 	loadHistory,
 	loadPageContext,
@@ -33,6 +34,9 @@ import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.t
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import { fetchAttachment } from '../vision/fetchAttachment.ts';
+import { classifyAttachment } from '../files/classify.ts';
+import { fitFiles } from '../files/excerpt.ts';
+import type { FittedFile } from '../files/excerpt.ts';
 import { readImageHeader } from '../vision/imageHeader.ts';
 import { stripMetadata } from '../vision/stripMetadata.ts';
 
@@ -59,6 +63,8 @@ export interface AttachmentRef {
 export interface MediaAttachmentRef {
 	kind: 'media';
 	path: string;
+	/** Display data of a file: the bytes decide its type, never the name. */
+	name?: string;
 }
 export type RunAttachment = AttachmentRef | MediaAttachmentRef;
 
@@ -221,13 +227,6 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		}
 	}
 
-	// A run that carries attachments on a model without vision is refused
-	// before anything else: no upstream call, no money.
-	if (attachments.length > 0 && !target.vision) {
-		await markRun(db, runId, 'failed', 'model_no_vision');
-		return { kind: 'refused', status: 400, code: 'model_no_vision' };
-	}
-
 	// The rate limit comes before the attachments: a refused run makes the
 	// service fetch nothing.
 	const rate = await checkRunRateLimit(redis, ownerId, config.runsPerMinute);
@@ -239,11 +238,25 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// The attachments are fetched through the bridge with the caller's token of
 	// THIS request. They are validated and stripped before the money moves.
 	const images: { data: Uint8Array; mediaType: string }[] = [];
+	const texts: { name: string; text: string }[] = [];
 	try {
 		for (const attachment of attachments) {
 			const bridgePath =
 				attachment.kind === 'chat' ? `/api/chat/uploads/${attachment.id}` : attachment.path;
 			const fetched = await fetchAttachment(bridgePath, sessionToken);
+			// The type is the one the BYTES say, never the name or the stored type.
+			const classified = classifyAttachment(fetched.bytes);
+			if (classified.kind === 'unsupported') {
+				throw Object.assign(new Error('unsupported_file'), { status: 415, code: 'unsupported_file' });
+			}
+			if (classified.kind === 'text') {
+				texts.push({ name: attachment.kind === 'media' ? attachment.name ?? 'file' : 'file', text: classified.text });
+				continue;
+			}
+			// Only an image needs a model that sees: a text file works on every model.
+			if (!target.vision) {
+				throw Object.assign(new Error('model_no_vision'), { status: 400, code: 'model_no_vision' });
+			}
 			const header = readImageHeader(fetched.bytes);
 			if (header.width * header.height > 16_700_000) {
 				throw Object.assign(new Error('image_too_large'), { status: 422, code: 'image_too_large' });
@@ -271,6 +284,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	if (input.replaceFromRunId !== undefined) {
 		await deleteMessagesFromRun(db, { conversationId, ownerId, runId: input.replaceFromRunId });
 	}
+	const files: FittedFile[] = fitFiles(texts, text);
 
 	// The history is read before the money moves: the reservation estimates the
 	// size of the prompt, so it has to know the prompt.
@@ -327,7 +341,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const baseAmount = estimateRunMicroUsd(target.pricing, {
 		text,
 		historyChars: historyChars(history),
-		pageChars: quotedPageChars(context.pages) + memoryChars(memories),
+		pageChars: quotedPageChars(context.pages) + memoryChars(memories) + fileChars(files),
 		sourceChars: sourceChars(sources),
 		// The system prompt of THIS run: the base one, or the longer one of
 		// the agent. The reservation counts what the call really sends.
@@ -349,7 +363,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 
 	// (c) The user's message joins the transcript, and the conversation takes
 	// its title when it has none: one transaction, one question.
-	const userParts: unknown[] = [{ type: 'text', text: [text, ...images.map(() => '[image]')].join('\n') }];
+	const userParts: unknown[] = [{ type: 'text', text: [text, ...images.map(() => '[image]'), ...files.map((file) => `[file: ${file.name.replaceAll('\n', ' ')}]`)].join('\n') }];
 	for (const attachment of attachments) {
 		userParts.push({ type: 'attachment', ...attachment });
 	}
@@ -389,6 +403,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			userMessageId: userMessage.id,
 			title,
 			images,
+			files,
 			agent,
 			skillIndex,
 			memories,

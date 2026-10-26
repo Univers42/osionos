@@ -141,7 +141,7 @@ describe('the bytes of an attachment', () => {
 		assert.equal(await codeOf(response), 'invalid_image');
 	});
 
-	it('refuses an SVG that the bridge announces as an image', async () => {
+	it('reads an SVG as a text file, whatever type the bridge announces', async () => {
 		const token = tokenFor(USER_A, WORKSPACE_A);
 		const conversationId = await createConversation();
 		const { id } = serveAttachment(svgBytes(), 'image/png');
@@ -151,8 +151,11 @@ describe('the bytes of an attachment', () => {
 			runBody(conversationId, { model: VISION.id, attachments: [{ kind: 'chat', id }] }),
 		);
 
-		assert.equal(response.status, 422);
-		assert.equal(await codeOf(response), 'invalid_image');
+		// The bytes are UTF-8 text, so the image path never sees them: the SVG
+		// is quoted as data (and the model needs no vision for it).
+		assert.equal(response.status, 200);
+		await collect(new SseStream(response));
+		assert.ok(JSON.stringify(mock.lastBody()).includes('<file name='));
 	});
 
 	it('sends the type the bytes say, not the type the bridge announced', async () => {

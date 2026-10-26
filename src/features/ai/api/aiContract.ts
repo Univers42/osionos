@@ -213,7 +213,7 @@ export interface StartRunInput {
   agentId?: string;
   /** How hard a reasoning model thinks; sent only for a model that reasons. */
   effort?: "low" | "medium" | "high";
-  attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }>;
+  attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string; name?: string }>;
   /** Edit & resend: the service drops this run's turn and every later one first. */
   replaceFromRunId?: string;
   /**
