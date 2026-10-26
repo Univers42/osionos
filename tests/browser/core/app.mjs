@@ -75,8 +75,12 @@ export async function activateFirstEditor(page) {
   return getEditors(page).first();
 }
 
+/** Outside a kept tab: a pane keeps its recent tabs mounted under an inert,
+ *  content-visibility: hidden wrapper, so their editors are still in the DOM. */
+export const LIVE = ":not([inert] *)";
+
 export function getEditors(page) {
-  return page.locator('[role="textbox"][aria-multiline="true"]');
+  return page.locator(`[role="textbox"][aria-multiline="true"]${LIVE}`);
 }
 
 export function getCodeTextareas(page) {
@@ -88,7 +92,7 @@ export function getCodeTextarea(page) {
 }
 
 export function pageTitleEditor(page) {
-  return page.getByRole("textbox", { name: "Page title" });
+  return page.getByRole("textbox", { name: "Page title" }).and(page.locator(LIVE));
 }
 
 export async function editorText(editor) {
