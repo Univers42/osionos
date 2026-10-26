@@ -1,13 +1,13 @@
 // Cell copy/paste: what a copied cell puts on the clipboard, how pasted text
 // becomes a stored value per column type, and how a pasted grid maps onto the
-// visible rows and columns.
+// selected range of visible rows and columns.
 
 import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  cellCopyText, parseClipboardGrid, parsePastedValue, planPaste,
-} from "../../src/shared/notion-database-sys/src/components/views/table/cellClipboard.ts";
+  cellCopyText, copyRange, parsePastedValue, parseTsv, planClear, planPaste,
+} from "../../src/shared/notion-database-sys/src/components/views/table/gridClipboard.ts";
 import { clearValueFor } from "../../src/shared/notion-database-sys/src/components/views/table/gridKeyboard.ts";
 import type { DatabaseSchema, Page, SchemaProperty } from "../../src/shared/notion-database-sys/src/types/database.ts";
 
@@ -74,21 +74,44 @@ test("pasting nothing clears a column the way Delete does", () => {
   assert.equal(clearValueFor("number"), null, "same as an emptied number editor");
 });
 
-test("parseClipboardGrid: tabs, lines and spreadsheet quoting", () => {
-  assert.deepEqual(parseClipboardGrid("a\tb\r\nc\td\r\n"), [["a", "b"], ["c", "d"]]);
-  assert.deepEqual(parseClipboardGrid('"x\ty"\t"say ""hi"""\n"l1\nl2"\tz'), [["x\ty", 'say "hi"'], ["l1\nl2", "z"]]);
-  assert.deepEqual(parseClipboardGrid('5" screen'), [['5" screen']], "a quote mid-cell is literal");
-  assert.deepEqual(parseClipboardGrid(""), [[""]]);
-  assert.deepEqual(parseClipboardGrid("a\t\tb"), [["a", "", "b"]]);
+test("parseTsv: tabs, lines and spreadsheet quoting", () => {
+  assert.deepEqual(parseTsv("a\tb\r\nc\td\r\n"), [["a", "b"], ["c", "d"]]);
+  assert.deepEqual(parseTsv('"x\ty"\t"say ""hi"""\n"l1\nl2"\tz'), [["x\ty", 'say "hi"'], ["l1\nl2", "z"]]);
+  assert.deepEqual(parseTsv('5" screen'), [['5" screen']], "a quote mid-cell is literal");
+  assert.deepEqual(parseTsv(""), [[""]]);
+  assert.deepEqual(parseTsv("a\t\tb"), [["a", "", "b"]]);
 });
 
-test("planPaste fills from the anchor and clips to what is on screen", () => {
+const range = (rowStart: number, rowEnd: number, colStart: number, colEnd: number) => ({ rowStart, rowEnd, colStart, colEnd });
+
+test("planPaste lands a block from the range's corner and clips to what is on screen", () => {
   const rows = [page("r1"), page("r2"), page("r3")];
   const cols = [prop("t", "text"), prop("n", "number"), prop("f", "formula")];
-  const writes = planPaste([["a", "1", "x"], ["b", "oops"], ["c", "3"], ["d", "4"]], rows, cols, { pageId: "r2", propId: "t" });
+  const writes = planPaste([["a", "1", "x"], ["b", "oops"], ["c", "3"], ["d", "4"]], range(1, 1, 0, 0), rows, cols);
   assert.deepEqual(writes, [
     { pageId: "r2", propId: "t", value: "a" }, { pageId: "r2", propId: "n", value: 1 },
     { pageId: "r3", propId: "t", value: "b" },
   ], "formula skipped, bad number skipped, rows past the end dropped");
-  assert.deepEqual(planPaste([["a"]], rows, cols, { pageId: "gone", propId: "t" }), []);
+});
+
+test("one copied value fills every selected cell", () => {
+  const rows = [page("r1"), page("r2")];
+  const cols = [prop("n", "number"), prop("m", "number")];
+  assert.deepEqual(planPaste([["7"]], range(0, 1, 0, 1), rows, cols).map(w => w.value), [7, 7, 7, 7]);
+});
+
+test("planClear empties writable cells only", () => {
+  const rows = [page("r1")];
+  const cols = [prop("t", "text"), prop("c", "checkbox"), prop("f", "formula")];
+  assert.deepEqual(planClear(range(0, 0, 0, 2), rows, cols), [
+    { pageId: "r1", propId: "t", value: "" }, { pageId: "r1", propId: "c", value: false },
+  ]);
+});
+
+test("a copied range round-trips through spreadsheet text", () => {
+  const db = { id: "db", titlePropertyId: "name", properties: {} } as unknown as DatabaseSchema;
+  const rows = [page("r1", { status: "o1", t: "a\tb" }), page("r2", { status: "o2", t: 'say "hi"' })];
+  const source = { pages: { r1: rows[0], r2: rows[1] }, databases: { db } };
+  const text = copyRange(range(0, 1, 0, 1), rows, [STATUS, prop("t", "text")], source);
+  assert.deepEqual(parseTsv(text), [["Done", "a\tb"], ["To do", 'say "hi"']]);
 });
