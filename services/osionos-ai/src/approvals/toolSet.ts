@@ -1,4 +1,6 @@
 import type { ToolSet } from 'ai';
+import { config } from '../config.ts';
+import { influencedBy } from '../mcpClient/taint.ts';
 import { countExecutedInRun } from './repo.ts';
 import { proposeWrite } from './propose.ts';
 import { writeTools } from '../tools/writeToolList.ts';
@@ -67,6 +69,12 @@ export function writeToolSet(
 					approvedInRun: await countExecutedInRun(ctx.db, approval.runId),
 					expiresAt: new Date(result.row.expires_at).toISOString(),
 				};
+				// C286: a write asked after MCP output entered the conversation
+				// says so on its card. Off, or no MCP call: no key at all (C291).
+				if (config.mcpClientEnabled) {
+					const tainted = await influencedBy(ctx.db, approval.conversationId);
+					if (tainted.length > 0) asked.influencedBy = tainted;
+				}
 				await hooks.onApproval?.(asked);
 				await hooks.onResult?.({ toolCallId: options.toolCallId, toolName: tool.name, ok: true });
 				return pool.draw(WAITING_FOR_APPROVAL);

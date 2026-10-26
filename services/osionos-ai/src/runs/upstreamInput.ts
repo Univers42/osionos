@@ -1,3 +1,4 @@
+import type { McpToolEntry } from '../mcpClient/runTools.ts';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
@@ -76,6 +77,8 @@ export interface UpstreamRunInput {
 	/** The approved memories of the caller, quoted in the user turn (devil C39). */
 	memories?: readonly RunMemory[];
 	workspaceId?: string;
+	/** The MCP tools of the caller, loaded by the runner (C265): empty is today's run. */
+	mcpTools?: readonly McpToolEntry[];
 	/** The account block of the caller, when requested. */
 	accountBlock?: string;
 	/** The view block of the caller, when reported. */
