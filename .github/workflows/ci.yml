@@ -34,10 +34,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A push to a branch with an open PR into main or develop starts this workflow twice: once for
+  # the push (refs/heads/<branch>), once for the PR (refs/pull/<n>/merge). The two concurrency
+  # groups differ, so both ran in full, and cancelling one by hand left a red, cancelled run on
+  # the PR. The push run now skips its jobs (shown as skipped, not failed): the PR run tests the
+  # same commit merged into its base. main and develop always run.
+  # Caveat: a PR opened after the push leaves that push run going (duplicate work, never a gap);
+  # an API error counts as "no PR", so the push run tests in full.
+  pr-dedupe:
+    name: Push already tested by an open PR
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      duplicate: ${{ steps.check.outputs.duplicate }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          duplicate=false
+          if [ "$EVENT" = push ] && [ "$BRANCH" != main ] && [ "$BRANCH" != develop ]; then
+            open=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json baseRefName \
+              -q '[.[] | select(.baseRefName == "main" or .baseRefName == "develop")] | length' 2>/dev/null || echo 0)
+            if [ "${open:-0}" -gt 0 ]; then duplicate=true; fi
+          fi
+          echo "duplicate=$duplicate" | tee -a "$GITHUB_OUTPUT"
+
   # Every job that builds or pulls an image goes through .github/actions/docker-hub-access
   # first: anonymous Docker Hub pulls from the shared runner IPs hit 429 (run 37990792990).
   build-image:
     name: Build & push Docker image
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -84,6 +115,8 @@ jobs:
 
   quality:
     name: quality (${{ matrix.scope }})
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -173,6 +206,8 @@ jobs:
   # scripts/ci.sh is the same command a developer runs.
   ai-service:
     name: AI service (tsc + suite)
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -330,6 +365,8 @@ jobs:
   # is the control that proves the grep would see the legacy code if it were there.
   bundle-legacy-gate:
     name: Bundle legacy second brain (gate ${{ matrix.gate == 'true' && 'on' || 'default' }})
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -393,8 +430,8 @@ jobs:
   # shard is therefore a failure here, not a silent pass.
   test-gate:
     name: Browser tests
-    needs: [test, test-legacy-on, test-bridge-stub, bundle-legacy-gate]
-    if: always()
+    needs: [pr-dedupe, test, test-legacy-on, test-bridge-stub, bundle-legacy-gate]
+    if: always() && needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Require every shard, the gate-on job, the stub-bridge job and the bundle check to have succeeded
