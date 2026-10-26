@@ -90,6 +90,8 @@ describe('C290 three failures break a server for five minutes', () => {
 		assert.equal(row.status, 'broken');
 		assert.equal(row.consecutive_failures, 3);
 		assert.equal(row.long, true, 'broken for about five minutes');
+		const listed = (await as(user, 'GET', LIST)).body?.servers as { brokenUntil: string | null }[];
+		assert.ok(Date.parse(String(listed[0]?.brokenUntil)) > Date.now() + 4 * 60 * 1000, 'the list says until when');
 
 		const calls = server.stats.posts;
 		const refused = await as(user, 'POST', `${LIST}/${id}/discover`);
@@ -106,6 +108,8 @@ describe('C290 three failures break a server for five minutes', () => {
 		assert.equal(healed.status, 'ok');
 		assert.equal(healed.consecutive_failures, 0);
 		assert.equal(healed.broken_until, null);
+		const relisted = (await as(user, 'GET', LIST)).body?.servers as { brokenUntil: string | null }[];
+		assert.equal(relisted[0]?.brokenUntil, null);
 	});
 });
 
