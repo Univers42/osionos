@@ -185,7 +185,7 @@ export function buildRunTools(input: {
 	run.tools = user
 		? {
 				...mcpTools,
-				...readToolSet({ db, user }, hooks, pool, [...skillTools, ...proposalTools, ...VIEW_TOOLS]),
+				...readToolSet({ db, user, agentId: agent ? agent.id : null }, hooks, pool, [...skillTools, ...proposalTools, ...VIEW_TOOLS]),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
 		: undefined;
@@ -209,7 +209,7 @@ export function keepAgentTools(tools: ToolSet, agent: AgentConfig | null): ToolS
 	const allowed = new Set(isCustomAgent(agent) ? agent.tools.filter((name) => !name.startsWith('mcp_')) : agent.tools);
 	const kept: ToolSet = {};
 	for (const [name, tool] of Object.entries(tools)) {
-		if (allowed.has(name) || name === 'load_skill' || name === 'remember' || name === 'open_page' || name === 'open_panel' || name === 'open_issue_report') kept[name] = tool;
+		if (allowed.has(name) || name === 'load_skill' || name === 'remember' || name === 'open_page' || name === 'open_panel' || name === 'open_issue_report' || name === 'suggest_agent') kept[name] = tool;
 	}
 	return kept;
 }
