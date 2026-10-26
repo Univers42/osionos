@@ -1,6 +1,7 @@
 import type { QueryResultRow } from 'pg';
 import { z } from 'zod';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
+import { BUILTIN_AGENT_IDS } from '../agents/builtins.ts';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import type { AnyViewTool, ReadToolContext, ToolResult, ViewTool } from './types.ts';
 
@@ -28,6 +29,12 @@ const openPanelArgs = z.object({
 const openIssueReportArgs = z.object({
 	title: z.unknown().optional().describe('a short title, at most 120 characters'),
 	description: z.unknown().optional().describe('what the user saw and expected, at most 2000 characters'),
+});
+
+/** The arguments of suggest_agent. */
+const suggestAgentArgs = z.object({
+	agentId: z.unknown().optional().describe(`the agent: one of ${BUILTIN_AGENT_IDS.join(', ')}`),
+	reason: z.unknown().optional().describe('why that agent fits better, at most 200 characters'),
 });
 
 /** The row of a page, as the read rule reads it. */
@@ -141,5 +148,39 @@ export const openIssueReport: ViewTool<z.infer<typeof openIssueReportArgs>, { ti
 	},
 };
 
+/** Control and format characters (bidi marks, zero-width): a reason is shown to the user as plain text. */
+const INVISIBLE = /[\p{Cc}\p{Cf}]/gu;
+
+/** suggest_agent: offer the user a hand-off to another built-in agent. */
+export const suggestAgent: ViewTool<z.infer<typeof suggestAgentArgs>, { agentId: string; reason: string }> = {
+	name: 'suggest_agent',
+	description:
+		'Suggest that another agent answers better: the user sees a chip and may click it. Changes nothing by itself. Built-in agents only.',
+	kind: 'view',
+	input: suggestAgentArgs,
+	async run(ctx, args) {
+		const agentId = typeof args.agentId === 'string' ? args.agentId : '';
+		// A custom agent id is refused too: a hand-off to one is out of scope in v1.
+		if (!(BUILTIN_AGENT_IDS as readonly string[]).includes(agentId)) {
+			return { ok: false, error: `the agent must be one of ${BUILTIN_AGENT_IDS.join(', ')}` };
+		}
+		if (agentId === ctx.agentId) return { ok: false, error: 'You are already that agent.' };
+		const reason = (typeof args.reason === 'string' ? args.reason : '').replace(INVISIBLE, '').trim();
+		if (reason.length < 1 || reason.length > 200) {
+			return { ok: false, error: 'the reason must be between 1 and 200 characters' };
+		}
+		return { ok: true, data: { agentId, reason } };
+	},
+	render(data) {
+		return `Suggested the ${data.agentId} agent to the user.`;
+	},
+	sources() {
+		return [];
+	},
+	view(data) {
+		return { action: 'suggest_agent', agentId: data.agentId, reason: data.reason };
+	},
+};
+
 /** The view tools, in the order the model sees them. */
-export const VIEW_TOOLS: readonly AnyViewTool[] = Object.freeze([openPage, openPanel, openIssueReport]);
+export const VIEW_TOOLS: readonly AnyViewTool[] = Object.freeze([openPage, openPanel, openIssueReport, suggestAgent]);
