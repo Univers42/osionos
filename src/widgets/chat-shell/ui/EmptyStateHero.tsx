@@ -12,9 +12,9 @@
 
 import React from "react";
 
-import { AppMark } from "./AppMark";
 import { ChatComposer } from "./ChatComposer";
 import { ConnectorsStrip } from "./ConnectorsStrip";
+import { AssistantMascot } from "@/features/ai/ui/AssistantMascot";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import type { ContextChip } from "@/features/ai/model/aiContext";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
@@ -44,10 +44,10 @@ interface Props {
   onAttachmentsChange?: (paths: string[]) => void;
 }
 
-/** The launcher empty state (per ai_prompt_chat.png): mark + heading + composer + connectors + cards. */
+/** The launcher empty state (per ai_prompt_chat.png): mascot + heading + composer + connectors + cards. */
 export const EmptyStateHero: React.FC<Props> = ({ value, onChange, onSubmit, onConnect, onPick, selection, onSelectionChange, chips, onChipsChange, agents, agentId, onAgentChange, attachments, onAttachmentsChange }) => (
   <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-6 px-4 py-10">
-    <AppMark size={56} />
+    <AssistantMascot size={112} followPointer typing={value.length > 0} />
     <h1 className="text-2xl font-semibold tracking-tight text-[var(--osio-fg-default)]">How can I help you today?</h1>
     <div className="w-full">
       <ChatComposer
