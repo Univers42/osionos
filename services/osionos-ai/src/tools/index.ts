@@ -5,10 +5,11 @@ import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { PermissionAsked } from '../approvals/types.ts';
 import { READ_TOOLS } from './readTools.ts';
 import { writeTools } from './writeToolList.ts';
-import type { AnyProposalTool, AnyReadTool, ReadToolContext } from './types.ts';
+import type { AnyProposalTool, AnyReadTool, AnyViewTool, ReadToolContext } from './types.ts';
 import { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS } from './loop.ts';
 import { rememberTool } from './memoryTools.ts';
 import { loadSkillTool } from './skillTools.ts';
+import { VIEW_TOOLS } from './viewTools.ts';
 import { numberSources, sourceKey, type ToolSource } from '../runs/sources.ts';
 
 export { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS };
@@ -45,6 +46,11 @@ export interface ToolOutcome {
 	memoryBody?: string;
 	/** The skill a `load_skill` call loaded: pinned in the history of the run (devil C40). */
 	skill?: { id: string; version: number; source: 'builtin' | 'workspace' };
+	/** The view change a view tool asked for: the client applies it. */
+	view?: 
+		| { action: 'open_page'; pageId: string; title: string; target: 'current' | 'tab' | 'split' }
+		| { action: 'open_panel'; panel: 'files' | 'search' | 'marketplace' | 'agents' | 'conversations' | 'notifications' | 'tasks' | 'public' | 'database' | 'scm' | 'run' | 'problems' | 'issues' }
+		| { action: 'open_issue_report'; title: string; description: string };
 }
 
 export type { ToolSource };
@@ -176,7 +182,7 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
  * The one exception is `build_plan` (its schema is large): it is counted only
  * when OSIONOS_AI_BUILDERS is on, the one case where it is sent.
  */
-export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...writeTools(), loadSkillTool([]), rememberTool({ workspaceId: '', runId: '' })]);
+export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...VIEW_TOOLS, ...writeTools(), loadSkillTool([]), rememberTool({ workspaceId: '', runId: '' })]);
 
 /** The shape the count of the definitions reads. */
 interface ToolDefinition {
@@ -212,7 +218,7 @@ export function readToolSet(
 	ctx: ReadToolContext,
 	hooks: ToolHooks,
 	pool: ToolPool = createToolPool(),
-	extra: readonly (AnyReadTool | AnyProposalTool)[] = [],
+	extra: readonly (AnyReadTool | AnyProposalTool | AnyViewTool)[] = [],
 ): ToolSet {
 	// The sources of the run are numbered once: the ones of the prompt
 	// first, then the ones the tools find, in the order the tools found
@@ -292,9 +298,12 @@ export function readToolSet(
 					toolName: tool.name,
 					ok: true,
 					found: cites.length,
-					...(tool.pin ? { skill: tool.pin(result.data) } : {}),
+					...('pin' in tool && tool.pin ? { skill: (tool as { pin: (data: unknown) => { id: string; version: number; source: 'builtin' | 'workspace' } }).pin(result.data) } : {}),
 					...('proposed' in tool && tool.proposed
 						? { memoryId: tool.proposed(result.data).id, memoryBody: tool.proposed(result.data).body }
+						: {}),
+					...('view' in tool && typeof (tool as { view?: unknown }).view === 'function'
+						? { view: (tool as { view: (data: unknown) => ToolOutcome['view'] }).view(result.data) }
 						: {}),
 				});
 				return output;

@@ -11,11 +11,12 @@
 /*     OSIONOS_AI_EMBED_MODEL   the model the service loads                    */
 /*     OSIONOS_AI_LLM_URL       the local llama.cpp server                     */
 /*     OSIONOS_AI_LLM_MODEL     the model that server loads                    */
+/*     ANSWER_JUDGE             whole (default) or claims                      */
 /*                                                                            */
 /*   No dependencies beyond the service's own. Node 22.                        */
 /* ************************************************************************** */
 
-import { writeFileSync, readFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
@@ -27,10 +28,12 @@ import { startStack } from '../../eval/stack.ts';
 import { readGolden } from '../../eval/lib.mjs';
 import { readCorpus } from '../../eval/lib.mjs';
 import { judge } from './judge.ts';
+import { judgeClaims } from './claimJudge.ts';
+import { openCheckpoint, appendCheckpoint } from './checkpoint.ts';
+import type { CheckpointHeader, CheckpointRow } from './checkpoint.ts';
 import { score, scoreByOrigin } from './score.ts';
 import type { LabeledAnswer } from './score.ts';
-import { refreshLabel } from './labels.ts';
-import type { LabelRow } from './labels.ts';
+import { fillLabelFile } from './labels.ts';
 
 interface GoldenQuestion {
 	id: string;
@@ -56,6 +59,13 @@ const embedUrl = process.env.OSIONOS_AI_EMBED_URL ?? '';
 const embedModel = process.env.OSIONOS_AI_EMBED_MODEL ?? 'intfloat/multilingual-e5-small';
 const llmUrl = process.env.OSIONOS_AI_LLM_URL ?? '';
 const llmModel = process.env.OSIONOS_AI_LLM_MODEL ?? 'qwen3-4b';
+const judgeMode = process.env.ANSWER_JUDGE ?? 'whole';
+const checkpointPath = process.env.ANSWERS_CHECKPOINT ?? '';
+if (judgeMode !== 'whole' && judgeMode !== 'claims') {
+	console.error(`[answers] refusing to start: ANSWER_JUDGE is "${judgeMode}", expected whole or claims`);
+	process.exit(2);
+}
+const runJudge = judgeMode === 'claims' ? judgeClaims : judge;
 
 if (databaseUrl.length === 0 || embedUrl.length === 0) {
 	console.error('[answers] refusing to start: OSIONOS_AI_DATABASE_URL and OSIONOS_AI_EMBED_URL are needed');
@@ -115,6 +125,18 @@ async function callLlm(prompt: string): Promise<string> {
 
 async function main() {
 	const questions = loadQuestions();
+
+	const checkpointHeader: CheckpointHeader = {
+		judge: judgeMode,
+		llmModel,
+		embedModel,
+		questionCount: questions.length,
+	};
+	const checkpoint = checkpointPath.length > 0 ? openCheckpoint(checkpointPath, checkpointHeader) : null;
+	if (checkpoint && checkpoint.size > 0) {
+		console.log(`[answers] resuming: ${checkpoint.size} of ${questions.length} already done`);
+	}
+
 	const { stack, index } = await startStack({
 		databaseUrl,
 		embedUrl,
@@ -129,6 +151,18 @@ async function main() {
 	const labelsData: LabelData[] = [];
 
 	for (const question of questions) {
+		const saved = checkpoint?.get(question.id);
+		if (saved) {
+			labeledAnswers.push({
+				questionId: saved.id,
+				answerable: saved.answerable,
+				origin: saved.origin,
+				verdict: saved.verdict,
+			});
+			labelsData.push({ id: saved.id, answer: saved.answer, sources: saved.sources, judge: saved.verdict });
+			continue;
+		}
+
 		const asker = stack.authUser(question.asker);
 		const workspaces = stack.workspaces.get(question.asker) ?? [];
 		const retrievalUser = stack.retrievalUser(question);
@@ -154,7 +188,19 @@ async function main() {
 		const answer = await callLlm(prompt);
 
 		// Judge
-		const verdict = await judge(question.q, answer, sources, callLlm);
+		const verdict = await runJudge(question.q, answer, sources, callLlm);
+
+		const row: CheckpointRow = {
+			id: question.id,
+			answer,
+			sources,
+			verdict,
+			answerable: question.answerable,
+			origin: question.origin,
+		};
+		if (checkpointPath.length > 0) {
+			appendCheckpoint(checkpointPath, row);
+		}
 
 		labeledAnswers.push({
 			questionId: question.id,
@@ -183,21 +229,19 @@ async function main() {
 		...byOrigin.map((s) => `- ${s.origin}: n=${s.count}, faithfulness=${s.faithfulnessRate.toFixed(3)}, relevance=${s.meanRelevance.toFixed(3)}, abstention_precision=${s.abstentionPrecision.toFixed(3)}, abstention_recall=${s.abstentionRecall.toFixed(3)}`),
 		'',
 		'Command: node --experimental-strip-types eval/answers/answers.ts',
+		`Judge: ${judgeMode}`,
 	];
 	writeFileSync(path.join(ANSWERS_DIR, 'RESULTS.md'), lines.join('\n'), 'utf8');
 
-	// Fill labels.jsonl
-	const labelsPath = path.join(ANSWERS_DIR, 'labels.jsonl');
-	const existingLabels = readFileSync(labelsPath, 'utf8').split(/\r?\n/).filter((l) => l.trim());
-	const labelMap = new Map(existingLabels.map((l) => [JSON.parse(l).id, l]));
-	for (const ld of labelsData) {
-		if (labelMap.has(ld.id)) {
-			const label = refreshLabel(JSON.parse(labelMap.get(ld.id)!) as LabelRow, ld);
-			labelMap.set(ld.id, JSON.stringify(label));
-		}
+	// Fill labels.jsonl and heldout.jsonl
+	fillLabelFile(path.join(ANSWERS_DIR, 'labels.jsonl'), labelsData);
+	fillLabelFile(path.join(ANSWERS_DIR, 'heldout.jsonl'), labelsData);
+
+	// Only now that RESULTS.md and both label files are written can the
+	// checkpoint go: a killed write above still leaves the work re-runnable.
+	if (checkpointPath.length > 0) {
+		unlinkSync(checkpointPath);
 	}
-	const newLabels = [...labelMap.values()].join('\n') + '\n';
-	writeFileSync(labelsPath, newLabels, 'utf8');
 
 	await stack.db.end();
 	console.log('[answers] done');

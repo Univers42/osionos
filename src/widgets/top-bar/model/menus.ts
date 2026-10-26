@@ -19,6 +19,7 @@ import { useUIStore } from "@/shared/config/uiStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import type { SettingsSectionId } from "@/features/settings/model/sections";
 import { usePageStore } from "@/store/usePageStore";
+import { useIssueReportRequest } from "@/features/issues/model/issueReportRequest";
 import { whiteboardAppUrl } from "@/shared/config/appUrls";
 import { createBoardInNewTab } from "@/features/whiteboard/model/newBoardTab";
 import { whiteboardClient } from "@/features/whiteboard/model/whiteboardClient";
@@ -142,6 +143,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
       id: "help", label: "Help", items: [
         { id: "help.docs", label: "Documentation", run: () => { globalThis.open(DOCS_URL, "_blank", "noopener"); } },
         { id: "help.shortcuts", label: "Keyboard shortcuts", run: () => ctx.openSettings("shortcuts") },
+        { id: "help.report", label: "Report an issue…", run: () => useIssueReportRequest.getState().open({ title: "", description: "" }) },
         { id: "help.about", label: "About osionos", run: () => useToastStore.getState().push({ kind: "info", title: "osionos", description: "Notion-style collaborative workspace" }) },
       ],
     },
