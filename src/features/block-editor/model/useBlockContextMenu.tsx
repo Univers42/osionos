@@ -69,6 +69,7 @@ interface UseBlockContextMenuOptions {
   updatePageContent: (pageId: string, blocks: Block[]) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
   attachLinkSnapshot: (request: SnapshotRequest) => void;
+  onShowWhen?: (blockId: string, position: { x: number; y: number }) => void;
 }
 
 interface OperationResult {
@@ -226,6 +227,7 @@ export function useBlockContextMenu({
   updatePageContent,
   focusBlock,
   attachLinkSnapshot,
+  onShowWhen,
 }: Readonly<UseBlockContextMenuOptions>) {
   const [contextMenu, setContextMenu] = useState<BlockContextMenuState | null>(
     null,
@@ -436,13 +438,15 @@ export function useBlockContextMenu({
 
   const handleShowWhen = useCallback(() => {
     if (!contextMenu) return;
-    globalThis.dispatchEvent(
-      new CustomEvent("osionos:block-visibility", {
-        detail: { pageId, blockId: contextMenu.blockId, position: { x: contextMenu.x, y: contextMenu.y } },
-      }),
-    );
+    const position = { x: contextMenu.x, y: contextMenu.y };
+    if (onShowWhen) {
+      onShowWhen(contextMenu.blockId, position);
+    } else {
+      const handler = showWhenHandlers.get(`${pageId}\u0000${sourceKey}`);
+      if (handler) handler(contextMenu.blockId, position);
+    }
     closeContextMenu();
-  }, [closeContextMenu, contextMenu, pageId]);
+  }, [closeContextMenu, contextMenu, onShowWhen, pageId, sourceKey]);
 
   const handleProfileFieldSettings = useCallback((bind: boolean) => {
     if (!contextMenu || !blockLocation) return;
@@ -819,4 +823,14 @@ export function useBlockContextMenu({
     openContextMenu,
     closeContextMenu,
   };
+}
+
+const showWhenHandlers = new Map<string, (blockId: string, position: { x: number; y: number }) => void>();
+
+export function registerShowWhenHandler(
+  key: string,
+  handler: ((blockId: string, position: { x: number; y: number }) => void) | null,
+): void {
+  if (handler) showWhenHandlers.set(key, handler);
+  else showWhenHandlers.delete(key);
 }

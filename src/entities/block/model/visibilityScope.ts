@@ -29,37 +29,46 @@ export interface VisibilityScope {
   subscribe(onChange: () => void): () => void;
 }
 
+interface ScopeCacheEntry {
+  propertiesRef: unknown;
+  values: unknown[];
+  snapshot: PropertyMap;
+}
+
 /**
  * Page-properties scope: reads the page's own properties through the page store.
  * Returns the same snapshot object while none of the requested keys' values
  * changed (Object.is per key), so it is a valid useSyncExternalStore snapshot.
+ *
+ * The cache is keyed per distinct key list, so two formulas reading different
+ * keys never evict each other's snapshot.
  */
 export function createPagePropertiesScope(pageId: string): VisibilityScope {
-  let cachedKeys: readonly string[] | null = null;
-  let cachedValues: unknown[] | null = null;
-  let cachedSnapshot: PropertyMap | null = null;
+  const cache = new Map<string, ScopeCacheEntry>();
 
   const read = (keys: readonly string[]): PropertyMap => {
+    const key = keys.join("\u0000");
     const properties = usePageStore.getState().pageById(pageId)?.properties;
-    const propertyMap = resolvePropertyMap(properties as never);
-    const values = keys.map((key) => propertyMap[key]);
+    const entry = cache.get(key);
 
-    if (
-      cachedSnapshot !== null &&
-      cachedKeys !== null &&
-      cachedValues !== null &&
-      keys.length === cachedKeys.length &&
-      keys.every((key, index) => key === cachedKeys![index]) &&
-      values.every((value, index) => Object.is(value, cachedValues![index]))
-    ) {
-      return cachedSnapshot;
+    // Short-circuit: the page's property list did not change identity, so the
+    // snapshot built last time is still valid. Avoids rebuilding the map for
+    // every gated block on every store change.
+    if (entry && properties === entry.propertiesRef) {
+      return entry.snapshot;
+    }
+
+    const propertyMap = resolvePropertyMap(properties as never);
+    const values = keys.map((k) => propertyMap[k]);
+
+    if (entry && values.every((value, index) => Object.is(value, entry.values[index]))) {
+      entry.propertiesRef = properties;
+      return entry.snapshot;
     }
 
     const snapshot: PropertyMap = {};
-    for (const key of keys) snapshot[key] = propertyMap[key];
-    cachedKeys = [...keys];
-    cachedValues = values;
-    cachedSnapshot = snapshot;
+    for (const k of keys) snapshot[k] = propertyMap[k];
+    cache.set(key, { propertiesRef: properties, values, snapshot });
     return snapshot;
   };
 

@@ -20,9 +20,12 @@ import {
   initFormulaEngine,
   isWasmReady,
 } from "@/shared/notion-database-sys/src/lib/engine/bridge";
+import { evaluateVisibleWhen } from "@/entities/block/model/visibility";
 import { useVisibilityScope } from "@/entities/block/model/visibilityScope";
 
 const EMPTY_PROPS: Record<string, unknown> = {};
+const NO_SCOPE_SUBSCRIBE = (): (() => void) => () => {};
+const NO_SCOPE_SNAPSHOT = EMPTY_PROPS;
 
 /**
  * Returns whether a block carrying `visibleWhen` should be shown. Fails open
@@ -57,26 +60,23 @@ export function useVisibleWhen(formula: string | undefined): boolean {
   }, [handleNumber]);
 
   const snapshot = useSyncExternalStore(
-    scope ? scope.subscribe : () => () => undefined,
-    () => (scope ? scope.read(deps) : EMPTY_PROPS),
-    () => (scope ? scope.read(deps) : EMPTY_PROPS),
+    scope ? scope.subscribe : NO_SCOPE_SUBSCRIBE,
+    () => (scope ? scope.read(deps) : NO_SCOPE_SNAPSHOT),
+    () => (scope ? scope.read(deps) : NO_SCOPE_SNAPSHOT),
   );
 
-  const visible = useMemo<boolean>(() => {
-    if (!source) return true;
-    if (!scope) return true;
-    if (!engineReady) return true;
-    if (handleNumber === undefined) return true;
-    const result = evaluateHandle(handleNumber, snapshot);
-    if (result === FORMULA_ENGINE_UNAVAILABLE) return true;
-    return !(
-      result === false ||
-      result === 0 ||
-      result === "" ||
-      result === null ||
-      result === undefined
-    );
-  }, [source, scope, engineReady, handleNumber, snapshot]);
+  const visible = evaluateVisibleWhen(
+    source,
+    scope,
+    (_formula, props) =>
+      engineReady && handleNumber !== undefined
+        ? evaluateHandle(handleNumber, props)
+        : FORMULA_ENGINE_UNAVAILABLE,
+    engineReady,
+  );
+
+  // Keep the snapshot referenced so React re-runs this render's value when it changes.
+  void snapshot;
 
   return visible;
 }

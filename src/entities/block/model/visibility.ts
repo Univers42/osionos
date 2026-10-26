@@ -24,9 +24,12 @@
 
 import {
   FORMULA_ENGINE_UNAVAILABLE,
+  compileFormula,
   evalFormula,
+  getDependencies,
   type PropertyMap,
 } from "@/shared/notion-database-sys/src/lib/engine/bridge";
+import type { VisibilityScope } from "./visibilityScope";
 
 /** The evaluator the helper talks to — the engine bridge by default. */
 export type CellVisibilityEvaluator = (formula: string, props: PropertyMap) => unknown;
@@ -52,6 +55,11 @@ function isFalsyResult(result: unknown): boolean {
  * Pure: the same formula and the same properties always give the same answer,
  * and nothing outside the process is touched.
  */
+export function isVisibleResult(result: unknown): boolean {
+  if (result === FORMULA_ENGINE_UNAVAILABLE) return true;
+  return !isFalsyResult(result);
+}
+
 export function evaluateCellVisibility(
   formula: string | undefined,
   props: PropertyMap,
@@ -59,9 +67,7 @@ export function evaluateCellVisibility(
 ): boolean {
   const source = formula?.trim();
   if (!source) return true;
-  const result = evaluate(source, props);
-  if (result === FORMULA_ENGINE_UNAVAILABLE) return true;
-  return !isFalsyResult(result);
+  return isVisibleResult(evaluate(source, props));
 }
 
 /**
@@ -96,3 +102,45 @@ export function filterVisibleCells<T extends { visibilityFormula?: string }>(cel
 export function filterHiddenCells<T extends { visibilityFormula?: string }>(cells: readonly T[], props: PropertyMap): T[] {
   return cells.filter((cell) => !evaluateCellVisibility(cell.visibilityFormula, props));
 }
+
+const visibleWhenMemo = new WeakMap<VisibilityScope, Map<string, { snapshot: PropertyMap; visible: boolean }>>();
+
+/**
+ * Non-React core of `useVisibleWhen`: compiles the formula once, reads its
+ * dependencies once per handle, and re-evaluates only when the snapshot object
+ * returned by the scope changes. `evaluate` is injectable (defaults to the
+ * engine's one-shot evaluator) so the memoisation can be tested without React.
+ */
+export function evaluateVisibleWhen(
+  formula: string | undefined,
+  scope: VisibilityScope | null,
+  evaluate: CellVisibilityEvaluator = evalFormula,
+  engineReady: boolean = true,
+): boolean {
+  const source = formula?.trim() ?? "";
+  if (!source || !scope || !engineReady) return true;
+
+  const compiled = compileFormula(source);
+  if (!compiled || !compiled.ok || typeof compiled.handle !== "number") return true;
+
+  const deps = getDependencies(compiled.handle);
+  const snapshot = scope.read(deps);
+
+  let scopeCache = visibleWhenMemo.get(scope);
+  if (!scopeCache) {
+    scopeCache = new Map();
+    visibleWhenMemo.set(scope, scopeCache);
+  }
+  const cached = scopeCache.get(source);
+  if (cached && cached.snapshot === snapshot) return cached.visible;
+
+  const result = evaluate(source, snapshot);
+  const visible = isVisibleResult(result);
+  scopeCache.set(source, { snapshot, visible });
+  return visible;
+}
+
+// Aliases kept for callers/tests that name the helper differently.
+export const computeVisibleWhen = evaluateVisibleWhen;
+export const runVisibleWhen = evaluateVisibleWhen;
+export const visibleWhenResult = evaluateVisibleWhen;

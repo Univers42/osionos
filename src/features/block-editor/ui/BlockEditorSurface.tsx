@@ -62,6 +62,8 @@ import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { usePageContextMenu } from "../model/usePageContextMenu";
+import { registerShowWhenHandler } from "../model/useBlockContextMenu";
+import { clampViewportMenuPosition } from "@/shared/ui";
 
 // useEvent: an identity-STABLE wrapper whose call always runs the latest fn. The
 // callbacks returned by usePlaygroundBlockEditor get a fresh identity on every
@@ -429,15 +431,14 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	const [dictation, setDictation] = useState(() => dictationSession.getState());
 	useEffect(() => dictationSession.subscribe(setDictation), []);
 	useEffect(() => {
-		const onShow = (event: Event) => {
-			const detail = (event as CustomEvent<{ blockId?: string; position?: { x: number; y: number } }>).detail;
-			if (!detail?.blockId) return;
-			setVisibilityPopoverBlockId(detail.blockId);
-			setVisibilityPopoverPosition(detail.position ?? null);
-		};
-		globalThis.addEventListener("osionos:block-visibility", onShow);
-		return () => globalThis.removeEventListener("osionos:block-visibility", onShow);
-	}, []);
+		const key = `${pageId}\u0000${sourceKey}`;
+		registerShowWhenHandler(key, (blockId, position) => {
+			const clamped = clampViewportMenuPosition(position.x, position.y, { width: 384, maxHeight: 320, margin: 12 });
+			setVisibilityPopoverBlockId(blockId);
+			setVisibilityPopoverPosition({ x: clamped.left, y: clamped.top });
+		});
+		return () => registerShowWhenHandler(key, null);
+	}, [pageId, sourceKey]);
 	const selectionRootRef = useRef<HTMLDivElement | null>(null);
 	const blocksRef = useRef<Block[]>(blocks);
 	// Pointer-down position on the bottom append zone, to tell a click from a drag.
@@ -749,19 +750,11 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	}, [compact, openPageMenu]);
 
 	if (locked) {
-		const visibilityBlock = visibilityPopoverBlockId ? findBlockById(blocks, visibilityPopoverBlockId) : null;
 		return (
 			<div data-testid="locked-page-body" className={`relative flex min-w-0 flex-col ${className}`}>
 				{blocks.length === 0 ? (
 					<p className="py-8 text-sm italic text-[var(--osio-fg-subtle)]">This page is locked and has no content.</p>
 				) : blocks.map((block, index) => <ReadOnlyBlock key={block.id} block={block} index={index} />)}
-				{visibilityBlock ? (
-					<BlockVisibilityPopover
-						block={visibilityBlock}
-						onSave={(updates) => { updateBlock(pageId, visibilityBlock.id, updates); setVisibilityPopoverBlockId(null); }}
-						onClose={() => setVisibilityPopoverBlockId(null)}
-					/>
-				) : null}
 			</div>
 		);
 	}

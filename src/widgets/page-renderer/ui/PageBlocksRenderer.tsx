@@ -14,7 +14,6 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Block } from "@/entities/block";
 import { ReadOnlyBlock } from "@/entities/block";
-import { VisibilityScopeProvider } from "@/entities/block/model/visibilityScope";
 import {
   createRootBlockRenderMeta,
   estimateBlockHeight,
@@ -43,7 +42,6 @@ function resolveScrollElement(root: HTMLElement | null): HTMLElement | null {
 
 interface PageBlocksRendererProps {
   blocks: Block[];
-  pageId?: string;
   properties?: readonly import("@/entities/page/model/types").PagePropertyEntry[] | Record<string, unknown>;
 }
 
@@ -53,7 +51,6 @@ interface PageBlocksRendererProps {
  */
 export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
   blocks,
-  pageId,
   properties,
 }) => {
   const openPage = usePageStore((s) => s.openPage);
@@ -152,7 +149,6 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
 
   if (shouldVirtualize) {
     return (
-      <VisibilityScopeProvider pageId={pageId}>
       <div ref={rootRef} className="relative" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((virtualItem) => {
           const item = renderMeta[virtualItem.index];
@@ -171,17 +167,14 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
           );
         })}
       </div>
-      </VisibilityScopeProvider>
     );
   }
 
   return (
-    <VisibilityScopeProvider pageId={pageId}>
     <div ref={rootRef} className="flex flex-col">
       {renderMeta.map((item) => (
         <ReadOnlyBlock key={item.block.id} block={item.block} index={item.effectiveIndex} properties={properties} />
       ))}
     </div>
-    </VisibilityScopeProvider>
   );
 };
