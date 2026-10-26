@@ -1,4 +1,5 @@
 import type { QueryResultRow } from 'pg';
+import type { CardAgent } from '../agents/card.ts';
 
 /**
  * The approvals: a write the assistant asked for, and the human who decides
@@ -103,6 +104,20 @@ export interface ApprovalPlan {
 }
 
 /**
+ * What the card of an MCP call shows besides the arguments (C281): who gets the
+ * text, which tool, the words the user agreed to, and the hash that pins them.
+ */
+export interface McpCard {
+	serverLabel: string;
+	serverHost: string;
+	toolName: string;
+	description: string;
+	snapshotSha256: string;
+	/** The disclosure of C282: what approving sends, and where. */
+	disclosure: string;
+}
+
+/**
  * What the write tools of a run need to know about that run.
  *
  * The run owns the approval: the row carries the run, the conversation and
@@ -122,6 +137,8 @@ export interface ApprovalContext {
 	 * the provenance of an approval is what the run had seen WHEN it asked.
 	 */
 	provenance(): readonly string[];
+	/** The agent of the run, from its pin: the card names it (C304). */
+	agent?: CardAgent | null;
 }
 
 /**
@@ -151,4 +168,10 @@ export interface PermissionAsked {
 	approvedInRun: number;
 	/** When the question closes itself. */
 	expiresAt: string;
+	/** The card of an MCP call; absent for every other tool. */
+	mcp?: McpCard;
+	/** The servers whose output the conversation holds, absent when none (C286). */
+	influencedBy?: string[];
+	/** The agent that asked, from the run's pin; null for the general assistant. */
+	agent: CardAgent | null;
 }

@@ -25,6 +25,7 @@ import { failureCode, retryAfterOf } from "./runErrors";
 import { conversationApi } from "./conversationApi";
 import { useUserStore } from "@/features/auth";
 import { withMemoryDecision, type MemoryDecision } from "./memoryParts";
+import { withoutUnreadableMirrors } from "./storedChatRepair";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -78,7 +79,7 @@ interface ChatData {
 function load(): ChatData {
   const empty: ChatData = { projects: [], conversations: [], messages: [], contextItems: [] };
   try {
-    return { ...empty, ...(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<ChatData>) };
+    return withoutUnreadableMirrors({ ...empty, ...(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<ChatData>) });
   } catch {
     return empty;
   }

@@ -170,7 +170,7 @@ export function streamAnswer(
  */
 export function streamToolCall(
 	response: ServerResponse,
-	toolCall: { name: string; arguments: Record<string, unknown> },
+	toolCall: { name: string; arguments: Record<string, unknown>; also?: { name: string; arguments: Record<string, unknown> }[] },
 	options: StreamOptions,
 	sendUsage: boolean,
 	usage: StreamOptions['usage'],
@@ -186,6 +186,11 @@ export function streamToolCall(
 		name: toolCall.name,
 		args,
 	}));
+	// `also`: further calls of the same step, each with its own name and
+	// arguments (two different MCP calls in one step).
+	for (const [index, extra] of (toolCall.also ?? []).entries()) {
+		calls.push({ id: `call_mock_${extra.name}_also${index}`, name: extra.name, args: JSON.stringify(extra.arguments) });
+	}
 	const send = () => {
 		if (response.writableEnded || response.destroyed) return;
 		// The words of the step come before the call: the step says what it

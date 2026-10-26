@@ -1,15 +1,15 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { checkEndpointUrl, guardedFetch } from '../connections/endpointGuard.ts';
 import type { GuardedFetch } from '../connections/endpointGuard.ts';
 
 /**
  * The transport to a remote MCP server the user registered (E1a).
  *
- * It lists the tools of one server and nothing else: no tool is called here,
- * and no run reaches this file. What it holds to, and the condition each line
- * answers:
+ * It lists the tools of one server (E1a) and calls one (E1b), through ONE
+ * session helper, so both hold to the same lines. What it holds to, and the
+ * condition each line answers:
  *   - EVERY byte goes through the guarded fetch (C263): the SDK is handed our
  *     fetch for the POSTs and the GETs alike, so the global fetch is never
  *     called, a redirect is never followed, and a name that resolves to a
@@ -139,8 +139,19 @@ export function toFailure(state: CallState, error: unknown): McpFailure {
 	return new McpFailure('mcp_protocol');
 }
 
-/** Lists the tools of one server: up to `maxPages` pages, 51 tools at most. */
-export async function listServerTools(options: ListOptions): Promise<RawTool[]> {
+/** What every operation shares: the URL, the header, the bounds, the injected fetch. */
+type SessionOptions = Pick<ListOptions, 'url' | 'header' | 'deadlineMs' | 'maxBodyBytes' | 'fetchImpl'>;
+
+/**
+ * One operation on one server: connect, run `work`, close.
+ *
+ * The guard, the deadline, the cap, the close in `finally` and the fixed
+ * failure codes live here once, so a list and a call cannot drift apart.
+ */
+async function withSession<T>(
+	options: SessionOptions,
+	work: (client: Client, signal: AbortSignal, deadlineMs: number) => Promise<T>,
+): Promise<T> {
 	const controller = new AbortController();
 	const state: CallState = { timedOut: false, tooLarge: false, network: false, abort: () => controller.abort() };
 	const deadlineMs = options.deadlineMs ?? TOTAL_DEADLINE_MS;
@@ -168,6 +179,19 @@ export async function listServerTools(options: ListOptions): Promise<RawTool[]> 
 		});
 		client = new Client({ name: 'osionos-ai', version: '1.0.0' }, { capabilities: {} });
 		await client.connect(transport, { signal: controller.signal, timeout: deadlineMs });
+		return await work(client, controller.signal, deadlineMs);
+	} catch (error) {
+		throw toFailure(state, error);
+	} finally {
+		clearTimeout(timer);
+		controller.abort();
+		await client?.close().catch(() => undefined);
+	}
+}
+
+/** Lists the tools of one server: up to `maxPages` pages, 51 tools at most. */
+export function listServerTools(options: ListOptions): Promise<RawTool[]> {
+	return withSession(options, async (client, signal, deadlineMs) => {
 		const tools: RawTool[] = [];
 		let cursor: string | undefined;
 		for (let page = 0; page < (options.maxPages ?? MAX_PAGES); page++) {
@@ -176,7 +200,7 @@ export async function listServerTools(options: ListOptions): Promise<RawTool[]> 
 			const result = await client.request(
 				{ method: 'tools/list', params: cursor ? { cursor } : {} },
 				ListToolsResultSchema,
-				{ signal: controller.signal, timeout: deadlineMs },
+				{ signal, timeout: deadlineMs },
 			);
 			for (const tool of result.tools) {
 				tools.push({
@@ -189,11 +213,42 @@ export async function listServerTools(options: ListOptions): Promise<RawTool[]> 
 			if (!cursor || tools.length >= MAX_TOOLS_READ) break;
 		}
 		return tools;
-	} catch (error) {
-		throw toFailure(state, error);
-	} finally {
-		clearTimeout(timer);
-		controller.abort();
-		await client?.close().catch(() => undefined);
-	}
+	});
+}
+
+export interface CallOptions extends SessionOptions {
+	name: string;
+	arguments: Record<string, unknown>;
+}
+
+/** What a tool answered: its text blocks, and whether anything else was dropped (C278). */
+export interface CalledTool {
+	text: string;
+	droppedNonText: boolean;
+	/** The server said the call failed; its words are still only data. */
+	isError: boolean;
+}
+
+/**
+ * Calls one tool, once.
+ *
+ * request(), not callTool(): callTool compiles a server-supplied outputSchema
+ * with Ajv (C277). Only `text` blocks are kept; an image, audio, resource
+ * link or embedded resource is dropped, never fetched (C278).
+ */
+export function callServerTool(options: CallOptions): Promise<CalledTool> {
+	return withSession(options, async (client, signal, deadlineMs) => {
+		const result = await client.request(
+			{ method: 'tools/call', params: { name: options.name, arguments: options.arguments } },
+			CallToolResultSchema,
+			{ signal, timeout: deadlineMs },
+		);
+		const texts: string[] = [];
+		let droppedNonText = false;
+		for (const block of result.content ?? []) {
+			if (block.type === 'text') texts.push(block.text);
+			else droppedNonText = true;
+		}
+		return { text: texts.join('\n'), droppedNonText, isError: result.isError === true };
+	});
 }

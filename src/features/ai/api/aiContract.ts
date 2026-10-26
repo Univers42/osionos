@@ -54,7 +54,9 @@ export interface AiModel {
  * The list NEVER carries the instructions: they are the text of the server's
  * prompt, and the browser has no business holding them.
  */
-export interface AiAgent {
+export interface AiBuiltinAgent {
+  /** Absent on a built-in: the service sends `kind` on custom agents only. */
+  kind?: "builtin";
   /** The id the run carries: `db-architect`, `doc-writer`, `analyst`. */
   id: string;
   /** The version of the instructions — pinned on the run. */
@@ -63,6 +65,57 @@ export interface AiAgent {
   name: string;
   /** One line: what the agent is for. */
   description: string;
+}
+
+/**
+ * An agent a user or a workspace admin wrote. `instructions` is present only
+ * on `GET /agents/:id`, and only for who may run the agent (a viewer sees none).
+ */
+export interface AiCustomAgent {
+  kind: "custom";
+  /** The uuid a run carries. */
+  id: string;
+  scope: "user" | "workspace";
+  workspaceId: string | null;
+  name: string;
+  description: string;
+  tools: string[];
+  skills: string[];
+  version: number;
+  archived: boolean;
+  /** The author lost the right to write for the workspace: a run is refused until an admin saves it. */
+  needsReview: boolean;
+  instructions?: string;
+}
+
+/** An agent a run can take: a built-in, or a custom one. */
+export type AiAgent = AiBuiltinAgent | AiCustomAgent;
+
+/** The body of `POST /agents`: exactly these keys, the service refuses any other (C332). */
+export interface CreateAgentInput {
+  scope: "user" | "workspace";
+  workspaceId?: string;
+  name: string;
+  description: string;
+  instructions: string;
+  tools: string[];
+  skills: string[];
+}
+
+/** The body of `PATCH /agents/:id`. */
+export interface UpdateAgentInput {
+  expectedVersion: number;
+  name?: string;
+  description?: string;
+  instructions?: string;
+  tools?: string[];
+  skills?: string[];
+}
+
+/** The switches of a workspace, as the service enforces them (C305). */
+export interface AiAgentSettings {
+  agents_enabled: boolean;
+  custom_agents_allowed: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -258,6 +311,55 @@ export interface CompleteInput {
   /** The connection the completion spends — `platform` when the caller does not say. */
   connectionId?: string;
 }
+/* -------------------------------------------------------------------------- */
+/* The MCP servers of the user                                                */
+/* -------------------------------------------------------------------------- */
+
+/** A tool of a server: off until the user switches it on. */
+export interface AiMcpTool {
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
+/** A server as the list shows it: the host, never the URL, never the secret (C271). */
+export interface AiMcpServer {
+  id: string;
+  label: string;
+  host: string;
+  status: "new" | "ok" | "failing" | "broken";
+  headerName: string | null;
+  headerLast4: string | null;
+  /** While the service pauses the server after 3 failures, until when (ISO); null otherwise. */
+  brokenUntil: string | null;
+  tools: AiMcpTool[];
+}
+
+/** The body of `POST /mcp-servers`. */
+export interface CreateMcpServerInput {
+  label: string;
+  url: string;
+  headerName?: string;
+  headerValue?: string;
+  /** The disclosure was ticked (C282); the service refuses a create without it. */
+  acknowledged: true;
+}
+
+/** The body of `PATCH /mcp-servers/:id`: a new `url` travels with `headerValue` (C270). */
+export interface UpdateMcpServerInput {
+  label?: string;
+  url?: string;
+  headerName?: string;
+  headerValue?: string;
+}
+
+/** The answer of `POST /mcp-servers/:id/discover`. */
+export interface AiMcpDiscovery {
+  tools: AiMcpTool[];
+  /** Tools the server listed that broke a cap and were left out. */
+  refused: number;
+}
+
 /* -------------------------------------------------------------------------- */
 /* The errors                                                                 */
 /* -------------------------------------------------------------------------- */
