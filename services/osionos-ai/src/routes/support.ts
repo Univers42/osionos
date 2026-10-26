@@ -22,3 +22,13 @@ export function requireUser(ctx: RouteContext): AuthUser | null {
 	}
 	return result.user;
 }
+
+/**
+ * Whether the session was issued within `windowMs`.
+ *
+ * A stolen app session is worth an hour; the writes that put a credential in
+ * the service ask for a human who has just signed in (C113, C289).
+ */
+export function isFreshSession(user: AuthUser, windowMs: number): boolean {
+	return Number.isFinite(user.issuedAtMs) && Date.now() - user.issuedAtMs <= windowMs;
+}

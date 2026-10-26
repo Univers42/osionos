@@ -27,6 +27,8 @@ export const IMAGE_LIMIT_PREFIX = 'ai:rl:image';
 export const DESCRIBE_LIMIT_PREFIX = 'ai:rl:describe';
 /** The window of the mints: a PAT is minted from a fresh session, and rarely. */
 export const PAT_LIMIT_PREFIX = 'ai:rl:pat';
+/** The discoveries of MCP servers: each one is an outbound call to a host the user chose (C289). */
+export const MCP_DISCOVER_LIMIT_PREFIX = 'ai:rl:mcp-discover';
 /** The day bucket of the builder passes (C161). */
 export const BUILD_LIMIT_PREFIX = 'ai:rl:build';
 
