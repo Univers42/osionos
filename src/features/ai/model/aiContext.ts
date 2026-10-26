@@ -44,6 +44,8 @@ export interface RunContext {
   account?: boolean;
   /** True = the web tools are on for THIS message (one of three layers; never sticky). */
   web?: boolean;
+  /** True = this message is a research run; the port sends it as `mode: 'research'` with the web on. */
+  research?: boolean;
   /** The view the assistant may drive. */
   view?: RunView;
 }
@@ -90,13 +92,15 @@ export function addContextChip(chips: ContextChip[], chip: ContextChip): ChipPic
 
 /**
  * The chips as the run's context: the pages, and whether the workspace is read.
- * `web` rides along only when true: a run without it is byte-identical to before.
+ * `web` and `research` ride along only when true: a run without them is
+ * byte-identical to before. Research needs the web, so it brings it.
  */
-export function buildRunContext(chips: ContextChip[], web = false): RunContext {
+export function buildRunContext(chips: ContextChip[], web = false, research = false): RunContext {
   return {
     pageIds: chips.filter((chip) => chip.kind === "page" && chip.pageId).map((chip) => chip.pageId as string),
     workspace: chips.some((chip) => chip.kind === "workspace"),
-    ...(web ? { web: true } : {}),
+    ...(web || research ? { web: true } : {}),
+    ...(research ? { research: true } : {}),
   };
 }
 

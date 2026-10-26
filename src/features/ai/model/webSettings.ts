@@ -29,12 +29,15 @@ import { AiError, getWebSettings, putWebSettings } from "@/features/ai/api/aiCli
 export const WEB_DISCLOSURE =
   "Queries and the pages you fetch are sent to third-party search engines and websites.";
 
+/** What the reader is told before a research run (C414) — shown verbatim. */
+export const RESEARCH_DISCLOSURE = "Research reads up to 24 web pages and takes a few minutes.";
+
 /** Where the switch of a workspace stands, as the SERVER says it. */
 export type WebSettingsView =
   | { status: "loading" }
   | { status: "off" }
   | { status: "failed" }
-  | { status: "ready"; enabled: boolean };
+  | { status: "ready"; enabled: boolean; research?: boolean };
 
 /**
  * The switch of a workspace. A 404 is "feature off" (the flag, or a caller who
@@ -44,7 +47,7 @@ export type WebSettingsView =
 export async function loadWebView(workspaceId: string): Promise<WebSettingsView> {
   try {
     const settings = await getWebSettings(workspaceId);
-    return { status: "ready", enabled: settings.enabled === true };
+    return { status: "ready", enabled: settings.enabled === true, ...(settings.research === true ? { research: true } : {}) };
   } catch (failure) {
     return { status: failure instanceof AiError && failure.status === 404 ? "off" : "failed" };
   }
