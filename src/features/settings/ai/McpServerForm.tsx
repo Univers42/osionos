@@ -36,13 +36,14 @@ import { FIELD_LABEL, MCP_BOX, MCP_TEXT_DANGER_SM, MCP_TEXT_DANGER_XS, MCP_TITLE
 import { Button, Input } from "@/shared/ui";
 import { Checkbox } from "@osionos/ui/primitives/Checkbox";
 
-/** The body of a create: the header fields travel only when filled. */
+/** The body of a create, built only once the disclosure is ticked: the header fields travel only when filled. */
 export function createBodyOf(input: McpFormInput): CreateMcpServerInput {
   return {
     label: input.label.trim(),
     url: input.url.trim(),
     ...(input.headerName ? { headerName: input.headerName } : {}),
     ...(input.headerValue ? { headerValue: input.headerValue } : {}),
+    acknowledged: true,
   };
 }
 

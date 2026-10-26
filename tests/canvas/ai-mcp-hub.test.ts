@@ -60,13 +60,14 @@ const OK_SERVER: AiMcpServer = {
   status: "ok",
   headerName: "Authorization",
   headerLast4: "wxyz",
+  brokenUntil: null,
   tools: [
     { name: "search", description: "Search the docs", enabled: true },
     { name: "fetch_page", description: "Fetch one page", enabled: false },
   ],
 };
 
-const BROKEN_SERVER: AiMcpServer = { ...OK_SERVER, id: "22222222-2222-4222-8222-222222222222", label: "Flaky", status: "broken", tools: [] };
+const BROKEN_SERVER: AiMcpServer = { ...OK_SERVER, id: "22222222-2222-4222-8222-222222222222", label: "Flaky", status: "broken", brokenUntil: new Date(2026, 9, 26, 14, 5).toISOString(), tools: [] };
 
 const NO_ACTIONS: McpRowActions = {
   onDiscover: () => undefined,
@@ -76,7 +77,7 @@ const NO_ACTIONS: McpRowActions = {
   onToggle: () => undefined,
 };
 
-const STATE = { changed: {}, retryAt: {}, busy: "", confirming: null };
+const STATE = { changed: {}, busy: "", confirming: null };
 
 const GOOD: McpFormInput = { label: "Docs", url: "https://mcp.example.com/mcp", headerName: "", headerValue: "" };
 
@@ -133,12 +134,12 @@ test("a changed address needs the header again, an unchanged one does not (C270)
   assert.ok(validateMcpEdit({ ...GOOD, url: "", headerValue: "secret-value-1" }).url);
 });
 
-test("the add is off until the disclosure is ticked, and its body carries no acknowledged key", () => {
+test("C282 the add is off until the disclosure is ticked, and its body carries acknowledged: true", () => {
   assert.equal(canAddMcp(GOOD, false), false);
   assert.equal(canAddMcp(GOOD, true), true);
   assert.equal(canAddMcp({ ...GOOD, url: "http://x.example.com" }, true), false);
-  // The service's create schema is strict: an extra key is a 400 (mcpServers C282 is client-side).
-  assert.deepEqual(Object.keys(createBodyOf(GOOD)).sort(), ["label", "url"]);
+  // The service refuses a create without it (validate.ts createBodySchema).
+  assert.deepEqual(createBodyOf(GOOD), { label: "Docs", url: "https://mcp.example.com/mcp", acknowledged: true });
   const html = renderToString(React.createElement(McpServerForm, { busy: false, error: "", onSubmit: () => undefined, onCancel: () => undefined }));
   assert.match(html, /Page text you approve is sent to this server/);
   assert.match(html, /type="password"/);
@@ -180,7 +181,7 @@ test("the routes: list, create, patch, delete, discover, tool switch", async () 
   });
   const id = OK_SERVER.id;
   assert.equal((await listMcpServers()).length, 1);
-  await createMcpServer({ label: "x", url: "https://a.example.com" });
+  await createMcpServer({ label: "x", url: "https://a.example.com", acknowledged: true });
   await updateMcpServer(id, { label: "y" });
   await discoverMcpServer(id);
   assert.equal(await setMcpToolEnabled(id, "search", true), true);
@@ -209,9 +210,9 @@ test("a changed tool is off and says so; a broken server says when to retry", ()
   assert.match(html, /aria-checked="false"/);
   assert.equal(render([changed]).includes("changed since you enabled it"), false);
 
-  const at = new Date(2026, 9, 26, 14, 5);
-  assert.equal(statusWords(BROKEN_SERVER, at), "Paused after 3 failures, retry after 14:05");
-  assert.match(render([BROKEN_SERVER], { ...STATE, retryAt: { [BROKEN_SERVER.id]: at } }), /retry after 14:05/);
+  assert.equal(statusWords(BROKEN_SERVER), "Paused after 3 failures, retry after 14:05");
+  assert.match(render([BROKEN_SERVER]), /retry after 14:05/);
+  assert.equal(statusWords({ ...BROKEN_SERVER, brokenUntil: null }), "Paused after 3 failures, you can retry now");
 });
 
 test("delete asks inline, with no confirm()", () => {

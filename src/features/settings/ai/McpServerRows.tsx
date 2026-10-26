@@ -39,7 +39,6 @@ export interface McpRowActions {
 export interface McpRowState {
   /** Tool names that were on and came back off after a discovery, per server. */
   changed: Record<string, string[]>;
-  retryAt: Record<string, Date>;
   busy: string;
   confirming: string | null;
 }
@@ -130,7 +129,7 @@ export const McpServerList: React.FC<{
             {server.host} · {headerWords(server)}
           </div>
           <div className={`mt-0.5 ${MCP_TEXT_MUTED_XS}`} data-testid="mcp-status">
-            {statusWords(server, state.retryAt[server.id])}
+            {statusWords(server)}
           </div>
           {server.tools.length > 0 ? (
             <ToolRows

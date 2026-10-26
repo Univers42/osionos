@@ -277,6 +277,8 @@ export interface AiMcpServer {
   status: "new" | "ok" | "failing" | "broken";
   headerName: string | null;
   headerLast4: string | null;
+  /** While the service pauses the server after 3 failures, until when (ISO); null otherwise. */
+  brokenUntil: string | null;
   tools: AiMcpTool[];
 }
 
@@ -286,6 +288,8 @@ export interface CreateMcpServerInput {
   url: string;
   headerName?: string;
   headerValue?: string;
+  /** The disclosure was ticked (C282); the service refuses a create without it. */
+  acknowledged: true;
 }
 
 /** The body of `PATCH /mcp-servers/:id`: a new `url` travels with `headerValue` (C270). */

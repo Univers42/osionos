@@ -33,7 +33,6 @@ import {
   type AiMcpServer,
 } from "@/features/ai/api/aiClient";
 import {
-  BREAKER_MS,
   isMcpOff,
   mcpFailureMessage,
   type McpFormInput,
@@ -55,7 +54,6 @@ export const McpServersSection: React.FC = () => {
   const [editing, setEditing] = useState<Editing>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [changed, setChanged] = useState<Record<string, string[]>>({});
-  const [retryAt, setRetryAt] = useState<Record<string, Date>>({});
 
   const refresh = useCallback(async () => {
     try {
@@ -110,17 +108,16 @@ export const McpServersSection: React.FC = () => {
         `discover:${server.id}`,
         async () => {
           const found = await discoverMcpServer(server.id);
+          // Caveat: "changed" is what this page saw (on before the discovery, off
+          // after it); the list keeps no such mark, so a reload forgets it. The
+          // tool itself stays off either way (C272).
           const wasOn = server.tools.filter((tool) => tool.enabled).map((tool) => tool.name);
           const nowOff = found.tools.filter((tool) => !tool.enabled).map((tool) => tool.name);
           setChanged((now) => ({ ...now, [server.id]: wasOn.filter((name) => nowOff.includes(name)) }));
           await refresh();
         },
-        (failure) => {
-          if ((failure as { code?: string } | null)?.code === "mcp_broken") {
-            setRetryAt((now) => ({ ...now, [server.id]: new Date(Date.now() + BREAKER_MS) }));
-          }
-          void refresh();
-        },
+        // The list carries the pause (brokenUntil) once the service has set it.
+        () => void refresh(),
       ),
     onEdit: (server) => {
       setFormError("");
@@ -158,7 +155,7 @@ export const McpServersSection: React.FC = () => {
           {error}
         </p>
       ) : null}
-      <McpServerList servers={servers} state={{ changed, retryAt, busy, confirming }} actions={actions} />
+      <McpServerList servers={servers} state={{ changed, busy, confirming }} actions={actions} />
       {editing ? (
         <McpServerForm
           key={editing.kind === "edit" ? editing.id : "add"}
