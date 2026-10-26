@@ -30,6 +30,7 @@ import {
   rememberDatabaseWorkspace,
   resetObjectDatabaseWorkspaces,
 } from "./objectDatabaseWorkspaces";
+import { createSessionWait, type SessionWait } from "./sessionWait";
 
 const PUSHED_HASHES_KEY = "osionos.objectDb.pushed.v1";
 const HYDRATION_JWT_RETRY_MS = 1500;
@@ -56,7 +57,7 @@ export type ObjectDatabaseSyncHooks = {
 
 let pushInFlight = false;
 let hydrationDone = false; // hydrate() has been launched with a session this account
-let hydrationPolling = false; // a jwt-wait loop is currently running (no concurrent polls)
+let hydrationWait: SessionWait | null = null; // the wait for the session token, one per account
 let hydrationCompleted = false; // hydrate() finished — gates delete propagation
 
 /** Sync is possible only client-side, with the flag on and a bridge URL set
@@ -237,40 +238,35 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
 
 /** Kick hydration once the session token exists. Waits briefly for it, then
  *  reconciles. If no token appears in time (e.g. the user logs in later) it
- *  stops WITHOUT latching, so a subsequent call retries with the fresh session.
- *  Any failure degrades to local-only (edits still push once the bridge is up). */
+ *  stops WITHOUT latching, so a subsequent call retries with the fresh session;
+ *  a call that finds the token while the wait sleeps starts it now (App calls
+ *  this when a sign-in lands). Any failure degrades to local-only (edits still
+ *  push once the bridge is up). */
 export function ensureObjectDatabaseHydration(hooks: ObjectDatabaseSyncHooks): void {
-  if (hydrationDone || hydrationPolling) return;
+  if (hydrationDone) return;
   if (!objectDatabaseServerSyncReady()) return;
-  hydrationPolling = true;
-
-  let attempts = 0;
-  const attempt = (): void => {
-    if (getActivePageJwt()) {
-      hydrationPolling = false;
+  hydrationWait ??= createSessionWait({
+    hasSession: () => Boolean(getActivePageJwt()),
+    start: () => {
       hydrationDone = true;
       void hydrate(hooks).catch(() => undefined);
       // Live cross-client refresh: re-run the same data-loss-safe hydration whenever
       // another browser/tab of this account writes (idempotent + coalesced).
       startObjectDatabaseRealtime(() => { void hydrate(hooks).catch(() => undefined); });
-      return;
-    }
-    attempts += 1;
-    if (attempts < HYDRATION_JWT_MAX_ATTEMPTS) {
-      globalThis.setTimeout(attempt, HYDRATION_JWT_RETRY_MS);
-    } else {
-      hydrationPolling = false; // gave up; a later call (post-login) retries cleanly
-    }
-  };
-  attempt();
+    },
+    retryMs: HYDRATION_JWT_RETRY_MS,
+    maxAttempts: HYDRATION_JWT_MAX_ATTEMPTS,
+  });
+  hydrationWait.poke();
 }
 
 /** Start clean for a different account (call on account switch): the next
  *  hydration re-runs for the new session and no old push baseline lingers. */
 export function resetObjectDatabaseSync(): void {
   stopObjectDatabaseRealtime();
+  hydrationWait?.cancel();
+  hydrationWait = null;
   hydrationDone = false;
-  hydrationPolling = false;
   hydrationCompleted = false;
   resetObjectDatabaseWorkspaces();
   try {
