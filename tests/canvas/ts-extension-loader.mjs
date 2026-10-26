@@ -201,7 +201,11 @@ export async function load(url, context, nextLoad) {
   const isFile = path.startsWith("file:");
 
   // A style import is Vite's business; in node it is an empty module, so a
-  // component that imports its .scss can still be rendered to markup.
+  // component that imports its .scss can still be rendered to markup. A CSS
+  // module's import is read for its class names: each name maps to itself.
+  if (isFile && /\.module\.s?css$/.test(path)) {
+    return { format: "module", source: "export default new Proxy({}, { get: (_, name) => String(name) });", shortCircuit: true };
+  }
   if (isFile && /\.s?css$/.test(path)) return { format: "module", source: "", shortCircuit: true };
 
   // A .tsx file: node refuses the extension outright, so the source is
