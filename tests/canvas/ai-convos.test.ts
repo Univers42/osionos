@@ -30,6 +30,7 @@ import type { ChatMessage } from "@/features/chat/model/chatTypes";
 import { setConversationApi } from "@/features/chat/model/conversationApi";
 import { conversationMarkdown, markdownFileName } from "@/features/chat/model/conversationExport";
 import { conversationsOf, useChatStore } from "@/features/chat/model/useChatStore";
+import { useSummaryStore } from "@/features/chat/model/useSummaryStore";
 import { useUserStore } from "@/features/auth";
 import { ConversationMenu, DeleteConfirm } from "@/features/chat/ui/ConversationRow";
 
@@ -113,13 +114,13 @@ test("a conversation from the service reads its transcript once, when it has no 
   let reads = 0;
   freshStore({
     list: async () => [remote("s9", "Remote")],
-    messages: async () => {
+    transcript: async () => {
       reads += 1;
-      return [
+      return { summary: { text: "Earlier.", through: "2026-10-01T10:00:00Z" }, messages: [
         { id: "m1", conversationId: "s9", runId: "r1", role: "user", parts: [{ type: "text", text: "Hi" }], createdAt: "2026-10-01T10:00:00Z" },
         { id: "m2", conversationId: "s9", runId: "r1", role: "tool", parts: [{ type: "tool-result", toolCallId: "t", output: 1 }], createdAt: "2026-10-01T10:00:01Z" },
         { id: "m3", conversationId: "s9", runId: "r1", role: "assistant", parts: [{ type: "text", text: "Hello" }], createdAt: "2026-10-01T10:00:02Z" },
-      ];
+      ] };
     },
   });
   await useChatStore.getState().syncServerConversations("w1");
@@ -129,6 +130,7 @@ test("a conversation from the service reads its transcript once, when it has no 
   assert.equal(reads, 1);
   const messages = useChatStore.getState().messagesFor(id);
   assert.deepEqual(messages.map((m) => [m.role, m.content]), [["user", "Hi"], ["assistant", "Hello"]]);
+  assert.equal(useSummaryStore.getState().byConversation[id]?.summary?.text, "Earlier.");
 });
 
 test("rename and delete reach the service with the server id, and only when there is one", () => {
