@@ -32,16 +32,16 @@ async function openSettings(page, block) {
   return { button, dialog };
 }
 
-/** Geometry of the popover against its pane and its button, plus what is painted at its centre. */
-async function measure(page) {
-  return page.evaluate(() => {
-    const dialog = document.querySelector('dialog[open][aria-label="View settings"]');
+/** Geometry of the popover against the window and its button, plus what is painted at its centre. */
+async function measure(page, label = "View settings") {
+  return page.evaluate((name) => {
+    const dialog = document.querySelector(`dialog[open][aria-label="${name}"]`);
     const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; };
     const d = box(dialog);
-    const button = [...document.querySelectorAll('button[aria-label="View settings"]')].find((el) => el.getBoundingClientRect().width > 0);
+    const button = [...document.querySelectorAll(`button[aria-label="${name}"]`)].find((el) => el.getBoundingClientRect().width > 0);
     const hit = document.elementFromPoint((d.left + d.right) / 2, (d.top + d.bottom) / 2);
     return { dialog: d, button: box(button), viewport: { width: innerWidth, height: innerHeight }, paintedAtCentre: Boolean(hit && dialog.contains(hit)), pageScrollsSideways: document.documentElement.scrollWidth > innerWidth };
-  });
+  }, label);
 }
 
 function expectPinnedOnScreen(m) {
@@ -101,6 +101,22 @@ test.describe("database-settings-popover", () => {
     await block.waitFor({ timeout: 20_000 });
     await openSettings(page, block);
     expectPinnedOnScreen(await measure(page));
+  });
+
+  test("Sort opens as a popover under its button, not a panel in the page flow", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const block = await insertInlineDatabase(page);
+    await expect(block.getByText("Untitled Database").first()).toBeVisible({ timeout: 15_000 });
+    await block.hover();
+    const button = block.getByRole("button", { name: "Sort", exact: true });
+    await button.click();
+    const dialog = page.locator('dialog[open][aria-label="Sort"]');
+    await expect(dialog.getByText("Sorts", { exact: true })).toBeVisible();
+    expectPinnedOnScreen(await measure(page, "Sort"));
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(button).toBeFocused();
   });
 
   test("fits a phone-width window", async ({ page }) => {
