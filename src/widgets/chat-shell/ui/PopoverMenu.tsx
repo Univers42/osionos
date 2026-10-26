@@ -33,7 +33,7 @@ interface Props {
   children: React.ReactNode;
 }
 
-const ROWS = "[role=menuitem],[role=menuitemradio]";
+const ROWS = "[role=menuitem],[role=menuitemradio],[role=menuitemcheckbox]";
 
 export const PopoverMenu: React.FC<Props> = ({ anchorRef, open, onClose, label, align = "start", children }) => {
   const menuRef = useRef<HTMLDivElement>(null);

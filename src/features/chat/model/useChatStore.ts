@@ -18,7 +18,8 @@ import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiS
 import type { RunContext } from "@/features/ai/model/aiContext";
 import { withAccountContext } from "@/features/ai/model/viewContext";
 import { parseAgentPrefix, type AgentSummary } from "@/features/ai/model/aiAgents";
-import { listAgents, type AiMessage } from "@/features/ai/api/aiClient";
+import { listAgents } from "@/features/ai/api/aiClient";
+import { chatMessageFromTranscript } from "./transcriptMessages";
 import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTurn";
 import { dispatchRunEvent } from "./runEventDispatch";
 import { failureCode, retryAfterOf } from "./runErrors";
@@ -70,11 +71,6 @@ export function getInferencePort(): InferencePort {
 
 /** The server transcripts read or being read: a conversation is read once. */
 const transcriptsRequested = new Set<string>();
-
-/** The text of a server message, from its text parts. */
-function textOfParts(parts: AiMessage["parts"]): string {
-  return parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
-}
 
 /** The runs in flight, per conversation. A conversation speaks one at a time. */
 const activeRuns = new Map<string, AbortController>();
@@ -333,11 +329,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
         const transcript = await api.messages(serverId);
         const loaded: ChatMessage[] = transcript
           .filter((m) => m.role !== "tool")
-          .map((m) => ({
-            id: uid(), conversationId, role: m.role === "user" ? "user" : m.role === "system" ? "system" : "assistant",
-            content: textOfParts(m.parts), createdAt: m.createdAt, parts: m.parts, runId: m.runId || undefined,
-            model: m.model, status: "done" as const,
-          }));
+          .map((m) => chatMessageFromTranscript(m, conversationId, uid()));
         // A turn sent while the read was going is already there: the transcript goes before it.
         set((s) => ({ messages: [...loaded, ...s.messages] }));
         persist();
