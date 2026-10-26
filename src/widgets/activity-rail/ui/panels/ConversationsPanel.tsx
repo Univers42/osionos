@@ -22,7 +22,7 @@ import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import type { PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
 import { ConversationRow } from "@/features/chat/ui/ConversationRow";
-import { useChatStore, conversationsOf } from "@/features/chat/model/useChatStore";
+import { useChatStore, conversationsOf, isUntouchedConversation } from "@/features/chat/model/useChatStore";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { matchingByName } from "@/shared/lib/text/matchingByName";
 import { usePageStore } from "@/store/usePageStore";
@@ -59,9 +59,14 @@ const rowClass =
 
 const AiSection: React.FC<{ filter: string }> = ({ filter }) => {
   const userId = useUserStore((s) => s.activeUserId);
-  const conversations = useChatStore(useShallow((s) => conversationsOf(s.conversations, userId)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, RECENT_AI_CHATS)));
+  // A chat opened and never used is not history; the open one is listed even while empty.
+  const conversations = useChatStore(useShallow((s) => {
+    const withMessages = new Set(s.messages.map((m) => m.conversationId));
+    return conversationsOf(s.conversations, userId)
+      .filter((c) => c.id === s.activeConversationId || !isUntouchedConversation(c, withMessages))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, RECENT_AI_CHATS);
+  }));
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const pages = usePageStore((s) => s.pages[workspaceId] ?? NO_PAGES);
   const agents = useMemo(() => pages.filter((p) => p.surface === "agent" && !p.archivedAt && !p.parentPageId), [pages]);
