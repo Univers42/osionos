@@ -69,6 +69,15 @@ export interface ApprovalPreview {
   count: number;
 }
 
+/** The agent whose run asked for a write (C304). `name` is user-written text: a text node, never markup. */
+export interface ApprovalAgent {
+  kind: "builtin" | "custom";
+  id: string;
+  name: string;
+  version: number;
+  scope: "user" | "workspace" | null;
+}
+
 /** The card of a write, as the service describes it. */
 export interface ApprovalDescription {
   approvalId: string;
@@ -86,6 +95,8 @@ export interface ApprovalDescription {
   /** When the question closes itself. */
   expiresAt: string;
   createdAt: string;
+  /** The agent that asked, or null when no agent did. */
+  agent?: ApprovalAgent | null;
   /** What the write came to, in the service's words — "… (page version N)" — once it happened. */
   summary?: string | null;
 }

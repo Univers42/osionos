@@ -197,8 +197,6 @@ export interface AiSettings {
   workspaceId: string;
   connectors: boolean;
   meetingNotesAutoRecord: boolean;
-  agentsEnabled: boolean;
-  customAgentsAllowed: boolean;
   searchEverywhereIndexing: boolean;
   summaries: boolean;
   accountContext?: boolean;

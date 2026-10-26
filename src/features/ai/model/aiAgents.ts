@@ -54,7 +54,8 @@ export function parseAgentPrefix(text: string, agents: readonly AgentSummary[]):
   const match = AGENT_PREFIX.exec(text);
   if (!match) return { agentId: null, text };
   const id = match[1];
-  if (!agents.some((agent) => agent.id === id)) return { agentId: null, text };
+  // A custom agent is picked by click, never by prefix: its id is a uuid.
+  if (!agents.some((agent) => agent.kind !== "custom" && agent.id === id)) return { agentId: null, text };
   return { agentId: id, text: text.slice(match[0].length) };
 }
 

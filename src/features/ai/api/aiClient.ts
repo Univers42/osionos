@@ -25,6 +25,11 @@
 import { AiError, toAiError } from "./aiContract";
 import type {
   AiAgent,
+  AiAgentSettings,
+  AiBuiltinAgent,
+  AiCustomAgent,
+  CreateAgentInput,
+  UpdateAgentInput,
   AiAccessScope,
   AiAccessToken,
   AiAccessTokenCreated,
@@ -58,6 +63,11 @@ type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 export { AiError };
 export type {
   AiAgent,
+  AiAgentSettings,
+  AiBuiltinAgent,
+  AiCustomAgent,
+  CreateAgentInput,
+  UpdateAgentInput,
   AiAccessScope,
   AiAccessToken,
   AiAccessTokenCreated,
@@ -205,6 +215,39 @@ export async function listModels(connectionId?: string): Promise<AiModel[]> {
 export async function listAgents(): Promise<AiAgent[]> {
   const body = await requestJson<AiAgent[]>("GET", "/agents");
   return Array.isArray(body) ? body : [];
+}
+
+const agentPath = (id: string) => `/agents/${encodeURIComponent(id)}`;
+const settingsPath = (workspaceId: string) => `/workspaces/${encodeURIComponent(workspaceId)}/agents/settings`;
+
+/** `GET /agents/:id` — one custom agent; `instructions` only when the caller may run it. */
+export async function getAgent(id: string): Promise<AiCustomAgent> {
+  return requestJson<AiCustomAgent>("GET", agentPath(id));
+}
+
+/** `POST /agents` — a custom agent; the answer carries its instructions. */
+export async function createAgent(input: CreateAgentInput): Promise<AiCustomAgent> {
+  return requestJson<AiCustomAgent>("POST", "/agents", input);
+}
+
+/** `PATCH /agents/:id` — a new version; 409 `version_conflict` when somebody saved first. */
+export async function updateAgent(id: string, input: UpdateAgentInput): Promise<AiCustomAgent> {
+  return requestJson<AiCustomAgent>("PATCH", agentPath(id), input);
+}
+
+/** `DELETE /agents/:id` — archives the agent (terminal in v1). */
+export async function archiveAgent(id: string): Promise<void> {
+  await requestNoContent("DELETE", agentPath(id));
+}
+
+/** `GET /workspaces/:ws/agents/settings` — 404 when the feature is off on this deployment. */
+export async function getAgentSettings(workspaceId: string): Promise<AiAgentSettings> {
+  return requestJson<AiAgentSettings>("GET", settingsPath(workspaceId));
+}
+
+/** `PUT /workspaces/:ws/agents/settings` — both keys, admins only (403 otherwise). */
+export async function putAgentSettings(workspaceId: string, settings: AiAgentSettings): Promise<AiAgentSettings> {
+  return requestJson<AiAgentSettings>("PUT", settingsPath(workspaceId), settings);
 }
 
 /** `POST /conversations` — a conversation of the workspace. */

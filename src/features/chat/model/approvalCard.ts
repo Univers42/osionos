@@ -61,6 +61,11 @@ export function approvalCardState(status: string): ApprovalCardState {
   return "unknown";
 }
 
+/** "Asked by <name> · v<version>" — nothing when no agent asked (C304). */
+export function askedByWords(agent: ApprovalDescription["agent"]): string {
+  return agent ? `Asked by ${agent.name} · v${agent.version}` : "";
+}
+
 /**
  * The sentence of a state: what the card says when there is nothing to do.
  *

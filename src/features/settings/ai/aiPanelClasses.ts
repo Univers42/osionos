@@ -39,3 +39,7 @@ export const MCP_BOX = "rounded-lg border border-[var(--osio-border-default)] p-
 export const MCP_TOOL_LIST =
   "mt-2 divide-y divide-[var(--osio-border-default)] rounded-md border border-[var(--osio-border-default)]";
 export const MCP_STATUS_CHIP = "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-muted)]";
+
+export const NEEDS_REVIEW_CHIP = "bg-[var(--osio-danger-bg,var(--osio-bg-muted))] text-[var(--osio-danger)]";
+
+export const SWITCH_NOTE = "text-xs text-[var(--osio-fg-muted)]";
