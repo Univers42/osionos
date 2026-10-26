@@ -211,6 +211,16 @@ export async function listConversations(workspaceId: string): Promise<AiConversa
   return body.conversations ?? [];
 }
 
+/** `PATCH /conversations/:id` — a new title on a conversation the caller owns. */
+export async function renameConversation(id: string, title: string): Promise<AiConversation> {
+  return requestJson<AiConversation>("PATCH", `/conversations/${encodeURIComponent(id)}`, { title });
+}
+
+/** `DELETE /conversations/:id` — archives the conversation: it leaves the list. */
+export async function deleteConversation(id: string): Promise<void> {
+  await requestJson<unknown>("DELETE", `/conversations/${encodeURIComponent(id)}`);
+}
+
 /** `GET /conversations/:id/messages` — the transcript, oldest first. */
 export async function listMessages(conversationId: string): Promise<AiMessage[]> {
   const body = await requestJson<{ messages?: AiMessage[] }>(

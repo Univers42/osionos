@@ -18,10 +18,11 @@ import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiS
 import type { RunContext } from "@/features/ai/model/aiContext";
 import { withAccountContext } from "@/features/ai/model/viewContext";
 import { parseAgentPrefix, type AgentSummary } from "@/features/ai/model/aiAgents";
-import { listAgents } from "@/features/ai/api/aiClient";
+import { listAgents, type AiMessage } from "@/features/ai/api/aiClient";
 import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTurn";
 import { dispatchRunEvent } from "./runEventDispatch";
 import { failureCode, retryAfterOf } from "./runErrors";
+import { conversationApi } from "./conversationApi";
 import { withMemoryDecision, type MemoryDecision } from "./memoryParts";
 
 const STORAGE_KEY = "osionos.chat.v1";
@@ -43,6 +44,14 @@ export function setInferencePort(port: InferencePort): void {
 /** The port in use right now. */
 export function getInferencePort(): InferencePort {
   return inferencePort;
+}
+
+/** The server transcripts read or being read: a conversation is read once. */
+const transcriptsRequested = new Set<string>();
+
+/** The text of a server message, from its text parts. */
+function textOfParts(parts: AiMessage["parts"]): string {
+  return parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
 }
 
 /** The runs in flight, per conversation. A conversation speaks one at a time. */
@@ -76,6 +85,10 @@ export interface ChatStoreState extends ChatData {
   createConversation: (projectId?: string | null, opts?: { title?: string; connectorId?: string; model?: string }) => Conversation;
   renameConversation: (id: string, title: string) => void;
   deleteConversation: (id: string) => void;
+  /** Adds the conversations the account has on the service and this browser lacks. Never throws. */
+  syncServerConversations: (workspaceId: string) => Promise<void>;
+  /** Reads the transcript of a conversation that came from the service, once, when it has no local message. */
+  loadServerTranscript: (conversationId: string) => Promise<void>;
   setActive: (id: string | null) => void;
   setConversationModel: (id: string, connectorId: string, model: string) => void;
   send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; agentId?: string; context?: RunContext; attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }> }) => Promise<void>;
@@ -168,6 +181,25 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     }
   };
 
+  /**
+   * Tells the service about a rename or a delete of a conversation it holds.
+   *
+   * The local store is the reader's copy: a refusal leaves the local change and
+   * logs one line. Caveat: a delete that failed on the service comes back at
+   * the next sync.
+   */
+  const mirrorToServer = (
+    what: string,
+    serverId: string | undefined,
+    call: (api: ReturnType<typeof conversationApi>, serverId: string) => Promise<unknown>,
+  ) => {
+    const api = conversationApi();
+    if (!serverId || !api.isConfigured()) return;
+    call(api, serverId).catch((error: unknown) => {
+      console.warn(`[chat] the service did not take the ${what} of conversation ${serverId}`, error);
+    });
+  };
+
   return {
     ...load(),
     activeConversationId: null,
@@ -209,14 +241,66 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       persist();
       return conversation;
     },
-    renameConversation: (id, title) => { set((s) => ({ conversations: s.conversations.map((c) => (c.id === id ? { ...c, title } : c)) })); persist(); },
+    renameConversation: (id, title) => {
+      const serverId = get().conversations.find((c) => c.id === id)?.serverConversationId;
+      set((s) => ({ conversations: s.conversations.map((c) => (c.id === id ? { ...c, title } : c)) }));
+      persist();
+      mirrorToServer("rename", serverId, (api, sid) => api.rename(sid, title));
+    },
     deleteConversation: (id) => {
+      const serverId = get().conversations.find((c) => c.id === id)?.serverConversationId;
+      mirrorToServer("delete", serverId, (api, sid) => api.remove(sid));
       set((s) => ({
         conversations: s.conversations.filter((c) => c.id !== id),
         messages: s.messages.filter((m) => m.conversationId !== id),
         activeConversationId: s.activeConversationId === id ? null : s.activeConversationId,
       }));
       persist();
+    },
+    syncServerConversations: async (workspaceId) => {
+      const api = conversationApi();
+      if (!api.isConfigured()) return;
+      try {
+        const remote = await api.list(workspaceId);
+        // Read after the await: a conversation created meanwhile is not added twice.
+        const known = new Set(get().conversations.flatMap((c) => (c.serverConversationId ? [c.serverConversationId] : [])));
+        const added: Conversation[] = remote
+          .filter((r) => !known.has(r.id))
+          .map((r) => ({
+            id: uid(), projectId: null, title: r.title.trim() || "New conversation", model: r.model,
+            serverConversationId: r.id, createdAt: r.createdAt, updatedAt: r.updatedAt,
+          }));
+        if (added.length === 0) return;
+        set((s) => ({ conversations: [...s.conversations, ...added] }));
+        persist();
+      } catch (error) {
+        console.warn("[chat] could not read the conversations of the account", error);
+      }
+    },
+    loadServerTranscript: async (conversationId) => {
+      const conversation = get().conversations.find((c) => c.id === conversationId);
+      const serverId = conversation?.serverConversationId;
+      const api = conversationApi();
+      if (!serverId || !api.isConfigured() || transcriptsRequested.has(serverId)) return;
+      if (get().messagesFor(conversationId).length > 0) return;
+      transcriptsRequested.add(serverId);
+      try {
+        const transcript = await api.messages(serverId);
+        const loaded: ChatMessage[] = transcript
+          .filter((m) => m.role !== "tool")
+          .map((m) => ({
+            id: uid(), conversationId, role: m.role === "user" ? "user" : m.role === "system" ? "system" : "assistant",
+            content: textOfParts(m.parts), createdAt: m.createdAt, parts: m.parts, runId: m.runId || undefined,
+            model: m.model, status: "done" as const,
+          }));
+        // A turn sent while the read was going is already there: the transcript goes before it.
+        set((s) => ({ messages: [...loaded, ...s.messages] }));
+        persist();
+      } catch (error) {
+        // A failed read may be tried again the next time the conversation opens.
+        transcriptsRequested.delete(serverId);
+        console.warn("[chat] could not read the transcript of a conversation", error);
+      }
     },
     setActive: (id) => set({ activeConversationId: id }),
     setConversationModel: (id, connectorId, model) => {

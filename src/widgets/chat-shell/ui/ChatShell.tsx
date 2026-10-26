@@ -21,6 +21,8 @@ import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/fea
 import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { MAX_ATTACHMENTS } from "./AttachImageButton";
+import { ConversationRow } from "@/features/chat/ui/ConversationRow";
+import { useUserStore } from "@/features/auth";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
 import { EmptyStateHero } from "./EmptyStateHero";
@@ -42,6 +44,9 @@ export const ChatShell: React.FC = () => {
   // The built-in agents the service offers: the shapes a run can take.
   const agents = useChatStore((s) => s.agents);
   const loadAgents = useChatStore((s) => s.loadAgents);
+  const syncServerConversations = useChatStore((s) => s.syncServerConversations);
+  const loadServerTranscript = useChatStore((s) => s.loadServerTranscript);
+  const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
 
   const [text, setText] = useState("");
   const [onboarding, setOnboarding] = useState<null | "ask" | "choose">(null);
@@ -56,6 +61,10 @@ export const ChatShell: React.FC = () => {
   useEffect(() => { if (!activeId) createConversation(); }, [activeId, createConversation]);
   // The list of the agents, once: the service owns it.
   useEffect(() => { void loadAgents(); }, [loadAgents]);
+  // The conversations of the account, once: another browser may have started them.
+  useEffect(() => { if (workspaceId && isAiConfigured()) void syncServerConversations(workspaceId); }, [workspaceId, syncServerConversations]);
+  // A conversation that came from the service has no local message until it is opened.
+  useEffect(() => { if (activeId) void loadServerTranscript(activeId); }, [activeId, loadServerTranscript]);
 
   /**
    * The hand-off from a block: the image the user pointed at, waiting for the
@@ -163,17 +172,17 @@ export const ChatShell: React.FC = () => {
         </button>
         <nav className="flex-1 overflow-y-auto px-2 pb-3" aria-label="Conversations">
           {conversations.map((c) => (
-            <button
+            <ConversationRow
               key={c.id}
-              type="button"
-              onClick={() => setActive(c.id)}
-              aria-current={c.id === activeId}
-              className={`mb-0.5 block w-full truncate rounded-md px-3 py-2 text-left text-sm transition-colors ${
+              conversation={c}
+              isCurrent={c.id === activeId}
+              onOpen={() => setActive(c.id)}
+              openClassName={`mb-0.5 block truncate rounded-md px-3 py-2 text-left text-sm transition-colors ${
                 c.id === activeId ? "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]" : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]"
               }`}
             >
               {c.title}
-            </button>
+            </ConversationRow>
           ))}
         </nav>
       </aside>
