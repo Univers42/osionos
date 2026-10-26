@@ -20,7 +20,7 @@ else can be changed, and `>` can only navigate to a Settings page.
    everything else comes from the base the theme starts from.
 2. **Edited in the built-in code editor, VS Code style.**
    - Monaco with a JSON Schema: completion lists every token, hover shows what it changes and
-     its default, and an invalid value gets a red underline.
+     its current value, and an invalid value gets a red underline.
    - The app restyles live as you type. Save keeps it, Revert drops it.
 3. **Profiles.** Named bundles: a theme plus the look-and-feel preferences (mode, palette,
    accent, density, roundness, UI scale, link underlines, motion, animated images, hovercards,
@@ -32,8 +32,8 @@ else can be changed, and `>` can only navigate to a Settings page.
      **Advanced (JSON)** button.
    - Every one of those actions is also a `>` command.
 5. **`>` as VS Code's command palette.**
-   - Every preference is a command that shows its current value. A command with options opens
-     a second-step picker; an on/off command toggles on Enter.
+   - Every preference is a command. Enter opens a second-step picker of its options with the
+     current one checked.
    - **Preferences: Color Theme** previews each theme live while you arrow through the list.
      Enter keeps it; Esc puts back what you had.
    - Recently used commands come first. Every row shows its shortcut.
@@ -178,7 +178,9 @@ else can be changed, and `>` can only navigate to a Settings page.
   - Typing re-parses the document after 120 ms. Every valid value applies; an invalid one gets
     a marker and is skipped.
   - Save writes the document and keeps the preview; Revert restores the saved state.
-  - Closing the tab with unsaved changes asks in-page and reverts the preview.
+  - Closing the tab with unsaved changes reverts the preview and keeps the draft (per tab, in
+    sessionStorage); reopening the tab brings the draft back with a "Draft restored" note.
+    The layout store has no close guard, and keeping the draft loses nothing.
 - **Contrast warnings.** After each apply, fixed text pairs are resolved to RGB through
   `getComputedStyle` and checked against WCAG: `fg-default`, `fg-muted` and `link` on
   `bg-page` and `bg-surface`, `accent-fg` on `accent`, `danger-fg` on `danger`. Under 4.5:1
@@ -188,7 +190,8 @@ else can be changed, and `>` can only navigate to a Settings page.
     banner offering a reset.
   - **Preferences: Reset Theme** in `>` and a **Reset theme** button in Settings bring back the
     built-in look.
-- **Preference registry.** `src/features/settings/model/preferenceRegistry.ts` lists every
+- **Preference registry.** `src/shared/config/preferenceRegistry.ts`, next to `theme.ts` so
+  the theme feature and the settings feature can both read it, lists every
   preference once: key, label, options with labels, how to read it, how to write it. The
   profile schema, the `>` preference commands and the profile export all read it.
   `AppearanceControls` takes its option labels from it.
@@ -202,7 +205,7 @@ else can be changed, and `>` can only navigate to a Settings page.
 
 ### Commands
 
-- **Preferences:** Color Theme (pick, live preview), Theme Mode, Accent, Density, Roundness,
+- **Preferences:** Color Theme (pick, live preview), Theme Mode, Color Palette, Accent, Density, Roundness,
   UI Scale, Link Underlines, Motion, Animated Images, Hovercards, Paste URLs. Each is a pick,
   generated from the registry, with its current value checked.
 - **Preferences:** Open Theme (JSON), Open Settings (JSON), Reset Theme.
@@ -210,6 +213,7 @@ else can be changed, and `>` can only navigate to a Settings page.
   JSON), Import Theme (opens an empty editor to paste into).
 - **Profiles:** Switch Profile (pick), New Profile from Current, Rename Profile, Delete Profile,
   Export Profile, Import Profile.
+- Delete Theme and Delete Profile act at once and show a toast with **Undo**.
 - Every existing Settings navigation command stays.
 
 ## Shipped themes
@@ -265,7 +269,7 @@ checked pair, computed from its hex values.
 - Ship in waves, each a green PR merged to main and deployed:
   1. catalog, validator and apply;
   2. editor and Settings entry;
-  3. profiles and sync;
+  3. the preference registry, profiles and sync;
   4. palette picks and the preference commands.
 
 ## Calls I made (the owner can overrule)
