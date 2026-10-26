@@ -26,7 +26,7 @@ information in each cell, and use one style everywhere.
 | # | Defect | State |
 |---|---|---|
 | 1 | KPI counts every record | Fixed: `notion/model/kpiModel.ts` computes over the view's own filtered pages; tiles show a provenance line ("56% of 55 records"). |
-| 2 | Labels claim revenue | Products tiles read *Catalog list value*. The `commerceViewPresets.ts` preset title *Total Revenue* is still open. |
+| 2 | Labels claim revenue | Fixed: Products tiles read *Catalog list value*. The commerce *Total Revenue* tile sums order totals of an orders table, which is revenue. |
 | 3 | Frozen insight text | Fixed: the showcase cells carry no literals; the hero embeds the live `v-proj-dashboard` view (`tests/canvas/page-actions-turn-into-dashboard.test.ts` asserts no digit in any non-database block). |
 | 4 | Template numbers | GPA, credits, `Fri` and the Grade Calculator's `86` are removed (`tests/canvas/seed-templates-typed-figures.test.ts`). The live `/metric` replacements are not built: there is no `/metric` block yet. |
 | 5 | "Untitled" chips | Fixed: chips hold multi-select labels. |
