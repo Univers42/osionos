@@ -4,7 +4,7 @@ Project: rebuild every settings section from the app's own blocks (design: `docs
 
 👹 because it handles an authentication factor, session tokens and one-time secrets.
 
-Base: the integration tip with SB-3b, SB-3c and SB-2c merged (buttons on the action runner, the `secret` block, the `field` block; SB-3a's runner and SB-2a's bindings come with them).
+Base: the integration tip with SB-3b, SB-3c, SB-2c and SB-1e merged (buttons on the action runner, the `secret` block, the `field` block, `useTrustedPage`; SB-3a's runner and SB-2a's bindings come with them).
 
 ## What exists (read these first)
 
@@ -18,7 +18,11 @@ Base: the integration tip with SB-3b, SB-3c and SB-2c merged (buttons on the act
 **OWNS (all new unless marked):**
 - `src/features/flows/model/flowRegistry.ts`: `FlowDefinition`, `FLOWS`, `createFlowRuntime`;
 - `src/features/flows/model/twoStepFlow.ts`: the `twostep` flow;
-- `src/features/flows/model/flowScope.tsx`: `FlowScopeProvider`, `useFlowScope`;
+- `src/entities/block/model/flowScope.ts`: the `FlowScopeContext`, the `FlowHandle` type and `useFlowSecret(field, renderer)`. They sit in entities so `bindingSources.ts` and the blocks can read them without importing features (D-SB-4h-spec 9);
+- `src/features/flows/model/flowScope.tsx`: `FlowScopeProvider` (creates the runtime and fills the context), `useFlowScope`;
+- `src/entities/block/registered/codes/CodesBlock.tsx` + its registry entry and `BlockType`: the recovery-code list (D-SB-4h-spec 10);
+- `src/features/bindings/sources/lists/mfaMethods.ts`: `list:mfa-methods`, and `security.preferMethod` in `actionRegistry.ts` (D-SB-4h-spec 7);
+- `bindingSources.ts` (modified): `FieldSpec.secret?`, `FieldSpec.writeOn?`, `FieldSpec.filter?`; `appActions.ts` (modified): `ActionDefinition.enabled?`; `FieldBlock` (modified): per-keystroke writes when `writeOn: "input"`; the registered `ButtonBlock.tsx` (modified): disabled while `enabled` is false or the flow is pending;
 - `src/entities/block/registered/steps/StepsBlock.tsx`, `src/entities/block/registered/qr/QrBlock.tsx` + registry entries, the `steps` and `qr` `BlockType`s, `steps?: { flow: string }` and `stepId?: string` in `types.ts`, their page-file keys, category rows, slash entries, allowlists, height estimates. Both blocks load lazily (design §11 point 8);
 - `bindingSources.ts` (modified): the `"$flow"` branch of `useBoundField` only;
 - `runAppAction.ts` / `appActions.ts` (modified): `ActionContext.flow?: FlowHandle` passed through to `run`, nothing else;
@@ -41,12 +45,18 @@ interface FlowDefinition<V extends Record<string, unknown>> {
   actions: Readonly<Record<string, ActionDefinition>>;         // registered as "<flow>.<name>"
 }
 interface FlowHandle {                              // what an action's run receives in ctx.flow
+  id: string;                                       // the flow id; the runner compares it with the action-name prefix
+  pending(): boolean;                               // true while any of this flow's actions runs
   step(): string;
   get<K extends string>(field: K): unknown;
   set(field: string, value: unknown): void;         // kernel only; pages go through `writable`
   go(step: string, values?: Record<string, unknown>): void;   // replaces the values, see Rule 3
 }
 function createFlowRuntime(def: FlowDefinition<any>): { handle: FlowHandle; subscribe(l: () => void): () => void; dispose(): void };
+
+// additions
+interface FieldSpec { …; secret?: "qr" | "codes"; writeOn?: "input"; filter?(raw: string): string }   // source-declared, never from block data
+interface ActionDefinition { …; enabled?(ctx: ActionContext): boolean }                           // re-read when the flow changes
 ```
 
 ## Rules (each one is tested)
@@ -65,7 +75,24 @@ function createFlowRuntime(def: FlowDefinition<any>): { handle: FlowHandle; subs
    - `twostep.cancel`: `go(<initial step>)`, dropping every value.
    - `sudo_required` from any of them → the result carries `sudoHint` "Confirm it's you first, then press the button again." (`TwoFactorModal.tsx:23`); `unavailable`/`failed` → `accountActionNotice(outcome, label)?.description` with the modal's labels.
    A spy test per action asserts the same `twoStepClient` function is called with the same arguments as the modal, in the same order.
-7. **The code field.** A `field` bound to `$flow` › `code` (display `text`, `inputMode="numeric"`, label "6-digit code") keeps only digits, at most 6, as the modal's `onChange` does. Verify stays disabled until 6 digits (a `visibleWhen` or the button's own disabled rule; say which).
+7. **The code field.** A `field` bound to `$flow` › `code` (display `text`, `inputMode="numeric"`, label "6-digit code") keeps only digits, at most 6, as the modal's `onChange` does. The spec declares `writeOn: "input"` and `filter` = digits only, at most 6, so the value reaches the runtime on every keystroke, not on blur. Verify stays disabled through `twostep.confirm`'s `enabled(ctx)` = `ctx.flow.get("code")` has 6 digits (D-SB-4h-spec 8).
+
+## Devil conditions (D-SB-4h-spec, 2026-10-26 01:49, kimi-k3: PROCEED-WITH-CONDITIONS)
+
+Acceptance criteria. Each has a test that fails when it is broken; name it in the report.
+
+1. **Flow identity.** `FlowHandle.id`; the runner compares it with the action name's prefix before args or confirm. A button inside a `twostep` container calling a second test flow's action resolves `blocked`, as does a flow action with no `ctx.flow`.
+2. **No container off trusted pages.** A `steps` container renders the muted placeholder "<flow label> isn't available here", mounts no runtime and sends no request unless `useTrustedPage(hostPageId)` is true and the mode is live (SB-6a). Test: a page another user owns, and a preview, record zero `/api/account/2fa/*` calls, and their flow buttons resolve `blocked` / `preview`. (Read-only renders run buttons today, `ReadOnlyBlock.tsx:622`, and `twostep.disable` has a confirm, so SB-3a's untrusted rule alone would not stop it.)
+3. **Sudo from the outcome.** Every flow action declares `sudo: "none"` and maps `outcome.reason === "sudo_required"` to `{ status: "sudo_required", message: "Confirm it's you first, then press the button again." }` exactly as the modal reads it (`TwoFactorModal.tsx:57`, `settingsCalls.ts:69-70`). Tests per action with a stubbed 403; and an unrelated `onSudoRequired` event during a successful verify leaves the result `ok`.
+4. **The confirm failure matrix is the modal's.** The session drop on `RECORD_UNAVAILABLE` / `SESSION_REVOKED_CODE` applies to `confirmEnrolment` only (`TwoFactorModal.tsx:70` vs `:74`). A failed, sudo or unavailable `createRecoveryCodes` after a successful confirm keeps the adopted session and lands on `go("on")` with the info toast (`TwoFactorModal.tsx:78`) and the problem line. One test per cell against the stub routes (`twoStepStub.mjs:51-53`).
+5. **Dispose is final.** `go` and `set` after `dispose()` are no-ops. A confirm in flight when the container unmounts still adopts the returned pair, never throws and never renders codes; the next mount runs `initial()` again and shows "on". Test with a deferred verify.
+6. **Status is re-read.** `twostep.confirm`, `twostep.recovery` and `twostep.disable` fetch the status again before landing on "on" or "off", as the modal awaits `onChanged` (`TwoFactorModal.tsx:76,83,91`). Test: after `twostep.recovery` then `twostep.done`, "on" shows the stub's post-generate count, not the one `initial()` read.
+7. **Methods and "Make preferred".** The "on" step holds a `collection` over `list:mfa-methods` (rows from `orderedMethods(preferred)`; fields `method`, `label` = `METHOD_LABELS[method]` plus " (preferred)" on the first row, `isPreferred`) with a "Make preferred" button with `visibleWhen: 'prop("$row.isPreferred") == false'`, running `security.preferMethod` with `args: { method: { formula: 'prop("$row.method")' } }`. The action validates `method` against `METHOD_LABELS`' keys and calls the write the modal's parent makes (`ProfilePanel.tsx:100`). The e2e asserts the PATCH body `{ security: { preferredMfaMethod: "recovery" } }` as `twoStepVerification.spec.mjs:118-121` does.
+8. **Verify's gate is buildable** (Rule 7): typing "12345" leaves Verify disabled, the sixth digit enables it with no blur, and a non-digit never reaches the runtime value.
+9. **Secrets keep the import direction.** `useBoundField("$flow", f)` reads through the entities-level context. For a field with `secret`, it returns the muted placeholder; only the renderer the spec names reads it, through `useFlowSecret(field, renderer)` (`qr` for `otpauthUrl`, `codes` for `codes`). Test: `field`, `chip` and paragraph blocks bound to `otpauthUrl` or `codes` render the placeholder.
+10. **The codes renderer has no copy.** The `codes` block renders `<ul aria-label="Recovery codes">` with the modal's classes (`TwoFactorModal.tsx:104`) and no Copy control; the SB-3c `secret` block is not used for codes. Test: the codes step's DOM has no Copy button.
+11. **The typed code does not persist.** After typing 6 digits and reloading, the value is in no page content, no outbox payload (`runProgram.ts:116-133`), no undo snapshot and no storage key.
+12. **One busy flag per flow.** While any `twostep` action is pending, every flow button in the container is disabled, as the modal's shared `busy` (`TwoFactorModal.tsx:40,118,133-134`). Test: during a deferred `start`, Verify and Turn off are disabled.
 
 ## Steps
 
