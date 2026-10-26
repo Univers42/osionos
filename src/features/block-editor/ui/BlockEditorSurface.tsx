@@ -31,6 +31,7 @@ import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
 import { BlockVisibilityPopover } from "./visibility/BlockVisibilityPopover";
 import { VisibilityScopeProvider } from "@/entities/block/model/visibilityScope";
 import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
+import { RenderModeProvider } from "@/entities/block/ui/renderMode";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
 import { complete as completeRoute } from "@/features/ai/api/aiClient";
@@ -1965,10 +1966,12 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
  *  mount this component. */
 export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = (props) => (
 	<EditorSurfaceIdContext.Provider value={useId()}>
-		<ReadOnlyEmbedModeContext.Provider value="live">
-			<VisibilityScopeProvider pageId={props.pageId}>
-				<BlockEditorSurfaceBody {...props} />
-			</VisibilityScopeProvider>
-		</ReadOnlyEmbedModeContext.Provider>
+		<RenderModeProvider mode="live">
+			<ReadOnlyEmbedModeContext.Provider value="live">
+				<VisibilityScopeProvider pageId={props.pageId}>
+					<BlockEditorSurfaceBody {...props} />
+				</VisibilityScopeProvider>
+			</ReadOnlyEmbedModeContext.Provider>
+		</RenderModeProvider>
 	</EditorSurfaceIdContext.Provider>
 );

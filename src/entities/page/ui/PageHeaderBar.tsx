@@ -49,6 +49,7 @@ import {
   fontSampleClass,
   usePageActions,
 } from '@/entities/page';
+import { runPageAction } from '@/entities/page/model/runPageAction';
 import type { PageConfig, PageFont, PageVersion } from '@/shared/config/pageConfigStore';
 import { canEditPage, usePageAccessContext } from '@/shared/lib/auth/pageAccess';
 import { Dropdown, IconButton, useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
@@ -57,6 +58,7 @@ import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
 import { PageShareButton } from './PageShareButton';
+import { PageEditToggle } from './PageEditToggle';
 import { PageFavoriteButton } from './PageFavoriteButton';
 import { PageCommentsButton } from '@/features/comments/ui/PageCommentsButton';
 
@@ -162,14 +164,6 @@ const VersionsPanel: React.FC<{ versions: PageVersion[]; onRestore: (version: Pa
   </div>
 );
 
-function actionErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : 'Page action failed.';
-}
-
-function runPageAction(work: Promise<unknown> | void, onError: (message: string) => void) {
-  Promise.resolve(work).catch((error) => onError(actionErrorMessage(error)));
-}
-
 function openPageActionsHome() {
   usePageStore.setState({ activePage: null, showTrash: false, navigationPath: [] });
 }
@@ -228,6 +222,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
           <span className="hidden whitespace-nowrap text-sm text-[var(--osio-fg-subtle)] sm:inline">{actions.editedLabel}</span>
           <PageFavoriteButton pageId={pageId} />
           <PageCommentsButton pageId={pageId} />
+          <PageEditToggle pageId={pageId} />
           <PageShareButton pageId={pageId} workspaceId={workspaceId} />
           <div className="relative">
             <IconButton ref={triggerRef} label="Open page configuration" onClick={() => setConfigOpen((open) => !open)}>
