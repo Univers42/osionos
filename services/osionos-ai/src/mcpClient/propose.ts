@@ -119,6 +119,7 @@ export function mcpToolSet(ctx: McpRunContext): ToolSet {
 					provenance: { pageIds: [...ctx.approval.provenance()] },
 					approvedInRun: await countExecutedInRun(ctx.db, ctx.approval.runId),
 					expiresAt: new Date(row.expires_at).toISOString(),
+					agent: ctx.approval.agent ?? null,
 					mcp: cardOf(stored),
 					...(tainted.length > 0 ? { influencedBy: tainted } : {}),
 				};

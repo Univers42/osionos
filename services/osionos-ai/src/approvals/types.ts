@@ -1,4 +1,5 @@
 import type { QueryResultRow } from 'pg';
+import type { CardAgent } from '../agents/card.ts';
 
 /**
  * The approvals: a write the assistant asked for, and the human who decides
@@ -136,6 +137,8 @@ export interface ApprovalContext {
 	 * the provenance of an approval is what the run had seen WHEN it asked.
 	 */
 	provenance(): readonly string[];
+	/** The agent of the run, from its pin: the card names it (C304). */
+	agent?: CardAgent | null;
 }
 
 /**
@@ -169,4 +172,6 @@ export interface PermissionAsked {
 	mcp?: McpCard;
 	/** The servers whose output the conversation holds, absent when none (C286). */
 	influencedBy?: string[];
+	/** The agent that asked, from the run's pin; null for the general assistant. */
+	agent: CardAgent | null;
 }

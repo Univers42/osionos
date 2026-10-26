@@ -4,6 +4,9 @@ import { handleConversationItem, handleConversationMessages, handleConversations
 import { handleModels } from './models.ts';
 import { handleCommands } from './commands.ts';
 import { handleAgents } from './agents.ts';
+import { handleAgentSettings } from './agentSettings.ts';
+import { handleAgentGet } from './agentsRead.ts';
+import { handleAgentArchive, handleAgentCreate, handleAgentUpdate } from './agentsWrite.ts';
 import { handleComplete } from './complete.ts';
 import { handleVoiceTranscribe } from './voice.ts';
 import { handleImages } from './images.ts';
@@ -217,6 +220,22 @@ export const ROUTES: RouteEntry[] = [
 			},
 			// The remote MCP endpoint: PAT only, read only (G4b-1).
 			{ methods: [], pattern: /^\/api\/ai\/mcp$/, label: '/api/ai/mcp', handle: handleMcp, anyMethod: true },
+		]
+		: []),
+	// Custom agents (C329): off, these paths do not exist either.
+	...(config.customAgentsEnabled
+		? [
+			{ methods: ['POST'], pattern: /^\/api\/ai\/agents$/, label: '/api/ai/agents', handle: handleAgentCreate },
+			{ methods: ['GET'], pattern: /^\/api\/ai\/agents\/([^/]+)$/, label: '/api/ai/agents/:id', handle: handleAgentGet },
+			{ methods: ['PATCH'], pattern: /^\/api\/ai\/agents\/([^/]+)$/, label: '/api/ai/agents/:id', handle: handleAgentUpdate },
+			{ methods: ['DELETE'], pattern: /^\/api\/ai\/agents\/([^/]+)$/, label: '/api/ai/agents/:id', handle: handleAgentArchive },
+			{
+				methods: [],
+				pattern: /^\/api\/ai\/workspaces\/([^/]+)\/agents\/settings$/,
+				label: '/api/ai/workspaces/:ws/agents/settings',
+				handle: handleAgentSettings,
+				anyMethod: true,
+			},
 		]
 		: []),
 	// The MCP client: the servers a user registers. Off, these paths do not

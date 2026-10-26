@@ -22,10 +22,13 @@ export interface RunRow extends QueryResultRow {
 	/** The agent that shaped the run, and its version — pinned (devil C40). */
 	agent_id: string | null;
 	agent_version: number | null;
+	/** A custom agent pins its own columns (C301); the built-in pair stays NULL for it. */
+	custom_agent_id: string | null;
+	custom_agent_version: number | null;
 }
 
 const RUN_COLUMNS =
-	'id, conversation_id, owner_id, kind, status, model, error, usage, reserved_microusd, created_at, ended_at, finish_reason, agent_id, agent_version';
+	'id, conversation_id, owner_id, kind, status, model, error, usage, reserved_microusd, created_at, ended_at, finish_reason, agent_id, agent_version, custom_agent_id, custom_agent_version';
 
 /** One run, whatever its owner. */
 export async function getRun(db: Pool, id: string): Promise<RunRow | null> {
@@ -66,6 +69,8 @@ export async function insertRun(
 		kind = 'text',
 		agentId = null,
 		agentVersion = null,
+		customAgentId = null,
+		customAgentVersion = null,
 	}: {
 		runId: string;
 		conversationId: string | null;
@@ -75,15 +80,17 @@ export async function insertRun(
 		/** The agent that shaped the run, and its version. */
 		agentId?: string | null;
 		agentVersion?: number | null;
+		customAgentId?: string | null;
+		customAgentVersion?: number | null;
 	},
 ): Promise<{ kind: 'inserted' | 'exists' | 'conflict' | 'missing' }> {
 	try {
 		const result = await db.query(
-			`insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind, agent_id, agent_version)
-			 values ($1, $2, $3, 'running', $4, $5, $6, $7)
+			`insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind, agent_id, agent_version, custom_agent_id, custom_agent_version)
+			 values ($1, $2, $3, 'running', $4, $5, $6, $7, $8, $9)
 			 on conflict (id) do nothing
 			 returning id`,
-			[runId, conversationId, ownerId, model, kind, agentId, agentVersion],
+			[runId, conversationId, ownerId, model, kind, agentId, agentVersion, customAgentId, customAgentVersion],
 		);
 		return result.rowCount === 1 ? { kind: 'inserted' } : { kind: 'exists' };
 	} catch (error) {
