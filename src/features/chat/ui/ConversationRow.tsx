@@ -82,11 +82,11 @@ export const DeleteConfirm: React.FC<{ onConfirm: () => void; onCancel: () => vo
     onKeyDown={(event) => { if (event.key === "Escape") onCancel(); }}
   >
     <span>Delete this conversation?</span>
-    <button type="button" onClick={onConfirm} autoFocus
-      className="rounded-sm px-2 py-0.5 text-[var(--osio-danger-fg,var(--osio-fg-default))] underline hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]">
+    <button type="button" onClick={onConfirm}
+      className="rounded-sm bg-[var(--osio-danger)] px-2 py-0.5 text-[var(--osio-danger-fg)] hover:bg-[var(--osio-danger-hover)] focus-visible:outline-none focus-visible:ring-offset-1 focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]">
       Delete
     </button>
-    <button type="button" onClick={onCancel}
+    <button type="button" onClick={onCancel} autoFocus
       className="rounded-sm px-2 py-0.5 hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]">
       Cancel
     </button>
