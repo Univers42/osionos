@@ -32,6 +32,7 @@ import { permissionFromEvent } from "./approvalParts";
 import type { PermissionPart } from "./approvalParts";
 import { memoryProposalFromEvent } from "./memoryParts";
 import type { MemoryProposalPart } from "./memoryParts";
+import { truncatedFromEvent, type TruncatedFrame } from "./summaryNotice";
 import { applyViewAction } from "@/features/ai/model/viewActions";
 
 /** What the dispatch needs from the store. */
@@ -54,6 +55,8 @@ export interface RunEventActions {
   askPermission(permission: PermissionPart): void;
   /** The assistant proposes a fact to remember: the chip that asks the user. */
   proposeMemory(proposal: MemoryProposalPart): void;
+  /** The run dropped older turns from its window. Optional: a turn that shows no notice ignores it. */
+  noteTruncated?(truncated: TruncatedFrame): void;
 }
 
 const ROUTE_REASONS = ["rate_limited", "upstream_error", "unavailable"] as const;
@@ -163,6 +166,11 @@ export function dispatchRunEvent(
     // The frame carries model ids and a closed reason, never an upstream body (C260).
     if (typeof data.to !== "string" || data.to === "") return;
     actions.patchAssistant({ answeredBy: data.to, routeReason: routeReasonOf(data.reason) });
+    return;
+  }
+  if (event === "context.truncated") {
+    const truncated = truncatedFromEvent(data);
+    if (truncated) actions.noteTruncated?.(truncated);
     return;
   }
   if (event === "done") {
