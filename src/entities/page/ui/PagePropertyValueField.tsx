@@ -75,6 +75,10 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
     );
   }
 
+  if ((property.type ?? "text") === "text") {
+    return <TextValueField property={property} onChange={onChange} />;
+  }
+
   return (
     <input
       aria-label={property.label}
@@ -88,6 +92,31 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
           : event.target.value)
       }
       className={property.type === "date" ? DATE_CLASS : INPUT_CLASS}
+    />
+  );
+};
+
+/**
+ * Text values can hold line breaks (Shift+Enter in a database cell), which an
+ * <input> silently strips, so an edit here used to save the lines merged. Keys
+ * match the table cell: Shift+Enter adds a line, Enter finishes.
+ */
+const TextValueField: React.FC<Omit<Props, "editable">> = ({ property, onChange }) => {
+  const text = stringValue(property.value);
+  return (
+    <textarea
+      aria-label={property.label}
+      value={text}
+      rows={Math.min(text.split("\n").length, 8)}
+      placeholder="Empty"
+      autoComplete="off"
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" || event.shiftKey) return;
+        event.preventDefault();
+        event.currentTarget.blur();
+      }}
+      className={`${INPUT_CLASS} block resize-none`}
     />
   );
 };
