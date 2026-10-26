@@ -259,6 +259,8 @@ export interface AiMessage {
   role: "user" | "assistant" | "system" | "tool";
   parts: AiPart[];
   model?: string;
+  /** The agent of an answer: a built-in id or a custom agent's uuid. It may name an agent since deleted. */
+  agentId?: string;
   createdAt: string;
 }
 
