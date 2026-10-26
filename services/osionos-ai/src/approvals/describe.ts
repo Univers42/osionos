@@ -30,6 +30,8 @@ export interface ApprovalDescription {
 	approvedInRun: number;
 	expiresAt: string;
 	createdAt: string;
+	/** What the write came to, in the words execution recorded: "… (page version N)" (C239). */
+	summary: string | null;
 }
 
 /** The tool of an approval, by name. */
@@ -74,5 +76,12 @@ export async function describeApproval(
 		approvedInRun: await countExecutedInRun(db, row.run_id),
 		expiresAt: new Date(row.expires_at).toISOString(),
 		createdAt: new Date(row.created_at).toISOString(),
+		summary: summaryOf(row.result),
 	};
+}
+
+/** The sentence execution recorded, when it recorded one. */
+function summaryOf(result: unknown): string | null {
+	const summary = (result as { summary?: unknown } | null)?.summary;
+	return typeof summary === 'string' ? summary : null;
 }
