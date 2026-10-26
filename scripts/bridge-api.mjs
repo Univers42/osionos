@@ -19,6 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
+import { writeJsonResponse } from './bridge-json-response.mjs';
 import { LINK_EDGES_RPC, PAGE_ROWS_RPC, readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
@@ -2334,15 +2335,14 @@ async function readJson(request, maxBytes = DEFAULT_JSON_BODY_LIMIT_BYTES) {
 }
 
 function json(response, status, body, config, extraHeaders = {}) {
-	response.writeHead(status, {
+	writeJsonResponse(response, status, {
 		'content-type': 'application/json; charset=utf-8',
 		'cache-control': 'no-store',
 		...extraHeaders,
 		'access-control-allow-origin': config.allowedOrigin,
 		'access-control-allow-credentials': 'true',
 		vary: 'Origin',
-	});
-	response.end(JSON.stringify(body));
+	}, body);
 }
 
 function requestOriginConfig(config, request) {
@@ -4251,7 +4251,10 @@ async function handleObjectDatabasesUpsert(url, request, response, config, fetch
 	// Nudge the owner's OTHER browsers/tabs to re-hydrate — cross-client realtime for
 	// object DBs, which otherwise only pick up remote writes on a full reload. The
 	// per-owner topic matches the token `sub` the client subscribes with. Best-effort.
-	void publishRealtime({ topic: `objectdb:${authContext.userId}`, eventType: 'objectdb_changed', payload: { dbKey, userId: authContext.userId } });
+	// `origin` is the pushing tab's own id, echoed so that tab skips its own nudge; it
+	// reaches only this owner's topic, so a forged value can only mute the owner's tabs.
+	const origin = typeof payload.origin === 'string' ? safeText(payload.origin, 64) : '';
+	void publishRealtime({ topic: `objectdb:${authContext.userId}`, eventType: 'objectdb_changed', payload: { dbKey, userId: authContext.userId, ...(origin ? { origin } : {}) } });
 	json(response, 200, { ok: true, dbKey, updatedAt: row?.updated_at ?? null }, config);
 	return true;
 }
