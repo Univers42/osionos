@@ -28,3 +28,14 @@ export const SECONDARY_BUTTON =
 
 export const DANGER_BUTTON =
   "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-[var(--osio-danger)] hover:bg-[var(--osio-bg-hover)] disabled:opacity-50";
+
+// The MCP servers part: its text, rows and borders, written once.
+export const MCP_TEXT_MUTED_XS = "text-xs text-[var(--osio-fg-muted)]";
+export const MCP_TEXT_MUTED_SM = "text-sm text-[var(--osio-fg-muted)]";
+export const MCP_TEXT_DANGER_XS = "text-xs text-[var(--osio-danger)]";
+export const MCP_TEXT_DANGER_SM = "text-sm text-[var(--osio-danger)]";
+export const MCP_TITLE = "text-sm font-medium text-[var(--osio-fg-default)]";
+export const MCP_BOX = "rounded-lg border border-[var(--osio-border-default)] p-3";
+export const MCP_TOOL_LIST =
+  "mt-2 divide-y divide-[var(--osio-border-default)] rounded-md border border-[var(--osio-border-default)]";
+export const MCP_STATUS_CHIP = "bg-[var(--osio-bg-muted)] text-[var(--osio-fg-muted)]";

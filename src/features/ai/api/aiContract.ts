@@ -259,6 +259,51 @@ export interface CompleteInput {
   connectionId?: string;
 }
 /* -------------------------------------------------------------------------- */
+/* The MCP servers of the user                                                */
+/* -------------------------------------------------------------------------- */
+
+/** A tool of a server: off until the user switches it on. */
+export interface AiMcpTool {
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
+/** A server as the list shows it: the host, never the URL, never the secret (C271). */
+export interface AiMcpServer {
+  id: string;
+  label: string;
+  host: string;
+  status: "new" | "ok" | "failing" | "broken";
+  headerName: string | null;
+  headerLast4: string | null;
+  tools: AiMcpTool[];
+}
+
+/** The body of `POST /mcp-servers`. */
+export interface CreateMcpServerInput {
+  label: string;
+  url: string;
+  headerName?: string;
+  headerValue?: string;
+}
+
+/** The body of `PATCH /mcp-servers/:id`: a new `url` travels with `headerValue` (C270). */
+export interface UpdateMcpServerInput {
+  label?: string;
+  url?: string;
+  headerName?: string;
+  headerValue?: string;
+}
+
+/** The answer of `POST /mcp-servers/:id/discover`. */
+export interface AiMcpDiscovery {
+  tools: AiMcpTool[];
+  /** Tools the server listed that broke a cap and were left out. */
+  refused: number;
+}
+
+/* -------------------------------------------------------------------------- */
 /* The errors                                                                 */
 /* -------------------------------------------------------------------------- */
 

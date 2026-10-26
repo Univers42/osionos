@@ -28,6 +28,9 @@ import type {
   AiAccessScope,
   AiAccessToken,
   AiAccessTokenCreated,
+  AiMcpDiscovery,
+  AiMcpServer,
+  AiMcpTool,
   AiCommand,
   AiConnection,
   AiConversation,
@@ -39,7 +42,9 @@ import type {
   CompleteInput,
   CreateAccessTokenInput,
   CreateConnectionInput,
+  CreateMcpServerInput,
   StartRunInput,
+  UpdateMcpServerInput,
 } from "./aiContract";
 import { bearerFetch } from "@/shared/agent/bearerFetch";
 import { getActivePageJwt, reportRevokedSession } from "@/shared/api/client";
@@ -56,6 +61,9 @@ export type {
   AiAccessScope,
   AiAccessToken,
   AiAccessTokenCreated,
+  AiMcpDiscovery,
+  AiMcpServer,
+  AiMcpTool,
   AiCommand,
   AiConnection,
   AiConversation,
@@ -67,7 +75,9 @@ export type {
   CompleteInput,
   CreateAccessTokenInput,
   CreateConnectionInput,
+  CreateMcpServerInput,
   StartRunInput,
+  UpdateMcpServerInput,
 };
 /* -------------------------------------------------------------------------- */
 /* The transport                                                              */
@@ -375,6 +385,46 @@ export async function createAccessToken(
 /** `DELETE /access-tokens/:id` — the token is revoked. */
 export async function revokeAccessToken(id: string): Promise<void> {
   await requestNoContent("DELETE", `/access-tokens/${encodeURIComponent(id)}`);
+}
+
+/* -------------------------------------------------------------------------- */
+/* MCP servers                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** `GET /mcp-servers` — the servers of the user; a 404 means the feature is off (C288). */
+export async function listMcpServers(): Promise<AiMcpServer[]> {
+  const body = await requestJson<{ servers?: AiMcpServer[] }>("GET", "/mcp-servers");
+  return body.servers ?? [];
+}
+
+/** `POST /mcp-servers` — registers a server; the header value is sealed by the service. */
+export async function createMcpServer(input: CreateMcpServerInput): Promise<AiMcpServer> {
+  return requestJson<AiMcpServer>("POST", "/mcp-servers", input);
+}
+
+/** `PATCH /mcp-servers/:id` — a label, or a new address with its header (C270). */
+export async function updateMcpServer(id: string, input: UpdateMcpServerInput): Promise<AiMcpServer> {
+  return requestJson<AiMcpServer>("PATCH", `/mcp-servers/${encodeURIComponent(id)}`, input);
+}
+
+/** `DELETE /mcp-servers/:id` — the server and its tools are gone. */
+export async function deleteMcpServer(id: string): Promise<void> {
+  await requestNoContent("DELETE", `/mcp-servers/${encodeURIComponent(id)}`);
+}
+
+/** `POST /mcp-servers/:id/discover` — lists the tools of the server; each new one is off. */
+export async function discoverMcpServer(id: string): Promise<AiMcpDiscovery> {
+  return requestJson<AiMcpDiscovery>("POST", `/mcp-servers/${encodeURIComponent(id)}/discover`);
+}
+
+/** `PATCH /mcp-servers/:id/tools/:name` — one tool on or off. */
+export async function setMcpToolEnabled(id: string, name: string, enabled: boolean): Promise<boolean> {
+  const body = await requestJson<{ enabled: boolean }>(
+    "PATCH",
+    `/mcp-servers/${encodeURIComponent(id)}/tools/${encodeURIComponent(name)}`,
+    { enabled },
+  );
+  return body.enabled;
 }
 
 /* -------------------------------------------------------------------------- */
