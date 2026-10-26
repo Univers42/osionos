@@ -112,11 +112,13 @@ describe('what a token sees (C117)', () => {
 			writeNames,
 			[...READ_TOOLS.map((tool) => tool.name), ...WRITE_TOOLS.map((tool) => tool.name)].sort(),
 		);
-		// C23 is not met: no build_plan, and no content write.
+		// No build_plan. Content is written only by ADDING blocks through the
+		// bridge's atomic append (C226, which replaces C23 for additions); a
+		// rewrite of existing text stays out until the strict version (C227).
 		assert.ok(!writeNames.includes('build_plan'));
 		assert.deepEqual(
 			WRITE_TOOLS.map((tool) => tool.name).sort(),
-			['archive_page', 'create_page', 'rename_page'],
+			['add_blocks', 'archive_page', 'create_page', 'rename_page'],
 		);
 	});
 

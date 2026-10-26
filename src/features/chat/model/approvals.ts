@@ -86,6 +86,8 @@ export interface ApprovalDescription {
   /** When the question closes itself. */
   expiresAt: string;
   createdAt: string;
+  /** What the write came to, in the service's words — "… (page version N)" — once it happened. */
+  summary?: string | null;
 }
 
 /**
