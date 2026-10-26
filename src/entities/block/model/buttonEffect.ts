@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block } from "./types";
-import type { RenderMode } from "@/entities/block/ui/renderMode";
+export type RenderMode = "live" | "preview";
 
 export type ButtonEffect = "run-program" | "open-page" | "anchor" | "none";
 

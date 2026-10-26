@@ -11,12 +11,8 @@
 /* ************************************************************************** */
 
 import React, { createContext, useContext } from "react";
-
-/** Whether a block renderer is running in a surface that may write.
- *  `live`: the page itself (editable or locked — buttons/fields still work).
- *  `preview`: hover cards, marketplace, profile README, public page, etc.
- *  Default is `preview` so a surface that forgets its provider fails safe. */
-export type RenderMode = "live" | "preview";
+import type { RenderMode } from "@/entities/block/model/buttonEffect";
+export type { RenderMode };
 
 export const RenderModeContext = createContext<RenderMode>("preview");
 
