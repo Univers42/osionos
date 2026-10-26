@@ -24,6 +24,7 @@ import { useAutomationStore } from "@/features/automations/model/useAutomationSt
 import { shortcutLabel } from "@/features/automations/model/shortcutLabel";
 import type { Automation, CommandId } from "@/features/automations/model/types";
 import { usePalette } from "@/widgets/top-bar/model/usePalette";
+import { greetingFor } from "@/shared/lib/date/greeting";
 
 import { openHome, startNewFolder, startNewPage } from "../model/startActions";
 import "./emptyWorkspace.css";
@@ -51,13 +52,6 @@ const TIPS: readonly { text: string; commandId?: CommandId }[] = [
   { text: "{keys} zooms only the pane you are in.", commandId: "zoomPaneIn" },
   { text: "{keys} hides everything but the page.", commandId: "toggleZenMode" },
 ];
-
-function greeting(hour: number): string {
-  if (hour < 5) return "Up late";
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
 
 function pickTip(automations: readonly Automation[], showKeys: boolean, seed: number): string {
   const usable = TIPS.flatMap((tip) => {
@@ -109,7 +103,7 @@ export const EmptyWorkspace: React.FC = () => {
       <div className="w-full max-w-sm">
         <Sketch />
         <p className="text-center text-lg font-semibold tracking-tight text-[var(--osio-fg-default)]">
-          {greeting(visit.hour)}{firstName ? `, ${firstName}` : ""}
+          {greetingFor(visit.hour)}{firstName ? `, ${firstName}` : ""}
         </p>
         <p className="mb-5 mt-1 text-center text-sm text-[var(--osio-fg-muted)]">Nothing is open. Start something, or pick up a page from the sidebar.</p>
         <ul className="flex flex-col gap-0.5 rounded-[var(--osio-radius-panel)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1.5 shadow-[var(--osio-shadow-sm)]" aria-label="Start">

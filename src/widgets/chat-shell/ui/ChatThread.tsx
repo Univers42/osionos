@@ -31,9 +31,9 @@ import { ApprovalCard } from "@/features/chat/ui/ApprovalCard";
 import { memoryProposalsFromParts } from "@/features/chat/model/memoryParts";
 import { MemoryProposalChip } from "@/features/chat/ui/MemoryProposalChip";
 import { openSettings } from "@/features/settings/model/settingsNav";
-import { BinocleMascot } from "@/shared/ui/mascot/BinocleMascot";
 import { useChatStore } from "@/features/chat/model/useChatStore";
 import { RunErrorNotice } from "@/features/chat/model/runErrorNotice";
+import { AgentAvatar } from "./AgentAvatar";
 
 interface Props {
   messages: ChatMessage[];
@@ -162,7 +162,12 @@ const UserTurn = React.memo(function UserTurn({
   );
 });
 
-/** The message thread: user turns (accent, right) and assistant turns (subtle, left). */
+/** The model a turn names: the id without its provider prefix and its `:free` tag. */
+function modelLabel(model: string): string {
+  return (model.split("/").pop() ?? model).replace(/:free$/, "");
+}
+
+/** The message thread: the reader's turns as bubbles on the right, the answers as text under who wrote them. */
 export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
   const endRef = useRef<HTMLDivElement>(null);
   const agents = useChatStore((s) => s.agents);
@@ -181,42 +186,38 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6" data-testid="chat-thread">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-8" data-testid="chat-thread">
       <MessageWindow items={messages}>
         {(visible, offset) => visible.map((m, visibleIndex) => {
         const index = offset + visibleIndex;
         const retryText = m.status === "error" ? textBefore(index) : null;
-        // The agent that shaped the answer: its name, in small letters, above
-        // the answer. The general assistant says nothing.
+        // The agent that shaped the answer: its avatar and name head the answer.
         const agent = m.role === "assistant" && m.agentId ? agents.find((one) => one.id === m.agentId) : undefined;
-        return (
-          <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div
-              data-role={m.role}
-              data-status={m.status}
-              className={`max-w-[80%] break-words rounded-2xl px-4 py-2.5 text-sm ${
-                m.role === "user"
-                  ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
-                  : "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]"
-              }`}
-            >
-              {agent ? (
-                <span className="mb-1 block text-2xs text-[var(--osio-fg-muted)]" data-testid="chat-agent-label">
-                  {agent.name}
-                </span>
-              ) : null}
-              {m.role === "user" ? (
+        if (m.role === "user") {
+          return (
+            <div key={m.id} className="flex justify-end">
+              <div data-role="user" data-status={m.status} className="max-w-[80%] break-words rounded-2xl rounded-br-md bg-[var(--osio-bg-subtle)] px-4 py-2.5 text-sm text-[var(--osio-fg-default)]">
                 <UserTurn messageId={m.id} content={m.content} canEdit={!busy} />
-              ) : (
-                <AssistantAnswer content={m.content} status={m.status} parts={m.parts} conversationId={m.conversationId} messageId={m.id} />
-              )}
-              {m.status === "streaming" ? (
-                <span className="ml-0.5 inline-flex items-center gap-1 text-[var(--osio-fg-muted)]" data-testid="chat-streaming">
-                  <BinocleMascot mood="thinking" size={24} />
-                  <span className="animate-pulse">…</span>
+              </div>
+            </div>
+          );
+        }
+        const streamingNow = m.status === "streaming";
+        return (
+          <div key={m.id} className="flex gap-3">
+            <AgentAvatar agent={agent ?? null} size={28} mood={streamingNow ? "thinking" : "curious"} />
+            <div data-role={m.role} data-status={m.status} className="min-w-0 flex-1 break-words text-sm leading-relaxed text-[var(--osio-fg-default)]">
+              <div className="mb-1 flex min-w-0 items-baseline gap-2 text-xs">
+                <span className="font-medium text-[var(--osio-fg-default)]" data-testid={agent ? "chat-agent-label" : undefined}>{agent?.name ?? "Assistant"}</span>
+                {m.model && m.model !== "auto" ? <span className="truncate text-[var(--osio-fg-subtle)]" title={m.model}>{modelLabel(m.model)}</span> : null}
+              </div>
+              <AssistantAnswer content={m.content} status={m.status} parts={m.parts} conversationId={m.conversationId} messageId={m.id} />
+              {streamingNow ? (
+                <span className="inline-flex items-center gap-1 text-xs text-[var(--osio-fg-muted)]" data-testid="chat-streaming">
+                  <span className="animate-pulse motion-reduce:animate-none">Writing…</span>
                 </span>
               ) : null}
-              {m.role === "assistant" && m.status !== "streaming" && m.content ? (
+              {!streamingNow && m.content ? (
                 <AssistantMessageActions
                   messageId={m.id}
                   content={m.content}
