@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { compareCodeUnits } from './order.ts';
 import { decodePlatformModels, type PlatformModelEntry } from './platformModels.ts';
 
 /**
@@ -108,6 +109,7 @@ const envSchema = z.object({
 	// devil C288). OFF unless exactly "on": the public overlay leaves it empty.
 	// Off, the /api/ai/mcp-servers paths do not exist.
 	OSIONOS_AI_MCP_CLIENT: z.string().optional(),
+	OSIONOS_AI_CUSTOM_AGENTS: z.string().optional(),
 	// The remote MCP endpoint (G4b, devil C118). Comma lists, added to the
 	// loopback defaults: the hosts the endpoint answers to (the public host
 	// goes here, only when the deployment has one) and the browser origins
@@ -208,6 +210,7 @@ const rawEnv = {
 	OSIONOS_AI_BUILDS_PER_DAY: process.env.OSIONOS_AI_BUILDS_PER_DAY,
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
 	OSIONOS_AI_MCP_CLIENT: process.env.OSIONOS_AI_MCP_CLIENT,
+	OSIONOS_AI_CUSTOM_AGENTS: process.env.OSIONOS_AI_CUSTOM_AGENTS,
 	OSIONOS_AI_MCP_ALLOWED_HOSTS: process.env.OSIONOS_AI_MCP_ALLOWED_HOSTS,
 	OSIONOS_AI_MCP_ALLOWED_ORIGINS: process.env.OSIONOS_AI_MCP_ALLOWED_ORIGINS,
 	OSIONOS_AI_MCP_PENDING_PER_TOKEN: process.env.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
@@ -234,7 +237,7 @@ const rawEnv = {
 const parsed = envSchema.safeParse(rawEnv);
 if (!parsed.success) {
 	// Names only: an environment value can hold the app-session secret.
-	const names = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? 'environment')))].sort((a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0));
+	const names = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? 'environment')))].sort(compareCodeUnits);
 	console.error(`[osionos-ai] refusing to start: invalid environment variables: ${names.join(', ')}`);
 	process.exit(1);
 }
@@ -390,6 +393,7 @@ export interface AiServiceConfig {
 	buildsPerDay: number;
 	patEnabled: boolean;
 	mcpClientEnabled: boolean;
+	customAgentsEnabled: boolean;
 	/** The hosts the MCP endpoint answers to (lower-case, loopback included). */
 	mcpAllowedHosts: readonly string[];
 	/** The browser origins that may reach the MCP endpoint: none by default. */
@@ -475,6 +479,7 @@ export const config: AiServiceConfig = Object.freeze({
 	patEnabled: parsed.data.OSIONOS_AI_PAT?.trim().toLowerCase() === 'on',
 	// Exactly "on" (C288): no trim, no case folding, so a stray value stays off.
 	mcpClientEnabled: parsed.data.OSIONOS_AI_MCP_CLIENT === 'on',
+	customAgentsEnabled: parsed.data.OSIONOS_AI_CUSTOM_AGENTS === 'on',
 	mcpAllowedHosts: Object.freeze(['localhost', '127.0.0.1', ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),
 	mcpAllowedOrigins: Object.freeze(commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_ORIGINS)),
 	mcpPendingPerToken: parsed.data.OSIONOS_AI_MCP_PENDING_PER_TOKEN,

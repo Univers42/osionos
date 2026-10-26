@@ -20,6 +20,8 @@ import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { AttachButton } from "./AttachButton";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
+import type { AiCustomAgent } from "@/features/ai/api/aiContract";
+import { scopeWords } from "@/features/ai/model/agentForm";
 import { WORKSPACE_CHIP, type ContextChip } from "@/features/ai/model/aiContext";
 import { minimalReplacement, type MarkdownMarker, shortcutMarker, wrapSelection } from "@/features/chat/model/composerMarkdown";
 import { PreviewToggle, UserMarkdown } from "@/features/chat/ui/UserMarkdown";
@@ -47,7 +49,7 @@ interface Props {
   /** The pages (and the workspace) the answer is read from. */
   chips: ContextChip[];
   onChipsChange: (chips: ContextChip[]) => void;
-  /** The built-in agents the service offers. */
+  /** The agents the service offers: the built-ins, then the caller's custom ones. */
   agents?: AgentSummary[];
   /** The agent of the next run, or none (the general assistant). */
   agentId?: string | null;
@@ -250,11 +252,21 @@ export const ChatComposer: React.FC<Props> = ({
             className="cursor-pointer rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1.5 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
           >
             <option value="">Assistant</option>
-            {agents.map((agent) => (
+            {agents.filter((agent) => agent.kind !== "custom").map((agent) => (
               <option key={agent.id} value={agent.id}>
                 {agent.name}
               </option>
             ))}
+            {/* The custom agents, after the built-ins: a select cannot draw a badge, so the scope is in the text. */}
+            {agents.some((agent) => agent.kind === "custom" && !agent.archived) ? (
+              <optgroup label="Your agents">
+                {agents.filter((agent): agent is AiCustomAgent => agent.kind === "custom" && !agent.archived).map((agent) => (
+                  <option key={agent.id} value={agent.id} disabled={agent.needsReview}>
+                    {agent.name} · {scopeWords(agent.scope)}{agent.needsReview ? " · needs review" : ""}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
           </select>
         ) : null}
         <DictationButton onText={applyTranscript} language={dictationLanguage(voice)} />

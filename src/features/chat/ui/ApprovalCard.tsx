@@ -38,6 +38,7 @@ import {
   approvalArgs,
   approvalCardState,
   approvedInRunWords,
+  askedByWords,
   decideApprovalCard,
   expiryWords,
   externalAgentWords,
@@ -154,6 +155,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     { className: CARD, "data-testid": "chat-approval-card", "data-status": state },
     heading(approval),
     typeof agentName === "string" ? noteLine(externalAgentWords(agentName)) : null,
+    noteLine(askedByWords(approval?.agent)),
     target ? targetLine(target.title, target.workspaceName || target.workspaceId) : null,
     isPlanCard && tree
       ? planTreeBlock(tree, off, toggle, state !== "pending" || busy)

@@ -1,10 +1,11 @@
+import type { McpToolEntry } from '../mcpClient/runTools.ts';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
 import type { FittedFile } from '../files/excerpt.ts';
 import type { HistoryMessage, PageContext } from './prompt.ts';
 import type { RunMemory } from '../memory/repo.ts';
-import type { BuiltinAgent } from '../agents/builtins.ts';
+import type { AgentConfig } from '../agents/config.ts';
 import type { SkillIndex } from '../skills/runSkills.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
@@ -70,12 +71,14 @@ export interface UpstreamRunInput {
 	 * None is the general assistant: the base prompt, byte for byte. An agent
 	 * adds its block to the prompt and narrows the tools to its own list.
 	 */
-	agent?: BuiltinAgent | null;
+	agent?: AgentConfig | null;
 	/** The skills the prompt lists (the agent's built-ins and the workspace's), and their workspace. */
 	skillIndex?: SkillIndex;
 	/** The approved memories of the caller, quoted in the user turn (devil C39). */
 	memories?: readonly RunMemory[];
 	workspaceId?: string;
+	/** The MCP tools of the caller, loaded by the runner (C265): empty is today's run. */
+	mcpTools?: readonly McpToolEntry[];
 	/** The account block of the caller, when requested. */
 	accountBlock?: string;
 	/** The view block of the caller, when reported. */
