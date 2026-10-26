@@ -75,6 +75,25 @@ describe('excerptForQuestion', () => {
 		assert.equal(tight[1]?.excerpt, true);
 		assert.equal(fitFiles(files, 'word', 24_000, 0)[0]?.text, '');
 	});
+
+	// A 10 MB file is ~7 700 windows. Document frequency counted per window took
+	// 26 s here (O(windows² × terms)) and froze every run of the service; once per
+	// term it takes ~0.3 s.
+	// Caveat: a wall-clock bound; a runner 15x slower than this host fails it with no regression.
+	it('cuts a 10 MB file in well under the time a quadratic score takes', () => {
+		const words = 'alpha beta gamma delta epsilon zeta eta theta iota kappa'.split(' ');
+		const parts: string[] = [];
+		let length = 0;
+		for (let index = 0; length < 10_000_000; index += 1) {
+			const part = `${words[(index * 7) % words.length]} ${index % 997} `;
+			parts.push(part);
+			length += part.length;
+		}
+		const started = performance.now();
+		const result = excerptForQuestion(parts.join(''), 'the kappa value 512 of theta and iota', 24_000);
+		assert.ok(performance.now() - started < 5_000, `took ${Math.round(performance.now() - started)} ms`);
+		assert.ok(result.text.length <= 24_000);
+	});
 });
 
 const { app, base, bridge, mock, tokenFor, createConversation } = await startHarness();

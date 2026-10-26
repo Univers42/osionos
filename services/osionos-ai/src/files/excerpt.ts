@@ -39,13 +39,18 @@ function scoreWindows(windows: readonly string[], query: readonly string[]): num
 	});
 	const average = docs.reduce((sum, doc) => sum + doc.length, 0) / docs.length || 1;
 	const terms = [...new Set(query)];
+	// Document frequency once per term: counted per window it made a 10 MB file
+	// take 26 s of one CPU (O(windows² × terms)); now O(windows × terms).
+	const idfOf = new Map(terms.map((term) => {
+		const containing = docs.reduce((count, doc) => count + (doc.counts.has(term) ? 1 : 0), 0);
+		return [term, Math.log(1 + (docs.length - containing + 0.5) / (containing + 0.5))];
+	}));
 	return docs.map((doc) => {
 		let score = 0;
 		for (const term of terms) {
 			const frequency = doc.counts.get(term) ?? 0;
 			if (frequency === 0) continue;
-			const containing = docs.filter((other) => other.counts.has(term)).length;
-			const idf = Math.log(1 + (docs.length - containing + 0.5) / (containing + 0.5));
+			const idf = idfOf.get(term) ?? 0;
 			score += (idf * frequency * (K1 + 1)) / (frequency + K1 * (1 - B + (B * doc.length) / average));
 		}
 		return score;
