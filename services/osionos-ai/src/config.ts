@@ -113,6 +113,9 @@ const envSchema = z.object({
 	// The web tools, web_search and web_fetch (web C369). OFF unless exactly
 	// "on": the public overlay leaves it empty until C371 and C372 hold.
 	OSIONOS_AI_WEB: z.string().optional(),
+	// The rolling summary of the turns the history window drops (context
+	// C389). OFF unless exactly "on": the public overlay leaves it empty.
+	OSIONOS_AI_SUMMARY: z.string().optional(),
 	// The one SearXNG the search tool calls (web C351): a deployment setting,
 	// never a user's or the model's. Unset, web_search does not exist.
 	OSIONOS_AI_SEARXNG_URL: z.string().url().optional(),
@@ -220,6 +223,7 @@ const rawEnv = {
 	OSIONOS_AI_MCP_CLIENT: process.env.OSIONOS_AI_MCP_CLIENT,
 	OSIONOS_AI_CUSTOM_AGENTS: process.env.OSIONOS_AI_CUSTOM_AGENTS,
 	OSIONOS_AI_WEB: process.env.OSIONOS_AI_WEB,
+	OSIONOS_AI_SUMMARY: process.env.OSIONOS_AI_SUMMARY,
 	OSIONOS_AI_SEARXNG_URL: process.env.OSIONOS_AI_SEARXNG_URL || undefined,
 	OSIONOS_AI_WEB_CONTACT_URL: process.env.OSIONOS_AI_WEB_CONTACT_URL || undefined,
 	OSIONOS_AI_MCP_ALLOWED_HOSTS: process.env.OSIONOS_AI_MCP_ALLOWED_HOSTS,
@@ -406,6 +410,8 @@ export interface AiServiceConfig {
 	mcpClientEnabled: boolean;
 	customAgentsEnabled: boolean;
 	webEnabled: boolean;
+	/** Whether a conversation keeps a summary of the turns its history window drops (C389). */
+	summaryEnabled: boolean;
 	/** The SearXNG base URL, without a trailing slash; undefined = no web_search. */
 	searxngUrl: string | undefined;
 	webContactUrl: string;
@@ -496,6 +502,7 @@ export const config: AiServiceConfig = Object.freeze({
 	mcpClientEnabled: parsed.data.OSIONOS_AI_MCP_CLIENT === 'on',
 	customAgentsEnabled: parsed.data.OSIONOS_AI_CUSTOM_AGENTS === 'on',
 	webEnabled: parsed.data.OSIONOS_AI_WEB === 'on',
+	summaryEnabled: parsed.data.OSIONOS_AI_SUMMARY === 'on',
 	searxngUrl: parsed.data.OSIONOS_AI_SEARXNG_URL?.replace(/\/+$/, ''),
 	webContactUrl: parsed.data.OSIONOS_AI_WEB_CONTACT_URL,
 	mcpAllowedHosts: Object.freeze(['localhost', '127.0.0.1', ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),

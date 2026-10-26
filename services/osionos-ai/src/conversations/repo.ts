@@ -1,4 +1,5 @@
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
+import { config } from '../config.ts';
 
 export interface ConversationRow extends QueryResultRow {
 	id: string;
@@ -159,6 +160,30 @@ export async function hasMessagesOfRun(
 	return (result.rowCount ?? 0) > 0;
 }
 
+/** The deletion of edit and resend: every message from the first one of the run onward. */
+const DELETE_FROM_RUN_SQL = `delete from public.ai_messages m using public.ai_conversations c
+		 where m.conversation_id = $1 and c.id = m.conversation_id and c.owner_id = $2 and c.archived_at is null
+		   and m.created_at >= (select min(created_at) from public.ai_messages where conversation_id = $1 and run_id = $3)`;
+
+/**
+ * The same deletion, which also clears a summary that covers a deleted turn
+ * (context C383): one statement, so no run reads the summary without the
+ * turns it was made of. The clear bumps the version, so a summary being
+ * written from the old turns is refused (C382).
+ */
+const DELETE_FROM_RUN_CLEARING_SUMMARY_SQL = `with cut as (
+		   select min(created_at) as at from public.ai_messages where conversation_id = $1 and run_id = $3
+		 ), cleared as (
+		   update public.ai_conversations
+		   set summary = null, summary_through = null, summary_version = summary_version + 1
+		   where id = $1 and owner_id = $2 and archived_at is null
+		     and summary_through is not null and summary_through >= (select at from cut)
+		 ), deleted as (
+		   ${DELETE_FROM_RUN_SQL}
+		   returning 1
+		 )
+		 select count(*)::int as count from deleted`;
+
 /**
  * Edit and resend: deletes the messages of the conversation from the first
  * message of `runId` onward, so the next run's history no longer holds them.
@@ -168,13 +193,13 @@ export async function deleteMessagesFromRun(
 	db: Pool,
 	{ conversationId, ownerId, runId }: { conversationId: string; ownerId: string; runId: string },
 ): Promise<number> {
-	const result = await db.query(
-		`delete from public.ai_messages m using public.ai_conversations c
-		 where m.conversation_id = $1 and c.id = m.conversation_id and c.owner_id = $2 and c.archived_at is null
-		   and m.created_at >= (select min(created_at) from public.ai_messages where conversation_id = $1 and run_id = $3)`,
-		[conversationId, ownerId, runId],
-	);
-	return result.rowCount ?? 0;
+	// Flag off, the summary columns are never named (C389).
+	if (!config.summaryEnabled) {
+		const result = await db.query(DELETE_FROM_RUN_SQL, [conversationId, ownerId, runId]);
+		return result.rowCount ?? 0;
+	}
+	const result = await db.query<{ count: number }>(DELETE_FROM_RUN_CLEARING_SUMMARY_SQL, [conversationId, ownerId, runId]);
+	return result.rows[0]?.count ?? 0;
 }
 
 /**
