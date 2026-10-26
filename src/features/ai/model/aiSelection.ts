@@ -146,19 +146,17 @@ export function resolveAiSelection(
 }
 
 /**
- * The effort a run is sent with: the chosen one, and only when the chosen
- * model reasons. A model that does not reason, or one the list does not
- * name, is sent none.
+ * The effort a run is sent with: the stored choice, when it was made for this
+ * very connection and model. The service drops it for a model that does not
+ * reason (services/osionos-ai/src/runs/effort.ts), so no model list is read.
  */
-export function selectionEffort(
+export function effortFor(
   selection: AiSelection | null,
-  modelsByConnection: Record<string, AiModelLike[]>,
+  connectionId: string,
+  model: string | undefined,
 ): AiEffort | undefined {
-  if (!selection?.effort) return undefined;
-  const models = modelsByConnection[selection.connectionId] ?? [];
-  return models.some((model) => model.id === selection.model && model.reasoning === true)
-    ? selection.effort
-    : undefined;
+  if (!selection || selection.connectionId !== connectionId || selection.model !== model) return undefined;
+  return selection.effort;
 }
 
 /**

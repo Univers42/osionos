@@ -13,7 +13,7 @@ import {
   AI_SELECTION_STORAGE_KEY,
   readAiSelection,
   resolveAiSelection,
-  selectionEffort,
+  effortFor,
   writeAiSelection,
   type SelectionStorage,
 } from "@/features/ai/model/aiSelection";
@@ -60,11 +60,13 @@ test("an old stored value still parses, and an unknown effort is kept out", () =
   );
 });
 
-test("the run carries an effort only for a model that reasons", () => {
-  assert.equal(selectionEffort({ connectionId: "platform", model: "think", effort: "low" }, models), "low");
-  assert.equal(selectionEffort({ connectionId: "platform", model: "plain", effort: "low" }, models), undefined);
-  assert.equal(selectionEffort({ connectionId: "platform", model: "gone", effort: "low" }, models), undefined);
-  assert.equal(selectionEffort({ connectionId: "platform", model: "think" }, models), undefined);
+test("the run carries the effort chosen for this very connection and model", () => {
+  const chosen = { connectionId: "platform", model: "think", effort: "low" as const };
+  assert.equal(effortFor(chosen, "platform", "think"), "low");
+  assert.equal(effortFor(chosen, "platform", "plain"), undefined, "another model gets none");
+  assert.equal(effortFor(chosen, "own-key", "think"), undefined, "another connection gets none");
+  assert.equal(effortFor({ connectionId: "platform", model: "think" }, "platform", "think"), undefined);
+  assert.equal(effortFor(null, "platform", "think"), undefined);
 });
 
 test("the picker is a radiogroup with exactly one checked radio, Medium by default", () => {
