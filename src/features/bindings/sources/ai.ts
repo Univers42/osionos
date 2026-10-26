@@ -54,8 +54,6 @@ function getData(store: StoreLike<AiSettingsStoreState>, workspaceId: string): A
     workspaceId,
     connectors: false,
     meetingNotesAutoRecord: false,
-    agentsEnabled: true,
-    customAgentsAllowed: false,
     searchEverywhereIndexing: false,
     summaries: true,
     updatedAt: new Date().toISOString(),
@@ -65,8 +63,6 @@ function getData(store: StoreLike<AiSettingsStoreState>, workspaceId: string): A
 const fields: readonly FieldSpec[] = [
   { key: "connectors", display: "switch", label: "AI connectors" },
   { key: "meetingNotesAutoRecord", display: "switch", label: "Meeting notes auto-record" },
-  { key: "agentsEnabled", display: "switch", label: "Agents" },
-  { key: "customAgentsAllowed", display: "switch", label: "Custom agents" },
   { key: "searchEverywhereIndexing", display: "switch", label: "Search everywhere indexing" },
   { key: "summaries", display: "switch", label: "Summaries" },
 ];
@@ -88,8 +84,6 @@ export function createAiSource(deps: {
       return {
         connectors: data.connectors ?? false,
         meetingNotesAutoRecord: data.meetingNotesAutoRecord ?? false,
-        agentsEnabled: data.agentsEnabled ?? true,
-        customAgentsAllowed: data.customAgentsAllowed ?? false,
         searchEverywhereIndexing: data.searchEverywhereIndexing ?? false,
         summaries: data.summaries ?? true,
       };

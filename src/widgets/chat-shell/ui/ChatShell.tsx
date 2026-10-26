@@ -14,6 +14,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 
 import { useChatStore, getInferencePort, conversationsOf } from "@/features/chat/model/useChatStore";
+import { useAgentRequest } from "@/features/chat/model/agentRequest";
 import { mergeAttachments, subscribeAssistantHandoff, toRunAttachments } from "@/features/chat/model/assistantHandoff";
 import type { ComposerAttachment } from "@/features/chat/model/assistantHandoff";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
@@ -64,6 +65,21 @@ export const ChatShell: React.FC = () => {
   // Another account's conversation is never shown: switching accounts starts a new one.
   const active = conversations.find((c) => c.id === activeId) ?? null;
   useEffect(() => { if (!active) createConversation(); }, [active, createConversation]);
+  // "Try it" in the Hub: a fresh conversation with that agent selected. A request waiting
+  // before this mounts is taken here, once.
+  const requestedAgent = useAgentRequest((s) => s.agentId);
+  const [takenAgent, setTakenAgent] = useState<string | null>(null);
+  // Adjusted while rendering, not in an effect: the selection follows the request at once.
+  if (requestedAgent && requestedAgent !== takenAgent) {
+    setTakenAgent(requestedAgent);
+    setAgentId(requestedAgent);
+  } else if (!requestedAgent && takenAgent) setTakenAgent(null);
+  useEffect(() => {
+    if (!useAgentRequest.getState().take()) return;
+    // An empty chat is reused: the effect above already makes one when none is open.
+    const { messages: all, activeConversationId } = useChatStore.getState();
+    if (all.some((m) => m.conversationId === activeConversationId)) createConversation();
+  }, [requestedAgent, createConversation]);
   // The list of the agents, once: the service owns it.
   useEffect(() => { void loadAgents(); }, [loadAgents]);
   // The conversations of the account, once: another browser may have started them.

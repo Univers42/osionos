@@ -20,6 +20,9 @@ const NO_SEEDS: ReadonlySet<string> = new Set();
 // Budgets are ~3x this host's p95, for the slower CI runner, and stay below the
 // replaced loops' p95, so CI fails if the O(databases × rows) shape comes back.
 // Caveat: a runner more than 3x slower than this host reads as a regression.
+// structuredClone and JSON.stringify of the fixed fixture are reference rows, with no budget:
+// the input never changes, so only the runner can move their time. The clone's 70 ms budget
+// failed CI on 2026-10-26 (p95 76.39 ms, median 24.44 ms) with no code change under it.
 
 export const bench = defineBench("object-database sync (83 databases, 8,646 rows)", [
   {
@@ -38,7 +41,6 @@ export const bench = defineBench("object-database sync (83 databases, 8,646 rows
   {
     // 2026-10-26: p95 21.80 ms
     name: "flush: structuredClone snapshot",
-    budgetNs: 70_000_000,
     setup: () => {
       const state = accountState();
       return () => structuredClone(state);
@@ -47,7 +49,6 @@ export const bench = defineBench("object-database sync (83 databases, 8,646 rows
   {
     // 2026-10-26: p95 6.17 ms
     name: "flush: JSON.stringify for localStorage",
-    budgetNs: 25_000_000,
     setup: () => {
       const state = accountState();
       return () => JSON.stringify(state);

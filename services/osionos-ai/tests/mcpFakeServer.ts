@@ -34,6 +34,15 @@ export interface Behavior {
 	pageSize?: number;
 	/** Ask the client to sample before answering tools/list. */
 	asksToSample?: boolean;
+	/** The content blocks tools/call answers with (default: one text block "ok"). */
+	callContent?: unknown[];
+	/** Make the tools/call answer an error result. */
+	callIsError?: boolean;
+}
+
+export interface SeenCall {
+	name: string;
+	arguments: unknown;
 }
 
 export interface Stats {
@@ -45,6 +54,8 @@ export interface Stats {
 	clientAnswers: unknown[];
 	/** The capabilities the client declared in `initialize`. */
 	initializeCapabilities: unknown;
+	/** The tools/call requests the server saw: the proof a call left the service. */
+	calls: SeenCall[];
 	/** Requests whose socket closed before the answer: the client gave up. */
 	aborted: number;
 }
@@ -99,7 +110,7 @@ async function handlePost(request: IncomingMessage, response: ServerResponse, be
 	const message = JSON.parse((await readBody(request)) || '{}') as {
 		id?: number | string;
 		method?: string;
-		params?: { protocolVersion?: string; cursor?: string; capabilities?: unknown };
+		params?: { protocolVersion?: string; cursor?: string; capabilities?: unknown; name?: string; arguments?: unknown };
 		result?: unknown;
 		error?: unknown;
 	};
@@ -137,6 +148,19 @@ async function handlePost(request: IncomingMessage, response: ServerResponse, be
 				protocolVersion: message.params?.protocolVersion,
 				capabilities: { tools: {} },
 				serverInfo: { name: 'fake', version: '1' },
+			},
+		});
+		return;
+	}
+	if (message.method === 'tools/call') {
+		stats.calls.push({ name: String(message.params?.name), arguments: message.params?.arguments });
+		answered = true;
+		json(response, {
+			jsonrpc: '2.0',
+			id: message.id,
+			result: {
+				content: behavior.callContent ?? [{ type: 'text', text: 'ok' }],
+				...(behavior.callIsError ? { isError: true } : {}),
 			},
 		});
 		return;
@@ -179,7 +203,7 @@ async function handlePost(request: IncomingMessage, response: ServerResponse, be
 
 export async function startFakeMcp(initial: Partial<Behavior> = {}): Promise<FakeMcp> {
 	const behavior: Behavior = { ...NO_TOOLS, ...initial };
-	const stats: Stats = { gets: 0, posts: 0, toolsListCalls: 0, authorization: [], clientAnswers: [], initializeCapabilities: undefined, aborted: 0 };
+	const stats: Stats = { gets: 0, posts: 0, toolsListCalls: 0, authorization: [], clientAnswers: [], initializeCapabilities: undefined, calls: [], aborted: 0 };
 	const server: Server = createServer((request, response) => {
 		if (request.method !== 'POST') {
 			stats.gets++;

@@ -18,6 +18,7 @@ import type { RunEvent, UpstreamRunInput } from './upstreamInput.ts';
 import { citationData, sourceChars } from './sources.ts';
 import { createToolPool } from '../tools/index.ts';
 import { buildRunTools } from './toolSet.ts';
+import { mcpToolChars } from '../mcpClient/runTools.ts';
 import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
 import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
 
@@ -87,7 +88,11 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const accountBlockText = input.accountBlock;
 	const viewBlockText = input.viewBlock;
 	const workspaceBlockText = input.workspaceBlock;
-	const contextChars = (accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0) + (workspaceBlockText?.length ?? 0);
+	const contextChars =
+		(accountBlockText?.length ?? 0) +
+		(viewBlockText?.length ?? 0) +
+		(workspaceBlockText?.length ?? 0) +
+		mcpToolChars(input.mcpTools ?? []);
 	const promptChars = promptCharCount({
 		text,
 		historyChars: historyChars(history),
@@ -149,6 +154,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			agent,
 			skillIndex: input.skillIndex,
 			workspaceId: input.workspaceId,
+			...(input.mcpTools && input.mcpTools.length > 0 ? { mcp: { tools: input.mcpTools, redis } } : {}),
 			emit: (type, data) => emit(type, data),
 		});
 		const tools = runTools.tools;

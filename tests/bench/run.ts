@@ -17,17 +17,24 @@ import { pathToFileURL } from "node:url";
 import { formatNs, isBurst, measure, measureBurst, type BenchResult, type BenchSuite } from "./harness.ts";
 
 // Usage: node --experimental-strip-types --expose-gc tests/bench/run.ts tests/bench/x.bench.ts…
-// Each file exports `bench` (a BenchSuite). Exit 1 when any case's p95 exceeds its budget.
+// Each file exports `bench` (a BenchSuite). Exit 1 when any case's p95 exceeds its budget; a
+// case without one is a reference row ("ref"), printed and never failing.
 const OUT_DIR = "test-results/bench";
 
 function isSuite(value: unknown): value is BenchSuite {
   return typeof value === "object" && value !== null && "suite" in value && "cases" in value;
 }
 
+function verdict(result: BenchResult): string {
+  if (result.budgetNs === undefined) return "ref ";
+  return result.ok ? "ok  " : "OVER";
+}
+
 function row(result: BenchResult): string {
-  const cells = [formatNs(result.medianNs), formatNs(result.p95Ns), formatNs(result.p99Ns), formatNs(result.budgetNs)];
+  const budget = result.budgetNs === undefined ? "-" : formatNs(result.budgetNs);
+  const cells = [formatNs(result.medianNs), formatNs(result.p95Ns), formatNs(result.p99Ns), budget];
   const total = result.totalNs === undefined ? "" : `  total ${formatNs(result.totalNs)} / ${formatNs(result.totalBudgetNs ?? Number.NaN)}`;
-  return `${result.ok ? "ok  " : "OVER"} ${result.name.padEnd(52)} ${cells.map((c) => c.padStart(11)).join(" ")}  ×${result.batch}${total}`;
+  return `${verdict(result)} ${result.name.padEnd(52)} ${cells.map((c) => c.padStart(11)).join(" ")}  ×${result.batch}${total}`;
 }
 
 async function runFile(file: string): Promise<BenchResult[]> {

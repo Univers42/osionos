@@ -11,12 +11,17 @@ import { readToolSet } from '../tools/index.ts';
 import { VIEW_TOOLS } from '../tools/viewTools.ts';
 import type { ToolOutcome, ToolPool } from '../tools/index.ts';
 import { writeToolSet } from '../approvals/toolSet.ts';
+import { mcpToolSet } from '../mcpClient/propose.ts';
+import type { McpToolEntry } from '../mcpClient/runTools.ts';
+import type { Redis } from 'ioredis';
 import type { ApprovalContext, PermissionAsked } from '../approvals/types.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import type { PageContext } from './prompt.ts';
 import { citationData } from './sources.ts';
-import type { BuiltinAgent } from '../agents/builtins.ts';
+import { cardAgentOf } from '../agents/card.ts';
+import { isCustomAgent } from '../agents/config.ts';
+import type { AgentConfig } from '../agents/config.ts';
 
 /**
  * The tools of a run.
@@ -71,7 +76,7 @@ export function buildRunTools(input: {
 	 * agent narrows them to its own list — it never gains one, and the write
 	 * tools it keeps stay behind the approval of the user.
 	 */
-	agent?: BuiltinAgent | null;
+	agent?: AgentConfig | null;
 	/**
 	 * The skills the prompt of the run lists, and the workspace they come from.
 	 *
@@ -80,6 +85,12 @@ export function buildRunTools(input: {
 	 */
 	skillIndex?: SkillIndex;
 	workspaceId?: string;
+	/**
+	 * The MCP tools of the caller, loaded before the run (C265).
+	 *
+	 * Empty or absent is the run of today: not one key is added.
+	 */
+	mcp?: { tools: readonly McpToolEntry[]; redis: Redis };
 	/** The event of the run. */
 	emit: (type: string, data: unknown) => Promise<void>;
 }): RunTools {
@@ -130,6 +141,7 @@ export function buildRunTools(input: {
 		runId,
 		conversationId,
 		ownerId,
+		agent: cardAgentOf(agent),
 		// The pages the run had read or quoted: where the request comes
 		// from. It grows as the run reads more.
 		provenance: () => [
@@ -154,8 +166,25 @@ export function buildRunTools(input: {
 	// C42: `remember` proposes; it needs the workspace the memory belongs to.
 	const proposalTools = input.workspaceId ? [rememberTool({ workspaceId: input.workspaceId, runId })] : [];
 
+	// C265 / C308 / C339: the MCP tools go in FIRST, before the built-ins and
+	// before the allow-list loop below. A built-in agent lists its tools by
+	// name and the loop keeps only those, so it strips every MCP tool: a custom
+	// agent never reaches one. Never add them after that loop.
+	const mcpTools =
+		user && input.mcp && input.mcp.tools.length > 0 && input.workspaceId
+			? mcpToolSet({
+					db,
+					redis: input.mcp.redis,
+					workspaceId: input.workspaceId,
+					tools: input.mcp.tools,
+					approval,
+					hooks,
+					pool,
+				})
+			: {};
 	run.tools = user
 		? {
+				...mcpTools,
 				...readToolSet({ db, user }, hooks, pool, [...skillTools, ...proposalTools, ...VIEW_TOOLS]),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
@@ -164,13 +193,23 @@ export function buildRunTools(input: {
 	// what the runtime offers and what the agent may call. An agent never
 	// gains a tool, and a tool the agent does not list is not even sent to
 	// the model — it is not in the request.
-	if (run.tools && agent) {
-		const allowed = new Set(agent.tools);
-		const kept: ToolSet = {};
-		for (const [name, tool] of Object.entries(run.tools)) {
-			if (allowed.has(name) || name === 'load_skill' || name === 'remember' || name === 'open_page' || name === 'open_panel' || name === 'open_issue_report') kept[name] = tool;
-		}
-		run.tools = kept;
-	}
+	if (run.tools) run.tools = keepAgentTools(run.tools, agent);
 	return run;
+}
+
+/**
+ * The tools an agent keeps: its own list, plus the five the runtime always
+ * gives. Default-deny: a tool added to the set before this call (an MCP tool,
+ * C308/C339) is stripped for every agent and kept only for no agent.
+ */
+export function keepAgentTools(tools: ToolSet, agent: AgentConfig | null): ToolSet {
+	if (!agent) return tools;
+	// A custom agent never keeps an MCP tool, even one its stored list names
+	// (the table's CHECK refuses it at write; this is the second lock).
+	const allowed = new Set(isCustomAgent(agent) ? agent.tools.filter((name) => !name.startsWith('mcp_')) : agent.tools);
+	const kept: ToolSet = {};
+	for (const [name, tool] of Object.entries(tools)) {
+		if (allowed.has(name) || name === 'load_skill' || name === 'remember' || name === 'open_page' || name === 'open_panel' || name === 'open_issue_report') kept[name] = tool;
+	}
+	return kept;
 }
