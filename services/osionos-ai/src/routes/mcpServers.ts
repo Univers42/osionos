@@ -55,6 +55,7 @@ function present(row: ServerRow, tools: ToolRow[]) {
 		status: row.status,
 		headerName: row.header_name,
 		headerLast4: row.header_last4,
+		brokenUntil: row.is_broken && row.broken_until ? row.broken_until.toISOString() : null,
 		tools: tools.map((tool) => ({ name: tool.name, description: tool.description, enabled: tool.enabled })),
 	};
 }
@@ -105,7 +106,6 @@ export async function handleMcpServers(ctx: RouteContext): Promise<number> {
 	// not worth a half-working route: 503, always, as the connections do.
 	if (!kekAvailable()) return refuse(ctx, 503, 'connections_unavailable');
 	const body = await readJson(ctx.request, createBodySchema);
-	if (body.acknowledged === false) return refuse(ctx, 400, 'disclosure_not_acknowledged');
 	const url = checkServerUrl(body.url);
 	const header = parseHeader(body.headerName, body.headerValue);
 	const id = randomUUID();

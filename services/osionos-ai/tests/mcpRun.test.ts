@@ -339,7 +339,6 @@ describe('C281 C282 the card shows the stored call, and the disclosure is the co
 		const user = randomUUID();
 		const refused = await as(user, 'POST', LIST, { label: 'x', url: server.url, acknowledged: false });
 		assert.equal(refused.status, 400);
-		assert.equal(refused.body?.code ?? refused.body?.error, 'disclosure_not_acknowledged');
 		assert.equal((await as(user, 'POST', LIST, { label: 'x', url: server.url, acknowledged: true })).status, 201);
 	});
 });

@@ -26,7 +26,7 @@ describe('C268 the URL and the header are checked', () => {
 			'ftp://example.com/mcp',
 			'not a url',
 		]) {
-			const made = await as(user, 'POST', LIST, { label: 'bad', url });
+			const made = await as(user, 'POST', LIST, { label: 'bad', url, acknowledged: true });
 			assert.equal(made.status, 400, url);
 		}
 		const mine = await as(user, 'GET', LIST);
@@ -42,19 +42,31 @@ describe('C268 the URL and the header are checked', () => {
 			{ headerName: 'Authorization', headerValue: 'abcdefgh\nrest' },
 			{ headerName: 'Authorization', headerValue: 'short' },
 		]) {
-			const made = await as(USER_A, 'POST', LIST, { label: 'bad', url: server.url, ...extra });
+			const made = await as(USER_A, 'POST', LIST, { label: 'bad', url: server.url, acknowledged: true, ...extra });
 			assert.equal(made.status, 400, JSON.stringify(extra));
 		}
-		const ok = await as(USER_A, 'POST', LIST, { label: 'ok', url: server.url, headerName: 'x-api-key', headerValue: SECRET });
+		const ok = await as(USER_A, 'POST', LIST, { label: 'ok', url: server.url, headerName: 'x-api-key', headerValue: SECRET, acknowledged: true });
 		assert.equal(ok.status, 201);
 		await as(USER_A, 'DELETE', `${LIST}/${String(ok.body?.id)}`);
+	});
+});
+
+describe('C282 a server is registered only after the disclosure', () => {
+	it('C282 the create route refuses a missing or false acknowledged', async () => {
+		const server = await fake();
+		const user = randomUUID();
+		for (const extra of [{}, { acknowledged: false }, { acknowledged: 'true' }]) {
+			const made = await as(user, 'POST', LIST, { label: 'x', url: server.url, ...extra });
+			assert.equal(made.status, 400, JSON.stringify(extra));
+		}
+		assert.deepEqual((await as(user, 'GET', LIST)).body?.servers, [], 'nothing was stored');
 	});
 });
 
 describe('C269 there is no read-only mark', () => {
 	it('C269 create and patch refuse a read_only key', async () => {
 		const server = await fake();
-		const made = await as(USER_A, 'POST', LIST, { label: 'x', url: server.url, read_only: true });
+		const made = await as(USER_A, 'POST', LIST, { label: 'x', url: server.url, acknowledged: true, read_only: true });
 		assert.equal(made.status, 400);
 		const id = await register(USER_A, server);
 		const patched = await as(USER_A, 'PATCH', `${LIST}/${id}`, { label: 'y', read_only: true });
@@ -97,7 +109,7 @@ describe('C271 nothing secret comes back, and the tables are closed to the publi
 		const listed = await as(user, 'GET', LIST);
 		const raw = JSON.stringify(listed.body);
 		const entry = (listed.body?.servers as Record<string, unknown>[])[0];
-		assert.deepEqual(Object.keys(entry).sort(), ['headerLast4', 'headerName', 'host', 'id', 'label', 'status', 'tools']);
+		assert.deepEqual(Object.keys(entry).sort(), ['brokenUntil', 'headerLast4', 'headerName', 'host', 'id', 'label', 'status', 'tools']);
 		assert.equal(entry.host, new URL(server.url).host);
 		assert.equal(entry.headerLast4, SECRET.slice(-4));
 		assert.ok(!raw.includes(SECRET) && !raw.includes(new URL(server.url).pathname + '"'), 'no secret, no path');
@@ -159,10 +171,10 @@ describe('C276 the number of servers and of tools is capped', () => {
 		const server = await fake();
 		const user = randomUUID();
 		for (let index = 0; index < 10; index++) await register(user, server);
-		const eleventh = await as(user, 'POST', LIST, { label: 'one too many', url: server.url });
+		const eleventh = await as(user, 'POST', LIST, { label: 'one too many', url: server.url, acknowledged: true });
 		assert.equal(eleventh.status, 409);
 		assert.equal(code(eleventh.body), 'too_many_servers');
-		assert.equal((await as(randomUUID(), 'POST', LIST, { label: 'free', url: server.url })).status, 201);
+		assert.equal((await as(randomUUID(), 'POST', LIST, { label: 'free', url: server.url, acknowledged: true })).status, 201);
 	});
 });
 
@@ -190,7 +202,7 @@ describe('C289 a server is its owner\'s, behind a fresh session and a rate limit
 		const server = await fake();
 		const id = await register(USER_A, server);
 		const stale = staleTokenOf(USER_A);
-		const made = await as(USER_A, 'POST', LIST, { label: 'x', url: server.url }, stale);
+		const made = await as(USER_A, 'POST', LIST, { label: 'x', url: server.url, acknowledged: true }, stale);
 		assert.equal(made.status, 403);
 		assert.equal(code(made.body), 'reauth_required');
 		const patched = await as(USER_A, 'PATCH', `${LIST}/${id}`, { label: 'y' }, stale);
