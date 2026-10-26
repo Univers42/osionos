@@ -26,6 +26,7 @@ import {
   Play,
   Search,
   Shield,
+  Sparkles,
   Store,
   type LucideIcon,
 } from "lucide-react";
@@ -46,7 +47,7 @@ export const PANEL_TRANSITION_WIDTH = 140;
 export const RAIL_HIDE_WIDTH = 24;
 
 /** The apps whose rail item opens a tab of its own. */
-export type RailApp = "mail" | "calendar" | "whiteboard";
+export type RailApp = "mail" | "calendar" | "whiteboard" | "ai-hub";
 
 /** A rail item selects a side panel or opens an embedded app tab. */
 export type RailAction =
@@ -107,6 +108,7 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
     label: "Conversations",
     items: [
       { id: "conversations", label: "Conversations", Icon: MessagesSquare, action: { kind: "panel", panel: "conversations" }, commandId: "focusConversations" },
+      { id: "ai-hub", label: "AI Hub", Icon: Sparkles, action: { kind: "tab", app: "ai-hub" } },
       { id: "notifications", label: "Notifications", Icon: Bell, action: { kind: "panel", panel: "notifications" } },
     ],
   },

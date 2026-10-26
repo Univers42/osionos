@@ -39,9 +39,14 @@ function formatterFor(locale?: string): Intl.NumberFormat {
   return made;
 }
 
+/** A cent: below it a real spend reads "< $0.01" instead of a misleading "$0.00". */
+const CENT_MICRO = 10_000;
+
 /** Micro dollars, as money. The reader's locale unless another one is asked for. */
 export function formatMicroUsd(microUsd: number, locale?: string): string {
-  return formatterFor(locale).format(microUsd / MICRO_PER_DOLLAR);
+  const format = formatterFor(locale);
+  if (microUsd > 0 && microUsd < CENT_MICRO) return `< ${format.format(CENT_MICRO / MICRO_PER_DOLLAR)}`;
+  return format.format(microUsd / MICRO_PER_DOLLAR);
 }
 
 /** The meter: what the day has cost, of what the day allows. */
