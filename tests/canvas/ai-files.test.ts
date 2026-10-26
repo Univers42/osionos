@@ -7,7 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { mergeAttachments, toRunAttachments } from "@/features/chat/model/assistantHandoff";
 import type { ComposerAttachment } from "@/features/chat/model/assistantHandoff";
 import { runError } from "@/features/chat/model/runErrors";
-import { AttachButton } from "@/widgets/chat-shell/ui/AttachButton";
+import { AttachButton, uploadableFile } from "@/widgets/chat-shell/ui/AttachButton";
 
 const CSV: ComposerAttachment = { path: `/api/media/uploads/u/${"a".repeat(64)}.csv`, name: "data.csv", kind: "file" };
 const PNG: ComposerAttachment = { path: `/api/media/uploads/u/${"b".repeat(64)}.png`, name: "pic.png", kind: "image" };
@@ -47,4 +47,15 @@ test("merging keeps names and dedupes by path", () => {
 
 test("an unsupported file says what can be read", () => {
   assert.match(runError("unsupported_file").text, /This file type can't be read yet/);
+});
+
+test("a markup file uploads as plain text, since the bridge refuses markup types", () => {
+  const html = uploadableFile(new File(["<p>hi</p>"], "page.html", { type: "text/html" }));
+  assert.equal(html.file.type, "text/plain");
+  assert.equal(html.file.name, "page.html");
+  assert.equal(html.kind, "file");
+  assert.equal(uploadableFile(new File(["<svg/>"], "logo.svg", { type: "image/svg+xml" })).kind, "file");
+  const csv = new File(["a,b"], "data.csv", { type: "text/csv" });
+  assert.equal(uploadableFile(csv).file, csv);
+  assert.equal(uploadableFile(new File([""], "p.png", { type: "image/png" })).kind, "image");
 });
