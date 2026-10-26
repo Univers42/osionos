@@ -8,6 +8,7 @@ import { appendUserTurn, deleteMessagesFromRun, hasMessagesOfRun, touchConversat
 import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
+import { loadMcpTools, mcpToolChars } from '../mcpClient/runTools.ts';
 import type { Effort } from './effort.ts';
 import type { RunEvent } from './upstream.ts';
 import {
@@ -301,7 +302,13 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	if (input.view) {
 		viewBlockText = viewBlock(input.view);
 	}
-	const contextChars = (accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0) + (workspaceBlockText?.length ?? 0);
+	// C265 / C287: the MCP tools of the caller are loaded once, here, so the
+	// reservation counts their definitions and the run offers the same list.
+	// Only the general assistant gets them (C308): an agent never does. Flag
+	// off: no query, nothing (C291).
+	const mcpTools = config.mcpClientEnabled && input.user && !agent ? await loadMcpTools(db, ownerId) : [];
+	const contextChars =
+		(accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0) + (workspaceBlockText?.length ?? 0) + mcpToolChars(mcpTools);
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
@@ -382,6 +389,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			agent,
 			skillIndex,
 			memories,
+			mcpTools,
 			workspaceId: input.workspaceId,
 			...(accountBlockText ? { accountBlock: accountBlockText } : {}),
 			...(viewBlockText ? { viewBlock: viewBlockText } : {}),

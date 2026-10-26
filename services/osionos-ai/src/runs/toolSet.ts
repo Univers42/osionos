@@ -11,6 +11,9 @@ import { readToolSet } from '../tools/index.ts';
 import { VIEW_TOOLS } from '../tools/viewTools.ts';
 import type { ToolOutcome, ToolPool } from '../tools/index.ts';
 import { writeToolSet } from '../approvals/toolSet.ts';
+import { mcpToolSet } from '../mcpClient/propose.ts';
+import type { McpToolEntry } from '../mcpClient/runTools.ts';
+import type { Redis } from 'ioredis';
 import type { ApprovalContext, PermissionAsked } from '../approvals/types.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
@@ -80,6 +83,12 @@ export function buildRunTools(input: {
 	 */
 	skillIndex?: SkillIndex;
 	workspaceId?: string;
+	/**
+	 * The MCP tools of the caller, loaded before the run (C265).
+	 *
+	 * Empty or absent is the run of today: not one key is added.
+	 */
+	mcp?: { tools: readonly McpToolEntry[]; redis: Redis };
 	/** The event of the run. */
 	emit: (type: string, data: unknown) => Promise<void>;
 }): RunTools {
@@ -154,8 +163,25 @@ export function buildRunTools(input: {
 	// C42: `remember` proposes; it needs the workspace the memory belongs to.
 	const proposalTools = input.workspaceId ? [rememberTool({ workspaceId: input.workspaceId, runId })] : [];
 
+	// C265 / C308 / C339: the MCP tools go in FIRST, before the built-ins and
+	// before the allow-list loop below. A built-in agent lists its tools by
+	// name and the loop keeps only those, so it strips every MCP tool: a custom
+	// agent never reaches one. Never add them after that loop.
+	const mcpTools =
+		user && input.mcp && input.mcp.tools.length > 0 && input.workspaceId
+			? mcpToolSet({
+					db,
+					redis: input.mcp.redis,
+					workspaceId: input.workspaceId,
+					tools: input.mcp.tools,
+					approval,
+					hooks,
+					pool,
+				})
+			: {};
 	run.tools = user
 		? {
+				...mcpTools,
 				...readToolSet({ db, user }, hooks, pool, [...skillTools, ...proposalTools, ...VIEW_TOOLS]),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}

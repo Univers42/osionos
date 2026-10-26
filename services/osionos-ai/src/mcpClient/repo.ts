@@ -259,3 +259,67 @@ export async function recordFailure(db: Pool, serverId: string): Promise<void> {
 		[serverId],
 	);
 }
+
+/** A call went through: the run of failures ends (C290). */
+export async function recordSuccess(db: Pool, serverId: string): Promise<void> {
+	await db.query(
+		`update public.ai_mcp_servers
+		    set consecutive_failures = 0, status = 'ok', broken_until = null, updated_at = now()
+		  where id = $1`,
+		[serverId],
+	);
+}
+
+/** One enabled tool of a working server, with the words and the hash the user agreed to. */
+export interface EnabledTool extends QueryResultRow {
+	server_id: string;
+	label: string;
+	url: string;
+	name: string;
+	description: string;
+	input_schema: Record<string, unknown>;
+	snapshot_sha256: string;
+}
+
+/**
+ * The tools a run may offer: enabled by the user, on a server that is not
+ * broken (C266, C290). The order is fixed, so the generated names are stable
+ * from one run to the next.
+ */
+export async function listEnabledTools(db: Pool, ownerId: string): Promise<EnabledTool[]> {
+	const result = await db.query<EnabledTool>(
+		`select t.server_id, s.label, s.url, t.name, t.description, t.input_schema, t.snapshot_sha256
+		   from public.ai_mcp_tools t join public.ai_mcp_servers s on s.id = t.server_id
+		  where s.owner_id = $1 and t.enabled
+		    and not (s.broken_until is not null and s.broken_until > now())
+		  order by s.created_at, s.id, t.name`,
+		[ownerId],
+	);
+	return result.rows;
+}
+
+/** The snapshot of one tool as it is NOW, for the checks of the decision (C272). */
+export async function getToolNow(
+	db: Pool,
+	serverId: string,
+	ownerId: string,
+	name: string,
+): Promise<(EnabledTool & { enabled: boolean }) | null> {
+	const result = await db.query<EnabledTool & { enabled: boolean }>(
+		`select t.server_id, s.label, s.url, t.name, t.description, t.input_schema, t.snapshot_sha256, t.enabled
+		   from public.ai_mcp_tools t join public.ai_mcp_servers s on s.id = t.server_id
+		  where s.id = $1 and s.owner_id = $2 and t.name = $3`,
+		[serverId, ownerId, name],
+	);
+	return result.rows[0] ?? null;
+}
+
+/** The MCP calls a user has waiting for a decision (C283). */
+export async function countPendingCalls(db: Pool, ownerId: string): Promise<number> {
+	const result = await db.query<{ n: string }>(
+		`select count(*)::text as n from public.ai_approvals
+		  where owner_id = $1 and tool = 'mcp_call' and status = 'pending' and expires_at > now()`,
+		[ownerId],
+	);
+	return Number(result.rows[0]?.n ?? 0);
+}
