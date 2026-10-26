@@ -90,6 +90,14 @@ export interface ChatStoreState extends ChatData {
   followUp: (conversationId: string, runId: string) => Promise<void>;
   /** Writes the user's decision on a memory chip into the part, so it persists in the message. */
   decideMemoryProposal: (messageId: string, memoryId: string, decision: MemoryDecision) => void;
+  /** 👍/👎 on an answer: the same value again clears it, the other value replaces it. */
+  setFeedback: (messageId: string, value: "up" | "down") => void;
+  /**
+   * Edit & resend: drops this user message and every later one of its
+   * conversation, then sends the new text as a new turn. Refused (false) while
+   * the conversation has a run in flight.
+   */
+  editAndResend: (messageId: string, text: string) => Promise<boolean>;
   attachContext: (scope: SharedContextItem["scope"], scopeId: string, item: Pick<SharedContextItem, "kind" | "label" | "ref">) => void;
   detachContext: (id: string) => void;
   messagesFor: (conversationId: string) => ChatMessage[];
@@ -315,6 +323,37 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
         ),
       }));
       persist();
+    },
+
+    setFeedback: (messageId, value) => {
+      set((s) => ({
+        messages: s.messages.map((m) => {
+          if (m.id !== messageId || m.role !== "assistant") return m;
+          const { feedback: current, ...rest } = m;
+          return current === value ? rest : { ...rest, feedback: value };
+        }),
+      }));
+      persist();
+    },
+
+    editAndResend: async (messageId, text) => {
+      const original = get().messages.find((m) => m.id === messageId);
+      if (!original || original.role !== "user" || !text.trim()) return false;
+      const { conversationId } = original;
+      if (activeRuns.has(conversationId)) return false;
+      const inConversation = get().messagesFor(conversationId);
+      const from = inConversation.findIndex((m) => m.id === messageId);
+      const dropped = new Set(inConversation.slice(from).map((m) => m.id));
+      set((s) => ({ messages: s.messages.filter((m) => !dropped.has(m.id)) }));
+      persist();
+      // The turn keeps the connection, model and agent it was first sent with.
+      await get().send(conversationId, text, {
+        connectorId: original.connectorId,
+        model: original.model,
+        connectionId: original.connectionId,
+        agentId: original.agentId,
+      });
+      return true;
     },
 
     attachContext: (scope, scopeId, item) => {

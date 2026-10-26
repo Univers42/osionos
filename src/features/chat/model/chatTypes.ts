@@ -49,6 +49,8 @@ export interface ChatMessage {
   errorCode?: string;
   /** The seconds the service asked the client to wait, when it did. */
   retryAfterSeconds?: number | null;
+  /** The reader's verdict on an answer. Local only: no service route takes it yet. */
+  feedback?: "up" | "down";
 }
 
 export interface Conversation {

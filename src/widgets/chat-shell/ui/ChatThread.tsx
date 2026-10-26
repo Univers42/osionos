@@ -13,6 +13,11 @@
 import React, { useEffect, useMemo, useRef } from "react";
 
 import type { ChatMessage } from "@/features/chat/model/chatTypes";
+import { DiagramOutput } from "@/features/diagram/ui/DiagramOutput";
+import { AnswerRenderContext, type AnswerRenderState } from "@/features/chat/ui/answerRenderContext";
+import { AssistantActions, UserBubble } from "@/features/chat/ui/MessageActions";
+import { MessageWindow } from "@/features/chat/ui/MessageWindow";
+import { ReasoningNote } from "@/features/chat/ui/ReasoningNote";
 import { ReadAloudButton } from "@/features/voice/ui/ReadAloudButton";
 import { citationsFromParts } from "@/features/chat/model/citations";
 import { renderCitationSources, renderCitedAnswer } from "@/features/chat/model/citedAnswer";
@@ -55,19 +60,38 @@ interface Props {
  * what the assistant wants to write, and decides. A memory it proposes is a
  * small chip after them: the user approves it or dismisses it.
  */
-const AssistantAnswer: React.FC<{
+/** Draws the LOCKED mermaid source of a fence — the diagram block's own output. */
+const drawDiagram: AnswerRenderState["drawDiagram"] = (source) => (
+  <DiagramOutput source={source} truncated={false} error={null} />
+);
+
+// Memoised on its props (content, status, parts identity): a streaming turn
+// does not re-render the finished ones.
+const AssistantAnswer = React.memo(function AssistantAnswer({
+  content,
+  status,
+  parts,
+  conversationId,
+  messageId,
+}: {
   content: string;
+  status?: ChatMessage["status"];
   parts?: ChatMessage["parts"];
   conversationId: string;
   messageId: string;
-}> = ({ content, parts, conversationId, messageId }) => {
+}) {
   const citations = useMemo(() => citationsFromParts(parts), [parts]);
   const activities = useMemo(() => toolActivitiesFromParts(parts), [parts]);
   const permissions = useMemo(() => permissionsFromParts(parts), [parts]);
   const proposals = useMemo(() => memoryProposalsFromParts(parts), [parts]);
   const elements = useMemo(() => renderCitedAnswer(content, citations, openCitation), [content, citations]);
+  const renderState = useMemo<AnswerRenderState>(
+    () => ({ complete: status !== "streaming", drawDiagram }),
+    [status],
+  );
   return (
-    <>
+    <AnswerRenderContext.Provider value={renderState}>
+      <ReasoningNote parts={parts} status={status} content={content} />
       <ToolActivity activities={activities} />
       <div className={`min-w-0 ${ANSWER_TABLE_CLASS} [&_a]:text-[var(--osio-accent)] [&_h1]:my-2 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:my-2 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:my-1 [&_h3]:font-semibold [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-1 [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-xs [&_pre]:bg-[var(--osio-bg-muted)] [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-xs [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5`}>
         {elements}
@@ -92,15 +116,57 @@ const AssistantAnswer: React.FC<{
           onManage={() => openSettings("ai_connections")}
         />
       ))}
-    </>
+    </AnswerRenderContext.Provider>
   );
-};
+});
+
+const AssistantMessageActions = React.memo(function AssistantMessageActions({
+  messageId,
+  content,
+  feedback,
+}: {
+  messageId: string;
+  content: string;
+  feedback?: ChatMessage["feedback"];
+}) {
+  return (
+    <div className="mt-1 flex items-center justify-end gap-1">
+      <AssistantActions
+        content={content}
+        feedback={feedback}
+        onFeedback={(value) => useChatStore.getState().setFeedback(messageId, value)}
+      />
+      <ReadAloudButton text={content} />
+    </div>
+  );
+});
+
+const UserTurn = React.memo(function UserTurn({
+  messageId,
+  content,
+  canEdit,
+}: {
+  messageId: string;
+  content: string;
+  canEdit: boolean;
+}) {
+  return (
+    <UserBubble
+      content={content}
+      canEdit={canEdit}
+      onResend={(text) => void useChatStore.getState().editAndResend(messageId, text)}
+    />
+  );
+});
 
 /** The message thread: user turns (accent, right) and assistant turns (subtle, left). */
 export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
   const endRef = useRef<HTMLDivElement>(null);
   const agents = useChatStore((s) => s.agents);
   useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [messages.length]);
+
+  // An edit would race a run in flight: the Edit button waits for it.
+  const busy = messages.some((message) => message.status === "streaming");
 
   /** The text a failed answer answers: the user turn right before it. */
   const textBefore = (index: number): string | null => {
@@ -113,7 +179,9 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-4 py-6" data-testid="chat-thread">
-      {messages.map((m, index) => {
+      <MessageWindow items={messages}>
+        {(visible, offset) => visible.map((m, visibleIndex) => {
+        const index = offset + visibleIndex;
         const retryText = m.status === "error" ? textBefore(index) : null;
         // The agent that shaped the answer: its name, in small letters, above
         // the answer. The general assistant says nothing.
@@ -135,9 +203,9 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                 </span>
               ) : null}
               {m.role === "user" ? (
-                <span className="whitespace-pre-wrap">{m.content}</span>
+                <UserTurn messageId={m.id} content={m.content} canEdit={!busy} />
               ) : (
-                <AssistantAnswer content={m.content} parts={m.parts} conversationId={m.conversationId} messageId={m.id} />
+                <AssistantAnswer content={m.content} status={m.status} parts={m.parts} conversationId={m.conversationId} messageId={m.id} />
               )}
               {m.status === "streaming" ? (
                 <span className="ml-0.5 inline-flex items-center gap-1 text-[var(--osio-fg-muted)]" data-testid="chat-streaming">
@@ -146,9 +214,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                 </span>
               ) : null}
               {m.role === "assistant" && m.status !== "streaming" && m.content ? (
-                <div className="mt-1 flex justify-end">
-                  <ReadAloudButton text={m.content} />
-                </div>
+                <AssistantMessageActions messageId={m.id} content={m.content} feedback={m.feedback} />
               ) : null}
               {m.status === "error" ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[var(--osio-border-default)] pt-2 text-xs text-[var(--osio-fg-muted)]">
@@ -162,7 +228,8 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
             </div>
           </div>
         );
-      })}
+        })}
+      </MessageWindow>
       <div ref={endRef} />
     </div>
   );

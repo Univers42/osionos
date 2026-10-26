@@ -33,6 +33,8 @@ import React from "react";
 import { parse } from "@osionos/markdown-engine";
 import { renderReact, type ReactRenderOptions } from "@osionos/markdown-engine/react";
 
+import { AnswerCodeBlock } from "../ui/AnswerCodeBlock";
+
 /**
  * An image, as an answer shows it: the alt text, and a link to the picture.
  *
@@ -59,6 +61,7 @@ export const ASSISTANT_MARKDOWN_OPTIONS: ReactRenderOptions = {
   allowHtml: false,
   externalLinks: true,
   imageRenderer: imageAsLink,
+  codeBlockRenderer: (lang, code) => React.createElement(AnswerCodeBlock, { lang, code }),
 };
 
 /**
