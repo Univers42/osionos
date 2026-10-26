@@ -17,7 +17,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { retargetSlide, slideOffset, stageStyle, type SlideState } from "../../src/shared/notion-database-sys/src/components/ViewSlideStage.tsx";
+import { retargetSlide, settleDelay, slideOffset, stageStyle, type SlideState } from "../../src/shared/notion-database-sys/src/components/ViewSlideStage.tsx";
 
 const idle = (viewId: string): SlideState =>
   ({ slots: [viewId, ""], keys: [0, 0], active: 0, incoming: null, dir: 1, run: false, lockH: 0 });
@@ -76,4 +76,10 @@ test("an inline (flow) stage animates its height to the incoming pane's", () => 
   assert.equal(stageStyle(running, true, 250)?.height, 250);
   assert.match(String(stageStyle(running, true, 250)?.transition), /^height /);
   assert.deepEqual(stageStyle(running, false, 250), { height: 400, flex: "none" }, "full page keeps the pin");
+});
+
+test("a slide into a loading pane waits for its content, but not forever", () => {
+  assert.equal(settleDelay(false), 420);
+  assert.ok(settleDelay(true) > settleDelay(false));
+  assert.ok(settleDelay(true) <= 3000);
 });
