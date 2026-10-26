@@ -28,7 +28,9 @@ import { insertTranscript } from "@/features/voice/model/insertTranscript";
 import { dictationLanguage } from "@/features/voice/model/language";
 import { usePageStore } from "@/store/usePageStore";
 import { useVoiceSettingsStore } from "@/store/settings";
+import { SlashPalette, SLASH_LISTBOX_ID, slashOptionId } from "@/features/ai/ui/SlashPalette";
 import { useContextPicker } from "../model/useContextPicker";
+import { useSlashPalette } from "../model/useSlashPalette";
 
 interface Props {
   value: string;
@@ -112,17 +114,26 @@ export const ChatComposer: React.FC<Props> = ({
   // What the assistant is pointed at: the "@" picker and the chips.
   const picker = useContextPicker({ value, onChange, chips, onChipsChange });
 
+  // The "/" palette: actions and prompt commands. "/" and "@" never both open
+  // (the text before the caret cannot be "/word" and hold an "@").
+  const rootRef = useRef<HTMLDivElement>(null);
+  const slash = useSlashPalette({ value, onChange, onSubmit, textarea: ref, root: rootRef, syncPicker: picker.sync });
+  const activeCommand = slash.open ? slash.matches[slash.index] : undefined;
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // The palette owns the arrows, Enter, Tab and Escape while it is open.
+    if (slash.onKeyDown(e)) return;
     // The picker has the keyboard while it is open: Enter picks, Escape closes.
     if (picker.trigger) {
       if (e.key === "Escape") picker.cancel();
       return;
     }
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSubmit(); }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); slash.submit(); }
   };
 
   return (
     <div
+      ref={rootRef}
       data-dictation-composer="assistant"
       className="relative rounded-2xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] shadow-[var(--osio-shadow-sm)] focus-within:border-[var(--osio-accent)]"
     >
@@ -154,20 +165,25 @@ export const ChatComposer: React.FC<Props> = ({
         ref={ref}
         autoFocus={autoFocus}
         value={value}
-        onChange={(e) => { onChange(e.target.value); picker.sync(e.target, e.target.value); }}
-        onSelect={(e) => picker.sync(e.currentTarget, value)}
+        onChange={(e) => { onChange(e.target.value); picker.sync(e.target, e.target.value); slash.sync(e.target, e.target.value); }}
+        onSelect={(e) => { picker.sync(e.currentTarget, value); slash.sync(e.currentTarget, value); }}
         onKeyDown={onKeyDown}
         rows={1}
         placeholder="Do anything with AI…"
         aria-label="Message the assistant"
+        aria-controls={slash.open ? SLASH_LISTBOX_ID : undefined}
+        aria-expanded={slash.open ? true : undefined}
+        aria-activedescendant={activeCommand ? slashOptionId(activeCommand.name) : undefined}
         className="block w-full resize-none bg-transparent px-4 pt-3 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
       />
       <div className="flex items-center gap-2 px-2 pb-2 pt-1">
-        <AttachImageButton
-          vision={vision === true}
-          attachments={attachments}
-          onChange={(paths) => onAttachmentsChange?.(paths)}
-        />
+        <div data-composer-slot="attach" className="contents">
+          <AttachImageButton
+            vision={vision === true}
+            attachments={attachments}
+            onChange={(paths) => onAttachmentsChange?.(paths)}
+          />
+        </div>
         <button
           type="button"
           onClick={onConnect}
@@ -177,15 +193,17 @@ export const ChatComposer: React.FC<Props> = ({
         >
           <Plug size={16} /> Connect
         </button>
-        {isAiConfigured() ? (
-          <AiConnectionPicker
-            value={selection}
-            onChange={onSelectionChange}
-            onVisionChange={setVision}
-          />
-        ) : (
-          <OfflineModelPicker value={selection} onChange={onSelectionChange} />
-        )}
+        <div data-composer-slot="model" className="contents">
+          {isAiConfigured() ? (
+            <AiConnectionPicker
+              value={selection}
+              onChange={onSelectionChange}
+              onVisionChange={setVision}
+            />
+          ) : (
+            <OfflineModelPicker value={selection} onChange={onSelectionChange} />
+          )}
+        </div>
         {/* The agent of the run: the general assistant, or one of the built-ins
             the service offers. A native <select> is keyboard-driven for free,
             and the label says what it is. */}
@@ -219,7 +237,7 @@ export const ChatComposer: React.FC<Props> = ({
           <button
             type="button"
             aria-label="Send message"
-            onClick={onSubmit}
+            onClick={slash.submit}
             disabled={!value.trim()}
             className="ml-auto rounded-full bg-[var(--osio-accent)] p-2 text-[var(--osio-accent-fg)] transition-colors hover:bg-[var(--osio-accent-hover,var(--osio-accent))] disabled:opacity-40"
           >
@@ -227,6 +245,16 @@ export const ChatComposer: React.FC<Props> = ({
           </button>
         )}
       </div>
+      {slash.open ? (
+        <SlashPalette
+          commands={slash.matches}
+          query={slash.query}
+          index={slash.index}
+          placement={slash.placement}
+          onHover={slash.setIndex}
+          onPick={slash.pick}
+        />
+      ) : null}
       {picker.trigger && picker.position ? (
         <PageSelectorMenu
           position={picker.position}
