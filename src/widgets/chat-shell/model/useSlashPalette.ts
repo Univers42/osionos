@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { listCommands, type AiCommand } from "@/features/ai/api/aiClient";
+import { openAiHub, type HubSectionId } from "@/features/ai/model/aiHubNav";
 import {
   CHAT_ACTIONS,
   expandSlashText,
@@ -35,6 +36,9 @@ function loadServiceCommands(): Promise<AiCommand[]> {
   serviceCommands ??= listCommands("chat").catch(() => []);
   return serviceCommands;
 }
+
+const EFFORT_GROUP = '[role="radiogroup"][aria-label="Reasoning effort"]';
+const HUB_ACTIONS: Record<string, HubSectionId> = { skills: "skills", memory: "memory", mcp: "mcp", hub: "overview" };
 
 const FOCUSABLE = 'button, select, input, [href], [tabindex]:not([tabindex="-1"])';
 
@@ -59,7 +63,12 @@ export function useSlashPalette({ value, onChange, onSubmit, textarea, root, syn
   latestSubmit.current = onSubmit;
 
   const commands = useMemo(() => mergeCommands(CHAT_ACTIONS, fetched), [fetched]);
-  const matches = useMemo(() => (query === null ? [] : filterCommands(commands, query)), [commands, query]);
+  // Caveat: read from the DOM when the query changes; a model switch with the palette
+  // open shows /effort stale until the next keystroke.
+  const matches = useMemo(
+    () => query === null ? [] : filterCommands(commands, query, (name) => name !== "effort" || !!root.current?.querySelector(EFFORT_GROUP)),
+    [commands, query, root],
+  );
   const open = query !== null;
 
   const sync = useCallback((element: HTMLTextAreaElement, text: string) => {
@@ -119,9 +128,11 @@ export function useSlashPalette({ value, onChange, onSubmit, textarea, root, syn
       onChange("");
       if (command.name === "new") useChatStore.getState().createConversation();
       else if (command.name === "context") write("@");
+      else if (Object.hasOwn(HUB_ACTIONS, command.name)) openAiHub(HUB_ACTIONS[command.name]);
       else requestAnimationFrame(() => {
         if (command.name === "model") focusSlot('[data-composer-slot="model"]', true);
         else if (command.name === "agent") focusSlot('select[aria-label="Agent"]');
+        else if (command.name === "effort") focusSlot(`${EFFORT_GROUP} [role="radio"][aria-checked="true"]`);
         else if (command.name === "attach") focusSlot('[data-composer-slot="attach"] button');
       });
     },
