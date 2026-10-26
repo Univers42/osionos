@@ -36,6 +36,8 @@ export interface AiModel {
   default: boolean;
   /** Whether the model can see images. */
   vision?: boolean;
+  /** Whether the model reasons, so a run may ask for an effort. */
+  reasoning?: boolean;
   /** The context window, in tokens, when the service knows it. */
   contextWindow?: number;
   /** The price of a million input tokens, in micro dollars. */
@@ -209,6 +211,8 @@ export interface StartRunInput {
    * Absent is the general assistant — the run of today, byte for byte.
    */
   agentId?: string;
+  /** How hard a reasoning model thinks; sent only for a model that reasons. */
+  effort?: "low" | "medium" | "high";
   attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }>;
   /**
    * What the answer is read from: the pages it may use (at most three), and
