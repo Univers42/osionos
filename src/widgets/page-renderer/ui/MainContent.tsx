@@ -29,7 +29,7 @@ import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
 import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 
-const HOME_DASHBOARD_VERSION = 10;
+const HOME_DASHBOARD_VERSION = 11;
 const HOME_DASHBOARD_FOCUS_VIEW_ID = "v-prod-table";
 
 function getHomeProfession(page: PageEntry | undefined): string | null {
@@ -46,11 +46,17 @@ function homeDashboardNeedsRefresh(page: PageEntry | undefined, currentProfessio
   return getHomeProfession(page) !== currentProfession;
 }
 
+function viewLabel(view: { databaseName: string; name: string }): string {
+  return `${view.databaseName} · ${view.name}`;
+}
+
 type HomeLayoutContentBuilder =
   typeof import("@/widgets/database-view/model/databaseViewCatalog")["createHomeLayoutContent"];
 
 function createHomeDashboardPage(createContent: HomeLayoutContentBuilder, workspaceId: string, ownerId: string | null, greetingName?: string): PageEntry {
   const focusView = getKnownDatabaseView(HOME_DASHBOARD_FOCUS_VIEW_ID);
+  const dataSources = [...new Set(KNOWN_DATABASE_VIEWS.map((view) => view.databaseName))];
+  const viewLabels = [...new Set([focusView, ...KNOWN_DATABASE_VIEWS].filter((view): view is NonNullable<typeof view> => Boolean(view)).slice(0, 8).map(viewLabel))];
   return {
     _id: getHomeDashboardPageId(workspaceId),
     title: HOME_DASHBOARD_PAGE_TITLE,
@@ -68,13 +74,11 @@ function createHomeDashboardPage(createContent: HomeLayoutContentBuilder, worksp
       { key: "status", label: "Status", type: "select", value: "Active", options: ["Active", "Planning", "Review"] },
       { key: "variant", label: "Home variant", type: "select", value: "Dashboard", options: ["Dashboard", "Second Brain"] },
       { key: "last_refresh", label: "Last refresh", type: "date", value: new Date().toISOString().slice(0, 10) },
-      { key: "data_sources", label: "Data sources", type: "relation", value: ["projects", "tasks", "crm", "content", "inventory", "products"], relationTarget: "database" },
-      {
-        key: "views", label: "Views", type: "relation",
-        value: [focusView, ...KNOWN_DATABASE_VIEWS].filter((view): view is NonNullable<typeof view> => Boolean(view)).slice(0, 8).map((view) => view.name),
-        relationTarget: "database",
-      },
-      { key: "focus_view", label: "Featured /view", type: "text", value: focusView?.id ?? "v-prod-table" },
+      // Labels, not relations: a relation resolves page ids, and database keys
+      // or view names resolved to nothing and rendered as "Untitled" chips.
+      { key: "data_sources", label: "Data sources", type: "multi_select", value: dataSources, options: dataSources },
+      { key: "views", label: "Views", type: "multi_select", value: viewLabels, options: viewLabels },
+      { key: "focus_view", label: "Featured /view", type: "text", value: focusView ? viewLabel(focusView) : "" },
     ],
     content: createContent(greetingName, { idScope: getHomeDashboardPageId(workspaceId) }),
     surface: "home",

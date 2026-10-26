@@ -62,29 +62,12 @@ interface DashboardMetrics {
   inventoryValue: number;
   averageProductRating: number;
   productRevenuePotential: number;
-  productStockUnits: number;
   featuredProducts: number;
   approvedContent: number;
 }
 
 type KnownDatabaseState = ReturnType<typeof loadKnownDatabaseState>;
 type KnownDatabasePage = KnownDatabaseState["pages"][string];
-
-const VIEW_INSIGHTS: Record<string, string> = {
-  "v-proj-dashboard": createInlineDocumentPlaygroundExample(),
-  "v-tasks-board": "The board shows 8 tasks moving across 5 statuses, with 1 blocked item that should not be buried in a table.",
-  "v-proj-timeline": "The timeline makes schedule pressure visible across 8 projects before anyone opens a project record.",
-  "v-proj-chart": "Budget is not just finance context here: it frames active work against 530K USD of committed project scope.",
-  "v-crm-board": "The CRM board has one account in each major stage, making pipeline movement easy to scan.",
-  "v-content-calendar": "The calendar turns 5 content items into a publishing rhythm that can sit beside product and project work.",
-  "v-prod-analytics": "Product analytics summarizes a 300-item catalog, balanced across categories with a 3.64 average rating.",
-  "v-prod-map": "The warehouse map gives spatial context to product operations instead of hiding location inside rows.",
-  "v-prod-feed": "The feed gives the catalog a narrative pulse for launches, changes, and operational notes.",
-  "v-inv-dashboard": "Inventory connects 5 owned assets and 5.6K USD of equipment value back to the project system.",
-  "v-crm-gallery": "Gallery view is better for account recognition and stakeholder scanning than a dense CRM table.",
-  "v-prod-table": "The product table keeps the full 300-row catalog available when the dashboard needs exact inspection.",
-  "v-tasks-list": "The task list is the compact daily triage view: 47 story points, 3 high-priority tasks, and 1 urgent task.",
-};
 
 const CELL_PALETTE = [
   { backgroundColor: "color-mix(in srgb, #2563eb 7%, var(--osio-bg-surface))", textColor: "var(--osio-fg-default)" },
@@ -143,6 +126,28 @@ function money(value: number): string {
   }).format(value) + " USD";
 }
 
+function plural(count: number, one: string, many = `${one}s`): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+// Built from the computed metrics: these sentences were typed by hand and drifted
+// from the data ("3.64 average rating" against a computed 3.53).
+function viewInsight(viewId: string, metrics: DashboardMetrics): string | undefined {
+  switch (viewId) {
+    case "v-proj-dashboard": return createInlineDocumentPlaygroundExample();
+    case "v-tasks-board": return `The board shows ${plural(metrics.taskCount, "task")} moving across their statuses, with ${plural(metrics.blockedTasks, "blocked item")} that should not be buried in a table.`;
+    case "v-proj-timeline": return `The timeline makes schedule pressure visible across ${plural(metrics.projectCount, "project")} before anyone opens a project record.`;
+    case "v-proj-chart": return `Budget frames active work against ${money(metrics.projectBudget)} of committed project scope.`;
+    case "v-crm-board": return `The CRM board tracks ${plural(metrics.crmCount, "account")} and ${money(metrics.pipelineValue)} of pipeline across its stages.`;
+    case "v-content-calendar": return `The calendar turns ${plural(metrics.contentCount, "content item")} into a publishing rhythm that can sit beside product and project work.`;
+    case "v-prod-analytics": return `Product analytics summarizes a ${metrics.productCount}-item catalog with a ${metrics.averageProductRating} average rating.`;
+    case "v-inv-dashboard": return `Inventory connects ${plural(metrics.inventoryCount, "owned asset")} and ${money(metrics.inventoryValue)} of equipment value back to the project system.`;
+    case "v-prod-table": return `The product table keeps the full ${metrics.productCount}-row catalog available when the dashboard needs exact inspection.`;
+    case "v-tasks-list": return `The task list is the compact daily triage view: ${plural(metrics.storyPoints, "story point")}, ${plural(metrics.highPriorityTasks, "high-priority task")}, and ${plural(metrics.urgentTasks, "urgent task")}.`;
+    default: return undefined;
+  }
+}
+
 function pagesForDatabase(state: KnownDatabaseState, databaseId: KnownDatabaseId): KnownDatabasePage[] {
   return Object.values(state.pages).filter((page) => page.databaseId === databaseId);
 }
@@ -195,7 +200,6 @@ function getDashboardMetrics(): DashboardMetrics {
       ? Number((productRatings.reduce((total, rating) => total + rating, 0) / productRatings.length).toFixed(2))
       : 0,
     productRevenuePotential: sumProperty(products, "pp-price"),
-    productStockUnits: sumProperty(products, "pp-stock-qty"),
     featuredProducts: countProperty(products, "pp-featured", Boolean),
     approvedContent: countProperty(content, "prop-approved", Boolean),
   };
@@ -203,6 +207,7 @@ function getDashboardMetrics(): DashboardMetrics {
 
 function createViewCell(
   viewId: string,
+  metrics: DashboardMetrics,
   placement: LayoutPlacement,
   placementIndex: number,
   idScope: string,
@@ -223,7 +228,7 @@ function createViewCell(
     fontSize: options.fontSize ?? "base",
     blocks: [
       heading3(`${VIEW_TYPE_ICONS[viewDefinition.type]} ${viewDefinition.databaseName} · ${viewDefinition.name}`, stableDashboardBlockId(cellId, "heading")),
-      paragraph(VIEW_INSIGHTS[viewDefinition.id] ?? viewDefinition.description, stableDashboardBlockId(cellId, "insight")),
+      paragraph(viewInsight(viewDefinition.id, metrics) ?? viewDefinition.description, stableDashboardBlockId(cellId, "insight")),
       createDatabaseViewBlock(viewDefinition.id, stableDashboardBlockId(cellId, "database")),
     ],
   });
@@ -241,7 +246,7 @@ function createHeroCell(placement: LayoutPlacement, metrics: DashboardMetrics, f
     blocks: [
       heading2("Workspace command center", stableDashboardBlockId(cellId, "heading")),
       paragraph(`A cross-functional canvas built from live known database state: ${metrics.taskCount} tasks, ${metrics.projectCount} projects, ${metrics.crmCount} CRM accounts, ${metrics.contentCount} content items, ${metrics.inventoryCount} inventory assets, and ${metrics.productCount} product records.`, stableDashboardBlockId(cellId, "summary")),
-      callout(`${money(metrics.projectBudget)} project budget, ${money(metrics.pipelineValue)} pipeline value, ${metrics.storyPoints} story points, and ${metrics.productStockUnits.toLocaleString()} product units are visible without leaving Home. Featured /view: ${focusView.databaseName} · ${focusView.name}.`, "◈", stableDashboardBlockId(cellId, "callout")),
+      callout(`${money(metrics.projectBudget)} project budget, ${money(metrics.pipelineValue)} pipeline value and ${plural(metrics.storyPoints, "story point")} are visible without leaving Home. Featured /view: ${focusView.databaseName} · ${focusView.name}.`, "◈", stableDashboardBlockId(cellId, "callout")),
     ],
   });
 }
@@ -256,7 +261,7 @@ function createWorkCell(placement: LayoutPlacement, metrics: DashboardMetrics, f
     padding: "spacious",
     blocks: [
       heading3("Today focus", stableDashboardBlockId(cellId, "heading")),
-      paragraph(`${metrics.highPriorityTasks} high-priority tasks, ${metrics.urgentTasks} urgent task, ${metrics.blockedTasks} blocker, and ${metrics.completedTasks} completed item across ${metrics.storyPoints} story points.`, stableDashboardBlockId(cellId, "summary")),
+      paragraph(`${plural(metrics.highPriorityTasks, "high-priority task")}, ${plural(metrics.urgentTasks, "urgent task")}, ${plural(metrics.blockedTasks, "blocker")}, and ${plural(metrics.completedTasks, "completed item")} across ${plural(metrics.storyPoints, "story point")}.`, stableDashboardBlockId(cellId, "summary")),
     ],
   });
 }
@@ -272,7 +277,7 @@ function createGrowthCell(placement: LayoutPlacement, metrics: DashboardMetrics,
     blocks: [
       heading3("Growth radar", stableDashboardBlockId(cellId, "heading")),
       paragraph(`${money(metrics.pipelineValue)} pipeline value across ${metrics.crmCount} accounts and ${metrics.activeProjects} active projects.`, stableDashboardBlockId(cellId, "pipeline")),
-      paragraph(`${metrics.productCount} products, ${metrics.averageProductRating} average rating, ${metrics.featuredProducts} featured products, and ${money(metrics.productRevenuePotential)} catalog value.`, stableDashboardBlockId(cellId, "products")),
+      paragraph(`${plural(metrics.productCount, "product")}, ${metrics.averageProductRating} average rating, ${plural(metrics.featuredProducts, "featured product")}, and ${money(metrics.productRevenuePotential)} catalog list value.`, stableDashboardBlockId(cellId, "products")),
     ],
   });
 }
@@ -319,7 +324,7 @@ export function createViewShowcaseCells(focusViewId = "v-prod-table", options: V
     createWorkCell(SHOWCASE_PLACEMENTS[1], metrics, focusView, idScope),
     createGrowthCell(SHOWCASE_PLACEMENTS[2], metrics, focusView, idScope),
     createLayoutLabCell(SHOWCASE_PLACEMENTS[3], metrics, focusView, idScope),
-    ...SHOWCASE_PLACEMENTS.slice(4).map((placement, index) => createViewCell(viewIds[index] ?? viewIds[0], placement, index + 4, idScope)),
+    ...SHOWCASE_PLACEMENTS.slice(4).map((placement, index) => createViewCell(viewIds[index] ?? viewIds[0], metrics, placement, index + 4, idScope)),
   ];
 }
 
