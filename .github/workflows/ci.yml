@@ -105,11 +105,17 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           token: ${{ secrets.DOCKER_HUB_TOKEN }}
 
+      # The Dockerfile's base is public.ecr.aws (groot parity); the named context routes that
+      # one pull through mirror.gcr.io, where the docker-hub-access mirror does not reach
+      # (run 40325175014: "toomanyrequests: Data limit exceeded" from ECR). Caveat: the key
+      # must equal the FROM string byte for byte — a retagged base silently goes back to ECR.
       - name: Build (no push)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/services/bridge/Dockerfile
+          build-contexts: |
+            public.ecr.aws/docker/library/node:22-bookworm-slim=docker-image://mirror.gcr.io/library/node:22-bookworm-slim
           push: false
           provenance: false
           sbom: false
@@ -160,6 +166,8 @@ jobs:
         with:
           context: .
           file: docker/services/bridge/Dockerfile
+          build-contexts: |
+            public.ecr.aws/docker/library/node:22-bookworm-slim=docker-image://mirror.gcr.io/library/node:22-bookworm-slim
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
