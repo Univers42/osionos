@@ -318,47 +318,47 @@ const App: React.FC = () => {
 
   return (
     <BindingSourcesProvider>
-      <div
-        data-testid="app-shell"
-      data-zen={zen ? "1" : undefined}
-      className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
-    >
-      {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
-      <TopBar onOpenSettings={openSettings} />
+        <div
+          data-testid="app-shell"
+        data-zen={zen ? "1" : undefined}
+        className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
+      >
+        {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
+        <TopBar onOpenSettings={openSettings} />
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {/* Left sidebar */}
-        <ActivitySidebar
-          onOpenSettings={() => openSettings()}
-          onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
-          onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
-        />
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          {/* Left sidebar */}
+          <ActivitySidebar
+            onOpenSettings={() => openSettings()}
+            onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
+            onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
+          />
 
-        {/* Hidden sidebar: the left edge reveals it over the page (no floating button). */}
-        <SidebarEdgePeek
-          onOpenSettings={() => openSettings()}
-          onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
-          onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
-        />
+          {/* Hidden sidebar: the left edge reveals it over the page (no floating button). */}
+          <SidebarEdgePeek
+            onOpenSettings={() => openSettings()}
+            onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
+            onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
+          />
 
-        {/* Content area — the unified workbench (grid + dock + status bar). */}
-        <main className="flex-1 flex min-w-0 overflow-hidden relative">
-          <LazyWorkbench />
-        </main>
+          {/* Content area — the unified workbench (grid + dock + status bar). */}
+          <main className="flex-1 flex min-w-0 overflow-hidden relative">
+            <LazyWorkbench />
+          </main>
+        </div>
+
+        <WorkspaceThemePanel />
+        <ToastViewport />
+        <ShareHost />
+        <ExportHost />
+        <AiInlinePanel />
+        <ContactDock />
+        <QuickCaptureModal />
+        <WorkspaceIntentModal />
+        {/* The profession picker: the Modal primitive returns null until the store's
+            `open` flag is set, so the warm path renders nothing. */}
+        <ProfessionPickerModal />
       </div>
-
-      <WorkspaceThemePanel />
-      <ToastViewport />
-      <ShareHost />
-      <ExportHost />
-      <AiInlinePanel />
-      <ContactDock />
-      <QuickCaptureModal />
-      <WorkspaceIntentModal />
-      {/* The profession picker: the Modal primitive returns null until the store's
-          `open` flag is set, so the warm path renders nothing. */}
-      <ProfessionPickerModal />
-    </div>
     </BindingSourcesProvider>
   );
 };

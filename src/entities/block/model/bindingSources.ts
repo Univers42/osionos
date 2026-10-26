@@ -83,14 +83,17 @@ export function createStoreRecordSource<S>(input: {
   const ensureStoreSub = (): void => {
     if (storeUnsub) return;
     storeUnsub = input.store.subscribe((next, previous) => {
-      // Only fields with active listeners are compared; cost is O(subscribed fields).
+      // Read each side once per store change; cost stays O(subscribed fields).
+      const prevRecord = input.read(previous);
+      const nextRecord = input.read(next);
+      const statusChanged =
+        (prevRecord === null) !== (nextRecord === null) ||
+        input.isLoading(previous) !== input.isLoading(next);
       for (const [field, set] of listeners) {
         if (set.size === 0) continue;
-        const prevRecord = input.read(previous);
-        const nextRecord = input.read(next);
         const prevValue = prevRecord && Object.hasOwn(prevRecord, field) ? prevRecord[field] : undefined;
         const nextValue = nextRecord && Object.hasOwn(nextRecord, field) ? nextRecord[field] : undefined;
-        if (!Object.is(prevValue, nextValue)) {
+        if (statusChanged || !Object.is(prevValue, nextValue)) {
           for (const cb of [...set]) cb();
         }
       }

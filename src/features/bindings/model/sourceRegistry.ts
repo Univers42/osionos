@@ -29,7 +29,3 @@ export function listRecordSources(): readonly RecordSource[] {
   return [...registry.values()];
 }
 
-/** Test-only helper: clear the registry. Not for production code. */
-export function clearRecordSources(): void {
-  registry.clear();
-}
