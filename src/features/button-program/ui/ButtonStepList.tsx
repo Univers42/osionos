@@ -101,6 +101,7 @@ const ACTION_LABELS: Record<ProgramAction["type"], string> = {
   notify: "Show a message",
   set_property: "Set a page property",
   page_action: "Run a page action",
+  app_action: "Run an app action",
 };
 
 const PAGE_ACTION_LABELS: Record<string, string> = Object.fromEntries(
@@ -113,6 +114,7 @@ const PAGE_ACTION_LABELS: Record<string, string> = Object.fromEntries(
 function blankAction(type: ProgramAction["type"]): ProgramAction {
   if (type === "notify") return { type, message: "" };
   if (type === "page_action") return { type, name: Object.keys(DESTRUCTIVE_PAGE_ACTIONS)[0] };
+  if (type === "app_action") return { type, name: "", args: {} };
   return { type, property: "", value: "" };
 }
 
