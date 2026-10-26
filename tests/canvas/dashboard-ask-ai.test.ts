@@ -24,6 +24,7 @@ const properties: Record<string, SchemaProperty> = {
   owner: { id: "owner", name: "Owner", type: "person" },
   deal: { id: "deal", name: "Deal", type: "relation" },
   note: { id: "note", name: "Note", type: "text" },
+  active: { id: "active", name: "Active", type: "checkbox" },
 };
 
 interface Row { title: string; values: Record<string, unknown> }
@@ -36,17 +37,22 @@ test("the snapshot is the count, then each record's title and visible values in 
   const text = snapshot([
     row("Acme", { stage: "s1", tags: ["t1", "t2"], amount: 1200, note: "first\ncall  done" }),
     row("", { amount: 0 }),
-  ]);
+  ], ["name", "stage", "tags", "amount", "note"]);
   assert.equal(text, [
     "2 records",
     "- Acme — Stage: Won; Tags: VIP, EU; Amount: 1,200; Note: first call done",
     "- Untitled — Amount: 0",
   ].join("\n"));
-  assert.equal(snapshot([row("Solo")]), "1 record\n- Solo");
+  assert.equal(snapshot([row("Solo")], ["name"]), "1 record\n- Solo");
+});
+
+test("a checkbox reads yes or no, so an unchecked box is not dropped", () => {
+  assert.equal(snapshot([row("On", { active: true }), row("Off", { active: false }), row("Unset")], ["active"]),
+    "3 records\n- On — Active: yes\n- Off — Active: no\n- Unset — Active: no");
 });
 
 test("values that are ids (people, relations) and empty cells are left out", () => {
-  const text = snapshot([row("Acme", { owner: "user-7f3a", deal: ["page-91"], note: "", stage: null })]);
+  const text = snapshot([row("Acme", { owner: "user-7f3a", deal: ["page-91"], note: "", stage: null })], ["owner", "deal", "note", "stage"]);
   assert.equal(text, "1 record\n- Acme");
   assert.equal(snapshotValue("user-7f3a", properties.owner), null);
   assert.equal(snapshotValue({ nested: true }, properties.note), null);
