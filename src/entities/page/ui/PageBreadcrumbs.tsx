@@ -14,6 +14,7 @@ import React, { useCallback, useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 
 import type { PageEntry } from "@/entities/page";
+import { ancestorChain } from "@/entities/page/model/ancestorChain";
 import { usePageStore } from "@/store/usePageStore";
 
 const EMPTY_WORKSPACE_PAGES: PageEntry[] = [];
@@ -53,55 +54,28 @@ export const PageBreadcrumbs: React.FC<PageBreadcrumbsProps> = ({
   });
 
   const breadcrumbs = useMemo(() => {
-    // Prefer navigation path if available and applicable
-    if (
-      navigationPath.length > 0 &&
-      navigationPath.at(-1)?.id === pageId
-    ) {
-      // Convert ActivePage to PageEntry format for consistent rendering
-      const entries: PageEntry[] = navigationPath.map((ap) => ({
+    // Where the page lives, not how the reader got here: the history trail put
+    // the previously open page in front of an unrelated one ("Home ›
+    // transcendance › 05 · Actividad de citas" on live, 2026-10-26).
+    if (page) return ancestorChain(page, workspacePages);
+
+    // Page not loaded yet: the history trail is all there is.
+    if (navigationPath.at(-1)?.id === pageId) {
+      return navigationPath.map((ap): PageEntry => ({
         _id: ap.id,
         workspaceId: ap.workspaceId,
         title: ap.title ?? "Untitled",
         icon: ap.icon,
       }));
-
-      // Use the reactive page title for the current page (last crumb)
-      // so the breadcrumb updates when the user edits the title.
-      if (page && entries.length > 0) {
-        const last = entries.at(-1);
-        if (last) entries[entries.length - 1] = { ...last, title: page.title || "Untitled" };
-      }
-
-      return entries;
     }
 
-    // Fall back to parentPageId hierarchy
-    if (!page) {
-      if (activePage?.id !== pageId) return [];
-      const fallbackEntry: PageEntry = {
-        _id: activePage.id,
-        workspaceId: activePage.workspaceId,
-        title: activePage.title ?? "Untitled",
-        icon: activePage.icon,
-      };
-      return [fallbackEntry];
-    }
-
-    const pageById = new Map(workspacePages.map((entry) => [entry._id, entry]));
-    const path: PageEntry[] = [];
-    const visited = new Set<string>();
-
-    let current: PageEntry | undefined = page;
-    while (current && !visited.has(current._id)) {
-      path.unshift(current);
-      visited.add(current._id);
-      current = current.parentPageId
-        ? pageById.get(current.parentPageId)
-        : undefined;
-    }
-
-    return path;
+    if (activePage?.id !== pageId) return [];
+    return [{
+      _id: activePage.id,
+      workspaceId: activePage.workspaceId,
+      title: activePage.title ?? "Untitled",
+      icon: activePage.icon,
+    }];
   }, [page, workspacePages, activePage, pageId, navigationPath]);
 
   const handleOpenCrumb = useCallback(
