@@ -50,3 +50,16 @@ test("reduced motion stops the turning and leaves the glow alone", () => {
   assert.match(reduced, /animation:\s*none/);
   assert.doesNotMatch(reduced, /box-shadow|filter|opacity|background/);
 });
+
+test("the ring carries four lights, not one tint", () => {
+  const ring = blockAfter(css, ".lens {") ?? "";
+  for (const light of ["--lens-blue", "--lens-violet", "--lens-pink", "--lens-amber"]) {
+    assert.match(ring, new RegExp(`var\\(${light}\\)`), `${light} is a stop of the ring`);
+  }
+});
+
+test("the apps tray hangs under the ring: no top border, rounded only at the bottom", () => {
+  const tray = blockAfter(css, ".tray {") ?? "";
+  assert.match(tray, /border-top:\s*0/);
+  assert.match(tray, /border-radius:\s*0 0 /);
+});
