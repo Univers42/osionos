@@ -55,6 +55,7 @@ function present(row: ServerRow, tools: ToolRow[]) {
 		status: row.status,
 		headerName: row.header_name,
 		headerLast4: row.header_last4,
+		brokenUntil: row.is_broken && row.broken_until ? row.broken_until.toISOString() : null,
 		tools: tools.map((tool) => ({ name: tool.name, description: tool.description, enabled: tool.enabled })),
 	};
 }
