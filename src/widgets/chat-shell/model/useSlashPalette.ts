@@ -29,7 +29,7 @@ import {
   type ChatCommand,
 } from "@/features/ai/model/chatCommands";
 import { useChatStore } from "@/features/chat/model/useChatStore";
-import { EFFORT_GROUP, slashActionTarget } from "./slashActionTarget";
+import { isSlashActionAvailable, slashActionTarget } from "./slashActionTarget";
 
 /** The service's chat commands — fetched ONCE per session; a failure leaves the actions. */
 let serviceCommands: Promise<AiCommand[]> | null = null;
@@ -66,7 +66,7 @@ export function useSlashPalette({ value, onChange, onSubmit, textarea, root, syn
   // Caveat: read from the DOM when the query changes; a model switch with the palette
   // open shows /effort stale until the next keystroke.
   const matches = useMemo(
-    () => query === null ? [] : filterCommands(commands, query, (name) => name !== "effort" || !!root.current?.querySelector(EFFORT_GROUP)),
+    () => query === null ? [] : filterCommands(commands, query, (name) => isSlashActionAvailable(name, root.current)),
     [commands, query, root],
   );
   const open = query !== null;

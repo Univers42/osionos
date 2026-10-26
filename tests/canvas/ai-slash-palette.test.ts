@@ -21,7 +21,7 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { AGENT_PICKER_BUTTON, MODEL_PICKER_BUTTON, slashActionTarget } from "@/widgets/chat-shell/model/slashActionTarget";
+import { AGENT_PICKER_BUTTON, isSlashActionAvailable, MODEL_PICKER_BUTTON, slashActionTarget } from "@/widgets/chat-shell/model/slashActionTarget";
 import { AgentChip } from "@/widgets/chat-shell/ui/AgentChip";
 
 import {
@@ -155,6 +155,18 @@ test("/model and /agent open their menu, /attach asks the composer, /effort focu
   assert.deepEqual(slashActionTarget("attach"), { kind: "attach" });
   assert.equal(slashActionTarget("effort")?.kind, "focus");
   assert.equal(slashActionTarget("new"), null);
+});
+
+test("an action is offered only while its control is drawn: /agent without agents is not", () => {
+  const drawn = (...selectors: string[]) => ({ querySelector: (selector: string) => (selectors.includes(selector) ? ({} as Element) : null) });
+  const composer = drawn(MODEL_PICKER_BUTTON);
+  assert.equal(isSlashActionAvailable("model", composer), true);
+  assert.equal(isSlashActionAvailable("agent", composer), false);
+  assert.equal(isSlashActionAvailable("agent", drawn(AGENT_PICKER_BUTTON)), true);
+  assert.equal(isSlashActionAvailable("effort", composer), false);
+  assert.equal(isSlashActionAvailable("attach", composer), true);
+  assert.equal(isSlashActionAvailable("new", null), true);
+  assert.equal(isSlashActionAvailable("agent", null), false);
 });
 
 test("/agent aims at the agent chip that is drawn, not the select it replaced", () => {
