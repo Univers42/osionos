@@ -13,7 +13,7 @@ import { connectionBaseUrl, connectionSecret } from '../connections/service.ts';
 import { PLATFORM_CONNECTION_ID } from '../connections/service.ts';
 import { guardedFetch } from '../connections/endpointGuard.ts';
 import { ENDPOINT_PROVIDER, providerBaseUrl } from '../connections/providers.ts';
-import { providerEntry } from '../connections/catalog.ts';
+import { providerEntry, providerModels } from '../connections/catalog.ts';
 import type { ProviderEntry } from '../connections/providers.ts';
 import { costMicroUsd, platformModel, resolveModel } from './platform.ts';
 import type { PlatformModelEntry } from './platform.ts';
@@ -42,6 +42,12 @@ export interface ResolvedTarget {
 	platformBudget: boolean;
 	/** Whether the model accepts image input. */
 	vision?: boolean;
+	/** The wire of the adapter: it decides which reasoning option is sent. */
+	wire: 'openai-compatible' | 'anthropic' | 'google';
+	/** The key the adapter reads its provider options under. */
+	optionsKey: string;
+	/** Whether the model reasons, so an effort applies to it. */
+	reasoning: boolean;
 }
 
 /** The answer of the resolver: a target, or a refusal. */
@@ -132,6 +138,17 @@ export function modelHandle(entry: ProviderEntry, modelId: string, secret: strin
 }
 
 /**
+ * The key an adapter reads its provider options under: anthropic and google
+ * read their fixed key (anthropic also the adapter name), openai-compatible
+ * reads the adapter name, which is the id of the provider.
+ */
+function optionsKeyOf(entry: ProviderEntry): string {
+	if (entry.wire === 'anthropic') return 'anthropic';
+	if (entry.wire === 'google') return 'google';
+	return entry.id;
+}
+
+/**
  * The provider a connection calls.
  *
  * A connection of a provider is that provider of the catalog; an endpoint is
@@ -172,6 +189,9 @@ export async function resolveTarget(
 				pricing: entry,
 				platformBudget: true,
 				vision: entry.vision === true,
+				wire: 'openai-compatible',
+				optionsKey: 'platform',
+				reasoning: entry.reasoning === true,
 			},
 		};
 	}
@@ -188,6 +208,9 @@ export async function resolveTarget(
 	const entry = await targetProvider(redis, row, baseUrl);
 	if (!entry) return { kind: 'refused', status: 400, code: 'provider_not_supported' };
 	const secret = connectionSecret(row);
+	// Only the catalog says a model reasons; an endpoint of the user does not.
+	const catalogReasoning = row.kind !== 'endpoint'
+		&& (await providerModels(redis, row.provider)).some((m) => m.id === model && m.reasoning === true);
 	return {
 		kind: 'resolved',
 		target: {
@@ -197,6 +220,9 @@ export async function resolveTarget(
 			pricing: { id: model, label: model, inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: false },
 			platformBudget: false,
 			vision: false,
+			wire: entry.wire === 'anthropic' || entry.wire === 'google' ? entry.wire : 'openai-compatible',
+			optionsKey: optionsKeyOf(entry),
+			reasoning: catalogReasoning,
 		},
 	};
 }

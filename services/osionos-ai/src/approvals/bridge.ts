@@ -14,6 +14,9 @@
 /** How long a call to the bridge may take. */
 export const BRIDGE_TIMEOUT_MS = 8_000;
 
+/** How much of an answer is kept by default: a page is a lot of JSON, and a row keeps a short result. */
+export const BRIDGE_BODY_MAX_CHARS = 4_000;
+
 /** The write the bridge is asked for: a method, a path, and a body. */
 export interface BridgeWrite {
 	method: 'POST' | 'PATCH';
@@ -44,12 +47,15 @@ export async function bridgeWrite(
 		write,
 		fetchImpl = fetch,
 		timeoutMs = BRIDGE_TIMEOUT_MS,
+		maxBodyChars = BRIDGE_BODY_MAX_CHARS,
 	}: {
 		url: string;
 		token: string;
 		write: BridgeWrite;
 		fetchImpl?: typeof fetch;
 		timeoutMs?: number;
+		/** A caller that parses the answer (the append answers the whole page) asks for more. */
+		maxBodyChars?: number;
 	},
 ): Promise<BridgeAnswer> {
 	try {
@@ -63,7 +69,7 @@ export async function bridgeWrite(
 			signal: AbortSignal.timeout(timeoutMs),
 		});
 		const body = await response.text();
-		return { ok: response.ok, status: response.status, body: body.slice(0, 4000) };
+		return { ok: response.ok, status: response.status, body: body.slice(0, maxBodyChars) };
 	} catch {
 		// The failure says nothing about the URL and nothing about the token:
 		// the log of a write carries the code and the name of the error.
@@ -101,7 +107,7 @@ export async function bridgeRead(
 			signal: AbortSignal.timeout(timeoutMs),
 		});
 		const body = await response.text();
-		return { ok: response.ok, status: response.status, body: body.slice(0, 4000) };
+		return { ok: response.ok, status: response.status, body: body.slice(0, BRIDGE_BODY_MAX_CHARS) };
 	} catch {
 		return { ok: false, status: 0, body: '' };
 	}

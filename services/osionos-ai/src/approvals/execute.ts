@@ -41,7 +41,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type DecisionOutcome =
 	| {
 			kind: 'decided';
-			status: 'executed' | 'failed' | 'declined' | 'partial';
+			status: 'executed' | 'failed' | 'declined' | 'partial' | 'unknown';
 			approval: ApprovalRow;
 			result?: unknown;
 			continuationRunId?: string;
@@ -94,7 +94,69 @@ export function bridgeWriteOf(row: ApprovalRow): BridgeWrite | null {
 			body: { archivedAt: new Date().toISOString() },
 		};
 	}
+	if (row.tool === 'add_blocks') {
+		if (!UUID.test(pageId) || !Array.isArray(args.blocks)) return null;
+		// The ids are minted here, per execution, never taken from the model
+		// (C235); the approval id is the idempotency key, so a retry of this
+		// write lands once (C226).
+		const blocks = args.blocks.map((block) => {
+			const { type, content } = (block ?? {}) as { type?: unknown; content?: unknown };
+			return { id: randomUUID(), type: String(type ?? ''), content: String(content ?? '') };
+		});
+		return {
+			method: 'POST',
+			path: `/api/pages/${pageId}/blocks`,
+			body: {
+				blocks,
+				...(typeof args.afterBlockId === 'string' ? { afterBlockId: args.afterBlockId } : {}),
+				idempotencyKey: row.id,
+			},
+		};
+	}
 	return null;
+}
+
+/** The most of the append's answer that is read: it carries the whole page. */
+const APPEND_ANSWER_MAX_CHARS = 8_000_000;
+
+/**
+ * What an append did, read from the bridge's answer: the version it produced,
+ * and whether the blocks sit where the card said.
+ *
+ * The append lands at the END when the block it follows is gone since the
+ * card was shown (the bridge's rule for an unknown id): the user is told so,
+ * never "added after …" on a page where they are not.
+ */
+export function appendOutcome(
+	write: BridgeWrite,
+	answerBody: string,
+): { version: number | null; placed: 'after' | 'end' | 'unknown' } {
+	let parsed: { version?: unknown; content?: unknown };
+	try {
+		parsed = JSON.parse(answerBody) as { version?: unknown; content?: unknown };
+	} catch {
+		return { version: null, placed: 'unknown' };
+	}
+	const version = Number.isSafeInteger(parsed.version) ? Number(parsed.version) : null;
+	const content = Array.isArray(parsed.content) ? (parsed.content as { id?: unknown }[]) : null;
+	const firstId = (write.body.blocks as { id: string }[])[0]?.id;
+	const afterId = write.body.afterBlockId;
+	if (!content || !firstId) return { version, placed: 'unknown' };
+	const at = content.findIndex((block) => block?.id === firstId);
+	if (at === -1) return { version, placed: 'unknown' };
+	if (typeof afterId !== 'string') return { version, placed: 'end' };
+	return { version, placed: at > 0 && content[at - 1]?.id === afterId ? 'after' : 'end' };
+}
+
+/** The words of an append that landed. */
+function appendSummary(count: number, outcome: ReturnType<typeof appendOutcome>, asked: boolean): string {
+	const blocks = count === 1 ? '1 block was' : `${count} blocks were`;
+	const at = outcome.version === null ? '' : ` (page version ${outcome.version})`;
+	if (asked && outcome.placed === 'end') {
+		return `${blocks} added at the end of the page: the block they were to follow is gone${at}`;
+	}
+	const where = outcome.placed === 'after' ? ' after the block shown on the card' : ' at the end of the page';
+	return `${blocks} added${where}${at}`;
 }
 
 /** The sentence the continuation carries: what the user decided, and what happened. */
@@ -325,6 +387,10 @@ export async function decideApproval(input: {
 		return { kind: 'decided', status: 'failed', approval: claimed, continuationRunId };
 	}
 
+	if (claimed.tool === 'add_blocks') {
+		return executeAppend(db, redis, user, claimed, { url: bridgeUrl, token: sessionToken, write });
+	}
+
 	const answer = await bridgeWrite({ url: bridgeUrl, token: sessionToken, write });
 	if (!answer.ok) {
 		const error = refusalMessage(answer);
@@ -336,5 +402,44 @@ export async function decideApproval(input: {
 	const result = { ok: true, ...createdPage(answer.body) };
 	await recordOutcome(db, { id: claimed.id, status: 'executed', result });
 	const continuationRunId = await continueRun(db, redis, user, claimed, 'executed', successSummary(claimed));
+	return { kind: 'decided', status: 'executed', approval: claimed, result, continuationRunId };
+}
+
+/**
+ * The append, approved: one write, retried once when the bridge did not answer.
+ *
+ * The retry is safe because it carries the same idempotency key and the same
+ * ids: the bridge appends once whatever the number of calls (C226). When the
+ * second call gets no answer either, the outcome is UNKNOWN — the blocks may
+ * be on the page — and never "failed", which would invite a second approval
+ * that writes them twice (C238).
+ */
+async function executeAppend(
+	db: Pool,
+	redis: Redis,
+	user: AuthUser,
+	claimed: ApprovalRow,
+	call: { url: string; token: string; write: BridgeWrite },
+): Promise<DecisionOutcome> {
+	let answer = await bridgeWrite({ ...call, maxBodyChars: APPEND_ANSWER_MAX_CHARS });
+	if (answer.status === 0) answer = await bridgeWrite({ ...call, maxBodyChars: APPEND_ANSWER_MAX_CHARS });
+	if (answer.status === 0) {
+		const error = 'the bridge did not answer: the blocks may have been added, check the page';
+		await recordOutcome(db, { id: claimed.id, status: 'unknown', error });
+		const continuationRunId = await continueRun(db, redis, user, claimed, 'failed', error);
+		return { kind: 'decided', status: 'unknown', approval: claimed, continuationRunId };
+	}
+	if (!answer.ok) {
+		const error = refusalMessage(answer);
+		await recordOutcome(db, { id: claimed.id, status: 'failed', error });
+		const continuationRunId = await continueRun(db, redis, user, claimed, 'failed', error);
+		return { kind: 'decided', status: 'failed', approval: claimed, continuationRunId };
+	}
+	const outcome = appendOutcome(call.write, answer.body);
+	const count = (call.write.body.blocks as unknown[]).length;
+	const summary = appendSummary(count, outcome, typeof call.write.body.afterBlockId === 'string');
+	const result = { ok: true, pageId: String(claimed.args.pageId), version: outcome.version, placed: outcome.placed, summary };
+	await recordOutcome(db, { id: claimed.id, status: 'executed', result });
+	const continuationRunId = await continueRun(db, redis, user, claimed, 'executed', summary);
 	return { kind: 'decided', status: 'executed', approval: claimed, result, continuationRunId };
 }

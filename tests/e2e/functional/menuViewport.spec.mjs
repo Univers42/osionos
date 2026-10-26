@@ -74,18 +74,22 @@ test("slash menu fades its bottom edge when it has to scroll", async ({ page, ba
 test.describe("Relate picker stays inside the viewport", () => {
   for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 900 }]) {
     test(`at ${viewport.width}x${viewport.height}`, async ({ page, baseURL }) => {
+      // The page is opened at desktop width: at phone width the first "New page" button is the
+      // home gallery's, which opens no page, so the relation below had no page to land on and
+      // the phone case only ever clicked the home page's own relation fields.
+      await page.setViewportSize({ width: 1440, height: 900 });
       await openFreshPage(page, baseURL);
-      // Resized after the page exists: the phone layout opens on Home, not on the new page.
-      await page.setViewportSize(viewport);
-      await page.evaluate(async () => {
+      const pageId = await page.evaluate(async () => {
         const { usePageStore } = await import("/src/store/usePageStore.ts");
         const store = usePageStore.getState();
         store.patchPage(store.activePage?.id, {
           properties: [{ key: "related", label: "Related", type: "relation", value: ["gone-1", "gone-2", "gone-3"] }],
         });
+        return store.activePage?.id ?? null;
       });
+      expect(pageId).not.toBeNull();
+      await page.setViewportSize(viewport);
       await waitForRenderStability(page);
-      // The last trigger is lowest on screen, where clipping is worst.
       const trigger = page.getByRole("button", { name: "Relate" }).last();
       await trigger.click();
       const picker = page.getByTestId("relation-picker");

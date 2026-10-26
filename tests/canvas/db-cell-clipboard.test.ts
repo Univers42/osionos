@@ -6,9 +6,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  cellCopyText, copyRange, parsePastedValue, parseTsv, planClear, planPaste,
+  cellCopyText, copyRange, parsePastedValue, parseTsv, planClear, planPaste, toTsv,
 } from "../../src/shared/notion-database-sys/src/components/views/table/gridClipboard.ts";
-import { clearValueFor } from "../../src/shared/notion-database-sys/src/components/views/table/gridKeyboard.ts";
+import { clearValueFor, rangeBetween } from "../../src/shared/notion-database-sys/src/components/views/table/gridKeyboard.ts";
 import type { DatabaseSchema, Page, SchemaProperty } from "../../src/shared/notion-database-sys/src/types/database.ts";
 
 const prop = (id: string, type: string, extra: Partial<SchemaProperty> = {}) =>
@@ -80,6 +80,21 @@ test("parseTsv: tabs, lines and spreadsheet quoting", () => {
   assert.deepEqual(parseTsv('5" screen'), [['5" screen']], "a quote mid-cell is literal");
   assert.deepEqual(parseTsv(""), [[""]]);
   assert.deepEqual(parseTsv("a\t\tb"), [["a", "", "b"]]);
+});
+
+test("toTsv / parseTsv round-trip tabs, newlines and quotes", () => {
+  const rows = [["plain", "has\ttab"], ['say "hi"', "two\nlines"], ["", "end"]];
+  assert.deepEqual(parseTsv(toTsv(rows)), rows);
+  assert.equal(toTsv([["a", "b"], ["c", "d"]]), "a\tb\nc\td\n", "rows end in a newline, as Excel writes them");
+  assert.equal(toTsv([["only"]]), "only");
+});
+
+test("rangeBetween normalizes any drag direction and rejects unknown cells", () => {
+  const rows = [page("r0"), page("r1"), page("r2")];
+  const cols = [prop("a", "text"), prop("b", "text"), prop("c", "text")];
+  assert.deepEqual(rangeBetween({ pageId: "r2", propId: "c" }, { pageId: "r1", propId: "a" }, rows, cols),
+    { rowStart: 1, rowEnd: 2, colStart: 0, colEnd: 2 });
+  assert.equal(rangeBetween({ pageId: "gone", propId: "a" }, { pageId: "r1", propId: "a" }, rows, cols), null);
 });
 
 const range = (rowStart: number, rowEnd: number, colStart: number, colEnd: number) => ({ rowStart, rowEnd, colStart, colEnd });

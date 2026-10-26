@@ -8,6 +8,7 @@ import { appendUserTurn, touchConversation } from '../conversations/repo.ts';
 import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
+import type { Effort } from './effort.ts';
 import type { RunEvent } from './upstream.ts';
 import {
 	accountBlock,
@@ -106,6 +107,8 @@ export interface StartRunInput {
 	view?: import('./prompt.ts').RunView;
 	/** Where the model is called, and who pays for it. */
 	target: ResolvedTarget;
+	/** How hard a reasoning model thinks; ignored by a model that does not reason. */
+	effort?: Effort;
 	emit: (event: RunEvent) => void;
 }
 
@@ -352,6 +355,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			ownerId,
 			text,
 			target,
+			...(input.effort ? { effort: input.effort } : {}),
 			emit: input.emit,
 			day,
 			reserved: amount,

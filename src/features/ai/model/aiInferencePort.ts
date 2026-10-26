@@ -31,6 +31,7 @@ import {
   resumeRun,
   startRun,
 } from "../api/aiClient";
+import { effortFor, PLATFORM_CONNECTION_ID, readAiSelection } from "./aiSelection";
 import { streamRun } from "./runStream";
 import { DEVICE_CONNECTION_ID, readDeviceEngine } from "./deviceEngine";
 import { deviceInferencePort } from "./deviceInferencePort";
@@ -100,6 +101,7 @@ export const aiInferencePort: InferencePort = {
   async stream(request, onEvent, signal): Promise<void> {
     const conversationId = await ensureServerConversation(request);
     const runId = crypto.randomUUID();
+    const effort = effortFor(readAiSelection(), request.connectionId ?? PLATFORM_CONNECTION_ID, request.model);
 
     // A stop is an abort: the run is cancelled on the service too, so it stops
     // burning tokens there.
@@ -120,6 +122,8 @@ export const aiInferencePort: InferencePort = {
               connectionId: request.connectionId,
               // The agent of this run: the one the reader picked, or none.
               ...(request.agentId ? { agentId: request.agentId } : {}),
+              // The service applies it only to a model that reasons.
+              ...(effort ? { effort } : {}),
               // What the answer is read from — the pages the reader pointed at.
               context: request.context,
               attachments: request.attachments,

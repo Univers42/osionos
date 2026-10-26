@@ -35,6 +35,7 @@ import {
   writeAiSelection,
   type AiSelection,
 } from "@/features/ai/model/aiSelection";
+import { EffortPicker } from "@/features/ai/ui/EffortPicker";
 import { DEVICE_CONNECTION_ID, readDeviceEngine } from "@/features/ai/model/deviceEngine";
 
 interface Props {
@@ -143,6 +144,8 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionC
     onVisionChangeRef.current?.(sees);
   }, [sees]);
 
+  const reasons = chosen && models.some((model) => model.id === value.model && model.reasoning === true);
+
   const connectionOptions = [
     ...connections.map((connection) => ({
       value: connection.id,
@@ -194,6 +197,9 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionC
         onChange={(model) => apply({ connectionId: value.connectionId, model })}
         placeholder="Model"
       />
+      {reasons ? (
+        <EffortPicker value={value.effort} onChange={(effort) => apply({ ...value, effort })} />
+      ) : null}
     </span>
   );
 };

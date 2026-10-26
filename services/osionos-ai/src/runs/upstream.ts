@@ -25,6 +25,8 @@ import type { HistoryMessage, PageContext } from './prompt.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
+import { mergeProviderOptions, reasoningOptions } from './effort.ts';
+import type { Effort, ProviderOptionsFragment } from './effort.ts';
 import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
 
 /**
@@ -51,6 +53,8 @@ export interface UpstreamRunInput {
 	text: string;
 	/** Where the model is called, and who pays for it. */
 	target: ResolvedTarget;
+	/** How hard a reasoning model thinks. */
+	effort?: Effort;
 	/** The images of this run, as bytes. They go only into this run's user message. */
 	images?: readonly { data: Uint8Array; mediaType: string }[];
 	emit: (event: RunEvent) => void;
@@ -219,16 +223,21 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			{ role: 'user', content: userContent } as ModelMessage,
 		];
 
+		// Platform vision requests to OpenRouter carry the data-collection deny;
+		// the effort of a reasoning model joins it under the same key.
+		const visionDeny: ProviderOptionsFragment = target.platformBudget && images.length > 0
+			? { platform: { provider: { data_collection: 'deny' } } }
+			: {};
+		const mergedOptions = mergeProviderOptions(visionDeny, reasoningOptions(target, input.effort));
+		const providerOptions = Object.keys(mergedOptions).length > 0 ? mergedOptions : undefined;
+
 		const outcome = await pumpUpstream({
 			model: target.model,
 			system,
 			messages,
 			controller,
 			...(tools ? { tools } : {}),
-			// Platform vision requests to OpenRouter carry the data-collection deny.
-			...(target.platformBudget && images.length > 0
-				? { providerOptions: { platform: { provider: { data_collection: 'deny' } } } }
-				: {}),
+			...(providerOptions ? { providerOptions } : {}),
 			// The ceiling of the loop: the money the run holds, and the cost
 			// of one more step. The loop decides before every step: a step
 			// it cannot pay for becomes the answer.
