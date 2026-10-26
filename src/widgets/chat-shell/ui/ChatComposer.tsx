@@ -18,7 +18,7 @@ import { AiConnectionPicker } from "./AiConnectionPicker";
 import { OfflineModelPicker } from "./OfflineModelPicker";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { AttachButton } from "./AttachButton";
-import { WebToggle } from "./WebToggle";
+import { ResearchToggle, WebToggle } from "./WebToggle";
 import { AgentChip } from "./AgentChip";
 import { ComposerPlus } from "./ComposerPlus";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
@@ -70,6 +70,8 @@ interface Props {
   onStop?: () => void;
   /** The workspace switch of the web tools is on: only then is the "Web" toggle drawn. */
   webAvailable?: boolean;
+  /** The service offers research mode: the "Research" toggle is drawn next to "Web". */
+  researchAvailable?: boolean;
   /** The attached image paths. */
   attachments?: ComposerAttachment[];
   /** Replaces the attached image list. */
@@ -96,6 +98,7 @@ export const ChatComposer: React.FC<Props> = ({
   streaming,
   onStop,
   webAvailable = false,
+  researchAvailable = false,
   attachments = [],
   onAttachmentsChange,
 }) => {
@@ -268,6 +271,7 @@ export const ChatComposer: React.FC<Props> = ({
         {agents.length > 0 ? <AgentChip agents={agents} agentId={agentId} onChange={onAgentChange} panel={panel} onPanelChange={onPanelChange} /> : null}
         {onPanelChange && panelMembers.length >= PANEL_MIN ? <AgentPanelRow members={panelMembers} onClear={() => onPanelChange([])} /> : null}
         {webAvailable ? <WebToggle /> : null}
+        {webAvailable && researchAvailable ? <ResearchToggle /> : null}
         {value.trim() ? (
           <PreviewToggle pressed={previewing} onToggle={() => setPreviewing((on) => !on)} />
         ) : null}
