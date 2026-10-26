@@ -11,6 +11,8 @@
 /* ************************************************************************** */
 
 export * from './model/types';
+export * from './model/buttonEffect';
+export * from './model/blockStyle';
 export * from './model/mediaBlocks';
 export * from './model/placeholders';
 export * from './model/blockTypeGuards';
@@ -21,4 +23,5 @@ export * from './model/whiteboardBlocks';
 export * from './model/diagramBlocks';
 export * from './model/linkBlocks';
 export * from './ui';
+export * from './ui/renderMode';
 export * from './model/blockCategories';

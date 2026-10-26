@@ -20,6 +20,7 @@ import { Button, Dropdown, Modal, Toggle } from '@/shared/ui';
 import { FeatureCard, PanelStatus, Section, SettingRow } from '../ui/settingsKit';
 import { runAsync } from '../model/settingsCalls';
 import { useSettingsHydration } from '../model/settingsHydration';
+import { NOTIFICATION_MODE_OPTIONS } from './options';
 
 type SettingsModalName = 'page-notification-overrides';
 
@@ -59,8 +60,8 @@ export const NotificationsPanel: React.FC<{ activeUserId: string }> = ({ activeU
       <Section title="In-app notifications">
         <FeatureCard icon={<CalendarDays size={16} />} title="Live meeting activity" description="Join video conferencing and start transcribing. Meeting is being transcribed and summarized." action={<Toggle checked={inApp?.liveMeetingActivity ?? true} onChange={(checked) => update({ inApp: { ...settings?.inApp, liveMeetingActivity: checked } })} label="Live meeting activity" />} />
       </Section>
-      <Section title="Slack notifications"><SettingRow title="Slack notifications" description="Get Slack notifications about activity in your osionos workspace" action={<Dropdown label="Slack notifications" value={slack?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ slack: { ...settings?.slack, mode: value } })} align="end" width="auto" />} /></Section>
-      <Section title="Discord notifications"><SettingRow title="Discord notifications" description="Get Discord notifications about activity in your osionos workspace" action={<Dropdown label="Discord notifications" value={discord?.mode ?? 'off'} options={[{ value: 'off', label: 'Off' }, { value: 'mentions', label: 'Mentions only' }, { value: 'all', label: 'All activity' }]} onChange={(value) => update({ discord: { ...settings?.discord, mode: value } })} align="end" width="auto" />} /></Section>
+      <Section title="Slack notifications"><SettingRow title="Slack notifications" description="Get Slack notifications about activity in your osionos workspace" action={<Dropdown label="Slack notifications" value={slack?.mode ?? 'off'} options={NOTIFICATION_MODE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} onChange={(value) => update({ slack: { ...settings?.slack, mode: value } })} align="end" width="auto" />} /></Section>
+      <Section title="Discord notifications"><SettingRow title="Discord notifications" description="Get Discord notifications about activity in your osionos workspace" action={<Dropdown label="Discord notifications" value={discord?.mode ?? 'off'} options={NOTIFICATION_MODE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} onChange={(value) => update({ discord: { ...settings?.discord, mode: value } })} align="end" width="auto" />} /></Section>
       <Section title="Email notifications">
         {emailRows.map(([label, key, description]) => (
           <SettingRow key={label} title={label} description={description} action={<Toggle checked={email?.[key] ?? key !== 'alwaysSend'} onChange={(checked) => update({ email: { ...settings?.email, [key]: checked } })} label={label} />} />

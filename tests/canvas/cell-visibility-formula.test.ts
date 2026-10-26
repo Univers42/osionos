@@ -20,7 +20,7 @@ import type { LayoutCell } from "../../src/entities/block/model/types.ts";
 import { buildCanvasBlockPatch } from "../../src/features/block-editor/ui/canvas/controller/persistence.ts";
 import { createCanvasStateFromLegacy, gridConfigFromLegacy, migrate, unmigrateCanvasCells } from "../../src/features/block-editor/ui/canvas/model/migration.ts";
 import { canvasReducer } from "../../src/features/block-editor/ui/canvas/model/canvasReducer.ts";
-import { evaluateCellVisibility, filterHiddenCells, filterVisibleCells, resolvePropertyMap, toPropertyMap } from "../../src/features/block-editor/ui/canvas/model/visibility.ts";
+import { evaluateCellVisibility, filterHiddenCells, filterVisibleCells, resolvePropertyMap, toPropertyMap } from "../../src/entities/block/model/visibility.ts";
 import {
   FORMULA_ENGINE_UNAVAILABLE,
   initFormulaEngine,
