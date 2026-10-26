@@ -49,7 +49,7 @@ export async function startMcpRoutes() {
 		harness.call(path, { method, token, body });
 	/** A server registered for `user`, its id. */
 	const register = async (user: string, server: FakeMcp, extra: JsonBody = {}): Promise<string> => {
-		const made = await as(user, 'POST', '/api/ai/mcp-servers', { label: 'fake', url: server.url, ...extra });
+		const made = await as(user, 'POST', '/api/ai/mcp-servers', { label: 'fake', url: server.url, acknowledged: true, ...extra });
 		if (made.status !== 201) throw new Error(`register answered ${made.status}`);
 		return String(made.body?.id);
 	};

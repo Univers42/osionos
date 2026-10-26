@@ -25,8 +25,9 @@ export const createBodySchema = z
 		url: z.string().min(1).max(2048),
 		headerName: z.string().max(64).optional(),
 		headerValue: z.string().max(512).optional(),
-		/** C282: the dialog's disclosure. Absent keeps older clients working; an explicit false is refused. */
-		acknowledged: z.boolean().optional(),
+		// C282: the add dialog's disclosure, ticked. Page text the user approves
+		// is sent to this host; a client that did not show it cannot register one.
+		acknowledged: z.literal(true),
 	})
 	.strict();
 
