@@ -45,9 +45,11 @@ import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
 import { IssueReportHost } from "@/features/issues/ui/IssueReportHost";
 import { ExportHost } from "@/features/page-export/ui/ExportHost";
+import { ActionGuardHost } from "@/features/app-actions/ui/ActionGuardHost";
 import { AiInlinePanel } from "@/features/ai/ui/AiInlinePanel";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
+import { BindingSourcesProvider } from "@/features/bindings/ui/BindingSourcesProvider";
 
 type UserSessions = Record<string, UserSession>;
 
@@ -317,48 +319,51 @@ const App: React.FC = () => {
   }
 
   return (
-    <div
-      data-testid="app-shell"
-      data-zen={zen ? "1" : undefined}
-      className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
-    >
-      {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
-      <TopBar onOpenSettings={openSettings} />
+    <BindingSourcesProvider>
+      <div
+        data-testid="app-shell"
+        data-zen={zen ? "1" : undefined}
+        className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
+      >
+        {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
+        <TopBar onOpenSettings={openSettings} />
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {/* Left sidebar */}
-        <ActivitySidebar
-          onOpenSettings={() => openSettings()}
-          onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
-          onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
-        />
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          {/* Left sidebar */}
+          <ActivitySidebar
+            onOpenSettings={() => openSettings()}
+            onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
+            onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
+          />
 
-        {/* Hidden sidebar: the left edge reveals it over the page (no floating button). */}
-        <SidebarEdgePeek
-          onOpenSettings={() => openSettings()}
-          onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
-          onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
-        />
+          {/* Hidden sidebar: the left edge reveals it over the page (no floating button). */}
+          <SidebarEdgePeek
+            onOpenSettings={() => openSettings()}
+            onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
+            onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
+          />
 
-        {/* Content area — the unified workbench (grid + dock + status bar). */}
-        <main className="flex-1 flex min-w-0 overflow-hidden relative">
-          <LazyWorkbench />
-        </main>
+          {/* Content area — the unified workbench (grid + dock + status bar). */}
+          <main className="flex-1 flex min-w-0 overflow-hidden relative">
+            <LazyWorkbench />
+          </main>
+        </div>
+
+        <WorkspaceThemePanel />
+        <ToastViewport />
+        <ShareHost />
+        <IssueReportHost />
+        <ExportHost />
+        <ActionGuardHost />
+        <AiInlinePanel />
+        <ContactDock />
+        <QuickCaptureModal />
+        <WorkspaceIntentModal />
+        {/* The profession picker: the Modal primitive returns null until the store's
+            `open` flag is set, so the warm path renders nothing. */}
+        <ProfessionPickerModal />
       </div>
-
-      <WorkspaceThemePanel />
-      <ToastViewport />
-      <ShareHost />
-      <IssueReportHost />
-      <ExportHost />
-      <AiInlinePanel />
-      <ContactDock />
-      <QuickCaptureModal />
-      <WorkspaceIntentModal />
-      {/* The profession picker: the Modal primitive returns null until the store's
-          `open` flag is set, so the warm path renders nothing. */}
-      <ProfessionPickerModal />
-    </div>
+    </BindingSourcesProvider>
   );
 };
 

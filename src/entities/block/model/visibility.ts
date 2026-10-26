@@ -27,6 +27,7 @@ import {
   evalFormula,
   type PropertyMap,
 } from "@/shared/notion-database-sys/src/lib/engine/bridge";
+import type { VisibilityScope } from "./visibilityScope";
 
 /** The evaluator the helper talks to — the engine bridge by default. */
 export type CellVisibilityEvaluator = (formula: string, props: PropertyMap) => unknown;
@@ -52,6 +53,11 @@ function isFalsyResult(result: unknown): boolean {
  * Pure: the same formula and the same properties always give the same answer,
  * and nothing outside the process is touched.
  */
+export function isVisibleResult(result: unknown): boolean {
+  if (result === FORMULA_ENGINE_UNAVAILABLE) return true;
+  return !isFalsyResult(result);
+}
+
 export function evaluateCellVisibility(
   formula: string | undefined,
   props: PropertyMap,
@@ -59,9 +65,7 @@ export function evaluateCellVisibility(
 ): boolean {
   const source = formula?.trim();
   if (!source) return true;
-  const result = evaluate(source, props);
-  if (result === FORMULA_ENGINE_UNAVAILABLE) return true;
-  return !isFalsyResult(result);
+  return isVisibleResult(evaluate(source, props));
 }
 
 /**
@@ -95,4 +99,33 @@ export function filterVisibleCells<T extends { visibilityFormula?: string }>(cel
 /** The complement of {@link filterVisibleCells}: cells the editor must still let the author reach. */
 export function filterHiddenCells<T extends { visibilityFormula?: string }>(cells: readonly T[], props: PropertyMap): T[] {
   return cells.filter((cell) => !evaluateCellVisibility(cell.visibilityFormula, props));
+}
+
+const visibleForSnapshotMemo = new WeakMap<VisibilityScope, Map<string, { snapshot: PropertyMap; visible: boolean }>>();
+
+/**
+ * Non-React core of `useVisibleWhen`: memoised per (scope, source) on snapshot
+ * identity, so the injected evaluator runs only when the snapshot object changes.
+ * Truthiness is applied through `isVisibleResult`.
+ */
+export function visibleForSnapshot(
+  scope: VisibilityScope,
+  source: string,
+  snapshot: PropertyMap,
+  evaluate: (props: PropertyMap) => unknown,
+): boolean {
+  const trimmed = source.trim();
+  if (!trimmed) return true;
+
+  let scopeCache = visibleForSnapshotMemo.get(scope);
+  if (!scopeCache) {
+    scopeCache = new Map();
+    visibleForSnapshotMemo.set(scope, scopeCache);
+  }
+  const cached = scopeCache.get(trimmed);
+  if (cached && cached.snapshot === snapshot) return cached.visible;
+
+  const visible = isVisibleResult(evaluate(snapshot));
+  scopeCache.set(trimmed, { snapshot, visible });
+  return visible;
 }

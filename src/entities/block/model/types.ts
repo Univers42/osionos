@@ -12,6 +12,7 @@
 
 import type { EmbedSnapshot } from '@/shared/lib/embed/embedInfo';
 import type { ButtonProgram } from './buttonProgram';
+import type { BlockStyle } from './blockStyle';
 
 /**
  * Standalone Block types for the playground application.
@@ -158,6 +159,7 @@ export interface Block {
   color?: string;			/** Color for callouts, etc. */
   textColor?: string;		/** Optional block text color */
   backgroundColor?: string; /** Optional block background color */
+  style?: BlockStyle;		/** Typed style overrides (SB-1a); wins over flat fields */
   headingLevel?: 1 | 2 | 3 | 4 | 5 | 6; /** Optional heading style inside composed blocks */
   widthRatio?: number;      /** Relative width for column blocks */
   collapsed?: boolean;		/** Whether a toggle is collapsed */
@@ -195,6 +197,13 @@ export interface Block {
   layoutConfig?: Partial<LayoutConfig>;
   layoutCells?: LayoutCell[];
   schemaVersion?: number;
+  /**
+   * A formula that decides whether the block is rendered at all, evaluated
+   * against the page's own properties. Empty (or absent) means always visible.
+   * Caveat: it runs in every reader's browser, so a formula that branches on a
+   * value leaks that value's existence to every reader of the page.
+   */
+  visibleWhen?: string;
   conflictOf?: string;		/** The id of the block this one is a conflict copy of — the merge kept both variants */
   [key: string]: unknown;	/** Arbitrary metadata */
 }

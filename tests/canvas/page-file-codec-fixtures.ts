@@ -83,6 +83,7 @@ export const OVERLAY_PROBES: Record<string, Probe> = {
   mediaAspect: probe(mk({ type: "image", asset: "a", mediaAspect: "16 / 9" }), "mediaAspect"),
   mediaTags: probe(mk({ type: "image", asset: "a", mediaTags: ["cat", "street sign"] }), "mediaTags"),
   mediaText: probe(mk({ type: "image", asset: "a", mediaText: "STOP ahead" }), "mediaText"),
+  style: probe(mk({ type: "paragraph", content: "p", style: { padding: 3, radius: "panel" } }), "style"),
   deferMount: probe(mk({ type: "home_views", deferMount: true }), "deferMount"),
   collectionRef: probe(mk({ type: "paragraph", content: "p", collectionRef: "members" }), "collectionRef"),
   recordRef: probe(mk({ type: "paragraph", content: "p", recordRef: "$record" }), "recordRef"),
@@ -93,6 +94,7 @@ export const OVERLAY_PROBES: Record<string, Probe> = {
     "tableConfig",
   ),
   conflictOf: probe(mk({ type: "paragraph", content: "p", conflictOf: "b1" }), "conflictOf"),
+  visibleWhen: probe(mk({ type: "paragraph", content: "p", visibleWhen: 'prop("status") == "active"' }), "visibleWhen"),
   buttonProgram: probe(
     mk({ type: "button", content: "Go", buttonProgram: { version: 1, steps: [{ op: "action", action: { type: "notify", message: "hi" } }] } }),
     "buttonProgram",

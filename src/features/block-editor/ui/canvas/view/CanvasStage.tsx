@@ -23,7 +23,7 @@ import { useCanvasMarquee } from "../controller/useCanvasMarquee";
 import { useHugHeights } from "../controller/useHugHeights";
 import { resolveHugDisplacements } from "../model/collision";
 import { getCellsOrderedByZ } from "../model/selectors";
-import { filterVisibleCells } from "../model/visibility";
+import { filterVisibleCells } from "@/entities/block/model/visibility";
 import type { CanvasStoreApi } from "../store/canvasStore";
 import { CanvasCellView } from "./CanvasCellView";
 import { CanvasEmptyState } from "./CanvasEmptyState";

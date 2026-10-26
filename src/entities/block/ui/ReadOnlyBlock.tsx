@@ -22,6 +22,7 @@ import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
 import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
 import { TableBlockReadOnly } from "./TableBlockReadOnly";
 import { LayoutBlockReadOnly } from "./LayoutBlockReadOnly";
+import { VisibleWhenGate } from "./VisibleWhenGate";
 import { BoundFieldReadOnly } from "./BoundFieldReadOnly";
 import { DeferredMount } from "./DeferredMount";
 import { renderInlineToReact } from '@osionos/markdown-engine/react';
@@ -30,6 +31,8 @@ import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 import { usePageStore } from "@/store/usePageStore";
 import { runButtonBlock } from "@/services/button-program/runProgram";
+import { useRenderMode } from "./renderMode";
+import { buttonEffect } from "@/entities/block/model/buttonEffect";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 
 // Async boundary: database blocks are rare in rendered pages. Loading the
@@ -185,7 +188,7 @@ function areReadOnlyBlockPropsEqual(previous: BlockProps, next: BlockProps): boo
   );
 }
 
-const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0, properties }) => {
+const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0, properties }) => {
   // Per-block text/background colour set via the block colour menu; mirrors the
   // editable BlockEditor (getBlockSurfaceStyle), so read-only matches editing.
   const surface = getBlockSurfaceStyle(block);
@@ -540,6 +543,19 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
   }
 };
 
+const ReadOnlyBlockImpl: React.FC<BlockProps> = (props) => {
+  const { block } = props;
+  const visibleWhen = typeof block?.visibleWhen === "string" ? block.visibleWhen.trim() : "";
+  if (visibleWhen) {
+    return (
+      <VisibleWhenGate block={block} mode="view">
+        <ReadOnlyBlockBody {...props} />
+      </VisibleWhenGate>
+    );
+  }
+  return <ReadOnlyBlockBody {...props} />;
+};
+
 export const ReadOnlyBlock = React.memo(ReadOnlyBlockImpl, areReadOnlyBlockPropsEqual);
 
 /**
@@ -615,8 +631,24 @@ export const ButtonBlockReadOnly: React.FC<{ block: Block; hostPageId?: string }
   const pageId = buttonPageRef(href);
   const openPage = usePageStore((s) => s.openPage);
   const page = usePageStore((s) => (pageId ? s.pageById(pageId) : undefined));
+  const mode = useRenderMode();
+  const effect = buttonEffect(block, mode);
 
   if (block.buttonProgram !== undefined) {
+    if (effect === "none") {
+      return (
+        <div className="py-1">
+          <button
+            type="button"
+            className={className}
+            aria-disabled="true"
+            title="Buttons run on the page itself"
+          >
+            {label}
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="py-1">
         <button type="button" className={className} onClick={() => void runButtonBlock(block, hostPageId)}>

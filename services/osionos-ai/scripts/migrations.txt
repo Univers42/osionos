@@ -1,0 +1,20 @@
+# The groot models migrations the service suite runs on, in apply order: the
+# base five, then every later AI migration (a file is a path under groot's
+# models/). scripts/ci.sh reads this list; ops tooling that mirrors it should
+# read it too, not copy it.
+osionos-ai-migration.sql
+osionos-ai-rag-migration.sql
+osionos-ai-graph-migration.sql
+osionos-ai-jobs-migration.sql
+osionos-ai-access-tokens-migration.sql
+osionos-ai-media-migration.sql
+osionos-ai-mzz-approval-live-index-migration.sql
+osionos-ai-plan-items-migration.sql
+osionos-ai-skills-migration.sql
+osionos-ai-user-memory-migration.sql
+osionos-ugc-moderation-migration.sql
+osionos-ugc-sentiment-migration.sql
+osionos-ai-mcp-approvals-migration.sql
+osionos-object-databases-migration.sql
+osionos-ugc-sentiment-rows-migration.sql
+osionos-ai-packs-migration.sql

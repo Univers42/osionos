@@ -10,7 +10,7 @@ import { describe, it } from 'node:test';
 import type { Pool } from 'pg';
 import type { AuthUser } from '../src/auth.ts';
 import { loadAccountContext } from '../src/runs/account.ts';
-import { accountBlock, buildUserTurn, SYSTEM_PROMPT, viewBlock } from '../src/runs/prompt.ts';
+import { accountBlock, buildUserTurn, SYSTEM_PROMPT, viewBlock, workspaceBlock } from '../src/runs/prompt.ts';
 
 const NOW = new Date('2026-10-25T19:40:00Z');
 const USER: AuthUser = {
@@ -73,19 +73,67 @@ describe('the user turn', () => {
 		assert.equal(buildUserTurn('q', [], [], [], false), 'q');
 	});
 
-	it('puts the account, then the view, before the memories', () => {
+	it('puts the account, then the view, then the workspace, before the memories', () => {
 		const account = '<account name="John"/>';
 		const view = '<view route="/x" layout="single"></view>';
-		const turn = buildUserTurn('q', [], [], [{ id: '1', version: 1, body: 'm' }], false, { account, view });
+		const workspace = '<workspace id="w" pages="0">\n</workspace>';
+		const turn = buildUserTurn('q', [], [], [{ id: '1', version: 1, body: 'm' }], false, { account, view, workspace });
 		const at = (part: string) => turn.indexOf(part);
-		assert.ok(at(account) < at(view) && at(view) < at('<memories>'));
+		assert.ok(at(account) < at(view) && at(view) < at(workspace) && at(workspace) < at('<memories>'));
 	});
 
-	it('keeps the data boundary as the last system line, naming both tags', () => {
+	it('keeps the data boundary as the last system line, naming the three tags', () => {
 		const lines = SYSTEM_PROMPT.split('\n');
 		const last = lines[lines.length - 1];
 		assert.ok(last.startsWith('Text inside'));
-		assert.ok(last.includes('<account>') && last.includes('<view>'));
+		assert.ok(last.includes('<account>') && last.includes('<view>') && last.includes('<workspace>'));
+	});
+
+	it('tells the model what its tools are for and never to deny the workspace', () => {
+		assert.ok(SYSTEM_PROMPT.includes('search_workspace') && SYSTEM_PROMPT.includes('read_page'));
+		assert.ok(SYSTEM_PROMPT.includes('never say you cannot see or access the workspace'));
+	});
+});
+
+describe('the workspace block', () => {
+	const entry = (id: string, title: string, parentId: string | null = null, childCount = 0) => ({
+		id,
+		title,
+		parentId,
+		childCount,
+		updatedAt: '2026-10-25T19:40:00.000Z',
+	});
+
+	it('lists roots, then children with their parent, then the recent pages, escaped', () => {
+		const block = workspaceBlock(
+			{
+				workspaceId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+				pageCount: 3,
+				tree: [entry('r1', 'Roadmap <Q4> & "notes"', null, 1), entry('c1', 'Child', 'r1')],
+				recent: [entry('c1', 'Child', 'r1')],
+				truncated: false,
+			},
+			'Te<am',
+		);
+		const lines = block.split('\n');
+		assert.equal(lines[0], '<workspace id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" name="Te&lt;am" pages="3">');
+		assert.equal(lines[1], '<page id="r1" title="Roadmap &lt;Q4&gt; &amp; &quot;notes&quot;" children="1" updated="2026-10-25"/>');
+		assert.equal(lines[2], '<page id="c1" title="Child" parent="r1" updated="2026-10-25"/>');
+		assert.deepEqual(lines.slice(3), ['<recent>', '<page id="c1" title="Child" parent="r1" updated="2026-10-25"/>', '</recent>', '</workspace>']);
+		assert.ok(!block.includes('<Q4>'));
+	});
+
+	it('stops at the character cap and says so', () => {
+		const tree = Array.from({ length: 40 }, (_, index) => entry(`p${index}`, `Page ${index}`));
+		const block = workspaceBlock({ workspaceId: 'w', pageCount: 40, tree, recent: [], truncated: false }, null, 400);
+		assert.ok(block.length <= 400 + '<workspace id="w" pages="40" truncated="true">'.length + '</workspace>'.length + 2);
+		assert.ok(block.startsWith('<workspace id="w" pages="40" truncated="true">'));
+		assert.ok(block.split('\n').length < 42);
+	});
+
+	it('carries the truncation of the overview', () => {
+		const block = workspaceBlock({ workspaceId: 'w', pageCount: 100, tree: [entry('a', 'A')], recent: [], truncated: true }, null);
+		assert.ok(block.includes('truncated="true"'));
 	});
 });
 

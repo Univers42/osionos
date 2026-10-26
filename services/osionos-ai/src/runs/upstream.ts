@@ -90,6 +90,8 @@ export interface UpstreamRunInput {
 	accountBlock?: string;
 	/** The view block of the caller, when reported. */
 	viewBlock?: string;
+	/** The workspace block: the pages the caller can read (plan H1). */
+	workspaceBlock?: string;
 }
 
 /**
@@ -141,7 +143,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	// nothing: the reservation reads it from the same place.
 	const accountBlockText = input.accountBlock;
 	const viewBlockText = input.viewBlock;
-	const contextChars = (accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0);
+	const workspaceBlockText = input.workspaceBlock;
+	const contextChars = (accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0) + (workspaceBlockText?.length ?? 0);
 	const promptChars = promptCharCount({
 		text,
 		historyChars: historyChars(history),
@@ -205,6 +208,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		const userText = buildUserTurn(text, pages, sources, memories, abstained, {
 			...(accountBlockText ? { account: accountBlockText } : {}),
 			...(viewBlockText ? { view: viewBlockText } : {}),
+			...(workspaceBlockText ? { workspace: workspaceBlockText } : {}),
 		});
 		const userContent = [
 			{ type: 'text' as const, text: userText },
