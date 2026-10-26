@@ -3,6 +3,7 @@ import type { LanguageModel, LanguageModelUsage, ModelMessage, ToolSet } from 'a
 import { config } from '../config.ts';
 import { MAX_STEPS } from '../tools/loop.ts';
 import type { ToolPool } from '../tools/index.ts';
+import { markOwnError } from './failover.ts';
 import { stepHasTools } from './loopBudget.ts';
 import type { LoopBudget, StepUsage } from './loopBudget.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
@@ -24,6 +25,9 @@ import { SYSTEM_PROMPT } from './prompt.ts';
 export const IDLE_TIMEOUT_MS = 30_000;
 /** Two minutes for the whole call. */
 export const TOTAL_TIMEOUT_MS = 120_000;
+
+/** What the SDK does when no value is passed (ai 7.0.139, index.js:2658), spelled out. */
+const SDK_DEFAULT_RETRIES = 2;
 
 /** The abort of a timeout: the reason of the signal says so. */
 export class UpstreamTimeout extends Error {
@@ -127,6 +131,8 @@ export interface PumpInput {
 	onToolCall?: (call: { toolCallId: string; toolName: string; input: unknown }) => Promise<void>;
 	/** A tool failed before it ran: the model never gets an answer of it. */
 	onToolError?: (failure: { toolCallId: string; toolName: string }) => Promise<void>;
+	/** The SDK's retries on a 429 or 5xx; 0 when a next model waits (devil C250). */
+	maxRetries?: number;
 }
 
 export interface PumpOutcome {
@@ -141,6 +147,8 @@ export interface PumpOutcome {
 	reserved: number;
 	/** The failure, when the stream broke. */
 	error?: unknown;
+	/** Anything reached the callbacks, or a step finished: a run may not move to another model. */
+	emitted: boolean;
 }
 
 /**
@@ -176,6 +184,8 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 	// The step that ended: the text of the step that follows it is another
 	// paragraph, and not the end of the sentence before it.
 	let stepEnded = false;
+	// Set BEFORE a callback is awaited: one that throws has still shown something.
+	let emitted = false;
 
 	// The one clock of the loop: the steps. The money never stops it: a step
 	// the run cannot pay for becomes the ANSWER (prepareStep), so a run
@@ -199,8 +209,14 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 				// whatever the number of the calls they make.
 				pool?.startStep();
 				if (!budget) return undefined;
-				const hasTools = await stepHasTools(budget, { stepNumber, steps });
-				return hasTools ? undefined : { toolChoice: 'none' as const };
+				try {
+					const hasTools = await stepHasTools(budget, { stepNumber, steps });
+					return hasTools ? undefined : { toolChoice: 'none' as const };
+				} catch (error) {
+					// The ledger failed, not the upstream.
+					markOwnError(error);
+					throw error;
+				}
 			}
 		: undefined;
 
@@ -224,6 +240,7 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 			messages,
 			maxOutputTokens: config.maxOutputTokens,
 			abortSignal: controller.signal,
+			maxRetries: input.maxRetries ?? SDK_DEFAULT_RETRIES,
 			// The SDK must never fetch a URL: the images are bytes we fetched.
 			experimental_download: refuseDownload,
 			...(input.providerOptions ? { providerOptions: input.providerOptions } : {}),
@@ -245,17 +262,22 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 				stepEnded = false;
 				const text = separator + part.text;
 				answer += text;
+				emitted = true;
 				await onText(text);
 			} else if (part.type === 'reasoning-delta') {
 				reasoning += part.text;
+				emitted = true;
 				await onReasoning(part.text);
 			} else if (part.type === 'tool-call') {
+				emitted = true;
 				await onToolCall?.({ toolCallId: part.toolCallId, toolName: part.toolName, input: part.input });
 			} else if (part.type === 'tool-error') {
+				emitted = true;
 				await onToolError?.({ toolCallId: part.toolCallId, toolName: part.toolName });
 			} else if (part.type === 'finish-step') {
 				usage = part.usage;
 				stepEnded = true;
+				emitted = true;
 			} else if (part.type === 'finish') {
 				usage = part.totalUsage;
 				finishReason = part.finishReason;
@@ -265,9 +287,9 @@ export async function pumpUpstream(input: PumpInput): Promise<PumpOutcome> {
 				throw new Error('aborted');
 			}
 		}
-		return { answer, reasoning, usage, finishReason, reserved: budget?.reserved ?? 0 };
+		return { answer, reasoning, usage, finishReason, reserved: budget?.reserved ?? 0, emitted };
 	} catch (error) {
-		return { answer, reasoning, usage, finishReason, reserved: budget?.reserved ?? 0, error };
+		return { answer, reasoning, usage, finishReason, reserved: budget?.reserved ?? 0, error, emitted };
 	} finally {
 		clearTimers();
 	}

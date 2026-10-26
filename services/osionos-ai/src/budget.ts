@@ -133,18 +133,23 @@ async function settleOn(
  * books what it really cost: the caps read this ledger, and a cap that reads
  * a smaller number is a cap that does not hold. The cost the upstream really
  * charged is in the row of the run too.
+ *
+ * A client may be given, as `reserve` takes one: the rotation of a run to
+ * its next model settles the old reservation and takes the new one in ONE
+ * transaction.
  */
-export async function settle(db: Pool, request: SettleRequest): Promise<void> {
-	const client = await db.connect();
+export async function settle(db: Pool, request: SettleRequest, client?: PoolClient): Promise<void> {
+	const own: PoolClient = client ?? (await db.connect());
+	const ownTransaction = client === undefined;
 	try {
-		await client.query('begin');
-		await settleOn(client, request.userId, request.day, request.reserved, request.actual);
-		await settleOn(client, PLATFORM_SUBJECT, request.day, request.reserved, request.actual);
-		await client.query('commit');
+		if (ownTransaction) await own.query('begin');
+		await settleOn(own, request.userId, request.day, request.reserved, request.actual);
+		await settleOn(own, PLATFORM_SUBJECT, request.day, request.reserved, request.actual);
+		if (ownTransaction) await own.query('commit');
 	} catch (error) {
-		await client.query('rollback').catch(() => undefined);
+		if (ownTransaction) await own.query('rollback').catch(() => undefined);
 		throw error;
 	} finally {
-		client.release();
+		if (ownTransaction) own.release();
 	}
 }
