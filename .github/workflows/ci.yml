@@ -123,6 +123,8 @@ jobs:
   # on that branch (groot ADR 0030, conditions C2/C14/C17).
   build-bridge-image:
     name: Build bridge image
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
