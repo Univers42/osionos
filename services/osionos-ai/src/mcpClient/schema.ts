@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { AjvJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/ajv';
+import { compareCodeUnits } from '../order.ts';
 import type { RawTool } from './transport.ts';
 
 /**
@@ -53,7 +54,7 @@ export function canonicalJson(value: unknown): string {
 	if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
 	if (value && typeof value === 'object') {
 		const record = value as Record<string, unknown>;
-		const keys = Object.keys(record).sort();
+		const keys = Object.keys(record).sort(compareCodeUnits);
 		return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
 	}
 	return JSON.stringify(value) ?? 'null';

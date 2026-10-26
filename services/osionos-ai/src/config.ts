@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { compareCodeUnits } from './order.ts';
 import { decodePlatformModels, type PlatformModelEntry } from './platformModels.ts';
 
 /**
@@ -236,7 +237,7 @@ const rawEnv = {
 const parsed = envSchema.safeParse(rawEnv);
 if (!parsed.success) {
 	// Names only: an environment value can hold the app-session secret.
-	const names = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? 'environment')))].sort((a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0));
+	const names = [...new Set(parsed.error.issues.map((issue) => String(issue.path[0] ?? 'environment')))].sort(compareCodeUnits);
 	console.error(`[osionos-ai] refusing to start: invalid environment variables: ${names.join(', ')}`);
 	process.exit(1);
 }
