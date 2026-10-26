@@ -1,12 +1,14 @@
 // The AI Hub pane: a list of sections on the left (stacked above below 640 px) and the
 // selected section on the right. It composes the Settings panels; it owns no AI setting.
 // A section, not <main>: the workspace already has the page's one main landmark.
-import React, { useState } from "react";
-import { HUB_SECTIONS, type HubSectionId } from "./hubSections";
+import React from "react";
+import { useAiHubNav } from "@/features/ai/model/aiHubNav";
+import { HUB_SECTIONS } from "./hubSections";
 import { HubSectionBody } from "./HubSectionBody";
 
 export const AiHubView: React.FC = () => {
-  const [selected, setSelected] = useState<HubSectionId>("overview");
+  const selected = useAiHubNav((state) => state.section);
+  const request = useAiHubNav((state) => state.request);
   const current = HUB_SECTIONS.find((section) => section.id === selected) ?? HUB_SECTIONS[0];
   return (
     <div className="flex h-full flex-col overflow-hidden min-[640px]:flex-row">
@@ -19,7 +21,7 @@ export const AiHubView: React.FC = () => {
             key={section.id}
             type="button"
             aria-current={section.id === selected ? "page" : undefined}
-            onClick={() => setSelected(section.id)}
+            onClick={() => request(section.id)}
             className="whitespace-nowrap rounded-md px-3 py-2 text-left text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-subtle)] aria-[current=page]:bg-[var(--osio-bg-subtle)] aria-[current=page]:font-medium aria-[current=page]:text-[var(--osio-fg-default)]"
           >
             {section.label}

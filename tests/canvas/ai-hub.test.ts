@@ -1,7 +1,9 @@
 /** The AI Hub: its tab, its rail item, the spend format, and the markup of its pieces. */
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { afterEach } from "node:test";
+
+import "./support/memory-local-storage.ts";
 
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -12,6 +14,8 @@ import { RAIL_GROUPS } from "@/widgets/activity-rail/model/railItems";
 import { ServiceCard, SpendCard } from "@/widgets/ai-hub/ui/HubCards";
 import { HUB_SECTIONS } from "@/widgets/ai-hub/ui/hubSections";
 import { AiHubView } from "@/widgets/ai-hub/ui/AiHubView";
+import { openAiHub, useAiHubNav } from "@/features/ai/model/aiHubNav";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { aiHubTab } from "@/widgets/workspace-grid/model/layoutPersist";
 
 test("aiHubTab is an ai-hub tab with a stable pageId", () => {
@@ -62,4 +66,30 @@ test("the spend card shows money and a meter", () => {
   const html = renderToStaticMarkup(React.createElement(SpendCard, { configured: true, usage }));
   assert.ok(html.includes("$0.12 of $1.00 today"));
   assert.ok(html.includes("<meter"));
+});
+
+// renderToStaticMarkup reads zustand's server snapshot, which is the initial state, so
+// the initial state follows the section the test asked for.
+const serverSection = (section: "overview" | "memory") => { useAiHubNav.getInitialState().section = section; };
+
+afterEach(() => {
+  useAiHubNav.getState().request("overview");
+  serverSection("overview");
+});
+
+test("request sets the section, and AiHubView marks it current", () => {
+  useAiHubNav.getState().request("memory");
+  assert.equal(useAiHubNav.getState().section, "memory");
+  serverSection("memory");
+  const html = renderToStaticMarkup(React.createElement(AiHubView));
+  assert.match(html, /aria-current="page"[^>]*>Memory</);
+});
+
+test("openAiHub twice leaves one Hub tab and the last section", () => {
+  useWorkspaceLayout.setState({ root: { type: "pane", id: "p1", tabs: [], activeTabId: null }, activePaneId: "p1" });
+  openAiHub("memory");
+  openAiHub("overview");
+  const root = useWorkspaceLayout.getState().root;
+  assert.equal(root.type === "pane" ? root.tabs.filter((tab) => tab.kind === "ai-hub").length : -1, 1);
+  assert.equal(useAiHubNav.getState().section, "overview");
 });
