@@ -21,6 +21,7 @@ interface ListedModel {
 	label: string;
 	default: boolean;
 	vision?: boolean;
+	reasoning: boolean;
 	contextWindow?: number;
 	inputMicroUsdPerMTok?: number;
 	outputMicroUsdPerMTok?: number;
@@ -42,13 +43,15 @@ async function modelsOf(redis: Redis, row: ConnectionRow): Promise<ListedModel[]
 				label: model.label,
 				default: index === 0,
 				vision: model.vision === true,
+				reasoning: model.reasoning === true,
 				...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
 				...(model.inputMicroUsdPerMTok === undefined ? {} : { inputMicroUsdPerMTok: model.inputMicroUsdPerMTok }),
 				...(model.outputMicroUsdPerMTok === undefined ? {} : { outputMicroUsdPerMTok: model.outputMicroUsdPerMTok }),
 			}));
 		}
 	}
-	return connectionModels(redis, row, connectionSecret(row));
+	const listed = await connectionModels(redis, row, connectionSecret(row));
+	return listed.map((model) => ({ ...model, reasoning: false }));
 }
 
 /** GET /api/ai/models */
@@ -59,7 +62,7 @@ export async function handleModels(ctx: RouteContext): Promise<number> {
 	if (!connectionId || connectionId === PLATFORM_CONNECTION_ID) {
 		const status = 200;
 		sendJson(ctx.response, status, {
-			models: platformModels().map((model) => ({ id: model.id, label: model.label, default: model.default, vision: model.vision === true })),
+			models: platformModels().map((model) => ({ id: model.id, label: model.label, default: model.default, vision: model.vision === true, reasoning: model.reasoning === true })),
 		});
 		return status;
 	}
