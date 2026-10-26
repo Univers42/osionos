@@ -113,6 +113,8 @@ export const aiInferencePort: InferencePort = {
     const runId = crypto.randomUUID();
     const effort = effortFor(readAiSelection(), request.connectionId ?? PLATFORM_CONNECTION_ID, request.model);
     const fallbacks = runFallbacks(request);
+    // `research` is the client's word for the run's mode: it is never sent inside the context.
+    const { research, ...context } = request.context ?? {};
 
     // A stop is an abort: the run is cancelled on the service too, so it stops
     // burning tokens there.
@@ -137,8 +139,9 @@ export const aiInferencePort: InferencePort = {
               ...(effort ? { effort } : {}),
               // Absent when empty: a run without a chain is byte-identical to before (C262).
               ...(fallbacks.length > 0 ? { fallbacks } : {}),
+              ...(research ? { mode: "research" as const } : {}),
               // What the answer is read from — the pages the reader pointed at.
-              context: request.context,
+              context: request.context ? context : undefined,
               attachments: request.attachments,
               ...(request.replaceFromRunId ? { replaceFromRunId: request.replaceFromRunId } : {}),
             },
