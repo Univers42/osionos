@@ -1,6 +1,6 @@
 // The AI Hub's "Routing": the models a run moves on to when the chosen one cannot answer
 // (rate limit, upstream error). The chain is a device preference, sent with every run.
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isAiConfigured, listConnections, listModels } from "@/features/ai/api/aiClient";
 import type { AiConnection, AiModel } from "@/features/ai/api/aiContract";
 import {
@@ -42,7 +42,9 @@ export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, mod
     </p>
     <Section title="Primary">
       <SettingRow
-        title={`${labelOf(connections, primary.connectionId)} · ${primary.model || "default model"}`}
+        title={`${labelOf(connections, primary.connectionId)} · ${
+          models[primary.connectionId]?.find((model) => model.id === primary.model)?.label ?? (primary.model || "default model")
+        }`}
         description="Chosen in the composer, above the message box."
       />
     </Section>
@@ -117,14 +119,19 @@ export const HubRoutingSection: React.FC = () => {
     () => Array.from(new Set([PLATFORM_CONNECTION_ID, primary.connectionId, ...chain.map((entry) => entry.connectionId)])),
     [primary.connectionId, chain],
   );
+  // Each connection is asked once: re-running on every arrival would drop the
+  // answers still in flight and ask for them again.
+  const requested = useRef(new Set<string>());
   useEffect(() => {
     if (!configured) return;
-    let alive = true;
-    for (const id of wanted.filter((one) => !(one in models))) {
-      void listModels(id).then((list) => alive && setModels((current) => ({ ...current, [id]: list }))).catch(() => undefined);
+    for (const id of wanted) {
+      if (requested.current.has(id)) continue;
+      requested.current.add(id);
+      void listModels(id)
+        .then((list) => setModels((current) => ({ ...current, [id]: list })))
+        .catch(() => requested.current.delete(id));
     }
-    return () => { alive = false; };
-  }, [configured, wanted, models]);
+  }, [configured, wanted]);
 
   const save = useCallback((next: AiFallbackChoice[]) => {
     writeAiFallbacks(next, undefined, primary);
