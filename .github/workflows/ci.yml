@@ -19,10 +19,10 @@ on:
       - develop
   workflow_dispatch:
 
+# Write scopes live on the jobs that push (build-image on main, push-bridge-image on
+# main/develop): a feature-branch run of any job holds nothing it could tag a package with.
 permissions:
   contents: read
-  packages: write
-  id-token: write
 
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/osionos
@@ -70,6 +70,9 @@ jobs:
     needs: pr-dedupe
     if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -112,6 +115,104 @@ jobs:
           sbom: ${{ github.ref == 'refs/heads/main' }}
           cache-from: type=gha,scope=osionos-prod
           cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,scope=osionos-prod,mode=max' || '' }}
+
+  # The bridge image (scripts/bridge-*.mjs, no npm deps) is what groot's beta and release
+  # hosts run. Every branch proves the Dockerfile builds; only a push to main or develop
+  # pushes, and only that job holds the write scopes. The pushed digest is attested so the
+  # host can refuse any image whose Sigstore certificate was not minted by this workflow
+  # on that branch (groot ADR 0030, conditions C2/C14/C17).
+  build-bridge-image:
+    name: Build bridge image
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      # The Dockerfile's base is public.ecr.aws (groot parity); the named context routes that
+      # one pull through mirror.gcr.io, where the docker-hub-access mirror does not reach
+      # (run 40325175014: "toomanyrequests: Data limit exceeded" from ECR). Caveat: the key
+      # must equal the FROM string byte for byte — a retagged base silently goes back to ECR.
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/services/bridge/Dockerfile
+          build-contexts: |
+            public.ecr.aws/docker/library/node:22-bookworm-slim=docker-image://mirror.gcr.io/library/node:22-bookworm-slim
+          push: false
+          provenance: false
+          sbom: false
+
+  push-bridge-image:
+    name: Push & attest bridge image
+    needs: build-bridge-image
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      BRIDGE_IMAGE: ghcr.io/${{ github.repository_owner }}/osionos-bridge
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BRIDGE_IMAGE }}
+          tags: |
+            type=sha,prefix=sha-
+            type=ref,event=branch
+
+      # provenance/sbom off: the attest step below is the single signer, and the host
+      # verifies exactly one predicate type.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/services/bridge/Dockerfile
+          build-contexts: |
+            public.ecr.aws/docker/library/node:22-bookworm-slim=docker-image://mirror.gcr.io/library/node:22-bookworm-slim
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.BRIDGE_IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
 
   quality:
     name: quality (${{ matrix.scope }})
