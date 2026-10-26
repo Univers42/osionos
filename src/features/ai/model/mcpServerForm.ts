@@ -167,21 +167,12 @@ export function clockTime(at: Date): string {
   return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
 }
 
-/** How long the service pauses a server after 3 failures (repo.ts recordFailure). */
-export const BREAKER_MS = 5 * 60 * 1000;
-
-/**
- * The words under a server's name when it is not healthy.
- *
- * Caveat: the list does not carry `broken_until`, so the time is the moment
- * this browser saw the pause plus the service's 5 minutes; a server found
- * paused at page load says "in a few minutes" instead of a clock time.
- */
-export function statusWords(server: Pick<AiMcpServer, "status">, retryAt?: Date): string {
+/** The words under a server's name when it is not healthy. A pause that has run out keeps `broken` until the next discovery. */
+export function statusWords(server: Pick<AiMcpServer, "status" | "brokenUntil">): string {
   if (server.status === "broken") {
-    return retryAt
-      ? `Paused after 3 failures, retry after ${clockTime(retryAt)}`
-      : "Paused after 3 failures, retry in a few minutes";
+    return server.brokenUntil
+      ? `Paused after 3 failures, retry after ${clockTime(new Date(server.brokenUntil))}`
+      : "Paused after 3 failures, you can retry now";
   }
   if (server.status === "failing") return "The last discovery failed";
   if (server.status === "new") return "No tools discovered yet";
