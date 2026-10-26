@@ -35,6 +35,7 @@ import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersi
 import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
 import { LazyCanvasDebugRoute, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
 import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
+import { applyStoredTheme } from "@/shared/config/themeApply";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
 import { openSettings } from "@/features/settings/model/settingsNav";
@@ -229,6 +230,7 @@ const App: React.FC = () => {
   // Run once on mount
   useEffect(() => {
     applyStoredAppearance();
+    applyStoredTheme();
 
     if (initialized) {
       return;
