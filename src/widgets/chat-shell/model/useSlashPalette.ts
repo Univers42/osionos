@@ -29,6 +29,7 @@ import {
   type ChatCommand,
 } from "@/features/ai/model/chatCommands";
 import { useChatStore } from "@/features/chat/model/useChatStore";
+import { isSlashActionAvailable, slashActionTarget } from "./slashActionTarget";
 
 /** The service's chat commands — fetched ONCE per session; a failure leaves the actions. */
 let serviceCommands: Promise<AiCommand[]> | null = null;
@@ -37,10 +38,7 @@ function loadServiceCommands(): Promise<AiCommand[]> {
   return serviceCommands;
 }
 
-const EFFORT_GROUP = '[role="radiogroup"][aria-label="Reasoning effort"]';
 const HUB_ACTIONS: Record<string, HubSectionId> = { skills: "skills", memory: "memory", mcp: "mcp", routing: "routing", hub: "overview" };
-
-const FOCUSABLE = 'button, select, input, [href], [tabindex]:not([tabindex="-1"])';
 
 interface Options {
   value: string;
@@ -50,9 +48,11 @@ interface Options {
   root: React.RefObject<HTMLElement | null>;
   /** Re-reads the "@" at the caret, so the "context" action opens its picker. */
   syncPicker: (element: HTMLTextAreaElement, text: string) => void;
+  /** Opens the file dialog of the composer: the "/attach" action. */
+  onAttach?: () => void;
 }
 
-export function useSlashPalette({ value, onChange, onSubmit, textarea, root, syncPicker }: Options) {
+export function useSlashPalette({ value, onChange, onSubmit, textarea, root, syncPicker, onAttach }: Options) {
   const [fetched, setFetched] = useState<AiCommand[]>([]);
   const [query, setQuery] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
@@ -66,7 +66,7 @@ export function useSlashPalette({ value, onChange, onSubmit, textarea, root, syn
   // Caveat: read from the DOM when the query changes; a model switch with the palette
   // open shows /effort stale until the next keystroke.
   const matches = useMemo(
-    () => query === null ? [] : filterCommands(commands, query, (name) => name !== "effort" || !!root.current?.querySelector(EFFORT_GROUP)),
+    () => query === null ? [] : filterCommands(commands, query, (name) => isSlashActionAvailable(name, root.current)),
     [commands, query, root],
   );
   const open = query !== null;
@@ -104,13 +104,20 @@ export function useSlashPalette({ value, onChange, onSubmit, textarea, root, syn
     [onChange, sync, syncPicker, textarea],
   );
 
-  const focusSlot = useCallback(
-    (selector: string, inside = false) => {
-      const found = root.current?.querySelector<HTMLElement>(selector);
-      const target = inside ? found?.querySelector<HTMLElement>(FOCUSABLE) : found;
-      target?.focus();
+  // Opens (or focuses) the control a "/" action names.
+  const reach = useCallback(
+    (name: string) => {
+      const target = slashActionTarget(name);
+      if (!target) return;
+      if (target.kind === "attach") {
+        onAttach?.();
+        return;
+      }
+      const element = root.current?.querySelector<HTMLElement>(target.selector);
+      element?.focus();
+      if (target.kind === "open") element?.click();
     },
-    [root],
+    [onAttach, root],
   );
 
   const pick = useCallback(
@@ -129,14 +136,9 @@ export function useSlashPalette({ value, onChange, onSubmit, textarea, root, syn
       if (command.name === "new") useChatStore.getState().createConversation();
       else if (command.name === "context") write("@");
       else if (Object.hasOwn(HUB_ACTIONS, command.name)) openAiHub(HUB_ACTIONS[command.name]);
-      else requestAnimationFrame(() => {
-        if (command.name === "model") focusSlot('[data-composer-slot="model"]', true);
-        else if (command.name === "agent") focusSlot('select[aria-label="Agent"]');
-        else if (command.name === "effort") focusSlot(`${EFFORT_GROUP} [role="radio"][aria-checked="true"]`);
-        else if (command.name === "attach") focusSlot('[data-composer-slot="attach"] button');
-      });
+      else requestAnimationFrame(() => reach(command.name));
     },
-    [focusSlot, onChange, write],
+    [reach, onChange, write],
   );
 
   /** True when the palette took the key. */
