@@ -27,6 +27,7 @@
  *   POST   /api/chat/messages/:id/reactions        {emoji}
  *   DELETE /api/chat/messages/:id/reactions        {emoji} (or ?emoji=)
  *   POST   /api/chat/dm                            {peerUserId, workspaceId?}
+ *   POST   /api/chat/channels/:id/ai-answers       {runId} (bridge-chat-ai.mjs, flag-gated)
  *
  * Membership model: dm/private channels require an osionos_channel_members
  * row; public text channels accept any osionos_workspace_members row of the
@@ -73,6 +74,7 @@ import {
 import { takeToken } from './bridge-ratelimit.mjs';
 import { publicIconAvatar } from './bridge-avatar.mjs';
 import { searchMessages } from './bridge-chat-search.mjs';
+import { AI_HANDLES, authorSummary, isAiAnswer, postAiAnswer, threadAnswersEnabled } from './bridge-chat-ai.mjs';
 import { getThread } from './bridge-chat-threads.mjs';
 import { askBeforeWrite } from './bridge-moderation-gate.mjs';
 import { assertNotBlocked, requireInteraction } from './bridge-moderation-core.mjs';
@@ -116,6 +118,7 @@ function messageEntry(row, identity, reactions = [], attachments = null, replyTo
 		editedAt: row.edited_at ?? null,
 		deletedAt: row.deleted_at ?? null,
 		reactions,
+		...(isAiAnswer(row) ? { isAi: true, aiRequestedBy: row.ai_requested_by ?? null } : {}),
 	};
 }
 
@@ -159,11 +162,25 @@ async function requireChannelAdmin(config, fetchImpl, userId, channelId) {
 	return access;
 }
 
-async function fetchMessageForAuthor(config, fetchImpl, userId, messageId) {
+async function fetchLiveMessage(config, fetchImpl, messageId) {
 	const rows = await rest(config, fetchImpl, `osionos_messages?id=eq.${messageId}&select=*&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
 	if (!row || row.deleted_at) throw httpError('Message not found.', 404);
+	return row;
+}
+
+async function fetchMessageForAuthor(config, fetchImpl, userId, messageId) {
+	const row = await fetchLiveMessage(config, fetchImpl, messageId);
 	if (row.author_id !== userId) throw httpError('Only the author can modify this message.', 403);
+	return row;
+}
+
+/** The author deletes a message; a posted AI answer, its requester or the channel's owner/admin (C437). */
+async function fetchMessageForDelete(config, fetchImpl, userId, messageId) {
+	const row = await fetchLiveMessage(config, fetchImpl, messageId);
+	if (isAiAnswer(row) ? row.ai_requested_by === userId : row.author_id === userId) return row;
+	if (!isAiAnswer(row)) throw httpError('Only the author can modify this message.', 403);
+	await requireChannelAdmin(config, fetchImpl, userId, row.channel_id);
 	return row;
 }
 
@@ -274,15 +291,15 @@ async function listMessages(deps, session, url, channelId, response, config) {
 	let replyById = new Map();
 	if (replyIds.length > 0) {
 		const replyRows = await readInChunks(replyIds, async (chunk) => {
-			const rows = await rest(config, deps.fetchImpl, `osionos_messages?${inFilter('id', chunk)}&select=id,author_id,content,deleted_at`);
+			const rows = await rest(config, deps.fetchImpl, `osionos_messages?${inFilter('id', chunk)}&select=id,author_id,content,deleted_at,ai_run_id`);
 			return Array.isArray(rows) ? rows : [];
 		});
 		const replyIdentities = await identitySummaries(config, deps.fetchImpl, replyRows.map((r) => r.author_id));
-		replyById = new Map(replyRows.map((r) => [r.id, replyExcerpt(r, replyIdentities.get(r.author_id))]));
+		replyById = new Map(replyRows.map((r) => [r.id, replyExcerpt(r, authorSummary(r, replyIdentities))]));
 	}
 	const messages = ordered.map((row) => messageEntry(
 		row,
-		identities.get(row.author_id),
+		authorSummary(row, identities),
 		(reactionsByMessage.get(row.id) ?? []).map((r) => ({ userId: r.user_id, emoji: r.emoji })),
 		attachmentsByMessage.has(row.id) ? (attachmentsByMessage.get(row.id) ?? []).map(attachmentEntry) : null,
 		row.reply_to_id ? replyById.get(row.reply_to_id) ?? null : null,
@@ -321,7 +338,7 @@ async function fanOutAttachments(deps, config, message, channel, drafts) {
 
 /** Resolve @handles in `content` to channel-member user ids (≤10, excludes self). */
 async function resolveMentions(deps, config, channelId, content, selfId) {
-	const handles = parseMentions(content);
+	const handles = parseMentions(content).filter((handle) => !AI_HANDLES.has(String(handle).toLowerCase()));
 	if (handles.length === 0) return [];
 	// Both id lists are bounded by construction: 20 handles (parseMentions) and 10 candidates.
 	const idents = await rest(config, deps.fetchImpl, `osionos_bridge_identities?username=in.(${handles.map(encodeURIComponent).join(',')})&select=user_id,username`);
@@ -357,13 +374,14 @@ async function postMessage(deps, session, request, channelId, response, config) 
 	let replyAuthorId = null;
 	let threadRootId = null;
 	if (replyToId) {
-		const replyRows = await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${replyToId}&channel_id=eq.${channel.id}&deleted_at=is.null&select=id,author_id,content,deleted_at,thread_root_id&limit=1`);
+		const replyRows = await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${replyToId}&channel_id=eq.${channel.id}&deleted_at=is.null&select=id,author_id,content,deleted_at,thread_root_id,ai_run_id&limit=1`);
 		const replyRow = Array.isArray(replyRows) ? replyRows[0] : null;
 		if (replyRow) {
-			replyAuthorId = replyRow.author_id;
+			// The bot is no one to notify (C438).
+			replyAuthorId = isAiAnswer(replyRow) ? null : replyRow.author_id;
 			threadRootId = replyRow.thread_root_id ?? replyRow.id;
 			const replyIdent = await identitySummaries(config, deps.fetchImpl, [replyRow.author_id]);
-			replyTo = replyExcerpt(replyRow, replyIdent.get(replyRow.author_id));
+			replyTo = replyExcerpt(replyRow, authorSummary(replyRow, replyIdent));
 		}
 	}
 	const rows = await rest(config, deps.fetchImpl, 'osionos_messages', {
@@ -463,7 +481,7 @@ async function patchMessage(deps, session, request, messageId, response, config)
 }
 
 async function deleteMessage(deps, session, messageId, response, config) {
-	const existing = await fetchMessageForAuthor(config, deps.fetchImpl, session.userId, messageId);
+	const existing = await fetchMessageForDelete(config, deps.fetchImpl, session.userId, messageId);
 	await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${messageId}`, {
 		method: 'PATCH',
 		body: { deleted_at: new Date().toISOString() },
@@ -473,7 +491,7 @@ async function deleteMessage(deps, session, messageId, response, config) {
 	await publishRealtime({
 		topic: chatTopic(channel),
 		eventType: 'message_deleted',
-		payload: { messageId, channelId: channel.id, authorId: session.userId },
+		payload: { messageId, channelId: channel.id, authorId: existing.author_id },
 		fetchImpl: deps.fetchImpl,
 		env: deps.env,
 	});
@@ -808,6 +826,10 @@ export function createChatHandler({ config, verifySession, fetchImpl = fetch, en
 			const channelMessages = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/messages$/i.exec(pathname);
 			if (channelMessages && method === 'GET') return await listMessages(deps, session, url, channelMessages[1], response, requestConfig);
 			if (channelMessages && method === 'POST') return await postMessage(deps, session, request, channelMessages[1], response, requestConfig);
+			const channelAiAnswers = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/ai-answers$/i.exec(pathname);
+			if (channelAiAnswers && method === 'POST' && threadAnswersEnabled(env)) {
+				return await postAiAnswer(deps, session, request, requireUuid(channelAiAnswers[1], 'channelId'), response, requestConfig, { requireChannelAccess, chatTopic, messageEntry });
+			}
 			const channelMembersOne = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/members\/([0-9a-f-]{36})$/i.exec(pathname);
 			if (channelMembersOne && method === 'DELETE') return await removeMember(deps, session, requireUuid(channelMembersOne[1], 'channelId'), requireUuid(channelMembersOne[2], 'userId'), response, requestConfig);
 			if (channelMembersOne && method === 'PATCH') return await setMemberRole(deps, session, request, requireUuid(channelMembersOne[1], 'channelId'), requireUuid(channelMembersOne[2], 'userId'), response, requestConfig);
