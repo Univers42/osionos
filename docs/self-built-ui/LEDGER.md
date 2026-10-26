@@ -33,3 +33,4 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | D-SB-4h-spec | PROCEED-WITH-CONDITIONS (kimi-k3, 01:49), 12 conditions folded into SB-4h.md 01:54 | — | — | — | — |
 | SB-1c | returned af41816e4 (01:50) → fix round 1 (01:53): one snapshot cache shared by all gated blocks, duplicated truthiness, missing counter test, global menu event, dead read-only provider; perf to be measured against base by the reviewer | feat/sb-SB-1c | — | — | — |
 | D-SB-4d-spec | PROCEED-WITH-CONDITIONS (kimi-k3, 02:00), 8 conditions folded into SB-4d.md 02:01: page-path load, latest-load-wins, failed save refetches, deny removal confirms, busy by subscription | — | — | — | — |
+| specs | SB-6b written 2026-10-26 02:01, marked 👹 (every canvas renderer; V1 would rewrite a fine grid); tray moved to SB-6e; devil D-SB-6b-spec running | — | — | — | — |
