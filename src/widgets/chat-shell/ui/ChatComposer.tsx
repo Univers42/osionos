@@ -18,6 +18,7 @@ import { AiConnectionPicker } from "./AiConnectionPicker";
 import { OfflineModelPicker } from "./OfflineModelPicker";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { AttachButton } from "./AttachButton";
+import { WebToggle } from "./WebToggle";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import type { AiCustomAgent } from "@/features/ai/api/aiContract";
@@ -62,6 +63,8 @@ interface Props {
   streaming?: boolean;
   /** Stops the answer in flight. */
   onStop?: () => void;
+  /** The workspace switch of the web tools is on: only then is the "Web" toggle drawn. */
+  webAvailable?: boolean;
   /** The attached image paths. */
   attachments?: ComposerAttachment[];
   /** Replaces the attached image list. */
@@ -85,6 +88,7 @@ export const ChatComposer: React.FC<Props> = ({
   focusSignal,
   streaming,
   onStop,
+  webAvailable = false,
   attachments = [],
   onAttachmentsChange,
 }) => {
@@ -219,7 +223,7 @@ export const ChatComposer: React.FC<Props> = ({
         className="block w-full resize-none bg-transparent px-4 pt-3 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
       />
       )}
-      <div className="flex items-center gap-2 px-2 pb-2 pt-1">
+      <div className="flex flex-wrap items-center gap-2 px-2 pb-2 pt-1">
         <div data-composer-slot="attach" className="contents">
           <AttachButton
             vision={vision === true}
@@ -279,6 +283,7 @@ export const ChatComposer: React.FC<Props> = ({
             ) : null}
           </select>
         ) : null}
+        {webAvailable ? <WebToggle /> : null}
         <DictationButton onText={applyTranscript} language={dictationLanguage(voice)} />
         {streaming ? (
           <button
