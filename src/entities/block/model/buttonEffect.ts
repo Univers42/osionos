@@ -11,6 +11,10 @@
 /* ************************************************************************** */
 
 import type { Block } from "./types";
+/** Whether a block renderer is running in a surface that may write.
+ *  `live`: the page itself (editable or locked — buttons and fields still work).
+ *  `preview`: hover cards, marketplace, profile README, public page.
+ *  The context defaults to `preview`, so a surface that forgets its provider fails safe. */
 export type RenderMode = "live" | "preview";
 
 export type ButtonEffect = "run-program" | "open-page" | "anchor" | "none";
