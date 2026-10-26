@@ -165,3 +165,20 @@ test("the primary is read-only and says where it is chosen", () => {
   writeAiSelection(B);
   assert.match(editor(B, []), /Chosen in the composer/);
 });
+
+test("a model with a future cooldownUntil shows when it stops resting; a past one shows nothing", () => {
+  const now = Date.parse("2026-10-26T12:00:00Z");
+  const until = new Date(now + 90_000);
+  const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(until);
+  const render = (cooldownUntil: string) =>
+    renderToStaticMarkup(
+      React.createElement(RoutingEditor, {
+        primary: B, connections: CONNECTIONS, now,
+        models: { ...MODELS, "c-1": [{ id: "m-b", label: "B", default: true, cooldownUntil }] },
+        chain: [B],
+        onChange: () => undefined, onRemove: () => undefined, onAdd: () => undefined,
+      }),
+    );
+  assert.match(render(until.toISOString()), new RegExp(`resting until ${clock}`));
+  assert.doesNotMatch(render(new Date(now - 1000).toISOString()), /resting until/);
+});

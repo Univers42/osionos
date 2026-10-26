@@ -50,6 +50,17 @@ function networkCode(error: unknown): string | undefined {
 	return typeof code === 'string' && NETWORK_CODES.has(code) ? code : undefined;
 }
 
+/** The APICallError under a RetryError or a `cause` chain, when there is one. */
+export function apiCallOf(error: unknown): APICallError | undefined {
+	let current: unknown = error;
+	for (let depth = 0; depth < MAX_UNWRAP && current !== undefined && current !== null; depth += 1) {
+		if (RetryError.isInstance(current)) current = current.lastError;
+		else if (APICallError.isInstance(current)) return current;
+		else current = (current as { cause?: unknown }).cause;
+	}
+	return undefined;
+}
+
 /** The class of a failure, or null when the run must end instead of moving. */
 export function classifyFailure(error: unknown): FailoverClass | null {
 	let current: unknown = error;

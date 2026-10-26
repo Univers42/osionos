@@ -207,6 +207,9 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
 	// failures in visionUpstream; started mid-minute → green).
 	const windows = await app.redis.keys('ai:rl:*');
 	if (windows.length > 0) await app.redis.del(...windows);
+	// A rest written by an earlier file would skip this file's primary.
+	const rests = await app.redis.keys('ai:cooldown:*');
+	if (rests.length > 0) await app.redis.del(...rests);
 	await new Promise<void>((resolve) => {
 		app.server.listen(0, '127.0.0.1', () => resolve());
 	});

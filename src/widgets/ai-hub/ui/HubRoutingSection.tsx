@@ -25,7 +25,23 @@ interface EditorProps {
   onChange: (index: number, next: AiFallbackChoice) => void;
   onRemove: (index: number) => void;
   onAdd: () => void;
+  /** The clock of the "resting until" note; without it no note shows. */
+  now?: number;
 }
+
+/** "resting until 14:05" for a model whose cooldown is still ahead, else nothing. */
+export const restingNote = (model: AiModel | undefined, now: number | undefined): string | null => {
+  if (now === undefined) return null;
+  const until = model?.cooldownUntil ? Date.parse(model.cooldownUntil) : Number.NaN;
+  if (!(until > now)) return null;
+  const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(until));
+  return `resting until ${clock}`;
+};
+
+const RestingNote: React.FC<{ model: AiModel | undefined; now: number | undefined }> = ({ model, now }) => {
+  const text = restingNote(model, now);
+  return text ? <span className="text-xs text-[var(--osio-fg-muted)]" data-testid="routing-resting">{text}</span> : null;
+};
 
 const labelOf = (connections: AiConnection[], id: string) =>
   connections.find((connection) => connection.id === id)?.label ?? id;
@@ -35,7 +51,7 @@ export const sendsToPlatform = (primary: AiFallbackChoice, chain: AiFallbackChoi
   primary.connectionId !== PLATFORM_CONNECTION_ID && chain.some((entry) => entry.connectionId === PLATFORM_CONNECTION_ID);
 
 /** The editor, with no data of its own: the section feeds it, the tests render it. */
-export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, models, chain, onChange, onRemove, onAdd }) => (
+export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, models, chain, onChange, onRemove, onAdd, now }) => (
   <div className="space-y-4" data-testid="routing-editor">
     <p className="text-sm text-[var(--osio-fg-muted)]">
       When the chosen model is busy or unavailable, the run moves on to the next model below, in order.
@@ -46,6 +62,7 @@ export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, mod
           models[primary.connectionId]?.find((model) => model.id === primary.model)?.label ?? (primary.model || "default model")
         }`}
         description="Chosen in the composer, above the message box."
+        action={<RestingNote model={models[primary.connectionId]?.find((model) => model.id === primary.model)} now={now} />}
       />
     </Section>
     <Section title="Fallbacks">
@@ -73,6 +90,7 @@ export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, mod
                 onChange={(model) => onChange(index, { connectionId: entry.connectionId, model })}
                 placeholder="Model"
               />
+              <RestingNote model={models[entry.connectionId]?.find((model) => model.id === entry.model)} now={now} />
               <button type="button" className="text-sm text-[var(--osio-fg-muted)] hover:underline" onClick={() => onRemove(index)}>
                 Remove
               </button>
@@ -106,6 +124,7 @@ export const HubRoutingSection: React.FC = () => {
   });
   const [chain, setChain] = useState<AiFallbackChoice[]>(() => readAiFallbacks(undefined, primary));
   const configured = isAiConfigured();
+  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     if (!configured) return;
@@ -163,6 +182,7 @@ export const HubRoutingSection: React.FC = () => {
       onChange={replaceAt}
       onRemove={(index) => save(chain.filter((_entry, at) => at !== index))}
       onAdd={onAdd}
+      now={now}
     />
   );
 };

@@ -197,7 +197,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		let outcome = await callModel(current);
 		while (outcome.error !== undefined) {
 			failure = outcome.error;
-			const move = await moveOn({ db, run: runState, steps, index, current, outcome, records, emit });
+			const move = await moveOn({ db, redis, run: runState, steps, index, current, outcome, records, emit });
 			if (move.kind === 'stay') break;
 			if (move.kind === 'refused') {
 				// The old money is back and the row holds none: only the end is left.

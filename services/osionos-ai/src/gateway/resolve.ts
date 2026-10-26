@@ -33,6 +33,8 @@ export interface ResolvedTarget {
 	model: LanguageModel;
 	/** The id of the model: the run row and the events carry it. */
 	modelId: string;
+	/** The connection it is called through: `platform`, or the id of the user's own. */
+	connectionId: string;
 	/**
 	 * The prices of the call: the ones of the allowlist, or zero when the
 	 * provider of the user bills them.
@@ -187,6 +189,7 @@ export async function resolveTarget(
 			target: {
 				model: platformModel(entry.id),
 				modelId: entry.id,
+				connectionId: PLATFORM_CONNECTION_ID,
 				pricing: entry,
 				platformBudget: true,
 				vision: entry.vision === true,
@@ -217,6 +220,7 @@ export async function resolveTarget(
 		target: {
 			model: modelHandle(entry, model, secret),
 			modelId: model,
+			connectionId: row.id,
 			// The provider of the user bills them: our prices are zero.
 			pricing: { id: model, label: model, inputMicroUsdPerMTok: 0, outputMicroUsdPerMTok: 0, default: false },
 			platformBudget: false,

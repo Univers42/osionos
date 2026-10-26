@@ -184,6 +184,7 @@ describe('the money of a step, and of the answer that follows it', () => {
 		const target = {
 			model: platformModel(METERED.id),
 			modelId: METERED.id,
+			connectionId: 'platform',
 			pricing: METERED,
 			platformBudget: true,
 			wire: 'openai-compatible' as const,

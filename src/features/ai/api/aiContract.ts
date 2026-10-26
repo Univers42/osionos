@@ -44,6 +44,8 @@ export interface AiModel {
   inputMicroUsdPerMTok?: number;
   /** The price of a million output tokens, in micro dollars. */
   outputMicroUsdPerMTok?: number;
+  /** ISO time until which the model rests after repeated failures; absent when it does not. */
+  cooldownUntil?: string;
 }
 
 /**

@@ -1,4 +1,6 @@
 import type { Pool } from 'pg';
+import type { Redis } from 'ioredis';
+import { recordFailure } from './cooldown.ts';
 import { failedAttemptCost, failoverClassOf, kindOf, startAttempt } from './attempt.ts';
 import type { Attempt, AttemptRecord, ChainStep } from './attempt.ts';
 import { rotateReservation } from './rotate.ts';
@@ -17,6 +19,7 @@ export type MoveOutcome = { kind: 'stay' } | { kind: 'refused' } | { kind: 'move
 
 export interface MoveInput {
 	db: Pool;
+	redis: Redis;
 	run: { signal: AbortSignal; runId: string; userId: string; day: string; promptChars: number };
 	steps: readonly ChainStep[];
 	index: number;
@@ -28,6 +31,16 @@ export interface MoveInput {
 
 export async function moveOn(input: MoveInput): Promise<MoveOutcome> {
 	const { db, run, steps, index, current, outcome, records } = input;
+	// Before the move is decided: a model that failed rests even when the run
+	// has nowhere to go (devil C256: the failure allowlist, not a timeout or a cancel).
+	if (outcome.error !== undefined) {
+		await recordFailure(input.redis, {
+			target: current.target,
+			userId: run.userId,
+			error: outcome.error,
+			attemptAborted: current.controller.signal.aborted,
+		});
+	}
 	const failure = failoverClassOf(outcome, {
 		hasNext: index + 1 < steps.length,
 		attempts: records.length + 1,
