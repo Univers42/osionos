@@ -14,13 +14,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 
 import { useChatStore, getInferencePort } from "@/features/chat/model/useChatStore";
-import { mergeAttachments, subscribeAssistantHandoff } from "@/features/chat/model/assistantHandoff";
+import { mergeAttachments, subscribeAssistantHandoff, toRunAttachments } from "@/features/chat/model/assistantHandoff";
+import type { ComposerAttachment } from "@/features/chat/model/assistantHandoff";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { PLATFORM_CONNECTION_ID, readAiSelection, type AiSelection } from "@/features/ai/model/aiSelection";
 import { buildRunContext, type ContextChip } from "@/features/ai/model/aiContext";
 import { openSettings } from "@/features/settings/model/settingsNav";
-import { MAX_ATTACHMENTS } from "./AttachImageButton";
+import { MAX_ATTACHMENTS } from "./AttachButton";
 import { ChatComposer } from "./ChatComposer";
 import { ChatThread } from "./ChatThread";
 import { EmptyStateHero } from "./EmptyStateHero";
@@ -48,7 +49,7 @@ export const ChatShell: React.FC = () => {
   // What the answer is read from: the pages the reader pointed at, and whether
   // the whole workspace is searched.
   const [chips, setChips] = useState<ContextChip[]>([]);
-  const [attachments, setAttachments] = useState<string[]>([]);
+  const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   // The agent of the next run: none is the general assistant.
   const [agentId, setAgentId] = useState<string | null>(null);
 
@@ -65,7 +66,11 @@ export const ChatShell: React.FC = () => {
   useEffect(
     () =>
       subscribeAssistantHandoff((pending) => {
-        setAttachments((current) => mergeAttachments(current, pending.attachments, MAX_ATTACHMENTS));
+        setAttachments((current) => mergeAttachments(
+            current,
+            pending.attachments.map((path) => ({ path, name: "image", kind: "image" as const })),
+            MAX_ATTACHMENTS,
+          ));
         if (pending.text) setText((current) => (current.trim() ? current : pending.text));
       }),
     [],
@@ -95,11 +100,7 @@ export const ChatShell: React.FC = () => {
       connectionId: selection.connectionId,
       // The agent of this run: the one the reader picked, or none.
       ...(agentId ? { agentId } : {}),
-      attachments: attachments
-        .map((path) => {
-          if (path.startsWith("/api/media/")) return { kind: "media" as const, path };
-          return { kind: "chat" as const, id: path.split("/").pop() ?? "" };
-        }),
+      attachments: toRunAttachments(attachments),
       // What the answer may read: the pages the reader pointed at.
       ...(chips.length > 0 ? { context: buildRunContext(chips) } : {}),
     });

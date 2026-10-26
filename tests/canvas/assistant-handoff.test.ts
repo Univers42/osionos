@@ -136,12 +136,12 @@ test("the hand-off is memory only: nothing reaches the storage", () => {
 /* The attachments of the composer                                            */
 /* -------------------------------------------------------------------------- */
 
+const asAttachment = (path: string) => ({ path, name: "image", kind: "image" as const });
+
 test("the composer takes the picture once, and never more than it holds", () => {
-  assert.deepEqual(mergeAttachments([], [PATH], 4), [PATH]);
-  assert.deepEqual(mergeAttachments([PATH], [PATH], 4), [PATH]);
-  assert.deepEqual(mergeAttachments([PATH], [OTHER_PATH], 4), [PATH, OTHER_PATH]);
-  assert.deepEqual(mergeAttachments([PATH, OTHER_PATH], ["/api/media/third.png"], 2), [
-    PATH,
-    OTHER_PATH,
-  ]);
+  const [one, other, third] = [PATH, OTHER_PATH, "/api/media/third.png"].map(asAttachment);
+  assert.deepEqual(mergeAttachments([], [one], 4), [one]);
+  assert.deepEqual(mergeAttachments([one], [one], 4), [one]);
+  assert.deepEqual(mergeAttachments([one], [other], 4), [one, other]);
+  assert.deepEqual(mergeAttachments([one, other], [third], 2), [one, other]);
 });

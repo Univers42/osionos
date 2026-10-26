@@ -78,7 +78,7 @@ export interface ChatStoreState extends ChatData {
   deleteConversation: (id: string) => void;
   setActive: (id: string | null) => void;
   setConversationModel: (id: string, connectorId: string, model: string) => void;
-  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; agentId?: string; context?: RunContext; attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }> }) => Promise<void>;
+  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; agentId?: string; context?: RunContext; attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string; name?: string }> }) => Promise<void>;
   stop: (conversationId: string) => void;
   /**
    * The follow-up of a write the user just approved.
