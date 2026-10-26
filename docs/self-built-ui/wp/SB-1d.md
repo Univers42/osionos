@@ -35,6 +35,8 @@ Depends on SB-1b (merged): the registry and `frame`. SB-0b is merged too, so the
   - `styleScales`: `STYLE_SCALES`;
   - `limits`: `{ maxDepth: 12, maxBlocks: 2000, maxBytes: 524288 }`. Caveat: these limits are a guess sized for the largest settings page today (Permissions, about 300 blocks once rebuilt). Raise them when a shipped page hits them; never trim a page to fit.
 - `parseSystemDoc(raw: unknown, mode: "strict" | "lenient"): { ok: true; doc: SystemDoc; unknown: string[] } | { ok: false; errors: string[] }`.
+  - Every check below runs on every block at any depth: the blocks reachable through `children` and through `layoutCells[].blocks` (cells hold their own block lists, `pageFileCodec.ts:63-69`). Both validators of a stored tree (this one and the bridge's, SB-6d2) walk the same two paths.
+  - Both modes reject a key named `__proto__`, `constructor` or `prototype` anywhere in a block, its `style`, or a cell (a JSON-parsed `__proto__` key becomes an own property that a later spread turns into a prototype change).
   - Both modes reject a wrong envelope (kind, id, version, title, `blocks` not an array, `required` not a sorted array of unique strings or naming an id absent from the tree), a block without a string `id` and `type`, duplicate ids, and anything over a limit.
   - **strict** (CI and the future bridge check) also rejects an unknown block type, an unknown field, and a `style` value that is off its scale. Each error names the block id and the key.
   - **lenient** (the app's loader) keeps those and lists them in `unknown` as `"<blockId>.type"`, `"<blockId>.<field>"` or `"<blockId>.style.<key>"`. A newer app's document must survive an older app (design §10).
