@@ -16,7 +16,8 @@ import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import type { PageContext } from './prompt.ts';
 import { citationData } from './sources.ts';
-import type { BuiltinAgent } from '../agents/builtins.ts';
+import { isCustomAgent } from '../agents/config.ts';
+import type { AgentConfig } from '../agents/config.ts';
 
 /**
  * The tools of a run.
@@ -71,7 +72,7 @@ export function buildRunTools(input: {
 	 * agent narrows them to its own list — it never gains one, and the write
 	 * tools it keeps stay behind the approval of the user.
 	 */
-	agent?: BuiltinAgent | null;
+	agent?: AgentConfig | null;
 	/**
 	 * The skills the prompt of the run lists, and the workspace they come from.
 	 *
@@ -164,13 +165,23 @@ export function buildRunTools(input: {
 	// what the runtime offers and what the agent may call. An agent never
 	// gains a tool, and a tool the agent does not list is not even sent to
 	// the model — it is not in the request.
-	if (run.tools && agent) {
-		const allowed = new Set(agent.tools);
-		const kept: ToolSet = {};
-		for (const [name, tool] of Object.entries(run.tools)) {
-			if (allowed.has(name) || name === 'load_skill' || name === 'remember' || name === 'open_page' || name === 'open_panel' || name === 'open_issue_report') kept[name] = tool;
-		}
-		run.tools = kept;
-	}
+	if (run.tools) run.tools = keepAgentTools(run.tools, agent);
 	return run;
+}
+
+/**
+ * The tools an agent keeps: its own list, plus the five the runtime always
+ * gives. Default-deny: a tool added to the set before this call (an MCP tool,
+ * C308/C339) is stripped for every agent and kept only for no agent.
+ */
+export function keepAgentTools(tools: ToolSet, agent: AgentConfig | null): ToolSet {
+	if (!agent) return tools;
+	// A custom agent never keeps an MCP tool, even one its stored list names
+	// (the table's CHECK refuses it at write; this is the second lock).
+	const allowed = new Set(isCustomAgent(agent) ? agent.tools.filter((name) => !name.startsWith('mcp_')) : agent.tools);
+	const kept: ToolSet = {};
+	for (const [name, tool] of Object.entries(tools)) {
+		if (allowed.has(name) || name === 'load_skill' || name === 'remember' || name === 'open_page' || name === 'open_panel' || name === 'open_issue_report') kept[name] = tool;
+	}
+	return kept;
 }
