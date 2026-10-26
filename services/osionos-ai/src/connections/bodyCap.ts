@@ -19,7 +19,9 @@ export function capBody(response: Response, max: number, onExceeded: () => void)
 	const declared = Number(response.headers.get('content-length'));
 	if (Number.isFinite(declared) && declared > max) {
 		onExceeded();
-		void response.body?.cancel();
+		// A caller that aborts the request in `onExceeded` makes this cancel
+		// reject with AbortError; unhandled, that crashes the process.
+		void response.body?.cancel().catch(() => undefined);
 		throw new Error('too_large');
 	}
 	if (!response.body) return response;
