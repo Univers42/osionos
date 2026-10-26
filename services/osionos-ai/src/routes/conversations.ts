@@ -10,6 +10,8 @@ import {
 	listMessages,
 	renameConversation,
 } from '../conversations/repo.ts';
+import { clearSummary, readOwnedSummary } from '../summary/repo.ts';
+import { config } from '../config.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -70,8 +72,28 @@ export async function handleConversationMessages(ctx: RouteContext): Promise<num
 		return 404;
 	}
 	const transcript = await listMessages(ctx.deps.db, { conversationId, ownerId: user.userId });
+	// The owner sees the summary the assistant keeps of the thread (context
+	// C391); flag off, the answer is what it always was (C395).
+	const summary = config.summaryEnabled ? { summary: await readOwnedSummary(ctx.deps.db, { conversationId, ownerId: user.userId }) } : {};
 	const status = 200;
-	sendJson(ctx.response, status, { conversationId, messages: transcript });
+	sendJson(ctx.response, status, { conversationId, messages: transcript, ...summary });
+	return status;
+}
+
+/** DELETE /api/ai/conversations/:id/summary — the owner clears the summary (C391). */
+export async function handleConversationSummary(ctx: RouteContext): Promise<number> {
+	const user = requireUser(ctx);
+	if (!user) return 401;
+	const conversationId = ctx.params[0] ?? '';
+	// Flag off, foreign, archived, missing and malformed ids all answer the same 404.
+	const cleared =
+		config.summaryEnabled && UUID.test(conversationId) && (await clearSummary(ctx.deps.db, { conversationId, ownerId: user.userId }));
+	if (!cleared) {
+		sendError(ctx.response, 404, 'not_found');
+		return 404;
+	}
+	const status = 200;
+	sendJson(ctx.response, status, { ok: true });
 	return status;
 }
 

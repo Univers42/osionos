@@ -21,3 +21,4 @@ osionos-ai-packs-migration.sql
 osionos-ai-mcp-client-migration.sql
 osionos-ai-runs-agents-migration.sql
 osionos-ai-web-migration.sql
+osionos-ai-summary-migration.sql
