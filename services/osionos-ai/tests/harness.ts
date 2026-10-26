@@ -89,6 +89,16 @@ export const VISION = {
 	default: false,
 };
 
+/** A model that reasons: a run may ask it for an effort. */
+export const REASONER = {
+	id: 'mock-reasoner',
+	label: 'Mock reasoner',
+	inputMicroUsdPerMTok: 0,
+	outputMicroUsdPerMTok: 0,
+	default: false,
+	reasoning: true,
+};
+
 /** A JSON body of the service. */
 export type JsonBody = Record<string, unknown>;
 
@@ -180,7 +190,7 @@ export async function startHarness(options: HarnessOptions = {}): Promise<Harnes
 	const bridge = await startMockBridge();
 	process.env.OSIONOS_AI_UPSTREAM_BASE_URL = `${options.upstreamBaseUrl ?? mock.baseUrl}/v1`;
 	process.env.OSIONOS_AI_BRIDGE_URL = bridge.baseUrl;
-	process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([FREE, METERED, PLATFORM, DEAR, VISION]);
+	process.env.OSIONOS_AI_PLATFORM_MODELS = JSON.stringify([FREE, METERED, PLATFORM, DEAR, VISION, REASONER]);
 	// The daily budget of a user: the same as the deployment's, and the dear
 	// model asks for more than that.
 	process.env.OSIONOS_AI_USER_DAILY_MICROUSD = String(USER_DAILY_MICROUSD);

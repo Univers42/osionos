@@ -186,6 +186,9 @@ describe('the money of a step, and of the answer that follows it', () => {
 			modelId: METERED.id,
 			pricing: METERED,
 			platformBudget: true,
+			wire: 'openai-compatible' as const,
+			optionsKey: 'platform',
+			reasoning: false,
 		};
 
 		// The row of the run cannot be written: the id of a run is a uuid,
