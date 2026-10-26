@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowUp, FileText, Layers, Plug, Square, X } from "lucide-react";
+import { ArrowUp, FileText, Layers, Square, X } from "lucide-react";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 
 import { AiConnectionPicker } from "./AiConnectionPicker";
@@ -19,10 +19,10 @@ import { OfflineModelPicker } from "./OfflineModelPicker";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { AttachButton } from "./AttachButton";
 import { WebToggle } from "./WebToggle";
+import { AgentChip } from "./AgentChip";
+import { ComposerPlus } from "./ComposerPlus";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
-import type { AiCustomAgent } from "@/features/ai/api/aiContract";
-import { scopeWords } from "@/features/ai/model/agentForm";
 import { WORKSPACE_CHIP, type ContextChip } from "@/features/ai/model/aiContext";
 import { minimalReplacement, type MarkdownMarker, shortcutMarker, wrapSelection } from "@/features/chat/model/composerMarkdown";
 import { PreviewToggle, UserMarkdown } from "@/features/chat/ui/UserMarkdown";
@@ -99,6 +99,8 @@ export const ChatComposer: React.FC<Props> = ({
   const [vision, setVision] = useState<boolean | null>(null);
   // The draft shown rendered, in place of the textarea. Typing leaves it.
   const [previewing, setPreviewing] = useState(false);
+  // Bumped by the "+" menu: the attach button opens its file dialog on a change.
+  const [attachSignal, setAttachSignal] = useState(0);
   const pushToast = useToastStore((s) => s.push);
   const grow = (el: HTMLTextAreaElement) => { el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 240)}px`; };
   useEffect(() => { if (ref.current) grow(ref.current); }, [value, previewing]);
@@ -134,6 +136,23 @@ export const ChatComposer: React.FC<Props> = ({
 
   // What the assistant is pointed at: the "@" picker and the chips.
   const picker = useContextPicker({ value, onChange, chips, onChipsChange });
+
+  // The "+" menu's "Reference a page": types the "@" the picker listens for.
+  const mentionPage = () => {
+    const element = ref.current;
+    const caret = element?.selectionStart ?? value.length;
+    const lead = caret > 0 && !/\s/.test(value[caret - 1] ?? "") ? " " : "";
+    const next = `${value.slice(0, caret)}${lead}@${value.slice(caret)}`;
+    const after = caret + lead.length + 1;
+    setPreviewing(false);
+    onChange(next);
+    requestAnimationFrame(() => {
+      if (!element) return;
+      element.focus();
+      element.setSelectionRange(after, after);
+      picker.sync(element, next);
+    });
+  };
 
   // The "/" palette: actions and prompt commands. "/" and "@" never both open
   // (the text before the caret cannot be "/word" and hold an "@").
@@ -215,7 +234,7 @@ export const ChatComposer: React.FC<Props> = ({
         onSelect={(e) => { picker.sync(e.currentTarget, value); slash.sync(e.currentTarget, value); }}
         onKeyDown={onKeyDown}
         rows={1}
-        placeholder="Do anything with AI…"
+        placeholder="Ask osionos AI…"
         aria-label="Message the assistant"
         aria-controls={slash.open ? SLASH_LISTBOX_ID : undefined}
         aria-expanded={slash.open ? true : undefined}
@@ -223,27 +242,28 @@ export const ChatComposer: React.FC<Props> = ({
         className="block w-full resize-none bg-transparent px-4 pt-3 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
       />
       )}
-      <div className="flex flex-wrap items-center gap-2 px-2 pb-2 pt-1">
+      <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2 pt-1">
         <div data-composer-slot="attach" className="contents">
+          <ComposerPlus
+            onAttach={() => setAttachSignal((n) => n + 1)}
+            onMention={mentionPage}
+            onConnect={onConnect}
+          />
           <AttachButton
+            hideButton
+            openSignal={attachSignal}
             vision={vision === true}
             attachments={attachments}
             onChange={(next) => onAttachmentsChange?.(next)}
           />
         </div>
+        {agents.length > 0 ? <AgentChip agents={agents} agentId={agentId} onChange={onAgentChange} /> : null}
+        {webAvailable ? <WebToggle /> : null}
         {value.trim() ? (
           <PreviewToggle pressed={previewing} onToggle={() => setPreviewing((on) => !on)} />
         ) : null}
-        <button
-          type="button"
-          onClick={onConnect}
-          aria-label="Connect a model"
-          title="Connect your own model (Settings › AI connections)"
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-        >
-          <Plug size={16} /> Connect
-        </button>
-        <div data-composer-slot="model" className="contents">
+        <DictationButton onText={applyTranscript} language={dictationLanguage(voice)} />
+        <div data-composer-slot="model" className="ml-auto flex items-center gap-1.5">
           {isAiConfigured() ? (
             <AiConnectionPicker
               value={selection}
@@ -253,58 +273,27 @@ export const ChatComposer: React.FC<Props> = ({
           ) : (
             <OfflineModelPicker value={selection} onChange={onSelectionChange} />
           )}
+          {streaming ? (
+            <button
+              type="button"
+              aria-label="Stop the answer"
+              onClick={() => onStop?.()}
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--osio-border-default)] px-3 py-1.5 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+            >
+              <Square size={12} /> Stop
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-label="Send message"
+              onClick={slash.submit}
+              disabled={!value.trim()}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--osio-accent)] text-[var(--osio-accent-fg)] transition-colors hover:bg-[var(--osio-accent-hover,var(--osio-accent))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] disabled:opacity-40"
+            >
+              <ArrowUp size={16} />
+            </button>
+          )}
         </div>
-        {/* The agent of the run: the general assistant, or one of the built-ins
-            the service offers. A native <select> is keyboard-driven for free,
-            and the label says what it is. */}
-        {agents.length > 0 ? (
-          <select
-            aria-label="Agent"
-            data-testid="ai-agent-picker"
-            value={agentId ?? ""}
-            onChange={(event) => onAgentChange?.(event.target.value || null)}
-            className="cursor-pointer rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1.5 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
-          >
-            <option value="">Assistant</option>
-            {agents.filter((agent) => agent.kind !== "custom").map((agent) => (
-              <option key={agent.id} value={agent.id}>
-                {agent.name}
-              </option>
-            ))}
-            {/* The custom agents, after the built-ins: a select cannot draw a badge, so the scope is in the text. */}
-            {agents.some((agent) => agent.kind === "custom" && !agent.archived) ? (
-              <optgroup label="Your agents">
-                {agents.filter((agent): agent is AiCustomAgent => agent.kind === "custom" && !agent.archived).map((agent) => (
-                  <option key={agent.id} value={agent.id} disabled={agent.needsReview}>
-                    {agent.name} · {scopeWords(agent.scope)}{agent.needsReview ? " · needs review" : ""}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-          </select>
-        ) : null}
-        {webAvailable ? <WebToggle /> : null}
-        <DictationButton onText={applyTranscript} language={dictationLanguage(voice)} />
-        {streaming ? (
-          <button
-            type="button"
-            aria-label="Stop the answer"
-            onClick={() => onStop?.()}
-            className="ml-auto inline-flex items-center gap-1 rounded-full border border-[var(--osio-border-default)] px-3 py-1.5 text-xs text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]"
-          >
-            <Square size={12} /> Stop
-          </button>
-        ) : (
-          <button
-            type="button"
-            aria-label="Send message"
-            onClick={slash.submit}
-            disabled={!value.trim()}
-            className="ml-auto rounded-full bg-[var(--osio-accent)] p-2 text-[var(--osio-accent-fg)] transition-colors hover:bg-[var(--osio-accent-hover,var(--osio-accent))] disabled:opacity-40"
-          >
-            <ArrowUp size={16} />
-          </button>
-        )}
       </div>
       {slash.open ? (
         <SlashPalette
