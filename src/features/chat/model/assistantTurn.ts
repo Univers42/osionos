@@ -32,6 +32,8 @@ import type { PermissionPart } from "./approvalParts";
 import { withMemoryProposal } from "./memoryParts";
 import type { MemoryProposalPart } from "./memoryParts";
 import type { TruncatedFrame } from "./summaryNotice";
+import { withHandoff } from "./agentHandoff";
+import type { HandoffPart } from "./agentHandoff";
 import type { RunEventActions } from "./runEventDispatch";
 
 /** What a turn needs from the store. */
@@ -134,6 +136,10 @@ export function assistantTurn(
 
     noteTruncated(truncated: TruncatedFrame) {
       store.noteTruncated(conversationId, truncated);
+    },
+
+    suggestAgent(handoff: HandoffPart) {
+      patchParts((current) => withHandoff(current, handoff));
     },
 
     finish() {
