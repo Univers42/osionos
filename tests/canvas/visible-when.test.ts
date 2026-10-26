@@ -11,12 +11,13 @@
 /* ************************************************************************** */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test, { before } from "node:test";
 import "./support/user-store-env.ts";
 
-import { evaluateCellVisibility } from "../../src/entities/block/model/visibility.ts";
+import { evaluateCellVisibility, evaluateVisibleWhen, isVisibleResult } from "../../src/entities/block/model/visibility.ts";
 import { createPagePropertiesScope } from "../../src/entities/block/model/visibilityScope.ts";
 import {
   FORMULA_ENGINE_UNAVAILABLE,
@@ -106,4 +107,52 @@ test("createPagePropertiesScope read returns a new object when a changes", () =>
 test("validateFormula reports invalid formula", () => {
   const result = validateFormula("prop(");
   assert.equal(result.ok, false);
+});
+
+test("scope caches per key list (item 1)", () => {
+  seedPage([{ key: "a", value: 1 }, { key: "b", value: 2 }]);
+  const scope = createPagePropertiesScope("p1");
+  const firstA = scope.read(["a"]);
+  const firstB = scope.read(["b"]);
+  const secondA = scope.read(["a"]);
+  assert.equal(firstA, secondA);
+  seedPage([{ key: "a", value: 7 }, { key: "b", value: 2 }]);
+  const thirdA = scope.read(["a"]);
+  assert.notEqual(firstA, thirdA);
+  const stillB = scope.read(["b"]);
+  assert.equal(firstB, stillB);
+});
+
+test("isVisibleResult is the single truthiness rule (item 2)", () => {
+  assert.equal(isVisibleResult(FORMULA_ENGINE_UNAVAILABLE), true);
+  assert.equal(isVisibleResult(false), false);
+  assert.equal(isVisibleResult(0), false);
+  assert.equal(isVisibleResult(""), false);
+  assert.equal(isVisibleResult(null), false);
+  assert.equal(isVisibleResult(true), true);
+  assert.equal(isVisibleResult(1), true);
+  const source = readFileSync(new URL("../../src/entities/block/ui/useVisibleWhen.ts", import.meta.url), "utf8");
+  assert.match(source, /evaluateVisibleWhen/);
+  assert.match(source, /from "@\/entities\/block\/model\/visibility"/);
+});
+
+test("evaluation counter: one eval first read, zero on unrelated change, one on a change (item 3)", () => {
+  let evaluations = 0;
+  const evaluate = (_formula: string, props: { a?: unknown }) => {
+    evaluations += 1;
+    return props.a;
+  };
+  seedPage([{ key: "a", value: 1 }, { key: "b", value: 2 }]);
+  const scope = createPagePropertiesScope("p1");
+  const first = evaluateVisibleWhen('prop("a")', scope, evaluate as never);
+  assert.equal(evaluations, 1);
+  assert.equal(first, true);
+  seedPage([{ key: "a", value: 1 }, { key: "b", value: 99 }]);
+  const second = evaluateVisibleWhen('prop("a")', scope, evaluate as never);
+  assert.equal(evaluations, 1);
+  assert.equal(second, first);
+  seedPage([{ key: "a", value: 0 }, { key: "b", value: 99 }]);
+  const third = evaluateVisibleWhen('prop("a")', scope, evaluate as never);
+  assert.equal(evaluations, 2);
+  assert.equal(third, false);
 });

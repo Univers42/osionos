@@ -71,9 +71,6 @@ test.describe("visibleWhen on any block", () => {
     await expect(page.locator("[data-hidden-by-rule]")).toHaveCount(0);
     await expect(page.getByText("Hello")).toHaveCount(0);
 
-    await page.evaluate(async () => {
-      // unlock by reloading? Instead set status via store while locked view reads page store
-    });
     await setStatus(page, "active");
     await expect(page.getByText("Hello")).toBeVisible();
   });
