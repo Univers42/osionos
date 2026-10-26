@@ -34,7 +34,12 @@ export const CHAT_ACTIONS: readonly ChatCommand[] = [
   { name: "model", description: "Choose the model", kind: "action", keywords: ["connection", "provider"] },
   { name: "agent", description: "Choose the agent", kind: "action" },
   { name: "context", description: "Add pages the answer may read", kind: "action", keywords: ["pages", "mention"] },
-  { name: "attach", description: "Attach an image", kind: "action", keywords: ["picture", "vision"] },
+  { name: "effort", description: "Choose the reasoning effort", kind: "action", keywords: ["reasoning", "think"] },
+  { name: "attach", description: "Attach a file or an image", kind: "action", keywords: ["picture", "vision"] },
+  { name: "skills", description: "Manage skills", kind: "action" },
+  { name: "memory", description: "Manage what the assistant remembers", kind: "action" },
+  { name: "mcp", description: "Manage MCP servers and access tokens", kind: "action", keywords: ["tools", "token"] },
+  { name: "hub", description: "Open the AI Hub", kind: "action", keywords: ["settings", "usage", "spend"] },
   { name: "help", description: "List the commands", kind: "action", keywords: ["commands"] },
 ];
 
@@ -63,7 +68,13 @@ export function slashQuery(value: string, caret: number): string | null {
 }
 
 /** Prefix on the name, then substring on the name, then description or keywords. */
-export function filterCommands(commands: readonly ChatCommand[], query: string): ChatCommand[] {
+export function filterCommands(
+  all: readonly ChatCommand[],
+  query: string,
+  // "effort" has nothing to focus while the model does not reason.
+  available: (name: string) => boolean = () => true,
+): ChatCommand[] {
+  const commands = all.filter((command) => available(command.name));
   const needle = query.toLowerCase();
   if (!needle) return commands.slice(0, MAX_RESULTS);
   const prefix: ChatCommand[] = [];

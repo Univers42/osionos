@@ -126,3 +126,22 @@ test("SlashPalette says when nothing matches", () => {
   assert.match(html, /No command matches \/zz/);
   assert.doesNotMatch(html, /role="option"/);
 });
+
+test("the empty query lists the hub actions, and the keyword and prefix find them", () => {
+  const names = filterCommands(CHAT_ACTIONS, "").map((c) => c.name);
+  for (const name of ["skills", "memory", "mcp", "hub"]) assert.ok(names.includes(name), name);
+  assert.equal(filterCommands(CHAT_ACTIONS, "mem")[0].name, "memory");
+  assert.ok(filterCommands(CHAT_ACTIONS, "token").some((c) => c.name === "mcp"));
+});
+
+test("every action stays visible ahead of the service commands under the cap", () => {
+  const service = Array.from({ length: 10 }, (_, i) => ({ name: `svc${i}`, description: "", template: "x", surface: "chat" as const }));
+  const shown = filterCommands(mergeCommands(CHAT_ACTIONS, service), "").map((c) => c.name);
+  for (const action of CHAT_ACTIONS) assert.ok(shown.includes(action.name), action.name);
+});
+
+test("/effort is listed only while the effort picker is in the composer", () => {
+  assert.ok(!filterCommands(CHAT_ACTIONS, "", (name) => name !== "effort").some((c) => c.name === "effort"));
+  assert.ok(!filterCommands(CHAT_ACTIONS, "effort", (name) => name !== "effort").some((c) => c.name === "effort"));
+  assert.ok(filterCommands(CHAT_ACTIONS, "effort", () => true).some((c) => c.name === "effort"));
+});
