@@ -58,7 +58,7 @@ Integration branch: `feat/self-built-ui` (from develop `3be8dc71b`). One worktre
 | SB-3a 👹 | S3 | action registry + `app_action` step + runner guards (confirm, typed, sudo, single-flight) + action state | SB-2a | a page cannot weaken a guard (test edits the doc, guard still runs) |
 | SB-3b | S3 | `button` on `@osionos/ui` Button: every tone/size, icon, icon-only label, loading | SB-3a | old `buttonVariant` pages render unchanged |
 | SB-3c | S3 | `chip`, `avatar`, `meter`, `status`, `secret`; heading `anchor` | SB-3a | deep link `?settings=<id>#<anchor>` scrolls to a doc heading |
-| SB-4a | S4 | `collection`: list/table/grid, virtual rows, empty slot, `$row`, row actions, inline edit | SB-2a, SB-3a | 10,000-row scroll with no long task over 50 ms |
+| SB-4a | S4 | `collection`: list/table/grid, virtual rows, empty slot, `$row`, row actions, inline edit | SB-2c, SB-3b | 10,000-row scroll with no long task over 50 ms |
 | SB-4b | S4 | list sources for every settings list (sessions exists), incl. moderation limits and per-page notification overrides | SB-4a | each list matches today's rows from the same stub |
 | SB-4c | S4 | `tabs`, `dialog` containers | SB-1b | keyboard per WAI-ARIA (shadcn reference) |
 | SB-4d | S4 | `collection` display `matrix` (rows × columns sources, a choice field per cell) | SB-4a, SB-2c | the permission matrix's cells and saves match today's panel |

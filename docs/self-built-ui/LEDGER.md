@@ -18,3 +18,4 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | SB-6a | dispatched 2026-10-25 20:56 (parallel with SB-1b) | feat/sb-SB-6a | | | |
 | SB-1c | dispatched 2026-10-25 20:56 (parallel with SB-1b) | feat/sb-SB-1c | | | |
 | specs | SB-4f written 2026-10-26 01:40 (base moved to SB-1d: presets are a system-doc kind; adds text-block `style`, `leading`/`minWidth` scales) | — | — | — | — |
+| specs | SB-4a written 2026-10-26 01:55 (base SB-2c + SB-3b: inline edit needs the field block, row actions need the button run options; extracts the duplicated `resolveScrollElement`) | — | — | — | — |
