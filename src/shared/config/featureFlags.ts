@@ -33,7 +33,8 @@ export type FeatureFlagName =
   | "osio.whiteboard"
   | "osio.panezoom"
   | "osio.ai.images"
-  | "osio.account.delete";
+  | "osio.account.delete"
+  | "osio.themes";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -208,4 +209,14 @@ export function isAiImagesEnabled(): boolean {
  *  `VITE_OSIO_ACCOUNT_DELETE=1`. */
 export function isAccountDeleteEnabled(): boolean {
   return isFeatureFlagEnabled("osio.account.delete", false);
+}
+
+/** Custom JSON themes: the Advanced (JSON) button in Preferences, the theme
+ *  editor tab, the theme and profile commands in `>`, and applying a stored
+ *  theme at all. Default ON; the kill switch is `?osio.themes=0`, the
+ *  `osio.themes` localStorage key, or `VITE_OSIO_THEMES=0` (index.html reads
+ *  the first two before first paint; the boot pass clears what it applied when
+ *  the env says off). */
+export function isThemesEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.themes", true);
 }
