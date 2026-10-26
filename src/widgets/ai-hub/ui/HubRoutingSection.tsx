@@ -70,6 +70,8 @@ export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, mod
         <SettingRow
           key={`${entry.connectionId}-${index}`}
           title={`Fallback ${index + 1}`}
+          // Under the title, not among the pickers: a note there pushes them off their column.
+          description={<RestingNote model={models[entry.connectionId]?.find((model) => model.id === entry.model)} now={now} />}
           action={
             <>
               <Dropdown
@@ -90,7 +92,6 @@ export const RoutingEditor: React.FC<EditorProps> = ({ primary, connections, mod
                 onChange={(model) => onChange(index, { connectionId: entry.connectionId, model })}
                 placeholder="Model"
               />
-              <RestingNote model={models[entry.connectionId]?.find((model) => model.id === entry.model)} now={now} />
               <button type="button" className="text-sm text-[var(--osio-fg-muted)] hover:underline" onClick={() => onRemove(index)}>
                 Remove
               </button>
