@@ -5,6 +5,7 @@ import { handleModels } from './models.ts';
 import { handleCommands } from './commands.ts';
 import { handleAgents } from './agents.ts';
 import { handleAgentSettings } from './agentSettings.ts';
+import { handleWebSettings } from './webSettings.ts';
 import { handleAgentGet } from './agentsRead.ts';
 import { handleAgentArchive, handleAgentCreate, handleAgentUpdate } from './agentsWrite.ts';
 import { handleComplete } from './complete.ts';
@@ -234,6 +235,18 @@ export const ROUTES: RouteEntry[] = [
 				pattern: /^\/api\/ai\/workspaces\/([^/]+)\/agents\/settings$/,
 				label: '/api/ai/workspaces/:ws/agents/settings',
 				handle: handleAgentSettings,
+				anyMethod: true,
+			},
+		]
+		: []),
+	// The web tools (C369): off, the switch of a workspace does not exist either.
+	...(config.webEnabled
+		? [
+			{
+				methods: [],
+				pattern: /^\/api\/ai\/workspaces\/([^/]+)\/web\/settings$/,
+				label: '/api/ai/workspaces/:ws/web/settings',
+				handle: handleWebSettings,
 				anyMethod: true,
 			},
 		]
