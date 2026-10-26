@@ -23,12 +23,19 @@ export const PREFIX_MAX = 4096;
  * The smallest context window, in tokens, among the models a public surface
  * can route to.
  *
- * Caveat: an operator assertion, NOT a measurement. `PlatformModelEntry` has
- * no context field, so nothing derives it; a deployment routing to a smaller
- * model breaks the margin silently. Under-reporting direction: the check
- * passes while a model is too small. A user's own connection (a small local
- * model) is outside this check. Release gate C294/C329: record the real
- * floor (ids only, with the date) before any public surface turns agents on.
+ * Recorded floor (C294/C329), 2026-10-26: the live `OSIONOS_AI_PLATFORM_MODELS`
+ * ids are nvidia/nemotron-3-ultra-550b-a55b:free (1,000,000),
+ * poolside/laguna-s-2.1:free (262,144), google/gemma-4-31b-it:free (262,144)
+ * and openrouter/free (200,000), per the `context_length` of OpenRouter's
+ * public `GET /api/v1/models`. The smallest is 200,000; 8192 stays the
+ * declared floor, far under it.
+ *
+ * Caveat: `PlatformModelEntry` has no context field, so nothing re-derives
+ * this when the list changes; a deployment adding a model under 8192 breaks
+ * the margin silently (the check passes while a model is too small).
+ * `openrouter/free` is a router: the 200,000 is its own figure, not the
+ * smallest model it may pick. A user's own connection (a small local model)
+ * is outside this check.
  */
 export const SMALLEST_CONTEXT_TOKENS = 8192;
 
