@@ -14,14 +14,16 @@
 // direct messages. One filter box narrows all of them; the chips show one kind.
 // Channels and DMs keep their own create buttons; AI chats get theirs here.
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Bot, MessageSquarePlus, Search, Sparkles } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 
 import type { PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
+import { ConversationRow } from "@/features/chat/ui/ConversationRow";
 import { useChatStore } from "@/features/chat/model/useChatStore";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { matchingByName } from "@/shared/lib/text/matchingByName";
 import { usePageStore } from "@/store/usePageStore";
 import { ChannelList } from "@/widgets/channel-list";
@@ -62,6 +64,9 @@ const AiSection: React.FC<{ filter: string }> = ({ filter }) => {
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const pages = usePageStore((s) => s.pages[workspaceId] ?? NO_PAGES);
   const agents = useMemo(() => pages.filter((p) => p.surface === "agent" && !p.archivedAt && !p.parentPageId), [pages]);
+  const syncServerConversations = useChatStore((s) => s.syncServerConversations);
+  // The conversations of the account, once: another browser may have started them.
+  useEffect(() => { if (workspaceId && isAiConfigured()) void syncServerConversations(workspaceId); }, [workspaceId, syncServerConversations]);
   const chats = matchingByName(conversations.map((c) => ({ ...c, name: c.title })), filter);
   const shownAgents = matchingByName(agents.map((a) => ({ ...a, name: a.title })), filter);
 
@@ -77,10 +82,10 @@ const AiSection: React.FC<{ filter: string }> = ({ filter }) => {
       <ul className="mt-1 space-y-0.5">
         {chats.map((chat) => (
           <li key={chat.id}>
-            <button type="button" className={rowClass} onClick={() => openAiChat(chat.id)}>
+            <ConversationRow conversation={chat} openClassName={rowClass} onOpen={() => openAiChat(chat.id)}>
               <Sparkles size={14} className="shrink-0" aria-hidden />
               <span className="truncate">{chat.title || "New chat"}</span>
-            </button>
+            </ConversationRow>
           </li>
         ))}
         {shownAgents.map((agent) => (
