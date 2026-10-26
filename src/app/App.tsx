@@ -44,6 +44,7 @@ import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDa
 import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
 import { ExportHost } from "@/features/page-export/ui/ExportHost";
+import { ActionGuardHost } from "@/features/app-actions/ui/ActionGuardHost";
 import { AiInlinePanel } from "@/features/ai/ui/AiInlinePanel";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
@@ -349,6 +350,7 @@ const App: React.FC = () => {
       <ToastViewport />
       <ShareHost />
       <ExportHost />
+      <ActionGuardHost />
       <AiInlinePanel />
       <ContactDock />
       <QuickCaptureModal />

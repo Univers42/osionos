@@ -28,6 +28,7 @@ import { ConfirmDialog } from "@osionos/ui/molecules/ConfirmDialog";
 
 import { findBlockInTree, type Block } from "@/entities/block";
 import { DESTRUCTIVE_PAGE_ACTIONS, parseButtonProgram } from "@/entities/block/model/buttonProgram";
+import { runAppAction } from "@/features/app-actions/model/runAppAction";
 import type { PageEntry, PagePropertyEntry } from "@/entities/page";
 import { runProgramPageAction } from "@/entities/page/model/usePageActions";
 import { useUserStore } from "@/features/auth";
@@ -169,14 +170,15 @@ function performAction(pageId: string, action: ResolvedAction): Promise<ActionOu
 		return Promise.resolve({ status: "ok" });
 	}
 	if (action.type === "page_action") return runProgramPageAction(pageId, action.name);
-	return writeProperty(pageId, action.property, action.value);
+	const sp = action as { type: "set_property"; property: string; value: unknown };
+	return writeProperty(pageId, sp.property, sp.value);
 }
 
 /**
  * Run a button block's program. A second click while a run is in flight is
  * ignored: two runs would double every budget and interleave their logs.
  */
-export async function runButtonBlock(block: Block, hostPageId?: string): Promise<void> {
+export async function runButtonBlock(block: Block, hostPageId?: string, mode: "live" | "preview" = "live"): Promise<void> {
 	if (inFlight) return;
 	const parsed = parseButtonProgram(block.buttonProgram);
 	if (!parsed.ok) {
@@ -189,15 +191,48 @@ export async function runButtonBlock(block: Block, hostPageId?: string): Promise
 		toast("error", "This button's page could not be found");
 		return;
 	}
+	const viewerId = useUserStore.getState().activeUserId;
+	const trusted = !!viewerId && page.ownerId === viewerId;
+	const programCtx: {
+		props: PropertyMap;
+		evaluateFormula: (f: string, p: PropertyMap) => unknown;
+		runAction: (action: ResolvedAction, scope: PropertyMap) => Promise<ActionOutcome>;
+		now: () => number;
+		mode: "live" | "preview";
+		trusted: boolean;
+		pause?: { begin(): void; end(): void };
+	} = {
+		props: propsOf(page),
+		evaluateFormula: () => 0,
+		runAction: async () => ({ status: "failed", detail: "not ready" }),
+		now: () => Date.now(),
+		mode,
+		trusted,
+	};
 	inFlight = true;
 	try {
 		const engine = await loadEngine();
-		const result = await runButtonProgram(parsed.program, {
-			props: propsOf(page),
-			evaluateFormula: engine.evalFormula,
-			runAction: guardDestructive((action) => performAction(pageId, action), confirmDestructive, DESTRUCTIVE_PAGE_ACTIONS),
-			now: () => Date.now(),
-		});
+		programCtx.evaluateFormula = engine.evalFormula;
+		const wrappedRunAction = guardDestructive(async (action: ResolvedAction, _scope: PropertyMap) => {
+			if (action.type === "app_action") {
+				const outcome = await runAppAction(action.name, action.args, {
+					mode: programCtx.mode,
+					trusted: programCtx.trusted,
+					pause: programCtx.pause,
+				});
+				const status =
+					outcome.status === "ok" ? "ok"
+					: outcome.status === "preview" ? "skipped"
+					: outcome.status === "cancelled" ? "cancelled"
+					: outcome.status === "blocked" ? "blocked"
+					: "failed";
+				const detail = outcome.status === "preview" ? "preview" : ("message" in outcome ? outcome.message : undefined);
+				return { status, detail };
+			}
+			return performAction(pageId, action);
+		}, confirmDestructive, DESTRUCTIVE_PAGE_ACTIONS, () => programCtx.pause);
+		programCtx.runAction = wrappedRunAction;
+		const result = await runButtonProgram(parsed.program, programCtx as never, programCtx.mode);
 		lastRun = { blockId: block.id, pageId, result };
 		listeners.forEach((listener) => listener());
 	} catch {
