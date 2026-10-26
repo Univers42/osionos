@@ -61,6 +61,14 @@ async function selectCell(block, cell) {
   return grid(block).getAttribute("aria-activedescendant");
 }
 
+/** What the focused element paints: the app-wide keyboard ring is an outline plus a gray inset fill. */
+async function focusPaint(page) {
+  return page.evaluate(() => {
+    const style = getComputedStyle(document.activeElement);
+    return { tag: document.activeElement.tagName.toLowerCase(), outline: style.outlineStyle, boxShadow: style.boxShadow };
+  });
+}
+
 test.describe("database-cell-enter", () => {
   test("Enter commits the Name cell and keeps it selected; typing stays out of the page", async ({ page }) => {
     const block = await freshTable(page);
@@ -152,6 +160,26 @@ test.describe("database-cell-enter", () => {
     expect(await name.textContent()).toContain("first\nsecond");
     await expectSelectedNotEditing(page, selectedId);
   });
+  test("one focus frame: neither a cell editor nor the selected grid paints the keyboard ring", async ({ page }) => {
+    const block = await freshTable(page);
+    await addPropertyOfType(block, page, "Number", "Score");
+    const headers = await block.locator("thead th").allTextContents();
+
+    // The edited cell's own frame shows where the caret is; the ring drew a
+    // second box inside it.
+    for (const [column, editor] of [["Name", "textarea"], ["Score", "input"]]) {
+      const cell = cellIn(block, headers, column);
+      await selectCell(block, cell);
+      await page.keyboard.press("Enter");
+      await cell.locator(editor).waitFor();
+      await page.keyboard.type("7");
+      expect(await focusPaint(page)).toEqual({ tag: editor, outline: "none", boxShadow: "none" });
+      await page.keyboard.press("Enter");
+      // The selected cell's frame is the grid's focus; the ring tinted the whole table.
+      expect(await focusPaint(page)).toEqual({ tag: "div", outline: "none", boxShadow: "none" });
+    }
+  });
+
   test("a two-line Name keeps its line break on the record page, where Shift+Enter adds another", async ({ page }) => {
     const block = await freshTable(page);
     const headers = await block.locator("thead th").allTextContents();
