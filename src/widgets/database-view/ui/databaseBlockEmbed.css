@@ -77,6 +77,56 @@
   background: linear-gradient(to right, transparent, var(--color-surface-primary) 1.5rem);
 }
 
+/* Floating beside the title only works while both fit: at 400 px the toolbar
+ * ran off the block's left edge and Filter sat at x = -40 (measured
+ * 2026-10-26). Below 40rem the row becomes two lines: the title, New and the
+ * collapse toggle, then the tools. The toolbar box dissolves (display:
+ * contents) so its buttons can sit on either line. Everything stays shown: a
+ * touch screen has no hover to reveal it. */
+.osionos-database-block--inline .osionos-object-database-single-view .odb-topbar {
+  container: odb-topbar / inline-size;
+}
+
+@container odb-topbar (max-width: 40rem) {
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row {
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+  }
+
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row > :first-child {
+    flex: 1 1 0%;
+    min-width: 0;
+  }
+
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row::after {
+    content: "";
+    flex-basis: 100%;
+    order: 1;
+  }
+
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row .odb-topbar-actions {
+    display: contents;
+  }
+
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-actions > * {
+    order: 2;
+  }
+
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-actions > .odb-topbar-new {
+    order: 0;
+  }
+
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-divider {
+    display: none;
+  }
+
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-collapse-btn,
+  .osionos-database-block--inline .osionos-object-database-single-view .odb-filter-bar {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 /* A collapsed embed must stay restorable: keep its toggle visible at rest. */
 .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar[data-collapsed] .odb-collapse-btn {
   opacity: 1;
