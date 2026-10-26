@@ -58,7 +58,10 @@ test.describe("wiki pages", () => {
 
     await expect(page.getByTestId("page-icon-toggle-picker")).toHaveText("📕");
     // The explorer row shows the wiki's own icon, not the default book.
-    await expect(page.getByRole("treeitem", { name: `📕 ${title}` })).toHaveCount(1);
+    // The row is named by its title alone (aria-label); the icon is its visible text.
+    const row = page.getByRole("treeitem", { name: title, exact: true });
+    await expect(row).toHaveCount(1);
+    await expect(row).toContainText(`📕${title}`);
   });
 
   test("a wiki lists its pages, and New page adds one under it", async ({ page, baseURL }) => {
