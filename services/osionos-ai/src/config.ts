@@ -113,6 +113,11 @@ const envSchema = z.object({
 	// The web tools, web_search and web_fetch (web C369). OFF unless exactly
 	// "on": the public overlay leaves it empty until C371 and C372 hold.
 	OSIONOS_AI_WEB: z.string().optional(),
+	// Research mode: a longer cited web loop (research C396). OFF unless exactly
+	// "on", and inert unless the web is on too.
+	OSIONOS_AI_RESEARCH: z.string().optional(),
+	// Research runs on a platform model one instance pays for in a UTC day (C404).
+	OSIONOS_AI_RESEARCH_PLATFORM_DAILY: z.coerce.number().int().positive().default(20),
 	// The rolling summary of the turns the history window drops (context
 	// C389). OFF unless exactly "on": the public overlay leaves it empty.
 	OSIONOS_AI_SUMMARY: z.string().optional(),
@@ -223,6 +228,8 @@ const rawEnv = {
 	OSIONOS_AI_MCP_CLIENT: process.env.OSIONOS_AI_MCP_CLIENT,
 	OSIONOS_AI_CUSTOM_AGENTS: process.env.OSIONOS_AI_CUSTOM_AGENTS,
 	OSIONOS_AI_WEB: process.env.OSIONOS_AI_WEB,
+	OSIONOS_AI_RESEARCH: process.env.OSIONOS_AI_RESEARCH,
+	OSIONOS_AI_RESEARCH_PLATFORM_DAILY: process.env.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,
 	OSIONOS_AI_SUMMARY: process.env.OSIONOS_AI_SUMMARY,
 	OSIONOS_AI_SEARXNG_URL: process.env.OSIONOS_AI_SEARXNG_URL || undefined,
 	OSIONOS_AI_WEB_CONTACT_URL: process.env.OSIONOS_AI_WEB_CONTACT_URL || undefined,
@@ -410,6 +417,10 @@ export interface AiServiceConfig {
 	mcpClientEnabled: boolean;
 	customAgentsEnabled: boolean;
 	webEnabled: boolean;
+	/** Whether research mode exists (C396, C415): exactly "on"; the run still needs the web. */
+	researchEnabled: boolean;
+	/** Research runs on a platform model per instance per UTC day (C404). */
+	researchPlatformDaily: number;
 	/** Whether a conversation keeps a summary of the turns its history window drops (C389). */
 	summaryEnabled: boolean;
 	/** The SearXNG base URL, without a trailing slash; undefined = no web_search. */
@@ -502,6 +513,8 @@ export const config: AiServiceConfig = Object.freeze({
 	mcpClientEnabled: parsed.data.OSIONOS_AI_MCP_CLIENT === 'on',
 	customAgentsEnabled: parsed.data.OSIONOS_AI_CUSTOM_AGENTS === 'on',
 	webEnabled: parsed.data.OSIONOS_AI_WEB === 'on',
+	researchEnabled: parsed.data.OSIONOS_AI_RESEARCH === 'on',
+	researchPlatformDaily: parsed.data.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,
 	summaryEnabled: parsed.data.OSIONOS_AI_SUMMARY === 'on',
 	searxngUrl: parsed.data.OSIONOS_AI_SEARXNG_URL?.replace(/\/+$/, ''),
 	webContactUrl: parsed.data.OSIONOS_AI_WEB_CONTACT_URL,

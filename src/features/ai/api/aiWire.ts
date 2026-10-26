@@ -62,3 +62,20 @@ export function messageFromWire(row: MessageWire): AiMessage {
     createdAt: row.created_at,
   };
 }
+
+/** The summary the assistant keeps of the turns that left its window. */
+export interface ConversationSummary {
+  text: string;
+  /** The timestamp of the last message the summary covers. */
+  through: string;
+}
+
+/** The `summary` key of a transcript body: a summary, null, or undefined (absent or malformed). */
+export function summaryFromBody(body: unknown): ConversationSummary | null | undefined {
+  if (typeof body !== "object" || body === null || !("summary" in body)) return undefined;
+  const raw = (body as { summary: unknown }).summary;
+  if (raw === null) return null;
+  if (typeof raw !== "object") return undefined;
+  const { text, through } = raw as { text?: unknown; through?: unknown };
+  return typeof text === "string" && typeof through === "string" ? { text, through } : undefined;
+}
