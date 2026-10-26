@@ -11,7 +11,8 @@
 /* ************************************************************************** */
 
 // The composer's lit perimeter must read without any motion: the user's desktop
-// asks for reduced motion, so the static glow is what they actually see.
+// asks for reduced motion, so the static glow is what they see until they pick
+// "Full" motion in Settings › Accessibility — then the light turns.
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -40,15 +41,20 @@ test("at rest the lens has a visible gradient ring and a blurred halo, both outs
   assert.match(halo, /opacity:\s*0?\.[3-9]/);
 });
 
-test("focus brightens the halo and turns the ring", () => {
+test("the ring turns at rest, focus brightens the halo, an answer in flight speeds it up", () => {
+  assert.match(blockAfter(css, ".lens {") ?? "", /animation:\s*lens-turn/);
   assert.match(blockAfter(css, ".lens:focus-within::before") ?? "", /opacity/);
-  assert.match(blockAfter(css, ".lens:focus-within") ?? "", /animation:\s*lens-turn/);
+  assert.match(blockAfter(css, '.lens[data-working="true"] {') ?? "", /animation-duration/);
+  assert.match(blockAfter(css, '.lens[data-working="true"]::before') ?? "", /animation:\s*lens-breathe/);
 });
 
-test("reduced motion stops the turning and leaves the glow alone", () => {
+test("reduced motion stops the turning and leaves the glow alone, unless the reader chose full motion", () => {
   const reduced = blockAfter(css, "@media (prefers-reduced-motion: reduce)") ?? "";
   assert.match(reduced, /animation:\s*none/);
   assert.doesNotMatch(reduced, /box-shadow|filter|opacity|background/);
+  // The OS is overridden by the reader's own choice, like global.css's reset.
+  assert.match(reduced, /:root:not\(\[data-motion="full"\]\) \.lens/);
+  assert.match(blockAfter(css, ':root[data-motion="reduce"] .lens,') ?? "", /animation:\s*none/);
 });
 
 test("the ring carries four lights, not one tint", () => {

@@ -41,6 +41,9 @@ test.describe("database-sort-filter", () => {
     // Apply a sort (SortPanel's "Add sort" uses the first property — deterministic).
     await page.getByRole("button", { name: /Add sort/ }).click();
     await expect(page.getByRole("button", { name: /Ascending|Descending/ }).first()).toBeVisible();
+    // Sort is a popover pinned to its button; it closes before the next toolbar click.
+    await page.keyboard.press("Escape");
+    await expect(page.locator('dialog[aria-label="Sort"]')).toHaveCount(0);
 
     // FILTER — mounts FilterPropertyPicker (the other crash site).
     await filterBtn.click();
