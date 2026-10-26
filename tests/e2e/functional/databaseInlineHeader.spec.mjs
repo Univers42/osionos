@@ -275,7 +275,11 @@ test.describe("database-inline-header", () => {
     const addBox = await addBtn.boundingBox();
     await addBtn.click();
     await expect(page.getByText("Select type")).toBeVisible();
-    const panelBox = await page.getByTestId("add-property-panel").boundingBox();
+    // The panel pops in from scale(0.97): measured on its first frame, a 320px
+    // panel sits 4.8px off its resting place (failed so under suite load).
+    const panel = page.getByTestId("add-property-panel");
+    await panel.evaluate((node) => Promise.all(node.getAnimations().map((animation) => animation.finished)));
+    const panelBox = await panel.boundingBox();
     const viewport = page.viewportSize();
     const fitsRight = addBox.x + panelBox.width <= viewport.width - 8;
     const expectedLeft = fitsRight ? addBox.x : addBox.x + addBox.width - panelBox.width;
