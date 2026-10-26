@@ -28,7 +28,10 @@ import {
 	ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
+import { BlockVisibilityPopover } from "./visibility/BlockVisibilityPopover";
+import { VisibilityScopeProvider } from "@/entities/block/model/visibilityScope";
 import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
+import { RenderModeProvider } from "@/entities/block/ui/renderMode";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
 import { complete as completeRoute } from "@/features/ai/api/aiClient";
@@ -60,6 +63,7 @@ import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { usePageContextMenu } from "../model/usePageContextMenu";
+import { clampViewportMenuPosition } from "@/shared/ui";
 
 // useEvent: an identity-STABLE wrapper whose call always runs the latest fn. The
 // callbacks returned by usePlaygroundBlockEditor get a fresh identity on every
@@ -383,6 +387,8 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 		contextMenuSections,
 		openContextMenu,
 		closeContextMenu,
+		showWhenTarget,
+		closeShowWhen,
 		handleBlockChange,
 		handleKeyDown,
 		handlePaste,
@@ -424,6 +430,10 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	const voiceSettings = useVoiceSettingsStore((state) => state.data);
 	const [dictation, setDictation] = useState(() => dictationSession.getState());
 	useEffect(() => dictationSession.subscribe(setDictation), []);
+	const visibilityPopoverBlockId = showWhenTarget?.blockId ?? null;
+	const visibilityPopoverPosition = showWhenTarget
+		? clampViewportMenuPosition(showWhenTarget.x, showWhenTarget.y, { width: Math.min(384, globalThis.innerWidth * 0.9), maxHeight: 320, margin: 12 })
+		: null;
 	const selectionRootRef = useRef<HTMLDivElement | null>(null);
 	const blocksRef = useRef<Block[]>(blocks);
 	// Pointer-down position on the bottom append zone, to tell a click from a drag.
@@ -999,6 +1009,18 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 
 			<BlockContextMenu menu={contextMenu} sections={contextMenuSections} onClose={closeContextMenu} />
 			<BlockContextMenu menu={pageMenuState} sections={pageMenuSections} onClose={closePageMenu} />
+			{/* Portal to <body>: the pane's `contain: paint` would otherwise anchor
+			    `position: fixed` to the pane and clip the popover at its edge. */}
+			{visibilityPopoverBlockId && findBlockById(blocks, visibilityPopoverBlockId) ? createPortal(
+				<div style={visibilityPopoverPosition ? { position: "fixed", left: visibilityPopoverPosition.left, top: visibilityPopoverPosition.top, zIndex: 50 } : undefined}>
+					<BlockVisibilityPopover
+						block={findBlockById(blocks, visibilityPopoverBlockId)!}
+						onSave={(updates) => { updateBlock(pageId, visibilityPopoverBlockId, updates); closeShowWhen(); }}
+						onClose={closeShowWhen}
+					/>
+				</div>,
+				document.body,
+			) : null}
 		</div>
 	);
 };
@@ -1947,8 +1969,12 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
  *  mount this component. */
 export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = (props) => (
 	<EditorSurfaceIdContext.Provider value={useId()}>
-		<ReadOnlyEmbedModeContext.Provider value="live">
-			<BlockEditorSurfaceBody {...props} />
-		</ReadOnlyEmbedModeContext.Provider>
+		<RenderModeProvider mode="live">
+			<ReadOnlyEmbedModeContext.Provider value="live">
+				<VisibilityScopeProvider pageId={props.pageId}>
+					<BlockEditorSurfaceBody {...props} />
+				</VisibilityScopeProvider>
+			</ReadOnlyEmbedModeContext.Provider>
+		</RenderModeProvider>
 	</EditorSurfaceIdContext.Provider>
 );

@@ -2049,6 +2049,8 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     contextMenuSections,
     openContextMenu,
     closeContextMenu,
+    showWhenTarget,
+    closeShowWhen,
   } = useBlockContextMenu({
     pageId,
     content,
@@ -2249,6 +2251,8 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     contextMenuSections,
     openContextMenu,
     closeContextMenu,
+    showWhenTarget,
+    closeShowWhen,
     handleBlockChange,
     handleKeyDown,
     handlePaste,

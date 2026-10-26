@@ -19,7 +19,7 @@ import { frameEquals, roundFrameForDom } from "../model/geometry";
 import { gridCellFromFrame } from "../model/migration";
 import { legacySizingFromCanvas } from "../model/migrationMaps";
 import type { CanvasCell, CanvasFrame, CanvasGridConfig } from "../model/types";
-import { evaluateCellVisibility } from "../model/visibility";
+import { evaluateCellVisibility } from "@/entities/block/model/visibility";
 import { CanvasCellChrome } from "./CanvasCellChrome";
 import { CanvasCellSurface } from "./CanvasCellSurface";
 import { CanvasResizeHandles, type CanvasResizeEdge } from "./CanvasResizeHandles";

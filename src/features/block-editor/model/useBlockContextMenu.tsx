@@ -16,6 +16,7 @@ import {
   ArrowUp,
   Copy,
   CopyPlus,
+  Eye,
   Link,
   MessageSquare,
   MoveRight,
@@ -229,6 +230,7 @@ export function useBlockContextMenu({
   const [contextMenu, setContextMenu] = useState<BlockContextMenuState | null>(
     null,
   );
+  const [showWhenTarget, setShowWhenTarget] = useState<{ blockId: string; x: number; y: number } | null>(null);
   const colorProfiles = useBlockColorProfileStore((state) => state.profiles);
   const isReadme = useAccountProfileStore((state) => isReadmePage(pageId, state.profile));
 
@@ -433,6 +435,14 @@ export function useBlockContextMenu({
     closeContextMenu();
   }, [closeContextMenu, contextMenu, pageId]);
 
+  const handleShowWhen = useCallback(() => {
+    if (!contextMenu) return;
+    setShowWhenTarget({ blockId: contextMenu.blockId, x: contextMenu.x, y: contextMenu.y });
+    closeContextMenu();
+  }, [closeContextMenu, contextMenu]);
+
+  const closeShowWhen = useCallback(() => setShowWhenTarget(null), []);
+
   const handleProfileFieldSettings = useCallback((bind: boolean) => {
     if (!contextMenu || !blockLocation) return;
     const { blockId } = contextMenu;
@@ -585,6 +595,11 @@ export function useBlockContextMenu({
               onClick: () => handleColumns(5),
             },
           ]),
+        },
+        {
+          icon: <Eye size={16} />,
+          label: "Show when…",
+          onClick: handleShowWhen,
         },
         {
           icon: <Palette size={16} />,
@@ -790,6 +805,7 @@ export function useBlockContextMenu({
     handleSetTableConfig,
     handleToggleHeading,
     handleButtonSettings,
+    handleShowWhen,
     handleProfileFieldSettings,
     isReadme,
     handleUnavailable,
@@ -801,5 +817,8 @@ export function useBlockContextMenu({
     contextMenuSections,
     openContextMenu,
     closeContextMenu,
+    showWhenTarget,
+    closeShowWhen,
   };
 }
+

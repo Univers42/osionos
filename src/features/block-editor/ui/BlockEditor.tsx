@@ -60,6 +60,7 @@ import { ButtonBlockEditor } from "@/features/button-program/ui/ButtonSettingsPo
 import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
+import { VisibleWhenGate } from "@/entities/block/ui/VisibleWhenGate";
 
 // embed/bookmark are void blocks (their content is a URL, not text), so they never reach
 // EditableContent. Lazy, like the whiteboard: the frame and card code stays off the warm chunk.
@@ -141,7 +142,7 @@ interface BlockEditorProps {
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 }
 
-export const BlockEditor: React.FC<BlockEditorProps> = ({
+const BlockEditorImpl: React.FC<BlockEditorProps> = ({
   pageId,
   block,
   numberedIndex,
@@ -1184,3 +1185,17 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
   }
 };
 
+
+const BlockEditor: React.FC<BlockEditorProps> = (props) => {
+  const visibleWhen = typeof props.block?.visibleWhen === "string" ? props.block.visibleWhen.trim() : "";
+  if (visibleWhen) {
+    return (
+      <VisibleWhenGate block={props.block} mode="edit">
+        <BlockEditorImpl {...props} />
+      </VisibleWhenGate>
+    );
+  }
+  return <BlockEditorImpl {...props} />;
+};
+
+export { BlockEditor };
