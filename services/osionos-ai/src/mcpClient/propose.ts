@@ -22,7 +22,9 @@ import { influencedBy } from './taint.ts';
  * The execute of an MCP tool CALLS NOTHING. It checks the arguments, stores
  * the question as an approval row, and asks: every call, with no exception,
  * waits for the user (C280). The server is contacted in the request that
- * decides, after the claim, and never here.
+ * decides, after the claim, and never here. One MCP call per step reaches a
+ * card; a second one in the same step is refused (C283, the stricter of C280
+ * and C283, whose tests disagreed on two calls in one step).
  *
  * Caveat: the per-minute window is the fixed one of the runs, which lets
  * through up to twice the limit around a minute boundary (src/rateLimit.ts).
@@ -46,6 +48,8 @@ export interface McpRunContext {
 /** The MCP tools of a run, as a tool set. */
 export function mcpToolSet(ctx: McpRunContext): ToolSet {
 	const set: ToolSet = {};
+	// The step that already holds an MCP call: one per step (C283).
+	let claimedStep = -1;
 	for (const entry of ctx.tools) {
 		set[entry.modelName] = {
 			description: entry.description,
@@ -62,6 +66,12 @@ export function mcpToolSet(ctx: McpRunContext): ToolSet {
 				if (Buffer.byteLength(JSON.stringify(callArgs), 'utf8') > MAX_APPROVAL_ARGS_BYTES) {
 					return refuse('the request is too big', 'This request is too big to be approved. Ask for less at a time.');
 				}
+				// The claim and its check are ONE stretch with no await: the calls
+				// of a step interleave at the awaits only, so two never both pass.
+				if (claimedStep === ctx.pool.step) {
+					return refuse('one outside tool call per step', 'Only one call to an outside tool can be asked at a time. Wait for the user to decide on the first one.');
+				}
+				claimedStep = ctx.pool.step;
 				// The words may have changed since the run began: the card must
 				// show the ones the user agreed to (C272).
 				const now = await getToolNow(ctx.db, entry.serverId, ctx.approval.ownerId, entry.toolName);
