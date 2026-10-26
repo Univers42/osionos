@@ -1,5 +1,8 @@
 import type { Pool } from 'pg';
 import { writeTools } from '../tools/writeToolList.ts';
+import { cardAgentOfRun } from '../agents/card.ts';
+import type { CardAgent } from '../agents/card.ts';
+import { getRun } from '../runs/repo.ts';
 import { countExecutedInRun } from './repo.ts';
 import type { ApprovalPlan, ApprovalRow, ApprovalTarget, McpCard } from './types.ts';
 import type { AuthUser } from '../auth.ts';
@@ -39,6 +42,8 @@ export interface ApprovalDescription {
 	/** The card of an MCP call, rebuilt from the stored row (C281). */
 	mcp?: McpCard & { changed: boolean };
 	influencedBy?: string[];
+	/** The agent of the run, from its pin (C304); null for the general assistant. */
+	agent: CardAgent | null;
 }
 
 /** The tool of an approval, by name. */
@@ -86,6 +91,7 @@ export async function describeApproval(
 		createdAt: new Date(row.created_at).toISOString(),
 		summary: summaryOf(row.result),
 		...(await taint(db, row)),
+		agent: await cardAgentOfRun(db, row.run_id ? await getRun(db, row.run_id) : null),
 	};
 }
 
@@ -117,6 +123,7 @@ async function describeMcp(db: Pool, row: ApprovalRow): Promise<ApprovalDescript
 		summary: summaryOf(row.result),
 		...(call ? { mcp: { ...cardOf(call), changed: !now || !now.enabled || now.snapshot_sha256 !== call.snapshotSha256 } } : {}),
 		...(await taint(db, row)),
+		agent: await cardAgentOfRun(db, row.run_id ? await getRun(db, row.run_id) : null),
 	};
 }
 
