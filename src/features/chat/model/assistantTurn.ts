@@ -34,6 +34,7 @@ import type { MemoryProposalPart } from "./memoryParts";
 import type { TruncatedFrame } from "./summaryNotice";
 import { withHandoff } from "./agentHandoff";
 import type { HandoffPart } from "./agentHandoff";
+import { withResearch, type ResearchFrame } from "./researchParts";
 import type { RunEventActions } from "./runEventDispatch";
 
 /** What a turn needs from the store. */
@@ -140,6 +141,10 @@ export function assistantTurn(
 
     suggestAgent(handoff: HandoffPart) {
       patchParts((current) => withHandoff(current, handoff));
+    },
+
+    noteResearch(frame: ResearchFrame) {
+      patchParts((current) => withResearch(current, frame));
     },
 
     finish() {

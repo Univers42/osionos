@@ -130,6 +130,12 @@ describe('research mode', { timeout: 180_000, skip: migrated ? false : 'the web 
 		await db.query('insert into public.ai_workspace_web_settings (workspace_id, web_enabled, updated_by) values ($1, true, $2)', [WS, owner]);
 	});
 
+	it('C414 the web settings tell a member that research is offered', async () => {
+		const response = await call(`/api/ai/workspaces/${WS}/web/settings`, { token: tokenFor(await newUser(), WS) });
+		assert.equal(response.status, 200);
+		assert.deepEqual(response.body, { enabled: true, research: true });
+	});
+
 	it('C396 mode research is accepted; any other mode is a 400', async () => {
 		arm({ toolCall: null });
 		const events = await research(await newUser());
