@@ -1,8 +1,10 @@
 /* The composer seen through the binocle's lens: a lit ring of four lights (the accent, violet,
-   pink and amber) with a soft halo of the same light around it. Both are drawn without any
-   motion, so a reader who asks for reduced motion still sees the perimeter lit — that static
-   state is the design, the turning is the extra. The light turns slowly while the composer
-   has the focus, faster while an answer is being written. */
+   pink and amber) with a soft halo of the same light around it. The light turns slowly all the
+   time, the halo brightens while the composer has the focus, and while an answer is being
+   written the light runs faster and the halo breathes. Both the ring and the halo are drawn
+   without any motion, so a reader who asks for reduced motion still sees the perimeter lit.
+   The reader's own Motion choice (Settings › Accessibility) wins over the OS in both
+   directions, like the global reset in global.css: "full" keeps the light turning. */
 @property --lens-angle {
   syntax: "<angle>";
   inherits: false;
@@ -30,6 +32,7 @@
   );
   box-shadow: 0 10px 34px -14px color-mix(in oklab, var(--lens-violet) 70%, transparent);
   transition: box-shadow var(--osio-dur-fast) ease;
+  animation: lens-turn 9s linear infinite;
 }
 
 /* The tints are text colours, quiet on purpose; the ring lifts their chroma so the four
@@ -51,8 +54,8 @@
   z-index: -1;
   border-radius: inherit;
   background: inherit;
-  filter: blur(18px);
-  opacity: 0.5;
+  filter: blur(22px);
+  opacity: 0.6;
   pointer-events: none;
   transition: opacity var(--osio-dur-fast) ease;
 }
@@ -63,19 +66,21 @@
   border-radius: calc(var(--osio-radius-panel) + 2px);
 }
 
-.lens:focus-within,
-.lens[data-working="true"] {
-  animation: lens-turn 7s linear infinite;
+.lens:focus-within {
   box-shadow: 0 12px 44px -12px color-mix(in oklab, var(--lens-violet) 85%, transparent);
 }
 
-.lens:focus-within::before,
-.lens[data-working="true"]::before {
-  opacity: 0.8;
+.lens:focus-within::before {
+  opacity: 0.85;
 }
 
 .lens[data-working="true"] {
-  animation-duration: 3s;
+  animation-duration: 2.8s;
+  box-shadow: 0 12px 48px -10px color-mix(in oklab, var(--lens-violet) 90%, transparent);
+}
+
+.lens[data-working="true"]::before {
+  animation: lens-breathe 1.4s ease-in-out infinite alternate;
 }
 
 /* The drawer under the lit composer: it hangs from the ring, narrower than it, so the two
@@ -97,9 +102,23 @@
   }
 }
 
+@keyframes lens-breathe {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 0.95;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .lens:focus-within,
-  .lens[data-working="true"] {
+  :root:not([data-motion="full"]) .lens,
+  :root:not([data-motion="full"]) .lens::before {
     animation: none;
   }
+}
+
+:root[data-motion="reduce"] .lens,
+:root[data-motion="reduce"] .lens::before {
+  animation: none;
 }
