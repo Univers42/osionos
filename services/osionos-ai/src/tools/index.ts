@@ -50,7 +50,8 @@ export interface ToolOutcome {
 	view?: 
 		| { action: 'open_page'; pageId: string; title: string; target: 'current' | 'tab' | 'split' }
 		| { action: 'open_panel'; panel: 'files' | 'search' | 'marketplace' | 'agents' | 'conversations' | 'notifications' | 'tasks' | 'public' | 'database' | 'scm' | 'run' | 'problems' | 'issues' }
-		| { action: 'open_issue_report'; title: string; description: string };
+		| { action: 'open_issue_report'; title: string; description: string }
+		| { action: 'suggest_agent'; agentId: string; reason: string };
 }
 
 export type { ToolSource };
