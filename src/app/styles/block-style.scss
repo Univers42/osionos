@@ -1,0 +1,223 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   block-style.scss                                   :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/25 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/10/25 00:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+$tone-map: (
+  "default": (color: var(--osio-fg-default), background: transparent),
+  "primary": (color: var(--osio-accent-fg), background: var(--osio-accent)),
+  "subtle": (color: var(--osio-fg-muted), background: var(--osio-bg-subtle)),
+  "ghost": (color: var(--osio-fg-default), background: transparent),
+  "danger": (color: var(--osio-danger-fg), background: var(--osio-danger)),
+  "danger-subtle": (color: var(--osio-danger), background: var(--osio-bg-subtle)),
+  "success": (color: var(--osio-success-fg), background: var(--osio-success)),
+  "warning": (color: var(--osio-warning-fg), background: var(--osio-warning)),
+  "accent": (color: var(--osio-accent-text), background: var(--osio-accent-subtle)),
+);
+@each $name, $props in $tone-map {
+  [data-s-tone="#{$name}"] {
+    color: map-get($props, color);
+    background-color: map-get($props, background);
+  }
+}
+
+$text-map: (
+  "default": var(--osio-fg-default),
+  "muted": var(--osio-fg-muted),
+  "subtle": var(--osio-fg-subtle),
+  "accent": var(--osio-accent-text),
+  "danger": var(--osio-danger),
+  "success": var(--osio-success),
+  "warning": var(--osio-warning),
+  "gray": var(--osio-block-tint-gray-fg),
+  "brown": var(--osio-block-tint-brown-fg),
+  "orange": var(--osio-block-tint-orange-fg),
+  "yellow": var(--osio-block-tint-yellow-fg),
+  "green": var(--osio-block-tint-green-fg),
+  "blue": var(--osio-block-tint-blue-fg),
+  "purple": var(--osio-block-tint-purple-fg),
+  "pink": var(--osio-block-tint-pink-fg),
+  "red": var(--osio-block-tint-red-fg),
+);
+@each $name, $token in $text-map {
+  [data-s-text="#{$name}"] {
+    color: $token;
+  }
+}
+
+$surface-map: (
+  "default": var(--osio-bg-surface),
+  "muted": var(--osio-bg-muted),
+  "subtle": var(--osio-bg-subtle),
+  "accent": var(--osio-accent-subtle),
+  "danger": color-mix(in srgb, var(--osio-danger) 10%, transparent),
+  "success": color-mix(in srgb, var(--osio-success) 10%, transparent),
+  "warning": color-mix(in srgb, var(--osio-warning) 10%, transparent),
+  "gray": var(--osio-block-tint-gray-bg),
+  "brown": var(--osio-block-tint-brown-bg),
+  "orange": var(--osio-block-tint-orange-bg),
+  "yellow": var(--osio-block-tint-yellow-bg),
+  "green": var(--osio-block-tint-green-bg),
+  "blue": var(--osio-block-tint-blue-bg),
+  "purple": var(--osio-block-tint-purple-bg),
+  "pink": var(--osio-block-tint-pink-bg),
+  "red": var(--osio-block-tint-red-bg),
+);
+@each $name, $token in $surface-map {
+  [data-s-surface="#{$name}"] {
+    background-color: $token;
+  }
+}
+
+[data-s-border="none"] {
+  border: 0;
+}
+[data-s-border]:not([data-s-border="none"]) {
+  border-style: solid;
+  border-width: var(--osio-border-width, 1px);
+}
+$border-color-map: (
+  "subtle": var(--osio-border-soft),
+  "default": var(--osio-border-default),
+  "strong": var(--osio-border-strong),
+  "danger": var(--osio-danger),
+  "accent": var(--osio-accent),
+);
+@each $name, $token in $border-color-map {
+  [data-s-border="#{$name}"] {
+    border-color: $token;
+  }
+}
+
+// A side list only narrows a border that is already on.
+[data-s-border][data-s-borderSides="top"] {
+  border-width: var(--osio-border-width, 1px) 0 0 0;
+}
+[data-s-border][data-s-borderSides="bottom"] {
+  border-width: 0 0 var(--osio-border-width, 1px) 0;
+}
+[data-s-border][data-s-borderSides="x"] {
+  border-width: 0 var(--osio-border-width, 1px) 0 var(--osio-border-width, 1px);
+}
+[data-s-border][data-s-borderSides="y"] {
+  border-width: var(--osio-border-width, 1px) 0 var(--osio-border-width, 1px) 0;
+}
+[data-s-border][data-s-borderSides="all"] {
+  border-width: var(--osio-border-width, 1px);
+}
+
+$radius-map: (
+  "none": 0,
+  "sm": var(--osio-radius-sm),
+  "md": var(--osio-radius),
+  "panel": var(--osio-radius-panel),
+  "lg": var(--osio-radius-lg),
+  "full": var(--osio-radius-full),
+);
+@each $name, $token in $radius-map {
+  [data-s-radius="#{$name}"] {
+    border-radius: $token;
+  }
+}
+
+@each $n in 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 {
+  [data-s-padding="#{$n}"] {
+    padding: calc(var(--spacing) * #{$n});
+  }
+  [data-s-paddingX="#{$n}"] {
+    padding-inline: calc(var(--spacing) * #{$n});
+  }
+  [data-s-paddingY="#{$n}"] {
+    padding-block: calc(var(--spacing) * #{$n});
+  }
+  [data-s-gap="#{$n}"] {
+    gap: calc(var(--spacing) * #{$n});
+  }
+  [data-s-fixedWidth="#{$n}"] {
+    width: calc(var(--spacing) * #{$n});
+  }
+  [data-s-basis="#{$n}"] {
+    flex-basis: calc(var(--spacing) * #{$n});
+  }
+}
+
+[data-s-width="hug"] {
+  width: fit-content;
+  max-width: 100%;
+}
+[data-s-width="fill"] {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 0%;
+}
+[data-s-width="fixed"] {
+  flex-shrink: 0;
+}
+
+[data-s-align="start"] {
+  align-items: flex-start;
+}
+[data-s-align="center"] {
+  align-items: center;
+}
+[data-s-align="end"] {
+  align-items: flex-end;
+}
+[data-s-align="stretch"] {
+  align-items: stretch;
+}
+
+[data-s-justify="start"] {
+  justify-content: flex-start;
+}
+[data-s-justify="center"] {
+  justify-content: center;
+}
+[data-s-justify="end"] {
+  justify-content: flex-end;
+}
+[data-s-justify="between"] {
+  justify-content: space-between;
+}
+
+$textsize-map: (
+  "xs": var(--osio-font-size-xs),
+  "sm": var(--osio-font-size-sm),
+  "base": var(--osio-font-size-base),
+  "lg": var(--osio-font-size-lg),
+  "xl": var(--osio-font-size-xl),
+);
+@each $name, $token in $textsize-map {
+  [data-s-textSize="#{$name}"] {
+    font-size: $token;
+  }
+}
+
+$weight-map: (
+  "regular": var(--osio-font-weight-normal),
+  "medium": var(--osio-font-weight-medium),
+  "semibold": var(--osio-font-weight-semibold),
+);
+@each $name, $token in $weight-map {
+  [data-s-weight="#{$name}"] {
+    font-weight: $token;
+  }
+}
+
+$shadow-map: (
+  "none": none,
+  "menu": var(--osio-shadow-menu),
+  "panel": var(--osio-shadow-modal),
+);
+@each $name, $token in $shadow-map {
+  [data-s-shadow="#{$name}"] {
+    box-shadow: $token;
+  }
+}
