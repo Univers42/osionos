@@ -44,6 +44,8 @@ import type { AuthUser } from '../auth.ts';
 import { loadAttachments } from './attachments.ts';
 import { fitFiles } from '../files/excerpt.ts';
 import type { FittedFile } from '../files/excerpt.ts';
+import { THREAD_SYSTEM_PROMPT } from '../threads/context.ts';
+import type { ThreadRun } from './upstreamInput.ts';
 
 export type { RunEvent };
 
@@ -128,6 +130,13 @@ export interface StartRunInput {
 	effort?: Effort;
 	/** The models the run moves to, in order, when the target fails before it said anything. */
 	fallbacks?: readonly ResolvedTarget[];
+	/**
+	 * A thread run (C429): `text` is the trigger message, the one turn the
+	 * transcript keeps (C442); the model reads the channel window instead, with
+	 * no history. The route passes no `user`, so the run has no tool, source,
+	 * skill, memory or web by construction.
+	 */
+	thread?: ThreadRun;
 	emit: (event: RunEvent) => void;
 }
 
@@ -210,6 +219,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		agentVersion: isCustomAgent(agent) ? null : (agent?.version ?? null),
 		customAgentId: isCustomAgent(agent) ? agent.id : null,
 		customAgentVersion: isCustomAgent(agent) ? agent.version : null,
+		...(input.thread ? { surface: { channelId: input.thread.channelId, messageId: input.thread.messageId } } : {}),
 	});
 	if (inserted.kind === 'conflict') {
 		// The conversation already has a running run: the partial unique index
@@ -270,11 +280,14 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 
 	// The history is read before the money moves: the reservation estimates the
 	// size of the prompt, so it has to know the prompt.
-	const window = await loadHistoryWindow(db, { conversationId, ownerId });
+	// A thread run reads no history: each "@AI" is one draft (C442).
+	const window = input.thread
+		? { messages: [], oldestKeptId: null, dropped: false }
+		: await loadHistoryWindow(db, { conversationId, ownerId });
 	const history = window.messages;
 	// The summary of the turns the window dropped, quoted when it ends before
 	// the window starts (context C384). Flag off: no column is read (C389).
-	const summary = config.summaryEnabled
+	const summary = config.summaryEnabled && !input.thread
 		? await readRunSummary(db, { conversationId, ownerId, oldestKeptId: window.oldestKeptId, dropped: window.dropped })
 		: null;
 	const summaryBlockText = summary?.quoted ? conversationSummaryBlock(summary.quoted.text, summary.quoted.through) : undefined;
@@ -348,13 +361,13 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
 	const estimateInputs = {
-		text,
+		text: input.thread?.prompt ?? text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(context.pages) + memoryChars(memories) + fileChars(files),
 		sourceChars: sourceChars(sources),
 		// The system prompt of THIS run: the base one, or the longer one of
 		// the agent. The reservation counts what the call really sends.
-		systemChars: systemPromptFor(agent, skillIndex).length,
+		systemChars: input.thread ? THREAD_SYSTEM_PROMPT.length : systemPromptFor(agent, skillIndex).length,
 		contextChars,
 		// The answer of a research step reads a larger pool share (C400).
 		...(input.research ? { limits: RESEARCH_LIMITS } : {}),
@@ -436,6 +449,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			...(accountBlockText ? { accountBlock: accountBlockText } : {}),
 			...(viewBlockText ? { viewBlock: viewBlockText } : {}),
 			...(workspaceBlockText ? { workspaceBlock: workspaceBlockText } : {}),
+			...(input.thread ? { thread: input.thread } : {}),
 		});
 	};
 	return { kind: 'started', run: (await getRun(db, runId)) as RunRow, execute };
