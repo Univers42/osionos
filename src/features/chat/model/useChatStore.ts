@@ -26,6 +26,7 @@ import { conversationApi } from "./conversationApi";
 import { useUserStore } from "@/features/auth";
 import { withMemoryDecision, type MemoryDecision } from "./memoryParts";
 import { withoutUnreadableMirrors } from "./storedChatRepair";
+import { DEFAULT_CONVERSATION_TITLE, isDefaultConversationTitle } from "./conversationTitle";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -47,6 +48,15 @@ const activeOwnerId = (): string | undefined => useUserStore.getState().activeUs
  */
 export function conversationsOf(conversations: Conversation[], userId: string | undefined): Conversation[] {
   return conversations.filter((c) => c.ownerId === undefined || c.ownerId === userId);
+}
+
+/**
+ * A chat opened and never used: its first title, no message here, none on the service.
+ * One that came from the service has no local message until it is opened, so the
+ * service id keeps it counted as used.
+ */
+export function isUntouchedConversation(conversation: Conversation, withMessages: ReadonlySet<string>): boolean {
+  return isDefaultConversationTitle(conversation.title) && !conversation.serverConversationId && !withMessages.has(conversation.id);
 }
 
 export function setInferencePort(port: InferencePort): void {
@@ -254,8 +264,20 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     },
 
     createConversation: (projectId = null, opts = {}) => {
+      // An untouched chat of the same owner and project is reused: reopening the
+      // assistant, or "New chat" twice, does not pile empty chats into the history.
+      if (!opts.title?.trim() && !opts.connectorId && !opts.model) {
+        const { conversations, messages } = get();
+        const withMessages = new Set(messages.map((m) => m.conversationId));
+        const ownerId = activeOwnerId();
+        const untouched = conversations.find((c) => c.ownerId === ownerId && c.projectId === projectId && isUntouchedConversation(c, withMessages));
+        if (untouched) {
+          set({ activeConversationId: untouched.id });
+          return untouched;
+        }
+      }
       const conversation: Conversation = {
-        id: uid(), projectId, title: opts.title?.trim() || "New conversation",
+        id: uid(), projectId, title: opts.title?.trim() || DEFAULT_CONVERSATION_TITLE,
         connectorId: opts.connectorId, model: opts.model, ownerId: activeOwnerId(), createdAt: now(), updatedAt: now(),
       };
       set((s) => ({ conversations: [conversation, ...s.conversations], activeConversationId: conversation.id }));
