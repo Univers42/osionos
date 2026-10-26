@@ -13,7 +13,8 @@
  * The frames of a run, and what they do.
  *
  * A run is a stream of frames: `run.started`, `citation`, `tool.called`,
- * `tool.result`, `permission.asked`, `memory.proposed`, `route`, `text.delta`, `done`, `error`. The store
+ * `tool.result`, `permission.asked`, `memory.proposed`, `route`, `text.delta`,
+ * `research.plan`, `research.progress`, `resume.gap`, `done`, `error`. The store
  * used to read them in one long `if` chain, inside the `send` of the chat, and
  * the chain grew with every frame the service learned.
  *
@@ -34,6 +35,7 @@ import { memoryProposalFromEvent } from "./memoryParts";
 import type { MemoryProposalPart } from "./memoryParts";
 import { truncatedFromEvent, type TruncatedFrame } from "./summaryNotice";
 import { handoffFromView } from "./agentHandoff";
+import { researchPlanFromEvent, researchProgressFromEvent, type ResearchFrame } from "./researchParts";
 import type { HandoffPart } from "./agentHandoff";
 import { applyViewAction } from "@/features/ai/model/viewActions";
 
@@ -61,6 +63,8 @@ export interface RunEventActions {
   noteTruncated?(truncated: TruncatedFrame): void;
   /** A view tool suggests another agent: a chip the user may press, never an action. */
   suggestAgent(handoff: HandoffPart): void;
+  /** Where a research run stands. Optional: a turn that shows no card ignores it. */
+  noteResearch?(frame: ResearchFrame): void;
 }
 
 const ROUTE_REASONS = ["rate_limited", "upstream_error", "unavailable"] as const;
@@ -181,6 +185,15 @@ export function dispatchRunEvent(
   if (event === "context.truncated") {
     const truncated = truncatedFromEvent(data);
     if (truncated) actions.noteTruncated?.(truncated);
+    return;
+  }
+  if (event === "research.plan" || event === "research.progress") {
+    const frame = event === "research.plan" ? researchPlanFromEvent(data) : researchProgressFromEvent(data);
+    if (frame) actions.noteResearch?.(frame);
+    return;
+  }
+  if (event === "resume.gap") {
+    actions.patchAssistant({ textGap: true });
     return;
   }
   if (event === "done") {

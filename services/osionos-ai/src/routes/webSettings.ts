@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { config } from '../config.ts';
 import { readJson, sendError, sendJson } from '../http.ts';
 import { canAccessWorkspaceLive } from '../workspaceAccess.ts';
 import { readWorkspaceWeb, writeWorkspaceWeb } from '../web/settings.ts';
@@ -13,6 +14,10 @@ import type { RouteContext } from './types.ts';
  * admin of the live member table flips it, from a session younger than ten
  * minutes, and only with `acknowledged: true`: the client showed the
  * disclosure that queries and fetched pages go to third parties.
+ *
+ * `research: true` is added only while OSIONOS_AI_RESEARCH is on and a SearXNG
+ * is configured, so the client offers the Research toggle (C414); with the
+ * flag off the body is unchanged (C415).
  */
 
 /** How fresh a session must be to flip the switch: a stolen hour-old session cannot. */
@@ -39,7 +44,8 @@ export async function handleWebSettings(ctx: RouteContext): Promise<number> {
 		return 404;
 	}
 	if (method === 'GET') {
-		sendJson(ctx.response, 200, { enabled: await readWorkspaceWeb(ctx.deps.db, workspaceId) });
+		const enabled = await readWorkspaceWeb(ctx.deps.db, workspaceId);
+		sendJson(ctx.response, 200, config.researchEnabled && config.searxngUrl ? { enabled, research: true } : { enabled });
 		return 200;
 	}
 	const body = await readJson(ctx.request, putSchema);
