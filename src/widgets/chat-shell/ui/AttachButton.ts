@@ -54,14 +54,27 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const ATTACH_ACCEPT =
   "image/png,image/jpeg,image/webp,.txt,.md,.markdown,.csv,.tsv,.json,.yaml,.yml,.xml,.html,.htm,.log,.ts,.tsx,.js,.jsx,.mjs,.py,.go,.rs,.c,.h,.cpp,.java,.rb,.php,.sh,.sql,.css,.scss,.toml,.ini";
 
+/**
+ * The bridge refuses markup types (they could render as a page from its origin).
+ * The service reads them as text anyway, so they travel as `text/plain`, are
+ * served as text, and attach as a file — an SVG included.
+ */
+const MARKUP_TYPES: ReadonlySet<string> = new Set(["text/html", "application/xhtml+xml", "image/svg+xml"]);
+
+/** What the composer uploads for a picked file, and the chip it shows. */
+export function uploadableFile(file: File): { file: File; kind: ComposerAttachment["kind"] } {
+  if (MARKUP_TYPES.has(file.type)) return { file: new File([file], file.name, { type: "text/plain" }), kind: "file" };
+  return { file, kind: file.type.startsWith("image/") ? "image" : "file" };
+}
+
 export const AttachButton: React.FC<Props> = ({ vision, attachments, onChange, max = MAX_ATTACHMENTS }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const onPick = async (file: File | null) => {
-    if (!file || attachments.length >= max) return;
-    const kind = file.type.startsWith("image/") ? "image" : "file";
+  const onPick = async (picked: File | null) => {
+    if (!picked || attachments.length >= max) return;
+    const { file, kind } = uploadableFile(picked);
     setNotice(null);
     if (kind === "image" && vision !== true) {
       setNotice(runError("model_no_vision").text);
