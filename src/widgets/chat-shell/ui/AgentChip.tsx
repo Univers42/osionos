@@ -12,12 +12,13 @@
 
 /** The agent of the next run, as a chip in the composer: it shows who answers and opens the list. */
 
-import React, { useRef, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { Check, ChevronDown, UsersRound } from "lucide-react";
 
 import { Button, MenuItem } from "@/shared/ui";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import { scopeWords } from "@/features/ai/model/agentForm";
+import { PANEL_MAX, PANEL_MIN, togglePanelMember } from "@/features/chat/model/agentPanel";
 import { AgentAvatar } from "./AgentAvatar";
 import { PopoverMenu } from "./PopoverMenu";
 
@@ -26,10 +27,15 @@ interface Props {
   /** The agent of the next run, or none (the general assistant). */
   agentId: string | null;
   onChange?: (agentId: string | null) => void;
+  /** The agents of the panel, in order; empty is no panel. */
+  panel?: string[];
+  onPanelChange?: (agentIds: string[]) => void;
 }
 
-export const AgentChip: React.FC<Props> = ({ agents, agentId, onChange }) => {
+export const AgentChip: React.FC<Props> = ({ agents, agentId, onChange, panel = [], onPanelChange }) => {
   const [open, setOpen] = useState(false);
+  // The panel is picked in the same menu: a draft until "Use panel".
+  const [draft, setDraft] = useState<string[] | null>(null);
   const anchorRef = useRef<HTMLSpanElement>(null);
   const runnable = agents.filter((agent) => agent.kind !== "custom" || !agent.archived);
   const current = runnable.find((agent) => agent.id === agentId) ?? null;
@@ -55,6 +61,33 @@ export const AgentChip: React.FC<Props> = ({ agents, agentId, onChange }) => {
     );
   };
 
+  // Switching to the picker unmounts the row that had the focus: put it on the first row.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const picking = draft !== null;
+  useEffect(() => {
+    if (open && picking) bodyRef.current?.querySelector<HTMLElement>("[role^=menuitem]:not(:disabled)")?.focus({ preventScroll: true });
+  }, [picking, open]);
+  const close = () => { setOpen(false); setDraft(null); };
+  const pickRow = (agent: AgentSummary) => {
+    const picked = draft?.includes(agent.id) ?? false;
+    const review = agent.kind === "custom" && agent.needsReview;
+    return (
+      <MenuItem
+        key={agent.id}
+        role="menuitemcheckbox"
+        aria-checked={picked}
+        disabled={review || (!picked && (draft?.length ?? 0) >= PANEL_MAX)}
+        icon={<AgentAvatar agent={agent} size={20} />}
+        onClick={() => setDraft((ids) => togglePanelMember(ids ?? [], agent.id))}
+      >
+        <span className="flex items-center gap-2">
+          <span className="min-w-0 truncate">{agent.name}</span>
+          {picked ? <Check size={14} aria-hidden="true" className="ml-auto shrink-0 text-[var(--osio-accent)]" /> : null}
+        </span>
+      </MenuItem>
+    );
+  };
+
   const builtIns = runnable.filter((agent) => agent.kind !== "custom");
   const custom = runnable.filter((agent) => agent.kind === "custom");
   return (
@@ -74,10 +107,27 @@ export const AgentChip: React.FC<Props> = ({ agents, agentId, onChange }) => {
           <ChevronDown size={14} aria-hidden="true" className="shrink-0" />
         </Button>
       </span>
-      <PopoverMenu anchorRef={anchorRef} open={open} onClose={() => setOpen(false)} label="Agent">
-        {(
-          <div className="w-[260px] max-w-[calc(100vw-4rem)] p-1">
+      <PopoverMenu anchorRef={anchorRef} open={open} onClose={close} label={draft ? "Panel" : "Agent"}>
+        {draft ? (
+          <div ref={bodyRef} className="w-[260px] max-w-[calc(100vw-4rem)] p-1">
+            <div role="presentation" className="px-3 pb-1 pt-2 text-xs font-medium text-[var(--osio-fg-muted)]">Pick {PANEL_MIN} or {PANEL_MAX} agents, in the order they answer</div>
+            {runnable.map((agent) => pickRow(agent))}
+            <MenuItem
+              role="menuitem"
+              disabled={draft.length < PANEL_MIN}
+              onClick={() => { onPanelChange?.(draft); close(); }}
+            >
+              Use panel
+            </MenuItem>
+          </div>
+        ) : (
+          <div ref={bodyRef} className="w-[260px] max-w-[calc(100vw-4rem)] p-1">
             {row(null)}
+            {onPanelChange ? (
+              <MenuItem role="menuitem" icon={<UsersRound size={16} aria-hidden="true" />} onClick={() => setDraft([...panel])}>
+                Panel…
+              </MenuItem>
+            ) : null}
             {builtIns.map((agent) => row(agent))}
             {custom.length > 0 ? (
               <>

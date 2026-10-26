@@ -54,6 +54,7 @@ const noActions: RunEventActions = {
   applyServerTitle: () => undefined,
   askPermission: () => undefined,
   proposeMemory: () => undefined,
+  suggestAgent: () => undefined,
 };
 
 test("open_page opens a tab, a split, or the current tab of an empty pane", async () => {

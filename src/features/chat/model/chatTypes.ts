@@ -17,13 +17,14 @@ import type { AiPart } from "@/features/ai/api/aiClient";
 import type { ToolActivityPart } from "./toolActivity";
 import type { PermissionPart } from "./approvalParts";
 import type { MemoryProposalPart } from "./memoryParts";
+import type { HandoffPart } from "./agentHandoff";
 
 /**
  * The parts of a message: the service's own (the sources of the answer), the
  * calls the assistant made to its tools, and the cards of the writes it asked
  * for, and the memories it proposed.
  */
-export type ChatMessagePart = AiPart | ToolActivityPart | PermissionPart | MemoryProposalPart;
+export type ChatMessagePart = AiPart | ToolActivityPart | PermissionPart | MemoryProposalPart | HandoffPart;
 
 export type MessageRole = "user" | "assistant" | "system";
 
@@ -37,7 +38,7 @@ export interface ChatMessage {
   model?: string;
   /** The connection the answer was paid for — the user's own, or the platform's. */
   connectionId?: string;
-  /** The agent that shaped the answer — the built-in the reader picked. */
+  /** The agent that shaped the answer: a built-in id, or a custom agent's uuid. */
   agentId?: string;
   /** The message parts, in the service's shape, and the calls of the tools. */
   parts?: ChatMessagePart[];
