@@ -15,7 +15,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import type { ChatMessage } from "@/features/chat/model/chatTypes";
 import { DiagramOutput } from "@/features/diagram/ui/DiagramOutput";
 import { AnswerRenderContext, type AnswerRenderState } from "@/features/chat/ui/answerRenderContext";
-import { AssistantActions, UserBubble } from "@/features/chat/ui/MessageActions";
+import { AssistantActions, RouteNote, UserBubble } from "@/features/chat/ui/MessageActions";
 import { MessageWindow } from "@/features/chat/ui/MessageWindow";
 import { ReasoningNote } from "@/features/chat/ui/ReasoningNote";
 import { ReadAloudButton } from "@/features/voice/ui/ReadAloudButton";
@@ -124,13 +124,16 @@ const AssistantMessageActions = React.memo(function AssistantMessageActions({
   messageId,
   content,
   feedback,
+  route,
 }: {
   messageId: string;
   content: string;
   feedback?: ChatMessage["feedback"];
+  route?: { primary: string; answeredBy: string; reason: NonNullable<ChatMessage["routeReason"]> };
 }) {
   return (
     <div className="mt-1 flex items-center justify-end gap-1">
+      {route ? <RouteNote {...route} /> : null}
       <AssistantActions
         content={content}
         feedback={feedback}
@@ -214,7 +217,12 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                 </span>
               ) : null}
               {m.role === "assistant" && m.status !== "streaming" && m.content ? (
-                <AssistantMessageActions messageId={m.id} content={m.content} feedback={m.feedback} />
+                <AssistantMessageActions
+                  messageId={m.id}
+                  content={m.content}
+                  feedback={m.feedback}
+                  route={m.answeredBy && m.routeReason ? { primary: m.model ?? "the chosen model", answeredBy: m.answeredBy, reason: m.routeReason } : undefined}
+                />
               ) : null}
               {m.status === "error" ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-[var(--osio-border-default)] pt-2 text-xs text-[var(--osio-fg-muted)]">
