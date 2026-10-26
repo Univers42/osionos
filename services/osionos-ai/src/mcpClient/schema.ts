@@ -100,7 +100,7 @@ function hasUnsafeParts(value: unknown): boolean {
 }
 
 /** Replaces the plaintext of the header wherever a server echoed it into a string. */
-function redactStrings(value: unknown, secret: string): unknown {
+export function redactStrings(value: unknown, secret: string): unknown {
 	if (!secret) return value;
 	if (typeof value === 'string') return value.split(secret).join('[redacted]');
 	if (Array.isArray(value)) return value.map((child) => redactStrings(child, secret));
@@ -117,6 +117,23 @@ function compiles(schema: Record<string, unknown>): boolean {
 		// server's $id must never answer for another's.
 		new AjvJsonSchemaValidator().getValidator(schema);
 		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Whether the arguments fit the stored schema (C277). Checked before the
+ * approval is stored AND again at execution.
+ *
+ * Caveat: the schema was screened for remote references and nested
+ * quantifiers, but a pattern that backtracks badly in another shape still
+ * runs here without a time limit; the arguments are capped at 64 KiB, which
+ * bounds the input, not the pattern.
+ */
+export function argsFit(schema: Record<string, unknown>, args: unknown): boolean {
+	try {
+		return new AjvJsonSchemaValidator().getValidator(schema)(args).valid;
 	} catch {
 		return false;
 	}

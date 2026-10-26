@@ -32,7 +32,7 @@ export interface MockOptions extends StreamOptions {
 	 * The call is answered once: the answer after it is the text, so the loop
 	 * of the model ends.
 	 */
-	toolCall: { name: string; arguments: Record<string, unknown> } | null;
+	toolCall: { name: string; arguments: Record<string, unknown>; also?: { name: string; arguments: Record<string, unknown> }[] } | null;
 	/** The exact answer text, instead of the mock's "part-0 part-1 …" chunks. */
 	answerText: string | null;
 	/**
