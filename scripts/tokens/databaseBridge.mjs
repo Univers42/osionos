@@ -191,7 +191,8 @@ const OWNED_TOKENS = [
   ["--osio-table-header-bg", "--osio-bg-subtle"],
   ["--osio-table-row-hover", "--osio-bg-hover"],
   ["--osio-table-border", "--osio-db-line"],
-  ...CHART_NAMES.map((name, i) => [`--osio-${name}`, `--osio-${["accent", ...["blue", "green", "orange", "purple", "pink", "red", "yellow", "brown", "gray"].map((c) => TINT(c, "fg"))][i]}`]),
+  // Series 1-8 are palette tokens (ramps.mjs CHART_SERIES); the two spares reuse tints.
+  ...CHART_NAMES.slice(8).map((name, i) => [`--osio-${name}`, `--osio-${TINT(["brown", "gray"][i], "fg")}`]),
 ];
 
 const block = (selectors, declarations) =>
