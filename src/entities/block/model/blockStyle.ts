@@ -53,7 +53,8 @@ export interface BlockStyle {
   shadow?: (typeof STYLE_SCALES.shadow)[number];
 }
 
-const PROP_SCALE: Record<string, keyof typeof STYLE_SCALES> = {
+/** Scale name (in STYLE_SCALES) for each BlockStyle property. */
+export const PROP_SCALE: Record<string, keyof typeof STYLE_SCALES> = {
   tone: 'tone',
   size: 'size',
   text: 'text',
@@ -75,6 +76,12 @@ const PROP_SCALE: Record<string, keyof typeof STYLE_SCALES> = {
   shadow: 'shadow',
 };
 
+/**
+ * Props whose CSS is defined by each block that uses them (e.g. the button in
+ * SB-3b), not by block-style.scss.
+ */
+export const COMPONENT_DEFINED_PROPS = ['size'] as const;
+
 export function sanitizeBlockStyle(input: unknown): BlockStyle {
   if (input === null || typeof input !== 'object' || Array.isArray(input)) return {};
   const out: BlockStyle = {};
@@ -88,39 +95,69 @@ export function sanitizeBlockStyle(input: unknown): BlockStyle {
   return out;
 }
 
-const STYLE_PROPS: readonly (keyof BlockStyle)[] = [
-  'tone', 'size', 'text', 'surface', 'border', 'borderSides', 'radius',
-  'padding', 'paddingX', 'paddingY', 'gap', 'width', 'fixedWidth', 'basis',
-  'align', 'justify', 'textSize', 'weight', 'shadow',
-];
+const TINT_TEXT_RE = /^var\(--osio-block-tint-([a-z]+)-fg\)$/;
+const TINT_SURFACE_RE = /^var\(--osio-block-tint-([a-z]+)-bg\)$/;
+
+function mappedFlatText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const match = value.match(TINT_TEXT_RE);
+  if (!match) return '';
+  const name = match[1];
+  return (STYLE_SCALES.text as readonly string[]).includes(name) ? name : '';
+}
+
+function mappedFlatSurface(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const match = value.match(TINT_SURFACE_RE);
+  if (!match) return '';
+  const name = match[1];
+  return (STYLE_SCALES.surface as readonly string[]).includes(name) ? name : '';
+}
+
+function flatKey(block: Pick<Block, 'style' | 'textColor' | 'backgroundColor'>): string {
+  return `${mappedFlatText(block.textColor)}|${mappedFlatSurface(block.backgroundColor)}`;
+}
 
 function computeStyle(block: Pick<Block, 'style' | 'textColor' | 'backgroundColor'>): Readonly<Record<string, string>> {
   const sanitized = sanitizeBlockStyle(block.style);
   const out: Record<string, string> = {};
-  for (const prop of STYLE_PROPS) {
-    const value = sanitized[prop];
+  for (const prop of Object.keys(PROP_SCALE)) {
+    const value = sanitized[prop as keyof BlockStyle];
     if (value !== undefined) out[`data-s-${prop}`] = String(value);
   }
-  // Flat fields are fallbacks: style wins when present.
-  if (out['data-s-text'] === undefined && block.textColor !== undefined && block.textColor !== null) {
-    out['data-s-text'] = String(block.textColor);
+  // Flat fields are fallbacks: style wins when present. Only tint vars map.
+  if (out['data-s-text'] === undefined) {
+    const name = mappedFlatText(block.textColor);
+    if (name) out['data-s-text'] = name;
   }
-  if (out['data-s-surface'] === undefined && block.backgroundColor !== undefined && block.backgroundColor !== null) {
-    out['data-s-surface'] = String(block.backgroundColor);
+  if (out['data-s-surface'] === undefined) {
+    const name = mappedFlatSurface(block.backgroundColor);
+    if (name) out['data-s-surface'] = name;
   }
   return Object.freeze(out);
 }
 
-const cache = new WeakMap<object, Readonly<Record<string, string>>>();
+const styleCache = new WeakMap<object, Map<string, Readonly<Record<string, string>>>>();
+const flatCache = new Map<string, Readonly<Record<string, string>>>();
 
 export function resolveBlockStyle(block: Pick<Block, 'style' | 'textColor' | 'backgroundColor'>): Readonly<Record<string, string>> {
   const style = block.style;
+  const fk = flatKey(block);
   if (style && typeof style === 'object') {
-    const hit = cache.get(style);
+    let inner = styleCache.get(style);
+    if (!inner) {
+      inner = new Map();
+      styleCache.set(style, inner);
+    }
+    const hit = inner.get(fk);
     if (hit) return hit;
     const result = computeStyle(block);
-    cache.set(style, result);
+    inner.set(fk, result);
     return result;
   }
-  return computeStyle(block);
+  const hit = flatCache.get(fk);
+  if (hit) return hit;
+  const result = computeStyle(block);
+  flatCache.set(fk, result);
+  return result;
 }

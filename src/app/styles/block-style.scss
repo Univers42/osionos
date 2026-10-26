@@ -10,10 +10,6 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// Static CSS for the BlockStyle data attributes (SB-1a). Every value maps to an
-// existing token; nothing here invents a colour or a spacing step.
-
-// --- tone ---
 $tone-map: (
   "default": (color: var(--osio-fg-default), background: transparent),
   "primary": (color: var(--osio-accent-fg), background: var(--osio-accent)),
@@ -26,29 +22,20 @@ $tone-map: (
   "accent": (color: var(--osio-accent-text), background: var(--osio-accent-subtle)),
 );
 @each $name, $props in $tone-map {
-  /* [data-s-tone="#{$name}"] */
   [data-s-tone="#{$name}"] {
     color: map-get($props, color);
     background-color: map-get($props, background);
   }
 }
 
-// --- size (no dedicated token; kept as a hook for component CSS) ---
-@each $v in sm, md, lg {
-  /* [data-s-size="#{$v}"] */
-  [data-s-size="#{$v}"] {
-  }
-}
-
-// --- text ---
 $text-map: (
   "default": var(--osio-fg-default),
   "muted": var(--osio-fg-muted),
   "subtle": var(--osio-fg-subtle),
   "accent": var(--osio-accent-text),
-  "danger": var(--osio-danger-fg),
-  "success": var(--osio-success-fg),
-  "warning": var(--osio-warning-fg),
+  "danger": var(--osio-danger),
+  "success": var(--osio-success),
+  "warning": var(--osio-warning),
   "gray": var(--osio-block-tint-gray-fg),
   "brown": var(--osio-block-tint-brown-fg),
   "orange": var(--osio-block-tint-orange-fg),
@@ -60,21 +47,19 @@ $text-map: (
   "red": var(--osio-block-tint-red-fg),
 );
 @each $name, $token in $text-map {
-  /* [data-s-text="#{$name}"] */
   [data-s-text="#{$name}"] {
     color: $token;
   }
 }
 
-// --- surface ---
 $surface-map: (
   "default": var(--osio-bg-surface),
   "muted": var(--osio-bg-muted),
   "subtle": var(--osio-bg-subtle),
   "accent": var(--osio-accent-subtle),
-  "danger": var(--osio-danger),
-  "success": var(--osio-success),
-  "warning": var(--osio-warning),
+  "danger": color-mix(in srgb, var(--osio-danger) 10%, transparent),
+  "success": color-mix(in srgb, var(--osio-success) 10%, transparent),
+  "warning": color-mix(in srgb, var(--osio-warning) 10%, transparent),
   "gray": var(--osio-block-tint-gray-bg),
   "brown": var(--osio-block-tint-brown-bg),
   "orange": var(--osio-block-tint-orange-bg),
@@ -86,36 +71,53 @@ $surface-map: (
   "red": var(--osio-block-tint-red-bg),
 );
 @each $name, $token in $surface-map {
-  /* [data-s-surface="#{$name}"] */
   [data-s-surface="#{$name}"] {
     background-color: $token;
   }
 }
 
-// --- border ---
-$border-map: (
-  "none": none,
+[data-s-border="none"] {
+  border: 0;
+}
+[data-s-border]:not([data-s-border="none"]) {
+  border-style: solid;
+  border-width: var(--osio-border-width, 1px);
+}
+$border-color-map: (
   "subtle": var(--osio-border-soft),
   "default": var(--osio-border-default),
   "strong": var(--osio-border-strong),
   "danger": var(--osio-danger),
   "accent": var(--osio-accent),
 );
-@each $name, $token in $border-map {
-  /* [data-s-border="#{$name}"] */
+@each $name, $token in $border-color-map {
   [data-s-border="#{$name}"] {
     border-color: $token;
   }
 }
 
-// --- border sides ---
 @each $v in all, top, bottom, x, y {
-  /* [data-s-borderSides="#{$v}"] */
   [data-s-borderSides="#{$v}"] {
   }
 }
 
-// --- radius ---
+// borderSides real rules, applied when a border colour is present
+[data-s-border][data-s-borderSides="top"] {
+  border-width: var(--osio-border-width, 1px) 0 0 0;
+}
+[data-s-border][data-s-borderSides="bottom"] {
+  border-width: 0 0 var(--osio-border-width, 1px) 0;
+}
+[data-s-border][data-s-borderSides="x"] {
+  border-width: 0 var(--osio-border-width, 1px) 0 var(--osio-border-width, 1px);
+}
+[data-s-border][data-s-borderSides="y"] {
+  border-width: var(--osio-border-width, 1px) 0 var(--osio-border-width, 1px) 0;
+}
+[data-s-border][data-s-borderSides="all"] {
+  border-width: var(--osio-border-width, 1px);
+}
+
 $radius-map: (
   "none": 0,
   "sm": var(--osio-radius-sm),
@@ -125,94 +127,71 @@ $radius-map: (
   "full": var(--osio-radius-full),
 );
 @each $name, $token in $radius-map {
-  /* [data-s-radius="#{$name}"] */
   [data-s-radius="#{$name}"] {
     border-radius: $token;
   }
 }
 
-// --- space (padding / gap / fixedWidth / basis) ---
 @each $n in 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 {
-  /* [data-s-space="#{$n}"] */
-  [data-s-space="#{$n}"] {
-  }
-  /* [data-s-padding="#{$n}"] */
   [data-s-padding="#{$n}"] {
     padding: calc(var(--spacing) * #{$n});
   }
-  /* [data-s-paddingX="#{$n}"] */
   [data-s-paddingX="#{$n}"] {
     padding-inline: calc(var(--spacing) * #{$n});
   }
-  /* [data-s-paddingY="#{$n}"] */
   [data-s-paddingY="#{$n}"] {
     padding-block: calc(var(--spacing) * #{$n});
   }
-  /* [data-s-gap="#{$n}"] */
   [data-s-gap="#{$n}"] {
     gap: calc(var(--spacing) * #{$n});
   }
-  /* [data-s-fixedWidth="#{$n}"] */
   [data-s-fixedWidth="#{$n}"] {
     width: calc(var(--spacing) * #{$n});
   }
-  /* [data-s-basis="#{$n}"] */
   [data-s-basis="#{$n}"] {
     flex-basis: calc(var(--spacing) * #{$n});
   }
 }
 
-// --- width ---
-/* [data-s-width="hug"] */
 [data-s-width="hug"] {
   width: fit-content;
+  max-width: 100%;
 }
-/* [data-s-width="fill"] */
 [data-s-width="fill"] {
   width: 100%;
+  min-width: 0;
+  flex: 1 1 0%;
 }
-/* [data-s-width="fixed"] */
 [data-s-width="fixed"] {
-  width: auto;
+  flex-shrink: 0;
 }
 
-// --- align ---
-/* [data-s-align="start"] */
 [data-s-align="start"] {
   align-items: flex-start;
 }
-/* [data-s-align="center"] */
 [data-s-align="center"] {
   align-items: center;
 }
-/* [data-s-align="end"] */
 [data-s-align="end"] {
   align-items: flex-end;
 }
-/* [data-s-align="stretch"] */
 [data-s-align="stretch"] {
   align-items: stretch;
 }
 
-// --- justify ---
-/* [data-s-justify="start"] */
 [data-s-justify="start"] {
   justify-content: flex-start;
 }
-/* [data-s-justify="center"] */
 [data-s-justify="center"] {
   justify-content: center;
 }
-/* [data-s-justify="end"] */
 [data-s-justify="end"] {
   justify-content: flex-end;
 }
-/* [data-s-justify="between"] */
 [data-s-justify="between"] {
   justify-content: space-between;
 }
 
-// --- textSize ---
 $textsize-map: (
   "xs": var(--osio-font-size-xs),
   "sm": var(--osio-font-size-sm),
@@ -221,34 +200,32 @@ $textsize-map: (
   "xl": var(--osio-font-size-xl),
 );
 @each $name, $token in $textsize-map {
-  /* [data-s-textSize="#{$name}"] */
   [data-s-textSize="#{$name}"] {
     font-size: $token;
   }
 }
 
-// --- weight ---
 $weight-map: (
   "regular": var(--osio-font-weight-normal),
   "medium": var(--osio-font-weight-medium),
   "semibold": var(--osio-font-weight-semibold),
 );
 @each $name, $token in $weight-map {
-  /* [data-s-weight="#{$name}"] */
   [data-s-weight="#{$name}"] {
     font-weight: $token;
   }
 }
 
-// --- shadow ---
 $shadow-map: (
   "none": none,
   "menu": var(--osio-shadow-menu),
   "panel": var(--osio-shadow-modal),
 );
 @each $name, $token in $shadow-map {
-  /* [data-s-shadow="#{$name}"] */
   [data-s-shadow="#{$name}"] {
     box-shadow: $token;
   }
 }
+
+// borderSides all = every side
+// (already covered by all rule above)
