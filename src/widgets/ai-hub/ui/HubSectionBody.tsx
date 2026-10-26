@@ -2,6 +2,7 @@
 import React from "react";
 import { AccessTokensPanel } from "@/features/settings/ai/AccessTokensPanel";
 import { AiConnectionsPanel } from "@/features/settings/ai/AiConnectionsPanel";
+import { McpServersSection } from "@/features/settings/ai/McpServersSection";
 import { AiMemoryPanel } from "@/features/settings/ai/AiMemoryPanel";
 import { WorkspaceSkillsPanel } from "@/features/settings/ai/WorkspaceSkillsPanel";
 import { useAiWorkspaces } from "@/features/settings/ai/useAiWorkspaces";
@@ -30,7 +31,12 @@ export const HubSectionBody: React.FC<{ id: HubSectionId }> = ({ id }) => {
     case "skills": return <WorkspaceSkillsPanel workspaces={workspaces} />;
     case "memory": return <AiMemoryPanel workspaces={workspaces} />;
     // AccessTokensPanel already ends with the MCP approvals section.
-    case "mcp": return <AccessTokensPanel workspaces={workspaces} />;
+    case "mcp": return (
+      <div className="space-y-6">
+        <McpServersSection />
+        <AccessTokensPanel workspaces={workspaces} />
+      </div>
+    );
     case "privacy": return <HubPrivacySection />;
   }
 };
