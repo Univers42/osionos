@@ -88,6 +88,14 @@ Integration branch: `feat/self-built-ui` (from develop `3be8dc71b`). One worktre
 
 Plans 2 to 8 are written at the start of their phase, each from a fresh read of the code. The interfaces they consume are the ones the previous plan's tasks produce. This plan details S0 and the first S1 slice.
 
+### Visible-first order (owner, 2026-10-26 03:45)
+
+The owner saw nothing change in the live app after 8 merged packages, because no settings section is rebuilt until all of S4 lands. The dependency table above stays true. Only the order of dispatch changes: the first rebuilt section goes live before the rest of S4.
+
+1. **Slice 1, one section built from blocks:** SB-1b → SB-1d → SB-1e, SB-4f and SB-2c → `SB-5-accessibility_voice`. Its dependency on "S4, S4b" narrows to SB-1e, SB-2c and SB-4f: that section needs only text, toggle, select and slider fields over its existing record sources (SB-2b). It ships behind `osio.settings.blocks` (default on for that one section, `?osio.settings.blocks=0` restores the old panel). It passes parity at 0.1 % against today's panel before it goes live.
+2. **Every merge that changes what a user sees ships in the next wave.** A wave is the integration tip merged with `origin/main`, through a PR to `main` (`develop` was deleted on 2026-10-25 23:45Z), then the funnel promote procedure (`groot-wt/deploy/DEPLOY-NOTES.md`). Plumbing waits for the next visible change, so it doesn't cost a deploy.
+3. The rest of S4 is dispatched in the order the next sections need it: SB-3b and SB-3c (plans, billing), SB-4a and SB-4b (lists), then SB-4c, SB-4d, SB-4e, SB-4h and SB-4j as their sections come up.
+
 ## Orchestration (per package)
 
 1. Spec → `docs/self-built-ui/wp/<ID>.md` (OWNS / MUST-NOT-TOUCH, interfaces, tests, gates). 👹 packages get the devil verdict first.
