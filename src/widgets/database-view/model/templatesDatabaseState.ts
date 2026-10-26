@@ -28,15 +28,16 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
+import { dedupeById, safeCardCover } from "./homeLiveEntries";
 import { TEMPLATES_DB_ID, TEMPLATES_GALLERY_VIEW } from "./workspaceDatabaseConstants";
 
 const TEMPLATE_TITLE = "home-template-title";
 
 /** The active workspace's template pages (isTemplate, not archived, readable). */
-function templateEntries(): PageEntry[] {
+export function templateEntries(): PageEntry[] {
   const workspaceId = useUserStore.getState().activeWorkspace()?._id;
   if (!workspaceId) return [];
-  return usePageStore.getState().templatePages(workspaceId);
+  return dedupeById(usePageStore.getState().templatePages(workspaceId));
 }
 
 /** osionos template page → a minimal gallery card record (id === real page id). */
@@ -46,7 +47,7 @@ function entryToCard(entry: PageEntry): Page {
     id: entry._id,
     databaseId: TEMPLATES_DB_ID,
     icon: entry.icon,
-    cover: entry.cover,
+    cover: safeCardCover(entry.cover),
     properties: { [TEMPLATE_TITLE]: entry.title || "Untitled template" },
     content: [],
     createdAt: at,
