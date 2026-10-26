@@ -36,18 +36,19 @@ test.describe("database-sort-filter", () => {
 
     // SORT — mounts SortPanel (crash site). Panel opens + chrome intact = no blank.
     await sortBtn.click();
-    await expect(page.getByText("Sorts", { exact: true })).toBeVisible();
+    const sortPanel = page.getByRole("dialog", { name: "Sort" });
+    await expect(sortPanel.getByRole("textbox", { name: "Sort by property" })).toBeVisible();
     await expect(filterBtn).toBeVisible();
-    // Apply a sort (SortPanel's "Add sort" uses the first property — deterministic).
-    await page.getByRole("button", { name: /Add sort/ }).click();
-    await expect(page.getByRole("button", { name: /Ascending|Descending/ }).first()).toBeVisible();
+    // Apply a sort on the first property listed — deterministic.
+    await sortPanel.locator("button:has(span.truncate)").first().click();
+    await expect(sortPanel.getByRole("button", { name: /Ascending|Descending/ }).first()).toBeVisible();
     // Sort is a popover pinned to its button; it closes before the next toolbar click.
     await page.keyboard.press("Escape");
     await expect(page.locator('dialog[aria-label="Sort"]')).toHaveCount(0);
 
     // FILTER — mounts FilterPropertyPicker (the other crash site).
     await filterBtn.click();
-    const picker = page.locator(".z-\\[9999\\]").filter({ hasText: "Add filter" });
+    const picker = page.getByRole("dialog", { name: "Add filter" });
     await expect(picker).toBeVisible();
     await expect(sortBtn).toBeVisible();
     // Apply a filter on the first property → the persistent filter bar appears.
