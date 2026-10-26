@@ -20,7 +20,7 @@ export type MoveOutcome = { kind: 'stay' } | { kind: 'refused' } | { kind: 'move
 export interface MoveInput {
 	db: Pool;
 	redis: Redis;
-	run: { signal: AbortSignal; runId: string; userId: string; day: string; promptChars: number };
+	run: Parameters<typeof startAttempt>[1];
 	steps: readonly ChainStep[];
 	index: number;
 	current: Attempt;
