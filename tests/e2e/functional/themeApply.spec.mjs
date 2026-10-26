@@ -23,9 +23,18 @@ const computedToken = (page, name) => page.evaluate((token) => getComputedStyle(
 test.describe("custom theme at first paint", () => {
   test("the cached theme is on <html> before the app mounts, and the boot pass keeps it", async ({ page, baseURL }) => {
     await seed(page, THEME);
+    await page.addInitScript(() => {
+      window.__firstThemeWrite = null;
+      // <html> does not exist yet when init scripts run, so watch the document.
+      new MutationObserver(() => {
+        const root = document.documentElement;
+        const value = root?.style.getPropertyValue("--osio-bg-page");
+        if (window.__firstThemeWrite || !value) return;
+        window.__firstThemeWrite = { value, theme: root.dataset.theme, readyState: document.readyState, mounted: Boolean(document.getElementById("root")?.firstChild) };
+      }).observe(document, { attributes: true, subtree: true });
+    });
     await page.goto(baseURL, { waitUntil: "domcontentloaded" });
-    expect(await computedToken(page, "--osio-bg-page")).toBe("#123456");
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    expect(await page.evaluate(() => window.__firstThemeWrite)).toEqual({ value: "#123456", theme: "dark", readyState: "loading", mounted: false });
 
     await createNewWorkspacePage(page);
     expect(await computedToken(page, "--osio-bg-page")).toBe("#123456");
@@ -46,10 +55,10 @@ test.describe("custom theme at first paint", () => {
   });
 
   test("a cache with a value that could leave its declaration is not written", async ({ page, baseURL }) => {
-    await seed(page, { v: 1, vars: { "--osio-bg-page": "red;}", "--x": "red" } });
+    // The browser itself would accept the var() value; only the filter keeps it out.
+    await seed(page, { v: 1, vars: { "--osio-bg-page": "red;}", "--osio-link": "var(--osio-danger)", "--x": "red" } });
     await page.goto(baseURL, { waitUntil: "domcontentloaded" });
-    expect(await inlineToken(page, "--osio-bg-page")).toBe("");
-    expect(await inlineToken(page, "--x")).toBe("");
+    for (const name of ["--osio-bg-page", "--osio-link", "--x"]) expect(await inlineToken(page, name)).toBe("");
     await createNewWorkspacePage(page);
     expect(await inlineToken(page, "--osio-bg-page")).toBe("");
     expect(await computedToken(page, "--osio-bg-page")).not.toBe("");
