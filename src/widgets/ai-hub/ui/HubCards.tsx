@@ -2,7 +2,7 @@
 // without a network. The data comes from useHubData.
 import React from "react";
 import { formatMicroUsd } from "@/features/settings/ai/aiUsageFormat";
-import type { AiSelection } from "@/features/ai/model/aiSelection";
+import { PLATFORM_CONNECTION_ID, type AiSelection } from "@/features/ai/model/aiSelection";
 
 export type Loadable<T> = { state: "loading" } | { state: "failed" } | { state: "ready"; value: T };
 
@@ -39,7 +39,7 @@ export const ModelCard: React.FC<{ selection: AiSelection | null }> = ({ selecti
   <HubCard title="Model">
     <div>{selection?.model ? selection.model : "Automatic"}</div>
     <div className="text-xs text-[var(--osio-fg-muted)]">
-      {selection ? `Connection: ${selection.connectionId}` : "Connection: platform default"}
+      {selection && selection.connectionId !== PLATFORM_CONNECTION_ID ? "Through your own connection" : "Through the platform"}
     </div>
   </HubCard>
 );

@@ -1,5 +1,6 @@
 // The AI Hub pane: a list of sections on the left (stacked above below 640 px) and the
 // selected section on the right. It composes the Settings panels; it owns no AI setting.
+// A section, not <main>: the workspace already has the page's one main landmark.
 import React, { useState } from "react";
 import { HUB_SECTIONS, type HubSectionId } from "./hubSections";
 import { HubSectionBody } from "./HubSectionBody";
@@ -25,10 +26,10 @@ export const AiHubView: React.FC = () => {
           </button>
         ))}
       </nav>
-      <main className="min-w-0 flex-1 overflow-y-auto p-4 min-[640px]:p-6">
+      <section aria-label={current.label} className="min-w-0 flex-1 overflow-y-auto p-4 min-[640px]:p-6">
         <h1 className="mb-4 text-xl font-semibold text-[var(--osio-fg-default)]">{current.label}</h1>
         <HubSectionBody id={selected} />
-      </main>
+      </section>
     </div>
   );
 };
