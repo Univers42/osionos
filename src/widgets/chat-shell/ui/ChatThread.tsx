@@ -30,6 +30,7 @@ import { provenanceTitles } from "@/features/chat/model/approvalCard";
 import { ApprovalCard } from "@/features/chat/ui/ApprovalCard";
 import { memoryProposalsFromParts } from "@/features/chat/model/memoryParts";
 import { MemoryProposalChip } from "@/features/chat/ui/MemoryProposalChip";
+import { SummaryNotice } from "@/features/chat/ui/SummaryNotice";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { useChatStore } from "@/features/chat/model/useChatStore";
 import { RunErrorNotice } from "@/features/chat/model/runErrorNotice";
@@ -197,6 +198,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-8" data-testid="chat-thread">
+      {messages[0] ? <SummaryNotice conversationId={messages[0].conversationId} /> : null}
       <MessageWindow items={messages}>
         {(visible, offset) => visible.map((m, visibleIndex) => {
         const index = offset + visibleIndex;

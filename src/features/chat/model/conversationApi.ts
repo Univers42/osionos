@@ -23,7 +23,8 @@ import * as client from "@/features/ai/api/aiClient";
 export interface ConversationApi {
   isConfigured: () => boolean;
   list: typeof client.listConversations;
-  messages: typeof client.listMessages;
+  transcript: typeof client.getTranscript;
+  clearSummary: typeof client.clearConversationSummary;
   rename: typeof client.renameConversation;
   remove: typeof client.deleteConversation;
 }
@@ -31,7 +32,8 @@ export interface ConversationApi {
 const realApi: ConversationApi = {
   isConfigured: client.isAiConfigured,
   list: client.listConversations,
-  messages: client.listMessages,
+  transcript: client.getTranscript,
+  clearSummary: client.clearConversationSummary,
   rename: client.renameConversation,
   remove: client.deleteConversation,
 };

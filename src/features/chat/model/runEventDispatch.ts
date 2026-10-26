@@ -32,6 +32,7 @@ import { permissionFromEvent } from "./approvalParts";
 import type { PermissionPart } from "./approvalParts";
 import { memoryProposalFromEvent } from "./memoryParts";
 import type { MemoryProposalPart } from "./memoryParts";
+import { truncatedFromEvent, type TruncatedFrame } from "./summaryNotice";
 import { handoffFromView } from "./agentHandoff";
 import type { HandoffPart } from "./agentHandoff";
 import { applyViewAction } from "@/features/ai/model/viewActions";
@@ -56,6 +57,8 @@ export interface RunEventActions {
   askPermission(permission: PermissionPart): void;
   /** The assistant proposes a fact to remember: the chip that asks the user. */
   proposeMemory(proposal: MemoryProposalPart): void;
+  /** The run dropped older turns from its window. Optional: a turn that shows no notice ignores it. */
+  noteTruncated?(truncated: TruncatedFrame): void;
   /** A view tool suggests another agent: a chip the user may press, never an action. */
   suggestAgent(handoff: HandoffPart): void;
 }
@@ -173,6 +176,11 @@ export function dispatchRunEvent(
     // The frame carries model ids and a closed reason, never an upstream body (C260).
     if (typeof data.to !== "string" || data.to === "") return;
     actions.patchAssistant({ answeredBy: data.to, routeReason: routeReasonOf(data.reason) });
+    return;
+  }
+  if (event === "context.truncated") {
+    const truncated = truncatedFromEvent(data);
+    if (truncated) actions.noteTruncated?.(truncated);
     return;
   }
   if (event === "done") {
