@@ -48,14 +48,14 @@ function enforceRequired(blocks: readonly Block[], shipped: readonly Block[], re
    - **deleted by the user** (in `fingerprints`, absent from the copy): stays deleted.
    - **new in the shipped page** (in neither `fingerprints` nor the result): inserted under its shipped parent when that parent is in the result, right after the nearest preceding shipped sibling present there, else first. When its shipped parent is not in the result (the user deleted the container), it is not inserted. Root-level blocks use the root list the same way.
    - `fingerprints` in the result: every entry for a block still shipped or still in the result; entries for ids in neither are dropped.
-3. **Required blocks come back.** `enforceRequired` inserts every `required` id missing from `blocks` (at any depth) from the shipped tree, with only those shipped children whose ids are not already present, at its shipped position by Rule 2's insertion rule. When its shipped parent is missing, it goes under the nearest shipped ancestor present in the result (as its last child), else at the root by the root rule. On every required block present, `visibleWhen` is the shipped block's value (removed when the shipped block has none): a copy cannot hide a required control. An id in `required` that the shipped tree does not hold is ignored.
+3. **Required blocks come back.** `enforceRequired` inserts every `required` id missing from `blocks` (at any depth) from the shipped tree, with only those shipped children whose ids are not already present, at its shipped position by Rule 2's insertion rule. When its shipped parent is missing, it goes under the nearest shipped ancestor present in the result (as its last child), else at the root by the root rule. On every required block present, `visibleWhen` and the sizing keys of `style` (`width`, `fixedWidth`, `basis`, `size`, `textSize`) are the shipped block's values (each removed when the shipped block has none): a copy cannot hide or shrink a required control. Its other style keys (tone, surface, border, radius, spacing, alignment) stay the copy's. An id in `required` that the shipped tree does not hold is ignored.
 4. **Safe on odd input.** Inputs are never mutated. A copy holding the same id twice keeps the first occurrence (pre-order) and drops the later ones with their subtrees. A user block whose subtree the merge did not change is returned as the same object (`===`), so a merge after a no-op ship re-renders nothing.
 5. **Properties.** With `mulberry32` over 500 seeds, generate a shipped tree (depth ≤ 4, ≤ 60 blocks), derive a copy by random edits, deletions, moves and additions, and a new shipped version by random edits, removals, moves and additions; then assert:
    - ids in the result are unique;
    - every block the user added appears exactly once;
    - every block the user edited appears exactly once with the user's own fields;
    - every block the user deleted is absent unless it is required;
-   - every required id is present exactly once and carries the shipped `visibleWhen`;
+   - every required id is present exactly once and carries the shipped `visibleWhen` and sizing keys;
    - idempotence: merging the result again against the same shipped page with the result's fingerprints returns a deep-equal tree and map;
    - a fresh copy: `mergeBlockTree(shipped, shipped, seedFingerprints(shipped))` deep-equals `shipped`.
 6. **Linear.** Each function builds its id maps once and is O(n) in the blocks of both trees; no per-block `find` over a list. `tree-merge.bench.ts` reports p50 and p95 for a 2,000-block copy against a 2,000-block shipped page (paste them; no budget assertion in the bench).
@@ -69,7 +69,8 @@ function enforceRequired(blocks: readonly Block[], shipped: readonly Block[], re
   - (a) an untouched block no longer shipped is kept;
   - (b) a new shipped block whose parent the user deleted is inserted at the root;
   - (c) `fingerprintShallow` includes `children`;
-  - (d) `enforceRequired` keeps the copy's `visibleWhen`.
+  - (d) `enforceRequired` keeps the copy's `visibleWhen`;
+  - (e) `enforceRequired` keeps the copy's `width` on a required block.
 - [ ] **Step 5: Gates.** `npm run test:canvas` rc 0; `npm run test:quality` rc 0; `npm run test:bench -- tests/bench/tree-merge.bench.ts` (paste p50/p95). Report each.
 - [ ] **Step 6: Commit** with the message above. No trailer, no push.
 
