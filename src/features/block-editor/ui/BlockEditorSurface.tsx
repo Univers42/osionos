@@ -29,6 +29,7 @@ import {
 } from "@/entities/block/model/blockVirtualization";
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
 import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
+import { RenderModeProvider } from "@/entities/block/ui/renderMode";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
 import { complete as completeRoute } from "@/features/ai/api/aiClient";
@@ -1947,8 +1948,10 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
  *  mount this component. */
 export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = (props) => (
 	<EditorSurfaceIdContext.Provider value={useId()}>
-		<ReadOnlyEmbedModeContext.Provider value="live">
-			<BlockEditorSurfaceBody {...props} />
-		</ReadOnlyEmbedModeContext.Provider>
+		<RenderModeProvider mode="live">
+			<ReadOnlyEmbedModeContext.Provider value="live">
+				<BlockEditorSurfaceBody {...props} />
+			</ReadOnlyEmbedModeContext.Provider>
+		</RenderModeProvider>
 	</EditorSurfaceIdContext.Provider>
 );

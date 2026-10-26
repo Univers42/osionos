@@ -14,6 +14,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Block } from "@/entities/block";
 import { ReadOnlyBlock } from "@/entities/block";
+import { RenderModeProvider } from "@/entities/block/ui/renderMode";
 import {
   createRootBlockRenderMeta,
   estimateBlockHeight,
@@ -149,7 +150,8 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
 
   if (shouldVirtualize) {
     return (
-      <div ref={rootRef} className="relative" style={{ height: virtualizer.getTotalSize() }}>
+      <RenderModeProvider mode="preview">
+        <div ref={rootRef} className="relative" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((virtualItem) => {
           const item = renderMeta[virtualItem.index];
           if (!item) return null;
@@ -167,14 +169,17 @@ export const PageBlocksRenderer: React.FC<PageBlocksRendererProps> = ({
           );
         })}
       </div>
+      </RenderModeProvider>
     );
   }
 
   return (
-    <div ref={rootRef} className="flex flex-col">
+    <RenderModeProvider mode="preview">
+      <div ref={rootRef} className="flex flex-col">
       {renderMeta.map((item) => (
         <ReadOnlyBlock key={item.block.id} block={item.block} index={item.effectiveIndex} properties={properties} />
       ))}
     </div>
+    </RenderModeProvider>
   );
 };

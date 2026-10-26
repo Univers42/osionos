@@ -57,6 +57,7 @@ import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
 import { PageShareButton } from './PageShareButton';
+import { PageEditToggle } from './PageEditToggle';
 import { PageFavoriteButton } from './PageFavoriteButton';
 import { PageCommentsButton } from '@/features/comments/ui/PageCommentsButton';
 
@@ -228,6 +229,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
           <span className="hidden whitespace-nowrap text-sm text-[var(--osio-fg-subtle)] sm:inline">{actions.editedLabel}</span>
           <PageFavoriteButton pageId={pageId} />
           <PageCommentsButton pageId={pageId} />
+          <PageEditToggle pageId={pageId} />
           <PageShareButton pageId={pageId} workspaceId={workspaceId} />
           <div className="relative">
             <IconButton ref={triggerRef} label="Open page configuration" onClick={() => setConfigOpen((open) => !open)}>

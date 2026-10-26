@@ -30,6 +30,8 @@ import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 import { usePageStore } from "@/store/usePageStore";
 import { runButtonBlock } from "@/services/button-program/runProgram";
+import { useRenderMode } from "./renderMode";
+import { buttonEffect } from "@/entities/block/model/buttonEffect";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 
 // Async boundary: database blocks are rare in rendered pages. Loading the
@@ -615,8 +617,24 @@ export const ButtonBlockReadOnly: React.FC<{ block: Block; hostPageId?: string }
   const pageId = buttonPageRef(href);
   const openPage = usePageStore((s) => s.openPage);
   const page = usePageStore((s) => (pageId ? s.pageById(pageId) : undefined));
+  const mode = useRenderMode();
+  const effect = buttonEffect(block, mode);
 
   if (block.buttonProgram !== undefined) {
+    if (effect === "none") {
+      return (
+        <div className="py-1">
+          <button
+            type="button"
+            className={className}
+            aria-disabled="true"
+            title="Buttons run on the page itself"
+          >
+            {label}
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="py-1">
         <button type="button" className={className} onClick={() => void runButtonBlock(block, hostPageId)}>
