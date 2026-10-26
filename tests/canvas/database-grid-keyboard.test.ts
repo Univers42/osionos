@@ -12,6 +12,7 @@ import {
   nextFocusedCell,
   isGridEntryKey,
   cellDomId,
+  typeToEditSeed,
   type CellActivation,
 } from "../../src/shared/notion-database-sys/src/components/views/table/gridKeyboard.ts";
 
@@ -113,4 +114,34 @@ test("isGridEntryKey: nav/Enter/Tab enter the grid, letters don't", () => {
 test("cellDomId is stable and scoped by database id", () => {
   assert.equal(cellDomId("db1", "pageA", "propB"), "odb-cell:db1:pageA:propB");
   assert.notEqual(cellDomId("db1", "p", "c"), cellDomId("db2", "p", "c"));
+});
+
+test("Tab moves right, Shift+Tab left; past the edge it leaves the grid", () => {
+  assert.equal(directionForKey({ key: "Tab" }), "right");
+  assert.equal(directionForKey({ key: "Tab", shiftKey: true }), "left");
+  const pages = [{ id: "a" }], props = [{ id: "p1" }, { id: "p2" }];
+  // null at an edge is what lets the keyboard hook release Tab to the browser.
+  assert.equal(nextFocusedCell("right", { pageId: "a", propId: "p2" }, pages, props), null);
+  assert.equal(nextFocusedCell("left", { pageId: "a", propId: "p1" }, pages, props), null);
+});
+
+test("typeToEditSeed: printable keys start text-like editors, nothing else does", () => {
+  for (const type of ["title", "text", "email", "url", "phone"]) {
+    assert.equal(typeToEditSeed({ key: "a" }, type), "a", type);
+    assert.equal(typeToEditSeed({ key: "é" }, type), "é", type);
+    assert.equal(typeToEditSeed({ key: " " }, type), null, `${type} space stays a grid key`);
+  }
+  assert.equal(typeToEditSeed({ key: "7" }, "number"), "7");
+  for (const key of ["a", "-", ".", " "]) assert.equal(typeToEditSeed({ key }, "number"), null, `number ${key}`);
+  for (const key of ["Enter", "Tab", "ArrowUp", "Shift", "Dead", "Process", "F2"]) {
+    assert.equal(typeToEditSeed({ key }, "text"), null, key);
+  }
+  for (const mod of ["ctrlKey", "metaKey", "altKey"] as const) {
+    assert.equal(typeToEditSeed({ key: "c", [mod]: true }, "text"), null, mod);
+  }
+  for (const type of Object.keys(ACTIVATION_BY_TYPE)) {
+    if (!["title", "text", "number", "email", "url", "phone"].includes(type)) {
+      assert.equal(typeToEditSeed({ key: "a" }, type), null, `${type} has no text editor`);
+    }
+  }
 });
