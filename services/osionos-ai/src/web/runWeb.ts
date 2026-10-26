@@ -52,6 +52,7 @@ export function newWebRun(input: {
 	taint: WebTaint;
 	typed: string;
 	read: readonly string[];
+	caps?: { searches: number; fetches: number };
 }): WebRun {
 	const provenance = new UrlProvenance();
 	provenance.addTyped(input.typed);
@@ -66,7 +67,8 @@ export function newWebRun(input: {
 		provenance,
 		ledger,
 		taint: input.taint,
-		counters: { searches: 0, fetches: 0 },
+		counters: { searches: 0, fetches: 0, bytes: 0 },
+		...(input.caps ? { caps: input.caps } : {}),
 		...(config.searxngUrl ? { searxngUrl: config.searxngUrl } : {}),
 	};
 }
