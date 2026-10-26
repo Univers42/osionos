@@ -89,7 +89,9 @@ test.describe("analytics-dashboards-wave", () => {
     await page.getByText("Edit view", { exact: true }).click();
     await page.getByRole("menuitem", { name: "Conditional color" }).click();
     await page.getByRole("button", { name: /Add a color rule/ }).click();
-    await page.getByRole("button", { name: /Visibility/ }).first().click();
+    // The popover is portaled to <body>, after the table whose Visibility column
+    // header also matches; pick the property from the popover.
+    await page.locator('dialog[aria-label="View settings"]').getByRole("button", { name: /Visibility/ }).click();
     // Rule editor: `equals` + the first option value, then the green token.
     await expect(page.getByText("Edit color rule")).toBeVisible();
     const search = page.getByPlaceholder("Search for an option...");
