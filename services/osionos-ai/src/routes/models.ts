@@ -6,6 +6,7 @@ import { getOwnedConnection } from '../connections/repo.ts';
 import type { ConnectionRow } from '../connections/repo.ts';
 import { providerModels } from '../connections/catalog.ts';
 import { platformModels } from '../gateway/platform.ts';
+import { restingUntil } from '../runs/cooldown.ts';
 import { requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -25,6 +26,26 @@ interface ListedModel {
 	contextWindow?: number;
 	inputMicroUsdPerMTok?: number;
 	outputMicroUsdPerMTok?: number;
+	cooldownUntil?: string;
+}
+
+/**
+ * The models with the end of their rest. Only the caller's own view: the
+ * platform key and the caller's own key on it, or the caller's own
+ * connection (devil C259).
+ */
+async function withRest(
+	redis: Redis,
+	userId: string,
+	connectionId: string,
+	platform: boolean,
+	models: ListedModel[],
+): Promise<ListedModel[]> {
+	const until = await restingUntil(redis, userId, models.map((model) => ({ connectionId, model: model.id, platform })));
+	return models.map((model, index) => {
+		const end = until[index];
+		return end === undefined ? model : { ...model, cooldownUntil: new Date(end).toISOString() };
+	});
 }
 
 /**
@@ -61,8 +82,9 @@ export async function handleModels(ctx: RouteContext): Promise<number> {
 	const connectionId = (ctx.url.searchParams.get('connectionId') ?? '').trim();
 	if (!connectionId || connectionId === PLATFORM_CONNECTION_ID) {
 		const status = 200;
+		const listed: ListedModel[] = platformModels().map((model) => ({ id: model.id, label: model.label, default: model.default, vision: model.vision === true, reasoning: model.reasoning === true }));
 		sendJson(ctx.response, status, {
-			models: platformModels().map((model) => ({ id: model.id, label: model.label, default: model.default, vision: model.vision === true, reasoning: model.reasoning === true })),
+			models: await withRest(ctx.deps.redis, user.userId, PLATFORM_CONNECTION_ID, true, listed),
 		});
 		return status;
 	}
@@ -72,7 +94,7 @@ export async function handleModels(ctx: RouteContext): Promise<number> {
 		sendError(ctx.response, 404, 'not_found');
 		return 404;
 	}
-	const models = await modelsOf(ctx.deps.redis, row);
+	const models = await withRest(ctx.deps.redis, user.userId, row.id, false, await modelsOf(ctx.deps.redis, row));
 	const status = 200;
 	sendJson(ctx.response, status, { models });
 	return status;

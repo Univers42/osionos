@@ -29,6 +29,7 @@ import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
 import { memoriesForRun } from '../memory/runMemories.ts';
 import { recordMemoryPins } from '../memory/repo.ts';
 import { chainSteps, reservationOf } from './chain.ts';
+import { orderByRest } from './cooldown.ts';
 import { sourceChars } from './sources.ts';
 import { abstainThreshold, retrieve, shouldAbstain } from '../retrieval/search.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
@@ -179,7 +180,8 @@ async function findSources(
  * re-attaches to its stream instead of calling the model a second time.
  */
 export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
-	const { db, redis, runId, conversationId, ownerId, text, target } = input;
+	const { db, redis, runId, conversationId, ownerId, text } = input;
+	let target = input.target;
 	const attachments = input.attachments ?? [];
 	const sessionToken = input.sessionToken ?? '';
 	// The agent of the run: none is the general assistant. Its id and its
@@ -313,7 +315,16 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		systemChars: systemPromptFor(agent, skillIndex).length,
 		contextChars,
 	};
-	const amount = reservationOf(target, estimateInputs, images.length);
+	// A model that keeps failing rests: it is skipped while a later one is
+	// ready (devil C256-C259). The row of the run is pinned to the model that
+	// really starts it.
+	const ordered = await orderByRest(redis, ownerId, [
+		{ target, amount: reservationOf(target, estimateInputs, images.length) },
+		...chainSteps(input.fallbacks ?? [], estimateInputs, images.length),
+	]);
+	const [first, ...fallbacks] = ordered;
+	target = first.target;
+	const amount = first.amount;
 	// A run on a connection of the user is not ours to pay for: the provider
 	// bills the user, and our ledger stays out of it.
 	const reserved = await reserveTarget(db, target, { userId: ownerId, day, amount });
@@ -321,7 +332,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		await markRun(db, runId, 'failed', 'budget_exhausted');
 		return { kind: 'refused', status: 402, code: 'budget_exhausted' };
 	}
-	await db.query('update public.ai_runs set reserved_microusd = $2::bigint where id = $1', [runId, amount]);
+	await db.query('update public.ai_runs set reserved_microusd = $2::bigint, model = $3::text where id = $1', [runId, amount, target.modelId]);
 
 	// (c) The user's message joins the transcript, and the conversation takes
 	// its title when it has none: one transaction, one question.
@@ -356,7 +367,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			emit: input.emit,
 			day,
 			reserved: amount,
-			fallbacks: chainSteps(input.fallbacks ?? [], estimateInputs, images.length),
+			fallbacks,
 			history,
 			pages: context.pages,
 			sources,

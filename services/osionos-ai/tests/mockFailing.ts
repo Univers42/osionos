@@ -32,6 +32,8 @@ export interface Scripted {
 	behaviour: Behaviour;
 	/** Wait before answering: a test arms something while the request is in flight. */
 	delayMs?: number;
+	/** The `Retry-After` header of a status answer. */
+	retryAfter?: string;
 }
 
 export interface FailingUpstream {
@@ -54,8 +56,8 @@ export interface FailingUpstream {
 
 const ERROR_BODY = JSON.stringify({ error: { message: 'scripted failure', type: 'scripted' } });
 
-function sendStatus(response: ServerResponse, status: number): void {
-	response.writeHead(status, { 'content-type': 'application/json' });
+function sendStatus(response: ServerResponse, status: number, retryAfter?: string): void {
+	response.writeHead(status, { 'content-type': 'application/json', ...(retryAfter ? { 'retry-after': retryAfter } : {}) });
 	response.end(ERROR_BODY);
 }
 
@@ -84,12 +86,12 @@ export async function startFailingUpstream(): Promise<FailingUpstream> {
 			requests.push(model);
 			bodies.push(body);
 			const next = scripts.get(model)?.shift() ?? { behaviour: steady.get(model) ?? ('ok' as const) };
-			setTimeout(() => answer(response, next.behaviour, askedForUsage(body)), next.delayMs ?? 0);
+			setTimeout(() => answer(response, next.behaviour, askedForUsage(body), next.retryAfter), next.delayMs ?? 0);
 		});
 	});
 
-	function answer(response: ServerResponse, behaviour: Behaviour, sendUsage: boolean): void {
-		if (typeof behaviour === 'number') return sendStatus(response, behaviour);
+	function answer(response: ServerResponse, behaviour: Behaviour, sendUsage: boolean, retryAfter?: string): void {
+		if (typeof behaviour === 'number') return sendStatus(response, behaviour, retryAfter);
 		if (behaviour === 'reset') return void response.socket?.destroy();
 		if (behaviour === 'text_then_break') {
 			response.writeHead(200, { 'content-type': 'text/event-stream' });

@@ -78,6 +78,8 @@ export async function startKit() {
 		await app.db.query('delete from public.ai_conversations');
 		await app.db.query('delete from public.ai_usage_daily');
 		failing.reset();
+		const rests = await app.redis.keys('ai:cooldown:*');
+		if (rests.length > 0) await app.redis.del(...rests);
 	};
 
 	return { ...harness, failing, post, runToEnd, ledger, settledLedger, runRow, clean };
