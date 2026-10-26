@@ -50,7 +50,8 @@ export const DEFAULT_LIMITS: ProgramLimits = {
 export type ResolvedAction =
 	| { type: "notify"; message: unknown }
 	| { type: "set_property"; property: string; value: unknown }
-	| { type: "page_action"; name: string };
+	| { type: "page_action"; name: string }
+	| { type: "app_action"; name: string; args: Record<string, unknown> };
 
 /**
  * Wrap an action runner so a destructive page action asks `confirm` first;
@@ -62,17 +63,26 @@ export function guardDestructive(
 	runAction: ProgramRunContext["runAction"],
 	confirm: (actionName: string) => Promise<boolean>,
 	destructive: Readonly<Record<string, boolean>>,
+	pause?: { begin(): void; end(): void } | (() => { begin(): void; end(): void } | undefined),
 ): ProgramRunContext["runAction"] {
+	const resolvePause = (): { begin(): void; end(): void } | undefined =>
+		typeof pause === "function" ? pause() : pause;
 	return async (action, scope) => {
 		if (action.type === "page_action" && destructive[action.name] === true) {
-			if (!(await confirm(action.name))) return { status: "cancelled", detail: "not confirmed" };
+			const p = resolvePause();
+			p?.begin();
+			try {
+				if (!(await confirm(action.name))) return { status: "cancelled", detail: "not confirmed" };
+			} finally {
+				p?.end();
+			}
 		}
 		return runAction(action, scope);
 	};
 }
 
 export interface ActionOutcome {
-	status: "ok" | "failed" | "blocked" | "cancelled";
+	status: "ok" | "failed" | "blocked" | "cancelled" | "skipped" | "sudo_required" | "busy" | "preview";
 	detail?: string;
 }
 
@@ -82,6 +92,8 @@ export interface ProgramRunContext {
 	runAction(action: ResolvedAction, scope: PropertyMap): Promise<ActionOutcome>;
 	now(): number;
 	limits?: Partial<ProgramLimits>;
+	pause?: { begin(): void; end(): void };
+	mode?: "live" | "preview";
 }
 
 export type LogStatus = "ok" | "skipped" | "failed" | "blocked" | "cancelled";
@@ -123,11 +135,23 @@ class Run {
 	private sideEffects = 0;
 	private notifies = 0;
 	private logged = 0;
+	private pausedMs = 0;
+	private pauseStartedAt: number | null = null;
+	private readonly pauseHandle = {
+		begin: () => { this.pauseStartedAt = this.ctx.now(); },
+		end: () => {
+			if (this.pauseStartedAt !== null) {
+				this.pausedMs += this.ctx.now() - this.pauseStartedAt;
+				this.pauseStartedAt = null;
+			}
+		},
+	};
 
 	constructor(ctx: ProgramRunContext) {
 		this.ctx = ctx;
 		this.limits = { ...DEFAULT_LIMITS, ...ctx.limits };
 		this.startedAt = ctx.now();
+		this.ctx.pause = this.pauseHandle;
 	}
 
 	private record(op: string, label: string, status: LogStatus, detail?: string): void {
@@ -141,7 +165,8 @@ class Run {
 	}
 
 	private checkWall(): void {
-		if (this.ctx.now() - this.startedAt > this.limits.maxWallMs) this.stop("wall_time");
+		const paused = this.pausedMs + (this.pauseStartedAt !== null ? this.ctx.now() - this.pauseStartedAt : 0);
+		if (this.ctx.now() - this.startedAt - paused > this.limits.maxWallMs) this.stop("wall_time");
 	}
 
 	private stop(limit: BudgetLimit, unvisited?: number): never {
@@ -263,12 +288,26 @@ class Run {
 			this.notifies += 1;
 		}
 		const outcome = await this.ctx.runAction(resolved.action, this.scope());
-		this.record("action", label, outcome.status, outcome.detail);
+		const logStatus: LogStatus =
+			outcome.status === "ok" || outcome.status === "skipped" ? outcome.status
+			: outcome.status === "preview" ? "skipped"
+			: outcome.status === "sudo_required" || outcome.status === "busy" ? "failed"
+			: outcome.status;
+		this.record("action", label, logStatus, outcome.detail);
 		if (outcome.status === "blocked" || outcome.status === "cancelled") throw new RunStop(outcome.status);
 	}
 
 	private resolveAction(action: Extract<ProgramStep, { op: "action" }>["action"]): { action: ResolvedAction } | { sentinel: string } {
 		if (action.type === "page_action") return { action };
+		if (action.type === "app_action") {
+			const resolvedArgs: Record<string, unknown> = {};
+			for (const key of Object.keys(action.args)) {
+				const result = this.evaluate(action.args[key]);
+				if ("sentinel" in result) return result;
+				resolvedArgs[key] = result.value;
+			}
+			return { action: { type: "app_action", name: action.name, args: resolvedArgs } };
+		}
 		const result = this.evaluate(action.type === "notify" ? action.message : action.value);
 		if ("sentinel" in result) return result;
 		return {
@@ -282,10 +321,13 @@ class Run {
 
 function labelOf(action: Extract<ProgramStep, { op: "action" }>["action"]): string {
 	if (action.type === "set_property") return `Set property \`${action.property}\``;
-	return action.type === "page_action" ? `Page action \`${action.name}\`` : "Notify";
+	if (action.type === "page_action") return `Page action \`${action.name}\``;
+	if (action.type === "app_action") return `App action \`${action.name}\``;
+	return "Notify";
 }
 
-export async function runButtonProgram(program: ButtonProgram, ctx: ProgramRunContext): Promise<ProgramRunResult> {
+export async function runButtonProgram(program: ButtonProgram, ctx: ProgramRunContext, mode?: "live" | "preview"): Promise<ProgramRunResult> {
+	if (mode !== undefined) ctx.mode = mode;
 	const run = new Run(ctx);
 	try {
 		await run.runSteps(program.steps);

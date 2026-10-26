@@ -21,7 +21,8 @@
 import type { NotionState } from "@notion-db/object-database";
 import { api, getActivePageJwt, API_BASE } from "@/shared/api/client";
 import { isObjectDatabaseServerSyncEnabled } from "@/shared/config/featureFlags";
-import { hashSlice, sliceDatabase, userDatabaseIds, withMergedSlice, withServerSlice } from "./objectDatabaseSlice";
+import { emptySlice, hashSlice, sliceAllDatabases, userDatabaseIds } from "./objectDatabaseSlice";
+import { reconcileServerDatabases } from "./objectDatabaseReconcile";
 import { withoutDeletedPages, tombstonesStillNeeded } from "./knownDatabasePersistedState";
 import { startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objectDatabaseRealtime";
 import {
@@ -155,8 +156,9 @@ export function pushDirtyObjectDatabases(
 
   const pushed = loadPushedHashes();
   const userIds = new Set(userDatabaseIds(state, seedIds));
+  const slices = sliceAllDatabases(state);
   const dirty = [...userIds]
-    .map((dbKey) => ({ dbKey, title: databaseTitle(state, dbKey), slice: sliceDatabase(state, dbKey) }))
+    .map((dbKey) => ({ dbKey, title: databaseTitle(state, dbKey), slice: slices.get(dbKey) ?? emptySlice() }))
     .map((item) => ({ ...item, hash: hashSlice(item.slice) }))
     .filter((item) => pushed[item.dbKey] !== item.hash);
   const removed = Object.keys(pushed).filter((dbKey) => !userIds.has(dbKey));
@@ -203,37 +205,12 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
   const serverMap = await fetchServerDatabases(jwt);
 
   const seedIds = hooks.getSeedIds();
-  const pushed = loadPushedHashes();
-  const nextPushed: Record<string, string> = { ...pushed };
   const deletedPageIds = hooks.getDeletedPageIds?.() ?? new Set<string>();
   const liveState = hooks.getLiveState();
-  let merged = withoutDeletedPages(liveState, deletedPageIds);
-  let changed = merged !== liveState;
-
-  for (const [dbKey, row] of serverMap) {
-    const serverState = serverStateOf(row);
-    const localHash = hashSlice(sliceDatabase(merged, dbKey));
-    if (merged.databases[dbKey] && pushed[dbKey] !== localHash) {
-      // Local is dirty/untracked — genuine offline edits OR a fresh placeholder
-      // auto-created before this pull landed. Union with the server so neither
-      // side loses a record (a placeholder can no longer erase real data), then
-      // re-push the union (drop the baseline so it counts as dirty next flush).
-      const unionCandidate = withMergedSlice(merged, dbKey, serverState, deletedPageIds);
-      delete nextPushed[dbKey];
-      if (hashSlice(sliceDatabase(unionCandidate, dbKey)) !== localHash) {
-        merged = unionCandidate;
-        changed = true;
-      }
-      continue;
-    }
-    const candidate = withServerSlice(merged, dbKey, serverState, deletedPageIds);
-    const serverHash = hashSlice(sliceDatabase(candidate, dbKey));
-    nextPushed[dbKey] = serverHash; // baseline: local now equals server
-    if (serverHash !== localHash) {
-      merged = candidate;
-      changed = true;
-    }
-  }
+  const live = withoutDeletedPages(liveState, deletedPageIds);
+  const server = new Map([...serverMap].map(([dbKey, row]) => [dbKey, serverStateOf(row)] as const));
+  const { merged, changed: reconciled, nextPushed } = reconcileServerDatabases({ live, server, pushed: loadPushedHashes(), deletedPageIds });
+  const changed = reconciled || live !== liveState;
 
   for (const dbKey of userDatabaseIds(merged, seedIds)) {
     if (!serverMap.has(dbKey)) delete nextPushed[dbKey]; // never on server → auto-repair on push
@@ -245,7 +222,7 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
   // every deletion the user ever made. An empty server map keeps them all (an
   // empty list can mean "not loaded" — never prune blind).
   hooks.pruneDeletedPageIds?.(
-    tombstonesStillNeeded(deletedPageIds, [...serverMap.values()].map(serverStateOf)),
+    tombstonesStillNeeded(deletedPageIds, [...server.values()]),
   );
 
   savePushedHashes(nextPushed);

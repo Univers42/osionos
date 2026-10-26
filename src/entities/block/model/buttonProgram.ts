@@ -23,7 +23,8 @@ export type ProgramValue = string | number | boolean | null | { formula: string 
 export type ProgramAction =
 	| { type: "notify"; message: ProgramValue }
 	| { type: "set_property"; property: string; value: ProgramValue }
-	| { type: "page_action"; name: string };
+	| { type: "page_action"; name: string }
+	| { type: "app_action"; name: string; args: Record<string, ProgramValue> };
 
 /**
  * Whether a page action changes the page's state and so must be confirmed
@@ -149,6 +150,17 @@ function parseAction(input: unknown, path: string): ProgramAction {
 		const name = parseText(record.name, join(path, "name"));
 		if (!name) fail(join(path, "name"), "a page action needs a name");
 		return { type: "page_action", name };
+	}
+	if (record.type === "app_action") {
+		checkKeys(record, path, ["type", "name", "args"]);
+		const name = parseText(record.name, join(path, "name"));
+		if (!name) fail(join(path, "name"), "an app action needs a name");
+		const argsRecord = asRecord(record.args, join(path, "args"));
+		const args: Record<string, ProgramValue> = {};
+		for (const key of Object.keys(argsRecord)) {
+			args[key] = parseValue(argsRecord[key], join(join(path, "args"), key));
+		}
+		return { type: "app_action", name, args };
 	}
 	return fail(join(path, "type"), "unknown action type");
 }

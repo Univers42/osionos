@@ -17,8 +17,10 @@ import {
 	memoryChars,
 	quotedPageChars,
 	viewBlock,
+	workspaceBlock,
 } from './prompt.ts';
 import { loadAccountContext } from './account.ts';
+import { loadWorkspaceOverview } from './workspace.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
 import type { BuiltinAgent } from '../agents/builtins.ts';
 import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
@@ -279,16 +281,22 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	const day = today();
 	// The account block, when the client asks for it: who is asking.
 	let accountBlockText: string | undefined;
+	// The workspace block comes with it (plan H1): which pages the caller can
+	// read, under the same Settings switch (C205).
+	let workspaceBlockText: string | undefined;
 	if (input.account === true && input.user) {
-		const accountCtx = await loadAccountContext(db, input.user, input.workspaceId ?? input.user.workspaceId);
+		const runWorkspaceId = input.workspaceId ?? input.user.workspaceId;
+		const accountCtx = await loadAccountContext(db, input.user, runWorkspaceId);
 		accountBlockText = accountBlock(accountCtx, new Date());
+		const overview = await loadWorkspaceOverview(db, input.user, runWorkspaceId);
+		if (overview) workspaceBlockText = workspaceBlock(overview, accountCtx.workspaceName);
 	}
 	// The view block, when the client reports one.
 	let viewBlockText: string | undefined;
 	if (input.view) {
 		viewBlockText = viewBlock(input.view);
 	}
-	const contextChars = (accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0);
+	const contextChars = (accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0) + (workspaceBlockText?.length ?? 0);
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
@@ -362,6 +370,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			workspaceId: input.workspaceId,
 			...(accountBlockText ? { accountBlock: accountBlockText } : {}),
 			...(viewBlockText ? { viewBlock: viewBlockText } : {}),
+			...(workspaceBlockText ? { workspaceBlock: workspaceBlockText } : {}),
 		});
 	};
 	return { kind: 'started', run: (await getRun(db, runId)) as RunRow, execute };

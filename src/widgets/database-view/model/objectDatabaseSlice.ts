@@ -22,7 +22,7 @@ type Owned = { databaseId?: string };
 
 const NO_DELETED_PAGES: ReadonlySet<string> = new Set();
 
-function emptyState(): NotionState {
+export function emptySlice(): NotionState {
   return { databases: {}, pages: {}, views: {} } as NotionState;
 }
 
@@ -41,7 +41,7 @@ function withoutPages(slice: NotionState, deletedPageIds: ReadonlySet<string>): 
 /** Everything belonging to one database: its schema entry, its record pages and
  *  its views — the unit the bridge persists as a single row's `state`. */
 export function sliceDatabase(state: NotionState, dbKey: string): NotionState {
-  const slice = emptyState();
+  const slice = emptySlice();
   const database = state.databases[dbKey];
   if (database) slice.databases[dbKey] = database;
   for (const [pageId, page] of Object.entries(state.pages)) {
@@ -53,78 +53,120 @@ export function sliceDatabase(state: NotionState, dbKey: string): NotionState {
   return slice;
 }
 
-/** Replace one database's slice in `state` with the server's copy (server is the
- *  source of truth for that database): drop the local schema/pages/views owned
- *  by `dbKey`, then lay the server slice's down. Other databases are untouched.
- *  Tombstoned pages are never laid down: a local delete outranks a stale server
- *  copy (the delete may not have reached the server before a reload). */
+/** Every database's slice in one pass over the pages and views: O(pages + views),
+ *  where calling `sliceDatabase` once per database is O(databases × pages)
+ *  (163 ms per flush on an 83-database, 8,646-row account, object-database-sync.bench.ts). */
+export function sliceAllDatabases(state: NotionState): Map<string, NotionState> {
+  const slices = new Map<string, NotionState>();
+  const sliceOf = (dbKey: string): NotionState => {
+    let slice = slices.get(dbKey);
+    if (!slice) slices.set(dbKey, (slice = emptySlice()));
+    return slice;
+  };
+  for (const [dbKey, database] of Object.entries(state.databases)) {
+    if (database) sliceOf(dbKey).databases[dbKey] = database;
+  }
+  for (const [pageId, page] of Object.entries(state.pages)) {
+    const dbKey = (page as Owned).databaseId;
+    if (dbKey) sliceOf(dbKey).pages[pageId] = page;
+  }
+  for (const [viewId, view] of Object.entries(state.views)) {
+    const dbKey = (view as Owned).databaseId;
+    if (dbKey) sliceOf(dbKey).views[viewId] = view;
+  }
+  return slices;
+}
+
+/** The slice the server's copy makes of one database (server is the source of
+ *  truth for it): its schema (the local one when the server row has none), its
+ *  pages and its views. Tombstoned pages are never laid down: a local delete
+ *  outranks a stale server copy (the delete may not have reached the server
+ *  before a reload). */
+export function serverSliceFor(
+  local: NotionState,
+  dbKey: string,
+  server: NotionState,
+  deletedPageIds: ReadonlySet<string> = NO_DELETED_PAGES,
+): NotionState {
+  const slice = emptySlice();
+  const definition = server.databases?.[dbKey] ?? local.databases[dbKey];
+  if (definition) slice.databases[dbKey] = definition;
+  for (const [id, page] of Object.entries(server.pages ?? {})) {
+    if ((page as Owned).databaseId === dbKey && !deletedPageIds.has(id)) slice.pages[id] = page;
+  }
+  for (const [id, view] of Object.entries(server.views ?? {})) {
+    if ((view as Owned).databaseId === dbKey) slice.views[id] = view;
+  }
+  return slice;
+}
+
+/** Union of one database's local slice with the server's copy so NEITHER side
+ *  loses a record. Used when local is dirty/untracked and can't be trusted to
+ *  replace the server wholesale — it may be genuine offline edits, OR a fresh
+ *  empty placeholder a browser auto-created before the server copy arrived (the
+ *  latter used to overwrite real data). The side with MORE records is the base
+ *  and wins id collisions (its schema/views win too); the other side only fills
+ *  in records the base lacks. No page or view owned by `dbKey` is dropped —
+ *  except a tombstoned page, which is a deletion, not a record to rescue. */
+export function unionSliceFor(
+  local: NotionState,
+  dbKey: string,
+  server: NotionState,
+  deletedPageIds: ReadonlySet<string> = NO_DELETED_PAGES,
+): NotionState {
+  const localSlice = withoutPages(local, deletedPageIds);
+  const serverSlice = withoutPages(sliceDatabase(server, dbKey), deletedPageIds);
+  const serverIsBase = Object.keys(serverSlice.pages).length > Object.keys(localSlice.pages).length;
+  const base = serverIsBase ? serverSlice : localSlice;
+  const fill = serverIsBase ? localSlice : serverSlice;
+  const slice = emptySlice();
+  const definition = base.databases[dbKey] ?? fill.databases[dbKey];
+  if (definition) slice.databases[dbKey] = definition;
+  slice.pages = { ...fill.pages, ...base.pages };
+  slice.views = { ...fill.views, ...base.views };
+  return slice;
+}
+
+/** `state` with each database in `slices` swapped for its slice, in one pass:
+ *  the other databases' pages and views keep their order, the swapped ones are
+ *  appended in `slices` order. */
+export function withReplacedSlices(state: NotionState, slices: ReadonlyMap<string, NotionState>): NotionState {
+  if (slices.size === 0) return state;
+  const databases = { ...state.databases };
+  const pages: NotionState["pages"] = {};
+  const views: NotionState["views"] = {};
+  for (const [id, page] of Object.entries(state.pages)) {
+    if (!slices.has((page as Owned).databaseId ?? "")) pages[id] = page;
+  }
+  for (const [id, view] of Object.entries(state.views)) {
+    if (!slices.has((view as Owned).databaseId ?? "")) views[id] = view;
+  }
+  for (const [dbKey, slice] of slices) {
+    if (slice.databases[dbKey]) databases[dbKey] = slice.databases[dbKey];
+    Object.assign(pages, slice.pages);
+    Object.assign(views, slice.views);
+  }
+  return { databases, pages, views } as NotionState;
+}
+
+/** Replace one database's slice in `state` with the server's copy (`serverSliceFor`). */
 export function withServerSlice(
   state: NotionState,
   dbKey: string,
   server: NotionState,
   deletedPageIds: ReadonlySet<string> = NO_DELETED_PAGES,
 ): NotionState {
-  const databases = { ...state.databases };
-  if (server.databases?.[dbKey]) databases[dbKey] = server.databases[dbKey];
-
-  const pages: NotionState["pages"] = {};
-  for (const [id, page] of Object.entries(state.pages)) {
-    if ((page as Owned).databaseId !== dbKey) pages[id] = page;
-  }
-  for (const [id, page] of Object.entries(server.pages ?? {})) {
-    if ((page as Owned).databaseId === dbKey && !deletedPageIds.has(id)) pages[id] = page;
-  }
-
-  const views: NotionState["views"] = {};
-  for (const [id, view] of Object.entries(state.views)) {
-    if ((view as Owned).databaseId !== dbKey) views[id] = view;
-  }
-  for (const [id, view] of Object.entries(server.views ?? {})) {
-    if ((view as Owned).databaseId === dbKey) views[id] = view;
-  }
-
-  return { databases, pages, views } as NotionState;
+  return withReplacedSlices(state, new Map([[dbKey, serverSliceFor(sliceDatabase(state, dbKey), dbKey, server, deletedPageIds)]]));
 }
 
-/** Union one database's local slice with the server's copy so NEITHER side loses
- *  a record. Used when local is dirty/untracked and can't be trusted to replace
- *  the server wholesale — it may be genuine offline edits, OR a fresh empty
- *  placeholder a browser auto-created before the server copy arrived (the latter
- *  used to overwrite real data). The side with MORE records is the base and wins
- *  id collisions (its schema/views win too); the other side only fills in records
- *  the base lacks. No page or view owned by `dbKey` is dropped — except a
- *  tombstoned page, which is a deletion, not a record to rescue. */
+/** Union one database's local slice with the server's copy (`unionSliceFor`). */
 export function withMergedSlice(
   state: NotionState,
   dbKey: string,
   server: NotionState,
   deletedPageIds: ReadonlySet<string> = NO_DELETED_PAGES,
 ): NotionState {
-  const localSlice = withoutPages(sliceDatabase(state, dbKey), deletedPageIds);
-  const serverSlice = withoutPages(sliceDatabase(server, dbKey), deletedPageIds);
-  const serverIsBase = Object.keys(serverSlice.pages).length > Object.keys(localSlice.pages).length;
-  const base = serverIsBase ? serverSlice : localSlice;
-  const fill = serverIsBase ? localSlice : serverSlice;
-
-  const databases = { ...state.databases };
-  const definition = base.databases[dbKey] ?? fill.databases[dbKey];
-  if (definition) databases[dbKey] = definition;
-
-  const pages: NotionState["pages"] = {};
-  for (const [id, page] of Object.entries(state.pages)) {
-    if ((page as Owned).databaseId !== dbKey) pages[id] = page; // other databases untouched
-  }
-  for (const [id, page] of Object.entries(fill.pages)) pages[id] = page; // fill first…
-  for (const [id, page] of Object.entries(base.pages)) pages[id] = page; // …base wins collisions
-
-  const views: NotionState["views"] = {};
-  for (const [id, view] of Object.entries(state.views)) {
-    if ((view as Owned).databaseId !== dbKey) views[id] = view;
-  }
-  for (const [id, view] of Object.entries(fill.views)) views[id] = view;
-  for (const [id, view] of Object.entries(base.views)) views[id] = view;
-
-  return { databases, pages, views } as NotionState;
+  return withReplacedSlices(state, new Map([[dbKey, unionSliceFor(sliceDatabase(state, dbKey), dbKey, server, deletedPageIds)]]));
 }
 
 /** Database ids present in `state` that are NOT code-shipped seeds — i.e. the

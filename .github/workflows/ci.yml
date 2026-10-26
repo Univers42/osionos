@@ -154,12 +154,39 @@ jobs:
         if: matrix.scope == 'root'
         run: make test-bridge
 
+      # The object-database sync runs after every edit and on every load; its budgets
+      # fail the O(databases x rows) loops it replaced (numbers in the bench file).
+      - name: Object-database sync bench
+        if: matrix.scope == 'root'
+        run: make test-bench BENCH=tests/bench/object-database-sync.bench.ts
+
       - name: SonarQube scan
         if: matrix.scope == 'root' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
         run: make sonar
+
+  # The AI service (services/osionos-ai) has its own suite: a throwaway Postgres and Redis,
+  # the groot models migrations, node --test. Until 2026-10-26 no CI job ran it — the service
+  # shipped on local gates only — so a green check here is the first proof the service works.
+  # scripts/ci.sh is the same command a developer runs.
+  ai-service:
+    name: AI service (tsc + suite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Install, type-check and run the service suite
+        run: sh services/osionos-ai/scripts/ci.sh
 
   # The E2E suite is 421 tests. A single ubuntu-latest runner (4 vCPU) chews through it at
   # ~6 tests/min, i.e. ~70 min — it never fit the old 30-min single job (it was killed at
