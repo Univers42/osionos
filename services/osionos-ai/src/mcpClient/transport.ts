@@ -3,6 +3,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { CallToolResultSchema, ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js';
 import { checkEndpointUrl, guardedFetch } from '../connections/endpointGuard.ts';
 import type { GuardedFetch } from '../connections/endpointGuard.ts';
+import { capBody } from '../connections/bodyCap.ts';
 
 /**
  * The transport to a remote MCP server the user registered (E1a).
@@ -75,37 +76,6 @@ interface CallState {
 	abort: () => void;
 }
 
-/** The body, cut the moment it passes the cap. */
-function capBody(response: Response, state: CallState, max: number): Response {
-	const declared = Number(response.headers.get('content-length'));
-	if (Number.isFinite(declared) && declared > max) {
-		state.tooLarge = true;
-		state.abort();
-		void response.body?.cancel();
-		throw new Error('too_large');
-	}
-	if (!response.body) return response;
-	let total = 0;
-	const counted = response.body.pipeThrough(
-		new TransformStream<Uint8Array, Uint8Array>({
-			transform(chunk, controller) {
-				total += chunk.byteLength;
-				if (total > max) {
-					state.tooLarge = true;
-					state.abort();
-					controller.error(new Error('too_large'));
-					return;
-				}
-				controller.enqueue(chunk);
-			},
-		}),
-	);
-	const headers = new Headers(response.headers);
-	headers.delete('content-length');
-	headers.delete('content-encoding');
-	return new Response(counted, { status: response.status, statusText: response.statusText, headers });
-}
-
 /** The fetch the SDK is given: the guard, the 405 on GET, the cap, the deadline. */
 function buildFetch(fetchImpl: GuardedFetch, state: CallState, deadline: AbortSignal, max: number) {
 	return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
@@ -121,7 +91,10 @@ function buildFetch(fetchImpl: GuardedFetch, state: CallState, deadline: AbortSi
 			state.network = true;
 			throw error;
 		}
-		return capBody(response, state, max);
+		return capBody(response, max, () => {
+			state.tooLarge = true;
+			state.abort();
+		});
 	};
 }
 

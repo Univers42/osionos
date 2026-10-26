@@ -10,12 +10,14 @@ import { describe, it } from 'node:test';
  */
 process.env.OSIONOS_AI_KEK = Buffer.alloc(32, 7).toString('base64');
 process.env.OSIONOS_AI_KEK_ID = 'k1';
+// A development host of the escape hatch, for the web C343 test below.
+process.env.OSIONOS_AI_DEV_ENDPOINT_HOSTS = 'dev.example';
 
 const USER_A = '11111111-1111-4111-8111-111111111111';
 const USER_B = '22222222-2222-4222-8222-222222222222';
 
 const { connectionAad, openSecret, sealSecret } = await import('../src/connections/crypto.ts');
-const { checkEndpointUrl, guardedLookup, guardedShortFetch } = await import(
+const { checkEndpointUrl, guardedLookup, guardedShortFetch, isBlockedAddress } = await import(
 	'../src/connections/endpointGuard.ts'
 );
 
@@ -131,5 +133,32 @@ describe('osionos-ai envelope and guard', () => {
 		);
 		assert.equal(publicOnly.error, undefined);
 		assert.equal(publicOnly.address, '93.184.216.34');
+	});
+
+	it('web C343 the documentation, relay, Teredo and site-local ranges are blocked; the world is not', () => {
+		const blocked = [
+			'192.0.2.1',
+			'198.51.100.7',
+			'203.0.113.200',
+			'192.88.99.1',
+			'2001::1',
+			'2001:0:4136:e378::1',
+			'2001:db8::1',
+			'fec0::1',
+			'::ffff:192.0.2.1',
+		];
+		for (const address of blocked) assert.equal(isBlockedAddress(address), true, `${address} must be blocked`);
+		// Neighbours of the new ranges stay reachable: the ranges are exact.
+		const open = ['192.0.3.1', '198.51.101.1', '203.0.114.1', '2001:4860::8888', '2001:dc8::1', 'ff0::1', '8.8.8.8'];
+		for (const address of open) assert.equal(isBlockedAddress(address), false, `${address} must stay open`);
+	});
+
+	it('web C343 trustDevHosts:false refuses a development host that answers with a private address', async () => {
+		const host = 'dev.example';
+		const resolver = async () => [{ address: '10.0.0.5', family: 4 }];
+		const trusted = await lookupWith(guardedLookup(resolver), host);
+		assert.equal(trusted.address, '10.0.0.5', 'the hatch still opens for the connections');
+		const strict = await lookupWith(guardedLookup(resolver, { trustDevHosts: false }), host);
+		assert.ok(strict.error, 'the web surface never trusts a development host');
 	});
 });

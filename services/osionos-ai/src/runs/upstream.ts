@@ -19,6 +19,9 @@ import { citationData, sourceChars } from './sources.ts';
 import { createToolPool } from '../tools/index.ts';
 import { buildRunTools } from './toolSet.ts';
 import { mcpToolChars } from '../mcpClient/runTools.ts';
+import { config } from '../config.ts';
+import { readWebTaint } from '../web/settings.ts';
+import { newWebRun, webToolChars } from '../web/runWeb.ts';
 import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
 import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
 
@@ -92,7 +95,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		(accountBlockText?.length ?? 0) +
 		(viewBlockText?.length ?? 0) +
 		(workspaceBlockText?.length ?? 0) +
-		mcpToolChars(input.mcpTools ?? []);
+		mcpToolChars(input.mcpTools ?? []) +
+		webToolChars(input.web === true);
 	const promptChars = promptCharCount({
 		text,
 		historyChars: historyChars(history),
@@ -142,6 +146,27 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// The tools of the assistant: the search of a workspace, the read of
 		// a page, and — when the bridge is configured — the writes that ask
 		// the user for the right to write.
+		// The taint is read only while the flag is on: a database without the
+		// web columns is never asked for them (C375).
+		const webTaint = config.webEnabled ? await readWebTaint(db, conversationId) : undefined;
+		const web =
+			input.web === true && webTaint
+				? newWebRun({
+						db,
+						redis,
+						runId,
+						userId: ownerId,
+						conversationId,
+						taint: webTaint,
+						typed: text,
+						read: [
+							...pages.map((page) => page.text),
+							...sources.map((source) => source.snippet),
+							...files.map((file) => file.text),
+							...memories.map((memory) => memory.body),
+						],
+					})
+				: undefined;
 		const runTools = buildRunTools({
 			db,
 			user,
@@ -155,6 +180,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			skillIndex: input.skillIndex,
 			workspaceId: input.workspaceId,
 			...(input.mcpTools && input.mcpTools.length > 0 ? { mcp: { tools: input.mcpTools, redis } } : {}),
+			...(web ? { web } : {}),
+			...(webTaint ? { webTaint } : {}),
 			emit: (type, data) => emit(type, data),
 		});
 		const tools = runTools.tools;

@@ -101,6 +101,8 @@ export function sourceBlock(source: RetrievedChunk, n: number, authorship?: Auth
  * document and the heading path: two packs never collide on the empty id.
  */
 export function sourceKey(source: RetrievedChunk): string {
+	// A web source is its URL: the same page found twice keeps one number.
+	if (source.collection === 'web') return `web:${source.url ?? ''}`;
 	if (source.collection === 'pack') {
 		return `pack:${source.packSlug ?? ''}:${source.docPath ?? ''}:${source.headingPath}`;
 	}
@@ -115,6 +117,11 @@ export function sourceKey(source: RetrievedChunk): string {
  * pageId and no blockId: a pack document is not a page the client can open.
  */
 export function citationData(source: RetrievedChunk, n: number): Record<string, unknown> {
+	// A web citation names its URL and domain, and has no pageId: an old client
+	// drops a collection it does not know, so this shape is additive (U2).
+	if (source.collection === 'web') {
+		return { n, collection: 'web', url: source.url ?? '', domain: source.domain ?? '', title: source.title, snippet: source.snippet };
+	}
 	if (source.collection === 'pack') {
 		return {
 			n,

@@ -27,6 +27,7 @@ import { conversationFromWire, messageFromWire, type ConversationWire, type Mess
 import type {
   AiAgent,
   AiAgentSettings,
+  AiWebSettings,
   AiBuiltinAgent,
   AiCustomAgent,
   CreateAgentInput,
@@ -65,6 +66,7 @@ export { AiError };
 export type {
   AiAgent,
   AiAgentSettings,
+  AiWebSettings,
   AiBuiltinAgent,
   AiCustomAgent,
   CreateAgentInput,
@@ -249,6 +251,22 @@ export async function getAgentSettings(workspaceId: string): Promise<AiAgentSett
 /** `PUT /workspaces/:ws/agents/settings` — both keys, admins only (403 otherwise). */
 export async function putAgentSettings(workspaceId: string, settings: AiAgentSettings): Promise<AiAgentSettings> {
   return requestJson<AiAgentSettings>("PUT", settingsPath(workspaceId), settings);
+}
+
+const webSettingsPath = (workspaceId: string) => `/workspaces/${encodeURIComponent(workspaceId)}/web/settings`;
+
+/** `GET /workspaces/:ws/web/settings` — 404 when the web tools are off on this deployment, or the caller is no member. */
+export async function getWebSettings(workspaceId: string): Promise<AiWebSettings> {
+  return requestJson<AiWebSettings>("GET", webSettingsPath(workspaceId));
+}
+
+/**
+ * `PUT /workspaces/:ws/web/settings` — owner or admin, session under 10 minutes old.
+ * `acknowledged: true` is always sent: the caller is the confirm step of the
+ * disclosure, and nothing else calls this.
+ */
+export async function putWebSettings(workspaceId: string, enabled: boolean): Promise<AiWebSettings> {
+  return requestJson<AiWebSettings>("PUT", webSettingsPath(workspaceId), { enabled, acknowledged: true });
 }
 
 /** `POST /conversations` — a conversation of the workspace. */

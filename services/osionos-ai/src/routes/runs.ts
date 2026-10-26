@@ -68,6 +68,9 @@ const startRunSchema = z.object({
 			workspace: z.boolean().optional(),
 			// The account block: who is asking. True adds it; absent or false does not.
 			account: z.boolean().optional(),
+			// The web toggle of this message (C355): ignored unless OSIONOS_AI_WEB
+			// and the workspace switch are on too.
+			web: z.boolean().optional(),
 			// What the caller has open.
 			view: z
 				.object({
@@ -230,6 +233,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		agent,
 		workspaceId: conversation.workspace_id,
 		account: body.context?.account,
+		web: body.context?.web,
 		view: body.context?.view,
 		emit: (event) => writeSseFrame(ctx.response, event),
 	});

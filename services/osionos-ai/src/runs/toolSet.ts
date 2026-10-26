@@ -22,6 +22,9 @@ import { citationData } from './sources.ts';
 import { cardAgentOf } from '../agents/card.ts';
 import { isCustomAgent } from '../agents/config.ts';
 import type { AgentConfig } from '../agents/config.ts';
+import { webTools } from '../web/tools.ts';
+import type { WebRun, WebTaint } from '../web/tools.ts';
+import { guardTainted } from '../web/runWeb.ts';
 
 /**
  * The tools of a run.
@@ -91,6 +94,17 @@ export function buildRunTools(input: {
 	 * Empty or absent is the run of today: not one key is added.
 	 */
 	mcp?: { tools: readonly McpToolEntry[]; redis: Redis };
+	/**
+	 * The web tools of the run (C355): present only when every layer is on.
+	 * Absent is the run of today: not one key is added.
+	 */
+	web?: WebRun;
+	/**
+	 * The web taint of the conversation, while OSIONOS_AI_WEB is on (C359):
+	 * the guarded tools refuse once it is set, even by a call of this run.
+	 * The web run, when there is one, shares this object.
+	 */
+	webTaint?: WebTaint;
 	/** The event of the run. */
 	emit: (type: string, data: unknown) => Promise<void>;
 }): RunTools {
@@ -134,6 +148,10 @@ export function buildRunTools(input: {
 			run.awaitingApproval = true;
 			permissions.push(asked);
 			await emit('permission.asked', asked);
+		},
+		// C356: what the workspace tools gave the model joins the leak guard.
+		onOutput: (toolName: string, text: string) => {
+			if (input.web && !toolName.startsWith('web_')) input.web.ledger.add(text);
 		},
 	};
 
@@ -185,7 +203,7 @@ export function buildRunTools(input: {
 	run.tools = user
 		? {
 				...mcpTools,
-				...readToolSet({ db, user, agentId: agent ? agent.id : null }, hooks, pool, [...skillTools, ...proposalTools, ...VIEW_TOOLS]),
+				...readToolSet({ db, user, agentId: agent ? agent.id : null }, hooks, pool, [...skillTools, ...proposalTools, ...VIEW_TOOLS, ...(input.web ? webTools(input.web) : [])]),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
 		: undefined;
@@ -194,13 +212,15 @@ export function buildRunTools(input: {
 	// gains a tool, and a tool the agent does not list is not even sent to
 	// the model — it is not in the request.
 	if (run.tools) run.tools = keepAgentTools(run.tools, agent);
+	if (run.tools && input.webTaint) run.tools = guardTainted(run.tools, input.webTaint, hooks, pool);
 	return run;
 }
 
 /**
  * The tools an agent keeps: its own list, plus the five the runtime always
  * gives. Default-deny: a tool added to the set before this call (an MCP tool,
- * C308/C339) is stripped for every agent and kept only for no agent.
+ * C308/C339) is stripped for every agent and kept only for no agent. A web
+ * tool is stripped for every agent too, whatever its list says (C369).
  */
 export function keepAgentTools(tools: ToolSet, agent: AgentConfig | null): ToolSet {
 	if (!agent) return tools;
@@ -209,6 +229,7 @@ export function keepAgentTools(tools: ToolSet, agent: AgentConfig | null): ToolS
 	const allowed = new Set(isCustomAgent(agent) ? agent.tools.filter((name) => !name.startsWith('mcp_')) : agent.tools);
 	const kept: ToolSet = {};
 	for (const [name, tool] of Object.entries(tools)) {
+		if (name.startsWith('web_')) continue;
 		if (allowed.has(name) || name === 'load_skill' || name === 'remember' || name === 'open_page' || name === 'open_panel' || name === 'open_issue_report' || name === 'suggest_agent') kept[name] = tool;
 	}
 	return kept;
