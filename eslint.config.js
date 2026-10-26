@@ -48,11 +48,13 @@ const bannedClassWord = (pattern, message) => [
   { selector: `TemplateElement[value.raw=/${pattern}/]`, message },
 ];
 
+const PX_RULE = bannedText(PX_FONT_SIZE, "Literal px font size in a class. Use text-3xs (10), text-2xs (11), text-xs (12), text-sm (14) or text-display.");
+const RAMP_RULE = bannedText(RAMP_TOKEN, "Ramp token in a component. Use a semantic token (--osio-bg-*, --osio-fg-*, --osio-accent-*); ramps are for src/app/styles only.");
 const CLASS_RULES = [
-  ...bannedText(PX_FONT_SIZE, "Literal px font size in a class. Use text-3xs (10), text-2xs (11), text-xs (12), text-sm (14) or text-display."),
+  ...PX_RULE,
   ...bannedClassWord(STOCK_SHADOW, "Stock Tailwind shadow. Use shadow-osio-e1 .. shadow-osio-e5 (sm/bare = e1, md = e2, lg = e3, xl = e4, 2xl = e5)."),
   ...bannedClassWord(BARE_ROUNDED, "Bare rounded class. Use rounded-xs/sm/md/lg (radius tokens), osio-chip for tags, or osio-surface-overlay for panels."),
-  ...bannedText(RAMP_TOKEN, "Ramp token in a component. Use a semantic token (--osio-bg-*, --osio-fg-*, --osio-accent-*); ramps are for src/app/styles only."),
+  ...RAMP_RULE,
 ];
 const HEX_RULE = bannedText(HEX_COLOR, "Raw hex colour. Use a semantic --osio-* token, or add the file to HEX_ALLOWLIST with its reason.");
 
@@ -84,6 +86,11 @@ const HEX_ALLOWLIST = [
   "src/shared/lib/color/resolveCssColor.ts", // canvas probe: needs concrete sentinel colours
   "src/features/ide/ui/IdeTerminal.tsx", // xterm's theme object takes a concrete colour
 ];
+
+// The theme token catalog: its strings are `--osio-*` token names without the
+// prefix and what each paints, never a class list ("shadow-sm" is the name of
+// --osio-shadow-sm there). It drops only the two class-word rules.
+const TOKEN_CATALOGS = ["src/shared/config/themeTokens.ts"];
 
 export default [
   {
@@ -243,8 +250,12 @@ export default [
   {
     // Style-literal guards for component code. Allowlisted files drop only the hex rule.
     files: ["src/**/*.{ts,tsx}", "packages/osionos-ui/src/**/*.{ts,tsx}"],
-    ignores: HEX_ALLOWLIST,
+    ignores: [...HEX_ALLOWLIST, ...TOKEN_CATALOGS],
     rules: { "no-restricted-syntax": ["error", ...CLASS_RULES, ...HEX_RULE] },
+  },
+  {
+    files: TOKEN_CATALOGS,
+    rules: { "no-restricted-syntax": ["error", ...PX_RULE, ...RAMP_RULE, ...HEX_RULE] },
   },
   {
     files: HEX_ALLOWLIST,
