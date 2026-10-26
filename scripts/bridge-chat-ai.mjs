@@ -12,6 +12,9 @@
  * (C435, C436). It resolves no mention and notifies nobody (C438). Its
  * requester and the channel's owner/admin may delete it; nobody may edit it
  * (C437). The schema is groot models/osionos-ai-thread-answers-migration.sql.
+ *
+ * The chat reads message rows with select=*, never naming ai_run_id: a bridge
+ * deployed before that migration would otherwise fail every list with a 400.
  */
 
 import {
@@ -61,14 +64,14 @@ async function readRun(config, fetchImpl, runId) {
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
-/** The text of the run's one assistant message (C432). */
+/** The text of the run's one assistant message (C432): every text part, as the draft streamed it. */
 async function answerText(config, fetchImpl, runId, messageId) {
 	if (!messageId) return '';
 	const rows = await rest(config, fetchImpl,
 		`ai_messages?id=eq.${messageId}&run_id=eq.${runId}&role=eq.assistant&select=parts&limit=1`);
 	const parts = Array.isArray(rows) ? rows[0]?.parts : null;
-	const text = Array.isArray(parts) ? parts.find((part) => part?.type === 'text')?.text : '';
-	return safeText(text, CHAT_CONTENT_LIMIT);
+	const texts = Array.isArray(parts) ? parts.filter((part) => part?.type === 'text' && typeof part.text === 'string') : [];
+	return safeText(texts.map((part) => part.text).join(''), CHAT_CONTENT_LIMIT);
 }
 
 /**
@@ -89,16 +92,38 @@ function runRefusal(run, userId, channelId, now) {
 	return null;
 }
 
-/** The trigger as it is now: still the caller's, live, and not edited after the run (C443). */
+/** When the run read the channel: the service stamps it; a run without the stamp counts from its start. */
+function readTime(run) {
+	const started = Date.parse(run.created_at);
+	const readAt = Date.parse(run.surface_ref?.readAt ?? '');
+	return Number.isFinite(readAt) ? Math.min(readAt, started) : started;
+}
+
+/** The trigger as it is now: still the caller's, live, and not edited after the run read it (C443). */
 async function readLiveTrigger(config, fetchImpl, run, channelId, userId) {
 	const rows = await rest(config, fetchImpl,
 		`osionos_messages?id=eq.${run.surface_ref.messageId}&channel_id=eq.${channelId}&select=id,author_id,deleted_at,edited_at,thread_root_id&limit=1`);
 	const trigger = Array.isArray(rows) ? rows[0] ?? null : null;
-	const editedAfter = trigger?.edited_at && Date.parse(trigger.edited_at) > Date.parse(run.created_at);
+	const editedAfter = trigger?.edited_at && Date.parse(trigger.edited_at) > readTime(run);
 	if (!trigger || trigger.deleted_at || trigger.author_id !== userId || editedAfter) {
 		throw refusal(409, 'trigger_changed', 'The message you asked about changed. Ask again.');
 	}
 	return trigger;
+}
+
+/**
+ * A message the run could read was deleted or edited since: the draft may
+ * quote words their author took back, so it is drafted again. Any such message
+ * of the channel counts, not only the window's 30: refusing too often is the
+ * safe side.
+ */
+async function refuseChangedContext(config, fetchImpl, run, channelId) {
+	const since = encodeURIComponent(new Date(readTime(run)).toISOString());
+	const rows = await rest(config, fetchImpl,
+		`osionos_messages?channel_id=eq.${channelId}&created_at=lte.${since}&or=(deleted_at.gt."${since}",edited_at.gt."${since}")&select=id&limit=1`);
+	if (Array.isArray(rows) && rows.length > 0) {
+		throw refusal(409, 'context_changed', 'The conversation changed since this draft. Draft it again.');
+	}
 }
 
 async function insertAnswer(config, fetchImpl, body) {
@@ -128,6 +153,7 @@ export async function postAiAnswer(deps, session, request, channelId, response, 
 	const content = await answerText(config, deps.fetchImpl, runId, run.answer_message_id);
 	if (!content) throw refusal(409, 'answer_not_ready', 'This answer did not finish.');
 	const trigger = await readLiveTrigger(config, deps.fetchImpl, run, channel.id, session.userId);
+	await refuseChangedContext(config, deps.fetchImpl, run, channel.id);
 	// The rules apply in full whatever the deployment's mode, with no "post
 	// anyway": the asker did not write these words (C444).
 	if (decideWrite({ text: content, surface: 'channel', mode: 'on', acknowledged: false }).outcome !== 'write') {

@@ -99,7 +99,7 @@ async function resolveUser(config, fetchImpl, subjectId) {
 
 /** The reported message: its author, and a reporter who may read its channel. */
 async function resolveMessage(config, fetchImpl, subjectId, session) {
-	const rows = await rest(config, fetchImpl, `osionos_messages?id=eq.${subjectId}&select=id,author_id,channel_id,ai_run_id&limit=1`);
+	const rows = await rest(config, fetchImpl, `osionos_messages?id=eq.${subjectId}&select=*&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
 	if (!row) return null;
 	await requireChannelAccess(config, fetchImpl, session.userId, row.channel_id);

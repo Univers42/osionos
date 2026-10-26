@@ -22,6 +22,8 @@ export interface ThreadRun {
 	prompt: string;
 	channelId: string;
 	messageId: string;
+	/** When the window was read: the bridge refuses a post once a message changed after it (C443). */
+	readAt: Date;
 	/** Whether the asker can still read the channel and the trigger still stands (C454). */
 	stillAllowed: () => Promise<boolean>;
 }

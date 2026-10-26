@@ -14,7 +14,7 @@ import type { SseEvent } from './sse.ts';
 process.env.OSIONOS_AI_THREAD_ANSWERS = 'on';
 const { startHarness, USER_A, USER_B, WORKSPACE_A } = await import('./harness.ts');
 const { app, base, mock, bridge, call, postRun, tokenFor, createConversation } = await startHarness();
-const { THREAD_SYSTEM_PROMPT, CHANNEL_RUNS, admitThreadRun, checkThreadLimits } = await import('../src/threads/context.ts');
+const { THREAD_SYSTEM_PROMPT, CHANNEL_RUNS, MEMBER_CHANNEL_RUNS, admitThreadRun, checkThreadLimits } = await import('../src/threads/context.ts');
 
 const OUTSIDER = '99999999-9999-4999-8999-999999999999';
 const OUTSIDER_WORKSPACE = '99999999-9999-4999-8999-0000000000ff';
@@ -130,12 +130,14 @@ describe('thread runs', () => {
 		for (const id of [USER_A, USER_B, BOT, channel.id, channel.trigger]) assert.ok(!sent.includes(id), 'no id leaves the window (C440)');
 
 		const run = await app.db.query(
-			'select status, surface, surface_ref, answer_message_id from public.ai_runs where id = $1',
+			'select status, surface, surface_ref, answer_message_id, created_at from public.ai_runs where id = $1',
 			[runId],
 		);
 		assert.equal(run.rows[0].status, 'succeeded');
 		assert.equal(run.rows[0].surface, 'channel');
-		assert.deepEqual(run.rows[0].surface_ref, { channelId: channel.id, messageId: channel.trigger });
+		const { readAt, ...ref } = run.rows[0].surface_ref;
+		assert.deepEqual(ref, { channelId: channel.id, messageId: channel.trigger });
+		assert.ok(Date.parse(readAt) <= run.rows[0].created_at.getTime(), 'the window is read before the run starts (C443)');
 		const stored = await app.db.query(
 			'select id, role, parts from public.ai_messages where conversation_id = $1 order by created_at',
 			[conversationId],
@@ -204,7 +206,8 @@ describe('thread runs', () => {
 		const channel = await seedChannel();
 		await awaitBucketRoom();
 		for (let index = 0; index < CHANNEL_RUNS; index += 1) {
-			assert.equal((await checkThreadLimits(app.redis, { channelId: channel.id, workspaceId: WORKSPACE_A })).allowed, true);
+			const scope = { channelId: channel.id, workspaceId: WORKSPACE_A, userId: randomUUID() };
+			assert.equal((await checkThreadLimits(app.redis, scope)).allowed, true);
 		}
 		const calls = mock.calls;
 		const answer = await refusal(await postThreadRun({ runId: randomUUID(), conversationId: await createConversation('full'), channelId: channel.id, messageId: channel.trigger }));
@@ -213,9 +216,35 @@ describe('thread runs', () => {
 		assert.equal(mock.calls, calls);
 	});
 
+	it('gives one member a share of the channel: past it, they spend no run of the others (C449)', async () => {
+		await awaitBucketRoom();
+		const channelId = randomUUID();
+		const member = { channelId, workspaceId: WORKSPACE_A, userId: randomUUID() };
+		for (let index = 0; index < MEMBER_CHANNEL_RUNS; index += 1) assert.equal((await checkThreadLimits(app.redis, member)).allowed, true);
+		for (let index = 0; index < CHANNEL_RUNS; index += 1) assert.equal((await checkThreadLimits(app.redis, member)).allowed, false);
+		for (let index = MEMBER_CHANNEL_RUNS; index < CHANNEL_RUNS; index += 1) {
+			const other = { channelId, workspaceId: WORKSPACE_A, userId: randomUUID() };
+			assert.equal((await checkThreadLimits(app.redis, other)).allowed, true, 'the refused member left the others their runs');
+		}
+	});
+
+	it('re-attaches a replayed run id without spending the buckets (C449)', async () => {
+		await awaitBucketRoom();
+		const channel = await seedChannel();
+		const body = { runId: randomUUID(), conversationId: await createConversation('replay'), channelId: channel.id, messageId: channel.trigger };
+		assert.equal((await collect(new SseStream(await postThreadRun(body)))).at(-1)?.event, 'done');
+		const calls = mock.calls;
+		for (let index = 0; index < CHANNEL_RUNS; index += 1) {
+			const replay = await postThreadRun(body);
+			assert.equal(replay.status, 200, `replay ${index + 1}`);
+			await replay.body?.cancel();
+		}
+		assert.equal(mock.calls, calls, 'a replay never calls the model again');
+	});
+
 	it('fails closed when the buckets cannot be read (C449)', async () => {
 		const broken = new Proxy({}, { get: () => () => { throw new Error('redis down'); } }) as unknown as Redis;
-		assert.deepEqual(await admitThreadRun(broken, { channelId: randomUUID(), workspaceId: WORKSPACE_A }), {
+		assert.deepEqual(await admitThreadRun(broken, { channelId: randomUUID(), workspaceId: WORKSPACE_A, userId: USER_A }), {
 			kind: 'refused',
 			status: 503,
 			code: 'rate_limit_unavailable',

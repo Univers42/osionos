@@ -114,7 +114,7 @@ const SHAPES = [
 	{
 		logical: 'message', method: 'GET', table: 'osionos_messages',
 		keys: ['id', 'select', 'limit'],
-		fixed: { select: 'id,author_id,channel_id,ai_run_id', limit: '1' },
+		fixed: { select: '*', limit: '1' },
 		run: (world, p) => world.messages.filter((row) => row.id === p.id.slice(3)),
 	},
 	{

@@ -4,9 +4,10 @@
  * the real chat handler over an in-memory PostgREST, so "nothing was written"
  * is an assertion on the fake's state.
  *
- * Caveat: the fake models eq / neq / in / is.null / or filters and ignores the
- * rest (wfts search, ranges), so a filter the handlers add later passes every
- * row here; the writes and the refusals are what the cases pin.
+ * Caveat: the fake models eq / neq / in / is.null / gt / gte / lt / lte / or
+ * filters (ranges compare ISO strings) and ignores the rest (wfts search), so a
+ * filter the handlers add later passes every row here; the writes and the
+ * refusals are what the cases pin.
  */
 
 import { describe, it } from 'node:test';
@@ -37,7 +38,12 @@ function matches(row, key, value) {
 		});
 	}
 	const cell = row[key];
-	const list = (raw) => raw.split(',').map((item) => item.replace(/^"|"$/g, ''));
+	const bare = (raw) => raw.replace(/^"|"$/g, '');
+	const list = (raw) => raw.split(',').map(bare);
+	const ranges = { 'gt.': (a, b) => a > b, 'gte.': (a, b) => a >= b, 'lt.': (a, b) => a < b, 'lte.': (a, b) => a <= b };
+	for (const [op, holds] of Object.entries(ranges)) {
+		if (value.startsWith(op)) return cell != null && holds(String(cell), bare(value.slice(op.length)));
+	}
 	if (value.startsWith('eq.')) return String(cell) === value.slice(3);
 	if (value.startsWith('neq.')) return String(cell) !== value.slice(4);
 	if (value === 'is.null') return cell == null;
@@ -46,8 +52,12 @@ function matches(row, key, value) {
 	return true;
 }
 
-/** An in-memory PostgREST over the tables the chat, AI-answer and report routes touch. */
-function fakeBaas(tables) {
+/**
+ * An in-memory PostgREST over the tables the chat, AI-answer and report routes
+ * touch. A select naming one of missingColumns is PostgREST's 400 for a column
+ * the database does not have yet.
+ */
+function fakeBaas(tables, { missingColumns = [] } = {}) {
 	const writes = [];
 	const frames = [];
 	const reads = [];
@@ -65,6 +75,9 @@ function fakeBaas(tables) {
 		const selected = () => rows.filter((row) => params.every(([key, value]) => matches(row, key, value)));
 		if (method === 'GET') {
 			reads.push({ table, query: decodeURIComponent(parsed.search) });
+			const named = (parsed.searchParams.get('select') ?? '').split(',');
+			const missing = missingColumns.find((column) => named.includes(column));
+			if (missing) return answer({ code: '42703', message: `column ${table}.${missing} does not exist` }, 400);
 			const order = parsed.searchParams.get('order');
 			const found = selected();
 			if (order === 'created_at.desc') found.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
@@ -96,7 +109,7 @@ function fakeBaas(tables) {
  * A text channel where the asker said "@ai" and their thread run answered. Each
  * world has its own asker: the bridge's message bucket is per user and per process.
  */
-function world({ channel = {}, run = {}, trigger = {}, env = {}, answerParts } = {}) {
+function world({ channel = {}, run = {}, trigger = {}, env = {}, answerParts, messages = [], missingColumns } = {}) {
 	const asker = randomUUID();
 	const channelId = randomUUID();
 	const triggerId = randomUUID();
@@ -110,13 +123,16 @@ function world({ channel = {}, run = {}, trigger = {}, env = {}, answerParts } =
 		osionos_messages: [{
 			id: triggerId, channel_id: channelId, author_id: asker, content: '@ai what did we decide?',
 			created_at: ago(2 * MINUTE), deleted_at: null, edited_at: null, thread_root_id: null, ...trigger,
-		}],
+		}, ...messages.map((message) => ({
+			id: randomUUID(), channel_id: channelId, author_id: MEMBER, content: 'see you friday',
+			created_at: ago(3 * MINUTE), deleted_at: null, edited_at: null, thread_root_id: null, ...message,
+		}))],
 		ai_runs: [{
 			id: runId, owner_id: asker, status: 'succeeded', finish_reason: 'stop', created_at: ago(MINUTE), ended_at: ago(MINUTE / 2),
 			surface: 'channel', surface_ref: { channelId, messageId: triggerId }, answer_message_id: answerId, ...run,
 		}],
 		ai_messages: [{ id: answerId, run_id: runId, role: 'assistant', parts: answerParts ?? [{ type: 'text', text: ANSWER }] }],
-	});
+	}, { missingColumns });
 	const handler = createChatHandler({
 		config: CONFIG,
 		verifySession: (token) => ({ userId: token }),
@@ -221,6 +237,31 @@ describe('posting an @AI answer', () => {
 		assert.deepEqual(messageWrites(left), []);
 	});
 
+	it('refuses when an edit landed between the window read and the run start (C443)', async () => {
+		const w = world({ trigger: { edited_at: ago(MINUTE + 2_000) } });
+		w.baas.tables.ai_runs[0].surface_ref.readAt = ago(MINUTE + 5_000);
+		const result = await post(w);
+		assert.deepEqual([result.status, result.body.code], [409, 'trigger_changed']);
+		assert.deepEqual(messageWrites(w), []);
+	});
+
+	it('refuses when a message the run could read was deleted or edited since', async () => {
+		for (const message of [{ deleted_at: ago(10_000) }, { edited_at: ago(10_000) }]) {
+			const w = world({ messages: [message] });
+			const result = await post(w);
+			assert.deepEqual([result.status, result.body.code], [409, 'context_changed'], JSON.stringify(message));
+			assert.deepEqual(messageWrites(w), []);
+		}
+		const later = world({ messages: [{ created_at: ago(20_000), deleted_at: ago(10_000) }] });
+		assert.equal((await post(later)).status, 201, 'a message written after the run was not in its window');
+	});
+
+	it('posts every text part of the answer, as the draft streamed it', async () => {
+		const w = world({ answerParts: [{ type: 'text', text: 'The team ' }, { type: 'reasoning', text: 'hidden' }, { type: 'text', text: 'chose Friday.' }] });
+		assert.equal((await post(w)).status, 201);
+		assert.equal(posted(w).content, 'The team chose Friday.');
+	});
+
 	it('applies the channel rules in full, with no "post anyway" (C444)', async () => {
 		const w = world({ answerParts: [{ type: 'text', text: `what a ${TERM} you are` }], env: { OSIONOS_MODERATION_ACTIONS: 'log' } });
 		const result = await post(w, { runId: w.runId, acknowledgeWarning: true });
@@ -291,6 +332,13 @@ describe('a posted @AI answer', () => {
 		}
 	});
 
+	it('is not deleted by a requester who lost the channel', async () => {
+		const w = await postedWorld();
+		w.baas.tables.osionos_channels[0].is_private = true;
+		assert.equal((await call(w.handler, `/api/chat/messages/${w.answerId}`, { method: 'DELETE', as: w.asker })).status, 403);
+		assert.equal(posted(w).deleted_at, null);
+	});
+
 	it('is reported with no subject person: its requester did not write it (C439)', async () => {
 		const w = await postedWorld();
 		const captured = {};
@@ -305,5 +353,32 @@ describe('a posted @AI answer', () => {
 		assert.equal(captured.status, 201);
 		const report = w.baas.writes.find((write) => write.table === 'osionos_user_reports');
 		assert.equal(report.body.subject_user_id, null);
+	});
+});
+
+describe('the chat on a database without the thread-answers columns, flag off', () => {
+	it('lists, replies, searches, opens a thread and reports without naming them (deploy order)', async () => {
+		const w = world({ env: { OSIONOS_THREAD_ANSWERS: undefined }, missingColumns: ['ai_run_id', 'ai_requested_by'] });
+		const reply = await call(w.handler, `/api/chat/channels/${w.channelId}/messages`, { payload: { content: 'friday then', replyTo: w.triggerId }, as: MEMBER });
+		assert.equal(reply.status, 201);
+		assert.equal(reply.body.message.replyTo.authorName, 'Ada');
+		const list = await call(w.handler, `/api/chat/channels/${w.channelId}/messages`, { method: 'GET', as: MEMBER });
+		assert.equal(list.status, 200);
+		assert.equal(list.body.messages.find((message) => message.id === reply.body.message.id).replyTo.authorName, 'Ada');
+		const search = await call(w.handler, `/api/chat/search?q=friday&channelId=${w.channelId}`, { method: 'GET', as: MEMBER });
+		assert.equal(search.status, 200);
+		const thread = await call(w.handler, `/api/chat/threads/${w.triggerId}`, { method: 'GET', as: MEMBER });
+		assert.equal(thread.status, 200);
+		const captured = {};
+		const response = { writeHead: (status) => { captured.status = status; }, setHeader() {}, end: (text) => { captured.body = JSON.parse(text); } };
+		await handleReportRoutes(
+			{ fetchImpl: w.baas.fetchImpl, env: {} },
+			{ userId: MEMBER },
+			jsonRequest('POST', { subjectKind: 'message', subjectId: w.triggerId, category: 'other' }, MEMBER),
+			response,
+			CONFIG,
+		);
+		assert.equal(captured.status, 201);
+		assert.ok(!w.baas.reads.some((read) => read.query.includes('ai_run_id')), 'no read names the new column');
 	});
 });

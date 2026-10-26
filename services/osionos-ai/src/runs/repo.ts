@@ -88,7 +88,7 @@ export async function insertRun(
 		 * and only by the thread path. Absent, the two columns are not named,
 		 * so a database without them takes every other run as before.
 		 */
-		surface?: { channelId: string; messageId: string };
+		surface?: { channelId: string; messageId: string; readAt: Date };
 	},
 ): Promise<{ kind: 'inserted' | 'exists' | 'conflict' | 'missing' }> {
 	try {
@@ -104,7 +104,7 @@ export async function insertRun(
 				   returning id`,
 			[
 				runId, conversationId, ownerId, model, kind, agentId, agentVersion, customAgentId, customAgentVersion,
-				...(surface ? [JSON.stringify({ channelId: surface.channelId, messageId: surface.messageId })] : []),
+				...(surface ? [JSON.stringify({ channelId: surface.channelId, messageId: surface.messageId, readAt: surface.readAt.toISOString() })] : []),
 			],
 		);
 		return result.rowCount === 1 ? { kind: 'inserted' } : { kind: 'exists' };

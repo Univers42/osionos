@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { readJson, sendError, sendSseHeaders, writeSseFrame } from '../http.ts';
 import { resolveTarget } from '../gateway/resolve.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
+import { getRun } from '../runs/repo.ts';
 import { startRun } from '../runs/runner.ts';
 import { admitThreadRun, channelWorkspace, loadThreadWindow, threadPrompt, triggerRefusal } from '../threads/context.ts';
 import { replayRun, startPing } from './runs.ts';
@@ -47,8 +48,11 @@ export async function handleThreadRuns(ctx: RouteContext): Promise<number> {
 	if (refusal) return refuse(TRIGGER_STATUS[refusal], refusal);
 	const workspaceId = await channelWorkspace(db, body.channelId);
 	if (!workspaceId) return refuse(404, 'not_found');
-	const admitted = await admitThreadRun(redis, { channelId: body.channelId, workspaceId });
-	if (admitted.kind === 'refused') return refuse(admitted.status, admitted.code, admitted.retryAfterSeconds);
+	// A run id already started re-attaches to that run below: replaying it spends no bucket.
+	if (!(await getRun(db, body.runId))) {
+		const admitted = await admitThreadRun(redis, { channelId: body.channelId, workspaceId, userId: user.userId });
+		if (admitted.kind === 'refused') return refuse(admitted.status, admitted.code, admitted.retryAfterSeconds);
+	}
 
 	const outcome = await startRun({
 		db,
@@ -62,6 +66,7 @@ export async function handleThreadRuns(ctx: RouteContext): Promise<number> {
 			prompt: threadPrompt(window),
 			channelId: body.channelId,
 			messageId: body.messageId,
+			readAt: window[window.length - 1].readAt,
 			stillAllowed: async () => (await loadThreadWindow(db, scope)).length > 0,
 		},
 		emit: (event) => writeSseFrame(ctx.response, event),

@@ -20,6 +20,8 @@ export interface ThreadMessage {
 	label: string;
 	content: string;
 	createdAt: Date;
+	/** The database time the window was read, the same on every row: edits after it change the draft's ground. */
+	readAt: Date;
 }
 
 /** The characters of quoted messages a run reads at most; the oldest go first. */
@@ -35,8 +37,13 @@ const CHANNEL_WINDOW_SECONDS = 600;
 /** Thread runs per workspace per day (C449). */
 export const WORKSPACE_RUNS_PER_DAY = 200;
 const DAY_SECONDS = 86_400;
+/** One member's share of each bucket: no single member spends a channel's or a workspace's runs. */
+export const MEMBER_CHANNEL_RUNS = 3;
+export const MEMBER_WORKSPACE_RUNS_PER_DAY = 40;
 const CHANNEL_LIMIT_PREFIX = 'ai:rl:thread-channel';
 const WORKSPACE_LIMIT_PREFIX = 'ai:rl:thread-workspace';
+const MEMBER_CHANNEL_LIMIT_PREFIX = 'ai:rl:thread-member-channel';
+const MEMBER_WORKSPACE_LIMIT_PREFIX = 'ai:rl:thread-member-workspace';
 
 const [IDENTITY, LANGUAGE, STYLE] = SYSTEM_PROMPT_LINES;
 
@@ -58,11 +65,11 @@ export async function loadThreadWindow(
 	db: Pool,
 	{ channelId, userId, messageId }: { channelId: string; userId: string; messageId: string },
 ): Promise<ThreadMessage[]> {
-	const result = await db.query<{ n: number; label: string; content: string; created_at: Date }>(
-		'select n, label, content, created_at from public.osionos_ai_channel_context($1::uuid, $2::uuid, $3::uuid)',
+	const result = await db.query<{ n: number; label: string; content: string; created_at: Date; read_at: Date }>(
+		'select n, label, content, created_at, now() as read_at from public.osionos_ai_channel_context($1::uuid, $2::uuid, $3::uuid)',
 		[channelId, userId, messageId],
 	);
-	return result.rows.map((row) => ({ n: row.n, label: row.label, content: row.content, createdAt: row.created_at }));
+	return result.rows.map((row) => ({ n: row.n, label: row.label, content: row.content, createdAt: row.created_at, readAt: row.read_at }));
 }
 
 /** The workspace of a channel, for its daily cap. Read only after the window said yes. */
@@ -105,16 +112,31 @@ export function threadPrompt(window: readonly ThreadMessage[]): string {
 
 /**
  * The channel and workspace buckets (C449), after the user's own minute
- * window. A Redis that does not answer throws: the route refuses (fail closed).
+ * window. The member's share is counted first, so a member past it spends no
+ * shared run. A Redis that does not answer throws: the route refuses (fail closed).
  */
 export async function checkThreadLimits(
 	redis: Redis,
-	{ channelId, workspaceId }: { channelId: string; workspaceId: string },
+	{ channelId, workspaceId, userId }: ThreadLimitScope,
 	now: Date = new Date(),
 ): Promise<{ allowed: boolean; retryAfterSeconds: number }> {
-	const channel = await checkRateLimit(redis, channelId, CHANNEL_RUNS, now, CHANNEL_LIMIT_PREFIX, CHANNEL_WINDOW_SECONDS);
-	if (!channel.allowed) return channel;
-	return checkRateLimit(redis, workspaceId, WORKSPACE_RUNS_PER_DAY, now, WORKSPACE_LIMIT_PREFIX, DAY_SECONDS);
+	const buckets: [string, number, string, number][] = [
+		[`${channelId}:${userId}`, MEMBER_CHANNEL_RUNS, MEMBER_CHANNEL_LIMIT_PREFIX, CHANNEL_WINDOW_SECONDS],
+		[`${workspaceId}:${userId}`, MEMBER_WORKSPACE_RUNS_PER_DAY, MEMBER_WORKSPACE_LIMIT_PREFIX, DAY_SECONDS],
+		[channelId, CHANNEL_RUNS, CHANNEL_LIMIT_PREFIX, CHANNEL_WINDOW_SECONDS],
+		[workspaceId, WORKSPACE_RUNS_PER_DAY, WORKSPACE_LIMIT_PREFIX, DAY_SECONDS],
+	];
+	for (const [key, limit, prefix, seconds] of buckets) {
+		const result = await checkRateLimit(redis, key, limit, now, prefix, seconds);
+		if (!result.allowed) return result;
+	}
+	return { allowed: true, retryAfterSeconds: 0 };
+}
+
+export interface ThreadLimitScope {
+	channelId: string;
+	workspaceId: string;
+	userId: string;
 }
 
 /**
@@ -123,7 +145,7 @@ export async function checkThreadLimits(
  */
 export async function admitThreadRun(
 	redis: Redis,
-	scope: { channelId: string; workspaceId: string },
+	scope: ThreadLimitScope,
 	now: Date = new Date(),
 ): Promise<{ kind: 'admitted' } | { kind: 'refused'; status: number; code: string; retryAfterSeconds?: number }> {
 	try {

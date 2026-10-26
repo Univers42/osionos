@@ -219,7 +219,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		agentVersion: isCustomAgent(agent) ? null : (agent?.version ?? null),
 		customAgentId: isCustomAgent(agent) ? agent.id : null,
 		customAgentVersion: isCustomAgent(agent) ? agent.version : null,
-		...(input.thread ? { surface: { channelId: input.thread.channelId, messageId: input.thread.messageId } } : {}),
+		...(input.thread ? { surface: { channelId: input.thread.channelId, messageId: input.thread.messageId, readAt: input.thread.readAt } } : {}),
 	});
 	if (inserted.kind === 'conflict') {
 		// The conversation already has a running run: the partial unique index
