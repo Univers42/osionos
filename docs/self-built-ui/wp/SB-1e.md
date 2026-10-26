@@ -8,7 +8,8 @@ Depends on SB-1d (format, loader, `UnsupportedBlock`) and SB-6a (`RenderModeProv
 - `src/features/system-pages/ui/SystemPageHost.tsx` (new);
 - `src/features/system-pages/ui/systemPagePanel.tsx` (new): `systemPagePanel(id)`, the lazy panel factory;
 - `src/app/__styleguide__/sections/SystemPageSection.tsx` (new), plus one line in `StyleGuideRoute.tsx` to mount it;
-- tests: `tests/e2e/functional/systemPageHost.spec.mjs` (new).
+- `src/features/system-pages/ui/systemPageContext.ts` (new); `src/services/button-program/runProgram.ts` and the button call site: the `trusted` option of Rule 5 only;
+- tests: `tests/e2e/functional/systemPageHost.spec.mjs` (new), `tests/canvas/system-page-trust.test.ts` (new).
 
 **MUST NOT TOUCH:** `sectionPanels.tsx` (no section migrates in this package; S5 does that one section at a time), `SettingsView.tsx`, `sections.ts`, the document files.
 
@@ -29,6 +30,7 @@ Depends on SB-1d (format, loader, `UnsupportedBlock`) and SB-6a (`RenderModeProv
 2. Live, not preview. Buttons and (later) fields work inside the host. The e2e proves the mode by reading it in a test-only way (`data-render-mode` on the host root).
 3. No layout shift on load: the Suspense fallback is the existing skeleton, and the host adds no top margin of its own.
 4. Perf: opening the demo through the host is measured once (Playwright `performance.now()` from the nav click to `[data-system-page]` visible, 10 runs, p95). Report the number; the budget (≤ 61 ms) applies to S5 sections, not to this demo.
+5. A system page is trusted (SB-3a devil condition 2, deferred here by D-SB-3a-diff). The host provides `SystemPageContext` (`src/features/system-pages/ui/systemPageContext.ts`, a boolean, default `false`). The button call site (the legacy button in `ReadOnlyBlock.tsx`, or SB-3b's registered `ButtonBlock.tsx` if it is merged first) passes `trusted: useContext(SystemPageContext) || undefined` to `runButtonBlock`, whose options gain `trusted?: true`; `runProgram.ts` ORs it with today's `page.ownerId === viewerId`. Nothing in block data, program args or page properties can set it. Tests: a `confirm: "none"` test action run from a button inside the host resolves `ok`; the same button on a page the viewer does not own resolves `blocked`; a block carrying a stray `trusted: true` field changes nothing.
 
 ## Steps
 
