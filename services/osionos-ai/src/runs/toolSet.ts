@@ -16,6 +16,7 @@ import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import type { PageContext } from './prompt.ts';
 import { citationData } from './sources.ts';
+import { cardAgentOf } from '../agents/card.ts';
 import { isCustomAgent } from '../agents/config.ts';
 import type { AgentConfig } from '../agents/config.ts';
 
@@ -131,6 +132,7 @@ export function buildRunTools(input: {
 		runId,
 		conversationId,
 		ownerId,
+		agent: cardAgentOf(agent),
 		// The pages the run had read or quoted: where the request comes
 		// from. It grows as the run reads more.
 		provenance: () => [

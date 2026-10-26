@@ -24,7 +24,9 @@ import {
 import { loadAccountContext } from './account.ts';
 import { loadWorkspaceOverview } from './workspace.ts';
 import { systemPromptFor } from '../agents/prompt.ts';
-import type { BuiltinAgent } from '../agents/builtins.ts';
+import type { AgentConfig } from '../agents/config.ts';
+import { isCustomAgent } from '../agents/config.ts';
+import { PREFIX_MAX, prefixCost } from '../agents/prefix.ts';
 import { buildSkillIndex, workspaceSkillsForRun } from '../skills/runSkills.ts';
 import { memoriesForRun } from '../memory/runMemories.ts';
 import { recordMemoryPins } from '../memory/repo.ts';
@@ -104,7 +106,7 @@ export interface StartRunInput {
 	 * byte. An agent adds its instructions to the prompt and narrows the tools
 	 * to its own list — it never gains one.
 	 */
-	agent?: BuiltinAgent | null;
+	agent?: AgentConfig | null;
 	/** The workspace of the conversation: its skills join the prompt, when the caller is a live member. */
 	workspaceId?: string;
 	/** Whether the account block is included in the prompt. */
@@ -134,6 +136,7 @@ export function today(now: Date = new Date()): string {
 const PREFLIGHT_ERRORS: Record<string, number> = {
 	rate_limited: 429,
 	budget_exhausted: 402,
+	agent_invalid: 409,
 };
 
 /**
@@ -193,8 +196,11 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		conversationId,
 		ownerId,
 		model: target.modelId,
-		agentId: agent?.id ?? null,
-		agentVersion: agent?.version ?? null,
+		// A custom agent pins its own pair of columns; the built-in pair stays NULL (C301).
+		agentId: isCustomAgent(agent) ? null : (agent?.id ?? null),
+		agentVersion: isCustomAgent(agent) ? null : (agent?.version ?? null),
+		customAgentId: isCustomAgent(agent) ? agent.id : null,
+		customAgentVersion: isCustomAgent(agent) ? agent.version : null,
 	});
 	if (inserted.kind === 'conflict') {
 		// The conversation already has a running run: the partial unique index
@@ -277,6 +283,12 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		agent?.skills ?? [],
 		await workspaceSkillsForRun(db, input.user, input.workspaceId),
 	);
+	// C340: the prefix is judged again with the real index, after the row exists
+	// and before any money moves, so a refusal leaves reserved_microusd at 0.
+	if (isCustomAgent(agent) && prefixCost(agent, skillIndex) > PREFIX_MAX) {
+		await markRun(db, runId, 'failed', 'agent_invalid');
+		return { kind: 'refused', status: 409, code: 'agent_invalid' };
+	}
 	// The user's approved memories, loaded ONCE for this run and pinned on its
 	// row (C40): a continuation run loads its own, as skills do. The pin is what
 	// the run was GIVEN, recorded before it executes: a run that fails before

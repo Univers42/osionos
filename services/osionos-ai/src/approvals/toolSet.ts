@@ -66,6 +66,7 @@ export function writeToolSet(
 					provenance: { pageIds: [...approval.provenance()] },
 					approvedInRun: await countExecutedInRun(ctx.db, approval.runId),
 					expiresAt: new Date(result.row.expires_at).toISOString(),
+					agent: approval.agent ?? null,
 				};
 				await hooks.onApproval?.(asked);
 				await hooks.onResult?.({ toolCallId: options.toolCallId, toolName: tool.name, ok: true });
