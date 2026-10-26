@@ -11,7 +11,8 @@
 /* ************************************************************************** */
 
 /**
- * The composer's picker: a connection, then a model.
+ * The composer's picker: the model pill (see ModelMenu), where "Auto" is the
+ * platform connection and each of the reader's own connections is a submenu.
  *
  * The options come from the service (the user's own connections and the models
  * each of them offers), never from a list written in the app. The choice is
@@ -25,16 +26,15 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import { Dropdown } from "@/shared/ui";
 import { listConnections, listModels, type AiConnection, type AiModel } from "@/features/ai/api/aiClient";
 import {
   PLATFORM_CONNECTION_ID,
-  defaultModelId,
   resolveAiSelection,
   selectionSeesImages,
   writeAiSelection,
   type AiSelection,
 } from "@/features/ai/model/aiSelection";
+import { ModelMenu } from "./ModelMenu";
 import { EffortPicker } from "@/features/ai/ui/EffortPicker";
 import { DEVICE_CONNECTION_ID, readDeviceEngine } from "@/features/ai/model/deviceEngine";
 
@@ -146,56 +146,28 @@ export const AiConnectionPicker: React.FC<Props> = ({ value, onChange, onVisionC
 
   const reasons = chosen && models.some((model) => model.id === value.model && model.reasoning === true);
 
-  const connectionOptions = [
-    ...connections.map((connection) => ({
-      value: connection.id,
-      label: connection.label,
-    })),
-    ...(deviceEngine ? [{ value: DEVICE_CONNECTION_ID, label: "This device" }] : []),
+  // The reader's own connections, each a submenu of the model menu; the platform one is "Auto".
+  const ownConnections = [
+    ...connections.filter((connection) => connection.id !== PLATFORM_CONNECTION_ID).map((connection) => ({ id: connection.id, label: connection.label })),
+    ...(deviceEngine ? [{ id: DEVICE_CONNECTION_ID, label: "This device" }] : []),
   ];
-  const modelOptions = (modelsByConnection[value.connectionId] ?? []).map((model) => ({
-    value: model.id,
-    label: model.vision ? `${model.label} (sees images)` : model.label,
-  }));
 
-  const onConnectionChange = (nextId: string) => {
-    if (nextId === DEVICE_CONNECTION_ID && deviceEngine) {
-      apply({ connectionId: nextId, model: deviceEngine.model });
-      return;
-    }
-    const models = modelsByConnection[nextId] ?? [];
-    if (models.length > 0) {
-      apply({ connectionId: nextId, model: defaultModelId(models) });
-      return;
-    }
-    // The models of a connection we have not seen yet.
-    void listModels(nextId)
-      .then((list) => {
-        setServiceModels((current) => ({ ...current, [nextId]: list }));
-        apply({ connectionId: nextId, model: defaultModelId(list) });
-      })
+  // The models of a connection we have not seen yet, loaded when its submenu opens.
+  const ensureModels = useCallback((connectionId: string) => {
+    if (connectionId === DEVICE_CONNECTION_ID) return;
+    void listModels(connectionId)
+      .then((list) => setServiceModels((current) => (current[connectionId] ? current : { ...current, [connectionId]: list })))
       .catch(() => undefined);
-  };
+  }, []);
 
   return (
     <span className="flex items-center gap-1" data-testid="ai-connection-picker">
-      <Dropdown
-        label="Connection"
-        variant="inline"
-        width={200}
-        value={value.connectionId}
-        options={connectionOptions}
-        onChange={onConnectionChange}
-        placeholder="Connection"
-      />
-      <Dropdown
-        label="Model"
-        variant="inline"
-        width={220}
-        value={value.model}
-        options={modelOptions}
-        onChange={(model) => apply({ connectionId: value.connectionId, model })}
-        placeholder="Model"
+      <ModelMenu
+        value={value}
+        onChange={apply}
+        modelsByConnection={modelsByConnection}
+        connections={ownConnections}
+        onNeedModels={ensureModels}
       />
       {reasons ? (
         <EffortPicker value={value.effort} onChange={(effort) => apply({ ...value, effort })} />
