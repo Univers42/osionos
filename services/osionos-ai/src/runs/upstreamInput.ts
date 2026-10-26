@@ -45,6 +45,8 @@ export interface UpstreamRunInput {
 	 * before it said anything. Each is paid for only when the run gets there.
 	 */
 	fallbacks?: readonly ChainStep[];
+	/** The primary the run skipped because it rests: the client is told who answered instead. */
+	restedFrom?: string;
 	history: HistoryMessage[];
 	pages: readonly PageContext[];
 	/** The sources of the answer: the chunks the retrieval found. */

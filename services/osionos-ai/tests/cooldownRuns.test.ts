@@ -42,6 +42,10 @@ describe('the order of a run', () => {
 		assert.equal(lastOf(events).event, 'done');
 		assert.deepEqual(failing.requests, ['mock-platform']);
 		assert.equal((await runRow(runId)).model, 'mock-platform');
+		// The reader is told who answered, as after a failed attempt.
+		assert.deepEqual(events.filter((event) => event.event === 'route').map((event) => event.data), [
+			{ from: 'mock-metered', to: 'mock-platform', reason: 'unavailable' },
+		]);
 		const { user, platform } = await settledLedger();
 		assert.equal(user.reserved, 0);
 		assert.equal(platform.reserved, 0);
@@ -55,6 +59,8 @@ describe('the order of a run', () => {
 		const { events } = await runToEnd({ model: 'mock-metered', fallbacks: [{ model: 'mock-platform' }] });
 		assert.equal(lastOf(events).event, 'done');
 		assert.deepEqual(failing.requests, ['mock-metered', 'mock-platform']);
+		// Nothing was skipped: the one route frame is the failover's own.
+		assert.deepEqual(events.filter((event) => event.event === 'route').map((event) => (event.data as { reason: string }).reason), ['upstream_error']);
 	});
 
 	it('a failed primary rests for its user, and for nobody else', async () => {
