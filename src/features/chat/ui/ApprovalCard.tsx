@@ -48,6 +48,7 @@ import {
   type ApprovalOutcome,
 } from "../model/approvalCard";
 import { fetchApproval, type ApprovalChoice, type ApprovalDescription } from "../model/approvals";
+import { reloadWrittenPage } from "../model/reloadWrittenPage";
 import { decisionItems, keptKeys, planTree, type PlanNode } from "../model/planTree";
 
 export interface ApprovalCardProps {
@@ -118,7 +119,9 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
       return;
     }
     setError(outcome.error);
-    setApproval((current) => (current ? { ...current, status: outcome.status } : current));
+    setApproval((current) => (current ? { ...current, status: outcome.status, summary: outcome.summary } : current));
+    const writtenPageId = approval?.target.pageId;
+    if (outcome.status === "executed" && approval && writtenPageId) reloadWrittenPage(approval.tool, writtenPageId);
     if (outcome.continuationRunId) onContinuation?.(outcome.continuationRunId);
   };
 
@@ -166,8 +169,8 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     approval ? noteLine(expiryWords(approval.expiresAt)) : null,
     busy
       ? stateLine("Writing…", true)
-      : stateWords(state, error)
-        ? stateLine(stateWords(state, error))
+      : stateWords(state, error, approval?.summary)
+        ? stateLine(stateWords(state, error, approval?.summary))
         : null,
     failure ? stateLine(failure) : null,
     !approval ? stateLine("The card of this request is loading…") : null,
