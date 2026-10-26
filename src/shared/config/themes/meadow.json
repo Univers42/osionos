@@ -1,0 +1,39 @@
+{
+  "name": "Meadow",
+  "base": "light",
+  "palette": "warm",
+  "colors": {
+    "bg-canvas": "#e9f1e6",
+    "bg-page": "#f4f8f1",
+    "bg-surface": "#fbfdf9",
+    "bg-panel": "#eef4ea",
+    "bg-subtle": "#e8f0e3",
+    "bg-muted": "#dfe9d9",
+    "bg-hover": "#e2ecdc",
+    "bg-elevated": "#ffffff",
+    "fg-strong": "#13200f",
+    "fg-default": "#1f2d1a",
+    "fg-muted": "#4a5a43",
+    "fg-subtle": "#5f6f58",
+    "border-default": "#d3e0cb",
+    "border-strong": "#b9cbad",
+    "accent": "#3a7d44",
+    "accent-fg": "#ffffff",
+    "accent-hover": "#2f6838",
+    "accent-subtle": "#dcefdc",
+    "accent-text": "#2f6d39",
+    "link": "#2f6d39",
+    "danger": "#b3261e",
+    "danger-fg": "#ffffff"
+  },
+  "layout": {
+    "radius": "14px",
+    "radius-sm": "10px",
+    "radius-lg": "18px",
+    "page-max-width": "900px",
+    "space-3": "14px",
+    "space-4": "18px",
+    "control-h-md": "32px",
+    "field-h": "32px"
+  }
+}
