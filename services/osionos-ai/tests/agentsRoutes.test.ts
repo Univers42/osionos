@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, it, mock } from 'node:test';
 import { WORKSPACE_A, WORKSPACE_B } from './harness.ts';
 import { startAgents } from './agentsHarness.ts';
+import type { Actor } from './agentsHarness.ts';
 
 /**
  * The routes of custom agents with OSIONOS_AI_CUSTOM_AGENTS on (D3 slice B1):
@@ -48,6 +49,29 @@ describe('who reads (C300 amended, C332)', () => {
 		}
 		assert.equal((await as(member, 'GET', `/api/ai/agents/${made.id}`)).body?.instructions, 'SECRET-WS-TEXT');
 		assert.equal((await as(viewer, 'GET', `/api/ai/agents/${made.id}`)).body?.instructions, undefined);
+	});
+
+	it('C300 a member reads no instructions of an agent nobody may run; an admin still does, to review it', async () => {
+		const author = await actor('owner');
+		const reviewer = await actor('owner');
+		const member = await actor('member');
+		const readAs = async (who: Actor, id: string) => (await as(who, 'GET', `/api/ai/agents/${id}`)).body?.instructions;
+
+		const flagged = await make(author, { scope: 'workspace', workspaceId: WORKSPACE_A, instructions: 'SECRET-REVIEW-TEXT' });
+		await setRole(author, 'member');
+		assert.equal((await as(member, 'GET', `/api/ai/agents/${flagged.id}`)).body?.needsReview, true);
+		assert.equal(await readAs(member, String(flagged.id)), undefined, 'needs review: a member reads none');
+		assert.equal(await readAs(reviewer, String(flagged.id)), 'SECRET-REVIEW-TEXT', 'an admin reads them to review');
+
+		const fine = await make(reviewer, { scope: 'workspace', workspaceId: WORKSPACE_A, instructions: 'SECRET-OFF-TEXT' });
+		assert.equal(await readAs(member, String(fine.id)), 'SECRET-OFF-TEXT', 'runnable: a member reads them');
+		await settings(WORKSPACE_A, { agents_enabled: false });
+		try {
+			assert.equal(await readAs(member, String(fine.id)), undefined, 'agents off: a member reads none');
+			assert.equal(await readAs(reviewer, String(fine.id)), 'SECRET-OFF-TEXT');
+		} finally {
+			await settings(WORKSPACE_A, { agents_enabled: true, custom_agents_allowed: false });
+		}
 	});
 
 	it('C300 a non-member gets 404, in the list and on GET one', async () => {

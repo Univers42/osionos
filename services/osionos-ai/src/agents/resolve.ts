@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import type { AuthUser } from '../auth.ts';
+import { config } from '../config.ts';
 import type { RunRow } from '../runs/repo.ts';
 import { canAdminAgents, canRunAgents } from './authority.ts';
 import { findBuiltinAgent, READ_TOOL_NAMES, WRITE_TOOL_NAMES } from './builtins.ts';
@@ -139,6 +140,8 @@ export async function resolvePinnedAgent(
 			// A removed built-in is null, as before: only a built-in pin may land here.
 			return { ok: true, agent: run.agent_id ? findBuiltinAgent(run.agent_id) : null };
 		}
+		// The flag is the kill switch: off, no custom agent executes, a pinned one included.
+		if (!config.customAgentsEnabled) return { ok: false, reason: 'custom_agents_off' };
 		if (run.custom_agent_version == null) return { ok: false, reason: 'agent_version_missing' };
 		const pinned = await loadPinnedVersion(db, { agentId: run.custom_agent_id, version: run.custom_agent_version });
 		if (!pinned) return { ok: false, reason: 'agent_version_missing' };
