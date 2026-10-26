@@ -42,6 +42,7 @@ import {
 
 export { KNOWN_DATABASE_STATE_STORAGE_KEY };
 const KNOWN_DATABASE_STATE_FLUSH_DELAY_MS = 1000;
+const KNOWN_DATABASE_STATE_IDLE_TIMEOUT_MS = 2000;
 
 type KnownDatabaseStoreState = {
   state: NotionState;
@@ -180,7 +181,7 @@ export function persistKnownDatabaseState(state: NotionState): NotionState {
   return state;
 }
 
-export function flushKnownDatabaseStatePersist() {
+export function flushKnownDatabaseStatePersist(pushNow = false) {
   cancelKnownDatabaseStateFlush();
 
   if (!pendingKnownDatabaseState) return;
@@ -189,23 +190,28 @@ export function flushKnownDatabaseStatePersist() {
   pendingKnownDatabaseState = null;
 
   if (globalThis.window !== undefined) {
-    // Snapshot once per debounced flush: the persisted copy (and the async
-    // server push below, which holds slices past this tick) must not alias
-    // the live store state the pending ref now points at.
-    const nextState = cloneState(pendingState);
-    timed("persistKnownDatabaseState", () => writeKnownState(serializeKnownDatabaseState(nextState, deletedPageIds)));
+    // No snapshot: the store replaces objects and never mutates them (see
+    // persistKnownDatabaseState), so the pending ref is already a stable
+    // snapshot. structuredClone of the whole state was half of this flush —
+    // 54 ms with a 5k-row table, landing ~1 s after an edit, i.e. while the
+    // user is still typing.
+    timed("persistKnownDatabaseState", () => writeKnownState(serializeKnownDatabaseState(pendingState, deletedPageIds)));
     // Write-through: mirror every user-created database to the server (bridge →
     // Postgres, owner-isolated). No-ops offline / without a session — see module.
-    pushDirtyObjectDatabases(nextState, seedDatabaseIds(), deletedPageIds);
+    // Its own task: hashing every user slice must not stack on the local write
+    // (a page being unloaded gets no later task, so it pushes now).
+    const push = () => pushDirtyObjectDatabases(pendingState, seedDatabaseIds(), deletedPageIds);
+    if (pushNow) push();
+    else globalThis.setTimeout(push, 0);
   }
 }
 
 if (globalThis.window !== undefined) {
-  globalThis.addEventListener("beforeunload", flushKnownDatabaseStatePersist);
+  globalThis.addEventListener("beforeunload", () => flushKnownDatabaseStatePersist(true));
 }
 
 // Makes room in the page caches when the origin is full (knownDatabaseStorage).
-const writeKnownState = createKnownStateWriter(flushKnownDatabaseStatePersist);
+const writeKnownState = createKnownStateWriter(() => flushKnownDatabaseStatePersist(true));
 
 function scheduleKnownDatabaseStatePersist(state: NotionState) {
   pendingKnownDatabaseState = state;
@@ -238,10 +244,14 @@ function scheduleIdleKnownDatabaseStateFlush() {
   }).requestIdleCallback;
 
   if (requestIdle) {
+    // A busy (or headless) page may grant no idle period at all; without a
+    // timeout the save waited for the next edit or unload (seen: >8 s).
+    // Caveat: an edit is still unsaved for up to debounce + timeout (3 s); a
+    // tab crash in that window loses it (a normal close flushes on unload).
     pendingKnownDatabaseStateIdleHandle = requestIdle(() => {
       pendingKnownDatabaseStateIdleHandle = null;
       flushKnownDatabaseStatePersist();
-    });
+    }, { timeout: KNOWN_DATABASE_STATE_IDLE_TIMEOUT_MS });
     return;
   }
 
