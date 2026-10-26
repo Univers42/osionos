@@ -25,7 +25,6 @@
 @import "./shell.css";
 @import "./type.css";
 @import "./recipes.css";
-@import "./block-style.scss";
 /* The vendored database's colour bridge (database-bridge.generated.css) and its stock
    shadow/radius classes (database-overrides.css) are NOT imported here: nothing outside
    the database reads them, so each component that renders ObjectDatabase imports them
