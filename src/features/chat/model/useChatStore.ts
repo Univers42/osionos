@@ -131,7 +131,9 @@ export interface ChatStoreState extends ChatData {
    * new text as a new turn. Refused (false) while
    * the conversation has a run in flight.
    */
-  editAndResend: (messageId: string, text: string) => Promise<boolean>;
+  editAndResend: (messageId: string, text: string, choice?: { model?: string; connectionId?: string }) => Promise<boolean>;
+  /** Asks the question of an answer again, in place of that answer, with the model picked now. */
+  retryAnswer: (answerId: string) => Promise<boolean>;
   attachContext: (scope: SharedContextItem["scope"], scopeId: string, item: Pick<SharedContextItem, "kind" | "label" | "ref">) => void;
   detachContext: (id: string) => void;
   messagesFor: (conversationId: string) => ChatMessage[];
@@ -473,7 +475,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       persist();
     },
 
-    editAndResend: async (messageId, text) => {
+    editAndResend: async (messageId, text, choice) => {
       const original = get().messages.find((m) => m.id === messageId);
       if (!original || original.role !== "user" || !text.trim()) return false;
       const { conversationId } = original;
@@ -486,15 +488,30 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       const replaceFromRunId = inConversation.slice(from + 1).find((m) => m.runId)?.runId;
       set((s) => ({ messages: s.messages.filter((m) => !dropped.has(m.id)) }));
       persist();
-      // The turn keeps the connection, model and agent it was first sent with.
+      // The turn keeps the connection, model and agent it was first sent with,
+      // unless a retry names the model picked since.
       await get().send(conversationId, text, {
         connectorId: original.connectorId,
-        model: original.model,
-        connectionId: original.connectionId,
+        model: choice?.model || original.model,
+        connectionId: choice?.connectionId ?? original.connectionId,
         agentId: original.agentId,
         ...(replaceFromRunId ? { replaceFromRunId } : {}),
       });
       return true;
+    },
+
+    // A retry was a new turn under the failed one, the question asked twice and
+    // the model forgotten. It now replaces the answer, like an edit that keeps
+    // the words, with the model in the composer: after a rate limit on one
+    // model, the reader picks another and retries.
+    retryAnswer: async (answerId) => {
+      const answer = get().messages.find((m) => m.id === answerId);
+      if (!answer || answer.role !== "assistant") return false;
+      const turns = get().messagesFor(answer.conversationId);
+      const question = turns.slice(0, turns.findIndex((m) => m.id === answerId)).reverse().find((m) => m.role === "user");
+      if (!question) return false;
+      const picked = readAiSelection();
+      return get().editAndResend(question.id, question.content, picked ? { model: picked.model || "auto", connectionId: picked.connectionId } : undefined);
     },
 
     attachContext: (scope, scopeId, item) => {

@@ -55,6 +55,7 @@ export const ChatShell: React.FC = () => {
   const setActive = useChatStore((s) => s.setActive);
   const send = useChatStore((s) => s.send);
   const stop = useChatStore((s) => s.stop);
+  const retryAnswer = useChatStore((s) => s.retryAnswer);
   // The built-in agents the service offers: the shapes a run can take.
   const agents = useChatStore((s) => s.agents);
   const { loadAgents, syncServerConversations, loadServerTranscript } = useChatStore.getState();
@@ -278,7 +279,7 @@ export const ChatShell: React.FC = () => {
         ) : (
           <>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <ChatThread messages={messages} onRetry={(retryText) => { if (active) void send(active.id, retryText); }} />
+              <ChatThread messages={messages} onRetry={(answerId) => void retryAnswer(answerId)} />
             </div>
             <div className="mx-auto w-full max-w-3xl px-6 pb-5">
               <BrainLens working={streaming}>

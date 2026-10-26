@@ -168,7 +168,10 @@ export const ChatComposer: React.FC<Props> = ({
   // The "/" palette: actions and prompt commands. "/" and "@" never both open
   // (the text before the caret cannot be "/word" and hold an "@").
   const rootRef = useRef<HTMLDivElement>(null);
-  const slash = useSlashPalette({ value, onChange, onSubmit, textarea: ref, root: rootRef, syncPicker: picker.sync });
+  const slash = useSlashPalette({
+    value, onChange, onSubmit, textarea: ref, root: rootRef, syncPicker: picker.sync,
+    onAttach: () => setAttachSignal((n) => n + 1),
+  });
   const activeCommand = slash.open ? slash.matches[slash.index] : undefined;
 
   // Applies a markdown shortcut through the textarea, so the browser's undo
