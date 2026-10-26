@@ -309,6 +309,12 @@ export async function completeOpenRouterOAuth(code: string, state: string): Prom
   return requestJson<AiConnection>("POST", "/connections/oauth/openrouter/complete", { code, state });
 }
 
+/** `GET /health` — whether the service, its database and its cache answer. */
+export async function getHealth(): Promise<{ ok: boolean; db: boolean; redis: boolean }> {
+  const body = await requestJson<{ ok?: boolean; db?: boolean; redis?: boolean }>("GET", "/health");
+  return { ok: body.ok === true, db: body.db === true, redis: body.redis === true };
+}
+
 /** `GET /usage` — the platform's usage for the day. */
 export async function getUsage(): Promise<AiUsage> {
   const body = await requestJson<Partial<AiUsage>>("GET", "/usage");
