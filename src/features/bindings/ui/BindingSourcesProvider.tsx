@@ -13,6 +13,7 @@
 import React, { useMemo } from "react";
 import { BindingSourcesContext } from "@/entities/block/model/bindingSources";
 import { getRecordSource } from "../model/sourceRegistry";
+import "../sources";
 
 export function BindingSourcesProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const value = useMemo(() => ({ get: getRecordSource }), []);
