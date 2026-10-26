@@ -43,6 +43,7 @@ import { useAutomationDispatcher } from "@/features/automations/model/useAutomat
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
 import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
+import { IssueReportHost } from "@/features/issues/ui/IssueReportHost";
 import { ExportHost } from "@/features/page-export/ui/ExportHost";
 import { ActionGuardHost } from "@/features/app-actions/ui/ActionGuardHost";
 import { AiInlinePanel } from "@/features/ai/ui/AiInlinePanel";
@@ -351,6 +352,7 @@ const App: React.FC = () => {
         <WorkspaceThemePanel />
         <ToastViewport />
         <ShareHost />
+        <IssueReportHost />
         <ExportHost />
         <ActionGuardHost />
         <AiInlinePanel />

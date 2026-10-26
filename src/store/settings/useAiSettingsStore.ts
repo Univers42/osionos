@@ -35,6 +35,7 @@ export function defaultAiSettings(workspaceId: string): AiSettings {
     customAgentsAllowed: false,
     searchEverywhereIndexing: false,
     summaries: true,
+    accountContext: true,
     updatedAt: nowIso(),
   };
 }
@@ -43,7 +44,13 @@ export const useAiSettingsStore = create<AiSettingsStore>()(
   persist(
     (set, get) => ({
       data: {},
-      getData: (workspaceId) => get().data[workspaceId] ?? stableDefault(`ai:${workspaceId || 'local-workspace'}`, () => defaultAiSettings(workspaceId || 'local-workspace')),
+      getData: (workspaceId) => {
+        const key = workspaceId || 'local-workspace';
+        const stored = get().data[key];
+        if (!stored) return stableDefault(`ai:${key}`, () => defaultAiSettings(key));
+        if (stored.accountContext === undefined) return { ...stored, accountContext: true };
+        return stored;
+      },
       update: (workspaceId, patch) => {
         const current = get().getData(workspaceId);
         const next = { ...current, ...patch, updatedAt: nowIso() };
@@ -55,6 +62,19 @@ export const useAiSettingsStore = create<AiSettingsStore>()(
         recordSettingsAction('ai_settings_reset', { workspaceId });
       },
     }),
-    { name: STORE_NAME },
+    {
+      name: STORE_NAME,
+      version: 1,
+      migrate: (persistedState: unknown) => {
+        const state = (persistedState ?? {}) as { data?: Record<string, { accountContext?: boolean }> };
+        if (state.data) {
+          for (const key of Object.keys(state.data)) {
+            const row = state.data[key];
+            if (row && row.accountContext === undefined) row.accountContext = true;
+          }
+        }
+        return persistedState;
+      },
+    },
   ),
 );
