@@ -52,6 +52,17 @@ harness_apply_migrations() {
 	done
 }
 
+# The paths of the migrations of scripts/migrations.txt under a groot models/
+# directory, one per line, in apply order. A name that is not a file fails.
+harness_migration_list() {
+	models_dir=$1
+	while IFS= read -r name; do
+		case "$name" in '' | '#'*) continue ;; esac
+		[ -f "$models_dir/$name" ] || { echo "[$HARNESS_LABEL] missing migration $models_dir/$name" >&2; return 2; }
+		printf '%s\n' "$models_dir/$name"
+	done <"$HARNESS_DIR/../scripts/migrations.txt"
+}
+
 # Postgres is ready to take the fixture.
 harness_wait_postgres() {
 	container=$1
