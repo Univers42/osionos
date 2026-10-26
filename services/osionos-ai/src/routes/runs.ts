@@ -10,6 +10,7 @@ import { startRun } from '../runs/runner.ts';
 import { BUILTIN_AGENT_IDS, findBuiltinAgent } from '../agents/builtins.ts';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import * as runStore from '../runs/runStore.ts';
+import { resolveFallbacks } from './fallbacks.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -34,6 +35,12 @@ const startRunSchema = z.object({
 	agentId: z.enum(BUILTIN_AGENT_IDS).optional(),
 	// The connection the run spends: the platform one, or one of the caller's.
 	connectionId: z.string().min(1).max(64).optional(),
+	// The models the run moves to, in order, when the target fails before it
+	// said anything (devil C254). Absent is the run of before.
+	fallbacks: z.array(z.object({
+		connectionId: z.string().min(1).max(64).optional(),
+		model: z.string().min(1).max(200),
+	}).strict()).max(2).optional(),
 	// How hard a reasoning model thinks. Absent is the run of before.
 	effort: z.enum(['low', 'medium', 'high']).optional(),
 	attachments: z.array(z.discriminatedUnion('kind', [
@@ -162,6 +169,11 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		sendError(ctx.response, resolved.status, resolved.code);
 		return resolved.status;
 	}
+	const chain = await resolveFallbacks(ctx, user, body);
+	if (chain.kind === 'refused') {
+		sendError(ctx.response, 400, 'invalid_fallback');
+		return 400;
+	}
 	const conversation = await getOwnedConversation(ctx.deps.db, { id: body.conversationId, ownerId: user.userId });
 	if (!conversation) {
 		sendError(ctx.response, 404, 'not_found');
@@ -191,6 +203,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		replaceFromRunId: body.replaceFromRunId,
 		target: resolved.target,
 		effort: body.effort,
+		fallbacks: chain.targets,
 		pageIds,
 		memberWorkspaceIds: workspaces,
 		user,

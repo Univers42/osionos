@@ -38,7 +38,7 @@ function loadServiceCommands(): Promise<AiCommand[]> {
 }
 
 const EFFORT_GROUP = '[role="radiogroup"][aria-label="Reasoning effort"]';
-const HUB_ACTIONS: Record<string, HubSectionId> = { skills: "skills", memory: "memory", mcp: "mcp", hub: "overview" };
+const HUB_ACTIONS: Record<string, HubSectionId> = { skills: "skills", memory: "memory", mcp: "mcp", routing: "routing", hub: "overview" };
 
 const FOCUSABLE = 'button, select, input, [href], [tabindex]:not([tabindex="-1"])';
 

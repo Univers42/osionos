@@ -49,6 +49,10 @@ export interface ChatMessage {
   errorCode?: string;
   /** The seconds the service asked the client to wait, when it did. */
   retryAfterSeconds?: number | null;
+  /** The model that gave the answer, when the run moved on from the one chosen. */
+  answeredBy?: string;
+  /** Why it moved on: the service's closed set. */
+  routeReason?: "rate_limited" | "upstream_error" | "unavailable";
   /** The reader's verdict on an answer. Local only: no service route takes it yet. */
   feedback?: "up" | "down";
 }

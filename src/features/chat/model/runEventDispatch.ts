@@ -13,7 +13,7 @@
  * The frames of a run, and what they do.
  *
  * A run is a stream of frames: `run.started`, `citation`, `tool.called`,
- * `tool.result`, `permission.asked`, `memory.proposed`, `text.delta`, `done`, `error`. The store
+ * `tool.result`, `permission.asked`, `memory.proposed`, `route`, `text.delta`, `done`, `error`. The store
  * used to read them in one long `if` chain, inside the `send` of the chat, and
  * the chain grew with every frame the service learned.
  *
@@ -53,6 +53,13 @@ export interface RunEventActions {
   askPermission(permission: PermissionPart): void;
   /** The assistant proposes a fact to remember: the chip that asks the user. */
   proposeMemory(proposal: MemoryProposalPart): void;
+}
+
+const ROUTE_REASONS = ["rate_limited", "upstream_error", "unavailable"] as const;
+
+/** A reason outside the closed set reads as the vaguest one. */
+function routeReasonOf(reason: unknown): NonNullable<ChatMessage["routeReason"]> {
+  return ROUTE_REASONS.find((known) => known === reason) ?? "unavailable";
 }
 
 /** Applied view-action tool call ids, bounded to the last 500. */
@@ -141,6 +148,12 @@ export function dispatchRunEvent(
   if (event === "run.started") {
     if (typeof data.runId === "string") actions.patchAssistant({ runId: data.runId });
     if (typeof data.conversationTitle === "string") actions.applyServerTitle(data.conversationTitle);
+    return;
+  }
+  if (event === "route") {
+    // The frame carries model ids and a closed reason, never an upstream body (C260).
+    if (typeof data.to !== "string" || data.to === "") return;
+    actions.patchAssistant({ answeredBy: data.to, routeReason: routeReasonOf(data.reason) });
     return;
   }
   if (event === "done") {
