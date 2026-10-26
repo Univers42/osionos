@@ -29,6 +29,6 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | specs | SB-4j written 2026-10-26 01:42 (pipelines extracted so component and source share them; files reach a source through `RecordSource.upload`, never an action arg) | — | — | — | — |
 | specs | SB-4b written 2026-10-26 01:46 (pilots only: sessions and passkeys; other lists move to their SB-5 packages; `passkey.remove` adds a confirm today's modal lacks) | — | — | — | — |
 | integration | 27a4870f6 (SB-2a + SB-1a merged): quality rc 0, canvas 4014 pass / 0 fail, 2026-10-26 01:46 | — | — | — | — |
-| specs | SB-4d written 2026-10-26 01:58, marked 👹 (cell clicks write access policies; restyled live controls only on trusted pages); SB-1e now owns the one trust rule (`pageTrust.ts`, entities); SB-4a rows feed `visibleWhen` as `prop("$row.<field>")` | — | — | — | — |
-| D-SB-4h-spec | PROCEED-WITH-CONDITIONS (kimi-k3, 01:49), 12 conditions folded into SB-4h.md 01:58 | — | — | — | — |
+| specs | SB-4d written 2026-10-26 01:54, marked 👹 (cell clicks write access policies; restyled live controls only on trusted pages); SB-1e now owns the one trust rule (`pageTrust.ts`, entities); SB-4a rows feed `visibleWhen` as `prop("$row.<field>")` | — | — | — | — |
+| D-SB-4h-spec | PROCEED-WITH-CONDITIONS (kimi-k3, 01:49), 12 conditions folded into SB-4h.md 01:54 | — | — | — | — |
 | SB-1c | returned af41816e4 (01:50) → fix round 1 (01:53): one snapshot cache shared by all gated blocks, duplicated truthiness, missing counter test, global menu event, dead read-only provider; perf to be measured against base by the reviewer | feat/sb-SB-1c | — | — | — |
