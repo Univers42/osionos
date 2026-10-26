@@ -64,6 +64,19 @@
   pointer-events: auto;
 }
 
+/* Invisible at rest, the toolbar still reserved its ~350px in flow: on live
+ * "Citas · cubo de actividad" got 291 of 676px and truncated (measured
+ * 2026-10-26). Out of flow, the title owns the row; on reveal the toolbar
+ * floats over the row's right end, left of the collapse button (2rem + gap)
+ * and the row's 1rem padding. */
+.osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row .odb-topbar-actions {
+  position: absolute;
+  inset-block: 0;
+  right: 3.125rem;
+  padding-left: 1.5rem;
+  background: linear-gradient(to right, transparent, var(--color-surface-primary) 1.5rem);
+}
+
 /* A collapsed embed must stay restorable: keep its toggle visible at rest. */
 .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar[data-collapsed] .odb-collapse-btn {
   opacity: 1;

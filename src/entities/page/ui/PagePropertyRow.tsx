@@ -15,7 +15,7 @@ import { X } from "lucide-react";
 
 import { PropIcon } from "@/shared/notion-database-sys/src/constants/propertyIcons";
 import type { PagePropertyEntry } from "../model/types";
-import { notionIconType } from "./pageProperties.helpers";
+import { asStringArray, notionIconType } from "./pageProperties.helpers";
 import { PagePropertyValueField } from "./PagePropertyValueField";
 import { PageRelationField } from "./PageRelationField";
 
@@ -36,7 +36,13 @@ export const PagePropertyRow: React.FC<Props> = ({ property, workspaceId, pageId
       <span className="truncate">{property.label}</span>
     </div>
     <div className="min-h-8 min-w-0 flex-1 py-1">
-      {property.type === "relation" ? (
+      {property.type === "relation" && property.relationTarget === "database" ? (
+        // Database targets store names ("projects", a view name), not page ids:
+        // looked up as pages, every chip read "Untitled" (live Home, 2026-10-26).
+        <div className="flex flex-wrap items-center gap-1">
+          {asStringArray(property.value).map((name) => <span key={name} className="osio-chip">{name}</span>)}
+        </div>
+      ) : property.type === "relation" ? (
         <PageRelationField
           workspaceId={workspaceId}
           excludePageId={pageId}

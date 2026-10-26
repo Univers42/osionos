@@ -110,6 +110,9 @@ export const WorkspaceExplorerRow: React.FC<{ item: VisibleItem; placement: Line
       {...line}
       style={{ ...line.style, ...RING_INSET }}
       role="treeitem"
+      // Chrome computed no name from the row's text (live a11y snapshot: bare
+      // "treeitem", 2026-10-26), so screen readers announced nothing.
+      aria-label={row.label || "Untitled"}
       data-rel={rel}
       aria-level={level}
       aria-setsize={item.setSize}
