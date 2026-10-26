@@ -178,9 +178,13 @@ async function fetchMessageForAuthor(config, fetchImpl, userId, messageId) {
 /** The author deletes a message; a posted AI answer, its requester or the channel's owner/admin (C437). */
 async function fetchMessageForDelete(config, fetchImpl, userId, messageId) {
 	const row = await fetchLiveMessage(config, fetchImpl, messageId);
-	if (isAiAnswer(row) ? row.ai_requested_by === userId : row.author_id === userId) return row;
-	if (!isAiAnswer(row)) throw httpError('Only the author can modify this message.', 403);
-	await requireChannelAdmin(config, fetchImpl, userId, row.channel_id);
+	if (!isAiAnswer(row)) {
+		if (row.author_id !== userId) throw httpError('Only the author can modify this message.', 403);
+		return row;
+	}
+	// A requester who lost the channel no longer deletes its answers.
+	if (row.ai_requested_by === userId) await requireChannelAccess(config, fetchImpl, userId, row.channel_id);
+	else await requireChannelAdmin(config, fetchImpl, userId, row.channel_id);
 	return row;
 }
 
@@ -291,7 +295,7 @@ async function listMessages(deps, session, url, channelId, response, config) {
 	let replyById = new Map();
 	if (replyIds.length > 0) {
 		const replyRows = await readInChunks(replyIds, async (chunk) => {
-			const rows = await rest(config, deps.fetchImpl, `osionos_messages?${inFilter('id', chunk)}&select=id,author_id,content,deleted_at,ai_run_id`);
+			const rows = await rest(config, deps.fetchImpl, `osionos_messages?${inFilter('id', chunk)}&select=*`);
 			return Array.isArray(rows) ? rows : [];
 		});
 		const replyIdentities = await identitySummaries(config, deps.fetchImpl, replyRows.map((r) => r.author_id));
@@ -374,7 +378,7 @@ async function postMessage(deps, session, request, channelId, response, config) 
 	let replyAuthorId = null;
 	let threadRootId = null;
 	if (replyToId) {
-		const replyRows = await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${replyToId}&channel_id=eq.${channel.id}&deleted_at=is.null&select=id,author_id,content,deleted_at,thread_root_id,ai_run_id&limit=1`);
+		const replyRows = await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${replyToId}&channel_id=eq.${channel.id}&deleted_at=is.null&select=*&limit=1`);
 		const replyRow = Array.isArray(replyRows) ? replyRows[0] : null;
 		if (replyRow) {
 			// The bot is no one to notify (C438).

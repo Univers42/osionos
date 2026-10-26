@@ -16,6 +16,7 @@ const FAILURES: Record<string, string> = {
   rate_limit_unavailable: "@AI is unavailable right now. Try again later.",
   trigger_stale: "That message is too old for @AI. Ask again in a new message.",
   trigger_changed: "Your message changed or was deleted. Ask again.",
+  context_changed: "A message in this channel changed since the draft. Draft it again.",
   answer_stale: "This draft is too old to post. Draft it again.",
   answer_blocked: "This draft breaks the channel rules and cannot be posted.",
   access_revoked: "You no longer have access to this channel.",
