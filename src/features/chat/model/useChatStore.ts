@@ -78,7 +78,7 @@ export interface ChatStoreState extends ChatData {
   deleteConversation: (id: string) => void;
   setActive: (id: string | null) => void;
   setConversationModel: (id: string, connectorId: string, model: string) => void;
-  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; agentId?: string; context?: RunContext; attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }> }) => Promise<void>;
+  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; agentId?: string; context?: RunContext; replaceFromRunId?: string; attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }> }) => Promise<void>;
   stop: (conversationId: string) => void;
   /**
    * The follow-up of a write the user just approved.
@@ -94,7 +94,8 @@ export interface ChatStoreState extends ChatData {
   setFeedback: (messageId: string, value: "up" | "down") => void;
   /**
    * Edit & resend: drops this user message and every later one of its
-   * conversation, then sends the new text as a new turn. Refused (false) while
+   * conversation, here and on the service (replaceFromRunId), then sends the
+   * new text as a new turn. Refused (false) while
    * the conversation has a run in flight.
    */
   editAndResend: (messageId: string, text: string) => Promise<boolean>;
@@ -281,6 +282,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
             title: conversation.title,
             serverConversationId: conversation.serverConversationId,
             attachments: sel?.attachments,
+            ...(sel?.replaceFromRunId ? { replaceFromRunId: sel.replaceFromRunId } : {}),
             // What the answer may read: the pages the reader pointed at, plus
             // account/view when the setting is on.
             context: withAccountContext(sel?.context),
@@ -344,6 +346,9 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       const inConversation = get().messagesFor(conversationId);
       const from = inConversation.findIndex((m) => m.id === messageId);
       const dropped = new Set(inConversation.slice(from).map((m) => m.id));
+      // The service holds the history: it drops from the first answered turn
+      // after the edited one. An unanswered edit has nothing stored to drop.
+      const replaceFromRunId = inConversation.slice(from + 1).find((m) => m.runId)?.runId;
       set((s) => ({ messages: s.messages.filter((m) => !dropped.has(m.id)) }));
       persist();
       // The turn keeps the connection, model and agent it was first sent with.
@@ -352,6 +357,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
         model: original.model,
         connectionId: original.connectionId,
         agentId: original.agentId,
+        ...(replaceFromRunId ? { replaceFromRunId } : {}),
       });
       return true;
     },
