@@ -62,7 +62,7 @@ Integration branch: `feat/self-built-ui` (from develop `3be8dc71b`). One worktre
 | SB-4b | S4 | list sources for every settings list (sessions exists), incl. moderation limits and per-page notification overrides, plus the shipped `item-list` component | SB-4a, SB-4e | each list matches today's rows from the same stub |
 | SB-4c | S4 | `tabs`, `dialog` containers | SB-1b | keyboard per WAI-ARIA (shadcn reference) |
 | SB-4d | S4 | `collection` display `matrix` (rows × columns sources, a choice field per cell) | SB-4a, SB-2c | the permission matrix's cells and saves match today's panel |
-| SB-4h 👹 | S4b | `steps` container + `qr` block + guarded 2FA enrol/verify actions | SB-3a, SB-3c | enrol → scan → verify → recovery codes, every guard intact |
+| SB-4h 👹 | S4b | kernel flows (state machine with its own actions and short-lived secrets) + `steps` container + `qr` block + the `twostep` flow | SB-3b, SB-3c, SB-2c | enrol → scan → verify → recovery codes, every guard intact |
 | ~~SB-4i~~ | S4b | **dropped 2026-10-26**: the app registers no passkey today (`useAccountPasskeysStore.ts` header: "registering one is the control plane's job"; `ProfileSecurityModals.tsx:125` "new passkeys are added when you sign in on a device that offers one"). Parity needs only rename and remove, which are plain actions in SB-4b | — | — |
 | SB-4j | S4b | `field` displays `image` (pick, crop, upload) and `file` (drop zone) + avatar/banner/import actions | SB-2c, SB-3a | avatar/banner/import behave as today (existing e2e unchanged) |
 | SB-4e | S4 | components: definition, instance, slots, props, variants; the eight shipped settings components (§9; Item list moves to SB-4b) | SB-4f, SB-3c | editing a component updates every instance |
