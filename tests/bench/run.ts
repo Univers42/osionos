@@ -18,7 +18,7 @@ import { formatNs, isBurst, measure, measureBurst, type BenchResult, type BenchS
 
 // Usage: node --experimental-strip-types --expose-gc tests/bench/run.ts tests/bench/x.bench.ts…
 // Each file exports `bench` (a BenchSuite). Exit 1 when any case's p95 exceeds its budget; a
-// case without one is a reference row ("ref"), printed and never failing.
+// `reference: true` case is a reference row ("ref"), printed and never failing.
 const OUT_DIR = "test-results/bench";
 
 function isSuite(value: unknown): value is BenchSuite {
