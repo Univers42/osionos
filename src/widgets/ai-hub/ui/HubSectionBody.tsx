@@ -7,6 +7,7 @@ import { WorkspaceSkillsPanel } from "@/features/settings/ai/WorkspaceSkillsPane
 import { useAiWorkspaces } from "@/features/settings/ai/useAiWorkspaces";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { HubPrivacySection } from "./HubPrivacySection";
+import { HubRoutingSection } from "./HubRoutingSection";
 import { HubOverview, HubUsageSection } from "./HubOverview";
 import type { HubSectionId } from "./hubSections";
 
@@ -24,6 +25,7 @@ export const HubSectionBody: React.FC<{ id: HubSectionId }> = ({ id }) => {
   switch (id) {
     case "overview": return <HubOverview />;
     case "connections": return <AiConnectionsPanel />;
+    case "routing": return <HubRoutingSection />;
     case "usage": return <HubUsageSection />;
     case "skills": return <WorkspaceSkillsPanel workspaces={workspaces} />;
     case "memory": return <AiMemoryPanel workspaces={workspaces} />;

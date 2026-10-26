@@ -40,6 +40,7 @@ export const CHAT_ACTIONS: readonly ChatCommand[] = [
   { name: "memory", description: "Manage what the assistant remembers", kind: "action" },
   { name: "mcp", description: "Manage MCP servers and access tokens", kind: "action", keywords: ["tools", "token"] },
   { name: "hub", description: "Open the AI Hub", kind: "action", keywords: ["settings", "usage", "spend"] },
+  { name: "routing", description: "Choose the models to fall back to", kind: "action", keywords: ["fallback", "failover"] },
   { name: "help", description: "List the commands", kind: "action", keywords: ["commands"] },
 ];
 

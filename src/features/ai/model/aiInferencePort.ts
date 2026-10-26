@@ -31,7 +31,7 @@ import {
   resumeRun,
   startRun,
 } from "../api/aiClient";
-import { effortFor, PLATFORM_CONNECTION_ID, readAiSelection } from "./aiSelection";
+import { effortFor, PLATFORM_CONNECTION_ID, readAiFallbacks, readAiSelection, type AiFallbackChoice } from "./aiSelection";
 import { streamRun } from "./runStream";
 import { DEVICE_CONNECTION_ID, readDeviceEngine } from "./deviceEngine";
 import { deviceInferencePort } from "./deviceInferencePort";
@@ -79,6 +79,16 @@ async function ensureServerConversation(request: StreamInferenceRequest): Promis
   return conversation.id;
 }
 
+/**
+ * The chain a run is sent with. A device run never has one: its text must not
+ * leave the device, and the service cannot route to it.
+ */
+function runFallbacks(request: StreamInferenceRequest): AiFallbackChoice[] {
+  const connectionId = request.connectionId ?? PLATFORM_CONNECTION_ID;
+  if (connectionId === DEVICE_CONNECTION_ID) return [];
+  return readAiFallbacks(undefined, { connectionId, model: serviceModel(request.model) ?? "" });
+}
+
 /** The port the Assistant pane talks to when the AI service is configured. */
 export const aiInferencePort: InferencePort = {
   /** A one-shot completion — the service's `/complete` route, never persisted. */
@@ -102,6 +112,7 @@ export const aiInferencePort: InferencePort = {
     const conversationId = await ensureServerConversation(request);
     const runId = crypto.randomUUID();
     const effort = effortFor(readAiSelection(), request.connectionId ?? PLATFORM_CONNECTION_ID, request.model);
+    const fallbacks = runFallbacks(request);
 
     // A stop is an abort: the run is cancelled on the service too, so it stops
     // burning tokens there.
@@ -124,6 +135,8 @@ export const aiInferencePort: InferencePort = {
               ...(request.agentId ? { agentId: request.agentId } : {}),
               // The service applies it only to a model that reasons.
               ...(effort ? { effort } : {}),
+              // Absent when empty: a run without a chain is byte-identical to before (C262).
+              ...(fallbacks.length > 0 ? { fallbacks } : {}),
               // What the answer is read from — the pages the reader pointed at.
               context: request.context,
               attachments: request.attachments,

@@ -10,7 +10,7 @@ import { create } from "zustand";
 import { aiHubTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 
-export type HubSectionId = "overview" | "connections" | "usage" | "skills" | "memory" | "mcp" | "privacy";
+export type HubSectionId = "overview" | "connections" | "routing" | "usage" | "skills" | "memory" | "mcp" | "privacy";
 
 interface AiHubNavState {
   section: HubSectionId;

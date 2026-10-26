@@ -37,6 +37,33 @@ export const AssistantActions: React.FC<{
   );
 };
 
+/** A model id as a reader would say it: the provider prefix is noise. */
+export function modelLabel(id: string): string {
+  return id.slice(id.lastIndexOf("/") + 1) || id;
+}
+
+/** The sentence under an answer that a fallback gave. */
+export function routeNoteText(
+  primary: string,
+  answeredBy: string,
+  reason: NonNullable<ChatMessage["routeReason"]>,
+): string {
+  const why = reason === "rate_limited" ? "was busy" : "was unavailable";
+  return `Answered by ${modelLabel(answeredBy)} — ${modelLabel(primary)} ${why}`;
+}
+
+/** Muted line next to the actions of an answer that moved to another model. */
+export const RouteNote: React.FC<{
+  primary: string;
+  answeredBy: string;
+  reason: NonNullable<ChatMessage["routeReason"]>;
+}> = ({ primary, answeredBy, reason }) =>
+  el(
+    "span",
+    { className: "mr-auto text-2xs text-[var(--osio-fg-muted)]", "data-testid": "route-note" },
+    routeNoteText(primary, answeredBy, reason),
+  );
+
 /** A user turn: its text, or the textarea that edits it. */
 export const UserBubble: React.FC<{
   content: string;
