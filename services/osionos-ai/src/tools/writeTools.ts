@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { canReadPageRowAsMember, sameId } from '../../../../scripts/bridge-page-read.mjs';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import { canAccessWorkspace } from '../workspaceAccess.ts';
-import { BLOCK_TYPES } from './blockTypes.ts';
+import { BLOCK_TYPES, TEXT_BLOCK_TYPES } from './blockTypes.ts';
 import type { ApprovalTarget } from '../approvals/types.ts';
 import type { AnyWriteTool, WriteTool, WriteToolContext } from './types.ts';
 
@@ -20,9 +20,10 @@ import type { AnyWriteTool, WriteTool, WriteToolContext } from './types.ts';
  * `archivedAt` never reach the bridge, whatever the model writes. The bridge
  * does not strip them for an owner, so this is the only place that can.
  *
- * The tools are three, and not more: a page may be created, renamed, and
- * archived. There is no delete, and no content write — the content of a page
- * comes later, with the versioned append.
+ * A page may be created, renamed, archived, and written into: add_blocks adds
+ * text blocks through the bridge's atomic append, so it never rewrites what is
+ * already there. There is no delete, and no rewrite of an existing block: that
+ * one waits for the strict page version (devil C227).
  */
 
 /** The shape of a uuid: the ids that are not uuids can never be one. */
@@ -55,6 +56,26 @@ const createPageArgs = z.object({
 	workspaceId: z.string().regex(UUID),
 	parentPageId: z.string().regex(UUID).optional(),
 	content: z.array(blockSchema).max(MAX_BLOCKS).optional(),
+});
+
+/** The most blocks one add_blocks carries. */
+const ADD_MAX_BLOCKS = 50;
+
+/**
+ * The most bytes of blocks one add_blocks carries. The bridge's append takes
+ * 256 KB (APPEND_MAX_BYTES); the ids it gains at execution and the JSON of the
+ * request need the rest.
+ */
+export const ADD_MAX_BYTES = 200_000;
+
+/** The arguments of an addition to a page: text blocks, and where they go. */
+const addBlocksArgs = z.object({
+	pageId: z.string().regex(UUID),
+	blocks: z
+		.array(z.object({ type: z.enum(TEXT_BLOCK_TYPES), content: z.string().min(1).max(10_000) }))
+		.min(1)
+		.max(ADD_MAX_BLOCKS),
+	after: z.string().min(1).max(500).optional(),
 });
 
 /** The arguments of the rename of a page: a title, and nothing else. */
@@ -95,6 +116,25 @@ const SUB_PAGES_SQL = `
 		where p.archived_at is null
 	)
 	select count(*)::int as count from tree`;
+
+/**
+ * The top-level blocks of a page, and whether it is archived.
+ *
+ * Only the top level: the bridge's append addresses a top-level block (a block
+ * nested in children or in a layout cell is an unknown id there, and the
+ * blocks would land at the end of the page instead).
+ */
+const TOP_BLOCKS_SQL = `
+	select p.archived_at is not null as archived,
+	       coalesce(
+	         (select jsonb_agg(jsonb_build_object('id', b ->> 'id', 'content', coalesce(b ->> 'content', '')) order by o)
+	            from jsonb_array_elements(case when jsonb_typeof(p.content) = 'array' then p.content else '[]'::jsonb end)
+	                 with ordinality as e(b, o)
+	           where jsonb_typeof(b) = 'object' and b ? 'id'),
+	         '[]'::jsonb
+	       ) as blocks
+	  from public.osionos_pages p
+	 where p.id = $1::uuid`;
 
 /** The name of a workspace, when the database knows it. */
 const WORKSPACE_NAME_SQL = 'select name from public.osionos_workspaces where id = $1::uuid limit 1';
@@ -268,8 +308,101 @@ export const archivePage: WriteTool<z.infer<typeof archivePageArgs>> = {
 	},
 };
 
+/** The text the card shows of the block the addition follows. */
+const ANCHOR_TEXT_MAX_CHARS = 300;
+
+/** Spaces folded, ends trimmed, case folded: how two texts of a block are compared. */
+function foldText(text: string): string {
+	return text.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+/**
+ * The top-level block `after` names: the one whose text is `after`, or else the
+ * only one whose text starts with it.
+ *
+ * Caveat: a block is found by its text, not by its id — the model reads text
+ * (read_page shows no ids). Two blocks with the same opening words are
+ * ambiguous and refused, and a block nested under another one is not found:
+ * the model then names the top-level block that holds it.
+ */
+export function anchorOf(
+	blocks: readonly { id: string; content: string }[],
+	after: string,
+): { ok: true; id: string; text: string } | { ok: false; error: string } {
+	const wanted = foldText(after);
+	if (!wanted) return { ok: false, error: 'after names no block' };
+	const exact = blocks.filter((block) => foldText(block.content) === wanted);
+	const matches = exact.length > 0 ? exact : blocks.filter((block) => foldText(block.content).startsWith(wanted));
+	if (matches.length === 0) {
+		return {
+			ok: false,
+			error: 'no top-level block of the page starts with that text: quote the start of a heading or paragraph of the page, or leave after out to add at the end',
+		};
+	}
+	if (matches.length > 1) return { ok: false, error: 'several blocks start with that text: quote more of the one you mean' };
+	return { ok: true, id: matches[0].id, text: matches[0].content.slice(0, ANCHOR_TEXT_MAX_CHARS) };
+}
+
+/**
+ * The addition of text blocks to a page that exists: at its end, or right
+ * after one of its top-level blocks.
+ *
+ * Nothing already on the page is changed or removed. The ids of the new
+ * blocks are minted at execution, never taken from the model (C235), and the
+ * types are the text ones (C233). The card shows every block in full (C232):
+ * the arguments are the blocks, verbatim.
+ */
+export const addBlocks: WriteTool<z.infer<typeof addBlocksArgs>> = {
+	name: 'add_blocks',
+	description:
+		'Ask the user to add text blocks to one of their existing pages: at the end, or right after a top-level block whose text starts with `after` (quote it as read_page shows it). Use it to write into a page; it never changes or removes what is already there.',
+	kind: 'write',
+	verb: 'Add to a page',
+	input: addBlocksArgs,
+	async run(ctx, args) {
+		const page = await writablePage(ctx, args.pageId);
+		if (!page) return { ok: false, error: 'no page with that id in your workspaces' };
+		if (Buffer.byteLength(JSON.stringify(args.blocks), 'utf8') > ADD_MAX_BYTES) {
+			return { ok: false, error: 'too much text for one change: split it into several additions' };
+		}
+		const state = await ctx.db.query<{ archived: boolean; blocks: { id: string; content: string }[] }>(
+			TOP_BLOCKS_SQL,
+			[args.pageId],
+		);
+		const row = state.rows[0];
+		// An archived page is refused here AND by the bridge at execution (C234).
+		if (!row || row.archived) return { ok: false, error: 'that page is archived: restore it first' };
+		let anchor: { afterBlockId: string; afterBlockText: string } | null = null;
+		if (args.after !== undefined) {
+			const found = anchorOf(row.blocks, args.after);
+			if (!found.ok) return { ok: false, error: found.error };
+			anchor = { afterBlockId: found.id, afterBlockText: found.text };
+		}
+		const target: ApprovalTarget = {
+			pageId: String(page.id),
+			title: String(page.title ?? ''),
+			workspaceId: String(page.workspace_id),
+			workspaceName: await workspaceName(ctx.db, String(page.workspace_id)),
+		};
+		return {
+			ok: true,
+			data: {
+				// The model's `after` is replaced by the block it resolved to: the
+				// card shows that block's text, and execution addresses its id.
+				args: {
+					pageId: args.pageId,
+					blocks: args.blocks.map((block) => ({ type: block.type, content: block.content })),
+					...(anchor ?? {}),
+				},
+				target,
+				preview: { unit: 'blocks', count: args.blocks.length },
+			},
+		};
+	},
+};
+
 /** The write tools, in the order the model sees them. */
-export const WRITE_TOOLS: readonly AnyWriteTool[] = Object.freeze([createPage, renamePage, archivePage]);
+export const WRITE_TOOLS: readonly AnyWriteTool[] = Object.freeze([createPage, renamePage, archivePage, addBlocks]);
 
 /** The verb of every write tool, by name: the card says it in plain words. */
 export const WRITE_VERBS: Readonly<Record<string, string>> = Object.freeze(

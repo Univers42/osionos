@@ -31,6 +31,16 @@ export interface MockBridge {
 	readonly files: ReadonlyMap<string, BridgeFile>;
 	/** A hook that runs before the mock answers a PATCH, e.g. to mirror the archive in the database. */
 	onPatch?: (call: { path: string; body: unknown }) => void | Promise<void>;
+	/**
+	 * The content and version of a page the append route (POST /api/pages/:id/blocks)
+	 * writes to. The route mirrors public.osionos_page_append: the anchor is a TOP-LEVEL
+	 * block id (an unknown one appends at the end), a repeated idempotency key appends
+	 * nothing, and every append bumps the version.
+	 */
+	seedPage(pageId: string, content: unknown[], version?: number): void;
+	pageContent(pageId: string): { version: number; content: unknown[] } | undefined;
+	/** The next n appends are applied, then the connection is destroyed: the caller sees no answer. */
+	dropNextAppendAnswers(n: number): void;
 	reset(): void;
 	close(): Promise<void>;
 }
@@ -54,6 +64,9 @@ export async function startMockBridge(): Promise<MockBridge> {
 	let loseNextCount = 0;
 	const seenPages = new Map<string, string>(); // id -> workspaceId
 	const seenDbs = new Set<string>();
+	const pages = new Map<string, { version: number; content: unknown[] }>();
+	const appendKeys = new Map<string, number>(); // `${pageId}/${key}` -> version it produced
+	let dropAppendCount = 0;
 
 	const mock: MockBridge = {
 		baseUrl: '',
@@ -86,6 +99,18 @@ export async function startMockBridge(): Promise<MockBridge> {
 			failNextStatus = 0;
 			failNextCount = 0;
 			loseNextCount = 0;
+			pages.clear();
+			appendKeys.clear();
+			dropAppendCount = 0;
+		},
+		seedPage(pageId: string, content: unknown[], version = 1): void {
+			pages.set(pageId, { version, content: [...content] });
+		},
+		pageContent(pageId: string) {
+			return pages.get(pageId);
+		},
+		dropNextAppendAnswers(n: number): void {
+			dropAppendCount = n;
 		},
 		async close(): Promise<void> {
 			await new Promise<void>((resolve) => {
@@ -130,6 +155,44 @@ export async function startMockBridge(): Promise<MockBridge> {
 					'content-length': String(file.bytes.length),
 				});
 				response.end(Buffer.from(file.bytes));
+				return;
+			}
+
+			// POST /api/pages/<id>/blocks: the atomic append (osionos_page_append).
+			const appendMatch = method === 'POST' ? /^\/api\/pages\/([^/?]+)\/blocks$/.exec(path) : null;
+			if (appendMatch) {
+				if (mock.failWith) {
+					response.writeHead(mock.failWith, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ error: { message: 'refused' } }));
+					return;
+				}
+				const pid = decodeURIComponent(appendMatch[1]);
+				const page = pages.get(pid);
+				if (!page) {
+					response.writeHead(404, { 'content-type': 'application/json' });
+					response.end(JSON.stringify({ error: 'not found' }));
+					return;
+				}
+				const request_ = body as { blocks?: unknown[]; afterBlockId?: unknown; idempotencyKey?: unknown };
+				const ledgerKey = `${pid}/${String(request_.idempotencyKey ?? '')}`;
+				const repeated = appendKeys.get(ledgerKey);
+				if (repeated === undefined) {
+					const blocks = Array.isArray(request_.blocks) ? request_.blocks : [];
+					const at = page.content.findIndex(
+						(block) => (block as { id?: unknown })?.id === request_.afterBlockId,
+					);
+					const cut = at === -1 ? page.content.length : at + 1;
+					page.content = [...page.content.slice(0, cut), ...blocks, ...page.content.slice(cut)];
+					page.version += 1;
+					appendKeys.set(ledgerKey, page.version);
+				}
+				if (dropAppendCount > 0) {
+					dropAppendCount--;
+					request.socket.destroy();
+					return;
+				}
+				response.writeHead(200, { 'content-type': 'application/json' });
+				response.end(JSON.stringify({ ok: true, version: repeated ?? page.version, content: page.content }));
 				return;
 			}
 
