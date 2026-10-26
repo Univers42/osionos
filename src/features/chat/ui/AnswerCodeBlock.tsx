@@ -48,7 +48,7 @@ const CodeBlock: React.FC<{ label: string; code: string; note?: string }> = ({ l
     ),
     el(
       "pre",
-      { style: { margin: 0 }, className: wrap ? "whitespace-pre-wrap break-words" : "overflow-x-auto" },
+      { style: { margin: 0, fontVariantLigatures: "none" }, className: wrap ? "whitespace-pre-wrap break-words" : "overflow-x-auto" },
       el("code", null, code),
     ),
     note ? el("p", { role: "note", className: "px-2 py-1 text-xs text-[var(--osio-fg-muted)]" }, note) : null,

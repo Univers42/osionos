@@ -14,6 +14,10 @@ import { copyWord, useCopyFeedback } from "./useCopyFeedback";
 const BUTTON =
   "inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] aria-pressed:bg-[var(--osio-bg-hover)] aria-pressed:text-[var(--osio-fg-default)]";
 
+// On the accent bubble of a user turn: muted grey on the accent fill was unreadable.
+const ON_ACCENT_BUTTON =
+  "inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs text-[var(--osio-accent-fg)] underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent-fg)] disabled:cursor-default disabled:no-underline disabled:opacity-60";
+
 const el = React.createElement;
 
 /** Copy (the markdown source) and 👍/👎 of a finished answer. */
@@ -56,10 +60,10 @@ export const UserBubble: React.FC<{
       el(
         "span",
         { className: "flex justify-end gap-2" },
-        el("button", { type: "button", className: BUTTON, "aria-label": "Cancel edit", onClick: () => { setDraft(content); setEditing(false); } }, "Cancel"),
+        el("button", { type: "button", className: ON_ACCENT_BUTTON, "aria-label": "Cancel edit", onClick: () => { setDraft(content); setEditing(false); } }, "Cancel"),
         el(
           "button",
-          { type: "button", className: BUTTON, "aria-label": "Send edited message", disabled: !draft.trim(), onClick: () => { setEditing(false); onResend(draft); } },
+          { type: "button", className: ON_ACCENT_BUTTON, "aria-label": "Send edited message", disabled: !draft.trim(), onClick: () => { setEditing(false); onResend(draft); } },
           "Send",
         ),
       ),
@@ -73,7 +77,7 @@ export const UserBubble: React.FC<{
       ? el(
           "span",
           { className: "mt-1 flex justify-end" },
-          el("button", { type: "button", className: BUTTON, "aria-label": "Edit message", onClick: () => { setDraft(content); setEditing(true); } }, "Edit"),
+          el("button", { type: "button", className: ON_ACCENT_BUTTON, "aria-label": "Edit message", onClick: () => { setDraft(content); setEditing(true); } }, "Edit"),
         )
       : null,
   );
