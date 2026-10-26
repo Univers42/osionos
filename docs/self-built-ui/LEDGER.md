@@ -26,3 +26,4 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | SB-4i | dropped 2026-10-26 01:36: no passkey registration exists in the app to rebuild (useAccountPasskeysStore.ts header, ProfileSecurityModals.tsx:125); total 59 → 58 | — | — | — | — |
 | D-SB-3a-diff | devil: **BLOCK** (blast 3, rev 2, cost 3, conf 5), kimi-k3, 2026-10-26 01:39 | — | selfhost/wf/D-SB-3a-diff.a1 | — | vacuous wall-clock test, no getLastRun secret test, no sudo test or Caveat, no store spies, guard host strands runs; folded into SB-3a fix 1 items 11-19 |
 | specs | SB-4h written 2026-10-26 01:40 (👹: kernel flows hold the TOTP seed and recovery codes; devil spec review next) | — | — | — | — |
+| specs | SB-4j written 2026-10-26 01:42 (pipelines extracted so component and source share them; files reach a source through `RecordSource.upload`, never an action arg) | — | — | — | — |
