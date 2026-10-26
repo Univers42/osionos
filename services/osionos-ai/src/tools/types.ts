@@ -46,6 +46,8 @@ export interface ReadToolContext {
 	 * never inherits the workspaces of another step.
 	 */
 	user: AuthUser;
+	/** The agent answering the run: null is the general assistant. Absent outside a run. */
+	agentId?: string | null;
 }
 
 /**
