@@ -94,7 +94,9 @@ function validateArgs(def: ActionDefinition, rawArgs: unknown): { ok: true; args
 
 function canonicalArgs(args: Record<string, unknown>): string {
 	const sorted: Record<string, unknown> = {};
-	for (const key of Object.keys(args).sort()) sorted[key] = args[key];
+	// Code-unit order, not localeCompare: the single-flight key must be identical
+	// in every browser locale.
+	for (const key of Object.keys(args).sort((a, b) => (a < b ? -1 : Number(a > b)))) sorted[key] = args[key];
 	return JSON.stringify(sorted);
 }
 
