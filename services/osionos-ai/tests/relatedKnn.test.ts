@@ -73,10 +73,16 @@ async function partitionOf(workspaceId: string): Promise<string> {
 	return String(result.rows[0]?.partition ?? '');
 }
 
-/** A workspace whose vectors land in the same partition as the given one. */
+/**
+ * A workspace whose vectors land in the same partition as the given one.
+ *
+ * A random workspace hits one of the 16 partitions in 1 try out of 16. The
+ * old cap of 64 tries missed (15/16)^64 ≈ 1.6 % of runs (main CI run
+ * 40400754715); 512 misses ≈ 4e-15, and a run still takes 16 tries on average.
+ */
 async function samePartition(workspaceId: string): Promise<string> {
 	const wanted = await partitionOf(workspaceId);
-	for (let attempt = 0; attempt < 64; attempt += 1) {
+	for (let attempt = 0; attempt < 512; attempt += 1) {
 		const candidate = randomUUID();
 		await db.query(
 			`insert into public.ai_page_vectors (workspace_id, page_id, embedding, embedding_model)
