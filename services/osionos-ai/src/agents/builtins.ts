@@ -63,6 +63,9 @@ export const AGENT_INSTRUCTIONS_MAX = 1500;
 export const READ_TOOL_NAMES: readonly string[] = Object.freeze(READ_TOOLS.map((tool) => tool.name));
 export const WRITE_TOOL_NAMES: readonly string[] = Object.freeze(WRITE_TOOLS.map((tool) => tool.name));
 
+/** The tools of every built-in agent: all of the runtime's, writes behind the approval. */
+const AGENT_TOOL_NAMES: readonly string[] = Object.freeze([...READ_TOOL_NAMES, ...WRITE_TOOL_NAMES]);
+
 /** The ids of the built-ins: the wire contract of `agentId`. */
 export const BUILTIN_AGENT_IDS = ['db-architect', 'doc-writer', 'analyst', 'guide'] as const;
 
@@ -132,10 +135,9 @@ How you answer:
 /**
  * The built-in agents, in the order the client lists them.
  *
- * The read agents carry the read tools only: an agent never gains a tool the
- * runtime does not offer, and the write tools stay behind the approval of the
- * user. The Doc writer may propose a page edit, so it carries them — and the
- * approval is the one of every other write.
+ * Every agent carries the read AND the write tools. A read-only agent answered
+ * "I cannot create pages" to a user who asked for one (2026-10-26): the gate
+ * on a write is the approval card the user decides, never the agent's list.
  */
 export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 	Object.freeze({
@@ -144,7 +146,7 @@ export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 		name: 'Database architect',
 		description: 'Schema design, keys, isolation and indexes — answers with tables and DDL.',
 		instructions: DB_ARCHITECT,
-		tools: READ_TOOL_NAMES,
+		tools: AGENT_TOOL_NAMES,
 		skills: Object.freeze(['schema-design', 'acid-review']),
 		knowledge: Object.freeze([]),
 	}),
@@ -154,7 +156,7 @@ export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 		name: 'Doc writer',
 		description: 'Concise documentation for humans: task-first headings, short sentences, examples.',
 		instructions: DOC_WRITER,
-		tools: Object.freeze([...READ_TOOL_NAMES, ...WRITE_TOOL_NAMES]),
+		tools: AGENT_TOOL_NAMES,
 		skills: Object.freeze(['concise-docs']),
 		knowledge: Object.freeze([]),
 	}),
@@ -164,7 +166,7 @@ export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 		name: 'Analyst',
 		description: 'Answers from the pages and the databases of the workspace, with the numbers and their source.',
 		instructions: ANALYST,
-		tools: READ_TOOL_NAMES,
+		tools: AGENT_TOOL_NAMES,
 		skills: Object.freeze(['data-summary']),
 		knowledge: Object.freeze([]),
 	}),
@@ -174,7 +176,7 @@ export const BUILTIN_AGENTS: readonly BuiltinAgent[] = Object.freeze([
 		name: 'osionos guide',
 		description: 'How osionos and its AI features work — answers from the product docs, with their sources.',
 		instructions: GUIDE,
-		tools: READ_TOOL_NAMES,
+		tools: AGENT_TOOL_NAMES,
 		skills: Object.freeze([]),
 		knowledge: Object.freeze(['osionos-ai']),
 	}),
