@@ -31,6 +31,14 @@ async function call(method: string, path: string, body?: unknown): Promise<{ sta
 describe('C329 custom agents are off unless the flag is exactly on', () => {
 	const id = '11111111-1111-4111-8111-111111111111';
 
+	it('C329 the flag is a kill switch: a continuation pinned to a custom agent is refused', async () => {
+		const { resolvePinnedAgent } = await import('../src/agents/resolve.ts');
+		type PinnedRun = Parameters<typeof resolvePinnedAgent>[2];
+		const run = { agent_id: null, custom_agent_id: id, custom_agent_version: 1 } as unknown as PinnedRun;
+		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+		assert.deepEqual(await resolvePinnedAgent(app.db, user, run, WORKSPACE_A), { ok: false, reason: 'custom_agents_off' });
+	});
+
 	it('C329 every new route answers what an unknown route answers', async () => {
 		const unknown = await call('GET', '/api/ai/no-such-route');
 		assert.equal(unknown.status, 404);

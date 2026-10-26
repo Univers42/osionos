@@ -1,9 +1,10 @@
 import type { Pool } from 'pg';
 import type { AuthUser } from '../auth.ts';
-import { canReadAgents, canRunAgents } from '../agents/authority.ts';
+import { canAdminAgents, canReadAgents, canRunAgents } from '../agents/authority.ts';
 import { getAgent, listAgents } from '../agents/repo.ts';
 import type { StoredAgent } from '../agents/repo.ts';
 import { needsReview } from '../agents/resolve.ts';
+import { readAgentSettings } from '../agents/settings.ts';
 import { sendError, sendJson } from '../http.ts';
 import { requireUser, UUID } from './support.ts';
 import type { RouteContext } from './types.ts';
@@ -71,8 +72,20 @@ export async function handleAgentGet(ctx: RouteContext): Promise<number> {
 		sendError(ctx.response, 404, 'not_found');
 		return 404;
 	}
-	const mayRun = agent.scope === 'user' || (await canRunAgents(ctx.deps.db, user, workspaceId));
 	const review = await needsReview(ctx.deps.db, agent, agent.updated_by);
-	sendJson(ctx.response, 200, agentView(agent, { needsReview: review, instructions: mayRun }));
+	const instructions = agent.scope === 'user' || (await mayReadInstructions(ctx.deps.db, user, workspaceId, review));
+	sendJson(ctx.response, 200, agentView(agent, { needsReview: review, instructions }));
 	return 200;
+}
+
+/**
+ * Who reads the instructions of a workspace agent (C300): its live admins, who
+ * write and review it, and whoever may run it now. A member does not read an
+ * agent nobody may run: one that needs review, or in a workspace whose agents
+ * are off.
+ */
+async function mayReadInstructions(db: Pool, user: AuthUser, workspaceId: string, review: boolean): Promise<boolean> {
+	if (await canAdminAgents(db, user, workspaceId)) return true;
+	if (review || !(await readAgentSettings(db, workspaceId)).agents_enabled) return false;
+	return canRunAgents(db, user, workspaceId);
 }
