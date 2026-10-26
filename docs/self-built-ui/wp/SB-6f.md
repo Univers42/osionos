@@ -16,7 +16,7 @@ Base: the integration tip with SB-6a merged.
 **OWNS:**
 - `scripts/bridge-settings-pages.mjs` (new): the routes below, and `SETTINGS_PAGE_ICONS` (the icon allowlist);
 - `bridge-account-mounts.mjs` (one line), `deploy/bridge-fly/Dockerfile` (one name);
-- `bridge-workspace-settings.mjs` (modified): `settingsPages` joins `ALLOWED_KEYS` for reading back only; its PATCH must refuse a `settingsPages` key (writes go through the new routes and their checks);
+- `bridge-workspace-settings.mjs` (modified): `settingsPages` is returned by GET (default `{}`); its PATCH refuses a `settingsPages` key (writes go through the new routes and their checks) and writes with the compare-and-swap of Rule 5;
 - tests: `tests/bridge/bridge-settings-pages.test.mjs` (new).
 
 **MUST NOT TOUCH:** the root `models/` (no migration), `bridge-api.mjs` beyond importing `canWritePageRow`, `bridge-page-read.mjs` (call it).
@@ -45,22 +45,26 @@ Entry = {
   flaggedBy: uuid;
 }
 Errors: { ok: false, code, message }, as bridge-workspace-settings.mjs sends them.
-  401 no or bad session · 403 not_allowed · 404 page_not_found / workspace_not_found · 409 too_many · 422 invalid_<field> · 429 rate_limited
+  401 no or bad session · 403 not_allowed · 404 page_not_found / workspace_not_found · 409 too_many / conflict · 422 invalid_<field> / unknown_field / field_not_editable · 429 rate_limited · 503 audit_unavailable / store_unavailable
 ```
 
 Storage: "me" entries in `osionos_user_settings`, section `settings_pages`, value `{ "<pageId>": EntryCore }`, written with `osionos_user_settings_merge` as the user (`null` removes). "workspace" entries in `osionos_workspaces.settings.settingsPages`, the same map, written with the service role after the check. `EntryCore` is the stored subset (`group`, `groupLabel`, `label`, `icon`, `position`, `flaggedBy`); `pageTitle` and `authorName` are never stored.
 
 ## Rules (each one is tested)
 
-1. **Who may write.**
-   - "me": the caller can edit the page (`canWritePageRow` with the caller's membership), as design §13 says ("open to anyone who can edit the page"). A reader gets 403 and nothing is written.
-   - "workspace": the caller is the workspace owner or an `admin` member (`loadCaller`'s `canWrite`), and the page belongs to that workspace. A member gets 403 and nothing is written: the test reads the workspace row before and after and compares it byte for byte. This is the plan's done-when.
-   - A page the caller cannot read answers 404 (`page_not_found`) for both audiences, never 403, so the route does not reveal that a page exists.
-2. **Who may see.** GET returns the caller's own entries and the workspace's, each filtered by `canReadPageRowAsMember` for the caller at request time. A workspace entry for a page the caller cannot read (a private page an admin flagged) is absent. A non-member asking for a workspace gets 404 `workspace_not_found`, as `loadCaller` does today.
-3. **Validation.** Every field is checked before any write; an unknown body key is a 422. `label` and `groupLabel` go through `safeText` and must stay inside their lengths after trimming. `icon` must be in `SETTINGS_PAGE_ICONS`. At most 50 entries per user and 50 per workspace (409 `too_many`). A table test covers each field's bad values.
-4. **Audit and rate.** Every workspace-audience PUT and DELETE writes one audit row (`settings_page.flag`, `settings_page.unflag`) with `{ pageId, workspaceId, label }` in its details; if the audit write fails, the change is not made (write the audit first or roll back; say which). Writes are limited to 30 a minute per user (`rateLimit`).
-5. **Concurrent workspace writes.** The workspace map is read, changed and written back. `Caveat:` two admins writing at the same moment can lose one change, as the other workspace settings can today; the second write wins. Test the single-writer path; record the caveat in the module header.
-6. **The workspace-settings PATCH cannot bypass this.** `PATCH /api/workspaces/<id>/settings` with a `settingsPages` key answers 422 and writes nothing; GET returns the map (so an export carries it).
+Devil conditions (D-SB-6f-spec, 02:12, PROCEED-WITH-CONDITIONS, cost 5) are folded in below.
+
+1. **Who may write.** Every route authenticates with `verifySession(bearerToken(request), config)` before any pg call (401 otherwise), as `bridge-workspace-settings.mjs:66` does. The page row and the caller's memberships are read in parallel, so the response time does not depend on whether the page exists.
+   - "me": the caller can edit the page (`canWritePageRow(pageRow, userId, membership, "update")`), as design §13 says ("open to anyone who can edit the page"). A reader gets 403 and `osionos_user_settings_merge` is not called.
+   - "workspace": the caller is the workspace owner or an `admin` member (`loadCaller`'s `canWrite`), and `page.workspace_id === workspaceId`. A present member without write gets 403; a non-member gets 404 `workspace_not_found` (as `loadCaller` does). Nothing is written on refusal: the test reads the workspace row before and after and compares it byte for byte. This is the plan's done-when.
+   - A page that is missing, archived (`archived_at` set), unreadable by the caller, or (for "workspace") in another workspace answers 404 `page_not_found` with the same body in every case, never 403, so the route does not reveal that a page exists.
+   - `flaggedBy`, `pageTitle` and `authorName` come from the server (`flaggedBy` = the caller; `authorName` = the page owner's `osionos_profiles.display_name`, else "Member"); a body that sends them is a 422 (Rule 3).
+2. **Who may see.** GET returns the caller's own entries and the workspace's, each kept only if `!row.archived_at && canReadPageRowAsMember(row, userId, workspaceIds)` at request time, where `workspaceIds` is the session's workspace ids plus the caller's `osionos_workspace_members` rows (`bridge-api.mjs:3784-3795`). The page rows are read in one query (`id=in.(…)`, chunked at 50 with `idChunks`), never one per entry. A workspace entry for a page the caller cannot read (a private page an admin flagged) is absent. A non-member asking for a workspace gets 404 `workspace_not_found`. Caveat (module header): `canReadPageRowAsMember` ignores share rules, so a page a member can read only through a share rule is not listed for them; listing follows membership, not sharing.
+3. **Validation.** Every field is checked before any write; an unknown body key is a 422. `group` is one of the four shipped ids or `custom:<slug>`; `groupLabel` is required exactly when the group is custom. `label` and `groupLabel` go through `safeText` (which NFKC-normalises) and are length-checked after it and after trimming (1–40, 1–24). `icon` must be in `SETTINGS_PAGE_ICONS`; `position` an integer 0–999. At most 50 entries per user and 50 per workspace (409 `too_many`), counted on the stored map without the key being replaced, so editing an entry at the cap is allowed. A PUT stores the whole `EntryCore` (the merge RPC replaces a top-level key whole and strips nulls). A table test covers each field's bad values.
+4. **Rate, then audit, then write.** Every PUT and DELETE calls `rateLimit(kv, ["settings-pages", userId], { limit: 30, windowMs: 60000 })` before any write; a down KV answers 503 and writes nothing. Every workspace-audience PUT and DELETE writes its audit row (`settings_page.flag`, `settings_page.unflag`, details `{ pageId, workspaceId, label }`) **before** the change; if the audit write fails, the answer is 503 `audit_unavailable` and nothing changes. An audit row for a change that then fails is acceptable (it records an attempt); a change without an audit row is not.
+5. **Concurrent workspace writes do not lose an unflag.** The workspace map is read, changed and written back with a compare-and-swap on `updated_at`: the PATCH filter is `id=eq.<id>&updated_at=eq.<value read>` with `prefer: return=representation`; zero rows updated means another write landed, so re-read and retry, at most 3 times, then 409 `conflict`. Every other key of `settings` is preserved. The workspace-settings PATCH (`bridge-workspace-settings.mjs:128-160`) gets the same compare-and-swap, since it rewrites the whole `settings` object and would otherwise put back a stale `settingsPages`. Test: two interleaved writers (a flag and an unflag of different pages, and the workspace PATCH racing an unflag) end with both changes applied.
+6. **The workspace-settings PATCH cannot bypass this.** `PATCH /api/workspaces/<id>/settings` with a `settingsPages` key answers 422 `field_not_editable` and writes nothing; GET returns the map, `{}` when absent (so an export carries it).
+7. **The server does not police labels.** A label may equal a shipped section's label: the server cannot know the client's registry. What keeps a flagged page from passing for a shipped section is SB-6f2's "Custom · by <author>" mark and the `page:` id. Only owners and admins can show a page to everyone, and they already control the workspace.
 
 ## Steps
 
@@ -71,7 +75,10 @@ Storage: "me" entries in `osionos_user_settings`, section `settings_pages`, valu
   - (a) "workspace" writes check page edit rights instead of owner/admin;
   - (b) GET skips the read filter for workspace entries;
   - (c) an unreadable page answers 403;
-  - (d) the workspace-settings PATCH accepts `settingsPages`.
+  - (d) the workspace-settings PATCH accepts `settingsPages`;
+  - (e) GET keeps an archived page;
+  - (f) the workspace write drops the `updated_at` filter (the race test fails);
+  - (g) the mutation runs before the audit write.
 - [ ] **Step 5: Gates.** `npm run test:bridge` rc 0 (all); `npm run test:quality` rc 0. Report each.
 - [ ] **Step 6: Commit** with the message above. No trailer, no push.
 
