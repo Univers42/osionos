@@ -49,6 +49,7 @@ import {
   fontSampleClass,
   usePageActions,
 } from '@/entities/page';
+import { runPageAction } from '@/entities/page/model/runPageAction';
 import type { PageConfig, PageFont, PageVersion } from '@/shared/config/pageConfigStore';
 import { canEditPage, usePageAccessContext } from '@/shared/lib/auth/pageAccess';
 import { Dropdown, IconButton, useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
@@ -162,14 +163,6 @@ const VersionsPanel: React.FC<{ versions: PageVersion[]; onRestore: (version: Pa
     )}
   </div>
 );
-
-function actionErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : 'Page action failed.';
-}
-
-function runPageAction(work: Promise<unknown> | void, onError: (message: string) => void) {
-  Promise.resolve(work).catch((error) => onError(actionErrorMessage(error)));
-}
 
 function openPageActionsHome() {
   usePageStore.setState({ activePage: null, showTrash: false, navigationPath: [] });

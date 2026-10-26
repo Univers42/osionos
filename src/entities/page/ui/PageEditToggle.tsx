@@ -16,14 +16,7 @@ import { Button } from "@/shared/ui";
 import { useToastStore } from "@/shared/ui";
 import { canEditPage, usePageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { usePageActions } from "@/entities/page/model/usePageActions";
-
-function actionErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : "Page action failed.";
-}
-
-function runPageAction(work: Promise<unknown> | void, onError: (message: string) => void) {
-  Promise.resolve(work).catch((error) => onError(actionErrorMessage(error)));
-}
+import { runPageAction } from "@/entities/page/model/runPageAction";
 
 export interface PageEditToggleProps {
   pageId: string;
