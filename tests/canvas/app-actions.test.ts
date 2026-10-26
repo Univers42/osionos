@@ -507,6 +507,84 @@ test("store failure surfaces (reset)", async () => {
 	useUserStore.setState({ activeUserId: prevUser });
 });
 
+test("run log carries no secret", async () => {
+	(globalThis as any).__OBJECT_DATABASE_DISABLE_WASM__ = false;
+	const { usePageStore } = await import("@/store/usePageStore");
+	const { useUserStore } = await import("@/features/auth");
+	const { APP_ACTIONS } = await import("@/features/app-actions/model/actionRegistry");
+	const prevUser = useUserStore.getState().activeUserId;
+	useUserStore.setState({ activeUserId: "viewer" });
+	APP_ACTIONS.set("test.secret", {
+		name: "test.secret",
+		label: "ts",
+		params: {},
+		confirm: "none",
+		sudo: "none",
+		destructive: false,
+		run: async () => ({ status: "ok", secret: "s3cr3t" }),
+	});
+	const block = { id: "b1", type: "button", buttonProgram: { version: 1, steps: [{ op: "action", action: { type: "app_action", name: "test.secret", args: {} } }] } };
+	const page = { _id: "p1", title: "P", ownerId: "viewer", workspaceId: "ws", content: [block] };
+	usePageStore.setState({ pages: { ws: [page] }, pagesIndex: { p1: { workspaceId: "ws", index: 0 } } });
+	const store = usePageStore.getState();
+	usePageStore.setState({ pageById: () => page } as any);
+	setActionGuardHandlers(null);
+	const { runButtonBlock, getLastRun } = await import("@/services/button-program/runProgram");
+	await runButtonBlock(block as any, "p1");
+	const serialized = JSON.stringify(getLastRun());
+	assert.equal(serialized.includes("s3cr3t"), false);
+	APP_ACTIONS.delete("test.secret");
+	useUserStore.setState({ activeUserId: prevUser });
+});
+
+test("guard dialog controller: second confirm resolves first false", async () => {
+	const { createGuardDialogController } = await import("@/features/app-actions/model/guardDialogController");
+	let current: any = null;
+	const controller = createGuardDialogController((r) => { current = r; });
+	const p1 = controller.confirm({ title: "t1", message: "m1", actionLabel: "a1" });
+	const p2 = controller.confirm({ title: "t2", message: "m2", actionLabel: "a2" });
+	assert.equal(await p1, false);
+	assert.ok(current && current.title === "t2");
+	controller.settle(true);
+	assert.equal(await p2, true);
+});
+
+test("guard dialog controller: dispose resolves pending false", async () => {
+	const { createGuardDialogController } = await import("@/features/app-actions/model/guardDialogController");
+	let current: any = null;
+	const controller = createGuardDialogController((r) => { current = r; });
+	const p = controller.confirm({ title: "t", message: "m", actionLabel: "a" });
+	controller.dispose();
+	assert.equal(await p, false);
+});
+
+test("guard dialog controller: dispose mid-confirm strands nothing", async () => {
+	const { createGuardDialogController } = await import("@/features/app-actions/model/guardDialogController");
+	const { createActionRunner } = await import("@/features/app-actions/model/runAppAction");
+	let ran = 0;
+	const reg = new Map();
+	reg.set("test.simple3", {
+		name: "test.simple3",
+		label: "simple3",
+		params: {},
+		confirm: "simple",
+		confirmText: () => ({ title: "t", message: "m", actionLabel: "a" }),
+		sudo: "none",
+		destructive: false,
+		run: async () => { ran += 1; return { status: "ok" }; },
+	});
+	let current: any = null;
+	const controller = createGuardDialogController((r) => { current = r; });
+	setActionGuardHandlers({ confirm: controller.confirm, typedConfirm: controller.typedConfirm });
+	const run = createActionRunner(reg);
+	const p = run("test.simple3", {}, { mode: "live", trusted: true });
+	controller.dispose();
+	const res = await p;
+	assert.equal(res.status, "cancelled");
+	assert.equal(ran, 0);
+	setActionGuardHandlers(null);
+});
+
 test("APP_ACTIONS spy reset calls store with active user", async () => {
 	const { useUserStore } = await import("@/features/auth");
 	const { useUserPreferencesStore } = await import("@/store/settings/useUserPreferencesStore");
