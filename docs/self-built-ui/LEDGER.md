@@ -17,3 +17,4 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | D-SB-4g-spec | devil: **BLOCK** (blast 3, rev 3, cost 3, conf 4), kimi-k3, 2026-10-26 01:11 | — | ses_e8a7817c2ffeqCZOgW4Tp4sXl6 | — | 11 conditions folded into SB-4g.md; the compose re-bind replaced by a pairing code no route serves; re-rule 01:14: PROCEED-WITH-CONDITIONS (2/2/2/2), 4 more conditions folded; dispatch after SB-1d |
 | SB-6a | dispatched 2026-10-25 20:56 (parallel with SB-1b) | feat/sb-SB-6a | | | |
 | SB-1c | dispatched 2026-10-25 20:56 (parallel with SB-1b) | feat/sb-SB-1c | | | |
+| specs | SB-4f written 2026-10-26 01:40 (base moved to SB-1d: presets are a system-doc kind; adds text-block `style`, `leading`/`minWidth` scales) | — | — | — | — |
