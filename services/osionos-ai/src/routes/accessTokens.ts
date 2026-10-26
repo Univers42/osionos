@@ -6,7 +6,7 @@ import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import { createToken, listTokens, revokeToken } from '../pat/repo.ts';
 import type { TokenRow } from '../pat/repo.ts';
 import { hashToken, last4, mintToken } from '../pat/token.ts';
-import { requireUser, UUID } from './support.ts';
+import { isFreshSession, requireUser, UUID } from './support.ts';
 import type { RouteContext } from './types.ts';
 
 /**
@@ -91,7 +91,7 @@ async function handleListTokens(ctx: RouteContext, user: AuthUser): Promise<numb
 async function handleCreateToken(ctx: RouteContext, user: AuthUser): Promise<number> {
 	// A mint needs a fresh human (C113). A session that has been open for
 	// hours is not one.
-	if (!Number.isFinite(user.issuedAtMs) || Date.now() - user.issuedAtMs > MINT_WINDOW_MS) {
+	if (!isFreshSession(user, MINT_WINDOW_MS)) {
 		sendError(ctx.response, 403, 'reauth_required');
 		return 403;
 	}

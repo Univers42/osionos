@@ -34,6 +34,7 @@ import {
 	handleMemoryReject,
 } from './memories.ts';
 import { handleMcp } from './mcp.ts';
+import { handleMcpDiscover, handleMcpServerItem, handleMcpServers, handleMcpTool } from './mcpServers.ts';
 import type { RouteEntry } from './types.ts';
 
 /**
@@ -216,6 +217,37 @@ export const ROUTES: RouteEntry[] = [
 			},
 			// The remote MCP endpoint: PAT only, read only (G4b-1).
 			{ methods: [], pattern: /^\/api\/ai\/mcp$/, label: '/api/ai/mcp', handle: handleMcp, anyMethod: true },
+		]
+		: []),
+	// The MCP client: the servers a user registers. Off, these paths do not
+	// exist: the router's own 404, the same as any unknown path (C288).
+	...(config.mcpClientEnabled
+		? [
+			{
+				methods: [],
+				pattern: /^\/api\/ai\/mcp-servers$/,
+				label: '/api/ai/mcp-servers',
+				handle: handleMcpServers,
+				anyMethod: true,
+			},
+			{
+				methods: ['PATCH', 'DELETE'],
+				pattern: /^\/api\/ai\/mcp-servers\/([^/]+)$/,
+				label: '/api/ai/mcp-servers/:id',
+				handle: handleMcpServerItem,
+			},
+			{
+				methods: ['POST'],
+				pattern: /^\/api\/ai\/mcp-servers\/([^/]+)\/discover$/,
+				label: '/api/ai/mcp-servers/:id/discover',
+				handle: handleMcpDiscover,
+			},
+			{
+				methods: ['PATCH'],
+				pattern: /^\/api\/ai\/mcp-servers\/([^/]+)\/tools\/([^/]+)$/,
+				label: '/api/ai/mcp-servers/:id/tools/:name',
+				handle: handleMcpTool,
+			},
 		]
 		: []),
 ];

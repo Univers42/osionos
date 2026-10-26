@@ -244,39 +244,46 @@ export function guardedLookup(resolver: Resolver = systemResolver) {
 	};
 }
 
-/**
- * The agent of the guard: the connections it opens resolve through the
- * guarded lookup, so the address that is connected to is the address that
- * was checked.
- */
-const agent = new Agent({ connect: { lookup: guardedLookup() } });
+/** A fetch with the guard's rules: the shape of guardedFetch. */
+export type GuardedFetch = (input: string | URL | Request, init?: RequestInit, timeoutMs?: number) => Promise<Response>;
 
 /**
- * The fetch of the guard.
+ * A fetch of the guard over its own agent and its own resolver.
  *
- * A redirect is never followed: a 3xx would carry the request to a host the
- * guard never saw. The caller gets the 3xx and makes of it what it must.
+ * The connections use the one below, on the resolver of the machine. A caller
+ * that must be proven against a hostile resolver (the MCP transport tests)
+ * builds its own: the agent resolves through the guarded lookup, so the
+ * address that is connected to is the address that was checked.
+ *
+ * The fetch never follows a redirect: a 3xx would carry the request to a host
+ * the guard never saw. The caller gets the 3xx and makes of it what it must.
  *
  * The timeout is the caller's: 0 means no bound, which is what a stream of a
  * run needs; the short calls (the test of a connection, the list of its
  * models) pass eight seconds.
  */
-export async function guardedFetch(input: string | URL | Request, init?: RequestInit, timeoutMs = 0): Promise<Response> {
-	const timeout = timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
-	const signal =
-		timeout && init?.signal ? AbortSignal.any([init.signal, timeout]) : (timeout ?? init?.signal);
-	const options = {
-		...(init ?? {}),
-		...(signal ? { signal } : {}),
-		dispatcher: agent,
-		redirect: 'manual',
+export function createGuardedFetch(resolver: Resolver = systemResolver): GuardedFetch {
+	const agent = new Agent({ connect: { lookup: guardedLookup(resolver) } });
+	return async (input, init, timeoutMs = 0) => {
+		const timeout = timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
+		const signal =
+			timeout && init?.signal ? AbortSignal.any([init.signal, timeout]) : (timeout ?? init?.signal);
+		const options = {
+			...(init ?? {}),
+			...(signal ? { signal } : {}),
+			dispatcher: agent,
+			redirect: 'manual',
+		};
+		// undici's own types describe the same wire as the global ones; the cast
+		// is here because the two type packages are two copies of one shape.
+		const call = undiciFetch as unknown as (input: string, init: unknown) => Promise<Response>;
+		const target = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+		return call(target, options);
 	};
-	// undici's own types describe the same wire as the global ones; the cast
-	// is here because the two type packages are two copies of one shape.
-	const call = undiciFetch as unknown as (input: string, init: unknown) => Promise<Response>;
-	const target = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-	return call(target, options);
 }
+
+/** The fetch of the guard, on the resolver of the machine. */
+export const guardedFetch: GuardedFetch = createGuardedFetch();
 
 /** The fetch of a short call: the test of a connection, the list of its models. */
 export async function guardedShortFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
