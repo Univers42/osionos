@@ -28,6 +28,8 @@ import { newWebRun, webToolChars } from '../web/runWeb.ts';
 import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
 import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
 import { scheduleSummary } from '../summary/summarize.ts';
+import { THREAD_SYSTEM_PROMPT, ThreadAccessLost } from '../threads/context.ts';
+import { setRunAnswer } from './repo.ts';
 
 /**
  * The upstream of a run: the model call, the events, the settlement.
@@ -73,7 +75,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const agent = input.agent ?? null;
 	// The system prompt of THIS run: the base one, or the one of the agent,
 	// whose data-boundary line comes last (devil C38).
-	const system = systemPromptFor(agent, input.skillIndex);
+	const system = input.thread ? THREAD_SYSTEM_PROMPT : systemPromptFor(agent, input.skillIndex);
 
 	// The cancel controller is the run's; each attempt follows it.
 	const runController = new AbortController();
@@ -103,7 +105,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		webToolChars(input.web === true) +
 		(input.summaryBlock?.length ?? 0);
 	const promptChars = promptCharCount({
-		text,
+		text: input.thread?.prompt ?? text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(pages) + memoryChars(memories) + fileChars(files),
 		sourceChars: sourceChars(sources),
@@ -208,7 +210,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		});
 		const tools = runTools.tools;
 
-		const userText = buildUserTurn(text, pages, sources, memories, abstained, {
+		const userText = input.thread ? input.thread.prompt : buildUserTurn(text, pages, sources, memories, abstained, {
 			files,
 			...(accountBlockText ? { account: accountBlockText } : {}),
 			...(viewBlockText ? { view: viewBlockText } : {}),
@@ -296,6 +298,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		const outputTokens = settled.outputTokens;
 		const cost = costMicroUsd(current.target.pricing, settled);
 		await emit('usage', { inputTokens, outputTokens, costMicroUsd: cost });
+		// The asker left the channel, or the trigger went, while the model wrote:
+		// the draft is dropped before it is stored (C454).
+		if (input.thread && !(await input.thread.stillAllowed())) throw new ThreadAccessLost();
 
 		const assistant = await appendMessage(db, {
 			conversationId,
@@ -324,6 +329,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			runId,
 			usage: { inputTokens, outputTokens, costMicroUsd: cost },
 		});
+		// The one message the bridge may post (C432), named before the run reads
+		// 'succeeded': a run the bridge sees succeeded always has its answer.
+		if (input.thread && assistant) await setRunAnswer(db, runId, assistant.id);
 
 		const changed = await markRun(db, runId, 'succeeded', null, {
 			inputTokens,
@@ -345,7 +353,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			scheduleSummary({ db, target: current.target, runId, conversationId, ownerId, oldestKeptId: input.summarizeFrom.oldestKeptId, day });
 		}
 	} catch (error) {
-		const code = abortCode(current.controller.signal) ?? (isDataPolicyRefusal(error) ? 'vision_unavailable' : 'upstream_error');
+		const code = error instanceof ThreadAccessLost
+			? 'access_revoked'
+			: abortCode(current.controller.signal) ?? (isDataPolicyRefusal(error) ? 'vision_unavailable' : 'upstream_error');
 		// A cancelled or failed run settles what the upstream reported, or
 		// the estimate of what it streamed before it broke.
 		const billed = settled ?? usageForSettlement(runId, usage, {
@@ -362,7 +372,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// that reads the row when it sees the frame reads the truth. The
 		// success path does the same.
 		research?.end(code, current.budget.deadlineHit === true);
-		const runStatus: RunStatus = code === 'cancelled' ? 'cancelled' : 'failed';
+		const runStatus: RunStatus = code === 'cancelled' || code === 'access_revoked' ? 'cancelled' : 'failed';
 		const changed = await markRun(db, runId, runStatus, code, attemptsUsage(records, { target: current.target, outcome: code, billed: cost }));
 		await emit('error', { code, message: failureMessage(code, error) });
 		if (changed) {
