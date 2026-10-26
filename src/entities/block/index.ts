@@ -12,6 +12,7 @@
 
 export * from './model/types';
 export * from './model/buttonEffect';
+export * from './model/blockStyle';
 export * from './model/mediaBlocks';
 export * from './model/placeholders';
 export * from './model/blockTypeGuards';
