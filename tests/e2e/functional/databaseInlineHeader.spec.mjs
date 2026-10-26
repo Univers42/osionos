@@ -333,9 +333,11 @@ test.describe("database-inline-header", () => {
     await expect(block.locator("thead th")).toHaveCount(5);
   });
 
-  test("the title link opens the database origin as a full-page tab", async ({ page }) => {
+  test("the open arrow beside the title opens the database origin as a full-page tab", async ({ page }) => {
     const block = await insertInlineDatabase(page);
-    await block.locator('button[data-database-title]').click();
+    // Clicking the name renames it; the arrow beside it opens the origin.
+    await block.locator('button[data-database-title]').hover();
+    await block.getByRole("button", { name: "Open database" }).click();
 
     // The origin surface: full-page database tab with the full chrome
     // (editable h1 title + view tabs).
