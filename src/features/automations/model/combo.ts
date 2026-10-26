@@ -31,7 +31,7 @@ const ARIA_KEY_NAMES: Record<string, string> = { " ": "space", "+": "plus" };
 function ariaCanonical(shortcut: string): string {
   const parts = shortcut.toLowerCase().split("+");
   const key = parts.pop() ?? "";
-  return [...parts.sort(), key].join("+");
+  return [...parts.sort((a, b) => a.localeCompare(b)), key].join("+");
 }
 
 /**
