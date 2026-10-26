@@ -14,7 +14,7 @@ import { useUserStore } from "@/features/auth";
 import { debugActiveFile, openOrCreateTasksFile, runActiveFile, runDefaultTask } from "@/features/ide/model/ideTasks";
 import { isQuickCaptureEnabled, isWhiteboardEnabled } from "@/shared/config/featureFlags";
 import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
-import { toggleThemeMode } from "@/shared/config/theme";
+import { isThemeBasePinned, toggleThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import type { SettingsSectionId } from "@/features/settings/model/sections";
@@ -51,6 +51,19 @@ export interface MenuContext {
 }
 
 const DOCS_URL = "https://github.com/Univers42/osionos";
+
+/** The quick light/dark flip, which says why it does nothing while the active theme sets the mode. */
+function toggleThemeFromMenu() {
+  if (!isThemeBasePinned()) {
+    toggleThemeMode();
+    return;
+  }
+  useToastStore.getState().push({
+    kind: "info",
+    title: "Your theme sets light or dark",
+    description: "Choose another theme in Settings › Preferences to switch.",
+  });
+}
 
 /**
  * Build the menubar groups. Every item dispatches to an existing store action or
@@ -109,7 +122,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
     {
       id: "view", label: "View", items: [
         { id: "view.sidebar", label: "Show or hide the sidebar", accelerator: "Ctrl+Alt+B", run: () => useUIStore.getState().toggleDocked() },
-        { id: "view.theme", label: "Toggle theme", run: () => { toggleThemeMode(); }, separatorAfter: true },
+        { id: "view.theme", label: "Toggle theme", run: toggleThemeFromMenu, separatorAfter: true },
         ...workbenchViewMenu(),
         { id: "view.home", label: "Home", run: () => layout().openTab(homeTab()) },
         { id: "view.trash", label: "Trash", run: () => layout().openTab(trashTab()) },

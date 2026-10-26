@@ -1,0 +1,40 @@
+{
+  "name": "High Contrast",
+  "base": "dark",
+  "palette": "contrast",
+  "colors": {
+    "bg-canvas": "#000000",
+    "bg-page": "#000000",
+    "bg-surface": "#0a0a0a",
+    "bg-panel": "#000000",
+    "bg-subtle": "#121212",
+    "bg-muted": "#1a1a1a",
+    "bg-hover": "#1f1f1f",
+    "bg-elevated": "#0a0a0a",
+    "fg-strong": "#ffffff",
+    "fg-default": "#ffffff",
+    "fg-muted": "#e0e0e0",
+    "fg-subtle": "#c8c8c8",
+    "border-default": "#bdbdbd",
+    "border-strong": "#ffffff",
+    "accent": "#ffd60a",
+    "accent-fg": "#000000",
+    "accent-hover": "#ffe14d",
+    "accent-subtle": "#332b00",
+    "accent-text": "#ffd60a",
+    "link": "#ffd60a",
+    "link-hover": "#ffe866",
+    "danger": "#ff6b6b",
+    "danger-fg": "#000000",
+    "focus-ring-color": "#ffd60a"
+  },
+  "layout": {
+    "focus-ring-width": "3px",
+    "focus-ring-offset": "2px",
+    "border-width": "2px"
+  },
+  "fonts": {
+    "font-size-ui": "16px",
+    "line-height-normal": "1.6"
+  }
+}

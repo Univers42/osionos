@@ -1,0 +1,39 @@
+{
+  "name": "Studio Paper",
+  "base": "light",
+  "palette": "mono",
+  "colors": {
+    "bg-canvas": "#eef1f4",
+    "bg-page": "#fbfcfd",
+    "bg-surface": "#ffffff",
+    "bg-panel": "#f6f8fa",
+    "bg-subtle": "#f1f4f7",
+    "bg-muted": "#e8edf2",
+    "bg-hover": "#eaeef2",
+    "bg-elevated": "#ffffff",
+    "fg-strong": "#111418",
+    "fg-default": "#24292f",
+    "fg-muted": "#57606a",
+    "fg-subtle": "#6e7781",
+    "border-default": "#d8dee4",
+    "border-strong": "#c4ccd4",
+    "accent": "#0f766e",
+    "accent-fg": "#ffffff",
+    "accent-hover": "#0b5e58",
+    "accent-subtle": "#e0f2f0",
+    "accent-text": "#0f6b64",
+    "link": "#0f6b64",
+    "link-hover": "#0b5e58",
+    "danger": "#b42318",
+    "danger-fg": "#ffffff"
+  },
+  "layout": {
+    "page-max-width": "760px"
+  },
+  "fonts": {
+    "font-family-sans": "\"Newsreader\", Georgia, \"Iowan Old Style\", serif",
+    "font-family-serif": "\"Newsreader\", Georgia, \"Iowan Old Style\", serif",
+    "font-heading": "\"Newsreader\", Georgia, \"Iowan Old Style\", serif",
+    "line-height-normal": "1.65"
+  }
+}

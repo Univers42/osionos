@@ -23,9 +23,29 @@ function osTheme(): "light" | "dark" {
   return globalThis.matchMedia(OS_DARK).matches ? "dark" : "light";
 }
 
+/** What the active custom theme pins (themeApply.ts sets it): a theme with a
+ *  `base` decides light or dark, one with a `palette` decides the palette, and
+ *  the stored preferences come back when it goes. */
+export interface ThemeOverrides {
+  base?: "light" | "dark";
+  palette?: string;
+}
+
+let overrides: ThemeOverrides | null = null;
+
+export function setThemeOverrides(next: ThemeOverrides | null) {
+  overrides = next?.base || next?.palette ? { ...next } : null;
+  applyTheme(readStoredThemeMode());
+  applyPalette(readStoredPalette());
+}
+
+export function isThemeBasePinned(): boolean {
+  return Boolean(overrides?.base);
+}
+
 export function applyTheme(mode: ThemeMode) {
   if (typeof document === "undefined") return;
-  document.documentElement.dataset.theme = mode === "system" ? osTheme() : mode;
+  document.documentElement.dataset.theme = overrides?.base ?? (mode === "system" ? osTheme() : mode);
 }
 
 /** Keeps "system" mode in step with the OS while the app is open (a laptop
@@ -43,8 +63,10 @@ export function watchSystemTheme(): () => void {
 
 /** The quick light/dark flip. Landing back on the OS's own theme stores
  *  "system" rather than pinning it, so the app goes on following the OS; a
- *  permanent choice is made in Settings. */
+ *  permanent choice is made in Settings. While a theme pins the base it does
+ *  nothing and returns the stored mode (the caller says why). */
 export function toggleThemeMode(): ThemeMode {
+  if (isThemeBasePinned()) return readStoredThemeMode();
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   const mode: ThemeMode = next === osTheme() ? "system" : next;
   applyTheme(mode);
@@ -93,7 +115,7 @@ const PALETTE_STORAGE_KEY = "osionos:palette";
 
 export function applyPalette(id: string) {
   if (typeof document === "undefined") return;
-  document.documentElement.dataset.palette = id || DEFAULT_PALETTE;
+  document.documentElement.dataset.palette = overrides?.palette ?? (id || DEFAULT_PALETTE);
 }
 
 export function readStoredPalette(): string {

@@ -1,0 +1,47 @@
+{
+  "name": "Graphite Compact",
+  "base": "dark",
+  "palette": "mono",
+  "colors": {
+    "bg-canvas": "#141414",
+    "bg-page": "#1a1a1a",
+    "bg-surface": "#202020",
+    "bg-panel": "#1d1d1d",
+    "bg-subtle": "#262626",
+    "bg-muted": "#2c2c2c",
+    "bg-hover": "#2a2a2a",
+    "bg-elevated": "#242424",
+    "fg-strong": "#f5f5f5",
+    "fg-default": "#e0e0e0",
+    "fg-muted": "#a8a8a8",
+    "fg-subtle": "#8a8a8a",
+    "border-default": "#333333",
+    "border-strong": "#444444",
+    "accent": "#8ab4f8",
+    "accent-fg": "#0d1b2e",
+    "accent-hover": "#a1c3fa",
+    "accent-subtle": "#1f2a3a",
+    "accent-text": "#9cc0fa",
+    "link": "#9cc0fa",
+    "danger": "#f28b82",
+    "danger-fg": "#2b0d0b"
+  },
+  "layout": {
+    "radius": "3px",
+    "radius-xs": "2px",
+    "radius-sm": "2px",
+    "radius-lg": "4px",
+    "control-h-sm": "22px",
+    "control-h-md": "24px",
+    "control-h-lg": "28px",
+    "field-h": "24px",
+    "space-2": "6px",
+    "space-3": "10px",
+    "space-4": "12px",
+    "topbar-h": "36px",
+    "statusbar-h": "24px"
+  },
+  "fonts": {
+    "font-size-ui": "13px"
+  }
+}
