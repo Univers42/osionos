@@ -62,7 +62,6 @@ import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { usePageContextMenu } from "../model/usePageContextMenu";
-import { registerShowWhenHandler } from "../model/useBlockContextMenu";
 import { clampViewportMenuPosition } from "@/shared/ui";
 
 // useEvent: an identity-STABLE wrapper whose call always runs the latest fn. The
@@ -387,6 +386,8 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 		contextMenuSections,
 		openContextMenu,
 		closeContextMenu,
+		showWhenTarget,
+		closeShowWhen,
 		handleBlockChange,
 		handleKeyDown,
 		handlePaste,
@@ -424,21 +425,14 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	} = usePlaygroundBlockEditor(source ?? pageId);
 	const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
 	const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
-	const [visibilityPopoverBlockId, setVisibilityPopoverBlockId] = useState<string | null>(null);
-	const [visibilityPopoverPosition, setVisibilityPopoverPosition] = useState<{ x: number; y: number } | null>(null);
 	// The dictation: its state, and the language of the settings.
 	const voiceSettings = useVoiceSettingsStore((state) => state.data);
 	const [dictation, setDictation] = useState(() => dictationSession.getState());
 	useEffect(() => dictationSession.subscribe(setDictation), []);
-	useEffect(() => {
-		const key = `${pageId}\u0000${sourceKey}`;
-		registerShowWhenHandler(key, (blockId, position) => {
-			const clamped = clampViewportMenuPosition(position.x, position.y, { width: 384, maxHeight: 320, margin: 12 });
-			setVisibilityPopoverBlockId(blockId);
-			setVisibilityPopoverPosition({ x: clamped.left, y: clamped.top });
-		});
-		return () => registerShowWhenHandler(key, null);
-	}, [pageId, sourceKey]);
+	const visibilityPopoverBlockId = showWhenTarget?.blockId ?? null;
+	const visibilityPopoverPosition = showWhenTarget
+		? clampViewportMenuPosition(showWhenTarget.x, showWhenTarget.y, { width: 384, maxHeight: 320, margin: 12 })
+		: null;
 	const selectionRootRef = useRef<HTMLDivElement | null>(null);
 	const blocksRef = useRef<Block[]>(blocks);
 	// Pointer-down position on the bottom append zone, to tell a click from a drag.
@@ -1015,11 +1009,11 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 			<BlockContextMenu menu={contextMenu} sections={contextMenuSections} onClose={closeContextMenu} />
 			<BlockContextMenu menu={pageMenuState} sections={pageMenuSections} onClose={closePageMenu} />
 			{visibilityPopoverBlockId && findBlockById(blocks, visibilityPopoverBlockId) ? (
-				<div style={visibilityPopoverPosition ? { position: "fixed", left: visibilityPopoverPosition.x, top: visibilityPopoverPosition.y, zIndex: 50 } : undefined}>
+				<div style={visibilityPopoverPosition ? { position: "fixed", left: visibilityPopoverPosition.left, top: visibilityPopoverPosition.top, zIndex: 50 } : undefined}>
 					<BlockVisibilityPopover
 						block={findBlockById(blocks, visibilityPopoverBlockId)!}
-						onSave={(updates) => { updateBlock(pageId, visibilityPopoverBlockId, updates); setVisibilityPopoverBlockId(null); }}
-						onClose={() => setVisibilityPopoverBlockId(null)}
+						onSave={(updates) => { updateBlock(pageId, visibilityPopoverBlockId, updates); closeShowWhen(); }}
+						onClose={closeShowWhen}
 					/>
 				</div>
 			) : null}

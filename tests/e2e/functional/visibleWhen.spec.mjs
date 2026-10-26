@@ -75,6 +75,26 @@ test.describe("visibleWhen on any block", () => {
     await expect(page.getByText("Hello")).toBeVisible();
   });
 
+  test("show-when opens one popover in the pane that owns the menu", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const editor = await activateFirstEditor(page);
+    await editor.click();
+    await page.keyboard.type("Hello");
+    await waitForRenderStability(page);
+
+    await page.locator('button[title="Split right"]').first().click();
+    await waitForRenderStability(page);
+
+    const rightBlock = page.locator("[data-block-id]").last();
+    await rightBlock.click({ button: "right" });
+    await page.getByText("Show when…", { exact: true }).last().click();
+    const popovers = page.getByRole("dialog", { name: "Show when" });
+    await expect(popovers).toHaveCount(1);
+    const popoverBox = await popovers.boundingBox();
+    const rightBox = await rightBlock.boundingBox();
+    expect(popoverBox.x).toBeGreaterThan(rightBox.x - 50);
+  });
+
   test("invalid formula shows Check error and block stays visible", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await seedStatusProperty(page, "");

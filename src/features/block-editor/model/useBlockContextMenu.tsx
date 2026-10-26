@@ -69,7 +69,6 @@ interface UseBlockContextMenuOptions {
   updatePageContent: (pageId: string, blocks: Block[]) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
   attachLinkSnapshot: (request: SnapshotRequest) => void;
-  onShowWhen?: (blockId: string, position: { x: number; y: number }) => void;
 }
 
 interface OperationResult {
@@ -227,11 +226,11 @@ export function useBlockContextMenu({
   updatePageContent,
   focusBlock,
   attachLinkSnapshot,
-  onShowWhen,
 }: Readonly<UseBlockContextMenuOptions>) {
   const [contextMenu, setContextMenu] = useState<BlockContextMenuState | null>(
     null,
   );
+  const [showWhenTarget, setShowWhenTarget] = useState<{ blockId: string; x: number; y: number } | null>(null);
   const colorProfiles = useBlockColorProfileStore((state) => state.profiles);
   const isReadme = useAccountProfileStore((state) => isReadmePage(pageId, state.profile));
 
@@ -438,15 +437,11 @@ export function useBlockContextMenu({
 
   const handleShowWhen = useCallback(() => {
     if (!contextMenu) return;
-    const position = { x: contextMenu.x, y: contextMenu.y };
-    if (onShowWhen) {
-      onShowWhen(contextMenu.blockId, position);
-    } else {
-      const handler = showWhenHandlers.get(`${pageId}\u0000${sourceKey}`);
-      if (handler) handler(contextMenu.blockId, position);
-    }
+    setShowWhenTarget({ blockId: contextMenu.blockId, x: contextMenu.x, y: contextMenu.y });
     closeContextMenu();
-  }, [closeContextMenu, contextMenu, onShowWhen, pageId, sourceKey]);
+  }, [closeContextMenu, contextMenu]);
+
+  const closeShowWhen = useCallback(() => setShowWhenTarget(null), []);
 
   const handleProfileFieldSettings = useCallback((bind: boolean) => {
     if (!contextMenu || !blockLocation) return;
@@ -822,15 +817,8 @@ export function useBlockContextMenu({
     contextMenuSections,
     openContextMenu,
     closeContextMenu,
+    showWhenTarget,
+    closeShowWhen,
   };
 }
 
-const showWhenHandlers = new Map<string, (blockId: string, position: { x: number; y: number }) => void>();
-
-export function registerShowWhenHandler(
-  key: string,
-  handler: ((blockId: string, position: { x: number; y: number }) => void) | null,
-): void {
-  if (handler) showWhenHandlers.set(key, handler);
-  else showWhenHandlers.delete(key);
-}

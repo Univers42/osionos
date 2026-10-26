@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import test, { before } from "node:test";
 import "./support/user-store-env.ts";
 
-import { evaluateCellVisibility, evaluateVisibleWhen, isVisibleResult } from "../../src/entities/block/model/visibility.ts";
+import { evaluateCellVisibility, visibleForSnapshot, isVisibleResult } from "../../src/entities/block/model/visibility.ts";
 import { createPagePropertiesScope } from "../../src/entities/block/model/visibilityScope.ts";
 import {
   FORMULA_ENGINE_UNAVAILABLE,
@@ -131,28 +131,40 @@ test("isVisibleResult is the single truthiness rule (item 2)", () => {
   assert.equal(isVisibleResult(null), false);
   assert.equal(isVisibleResult(true), true);
   assert.equal(isVisibleResult(1), true);
-  const source = readFileSync(new URL("../../src/entities/block/ui/useVisibleWhen.ts", import.meta.url), "utf8");
-  assert.match(source, /evaluateVisibleWhen/);
-  assert.match(source, /from "@\/entities\/block\/model\/visibility"/);
+  const fakeScope = {
+    read: () => ({ x: 1 }),
+    subscribe: () => () => {},
+  } as never;
+  for (const value of [false, 0, "", null, undefined]) {
+    const snapshot = { x: value };
+    const scope = { read: () => snapshot, subscribe: () => () => {} } as never;
+    assert.equal(visibleForSnapshot(scope, 'prop("x")', snapshot, () => value), false, String(value));
+  }
+  for (const value of [FORMULA_ENGINE_UNAVAILABLE, true, 1]) {
+    const snapshot = { x: value };
+    const scope = { read: () => snapshot, subscribe: () => () => {} } as never;
+    assert.equal(visibleForSnapshot(scope, 'prop("x")', snapshot, () => value), true, String(value));
+  }
+  void fakeScope;
 });
 
 test("evaluation counter: one eval first read, zero on unrelated change, one on a change (item 3)", () => {
   let evaluations = 0;
-  const evaluate = (_formula: string, props: { a?: unknown }) => {
+  const evaluate = (props: { a?: unknown }) => {
     evaluations += 1;
     return props.a;
   };
   seedPage([{ key: "a", value: 1 }, { key: "b", value: 2 }]);
   const scope = createPagePropertiesScope("p1");
-  const first = evaluateVisibleWhen('prop("a")', scope, evaluate as never);
+  const first = visibleForSnapshot(scope, 'prop("a")', scope.read(["a"]), evaluate as never);
   assert.equal(evaluations, 1);
   assert.equal(first, true);
   seedPage([{ key: "a", value: 1 }, { key: "b", value: 99 }]);
-  const second = evaluateVisibleWhen('prop("a")', scope, evaluate as never);
+  const second = visibleForSnapshot(scope, 'prop("a")', scope.read(["a"]), evaluate as never);
   assert.equal(evaluations, 1);
   assert.equal(second, first);
   seedPage([{ key: "a", value: 0 }, { key: "b", value: 99 }]);
-  const third = evaluateVisibleWhen('prop("a")', scope, evaluate as never);
+  const third = visibleForSnapshot(scope, 'prop("a")', scope.read(["a"]), evaluate as never);
   assert.equal(evaluations, 2);
   assert.equal(third, false);
 });

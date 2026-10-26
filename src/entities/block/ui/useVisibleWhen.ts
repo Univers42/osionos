@@ -13,14 +13,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSyncExternalStore } from "react";
 import {
-  FORMULA_ENGINE_UNAVAILABLE,
   compileFormula,
   evaluateHandle,
   getDependencies,
   initFormulaEngine,
   isWasmReady,
 } from "@/shared/notion-database-sys/src/lib/engine/bridge";
-import { evaluateVisibleWhen } from "@/entities/block/model/visibility";
+import { visibleForSnapshot } from "@/entities/block/model/visibility";
 import { useVisibilityScope } from "@/entities/block/model/visibilityScope";
 
 const EMPTY_PROPS: Record<string, unknown> = {};
@@ -65,18 +64,14 @@ export function useVisibleWhen(formula: string | undefined): boolean {
     () => (scope ? scope.read(deps) : NO_SCOPE_SNAPSHOT),
   );
 
-  const visible = evaluateVisibleWhen(
-    source,
-    scope,
-    (_formula, props) =>
-      engineReady && handleNumber !== undefined
-        ? evaluateHandle(handleNumber, props)
-        : FORMULA_ENGINE_UNAVAILABLE,
-    engineReady,
-  );
+  if (!source || !scope || !engineReady || handleNumber === undefined) return true;
 
-  // Keep the snapshot referenced so React re-runs this render's value when it changes.
-  void snapshot;
+  const visible = visibleForSnapshot(
+    scope,
+    source,
+    snapshot,
+    (props) => evaluateHandle(handleNumber, props),
+  );
 
   return visible;
 }
