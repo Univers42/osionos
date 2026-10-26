@@ -61,6 +61,11 @@ export interface Conversation {
   model?: string;
   /** The conversation on the AI service, once it has one. */
   serverConversationId?: string;
+  /**
+   * The account that started it. The store is per browser, not per account, so the
+   * lists show a conversation only to its owner; one without an owner predates this.
+   */
+  ownerId?: string;
   createdAt: string;
   updatedAt: string;
 }

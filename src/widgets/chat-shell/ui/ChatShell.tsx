@@ -13,7 +13,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 
-import { useChatStore, getInferencePort } from "@/features/chat/model/useChatStore";
+import { useChatStore, getInferencePort, conversationsOf } from "@/features/chat/model/useChatStore";
 import { mergeAttachments, subscribeAssistantHandoff } from "@/features/chat/model/assistantHandoff";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
@@ -34,7 +34,9 @@ export const ChatShell: React.FC = () => {
   const initConnectors = useConnectorStore((s) => s.init);
   const snapshots = useConnectorStore((s) => s.snapshots);
   const connectedSnaps = useMemo(() => Object.values(snapshots).filter((x) => x.state === "connected"), [snapshots]);
-  const conversations = useChatStore((s) => s.conversations);
+  const allConversations = useChatStore((s) => s.conversations);
+  const userId = useUserStore((s) => s.activeUserId);
+  const conversations = useMemo(() => conversationsOf(allConversations, userId), [allConversations, userId]);
   const activeId = useChatStore((s) => s.activeConversationId);
   const allMessages = useChatStore((s) => s.messages);
   const createConversation = useChatStore((s) => s.createConversation);
@@ -58,7 +60,9 @@ export const ChatShell: React.FC = () => {
   const [agentId, setAgentId] = useState<string | null>(null);
 
   useEffect(() => { initConnectors(); }, [initConnectors]);
-  useEffect(() => { if (!activeId) createConversation(); }, [activeId, createConversation]);
+  // Another account's conversation is never shown: switching accounts starts a new one.
+  const active = conversations.find((c) => c.id === activeId) ?? null;
+  useEffect(() => { if (!active) createConversation(); }, [active, createConversation]);
   // The list of the agents, once: the service owns it.
   useEffect(() => { void loadAgents(); }, [loadAgents]);
   // The conversations of the account, once: another browser may have started them.
@@ -80,7 +84,6 @@ export const ChatShell: React.FC = () => {
     [],
   );
 
-  const active = conversations.find((c) => c.id === activeId) ?? null;
   const messages = allMessages.filter((m) => m.conversationId === activeId);
   const streaming = messages.some((m) => m.status === "streaming");
   const hasConnection = connectedSnaps.length > 0;

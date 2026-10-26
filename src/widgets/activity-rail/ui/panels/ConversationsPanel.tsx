@@ -22,7 +22,7 @@ import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import type { PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
 import { ConversationRow } from "@/features/chat/ui/ConversationRow";
-import { useChatStore } from "@/features/chat/model/useChatStore";
+import { useChatStore, conversationsOf } from "@/features/chat/model/useChatStore";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { matchingByName } from "@/shared/lib/text/matchingByName";
 import { usePageStore } from "@/store/usePageStore";
@@ -58,7 +58,8 @@ const rowClass =
   "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)]";
 
 const AiSection: React.FC<{ filter: string }> = ({ filter }) => {
-  const conversations = useChatStore(useShallow((s) => [...s.conversations]
+  const userId = useUserStore((s) => s.activeUserId);
+  const conversations = useChatStore(useShallow((s) => conversationsOf(s.conversations, userId)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .slice(0, RECENT_AI_CHATS)));
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");

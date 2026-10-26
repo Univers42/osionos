@@ -23,6 +23,7 @@ import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTu
 import { dispatchRunEvent } from "./runEventDispatch";
 import { failureCode, retryAfterOf } from "./runErrors";
 import { conversationApi } from "./conversationApi";
+import { useUserStore } from "@/features/auth";
 import { withMemoryDecision, type MemoryDecision } from "./memoryParts";
 
 const STORAGE_KEY = "osionos.chat.v1";
@@ -37,6 +38,16 @@ const uid = () => globalThis.crypto.randomUUID();
 let inferencePort: InferencePort = stubInferencePort;
 
 /** Injects the port the pane talks to. Called once, at app start. */
+const activeOwnerId = (): string | undefined => useUserStore.getState().activeUserId || undefined;
+
+/**
+ * The conversations an account may see on this browser: its own, and the ones
+ * stored before conversations recorded their owner.
+ */
+export function conversationsOf(conversations: Conversation[], userId: string | undefined): Conversation[] {
+  return conversations.filter((c) => c.ownerId === undefined || c.ownerId === userId);
+}
+
 export function setInferencePort(port: InferencePort): void {
   inferencePort = port;
 }
@@ -235,7 +246,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     createConversation: (projectId = null, opts = {}) => {
       const conversation: Conversation = {
         id: uid(), projectId, title: opts.title?.trim() || "New conversation",
-        connectorId: opts.connectorId, model: opts.model, createdAt: now(), updatedAt: now(),
+        connectorId: opts.connectorId, model: opts.model, ownerId: activeOwnerId(), createdAt: now(), updatedAt: now(),
       };
       set((s) => ({ conversations: [conversation, ...s.conversations], activeConversationId: conversation.id }));
       persist();
@@ -260,6 +271,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     syncServerConversations: async (workspaceId) => {
       const api = conversationApi();
       if (!api.isConfigured()) return;
+      // Read before the await: the account may switch while the list is in flight.
+      const ownerId = activeOwnerId();
       try {
         const remote = await api.list(workspaceId);
         // Read after the await: a conversation created meanwhile is not added twice.
@@ -268,7 +281,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
           .filter((r) => !known.has(r.id))
           .map((r) => ({
             id: uid(), projectId: null, title: r.title.trim() || "New conversation", model: r.model,
-            serverConversationId: r.id, createdAt: r.createdAt, updatedAt: r.updatedAt,
+            serverConversationId: r.id, ownerId, createdAt: r.createdAt, updatedAt: r.updatedAt,
           }));
         if (added.length === 0) return;
         set((s) => ({ conversations: [...s.conversations, ...added] }));

@@ -29,7 +29,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ChatMessage } from "@/features/chat/model/chatTypes";
 import { setConversationApi } from "@/features/chat/model/conversationApi";
 import { conversationMarkdown, markdownFileName } from "@/features/chat/model/conversationExport";
-import { useChatStore } from "@/features/chat/model/useChatStore";
+import { conversationsOf, useChatStore } from "@/features/chat/model/useChatStore";
+import { useUserStore } from "@/features/auth";
 import { ConversationMenu, DeleteConfirm } from "@/features/chat/ui/ConversationRow";
 
 (globalThis as unknown as { localStorage: Storage }).localStorage = {
@@ -84,6 +85,28 @@ test("syncServerConversations adds the missing ones, keeps the local ones, and a
   const added = useChatStore.getState().conversations.find((c) => c.serverConversationId === "s1");
   assert.equal(added?.title, "From the account");
   assert.equal(useChatStore.getState().conversations.find((c) => c.id === local.id)?.title, "Local only");
+});
+
+test("a conversation shows only to the account that made it, on a browser shared by two", async () => {
+  useUserStore.setState({ activeUserId: "user-a" });
+  let release: () => void = () => undefined;
+  const listed = new Promise<void>((resolve) => { release = resolve; });
+  freshStore({ list: async () => { await listed; return [remote("sA", "A's from elsewhere")]; } });
+  const mine = useChatStore.getState().createConversation(null, { title: "A local" });
+  const sync = useChatStore.getState().syncServerConversations("w1");
+  // The account switches while A's list is in flight: what arrives is still A's.
+  useUserStore.setState({ activeUserId: "user-b" });
+  release();
+  await sync;
+  const all = useChatStore.getState().conversations;
+  assert.equal(mine.ownerId, "user-a");
+  assert.equal(all.find((c) => c.serverConversationId === "sA")?.ownerId, "user-a");
+  assert.deepEqual(conversationsOf(all, "user-b").map((c) => c.title), []);
+  assert.deepEqual(conversationsOf(all, "user-a").map((c) => c.title).sort(), ["A local", "A's from elsewhere"]);
+  // A conversation stored before owners were recorded stays visible to every account.
+  const legacy = { id: "old", projectId: null, title: "Before owners", createdAt: "x", updatedAt: "x" };
+  assert.deepEqual(conversationsOf([legacy], "user-b").map((c) => c.title), ["Before owners"]);
+  useUserStore.setState({ activeUserId: "" });
 });
 
 test("a conversation from the service reads its transcript once, when it has no local message", async () => {
