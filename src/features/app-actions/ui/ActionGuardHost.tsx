@@ -14,6 +14,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { ConfirmModal, TypedConfirmModal } from "@/features/settings/ui/ConfirmModals";
 import { setActionGuardHandlers } from "@/features/app-actions/model/runAppAction";
+import type { ConfirmRequest, TypedConfirmRequest } from "@/features/app-actions/model/runAppAction";
 
 interface DialogRequest {
 	kind: "simple" | "typed";
@@ -26,6 +27,7 @@ interface DialogRequest {
 
 export function ActionGuardHost(): React.ReactElement | null {
 	const [request, setRequest] = useState<DialogRequest | null>(null);
+	const requestRef = useRef<DialogRequest | null>(null);
 	const settledRef = useRef(false);
 
 	useEffect(() => {
@@ -33,18 +35,32 @@ export function ActionGuardHost(): React.ReactElement | null {
 	}, [request]);
 
 	useEffect(() => {
-		const confirm = (title: string, message: string, actionLabel: string) =>
+		const confirm = (req: ConfirmRequest) =>
 			new Promise<boolean>((resolve) => {
+				if (requestRef.current) {
+					requestRef.current.resolve(false);
+				}
 				settledRef.current = false;
-				setRequest({ kind: "simple", title, message, actionLabel, resolve });
+				const next: DialogRequest = { kind: "simple", title: req.title, message: req.message, actionLabel: req.actionLabel, resolve };
+				requestRef.current = next;
+				setRequest(next);
 			});
-		const typedConfirm = (title: string, message: string, confirmText: string, actionLabel: string) =>
+		const typedConfirm = (req: TypedConfirmRequest) =>
 			new Promise<boolean>((resolve) => {
+				if (requestRef.current) {
+					requestRef.current.resolve(false);
+				}
 				settledRef.current = false;
-				setRequest({ kind: "typed", title, message, actionLabel, confirmText, resolve });
+				const next: DialogRequest = { kind: "typed", title: req.title, message: req.message, actionLabel: req.actionLabel, confirmText: req.confirmText, resolve };
+				requestRef.current = next;
+				setRequest(next);
 			});
 		setActionGuardHandlers({ confirm, typedConfirm });
 		return () => {
+			if (requestRef.current) {
+				requestRef.current.resolve(false);
+				requestRef.current = null;
+			}
 			setActionGuardHandlers(null);
 		};
 	}, []);
@@ -54,7 +70,9 @@ export function ActionGuardHost(): React.ReactElement | null {
 	const settle = (value: boolean) => {
 		if (settledRef.current) return;
 		settledRef.current = true;
-		request.resolve(value);
+		const current = requestRef.current;
+		requestRef.current = null;
+		if (current) current.resolve(value);
 		setRequest(null);
 	};
 
