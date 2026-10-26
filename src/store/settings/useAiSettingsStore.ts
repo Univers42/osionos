@@ -31,8 +31,6 @@ export function defaultAiSettings(workspaceId: string): AiSettings {
     workspaceId,
     connectors: false,
     meetingNotesAutoRecord: false,
-    agentsEnabled: true,
-    customAgentsAllowed: false,
     searchEverywhereIndexing: false,
     summaries: true,
     accountContext: true,

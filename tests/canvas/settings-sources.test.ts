@@ -153,12 +153,12 @@ test("voice: defaults and spy", () => {
 test("ai: workspace id and spy", () => {
   const u = userStore();
   const calls: any[] = [];
-  const aiData: any = { connectors: false, meetingNotesAutoRecord: false, agentsEnabled: true, customAgentsAllowed: false, searchEverywhereIndexing: false, summaries: true };
+  const aiData: any = { connectors: false, meetingNotesAutoRecord: false, searchEverywhereIndexing: false, summaries: true };
   const store = makeStore({ data: { "ws-1": aiData }, getData: (ws: string) => aiData, update: (ws: string, p: any) => { calls.push({ ws, p }); } });
   const src = createAiSource({ ai: store, user: u });
-  assert.equal(src.get("agentsEnabled"), true);
-  src.set!("agentsEnabled", false);
-  assert.deepEqual(calls[0], { ws: "ws-1", p: { agentsEnabled: false } });
+  assert.equal(src.get("connectors"), false);
+  src.set!("connectors", true);
+  assert.deepEqual(calls[0], { ws: "ws-1", p: { connectors: true } });
 });
 
 test("accessibility and voice unavailable without user", () => {
