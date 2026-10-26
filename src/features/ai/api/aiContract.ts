@@ -298,6 +298,8 @@ export interface StartRunInput {
   fallbacks?: AiFallback[];
   /** How hard a reasoning model thinks; sent only for a model that reasons. */
   effort?: "low" | "medium" | "high";
+  /** A research run: the web tools only, a longer budget, a cited report. Absent is a chat run. */
+  mode?: "research";
   attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string; name?: string }>;
   /** Edit & resend: the service drops this run's turn and every later one first. */
   replaceFromRunId?: string;
@@ -317,6 +319,8 @@ export interface StartRunInput {
 /** `GET|PUT /workspaces/:ws/web/settings` — the workspace switch of the assistant's web tools. */
 export interface AiWebSettings {
   enabled: boolean;
+  /** Present and true only while the service offers research mode. */
+  research?: boolean;
 }
 
 /** The body of `POST /complete` — an inline editor action, never persisted. */

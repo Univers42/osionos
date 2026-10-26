@@ -19,7 +19,8 @@ import type { RunContext } from "@/features/ai/model/aiContext";
 import { withAccountContext } from "@/features/ai/model/viewContext";
 import { parseAgentPrefix, type AgentSummary } from "@/features/ai/model/aiAgents";
 import { listAgents } from "@/features/ai/api/aiClient";
-import { chatMessageFromTranscript } from "./transcriptMessages";
+import { chatMessageFromTranscript, textOfParts } from "./transcriptMessages";
+import { textAfterGap } from "./researchParts";
 import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTurn";
 import { dispatchRunEvent } from "./runEventDispatch";
 import { failureCode, retryAfterOf } from "./runErrors";
@@ -27,6 +28,7 @@ import { conversationApi } from "./conversationApi";
 import { useUserStore } from "@/features/auth";
 import { withMemoryDecision, type MemoryDecision } from "./memoryParts";
 import { withoutUnreadableMirrors } from "./storedChatRepair";
+import { useSummaryStore } from "./useSummaryStore";
 import { DEFAULT_CONVERSATION_TITLE, isDefaultConversationTitle } from "./conversationTitle";
 
 const STORAGE_KEY = "osionos.chat.v1";
@@ -169,6 +171,25 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       set((s) => ({ conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, title } : c)) }));
       persist();
     },
+    noteTruncated: (conversationId, truncated) => useSummaryStore.getState().setTruncated(conversationId, truncated),
+  };
+
+  /**
+   * A resume that missed frames left the answer short (`resume.gap`, C402):
+   * its text is read back from the transcript once the run is over. A failed
+   * read keeps what arrived.
+   */
+  const refillAfterGap = async (conversationId: string, assistantId: string): Promise<void> => {
+    const message = get().messages.find((m) => m.id === assistantId);
+    const serverId = get().conversations.find((c) => c.id === conversationId)?.serverConversationId;
+    if (!message?.textGap || !message.runId || !serverId) return;
+    try {
+      const { messages: transcript } = await conversationApi().transcript(serverId);
+      const text = textAfterGap(message.runId, transcript.map((m) => ({ runId: m.runId, role: m.role, text: textOfParts(m.parts) })));
+      turnStore.patchMessage(assistantId, text === null ? { textGap: undefined } : { content: text, textGap: undefined });
+    } catch (error) {
+      console.warn("[chat] could not read back an answer after a gap", error);
+    }
   };
 
   /**
@@ -201,6 +222,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       // The stream ended without a terminal frame (a stop, or a run that gave
       // up): what arrived stays, and the answer is not marked as failed.
       turn.finish();
+      await refillAfterGap(conversationId, assistantId);
     } catch (error) {
       turn.patchAssistant({ status: "error", errorCode: failureCode(error), retryAfterSeconds: retryAfterOf(error) });
     } finally {
@@ -326,7 +348,8 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       if (get().messagesFor(conversationId).length > 0) return;
       transcriptsRequested.add(serverId);
       try {
-        const transcript = await api.messages(serverId);
+        const { messages: transcript, summary } = await api.transcript(serverId);
+        useSummaryStore.getState().setSummary(conversationId, summary);
         const loaded: ChatMessage[] = transcript
           .filter((m) => m.role !== "tool")
           .map((m) => chatMessageFromTranscript(m, conversationId, uid()));

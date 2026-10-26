@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useRef, useState } from "react";
+import { Sparkles } from "lucide-react";
 import { cx } from "@osionos/ui/shared/classNames";
 import { ModerationWarningNotice } from "@/shared/moderation/ModerationWarningNotice";
 import type { ModerationWarning } from "@/shared/moderation/moderationWarning";
@@ -27,10 +28,12 @@ interface Props {
   onAdd: (content: string, acknowledgeWarning?: boolean) => Promise<CommentWriteResult>;
   onResolve: (id: string, resolved: boolean) => void | Promise<unknown>;
   onRemove: (id: string) => void | Promise<unknown>;
+  /** Opens the Assistant with the thread quoted; absent when the AI service is not configured (C424). */
+  onAskAI?: () => void;
 }
 
 /** Presentational comment thread + composer (⌘↵ to send). */
-export const CommentsPanel: React.FC<Props> = ({ pageId, comments, loading, meId, onAdd, onResolve, onRemove }) => {
+export const CommentsPanel: React.FC<Props> = ({ pageId, comments, loading, meId, onAdd, onResolve, onRemove, onAskAI }) => {
   const [draft, setDraft] = useState("");
   const [warning, setWarning] = useState<ModerationWarning | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -59,6 +62,16 @@ export const CommentsPanel: React.FC<Props> = ({ pageId, comments, loading, meId
   return (
     <div className="flex max-h-[60vh] w-80 flex-col">
       {pageId && <ThreadMoodHint pageId={pageId} />}
+      {onAskAI && comments.length > 0 && (
+        <button
+          type="button"
+          onClick={onAskAI}
+          data-testid="comments-ask-ai"
+          className="mx-2 mt-2 inline-flex items-center gap-1 self-start rounded-md px-1.5 py-0.5 text-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+        >
+          <Sparkles size={12} aria-hidden="true" /> Ask AI about this thread
+        </button>
+      )}
       <div className="flex-1 overflow-y-auto p-2">
         {comments.length === 0 && !loading && (
           <p className="px-2 py-6 text-center text-xs text-[var(--osio-fg-subtle)]">No comments yet.</p>
