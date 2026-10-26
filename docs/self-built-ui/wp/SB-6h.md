@@ -17,7 +17,8 @@ Repo: the **root** repo (`groot`), not the app. Worktree: a root worktree on a n
 - `models/osionos-workspace-system-pages-migration.sql` (new);
 - `scripts/apply-models-migrations.sh` (one name in `ORDERED_LAST`, right after `osionos-user-system-pages-migration.sql`);
 - `models/osionos-account-erasure-migration.sql` (two seed rows);
-- `scripts/verify/models-grants/account-checks.sql` (the p5 seed helpers for the two tables, and the checks in Rule 5).
+- `scripts/verify/models-grants/account-checks.sql` (the p5 seed helpers for the two tables, and the checks in Rule 5);
+- `scripts/verify/models-grants.sh` (one two-session race, called from `run_races`, Rule 5).
 
 **MUST NOT TOUCH:** every other migration, the app repo, the grobase gitlink (never `git commit -a`; stage by path).
 
@@ -65,15 +66,17 @@ CREATE OR REPLACE FUNCTION public.osionos_workspace_system_page_apply(
 --      or { "ok": false, "code": "not_allowed" | "copy_exists" | "version_mismatch" | "version_not_found" | "invalid_action", "default": <current row> | null }
 ```
 
-Privileges: `service_role` gets `SELECT` on both tables and `EXECUTE` on the function, and nothing else (no INSERT, UPDATE, DELETE or TRUNCATE on either table: `REVOKE` them explicitly, since grobase's default privileges may grant them). `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated`. The function is owned by the migration's role (postgres), so it can write; cascade deletes from `osionos_workspaces` and the erase (`SECURITY DEFINER`) still reach both tables.
+Privileges: `service_role` gets `SELECT` on both tables and `EXECUTE` on the function, and nothing else: `REVOKE INSERT, UPDATE, DELETE, TRUNCATE … FROM service_role` and `REVOKE ALL … FROM PUBLIC, anon, authenticated, osionos_account_user` on both tables, explicitly and before the `GRANT SELECT`, since grobase's default privileges may grant them. `REVOKE EXECUTE … FROM PUBLIC, anon, authenticated`. The function is owned by the migration's role (postgres), so it can write; cascade deletes from `osionos_workspaces` and the erase (`SECURITY DEFINER`) still reach both tables.
 
 Data map seed rows: `('osionos_workspace_system_pages', 'updated_by', 'author', 'anonymise', NULL, NULL, NULL, 'workspace_id', NULL)` and the same for `osionos_workspace_system_page_history`.
 
 ## Rules (each one is tested)
 
+Devil conditions (D-SB-6h-spec, 02:51, PROCEED-WITH-CONDITIONS, blast 4, one ruling for SB-6h, SB-6h2 and SB-6h3) are folded in below.
+
 1. **The pattern.** Header (WHY / WHAT / WHO REACHES WHAT, as `osionos-user-emails-migration.sql` writes it, naming SB-6h2 as the only caller of the function); idempotent (`IF NOT EXISTS`, `CREATE OR REPLACE`, `REVOKE` before `GRANT`); a second apply changes no ACL (`models-grants.sh` check g). The size CHECKs are backstops at twice the bridge's limit, as in SB-6d; say so in a comment.
-2. **Who may write, in the database.** The function first checks `p_actor`: allowed when `osionos_workspaces.owner_id = p_actor` or a member row `(p_workspace, p_actor)` has `role = 'admin'` (`loadCaller`'s rule). Otherwise it returns `not_allowed` and writes nothing. A missing workspace is also `not_allowed` (the bridge answers 404 before it calls). Caveat (in the function's comment): a member whose role is `'owner'` but who is not `owner_id` is refused, as `loadCaller` refuses them; both change together or neither does.
-3. **One transaction, compare-and-swap, history always.** The function locks the current row (`SELECT … FOR UPDATE`) and:
+2. **Who may write, in the database.** The function first checks `p_actor`: allowed when `osionos_workspaces.owner_id = p_actor` or a member row `(p_workspace, p_actor)` has `role = 'admin'` (`loadCaller`'s rule). Otherwise it returns `not_allowed` and writes nothing. A missing workspace is also `not_allowed` (the bridge answers 404 before it calls). Caveat (in the function's comment): a member whose role is `'owner'` but who is not `owner_id` is refused, as `loadCaller` refuses them, although `bridge-api.mjs:841` (`memberHasPermission`) treats that role as admin-level for page writes; both change together or neither does. Who is an admin is the members table as it is at the call: an ownership transfer that leaves the old owner an `admin` member leaves them able to write, as for every other workspace setting.
+3. **One transaction, compare-and-swap, history always.** The body is static SQL only: no `EXECUTE`, no `format()`, every value a parameter. It first checks `p_page` against `^[a-z0-9_-]{1,64}$` and `p_action` against the three actions (`invalid_action` otherwise, before any read). It then takes `pg_advisory_xact_lock(hashtextextended('osionos_wsp:' || p_workspace::text || '/' || p_page, 0))`, so two calls for one page (two creates included, when there is no row to lock) run one after the other, and only then reads the current row and the history. Then:
    - `save` with `p_expected_version` NULL: refused with `copy_exists` (and the current row) when a row exists; else inserts with `version = coalesce(max(history.version), 0) + 1` for that page;
    - `save` with a version: refused with `version_mismatch` (current row, or `null` when there is none) unless it equals the row's; else updates with `version + 1`;
    - `rollback`: needs `p_expected_version` matching the current row's version, or NULL when there is no current row (a rollback after a restore); `p_rollback_to` must name a history row of this page whose action is not `restore_shipped`, else `version_not_found`; the current row becomes that row's `base_version`, `blocks` and `fingerprints`, byte for byte (`::text` equal), with the next version;
@@ -83,7 +86,8 @@ Data map seed rows: `('osionos_workspace_system_pages', 'updated_by', 'author', 
 4. **Bounded history.** After the append, the function deletes this page's history rows older than its newest 50. Caveat (in the header): a rollback reaches only the newest 50 versions, and one workspace can hold up to 32 pages × 51 rows of at most 512 KiB of compact JSON each (the bridge's limits, SB-6h2); the bridge's rate limit is what keeps an admin from churning it.
 5. **Checks** (`account-checks.sql`, each naming in a comment the mutant it fails on):
    - `workspace_system_pages_privileges`: `service_role` holds exactly SELECT on both tables (no INSERT, UPDATE, DELETE, TRUNCATE) and EXECUTE on the function; anon, authenticated and `osionos_account_user` hold nothing on any of the three. Run after the whole runner, the service-role-only sweep included.
-   - `workspace_system_pages_apply`: as `service_role`, on a seeded workspace with an owner, an admin, an editor and a stranger: the editor and the stranger get `not_allowed` and the tables are unchanged; the owner creates (version 1), the admin saves (2), a stale save with version 1 gets `version_mismatch`, a second create gets `copy_exists`, a rollback to 1 gives `blocks::text` and `fingerprints::text` equal to version 1's, a restore deletes the row, a save after it creates version 5, a rollback to the restore's version gets `version_not_found`; the history holds versions 1–5 with the right actions and actors; 52 saves leave exactly 50 history rows; a direct `INSERT`, `UPDATE` or `DELETE` on either table as `service_role` fails with 42501.
+   - `workspace_system_pages_race` (in `models-grants.sh`, two sessions as `run_races` runs them, 20 rounds): two creates of the same page at once end with one `ok` and one `copy_exists`, never an exception (23505 included), and two saves from the same version end with one `ok` and one `version_mismatch`.
+   - `workspace_system_pages_apply`: as `service_role`, on a seeded workspace with an owner, an admin, an editor and a stranger: the editor and the stranger get `not_allowed` and the tables are unchanged; the owner creates (version 1), the admin saves (2), a stale save with version 1 gets `version_mismatch`, a second create gets `copy_exists`, a rollback to 1 gives `blocks::text` and `fingerprints::text` equal to version 1's, a restore deletes the row, a save after it creates version 5, a rollback to the restore's version gets `version_not_found`; the history holds versions 1–5 with the right actions and actors; 52 saves leave exactly 50 history rows, and after them a restore and a save give version 54 (versions are counted over the surviving rows and never repeat); a `p_page` of `x'; DROP TABLE x; --` returns `invalid_action` and writes nothing; a direct `INSERT`, `UPDATE` or `DELETE` on either table as `service_role` fails with 42501.
    - The erase: `p5_seed_user` seeds both tables (helpers `p5_insert_workspace_system_page` and `p5_insert_workspace_system_page_history`, each with a workspace the seed already makes), and `p5_erase_canary`, `p5_erasure_complete` and the other p5 checks pass: after the erase, `updated_by` is the tombstone in both tables and the rows remain (they are the workspace's, not the user's).
    - Deleting the workspace deletes its rows in both tables (cascade).
 
@@ -97,7 +101,8 @@ Data map seed rows: `('osionos_workspace_system_pages', 'updated_by', 'author', 
   - (b) `GRANT INSERT` on the current table to `service_role`;
   - (c) `rollback` copies `blocks` but not `fingerprints`;
   - (d) the function writes the row but not the history row;
-  - (e) no seed row for the history table.
+  - (e) no seed row for the history table;
+  - (f) no advisory lock (the race check fails).
 - [ ] **Step 5: Commit** with the message above, staging by path. No trailer, no push.
 
 ## Report
