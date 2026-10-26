@@ -11,11 +11,12 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useMemo, useRef } from "react";
+import { RotateCcw } from "lucide-react";
 
 import type { ChatMessage } from "@/features/chat/model/chatTypes";
 import { DiagramOutput } from "@/features/diagram/ui/DiagramOutput";
 import { AnswerRenderContext, type AnswerRenderState } from "@/features/chat/ui/answerRenderContext";
-import { AssistantActions, RouteNote, UserBubble } from "@/features/chat/ui/MessageActions";
+import { ACTION_BUTTON, AssistantActions, RouteNote, UserBubble } from "@/features/chat/ui/MessageActions";
 import { MessageWindow } from "@/features/chat/ui/MessageWindow";
 import { ReasoningNote } from "@/features/chat/ui/ReasoningNote";
 import { ReadAloudButton } from "@/features/voice/ui/ReadAloudButton";
@@ -46,8 +47,8 @@ import { AskAnotherAgent } from "./AskAnotherAgent";
 
 interface Props {
   messages: ChatMessage[];
-  /** Re-sends the text of a failed answer. */
-  onRetry?: (text: string) => void;
+  /** Asks the question of an answer again, in place of that answer. */
+  onRetry?: (answerId: string) => void;
 }
 
 /**
@@ -140,6 +141,7 @@ const AssistantMessageActions = React.memo(function AssistantMessageActions({
   agents,
   answeredBy,
   busy,
+  onRetry,
 }: {
   messageId: string;
   content: string;
@@ -151,11 +153,26 @@ const AssistantMessageActions = React.memo(function AssistantMessageActions({
   agents: AgentSummary[];
   answeredBy?: string;
   busy: boolean;
+  /** Asks the question again in place of this answer: the last answer only. */
+  onRetry?: () => void;
 }) {
   const others = useMemo(() => otherAgents(agents, answeredBy), [agents, answeredBy]);
   return (
     <div className="mt-1 flex items-center justify-end gap-1">
       {route ? <RouteNote {...route} /> : null}
+      {onRetry ? (
+        <button
+          type="button"
+          className={ACTION_BUTTON}
+          aria-label="Retry this answer"
+          title="Retry with the model picked now"
+          disabled={busy}
+          onClick={onRetry}
+          data-testid="chat-answer-retry"
+        >
+          <RotateCcw size={13} aria-hidden="true" /> Retry
+        </button>
+      ) : null}
       {question !== null ? <AskAnotherAgent agents={others} disabled={busy} onPick={(id) => void askAgent(conversationId, question, id)} /> : null}
       <AssistantActions
         content={content}
@@ -205,7 +222,6 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
       <MessageWindow items={messages}>
         {(visible, offset) => visible.map((m, visibleIndex) => {
         const index = offset + visibleIndex;
-        const retryText = m.status === "error" ? questionBefore(messages, index) : null;
         // The agent that shaped the answer: its avatar and name head the answer.
         const agent = m.role === "assistant" && m.agentId ? agents.find((one) => one.id === m.agentId) : undefined;
         if (m.role === "user") {
@@ -255,6 +271,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                   agents={agents}
                   answeredBy={m.agentId}
                   busy={busy}
+                  onRetry={onRetry && question !== null && index === messages.length - 1 ? () => onRetry(m.id) : undefined}
                   route={m.answeredBy && m.routeReason ? { primary: m.model ?? "the chosen model", answeredBy: m.answeredBy, reason: m.routeReason } : undefined}
                 />
               ) : null}
@@ -263,7 +280,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                   <RunErrorNotice
                     code={m.errorCode ?? "internal"}
                     retryAfter={m.retryAfterSeconds}
-                    onRetry={onRetry && retryText !== null ? () => onRetry(retryText) : undefined}
+                    onRetry={onRetry && question !== null ? () => onRetry(m.id) : undefined}
                   />
                 </div>
               ) : null}
