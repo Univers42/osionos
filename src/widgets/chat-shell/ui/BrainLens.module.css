@@ -1,0 +1,44 @@
+/* The composer seen through the binocle's lens: a two-tone ring of the accent and the
+   purple tint. The ring turns only while an answer is being written, the one motion of
+   the assistant, and stands still for anyone who asks for reduced motion. */
+@property --lens-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 200deg;
+}
+
+.lens {
+  position: relative;
+  padding: 1.5px;
+  border-radius: calc(var(--osio-radius-panel) + 4px);
+  background: conic-gradient(
+    from var(--lens-angle),
+    var(--osio-accent),
+    var(--osio-block-tint-purple-fg),
+    color-mix(in oklab, var(--osio-accent) 25%, var(--osio-border-default)),
+    var(--osio-accent)
+  );
+  box-shadow: 0 18px 48px -28px color-mix(in oklab, var(--osio-accent) 60%, transparent);
+}
+
+/* The composer keeps its own surface; inside the lens the ring is its border. */
+.lens > [data-dictation-composer] {
+  border-color: transparent;
+  border-radius: calc(var(--osio-radius-panel) + 2.5px);
+}
+
+.lens[data-working="true"] {
+  animation: lens-turn 2.4s linear infinite;
+}
+
+@keyframes lens-turn {
+  to {
+    --lens-angle: 560deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lens[data-working="true"] {
+    animation: none;
+  }
+}

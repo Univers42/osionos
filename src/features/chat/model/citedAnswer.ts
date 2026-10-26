@@ -167,6 +167,8 @@ export function renderCitedAnswer(
  * opens the page; a pack source is a plain line, labelled with where it comes
  * from, because there is no page to open.
  */
+const SOURCE_CHIP = "inline-block max-w-64 truncate rounded-full border px-2.5 py-1";
+
 export function renderCitationSources(
   citations: Citation[],
   onOpen: (citation: Citation) => void,
@@ -174,15 +176,11 @@ export function renderCitationSources(
   if (citations.length === 0) return null;
   return React.createElement(
     "div",
-    { className: "mt-2 border-t border-[var(--osio-border-default)] pt-2", "data-testid": "chat-sources" },
-    React.createElement(
-      "p",
-      { className: "mb-1 text-2xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]" },
-      "Sources",
-    ),
+    { className: "mt-3 flex flex-col gap-1.5", "data-testid": "chat-sources" },
+    React.createElement("p", { className: "m-0 text-xs font-medium text-[var(--osio-fg-subtle)]" }, "Sources"),
     React.createElement(
       "ul",
-      { className: "m-0 list-none space-y-0.5 p-0 text-xs" },
+      { className: "m-0 flex list-none flex-wrap gap-1.5 p-0 text-xs" },
       ...citations.map((citation) =>
         React.createElement(
           "li",
@@ -190,14 +188,14 @@ export function renderCitationSources(
           citation.collection === "pack"
             ? React.createElement(
                 "span",
-                { className: "text-[var(--osio-fg-muted)]", title: citation.snippet },
+                { className: `${SOURCE_CHIP} border-dashed border-[var(--osio-border-default)] text-[var(--osio-fg-muted)]`, title: citation.snippet },
                 `${citation.n}. ${citation.title} · osionos docs`,
               )
             : React.createElement(
                 "button",
                 {
                   type: "button",
-                  className: "text-left text-[var(--osio-accent)] underline-offset-2 hover:underline",
+                  className: `${SOURCE_CHIP} border-transparent bg-[var(--osio-bg-subtle)] text-left text-[var(--osio-fg-default)] transition-colors hover:border-[var(--osio-accent)] hover:text-[var(--osio-accent-text)]`,
                   title: citation.snippet,
                   "aria-label": `Open source ${citation.n}: ${citation.title}`,
                   onClick: () => onOpen(citation),
