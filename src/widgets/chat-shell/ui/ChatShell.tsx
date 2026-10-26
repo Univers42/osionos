@@ -33,6 +33,7 @@ import { BrainRail } from "./BrainRail";
 import { BrainHeader } from "./BrainHeader";
 import { BrainContextPanel } from "./BrainContextPanel";
 import { BrainLens } from "./BrainLens";
+import { useAgentPanel } from "../model/useAgentPanel";
 import { usePaneWidth } from "../model/usePaneWidth";
 import { activitiesOf, sourcesOf } from "../model/conversationTrail";
 import { brainLayout, paneSize, togglePanel, toggleRail, type SideChoice } from "../model/brainLayout";
@@ -55,9 +56,7 @@ export const ChatShell: React.FC = () => {
   const stop = useChatStore((s) => s.stop);
   // The built-in agents the service offers: the shapes a run can take.
   const agents = useChatStore((s) => s.agents);
-  const loadAgents = useChatStore((s) => s.loadAgents);
-  const syncServerConversations = useChatStore((s) => s.syncServerConversations);
-  const loadServerTranscript = useChatStore((s) => s.loadServerTranscript);
+  const { loadAgents, syncServerConversations, loadServerTranscript } = useChatStore.getState();
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
 
   // The workspace switch of the web tools: the toggle is drawn only when the server says it is on.
@@ -72,6 +71,7 @@ export const ChatShell: React.FC = () => {
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
   // The agent of the next run: none is the general assistant.
   const [agentId, setAgentId] = useState<string | null>(null);
+  const panel = useAgentPanel(agents);
 
   useEffect(() => { initConnectors(); }, [initConnectors]);
   // Another account's conversation is never shown: switching accounts starts a new one.
@@ -122,8 +122,7 @@ export const ChatShell: React.FC = () => {
     const withMessages = new Set(allMessages.map((m) => m.conversationId));
     return conversations.filter((c) => c.id === activeId || !isUntouchedConversation(c, withMessages));
   }, [conversations, allMessages, activeId]);
-  const sources = useMemo(() => sourcesOf(messages), [messages]);
-  const activities = useMemo(() => activitiesOf(messages), [messages]);
+  const [sources, activities] = useMemo(() => [sourcesOf(messages), activitiesOf(messages)] as const, [messages]);
   const firstName = useUserStore((state) => state.activePersona()?.name?.split(/\s+/)[0] ?? "");
   // A starter puts its prompt in the composer and hands the focus back to it.
   const [focusSignal, setFocusSignal] = useState(0);
@@ -137,8 +136,7 @@ export const ChatShell: React.FC = () => {
   const layout = brainLayout(paneWidth, railChoice, panelChoice);
   const { railOpen, railOverlay, panelOpen, panelOverlay } = layout;
   const shut: SideChoice = { open: false, size: paneSize(paneWidth) };
-  const nextAgent = agents.find((agent) => agent.id === agentId) ?? null;
-  const streaming = messages.some((m) => m.status === "streaming");
+  const nextAgent = agents.find((agent) => agent.id === agentId) ?? null;  const streaming = messages.some((m) => m.status === "streaming");
   const hasConnection = connectedSnaps.length > 0;
   // The AI service owns the providers, so a streaming port needs no connector
   // of the app's own. The offline stub does: it stands in for a provider.
@@ -152,11 +150,12 @@ export const ChatShell: React.FC = () => {
 
   const submit = (explicit?: string) => {
     const value = (explicit ?? text).trim();
-    if (!active || !value) return;
+    // A panel talks one agent at a time: the next message waits for its end.
+    if (!active || !value || panel.isRunning()) return;
     if (needsConnection && !hasConnection) { setText(value); setOnboarding("ask"); return; } // ask to connect, keep the message
     // The toggle is this message's alone: taking it puts it back to off. A switch turned off since drops it.
     const web = useWebToggle.getState().take() && webAvailable;
-    void send(active.id, value, {
+    const sel = {
       connectorId: fallbackConnector,
       model: selection.model || "auto",
       connectionId: selection.connectionId,
@@ -165,7 +164,8 @@ export const ChatShell: React.FC = () => {
       attachments: toRunAttachments(attachments),
       // What the answer may read: the pages the reader pointed at.
       ...(chips.length > 0 || web ? { context: buildRunContext(chips, web) } : {}),
-    });
+    };
+    void (panel.active ? panel.sendToPanel(active.id, value, sel) : send(active.id, value, sel));
     setText("");
     setAttachments([]);
   };
@@ -210,11 +210,13 @@ export const ChatShell: React.FC = () => {
     agents,
     agentId,
     onAgentChange: setAgentId,
+    panel: panel.panelIds,
+    onPanelChange: panel.setPanelIds,
     attachments,
     onAttachmentsChange: setAttachments,
     webAvailable,
     streaming,
-    onStop: () => { if (active) stop(active.id); },
+    onStop: () => { panel.cancel(); if (active) stop(active.id); },
   };
 
   const overlay = "absolute inset-y-0 z-30 shadow-osio-e4";

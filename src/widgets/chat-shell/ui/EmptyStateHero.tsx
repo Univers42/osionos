@@ -53,6 +53,8 @@ interface Props {
   agentId?: string | null;
   /** The reader picked another agent. */
   onAgentChange?: (agentId: string | null) => void;
+  panel?: string[];
+  onPanelChange?: (agentIds: string[]) => void;
   /** The workspace switch of the web tools is on. */
   webAvailable?: boolean;
   /** The attached files — a block's "Ask AI" may have brought one. */
@@ -131,7 +133,7 @@ const StarterList: React.FC<{ onPick: (text: string) => void }> = ({ onPick }) =
 /** A new chat: the mascot, one question, the lit composer, and a row of ways to start. */
 export const EmptyStateHero: React.FC<Props> = ({
   value, onChange, onSubmit, onConnect, onPick, selection, onSelectionChange, chips, onChipsChange,
-  agents = [], agentId = null, onAgentChange, attachments, onAttachmentsChange, firstName, focusSignal, webAvailable,
+  agents = [], agentId = null, onAgentChange, panel, onPanelChange, attachments, onAttachmentsChange, firstName, focusSignal, webAvailable,
 }) => {
   const greeting = `${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}` : ""}`;
   return (
@@ -161,6 +163,8 @@ export const EmptyStateHero: React.FC<Props> = ({
               agents={agents}
               agentId={agentId}
               onAgentChange={onAgentChange}
+              panel={panel}
+              onPanelChange={onPanelChange}
               attachments={attachments}
               onAttachmentsChange={onAttachmentsChange}
               focusSignal={focusSignal}
