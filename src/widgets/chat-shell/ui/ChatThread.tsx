@@ -196,7 +196,7 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
               data-status={m.status}
               className={`max-w-[80%] break-words rounded-2xl px-4 py-2.5 text-sm ${
                 m.role === "user"
-                  ? "whitespace-pre-wrap bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
+                  ? "bg-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
                   : "bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]"
               }`}
             >
