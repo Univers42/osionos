@@ -150,3 +150,48 @@ test("readOnly field: set refused and write never called", () => {
   if (source.set) source.set("a", 5);
   assert.equal(writes.length, 0);
 });
+
+import { pageToFile, fileToPage } from "../../src/features/page-file/model/pageFileCodec.ts";
+
+test("settings recordRef survives the page-file round trip", () => {
+  const source = { _id: "p", workspaceId: "ws", title: "T", content: [{ id: "b1", type: "paragraph", content: "", recordRef: "settings:preferences", fieldBind: "reduceMotion" }] };
+  const text = pageToFile(source as any);
+  const done = fileToPage(text, source as any);
+  assert.equal(done.content[0]?.recordRef, "settings:preferences");
+  assert.equal(done.content[0]?.fieldBind, "reduceMotion");
+});
+
+test("invalid settings recordRef values are dropped by the page file", () => {
+  for (const bad of ["settings:Bad Name", "settings:"]) {
+    const source = { _id: "p", workspaceId: "ws", title: "T", content: [{ id: "b1", type: "paragraph", content: "", recordRef: bad, fieldBind: "x" }] };
+    const text = pageToFile(source as any);
+    const done = fileToPage(text, source as any);
+    assert.equal(done.content[0]?.recordRef, undefined, bad);
+  }
+  const ok = { _id: "p", workspaceId: "ws", title: "T", content: [{ id: "b1", type: "paragraph", content: "", recordRef: "$record", fieldBind: "x" }] };
+  const text = pageToFile(ok as any);
+  const done = fileToPage(text, ok as any);
+  assert.equal(done.content[0]?.recordRef, "$record");
+});
+
+test("a source leaving loading notifies subscribed fields", () => {
+  const store = { state: { loaded: false } as any, listeners: new Set<any>() };
+  const fullStore = {
+    getState: () => store.state,
+    subscribe: (cb: any) => { store.listeners.add(cb); return () => store.listeners.delete(cb); },
+    setState: (next: any) => { const prev = store.state; store.state = next; for (const cb of [...store.listeners]) cb(store.state, prev); },
+  };
+  const source = createStoreRecordSource({
+    id: "settings:t8",
+    label: "t8",
+    fields: [{ key: "a", display: "text", label: "A" }],
+    store: fullStore,
+    read: (s: any) => (s.loaded ? {} : null),
+    isLoading: (s: any) => !s.loaded,
+  });
+  let calls = 0;
+  source.subscribe("a", () => { calls++; });
+  fullStore.setState({ loaded: true });
+  assert.equal(calls, 1);
+  assert.equal(source.status(), "ready");
+});
