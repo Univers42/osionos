@@ -4,7 +4,7 @@ import type { Redis } from 'ioredis';
 import { config } from '../config.ts';
 import { checkDailyBuildLimit } from '../rateLimit.ts';
 import { resolveTarget } from '../gateway/resolve.ts';
-import { findBuiltinAgent } from '../agents/builtins.ts';
+import { resolvePinnedAgent } from '../agents/resolve.ts';
 import { startRun } from '../runs/runner.ts';
 import { getRun } from '../runs/repo.ts';
 import { getOwnedConversation } from '../conversations/repo.ts';
@@ -242,6 +242,15 @@ async function continueRun(
 	const model = run?.model ?? conversation.model ?? undefined;
 	const resolved = await resolveTarget(db, redis, user, undefined, model);
 	if (resolved.kind === 'refused') return undefined;
+	// The agent of the continuation is the version the run pinned, under the same
+	// gate as a new run (C333, C334). A refusal creates no run row (C336).
+	const pinned = await resolvePinnedAgent(db, user, run, conversation.workspace_id);
+	if (!pinned.ok) {
+		console.warn(
+			JSON.stringify({ event: 'continuation_agent_refused', runId: row.run_id, approvalId: row.id, reason: pinned.reason }),
+		);
+		return undefined;
+	}
 	// The workspace and the agent of the conversation go on too: without them the
 	// continuation lost the workspace skills and the approved memories (review
 	// p5d1, gap 1).
@@ -255,7 +264,7 @@ async function continueRun(
 		target: resolved.target,
 		user,
 		workspaceId: conversation.workspace_id,
-		agent: run?.agent_id ? findBuiltinAgent(run.agent_id) : null,
+		agent: pinned.agent,
 		emit: () => {},
 	});
 	if (started.kind !== 'started') return undefined;

@@ -1,5 +1,8 @@
 import type { Pool } from 'pg';
 import { writeTools } from '../tools/writeToolList.ts';
+import { cardAgentOfRun } from '../agents/card.ts';
+import type { CardAgent } from '../agents/card.ts';
+import { getRun } from '../runs/repo.ts';
 import { countExecutedInRun } from './repo.ts';
 import type { ApprovalPlan, ApprovalRow, ApprovalTarget } from './types.ts';
 import type { AuthUser } from '../auth.ts';
@@ -32,6 +35,8 @@ export interface ApprovalDescription {
 	createdAt: string;
 	/** What the write came to, in the words execution recorded: "… (page version N)" (C239). */
 	summary: string | null;
+	/** The agent of the run, from its pin (C304); null for the general assistant. */
+	agent: CardAgent | null;
 }
 
 /** The tool of an approval, by name. */
@@ -77,6 +82,7 @@ export async function describeApproval(
 		expiresAt: new Date(row.expires_at).toISOString(),
 		createdAt: new Date(row.created_at).toISOString(),
 		summary: summaryOf(row.result),
+		agent: await cardAgentOfRun(db, row.run_id ? await getRun(db, row.run_id) : null),
 	};
 }
 
