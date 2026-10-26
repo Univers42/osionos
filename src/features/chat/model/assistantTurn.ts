@@ -31,8 +31,10 @@ import { withPermission } from "./approvalParts";
 import type { PermissionPart } from "./approvalParts";
 import { withMemoryProposal } from "./memoryParts";
 import type { MemoryProposalPart } from "./memoryParts";
+import type { TruncatedFrame } from "./summaryNotice";
 import { withHandoff } from "./agentHandoff";
 import type { HandoffPart } from "./agentHandoff";
+import { withResearch, type ResearchFrame } from "./researchParts";
 import type { RunEventActions } from "./runEventDispatch";
 
 /** What a turn needs from the store. */
@@ -47,6 +49,8 @@ export interface TurnStore {
   conversationTitle(conversationId: string): string;
   /** Names a conversation — the service named it. */
   writeTitle(conversationId: string, title: string): void;
+  /** Keeps what a run said about its window. */
+  noteTruncated(conversationId: string, truncated: TruncatedFrame): void;
 }
 
 /** A turn of the assistant: its message, and the actions the frames use. */
@@ -131,8 +135,16 @@ export function assistantTurn(
       patchParts((current) => withMemoryProposal(current, proposal));
     },
 
+    noteTruncated(truncated: TruncatedFrame) {
+      store.noteTruncated(conversationId, truncated);
+    },
+
     suggestAgent(handoff: HandoffPart) {
       patchParts((current) => withHandoff(current, handoff));
+    },
+
+    noteResearch(frame: ResearchFrame) {
+      patchParts((current) => withResearch(current, frame));
     },
 
     finish() {

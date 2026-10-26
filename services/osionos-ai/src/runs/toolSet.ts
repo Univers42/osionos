@@ -105,6 +105,12 @@ export function buildRunTools(input: {
 	 * The web run, when there is one, shares this object.
 	 */
 	webTaint?: WebTaint;
+	/**
+	 * A research run (C398): the set is exactly the four reading tools,
+	 * absent rather than refused. Writes, memory, skills, MCP and the view
+	 * tools are not in the request at all.
+	 */
+	research?: boolean;
 	/** The event of the run. */
 	emit: (type: string, data: unknown) => Promise<void>;
 }): RunTools {
@@ -213,7 +219,18 @@ export function buildRunTools(input: {
 	// the model — it is not in the request.
 	if (run.tools) run.tools = keepAgentTools(run.tools, agent);
 	if (run.tools && input.webTaint) run.tools = guardTainted(run.tools, input.webTaint, hooks, pool);
+	if (run.tools && input.research) run.tools = keepResearchTools(run.tools);
 	return run;
+}
+
+/** The whole tool set of a research run (C398). */
+export const RESEARCH_TOOL_NAMES: readonly string[] = ['web_search', 'web_fetch', 'search_workspace', 'read_page'];
+
+/** Filters to the four names, after every guard: nothing outside the list can survive. */
+export function keepResearchTools(tools: ToolSet): ToolSet {
+	const kept: ToolSet = {};
+	for (const name of RESEARCH_TOOL_NAMES) if (tools[name]) kept[name] = tools[name];
+	return kept;
 }
 
 /**
