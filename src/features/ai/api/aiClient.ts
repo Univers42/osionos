@@ -23,7 +23,7 @@
  */
 
 import { AiError, toAiError } from "./aiContract";
-import { conversationFromWire, messageFromWire, type ConversationWire, type MessageWire } from "./aiWire";
+import { conversationFromWire, messageFromWire, summaryFromBody, type ConversationSummary, type ConversationWire, type MessageWire } from "./aiWire";
 import type {
   AiAgent,
   AiAgentSettings,
@@ -295,13 +295,21 @@ export async function deleteConversation(id: string): Promise<void> {
   await requestJson<unknown>("DELETE", `/conversations/${encodeURIComponent(id)}`);
 }
 
-/** `GET /conversations/:id/messages` — the transcript, oldest first. */
-export async function listMessages(conversationId: string): Promise<AiMessage[]> {
+/**
+ * `GET /conversations/:id/messages` — the transcript, oldest first, and the
+ * summary the service keeps of it (`undefined`: the service sent no key).
+ */
+export async function getTranscript(conversationId: string): Promise<{ messages: AiMessage[]; summary: ConversationSummary | null | undefined }> {
   const body = await requestJson<{ messages?: MessageWire[] }>(
     "GET",
     `/conversations/${encodeURIComponent(conversationId)}/messages`,
   );
-  return (body.messages ?? []).map(messageFromWire);
+  return { messages: (body.messages ?? []).map(messageFromWire), summary: summaryFromBody(body) };
+}
+
+/** `DELETE /conversations/:id/summary` — the owner clears the summary; 404 when the flag is off. */
+export async function clearConversationSummary(conversationId: string): Promise<void> {
+  await requestJson<unknown>("DELETE", `/conversations/${encodeURIComponent(conversationId)}/summary`);
 }
 
 /** `POST /runs` — the run's event stream. */
