@@ -31,6 +31,8 @@ import { withPermission } from "./approvalParts";
 import type { PermissionPart } from "./approvalParts";
 import { withMemoryProposal } from "./memoryParts";
 import type { MemoryProposalPart } from "./memoryParts";
+import { withHandoff } from "./agentHandoff";
+import type { HandoffPart } from "./agentHandoff";
 import type { RunEventActions } from "./runEventDispatch";
 
 /** What a turn needs from the store. */
@@ -127,6 +129,10 @@ export function assistantTurn(
 
     proposeMemory(proposal: MemoryProposalPart) {
       patchParts((current) => withMemoryProposal(current, proposal));
+    },
+
+    suggestAgent(handoff: HandoffPart) {
+      patchParts((current) => withHandoff(current, handoff));
     },
 
     finish() {
