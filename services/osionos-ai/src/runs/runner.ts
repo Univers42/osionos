@@ -9,6 +9,7 @@ import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
 import { loadMcpTools, mcpToolChars } from '../mcpClient/runTools.ts';
+import { webOnForRun, webToolChars } from '../web/runWeb.ts';
 import type { Effort } from './effort.ts';
 import type { RunEvent } from './upstream.ts';
 import {
@@ -112,6 +113,8 @@ export interface StartRunInput {
 	workspaceId?: string;
 	/** Whether the account block is included in the prompt. */
 	account?: boolean;
+	/** The web toggle of THIS message (C355): one of three layers, never sticky. */
+	web?: boolean;
 	/** The view the caller has open, as the client reports it. */
 	view?: import('./prompt.ts').RunView;
 	/** Where the model is called, and who pays for it. */
@@ -319,8 +322,15 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// Only the general assistant gets them (C308): an agent never does. Flag
 	// off: no query, nothing (C291).
 	const mcpTools = config.mcpClientEnabled && input.user && !agent ? await loadMcpTools(db, ownerId) : [];
+	// C355 / C369: the web tools, when the flag, the workspace switch and this
+	// message all say so, and never for an agent.
+	const web = await webOnForRun(db, { asked: input.web, user: input.user, agentful: agent !== null, workspaceId: input.workspaceId });
 	const contextChars =
-		(accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0) + (workspaceBlockText?.length ?? 0) + mcpToolChars(mcpTools);
+		(accountBlockText?.length ?? 0) +
+		(viewBlockText?.length ?? 0) +
+		(workspaceBlockText?.length ?? 0) +
+		mcpToolChars(mcpTools) +
+		webToolChars(web);
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
@@ -402,6 +412,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			skillIndex,
 			memories,
 			mcpTools,
+			web,
 			workspaceId: input.workspaceId,
 			...(accountBlockText ? { accountBlock: accountBlockText } : {}),
 			...(viewBlockText ? { viewBlock: viewBlockText } : {}),

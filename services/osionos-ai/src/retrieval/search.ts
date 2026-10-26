@@ -82,8 +82,10 @@ export interface RetrievedChunk {
 	/**
 	 * Which index the chunk comes from: a page, or a curated pack document.
 	 * Omitted means a page, so chunks built before packs existed stay valid.
+	 * `web` is a search result or a fetched page of the web tools: it is
+	 * never retrieved from the index, only found by a tool of the run.
 	 */
-	collection?: 'page' | 'pack';
+	collection?: 'page' | 'pack' | 'web';
 	/**
 	 * The page the chunk is in.
 	 *
@@ -105,6 +107,10 @@ export interface RetrievedChunk {
 	packSlug?: string;
 	/** The repo-relative path of the document, for a pack chunk. */
 	docPath?: string;
+	/** The canonical URL, for a web source (it has no page and no pack). */
+	url?: string;
+	/** The host of the URL, for a web source: what the client shows. */
+	domain?: string;
 	/**
 	 * The cross-encoder score, in (0, 1). Present only when the reranker ran
 	 * (OSIONOS_AI_RERANK_URL) and answered for this question.
