@@ -5,6 +5,7 @@ import { readAiSelection } from "@/features/ai/model/aiSelection";
 import { outgoingContext, recipientOf, type OutgoingRow } from "@/features/ai/model/outgoingContext";
 import { useUserStore } from "@/features/auth";
 import { AccountContextToggle, useAccountContext } from "@/features/settings/ai/AccountContextToggle";
+import { WebAccessRow } from "@/features/settings/ai/WebAccessRow";
 import { SentimentSection } from "@/features/settings/ai/SentimentSection";
 import { Section, SettingRow } from "@/features/settings/ui/settingsKit";
 
@@ -56,6 +57,7 @@ export const HubPrivacySection: React.FC = () => {
       </Section>
       <Section title="Controls">
         <AccountContextToggle />
+        {isAiConfigured() && workspaceId !== "local-workspace" && <WebAccessRow key={workspaceId} workspaceId={workspaceId} />}
       </Section>
       {/* The sentiment opt-in is a real server-side switch, unlike the other device switches. */}
       {isAiConfigured() && workspaceId !== "local-workspace" && <SentimentSection key={workspaceId} workspaceId={workspaceId} />}

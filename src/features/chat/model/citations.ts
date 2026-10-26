@@ -19,8 +19,8 @@
  *
  * Two rules hold everywhere in this file:
  *
- * - A TITLE AND A SNIPPET ARE PLAIN TEXT. They come from workspace pages, so
- *   they can carry anything a page holds. They are never markdown, never HTML.
+ * - A TITLE AND A SNIPPET ARE PLAIN TEXT. They come from workspace pages or
+ *   from the web, so they can carry anything a page holds; so does a domain. They are never markdown, never HTML.
  * - A `[n]` INSIDE CODE IS NOT A MARKER. Code spans and fenced blocks are
  *   shown as they were written: `` `[1]` `` stays `` `[1]` ``.
  *
@@ -32,8 +32,8 @@ import type { ChatMessagePart } from "./chatTypes";
 import { codeRegions } from "./markdownCode";
 
 /**
- * One source of an answer: a page and the block it points at, or a passage of
- * a curated knowledge pack.
+ * One source of an answer: a page and the block it points at, a passage of
+ * a curated knowledge pack, or a page of the web.
  *
  * The wire omits `collection` for a page (it is the source the client has
  * always read); `citationOf` normalises that absence to `'page'`.
@@ -62,6 +62,19 @@ export type Citation =
       title: string;
       /** The snippet the answer drew on — plain text. */
       snippet: string;
+    }
+  | {
+      collection: "web";
+      /** The number the answer cites this source by: `[n]`. */
+      n: number;
+      /** The address of the page: always `https:`, opened in a new tab and never in the app. */
+      url: string;
+      /** The host the page is on — plain text. */
+      domain: string;
+      /** The title of the page — plain text. */
+      title: string;
+      /** The snippet the answer drew on — plain text. */
+      snippet: string;
     };
 
 /** A piece of an answer: plain text, or a marker of a source. */
@@ -81,12 +94,25 @@ function citationNumber(value: unknown): number | null {
 /** The slug of a knowledge pack, exactly as the service mints it. */
 const PACK_SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
 
+/** The address of a web source: an `https:` URL, or nothing. Anything else is never a link. */
+function httpsUrl(value: unknown): URL | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * One source out of a record: a `citation` frame, or a stored `citation` part.
  *
  * A page source needs a non-empty string `pageId`; its `collection` is absent
  * on the wire and normalised to `'page'`. A pack source needs
- * `collection === 'pack'` and a `pack` slug. Anything else is not a source: it
+ * `collection === 'pack'` and a `pack` slug. A web source needs
+ * `collection === 'web'` and an `https:` `url`: any other scheme drops it.
+ * Anything else is not a source: it
  * is dropped here, so both paths drop exactly the same records.
  *
  * `rank` is the number a stored part without an `n` falls back to; an event
@@ -101,6 +127,13 @@ export function citationOf(record: Record<string, unknown>, rank: number | null)
     const pack = typeof record.pack === "string" ? record.pack : "";
     if (!PACK_SLUG.test(pack)) return null;
     return { collection: "pack", n, pack, title, snippet };
+  }
+  if (record.collection === "web") {
+    const parsed = httpsUrl(record.url);
+    if (!parsed) return null;
+    // The wire names the domain; a frame that omits it still shows the host it links to.
+    const domain = typeof record.domain === "string" && record.domain ? record.domain : parsed.hostname;
+    return { collection: "web", n, url: parsed.href, domain, title, snippet };
   }
   if (record.collection !== undefined && record.collection !== "page") return null;
   const pageId = typeof record.pageId === "string" ? record.pageId : "";
@@ -118,7 +151,7 @@ export function citationOf(record: Record<string, unknown>, rank: number | null)
 
 /**
  * A source out of a `citation` frame. A frame that does not carry a number and
- * a page or a pack is not a source: it is dropped, and the answer shows no
+ * a page, a pack or a web address is not a source: it is dropped, and the answer shows no
  * marker for it.
  */
 export function citationFromEvent(data: Record<string, unknown>): Citation | null {

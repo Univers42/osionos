@@ -21,6 +21,7 @@ import { SettingRow } from '../ui/settingsKit';
 import { AccountContextToggle } from './AccountContextToggle';
 import { SentimentSection } from './SentimentSection';
 import { AgentSwitchRows } from './AgentSwitchRows';
+import { WebAccessRow } from './WebAccessRow';
 
 export const AiSwitches = () => {
   const workspaceId = useUserStore((state) => state.activeWorkspace()?._id ?? 'local-workspace');
@@ -32,6 +33,7 @@ export const AiSwitches = () => {
       <SettingRow title="AI connectors" description="Let AI search connected tools from this workspace." action={<Toggle checked={settings.connectors} onChange={(checked) => update(workspaceId, { connectors: checked })} label="AI connectors" />} />
       <SettingRow title="Meeting notes auto-record" description="Automatically record and summarize meetings when available." action={<Toggle checked={settings.meetingNotesAutoRecord} onChange={(checked) => update(workspaceId, { meetingNotesAutoRecord: checked })} label="Meeting notes auto-record" />} />
       {isAiConfigured() && workspaceId !== 'local-workspace' && <AgentSwitchRows key={workspaceId} workspaceId={workspaceId} />}
+      {isAiConfigured() && workspaceId !== 'local-workspace' && <WebAccessRow key={workspaceId} workspaceId={workspaceId} />}
       <SettingRow title="Search everywhere indexing" description="Index pages and connected content for AI answers." action={<Toggle checked={settings.searchEverywhereIndexing} onChange={(checked) => update(workspaceId, { searchEverywhereIndexing: checked })} label="Search everywhere indexing" />} />
       <SettingRow title="Summaries" description="Generate page and meeting summaries." action={<Toggle checked={settings.summaries} onChange={(checked) => update(workspaceId, { summaries: checked })} label="Summaries" />} />
       {isAiConfigured() && workspaceId !== 'local-workspace' && <SentimentSection key={workspaceId} workspaceId={workspaceId} />}

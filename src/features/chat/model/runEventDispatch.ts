@@ -27,6 +27,7 @@
 
 import type { ChatMessage, ChatMessagePart } from "./chatTypes";
 import { citationFromEvent } from "./citations";
+import type { Citation } from "./citations";
 import { permissionFromEvent } from "./approvalParts";
 import type { PermissionPart } from "./approvalParts";
 import { memoryProposalFromEvent } from "./memoryParts";
@@ -71,6 +72,33 @@ const appliedViewActionIds = new Set<string>();
  * The order of the frames does not matter: each one is read on its own, and
  * the store keeps what it needs.
  */
+/** The stored part of a source: what the message keeps, in the shape the service stores. */
+function citationPart(citation: Citation): ChatMessagePart {
+  if (citation.collection === "pack") {
+    return { type: "citation", n: citation.n, collection: "pack", pack: citation.pack, title: citation.title, snippet: citation.snippet };
+  }
+  if (citation.collection === "web") {
+    return {
+      type: "citation",
+      n: citation.n,
+      collection: "web",
+      url: citation.url,
+      domain: citation.domain,
+      title: citation.title,
+      snippet: citation.snippet,
+    };
+  }
+  return {
+    type: "citation",
+    n: citation.n,
+    collection: "page",
+    pageId: citation.pageId,
+    ...(citation.blockId ? { blockId: citation.blockId } : {}),
+    title: citation.title,
+    snippet: citation.snippet,
+  };
+}
+
 export function dispatchRunEvent(
   event: string,
   data: Record<string, unknown>,
@@ -83,26 +111,7 @@ export function dispatchRunEvent(
   if (event === "citation") {
     const citation = citationFromEvent(data);
     if (!citation) return;
-    actions.appendCitation(
-      citation.collection === "pack"
-        ? {
-            type: "citation",
-            n: citation.n,
-            collection: "pack",
-            pack: citation.pack,
-            title: citation.title,
-            snippet: citation.snippet,
-          }
-        : {
-            type: "citation",
-            n: citation.n,
-            collection: "page",
-            pageId: citation.pageId,
-            ...(citation.blockId ? { blockId: citation.blockId } : {}),
-            title: citation.title,
-            snippet: citation.snippet,
-          },
-    );
+    actions.appendCitation(citationPart(citation));
     // The sources a tool found are its result: they arrive between the call
     // and its outcome.
     actions.appendToolSource(data);
