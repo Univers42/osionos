@@ -420,7 +420,7 @@ test.describe("database-inline-header", () => {
 
     // Board: the card must SHOW the text value (used to render nothing).
     await panel.getByRole("button", { name: "Board", exact: true }).click();
-    const card = block.getByTestId("board-card-props").first();
+    const card = block.getByTestId("card-props").first();
     await expect(card).toBeVisible();
     await expect(card.getByText("hello board")).toBeVisible();
 
