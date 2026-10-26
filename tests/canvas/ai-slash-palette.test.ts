@@ -21,6 +21,9 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { AGENT_PICKER_BUTTON, MODEL_PICKER_BUTTON, slashActionTarget } from "@/widgets/chat-shell/model/slashActionTarget";
+import { AgentChip } from "@/widgets/chat-shell/ui/AgentChip";
+
 import {
   CHAT_ACTIONS,
   expandPrompt,
@@ -144,4 +147,21 @@ test("/effort is listed only while the effort picker is in the composer", () => 
   assert.ok(!filterCommands(CHAT_ACTIONS, "", (name) => name !== "effort").some((c) => c.name === "effort"));
   assert.ok(!filterCommands(CHAT_ACTIONS, "effort", (name) => name !== "effort").some((c) => c.name === "effort"));
   assert.ok(filterCommands(CHAT_ACTIONS, "effort", () => true).some((c) => c.name === "effort"));
+});
+
+test("/model and /agent open their menu, /attach asks the composer, /effort focuses the level", () => {
+  assert.deepEqual(slashActionTarget("model"), { kind: "open", selector: MODEL_PICKER_BUTTON });
+  assert.deepEqual(slashActionTarget("agent"), { kind: "open", selector: AGENT_PICKER_BUTTON });
+  assert.deepEqual(slashActionTarget("attach"), { kind: "attach" });
+  assert.equal(slashActionTarget("effort")?.kind, "focus");
+  assert.equal(slashActionTarget("new"), null);
+});
+
+test("/agent aims at the agent chip that is drawn, not the select it replaced", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(AgentChip, { agents: [{ id: "writer", name: "Writer", kind: "built-in" } as never], agentId: null }),
+  );
+  assert.match(html, /data-testid="ai-agent-picker"><button/);
+  assert.match(AGENT_PICKER_BUTTON, /ai-agent-picker/);
+  assert.doesNotMatch(html, /<select/);
 });
