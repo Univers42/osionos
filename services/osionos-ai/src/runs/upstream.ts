@@ -121,6 +121,11 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			conversationTitle: title,
 			retrievedCount: sources.length,
 		});
+		// A resting primary was skipped before any call: the reader still learns
+		// which model answers, as after a failed attempt (C260's closed reasons).
+		if (input.restedFrom) {
+			await emit('route', { from: input.restedFrom, to: target.modelId, reason: 'unavailable' });
+		}
 
 		// The sources of the answer: one frame each, in the order the model
 		// sees them, before the first word of the answer. The number of a

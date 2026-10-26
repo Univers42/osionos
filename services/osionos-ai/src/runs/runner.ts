@@ -368,6 +368,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			day,
 			reserved: amount,
 			fallbacks,
+			...(target !== input.target ? { restedFrom: input.target.modelId } : {}),
 			history,
 			pages: context.pages,
 			sources,
