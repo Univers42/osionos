@@ -41,6 +41,7 @@ export const bench = defineBench("object-database sync (83 databases, 8,646 rows
   {
     // 2026-10-26: p95 21.80 ms
     name: "flush: structuredClone snapshot",
+    reference: true,
     setup: () => {
       const state = accountState();
       return () => structuredClone(state);
@@ -49,6 +50,7 @@ export const bench = defineBench("object-database sync (83 databases, 8,646 rows
   {
     // 2026-10-26: p95 6.17 ms
     name: "flush: JSON.stringify for localStorage",
+    reference: true,
     setup: () => {
       const state = accountState();
       return () => JSON.stringify(state);
