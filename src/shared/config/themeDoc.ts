@@ -57,7 +57,7 @@ const GRAMMAR: Record<ThemeTokenKind, { test: RegExp[]; property: string; expect
   color: {
     test: [/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i, new RegExp(`^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)${FUNCTION_ARGS}$`, "i"), /^[a-z]{3,24}$/i],
     property: "color",
-    expects: "a colour such as #1f6feb, rgb(31 111 235), oklch(0.6 0.15 250) or a colour name",
+    expects: "a colour: hex (#rrggbb), rgb(31 111 235), oklch(0.6 0.15 250) or a colour name",
   },
   length: {
     test: [/^0$/, new RegExp(`^${NUM}(?:px|rem|em|%|vw|vh|vmin|vmax|ch|ex|dvh|svh|lvh)$`), new RegExp(`^(?:calc|min|max|clamp)${FUNCTION_ARGS}$`)],
@@ -66,7 +66,7 @@ const GRAMMAR: Record<ThemeTokenKind, { test: RegExp[]; property: string; expect
   },
   number: { test: [new RegExp(`^${NUM}$`)], property: "line-height", expects: "a plain number such as 1.4 or 600" },
   font: { test: [/^(?=.*[a-z])[\w\s"',.-]+$/i], property: "font-family", expects: "a list of font names such as \"Inter\", sans-serif" },
-  shadow: { test: [/^none$/, /^(?=.*\d)[0-9a-z.,%#\s()/+-]+$/i], property: "box-shadow", expects: "a shadow such as 0 1px 2px rgb(0 0 0 / 20%)" },
+  shadow: { test: [/^none$/, /^(?=.*\d)[0-9a-z.,%#\s()/+-]+$/i], property: "box-shadow", expects: "box-shadow syntax such as 0 1px 2px rgb(0 0 0 / 20%)" },
   duration: { test: [/^(?:\d+\.?\d*|\.\d+)(?:ms|s)$/], property: "transition-duration", expects: "a duration such as 120ms or .2s" },
   easing: {
     test: [
