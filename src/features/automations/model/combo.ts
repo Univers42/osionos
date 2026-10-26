@@ -25,6 +25,27 @@ const NAMED_KEYS: Record<string, string> = {
   "+": "plus",
 };
 
+/** ARIA names the two keys whose KeyboardEvent.key is punctuation. */
+const ARIA_KEY_NAMES: Record<string, string> = { " ": "space", "+": "plus" };
+
+function ariaCanonical(shortcut: string): string {
+  const parts = shortcut.toLowerCase().split("+");
+  const key = parts.pop() ?? "";
+  return [...parts.sort(), key].join("+");
+}
+
+/**
+ * True when an `aria-keyshortcuts` list names the pressed combination: the
+ * widget that declares a key handles it, so a global binding must not take it.
+ * Caveat: compares KeyboardEvent.key, so a layout where Shift changes the key
+ * (Shift+1 → "!") matches only when the list names the shifted key.
+ */
+export function ariaShortcutsInclude(list: string, event: KeyboardEvent): boolean {
+  const mods = [event.altKey && "alt", event.ctrlKey && "control", event.metaKey && "meta", event.shiftKey && "shift"];
+  const pressed = [...mods.filter(Boolean), ARIA_KEY_NAMES[event.key] ?? event.key.toLowerCase()].join("+");
+  return list.split(/\s+/).some((shortcut) => shortcut !== "" && ariaCanonical(shortcut) === pressed);
+}
+
 /** True for the bare modifier keys (a combo is never just "Shift"). */
 export function isModifierKey(key: string): boolean {
   return key === "Control" || key === "Shift" || key === "Alt" || key === "Meta";
