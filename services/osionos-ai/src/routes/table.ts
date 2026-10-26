@@ -1,6 +1,6 @@
 import { config } from '../config.ts';
 import { handleHealth } from './health.ts';
-import { handleConversationItem, handleConversationMessages, handleConversations } from './conversations.ts';
+import { handleConversationItem, handleConversationMessages, handleConversationSummary, handleConversations } from './conversations.ts';
 import { handleModels } from './models.ts';
 import { handleCommands } from './commands.ts';
 import { handleAgents } from './agents.ts';
@@ -55,6 +55,12 @@ export const ROUTES: RouteEntry[] = [
 		pattern: /^\/api\/ai\/conversations\/([^/]+)\/messages$/,
 		label: '/api/ai/conversations/:id/messages',
 		handle: handleConversationMessages,
+	},
+	{
+		methods: ['DELETE'],
+		pattern: /^\/api\/ai\/conversations\/([^/]+)\/summary$/,
+		label: '/api/ai/conversations/:id/summary',
+		handle: handleConversationSummary,
 	},
 	{
 		methods: ['PATCH', 'DELETE'],
