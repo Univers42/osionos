@@ -21,6 +21,7 @@ Base: the integration tip with SB-1b, SB-3a and SB-6a merged.
 - `src/features/button-program/ui/ButtonSettingsPopover.tsx`: the appearance controls;
 - `src/services/button-program/runProgram.ts` and `interpreter.ts`: an `onSecret` callback (Rule 5) only;
 - `types.ts`: `buttonIcon?: string` (an icon value string) and `buttonIconOnly?: boolean`, plus their page-file overlay keys;
+- `src/entities/block/model/appActions.ts` and `runAppAction.ts`: the optional `sudoHint` (Rule 5) only;
 - tests: `tests/canvas/button-block.test.ts` (new), `tests/e2e/functional/buttonBlockLook.spec.mjs` (new); extend the existing button e2e (add cases, never delete one).
 
 **MUST NOT TOUCH:** `Button.tsx`, `buttonTones.ts` (no new tone), the action registry and runner semantics (SB-3a), `buttonEffect` (SB-6a).
@@ -44,7 +45,7 @@ Base: the integration tip with SB-1b, SB-3a and SB-6a merged.
    - The popover gets an icon picker (`IconPicker`), an "Icon only" `Toggle`, a tone `Dropdown` (the 9 style tones, labelled) and a size `MiniTabs`.
 4. **Busy.** While its run is pending, the button is `disabled`, has `aria-busy="true"` and shows a spinner in place of the icon, keeping its width (no layout shift). A second click does nothing. When the run's last step is an `app_action`, this pending state is `useActionState(name, argsKey).pending`, so two buttons bound to the same action and args both show busy.
 5. **Results.**
-   - `sudo_required` → an inline line under the button ("Confirm it's you, then try again"), announced with `aria-live="polite"`; the next click runs again. There is no automatic re-send.
+   - `sudo_required` → an inline line under the button, announced with `aria-live="polite"`; the next click runs again. There is no automatic re-send. The text is the action's own: today's panels say it four ways ("Confirm it's you first, then press the button again." in `TwoFactorModal.tsx:23`, "…then press Try again." in `emailCopy.ts:25`, "…then press Request export again." in `AccountExportSection.tsx:54`), and a rebuilt section must read the same. So `ActionDefinition` gains an optional `sudoHint: string` (`appActions.ts`; this package owns that one field), the runner puts it in the `sudo_required` result as `message`, and the button shows `message ?? "Confirm it's you, then try again."`. Test both.
    - `failed` → the message in the same line with `role="alert"`.
    - `ok` with a `secret` → `SecretRevealDialog`: the secret in a read-only monospace field, a Copy button and "Done". The secret lives only in that dialog's state and is gone when it closes. It reaches the button through `runButtonBlock(block, hostPageId, { mode, onSecret })`. The interpreter calls `onSecret` and keeps stripping the secret from every log, as SB-3a requires.
    - Test: after "Done", the secret is in no DOM node, and `getLastRun()` serialised does not contain it.
