@@ -8,18 +8,17 @@ $tube-slices: 6;
 $ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
 
 .binocle {
-  // The character's own colours, the website's (_brand-tokens.scss --brand-mascot-*), in BOTH
-  // themes: an ink outline and pupils on pastel shells. Theme tokens here turned the pupils
-  // light-on-dark in the dark theme (negative eyes). Only the tint follows the app accent.
-  --outline: #1d1b26;
-  --lens-color: color-mix(in srgb, var(--osio-accent) 42%, #fff);
-  --shell-color: color-mix(in srgb, var(--osio-accent) 24%, #fff);
-  --tube-color: color-mix(in srgb, var(--osio-accent) 34%, #fff);
-  --iris-color: #1d1b26;
-  --rim-color: #fff;
+  // The character's own colours (--osio-mascot-*, fixed in every theme): an ink outline and
+  // pupils on pastel shells. Only the tint follows the app accent.
+  --outline: var(--osio-mascot-ink);
+  --lens-color: color-mix(in srgb, var(--osio-accent) 42%, var(--osio-mascot-paper));
+  --shell-color: color-mix(in srgb, var(--osio-accent) 24%, var(--osio-mascot-paper));
+  --tube-color: color-mix(in srgb, var(--osio-accent) 34%, var(--osio-mascot-paper));
+  --iris-color: var(--osio-mascot-ink);
+  --rim-color: var(--osio-mascot-paper);
   --cheek-color: color-mix(in srgb, var(--osio-danger) 62%, transparent);
-  --mouth-fill: #fff1ee;
-  --star-color: var(--osio-accent-fg, #fff);
+  --mouth-fill: var(--osio-mascot-mouth);
+  --star-color: var(--osio-accent-fg);
 
   // Pose, set per mood below; --look-* is written by AssistantMascot.
   --look-x: 0px;

@@ -526,6 +526,12 @@
   /* Fix latent undefined token referenced by notionPage.css/components. */
   --osio-shadow: var(--osio-shadow-menu);
 
+  /* The binocle mascot keeps the website's colours in every theme (the website's
+     --brand-mascot-*): theme tokens turned its pupils light-on-dark in dark mode. */
+  --osio-mascot-ink: #1d1b26;
+  --osio-mascot-paper: #fff;
+  --osio-mascot-mouth: #fff1ee;
+
   /* @osionos/legacy-graph-engine — "Warm Constellation": the graph is an extension of
      the editorial brand. Light = cream/parchment "warm map of ideas" (paper
      grain, ink labels, white "seed" node sheets); dark = warm-charcoal "ember".
