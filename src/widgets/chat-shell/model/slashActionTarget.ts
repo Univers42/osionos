@@ -3,7 +3,9 @@
  * open their menu, as a click would: only focusing the button left the reader
  * looking at an unchanged composer, and "/agent" still aimed at the native
  * select the agent chip replaced, so it did nothing at all. "/attach" asks the
- * composer, which opens the file dialog.
+ * composer, which opens the file dialog. An action whose control is not drawn
+ * is not offered: "/agent" without agents, "/effort" with a model that does not
+ * reason.
  */
 
 export type SlashActionTarget =
@@ -22,4 +24,11 @@ export function slashActionTarget(name: string): SlashActionTarget | null {
   if (name === "attach") return { kind: "attach" };
   if (name === "effort") return { kind: "focus", selector: `${EFFORT_GROUP} [role="radio"][aria-checked="true"]` };
   return null;
+}
+
+/** Whether the palette offers an action: its control is drawn inside the composer. */
+export function isSlashActionAvailable(name: string, root: Pick<ParentNode, "querySelector"> | null): boolean {
+  const target = slashActionTarget(name);
+  if (!target || target.kind === "attach") return true;
+  return root?.querySelector(target.selector) != null;
 }
