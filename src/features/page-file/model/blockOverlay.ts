@@ -113,6 +113,9 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   // The provenance of an image the AI made (never the prompt): it rides the
   // overlay, so the "AI-generated" label survives a file round trip.
   aiGenerated: isAiGenerated,
+  // A formula that shows or hides the block; rides the overlay so it survives
+  // a markdown round trip.
+  visibleWhen: isBoundedText,
   // What "Describe with AI" found in an image: tags and the text in it.
   mediaTags: isMediaTags,
   mediaText: isMediaText,
