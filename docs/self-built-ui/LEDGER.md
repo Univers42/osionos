@@ -6,7 +6,7 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 |---|---|---|---|---|---|
 | SB-0a | dispatched 2026-10-25 | feat/acct-SB-0a | | | |
 | SB-0b | **merged** 44644f73f (2026-10-25) | feat/sb-SB-0b | ses_e8b872945ffecrcm1iAAb16BGt | integration 44644f73f: quality 0, canvas 3989/0; mutants ratchet+1 and extra `<input` killed | fix1 7eaf065bb: a missing dir is named |
-| SB-1a | **merged** 27a4870f6 (2026-10-26 01:45) | feat/sb-SB-1a | ses_e8b7e3f1cffecft28jg2ag6NXa | fix1 a16aa52a1 + my cleanup 06599b87b (empty borderSides rules, stale comment): block-style 11/11, canvas 3996/0, quality 0, build 0 with `[data-s-padding="3"]{padding:calc(var(--spacing) * 3)}` and the borderSides rules in build CSS, `$tone-map` 0; my mutant (empty gap rule) killed by "scss has a non-empty rule for every prop value" | round 1 rejected (coverage met by comments, scss never compiled into the app); fix round clean |
+| SB-1a | **merged** 27a4870f6 (2026-10-26 01:35) | feat/sb-SB-1a | ses_e8b7e3f1cffecft28jg2ag6NXa | fix1 a16aa52a1 + my cleanup 06599b87b (empty borderSides rules, stale comment): block-style 11/11, canvas 3996/0, quality 0, build 0 with `[data-s-padding="3"]{padding:calc(var(--spacing) * 3)}` and the borderSides rules in build CSS, `$tone-map` 0; my mutant (empty gap rule) killed by "scss has a non-empty rule for every prop value" | round 1 rejected (coverage met by comments, scss never compiled into the app); fix round clean |
 | D-SB-1b-spec | devil: PROCEED-WITH-CONDITIONS (blast 4, rev 3, cost 4, conf 2) | — | ses_e8b7d50f0ffeck0l33eF9P22ZZ | — | 9 conditions folded into SB-1b.md (b70ac61a2) |
 | SB-1f | **merged** dd00e16bb (2026-10-25) | feat/sb-SB-1f | ses_e8b70a3d1ffeLBYYWFkZNygzs2 | integration dd00e16bb: quality 0, canvas 3994/0; worker mutants 3/3 killed | clean: `rawSourceToBlocks` = parse → applyOverlay(collectOverlay(current)) |
 | specs | SB-1c, SB-1d, SB-1e, SB-2a, SB-6a written 2026-10-25 (SB-1e now depends on SB-6a too) | — | — | — | — |
@@ -21,5 +21,5 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | specs | SB-4a written 2026-10-26 01:31 (base SB-2c + SB-3b: inline edit needs the field block, row actions need the button run options; extracts the duplicated `resolveScrollElement`) | — | — | — | — |
 | specs | SB-4e written 2026-10-26 01:32 (base SB-4f + SB-3c; eight shipped components, Item list moves to SB-4b) | — | — | — | — |
 | SB-2b | dispatched 2026-10-26 01:34 from 0738c72c5 | feat/sb-SB-2b | | | |
-| SB-1b | dispatched 2026-10-26 01:46 from 27a4870f6 | feat/sb-SB-1b | | | |
+| SB-1b | dispatched 2026-10-26 01:35 from 27a4870f6 | feat/sb-SB-1b | | | |
 | SB-3a | returned 7025af2a7 (01:33) → devil diff review D-SB-3a-diff running | feat/sb-SB-3a | | worker: quality 0, canvas 0, button e2e 0; mutants c, d, f not caught or not run | mine: `useActionState` is not a hook (no subscription), 10 alias exports + arity dispatch, dead loops in validateArgs, preview writes state with raw args |
