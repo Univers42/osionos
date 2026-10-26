@@ -8,6 +8,8 @@ import type { FailoverClass } from './failover.ts';
 import { mergeProviderOptions, reasoningOptions } from './effort.ts';
 import type { Effort, ProviderOptionsFragment } from './effort.ts';
 import { extendRunReservation } from './extend.ts';
+import { clock } from '../tools/limits.ts';
+import type { RunLimits } from '../tools/limits.ts';
 import type { LoopBudget } from './loopBudget.ts';
 import { abortCode } from './streamPump.ts';
 import type { PumpOutcome } from './streamPump.ts';
@@ -54,6 +56,9 @@ export function startAttempt(
 		userId: string;
 		day: string;
 		promptChars: number;
+		/** A research run: its bounds and the moment it started (C399, C400). */
+		limits?: RunLimits;
+		startedAt?: number;
 	},
 	step: ChainStep,
 ): Attempt {
@@ -66,6 +71,7 @@ export function startAttempt(
 		pricing: target.pricing,
 		baseChars: run.promptChars,
 		runId: run.runId,
+		...(run.limits ? { limits: run.limits, startedAt: run.startedAt ?? clock.now() } : {}),
 		extend: (amount: number) =>
 			extendRunReservation(db, target, { userId: run.userId, day: run.day, runId: run.runId, amount }),
 	};
