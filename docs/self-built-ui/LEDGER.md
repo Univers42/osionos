@@ -11,7 +11,7 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | SB-1f | **merged** dd00e16bb (2026-10-25) | feat/sb-SB-1f | ses_e8b70a3d1ffeLBYYWFkZNygzs2 | integration dd00e16bb: quality 0, canvas 3994/0; worker mutants 3/3 killed | clean: `rawSourceToBlocks` = parse → applyOverlay(collectOverlay(current)) |
 | specs | SB-1c, SB-1d, SB-1e, SB-2a, SB-6a written 2026-10-25 (SB-1e now depends on SB-6a too) | — | — | — | — |
 | specs | SB-2b, SB-2c, SB-3b, SB-3c, SB-4c written 2026-10-25 21:20–21:35 (SB-2d split from SB-2b: profile draft + page settings; moderation and per-page overrides → SB-4b) | — | — | — | — |
-| SB-2a | returned 65551b387 → fix round 1 (21:14) | feat/sb-SB-2a | ses_e8b60c53fffebrAcBGDT3vdAUA | worker: canvas 4000, quality 0, profile e2e 6+8 passed; mutant killed | rejected: `blockOverlay.ts:95` drops `settings:` refs from the page file; a source that loads with the field undefined stays "loading"; read() per field in the loop; App.tsx indent; unused test-only export |
+| SB-2a | **merged** 0738c72c5 (2026-10-26 01:33) | feat/sb-SB-2a | ses_e8b60c53fffebrAcBGDT3vdAUA | fix1 7515d7308 + my indent fix 1ff5d79b4: canvas 4003/0, quality 0; my mutant (loose `settings:` regex) killed by "invalid settings recordRef values are dropped by the page file" | round 1 rejected (settings refs dropped by the page file, no loading→ready notify); fix round clean |
 | D-SB-3a-spec | devil: PROCEED-WITH-CONDITIONS (blast 4, rev 3, cost 5, conf 3) | — | selfhost/wf/D-SB-3a-spec.a4 | — | 10 conditions folded into SB-3a.md (278cc0113, bbce581fa): trusted pages, sudo by event, pause around the guard only, canonical args key, no host = no run |
 | SB-3a | dispatched 2026-10-25 21:16 (parallel with SB-2a) | feat/sb-SB-3a | | | |
 | D-SB-4g-spec | devil: **BLOCK** (blast 3, rev 3, cost 3, conf 4), kimi-k3, 2026-10-26 01:11 | — | ses_e8a7817c2ffeqCZOgW4Tp4sXl6 | — | 11 conditions folded into SB-4g.md; the compose re-bind replaced by a pairing code no route serves; re-rule 01:14: PROCEED-WITH-CONDITIONS (2/2/2/2), 4 more conditions folded; dispatch after SB-1d |
@@ -20,3 +20,4 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | specs | SB-4f written 2026-10-26 01:27 (base moved to SB-1d: presets are a system-doc kind; adds text-block `style`, `leading`/`minWidth` scales) | — | — | — | — |
 | specs | SB-4a written 2026-10-26 01:31 (base SB-2c + SB-3b: inline edit needs the field block, row actions need the button run options; extracts the duplicated `resolveScrollElement`) | — | — | — | — |
 | specs | SB-4e written 2026-10-26 01:32 (base SB-4f + SB-3c; eight shipped components, Item list moves to SB-4b) | — | — | — | — |
+| SB-2b | dispatched 2026-10-26 01:34 from 0738c72c5 | feat/sb-SB-2b | | | |
