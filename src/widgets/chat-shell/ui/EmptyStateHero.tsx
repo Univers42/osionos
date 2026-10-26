@@ -18,6 +18,7 @@ import { AssistantMascot } from "@/features/ai/ui/AssistantMascot";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
 import type { ContextChip } from "@/features/ai/model/aiContext";
 import type { AgentSummary } from "@/features/ai/model/aiAgents";
+import type { ComposerAttachment } from "@/features/chat/model/assistantHandoff";
 
 const SUGGESTIONS = ["Write a meeting agenda", "Summarize my notes", "Draft an email", "Brainstorm ideas"];
 
@@ -39,9 +40,9 @@ interface Props {
   /** The reader picked another agent. */
   onAgentChange?: (agentId: string | null) => void;
   /** The attached image paths — a block's "Ask AI" may have brought one. */
-  attachments?: string[];
+  attachments?: ComposerAttachment[];
   /** Replaces the attached image list. */
-  onAttachmentsChange?: (paths: string[]) => void;
+  onAttachmentsChange?: (attachments: ComposerAttachment[]) => void;
 }
 
 /** The launcher empty state (per ai_prompt_chat.png): mascot + heading + composer + connectors + cards. */

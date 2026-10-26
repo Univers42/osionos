@@ -75,6 +75,7 @@ const MESSAGES: Record<string, (retryAfter: number | null) => string> = {
   budget_exhausted: () => "Today's AI budget is used up",
   model_no_vision: () => "This model cannot see images",
   vision_unavailable: () => "Vision is unavailable for this model",
+  unsupported_file: () => "This file type can't be read yet — text, Markdown, CSV, JSON, code and images work",
   attachment_not_found: () => "An attachment could not be found",
   upstream_unavailable: () => "The AI service is unavailable — try again",
   upstream_error: () => "The AI service failed — try again",

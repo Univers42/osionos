@@ -71,6 +71,13 @@ export function mediaPathOfAsset(asset: string | undefined, apiBase: string): st
 /* The hand-off                                                               */
 /* -------------------------------------------------------------------------- */
 
+/** An attachment of the composer: where it is stored, what to call it, and what the chip shows. */
+export interface ComposerAttachment {
+  path: string;
+  name: string;
+  kind: "image" | "file";
+}
+
 /** What one block hands over to the Assistant. */
 export interface AssistantHandoff {
   /** The paths of the images (bridge capability paths). */
@@ -135,15 +142,29 @@ export function subscribeAssistantHandoff(onHandoff: (pending: AssistantHandoff)
  * and never more than the composer holds.
  */
 export function mergeAttachments(
-  existing: readonly string[],
-  incoming: readonly string[],
+  existing: readonly ComposerAttachment[],
+  incoming: readonly ComposerAttachment[],
   max: number,
-): string[] {
+): ComposerAttachment[] {
   const merged = [...existing];
-  for (const path of incoming) {
-    if (merged.includes(path)) continue;
+  for (const attachment of incoming) {
+    if (merged.some((current) => current.path === attachment.path)) continue;
     if (merged.length >= max) break;
-    merged.push(path);
+    merged.push(attachment);
   }
   return merged;
+}
+
+/**
+ * The attachments of a run: a media path is read by its capability path (with
+ * the name the reader sees), anything else is a chat upload id.
+ */
+export function toRunAttachments(
+  attachments: readonly ComposerAttachment[],
+): Array<{ kind: "chat"; id: string } | { kind: "media"; path: string; name?: string }> {
+  return attachments.map(({ path, name }) =>
+    path.startsWith("/api/media/")
+      ? { kind: "media" as const, path, name }
+      : { kind: "chat" as const, id: path.split("/").pop() ?? "" },
+  );
 }
