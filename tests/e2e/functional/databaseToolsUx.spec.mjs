@@ -16,16 +16,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import { fillCell, insertInlineDatabase } from "../support/databaseHelpers.mjs";
-
-async function tableNamed(page, names) {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  const block = await insertInlineDatabase(page);
-  await expect(block.getByText("Untitled Database").first()).toBeVisible({ timeout: 15_000 });
-  for (let i = 1; i < names.length; i++) await block.getByRole("button", { name: "New", exact: true }).last().click();
-  for (const [row, name] of names.entries()) await fillCell(page, block, row, 0, name);
-  return block;
-}
+import { dataRows, hasFrame, insertNamedTable } from "../support/databaseHelpers.mjs";
 
 async function openSearch(block) {
   await block.hover();
@@ -35,19 +26,9 @@ async function openSearch(block) {
   return input;
 }
 
-/** Whether the element paints a focus frame (an outline or a ring shadow). */
-function hasFrame(locator) {
-  return locator.evaluate((node) => {
-    const cs = getComputedStyle(node);
-    return (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== "none";
-  });
-}
-
-const dataRows = (block) => block.locator("tbody tr").filter({ has: block.page().locator("td") }).filter({ hasNotText: /^\s*New\s*$/ });
-
 test.describe("database-tools-ux", () => {
   test("at phone width the toolbar stays on screen and every tool opens", async ({ page }) => {
-    const block = await tableNamed(page, ["Alpha"]);
+    const block = await insertNamedTable(page, ["Alpha"]);
     await page.setViewportSize({ width: 400, height: 800 });
     await block.locator("tbody td").first().click();
     for (const name of ["Filter", "Sort", "Search"]) {
@@ -65,7 +46,7 @@ test.describe("database-tools-ux", () => {
   });
 
   test("search says how many rows match; Escape clears first, then closes", async ({ page }) => {
-    const block = await tableNamed(page, ["Alpha", "Beta", "Gamma"]);
+    const block = await insertNamedTable(page, ["Alpha", "Beta", "Gamma"]);
     const input = await openSearch(block);
     const status = block.getByRole("search").getByRole("status");
 
@@ -85,7 +66,7 @@ test.describe("database-tools-ux", () => {
   });
 
   test("the search row draws one focus frame and leaves the toolbar and title in place", async ({ page }) => {
-    const block = await tableNamed(page, ["Alpha"]);
+    const block = await insertNamedTable(page, ["Alpha"]);
     await block.hover();
     const actions = block.locator(".odb-topbar-actions");
     const before = await actions.boundingBox();
