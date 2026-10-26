@@ -78,7 +78,7 @@ export interface StreamInferenceRequest {
   /** What the answer is read from: pages of the workspace, or all of it. */
   context?: RunContext;
   /** The images attached to this run. */
-  attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }>;
+  attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string; name?: string }>;
   /** Called once the server-side conversation exists (created on the first send). */
   onServerConversationId?: (id: string) => void;
 }
