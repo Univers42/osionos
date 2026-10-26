@@ -24,7 +24,7 @@ describe('C274 without a KEK nothing is stored', () => {
 		const made = await call('/api/ai/mcp-servers', {
 			method: 'POST',
 			token: tokenFor(user, WORKSPACE_A),
-			body: { label: 'x', url: 'https://example.com/mcp', headerValue: 'abcdefgh1234' },
+			body: { label: 'x', url: 'https://example.com/mcp', headerValue: 'abcdefgh1234', acknowledged: true },
 		});
 		assert.equal(made.status, 503);
 		assert.equal(made.body?.code, 'connections_unavailable');
