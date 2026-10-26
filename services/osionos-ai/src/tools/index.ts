@@ -80,6 +80,11 @@ export interface ToolHooks {
 	 * `awaiting_approval`: the approval row is what waits, not the run.
 	 */
 	onApproval?(asked: PermissionAsked): void | Promise<void>;
+	/**
+	 * The text a tool gave the model, called with no await before it: the
+	 * leak guard of the web tools learns what the run read (web C356).
+	 */
+	onOutput?(toolName: string, text: string): void;
 }
 
 /**
@@ -199,7 +204,7 @@ interface ToolDefinition {
 }
 
 /** The length of the JSON the tools are sent as. */
-function toolDefinitionChars(tools: readonly ToolDefinition[]): number {
+export function toolDefinitionChars(tools: readonly ToolDefinition[]): number {
 	const definitions = tools.map((tool) => ({
 		type: 'function',
 		function: {
@@ -297,6 +302,7 @@ export function readToolSet(
 				// The numbers are committed: these passages keep them.
 				for (const { n, source } of fresh) numbers.set(sourceKey(source), n);
 				quoted += fresh.length;
+				hooks.onOutput?.(tool.name, output);
 				if (fresh.length > 0) {
 					await hooks.onSources?.(fresh, options.toolCallId);
 				}
