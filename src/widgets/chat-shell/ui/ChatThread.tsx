@@ -33,7 +33,12 @@ import { MemoryProposalChip } from "@/features/chat/ui/MemoryProposalChip";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { useChatStore } from "@/features/chat/model/useChatStore";
 import { RunErrorNotice } from "@/features/chat/model/runErrorNotice";
+import { askAgent } from "@/features/chat/model/askAgent";
+import { agentName, handoffFromParts, otherAgents, questionBefore } from "@/features/chat/model/agentHandoff";
+import type { AgentSummary } from "@/features/ai/model/aiAgents";
 import { AgentAvatar } from "./AgentAvatar";
+import { AgentHandoffChip } from "./AgentHandoffChip";
+import { AskAnotherAgent } from "./AskAnotherAgent";
 
 interface Props {
   messages: ChatMessage[];
@@ -126,15 +131,28 @@ const AssistantMessageActions = React.memo(function AssistantMessageActions({
   content,
   feedback,
   route,
+  conversationId,
+  question,
+  agents,
+  answeredBy,
+  busy,
 }: {
   messageId: string;
   content: string;
   feedback?: ChatMessage["feedback"];
   route?: { primary: string; answeredBy: string; reason: NonNullable<ChatMessage["routeReason"]> };
+  conversationId: string;
+  /** The question this answer answers; null without one: there is nothing to ask again. */
+  question: string | null;
+  agents: AgentSummary[];
+  answeredBy?: string;
+  busy: boolean;
 }) {
+  const others = useMemo(() => otherAgents(agents, answeredBy), [agents, answeredBy]);
   return (
     <div className="mt-1 flex items-center justify-end gap-1">
       {route ? <RouteNote {...route} /> : null}
+      {question !== null ? <AskAnotherAgent agents={others} disabled={busy} onPick={(id) => void askAgent(conversationId, question, id)} /> : null}
       <AssistantActions
         content={content}
         feedback={feedback}
@@ -177,21 +195,12 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
   // An edit would race a run in flight: the Edit button waits for it.
   const busy = messages.some((message) => message.status === "streaming");
 
-  /** The text a failed answer answers: the user turn right before it. */
-  const textBefore = (index: number): string | null => {
-    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-      const candidate = messages[cursor];
-      if (candidate.role === "user") return candidate.content;
-    }
-    return null;
-  };
-
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-8" data-testid="chat-thread">
       <MessageWindow items={messages}>
         {(visible, offset) => visible.map((m, visibleIndex) => {
         const index = offset + visibleIndex;
-        const retryText = m.status === "error" ? textBefore(index) : null;
+        const retryText = m.status === "error" ? questionBefore(messages, index) : null;
         // The agent that shaped the answer: its avatar and name head the answer.
         const agent = m.role === "assistant" && m.agentId ? agents.find((one) => one.id === m.agentId) : undefined;
         if (m.role === "user") {
@@ -204,15 +213,20 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
           );
         }
         const streamingNow = m.status === "streaming";
+        const question = questionBefore(messages, index);
+        const handoff = handoffFromParts(m.parts, agents);
         return (
           <div key={m.id} className="flex gap-3">
             <AgentAvatar agent={agent ?? null} size={28} mood={streamingNow ? "thinking" : "curious"} />
             <div data-role={m.role} data-status={m.status} className="min-w-0 flex-1 break-words text-sm leading-relaxed text-[var(--osio-fg-default)]">
               <div className="mb-1 flex min-w-0 items-baseline gap-2 text-xs">
-                <span className="font-medium text-[var(--osio-fg-default)]" data-testid={agent ? "chat-agent-label" : undefined}>{agent?.name ?? "Assistant"}</span>
+                <span className="font-medium text-[var(--osio-fg-default)]" data-testid={agent ? "chat-agent-label" : undefined}>{agentName(m.agentId, agents)}</span>
                 {m.model && m.model !== "auto" ? <span className="truncate text-[var(--osio-fg-subtle)]" title={m.model}>{modelLabel(m.model)}</span> : null}
               </div>
               <AssistantAnswer content={m.content} status={m.status} parts={m.parts} conversationId={m.conversationId} messageId={m.id} />
+              {!streamingNow && handoff && question !== null ? (
+                <AgentHandoffChip agent={handoff.agent} reason={handoff.reason} disabled={busy} onAsk={() => void askAgent(m.conversationId, question, handoff.agent.id)} />
+              ) : null}
               {streamingNow ? (
                 <span className="inline-flex items-center gap-1 text-xs text-[var(--osio-fg-muted)]" data-testid="chat-streaming">
                   <span className="animate-pulse motion-reduce:animate-none">Writing…</span>
@@ -223,6 +237,11 @@ export const ChatThread: React.FC<Props> = ({ messages, onRetry }) => {
                   messageId={m.id}
                   content={m.content}
                   feedback={m.feedback}
+                  conversationId={m.conversationId}
+                  question={question}
+                  agents={agents}
+                  answeredBy={m.agentId}
+                  busy={busy}
                   route={m.answeredBy && m.routeReason ? { primary: m.model ?? "the chosen model", answeredBy: m.answeredBy, reason: m.routeReason } : undefined}
                 />
               ) : null}

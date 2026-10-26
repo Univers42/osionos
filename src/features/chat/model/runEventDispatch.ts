@@ -32,6 +32,8 @@ import { permissionFromEvent } from "./approvalParts";
 import type { PermissionPart } from "./approvalParts";
 import { memoryProposalFromEvent } from "./memoryParts";
 import type { MemoryProposalPart } from "./memoryParts";
+import { handoffFromView } from "./agentHandoff";
+import type { HandoffPart } from "./agentHandoff";
 import { applyViewAction } from "@/features/ai/model/viewActions";
 
 /** What the dispatch needs from the store. */
@@ -54,6 +56,8 @@ export interface RunEventActions {
   askPermission(permission: PermissionPart): void;
   /** The assistant proposes a fact to remember: the chip that asks the user. */
   proposeMemory(proposal: MemoryProposalPart): void;
+  /** A view tool suggests another agent: a chip the user may press, never an action. */
+  suggestAgent(handoff: HandoffPart): void;
 }
 
 const ROUTE_REASONS = ["rate_limited", "upstream_error", "unavailable"] as const;
@@ -127,6 +131,12 @@ export function dispatchRunEvent(
     const ok = data.ok === true;
     const toolCallId = typeof data.toolCallId === "string" ? data.toolCallId : "";
     const view = data.view;
+    // A hand-off is only offered: it never goes through applyViewAction.
+    if (ok && toolName === "suggest_agent") {
+      const handoff = handoffFromView(view);
+      if (handoff) actions.suggestAgent(handoff);
+      return;
+    }
     if (
       ok &&
       view !== undefined &&

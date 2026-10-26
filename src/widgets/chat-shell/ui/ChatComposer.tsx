@@ -35,6 +35,8 @@ import { dictationLanguage } from "@/features/voice/model/language";
 import { usePageStore } from "@/store/usePageStore";
 import { useVoiceSettingsStore } from "@/store/settings";
 import { SlashPalette, SLASH_LISTBOX_ID, slashOptionId } from "@/features/ai/ui/SlashPalette";
+import { PANEL_MIN } from "@/features/chat/model/agentPanel";
+import { AgentPanelRow } from "./AgentPanelRow";
 import { useContextPicker } from "../model/useContextPicker";
 import { useSlashPalette } from "../model/useSlashPalette";
 
@@ -56,6 +58,9 @@ interface Props {
   agentId?: string | null;
   /** The reader picked another agent. */
   onAgentChange?: (agentId: string | null) => void;
+  /** The agents of the panel, in order; two or three make it active. */
+  panel?: string[];
+  onPanelChange?: (agentIds: string[]) => void;
   autoFocus?: boolean;
   /** Changes when the composer should take the focus back, the caret after the text (a starter was picked). */
   focusSignal?: number;
@@ -84,6 +89,8 @@ export const ChatComposer: React.FC<Props> = ({
   agents = [],
   agentId = null,
   onAgentChange,
+  panel = [],
+  onPanelChange,
   autoFocus,
   focusSignal,
   streaming,
@@ -93,6 +100,7 @@ export const ChatComposer: React.FC<Props> = ({
   onAttachmentsChange,
 }) => {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const panelMembers = panel.flatMap((id) => agents.find((agent) => agent.id === id) ?? []);
   // Whether the chosen model sees images. The picker is the one that holds the
   // models, so it is the one that says. Null while the service has not
   // answered: an unknown is not a "no", and a picture waits for the word.
@@ -257,7 +265,8 @@ export const ChatComposer: React.FC<Props> = ({
             onChange={(next) => onAttachmentsChange?.(next)}
           />
         </div>
-        {agents.length > 0 ? <AgentChip agents={agents} agentId={agentId} onChange={onAgentChange} /> : null}
+        {agents.length > 0 ? <AgentChip agents={agents} agentId={agentId} onChange={onAgentChange} panel={panel} onPanelChange={onPanelChange} /> : null}
+        {onPanelChange && panelMembers.length >= PANEL_MIN ? <AgentPanelRow members={panelMembers} onClear={() => onPanelChange([])} /> : null}
         {webAvailable ? <WebToggle /> : null}
         {value.trim() ? (
           <PreviewToggle pressed={previewing} onToggle={() => setPreviewing((on) => !on)} />

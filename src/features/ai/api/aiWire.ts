@@ -35,6 +35,7 @@ export interface MessageWire {
   role: AiMessage["role"];
   parts: AiPart[] | null;
   model: string | null;
+  agent_id?: string | null;
   created_at: string;
 }
 
@@ -57,6 +58,7 @@ export function messageFromWire(row: MessageWire): AiMessage {
     role: row.role,
     parts: row.parts ?? [],
     ...(row.model ? { model: row.model } : {}),
+    ...(row.agent_id ? { agentId: row.agent_id } : {}),
     createdAt: row.created_at,
   };
 }
