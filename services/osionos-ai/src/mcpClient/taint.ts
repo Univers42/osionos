@@ -1,4 +1,6 @@
 import type { Pool } from 'pg';
+import { config } from '../config.ts';
+import { readWebTaint } from '../web/settings.ts';
 
 /**
  * The servers whose output this conversation holds (C286).
@@ -12,6 +14,10 @@ import type { Pool } from 'pg';
  * declined delivered nothing, and is not listed. A conversation that is
  * influenced by a server whose output was later deleted from the transcript is
  * still listed, which over-reports and never under-reports.
+ *
+ * The web tools taint the conversation too (web C359): its domains follow the
+ * servers as `web:<domain>`, read only while OSIONOS_AI_WEB is on, so a
+ * database without the web columns is never asked for them.
  */
 export async function influencedBy(db: Pool, conversationId: string | null): Promise<string[]> {
 	if (!conversationId) return [];
@@ -22,5 +28,8 @@ export async function influencedBy(db: Pool, conversationId: string | null): Pro
 		  order by label`,
 		[conversationId],
 	);
-	return result.rows.map((row) => `mcp:${row.label}`);
+	const labels = result.rows.map((row) => `mcp:${row.label}`);
+	if (!config.webEnabled) return labels;
+	const web = await readWebTaint(db, conversationId);
+	return [...labels, ...web.domains.map((domain) => `web:${domain}`)];
 }
