@@ -19,6 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
+import { writeJsonResponse } from './bridge-json-response.mjs';
 import { LINK_EDGES_RPC, PAGE_ROWS_RPC, readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
@@ -2334,15 +2335,14 @@ async function readJson(request, maxBytes = DEFAULT_JSON_BODY_LIMIT_BYTES) {
 }
 
 function json(response, status, body, config, extraHeaders = {}) {
-	response.writeHead(status, {
+	writeJsonResponse(response, status, {
 		'content-type': 'application/json; charset=utf-8',
 		'cache-control': 'no-store',
 		...extraHeaders,
 		'access-control-allow-origin': config.allowedOrigin,
 		'access-control-allow-credentials': 'true',
 		vary: 'Origin',
-	});
-	response.end(JSON.stringify(body));
+	}, body);
 }
 
 function requestOriginConfig(config, request) {

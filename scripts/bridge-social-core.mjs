@@ -30,6 +30,7 @@
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { realtimeSocketPublisher } from './bridge-realtime-socket.mjs';
 import { CHUNK_SIZE, idChunks, inFilter, runChunks } from './bridge-paging.mjs';
+import { writeJsonResponse } from './bridge-json-response.mjs';
 // bridge-avatar.mjs imports this module back (for the error shape and the JSON
 // body), so the two modules form a cycle. It is safe: publicAvatar is a hoisted
 // function declaration and every call into it happens at request time.
@@ -79,14 +80,13 @@ export async function readJsonBody(request, maxBytes = DEFAULT_BODY_LIMIT) {
 }
 
 export function sendJson(response, status, body, config) {
-	response.writeHead(status, {
+	writeJsonResponse(response, status, {
 		'content-type': 'application/json; charset=utf-8',
 		'cache-control': 'no-store',
 		'access-control-allow-origin': config.allowedOrigin,
 		'access-control-allow-credentials': 'true',
 		vary: 'Origin',
-	});
-	response.end(JSON.stringify(body));
+	}, body);
 	return true;
 }
 
