@@ -85,4 +85,11 @@ export async function addView(block, page, typeLabel) {
   const panel = page.getByTestId("add-view-panel");
   await panel.waitFor({ timeout: 10_000 });
   await panel.getByRole("button", { name: typeLabel, exact: true }).click();
+  await waitForViewSettled(block);
+}
+
+/** A view switch slides for ~300 ms with both views in the DOM; a locator
+ *  resolved mid-slide can land on the leaving view and detach under it. */
+export async function waitForViewSettled(block) {
+  await expect(block.locator("[data-view-sliding]")).toHaveCount(0);
 }

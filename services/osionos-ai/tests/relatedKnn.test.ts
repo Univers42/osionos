@@ -73,21 +73,26 @@ async function partitionOf(workspaceId: string): Promise<string> {
 	return String(result.rows[0]?.partition ?? '');
 }
 
-/** A workspace whose vectors land in the same partition as the given one. */
+/** A workspace whose vectors land in the same partition as the given one.
+ *  Postgres picks it from the partition's own bound: 64 random draws over 16
+ *  hash partitions missed in 1.6 % of runs and failed the suite. */
 async function samePartition(workspaceId: string): Promise<string> {
 	const wanted = await partitionOf(workspaceId);
-	for (let attempt = 0; attempt < 64; attempt += 1) {
-		const candidate = randomUUID();
-		await db.query(
-			`insert into public.ai_page_vectors (workspace_id, page_id, embedding, embedding_model)
-			 values ($1, $2, $3::halfvec, 'test')`,
-			[candidate, randomUUID(), JSON.stringify(vectorFor('probe'))],
-		);
-		const partition = await partitionOf(candidate);
-		await db.query('delete from public.ai_page_vectors where workspace_id = $1', [candidate]);
-		if (partition === wanted) return candidate;
-	}
-	throw new Error('no workspace landed in the same partition');
+	const bound = await db.query(
+		'select pg_get_expr(relpartbound, oid) as bound from pg_class where oid = $1::regclass',
+		[wanted],
+	);
+	const hash = /modulus (\d+), remainder (\d+)/.exec(String(bound.rows[0]?.bound ?? ''));
+	if (!hash) throw new Error(`${wanted} is not a hash partition`);
+	const result = await db.query(
+		`select id::text from (select gen_random_uuid() as id from generate_series(1, 4096)) candidates
+		 where satisfies_hash_partition('public.ai_page_vectors'::regclass, $1::int, $2::int, id)
+		 limit 1`,
+		[Number(hash[1]), Number(hash[2])],
+	);
+	const candidate = result.rows[0]?.id;
+	if (!candidate) throw new Error('no workspace landed in the same partition');
+	return String(candidate);
 }
 
 /** The plan of a statement, without the vector literal: it is a screen of noise. */
