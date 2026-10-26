@@ -22,5 +22,6 @@ One row per package. Status: dispatched → returned → reviewed → **merged**
 | specs | SB-4e written 2026-10-26 01:32 (base SB-4f + SB-3c; eight shipped components, Item list moves to SB-4b) | — | — | — | — |
 | SB-2b | dispatched 2026-10-26 01:34 from 0738c72c5 | feat/sb-SB-2b | | | |
 | SB-1b | dispatched 2026-10-26 01:35 from 27a4870f6 | feat/sb-SB-1b | | | |
-| SB-3a | returned 7025af2a7 (01:33) → devil diff review D-SB-3a-diff running | feat/sb-SB-3a | | worker: quality 0, canvas 0, button e2e 0; mutants c, d, f not caught or not run | mine: `useActionState` is not a hook (no subscription), 10 alias exports + arity dispatch, dead loops in validateArgs, preview writes state with raw args |
+| SB-3a | returned 7025af2a7 (01:33) → fix round 1 (01:39) | feat/sb-SB-3a | ses_e8b4ab48effepqC5o8E7QUIvoC | worker: quality 0, canvas 0, button e2e 0; mutants c, d, f not caught or not run | rejected, 19 items: mine (`useActionState` not a hook, guard host orphans a request, store failures reported ok, 10 alias exports, dead loops, preview writes state) + D-SB-3a-diff |
 | SB-4i | dropped 2026-10-26 01:36: no passkey registration exists in the app to rebuild (useAccountPasskeysStore.ts header, ProfileSecurityModals.tsx:125); total 59 → 58 | — | — | — | — |
+| D-SB-3a-diff | devil: **BLOCK** (blast 3, rev 2, cost 3, conf 5), kimi-k3, 2026-10-26 01:39 | — | selfhost/wf/D-SB-3a-diff.a1 | — | vacuous wall-clock test, no getLastRun secret test, no sudo test or Caveat, no store spies, guard host strands runs; folded into SB-3a fix 1 items 11-19 |
