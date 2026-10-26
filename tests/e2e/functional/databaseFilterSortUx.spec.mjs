@@ -38,9 +38,14 @@ test.describe("database-filter-sort-ux", () => {
 
     const value = page.getByRole("textbox", { name: "Filter value" });
     await expect(value).toBeFocused();
+    const chip = block.locator(".odb-filter-bar").getByRole("button", { name: /^Name/ });
+    const [chipBox, valueBox] = [await chip.boundingBox(), await value.boundingBox()];
+    expect(valueBox.y, "the editor hangs under its chip, off the title").toBeGreaterThan(chipBox.y + chipBox.height);
     await value.fill("al");
     await expect(dataRows(block)).toHaveCount(1);
     await page.keyboard.press("Escape");
+    await expect(value, "Escape closes the editor").toHaveCount(0);
+    await expect(chip).toBeFocused();
 
     const bar = block.locator(".odb-filter-bar");
     await expect(bar.getByRole("button", { name: /Name contains al/ })).toBeVisible();
