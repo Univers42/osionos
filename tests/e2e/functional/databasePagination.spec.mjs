@@ -16,22 +16,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import {
-  activateFirstEditor,
-  openFreshPage,
-  openSlashMenuFromEditor,
-  slashCommandEntry,
-} from "../../browser/core/app.mjs";
-
-async function insertInlineDatabase(page) {
-  await openFreshPage(page, "/");
-  const editor = await activateFirstEditor(page);
-  await openSlashMenuFromEditor(editor, "/database");
-  await slashCommandEntry(page, "Database - Inline").click();
-  const block = page.locator(".osionos-database-block--inline").first();
-  await block.waitFor({ timeout: 15_000 });
-  return block;
-}
+import { closeViewSettings, insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 /** Open View settings → Layout, pick a Limit option, close the panel. */
 async function setLimit(page, block, optionLabel) {
@@ -43,7 +28,7 @@ async function setLimit(page, block, optionLabel) {
   }
   await dialog.getByRole("menuitem", { name: /Limit/ }).click();
   await dialog.getByRole("button", { name: optionLabel, exact: true }).click();
-  await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+  await closeViewSettings(page);
   await expect(dialog).toHaveCount(0);
 }
 

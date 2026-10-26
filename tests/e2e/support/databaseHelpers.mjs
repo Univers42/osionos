@@ -57,6 +57,12 @@ export async function addPropertyOfType(block, page, typeLabel, name) {
   await expect(block.locator("th", { hasText: name }).first()).toBeVisible();
 }
 
+/** Close the View settings popover (also the Automations screen) from any of its screens. */
+export async function closeViewSettings(page) {
+  await page.keyboard.press("Escape");
+  await expect(page.locator('dialog[aria-label="View settings"]')).toHaveCount(0);
+}
+
 /** Spreadsheet edit: click selects, Enter opens the inline editor. */
 export async function fillCell(page, block, row, col, value) {
   const cell = block.locator("tbody tr").nth(row).locator("td").nth(col);
