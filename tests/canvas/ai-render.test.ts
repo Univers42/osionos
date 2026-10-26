@@ -269,6 +269,34 @@ test("edit & resend refuses a non-user message and empty text", async () => {
   assert.equal(s().messagesFor(conversation.id).length, 2);
 });
 
+test("retry replaces the answer in place: the question once, the model picked now, the run dropped on the service", async () => {
+  shimLocalStorage();
+  const { useChatStore, setInferencePort } = await import("@/features/chat/model/useChatStore");
+  const { writeAiSelection } = await import("@/features/ai/model/aiSelection");
+  const s = () => useChatStore.getState();
+  const asked: string[] = [];
+  const replaced: Array<string | undefined> = [];
+  const models: string[] = [];
+  const port = recordingPort(asked, replaced);
+  setInferencePort({ ...port, stream: (request, onEvent, signal) => { models.push(request.model); return port.stream!(request, onEvent, signal); } });
+  const conversation = s().createConversation(null, { title: "Retry" });
+  writeAiSelection({ connectionId: "platform", model: "google/gemma-4-31b-it:free" });
+  await s().send(conversation.id, "what blocks the launch?", { model: "google/gemma-4-31b-it:free", connectionId: "platform" });
+  const [question, answer] = s().messagesFor(conversation.id);
+  // The reader moves to Auto after a rate limit, then retries.
+  writeAiSelection({ connectionId: "platform", model: "" });
+
+  assert.equal(await s().retryAnswer(answer.id), true);
+
+  const after = s().messagesFor(conversation.id);
+  assert.deepEqual(after.map((m) => [m.role, m.content]), [["user", "what blocks the launch?"], ["assistant", "answer-2"]], "no duplicated question");
+  assert.equal(after.some((m) => m.id === question.id || m.id === answer.id), false);
+  assert.deepEqual(asked, ["what blocks the launch?", "what blocks the launch?"]);
+  assert.deepEqual(replaced, [undefined, "run-1"], "the failed run is dropped from the service history");
+  assert.deepEqual(models, ["google/gemma-4-31b-it:free", "auto"], "the retry uses the model picked now");
+  assert.equal(await s().retryAnswer(after[0].id), false, "a question is not an answer");
+});
+
 test("message actions are real buttons with labels and pressed state", () => {
   const html = renderToStaticMarkup(
     React.createElement(AssistantActions, { content: "x", feedback: "up", onFeedback: () => undefined }),
