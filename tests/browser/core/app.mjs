@@ -30,6 +30,11 @@ export async function createNewWorkspacePage(page) {
     const addPrivatePageButton = page
       .locator('button[title="Add to Private"], button[title="Add file"]')
       .first();
+    // A phone-width shell can boot with the Explorer panel closed (CI, 390x844 and
+    // 375x812): its Add button never mounts until the Explorer rail tab opens it.
+    const explorerTab = page.getByRole("tab", { name: "Explorer" });
+    await addPrivatePageButton.or(explorerTab).first().waitFor({ state: "attached" });
+    if ((await addPrivatePageButton.count()) === 0) await explorerTab.click();
     await addPrivatePageButton.waitFor({ state: "attached" });
     await addPrivatePageButton.evaluate((node) => node.click());
   }
