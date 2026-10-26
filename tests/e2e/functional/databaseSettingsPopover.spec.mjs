@@ -111,7 +111,8 @@ test.describe("database-settings-popover", () => {
     const button = block.getByRole("button", { name: "Sort", exact: true });
     await button.click();
     const dialog = page.locator('dialog[open][aria-label="Sort"]');
-    await expect(dialog.getByText("Sorts", { exact: true })).toBeVisible();
+    // With no sort yet it opens on the property search.
+    await expect(dialog.getByRole("textbox", { name: "Sort by property" })).toBeFocused();
     expectPinnedOnScreen(await measure(page, "Sort"));
 
     await page.keyboard.press("Escape");

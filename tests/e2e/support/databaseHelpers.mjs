@@ -74,6 +74,28 @@ export async function fillCell(page, block, row, col, value) {
   await page.keyboard.press("Enter");
 }
 
+/** An inline table whose rows carry `names` in the Name column, at 1440 wide. */
+export async function insertNamedTable(page, names) {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const block = await insertInlineDatabase(page);
+  await expect(block.getByText("Untitled Database").first()).toBeVisible({ timeout: 15_000 });
+  for (let i = 1; i < names.length; i++) await block.getByRole("button", { name: "New", exact: true }).last().click();
+  for (const [row, name] of names.entries()) await fillCell(page, block, row, 0, name);
+  return block;
+}
+
+/** The table's data rows: every body row but the trailing "New" row. */
+export const dataRows = (block) =>
+  block.locator("tbody tr").filter({ has: block.page().locator("td") }).filter({ hasNotText: /^\s*New\s*$/ });
+
+/** Whether the element paints a focus frame (an outline or a ring shadow). */
+export function hasFrame(locator) {
+  return locator.evaluate((node) => {
+    const cs = getComputedStyle(node);
+    return (cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) > 0) || cs.boxShadow !== "none";
+  });
+}
+
 export async function addTextProperty(block, page, name = "Notes") {
   await addPropertyOfType(block, page, "Text", name);
 }
