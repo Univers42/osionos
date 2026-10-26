@@ -42,6 +42,8 @@ export interface RunContext {
   workspace?: boolean;
   /** True = the server adds who is asking. */
   account?: boolean;
+  /** True = the web tools are on for THIS message (one of three layers; never sticky). */
+  web?: boolean;
   /** The view the assistant may drive. */
   view?: RunView;
 }
@@ -86,11 +88,15 @@ export function addContextChip(chips: ContextChip[], chip: ContextChip): ChipPic
   return { chips: [...chips, chip], refusal: null };
 }
 
-/** The chips as the run's context: the pages, and whether the workspace is read. */
-export function buildRunContext(chips: ContextChip[]): RunContext {
+/**
+ * The chips as the run's context: the pages, and whether the workspace is read.
+ * `web` rides along only when true: a run without it is byte-identical to before.
+ */
+export function buildRunContext(chips: ContextChip[], web = false): RunContext {
   return {
     pageIds: chips.filter((chip) => chip.kind === "page" && chip.pageId).map((chip) => chip.pageId as string),
     workspace: chips.some((chip) => chip.kind === "workspace"),
+    ...(web ? { web: true } : {}),
   };
 }
 
