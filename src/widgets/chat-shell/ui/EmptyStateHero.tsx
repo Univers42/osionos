@@ -10,12 +10,11 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
-import { FileText, History, LayoutTemplate, ListChecks, Network, PenLine, Search, Table, type LucideIcon } from "lucide-react";
+import React, { useState } from "react";
+import { ChevronDown, FileText, History, LayoutTemplate, ListChecks, Network, PenLine, Search, Table, type LucideIcon } from "lucide-react";
 
 import { ChatComposer } from "./ChatComposer";
 import { ConnectorsStrip } from "./ConnectorsStrip";
-import { AgentAvatar } from "./AgentAvatar";
 import { BrainLens } from "./BrainLens";
 import { AssistantMascot } from "@/features/ai/ui/AssistantMascot";
 import { greetingFor } from "@/shared/lib/date/greeting";
@@ -65,25 +64,42 @@ interface Props {
   focusSignal?: number;
 }
 
-const AgentChoice: React.FC<{ agent: AgentSummary | null; picked: boolean; onPick: () => void }> = ({ agent, picked, onPick }) => (
-  <button
-    type="button"
-    onClick={onPick}
-    aria-pressed={picked}
-    disabled={agent?.kind === "custom" && agent.needsReview}
-    className={`flex min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors disabled:opacity-50 ${
-      picked
-        ? "border-[var(--osio-accent)] bg-[var(--osio-accent-subtle)]"
-        : "border-[var(--osio-border-soft)] hover:border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-hover)]"
-    }`}
-  >
-    <AgentAvatar agent={agent} size={30} />
-    <span className="min-w-0">
-      <span className="block truncate text-sm font-medium text-[var(--osio-fg-default)]">{agent?.name ?? "General assistant"}</span>
-      <span className="block truncate text-xs text-[var(--osio-fg-muted)]">{agent?.description ?? "Your whole workspace, every tool"}</span>
-    </span>
-  </button>
-);
+/** The quick actions in the row: the first five starters, in group order. */
+const QUICK_ACTIONS = STARTER_GROUPS.flatMap((group) => group.starters).slice(0, 5);
+
+const QuickActions: React.FC<{ onPick: (text: string) => void }> = ({ onPick }) => {
+  const [more, setMore] = useState(false);
+  return (
+    <div className="flex flex-col items-center gap-5">
+      <div className="flex flex-wrap items-center justify-center gap-1.5" data-testid="quick-actions">
+        {QUICK_ACTIONS.map((starter) => {
+          const Icon = STARTER_ICONS[starter.icon];
+          return (
+            <button
+              key={starter.title}
+              type="button"
+              onClick={() => onPick(starter.prompt)}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+            >
+              <Icon size={15} aria-hidden="true" className="shrink-0" />
+              {starter.title}
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          aria-expanded={more}
+          onClick={() => setMore((on) => !on)}
+          className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+        >
+          More
+          <ChevronDown size={14} aria-hidden="true" className={more ? "rotate-180" : undefined} />
+        </button>
+      </div>
+      {more ? <StarterList onPick={onPick} /> : null}
+    </div>
+  );
+};
 
 const StarterList: React.FC<{ onPick: (text: string) => void }> = ({ onPick }) => (
   <div className="grid gap-x-6 gap-y-5 @[640px]:grid-cols-3">
@@ -112,62 +128,52 @@ const StarterList: React.FC<{ onPick: (text: string) => void }> = ({ onPick }) =
   </div>
 );
 
-/** A new chat: a greeting, the composer, who answers, and ways to start. */
+/** A new chat: the mascot, one question, the lit composer, and a row of ways to start. */
 export const EmptyStateHero: React.FC<Props> = ({
   value, onChange, onSubmit, onConnect, onPick, selection, onSelectionChange, chips, onChipsChange,
   agents = [], agentId = null, onAgentChange, attachments, onAttachmentsChange, firstName, focusSignal, webAvailable,
 }) => {
   const greeting = `${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}` : ""}`;
-  const runnable = agents.filter((agent) => agent.kind !== "custom" || !agent.archived);
   return (
     <div className="@container min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-9 px-6 py-10 @[720px]:py-16">
-        <div className="flex items-end gap-4">
-          <AssistantMascot size={88} followPointer typing={value.length > 0} />
-          <div className="min-w-0 pb-1">
-            <h1 className="font-[family-name:var(--osio-font-display)] text-4xl leading-[1.05] tracking-[-0.02em] text-[var(--osio-fg-strong)] @[640px]:text-5xl">
-              {greeting}
+      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-7 px-4 py-10 @[720px]:py-16">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <AssistantMascot size={60} followPointer typing={value.length > 0} />
+          <div>
+            <p className="text-sm text-[var(--osio-fg-muted)]">{greeting}</p>
+            <h1 className="mt-1 font-[family-name:var(--osio-font-display)] text-3xl leading-[1.1] tracking-[-0.02em] text-[var(--osio-fg-strong)] @[640px]:text-4xl">
+              How can I help you today?
             </h1>
-            <p className="mt-2 text-base text-[var(--osio-fg-muted)]">How can I help you today? Ask about your workspace, or hand the work to an agent.</p>
           </div>
         </div>
 
-        <BrainLens working={false}>
-          <ChatComposer
-            value={value}
-            onChange={onChange}
-            onSubmit={onSubmit}
-            onConnect={onConnect}
-            selection={selection}
-            onSelectionChange={onSelectionChange}
-            chips={chips}
-            onChipsChange={onChipsChange}
-            agents={agents}
-            agentId={agentId}
-            onAgentChange={onAgentChange}
-            attachments={attachments}
-            onAttachmentsChange={onAttachmentsChange}
-            focusSignal={focusSignal}
-            webAvailable={webAvailable}
-            autoFocus
-          />
-        </BrainLens>
+        <div className="flex w-full max-w-[640px] flex-col gap-2">
+          <BrainLens working={false}>
+            <ChatComposer
+              value={value}
+              onChange={onChange}
+              onSubmit={onSubmit}
+              onConnect={onConnect}
+              selection={selection}
+              onSelectionChange={onSelectionChange}
+              chips={chips}
+              onChipsChange={onChipsChange}
+              agents={agents}
+              agentId={agentId}
+              onAgentChange={onAgentChange}
+              attachments={attachments}
+              onAttachmentsChange={onAttachmentsChange}
+              focusSignal={focusSignal}
+              webAvailable={webAvailable}
+              autoFocus
+            />
+          </BrainLens>
+          <div className="[&>div]:justify-center">
+            <ConnectorsStrip />
+          </div>
+        </div>
 
-        {runnable.length > 0 && onAgentChange ? (
-          <section aria-label="Who answers">
-            <h2 className="mb-2 font-sans text-xs font-medium text-[var(--osio-fg-subtle)]">Who answers</h2>
-            <div className="grid gap-2 @[560px]:grid-cols-2 @[880px]:grid-cols-3">
-              <AgentChoice agent={null} picked={agentId === null} onPick={() => onAgentChange(null)} />
-              {runnable.map((agent) => (
-                <AgentChoice key={agent.id} agent={agent} picked={agentId === agent.id} onPick={() => onAgentChange(agent.id)} />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <StarterList onPick={onPick} />
-
-        <ConnectorsStrip />
+        <QuickActions onPick={onPick} />
       </div>
     </div>
   );
