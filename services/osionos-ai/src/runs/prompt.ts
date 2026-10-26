@@ -92,7 +92,11 @@ export async function loadHistoryWindow(
 	db: Pool,
 	{ conversationId, ownerId }: { conversationId: string; ownerId: string },
 ): Promise<HistoryWindow> {
-	const rows = await listMessages(db, { conversationId, ownerId });
+	return pickHistoryWindow(await listMessages(db, { conversationId, ownerId }));
+}
+
+/** The window of a conversation's messages, oldest first: the pure half of {@link loadHistoryWindow}. */
+export function pickHistoryWindow(rows: readonly { id: unknown; role: string; parts: unknown }[]): HistoryWindow {
 	const picked: HistoryMessage[] = [];
 	let oldestKeptId: string | null = null;
 	let chars = 0;
