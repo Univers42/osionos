@@ -93,6 +93,43 @@ export async function listMessages(
 }
 
 /**
+ * True when the caller's conversation holds a message of that run. A foreign
+ * conversation, a missing run and a run of another conversation all read false.
+ */
+export async function hasMessagesOfRun(
+	db: Pool,
+	{ conversationId, ownerId, runId }: { conversationId: string; ownerId: string; runId: string },
+): Promise<boolean> {
+	const result = await db.query(
+		`select 1
+		 from public.ai_messages m
+		 join public.ai_conversations c on c.id = m.conversation_id
+		 where m.conversation_id = $1 and c.owner_id = $2 and c.archived_at is null and m.run_id = $3
+		 limit 1`,
+		[conversationId, ownerId, runId],
+	);
+	return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * Edit and resend: deletes the messages of the conversation from the first
+ * message of `runId` onward, so the next run's history no longer holds them.
+ * The ai_runs rows stay (usage and billing).
+ */
+export async function deleteMessagesFromRun(
+	db: Pool,
+	{ conversationId, ownerId, runId }: { conversationId: string; ownerId: string; runId: string },
+): Promise<number> {
+	const result = await db.query(
+		`delete from public.ai_messages m using public.ai_conversations c
+		 where m.conversation_id = $1 and c.id = m.conversation_id and c.owner_id = $2 and c.archived_at is null
+		   and m.created_at >= (select min(created_at) from public.ai_messages where conversation_id = $1 and run_id = $3)`,
+		[conversationId, ownerId, runId],
+	);
+	return result.rowCount ?? 0;
+}
+
+/**
  * A message appended to a conversation the caller owns. The insert selects the
  * conversation through its owner, so a foreign conversation gets no row at all:
  * the call is refused instead of writing into somebody else's thread.

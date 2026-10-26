@@ -214,6 +214,8 @@ export interface StartRunInput {
   /** How hard a reasoning model thinks; sent only for a model that reasons. */
   effort?: "low" | "medium" | "high";
   attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string }>;
+  /** Edit & resend: the service drops this run's turn and every later one first. */
+  replaceFromRunId?: string;
   /**
    * What the answer is read from: the pages it may use (at most three), and
    * whether the caller's whole workspace is searched.

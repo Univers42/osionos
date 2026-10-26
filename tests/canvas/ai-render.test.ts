@@ -149,13 +149,15 @@ test("no reasoning part, no note", () => {
 /* -------------------------------------------------------------------------- */
 
 /** A port that answers every turn with `answer-<n>`, and records what it was asked. */
-function recordingPort(asked: string[]): InferencePort {
+function recordingPort(asked: string[], replaced: Array<string | undefined> = []): InferencePort {
   return {
     async complete() {
       return { content: "unused" };
     },
     async stream(request, onEvent) {
       asked.push(request.text);
+      replaced.push(request.replaceFromRunId);
+      onEvent("run.started", { runId: `run-${asked.length}` });
       onEvent("text.delta", { text: `answer-${asked.length}` });
       onEvent("done", {});
     },
@@ -225,6 +227,32 @@ test("edit & resend drops the message and all after it, keeps the earlier ones, 
   assert.deepEqual(after.slice(2).map((m) => [m.role, m.content]), [["user", "second, reworded"], ["assistant", "answer-1"]]);
   assert.deepEqual(asked, ["second, reworded"], "sent exactly once");
   assert.equal(s().messagesFor(other.id).length, 2, "another conversation is untouched");
+});
+
+test("edit & resend names the first answered run after the edit, and none when unanswered", async () => {
+  shimLocalStorage();
+  const { useChatStore, setInferencePort } = await import("@/features/chat/model/useChatStore");
+  const s = () => useChatStore.getState();
+  const replaced: Array<string | undefined> = [];
+  setInferencePort(recordingPort([], replaced));
+  const conversation = s().createConversation(null, { title: "Replace" });
+  await s().send(conversation.id, "first");
+  await s().send(conversation.id, "second");
+  const [, , second] = s().messagesFor(conversation.id);
+  replaced.length = 0;
+
+  assert.equal(await s().editAndResend(second.id, "second, reworded"), true);
+  assert.deepEqual(replaced, ["run-2"], "the runId of the answer after the edited message");
+
+  // A last message that never got an answer: nothing stored on the service to drop.
+  const unanswered = s().createConversation(null, { title: "Unanswered" });
+  useChatStore.setState((st) => ({
+    messages: [...st.messages, { id: "lone", conversationId: unanswered.id, role: "user", content: "never answered", createdAt: 1 } as ChatMessage],
+  }));
+  replaced.length = 0;
+  const [lone] = s().messagesFor(unanswered.id);
+  assert.equal(await s().editAndResend(lone.id, "reworded"), true);
+  assert.deepEqual(replaced, [undefined]);
 });
 
 test("edit & resend refuses a non-user message and empty text", async () => {

@@ -4,7 +4,7 @@ import { config } from '../config.ts';
 import { reserveTarget, settleTarget } from '../gateway/resolve.ts';
 import type { ResolvedTarget } from '../gateway/resolve.ts';
 import { checkRunRateLimit } from '../rateLimit.ts';
-import { appendUserTurn, touchConversation } from '../conversations/repo.ts';
+import { appendUserTurn, deleteMessagesFromRun, hasMessagesOfRun, touchConversation } from '../conversations/repo.ts';
 import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
@@ -68,6 +68,8 @@ export interface StartRunInput {
 	runId: string;
 	conversationId: string;
 	ownerId: string;
+	/** Edit and resend: drop the conversation's messages from the first one of this run onward. */
+	replaceFromRunId?: string;
 	/** The pages the client quotes: at most three, and only the ones it may read. */
 	pageIds?: readonly string[];
 	/** The workspaces of the caller: the gate of the pages. */
@@ -207,6 +209,18 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		return { kind: 'reattach', run: existing };
 	}
 
+	// Edit and resend: a run id that holds no message of THIS caller's
+	// conversation (foreign, missing, another conversation's) is a 404 before
+	// anything is deleted or called. The row just inserted is failed so the
+	// conversation is not left "running".
+	if (input.replaceFromRunId !== undefined) {
+		const known = await hasMessagesOfRun(db, { conversationId, ownerId, runId: input.replaceFromRunId });
+		if (!known) {
+			await markRun(db, runId, 'failed', 'not_found');
+			return { kind: 'refused', status: 404, code: 'not_found' };
+		}
+	}
+
 	// A run that carries attachments on a model without vision is refused
 	// before anything else: no upstream call, no money.
 	if (attachments.length > 0 && !target.vision) {
@@ -249,6 +263,13 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		const finalStatus = code === 'attachment_not_found' ? 404 : status >= 400 ? status : 422;
 		await markRun(db, runId, 'failed', finalCode);
 		return { kind: 'refused', status: finalStatus, code: finalCode };
+	}
+
+	// The replaced turns go BEFORE the new user message is written and the
+	// history is read: the model must never receive what the user edited away.
+	// ai_runs rows stay (usage and billing).
+	if (input.replaceFromRunId !== undefined) {
+		await deleteMessagesFromRun(db, { conversationId, ownerId, runId: input.replaceFromRunId });
 	}
 
 	// The history is read before the money moves: the reservation estimates the

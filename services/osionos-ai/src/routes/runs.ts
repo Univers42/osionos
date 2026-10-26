@@ -24,6 +24,10 @@ const startRunSchema = z.object({
 	runId: z.string().regex(UUID, 'runId must be a uuid'),
 	conversationId: z.string().regex(UUID, 'conversationId must be a uuid'),
 	text: z.string().min(1).max(32_000),
+	// Edit and resend: the messages from the first one of this run onward are
+	// dropped before the new turn, so the model never sees the edited-away
+	// turns. Valid only with the conversationId, which the schema requires.
+	replaceFromRunId: z.string().regex(UUID, 'replaceFromRunId must be a uuid').optional(),
 	model: z.string().min(1).optional(),
 	// The agent that shapes the run: one of the built-ins, or none. An id the
 	// service does not know is a bad request — the client never guesses.
@@ -179,6 +183,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		conversationId: body.conversationId,
 		ownerId: user.userId,
 		text: body.text,
+		replaceFromRunId: body.replaceFromRunId,
 		target: resolved.target,
 		effort: body.effort,
 		pageIds,

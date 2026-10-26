@@ -127,6 +127,7 @@ export const aiInferencePort: InferencePort = {
               // What the answer is read from — the pages the reader pointed at.
               context: request.context,
               attachments: request.attachments,
+              ...(request.replaceFromRunId ? { replaceFromRunId: request.replaceFromRunId } : {}),
             },
             signal,
           ),
