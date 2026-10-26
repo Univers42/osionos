@@ -242,8 +242,11 @@ setting row, button group, sidebar+content) is a grid placement, a frame with a 
     connections, members, invites, memories, skills, MCP approvals, …).
   Each source declares its fields: type, label, options, validation, read, and write. A write
   calls the same store action or API function the React panel calls today.
-- **Bind.** `bind: { source, field }` on a block. A `field` block reads and writes. `chip`,
-  `avatar`, `meter` and text read. Inside a collection, `$row` is the current item.
+- **Bind.** No new block field: the existing `recordRef` + `fieldBind` pair is the binding.
+  `recordRef` names the source (`"$record"` / `"$viewedUser"` for the record in context,
+  `"settings:<name>"` for a registered source, `"$row"` reserved for collections), and
+  `fieldBind` names the field. A `field` block reads and writes. `chip`, `avatar`, `meter`
+  and text read. Inside a collection, `$row` is the current item.
 - **Who sees what.** Bindings resolve for the **viewer**, never the author. On a shared page,
   each viewer sees their own value. On a public page, bound blocks render a placeholder.
 - **Actions.** A registry of app actions (revoke a session, remove a passkey, sign out
