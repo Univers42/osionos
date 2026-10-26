@@ -43,9 +43,9 @@ describe('the web tools with the flag off', () => {
 		assert.equal(Object.keys(run.tools ?? {}).some((name) => name.startsWith('web_')), false);
 		assert.equal(webToolChars(false), 0);
 		assert.ok(webToolChars(true) > 0, 'the two definitions have a size when a run offers them');
-		// Pinned from main before the web tools (origin/main b3d1f7ccc, builders off): a
-		// change here moves every reservation.
-		assert.equal(TOOL_DEFINITION_CHARS, 7048);
+		// Pinned from main before the web tools (origin/main b3d1f7ccc, builders off: 7048),
+		// plus suggest_agent (bots B1: 495 chars). A change here moves every reservation.
+		assert.equal(TOOL_DEFINITION_CHARS, 7543);
 	});
 
 	it('C375 influencedBy never reads the web columns', async () => {

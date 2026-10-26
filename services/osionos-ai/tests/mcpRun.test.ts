@@ -478,7 +478,7 @@ describe('C287 the definitions of MCP tools count in the reservation', () => {
 	});
 });
 
-const SNAPSHOT_TOOLS = ['search_workspace', 'read_page', 'graph_neighbors', 'remember', 'open_page', 'open_panel', 'open_issue_report', 'create_page', 'rename_page', 'archive_page', 'add_blocks'];
+const SNAPSHOT_TOOLS = ['search_workspace', 'read_page', 'graph_neighbors', 'remember', 'open_page', 'open_panel', 'open_issue_report', 'suggest_agent', 'create_page', 'rename_page', 'archive_page', 'add_blocks'];
 
 describe('C291 with the flag on and no server, nothing differs from today', () => {
 	it('C291 the tool set, the reservation and the approval kinds of a user with no server', async () => {
@@ -486,7 +486,7 @@ describe('C291 with the flag on and no server, nothing differs from today', () =
 		const { runId } = await runWith(user, null, undefined, 'mock-metered');
 		assert.deepEqual(toolNamesOf(mock.lastBody()), SNAPSHOT_TOOLS);
 		const row = (await db.query('select reserved_microusd from public.ai_runs where id = $1', [runId])).rows[0];
-		assert.equal(Number(row.reserved_microusd), 226);
+		assert.equal(Number(row.reserved_microusd), 232);
 		const write = askedOf((await runWith(user, { name: 'create_page', arguments: { title: 'T', workspaceId: WORKSPACE_A } })).events);
 		assert.equal(write[0].tool, 'create_page');
 		assert.equal('mcp' in write[0], false);

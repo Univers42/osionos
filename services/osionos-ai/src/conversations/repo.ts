@@ -21,6 +21,11 @@ export interface MessageRow extends QueryResultRow {
 	model: string | null;
 	usage: unknown;
 	created_at: Date;
+	/**
+	 * The agent that answered: a built-in id or a custom agent uuid; null for the
+	 * general assistant and for user rows. Only `listMessages` selects it.
+	 */
+	agent_id?: string | null;
 }
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
@@ -125,15 +130,20 @@ export async function getOwnedConversation(
 /**
  * The transcript of a conversation the caller owns. The join on the owner is what
  * makes a foreign conversation an empty list instead of somebody else's transcript.
+ *
+ * `agent_id` comes from the run row, not the message: a deleted custom agent
+ * keeps its id here, and the client decides how to show an id it no longer knows.
  */
 export async function listMessages(
 	db: Pool,
 	{ conversationId, ownerId }: { conversationId: string; ownerId: string },
 ): Promise<MessageRow[]> {
 	const result = await db.query<MessageRow>(
-		`select ${MESSAGE_COLUMNS.split(', ').map((column) => `m.${column}`).join(', ')}
+		`select ${MESSAGE_COLUMNS.split(', ').map((column) => `m.${column}`).join(', ')},
+		        case when m.role = 'assistant' then coalesce(r.custom_agent_id::text, r.agent_id) end as agent_id
 		 from public.ai_messages m
 		 join public.ai_conversations c on c.id = m.conversation_id
+		 left join public.ai_runs r on r.id = m.run_id
 		 where m.conversation_id = $1 and c.owner_id = $2
 		 order by m.created_at asc, m.id asc`,
 		[conversationId, ownerId],
