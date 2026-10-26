@@ -16,7 +16,9 @@ export interface TrailActivity {
 }
 
 function sourceKey(citation: Citation): string {
-  return citation.collection === "page" ? `page:${citation.pageId}` : `pack:${citation.pack}:${citation.title}`;
+  if (citation.collection === "page") return `page:${citation.pageId}`;
+  if (citation.collection === "web") return `web:${citation.url}`;
+  return `pack:${citation.pack}:${citation.title}`;
 }
 
 /** Every source the answers cited, first citation first; a page cited by three answers is listed once. */

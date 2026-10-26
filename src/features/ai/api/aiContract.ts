@@ -239,7 +239,17 @@ export type AiPart =
       title: string;
       snippet: string;
     }
-  | { type: "citation"; n?: number; collection: "pack"; pack: string; title: string; snippet: string };
+  | { type: "citation"; n?: number; collection: "pack"; pack: string; title: string; snippet: string }
+  | {
+      type: "citation";
+      n?: number;
+      collection: "web";
+      url: string;
+      domain: string;
+      title: string;
+      snippet: string;
+      toolCallId?: string;
+    };
 
 /** A message, as the service stores it. */
 export interface AiMessage {
@@ -293,13 +303,18 @@ export interface StartRunInput {
    * What the answer is read from: the pages it may use (at most three), and
    * whether the caller's whole workspace is searched.
    */
-  context?: { pageIds?: string[]; workspace?: boolean; account?: boolean; view?: {
+  context?: { pageIds?: string[]; workspace?: boolean; account?: boolean; web?: boolean; view?: {
     route: string;
     layout: "single" | "split";
     activePage?: { id: string; title: string };
     tabs?: { title: string; kind: "page" | "database" | "app" | "other"; pageId?: string }[];
     panel?: string;
   } };
+}
+
+/** `GET|PUT /workspaces/:ws/web/settings` — the workspace switch of the assistant's web tools. */
+export interface AiWebSettings {
+  enabled: boolean;
 }
 
 /** The body of `POST /complete` — an inline editor action, never persisted. */
@@ -393,10 +408,13 @@ export async function toAiError(response: Response): Promise<AiError> {
   let message = "";
   try {
     const body = (await response.clone().json()) as
-      | { error?: { code?: string; message?: string }; code?: string; message?: string }
+      | { error?: string | { code?: string; message?: string }; code?: string; message?: string }
       | null;
-    code = body?.error?.code ?? body?.code ?? code;
-    message = body?.error?.message ?? body?.message ?? "";
+    // A route may answer a bare `{ "error": "forbidden" }`: the string is the code.
+    const flat = typeof body?.error === "string" ? body.error : undefined;
+    const nested = typeof body?.error === "object" ? body.error : undefined;
+    code = nested?.code ?? flat ?? body?.code ?? code;
+    message = nested?.message ?? body?.message ?? "";
   } catch {
     // A refusal that is not JSON still has a status.
   }

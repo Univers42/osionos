@@ -1,5 +1,5 @@
 import React, { useId, useState } from "react";
-import { BookOpen, CircleCheck, CircleX, FileText, Layers, LoaderCircle, X } from "lucide-react";
+import { BookOpen, CircleCheck, CircleX, FileText, Globe, Layers, LoaderCircle, X } from "lucide-react";
 
 import type { ContextChip } from "@/features/ai/model/aiContext";
 import type { AiSelection } from "@/features/ai/model/aiSelection";
@@ -79,23 +79,27 @@ const SourcesTab: React.FC<{ sources: readonly TrailSource[] }> = ({ sources }) 
       {sources.map((source) => {
         const { citation } = source;
         const isPack = citation.collection === "pack";
+        const card = "flex w-full flex-col gap-1 rounded-lg border border-[var(--osio-border-soft)] bg-[var(--osio-bg-surface)] px-3 py-2 text-left no-underline transition-colors hover:border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-hover)]";
+        const body = (
+          <>
+            <span className="flex items-center gap-2 text-sm font-medium text-[var(--osio-fg-default)]">
+              {isPack ? <BookOpen size={14} aria-hidden="true" /> : citation.collection === "web" ? <Globe size={14} aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}
+              <span className="truncate">{citation.title || "Untitled"}</span>
+            </span>
+            {citation.snippet ? <span className="line-clamp-2 text-xs text-[var(--osio-fg-muted)]">{citation.snippet}</span> : null}
+            <span className="text-2xs text-[var(--osio-fg-subtle)]">
+              {citation.collection === "web" ? `${citation.domain} · cited in ` : isPack ? "From a knowledge pack, cited in " : "Cited in "}
+              {source.answers === 1 ? "1 answer" : `${source.answers} answers`}
+            </span>
+          </>
+        );
         return (
           <li key={source.key}>
-            <button
-              type="button"
-              onClick={() => openCitation(citation)}
-              className="flex w-full flex-col gap-1 rounded-lg border border-[var(--osio-border-soft)] bg-[var(--osio-bg-surface)] px-3 py-2 text-left transition-colors hover:border-[var(--osio-border-default)] hover:bg-[var(--osio-bg-hover)]"
-            >
-              <span className="flex items-center gap-2 text-sm font-medium text-[var(--osio-fg-default)]">
-                {isPack ? <BookOpen size={14} aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}
-                <span className="truncate">{citation.title || "Untitled"}</span>
-              </span>
-              {citation.snippet ? <span className="line-clamp-2 text-xs text-[var(--osio-fg-muted)]">{citation.snippet}</span> : null}
-              <span className="text-2xs text-[var(--osio-fg-subtle)]">
-                {isPack ? "From a knowledge pack, cited in " : "Cited in "}
-                {source.answers === 1 ? "1 answer" : `${source.answers} answers`}
-              </span>
-            </button>
+            {citation.collection === "web" ? (
+              <a href={citation.url} target="_blank" rel="noopener noreferrer" title={citation.title} className={card}>{body}</a>
+            ) : (
+              <button type="button" onClick={() => openCitation(citation)} className={card}>{body}</button>
+            )}
           </li>
         );
       })}

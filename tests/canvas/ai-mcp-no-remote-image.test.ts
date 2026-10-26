@@ -50,3 +50,24 @@ test("C284 a reference-style image is a link too", () => {
   const out = html("![logo][1]\n\n[1]: https://evil.example/logo.png");
   assert.doesNotMatch(out, AUTO_LOADING);
 });
+
+test("a conversation with web sources renders no remote image and only safe links", async () => {
+  const { citationOf } = await import("@/features/chat/model/citations");
+  const { renderCitationSources, renderCitedAnswer } = await import("@/features/chat/model/citedAnswer");
+  const citation = citationOf(
+    { n: 1, collection: "web", url: "https://docs.example.org/a", domain: "docs.example.org", title: "T", snippet: "S" },
+    null,
+  )!;
+  const out = renderToStaticMarkup(
+    React.createElement(
+      React.Fragment,
+      null,
+      ...renderCitedAnswer("See [1] ![t](https://evil.example/p.png)", [citation], () => {}),
+      renderCitationSources([citation], () => {}),
+    ),
+  );
+  assert.doesNotMatch(out, AUTO_LOADING);
+  for (const anchor of out.match(/<a [^>]*>/g) ?? []) {
+    if (/target="_blank"/.test(anchor)) assert.match(anchor, /rel="noopener noreferrer"/, anchor);
+  }
+});

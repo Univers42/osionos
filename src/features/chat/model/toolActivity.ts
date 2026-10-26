@@ -41,6 +41,10 @@ import type { ChatMessagePart } from "./chatTypes";
 export const SEARCH_TOOL = "search_workspace";
 /** The tool that reads one page. */
 export const READ_TOOL = "read_page";
+/** The tool that searches the web: only when the three web layers are on. */
+export const WEB_SEARCH_TOOL = "web_search";
+/** The tool that reads one web page. */
+export const WEB_FETCH_TOOL = "web_fetch";
 /** The tool that loads one skill of the agent. */
 export const LOAD_SKILL_TOOL = "load_skill";
 
