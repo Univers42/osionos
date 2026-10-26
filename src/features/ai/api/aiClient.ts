@@ -23,6 +23,7 @@
  */
 
 import { AiError, toAiError } from "./aiContract";
+import { conversationFromWire, messageFromWire, type ConversationWire, type MessageWire } from "./aiWire";
 import type {
   AiAgent,
   AiAccessScope,
@@ -199,21 +200,23 @@ export async function listAgents(): Promise<AiAgent[]> {
 
 /** `POST /conversations` — a conversation of the workspace. */
 export async function createConversation(input: { workspaceId: string; title?: string }): Promise<AiConversation> {
-  return requestJson<AiConversation>("POST", "/conversations", input);
+  return conversationFromWire(await requestJson<ConversationWire>("POST", "/conversations", input));
 }
 
 /** `GET /conversations?workspaceId=` — the caller's conversations, newest first. */
 export async function listConversations(workspaceId: string): Promise<AiConversation[]> {
-  const body = await requestJson<{ conversations?: AiConversation[] }>(
+  const body = await requestJson<{ conversations?: ConversationWire[] }>(
     "GET",
     `/conversations?workspaceId=${encodeURIComponent(workspaceId)}`,
   );
-  return body.conversations ?? [];
+  return (body.conversations ?? []).map(conversationFromWire);
 }
 
 /** `PATCH /conversations/:id` — a new title on a conversation the caller owns. */
 export async function renameConversation(id: string, title: string): Promise<AiConversation> {
-  return requestJson<AiConversation>("PATCH", `/conversations/${encodeURIComponent(id)}`, { title });
+  return conversationFromWire(
+    await requestJson<ConversationWire>("PATCH", `/conversations/${encodeURIComponent(id)}`, { title }),
+  );
 }
 
 /** `DELETE /conversations/:id` — archives the conversation: it leaves the list. */
@@ -223,11 +226,11 @@ export async function deleteConversation(id: string): Promise<void> {
 
 /** `GET /conversations/:id/messages` — the transcript, oldest first. */
 export async function listMessages(conversationId: string): Promise<AiMessage[]> {
-  const body = await requestJson<{ messages?: AiMessage[] }>(
+  const body = await requestJson<{ messages?: MessageWire[] }>(
     "GET",
     `/conversations/${encodeURIComponent(conversationId)}/messages`,
   );
-  return body.messages ?? [];
+  return (body.messages ?? []).map(messageFromWire);
 }
 
 /** `POST /runs` — the run's event stream. */
