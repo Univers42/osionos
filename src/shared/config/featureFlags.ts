@@ -33,6 +33,7 @@ export type FeatureFlagName =
   | "osio.whiteboard"
   | "osio.panezoom"
   | "osio.ai.images"
+  | "osio.ai.channel"
   | "osio.account.delete"
   | "osio.themes";
 
@@ -200,6 +201,15 @@ export function isPaneZoomEnabled(): boolean {
  *  key, or `VITE_OSIO_AI_IMAGES=1`. */
 export function isAiImagesEnabled(): boolean {
   return isFeatureFlagEnabled("osio.ai.images", false);
+}
+
+/** "@AI" in a text channel drafts an answer only the asker sees, and posts it
+ *  on their click (C429). Default OFF: the AI service and the bridge refuse it
+ *  while their own flags (OSIONOS_AI_THREAD_ANSWERS, OSIONOS_THREAD_ANSWERS) are
+ *  off. Enable via `?osio.ai.channel=1`, the `osio.ai.channel` localStorage
+ *  key, or `VITE_OSIO_AI_CHANNEL=1`. */
+export function isChannelAiAnswersEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.ai.channel", false);
 }
 
 /** The "Delete my account" row and its grace-period banner in Profile. Default OFF:
