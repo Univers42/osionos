@@ -24,8 +24,11 @@
 
 export interface BenchCase {
   name: string;
-  /** p95 budget per operation, in nanoseconds. */
-  budgetNs: number;
+  /**
+   * p95 budget per operation, in nanoseconds. Omitted on a reference case (a platform call on a
+   * fixed input): its time is the runner's, not the code's, so it is reported and never gates.
+   */
+  budgetNs?: number;
   /** Builds inputs OUTSIDE the timed region and returns the operation to time. */
   setup: () => () => unknown;
 }
@@ -66,7 +69,7 @@ export interface BenchResult {
   p95Ns: number;
   p99Ns: number;
   minNs: number;
-  budgetNs: number;
+  budgetNs?: number;
   batch: number;
   samples: number;
   /** Burst cases only: the slowest run's sum of event times, and its budget. */
@@ -141,7 +144,7 @@ export function measure(entry: BenchCase): BenchResult {
     budgetNs: entry.budgetNs,
     batch,
     samples: perOp.length,
-    ok: p95Ns <= entry.budgetNs,
+    ok: entry.budgetNs === undefined || p95Ns <= entry.budgetNs,
   };
 }
 
