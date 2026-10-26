@@ -56,3 +56,10 @@ test("never stretches past either viewport edge, for any button position", () =>
     }
   }
 });
+
+test("align start hangs the panel right of the button, and flips to end when it would overflow", () => {
+  const anchor = { top: 100, bottom: 128, left: 870, right: 900 };
+  assert.equal(anchoredPanelFrame(anchor, 292, viewport, "start").left, 870);
+  const nearEdge = { top: 100, bottom: 128, left: 1100, right: 1130 };
+  assert.equal(anchoredPanelFrame(nearEdge, 292, viewport, "start").left, 1130 - 292);
+});
