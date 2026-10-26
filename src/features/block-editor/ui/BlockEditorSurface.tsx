@@ -432,7 +432,7 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	useEffect(() => dictationSession.subscribe(setDictation), []);
 	const visibilityPopoverBlockId = showWhenTarget?.blockId ?? null;
 	const visibilityPopoverPosition = showWhenTarget
-		? clampViewportMenuPosition(showWhenTarget.x, showWhenTarget.y, { width: 384, maxHeight: 320, margin: 12 })
+		? clampViewportMenuPosition(showWhenTarget.x, showWhenTarget.y, { width: Math.min(384, globalThis.innerWidth * 0.9), maxHeight: 320, margin: 12 })
 		: null;
 	const selectionRootRef = useRef<HTMLDivElement | null>(null);
 	const blocksRef = useRef<Block[]>(blocks);
@@ -1009,14 +1009,17 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 
 			<BlockContextMenu menu={contextMenu} sections={contextMenuSections} onClose={closeContextMenu} />
 			<BlockContextMenu menu={pageMenuState} sections={pageMenuSections} onClose={closePageMenu} />
-			{visibilityPopoverBlockId && findBlockById(blocks, visibilityPopoverBlockId) ? (
+			{/* Portal to <body>: the pane's `contain: paint` would otherwise anchor
+			    `position: fixed` to the pane and clip the popover at its edge. */}
+			{visibilityPopoverBlockId && findBlockById(blocks, visibilityPopoverBlockId) ? createPortal(
 				<div style={visibilityPopoverPosition ? { position: "fixed", left: visibilityPopoverPosition.left, top: visibilityPopoverPosition.top, zIndex: 50 } : undefined}>
 					<BlockVisibilityPopover
 						block={findBlockById(blocks, visibilityPopoverBlockId)!}
 						onSave={(updates) => { updateBlock(pageId, visibilityPopoverBlockId, updates); closeShowWhen(); }}
 						onClose={closeShowWhen}
 					/>
-				</div>
+				</div>,
+				document.body,
 			) : null}
 		</div>
 	);
