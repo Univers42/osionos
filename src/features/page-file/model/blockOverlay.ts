@@ -92,7 +92,11 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   codeTheme: isOneOf("dark", "light"),
   mediaShape: isOneOf("rounded", "circle"),
   collectionRef: isOneOf("members", "marketplace"),
-  recordRef: isOneOf("$record", "$viewedUser"),
+  recordRef: (value) =>
+    typeof value === "string" &&
+    (value === "$record" ||
+      value === "$viewedUser" ||
+      /^settings:[a-z][a-z0-9-]{0,63}$/.test(value)),
   layoutMode: isOneOf("inline", "full_page"),
   layoutRole: isOneOf("header"),
   layoutConfig: isPlainRecord,
@@ -115,6 +119,8 @@ export const EXTRA_BLOCK_KEYS: Readonly<Record<string, ExtraKeyCheck>> = Object.
   // What "Describe with AI" found in an image: tags and the text in it.
   mediaTags: isMediaTags,
   mediaText: isMediaText,
+  // Typed style overrides (SB-1a): a plain record, validated by sanitize at use.
+  style: isPlainRecord,
 });
 
 /**
