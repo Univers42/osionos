@@ -59,13 +59,13 @@ Integration branch: `feat/self-built-ui` (from develop `3be8dc71b`). One worktre
 | SB-3b | S3 | `button` on `@osionos/ui` Button: every tone/size, icon, icon-only label, loading | SB-3a | old `buttonVariant` pages render unchanged |
 | SB-3c | S3 | `chip`, `avatar`, `meter`, `status`, `secret`; heading `anchor` | SB-3a | deep link `?settings=<id>#<anchor>` scrolls to a doc heading |
 | SB-4a | S4 | `collection`: list/table/grid, virtual rows, empty slot, `$row`, row actions, inline edit | SB-2c, SB-3b | 10,000-row scroll with no long task over 50 ms |
-| SB-4b | S4 | list sources for every settings list (sessions exists), incl. moderation limits and per-page notification overrides | SB-4a | each list matches today's rows from the same stub |
+| SB-4b | S4 | list sources for every settings list (sessions exists), incl. moderation limits and per-page notification overrides, plus the shipped `item-list` component | SB-4a, SB-4e | each list matches today's rows from the same stub |
 | SB-4c | S4 | `tabs`, `dialog` containers | SB-1b | keyboard per WAI-ARIA (shadcn reference) |
 | SB-4d | S4 | `collection` display `matrix` (rows × columns sources, a choice field per cell) | SB-4a, SB-2c | the permission matrix's cells and saves match today's panel |
 | SB-4h 👹 | S4b | `steps` container + `qr` block + guarded 2FA enrol/verify actions | SB-3a, SB-3c | enrol → scan → verify → recovery codes, every guard intact |
 | SB-4i 👹 | S4b | guarded `passkey.register` action (WebAuthn in the kernel) | SB-3a | registration from a button block; the page cannot pass options |
 | SB-4j | S4b | `field` displays `image` (pick, crop, upload) and `file` (drop zone) + avatar/banner/import actions | SB-2c, SB-3a | avatar/banner/import behave as today (existing e2e unchanged) |
-| SB-4e | S4 | components: definition, instance, slots, props, variants; shipped components (§9) | SB-1d | editing a component updates every instance |
+| SB-4e | S4 | components: definition, instance, slots, props, variants; the eight shipped settings components (§9; Item list moves to SB-4b) | SB-4f, SB-3c | editing a component updates every instance |
 | SB-4f | S4 | shipped preset library reproducing settings looks, text blocks render `style`, `leading` and `minWidth` scales | SB-1d | each preset's computed style and part spacing equal its source element, light and dark |
 | SB-4g 👹 | S4 | dev authoring loop: "Export as system document" (serve-only middleware) | SB-1d | export of a demo doc = the committed file |
 | SB-5-* | S5 | one package per section, in this order: accessibility_voice, plans, billing, library, page_settings, notifications, preferences, moderation, mail_calendar, import, connections, contacts, public_pages, general, teamspaces, shortcuts, ai, ai_connections, mcp, developer, profile, people, permissions | S4, S4b | old panel deleted; parity ≤ 0.1 %; existing e2e unchanged and green; ratchet lowered; perf ≤ budget |
