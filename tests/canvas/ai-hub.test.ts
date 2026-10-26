@@ -7,6 +7,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { formatMicroUsd } from "@/features/settings/ai/aiUsageFormat";
+import { healthOf } from "@/features/ai/api/aiClient";
 import { RAIL_GROUPS } from "@/widgets/activity-rail/model/railItems";
 import { ServiceCard, SpendCard } from "@/widgets/ai-hub/ui/HubCards";
 import { HUB_SECTIONS } from "@/widgets/ai-hub/ui/hubSections";
@@ -47,6 +48,12 @@ test("the service card says so when the build has no AI service", () => {
 
 test("the service card names the failing part", () => {
   const health = { state: "ready", value: { ok: false, db: true, redis: false } } as const;
+  assert.ok(renderToStaticMarkup(React.createElement(ServiceCard, { configured: true, health })).includes("Not reachable (cache)"));
+});
+
+test("the health body's \"ok\"/\"down\" strings name the failing part", () => {
+  const health = { state: "ready", value: healthOf({ ok: false, db: "ok", redis: "down" }) } as const;
+  assert.deepEqual(health.value, { ok: false, db: true, redis: false });
   assert.ok(renderToStaticMarkup(React.createElement(ServiceCard, { configured: true, health })).includes("Not reachable (cache)"));
 });
 
