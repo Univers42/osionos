@@ -61,10 +61,15 @@ export function approvalCardState(status: string): ApprovalCardState {
   return "unknown";
 }
 
-/** The sentence of a state: what the card says when there is nothing to do. */
-export function stateWords(state: ApprovalCardState, error?: string | null): string {
+/**
+ * The sentence of a state: what the card says when there is nothing to do.
+ *
+ * An executed write says what the service recorded — where the blocks went,
+ * and the page version they made — and "Done" only when it recorded nothing.
+ */
+export function stateWords(state: ApprovalCardState, error?: string | null, summary?: string | null): string {
   if (state === "executing") return "Writing…";
-  if (state === "executed") return "Done";
+  if (state === "executed") return summary || "Done";
   if (state === "declined") return "Declined";
   if (state === "expired") return "Expired — ask again";
   if (state === "unknown") return "May have been written — check the page";
@@ -90,15 +95,40 @@ export function approvalArgs(args: Record<string, unknown> | undefined): Approva
   return Object.entries(args).map(([name, value]) => ({ name, value: argumentText(value) }));
 }
 
-/** The text of a value: the string itself, or the JSON of everything else. */
+/**
+ * The text of a value: the string itself, a list of text blocks one per line,
+ * or the JSON of everything else.
+ *
+ * A list of blocks that are ONLY a type and a text — what add_blocks writes —
+ * reads as `[type] text` lines: every character of it is still there, and
+ * the reader sees the text instead of its escaped JSON.
+ */
 function argumentText(value: unknown): string {
   if (typeof value === "string") return value;
+  if (isTextBlockList(value)) return value.map((block) => `[${block.type}] ${block.content}`).join("\n");
   if (value === undefined) return "";
   try {
     return JSON.stringify(value) ?? "";
   } catch {
     return String(value);
   }
+}
+
+/** A non-empty list whose every item is exactly `{ type, content }`, both strings. */
+function isTextBlockList(value: unknown): value is { type: string; content: string }[] {
+  if (!Array.isArray(value) || value.length === 0) return false;
+  return value.every((item) => {
+    if (typeof item !== "object" || item === null) return false;
+    const keys = Object.keys(item);
+    const { type, content } = item as { type?: unknown; content?: unknown };
+    return keys.length === 2 && typeof type === "string" && typeof content === "string";
+  });
+}
+
+/** The sentence of a write's result, when the service wrote one. */
+export function resultSummary(result: unknown): string | null {
+  const summary = (result as { summary?: unknown } | null)?.summary;
+  return typeof summary === "string" && summary ? summary : null;
 }
 
 /** The preview of a write, in words: how much it touches. */
@@ -177,7 +207,13 @@ export function refusalWords(code: string): string {
 /** What a decision came to. */
 export type ApprovalOutcome =
   /** The decision went through: the approval has a new status. */
-  | { kind: "decided"; status: ApprovalStatus; continuationRunId: string | null; error: string | null }
+  | {
+      kind: "decided";
+      status: ApprovalStatus;
+      continuationRunId: string | null;
+      error: string | null;
+      summary: string | null;
+    }
   /** A decision is already on its way: this one does nothing. */
   | { kind: "busy" }
   /** The approval was already decided: the card was fetched again. */
@@ -213,6 +249,7 @@ async function guardedDecision(
       status: answer.status,
       continuationRunId: answer.continuationRunId,
       error: answer.error ?? null,
+      summary: resultSummary(answer.result),
     };
   } catch (error) {
     if (error instanceof ApprovalError && error.status === 409) {
