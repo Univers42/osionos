@@ -60,14 +60,15 @@ function useListSnapshot(id: string | undefined): ListSnapshot;          // useS
 type CollectionConfig = {
   source: string;                             // a registered list source id
   display: "list" | "table" | "grid";
-  columns?: Array<{ field: string; label?: string }>;   // table only, at most 12
+  columns?: Array<{ field: string; label?: string; template?: string }>;   // table only, at most 12; `template` = a child id rendered as that cell
+  groupBy?: string;                           // a field key; see Rule 9
   emptyId?: string;                           // the child shown when there are no rows
   dividers?: boolean;                         // list only
   minColumn?: 40 | 48 | 56 | 64 | 80;         // grid only, in --spacing steps (160–320 px)
 };
 ```
 
-The row template is every child except `emptyId`. Labels are at most 80 characters; the sanitizer drops unknown keys, an unregistered-looking `source` (bad pattern), unknown column fields are kept but render empty.
+The row template is every child except `emptyId` and the column `template` children. Labels are at most 80 characters; the sanitizer drops unknown keys, an unregistered-looking `source` (bad pattern), unknown column fields are kept but render empty.
 
 ## Rules (each one is tested)
 
@@ -82,7 +83,11 @@ The row template is every child except `emptyId`. Labels are at most 80 characte
 6. **Row actions.** `runButtonBlock` gains `row?: Readonly<Record<string, unknown>>`. When set, the program scope adds `"$row.<field>"` for each row field, so `{ formula: 'prop("$row.id")' }` resolves to the row's id. The registered button passes `useRowScope()?.row`. Test: a row-action button bound to a test action with `args: { id: { formula: 'prop("$row.id")' } }` runs once with row 7's id when row 7's button is clicked. Guards are untouched: a destructive test action still asks to confirm.
 7. **Virtual rows.** At 60 rows or more, rows render through `useVirtualizer` on the nearest scroll container (`resolveScrollElement`), with `measureElement` and the template's estimate (the sum of `estimateBlockHeight` over the template children). The table display virtualises its `<tbody>` with a top and a bottom spacer row. The grid display virtualises rows of cells. `loadMore` runs when the last rendered row is within 10 of the end and `hasMore` is true, never twice at once.
 8. **Edit mode.** The block shows a header "Collection · <source label> · <n> rows" with a source picker (`listListSources()`, searchable) and a display `MiniTabs`, then the template children through `renderChildren` (editable), then the live rows as View renders them. Inside a row, a heading `anchor` is not rendered, so no id repeats.
-9. **Budgets** (`collectionScroll.spec.mjs`, `PLAYWRIGHT_PERF=1`, a 10,000-row test source; list display; template = a frame holding two paragraphs bound to `$row` fields and a row-action button):
+9. **Groups and cell templates** (the sessions table needs both: rows grouped by client kind under a heading each, and a device cell holding the name plus a "This device" chip).
+   - `groupBy: "<field>"` renders one group per distinct value, ordered as that field's `options`, each with an `<h3>` (`text-sm`, `font-medium`, `--osio-fg-default`, the option's label) and its own list, table or grid, inside `data-collection-group="<value>"`. Values without an option sort last under their raw value. Empty groups are not rendered. Grouped collections are not virtualised. `Caveat:` grouping is for short lists (at most 200 rows); past that it renders every row.
+   - In the table display, a column with `template` renders that child (in the row scope) instead of the formatted value.
+   Tests: three rows in two groups render two headings in option order; a column template shows a bound paragraph and a `chip` per row.
+10. **Budgets** (`collectionScroll.spec.mjs`, `PLAYWRIGHT_PERF=1`, a 10,000-row test source; list display; template = a frame holding two paragraphs bound to `$row` fields and a row-action button):
    - scrolling one screen 20 times: no long task over 50 ms (the observer from `boot.spec.mjs`);
    - clicking a row action whose test action updates the row synchronously: app cost p95 ≤ 16 ms (p95 minus the harness floor median, design §11);
    - scaling: that p95 at 10,000 rows minus the p95 at 100 rows ≤ 2 ms.
@@ -93,7 +98,7 @@ The row template is every child except `emptyId`. Labels are at most 80 characte
 - [ ] **Step 1: Failing tests.**
   - Canvas (`collection.test.ts`): snapshot stability (Rule 1); the sanitizer; the table cell formatter for each display; the grid column helper; the `$row` scope keys of Rule 6 (a pure `rowScopeEntries(row)`); `resolveScrollElement` from its new home.
   - e2e (`collectionBlock.spec.mjs`, offline): each display renders the test source's rows; the empty slot; the unavailable note; inline edit through a `$row` field (the source's `update` spy is called with the row id); Rule 2's render counts; Rule 6's row action; the table's header names; at 375 px the page body never scrolls horizontally (the table scrolls in its wrapper).
-  - Perf: Rule 9.
+  - Perf: Rule 10.
 - [ ] **Step 2: Run them and see them fail.** `npm run test:canvas -- tests/canvas/collection.test.ts`; `PW_BROWSER_SOURCE=system bash scripts/docker-run.sh test-e2e tests/e2e/functional/collectionBlock.spec.mjs`.
 - [ ] **Step 3: Implement.** Move `resolveScrollElement` first (a pure move; the existing virtualisation e2e stay green).
 - [ ] **Step 4: Mutants** (scratch copies under `target/mutants`, never committed). Paste the failing test name for each:
