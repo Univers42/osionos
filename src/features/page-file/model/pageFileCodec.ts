@@ -54,7 +54,9 @@ import {
  *     conflictOf (the merge's marker: the block a conflict copy belongs to)
  *     embed on a video/audio/file block (its tag cannot hold it; see SCOPED_BLOCK_KEYS)
      buttonProgram (a button's steps: Markdown cannot carry a program; the overlay check is a plain object, the parser is the real gate)
+ *     visibleWhen (a block's show/hide formula: Markdown cannot carry it)
  *
+
  * Ponytail: `fileName`, `headingLevel` and `tableConfig` are partly in Markdown
  * too (`<object title>`, `##>`, the table separator row), and the overlay wins,
  * so a hand edit of exactly those loses to the stored value until the next save.

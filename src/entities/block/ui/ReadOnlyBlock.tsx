@@ -22,6 +22,7 @@ import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
 import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
 import { TableBlockReadOnly } from "./TableBlockReadOnly";
 import { LayoutBlockReadOnly } from "./LayoutBlockReadOnly";
+import { VisibleWhenGate } from "./VisibleWhenGate";
 import { BoundFieldReadOnly } from "./BoundFieldReadOnly";
 import { DeferredMount } from "./DeferredMount";
 import { renderInlineToReact } from '@osionos/markdown-engine/react';
@@ -185,7 +186,7 @@ function areReadOnlyBlockPropsEqual(previous: BlockProps, next: BlockProps): boo
   );
 }
 
-const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0, properties }) => {
+const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0, properties }) => {
   // Per-block text/background colour set via the block colour menu; mirrors the
   // editable BlockEditor (getBlockSurfaceStyle), so read-only matches editing.
   const surface = getBlockSurfaceStyle(block);
@@ -538,6 +539,19 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         </>
       );
   }
+};
+
+const ReadOnlyBlockImpl: React.FC<BlockProps> = (props) => {
+  const { block } = props;
+  const visibleWhen = typeof block?.visibleWhen === "string" ? block.visibleWhen.trim() : "";
+  if (visibleWhen) {
+    return (
+      <VisibleWhenGate block={block} mode="view">
+        <ReadOnlyBlockBody {...props} />
+      </VisibleWhenGate>
+    );
+  }
+  return <ReadOnlyBlockBody {...props} />;
 };
 
 export const ReadOnlyBlock = React.memo(ReadOnlyBlockImpl, areReadOnlyBlockPropsEqual);

@@ -16,6 +16,7 @@ import {
   ArrowUp,
   Copy,
   CopyPlus,
+  Eye,
   Link,
   MessageSquare,
   MoveRight,
@@ -433,6 +434,16 @@ export function useBlockContextMenu({
     closeContextMenu();
   }, [closeContextMenu, contextMenu, pageId]);
 
+  const handleShowWhen = useCallback(() => {
+    if (!contextMenu) return;
+    globalThis.dispatchEvent(
+      new CustomEvent("osionos:block-visibility", {
+        detail: { pageId, blockId: contextMenu.blockId, position: { x: contextMenu.x, y: contextMenu.y } },
+      }),
+    );
+    closeContextMenu();
+  }, [closeContextMenu, contextMenu, pageId]);
+
   const handleProfileFieldSettings = useCallback((bind: boolean) => {
     if (!contextMenu || !blockLocation) return;
     const { blockId } = contextMenu;
@@ -585,6 +596,11 @@ export function useBlockContextMenu({
               onClick: () => handleColumns(5),
             },
           ]),
+        },
+        {
+          icon: <Eye size={16} />,
+          label: "Show when…",
+          onClick: handleShowWhen,
         },
         {
           icon: <Palette size={16} />,
@@ -790,6 +806,7 @@ export function useBlockContextMenu({
     handleSetTableConfig,
     handleToggleHeading,
     handleButtonSettings,
+    handleShowWhen,
     handleProfileFieldSettings,
     isReadme,
     handleUnavailable,

@@ -28,6 +28,8 @@ import {
 	ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
+import { BlockVisibilityPopover } from "./visibility/BlockVisibilityPopover";
+import { VisibilityScopeProvider } from "@/entities/block/model/visibilityScope";
 import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
@@ -420,10 +422,22 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	} = usePlaygroundBlockEditor(source ?? pageId);
 	const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
 	const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+	const [visibilityPopoverBlockId, setVisibilityPopoverBlockId] = useState<string | null>(null);
+	const [visibilityPopoverPosition, setVisibilityPopoverPosition] = useState<{ x: number; y: number } | null>(null);
 	// The dictation: its state, and the language of the settings.
 	const voiceSettings = useVoiceSettingsStore((state) => state.data);
 	const [dictation, setDictation] = useState(() => dictationSession.getState());
 	useEffect(() => dictationSession.subscribe(setDictation), []);
+	useEffect(() => {
+		const onShow = (event: Event) => {
+			const detail = (event as CustomEvent<{ blockId?: string; position?: { x: number; y: number } }>).detail;
+			if (!detail?.blockId) return;
+			setVisibilityPopoverBlockId(detail.blockId);
+			setVisibilityPopoverPosition(detail.position ?? null);
+		};
+		globalThis.addEventListener("osionos:block-visibility", onShow);
+		return () => globalThis.removeEventListener("osionos:block-visibility", onShow);
+	}, []);
 	const selectionRootRef = useRef<HTMLDivElement | null>(null);
 	const blocksRef = useRef<Block[]>(blocks);
 	// Pointer-down position on the bottom append zone, to tell a click from a drag.
@@ -735,11 +749,19 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	}, [compact, openPageMenu]);
 
 	if (locked) {
+		const visibilityBlock = visibilityPopoverBlockId ? findBlockById(blocks, visibilityPopoverBlockId) : null;
 		return (
 			<div data-testid="locked-page-body" className={`relative flex min-w-0 flex-col ${className}`}>
 				{blocks.length === 0 ? (
 					<p className="py-8 text-sm italic text-[var(--osio-fg-subtle)]">This page is locked and has no content.</p>
 				) : blocks.map((block, index) => <ReadOnlyBlock key={block.id} block={block} index={index} />)}
+				{visibilityBlock ? (
+					<BlockVisibilityPopover
+						block={visibilityBlock}
+						onSave={(updates) => { updateBlock(pageId, visibilityBlock.id, updates); setVisibilityPopoverBlockId(null); }}
+						onClose={() => setVisibilityPopoverBlockId(null)}
+					/>
+				) : null}
 			</div>
 		);
 	}
@@ -999,6 +1021,15 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 
 			<BlockContextMenu menu={contextMenu} sections={contextMenuSections} onClose={closeContextMenu} />
 			<BlockContextMenu menu={pageMenuState} sections={pageMenuSections} onClose={closePageMenu} />
+			{visibilityPopoverBlockId && findBlockById(blocks, visibilityPopoverBlockId) ? (
+				<div style={visibilityPopoverPosition ? { position: "fixed", left: visibilityPopoverPosition.x, top: visibilityPopoverPosition.y, zIndex: 50 } : undefined}>
+					<BlockVisibilityPopover
+						block={findBlockById(blocks, visibilityPopoverBlockId)!}
+						onSave={(updates) => { updateBlock(pageId, visibilityPopoverBlockId, updates); setVisibilityPopoverBlockId(null); }}
+						onClose={() => setVisibilityPopoverBlockId(null)}
+					/>
+				</div>
+			) : null}
 		</div>
 	);
 };
@@ -1948,7 +1979,9 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
 export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = (props) => (
 	<EditorSurfaceIdContext.Provider value={useId()}>
 		<ReadOnlyEmbedModeContext.Provider value="live">
-			<BlockEditorSurfaceBody {...props} />
+			<VisibilityScopeProvider pageId={props.pageId}>
+				<BlockEditorSurfaceBody {...props} />
+			</VisibilityScopeProvider>
 		</ReadOnlyEmbedModeContext.Provider>
 	</EditorSurfaceIdContext.Provider>
 );
