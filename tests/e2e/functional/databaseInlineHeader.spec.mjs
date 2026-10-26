@@ -335,7 +335,7 @@ test.describe("database-inline-header", () => {
 
   test("the title link opens the database origin as a full-page tab", async ({ page }) => {
     const block = await insertInlineDatabase(page);
-    await block.locator('button[title="Open database"]').click();
+    await block.locator('button[data-database-title]').click();
 
     // The origin surface: full-page database tab with the full chrome
     // (editable h1 title + view tabs).
