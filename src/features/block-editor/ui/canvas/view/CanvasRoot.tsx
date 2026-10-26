@@ -20,7 +20,7 @@ import type { SurfaceBlockEditorProps } from "../../BlockEditorSurface";
 import { createInteractionStore } from "../controller/interactionStore";
 import { useCanvasCellOps } from "../controller/useCanvasCellOps";
 import { useCanvasScale } from "../controller/useCanvasScale";
-import { evaluateCellVisibility, filterHiddenCells, toPropertyMap } from "../model/visibility";
+import { evaluateCellVisibility, filterHiddenCells, toPropertyMap } from "@/entities/block/model/visibility";
 import { useCanvasStoreBridge, type CanvasPersistHandler } from "../store/canvasStore";
 import { CanvasInspector } from "./CanvasInspector";
 import { CanvasSettingsPanel } from "./CanvasSettingsPanel";

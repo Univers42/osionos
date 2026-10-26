@@ -14,7 +14,7 @@ import React from "react";
 import type { Block, LayoutCell } from "@/entities/block";
 import type { PagePropertyEntry } from "@/entities/page/model/types";
 import { gridConfigFromLegacy } from "@/features/block-editor/ui/canvas/model/migration";
-import { filterVisibleCells, resolvePropertyMap } from "@/features/block-editor/ui/canvas/model/visibility";
+import { filterVisibleCells, resolvePropertyMap } from "@/entities/block/model/visibility";
 import { ReadOnlyBlock } from "./ReadOnlyBlock";
 
 /**

@@ -10,16 +10,16 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useRef, useState } from "react";
+import React from "react";
 import { X } from "lucide-react";
 import { useStore } from "zustand";
 
-import { validateFormula } from "@/shared/notion-database-sys/src/lib/engine/bridge";
 import { bringToFront, sendToBack } from "../model/frameOps";
 import { gridCellFromFrame, normalizeVisibilityFormula } from "../model/migration";
 import { legacySizingFromCanvas, migrateHorizontalConstraint, migrateVerticalConstraint, sizingFromLegacy, unmigrateHorizontalConstraint, unmigrateVerticalConstraint } from "../model/migrationMaps";
 import type { CanvasStoreApi } from "../store/canvasStore";
 import { CanvasNumberControl, CanvasSegmented, CanvasToggle } from "./CanvasInspectorControls";
+import { VisibilityFormulaField } from "../../visibility/VisibilityFormulaField";
 
 const CELL_COLOR_SWATCHES = [
   { label: "Surface", background: "var(--osio-bg-surface)", foreground: "var(--osio-fg-default)" },
@@ -71,11 +71,6 @@ export const CanvasInspector: React.FC<{ store: CanvasStoreApi; cellId: string; 
   const layoutConfig = useStore(store, (state) => state.layoutConfig);
   const dispatch = useStore(store, (state) => state.dispatch);
   const measuredHeight = useMeasuredCellHeight(cell?.id);
-  // The formula is drafted locally and committed on blur (like the cell
-  // title), so a half-typed formula never reaches the store.
-  const [formulaDraft, setFormulaDraft] = useState<string | null>(null);
-  const [formulaCheck, setFormulaCheck] = useState<{ ok: boolean; message: string } | null>(null);
-  const formulaInputRef = useRef<HTMLInputElement | null>(null);
   if (!cell) return null;
 
   const span = gridCellFromFrame(cell.frame, layoutConfig);
@@ -93,25 +88,6 @@ export const CanvasInspector: React.FC<{ store: CanvasStoreApi; cellId: string; 
       resolveCollisions: true,
     });
   };
-  const applyFormula = (source: string) => {
-    const next = normalizeVisibilityFormula(source);
-    if (next === normalizeVisibilityFormula(cell.visibilityFormula)) return;
-    dispatch({ type: "updateCell", id: cell.id, patch: { visibilityFormula: next } });
-  };
-  // The check never leaves the inspector: an invalid formula keeps the cell
-  // visible (the package fails open) and says why, here, in place.
-  const checkFormula = (source: string) => {
-    const trimmed = source.trim();
-    if (trimmed === "") {
-      setFormulaCheck(null);
-      return;
-    }
-    const result = validateFormula(trimmed);
-    setFormulaCheck(result.ok
-      ? { ok: true, message: "Formula is valid." }
-      : { ok: false, message: result.errors[0]?.message ?? "This formula is not valid." });
-  };
-
   return (
     <div className="osionos-layout-cell-inspector osio-canvas-advanced" aria-label="Cell options">
       <div className="osionos-layout-inspector-header">
@@ -178,41 +154,14 @@ export const CanvasInspector: React.FC<{ store: CanvasStoreApi; cellId: string; 
       </div>
       <div className="osionos-layout-control-row osionos-layout-control-row--stacked">
         <span>Visibility formula</span>
-        <input
-          ref={formulaInputRef}
-          className="osio-field w-full px-2 text-sm"
-          value={formulaDraft ?? cell.visibilityFormula ?? ""}
-          onFocus={() => setFormulaDraft(cell.visibilityFormula ?? "")}
-          onChange={(event) => setFormulaDraft(event.target.value)}
-          onBlur={() => {
-            const draft = formulaDraft;
-            setFormulaDraft(null);
-            if (draft !== null) applyFormula(draft);
+        <VisibilityFormulaField
+          value={cell.visibilityFormula}
+          onCommit={(next: string) => {
+            const normalized = normalizeVisibilityFormula(next);
+            if (normalized === normalizeVisibilityFormula(cell.visibilityFormula)) return;
+            dispatch({ type: "updateCell", id: cell.id, patch: { visibilityFormula: normalized } });
           }}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter") return;
-            event.preventDefault();
-            event.currentTarget.blur();
-          }}
-          placeholder='prop("status") == "active"'
-          aria-label="Visibility formula"
-          name="cell-visibility-formula"
-          autoComplete="off"
         />
-        <div className="osionos-layout-segmented">
-          <button
-            type="button"
-            title="Check the formula and show the first error"
-            onClick={() => checkFormula(formulaInputRef.current?.value ?? cell.visibilityFormula ?? "")}
-          >
-            Check
-          </button>
-        </div>
-        {formulaCheck ? (
-          <p role="status" className={formulaCheck.ok ? "text-xs text-[var(--osio-success)]" : "text-xs text-[var(--osio-danger)]"}>
-            {formulaCheck.message}
-          </p>
-        ) : null}
       </div>
       <CanvasToggle label="Wrap content" checked={cell.wrap !== false} onChange={(wrap) => dispatch({ type: "updateCell", id: cell.id, patch: { wrap } })} />
       <CanvasSegmented

@@ -93,6 +93,7 @@ export const OVERLAY_PROBES: Record<string, Probe> = {
     "tableConfig",
   ),
   conflictOf: probe(mk({ type: "paragraph", content: "p", conflictOf: "b1" }), "conflictOf"),
+  visibleWhen: probe(mk({ type: "paragraph", content: "p", visibleWhen: 'prop("status") == "active"' }), "visibleWhen"),
   buttonProgram: probe(
     mk({ type: "button", content: "Go", buttonProgram: { version: 1, steps: [{ op: "action", action: { type: "notify", message: "hi" } }] } }),
     "buttonProgram",
