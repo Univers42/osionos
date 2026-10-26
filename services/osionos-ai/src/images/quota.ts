@@ -37,10 +37,15 @@ export async function takeDaySeat(
 	userId: string,
 	limits: { perUser: number; global: number },
 	now: Date,
+	// Other features count their own day: the keys are the only difference.
+	keys: { user: (userId: string, day: string) => string; global: (day: string) => string } = {
+		user: imageDayKey,
+		global: imageGlobalDayKey,
+	},
 ): Promise<DaySeat> {
 	const day = utcDay(now);
-	const userKey = imageDayKey(userId, day);
-	const globalKey = imageGlobalDayKey(day);
+	const userKey = keys.user(userId, day);
+	const globalKey = keys.global(day);
 	// The counters of a day die with it.
 	const midnight = Math.floor(now.getTime() / 1000) + secondsUntilUtcMidnight(now);
 	const results = await redis

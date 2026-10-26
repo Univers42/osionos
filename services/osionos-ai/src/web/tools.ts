@@ -61,7 +61,9 @@ export interface WebRun {
 	provenance: UrlProvenance;
 	ledger: WorkspaceTextLedger;
 	taint: WebTaint;
-	counters: { searches: number; fetches: number };
+	counters: { searches: number; fetches: number; bytes?: number };
+	/** The run's own caps; unset is the chat's (C362). Research passes larger ones (C400). */
+	caps?: { searches: number; fetches: number };
 	/** Unset: web_search does not exist (C351). */
 	searxngUrl?: string;
 	/** Seams of the tests; production uses the real ones. */
@@ -85,8 +87,8 @@ const SENTENCES: Record<WebFailureCode, string> = {
 	web_protocol: 'The web tool failed.',
 };
 
-const SEARCH_CAP_REACHED = `This answer already made ${RUN_SEARCH_CAP} web searches. Answer with what you have.`;
-const FETCH_CAP_REACHED = `This answer already read ${RUN_FETCH_CAP} web pages. Answer with what you have.`;
+const searchCapReached = (cap: number) => `This answer already made ${cap} web searches. Answer with what you have.`;
+const fetchCapReached = (cap: number) => `This answer already read ${cap} web pages. Answer with what you have.`;
 
 /** The one place an error becomes a sentence: a WebFailure keeps its code, anything else is `web_protocol`. */
 function codeOf(error: unknown): WebFailureCode {
@@ -162,7 +164,8 @@ function searchTool(run: WebRun, baseUrl: string): ReadTool<z.infer<typeof searc
 		kind: 'read',
 		input: searchInput,
 		async run(_ctx, args) {
-			if (run.counters.searches >= RUN_SEARCH_CAP) return { ok: false, error: SEARCH_CAP_REACHED };
+			const cap = run.caps?.searches ?? RUN_SEARCH_CAP;
+			if (run.counters.searches >= cap) return { ok: false, error: searchCapReached(cap) };
 			run.counters.searches += 1;
 			const started = Date.now();
 			const query = cleanQuery(args.query);
@@ -208,7 +211,8 @@ function fetchTool(run: WebRun): ReadTool<z.infer<typeof fetchInput>, FetchedPag
 		kind: 'read',
 		input: fetchInput,
 		async run(_ctx, args) {
-			if (run.counters.fetches >= RUN_FETCH_CAP) return { ok: false, error: FETCH_CAP_REACHED };
+			const cap = run.caps?.fetches ?? RUN_FETCH_CAP;
+			if (run.counters.fetches >= cap) return { ok: false, error: fetchCapReached(cap) };
 			run.counters.fetches += 1;
 			const started = Date.now();
 			const url = run.provenance.allows(args.url);
@@ -232,6 +236,7 @@ function fetchTool(run: WebRun): ReadTool<z.infer<typeof fetchInput>, FetchedPag
 					},
 				});
 				await chargeDailyBytes(run.redis, run.userId, page.bytes);
+				run.counters.bytes = (run.counters.bytes ?? 0) + page.bytes;
 				// C350: links join the set only from a page this run read.
 				for (const link of page.links) run.provenance.add(link);
 				await taintWith(run, [new URL(page.url).hostname]);

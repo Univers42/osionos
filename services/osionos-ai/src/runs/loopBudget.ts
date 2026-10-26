@@ -1,7 +1,8 @@
 import { costMicroUsd } from '../gateway/platform.ts';
 import type { PlatformModelEntry } from '../gateway/platform.ts';
 import { usageForSettlement } from '../gateway/usage.ts';
-import { MAX_STEPS } from '../tools/loop.ts';
+import { clock, DEFAULT_RUN_LIMITS } from '../tools/limits.ts';
+import type { RunLimits } from '../tools/limits.ts';
 import { stepCeilingsMicroUsd, stepPromptChars } from './estimate.ts';
 
 /**
@@ -58,6 +59,12 @@ export interface LoopBudget {
 	 * step that asked is the last one of the loop.
 	 */
 	extend?: (amount: number) => Promise<boolean>;
+	/** The bounds of the loop; absent is the chat's (`DEFAULT_RUN_LIMITS`). */
+	limits?: RunLimits;
+	/** When the run started, in `clock` ms: the research clock counts from here (C399). */
+	startedAt?: number;
+	/** Set by `stepHasTools` when the clock, not the money or the steps, made a step the answer. */
+	deadlineHit?: boolean;
 }
 
 /**
@@ -137,8 +144,15 @@ export async function stepHasTools(
 	budget: LoopBudget,
 	{ stepNumber, steps }: { stepNumber: number; steps: readonly StepUsage[] },
 ): Promise<boolean> {
+	const limits = budget.limits ?? DEFAULT_RUN_LIMITS;
 	// The cap of the steps: the last step of the loop is the answer.
-	if (stepNumber >= MAX_STEPS - 1) return false;
+	if (stepNumber >= limits.maxSteps - 1) return false;
+	// The clock of a research run (C399): past it, the step is the answer, so
+	// the run still ends with text and never with a tool call nobody reads.
+	if (limits.answerAfterMs !== undefined && budget.startedAt !== undefined && clock.now() - budget.startedAt >= limits.answerAfterMs) {
+		budget.deadlineHit = true;
+		return false;
+	}
 
 	const { accrued, pool } = stepsLedger(budget, steps);
 	// The money the run still holds.
@@ -146,7 +160,7 @@ export async function stepHasTools(
 	// The ceiling of this step, and of the answer that follows it: the
 	// answer reads what the tools of this step add, so its ceiling is the
 	// one of a step whose prompt holds the pool AND the share of a step.
-	const { needed } = stepCeilingsMicroUsd(budget.pricing, { baseChars: budget.baseChars, pool });
+	const { needed } = stepCeilingsMicroUsd(budget.pricing, { baseChars: budget.baseChars, pool, limits });
 	if (held >= needed) return true;
 
 	// The money is missing: the run asks the ledger for it, ONCE. The

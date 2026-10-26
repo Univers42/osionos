@@ -2,7 +2,9 @@ import { config } from '../config.ts';
 import { costMicroUsd } from '../gateway/platform.ts';
 import type { PlatformModelEntry } from '../gateway/platform.ts';
 import { estimateTokens } from '../gateway/usage.ts';
-import { TOOL_DEFINITION_CHARS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS } from '../tools/index.ts';
+import { TOOL_DEFINITION_CHARS } from '../tools/index.ts';
+import { DEFAULT_RUN_LIMITS } from '../tools/limits.ts';
+import type { RunLimits } from '../tools/limits.ts';
 import { SYSTEM_PROMPT } from './prompt.ts';
 
 /**
@@ -115,12 +117,12 @@ export interface StepCeilings {
  */
 export function stepCeilingsMicroUsd(
 	model: PlatformModelEntry,
-	{ baseChars, pool = 0 }: { baseChars: number; pool?: number },
+	{ baseChars, pool = 0, limits = DEFAULT_RUN_LIMITS }: { baseChars: number; pool?: number; limits?: RunLimits },
 ): StepCeilings {
 	const step = stepCeilingMicroUsd(model, stepPromptChars(baseChars, pool));
 	// What the tools of the next step may add to the context: the share of a
 	// step, or what is left of the pool of the run, whichever is smaller.
-	const growth = Math.min(TOOL_OUTPUT_CHARS, Math.max(TOOL_POOL_CHARS - pool, 0));
+	const growth = Math.min(limits.stepChars, Math.max(limits.poolChars - pool, 0));
 	const answer = stepCeilingMicroUsd(model, stepPromptChars(baseChars, pool + growth));
 	return { step, answer, needed: step + answer };
 }
@@ -150,6 +152,7 @@ export function estimateRunMicroUsd(
 		sourceChars = 0,
 		systemChars = SYSTEM_PROMPT.length,
 		contextChars = 0,
+		limits,
 	}: {
 		text: string;
 		historyChars: number;
@@ -157,8 +160,10 @@ export function estimateRunMicroUsd(
 		sourceChars?: number;
 		systemChars?: number;
 		contextChars?: number;
+		/** Research passes its own: the answer's prompt holds a larger pool share. */
+		limits?: RunLimits;
 	},
 ): number {
 	const base = promptCharCount({ text, historyChars, pageChars, sourceChars, systemChars, contextChars });
-	return stepCeilingsMicroUsd(model, { baseChars: base }).needed;
+	return stepCeilingsMicroUsd(model, { baseChars: base, ...(limits ? { limits } : {}) }).needed;
 }
