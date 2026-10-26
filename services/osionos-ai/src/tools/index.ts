@@ -111,6 +111,8 @@ export interface ToolPool {
 	 * calls that come after the share is used up get the notice of the pool.
 	 */
 	startStep(): void;
+	/** The number of the step that is running: 0 until the first one begins. */
+	readonly step: number;
 	/** The output of a tool, cut to the room the pool has left. */
 	draw(text: string): string;
 	/** The notice, paid for by the pool: nothing when it does not fit. */
@@ -138,6 +140,7 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
 	// TOOL_OUTPUT_CHARS to the context of the run. It is empty until the
 	// step begins, so a pool that is never started gives nothing away.
 	let stepLeft = 0;
+	let step = 0;
 	/** The notice, paid for by the pool: nothing when it does not fit. */
 	const notice = (): string => {
 		if (left < POOL_SPENT.length) return '';
@@ -150,6 +153,10 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
 		},
 		startStep(): void {
 			stepLeft = TOOL_OUTPUT_CHARS;
+			step += 1;
+		},
+		get step(): number {
+			return step;
 		},
 		draw(text: string): string {
 			// The pool ran out while the tool worked.
