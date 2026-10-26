@@ -20,6 +20,7 @@
  */
 
 import { UUID_REGEX, identitySummaries, rest, safeText, sendJson } from './bridge-social-core.mjs';
+import { authorSummary } from './bridge-chat-ai.mjs';
 
 const MAX_HITS = 50;
 
@@ -49,7 +50,7 @@ export async function searchMessages(deps, session, url, response, config, { acc
 	if (ids.length === 0) return sendJson(response, 200, { ok: true, hits: [] }, config);
 
 	const rows = await rest(config, deps.fetchImpl,
-		`osionos_messages?channel_id=in.(${ids.join(',')})&deleted_at=is.null&search_doc=wfts(english).${encodeURIComponent(query)}&select=id,channel_id,author_id,content,created_at&order=created_at.desc&limit=${limit}`);
+		`osionos_messages?channel_id=in.(${ids.join(',')})&deleted_at=is.null&search_doc=wfts(english).${encodeURIComponent(query)}&select=id,channel_id,author_id,content,created_at,ai_run_id&order=created_at.desc&limit=${limit}`);
 	const list = Array.isArray(rows) ? rows : [];
 	const identities = await identitySummaries(config, deps.fetchImpl, list.map((r) => r.author_id));
 	let channelMeta = new Map();
@@ -62,7 +63,7 @@ export async function searchMessages(deps, session, url, response, config, { acc
 		messageId: r.id, channelId: r.channel_id,
 		channelName: channelMeta.get(r.channel_id)?.name ?? 'channel',
 		workspaceId: channelMeta.get(r.channel_id)?.workspace_id ?? null,
-		authorName: identities.get(r.author_id)?.name ?? 'Member',
+		authorName: authorSummary(r, identities)?.name ?? 'Member',
 		snippet: snippet(r.content, query), createdAt: r.created_at,
 	}));
 	return sendJson(response, 200, { ok: true, hits }, config);
