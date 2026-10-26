@@ -110,6 +110,14 @@ const envSchema = z.object({
 	// Off, the /api/ai/mcp-servers paths do not exist.
 	OSIONOS_AI_MCP_CLIENT: z.string().optional(),
 	OSIONOS_AI_CUSTOM_AGENTS: z.string().optional(),
+	// The web tools, web_search and web_fetch (web C369). OFF unless exactly
+	// "on": the public overlay leaves it empty until C371 and C372 hold.
+	OSIONOS_AI_WEB: z.string().optional(),
+	// The one SearXNG the search tool calls (web C351): a deployment setting,
+	// never a user's or the model's. Unset, web_search does not exist.
+	OSIONOS_AI_SEARXNG_URL: z.string().url().optional(),
+	// The operator page named in the User-Agent of every fetch (web C344).
+	OSIONOS_AI_WEB_CONTACT_URL: z.string().url().default('https://github.com/Univers42/osionos'),
 	// The remote MCP endpoint (G4b, devil C118). Comma lists, added to the
 	// loopback defaults: the hosts the endpoint answers to (the public host
 	// goes here, only when the deployment has one) and the browser origins
@@ -211,6 +219,9 @@ const rawEnv = {
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
 	OSIONOS_AI_MCP_CLIENT: process.env.OSIONOS_AI_MCP_CLIENT,
 	OSIONOS_AI_CUSTOM_AGENTS: process.env.OSIONOS_AI_CUSTOM_AGENTS,
+	OSIONOS_AI_WEB: process.env.OSIONOS_AI_WEB,
+	OSIONOS_AI_SEARXNG_URL: process.env.OSIONOS_AI_SEARXNG_URL || undefined,
+	OSIONOS_AI_WEB_CONTACT_URL: process.env.OSIONOS_AI_WEB_CONTACT_URL || undefined,
 	OSIONOS_AI_MCP_ALLOWED_HOSTS: process.env.OSIONOS_AI_MCP_ALLOWED_HOSTS,
 	OSIONOS_AI_MCP_ALLOWED_ORIGINS: process.env.OSIONOS_AI_MCP_ALLOWED_ORIGINS,
 	OSIONOS_AI_MCP_PENDING_PER_TOKEN: process.env.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
@@ -394,6 +405,10 @@ export interface AiServiceConfig {
 	patEnabled: boolean;
 	mcpClientEnabled: boolean;
 	customAgentsEnabled: boolean;
+	webEnabled: boolean;
+	/** The SearXNG base URL, without a trailing slash; undefined = no web_search. */
+	searxngUrl: string | undefined;
+	webContactUrl: string;
 	/** The hosts the MCP endpoint answers to (lower-case, loopback included). */
 	mcpAllowedHosts: readonly string[];
 	/** The browser origins that may reach the MCP endpoint: none by default. */
@@ -480,6 +495,9 @@ export const config: AiServiceConfig = Object.freeze({
 	// Exactly "on" (C288): no trim, no case folding, so a stray value stays off.
 	mcpClientEnabled: parsed.data.OSIONOS_AI_MCP_CLIENT === 'on',
 	customAgentsEnabled: parsed.data.OSIONOS_AI_CUSTOM_AGENTS === 'on',
+	webEnabled: parsed.data.OSIONOS_AI_WEB === 'on',
+	searxngUrl: parsed.data.OSIONOS_AI_SEARXNG_URL?.replace(/\/+$/, ''),
+	webContactUrl: parsed.data.OSIONOS_AI_WEB_CONTACT_URL,
 	mcpAllowedHosts: Object.freeze(['localhost', '127.0.0.1', ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),
 	mcpAllowedOrigins: Object.freeze(commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_ORIGINS)),
 	mcpPendingPerToken: parsed.data.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
