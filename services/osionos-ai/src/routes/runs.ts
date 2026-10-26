@@ -30,6 +30,8 @@ const startRunSchema = z.object({
 	agentId: z.enum(BUILTIN_AGENT_IDS).optional(),
 	// The connection the run spends: the platform one, or one of the caller's.
 	connectionId: z.string().min(1).max(64).optional(),
+	// How hard a reasoning model thinks. Absent is the run of before.
+	effort: z.enum(['low', 'medium', 'high']).optional(),
 	attachments: z.array(z.discriminatedUnion('kind', [
 		z.object({ kind: z.literal('chat'), id: z.string().regex(UUID, 'id must be a uuid') }).strict(),
 		z.object({ kind: z.literal('media'), path: z.string().regex(MEDIA_CAPABILITY_PATH, 'path must match SERVE_RE') }).strict(),
@@ -178,6 +180,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		ownerId: user.userId,
 		text: body.text,
 		target: resolved.target,
+		effort: body.effort,
 		pageIds,
 		memberWorkspaceIds: workspaces,
 		user,

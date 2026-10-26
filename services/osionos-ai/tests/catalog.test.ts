@@ -178,11 +178,12 @@ describe('osionos-ai catalog', () => {
 				label: 'Mock Model',
 				default: true,
 				vision: false,
+				reasoning: false,
 				contextWindow: 128000,
 				inputMicroUsdPerMTok: 3_000_000,
 				outputMicroUsdPerMTok: 15_000_000,
 			},
-			{ id: 'mock-free', label: 'Mock Free', default: false, vision: false, contextWindow: 8192 },
+			{ id: 'mock-free', label: 'Mock Free', default: false, vision: false, reasoning: false, contextWindow: 8192 },
 		]);
 	});
 

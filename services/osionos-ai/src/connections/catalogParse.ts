@@ -17,6 +17,8 @@ export interface CatalogModel {
 	outputMicroUsdPerMTok?: number;
 	/** Whether the model accepts image input. */
 	vision?: boolean;
+	/** Whether the catalog says the model reasons. */
+	reasoning?: boolean;
 	/** The modalities the catalog declares for the model. */
 	modalities?: { input?: string[]; output?: string[] };
 }
@@ -56,6 +58,8 @@ const modelSchema = z.object({
 			output: z.array(z.string()).optional(),
 		})
 		.optional(),
+	// A reasoning flag that is not a boolean must not cost the whole model.
+	reasoning: z.boolean().optional().catch(undefined),
 });
 
 /** The shape of a provider of the catalog. */
@@ -92,6 +96,7 @@ function toModel(raw: unknown): CatalogModel | null {
 		...(output === undefined ? {} : { outputMicroUsdPerMTok: Math.round(output * 1e6) }),
 		...(modalities ? { modalities } : {}),
 		vision,
+		reasoning: model.reasoning === true,
 	};
 }
 

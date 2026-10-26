@@ -17,6 +17,8 @@ export interface PlatformModelEntry {
 	default: boolean;
 	/** Whether the model accepts image input: `input` contains "image". */
 	vision?: boolean;
+	/** Whether the model reasons, so a run may ask for an effort. Absent is false. */
+	reasoning?: boolean;
 }
 
 const platformModelSchema = z.object({
@@ -26,6 +28,7 @@ const platformModelSchema = z.object({
 	inputMicroUsdPerMTok: z.number().int().nonnegative(),
 	outputMicroUsdPerMTok: z.number().int().nonnegative(),
 	default: z.boolean().optional(),
+	reasoning: z.boolean().optional(),
 });
 
 /** The allowlist: at least one model, exactly one of them the default. */
@@ -58,5 +61,6 @@ export function decodePlatformModels(raw: string): PlatformModelEntry[] | null {
 		...model,
 		default: model.default === true,
 		vision: Array.isArray(model.input) && model.input.includes('image'),
+		reasoning: model.reasoning === true,
 	}));
 }

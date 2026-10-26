@@ -32,10 +32,22 @@ export const PLATFORM_CONNECTION_ID = "platform";
 /** The model name that means "the service's own choice" — it is not a model. */
 const AUTO_MODEL = "auto";
 
+/** How hard a reasoning model thinks. */
+export type AiEffort = "low" | "medium" | "high";
+
+export const AI_EFFORTS: readonly AiEffort[] = ["low", "medium", "high"];
+
+/** The effort a stored value names, or undefined for anything else. */
+export function parseEffort(value: unknown): AiEffort | undefined {
+  return AI_EFFORTS.find((effort) => effort === value);
+}
+
 /** A connection and a model — what every run is sent with. */
 export interface AiSelection {
   connectionId: string;
   model: string;
+  /** Only a reasoning model uses it; absent is the service's own default. */
+  effort?: AiEffort;
 }
 
 /** The part of a connection the fallback needs. */
@@ -49,6 +61,8 @@ export interface AiModelLike {
   default?: boolean;
   /** Whether the model can see images. */
   vision?: boolean;
+  /** Whether the model reasons, so an effort applies to it. */
+  reasoning?: boolean;
 }
 
 /** The slice of `Storage` this module uses — a test can pass its own. */
@@ -76,7 +90,8 @@ export function readAiSelection(storage: SelectionStorage | null = browserStorag
     const connectionId = typeof parsed?.connectionId === "string" ? parsed.connectionId.trim() : "";
     if (!connectionId) return null;
     const model = typeof parsed?.model === "string" ? parsed.model.trim() : "";
-    return { connectionId, model };
+    const effort = parseEffort(parsed?.effort);
+    return { connectionId, model, ...(effort ? { effort } : {}) };
   } catch {
     return null;
   }
@@ -126,7 +141,22 @@ export function resolveAiSelection(
   const models = modelsByConnection[connection.id] ?? [];
   const wantedModel = wanted && stored ? stored.model : "";
   const model = models.some((entry) => entry.id === wantedModel) ? wantedModel : defaultModelId(models);
-  return { connectionId: connection.id, model };
+  const effort = wanted && stored ? parseEffort(stored.effort) : undefined;
+  return { connectionId: connection.id, model, ...(effort ? { effort } : {}) };
+}
+
+/**
+ * The effort a run is sent with: the stored choice, when it was made for this
+ * very connection and model. The service drops it for a model that does not
+ * reason (services/osionos-ai/src/runs/effort.ts), so no model list is read.
+ */
+export function effortFor(
+  selection: AiSelection | null,
+  connectionId: string,
+  model: string | undefined,
+): AiEffort | undefined {
+  if (!selection || selection.connectionId !== connectionId || selection.model !== model) return undefined;
+  return selection.effort;
 }
 
 /**
