@@ -26,6 +26,7 @@ import {
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 import { SEED_PAGES } from "../data/seedPages";
+import { isSeedTarget } from "./seedTarget";
 import {
   seedToEntry,
   localId,
@@ -105,7 +106,7 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
         await get().fetchPages(realWsId, jwt);
         verifiedWorkspaces.add(realWsId);
       }
-      if ((get().pages[realWsId] ?? []).length > 0) continue;
+      if (!isSeedTarget(pagesPulledAt(realWsId), get().pages[realWsId])) continue;
       try {
         const page = await api.post<PageEntry>(
           "/api/pages",
