@@ -85,4 +85,6 @@ export interface UpstreamRunInput {
 	viewBlock?: string;
 	/** The workspace block: the pages the caller can read (plan H1). */
 	workspaceBlock?: string;
+	/** Whether the run offers the web tools: the runner checked the three layers (C355). */
+	web?: boolean;
 }

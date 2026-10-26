@@ -266,30 +266,27 @@ test.describe("database-inline-header", () => {
     // (count, not first-visible — the "New" row made that pass vacuously).
     await expect(block.locator("tbody tr")).toHaveCount(2); // starter + New
 
-    // The + panel: "Select type" header + searchable sectioned type grid.
-    // It floats LEFT of the table (over the page margin/sidebar) so it never
-    // covers the columns being edited; clamps to the viewport when cramped.
+    // The + panel: searchable sectioned type grid, hanging under the + like
+    // Notion's (left edges aligned), flipped to end-align near the right edge.
     const addBtn = block.locator('[aria-label="Add property"]');
     const addBox = await addBtn.boundingBox();
     await addBtn.click();
     await expect(page.getByText("Select type")).toBeVisible();
-    const tableBox = await block.locator("table").boundingBox();
     const panelBox = await page.getByTestId("add-property-panel").boundingBox();
-    const expectedLeft = Math.max(8, tableBox.x - panelBox.width - 12);
-    expect(Math.abs(panelBox.x - expectedLeft)).toBeLessThan(4); // ±borders
+    const viewport = page.viewportSize();
+    const fitsRight = addBox.x + panelBox.width <= viewport.width - 8;
+    const expectedLeft = fitsRight ? addBox.x : addBox.x + addBox.width - panelBox.width;
+    expect(Math.abs(panelBox.x - Math.max(8, expectedLeft))).toBeLessThan(4); // ±borders
     expect(panelBox.y).toBeGreaterThanOrEqual(addBox.y + addBox.height);
-    // Shrink-to-fit invariant: the panel's right edge never crosses the
-    // table's left edge (it narrows down to its 280px floor first).
-    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(Math.max(tableBox.x + 2, 294));
+    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(viewport.width - 6);
 
-    // Regression (narrow margin): the fixed-400px panel used to clamp to
-    // x=8 and spill over the table's left columns on smaller windows.
+    // A narrow window keeps the panel inside the viewport.
     await page.keyboard.press("Escape");
     await page.setViewportSize({ width: 1000, height: 720 });
     await addBtn.click();
-    const nTableBox = await block.locator("table").boundingBox();
     const nPanelBox = await page.getByTestId("add-property-panel").boundingBox();
-    expect(nPanelBox.x + nPanelBox.width).toBeLessThanOrEqual(Math.max(nTableBox.x + 2, 294));
+    expect(nPanelBox.x).toBeGreaterThanOrEqual(6);
+    expect(nPanelBox.x + nPanelBox.width).toBeLessThanOrEqual(1000 - 6);
     await page.keyboard.press("Escape");
     await page.setViewportSize({ width: 1280, height: 720 });
     await addBtn.click();

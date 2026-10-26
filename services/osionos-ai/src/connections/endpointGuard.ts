@@ -23,10 +23,11 @@ import { httpError } from '../http.ts';
  * THE BLOCKED RANGES. An address in one of them is never reached.
  *
  * IPv4: 0.0.0.0/8, 10/8, 100.64/10, 127/8, 169.254/16, 172.16/12,
- * 192.0.0/24, 192.168/16, 198.18/15, 224/4, 240/4.
- * IPv6: ::/128, ::1/128, fc00::/7, fe80::/10, ff00::/8, 100::/64 and the
- * prefixes that carry an IPv4 address: ::/96, 64:ff9b::/96, 64:ff9b:1::/48,
- * 2002::/16.
+ * 192.0.0/24, 192.0.2/24, 192.88.99/24, 192.168/16, 198.18/15, 198.51.100/24,
+ * 203.0.113/24, 224/4, 240/4.
+ * IPv6: ::/128, ::1/128, fc00::/7, fec0::/10, fe80::/10, ff00::/8, 100::/64,
+ * 2001:db8::/32 and the prefixes that carry an IPv4 address: ::/96,
+ * 64:ff9b::/96, 64:ff9b:1::/48, 2001::/32, 2002::/16.
  * The IPv4-mapped range ::ffff:0:0/96 is not a range of its own: an address
  * in it is judged by the IPv4 address it carries.
  */
@@ -38,8 +39,12 @@ const BLOCKED_V4_SUBNETS: readonly (readonly [string, number])[] = [
 	['169.254.0.0', 16],
 	['172.16.0.0', 12],
 	['192.0.0.0', 24],
+	['192.0.2.0', 24], // documentation (TEST-NET-1)
+	['192.88.99.0', 24], // the retired 6to4 relay anycast
 	['192.168.0.0', 16],
 	['198.18.0.0', 15],
+	['198.51.100.0', 24], // documentation (TEST-NET-2)
+	['203.0.113.0', 24], // documentation (TEST-NET-3)
 	['224.0.0.0', 4],
 	['240.0.0.0', 4],
 ];
@@ -52,9 +57,12 @@ const BLOCKED_V6_SUBNETS: readonly (readonly [string, number])[] = [
 	['::', 96], // the deprecated IPv4-compatible addresses
 	['64:ff9b::', 96], // NAT64, the well-known prefix
 	['64:ff9b:1::', 48], // NAT64, the local-use prefix
+	['2001::', 32], // Teredo, a tunnel to an IPv4 address
 	['2002::', 16], // 6to4, the relay of an IPv4 address
+	['2001:db8::', 32], // documentation
 	['100::', 64], // the discard-only prefix
 	['fc00::', 7],
+	['fec0::', 10], // the deprecated site-local range, still routed on some internal nets
 	['fe80::', 10],
 	['ff00::', 8],
 ];
@@ -212,7 +220,7 @@ const systemResolver: Resolver = async (hostname) => dnsPromises.lookup(hostname
  * whole host: a name that answers with a public address and a private one is
  * refused, not half-trusted.
  */
-export function guardedLookup(resolver: Resolver = systemResolver) {
+export function guardedLookup(resolver: Resolver = systemResolver, { trustDevHosts = true } = {}) {
 	return (
 		hostname: string,
 		options: LookupOptions,
@@ -225,7 +233,7 @@ export function guardedLookup(resolver: Resolver = systemResolver) {
 					return;
 				}
 				// A development host is trusted: its private addresses are the point.
-				const trusted = isDevHost(hostname.toLowerCase());
+				const trusted = trustDevHosts && isDevHost(hostname.toLowerCase());
 				const refused = trusted ? undefined : addresses.find((entry) => isBlockedAddress(entry.address));
 				if (refused) {
 					callback(new Error('the address is not allowed'), '', 4);
@@ -261,9 +269,12 @@ export type GuardedFetch = (input: string | URL | Request, init?: RequestInit, t
  * The timeout is the caller's: 0 means no bound, which is what a stream of a
  * run needs; the short calls (the test of a connection, the list of its
  * models) pass eight seconds.
+ *
+ * `trustDevHosts: false` turns the development hatch off for this fetch: the
+ * web fetcher reaches hosts the model names, never a host of ours (web C343).
  */
-export function createGuardedFetch(resolver: Resolver = systemResolver): GuardedFetch {
-	const agent = new Agent({ connect: { lookup: guardedLookup(resolver) } });
+export function createGuardedFetch(resolver: Resolver = systemResolver, options: { trustDevHosts?: boolean } = {}): GuardedFetch {
+	const agent = new Agent({ connect: { lookup: guardedLookup(resolver, options) } });
 	return async (input, init, timeoutMs = 0) => {
 		const timeout = timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined;
 		const signal =

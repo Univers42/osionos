@@ -102,6 +102,7 @@ const AssistantAnswer = React.memo(function AssistantAnswer({
           key={permission.approvalId}
           approvalId={permission.approvalId}
           provenanceTitles={provenanceTitles(permission.provenancePageIds, citations)}
+          influencedBy={permission.influencedBy}
           onOpenPage={(pageId) => openCitation({ n: 0, collection: "page", pageId, title: "", snippet: "" })}
           onContinuation={(runId) => {
             void useChatStore.getState().followUp(conversationId, runId);

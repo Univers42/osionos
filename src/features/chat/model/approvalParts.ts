@@ -42,6 +42,8 @@ export interface PermissionPart {
   provenancePageIds?: string[];
   /** When the question closes itself. */
   expiresAt?: string;
+  /** What outside content shaped the request: `mcp:<label>` or `web:<domain>`. */
+  influencedBy?: string[];
 }
 
 /**
@@ -57,6 +59,9 @@ export function permissionFromEvent(data: Record<string, unknown>): PermissionPa
   const verb = typeof data.verb === "string" ? data.verb : "";
   const expiresAt = typeof data.expiresAt === "string" ? data.expiresAt : "";
   const pageIds = pageIdsOf(data.provenance);
+  const influencedBy = Array.isArray(data.influencedBy)
+    ? data.influencedBy.filter((entry): entry is string => typeof entry === "string" && entry !== "")
+    : [];
   return {
     type: "permission",
     approvalId,
@@ -64,6 +69,7 @@ export function permissionFromEvent(data: Record<string, unknown>): PermissionPa
     ...(verb ? { verb } : {}),
     ...(pageIds.length > 0 ? { provenancePageIds: pageIds } : {}),
     ...(expiresAt ? { expiresAt } : {}),
+    ...(influencedBy.length > 0 ? { influencedBy } : {}),
   };
 }
 

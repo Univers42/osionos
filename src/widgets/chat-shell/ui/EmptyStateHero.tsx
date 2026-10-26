@@ -54,6 +54,8 @@ interface Props {
   agentId?: string | null;
   /** The reader picked another agent. */
   onAgentChange?: (agentId: string | null) => void;
+  /** The workspace switch of the web tools is on. */
+  webAvailable?: boolean;
   /** The attached files — a block's "Ask AI" may have brought one. */
   attachments?: ComposerAttachment[];
   onAttachmentsChange?: (attachments: ComposerAttachment[]) => void;
@@ -113,7 +115,7 @@ const StarterList: React.FC<{ onPick: (text: string) => void }> = ({ onPick }) =
 /** A new chat: a greeting, the composer, who answers, and ways to start. */
 export const EmptyStateHero: React.FC<Props> = ({
   value, onChange, onSubmit, onConnect, onPick, selection, onSelectionChange, chips, onChipsChange,
-  agents = [], agentId = null, onAgentChange, attachments, onAttachmentsChange, firstName, focusSignal,
+  agents = [], agentId = null, onAgentChange, attachments, onAttachmentsChange, firstName, focusSignal, webAvailable,
 }) => {
   const greeting = `${greetingFor(new Date().getHours())}${firstName ? `, ${firstName}` : ""}`;
   const runnable = agents.filter((agent) => agent.kind !== "custom" || !agent.archived);
@@ -146,6 +148,7 @@ export const EmptyStateHero: React.FC<Props> = ({
             attachments={attachments}
             onAttachmentsChange={onAttachmentsChange}
             focusSignal={focusSignal}
+            webAvailable={webAvailable}
             autoFocus
           />
         </BrainLens>
