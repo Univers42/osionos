@@ -94,6 +94,12 @@ const MESSAGES: Record<string, (retryAfter: number | null) => string> = {
   endpoint_not_allowed: () => "Our server refused that address",
   provider_not_supported: () => "We do not support that provider yet",
   oauth_failed: () => "The sign-in did not go through. Start it again.",
+  agents_disabled: () => "Agents are turned off in this workspace",
+  custom_agents_not_allowed: () => "Custom agents are not allowed in this workspace",
+  agent_wrong_workspace: () => "That agent belongs to another workspace",
+  agent_needs_review: () => "That agent needs a workspace admin to review it before it can run",
+  agent_archived: () => "That agent is archived",
+  agent_invalid: () => "That agent can no longer run. Pick another one",
   internal: () => "Something went wrong. Try again.",
 };
 
