@@ -100,9 +100,10 @@ export async function settleTarget(
 	db: Pool,
 	target: ResolvedTarget,
 	{ userId, day, reserved, actual }: { userId: string; day: string; reserved: number; actual: number },
+	client?: PoolClient,
 ): Promise<void> {
 	if (!target.platformBudget) return;
-	await settle(db, { userId, day, reserved, actual });
+	await settle(db, { userId, day, reserved, actual }, client);
 }
 
 /**

@@ -197,6 +197,19 @@ export interface AiMessage {
   createdAt: string;
 }
 
+/** A model a run may move to: a connection of the caller (or the platform) and its model. */
+export interface AiFallback {
+  connectionId?: string;
+  model: string;
+}
+
+/** The data of the `route` event: the run moved from one model to the next. */
+export interface AiRouteEvent {
+  from: string;
+  to: string;
+  reason: "rate_limited" | "upstream_error" | "unavailable";
+}
+
 /** The body of `POST /runs`. `runId` is the client's idempotency key. */
 export interface StartRunInput {
   runId: string;
@@ -211,6 +224,11 @@ export interface StartRunInput {
    * Absent is the general assistant — the run of today, byte for byte.
    */
   agentId?: string;
+  /**
+   * The models the run moves to, in order (at most two), when the model before
+   * them fails before it said anything. Absent is the run of today.
+   */
+  fallbacks?: AiFallback[];
   /** How hard a reasoning model thinks; sent only for a model that reasons. */
   effort?: "low" | "medium" | "high";
   attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string; name?: string }>;
