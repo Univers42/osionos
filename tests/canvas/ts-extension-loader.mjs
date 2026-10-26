@@ -200,6 +200,10 @@ export async function load(url, context, nextLoad) {
   // is none of the app's business.
   const isFile = path.startsWith("file:");
 
+  // A style import is Vite's business; in node it is an empty module, so a
+  // component that imports its .scss can still be rendered to markup.
+  if (isFile && /\.s?css$/.test(path)) return { format: "module", source: "", shortCircuit: true };
+
   // A .tsx file: node refuses the extension outright, so the source is
   // compiled here — the markdown engine's React renderer is one (it calls
   // React.createElement, so it holds no JSX) and a component of the app is

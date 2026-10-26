@@ -162,8 +162,8 @@ describe('osionos-ai connections', () => {
 		assert.equal(answer.status, 200);
 		const models = answer.body?.models as { id: string; label: string; default: boolean }[];
 		assert.deepEqual(models, [
-			{ id: 'mock-model', label: 'mock-model', default: true, vision: false },
-			{ id: 'mock-small', label: 'mock-small', default: false, vision: false },
+			{ id: 'mock-model', label: 'mock-model', default: true, vision: false, reasoning: false },
+			{ id: 'mock-small', label: 'mock-small', default: false, vision: false, reasoning: false },
 		]);
 		// The list is cached under the id of the connection, for ten minutes.
 		const key = `ai:models:${String(created?.id)}`;

@@ -77,6 +77,45 @@ test.describe("database-inline-header", () => {
     expect(registry).toContain("Untitled Database");
   });
 
+  test("clicking the inline title renames the database, and the name survives a reload", async ({ page }) => {
+    const block = await insertInlineDatabase(page);
+    await block.getByRole("button", { name: "Untitled Database", exact: true }).click();
+    const input = block.getByRole("textbox", { name: "Database title" });
+    await expect(input).toBeFocused();
+    await input.fill("Reading list");
+    await input.press("Enter");
+    await expect(block.getByRole("button", { name: "Reading list", exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem("osionos.databases.created.v1"))).toContain("Reading list");
+
+    await page.reload();
+    const reloaded = page.locator(".osionos-database-block--inline").first();
+    await reloaded.waitFor({ timeout: 15_000 });
+    await expect(reloaded.getByRole("button", { name: "Reading list", exact: true })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Escape leaves the inline title unchanged", async ({ page }) => {
+    const block = await insertInlineDatabase(page);
+    await block.getByRole("button", { name: "Untitled Database", exact: true }).click();
+    const input = block.getByRole("textbox", { name: "Database title" });
+    await input.fill("Discarded");
+    await input.press("Escape");
+    await expect(block.getByRole("button", { name: "Untitled Database", exact: true })).toBeVisible();
+    await expect(block.getByText("Discarded")).toHaveCount(0);
+  });
+
+  test("the full-page title renames on a single click", async ({ page }) => {
+    const block = await insertInlineDatabase(page);
+    await block.locator('button[title="Open database"]').click();
+    const fullPage = page.locator(".osionos-database-block--full").first();
+    await fullPage.waitFor({ timeout: 15_000 });
+    await fullPage.getByRole("heading", { name: "Untitled Database" }).getByRole("button").click();
+    const input = fullPage.getByRole("textbox", { name: "Database name" });
+    await expect(input).toBeFocused();
+    await input.fill("Roadmap");
+    await input.press("Enter");
+    await expect(fullPage.getByRole("heading", { name: "Roadmap" })).toBeVisible();
+  });
+
   test("··· opens the view menu with the full action list", async ({ page }) => {
     const block = await insertInlineDatabase(page);
     await block.hover();

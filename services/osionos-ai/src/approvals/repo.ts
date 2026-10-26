@@ -164,7 +164,7 @@ export async function recordOutcome(
 		error,
 	}: {
 		id: string;
-		status: Extract<ApprovalStatus, 'executed' | 'failed' | 'partial'>;
+		status: Extract<ApprovalStatus, 'executed' | 'failed' | 'partial' | 'unknown'>;
 		result?: unknown;
 		error?: string | null;
 	},

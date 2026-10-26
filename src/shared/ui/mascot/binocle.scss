@@ -1,0 +1,400 @@
+// The binocle mascot, ported from the website's _mascot.scss and cut to the
+// seven moods the app uses. The character keeps the website's colours in
+// both themes; only its tint follows the app accent. Everything that moves is transform/opacity; the
+// only loops are the idle blink, "thinking" and "listening", and all of them
+// stop under prefers-reduced-motion.
+
+$tube-slices: 6;
+$ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+.binocle {
+  // The character's own colours (--osio-mascot-*, fixed in every theme): an ink outline and
+  // pupils on pastel shells. Only the tint follows the app accent.
+  --outline: var(--osio-mascot-ink);
+  --lens-color: color-mix(in srgb, var(--osio-accent) 42%, var(--osio-mascot-paper));
+  --shell-color: color-mix(in srgb, var(--osio-accent) 24%, var(--osio-mascot-paper));
+  --tube-color: color-mix(in srgb, var(--osio-accent) 34%, var(--osio-mascot-paper));
+  --iris-color: var(--osio-mascot-ink);
+  --rim-color: var(--osio-mascot-paper);
+  --cheek-color: color-mix(in srgb, var(--osio-danger) 62%, transparent);
+  --mouth-fill: var(--osio-mascot-mouth);
+  --star-color: var(--osio-accent-fg);
+
+  // Pose, set per mood below; --look-* is written by AssistantMascot.
+  --look-x: 0px;
+  --look-y: 0px;
+  --tilt: 0deg;
+  --body-x: 0px;
+  --body-float: 0px;
+  --depth-x: 5px;
+  --depth-y: 4px;
+  --iris-scale: 1;
+  --shine-opacity: 1;
+  --brow-y: 0px;
+  --brow-left: 0deg;
+  --brow-right: 0deg;
+  --cheek-opacity: 0;
+  --cheek-scale: 0.5;
+  --sweat-opacity: 0;
+  --mouth-y: 0px;
+  --mouth-scale: 1;
+  --smile: 0;
+  --ajar: 0;
+  --flat: 0;
+  --ooh: 0;
+  --stars: 0;
+  --blink: 1;
+
+  --tube-x: calc(13px + (var(--depth-x) - 5px) * 1.6);
+  --tube-y: calc(-10px + (var(--depth-y) - 4px) * 1.4);
+
+  display: block;
+  overflow: visible;
+  flex: none;
+  transform-origin: 50% 58%;
+  transform: translateX(var(--body-x)) rotate(var(--tilt));
+  transition: transform 220ms ease;
+  filter: drop-shadow(0 4px 3px rgb(var(--osio-shadow-rgb, 0 0 0) / 0.22));
+}
+
+.svg-body-group {
+  transform: translateY(var(--body-float));
+  transition: transform 220ms $ease-pop;
+}
+
+.svg-arm,
+.svg-detail,
+.svg-center-band,
+.svg-bridge {
+  fill: none;
+  stroke: var(--outline);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.svg-arm {
+  stroke-width: 4;
+}
+
+.svg-detail {
+  stroke-width: 1.4;
+  opacity: 0.55;
+}
+
+.svg-center-band {
+  stroke-width: 2.8;
+}
+
+.svg-bridge {
+  stroke-width: 3.6;
+}
+
+.svg-shell {
+  fill: var(--shell-color);
+  stroke: var(--outline);
+  stroke-width: 2.2;
+  transition: fill 220ms ease;
+}
+
+// Each barrel is the shell repeated and stepped back up-right, darker with
+// depth: the lens reads as the front of a cylinder.
+.svg-tube {
+  stroke: var(--outline);
+  stroke-width: 1;
+  stroke-opacity: 0.55;
+  transform-box: fill-box;
+  transform-origin: center;
+
+  &:first-child {
+    stroke-width: 2.4;
+    stroke-opacity: 1;
+  }
+}
+
+@for $i from 1 through $tube-slices {
+  $depth: calc(($tube-slices + 1 - $i) / $tube-slices);
+
+  .svg-tube:nth-child(#{$i}) {
+    fill: color-mix(in srgb, var(--shell-color), var(--outline) #{(10 + 30 * $depth) * 1%});
+    transform: translate(calc(var(--tube-x) * #{$depth}), calc(var(--tube-y) * #{$depth})) scale(#{1 - 0.16 * $depth});
+  }
+}
+
+.svg-barrel {
+  fill: var(--tube-color);
+  stroke: var(--outline);
+  stroke-width: 2.1;
+}
+
+.svg-frame {
+  fill: var(--shell-color);
+  stroke: var(--outline);
+  stroke-width: 3.5;
+  transition: fill 300ms ease;
+}
+
+.svg-inner-rim {
+  fill: var(--lens-color);
+  stroke: var(--outline);
+  stroke-width: 2;
+  transition: fill 300ms ease;
+}
+
+.svg-rim {
+  fill: var(--rim-color);
+  stroke: var(--outline);
+  stroke-width: 1.9;
+  opacity: 0.9;
+}
+
+.svg-brow {
+  fill: none;
+  stroke: var(--outline);
+  stroke-width: 3.1;
+  stroke-linecap: round;
+  transition: transform 220ms $ease-pop;
+
+  &.left {
+    transform-origin: 44px 20px;
+    transform: translateY(var(--brow-y)) rotate(var(--brow-left));
+  }
+
+  &.right {
+    transform-origin: 140px 20px;
+    transform: translateY(var(--brow-y)) rotate(var(--brow-right));
+  }
+}
+
+.svg-eye {
+  transform: translate(var(--look-x), var(--look-y));
+  transition: transform 120ms ease-out;
+}
+
+.svg-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scaleY(var(--blink));
+  animation: binocle-blink 5.6s infinite;
+}
+
+.svg-pupil {
+  fill: var(--iris-color);
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(var(--iris-scale));
+  transition: transform 260ms $ease-pop, fill 260ms ease;
+}
+
+.svg-pupil-shine {
+  fill: var(--rim-color);
+  opacity: var(--shine-opacity);
+}
+
+.svg-cheek {
+  fill: var(--cheek-color);
+  opacity: var(--cheek-opacity);
+  transform: scale(var(--cheek-scale));
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 300ms ease, transform 300ms $ease-pop;
+}
+
+.svg-sweat {
+  fill: var(--osio-accent);
+  stroke: var(--outline);
+  stroke-width: 0.8;
+  opacity: var(--sweat-opacity);
+}
+
+.svg-star {
+  fill: var(--star-color);
+  stroke: var(--outline);
+  stroke-width: 0.8;
+  opacity: var(--stars);
+  transform: scale(calc(0.3 + var(--stars) * 0.7));
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 200ms ease, transform 300ms $ease-pop;
+}
+
+.svg-thought-bubble {
+  fill: var(--rim-color);
+  stroke: var(--outline);
+  stroke-width: 1.2;
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.svg-mouth-pad {
+  fill: var(--mouth-fill);
+  opacity: 0.94;
+}
+
+.svg-mouth {
+  fill: none;
+  stroke: var(--outline);
+  stroke-width: 4.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-origin: 92px 96px;
+  transform: translateY(var(--mouth-y)) scale(var(--mouth-scale));
+  transition: opacity 180ms ease, transform 220ms $ease-pop;
+
+  &.smile {
+    opacity: var(--smile);
+  }
+
+  &.ajar {
+    fill: var(--mouth-fill);
+    stroke-width: 3;
+    opacity: var(--ajar);
+  }
+
+  &.flat {
+    stroke-width: 3.2;
+    opacity: var(--flat);
+  }
+
+  &.ooh {
+    fill: var(--iris-color);
+    stroke-width: 2.4;
+    opacity: var(--ooh);
+  }
+}
+
+.binocle[data-mood="curious"] {
+  --smile: 0.8;
+}
+
+.binocle[data-mood="listening"] {
+  --iris-scale: 1.12;
+  --brow-y: -5px;
+  --brow-left: -6deg;
+  --brow-right: 6deg;
+  --tilt: 3deg;
+  --ajar: 0.8;
+  animation: binocle-listen 2.4s ease-in-out infinite;
+}
+
+.binocle[data-mood="thinking"] {
+  --iris-scale: 0.82;
+  --brow-left: 12deg;
+  --brow-right: -2deg;
+  --brow-y: 2px;
+  --flat: 1;
+  --mouth-scale: 0.78;
+  --tilt: -4deg;
+  --look-x: 3px;
+  --look-y: -3px;
+  animation: binocle-think 1.6s ease-in-out infinite;
+
+  .svg-thought-bubble {
+    opacity: 1;
+  }
+}
+
+.binocle[data-mood="happy"] {
+  --iris-scale: 1.15;
+  --brow-y: -3px;
+  --brow-left: -6deg;
+  --brow-right: 6deg;
+  --mouth-y: -3px;
+  --mouth-scale: 1.2;
+  --cheek-opacity: 0.55;
+  --cheek-scale: 1;
+  --ajar: 0.5;
+  --smile: 1;
+  --stars: 1;
+  --body-float: -3px;
+}
+
+.binocle[data-mood="surprised"] {
+  --iris-scale: 1.45;
+  --brow-y: -10px;
+  --brow-left: -18deg;
+  --brow-right: 18deg;
+  --ooh: 1;
+  --mouth-scale: 0.9;
+  --mouth-y: -5px;
+  --body-float: -4px;
+  --sweat-opacity: 1;
+}
+
+.binocle[data-mood="sleeping"] {
+  --blink: 0.08;
+  --iris-scale: 1.18;
+  --shine-opacity: 0;
+  --brow-y: 7px;
+  --brow-left: 5deg;
+  --brow-right: -5deg;
+  --smile: 1;
+  --mouth-scale: 1.24;
+  --mouth-y: -4px;
+  --cheek-opacity: 0.32;
+  --cheek-scale: 0.95;
+  --tilt: 9deg;
+
+  .svg-blink {
+    animation: none;
+  }
+}
+
+.binocle[data-mood="shy"] {
+  --iris-scale: 0.75;
+  --brow-y: 4px;
+  --brow-left: 6deg;
+  --brow-right: -6deg;
+  --cheek-opacity: 1;
+  --cheek-scale: 1.5;
+  --smile: 0.4;
+  --mouth-scale: 0.72;
+  --body-x: 4px;
+  --look-x: -3px;
+  --look-y: 3px;
+}
+
+@keyframes binocle-blink {
+  0%,
+  94%,
+  100% {
+    transform: scaleY(var(--blink));
+  }
+
+  97% {
+    transform: scaleY(0.08);
+  }
+}
+
+@keyframes binocle-listen {
+  0%,
+  100% {
+    transform: translateX(var(--body-x)) rotate(var(--tilt));
+  }
+
+  50% {
+    transform: translateX(var(--body-x)) rotate(calc(var(--tilt) + 2deg));
+  }
+}
+
+@keyframes binocle-think {
+  0%,
+  100% {
+    transform: translateX(var(--body-x)) rotate(var(--tilt)) translateY(0);
+  }
+
+  50% {
+    transform: translateX(var(--body-x)) rotate(var(--tilt)) translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .binocle,
+  .svg-blink {
+    animation: none;
+  }
+
+  .binocle *,
+  .binocle {
+    transition: none;
+  }
+}
