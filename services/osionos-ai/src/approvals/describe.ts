@@ -1,8 +1,12 @@
 import type { Pool } from 'pg';
 import { writeTools } from '../tools/writeToolList.ts';
 import { countExecutedInRun } from './repo.ts';
-import type { ApprovalPlan, ApprovalRow, ApprovalTarget } from './types.ts';
+import type { ApprovalPlan, ApprovalRow, ApprovalTarget, McpCard } from './types.ts';
 import type { AuthUser } from '../auth.ts';
+import { config } from '../config.ts';
+import { cardOf, readStoredCall } from '../mcpClient/card.ts';
+import { getToolNow } from '../mcpClient/repo.ts';
+import { influencedBy } from '../mcpClient/taint.ts';
 
 /**
  * The description of an approval: what the card shows, rebuilt from the row.
@@ -32,6 +36,9 @@ export interface ApprovalDescription {
 	createdAt: string;
 	/** What the write came to, in the words execution recorded: "… (page version N)" (C239). */
 	summary: string | null;
+	/** The card of an MCP call, rebuilt from the stored row (C281). */
+	mcp?: McpCard & { changed: boolean };
+	influencedBy?: string[];
 }
 
 /** The tool of an approval, by name. */
@@ -51,6 +58,7 @@ export async function describeApproval(
 	user: AuthUser,
 	row: ApprovalRow,
 ): Promise<ApprovalDescription> {
+	if (row.tool === 'mcp_call') return describeMcp(db, row);
 	const tool = toolOf(row.tool);
 	let plan: ApprovalPlan | null = null;
 	if (tool) {
@@ -77,6 +85,38 @@ export async function describeApproval(
 		expiresAt: new Date(row.expires_at).toISOString(),
 		createdAt: new Date(row.created_at).toISOString(),
 		summary: summaryOf(row.result),
+		...(await taint(db, row)),
+	};
+}
+
+async function taint(db: Pool, row: ApprovalRow): Promise<{ influencedBy?: string[] }> {
+	if (!config.mcpClientEnabled || row.origin !== 'run' || !row.conversation_id) return {};
+	const labels = await influencedBy(db, row.conversation_id);
+	return labels.length > 0 ? { influencedBy: labels } : {};
+}
+
+/**
+ * An MCP call, drawn from the row alone: the words the user agreed to are the
+ * stored ones. `changed` tells the client the tool no longer matches them, so
+ * approving would be refused (C272).
+ */
+async function describeMcp(db: Pool, row: ApprovalRow): Promise<ApprovalDescription> {
+	const call = readStoredCall(row.args);
+	const now = call ? await getToolNow(db, call.serverId, row.owner_id, call.toolName) : null;
+	return {
+		approvalId: row.id,
+		tool: row.tool,
+		verb: call ? `Call ${call.toolName} on ${call.serverLabel}` : row.tool,
+		status: row.status,
+		target: { title: call?.toolName ?? '', workspaceId: row.workspace_id, workspaceName: '' },
+		args: call?.arguments ?? {},
+		preview: { unit: 'none', count: 0 },
+		approvedInRun: await countExecutedInRun(db, row.run_id),
+		expiresAt: new Date(row.expires_at).toISOString(),
+		createdAt: new Date(row.created_at).toISOString(),
+		summary: summaryOf(row.result),
+		...(call ? { mcp: { ...cardOf(call), changed: !now || !now.enabled || now.snapshot_sha256 !== call.snapshotSha256 } } : {}),
+		...(await taint(db, row)),
 	};
 }
 
