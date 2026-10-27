@@ -121,3 +121,54 @@ describe('ex-member owner loses access (C557)', () => {
 		}, { env: ON });
 	});
 });
+
+// Live 2026-10-27: every non-owner editor got 403 on `blocks` because the page-topic path
+// required a can_edit LEVEL, while an editor without a rule holds can_view plus the
+// membership's update permission (C558). The write gate is the one PATCH /pages uses.
+describe('blocks from a non-owner member follow the page write gate (C558)', () => {
+	const blocks = (seq) => post({
+		event: 'collab',
+		payload: { t: 'blocks', actor: `${IDS.userB}:tab-one`, seq, pageId: CHILD, ops: [{ k: 'put', id: 'b1', parentId: null, block: { id: 'b1', type: 'paragraph', content: 'hi' }, v: 1 }] },
+	});
+	const withRule = (permission) => {
+		const seed = world({ rule: false, memberRole: 'editor' });
+		seed.osionos_share_rules = [{ id: 'rule-child', workspace_id: IDS.team, resource_type: 'page', resource_id: CHILD, target: { type: 'user', userId: IDS.userB }, permission, explicit: true }];
+		return seed;
+	};
+
+	it('an editor with no page rule publishes blocks', async () => {
+		const { publishes } = await run(world({ rule: false, memberRole: 'editor' }), async (base) => {
+			const result = await send(base, `/api/collaboration/${IDS.team}/events`, headersB(), blocks(1));
+			assert.equal(result.status, 200, result.text);
+		});
+		assert.equal(publishes.length, 1);
+		assert.equal(publishes[0].topic, CHILD_TOPIC);
+	});
+
+	it('a viewer member is refused and nothing is published', async () => {
+		const { publishes } = await run(world({ rule: false, memberRole: 'viewer' }), async (base) => {
+			const result = await send(base, `/api/collaboration/${IDS.team}/events`, headersB(), blocks(1));
+			assert.equal(result.status, 403, result.text);
+		});
+		assert.equal(publishes.length, 0);
+	});
+
+	it('an editor held to can_view by a page rule is refused', async () => {
+		const { publishes } = await run(withRule('can_view'), async (base) => {
+			const result = await send(base, `/api/collaboration/${IDS.team}/events`, headersB(), blocks(1));
+			assert.equal(result.status, 403, result.text);
+		});
+		assert.equal(publishes.length, 0);
+	});
+
+	it('an editor may post a note without a comment rule', async () => {
+		const { publishes } = await run(world({ rule: false, memberRole: 'editor' }), async (base) => {
+			const result = await send(base, `/api/collaboration/${IDS.team}/events`, headersB(), post({
+				event: 'collab',
+				payload: { t: 'note', actor: `${IDS.userB}:tab-one`, pageId: CHILD, noteId: 'n1', op: 'add', anchor: { blockId: 'b1' } },
+			}));
+			assert.equal(result.status, 200, result.text);
+		});
+		assert.equal(publishes.length, 1);
+	});
+});
