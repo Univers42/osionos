@@ -156,7 +156,9 @@ test("view filters on computed, select, multi-select and created columns", () =>
     [view([f("earned", "greater_than", 0)]), ["a", "c"]],
     [view([f("earned", "equals", 0)]), ["b", "d"]],
     [view([f("partHours", "greater_than_or_equal", 3)]), ["a", "b"]],
-    [view([f("status", "equals", "st-validated")]), ["a"]],
+    // c stores the label "Validated": grouping, sorting and formulas read it as that option, so filters do too.
+    [view([f("status", "equals", "st-validated")]), ["a", "c"]],
+    [view([f("status", "not_equals", "st-validated")]), ["b", "d"]],
     [view([f("tags", "contains", ["tg-ai"])]), ["b", "c"]],
     [view([f("tags", "is_empty", "")]), ["d"]],
     [view([f("earned", "greater_than", "")]), ["a", "b", "c", "d"]],

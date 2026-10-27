@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  aggregate, formatKpi, kpiProvenance, numericValues,
+  aggregate, formatKpi, kpiProvenance, numericValues, whereFilterLabel,
 } from "../../src/shared/notion-database-sys/src/components/views/dashboard/notion/model/kpiModel.ts";
 
 test("empty, null and boolean cells are not zeros", () => {
@@ -51,4 +51,16 @@ test("a filtered count states its share of the records, as an unfiltered one doe
     kpiProvenance({ fn: "count", matched: 4, total: 4, whereLabel: "Done is checked" }),
     "Count where Done is checked · All 4 records",
   );
+});
+
+test("a where-filter reads as words, with the option's label for a select", () => {
+  const properties = {
+    status: { id: "status", name: "Status", type: "select", options: [{ id: "opt-accepted", value: "accepted", color: "green" }] },
+    done: { id: "done", name: "Done", type: "checkbox" },
+  } as const;
+  const where = (propertyId: string, operator: string, value: unknown) => [{ id: "f", propertyId, operator, value }] as never;
+  assert.equal(whereFilterLabel(where("status", "equals", "opt-accepted"), properties), "Status is accepted");
+  assert.equal(whereFilterLabel(where("status", "equals", "accepted"), properties), "Status is accepted");
+  assert.equal(whereFilterLabel(where("done", "is_not_checked", true), properties), "Done is not checked");
+  assert.equal(whereFilterLabel([], properties), undefined);
 });

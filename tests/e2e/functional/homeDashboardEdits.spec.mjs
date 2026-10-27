@@ -70,10 +70,10 @@ test.describe("home dashboard edits", () => {
     // re-seed counted the section bodies and called a page with fewer than
     // four "stale", so two deletions are what used to throw the user's own
     // blocks away.
-    await deleteHomeBlock(page, "home-learn-block-db");
-    await deleteHomeBlock(page, "home-learn-block-title");
-    await deleteHomeBlock(page, "home-events-block-db");
-    await deleteHomeBlock(page, "home-events-block-title");
+    await deleteHomeBlock(page, "home-tasks-block-db");
+    await deleteHomeBlock(page, "home-tasks-block-title");
+    await deleteHomeBlock(page, "home-pages-block-db");
+    await deleteHomeBlock(page, "home-pages-block-title");
 
     // A reload: the page comes back from the local cache.
     const updatedAtBeforeReload = await settledHomeUpdatedAt(page);
@@ -81,8 +81,8 @@ test.describe("home dashboard edits", () => {
     await openHome(page);
 
     await expect(page.getByText("My own home note")).toBeVisible();
-    await expect(homeBlock(page, "home-learn-block-title")).toHaveCount(0);
-    await expect(homeBlock(page, "home-events-block-title")).toHaveCount(0);
+    await expect(homeBlock(page, "home-tasks-block-title")).toHaveCount(0);
+    await expect(homeBlock(page, "home-pages-block-title")).toHaveCount(0);
     // The reload did not re-seed: the cached Home page keeps its stamp.
     expect(await cachedHomeUpdatedAt(page)).toBe(updatedAtBeforeReload);
 
@@ -92,8 +92,8 @@ test.describe("home dashboard edits", () => {
     await openHome(page);
 
     await expect(page.getByText("My own home note")).toBeVisible();
-    await expect(homeBlock(page, "home-learn-block-title")).toHaveCount(0);
-    await expect(homeBlock(page, "home-events-block-title")).toHaveCount(0);
+    await expect(homeBlock(page, "home-tasks-block-title")).toHaveCount(0);
+    await expect(homeBlock(page, "home-pages-block-title")).toHaveCount(0);
     expect(await cachedHomeUpdatedAt(page)).toBe(updatedAtBeforeSecondReload);
   });
 
@@ -109,8 +109,8 @@ test.describe("home dashboard edits", () => {
     await page.keyboard.type("My own home note");
     await expect(page.getByText("My own home note")).toBeVisible();
     await expect.poll(() => cacheHolds(page, "My own home note")).toBe(true);
-    await deleteHomeBlock(page, "home-learn-block-db");
-    await deleteHomeBlock(page, "home-learn-block-title");
+    await deleteHomeBlock(page, "home-tasks-block-db");
+    await deleteHomeBlock(page, "home-tasks-block-title");
 
     // The next load re-seeds the Home, the way a deliberate seed bump does:
     // the cached page carries an old seed version.
@@ -136,9 +136,9 @@ test.describe("home dashboard edits", () => {
     // The re-seed merged: the user's own blocks are still there, and the
     // section they deleted is still gone.
     await expect(page.getByText("My own home note")).toBeVisible();
-    await expect(homeBlock(page, "home-learn-block-title")).toHaveCount(0);
-    await expect(homeBlock(page, "home-learn-block-db")).toHaveCount(0);
+    await expect(homeBlock(page, "home-tasks-block-title")).toHaveCount(0);
+    await expect(homeBlock(page, "home-tasks-block-db")).toHaveCount(0);
     // The seed's own blocks are back in place (the merge replaced them).
-    await expect(homeBlock(page, "home-events-block-db")).toHaveCount(1);
+    await expect(homeBlock(page, "home-pages-block-db")).toHaveCount(1);
   });
 });

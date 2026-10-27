@@ -109,7 +109,7 @@ export async function loadSysSourceState(sourceId: string, transport: SysTranspo
     if (column === source.titleColumn) { properties[id] = { id, name: "Name", type: "title" }; continue; }
     const base = { id, name: column.replace(/_/g, " "), type: type as PropertyType };
     properties[id] = type === "select"
-      ? { ...base, options: synthOptions(rows.map((row) => cellText(row[column]) ?? "")) }
+      ? { ...base, options: synthOptions([...(source.columnOptions?.[column] ?? []), ...rows.map((row) => cellText(row[column]) ?? "")]) }
       : base;
   }
 
@@ -181,10 +181,12 @@ class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
         loadSysSourceState(this.sourceId, this.transport),
         fetchSavedViews(this.slug(), this.transport).catch(() => ({})),
       ]);
-      this.held = { ...saved };
       const source = sysSourceById(this.sourceId);
       const editableIds = sysEditableBuiltInViewIds(source);
       const mergedViews = mergeSysViews(loaded.state.views, saved, editableIds);
+      // Baseline includes the shipped built-ins so an unchanged editable built-in
+      // is not mistaken for a user-created view and PUT on first load.
+      this.held = { ...loaded.state.views, ...saved };
       const merged: SysLoaded = { ...loaded, state: { ...loaded.state, views: mergedViews } };
       if (sysSessionSignal() === signal) cache.set(this.sourceId, merged);
       this.announce({ truncated: loaded.truncated, error: null });

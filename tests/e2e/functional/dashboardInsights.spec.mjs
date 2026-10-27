@@ -12,24 +12,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import { openFreshPage } from "../../browser/core/app.mjs";
-
-async function openHomeViews(page) {
-  await openFreshPage(page, "/");
-  // The command center page hosts the "home_views" launcher.
-  const entry = page.getByText("Workspace command center", { exact: true }).first();
-  await entry.scrollIntoViewIfNeeded();
-  await entry.click();
-  await page.waitForTimeout(500);
-}
-
-async function openSeededView(page, name) {
-  await openHomeViews(page);
-  const viewEntry = page.getByText(name, { exact: true }).first();
-  await viewEntry.scrollIntoViewIfNeeded();
-  await viewEntry.click();
-  await page.locator("[data-dash-row]").first().waitFor({ timeout: 30_000 });
-}
+import { openSeededView } from "../support/seededViews.mjs";
 
 async function openProductsDashboard(page) {
   await openSeededView(page, "Overview Dashboard");
