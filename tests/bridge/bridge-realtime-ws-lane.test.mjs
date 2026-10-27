@@ -153,6 +153,21 @@ describe('the startup canary', () => {
 });
 
 describe('the HTTP fallback', () => {
+	it('sends a topic outside the granted namespaces over HTTP, never to the socket', async () => {
+		const gateway = await fakeGateway();
+		const env = envFor(gateway.url);
+		try {
+			assert.equal((await runWsCanary(env)).status, 'ok');
+			const posts = [];
+			for (const topic of ['collab:ws2', 'collabpage:p9']) assert.equal(await publishWith(env, posts, topic), true);
+			assert.equal(posts.length, 2);
+			await new Promise((resolveTick) => setTimeout(resolveTick, 100));
+			assert.equal(gateway.frames.some((frame) => frame.type === 'PUBLISH' && !frame.topic.startsWith('bridgecanary:')), false);
+		} finally {
+			await gateway.close();
+		}
+	});
+
 	it('falls back while the lane is pending (socket not yet open)', async () => {
 		const env = envFor('ws://127.0.0.1:1/realtime/v1/ws');
 		realtimeWsLane(env);
