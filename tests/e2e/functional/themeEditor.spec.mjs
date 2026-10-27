@@ -22,6 +22,14 @@ async function openEditor(page, baseURL) {
   await page.locator(".monaco-editor textarea").first().waitFor({ state: "attached", timeout: 150_000 });
 }
 
+// Monaco auto-closes the first `{` of inserted text, so the inserted JSON is
+// followed by a stray `}`; whatever sits after the cursor is deleted.
+async function enterJson(page, text) {
+  await page.keyboard.insertText(text);
+  await page.keyboard.press("Shift+Control+End");
+  await page.keyboard.press("Delete");
+}
+
 async function editorTextarea(page) {
   return page.locator(".monaco-editor textarea").first();
 }
@@ -40,7 +48,7 @@ test.describe("theme editor", () => {
     await openEditor(page, baseURL);
     await page.locator(".monaco-editor .view-lines").first().click();
     await page.keyboard.press("Control+A");
-    await page.keyboard.type('{\n  "name": "T",\n  "colors": { "bg-page": "#102030" }\n}');
+    await enterJson(page, '{\n  "name": "T",\n  "colors": { "bg-page": "#102030" }\n}');
     await page.waitForTimeout(500);
     await expect.poll(async () => (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--osio-bg-page").trim())), { timeout: 10_000 }).toBe("#102030");
   });
@@ -51,7 +59,7 @@ test.describe("theme editor", () => {
     const input = await editorTextarea(page);
     await page.locator(".monaco-editor .view-lines").first().click();
     await page.keyboard.press("Control+A");
-    await page.keyboard.type('{\n  "name": "T",\n  "colors": { "accent": "red;" }\n}');
+    await enterJson(page, '{\n  "name": "T",\n  "colors": { "accent": "red;" }\n}');
     await page.waitForTimeout(300);
     await expect(page.locator(".squiggly-error").first()).toBeVisible({ timeout: 5_000 });
     const after = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--osio-accent").trim());
@@ -62,7 +70,7 @@ test.describe("theme editor", () => {
     await openEditor(page, baseURL);
     await page.locator(".monaco-editor .view-lines").first().click();
     await page.keyboard.press("Control+A");
-    await page.keyboard.type('{\n  "name": "Persisted",\n  "colors": { "bg-page": "#102030" }\n}');
+    await enterJson(page, '{\n  "name": "Persisted",\n  "colors": { "bg-page": "#102030" }\n}');
     await page.keyboard.press("Control+S");
     await page.waitForTimeout(1000);
     await expect.poll(async () => (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--osio-bg-page").trim())), { timeout: 5_000 }).toBe("#102030");
@@ -76,7 +84,7 @@ test.describe("theme editor", () => {
     // edit then revert
     await page.locator(".monaco-editor .view-lines").first().click();
     await page.keyboard.press("Control+A");
-    await page.keyboard.type('{\n  "name": "Persisted",\n  "colors": { "bg-page": "#999999" }\n}');
+    await enterJson(page, '{\n  "name": "Persisted",\n  "colors": { "bg-page": "#999999" }\n}');
     await page.getByRole("button", { name: "Revert" }).first().click();
     await expect.poll(async () => (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--osio-bg-page").trim())), { timeout: 2_000 }).toBe("#102030");
   });
@@ -85,7 +93,7 @@ test.describe("theme editor", () => {
     await openEditor(page, baseURL);
     await page.locator(".monaco-editor .view-lines").first().click();
     await page.keyboard.press("Control+A");
-    await page.keyboard.type('{\n  "name": "Drafty",\n  "colors": { "bg-page": "#102030" }\n}');
+    await enterJson(page, '{\n  "name": "Drafty",\n  "colors": { "bg-page": "#102030" }\n}');
     await page.getByRole("button", { name: /Close .*\.json/ }).first().click();
     await page.goto(SETTINGS_URL(baseURL), { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Advanced (JSON)" }).first().click();
