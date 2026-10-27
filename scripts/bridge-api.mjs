@@ -5168,17 +5168,11 @@ export function createBridgeServer(options = {}) {
 			// A page outside `workspaceId` (or missing) is 'none', exactly like a page the
 			// caller cannot read, so the route's 404 never confirms existence.
 			pageLevelFor: async (userId, pageId, workspaceId) => {
-				const { row, member } = await fetchPageRowWithMember(pageId, userId, config, fetchImpl);
+				const row = await fetchPageRow(pageId, config, fetchImpl);
 				if (!row || !sameId(row.workspace_id, workspaceId)) return 'none';
-				if (sameId(row.owner_id, userId)) return 'full_access';
-				if (!member) return 'none';
-				const role = safeText(member.role, 16);
-				if (role === 'owner' || role === 'admin') return 'full_access';
-				const level = await shareLevelForPage(config, row.workspace_id, row.id, userId, role, fetchImpl);
-				if (shareDenies(level)) return 'none';
-				if (!canReadPageRow(row, userId) && !shareGrantsRead(level)) return 'none';
-				if (level) return level;
-				return memberHasPermission(member, 'update') ? 'can_edit' : 'can_view';
+				const authContext = { userId };
+				const loader = createPageAccessLoader(authContext, config, fetchImpl);
+				return pageLevelForRow(row, authContext, loader);
 			},
 		}),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
