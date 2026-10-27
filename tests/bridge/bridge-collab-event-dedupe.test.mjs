@@ -85,6 +85,30 @@ describe('one blocks event reads each fact once (C4)', () => {
 	});
 });
 
+describe('a non-member costs no page reads past its membership (security review)', () => {
+	const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+	const parentMapReads = (mock) => mock.calls.filter((call) => call.table === 'osionos_pages' && !call.params.has('id')).length;
+	for (const flag of ['1', '0']) {
+		it(`flag ${flag}: a removed member's blocks event is a 403, publishes nothing, reads no parent map`, async () => {
+			const published = await run(world('editor'), async (base, { mock }) => {
+				removeMember(mock, IDS.team, IDS.userB);
+				mock.calls.length = 0;
+				assert.equal((await blocks(base, PAGE)).status, 403);
+				await settle();
+				assert.equal(parentMapReads(mock), 0, mock.calls.map((call) => call.table).join(', '));
+			}, flag);
+			assert.equal(published.length, 0);
+		});
+	}
+
+	it('blocks whose ops is not an array is a 403 and publishes nothing', async () => {
+		const published = await run(world('editor'), async (base) => {
+			assert.equal((await event(base, 'blocks', OWN, { ops: 'x' })).status, 403);
+		});
+		assert.equal(published.length, 0);
+	});
+});
+
 describe('allow and deny are unchanged (C3, C4)', () => {
 	for (const flag of ['1', '0']) {
 		it(`flag ${flag}: guest blocks 403, editor blocks 200`, async () => {
