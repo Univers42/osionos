@@ -32,20 +32,30 @@ export interface RemoteCursor {
   selection: SelectionRange | null;  // active selection range, or null
   focusedElementId: string | null;   // a non-text control the actor is interacting with
   route: string | null;              // last navigated route (cross-page presence, §8)
+  // Receipt time (ms) of the last caret/selection/nav frame; the idle-collapse clock.
+  // Caveat: this client's clock, not the sender's, so frames delayed in transit and
+  // delivered together all read as one fresh move.
+  movedAt: number;
 }
 
 export type CursorMap = Map<string, RemoteCursor>;
 
 function blank(actor: string): RemoteCursor {
-  return { actor, seq: -1, caret: null, selection: null, focusedElementId: null, route: null };
+  return { actor, seq: -1, caret: null, selection: null, focusedElementId: null, route: null, movedAt: 0 };
 }
 
 /**
  * Apply one validated CollabEvent to the cursor map. `selfId` is dropped (you
  * never render your own caret). Durable 'note'/'file' announces carry no seq and
  * are ignored here — they are handled by the durable feed, not the cursor layer.
+ * `now` stamps `movedAt`; injected so the reducer stays deterministic under test.
  */
-export function applyCollabEvent(cursors: CursorMap, event: CollabEvent, selfId: string): CursorMap {
+export function applyCollabEvent(
+  cursors: CursorMap,
+  event: CollabEvent,
+  selfId: string,
+  now = Date.now(),
+): CursorMap {
   if (memberIdOf(event.actor) === memberIdOf(selfId)) return cursors;
   if (event.t === 'note' || event.t === 'file' || event.t === 'activity') return cursors;
 
@@ -57,10 +67,12 @@ export function applyCollabEvent(cursors: CursorMap, event: CollabEvent, selfId:
     case 'caret':
       next.caret = event.caret;
       next.selection = null;
+      next.movedAt = now;
       break;
     case 'selection':
       next.selection = event.range;
       next.caret = event.range ? event.range.focus : next.caret;
+      next.movedAt = now;
       break;
     case 'focus':
       next.focusedElementId = event.elementId;
@@ -70,6 +82,7 @@ export function applyCollabEvent(cursors: CursorMap, event: CollabEvent, selfId:
       next.caret = null;      // navigated away → their caret on this page is gone (§8)
       next.selection = null;
       next.focusedElementId = null;
+      next.movedAt = now;
       break;
     default:
       return cursors;
