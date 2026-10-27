@@ -196,6 +196,24 @@ export function externalAgentWords(name: string): string {
   return `Requested by external agent "${name}" — osionos cannot see what it read.`;
 }
 
+/**
+ * "Influenced by: docs.example.org (web), fake (MCP)" — what outside content
+ * shaped the request. Entries are `web:<domain>` or `mcp:<label>`; any other
+ * shape is not shown, and a card with none says nothing. Text only: the label
+ * of an MCP server and a domain come from third parties.
+ */
+export function influencedByWords(entries: readonly string[] | undefined): string {
+  const named = (entries ?? []).flatMap((entry) => {
+    const [kind, ...rest] = entry.split(":");
+    const name = rest.join(":");
+    if (!name) return [];
+    if (kind === "web") return [`${name} (web)`];
+    if (kind === "mcp") return [`${name} (MCP)`];
+    return [];
+  });
+  return named.length > 0 ? `Influenced by: ${named.join(", ")}` : "";
+}
+
 /** The words of a refusal: the decision did not go through. */
 export function refusalWords(code: string): string {
   if (code === "not_found") return "This request does not exist any more.";

@@ -17,13 +17,15 @@ import type { AiPart } from "@/features/ai/api/aiClient";
 import type { ToolActivityPart } from "./toolActivity";
 import type { PermissionPart } from "./approvalParts";
 import type { MemoryProposalPart } from "./memoryParts";
+import type { HandoffPart } from "./agentHandoff";
+import type { ResearchPart } from "./researchParts";
 
 /**
  * The parts of a message: the service's own (the sources of the answer), the
  * calls the assistant made to its tools, and the cards of the writes it asked
- * for, and the memories it proposed.
+ * for, the memories it proposed, and where a research run stands.
  */
-export type ChatMessagePart = AiPart | ToolActivityPart | PermissionPart | MemoryProposalPart;
+export type ChatMessagePart = AiPart | ToolActivityPart | PermissionPart | MemoryProposalPart | HandoffPart | ResearchPart;
 
 export type MessageRole = "user" | "assistant" | "system";
 
@@ -37,7 +39,7 @@ export interface ChatMessage {
   model?: string;
   /** The connection the answer was paid for — the user's own, or the platform's. */
   connectionId?: string;
-  /** The agent that shaped the answer — the built-in the reader picked. */
+  /** The agent that shaped the answer: a built-in id, or a custom agent's uuid. */
   agentId?: string;
   /** The message parts, in the service's shape, and the calls of the tools. */
   parts?: ChatMessagePart[];
@@ -53,6 +55,8 @@ export interface ChatMessage {
   answeredBy?: string;
   /** Why it moved on: the service's closed set. */
   routeReason?: "rate_limited" | "upstream_error" | "unavailable";
+  /** A resume missed frames (`resume.gap`): at the end the text is re-read from the transcript (C402). */
+  textGap?: boolean;
   /** The reader's verdict on an answer. Local only: no service route takes it yet. */
   feedback?: "up" | "down";
 }

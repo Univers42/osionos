@@ -20,7 +20,7 @@
  * read JSX.
  */
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FileText, Paperclip, X } from "lucide-react";
 
 import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
@@ -37,6 +37,10 @@ interface Props {
   onChange: (attachments: ComposerAttachment[]) => void;
   /** Hard cap on the number of attachments. */
   max?: number;
+  /** Opens the file dialog each time it changes (the composer's "+" menu). */
+  openSignal?: number;
+  /** Draws no button of its own: the dialog is opened by `openSignal`. */
+  hideButton?: boolean;
 }
 
 /** The hard cap on the number of attachments the composer takes. */
@@ -67,10 +71,13 @@ export function uploadableFile(file: File): { file: File; kind: ComposerAttachme
   return { file, kind: file.type.startsWith("image/") ? "image" : "file" };
 }
 
-export const AttachButton: React.FC<Props> = ({ vision, attachments, onChange, max = MAX_ATTACHMENTS }) => {
+export const AttachButton: React.FC<Props> = ({ vision, attachments, onChange, max = MAX_ATTACHMENTS, openSignal, hideButton }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (openSignal) inputRef.current?.click();
+  }, [openSignal]);
 
   const onPick = async (picked: File | null) => {
     if (!picked || attachments.length >= max) return;
@@ -145,7 +152,7 @@ export const AttachButton: React.FC<Props> = ({ vision, attachments, onChange, m
   return React.createElement(
     "span",
     { className: "inline-flex items-center gap-1", "data-testid": "attach-button" },
-    React.createElement(
+    hideButton ? null : React.createElement(
       "button",
       {
         type: "button",

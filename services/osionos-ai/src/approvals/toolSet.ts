@@ -70,9 +70,10 @@ export function writeToolSet(
 					expiresAt: new Date(result.row.expires_at).toISOString(),
 					agent: approval.agent ?? null,
 				};
-				// C286: a write asked after MCP output entered the conversation
-				// says so on its card. Off, or no MCP call: no key at all (C291).
-				if (config.mcpClientEnabled) {
+				// C286 / web C359: a write asked after MCP output or web content
+				// entered the conversation says so on its card. Both flags off, or
+				// nothing read: no key at all (C291, C375).
+				if (config.mcpClientEnabled || config.webEnabled) {
 					const tainted = await influencedBy(ctx.db, approval.conversationId);
 					if (tainted.length > 0) asked.influencedBy = tainted;
 				}

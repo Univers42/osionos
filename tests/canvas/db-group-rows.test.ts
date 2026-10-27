@@ -19,6 +19,7 @@ import test from "node:test";
 
 import { layoutGroupRows } from "../../src/shared/notion-database-sys/src/components/views/table/groupRowsLayout.ts";
 import { buildGroups, groupPresetValue } from "../../src/shared/notion-database-sys/src/store/slices/storeHelpers.ts";
+import { columnWidth } from "../../src/shared/notion-database-sys/src/components/views/table/useColumnResize.ts";
 import type { Page, SchemaProperty } from "../../src/shared/notion-database-sys/src/types/database.ts";
 
 const page = (id: string, properties: Record<string, unknown> = {}) =>
@@ -76,4 +77,22 @@ test("group preset puts a new page back into the group it was created from", () 
   }
   assert.equal(groupPresetValue({ ...select, nullable: false }, "__unassigned__"), undefined);
   assert.equal(groupPresetValue({ id: "f", name: "F", type: "formula" } as SchemaProperty, "3"), undefined);
+});
+
+test("an empty 'No <prop>' group is hidden until a row loses its value", () => {
+  const select = { id: "s", name: "S", type: "select", options: [{ id: "o1", value: "One", color: "" }] } as SchemaProperty;
+  const ids = (pages: Page[]) => buildGroups(pages, select, { propertyId: "s" }).map(g => g.groupId);
+  assert.deepEqual(ids([page("p1", { s: "o1" })]), ["o1"]);
+  assert.deepEqual(ids([page("p1", { s: "o1" }), page("p2", {})]), ["__unassigned__", "o1"]);
+});
+
+test("column width: the title column starts readable, a stored width wins", () => {
+  const state = (columnWidths?: Record<string, number>) => ({
+    views: { v: { databaseId: "db", settings: { columnWidths } } },
+    databases: { db: { titlePropertyId: "title" } },
+  }) as unknown as Parameters<typeof columnWidth>[0];
+  assert.equal(columnWidth(state(), "v", "title"), 280);
+  assert.equal(columnWidth(state(), "v", "other"), 180);
+  assert.equal(columnWidth(state({ title: 140 }), "v", "title"), 140);
+  assert.equal(columnWidth(state(), null, "title"), 180);
 });

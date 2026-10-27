@@ -61,7 +61,7 @@ test("the bridge owns the table and chart tokens, aliased to existing ones", () 
   assert.match(bridge.css, /--osio-table-header-bg: var\(--osio-bg-subtle\);/);
   assert.match(bridge.css, /--osio-table-row-hover: var\(--osio-bg-hover\);/);
   assert.match(bridge.css, /--osio-table-border: var\(--osio-db-line\);/);
-  assert.match(bridge.css, /--osio-chart-1: var\(--osio-accent\);/);
+  assert.doesNotMatch(bridge.css, /--osio-chart-1:/);
   assert.match(bridge.css, /--osio-chart-10: var\(--osio-block-tint-gray-fg\);/);
 });
 

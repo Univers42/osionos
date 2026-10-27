@@ -31,11 +31,10 @@ import {
 // Re-exported here to keep every existing import site working.
 //
 // This module is itself seed-JSON-FREE: it holds the pure layout primitives
-// and the redesigned Home builder (createHomeLayout). The OLD /dashboard
-// showcase builders (createViewShowcaseCells/Layout/LayoutContent), which DO
-// pull the ~458KB seed JSON via getDashboardMetrics, live in
+// and the redesigned Home builder (createHomeLayout). The /dashboard showcase
+// builders (createViewShowcaseCells/Layout/LayoutContent) live in
 // ./databaseViewShowcase — imported only by the lazy editor / slash-command
-// paths, so the JSON never reaches the warm entry or the home-seed chunk.
+// paths.
 export * from "./databaseViewCatalog.meta";
 // The Events + Learn demo seed lives in its own module to avoid a circular
 // import with knownDatabaseState; re-exported so existing call sites resolve.

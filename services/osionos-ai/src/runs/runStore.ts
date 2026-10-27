@@ -80,6 +80,36 @@ export async function readAfter(redis: Redis, runId: string, afterId: string): P
 	return raw.map((entry) => parseEntry(entry as [string, string[]]));
 }
 
+/** Compares two stream ids as (ms, seq) pairs: negative when `a` is older. */
+function compareIds(a: string, b: string): number {
+	const [aMs, aSeq] = a.split('-').map(Number);
+	const [bMs, bSeq] = b.split('-').map(Number);
+	return aMs - bMs || aSeq - bSeq;
+}
+
+/**
+ * Whether events between the client's last id and the head of the stream were
+ * trimmed away (research C402): the replay would silently start later than
+ * the client expects, and a long report needs to say so.
+ *
+ * Caveat: `entries-added > length` proves a trim happened, and the first
+ * entry being newer than the client's id says the client is behind it. A
+ * client whose last id is exactly the last trimmed entry lost nothing and is
+ * still told (over-reports by one boundary); Redis keeps no id to tell them
+ * apart (`max-deleted-entry-id` stays 0-0 after a MAXLEN ~ trim, measured).
+ * A Redis older than 7 has no `entries-added`: never reports a gap.
+ */
+export async function hasGap(redis: Redis, runId: string, afterId: string): Promise<boolean> {
+	if (!afterId || afterId === '0-0') return false;
+	const flat = (await redis.xinfo('STREAM', runKey(runId))) as unknown[];
+	const field = (name: string): unknown => flat[flat.indexOf(name) + 1];
+	const added = Number(field('entries-added'));
+	const length = Number(field('length'));
+	const first = field('first-entry') as [string, unknown] | null | undefined;
+	if (!first || !Number.isFinite(added) || added <= length) return false;
+	return compareIds(afterId, first[0]) < 0;
+}
+
 /**
  * The events of a run after one id, as they arrive. The loop ends on a terminal
  * event (done or error) or when the signal aborts.

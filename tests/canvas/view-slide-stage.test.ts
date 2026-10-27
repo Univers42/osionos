@@ -17,7 +17,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { retargetSlide, slideOffset, type SlideState } from "../../src/shared/notion-database-sys/src/components/ViewSlideStage.tsx";
+import { retargetSlide, settleDelay, slideOffset, stageStyle, type SlideState } from "../../src/shared/notion-database-sys/src/components/ViewSlideStage.tsx";
 
 const idle = (viewId: string): SlideState =>
   ({ slots: [viewId, ""], keys: [0, 0], active: 0, incoming: null, dir: 1, run: false, lockH: 0 });
@@ -66,4 +66,20 @@ test("any click sequence ends on the last clicked view", () => {
     }
     assert.equal(shown(s), last);
   }
+});
+
+test("an inline (flow) stage animates its height to the incoming pane's", () => {
+  const armed = retargetSlide(idle("A"), "B", 1, false, key, 400);
+  assert.equal(stageStyle(idle("A"), true, 0), undefined, "idle sizes normally");
+  assert.deepEqual(stageStyle(armed, true, 0), { height: 400, flex: "none" }, "pinned before the run");
+  const running = { ...armed, run: true };
+  assert.equal(stageStyle(running, true, 250)?.height, 250);
+  assert.match(String(stageStyle(running, true, 250)?.transition), /^height /);
+  assert.deepEqual(stageStyle(running, false, 250), { height: 400, flex: "none" }, "full page keeps the pin");
+});
+
+test("a slide into a loading pane waits for its content, but not forever", () => {
+  assert.equal(settleDelay(false), 420);
+  assert.ok(settleDelay(true) > settleDelay(false));
+  assert.ok(settleDelay(true) <= 3000);
 });

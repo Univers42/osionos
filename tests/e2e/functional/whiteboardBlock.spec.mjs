@@ -7,6 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   activateFirstEditor,
+  LIVE,
   openFreshPage,
   openSlashMenuFromEditor,
   selectSlashMenuEntry,
@@ -58,9 +59,9 @@ test.describe("built-in whiteboard", () => {
     await selectSlashMenuEntry(page, "Whiteboard");
 
     await page.locator('[data-block-type="whiteboard"]').getByRole("button", { name: /Open full/ }).click();
-    // The page tab goes inactive, so the inline block unmounts and the board tab's own frame remains.
-    await expect(page.locator('[data-block-type="whiteboard"]')).toHaveCount(0);
-    await expect(page.locator(`iframe[src$="/boards/${SLUG}"]`)).toBeVisible();
+    // The page tab goes inactive (kept mounted but inert), so only the board tab's own frame is live.
+    await expect(page.locator(`[data-block-type="whiteboard"]${LIVE}`)).toHaveCount(0);
+    await expect(page.locator(`iframe[src$="/boards/${SLUG}"]${LIVE}`)).toBeVisible();
     expect(created).toEqual([{ title: "Untitled" }]);
   });
 

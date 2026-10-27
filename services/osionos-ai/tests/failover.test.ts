@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import { USER_A, WORKSPACE_A } from './harness.ts';
+import { USER_A, USER_DAILY_MICROUSD, WORKSPACE_A } from './harness.ts';
 import { startKit, typesOf, lastOf } from './failoverKit.ts';
 import { SseStream, collect } from './sse.ts';
 
@@ -24,6 +24,8 @@ after(async () => {
 
 const PLATFORM_COST = 10_500;
 const VISION_COST = 1_500;
+/** C243: as many runs at once as the day can hold the fallback's reservation for. */
+const CONCURRENT_RUNS = 10;
 
 /** Waits until the scripted upstream has seen `count` requests. */
 async function untilRequests(count: number): Promise<void> {
@@ -161,17 +163,39 @@ describe('a run falls back to the next model', () => {
 		assert.deepEqual(platform, { spent: 0, reserved: 9_000 });
 	});
 
-	it('C243 twenty runs that fail over at once leave the ledger exact', async () => {
+	it('C243 runs that fail over at once leave the ledger exact', async () => {
+		// The premise: every run may hold the fallback's reservation at the same
+		// moment, and the day pays for all of them. Twenty did not fit (11 282
+		// each, 225 640 against 200 000): the runs that overlapped last ended
+		// budget_exhausted, which is the reservation working, and the test failed
+		// 1 CI run in 4 on the same commit.
+		await clean();
+		failing.script('mock-metered', 503);
+		failing.script('mock-vision', { behaviour: 'ok', delayMs: 300 });
+		const probe = runToEnd({ model: 'mock-metered', fallbacks: [{ model: 'mock-vision' }] });
+		await untilRequests(2);
+		const held = (await ledger(USER_A)).reserved;
+		await probe;
+		assert.ok(
+			CONCURRENT_RUNS * held < USER_DAILY_MICROUSD,
+			`${CONCURRENT_RUNS} runs hold ${CONCURRENT_RUNS * held} at once, over the day's ${USER_DAILY_MICROUSD}`,
+		);
+
 		await clean();
 		failing.always('mock-metered', 503);
 		const runs = await Promise.all(
-			Array.from({ length: 20 }, () => runToEnd({ model: 'mock-metered', fallbacks: [{ model: 'mock-vision' }] })),
+			Array.from({ length: CONCURRENT_RUNS }, () =>
+				runToEnd({ model: 'mock-metered', fallbacks: [{ model: 'mock-vision' }] }),
+			),
 		);
-		assert.ok(runs.every((run) => lastOf(run.events).event === 'done'));
+		assert.deepEqual(
+			runs.map((run) => lastOf(run.events).event),
+			Array.from({ length: CONCURRENT_RUNS }, () => 'done'),
+		);
 		// Once the first 503 rests the primary, the runs that start later skip it
 		// and list no failed attempt: the money is read from the ledger, not from
 		// the attempts. Every run is billed once, by the model that answers.
-		const billed = 20 * VISION_COST;
+		const billed = CONCURRENT_RUNS * VISION_COST;
 		const { user, platform } = await settledLedger();
 		assert.deepEqual(user, { spent: billed, reserved: 0 });
 		assert.deepEqual(platform, { spent: billed, reserved: 0 });

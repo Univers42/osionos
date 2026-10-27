@@ -67,13 +67,38 @@ export function markCitations(text: string, citations: Citation[]): string {
 }
 
 /**
+ * The attributes of a link to a web source: a new tab that gets neither the
+ * opener nor the referrer. The domain and the title are text; the page is on
+ * somebody else's site, so it is never opened inside the app.
+ */
+function webLinkProps(citation: Extract<Citation, { collection: "web" }>): Record<string, string> {
+  return { href: citation.url, target: "_blank", rel: "noopener noreferrer", title: citation.title };
+}
+
+/**
  * The marker of a source.
  *
  * A page source is a small button that opens the page. A pack source is not a
  * page: its marker is plain text, with the snippet as its tooltip, and it
- * carries the same visual weight as the button.
+ * carries the same visual weight as the button. A web source is a link to the
+ * page, in a new tab.
  */
 const CiteMarker: React.FC<{ citation: Citation; onCite: (citation: Citation) => void }> = ({ citation, onCite }) => {
+  if (citation.collection === "web") {
+    return React.createElement(
+      "sup",
+      { className: "text-2xs" },
+      React.createElement(
+        "a",
+        {
+          ...webLinkProps(citation),
+          className: "ml-0.5 rounded-xs bg-[var(--osio-accent-subtle)] px-1 text-[var(--osio-accent)] no-underline",
+          "aria-label": `Source ${citation.n}: ${citation.domain}`,
+        },
+        String(citation.n),
+      ),
+    );
+  }
   if (citation.collection === "pack") {
     return React.createElement(
       "sup",
@@ -165,8 +190,11 @@ export function renderCitedAnswer(
  * Each source reads `n. Title`, and carries the snippet as its tooltip — the
  * text the answer drew on. Both are plain text. A page source is a button that
  * opens the page; a pack source is a plain line, labelled with where it comes
- * from, because there is no page to open.
+ * from, because there is no page to open. A web source is a link that shows
+ * its domain and opens the page in a new tab.
  */
+const SOURCE_CHIP = "inline-block max-w-64 truncate rounded-full border px-2.5 py-1";
+
 export function renderCitationSources(
   citations: Citation[],
   onOpen: (citation: Citation) => void,
@@ -174,30 +202,36 @@ export function renderCitationSources(
   if (citations.length === 0) return null;
   return React.createElement(
     "div",
-    { className: "mt-2 border-t border-[var(--osio-border-default)] pt-2", "data-testid": "chat-sources" },
-    React.createElement(
-      "p",
-      { className: "mb-1 text-2xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]" },
-      "Sources",
-    ),
+    { className: "mt-3 flex flex-col gap-1.5", "data-testid": "chat-sources" },
+    React.createElement("p", { className: "m-0 text-xs font-medium text-[var(--osio-fg-subtle)]" }, "Sources"),
     React.createElement(
       "ul",
-      { className: "m-0 list-none space-y-0.5 p-0 text-xs" },
+      { className: "m-0 flex list-none flex-wrap gap-1.5 p-0 text-xs" },
       ...citations.map((citation) =>
         React.createElement(
           "li",
           { key: citation.n },
-          citation.collection === "pack"
+          citation.collection === "web"
+            ? React.createElement(
+                "a",
+                {
+                  ...webLinkProps(citation),
+                  className: `${SOURCE_CHIP} border-transparent bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)] no-underline transition-colors hover:border-[var(--osio-accent)] hover:text-[var(--osio-accent-text)]`,
+                  "data-testid": "chat-web-source",
+                },
+                `${citation.n}. ${citation.domain}`,
+              )
+            : citation.collection === "pack"
             ? React.createElement(
                 "span",
-                { className: "text-[var(--osio-fg-muted)]", title: citation.snippet },
+                { className: `${SOURCE_CHIP} border-dashed border-[var(--osio-border-default)] text-[var(--osio-fg-muted)]`, title: citation.snippet },
                 `${citation.n}. ${citation.title} · osionos docs`,
               )
             : React.createElement(
                 "button",
                 {
                   type: "button",
-                  className: "text-left text-[var(--osio-accent)] underline-offset-2 hover:underline",
+                  className: `${SOURCE_CHIP} border-transparent bg-[var(--osio-bg-subtle)] text-left text-[var(--osio-fg-default)] transition-colors hover:border-[var(--osio-accent)] hover:text-[var(--osio-accent-text)]`,
                   title: citation.snippet,
                   "aria-label": `Open source ${citation.n}: ${citation.title}`,
                   onClick: () => onOpen(citation),
