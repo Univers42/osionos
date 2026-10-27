@@ -4083,23 +4083,17 @@ async function cascadeDescendantIds(request, row, permission, config, fetchImpl)
 		if (error?.status !== 403) throw error;
 	}
 	const entry = await createPageAccessLoader(authContext, config, fetchImpl).entryFor(row.workspace_id);
-	// A rule decides the write outright; otherwise the direct route's membership rule
-	// does. The page owner keeps the write only while still a member (C557).
-	const writable = (descendant) => {
+	// Skip semantics (develop): a descendant the caller may not write is skipped, and a
+	// skipped page keeps its whole subtree. The share rules (incl. inherited no_access)
+	// now feed that decision: a level below can_edit skips (C551). Owner/admin
+	// exemptions come from the evaluator.
+	const keep = (descendant) => {
 		if (!descendant || !sameId(descendant.workspace_id, row.workspace_id)) return false;
 		const ruleLevel = pageRuleLevelFor(entry, descendant, userId);
-		if (ruleLevel !== null) return shareGrantsWrite(ruleLevel);
+		if (ruleLevel !== null && !shareGrantsWrite(ruleLevel)) return false;
 		return mayMutatePage(descendant, userId, memberAccess, true);
 	};
-	for (const id of descendantIds) {
-		const descendant = byId.get(id);
-		// Gone or moved out of the workspace between the two reads: no longer in the subtree.
-		if (!descendant || !sameId(descendant.workspace_id, row.workspace_id)) continue;
-		if (!writable(descendant)) {
-			throw Object.assign(new Error('The subtree is not writable.'), { status: 409, error: 'subtree_not_writable' });
-		}
-	}
-	return descendantIds.filter((id) => writable(byId.get(id)));
+	return descendantPageIds(refs, row.id, (id) => keep(byId.get(id)));
 }
 
 // Ponytail: not atomic — a failure leaves a suffix (delete, archive) or a prefix (restore) of the BFS order applied; a retry finishes it. Edits between chunks are not serialized.
