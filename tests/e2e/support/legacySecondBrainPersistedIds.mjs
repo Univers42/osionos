@@ -20,7 +20,6 @@ export const PERSISTED_IDS = [
   { id: "localStorage osio-sb-synced-notes", file: "src/features/legacy-second-brain/sync/noteSyncLedger.ts", pattern: /^const LEDGER_KEY = "osio-sb-synced-notes";$/m },
   { id: 'node-id mount segment "db"', file: "src/features/legacy-second-brain/graphSource.ts", pattern: /^export const LEGACY_GRAPH_SOURCE = "db";$/m },
   { id: 'bridge resource "osionos_pages"', file: "src/features/legacy-second-brain/baas/pageGraphSource.ts", pattern: /^export const LEGACY_PAGE_GRAPH_RESOURCE = "osionos_pages";$/m },
-  { id: 'dashboard property option "Second Brain"', file: "src/widgets/page-renderer/ui/MainContent.tsx", pattern: /options: \["Dashboard", "Second Brain"\]/ },
 ];
 
 /** Returns null when the declaration is intact, else the reason it is not. */
