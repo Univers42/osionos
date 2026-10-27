@@ -112,6 +112,17 @@ test("a dirty draft is written to sessionStorage on dispose and restored on the 
   sessionStore.clear();
 });
 
+// StrictMode mounts, unmounts and mounts again in dev: the rehearsal unmount
+// disposes the same draft the real unmount disposes later.
+test("a draft disposed by a rehearsal unmount still keeps its edits on the real one", () => {
+  const draft = createJsonDraft(makeConfig({ initialText: () => '{"name":"A"}' }), () => undefined);
+  draft.dispose();
+  draft.setText('{"name":"B"}');
+  draft.dispose();
+  assert.equal(sessionStore.get("osionos:theme-draft:test"), '{"name":"B"}');
+  sessionStore.clear();
+});
+
 test("save with an error result keeps dirty true and adds an issue at path", () => {
   const save = () => ({ ok: false, message: "name taken", path: ["name"] });
   const config = makeConfig({ save });
