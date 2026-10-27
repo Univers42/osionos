@@ -48,9 +48,13 @@ const dummyConfig: DraftConfig<ThemeDoc> = {
 };
 
 export function ThemeJsonEditor({ pageId }: { pageId: string }) {
-  const target = parseThemeJsonPageId(pageId);
-  const config = target ? themeDraftConfig(target, pageId) : dummyConfig;
+  // A new target object per render would rebuild the config, and with it the
+  // draft, whose creation notifies: React then loops ("Too many re-renders").
+  const target = React.useMemo(() => parseThemeJsonPageId(pageId), [pageId]);
+  const config = React.useMemo(() => (target ? themeDraftConfig(target, pageId) : dummyConfig), [target, pageId]);
   const draft = useJsonDraft(config);
+  const draftRef = React.useRef(draft);
+  draftRef.current = draft;
 
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const editorRef = React.useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -79,11 +83,16 @@ export function ThemeJsonEditor({ pageId }: { pageId: string }) {
     editorRef.current = instance;
     const stopTheme = watchEditorTheme(host);
 
+    const contentDisposable = model.onDidChangeContent(() => {
+      draftRef.current?.setText(model.getValue());
+    });
+
     instance.addCommand(KeyMod.CtrlCmd | KeyCode.KeyS, () => {
-      draft.save();
+      draftRef.current.save();
     });
 
     return () => {
+      contentDisposable.dispose();
       stopTheme();
       instance.dispose();
       model.dispose();
@@ -153,17 +162,6 @@ export function ThemeJsonEditor({ pageId }: { pageId: string }) {
     }
   }, [draft.issues, draft.text, target]);
 
-  // Push model changes into the draft (debounced by the controller).
-  React.useEffect(() => {
-    if (!isThemesEnabled() || !target) return;
-    const instance = editorRef.current;
-    const model = modelRef.current;
-    if (!instance || !model) return;
-    const disposable = model.onDidChangeContent(() => {
-      draft.setText(model.getValue());
-    });
-    return () => disposable.dispose();
-  }, [target, draft]);
 
   const handleRevert = React.useCallback(() => {
     draft.revert();
