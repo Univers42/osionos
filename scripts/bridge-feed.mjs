@@ -106,7 +106,14 @@ async function feedPageAccess(deps, config, session, pageId) {
 	const row = Array.isArray(rows) ? rows[0] : null;
 	if (!row) return { hidden: false, row: null };
 	const members = await memberWorkspacesAmong(config, deps.fetchImpl, session, [row.workspace_id]);
-	return { hidden: !canReadPageRowAsMember(row, session.userId, members), row };
+	if (!canReadPageRowAsMember(row, session.userId, members)) return { hidden: true, row };
+	// The SAME inherited rule as the page routes (C550): an ancestor no_access hides the
+	// page from every feed resource. The injection keeps this module free of bridge-api
+	// internals; bridge-api always supplies it.
+	const visible = typeof deps.pageAccessFilter === 'function'
+		? await deps.pageAccessFilter([row], session, config)
+		: [row];
+	return { hidden: visible.length === 0, row };
 }
 
 // What each feed GET answers for an id nobody has engaged with — and so for a hidden page.
@@ -459,8 +466,8 @@ async function postShare(deps, session, request, pageId, response, config) {
  * Build the /api/feed dispatcher: `await handler(url, request, response)` →
  * true when handled. deps: { config, verifySession, fetchImpl?, env? }.
  */
-export function createFeedHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
-	const deps = { fetchImpl, env };
+export function createFeedHandler({ config, verifySession, fetchImpl = fetch, env = process.env, pageAccessFilter = null }) {
+	const deps = { fetchImpl, env, pageAccessFilter };
 	return async function handleFeedRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		if (!pathname.startsWith('/api/feed/')) return false;

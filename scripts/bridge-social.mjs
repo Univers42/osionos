@@ -179,7 +179,12 @@ async function createConnection(deps, session, request, response, config) {
 	return sendJson(response, 201, { ok: true, connection }, config);
 }
 
-/** PATCH /api/connections/:id — accept|decline (addressee) or withdraw (requester). */
+/** The one answer for a transition that is not `pending → <next>` (C514): nothing was written. */
+function connectionNotPending(response, config) {
+	return sendJson(response, 409, { ok: false, error: 'connection_not_pending' }, config);
+}
+
+/** PATCH /api/connections/:id — accept|decline (addressee) or withdraw (requester), pending only. */
 async function patchConnection(deps, session, request, connectionId, response, config) {
 	const payload = await readJsonBody(request);
 	const action = safeText(payload.action, 16);
@@ -192,11 +197,17 @@ async function patchConnection(deps, session, request, connectionId, response, c
 	if ((action === 'accept' || action === 'decline') && isAddressee) status = action === 'accept' ? 'accepted' : 'declined';
 	else if (action === 'withdraw' && isRequester) status = 'withdrawn';
 	else throw httpError('You cannot perform this action on this connection.', 403);
-	await rest(config, deps.fetchImpl, `osionos_connections?id=eq.${connectionId}`, {
+	// Only pending → accepted/declined/withdrawn exists (C514): a second answer on an edge
+	// that already moved is a 409, never an overwrite.
+	if (row.status !== 'pending') return connectionNotPending(response, config);
+	// Atomic: the status filter makes a concurrent transition lose here too. Zero rows
+	// updated means the edge moved between the read above and this PATCH.
+	const updated = await rest(config, deps.fetchImpl, `osionos_connections?id=eq.${connectionId}&status=eq.pending&select=*`, {
 		method: 'PATCH',
 		body: { status, responded_at: new Date().toISOString() },
-		prefer: 'return=minimal',
+		prefer: 'return=representation',
 	});
+	if (!Array.isArray(updated) || updated.length === 0) return connectionNotPending(response, config);
 	if (status === 'accepted') {
 		const other = isAddressee ? row.requester_id : row.addressee_id;
 		await publishRealtime({
@@ -288,8 +299,8 @@ async function handleSocialOps(deps, session, request, url, response, config) {
  * Build the social-graph dispatcher: `await handler(url, request, response)` →
  * true when handled. deps: { config, verifySession, fetchImpl?, env?, kv?, now? }.
  */
-export function createSocialHandler({ config, verifySession, fetchImpl = fetch, env = process.env, kv = null, now = Date.now }) {
-	const deps = { fetchImpl, env, kv, now };
+export function createSocialHandler({ config, verifySession, fetchImpl = fetch, env = process.env, kv = null, now = Date.now, pageAccessFilter = null }) {
+	const deps = { fetchImpl, env, kv, now, pageAccessFilter };
 	return async function handleSocialRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		const isConnections = pathname === '/api/connections';

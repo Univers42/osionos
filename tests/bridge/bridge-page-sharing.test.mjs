@@ -171,7 +171,8 @@ describe('marketplace publishing and app pages', () => {
 			const byB = await send(base, `/api/pages/${IDS.privateA}`, asB, patch({ parentPageId: APPS.publishedB }));
 			assert.equal(byB.status, 404, byB.text);
 			const moved = await send(base, `/api/pages/${IDS.privateA}`, asA, patch({ parentPageId: APPS.publishedB }));
-			assert.deepEqual([moved.status, moved.body.ignored], [200, ['parentPageId']]);
+			assert.equal(moved.status, 404, moved.text);
+			assert.equal(moved.body.message, 'Parent page not found.');
 			mock.page(IDS.privateA).parent_page_id = APPS.publishedB; // a row placed there before moves were checked
 			const app = await send(base, `/api/marketplace/apps/${APPS.publishedB}`, asB);
 			assert.equal(app.status, 200, app.text);
