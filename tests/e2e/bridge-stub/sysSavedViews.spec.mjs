@@ -24,7 +24,7 @@ test.describe("sys saved views", () => {
     const bridge = await stubSysViews(page);
     bridge.failRows = { status: 500, json: { ok: false, message: "The read broke." } };
     await seedPage(page, baseURL, [{ id: "sys-views", type: "database_inline", content: "", databaseId: `sys:${SOURCE}`, viewId: `${SOURCE}-default` }]);
-    const block = page.locator(`.osionos-database-block[data-database-id="sys:${SOURCE}"]`);
+    const block = page.locator(`.osionos-database-block[data-database-id="sys:${SOURCE}"]`).filter({ visible: true });
     await expect(block.getByRole("alert")).toContainText("Connect to see your pages.", { timeout: 20_000 });
     bridge.failRows = null;
     await block.getByRole("button", { name: "Retry" }).click();
