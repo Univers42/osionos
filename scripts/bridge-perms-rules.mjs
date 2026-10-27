@@ -23,6 +23,7 @@
 
 import { httpError } from './bridge-social-core.mjs';
 import { readBaasJson } from './bridge-baas-body.mjs';
+import { bumpAccessAfter } from './bridge-access-generation.mjs';
 
 const TABLE = 'osionos_share_rules';
 const TEAMS_TABLE = 'osionos_teams';
@@ -171,6 +172,23 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 
 	const query = (params) => new URLSearchParams(params).toString();
 
+	/** A read the caller cannot trust, with the reason readFailed logs. */
+	const unreadable = (reason) => Object.assign(shareRulesUnavailable(), { reason });
+
+	/**
+	 * The 503 of a failed rules read, logged with its cause. The caller only ever sees
+	 * share_rules_unavailable, and a timeout, a dropped socket, an empty body or a full
+	 * page never reach storeFailure: 7 live 503s on 2026-10-27 left no line at all.
+	 * Codes and names only — a fetch error message can carry the request URL.
+	 */
+	const readFailed = (read, error) => {
+		// A DOMException's code is a legacy number (TimeoutError is 23): its name says more.
+		const reason = error?.reason ?? (typeof error?.code === 'string' ? error.code : error?.name) ?? 'unknown';
+		const cause = error?.cause?.code ? ` cause ${error.cause.code}` : '';
+		log(`[bridge-perms] ${read} rules read failed (${reason}${cause})`);
+		return shareRulesUnavailable();
+	};
+
 	/**
 	 * The rules that decide ONE page's access: the page's own rules and the workspace-wide
 	 * ones (resource_id = ''). Two reads, so a workspace with hundreds of rules about OTHER
@@ -201,17 +219,17 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 			]);
 			// An empty body is not an empty rule set: the read was broken, and deciding on
 			// it would drop every deny the caller is under.
-			if (pageRules === null || wideRules === null) throw shareRulesUnavailable();
+			if (pageRules === null || wideRules === null) throw unreadable('empty body');
 			// A full page of rules may be a truncated set: a deny beyond the cap would be
 			// dropped, so the read fails closed instead of deciding on half the rules.
-			if (pageRules.length >= LIST_LIMIT || wideRules.length >= LIST_LIMIT) throw shareRulesUnavailable();
+			if (pageRules.length >= LIST_LIMIT || wideRules.length >= LIST_LIMIT) throw unreadable('over limit');
 			return [...pageRules, ...wideRules].filter((row) => {
 				const resourceId = row?.resource_id;
 				return resourceId === '' || resourceId === null || String(resourceId).toLowerCase() === normalizedPageId;
 			});
 		} catch (error) {
 			if (error?.code === 'share_rules_table_missing') return [];
-			throw shareRulesUnavailable();
+			throw readFailed('listForPage', error);
 		}
 	};
 
@@ -232,8 +250,8 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 				call(config, query({ ...params, resource_id: `in.(${ids.join(',')})` }), { empty: null }),
 				call(config, query({ ...params, resource_id: 'eq.' }), { empty: null }),
 			]);
-			if (pageRules === null || wideRules === null) throw shareRulesUnavailable();
-			if (pageRules.length >= LIST_LIMIT || wideRules.length >= LIST_LIMIT) throw shareRulesUnavailable();
+			if (pageRules === null || wideRules === null) throw unreadable('empty body');
+			if (pageRules.length >= LIST_LIMIT || wideRules.length >= LIST_LIMIT) throw unreadable('over limit');
 			const wide = wideRules.filter((row) => row?.resource_id === '' || row?.resource_id === null);
 			return new Map(ids.map((id) => [id, [
 				...pageRules.filter((row) => String(row?.resource_id ?? '').toLowerCase() === id),
@@ -241,7 +259,7 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 			]]));
 		} catch (error) {
 			if (error?.code === 'share_rules_table_missing') return new Map(ids.map((id) => [id, []]));
-			throw shareRulesUnavailable();
+			throw readFailed('listForPages', error);
 		}
 	};
 
@@ -258,11 +276,12 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		};
 		try {
 			const rows = await call(config, query(params), { empty: null });
-			if (rows === null || rows.length >= WORKSPACE_RULES_LIMIT) throw shareRulesUnavailable();
+			if (rows === null) throw unreadable('empty body');
+			if (rows.length >= WORKSPACE_RULES_LIMIT) throw unreadable('over limit');
 			return rows;
 		} catch (error) {
 			if (error?.code === 'share_rules_table_missing') return [];
-			throw shareRulesUnavailable();
+			throw readFailed('listForWorkspace', error);
 		}
 	};
 
@@ -314,9 +333,9 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		async upsert(config, rule) {
 			if (rule.target.type === 'team') await requireTeamInWorkspace(config, rule);
 			const body = { ...rule, updated_at: new Date().toISOString() };
-			const rows = await call(config, query({ on_conflict: 'workspace_id,resource_type,resource_id,target_key', select: SELECT }), {
+			const rows = await bumpAccessAfter(call(config, query({ on_conflict: 'workspace_id,resource_type,resource_id,target_key', select: SELECT }), {
 				method: 'POST', body, prefer: 'resolution=merge-duplicates,return=representation',
-			});
+			}), { workspaceId: rule.workspace_id });
 			return toApiRule(rows[0]);
 		},
 		async byId(config, id) {
@@ -326,9 +345,9 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		},
 		async remove(config, id, workspaceId) {
 			if (!UUID.test(String(id))) return false;
-			const rows = await call(config, query({ id: `eq.${id}`, workspace_id: `eq.${workspaceId}`, select: 'id' }), {
+			const rows = await bumpAccessAfter(call(config, query({ id: `eq.${id}`, workspace_id: `eq.${workspaceId}`, select: 'id' }), {
 				method: 'DELETE', prefer: 'return=representation',
-			});
+			}), { workspaceId });
 			return rows.length > 0;
 		},
 	};

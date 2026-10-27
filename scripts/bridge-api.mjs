@@ -50,6 +50,7 @@ import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSe
 // keeps importing the token helpers from here, as before the move.
 export { signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { countingFetch } from './bridge-server-timing.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
 import { createRealtimeTokenHandler } from './bridge-realtime-token.mjs';
@@ -64,6 +65,7 @@ import { createTasksHandler } from './bridge-tasks.mjs';
 import { createCommentsHandler } from './bridge-comments.mjs';
 import { createPublicHandler } from './bridge-public.mjs';
 import { createCollabHandler } from './bridge-collab.mjs';
+import { bumpAccessAfter, touchesPageAccess } from './bridge-access-generation.mjs';
 import { createWorkspaceInvitesHandler } from './bridge-workspace-invites.mjs';
 import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
@@ -75,6 +77,7 @@ import { createActivityEmitter } from './bridge-activity.mjs';
 import { createActivityConsent } from './bridge-activity-consent.mjs';
 import { startActivityMaintenance } from './bridge-activity-maintenance.mjs';
 import { createModerationConsoleHandler } from './bridge-moderation-console.mjs';
+import { runWsCanary } from './bridge-realtime-ws-lane.mjs';
 import { createRecsHealthHandler } from './bridge-recs-health.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
@@ -998,26 +1001,32 @@ async function rulesByPageForWorkspace(store, config, workspaceId) {
 	return rulesByPage;
 }
 
+/** The caller's members row, or the owner's synthetic one (C557 parenthetical: the workspace owner keeps access without a member row). */
+async function ownerAwareMemberRow(authContext, workspaceId, config, fetchImpl) {
+	const memberRow = await workspaceMemberRow(authContext.userId, workspaceId, config, fetchImpl).catch(() => {
+		throw pageAccessUnavailable();
+	});
+	if (memberRow) return memberRow;
+	const owner = await workspaceOwnerOf(workspaceId, config, fetchImpl).catch(() => null);
+	return sameId(owner, authContext.userId) ? { role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] } : null;
+}
+
 /**
  * One workspace's access map: the membership row, every rule, and — only when the
  * workspace has a rule — the parent map. A workspace with no rule of its own can never
  * hide a page through inheritance, so it skips the ~1 MB id → parent read entirely. A
  * broken rules read is a 503; a broken parent read (when needed) is a 503 too.
  */
-async function pageAccessEntry(authContext, workspaceId, config, fetchImpl) {
+async function pageAccessEntry(authContext, workspaceId, config, fetchImpl, memberFor = null) {
 	const store = createShareRuleStore({ fetchImpl });
-	const [rulesByPage, memberRow] = await Promise.all([
+	// memberFor: a request that already reads the caller's membership (collab events) hands
+	// it in so it is read once; it already applies the workspace-owner fallback below.
+	const [rulesByPage, member] = await Promise.all([
 		rulesByPageForWorkspace(store, config, workspaceId),
-		workspaceMemberRow(authContext.userId, workspaceId, config, fetchImpl).catch(() => {
-			throw pageAccessUnavailable();
-		}),
+		memberFor
+			? memberFor(workspaceId).catch(() => { throw pageAccessUnavailable(); })
+			: ownerAwareMemberRow(authContext, workspaceId, config, fetchImpl),
 	]);
-	// C557 parenthetical: the workspace owner keeps access even without a member row.
-	let member = memberRow;
-	if (!member) {
-		const owner = await workspaceOwnerOf(workspaceId, config, fetchImpl).catch(() => null);
-		if (sameId(owner, authContext.userId)) member = { role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] };
-	}
 	// No rule: the ancestor chain cannot change any answer, and parentOf stays null.
 	const parentOf = rulesByPage.size > 0
 		? await parentMapForWorkspace(workspaceId, config, fetchImpl)
@@ -1032,12 +1041,12 @@ async function pageAccessEntry(authContext, workspaceId, config, fetchImpl) {
  * by every row of that workspace in this request (C511). It caches by workspace id only for
  * the life of the request; nothing crosses requests.
  */
-function createPageAccessLoader(authContext, config, fetchImpl) {
+function createPageAccessLoader(authContext, config, fetchImpl, memberFor = null) {
 	const entries = new Map();
 	return {
 		entryFor(workspaceId) {
 			const key = String(workspaceId).toLowerCase();
-			if (!entries.has(key)) entries.set(key, pageAccessEntry(authContext, key, config, fetchImpl));
+			if (!entries.has(key)) entries.set(key, pageAccessEntry(authContext, key, config, fetchImpl, memberFor));
 			return entries.get(key);
 		},
 	};
@@ -1082,6 +1091,13 @@ async function filterPageRowsForAccess(rows, authContext, loader) {
 		const entry = entries.get(String(row?.workspace_id ?? '').toLowerCase());
 		return entry !== undefined && pageLevelFor(entry, row, authContext.userId) !== 'none';
 	});
+}
+
+/** `(rows, session, requestConfig?) => readable rows`: the page-access filter handed to the
+ *  surfaces that read their own page rows (feed, profile, recs, reports, the agent). */
+export function pageAccessFilterFor(config, fetchImpl) {
+	return (rows, session, requestConfig = config) =>
+		filterPageRowsForAccess(rows, session, createPageAccessLoader(session, requestConfig, fetchImpl));
 }
 
 /**
@@ -1165,19 +1181,27 @@ function workspaceAccessContext(authContext, workspaceId, member, permission) {
  * unreadable answer is a miss: deny on any miss). Org/teamspace membership lives in
  * osionos_workspace_members — the app token only carries the user's PRIVATE workspace.
  */
-async function callerWorkspaceMember(authContext, workspaceId, config, fetchImpl) {
-	let member;
+async function readCallerMembership(authContext, workspaceId, config, fetchImpl) {
 	if (authContext.workspaceIds.includes(workspaceId)) {
-		member = await sessionWorkspaceMember(authContext.userId, workspaceId, config, fetchImpl);
-	} else {
-		member = await workspaceMemberRow(authContext.userId, workspaceId, config, fetchImpl).catch(() => null);
+		return { member: await sessionWorkspaceMember(authContext.userId, workspaceId, config, fetchImpl), tableError: null };
 	}
-	// C557 parenthetical: the workspace owner keeps access even without a member row.
-	if (!member) {
-		const owner = await workspaceOwnerOf(workspaceId, config, fetchImpl).catch(() => null);
-		if (sameId(owner, authContext.userId)) member = { role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] };
+	try {
+		return { member: await workspaceMemberRow(authContext.userId, workspaceId, config, fetchImpl), tableError: null };
+	} catch (tableError) {
+		return { member: null, tableError };
 	}
-	return member;
+}
+
+/** C557 parenthetical: the workspace owner keeps access even without a member row. */
+async function withOwnerFallback(member, authContext, workspaceId, config, fetchImpl) {
+	if (member) return member;
+	const owner = await workspaceOwnerOf(workspaceId, config, fetchImpl).catch(() => null);
+	return sameId(owner, authContext.userId) ? { role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] } : null;
+}
+
+async function callerWorkspaceMember(authContext, workspaceId, config, fetchImpl) {
+	const { member } = await readCallerMembership(authContext, workspaceId, config, fetchImpl);
+	return withOwnerFallback(member, authContext, workspaceId, config, fetchImpl);
 }
 
 export async function requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl = fetch) {
@@ -1452,18 +1476,18 @@ function pageNotFound() {
  * their access whatever the rules say, so they never pay for the rules read.
  * A caller who is not a member of the page's workspace gets the 404 of a missing id.
  */
-async function pageWriteContext(request, pageId, config, fetchImpl) {
+async function pageWriteContext(request, pageId, config, fetchImpl, access = null) {
 	const token = verifyAppSessionToken(bearerToken(request), config);
-	const row = await fetchPageAuthRow(pageId, config, fetchImpl);
+	const row = await (access ? access.pageRow(pageId) : fetchPageAuthRow(pageId, config, fetchImpl));
 	if (!row) throw pageNotFound();
 	const workspaceId = requireUuid(row.workspace_id, 'workspaceId');
 	// C557: the page owner keeps their write only while still a member of the workspace.
-	const member = await callerWorkspaceMember(token, workspaceId, config, fetchImpl);
+	const member = await (access ? access.member(workspaceId) : callerWorkspaceMember(token, workspaceId, config, fetchImpl));
 	if (ownerHoldsPage(row, token.userId, member)) return { token, row, member, workspaceId, owner: true, level: null, ruleLevel: null };
 	if (!member) throw pageNotFound();
 	const role = safeText(member.role, 16);
 	const exempt = role === 'owner' || role === 'admin';
-	const entry = exempt ? null : await createPageAccessLoader(token, config, fetchImpl).entryFor(workspaceId);
+	const entry = exempt ? null : await (access ? access.loader : createPageAccessLoader(token, config, fetchImpl)).entryFor(workspaceId);
 	const level = exempt ? null : pageLevelFor(entry, row, token.userId);
 	const ruleLevel = exempt ? null : pageRuleLevelFor(entry, row, token.userId);
 	return { token, row, member, workspaceId, owner: false, level, ruleLevel };
@@ -1488,6 +1512,49 @@ function requirePageWrite(context, permission) {
 		? [{ resource_type: 'page', resource_id: context.row?.id, target: { type: 'user', userId: context.token.userId }, permission: context.ruleLevel }]
 		: [];
 	if (!canWritePageRow(context.row, context.token.userId, context.member, permission, syntheticRules)) throw pageWriteDenied();
+}
+
+/**
+ * The reads one collaboration event shares between its page-level check and its blocks
+ * authorisation: the page row, the caller's membership and the share-rule map, each read
+ * once. `scope` is created per request by the collab handler and dropped with it; nothing
+ * crosses requests. Without a scope (summon targets, token routes) callers read as before.
+ */
+function collabEventAccess(scope, config, fetchImpl) {
+	if (!scope?.session) return null;
+	scope.access ??= createCollabEventAccess(scope.session, config, fetchImpl);
+	return scope.access;
+}
+
+function createCollabEventAccess(session, config, fetchImpl) {
+	const rows = new Map();
+	const members = new Map();
+	const once = (cache, key, read) => {
+		if (!cache.has(key)) cache.set(key, read());
+		return cache.get(key);
+	};
+	// One raw read; a members-table failure is a miss for the write context (as before) but
+	// a 503 for the page-level loader (as before): each consumer applies its own policy.
+	const raw = (workspaceId) => once(members, String(workspaceId).toLowerCase(), () => readCallerMembership(session, workspaceId, config, fetchImpl));
+	const member = async (workspaceId) => withOwnerFallback((await raw(workspaceId)).member, session, workspaceId, config, fetchImpl);
+	const strictMember = async (workspaceId) => {
+		const { member: row, tableError } = await raw(workspaceId);
+		if (tableError) throw tableError;
+		return withOwnerFallback(row, session, workspaceId, config, fetchImpl);
+	};
+	// The level read starts before the route's membership verdict; a caller with no row
+	// is refused by that verdict, so its read stops here instead of fetching the
+	// workspace's parent map (~1 MB) for a request that is already a 403.
+	const memberOrStop = async (workspaceId) => {
+		const row = await strictMember(workspaceId);
+		if (!row) throw pageAccessUnavailable();
+		return row;
+	};
+	return {
+		pageRow: (pageId) => once(rows, String(pageId).toLowerCase(), () => fetchPageAuthRow(pageId, config, fetchImpl)),
+		member,
+		loader: createPageAccessLoader(session, config, fetchImpl, memberOrStop),
+	};
 }
 
 /**
@@ -1753,7 +1820,9 @@ export function isBaasPersistenceEnabled(config) {
 
 export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) {
 	if (!isBaasPersistenceEnabled(config)) return null;
-	const response = await fetchWithTimeout(fetchImpl, `${config.baasUrl}/rest/v1/rpc/osionos_bridge_upsert_workspace`, {
+	// User-scoped: the upsert provisions this identity's own workspace and membership, nothing
+	// another user's cached allow was read under.
+	const response = await bumpAccessAfter(fetchWithTimeout(fetchImpl, `${config.baasUrl}/rest/v1/rpc/osionos_bridge_upsert_workspace`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -1767,7 +1836,7 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 			p_email_hash: emailHash(payload.email, config),
 			p_display_name: payload.name,
 		}),
-	}, BAAS_FETCH_TIMEOUT_MS);
+	}, BAAS_FETCH_TIMEOUT_MS), { userId: payload.subject });
 	if (!response.ok) {
 		const body = await response.text().catch(() => '');
 		throw Object.assign(new Error(`BaaS bridge persistence failed with ${response.status}: ${body.slice(0, 160)}`), { status: 502 });
@@ -1923,11 +1992,11 @@ async function resolveAdminFlag(payload, config, fetchImpl) {
 async function ensureAdminWorkspaceMembership(userId, config, fetchImpl) {
 	if (!config.serviceKey || !config.baasUrl) return;
 	try {
-		await baasRest(config, fetchImpl, 'osionos_workspace_members', {
+		await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_workspace_members', {
 			method: 'POST',
 			body: { workspace_id: ADMIN_WORKSPACE_ID, user_id: userId, role: 'admin', permissions: ['read', 'update', 'admin'] },
 			prefer: 'resolution=merge-duplicates,return=minimal',
-		});
+		}), { workspaceId: ADMIN_WORKSPACE_ID, userId });
 	} catch {
 		/* best-effort */
 	}
@@ -3035,11 +3104,11 @@ async function handleMarketplacePublish(request, response, config, fetchImpl, en
 	const props = (Array.isArray(row.properties) ? row.properties : []).filter((p) => p && p.key !== 'published' && p.key !== 'publishedAt');
 	props.push({ key: 'published', label: 'Published', type: 'checkbox', value: true });
 	props.push({ key: 'publishedAt', label: 'Published at', type: 'date', value: new Date().toISOString() });
-	const updated = await baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
+	const updated = await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
 		method: 'PATCH',
 		body: { properties: props, visibility: 'public', updated_at: new Date().toISOString() },
 		prefer: 'return=representation',
-	});
+	}), { workspaceId: MARKETPLACE_WORKSPACE_ID });
 	await publishAppChildren(pageId, authContext.userId, config, fetchImpl);
 	json(response, 200, pageRowToEntry(Array.isArray(updated) ? updated[0] : updated), config);
 	return true;
@@ -3056,11 +3125,11 @@ async function publishAppChildren(appId, userId, config, fetchImpl) {
 		.filter((child) => child.workspace_id === MARKETPLACE_WORKSPACE_ID && canChangePageSharing(child, userId))
 		.map((child) => child.id);
 	if (ids.length === 0) return;
-	await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', ids)}`, {
+	await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', ids)}`, {
 		method: 'PATCH',
 		body: { visibility: 'public', updated_at: new Date().toISOString() },
 		prefer: 'return=minimal',
-	});
+	}), { workspaceId: MARKETPLACE_WORKSPACE_ID });
 }
 
 /** Default property set for a freshly created draft app. */
@@ -3092,7 +3161,7 @@ async function handleMarketplaceCreate(request, response, config, fetchImpl) {
 	const title = safeText(payload.title, 200) || 'New app';
 	const appId = randomUUID();
 	const identifier = `app.${appId.slice(0, 8)}`;
-	await baasRest(config, fetchImpl, 'osionos_pages', {
+	await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', {
 		method: 'POST',
 		body: {
 			id: appId, workspace_id: MARKETPLACE_WORKSPACE_ID, parent_page_id: MARKETPLACE_DATABASE_ID,
@@ -3100,16 +3169,16 @@ async function handleMarketplaceCreate(request, response, config, fetchImpl) {
 			surface: 'app', visibility: 'private', collaborators: [], properties: defaultAppProperties(identifier), content: [],
 		},
 		prefer: 'return=minimal',
-	});
+	}), { workspaceId: MARKETPLACE_WORKSPACE_ID });
 	for (const [t, ic] of MARKETPLACE_SUBPAGES) {
-		await baasRest(config, fetchImpl, 'osionos_pages', {
+		await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', {
 			method: 'POST',
 			body: {
 				id: randomUUID(), workspace_id: MARKETPLACE_WORKSPACE_ID, parent_page_id: appId, owner_id: authContext.userId,
 				title: t, icon: ic, surface: 'page', visibility: 'private', collaborators: [], properties: [], content: [],
 			},
 			prefer: 'return=minimal',
-		});
+		}), { workspaceId: MARKETPLACE_WORKSPACE_ID });
 	}
 	json(response, 201, pageRowToEntry(await fetchPageRow(appId, config, fetchImpl)), config);
 	return true;
@@ -3467,11 +3536,11 @@ async function ensureRecordNote(dbId, table, pk, request, config, fetchImpl) {
 	// loser writes nothing) — proven against the test harness, not a live PostgREST.
 	const stored = await fetchRecordNoteMirror(body.id, config, fetchImpl);
 	if (!stored) {
-		await baasRest(config, fetchImpl, 'osionos_pages?on_conflict=id', {
+		await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages?on_conflict=id', {
 			method: 'POST',
 			body,
 			prefer: 'resolution=ignore-duplicates,return=minimal',
-		});
+		}), { workspaceId: mount.workspace_id });
 		return { noteId: body.id, mount, authContext };
 	}
 	const refresh = recordNoteRefresh(stored, body);
@@ -3566,11 +3635,11 @@ async function handleRecordSubitemCreate(match, request, response, config, fetch
 		content: safeJsonArray(safe.content),
 		now: new Date().toISOString(),
 	});
-	const created = await baasRest(config, fetchImpl, 'osionos_pages', {
+	const created = await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', {
 		method: 'POST',
 		body,
 		prefer: 'return=representation',
-	});
+	}), { workspaceId: access.workspaceId });
 	json(response, 201, pageRowToEntry(Array.isArray(created) ? created[0] : created), config);
 	return true;
 }
@@ -4016,7 +4085,7 @@ async function handlePageCreate(request, response, config, fetchImpl) {
 	const body = pageCreateRowFromPayload(payload, authContext);
 	let rows;
 	try {
-		rows = await baasRest(config, fetchImpl, 'osionos_pages', { method: 'POST', body, prefer: 'return=representation' });
+		rows = await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', { method: 'POST', body, prefer: 'return=representation' }), { workspaceId });
 	} catch (error) {
 		if (!body.id) throw error;
 		const replayed = await replayOrConflict(error, payload, authContext, config, fetchImpl);
@@ -4100,11 +4169,11 @@ async function handlePageArchiveCascade(row, ids, archivedAt, config, fetchImpl)
 	if (ids.length === 0) return;
 	const updatedAt = new Date().toISOString();
 	for (const chunk of idChunks(ids)) {
-		await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&workspace_id=eq.${row.workspace_id}`, {
+		await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&workspace_id=eq.${row.workspace_id}`, {
 			method: 'PATCH',
 			body: { archived_at: archivedAt, updated_at: updatedAt },
 			prefer: 'return=minimal',
-		});
+		}), { workspaceId: row.workspace_id });
 	}
 }
 
@@ -4242,11 +4311,13 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	};
 	if (carriesArchive && updateRow.archived_at !== null && precondition === null) await cascade(updateRow.archived_at, true);
 	const filter = precondition === null ? `id=eq.${pageId}` : `id=eq.${pageId}&version=eq.${precondition}&select=version`;
-	const updatedRows = await baasRest(config, fetchImpl, `osionos_pages?${filter}`, {
+	// A falsy scope bumps nothing: typing PATCHes content about every 800 ms and must not flush the cache.
+	const accessScope = touchesPageAccess(updateRow) && { workspaceId: [existing.workspace_id, updateRow.workspace_id].filter(Boolean) };
+	const updatedRows = await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?${filter}`, {
 		method: 'PATCH',
 		body: updateRow,
 		prefer: precondition === null ? 'return=minimal' : 'return=representation',
-	});
+	}), accessScope);
 	const updated = Array.isArray(updatedRows) ? updatedRows[0] ?? null : null;
 	if (precondition !== null && !updated) {
 		// The row moved on: the version the write was pinned to is stale. The server's
@@ -4741,15 +4812,15 @@ async function handlePageDelete(url, request, response, config, fetchImpl) {
 	// The root write carries the same workspace scope so a page that left the workspace between the read and the write is left alone.
 	const descendantIds = await cascadeDescendantIds(request, row, 'delete', config, fetchImpl);
 	for (const chunk of idChunks([...descendantIds].reverse())) {
-		await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&workspace_id=eq.${row.workspace_id}`, {
+		await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&workspace_id=eq.${row.workspace_id}`, {
 			method: 'DELETE',
 			prefer: 'return=minimal',
-		});
+		}), { workspaceId: row.workspace_id });
 	}
-	await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', [pageId])}&workspace_id=eq.${row.workspace_id}`, {
+	await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', [pageId])}&workspace_id=eq.${row.workspace_id}`, {
 		method: 'DELETE',
 		prefer: 'return=minimal',
-	});
+	}), { workspaceId: row.workspace_id });
 	json(response, 200, { ok: true, deletedIds: [pageId, ...descendantIds] }, config);
 	return true;
 }
@@ -4767,17 +4838,17 @@ async function handleWorkspaceCreate(request, response, config, fetchImpl) {
 	const id = randomUUID();
 	const slug = `${baseSlug}-${randomUUID().slice(0, 8)}`;
 	const ownerPermissions = ['create', 'read', 'update', 'delete', 'admin'];
-	const rows = await baasRest(config, fetchImpl, 'osionos_workspaces', {
+	const rows = await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_workspaces', {
 		method: 'POST',
 		body: { id, owner_id: authContext.userId, name, slug, source: 'bridge' },
 		prefer: 'return=representation',
-	});
+	}), { workspaceId: id });
 	const row = Array.isArray(rows) && rows[0] ? rows[0] : { id, owner_id: authContext.userId, name, slug };
-	await baasRest(config, fetchImpl, 'osionos_workspace_members?on_conflict=workspace_id,user_id', {
+	await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_workspace_members?on_conflict=workspace_id,user_id', {
 		method: 'POST',
 		body: { workspace_id: id, user_id: authContext.userId, role: 'owner', permissions: ownerPermissions },
 		prefer: 'resolution=ignore-duplicates,return=minimal',
-	});
+	}), { workspaceId: id, userId: authContext.userId });
 	json(response, 200, workspaceRowToEntry(row, { role: 'owner', permissions: ownerPermissions }), config);
 	return true;
 }
@@ -5114,7 +5185,7 @@ export function createBridgeServer(options = {}) {
 	const transport = !options.fetchImpl && process.env.OSIONOS_BAAS_KEEPALIVE === '1'
 		? (options.createTransport ?? createBaasTransport)({ baasUrl: config.baasUrl })
 		: null;
-	const fetchImpl = meter.wrapFetch(options.fetchImpl ?? transport?.fetch ?? fetch);
+	const fetchImpl = countingFetch(meter.wrapFetch(options.fetchImpl ?? transport?.fetch ?? fetch), options.env ?? process.env);
 	const spawnImpl = options.spawnImpl ?? spawn;
 	// The env the moderation slice reads: the mode (OSIONOS_MODERATION_ACTIONS)
 	// and the state flag (OSIONOS_MODERATION_STATE). A test injects its own.
@@ -5125,13 +5196,12 @@ export function createBridgeServer(options = {}) {
 	// The page-access filter injected into the sibling surfaces that own their page rows
 	// (feed, profile, recs, reports): the SAME loader/evaluator as the page routes, never
 	// a second copy (C550). `session` is the verified session (userId).
-	const pageAccessFilter = (rows, session, requestConfig = config) =>
-		filterPageRowsForAccess(rows, session, createPageAccessLoader(session, requestConfig, fetchImpl));
+	const pageAccessFilter = pageAccessFilterFor(config, fetchImpl);
 	// Standalone workstream handlers, created once. rtc keeps the sibling
 	// contract (closes over the base config); chat/profile/feed additionally
 	// accept the per-request (per-origin) config at dispatch time.
 	const social = options.social ?? {
-		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, pageAccessFilter }),
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl }),
 		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess }),
@@ -5157,8 +5227,8 @@ export function createBridgeServer(options = {}) {
 		recsHealth: createRecsHealthHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		social: createSocialHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv, pageAccessFilter }),
 		collab: createCollabHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env,
-			authorizeBlocks: async (request, pageId, workspaceId) => {
-				const context = await pageWriteContext(request, pageId, config, fetchImpl);
+			authorizeBlocks: async (request, pageId, workspaceId, scope) => {
+				const context = await pageWriteContext(request, pageId, config, fetchImpl, collabEventAccess(scope, config, fetchImpl));
 				requireReadablePage(context.row, context.token.userId, context.level);
 				if (!sameId(context.row.workspace_id, workspaceId)) throw pageNotFound();
 				requirePageWrite(context, 'update');
@@ -5166,7 +5236,15 @@ export function createBridgeServer(options = {}) {
 			// The page-read path as a single level, for the page-scoped realtime topics.
 			// A page outside `workspaceId` (or missing) is 'none', exactly like a page the
 			// caller cannot read, so the route's 404 never confirms existence.
-			pageLevelFor: async (userId, pageId, workspaceId) => {
+			pageLevelFor: async (userId, pageId, workspaceId, scope) => {
+				const access = collabEventAccess(scope, config, fetchImpl);
+				if (access) {
+					// The scope answers for its session's user only; any other user reads unscoped.
+					if (!sameId(userId, scope.session.userId)) throw new Error('pageLevelFor: scope belongs to another user');
+					const scoped = await access.pageRow(pageId);
+					if (!scoped || !sameId(scoped.workspace_id, workspaceId)) return 'none';
+					return pageLevelForRow(scoped, scope.session, access.loader);
+				}
 				const row = await fetchPageRow(pageId, config, fetchImpl);
 				if (!row || !sameId(row.workspace_id, workspaceId)) return 'none';
 				const authContext = { userId };
@@ -5240,6 +5318,8 @@ export function startBridgeServer(config = configFromEnv()) {
 	}
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
+		// Opt-in socket lane: HTTP carries every publish until the canary's echo arrives.
+		void runWsCanary(process.env);
 	});
 	return server;
 }

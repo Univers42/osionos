@@ -60,7 +60,10 @@ import type {
 } from '../model/realtimeTransport.port';
 import { validateCollabEvent, validateSummonReq } from '../model/collabEvent.schema';
 import { isPageScopedEvent } from '../model/pageScope';
+import { collabLatencyMarks } from '@/shared/lib/perf/collabLatencyMarks';
 import { backoffDelay, MAX_RECONNECT_ATTEMPTS, type BackoffOpts } from '../model/backoff';
+import { assignMemberColor } from '../model/collabPresence';
+import { memberIdOf } from '../model/collabActor';
 
 const COLLAB_EVENT = 'collab';      // broadcast label for a CollabEvent payload
 const REQUEST_EVENT = 'collab.req'; // directed-request envelope (user topic)
@@ -131,10 +134,36 @@ const validatePresenceMembers = (members: unknown): PresenceState[] => {
     if (!isRecord(meta) || typeof meta.memberId !== 'string') continue;
     const userId = (member as PresenceWireMember).user_id;
     if (typeof userId === 'string' && userId.toLowerCase() !== meta.memberId.toLowerCase()) continue;
-    states.push(meta as unknown as PresenceState);
+    states.push(renderablePresence(meta, meta.memberId));
   }
   return states;
 };
+
+const PALETTE_COLOR = /^var\(--collab-[1-9]\d*\)$/;
+const MAX_DISPLAY_NAME = 80;
+
+/**
+ * Another member's meta reaches CSS (`color`) and an `<img src>` (`avatarRef`): a
+ * `url(...)` colour or a foreign avatar would make every reader's browser fetch a URL
+ * the sender picked. Only a palette token, an https/same-origin avatar and a bounded
+ * name survive; a bad colour falls back to the member's own palette colour.
+ * Caveat: an https avatar is still a host the sender chose, so readers' browsers can
+ * be made to fetch it (their IP and the time leak to that host). Closing that needs the
+ * avatar resolved from the member's profile, not taken from presence meta.
+ */
+function renderablePresence(meta: Record<string, unknown>, memberId: string): PresenceState {
+  const color = typeof meta.color === 'string' && PALETTE_COLOR.test(meta.color) ? meta.color : assignMemberColor(memberId);
+  const displayName = typeof meta.displayName === 'string' ? meta.displayName.slice(0, MAX_DISPLAY_NAME) : '';
+  const state = { ...meta, memberId, color, displayName } as unknown as PresenceState;
+  if (!isSafeAvatar(meta.avatarRef)) delete state.avatarRef;
+  return state;
+}
+
+function isSafeAvatar(ref: unknown): boolean {
+  if (typeof ref !== 'string') return false;
+  if (ref.startsWith('/') && !ref.startsWith('//')) return true;
+  return ref.startsWith('https://');
+}
 
 /** Keep only the workspace allow-list so a caller cannot smuggle page state. */
 function workspacePresence(meta: Record<string, unknown>, selfId: string): Partial<PresenceState> {
@@ -153,7 +182,7 @@ class ActorRateLimiter {
   private static readonly MAX_ACTORS = 256;
 
   allow(actor: string, now = Date.now()): boolean {
-    const key = actor.split(':')[0] || actor;
+    const key = memberIdOf(actor);
     let bucket = this.buckets.get(key);
     if (!bucket) {
       if (this.buckets.size >= ActorRateLimiter.MAX_ACTORS) {
@@ -297,6 +326,7 @@ class GrobaseChannel implements RealtimeChannel {
   }
 
   private handleFrame(data: unknown): void {
+    collabLatencyMarks.frameReceived();
     let frame: { type?: string; event?: GatewayEvent; members?: unknown; code?: string };
     try { frame = JSON.parse(String(data)); } catch { return; }
     if (frame.type === 'AUTH_OK') this.frame({ type: 'SUBSCRIBE', sub_id: 'collab', topic: this.topic });

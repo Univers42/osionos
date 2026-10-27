@@ -103,6 +103,17 @@ test("loadSysSourceState builds schema, records and the default view from an ans
   assert.ok(view.visibleProperties.includes("surface"));
 });
 
+test("a select cell holds the id of its option, never the raw value", async () => {
+  const result = await state.loadSysSourceState("sys:my-pages", stub(answer("my-pages", ["id", "title", "surface"], [
+    { id: "p1", title: "Plan", surface: "Doc page" },
+    { id: "p2", title: "Bot", surface: null },
+  ])));
+  const options = (result.state.databases["sys:my-pages"].properties.surface as { options: { id: string; value: string }[] }).options;
+  const cell = result.state.pages.p1.properties.surface;
+  assert.equal(options.find((option) => option.id === cell)?.value, "Doc page");
+  assert.equal(result.state.pages.p2.properties.surface, null);
+});
+
 test("a non-2xx or malformed answer throws instead of returning an empty state", async () => {
   await assert.rejects(() => state.loadSysSourceState("sys:my-pages", stub(null, true)));
   await assert.rejects(() => state.loadSysSourceState("sys:my-pages", stub({ ok: false })));

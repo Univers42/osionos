@@ -92,13 +92,30 @@ async function refreshOwnerOf(token: string): Promise<string | null> {
   return userStore((state) => (state.sessions as Record<string, { accessToken: string }>)[owner]?.accessToken ?? null);
 }
 
+const guardedFetch = sudoRequiredAwareFetch(refreshAwareFetch(
+  revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
+  refreshOwnerOf,
+));
+
 /** Thin fetch wrapper exposing typed GET/POST/PATCH/DELETE helpers. */
 export const api = createHttpClient({
   baseUrl: API_BASE,
   maxConcurrent: 6,
-  fetchImpl: sudoRequiredAwareFetch(refreshAwareFetch(
-    revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
-    refreshOwnerOf,
-  )),
+  fetchImpl: guardedFetch,
+  missingBaseUrlMessage: 'This version of osionos is not connected to a server.',
+});
+
+/**
+ * Same client, own request gate: a collab publish must not queue behind six
+ * slow page/database requests in `api` (each client owns its gate). Used only
+ * behind the collab fast-send flag.
+ * Caveat: the lane is app-level; on HTTP/1.1 the browser still caps ~6
+ * connections per origin, so under saturation a publish can wait in the
+ * browser instead. HTTP/2 (the deployed edge) has no such cap.
+ */
+export const realtimeApi = createHttpClient({
+  baseUrl: API_BASE,
+  maxConcurrent: 4,
+  fetchImpl: guardedFetch,
   missingBaseUrlMessage: 'This version of osionos is not connected to a server.',
 });

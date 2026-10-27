@@ -233,6 +233,29 @@ test("the top-level PRESENCE frame path still delivers member meta", async () =>
   chA.leave(); chB.leave();
 });
 
+test("another member's presence meta cannot make readers fetch a URL", async () => {
+  const { chA, chB } = await joinTwo();
+  const snapshots: unknown[][] = [];
+  chA.onPresence((members) => snapshots.push(members));
+  chB.setPresence({
+    displayName: "B".repeat(500),
+    color: "url(https://evil.example/beacon)",
+    avatarRef: "http://evil.example/a.png",
+    lastSeen: 0,
+  });
+  await flush();
+  const member = snapshots.at(-1)?.[0] as { color: string; displayName: string; avatarRef?: string };
+  assert.match(member.color, /^var\(--collab-[1-8]\)$/, "a non-palette colour falls back to the palette");
+  assert.equal(member.displayName.length, 80);
+  assert.equal(member.avatarRef, undefined, "a non-https avatar is dropped");
+  chB.setPresence({ color: "var(--collab-3)", avatarRef: "https://cdn.example/a.png", displayName: "B" });
+  await flush();
+  const kept = snapshots.at(-1)?.[0] as { color: string; avatarRef?: string };
+  assert.equal(kept.color, "var(--collab-3)");
+  assert.equal(kept.avatarRef, "https://cdn.example/a.png");
+  chA.leave(); chB.leave();
+});
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 test("two clients exchange exactly one validated CollabEvent over the adapter", async () => {
   // Page events now travel on `collabpage:<pageId>`, never on the workspace

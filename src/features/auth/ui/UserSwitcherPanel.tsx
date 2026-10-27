@@ -172,7 +172,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
           <button
             key={workspace._id}
             type="button"
-            onClick={() => switchWorkspace(workspace._id)}
+            onClick={() => { switchWorkspace(workspace._id); onClose(); }}
             className="osio-menu-item"
           >
             <span className="flex h-5 w-5 items-center justify-center rounded-xs bg-[var(--osio-bg-muted)] text-xs">

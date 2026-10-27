@@ -43,6 +43,7 @@ import { writeAudit } from './bridge-guard.mjs';
 import { revokeAllPats } from './bridge-pat-store.mjs';
 import { writeSessionCutoff } from './bridge-session-cutoff.mjs';
 import { storageDelete } from './bridge-storage-core.mjs';
+import { bumpAccessAfter } from './bridge-access-generation.mjs';
 
 export const CLAIM_BATCH = 5;
 export const BATCH_WAIT_MS = 70_000;
@@ -182,7 +183,7 @@ export function createAccountErasureRunner({ config, pg, kv = null, fetchImpl = 
 		await guarded('ban_failed', () => banUser(userId, BAN_DURATION));
 		await guarded('pat_revoke_failed', () => revokeAllPats({ pg, userId, now: now() }));
 		try {
-			return await pg.asService().rpc('osionos_account_erase', { p_user: userId });
+			return await bumpAccessAfter(pg.asService().rpc('osionos_account_erase', { p_user: userId }));
 		} catch (error) {
 			const cancelled = mentions(error, 'no_deletion_request');
 			if (!cancelled && await requestStillThere(userId)) throw Object.assign(failure('erase_failed'), { cause: error });
@@ -210,7 +211,7 @@ export function createAccountErasureRunner({ config, pg, kv = null, fetchImpl = 
 
 	/** Steps 4-7. */
 	async function finish(userId, firstResult) {
-		const result = await guarded('erase_failed', () => pg.asService().rpc('osionos_account_erase', { p_user: userId }));
+		const result = await guarded('erase_failed', () => bumpAccessAfter(pg.asService().rpc('osionos_account_erase', { p_user: userId })));
 		await guarded('object_delete_failed', () => deleteObjects(userId));
 		await guarded('auth_delete_failed', () => deleteAuthUser(userId));
 		const outcome = result ?? firstResult;

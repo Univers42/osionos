@@ -215,7 +215,7 @@ function wins(op: BlockOp, actor: string, current: BlockRegister | undefined): b
   return actor > current.actor;
 }
 
-function registerKeyOf(op: BlockOp): string {
+export function registerKeyOf(op: BlockOp): string {
   return op.k === 'order' ? orderRegisterKey(op.parentId) : blockRegisterKey(op.id);
 }
 

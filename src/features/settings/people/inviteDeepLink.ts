@@ -23,6 +23,8 @@
 import { whenLayoutIsRestored } from "@/features/settings/model/settingsDeepLink";
 import { useToastStore } from "@osionos/ui/primitives";
 import { useWorkspaceInvitesStore } from "@/store/settings";
+import { useUserStore } from "@/features/auth";
+import { enterJoinedWorkspace } from "./enterJoinedWorkspace";
 
 const PENDING_KEY = "osionos.pendingInvite";
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{43}$/;
@@ -69,7 +71,10 @@ export function applyInviteDeepLink(): void {
   whenLayoutIsRestored(() => {
     writeStored(null);
     void useWorkspaceInvitesStore.getState().accept(token).then((workspaceId) => {
-      if (workspaceId) useToastStore.getState().push({ kind: "success", title: "You joined the workspace" });
+      if (!workspaceId) return;
+      useToastStore.getState().push({ kind: "success", title: "You joined the workspace" });
+      const { activeUserId, refreshWorkspaces, switchWorkspace } = useUserStore.getState();
+      void enterJoinedWorkspace(workspaceId, { refreshWorkspaces: () => refreshWorkspaces(activeUserId), switchWorkspace });
     });
   });
 }

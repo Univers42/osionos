@@ -35,6 +35,12 @@ export interface FileDerive {
   theme: string; category: string; folderId: string; type: string; tags: string[]; related: string[];
 }
 
+/** The select option id for a value. Select cells match by this id, so every producer of a
+ *  select value writes `optionId(value)` and every option list builds its ids with it. */
+export function optionId(value: string): string {
+  return `opt-${value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "opt"}`;
+}
+
 /** Distinct, stable, coloured select options synthesized from the live values. */
 export function synthOptions(values: Iterable<string>): SelectOption[] {
   const seen = new Set<string>();
@@ -43,8 +49,7 @@ export function synthOptions(values: Iterable<string>): SelectOption[] {
     const value = String(raw ?? "").trim();
     if (!value || seen.has(value)) continue;
     seen.add(value);
-    const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "opt";
-    out.push({ id: `opt-${slug}`, value, color: OPTION_COLORS[(out.length) % OPTION_COLORS.length] });
+    out.push({ id: optionId(value), value, color: OPTION_COLORS[(out.length) % OPTION_COLORS.length] });
   }
   return out;
 }
