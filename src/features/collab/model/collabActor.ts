@@ -26,3 +26,13 @@ export function randomTabId(): string {
 export function actorFor(userId: string, tab: string): string {
   return `${userId}:${tab}`;
 }
+
+/**
+ * Member id of an actor: the `<userId>` half of `<userId>:<tabId>`; a bare id
+ * (no tab) is returned unchanged. Presence is keyed by member, cursors by actor
+ * (per-tab), so every presence-vs-cursor comparison goes through this.
+ * Caveat: assumes a userId never contains ':'.
+ */
+export function memberIdOf(actor: string): string {
+  return actor.split(':')[0] || actor;
+}
