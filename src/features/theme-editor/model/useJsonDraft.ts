@@ -94,7 +94,10 @@ export function createJsonDraft<D>(config: DraftConfig<D>, onChange: (state: Dra
     }, DEBOUNCE_MS);
   }
 
+  // The editor echoes every text it is given (revert writes it back): an echo
+  // of the current text is not an edit and must not dirty the draft.
   function setText(nextText: string) {
+    if (nextText === state.text) return;
     commit({ text: nextText, issues: state.issues, dirty: true, restored: state.restored, doc: state.doc });
     scheduleParse();
   }
@@ -123,6 +126,7 @@ export function createJsonDraft<D>(config: DraftConfig<D>, onChange: (state: Dra
     const parsed = config.parse(initial);
     config.restore();
     commit({ text: initial, issues: parsed.issues, dirty: false, restored: false, doc: parsed.doc });
+    return initial;
   }
 
   // Re-entrant on purpose: StrictMode's rehearsal unmount disposes the same
@@ -140,7 +144,7 @@ export function createJsonDraft<D>(config: DraftConfig<D>, onChange: (state: Dra
 
   const api = { state: null as unknown as DraftState<D>, setText, save, revert, dispose };
   Object.defineProperty(api, "state", { get: () => state });
-  return api as { state: DraftState<D>; setText: (text: string) => void; save: () => void; revert: () => void; dispose: () => void };
+  return api as { state: DraftState<D>; setText: (text: string) => void; save: () => void; revert: () => string; dispose: () => void };
 }
 
 export function useJsonDraft<D>(config: DraftConfig<D>) {
