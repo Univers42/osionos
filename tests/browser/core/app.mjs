@@ -29,11 +29,13 @@ export async function createNewWorkspacePage(page) {
   // rail tab opens it.
   // Only when it is not mounted at all: the tab toggles, so clicking it on a slow
   // boot whose panel is already open would close it.
-  if (!appeared && (await newPageButton.count()) === 0) {
-    await page.getByRole("tab", { name: "Explorer" }).click();
-  }
+  const explorerTab = page.getByRole("tab", { name: "Explorer" });
+  const openedExplorer = !appeared && (await newPageButton.count()) === 0;
+  if (openedExplorer) await explorerTab.click();
   await newPageButton.click();
   await page.getByRole("textbox", { name: "Page title" }).waitFor();
+  // Back to the rail the shell booted with: a 375px page beside the open panel is a sliver.
+  if (openedExplorer) await explorerTab.click();
 }
 
 /** The workbench explorer row of the page titled `title`. The row's text may start with the
