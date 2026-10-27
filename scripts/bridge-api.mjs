@@ -65,6 +65,7 @@ import { createTasksHandler } from './bridge-tasks.mjs';
 import { createCommentsHandler } from './bridge-comments.mjs';
 import { createPublicHandler } from './bridge-public.mjs';
 import { createCollabHandler } from './bridge-collab.mjs';
+import { bumpAccessAfter, touchesPageAccess } from './bridge-access-generation.mjs';
 import { createWorkspaceInvitesHandler } from './bridge-workspace-invites.mjs';
 import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
@@ -1812,7 +1813,9 @@ export function isBaasPersistenceEnabled(config) {
 
 export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) {
 	if (!isBaasPersistenceEnabled(config)) return null;
-	const response = await fetchWithTimeout(fetchImpl, `${config.baasUrl}/rest/v1/rpc/osionos_bridge_upsert_workspace`, {
+	// User-scoped: the upsert provisions this identity's own workspace and membership, nothing
+	// another user's cached allow was read under.
+	const response = await bumpAccessAfter(fetchWithTimeout(fetchImpl, `${config.baasUrl}/rest/v1/rpc/osionos_bridge_upsert_workspace`, {
 		method: 'POST',
 		headers: {
 			Accept: 'application/json',
@@ -1826,7 +1829,7 @@ export async function persistBridgeIdentity(payload, config, fetchImpl = fetch) 
 			p_email_hash: emailHash(payload.email, config),
 			p_display_name: payload.name,
 		}),
-	}, BAAS_FETCH_TIMEOUT_MS);
+	}, BAAS_FETCH_TIMEOUT_MS), { userId: payload.subject });
 	if (!response.ok) {
 		const body = await response.text().catch(() => '');
 		throw Object.assign(new Error(`BaaS bridge persistence failed with ${response.status}: ${body.slice(0, 160)}`), { status: 502 });
@@ -1982,11 +1985,11 @@ async function resolveAdminFlag(payload, config, fetchImpl) {
 async function ensureAdminWorkspaceMembership(userId, config, fetchImpl) {
 	if (!config.serviceKey || !config.baasUrl) return;
 	try {
-		await baasRest(config, fetchImpl, 'osionos_workspace_members', {
+		await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_workspace_members', {
 			method: 'POST',
 			body: { workspace_id: ADMIN_WORKSPACE_ID, user_id: userId, role: 'admin', permissions: ['read', 'update', 'admin'] },
 			prefer: 'resolution=merge-duplicates,return=minimal',
-		});
+		}), { workspaceId: ADMIN_WORKSPACE_ID, userId });
 	} catch {
 		/* best-effort */
 	}
@@ -3094,11 +3097,11 @@ async function handleMarketplacePublish(request, response, config, fetchImpl, en
 	const props = (Array.isArray(row.properties) ? row.properties : []).filter((p) => p && p.key !== 'published' && p.key !== 'publishedAt');
 	props.push({ key: 'published', label: 'Published', type: 'checkbox', value: true });
 	props.push({ key: 'publishedAt', label: 'Published at', type: 'date', value: new Date().toISOString() });
-	const updated = await baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
+	const updated = await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?id=eq.${pageId}`, {
 		method: 'PATCH',
 		body: { properties: props, visibility: 'public', updated_at: new Date().toISOString() },
 		prefer: 'return=representation',
-	});
+	}), { workspaceId: MARKETPLACE_WORKSPACE_ID });
 	await publishAppChildren(pageId, authContext.userId, config, fetchImpl);
 	json(response, 200, pageRowToEntry(Array.isArray(updated) ? updated[0] : updated), config);
 	return true;
@@ -3115,11 +3118,11 @@ async function publishAppChildren(appId, userId, config, fetchImpl) {
 		.filter((child) => child.workspace_id === MARKETPLACE_WORKSPACE_ID && canChangePageSharing(child, userId))
 		.map((child) => child.id);
 	if (ids.length === 0) return;
-	await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', ids)}`, {
+	await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', ids)}`, {
 		method: 'PATCH',
 		body: { visibility: 'public', updated_at: new Date().toISOString() },
 		prefer: 'return=minimal',
-	});
+	}), { workspaceId: MARKETPLACE_WORKSPACE_ID });
 }
 
 /** Default property set for a freshly created draft app. */
@@ -3151,7 +3154,7 @@ async function handleMarketplaceCreate(request, response, config, fetchImpl) {
 	const title = safeText(payload.title, 200) || 'New app';
 	const appId = randomUUID();
 	const identifier = `app.${appId.slice(0, 8)}`;
-	await baasRest(config, fetchImpl, 'osionos_pages', {
+	await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', {
 		method: 'POST',
 		body: {
 			id: appId, workspace_id: MARKETPLACE_WORKSPACE_ID, parent_page_id: MARKETPLACE_DATABASE_ID,
@@ -3159,16 +3162,16 @@ async function handleMarketplaceCreate(request, response, config, fetchImpl) {
 			surface: 'app', visibility: 'private', collaborators: [], properties: defaultAppProperties(identifier), content: [],
 		},
 		prefer: 'return=minimal',
-	});
+	}), { workspaceId: MARKETPLACE_WORKSPACE_ID });
 	for (const [t, ic] of MARKETPLACE_SUBPAGES) {
-		await baasRest(config, fetchImpl, 'osionos_pages', {
+		await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', {
 			method: 'POST',
 			body: {
 				id: randomUUID(), workspace_id: MARKETPLACE_WORKSPACE_ID, parent_page_id: appId, owner_id: authContext.userId,
 				title: t, icon: ic, surface: 'page', visibility: 'private', collaborators: [], properties: [], content: [],
 			},
 			prefer: 'return=minimal',
-		});
+		}), { workspaceId: MARKETPLACE_WORKSPACE_ID });
 	}
 	json(response, 201, pageRowToEntry(await fetchPageRow(appId, config, fetchImpl)), config);
 	return true;
@@ -3526,11 +3529,11 @@ async function ensureRecordNote(dbId, table, pk, request, config, fetchImpl) {
 	// loser writes nothing) — proven against the test harness, not a live PostgREST.
 	const stored = await fetchRecordNoteMirror(body.id, config, fetchImpl);
 	if (!stored) {
-		await baasRest(config, fetchImpl, 'osionos_pages?on_conflict=id', {
+		await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages?on_conflict=id', {
 			method: 'POST',
 			body,
 			prefer: 'resolution=ignore-duplicates,return=minimal',
-		});
+		}), { workspaceId: mount.workspace_id });
 		return { noteId: body.id, mount, authContext };
 	}
 	const refresh = recordNoteRefresh(stored, body);
@@ -3625,11 +3628,11 @@ async function handleRecordSubitemCreate(match, request, response, config, fetch
 		content: safeJsonArray(safe.content),
 		now: new Date().toISOString(),
 	});
-	const created = await baasRest(config, fetchImpl, 'osionos_pages', {
+	const created = await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', {
 		method: 'POST',
 		body,
 		prefer: 'return=representation',
-	});
+	}), { workspaceId: access.workspaceId });
 	json(response, 201, pageRowToEntry(Array.isArray(created) ? created[0] : created), config);
 	return true;
 }
@@ -4075,7 +4078,7 @@ async function handlePageCreate(request, response, config, fetchImpl) {
 	const body = pageCreateRowFromPayload(payload, authContext);
 	let rows;
 	try {
-		rows = await baasRest(config, fetchImpl, 'osionos_pages', { method: 'POST', body, prefer: 'return=representation' });
+		rows = await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_pages', { method: 'POST', body, prefer: 'return=representation' }), { workspaceId });
 	} catch (error) {
 		if (!body.id) throw error;
 		const replayed = await replayOrConflict(error, payload, authContext, config, fetchImpl);
@@ -4159,11 +4162,11 @@ async function handlePageArchiveCascade(row, ids, archivedAt, config, fetchImpl)
 	if (ids.length === 0) return;
 	const updatedAt = new Date().toISOString();
 	for (const chunk of idChunks(ids)) {
-		await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&workspace_id=eq.${row.workspace_id}`, {
+		await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&workspace_id=eq.${row.workspace_id}`, {
 			method: 'PATCH',
 			body: { archived_at: archivedAt, updated_at: updatedAt },
 			prefer: 'return=minimal',
-		});
+		}), { workspaceId: row.workspace_id });
 	}
 }
 
@@ -4301,11 +4304,13 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	};
 	if (carriesArchive && updateRow.archived_at !== null && precondition === null) await cascade(updateRow.archived_at, true);
 	const filter = precondition === null ? `id=eq.${pageId}` : `id=eq.${pageId}&version=eq.${precondition}&select=version`;
-	const updatedRows = await baasRest(config, fetchImpl, `osionos_pages?${filter}`, {
+	// A falsy scope bumps nothing: typing PATCHes content about every 800 ms and must not flush the cache.
+	const accessScope = touchesPageAccess(updateRow) && { workspaceId: [existing.workspace_id, updateRow.workspace_id].filter(Boolean) };
+	const updatedRows = await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?${filter}`, {
 		method: 'PATCH',
 		body: updateRow,
 		prefer: precondition === null ? 'return=minimal' : 'return=representation',
-	});
+	}), accessScope);
 	const updated = Array.isArray(updatedRows) ? updatedRows[0] ?? null : null;
 	if (precondition !== null && !updated) {
 		// The row moved on: the version the write was pinned to is stale. The server's
@@ -4800,15 +4805,15 @@ async function handlePageDelete(url, request, response, config, fetchImpl) {
 	// The root write carries the same workspace scope so a page that left the workspace between the read and the write is left alone.
 	const descendantIds = await cascadeDescendantIds(request, row, 'delete', config, fetchImpl);
 	for (const chunk of idChunks([...descendantIds].reverse())) {
-		await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&workspace_id=eq.${row.workspace_id}`, {
+		await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&workspace_id=eq.${row.workspace_id}`, {
 			method: 'DELETE',
 			prefer: 'return=minimal',
-		});
+		}), { workspaceId: row.workspace_id });
 	}
-	await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', [pageId])}&workspace_id=eq.${row.workspace_id}`, {
+	await bumpAccessAfter(baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', [pageId])}&workspace_id=eq.${row.workspace_id}`, {
 		method: 'DELETE',
 		prefer: 'return=minimal',
-	});
+	}), { workspaceId: row.workspace_id });
 	json(response, 200, { ok: true, deletedIds: [pageId, ...descendantIds] }, config);
 	return true;
 }
@@ -4826,17 +4831,17 @@ async function handleWorkspaceCreate(request, response, config, fetchImpl) {
 	const id = randomUUID();
 	const slug = `${baseSlug}-${randomUUID().slice(0, 8)}`;
 	const ownerPermissions = ['create', 'read', 'update', 'delete', 'admin'];
-	const rows = await baasRest(config, fetchImpl, 'osionos_workspaces', {
+	const rows = await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_workspaces', {
 		method: 'POST',
 		body: { id, owner_id: authContext.userId, name, slug, source: 'bridge' },
 		prefer: 'return=representation',
-	});
+	}), { workspaceId: id });
 	const row = Array.isArray(rows) && rows[0] ? rows[0] : { id, owner_id: authContext.userId, name, slug };
-	await baasRest(config, fetchImpl, 'osionos_workspace_members?on_conflict=workspace_id,user_id', {
+	await bumpAccessAfter(baasRest(config, fetchImpl, 'osionos_workspace_members?on_conflict=workspace_id,user_id', {
 		method: 'POST',
 		body: { workspace_id: id, user_id: authContext.userId, role: 'owner', permissions: ownerPermissions },
 		prefer: 'resolution=ignore-duplicates,return=minimal',
-	});
+	}), { workspaceId: id, userId: authContext.userId });
 	json(response, 200, workspaceRowToEntry(row, { role: 'owner', permissions: ownerPermissions }), config);
 	return true;
 }

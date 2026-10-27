@@ -23,6 +23,7 @@
 
 import { httpError } from './bridge-social-core.mjs';
 import { readBaasJson } from './bridge-baas-body.mjs';
+import { bumpAccessAfter } from './bridge-access-generation.mjs';
 
 const TABLE = 'osionos_share_rules';
 const TEAMS_TABLE = 'osionos_teams';
@@ -314,9 +315,9 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		async upsert(config, rule) {
 			if (rule.target.type === 'team') await requireTeamInWorkspace(config, rule);
 			const body = { ...rule, updated_at: new Date().toISOString() };
-			const rows = await call(config, query({ on_conflict: 'workspace_id,resource_type,resource_id,target_key', select: SELECT }), {
+			const rows = await bumpAccessAfter(call(config, query({ on_conflict: 'workspace_id,resource_type,resource_id,target_key', select: SELECT }), {
 				method: 'POST', body, prefer: 'resolution=merge-duplicates,return=representation',
-			});
+			}), { workspaceId: rule.workspace_id });
 			return toApiRule(rows[0]);
 		},
 		async byId(config, id) {
@@ -326,9 +327,9 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		},
 		async remove(config, id, workspaceId) {
 			if (!UUID.test(String(id))) return false;
-			const rows = await call(config, query({ id: `eq.${id}`, workspace_id: `eq.${workspaceId}`, select: 'id' }), {
+			const rows = await bumpAccessAfter(call(config, query({ id: `eq.${id}`, workspace_id: `eq.${workspaceId}`, select: 'id' }), {
 				method: 'DELETE', prefer: 'return=representation',
-			});
+			}), { workspaceId });
 			return rows.length > 0;
 		},
 	};

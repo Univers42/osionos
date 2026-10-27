@@ -38,6 +38,7 @@ import {
 	safeText,
 } from './bridge-social-core.mjs';
 import { isOwnerOrCollaborator } from './bridge-page-read.mjs';
+import { bumpAccessAfter } from './bridge-access-generation.mjs';
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -213,7 +214,7 @@ async function toolCreatePage(deps, session, input) {
 	const ids = await callerWorkspaceIds(deps, session);
 	if (!ids.includes(workspaceId)) throw httpError('You do not have access to this workspace.', 403);
 	const title = safeText(input?.title, 200) || 'Untitled';
-	const rows = await rest(deps.config, deps.fetchImpl, 'osionos_pages', {
+	const rows = await bumpAccessAfter(rest(deps.config, deps.fetchImpl, 'osionos_pages', {
 		method: 'POST',
 		body: {
 			workspace_id: workspaceId,
@@ -223,7 +224,7 @@ async function toolCreatePage(deps, session, input) {
 			content: markdownToBlocks(input?.markdown),
 		},
 		prefer: 'return=representation',
-	});
+	}), { workspaceId });
 	const row = Array.isArray(rows) ? rows[0] : rows;
 	if (!row) throw httpError('Page creation returned no row.', 502);
 	// The mirror-to-client path in AgentConversationPage parses `created`/`page`.

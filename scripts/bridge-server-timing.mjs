@@ -20,7 +20,8 @@ export const serverTimingEnabled = (env) => env?.COLLAB_SERVER_TIMING === '1';
 
 function format(timing) {
 	const hops = Object.entries(timing.hops).map(([name, ms]) => `${name};dur=${round(ms)}`);
-	return [...hops, `postgrest;desc="${timing.postgrest}"`, `total;dur=${round(performance.now() - timing.startedAt)}`].join(', ');
+	const authcache = timing.authcache ? [`authcache;desc="${timing.authcache}"`] : [];
+	return [...hops, `postgrest;desc="${timing.postgrest}"`, ...authcache, `total;dur=${round(performance.now() - timing.startedAt)}`].join(', ');
 }
 
 /** Start timing one response; null when the flag is off. */
@@ -52,6 +53,12 @@ export async function timedHop(name, fn) {
 	} finally {
 		timing.hops[name] = (timing.hops[name] ?? 0) + performance.now() - start;
 	}
+}
+
+/** Record whether the access cache answered this request: hit | miss | off. */
+export function markAuthCache(state) {
+	const timing = storage.getStore();
+	if (timing) timing.authcache = state;
 }
 
 /** Wrap a fetch so PostgREST calls made inside a timed request are counted. */
