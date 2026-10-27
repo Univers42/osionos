@@ -107,18 +107,20 @@ function clampText(value) {
 	return String(value ?? '').slice(0, MAX_RESULT_TEXT);
 }
 
-/** Workspace ids the caller can touch: the token's workspace_ids ∪ members rows. */
+/** Workspace ids the caller can touch: the live osionos_workspace_members rows only. The
+ *  token's workspace_ids claim is not trusted (a removed member's token outlives the removal),
+ *  and a failed read gives [] (fail closed). */
 async function callerWorkspaceIds(deps, session) {
-	const ids = new Set((session.workspaceIds ?? []).filter((id) => UUID_REGEX.test(String(id))));
 	try {
 		const rows = await rest(deps.config, deps.fetchImpl, `osionos_workspace_members?user_id=eq.${session.userId}&select=workspace_id`);
+		const ids = new Set();
 		for (const row of Array.isArray(rows) ? rows : []) {
 			if (UUID_REGEX.test(String(row.workspace_id))) ids.add(row.workspace_id);
 		}
+		return [...ids];
 	} catch {
-		// Best-effort — the token's own workspace_ids are still authoritative.
+		return [];
 	}
-	return [...ids];
 }
 
 function pageRowToSummary(row) {
@@ -171,12 +173,14 @@ async function toolSearchPages(deps, session, input) {
 		deps.fetchImpl,
 		`osionos_pages?workspace_id=in.(${ids.join(',')})&select=id,title,workspace_id,content,updated_at,created_at,archived_at,owner_id,visibility,collaborators&order=updated_at.desc&limit=200`,
 	);
+	// Only the caller's own and shared-with-them pages reach the model: any text it reads
+	// can steer its next tool call, create_page included.
+	const candidates = (Array.isArray(rows) ? rows : []).filter((row) => !row.archived_at && isOwnerOrCollaborator(row, session.userId));
+	// Share rules (inherited no_access) run BEFORE matching so a hidden page's text is never
+	// searched; no filter wired = nothing visible.
+	const visible = typeof deps.pageAccessFilter === 'function' ? await deps.pageAccessFilter(candidates, session, deps.config) : [];
 	const matches = [];
-	for (const row of Array.isArray(rows) ? rows : []) {
-		if (row.archived_at) continue;
-		// Only the caller's own and shared-with-them pages reach the model: any text it reads
-		// can steer its next tool call, create_page included.
-		if (!isOwnerOrCollaborator(row, session.userId)) continue;
+	for (const row of Array.isArray(visible) ? visible : []) {
 		let haystack = String(row.title ?? '').toLowerCase();
 		try {
 			haystack += '\n' + JSON.stringify(row.content ?? '').toLowerCase();
@@ -195,6 +199,10 @@ async function toolGetPage(deps, session, input) {
 	const row = Array.isArray(rows) ? rows[0] : null;
 	// A page outside the caller's workspaces, or one that is not theirs, answers like a missing one.
 	if (!row || !ids.includes(row.workspace_id) || !isOwnerOrCollaborator(row, session.userId)) throw httpError('Page not found.', 404);
+	// A share rule hiding the page answers exactly like a missing one: no existence oracle.
+	if (typeof deps.pageAccessFilter !== 'function' || (await deps.pageAccessFilter([row], session, deps.config)).length === 0) {
+		throw httpError('Page not found.', 404);
+	}
 	const blocks = Array.isArray(row.content) ? row.content : [];
 	return {
 		page: {
@@ -429,10 +437,11 @@ async function streamAgent(deps, session, payload, response, config) {
 /**
  * Build the POST /api/agent/chat dispatcher: `await handler(url, request,
  * response, requestConfig)` → true when handled, false otherwise. deps:
- * { config, verifySession, fetchImpl?, env? }.
+ * { config, verifySession, fetchImpl?, env?, pageAccessFilter? } — pageAccessFilter(rows, session,
+ * config) is the bridge share-rule filter; without it the page tools see nothing.
  */
-export function createAgentHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
-	const deps = { config, fetchImpl, env };
+export function createAgentHandler({ config, verifySession, fetchImpl = fetch, env = process.env, pageAccessFilter = null }) {
+	const deps = { config, fetchImpl, env, pageAccessFilter };
 	return async function handleAgentRoute(url, request, response, requestConfig = config) {
 		if (url.pathname !== '/api/agent/chat') return false;
 		if ((request.method || 'GET').toUpperCase() !== 'POST') return false;
@@ -487,3 +496,4 @@ export function createAgentHandler({ config, verifySession, fetchImpl = fetch, e
 		return streamAgent(requestDeps, session, payload, response, requestConfig);
 	};
 }
+export { toolSearchPages, toolGetPage, callerWorkspaceIds };

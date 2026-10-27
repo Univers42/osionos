@@ -1092,6 +1092,13 @@ async function filterPageRowsForAccess(rows, authContext, loader) {
 	});
 }
 
+/** `(rows, session, requestConfig?) => readable rows`: the page-access filter handed to the
+ *  surfaces that read their own page rows (feed, profile, recs, reports, the agent). */
+export function pageAccessFilterFor(config, fetchImpl) {
+	return (rows, session, requestConfig = config) =>
+		filterPageRowsForAccess(rows, session, createPageAccessLoader(session, requestConfig, fetchImpl));
+}
+
 /**
  * The caller's team ids, read once per request and only when a rule names a team (no team
  * rule, no extra read). A failed read stays null, which the evaluator treats as fail closed.
@@ -5184,13 +5191,12 @@ export function createBridgeServer(options = {}) {
 	// The page-access filter injected into the sibling surfaces that own their page rows
 	// (feed, profile, recs, reports): the SAME loader/evaluator as the page routes, never
 	// a second copy (C550). `session` is the verified session (userId).
-	const pageAccessFilter = (rows, session, requestConfig = config) =>
-		filterPageRowsForAccess(rows, session, createPageAccessLoader(session, requestConfig, fetchImpl));
+	const pageAccessFilter = pageAccessFilterFor(config, fetchImpl);
 	// Standalone workstream handlers, created once. rtc keeps the sibling
 	// contract (closes over the base config); chat/profile/feed additionally
 	// accept the per-request (per-origin) config at dispatch time.
 	const social = options.social ?? {
-		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, pageAccessFilter }),
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl }),
 		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess }),
