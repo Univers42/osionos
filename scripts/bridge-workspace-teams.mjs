@@ -36,6 +36,7 @@
 import { UUID_REGEX, safeText, sendJson } from './bridge-social-core.mjs';
 import { accountError, callerSession, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { decodeCursor, inFilter, keyset, pageOf } from './bridge-paging.mjs';
+import { bumpAccessAfter } from './bridge-access-generation.mjs';
 
 const ROUTE = /^\/api\/workspaces\/([0-9a-f-]{36})\/teams(?:\/([0-9a-f-]{36}))?(\/members)?(?:\/([0-9a-f-]{36}))?$/i;
 const NAME_MAX = 80;
@@ -136,7 +137,7 @@ async function createTeam(ctx, service, session, request, workspaceId, response)
 	await requireAdmin(service, session.userId, workspaceId);
 	const fields = teamFields(await readBody(request), { partial: false });
 	await requireFreeName(service, workspaceId, fields.name);
-	const created = first(await writeTeam(() => service.post('osionos_teams', { workspace_id: workspaceId, description: '', ...fields, created_by: session.userId }, { prefer: 'return=representation' })));
+	const created = first(await writeTeam(() => bumpAccessAfter(service.post('osionos_teams', { workspace_id: workspaceId, description: '', ...fields, created_by: session.userId }, { prefer: 'return=representation' }), { workspaceId })));
 	if (!created) throw accountError(502, 'team_not_saved', 'The team could not be saved.');
 	return ctx.reply(response, 201, { ok: true, team: teamView(created, 0, null) });
 }
@@ -147,7 +148,7 @@ async function updateTeam(ctx, service, session, request, workspaceId, teamId, r
 	const fields = teamFields(await readBody(request), { partial: true });
 	if (Object.keys(fields).length === 0) throw accountError(422, 'invalid_field', 'Send a name or a description.');
 	if (Object.hasOwn(fields, 'name')) await requireFreeName(service, workspaceId, fields.name, teamId);
-	const patched = first(await writeTeam(() => service.patch(`osionos_teams?id=eq.${teamId}&workspace_id=eq.${workspaceId}&select=${TEAM_COLUMNS}`, { ...fields, updated_at: new Date().toISOString() }, { prefer: 'return=representation' })));
+	const patched = first(await writeTeam(() => bumpAccessAfter(service.patch(`osionos_teams?id=eq.${teamId}&workspace_id=eq.${workspaceId}&select=${TEAM_COLUMNS}`, { ...fields, updated_at: new Date().toISOString() }, { prefer: 'return=representation' }), { workspaceId })));
 	if (!patched) throw teamNotFound();
 	const counted = await service.get(`osionos_team_members?team_id=eq.${teamId}&select=user_id`);
 	return ctx.reply(response, 200, { ok: true, team: teamView(patched, Array.isArray(counted) ? counted.length : 0, null) });
@@ -157,7 +158,7 @@ async function deleteTeam(ctx, service, session, workspaceId, teamId, response) 
 	await requireAdmin(service, session.userId, workspaceId);
 	await loadTeam(service, workspaceId, teamId);
 	// The member rows go with the team through the foreign key's ON DELETE CASCADE.
-	await service.del(`osionos_teams?id=eq.${teamId}&workspace_id=eq.${workspaceId}`, { prefer: 'return=minimal' });
+	await bumpAccessAfter(service.del(`osionos_teams?id=eq.${teamId}&workspace_id=eq.${workspaceId}`, { prefer: 'return=minimal' }), { workspaceId });
 	return ctx.reply(response, 200, { ok: true, deleted: true });
 }
 
@@ -194,17 +195,17 @@ async function addMember(ctx, service, session, request, workspaceId, teamId, re
 	if (!workspaceMember) throw accountError(422, 'not_a_workspace_member', 'Only a member of the workspace can join one of its teams.');
 	const existing = first(await service.get(`osionos_team_members?team_id=eq.${teamId}&user_id=eq.${userId}&select=user_id&limit=1`));
 	if (existing) {
-		await service.patch(`osionos_team_members?team_id=eq.${teamId}&user_id=eq.${userId}`, { role, updated_at: new Date().toISOString() }, { prefer: 'return=minimal' });
+		await bumpAccessAfter(service.patch(`osionos_team_members?team_id=eq.${teamId}&user_id=eq.${userId}`, { role, updated_at: new Date().toISOString() }, { prefer: 'return=minimal' }), { workspaceId, userId });
 		return ctx.reply(response, 200, { ok: true, status: 'updated', member: { userId, role } });
 	}
-	await service.post('osionos_team_members', { workspace_id: workspaceId, team_id: teamId, user_id: userId, role, added_by: session.userId }, { prefer: 'return=minimal' });
+	await bumpAccessAfter(service.post('osionos_team_members', { workspace_id: workspaceId, team_id: teamId, user_id: userId, role, added_by: session.userId }, { prefer: 'return=minimal' }), { workspaceId, userId });
 	return ctx.reply(response, 201, { ok: true, status: 'added', member: { userId, role } });
 }
 
 async function removeMember(ctx, service, session, workspaceId, teamId, userId, response) {
 	await requireAdmin(service, session.userId, workspaceId);
 	await loadTeam(service, workspaceId, teamId);
-	const removed = await service.del(`osionos_team_members?team_id=eq.${teamId}&user_id=eq.${userId.toLowerCase()}&select=user_id`, { prefer: 'return=representation' });
+	const removed = await bumpAccessAfter(service.del(`osionos_team_members?team_id=eq.${teamId}&user_id=eq.${userId.toLowerCase()}&select=user_id`, { prefer: 'return=representation' }), { workspaceId, userId: userId.toLowerCase() });
 	if (!Array.isArray(removed) || removed.length === 0) throw accountError(404, 'member_not_found', 'That user is not in this team.');
 	return ctx.reply(response, 200, { ok: true, removed: true });
 }
