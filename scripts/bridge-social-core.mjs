@@ -29,6 +29,7 @@
 
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { realtimeSocketPublisher } from './bridge-realtime-socket.mjs';
+import { publishViaLane } from './bridge-realtime-ws-lane.mjs';
 import { CHUNK_SIZE, idChunks, inFilter, runChunks } from './bridge-paging.mjs';
 import { writeJsonResponse } from './bridge-json-response.mjs';
 // bridge-avatar.mjs imports this module back (for the error shape and the JSON
@@ -184,6 +185,7 @@ export async function readInChunks(ids, read, { size = CHUNK_SIZE } = {}) {
 export async function publishRealtime({ topic, eventType, payload, fetchImpl = fetch, env = process.env }) {
 	const base = (env.REALTIME_PUBLISH_URL || 'http://mini-baas-realtime:4000').replace(/\/$/, '');
 	if (/^wss?:\/\//i.test(base)) return realtimeSocketPublisher(base, env).publish(topic, eventType, payload);
+	if (publishViaLane(env, topic, eventType, payload)) return true;
 	const apikey = (env.REALTIME_PUBLISH_APIKEY ?? '').trim();
 	const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
 	if (apikey) headers.apikey = apikey;
