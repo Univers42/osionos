@@ -34,6 +34,7 @@ import {
   turnIntoDashboardContent,
   type PageActionName,
 } from '@/services/page-actions';
+import { saveAutosaveVersion } from './versionAutosave';
 
 const MINUTE_IN_MS = 60_000;
 const HOUR_IN_MS = 3_600_000;
@@ -158,16 +159,10 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     if (lastVersionRevisionRef.current === pageRevision) return undefined;
     if (versionTimerRef.current) globalThis.clearTimeout(versionTimerRef.current);
     versionTimerRef.current = globalThis.setTimeout(() => {
-      const latestPage = usePageStore.getState().pageById(pageId);
-      if (!latestPage) return;
       const latestRevision = usePageStore.getState().pageRevisions[pageId] ?? 0;
       if (lastVersionRevisionRef.current === latestRevision) return;
-      versionCounterRef.current += 1;
-      addVersion(safeUserId, pageId, {
-        title: latestPage.title || 'Untitled',
-        content: latestPage.content ?? [],
-        label: `Autosave ${versionCounterRef.current}`,
-      }).catch(() => undefined);
+      const label = `Autosave ${versionCounterRef.current + 1}`;
+      if (saveAutosaveVersion(pageId, safeUserId, label, addVersion)) versionCounterRef.current += 1;
       lastVersionRevisionRef.current = latestRevision;
     }, VERSION_AUTOSAVE_DELAY_MS);
     return () => {
