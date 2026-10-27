@@ -789,12 +789,19 @@ export function createCreatePageFromTemplate(_set: SetFn, get: GetFn) {
     const template = get().pageById(templateId);
     if (!template?.isTemplate) return null;
     const content = instantiateTemplateContent(template.content);
+    let clonedContent = content;
+    try {
+      const glue = await import("@/widgets/database-view/model/templateDatabaseInstantiate");
+      clonedContent = glue.instantiateTemplateDatabases(content, workspaceId);
+    } catch (err) {
+      return notifyCreateFailure("Couldn't create the page from this template.", err);
+    }
     const page = await get().addPage(
       workspaceId,
       template.title || "Untitled",
       jwt,
       parentPageId,
-      { icon: template.icon, content },
+      { icon: template.icon, content: clonedContent },
     );
     if (page && options?.open !== false) {
       get().openPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon });
