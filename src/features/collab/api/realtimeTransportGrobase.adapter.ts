@@ -61,6 +61,7 @@ import type {
 import { validateCollabEvent, validateSummonReq } from '../model/collabEvent.schema';
 import { isPageScopedEvent } from '../model/pageScope';
 import { backoffDelay, MAX_RECONNECT_ATTEMPTS, type BackoffOpts } from '../model/backoff';
+import { memberIdOf } from '../model/collabActor';
 
 const COLLAB_EVENT = 'collab';      // broadcast label for a CollabEvent payload
 const REQUEST_EVENT = 'collab.req'; // directed-request envelope (user topic)
@@ -153,7 +154,7 @@ class ActorRateLimiter {
   private static readonly MAX_ACTORS = 256;
 
   allow(actor: string, now = Date.now()): boolean {
-    const key = actor.split(':')[0] || actor;
+    const key = memberIdOf(actor);
     let bucket = this.buckets.get(key);
     if (!bucket) {
       if (this.buckets.size >= ActorRateLimiter.MAX_ACTORS) {
