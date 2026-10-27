@@ -23,7 +23,7 @@ import type { AutomationEventV2, AutomationHost } from "../../src/shared/notion-
 import { migrateAutomations } from "../../src/shared/notion-database-sys/src/lib/automations/migrateAutomations.ts";
 import { parseButtonProgram } from "../../src/shared/notion-database-sys/src/lib/program/buttonProgram.ts";
 import type {
-  AutomationRule, AutomationRuleV2, AutomationTrigger, DatabaseSchema, Filter, Page, ViewConfig,
+  AutomationRule, AutomationRuleV2, AutomationTrigger, DatabaseSchema, Filter, Page, SchemaProperty, ViewConfig,
 } from "../../src/shared/notion-database-sys/src/types/database.ts";
 import type { ProgramAction } from "../../src/shared/notion-database-sys/src/lib/program/buttonProgram.ts";
 
@@ -60,6 +60,21 @@ test("property changes: any property, one property, and from → to", () => {
   assert.equal(ruleMatches(rule("to-other", { type: "property_changed", propertyId: "status", to: "doing" }), event), false);
   assert.equal(ruleMatches(rule("from", { type: "property_changed", propertyId: "status", from: "todo", to: "done" }), event), true);
   assert.equal(ruleMatches(rule("from-other", { type: "property_changed", propertyId: "status", from: "doing" }), event), false);
+});
+
+// Seeded rows store the option id, account and workspace rows its text; the
+// rule editor stores whichever the user picked. Both name the same option.
+test("a select rule matches its option whether the row stores the id or the text", () => {
+  const properties = {
+    status: { id: "status", name: "Status", type: "select", options: [{ id: "opt-done", value: "Done", color: "green" }] },
+  } as unknown as Record<string, SchemaProperty>;
+  const storesId = changed(row("r1", { status: "" }), row("r1", { status: "opt-done" }), "status");
+  const storesText = changed(row("r1", { status: "" }), row("r1", { status: "Done" }), "status");
+  const toText = rule("to-text", { type: "property_changed", propertyId: "status", to: "Done" });
+  const whereId = rule("where-id", { type: "property_changed" }, [], [filter("status", "equals", "opt-done")]);
+  assert.equal(ruleMatches(toText, storesId, properties), true);
+  assert.equal(ruleMatches(whereId, storesText, properties), true);
+  assert.equal(ruleMatches(whereId, changed(row("r1"), row("r1", { status: "Todo" }), "status"), properties), false);
 });
 
 test("conditions read the row after the change, with and / or", () => {
@@ -115,6 +130,18 @@ test("the same rule never runs twice on a row in one chain", async () => {
   const ping = rule("ping", { type: "property_changed" }, [set("n", "1")]);
   const { host, writes } = harness([ping], pages);
   const runs = await runAutomations(changed(pages.r, pages.r, "title"), host);
+  assert.equal(runs.length, 1);
+  assert.deepEqual(writes, ["r.n=1"]);
+});
+
+test("the runner reads the database's options, so a select rule fires on a row that stores the text", async () => {
+  const pages = { r: row("r", { status: "Done" }) };
+  const done = rule("done", { type: "row_added" }, [set("n", "1")], [filter("status", "equals", "opt-done")]);
+  const { host, writes } = harness([done], pages);
+  const properties = {
+    status: { id: "status", name: "Status", type: "select", options: [{ id: "opt-done", value: "Done", color: "green" }] },
+  } as unknown as Record<string, SchemaProperty>;
+  const runs = await runAutomations({ type: "row_added", page: pages.r }, { ...host, properties: () => properties });
   assert.equal(runs.length, 1);
   assert.deepEqual(writes, ["r.n=1"]);
 });
