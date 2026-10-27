@@ -22,7 +22,7 @@ WORKDIR /app
 # permission UX proxy, and the social plane (chat/profile/feed/social/collab/
 # notify/communities/recs + their shared core/storage/ratelimit/BaaS-body
 # helpers).
-COPY scripts/bridge-api.mjs scripts/bridge-page-read.mjs scripts/bridge-live-workspaces.mjs scripts/bridge-graph.mjs scripts/bridge-graph-data.mjs scripts/bridge-graph-edges.mjs scripts/bridge-records.mjs scripts/bridge-agent.mjs scripts/bridge-runner.mjs \
+COPY scripts/bridge-api.mjs scripts/bridge-page-read.mjs scripts/bridge-page-access.mjs scripts/bridge-live-workspaces.mjs scripts/bridge-graph.mjs scripts/bridge-graph-data.mjs scripts/bridge-graph-edges.mjs scripts/bridge-records.mjs scripts/bridge-agent.mjs scripts/bridge-runner.mjs \
 	scripts/bridge-connector.mjs scripts/bridge-oauth.mjs \
 	scripts/bridge-rtc.mjs scripts/bridge-perms.mjs scripts/bridge-perms-rules.mjs scripts/bridge-perms-rule-owners.mjs scripts/bridge-share-rules.mjs scripts/bridge-chat.mjs \
 	scripts/bridge-chat-media.mjs scripts/bridge-url-guard.mjs scripts/bridge-url-fetch.mjs scripts/bridge-automations-webhook.mjs scripts/bridge-storage-core.mjs scripts/bridge-ratelimit.mjs scripts/bridge-chat-search.mjs scripts/bridge-chat-threads.mjs scripts/bridge-chat-ai.mjs \
