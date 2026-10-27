@@ -39,7 +39,7 @@
  * permission cannot become a deny, and it cannot become a grant either.
  */
 
-import { canReadPageRow, sameId } from './bridge-page-read.mjs';
+import { canReadPageRow, ownerHoldsPage } from './bridge-page-read.mjs';
 import { bestShareLevel } from './bridge-share-rules.mjs';
 
 /** The ancestor walk stops (and denies) past this many pages: a cycle cannot loop forever. */
@@ -104,9 +104,9 @@ function ancestorChain(pageId, parentOf) {
 function decidePageAccess({ row, userId, member = null, rulesByPage = new Map(), parentOf = new Map(), teamIds = null } = {}) {
 	if (!row || typeof row !== 'object' || !userId) return { level: NONE, fromRule: false };
 	// Page owner: their own page stays readable under a denying ancestor (C510e) — but
-	// only while they still belong to the page's workspace (C557). An ex-member owner is
-	// a non-member like any other.
-	if (sameId(row.owner_id, userId) && member) return { level: 'full_access', fromRule: false };
+	// only while they still belong to the page's workspace (C557), or in the memberless
+	// marketplace. An ex-member owner is a non-member like any other.
+	if (ownerHoldsPage(row, userId, member)) return { level: 'full_access', fromRule: false };
 	// Workspace owner/admin: the rules never reach them, but the page's own visibility
 	// still does — an admin does not become able to read another member's private page.
 	const role = typeof member?.role === 'string' ? member.role.toLowerCase() : '';

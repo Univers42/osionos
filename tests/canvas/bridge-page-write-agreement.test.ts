@@ -27,6 +27,7 @@ import {
 import { canWritePageRow, pageRowToEntry } from "../../scripts/bridge-api.mjs";
 // @ts-expect-error — bridge modules are plain JS (Node built-ins only), no types.
 import { SHARE_LEVELS } from "../../scripts/bridge-share-rules.mjs";
+import { MARKETPLACE_WORKSPACE_ID } from "../../src/features/marketplace/model/appMeta.ts";
 
 type Row = Record<string, unknown>;
 type Permission = "update" | "delete";
@@ -290,6 +291,17 @@ test("the page owner writes while still a member, whatever the role", () => {
 test("a page owner who left the workspace writes nothing (C557)", () => {
   const spot: Spot = { member: "none", owner: "self", visibility: "private", collaborators: "none", published: false };
   assert.deepEqual(writeAnswer(spot), { update: false, delete: false });
+});
+
+test("a marketplace app's owner writes it without membership; nobody else does (C557)", () => {
+  for (const [owner, expected] of [[SELF, true], [OTHER, false]] as const) {
+    const row = { ...pageRow(owner, "private", [], false), workspace_id: MARKETPLACE_WORKSPACE_ID };
+    const entry = pageRowToEntry(row);
+    for (const permission of ["update", "delete"] as const) {
+      assert.equal(serverWrite(row, null, permission, []), expected, `bridge ${permission} owner=${owner}`);
+      assert.equal(canWritePage(entry, contextFor(null), permission), expected, `client ${permission} owner=${owner}`);
+    }
+  }
 });
 
 test("an admin permission alone writes an ownerless page no more", () => {

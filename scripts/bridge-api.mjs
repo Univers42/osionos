@@ -23,7 +23,7 @@ import { writeJsonResponse } from './bridge-json-response.mjs';
 import { LINK_EDGES_RPC, PAGE_ROWS_RPC, readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
-import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
+import { MARKETPLACE_WORKSPACE_ID, canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, ownerHoldsPage, pageVisibility, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { pageContentText, pagePublishText } from './bridge-page-text.mjs';
 import { liveReadableWorkspaces, privateWorkspaceOf } from './bridge-live-workspaces.mjs';
 import { bestShareLevel, shareDenies, shareGrantsRead, shareGrantsWrite } from './bridge-share-rules.mjs';
@@ -141,7 +141,6 @@ const GRAPH_FETCH_TIMEOUT_MS = 20_000;
 const MAX_CLAUDE_TOOL_RESULT_TEXT = 120_000;
 const PAGE_SURFACE_VALUES = new Set(['page', 'agent', 'home', 'folder', 'wiki', 'app', 'code']);
 // Shared, system-owned global marketplace (app records are surface 'app' under this database).
-const MARKETPLACE_WORKSPACE_ID = '5a4b1c2d-1111-4111-8111-000000000001';
 const MARKETPLACE_DATABASE_ID = '5a4b1c2d-2222-4222-8222-000000000002';
 const MARKETPLACE_SYSTEM_USER = '5a4b1c2d-0000-4000-8000-000000000000';
 const TRANSLATABLE_BLOCK_TYPES = new Set([
@@ -1271,10 +1270,10 @@ async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImp
 	const member = knownMember === undefined
 		? await callerWorkspaceMember(token, workspaceId, config, fetchImpl)
 		: knownMember;
-	// C557: the page owner's exemption needs a live membership. A page whose owner left
-	// the workspace is the non-member case: the 404 of a missing id, never its context.
+	// C557: the page owner's exemption needs a live membership (the marketplace has none).
+	// A page whose owner left the workspace is the non-member case: the 404 of a missing id.
 	if (sameId(row.owner_id, token.userId)) {
-		if (!member) throw pageNotFound();
+		if (!ownerHoldsPage(row, token.userId, member)) throw pageNotFound();
 		return pageOwnerContext(token, row);
 	}
 	if (!member) throw pageNotFound();
@@ -1299,7 +1298,7 @@ async function memberAccessOrNull(request, workspaceId, permission, config, fetc
  */
 function mayMutatePage(row, userId, memberAccess, member = false) {
 	if (!canReadPageRow(row, userId)) return false;
-	if (sameId(row.owner_id, userId)) return member || memberAccess !== null;
+	if (sameId(row.owner_id, userId)) return ownerHoldsPage(row, userId, member) || memberAccess !== null;
 	return memberAccess !== null && mayModifyPage(row, memberAccess);
 }
 
@@ -1310,7 +1309,7 @@ function mayMutatePage(row, userId, memberAccess, member = false) {
  */
 export function canWritePageRow(row, userId, member, permission, rules = null, teamIds = null) {
 	// C557: the page owner keeps the write only while still a member of the workspace.
-	if (sameId(row?.owner_id, userId)) return member !== null;
+	if (sameId(row?.owner_id, userId)) return ownerHoldsPage(row, userId, member);
 	const level = bestShareLevel(rules ?? [], { userId, role: member?.role, workspaceId: row?.workspace_id, teamIds }, row?.id);
 	// C558: a share rule below can_edit is an explicit refusal, independent of the read
 	// gate. Without this, a can_view/can_comment rule fell through to the membership's
@@ -1348,9 +1347,9 @@ export async function readablePageAccess(request, pageId, permission, config, fe
 		if (sameId(wsOwner, token.userId)) member = { role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] };
 	}
 	// C557: the page owner's exemption holds only while they still belong to the workspace
-	// (or are the workspace owner).
+	// (or are the workspace owner, or the page sits in the memberless marketplace).
 	if (sameId(found.owner_id, token.userId)) {
-		if (!member) throw pageNotFound();
+		if (!ownerHoldsPage(found, token.userId, member)) throw pageNotFound();
 		return { authContext: pageOwnerContext(token, found), row: found };
 	}
 	if (!member) throw pageNotFound();
@@ -1385,7 +1384,7 @@ async function canNestUnder(authContext, parentPageId, config, fetchImpl) {
 	if (!parent || !canReadPageRowAsMember(parent, authContext.userId, [...authContext.workspaceIds, ...memberIds])) return false;
 	const workspaceId = requireUuid(parent.workspace_id, 'workspaceId');
 	const member = await callerWorkspaceMember(authContext, workspaceId, config, fetchImpl);
-	if (!member) return false; // C557: an ex-member owner is the non-member case
+	if (!member && !ownerHoldsPage(parent, authContext.userId, member)) return false; // C557: an ex-member owner is the non-member case
 	const entry = await createPageAccessLoader(authContext, config, fetchImpl).entryFor(workspaceId);
 	const ruleLevel = pageRuleLevelFor(entry, parent, authContext.userId);
 	if (ruleLevel !== null) return shareGrantsWrite(ruleLevel);
@@ -1460,9 +1459,9 @@ async function pageWriteContext(request, pageId, config, fetchImpl) {
 	const workspaceId = requireUuid(row.workspace_id, 'workspaceId');
 	// C557: the page owner keeps their write only while still a member of the workspace.
 	const member = await callerWorkspaceMember(token, workspaceId, config, fetchImpl);
+	if (ownerHoldsPage(row, token.userId, member)) return { token, row, member, workspaceId, owner: true, level: null, ruleLevel: null };
 	if (!member) throw pageNotFound();
 	const role = safeText(member.role, 16);
-	if (sameId(row.owner_id, token.userId)) return { token, row, member, workspaceId, owner: true, level: null, ruleLevel: null };
 	const exempt = role === 'owner' || role === 'admin';
 	const entry = exempt ? null : await createPageAccessLoader(token, config, fetchImpl).entryFor(workspaceId);
 	const level = exempt ? null : pageLevelFor(entry, row, token.userId);
@@ -1508,7 +1507,7 @@ async function requirePageScopeAccess(request, pageId, payload, permission, conf
 	const role = safeText(member?.role, 16);
 	// The page owner and the workspace owner/admin keep their access whatever the rules
 	// say, so they never pay for the rules read — but only while still a member (C557).
-	const exempt = Boolean(found) && Boolean(member) && (sameId(found.owner_id, tokenContext.userId) || role === 'owner' || role === 'admin');
+	const exempt = Boolean(found) && (ownerHoldsPage(found, tokenContext.userId, member) || (Boolean(member) && (role === 'owner' || role === 'admin')));
 	const level = found && !exempt
 		? pageLevelFor(await createPageAccessLoader(tokenContext, config, fetchImpl).entryFor(found.workspace_id), found, tokenContext.userId)
 		: null;
