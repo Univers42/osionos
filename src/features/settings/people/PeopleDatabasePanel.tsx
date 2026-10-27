@@ -27,6 +27,7 @@ import { PEOPLE_SOURCES } from "./peopleSources";
 import { PeoplePeek } from "./PeoplePeek";
 import { createGroup, inviteGuest } from "./peopleActions";
 import type { PeopleCtx, PeopleSourceKey } from "./peopleModel";
+import { useCanInviteMembers } from "./useCanInviteMembers";
 
 const INPUT_CLASS =
   "h-9 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]";
@@ -160,7 +161,8 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
     const frame = requestAnimationFrame(() => setMountedFrame(true));
     return () => cancelAnimationFrame(frame);
   }, []);
-  const activeCreating = creating ?? (inviteRequested && mountedFrame ? "guest" : null);
+  const canInvite = useCanInviteMembers(ctx.workspaceId, ctx.activeUserId);
+  const activeCreating = creating ?? (inviteRequested && mountedFrame && canInvite ? "guest" : null);
   const closeCreate = () => {
     if (inviteRequested) useWorkspaceInvitesStore.getState().consumeInviteRequest();
     setCreating(null);
@@ -210,7 +212,7 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people"
             className={`${INPUT_CLASS} max-w-[240px]`} />
         )}
-        {descriptor.create && (
+        {descriptor.create && (descriptor.create.kind !== "guest" || canInvite) && (
           <div className="ml-auto">
             <Button tone="primary" onClick={() => setCreating(descriptor.create!.kind)}>{descriptor.create.label}</Button>
           </div>

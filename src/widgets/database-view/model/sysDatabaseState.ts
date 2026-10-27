@@ -31,7 +31,7 @@ import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
 import { sysBuiltInViewIds, sysEditableBuiltInViewIds, sysSourceById, SYS_VIEW_TYPE, type SysColumnType, type SysSource } from "./sysDataSources";
 import type { SysTransport } from "./sysDatabaseTransport";
 import { deleteSavedView, diffViews, fetchSavedViews, saveSavedView } from "./sysDatabaseViews";
-import { synthOptions } from "./workspaceDatabaseMappers";
+import { optionId, synthOptions } from "./workspaceDatabaseMappers";
 
 type Row = Record<string, unknown>;
 interface SelfDataAnswer { ok: boolean; source: string; columns: string[]; rows: Row[]; truncated: boolean }
@@ -53,7 +53,9 @@ function cellText(value: unknown): string | null {
 
 function cellValue(type: SysColumnType, value: unknown): unknown {
   if (type === "checkbox") return value === true;
-  return cellText(value);
+  const text = cellText(value);
+  // Select cells match an option by id, never by the raw value.
+  return type === "select" && text?.trim() ? optionId(text.trim()) : text;
 }
 
 function recordId(source: SysSource, row: Row, index: number): string {

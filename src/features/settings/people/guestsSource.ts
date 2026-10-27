@@ -19,6 +19,7 @@ import type { NotionState } from "@notion-db/object-database";
 import type { DatabaseSchema } from "@notion-db/contract-types";
 import { useWorkspaceInvitesStore } from "@/store/settings";
 import { GUEST, PEOPLE_DB, PEOPLE_VIEW, personPage, selectOptions, singleDatabaseState, view, type PeopleCtx } from "./peopleModel";
+import { optionId } from "@/widgets/database-view/model/workspaceDatabaseMappers";
 
 const SCHEMA: DatabaseSchema = {
   id: PEOPLE_DB.guests,
@@ -37,7 +38,7 @@ const SCHEMA: DatabaseSchema = {
 const VIEWS = [
   view({
     id: PEOPLE_VIEW.guestsTable, databaseId: PEOPLE_DB.guests, name: "Table", type: "table",
-    visibleProperties: [GUEST.role, GUEST.status, GUEST.since],
+    visibleProperties: [GUEST.email, GUEST.role, GUEST.status, GUEST.since],
     settings: { showRowNumbers: false, openPagesIn: "side_peek" },
   }),
 ];
@@ -54,8 +55,8 @@ export async function buildGuestsState(ctx: PeopleCtx): Promise<NotionState> {
     .map((invite) =>
       personPage(PEOPLE_DB.guests, invite._id, {
         [GUEST.email]: invite.email,
-        [GUEST.role]: invite.role,
-        [GUEST.status]: inviteStatus(invite),
+        [GUEST.role]: optionId(invite.role),
+        [GUEST.status]: optionId(inviteStatus(invite)),
         [GUEST.since]: invite.createdAt,
       }));
   return singleDatabaseState(SCHEMA, VIEWS, pages);
