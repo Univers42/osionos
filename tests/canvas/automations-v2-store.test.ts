@@ -102,3 +102,35 @@ test("a live mount's rules are left to the server", async () => {
   await settle();
   assert.equal(store.getState().pages[id].properties.status, undefined);
 });
+
+test("a Date written to a date property is stored as its ISO string", async () => {
+  const DBD = (id: string, automations?: AutomationRuleV2[]): DatabaseSchema => ({
+    id, name: "Tasks", titlePropertyId: "title",
+    properties: {
+      title: { id: "title", name: "Name", type: "title" },
+      done: { id: "done", name: "Done at", type: "date" },
+    },
+    ...(automations ? { automations } : {}),
+  }) as DatabaseSchema;
+  const dateRule = rule("stamp", { type: "row_added" }, [{ op: "action", action: { type: "set_property", property: "done", value: new Date("2026-01-02T03:04:05.000Z") } } as unknown as ProgramStep]);
+  const store = storeWith({ tasks: DBD("tasks", [dateRule]) } as never);
+  const id = store.getState().addPage("tasks", {});
+  await settle();
+  assert.equal(store.getState().pages[id].properties.done, "2026-01-02T03:04:05.000Z");
+});
+
+test("a rule with a formula awaits the engine; when it is unavailable nothing is written", async () => {
+  const DBD = (id: string, automations?: AutomationRuleV2[]): DatabaseSchema => ({
+    id, name: "Tasks", titlePropertyId: "title",
+    properties: {
+      title: { id: "title", name: "Name", type: "title" },
+      done: { id: "done", name: "Done at", type: "date" },
+    },
+    ...(automations ? { automations } : {}),
+  }) as DatabaseSchema;
+  const formulaRule = rule("stamp", { type: "row_added" }, [{ op: "action", action: { type: "set_property", property: "done", value: { formula: "now()" } } } as ProgramStep]);
+  const store = storeWith({ tasks: DBD("tasks", [formulaRule]) } as never);
+  const id = store.getState().addPage("tasks", {});
+  await settle();
+  assert.equal(store.getState().pages[id].properties.done, undefined);
+});
