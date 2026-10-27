@@ -1000,18 +1000,23 @@ async function rulesByPageForWorkspace(store, config, workspaceId) {
 }
 
 /**
- * One workspace's access map: the membership row, every rule, and the parent map. The
- * three reads run together; a broken rules/parent read is a 503, never an empty map.
+ * One workspace's access map: the membership row, every rule, and — only when the
+ * workspace has a rule — the parent map. A workspace with no rule of its own can never
+ * hide a page through inheritance, so it skips the ~1 MB id → parent read entirely. A
+ * broken rules read is a 503; a broken parent read (when needed) is a 503 too.
  */
 async function pageAccessEntry(authContext, workspaceId, config, fetchImpl) {
 	const store = createShareRuleStore({ fetchImpl });
-	const [rulesByPage, parentOf, member] = await Promise.all([
+	const [rulesByPage, member] = await Promise.all([
 		rulesByPageForWorkspace(store, config, workspaceId),
-		parentMapForWorkspace(workspaceId, config, fetchImpl),
 		// A membership read failure hides the workspace's pages from a filtered surface;
 		// it is not an outage of the page access map itself (rules/parent still 503).
 		workspaceMemberRow(authContext.userId, workspaceId, config, fetchImpl).catch(() => null),
 	]);
+	// No rule: the ancestor chain cannot change any answer, and parentOf stays null.
+	const parentOf = rulesByPage.size > 0
+		? await parentMapForWorkspace(workspaceId, config, fetchImpl)
+		: null;
 	const allRules = [...rulesByPage.values()].flat();
 	const teamIds = member ? await teamIdsWhenRuled(store, config, workspaceId, authContext.userId, [allRules]) : null;
 	return { member, rulesByPage, parentOf, teamIds };

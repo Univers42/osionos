@@ -39,20 +39,20 @@ describe('list: membership and pages in one statement', () => {
 		});
 	});
 
-	it('/api/pages/all makes 4 BaaS calls: the list statement plus ONE access map', async () => {
+	it('/api/pages/all makes 3 BaaS calls: the list statement plus ONE rule read and the member', async () => {
 		const lines = [];
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			const response = await fetch(`${base}${TEAM_ALL}`, { headers: asB() });
 			assert.equal(response.status, 200);
 			await response.arrayBuffer();
-			assert.equal(mock.calls.length, 4);
+			assert.equal(mock.calls.length, 3);
 			assert.equal(mock.calls[0].table, 'osionos_workspace_members');
 			assert.equal(mock.calls.filter((call) => call.table === 'osionos_share_rules').length, 1, 'one rules read');
-			assert.equal(mock.calls.filter((call) => call.table === 'osionos_pages' && call.params.get('select') === 'id,parent_page_id').length, 1, 'one parent map');
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_pages' && call.params.get('select') === 'id,parent_page_id').length, 0, 'no rule, no parent map');
 			// The meter logs on the response's 'close', a tick after the client has the body.
 			for (let tries = 0; lines.length === 0 && tries < 50; tries++) await new Promise((resolve) => setTimeout(resolve, 10));
 			const line = JSON.parse(lines.find((entry) => entry.includes('/api/pages/all')));
-			assert.equal(line.baas_n, 4);
+			assert.equal(line.baas_n, 3);
 		}, { perf: true, perfLog: (entry) => lines.push(entry) });
 	});
 
@@ -89,7 +89,7 @@ describe('list: membership and pages in one statement', () => {
 			assert.equal(noDatabase.status, 200);
 			assert.ok(!idsOf(noDatabase).includes('a9a9a9a9-1111-4111-8111-a9a9a9a9a9a9'));
 			assert.equal(mock.calls.filter((call) => call.table === 'osionos_workspace_members' && call.params.get('select').includes('osionos_pages!')).length, 2);
-			assert.equal(mock.calls.length, 8, 'two lists, each with its own 4-call access map');
+			assert.equal(mock.calls.length, 6, 'two lists, each with its own 3-call access map');
 		});
 	});
 });
@@ -252,9 +252,9 @@ describe('list: the chunked path', () => {
 				assert.equal(call.params.get('user_id'), `eq.${IDS.userB}`);
 			}
 			assert.equal(pageCalls[1].params.get('workspace.pages.id') !== null, true);
-			assert.equal(mock.calls.length, 6, 'three chunks + rules + parent + member');
+			assert.equal(mock.calls.length, 5, 'three chunks + rules + member');
 			assert.equal(mock.calls.filter((call) => call.table === 'osionos_share_rules').length, 1);
-			assert.equal(mock.calls.filter((call) => call.table === 'osionos_pages' && call.params.get('select') === 'id,parent_page_id').length, 1);
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_pages' && call.params.get('select') === 'id,parent_page_id').length, 0, 'no rule, no parent map');
 		});
 	});
 

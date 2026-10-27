@@ -60,6 +60,9 @@ function rules(pairs = []) {
 	return map;
 }
 
+/** A workspace that HAS a rule, so the parent chain is walked — the rule itself is outside the tested chains. */
+const RULED_ELSEWHERE = rules([[GRAND, [rule(GRAND, 'can_view')]]]);
+
 function level(callerKey, pageKey, rulesByPage = new Map(), parentOf = PARENT_OF, rowOverride = null) {
 	const caller = CALLERS[callerKey];
 	return pageAccessLevel({
@@ -190,25 +193,38 @@ describe('the resolution order outside the matrix', () => {
 		assert.equal(level('guest', 'grand', malformed), 'none');
 		assert.equal(level('viewer', 'child', malformed), 'none');
 	});
+
+	it('an empty rulesByPage skips the ancestor walk: an unknown parent id is the visibility default', () => {
+		const unknownParent = new Map([[CHILD, 'ffffffff-0000-4000-8000-000000000000']]);
+		const shared = { ...PAGES.child, visibility: 'shared' };
+		// parentOf null (the loader skips the map) or a map that cannot prove the chain:
+		// with no rule at all, neither can deny. The visibility rule decides, as before.
+		for (const parentOf of [null, new Map(), unknownParent]) {
+			assert.equal(level('viewer', 'child', new Map(), parentOf, shared), 'can_view');
+			assert.equal(level('viewer', 'child', new Map(), parentOf, PAGES.child), 'none');
+			assert.equal(level('wsOwner', 'child', new Map(), parentOf, shared), 'full_access');
+			assert.equal(level('wsOwner', 'child', new Map(), parentOf, PAGES.child), 'none');
+		}
+	});
 });
 
 describe('a broken parent chain is fail-closed', () => {
 	it('a cycle answers none', () => {
 		const parentOf = new Map([[ROOT, CHILD], [CHILD, ROOT]]);
-		assert.equal(level('viewer', 'root', new Map(), parentOf, { ...PAGES.root, visibility: 'shared' }), 'none');
+		assert.equal(level('viewer', 'root', RULED_ELSEWHERE, parentOf, { ...PAGES.root, visibility: 'shared' }), 'none');
 	});
 
 	it('an orphan parent id missing from the map answers none', () => {
 		const parentOf = new Map([[CHILD, 'ffffffff-0000-4000-8000-000000000000']]);
-		assert.equal(level('viewer', 'child', new Map(), parentOf, { ...PAGES.child, visibility: 'shared' }), 'none');
+		assert.equal(level('viewer', 'child', RULED_ELSEWHERE, parentOf, { ...PAGES.child, visibility: 'shared' }), 'none');
 	});
 
 	it('a chain deeper than the cap answers none, the cap itself is allowed', () => {
 		const ids = Array.from({ length: MAX_ANCESTOR_DEPTH + 1 }, (_, index) => `cccccccc-0000-4000-8000-${String(index).padStart(12, '0')}`);
 		const parentOf = new Map(ids.map((id, index) => [id, index === 0 ? null : ids[index - 1]]));
 		const shared = (id) => ({ id, workspace_id: WS, owner_id: PAGE_OWNER, visibility: 'shared', collaborators: [] });
-		assert.equal(level('viewer', 'root', new Map(), parentOf, shared(ids[MAX_ANCESTOR_DEPTH - 1])), 'can_view');
-		assert.equal(level('viewer', 'root', new Map(), parentOf, shared(ids[MAX_ANCESTOR_DEPTH])), 'none');
+		assert.equal(level('viewer', 'root', RULED_ELSEWHERE, parentOf, shared(ids[MAX_ANCESTOR_DEPTH - 1])), 'can_view');
+		assert.equal(level('viewer', 'root', RULED_ELSEWHERE, parentOf, shared(ids[MAX_ANCESTOR_DEPTH])), 'none');
 	});
 
 	it('the chain is read live: moving the page out of a denied subtree becomes readable at once', () => {

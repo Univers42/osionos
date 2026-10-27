@@ -27,9 +27,14 @@
  *   4. else the visibility default — the read rule the bridge already applies, so a
  *      page with no rule behaves exactly as it did before inheritance.
  *
+ * A workspace with no page rule at all never reaches step 2: no ancestor can change the
+ * answer, so the caller skips the parent-map read (parentOf null) and the visibility
+ * default/exemptions decide, exactly as before inheritance.
+ *
  * A cycle, a parent id missing from the map (orphan), or a chain deeper than
- * MAX_ANCESTOR_DEPTH is fail-closed: 'none'. The parent map is always read live, so
- * moving a page changes its chain at the next request; nothing is cached here.
+ * MAX_ANCESTOR_DEPTH is fail-closed: 'none'. The parent map, when the workspace has a
+ * rule, is always read live, so moving a page changes its chain at the next request;
+ * nothing is cached here.
  * A malformed rule grants nothing (bridge-share-rules.mjs skips it): an unknown
  * permission cannot become a deny, and it cannot become a grant either.
  */
@@ -88,7 +93,8 @@ function ancestorChain(pageId, parentOf) {
  * @param {string} input.userId the caller
  * @param {{ role?: string } | null} [input.member] the caller's workspace membership, null when none
  * @param {Map<string, object[]>} [input.rulesByPage] lower-case page id → its rules; '' holds workspace-wide rules
- * @param {Map<string, string|null>} [input.parentOf] lower-case page id → lower-case parent id or null
+ * @param {Map<string, string|null> | null} [input.parentOf] lower-case page id → lower-case parent id or null;
+ *   null when the workspace has no rule, so the ancestor chain is never needed
  * @param {string[] | null} [input.teamIds] the caller's team ids, null when unread (fail closed for team grants)
  * @returns {'none'|'can_view'|'can_comment'|'can_edit'|'full_access'}
  */
@@ -102,6 +108,12 @@ export function pageAccessLevel({ row, userId, member = null, rulesByPage = new 
 	if (role === 'owner' || role === 'admin') return canReadPageRow(row, userId) ? 'full_access' : NONE;
 	// A caller with no membership row is not a member of this workspace: fail closed.
 	if (!member) return NONE;
+	// No rule in the workspace: no ancestor can grant or deny anything, so the caller need
+	// not have loaded the parent map (parentOf is null). This is the visibility default,
+	// never a fail-closed 'none' for a missing map or an unknown parent id.
+	if (!(rulesByPage instanceof Map) || rulesByPage.size === 0) {
+		return canReadPageRow(row, userId) ? 'can_view' : NONE;
+	}
 
 	const pageId = idOf(row.id);
 	if (!pageId) return NONE;

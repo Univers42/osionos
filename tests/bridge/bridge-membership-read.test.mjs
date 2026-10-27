@@ -50,9 +50,9 @@ describe('read: the member row comes with the page', () => {
 			const shared = await send(base, pageRead(IDS.sharedA), asB());
 			assert.equal(shared.status, 200);
 			assert.equal(shared.body._id, IDS.sharedA);
-			assert.equal(mock.calls.length, 5);
+			assert.equal(mock.calls.length, 4);
 			assert.deepEqual(mock.calls.map((call) => call.table), [
-				'osionos_pages', 'osionos_pages', 'osionos_share_rules', 'osionos_pages', 'osionos_workspace_members',
+				'osionos_pages', 'osionos_pages', 'osionos_share_rules', 'osionos_workspace_members',
 			]);
 			assert.equal(mock.calls.filter((call) => call.table === 'osionos_workspace_members').length, 1, 'the access map reads the caller member once');
 		});
@@ -81,7 +81,7 @@ describe('read: the member row comes with the page', () => {
 			const listed = await send(base, `/api/comments?pageId=${IDS.sharedA}`, asB());
 			assert.equal(listed.status, 200);
 			assert.deepEqual(mock.calls.map((call) => call.table), [
-				'osionos_pages', 'osionos_share_rules', 'osionos_pages', 'osionos_workspace_members', 'osionos_page_comments',
+				'osionos_pages', 'osionos_share_rules', 'osionos_workspace_members', 'osionos_page_comments',
 			]);
 		});
 	});
