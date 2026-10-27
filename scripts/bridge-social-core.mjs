@@ -28,6 +28,7 @@
  */
 
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
+import { keepAliveFetch } from './bridge-keepalive-post.mjs';
 import { realtimeSocketPublisher } from './bridge-realtime-socket.mjs';
 import { publishViaLane } from './bridge-realtime-ws-lane.mjs';
 import { CHUNK_SIZE, idChunks, inFilter, runChunks } from './bridge-paging.mjs';
@@ -182,7 +183,7 @@ export async function readInChunks(ids, read, { size = CHUNK_SIZE } = {}) {
 }
 
 /** Best-effort publish to the Rust realtime gateway; never throws. */
-export async function publishRealtime({ topic, eventType, payload, fetchImpl = fetch, env = process.env }) {
+export async function publishRealtime({ topic, eventType, payload, fetchImpl = keepAliveFetch, env = process.env }) {
 	const base = (env.REALTIME_PUBLISH_URL || 'http://mini-baas-realtime:4000').replace(/\/$/, '');
 	if (/^wss?:\/\//i.test(base)) return realtimeSocketPublisher(base, env).publish(topic, eventType, payload);
 	if (publishViaLane(env, topic, eventType, payload)) return true;
