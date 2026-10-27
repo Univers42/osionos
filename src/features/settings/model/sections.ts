@@ -71,6 +71,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     subtitle: "Choose how you want osionos to look and behave", icon: SlidersHorizontal,
     anchors: [
       { id: "appearance", label: "Theme", keywords: ["appearance", "theme", "dark", "light"] },
+      { id: "theme-json", label: "Advanced theme (JSON)", keywords: ["json", "custom theme", "tokens", "css variables", "colors", "spacing", "fonts"] },
       { id: "input-options", label: "Input options", keywords: ["enter", "newline", "send"] },
       { id: "accessibility", label: "Accessibility", keywords: ["motion", "animation", "underline", "links", "hovercard", "gif", "paste", "url"] },
       { id: "language-time", label: "Language and time", keywords: ["language", "number", "date", "timezone", "week"] },
