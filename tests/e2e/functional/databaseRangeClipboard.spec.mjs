@@ -18,7 +18,7 @@ import { test, expect } from "@playwright/test";
 
 import { fillCell, insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
-const NAME_COL = 1;
+const NAME_COL = 0;
 
 async function tableWithNames(page, names) {
   const block = await insertInlineDatabase(page);

@@ -16,20 +16,15 @@ import { ANSWER_TABLE_CLASS, renderAssistantMarkdown } from "../model/assistantM
 const SHARED =
   "min-w-0 [&_p]:my-0 [&_p+p]:mt-1 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_strong]:font-semibold [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-xs [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-xs [&_code]:font-mono";
 
-// On the accent fill only the on-accent token is readable (see ON_ACCENT_BUTTON).
-// "!" because .editor-link in global.css sets its colour with !important.
 // Inline code carries its own inline-style chip from the engine.
-const ON_ACCENT =
-  "[&_a]:text-[var(--osio-accent-fg)]! [&_a:hover]:text-[var(--osio-accent-fg)]! [&_pre]:bg-[color-mix(in_srgb,var(--osio-accent-fg)_20%,transparent)]";
-
 const ON_SURFACE =
   "[&_pre]:bg-[var(--osio-bg-muted)]";
 
-export const UserMarkdown: React.FC<{ markdown: string; tone: "accent" | "surface" }> = ({ markdown, tone }) => {
+export const UserMarkdown: React.FC<{ markdown: string }> = ({ markdown }) => {
   const elements = useMemo(() => renderAssistantMarkdown(keepLineBreaks(markdown)), [markdown]);
   return React.createElement(
     "div",
-    { className: `${SHARED} ${ANSWER_TABLE_CLASS} ${tone === "accent" ? ON_ACCENT : ON_SURFACE}`, "data-testid": "user-markdown" },
+    { className: `${SHARED} ${ANSWER_TABLE_CLASS} ${ON_SURFACE}`, "data-testid": "user-markdown" },
     elements,
   );
 };

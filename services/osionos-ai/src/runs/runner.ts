@@ -9,13 +9,17 @@ import { getRun, insertRun, markRun, sweepStaleRows } from './repo.ts';
 import type { RunRow } from './repo.ts';
 import { runUpstream } from './upstream.ts';
 import { loadMcpTools, mcpToolChars } from '../mcpClient/runTools.ts';
+import { webOnForRun, webToolChars } from '../web/runWeb.ts';
+import { RESEARCH_LIMITS } from '../tools/limits.ts';
+import { readRunSummary } from '../summary/repo.ts';
 import type { Effort } from './effort.ts';
 import type { RunEvent } from './upstream.ts';
 import {
 	accountBlock,
+	conversationSummaryBlock,
 	fileChars,
 	historyChars,
-	loadHistory,
+	loadHistoryWindow,
 	loadPageContext,
 	memoryChars,
 	quotedPageChars,
@@ -40,6 +44,8 @@ import type { AuthUser } from '../auth.ts';
 import { loadAttachments } from './attachments.ts';
 import { fitFiles } from '../files/excerpt.ts';
 import type { FittedFile } from '../files/excerpt.ts';
+import { THREAD_SYSTEM_PROMPT } from '../threads/context.ts';
+import type { ThreadRun } from './upstreamInput.ts';
 
 export type { RunEvent };
 
@@ -112,6 +118,10 @@ export interface StartRunInput {
 	workspaceId?: string;
 	/** Whether the account block is included in the prompt. */
 	account?: boolean;
+	/** The web toggle of THIS message (C355): one of three layers, never sticky. */
+	web?: boolean;
+	/** Research mode (C396): the route admitted it; needs `web`. */
+	research?: boolean;
 	/** The view the caller has open, as the client reports it. */
 	view?: import('./prompt.ts').RunView;
 	/** Where the model is called, and who pays for it. */
@@ -120,6 +130,13 @@ export interface StartRunInput {
 	effort?: Effort;
 	/** The models the run moves to, in order, when the target fails before it said anything. */
 	fallbacks?: readonly ResolvedTarget[];
+	/**
+	 * A thread run (C429): `text` is the trigger message, the one turn the
+	 * transcript keeps (C442); the model reads the channel window instead, with
+	 * no history. The route passes no `user`, so the run has no tool, source,
+	 * skill, memory or web by construction.
+	 */
+	thread?: ThreadRun;
 	emit: (event: RunEvent) => void;
 }
 
@@ -202,6 +219,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		agentVersion: isCustomAgent(agent) ? null : (agent?.version ?? null),
 		customAgentId: isCustomAgent(agent) ? agent.id : null,
 		customAgentVersion: isCustomAgent(agent) ? agent.version : null,
+		...(input.thread ? { surface: { channelId: input.thread.channelId, messageId: input.thread.messageId, readAt: input.thread.readAt } } : {}),
 	});
 	if (inserted.kind === 'conflict') {
 		// The conversation already has a running run: the partial unique index
@@ -262,7 +280,17 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 
 	// The history is read before the money moves: the reservation estimates the
 	// size of the prompt, so it has to know the prompt.
-	const history = await loadHistory(db, { conversationId, ownerId });
+	// A thread run reads no history: each "@AI" is one draft (C442).
+	const window = input.thread
+		? { messages: [], oldestKeptId: null, dropped: false }
+		: await loadHistoryWindow(db, { conversationId, ownerId });
+	const history = window.messages;
+	// The summary of the turns the window dropped, quoted when it ends before
+	// the window starts (context C384). Flag off: no column is read (C389).
+	const summary = config.summaryEnabled && !input.thread
+		? await readRunSummary(db, { conversationId, ownerId, oldestKeptId: window.oldestKeptId, dropped: window.dropped })
+		: null;
+	const summaryBlockText = summary?.quoted ? conversationSummaryBlock(summary.quoted.text, summary.quoted.through) : undefined;
 
 	// (b) The budget, before any upstream call.
 	// The pages are read before the money moves: the reservation estimates the
@@ -318,21 +346,31 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// reservation counts their definitions and the run offers the same list.
 	// Only the general assistant gets them (C308): an agent never does. Flag
 	// off: no query, nothing (C291).
-	const mcpTools = config.mcpClientEnabled && input.user && !agent ? await loadMcpTools(db, ownerId) : [];
+	const mcpTools = config.mcpClientEnabled && input.user && !agent && !input.research ? await loadMcpTools(db, ownerId) : [];
+	// C355 / C369: the web tools, when the flag, the workspace switch and this
+	// message all say so, and never for an agent.
+	const web = await webOnForRun(db, { asked: input.web, user: input.user, agentful: agent !== null, workspaceId: input.workspaceId });
 	const contextChars =
-		(accountBlockText?.length ?? 0) + (viewBlockText?.length ?? 0) + (workspaceBlockText?.length ?? 0) + mcpToolChars(mcpTools);
+		(accountBlockText?.length ?? 0) +
+		(viewBlockText?.length ?? 0) +
+		(workspaceBlockText?.length ?? 0) +
+		mcpToolChars(mcpTools) +
+		webToolChars(web) +
+		(summaryBlockText?.length ?? 0);
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
 	const estimateInputs = {
-		text,
+		text: input.thread?.prompt ?? text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(context.pages) + memoryChars(memories) + fileChars(files),
 		sourceChars: sourceChars(sources),
 		// The system prompt of THIS run: the base one, or the longer one of
 		// the agent. The reservation counts what the call really sends.
-		systemChars: systemPromptFor(agent, skillIndex).length,
+		systemChars: input.thread ? THREAD_SYSTEM_PROMPT.length : systemPromptFor(agent, skillIndex).length,
 		contextChars,
+		// The answer of a research step reads a larger pool share (C400).
+		...(input.research ? { limits: RESEARCH_LIMITS } : {}),
 	};
 	// A model that keeps failing rests: it is skipped while a later one is
 	// ready (devil C256-C259). The row of the run is pinned to the model that
@@ -402,10 +440,16 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			skillIndex,
 			memories,
 			mcpTools,
+			web,
+			...(input.research ? { research: true } : {}),
 			workspaceId: input.workspaceId,
+			...(summaryBlockText ? { summaryBlock: summaryBlockText } : {}),
+			...(summary && window.dropped ? { truncated: { summarized: summaryBlockText !== undefined } } : {}),
+			...(summary?.behind && window.oldestKeptId ? { summarizeFrom: { oldestKeptId: window.oldestKeptId } } : {}),
 			...(accountBlockText ? { accountBlock: accountBlockText } : {}),
 			...(viewBlockText ? { viewBlock: viewBlockText } : {}),
 			...(workspaceBlockText ? { workspaceBlock: workspaceBlockText } : {}),
+			...(input.thread ? { thread: input.thread } : {}),
 		});
 	};
 	return { kind: 'started', run: (await getRun(db, runId)) as RunRow, execute };

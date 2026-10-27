@@ -96,7 +96,7 @@ export async function describeApproval(
 }
 
 async function taint(db: Pool, row: ApprovalRow): Promise<{ influencedBy?: string[] }> {
-	if (!config.mcpClientEnabled || row.origin !== 'run' || !row.conversation_id) return {};
+	if (!(config.mcpClientEnabled || config.webEnabled) || row.origin !== 'run' || !row.conversation_id) return {};
 	const labels = await influencedBy(db, row.conversation_id);
 	return labels.length > 0 ? { influencedBy: labels } : {};
 }

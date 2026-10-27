@@ -50,7 +50,8 @@ export interface ToolOutcome {
 	view?: 
 		| { action: 'open_page'; pageId: string; title: string; target: 'current' | 'tab' | 'split' }
 		| { action: 'open_panel'; panel: 'files' | 'search' | 'marketplace' | 'agents' | 'conversations' | 'notifications' | 'tasks' | 'public' | 'database' | 'scm' | 'run' | 'problems' | 'issues' }
-		| { action: 'open_issue_report'; title: string; description: string };
+		| { action: 'open_issue_report'; title: string; description: string }
+		| { action: 'suggest_agent'; agentId: string; reason: string };
 }
 
 export type { ToolSource };
@@ -80,6 +81,11 @@ export interface ToolHooks {
 	 * `awaiting_approval`: the approval row is what waits, not the run.
 	 */
 	onApproval?(asked: PermissionAsked): void | Promise<void>;
+	/**
+	 * The text a tool gave the model, called with no await before it: the
+	 * leak guard of the web tools learns what the run read (web C356).
+	 */
+	onOutput?(toolName: string, text: string): void;
 }
 
 /**
@@ -134,7 +140,7 @@ export interface ToolPool {
  * TOOL_OUTPUT_CHARS to the context, whatever the number of the calls it
  * makes.
  */
-export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
+export function createToolPool(chars: number = TOOL_POOL_CHARS, stepChars: number = TOOL_OUTPUT_CHARS): ToolPool {
 	let left = chars;
 	// The share of the step: the tools of ONE step may not add more than
 	// TOOL_OUTPUT_CHARS to the context of the run. It is empty until the
@@ -152,7 +158,7 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
 			return left <= POOL_SPENT.length;
 		},
 		startStep(): void {
-			stepLeft = TOOL_OUTPUT_CHARS;
+			stepLeft = stepChars;
 			step += 1;
 		},
 		get step(): number {
@@ -165,7 +171,7 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS): ToolPool {
 			// the pool, and the context of the run grows by the notice and by
 			// nothing else.
 			if (stepLeft <= 0) return notice();
-			const room = Math.min(text.length, TOOL_OUTPUT_CHARS, stepLeft, left - POOL_SPENT.length);
+			const room = Math.min(text.length, stepChars, stepLeft, left - POOL_SPENT.length);
 			const cut = text.slice(0, room);
 			left -= cut.length;
 			stepLeft -= cut.length;
@@ -199,7 +205,7 @@ interface ToolDefinition {
 }
 
 /** The length of the JSON the tools are sent as. */
-function toolDefinitionChars(tools: readonly ToolDefinition[]): number {
+export function toolDefinitionChars(tools: readonly ToolDefinition[]): number {
 	const definitions = tools.map((tool) => ({
 		type: 'function',
 		function: {
@@ -297,6 +303,7 @@ export function readToolSet(
 				// The numbers are committed: these passages keep them.
 				for (const { n, source } of fresh) numbers.set(sourceKey(source), n);
 				quoted += fresh.length;
+				hooks.onOutput?.(tool.name, output);
 				if (fresh.length > 0) {
 					await hooks.onSources?.(fresh, options.toolCallId);
 				}

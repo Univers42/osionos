@@ -16,7 +16,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import { fillCell, insertInlineDatabase } from "../support/databaseHelpers.mjs";
+import { closeViewSettings, fillCell, insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 /** Add a property of `type`, rename it in the auto-opened config panel, close. */
 async function addNamedProperty(page, block, typeLabel, name) {
@@ -46,8 +46,8 @@ test.describe("database-automations", () => {
     await expect(dialog.getByText("Edit automation")).toBeVisible();
     await expect(dialog.locator('[aria-label="Trigger"]')).toHaveValue("row_updated");
 
-    // Close the settings dialog via the backdrop.
-    await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+    // Close the settings dialog.
+    await closeViewSettings(page);
     await expect(dialog).toHaveCount(0);
 
     // The ⚡ button now carries the local-rule count pill.
@@ -72,12 +72,12 @@ test.describe("database-automations", () => {
     await dialog.locator('[aria-label="Value"]').first().fill("auto-set");
     await dialog.getByText("+ Add action").click();
     await dialog.locator('[aria-label="Message"]').last().fill("Rule fired");
-    await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+    await closeViewSettings(page);
     await expect(dialog).toHaveCount(0);
 
     // Edit the Trigger cell → the rule writes Target and raises a toast.
-    await fillCell(page, block, 0, 2, "hello");
-    const targetCell = block.locator("tbody tr").first().locator("td").nth(3);
+    await fillCell(page, block, 0, 1, "hello");
+    const targetCell = block.locator("tbody tr").first().locator("td").nth(2);
     await expect(targetCell).toContainText("auto-set", { timeout: 10_000 });
     await expect(page.getByRole("status").filter({ hasText: "Rule fired" })).toBeVisible();
   });
@@ -106,9 +106,9 @@ test.describe("database-automations", () => {
     await page.getByRole("textbox", { name: "Page title" }).click(); // close config panel
 
     // Click the row's button → property set + toast.
-    await block.locator("tbody tr").first().locator("td").nth(3)
+    await block.locator("tbody tr").first().locator("td").nth(2)
       .getByRole("button", { name: "Button", exact: true }).click();
-    const targetCell = block.locator("tbody tr").first().locator("td").nth(2);
+    const targetCell = block.locator("tbody tr").first().locator("td").nth(1);
     await expect(targetCell).toContainText("pressed", { timeout: 10_000 });
     await expect(page.getByRole("status").filter({ hasText: "Button clicked" })).toBeVisible();
   });

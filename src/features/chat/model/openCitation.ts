@@ -25,7 +25,9 @@ import type { Citation } from "./citations";
 export function openCitation(citation: Citation): void {
   // A pack passage has no page: there is nothing to navigate to, and the page
   // store is never touched.
-  if (citation.collection === "pack") return;
+  // A web source is a link to another site: it opens in a new tab from its own
+  // anchor, and never as a page of the app.
+  if (citation.collection !== "page") return;
   const store = usePageStore.getState();
   const page = store.pageById(citation.pageId);
   store.openPage({

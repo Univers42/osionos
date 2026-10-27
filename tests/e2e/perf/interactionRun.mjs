@@ -18,7 +18,7 @@
 // profiler sees), so reset work shows up in the profile next to the action - read the stacks,
 // not the totals. Sampling caveats: perfProfile.mjs.
 
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { REPORT_DIR, assertBudget, measureToPaint, writeReport } from "./perfHarness.mjs";
@@ -30,6 +30,7 @@ export async function runInteraction(page, { spec, name, floor, action, before, 
   const options = { startEvent, until, before };
   const stats = await measureToPaint(page, action, { ...options, runs, warmups });
   const profile = await profileDuring(page, () => measureToPaint(page, action, { ...options, runs: PROFILE_REPEATS, warmups: 0 }));
+  mkdirSync(REPORT_DIR, { recursive: true });
   writeFileSync(path.join(REPORT_DIR, `${spec}.${name}.cpuprofile`), `${JSON.stringify(profile)}\n`);
   const { totalMs, self } = aggregateProfile(profile);
   writeReport(spec, `${name}.profile`, { totalMs, selfTop: self.slice(0, 20) });

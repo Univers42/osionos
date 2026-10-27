@@ -18,7 +18,9 @@ import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiS
 import type { RunContext } from "@/features/ai/model/aiContext";
 import { withAccountContext } from "@/features/ai/model/viewContext";
 import { parseAgentPrefix, type AgentSummary } from "@/features/ai/model/aiAgents";
-import { listAgents, type AiMessage } from "@/features/ai/api/aiClient";
+import { listAgents } from "@/features/ai/api/aiClient";
+import { chatMessageFromTranscript, textOfParts } from "./transcriptMessages";
+import { textAfterGap } from "./researchParts";
 import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTurn";
 import { dispatchRunEvent } from "./runEventDispatch";
 import { failureCode, retryAfterOf } from "./runErrors";
@@ -26,6 +28,8 @@ import { conversationApi } from "./conversationApi";
 import { useUserStore } from "@/features/auth";
 import { withMemoryDecision, type MemoryDecision } from "./memoryParts";
 import { withoutUnreadableMirrors } from "./storedChatRepair";
+import { useSummaryStore } from "./useSummaryStore";
+import { DEFAULT_CONVERSATION_TITLE, isDefaultConversationTitle } from "./conversationTitle";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
@@ -49,6 +53,15 @@ export function conversationsOf(conversations: Conversation[], userId: string | 
   return conversations.filter((c) => c.ownerId === undefined || c.ownerId === userId);
 }
 
+/**
+ * A chat opened and never used: its first title, no message here, none on the service.
+ * One that came from the service has no local message until it is opened, so the
+ * service id keeps it counted as used.
+ */
+export function isUntouchedConversation(conversation: Conversation, withMessages: ReadonlySet<string>): boolean {
+  return isDefaultConversationTitle(conversation.title) && !conversation.serverConversationId && !withMessages.has(conversation.id);
+}
+
 export function setInferencePort(port: InferencePort): void {
   inferencePort = port;
 }
@@ -60,11 +73,6 @@ export function getInferencePort(): InferencePort {
 
 /** The server transcripts read or being read: a conversation is read once. */
 const transcriptsRequested = new Set<string>();
-
-/** The text of a server message, from its text parts. */
-function textOfParts(parts: AiMessage["parts"]): string {
-  return parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n\n");
-}
 
 /** The runs in flight, per conversation. A conversation speaks one at a time. */
 const activeRuns = new Map<string, AbortController>();
@@ -123,7 +131,9 @@ export interface ChatStoreState extends ChatData {
    * new text as a new turn. Refused (false) while
    * the conversation has a run in flight.
    */
-  editAndResend: (messageId: string, text: string) => Promise<boolean>;
+  editAndResend: (messageId: string, text: string, choice?: { model?: string; connectionId?: string }) => Promise<boolean>;
+  /** Asks the question of an answer again, in place of that answer, with the model picked now. */
+  retryAnswer: (answerId: string) => Promise<boolean>;
   attachContext: (scope: SharedContextItem["scope"], scopeId: string, item: Pick<SharedContextItem, "kind" | "label" | "ref">) => void;
   detachContext: (id: string) => void;
   messagesFor: (conversationId: string) => ChatMessage[];
@@ -163,6 +173,25 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       set((s) => ({ conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, title } : c)) }));
       persist();
     },
+    noteTruncated: (conversationId, truncated) => useSummaryStore.getState().setTruncated(conversationId, truncated),
+  };
+
+  /**
+   * A resume that missed frames left the answer short (`resume.gap`, C402):
+   * its text is read back from the transcript once the run is over. A failed
+   * read keeps what arrived.
+   */
+  const refillAfterGap = async (conversationId: string, assistantId: string): Promise<void> => {
+    const message = get().messages.find((m) => m.id === assistantId);
+    const serverId = get().conversations.find((c) => c.id === conversationId)?.serverConversationId;
+    if (!message?.textGap || !message.runId || !serverId) return;
+    try {
+      const { messages: transcript } = await conversationApi().transcript(serverId);
+      const text = textAfterGap(message.runId, transcript.map((m) => ({ runId: m.runId, role: m.role, text: textOfParts(m.parts) })));
+      turnStore.patchMessage(assistantId, text === null ? { textGap: undefined } : { content: text, textGap: undefined });
+    } catch (error) {
+      console.warn("[chat] could not read back an answer after a gap", error);
+    }
   };
 
   /**
@@ -195,6 +224,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       // The stream ended without a terminal frame (a stop, or a run that gave
       // up): what arrived stays, and the answer is not marked as failed.
       turn.finish();
+      await refillAfterGap(conversationId, assistantId);
     } catch (error) {
       turn.patchAssistant({ status: "error", errorCode: failureCode(error), retryAfterSeconds: retryAfterOf(error) });
     } finally {
@@ -254,8 +284,20 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     },
 
     createConversation: (projectId = null, opts = {}) => {
+      // An untouched chat of the same owner and project is reused: reopening the
+      // assistant, or "New chat" twice, does not pile empty chats into the history.
+      if (!opts.title?.trim() && !opts.connectorId && !opts.model) {
+        const { conversations, messages } = get();
+        const withMessages = new Set(messages.map((m) => m.conversationId));
+        const ownerId = activeOwnerId();
+        const untouched = conversations.find((c) => c.ownerId === ownerId && c.projectId === projectId && isUntouchedConversation(c, withMessages));
+        if (untouched) {
+          set({ activeConversationId: untouched.id });
+          return untouched;
+        }
+      }
       const conversation: Conversation = {
-        id: uid(), projectId, title: opts.title?.trim() || "New conversation",
+        id: uid(), projectId, title: opts.title?.trim() || DEFAULT_CONVERSATION_TITLE,
         connectorId: opts.connectorId, model: opts.model, ownerId: activeOwnerId(), createdAt: now(), updatedAt: now(),
       };
       set((s) => ({ conversations: [conversation, ...s.conversations], activeConversationId: conversation.id }));
@@ -308,14 +350,11 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       if (get().messagesFor(conversationId).length > 0) return;
       transcriptsRequested.add(serverId);
       try {
-        const transcript = await api.messages(serverId);
+        const { messages: transcript, summary } = await api.transcript(serverId);
+        useSummaryStore.getState().setSummary(conversationId, summary);
         const loaded: ChatMessage[] = transcript
           .filter((m) => m.role !== "tool")
-          .map((m) => ({
-            id: uid(), conversationId, role: m.role === "user" ? "user" : m.role === "system" ? "system" : "assistant",
-            content: textOfParts(m.parts), createdAt: m.createdAt, parts: m.parts, runId: m.runId || undefined,
-            model: m.model, status: "done" as const,
-          }));
+          .map((m) => chatMessageFromTranscript(m, conversationId, uid()));
         // A turn sent while the read was going is already there: the transcript goes before it.
         set((s) => ({ messages: [...loaded, ...s.messages] }));
         persist();
@@ -436,7 +475,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       persist();
     },
 
-    editAndResend: async (messageId, text) => {
+    editAndResend: async (messageId, text, choice) => {
       const original = get().messages.find((m) => m.id === messageId);
       if (!original || original.role !== "user" || !text.trim()) return false;
       const { conversationId } = original;
@@ -449,15 +488,30 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       const replaceFromRunId = inConversation.slice(from + 1).find((m) => m.runId)?.runId;
       set((s) => ({ messages: s.messages.filter((m) => !dropped.has(m.id)) }));
       persist();
-      // The turn keeps the connection, model and agent it was first sent with.
+      // The turn keeps the connection, model and agent it was first sent with,
+      // unless a retry names the model picked since.
       await get().send(conversationId, text, {
         connectorId: original.connectorId,
-        model: original.model,
-        connectionId: original.connectionId,
+        model: choice?.model || original.model,
+        connectionId: choice?.connectionId ?? original.connectionId,
         agentId: original.agentId,
         ...(replaceFromRunId ? { replaceFromRunId } : {}),
       });
       return true;
+    },
+
+    // A retry was a new turn under the failed one, the question asked twice and
+    // the model forgotten. It now replaces the answer, like an edit that keeps
+    // the words, with the model in the composer: after a rate limit on one
+    // model, the reader picks another and retries.
+    retryAnswer: async (answerId) => {
+      const answer = get().messages.find((m) => m.id === answerId);
+      if (!answer || answer.role !== "assistant") return false;
+      const turns = get().messagesFor(answer.conversationId);
+      const question = turns.slice(0, turns.findIndex((m) => m.id === answerId)).reverse().find((m) => m.role === "user");
+      if (!question) return false;
+      const picked = readAiSelection();
+      return get().editAndResend(question.id, question.content, picked ? { model: picked.model || "auto", connectionId: picked.connectionId } : undefined);
     },
 
     attachContext: (scope, scopeId, item) => {

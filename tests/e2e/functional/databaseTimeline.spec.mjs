@@ -16,7 +16,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import { addPropertyOfType, addView, insertInlineDatabase } from "../support/databaseHelpers.mjs";
+import { addPropertyOfType, addView, insertInlineDatabase, waitForViewSettled } from "../support/databaseHelpers.mjs";
 
 const CELL = 48; // week-zoom cell width
 
@@ -113,7 +113,9 @@ test.describe("database-timeline", () => {
  *  not possible — hop through the table view tab, add it, come back. */
 async function addPropertyOfTypeInTimeline(block, page) {
   await block.getByText("Table", { exact: true }).first().click();
+  await waitForViewSettled(block);
   await addPropertyOfType(block, page, "Date", "Deadline");
   await block.getByText("Timeline", { exact: true }).first().click();
+  await waitForViewSettled(block);
   await block.locator('[role="row"]').first().waitFor();
 }

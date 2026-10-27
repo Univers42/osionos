@@ -16,7 +16,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { fillCell, insertInlineDatabase } from "../support/databaseHelpers.mjs";
+import { closeViewSettings, fillCell, insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 test("a group collapsed in one table view stays open in another", async ({ page }) => {
   const block = await insertInlineDatabase(page);
@@ -24,9 +24,9 @@ test("a group collapsed in one table view stays open in another", async ({ page 
   await page.getByTestId("add-property-panel").getByRole("button", { name: "Text", exact: true }).click();
   await page.getByRole("textbox", { name: "Page title" }).click(); // close the auto-opened config panel
   await expect(page.getByTestId("property-config-panel")).toHaveCount(0);
-  await fillCell(page, block, 0, 2, "alpha");
+  await fillCell(page, block, 0, 1, "alpha");
   await block.getByRole("button", { name: "New", exact: true }).last().click();
-  await fillCell(page, block, 1, 2, "beta");
+  await fillCell(page, block, 1, 1, "beta");
 
   await block.hover();
   await block.locator('[aria-label="View settings"]').click();
@@ -36,7 +36,7 @@ test("a group collapsed in one table view stays open in another", async ({ page 
   }
   await dialog.getByText("Group by").first().click();
   await dialog.getByRole("button", { name: "Text", exact: true }).click();
-  await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+  await closeViewSettings(page);
 
   await block.getByRole("button", { name: "Collapse group alpha" }).click();
   await expect(block.getByRole("button", { name: "Expand group alpha" })).toBeVisible();

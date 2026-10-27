@@ -14,16 +14,20 @@
  * Grobase storage-router client for the osionos messenger media plane.
  *
  * The bridge proxies the raw bytes — browser-direct upload is impossible
- * (S3_PUBLIC_ENDPOINT is empty, no presign). Auth is compat-mode: a single
- * `x-user-id: <ownerId>` header (NO JWT, NO Kong). The router AUTO-PREFIXES the
- * object key with `{ownerId}/`, so callers pass key=`{sha256}.{ext}` and the
- * stored key becomes `{ownerId}/{sha256}.{ext}` — same owner + same content =
- * same object (idempotent overwrite → content dedup).
+ * (S3_PUBLIC_ENDPOINT is empty, no presign). The router reads the owner from
+ * `x-user-id` (compat mode). Reached through Kong — the default, and the only
+ * path from a host linked to grobase — that header is cleared, so each call also
+ * carries a one-minute token for the owner, which Kong verifies and turns back
+ * into `x-user-id`. The router AUTO-PREFIXES the object key with `{ownerId}/`,
+ * so callers pass key=`{sha256}.{ext}` and the stored key becomes
+ * `{ownerId}/{sha256}.{ext}` — same owner + same content = same object
+ * (idempotent overwrite → content dedup).
  *
  * Node built-ins only. Best-effort with clear errors (httpError 502/timeout).
  */
 
 import { httpError } from './bridge-social-core.mjs';
+import { signRealtimeJwt } from './bridge-realtime-socket.mjs';
 import { INLINE_TYPES, PAGE_TYPES, assertBytesMatch, baseMime } from './bridge-mime.mjs';
 
 const STORAGE_TIMEOUT_MS = 15_000;
@@ -49,7 +53,27 @@ const EXT_BY_MIME = {
 };
 
 export function storageBase(env = process.env) {
-	return (env.STORAGE_ROUTER_URL ?? 'http://mini-baas-storage-router:3040/storage/v1').replace(/\/$/, '');
+	const kong = `${String(env.OSIONOS_BAAS_URL ?? env.PUBLIC_BAAS_URL ?? 'http://localhost:8000').replace(/\/$/, '')}/storage/v1`;
+	return (env.STORAGE_ROUTER_URL ?? kong).replace(/\/$/, '');
+}
+
+const STORAGE_TOKEN_TTL_SECONDS = 60;
+
+/**
+ * Who a storage call acts for. `x-user-id` serves a router reached directly;
+ * Kong clears it and rebuilds it from the bearer token. Without JWT_SECRET no
+ * token is sent: a direct router still works and Kong refuses, never a forgery.
+ */
+export function storageHeaders(ownerId, env = process.env, extra = {}) {
+	const headers = { 'x-user-id': ownerId, ...extra };
+	const apiKey = env.KONG_PUBLIC_API_KEY ?? env.ANON_KEY;
+	if (apiKey) headers.apikey = apiKey;
+	if (env.JWT_SECRET) {
+		const iat = Math.floor(Date.now() / 1000);
+		const claims = { iss: 'supabase', aud: 'authenticated', role: 'authenticated', sub: ownerId, iat, exp: iat + STORAGE_TOKEN_TTL_SECONDS };
+		headers.authorization = `Bearer ${signRealtimeJwt(claims, env.JWT_SECRET)}`;
+	}
+	return headers;
 }
 
 /**
@@ -96,7 +120,7 @@ export async function ensureBucket(ownerId, bucket, fetchImpl = fetch, env = pro
 	try {
 		await fetchImpl(`${storageBase(env)}/bucket/${bucket}`, {
 			method: 'POST',
-			headers: { 'x-user-id': ownerId, 'content-type': 'application/json' },
+			headers: storageHeaders(ownerId, env, { 'content-type': 'application/json' }),
 			body: JSON.stringify({ public: false }),
 			signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
 		});
@@ -121,7 +145,7 @@ export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImp
 	assertBytesMatch(contentType, bodyBuffer);
 	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
 		method: 'PUT',
-		headers: { 'x-user-id': ownerId, 'content-type': contentType || 'application/octet-stream' },
+		headers: storageHeaders(ownerId, env, { 'content-type': contentType || 'application/octet-stream' }),
 		body: bodyBuffer,
 		signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
 	}).catch((error) => {
@@ -140,7 +164,7 @@ export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImp
 export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
 	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
 		method: 'GET',
-		headers: { 'x-user-id': ownerId },
+		headers: storageHeaders(ownerId, env),
 		signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
 	}).catch((error) => {
 		throw httpError(`Storage fetch failed: ${error instanceof Error ? error.message : 'unreachable'}`, 502);
@@ -163,7 +187,7 @@ export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.
 export async function storageDelete(ownerId, key, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
 	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
 		method: 'DELETE',
-		headers: { 'x-user-id': ownerId },
+		headers: storageHeaders(ownerId, env),
 		signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
 	}).catch((error) => {
 		throw httpError(`Storage delete failed: ${error instanceof Error ? error.message : 'unreachable'}`, 502);

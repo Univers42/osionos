@@ -12,6 +12,7 @@ import { AgentRefusal, loadRunnableAgent } from '../agents/resolve.ts';
 import { config } from '../config.ts';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import * as runStore from '../runs/runStore.ts';
+import { gateResearch } from '../research/gate.ts';
 import { resolveFallbacks } from './fallbacks.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
@@ -27,6 +28,9 @@ const startRunSchema = z.object({
 	runId: z.string().regex(UUID, 'runId must be a uuid'),
 	conversationId: z.string().regex(UUID, 'conversationId must be a uuid'),
 	text: z.string().min(1).max(32_000),
+	// Research mode (C396): with the flag off the field accepts nothing, so a
+	// body that carries it is a 400 and the run of before is untouched (C415).
+	mode: (config.researchEnabled ? z.enum(['research']) : z.never()).optional(),
 	// Edit and resend: the messages from the first one of this run onward are
 	// dropped before the new turn, so the model never sees the edited-away
 	// turns. Valid only with the conversationId, which the schema requires.
@@ -68,6 +72,9 @@ const startRunSchema = z.object({
 			workspace: z.boolean().optional(),
 			// The account block: who is asking. True adds it; absent or false does not.
 			account: z.boolean().optional(),
+			// The web toggle of this message (C355): ignored unless OSIONOS_AI_WEB
+			// and the workspace switch are on too.
+			web: z.boolean().optional(),
 			// What the caller has open.
 			view: z
 				.object({
@@ -131,6 +138,10 @@ async function streamRunEvents(ctx: RouteContext, runId: string, afterId: string
 	const stop = () => controller.abort();
 	response.on('close', stop);
 	try {
+		// A research report outgrows the stream's cap: say so first (C402).
+		if (config.researchEnabled && (await runStore.hasGap(deps.redis, runId, afterId))) {
+			writeSseFrame(response, { id: afterId, type: 'resume.gap', data: {} });
+		}
 		const entries = await runStore.readAfter(deps.redis, runId, afterId);
 		for (const entry of entries) writeSseFrame(response, entry);
 		const last = entries.length > 0 ? entries[entries.length - 1] : undefined;
@@ -210,6 +221,20 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		sendError(ctx.response, error.status, error.code);
 		return error.status;
 	}
+	const research = await gateResearch(ctx.deps, {
+		mode: body.mode,
+		web: body.context?.web,
+		user,
+		agentful: agent !== null,
+		workspaceId: conversation.workspace_id,
+		runId: body.runId,
+		targets: [resolved.target, ...chain.targets],
+	});
+	if (research.kind === 'refused') {
+		if (research.retryAfterSeconds !== undefined) ctx.response.setHeader('retry-after', String(research.retryAfterSeconds));
+		sendError(ctx.response, research.status, research.code);
+		return research.status;
+	}
 	const outcome = await startRun({
 		db: ctx.deps.db,
 		redis: ctx.deps.redis,
@@ -230,9 +255,21 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 		agent,
 		workspaceId: conversation.workspace_id,
 		account: body.context?.account,
+		web: body.context?.web,
+		...(research.research ? { research: true } : {}),
 		view: body.context?.view,
 		emit: (event) => writeSseFrame(ctx.response, event),
+	}).catch(async (error: unknown) => {
+		// A start that throws never runs: the slot and the seat go back.
+		await research.release();
+		await research.refund();
+		throw error;
 	});
+	// Only a run that executes keeps the slot and the day's seat (C401, C404).
+	if (outcome.kind !== 'started') {
+		await research.release();
+		await research.refund();
+	}
 	if (outcome.kind === 'refused') {
 		// A rate limit says when to come back: the client counts the seconds
 		// down before it offers the retry.
@@ -248,6 +285,7 @@ export async function handleRuns(ctx: RouteContext): Promise<number> {
 	try {
 		await outcome.execute();
 	} finally {
+		await research.release();
 		stopPing();
 		if (!ctx.response.writableEnded && !ctx.response.destroyed) ctx.response.end();
 	}

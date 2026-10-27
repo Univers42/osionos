@@ -110,6 +110,25 @@ const envSchema = z.object({
 	// Off, the /api/ai/mcp-servers paths do not exist.
 	OSIONOS_AI_MCP_CLIENT: z.string().optional(),
 	OSIONOS_AI_CUSTOM_AGENTS: z.string().optional(),
+	// The web tools, web_search and web_fetch (web C369). OFF unless exactly
+	// "on": the public overlay leaves it empty until C371 and C372 hold.
+	OSIONOS_AI_WEB: z.string().optional(),
+	// Research mode: a longer cited web loop (research C396). OFF unless exactly
+	// "on", and inert unless the web is on too.
+	OSIONOS_AI_RESEARCH: z.string().optional(),
+	// Research runs on a platform model one instance pays for in a UTC day (C404).
+	OSIONOS_AI_RESEARCH_PLATFORM_DAILY: z.coerce.number().int().positive().default(20),
+	// The rolling summary of the turns the history window drops (context
+	// C389). OFF unless exactly "on": the public overlay leaves it empty.
+	OSIONOS_AI_SUMMARY: z.string().optional(),
+	// "@AI" answers in a text channel (C450). OFF unless exactly "on": the
+	// public overlay leaves it empty, and off the route does not exist.
+	OSIONOS_AI_THREAD_ANSWERS: z.string().optional(),
+	// The one SearXNG the search tool calls (web C351): a deployment setting,
+	// never a user's or the model's. Unset, web_search does not exist.
+	OSIONOS_AI_SEARXNG_URL: z.string().url().optional(),
+	// The operator page named in the User-Agent of every fetch (web C344).
+	OSIONOS_AI_WEB_CONTACT_URL: z.string().url().default('https://github.com/Univers42/osionos'),
 	// The remote MCP endpoint (G4b, devil C118). Comma lists, added to the
 	// loopback defaults: the hosts the endpoint answers to (the public host
 	// goes here, only when the deployment has one) and the browser origins
@@ -211,6 +230,13 @@ const rawEnv = {
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
 	OSIONOS_AI_MCP_CLIENT: process.env.OSIONOS_AI_MCP_CLIENT,
 	OSIONOS_AI_CUSTOM_AGENTS: process.env.OSIONOS_AI_CUSTOM_AGENTS,
+	OSIONOS_AI_WEB: process.env.OSIONOS_AI_WEB,
+	OSIONOS_AI_RESEARCH: process.env.OSIONOS_AI_RESEARCH,
+	OSIONOS_AI_RESEARCH_PLATFORM_DAILY: process.env.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,
+	OSIONOS_AI_SUMMARY: process.env.OSIONOS_AI_SUMMARY,
+	OSIONOS_AI_THREAD_ANSWERS: process.env.OSIONOS_AI_THREAD_ANSWERS,
+	OSIONOS_AI_SEARXNG_URL: process.env.OSIONOS_AI_SEARXNG_URL || undefined,
+	OSIONOS_AI_WEB_CONTACT_URL: process.env.OSIONOS_AI_WEB_CONTACT_URL || undefined,
 	OSIONOS_AI_MCP_ALLOWED_HOSTS: process.env.OSIONOS_AI_MCP_ALLOWED_HOSTS,
 	OSIONOS_AI_MCP_ALLOWED_ORIGINS: process.env.OSIONOS_AI_MCP_ALLOWED_ORIGINS,
 	OSIONOS_AI_MCP_PENDING_PER_TOKEN: process.env.OSIONOS_AI_MCP_PENDING_PER_TOKEN,
@@ -394,6 +420,18 @@ export interface AiServiceConfig {
 	patEnabled: boolean;
 	mcpClientEnabled: boolean;
 	customAgentsEnabled: boolean;
+	webEnabled: boolean;
+	/** Whether research mode exists (C396, C415): exactly "on"; the run still needs the web. */
+	researchEnabled: boolean;
+	/** Research runs on a platform model per instance per UTC day (C404). */
+	researchPlatformDaily: number;
+	/** Whether a conversation keeps a summary of the turns its history window drops (C389). */
+	summaryEnabled: boolean;
+	/** Whether a channel member can ask "@AI" for a draft answer (C450): exactly "on". */
+	threadAnswersEnabled: boolean;
+	/** The SearXNG base URL, without a trailing slash; undefined = no web_search. */
+	searxngUrl: string | undefined;
+	webContactUrl: string;
 	/** The hosts the MCP endpoint answers to (lower-case, loopback included). */
 	mcpAllowedHosts: readonly string[];
 	/** The browser origins that may reach the MCP endpoint: none by default. */
@@ -480,6 +518,13 @@ export const config: AiServiceConfig = Object.freeze({
 	// Exactly "on" (C288): no trim, no case folding, so a stray value stays off.
 	mcpClientEnabled: parsed.data.OSIONOS_AI_MCP_CLIENT === 'on',
 	customAgentsEnabled: parsed.data.OSIONOS_AI_CUSTOM_AGENTS === 'on',
+	webEnabled: parsed.data.OSIONOS_AI_WEB === 'on',
+	researchEnabled: parsed.data.OSIONOS_AI_RESEARCH === 'on',
+	researchPlatformDaily: parsed.data.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,
+	summaryEnabled: parsed.data.OSIONOS_AI_SUMMARY === 'on',
+	threadAnswersEnabled: parsed.data.OSIONOS_AI_THREAD_ANSWERS === 'on',
+	searxngUrl: parsed.data.OSIONOS_AI_SEARXNG_URL?.replace(/\/+$/, ''),
+	webContactUrl: parsed.data.OSIONOS_AI_WEB_CONTACT_URL,
 	mcpAllowedHosts: Object.freeze(['localhost', '127.0.0.1', ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),
 	mcpAllowedOrigins: Object.freeze(commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_ORIGINS)),
 	mcpPendingPerToken: parsed.data.OSIONOS_AI_MCP_PENDING_PER_TOKEN,

@@ -23,10 +23,11 @@
  */
 
 import { AiError, toAiError } from "./aiContract";
-import { conversationFromWire, messageFromWire, type ConversationWire, type MessageWire } from "./aiWire";
+import { conversationFromWire, messageFromWire, summaryFromBody, type ConversationSummary, type ConversationWire, type MessageWire } from "./aiWire";
 import type {
   AiAgent,
   AiAgentSettings,
+  AiWebSettings,
   AiBuiltinAgent,
   AiCustomAgent,
   CreateAgentInput,
@@ -65,6 +66,7 @@ export { AiError };
 export type {
   AiAgent,
   AiAgentSettings,
+  AiWebSettings,
   AiBuiltinAgent,
   AiCustomAgent,
   CreateAgentInput,
@@ -251,6 +253,22 @@ export async function putAgentSettings(workspaceId: string, settings: AiAgentSet
   return requestJson<AiAgentSettings>("PUT", settingsPath(workspaceId), settings);
 }
 
+const webSettingsPath = (workspaceId: string) => `/workspaces/${encodeURIComponent(workspaceId)}/web/settings`;
+
+/** `GET /workspaces/:ws/web/settings` — 404 when the web tools are off on this deployment, or the caller is no member. */
+export async function getWebSettings(workspaceId: string): Promise<AiWebSettings> {
+  return requestJson<AiWebSettings>("GET", webSettingsPath(workspaceId));
+}
+
+/**
+ * `PUT /workspaces/:ws/web/settings` — owner or admin, session under 10 minutes old.
+ * `acknowledged: true` is always sent: the caller is the confirm step of the
+ * disclosure, and nothing else calls this.
+ */
+export async function putWebSettings(workspaceId: string, enabled: boolean): Promise<AiWebSettings> {
+  return requestJson<AiWebSettings>("PUT", webSettingsPath(workspaceId), { enabled, acknowledged: true });
+}
+
 /** `POST /conversations` — a conversation of the workspace. */
 export async function createConversation(input: { workspaceId: string; title?: string }): Promise<AiConversation> {
   return conversationFromWire(await requestJson<ConversationWire>("POST", "/conversations", input));
@@ -277,18 +295,38 @@ export async function deleteConversation(id: string): Promise<void> {
   await requestJson<unknown>("DELETE", `/conversations/${encodeURIComponent(id)}`);
 }
 
-/** `GET /conversations/:id/messages` — the transcript, oldest first. */
-export async function listMessages(conversationId: string): Promise<AiMessage[]> {
+/**
+ * `GET /conversations/:id/messages` — the transcript, oldest first, and the
+ * summary the service keeps of it (`undefined`: the service sent no key).
+ */
+export async function getTranscript(conversationId: string): Promise<{ messages: AiMessage[]; summary: ConversationSummary | null | undefined }> {
   const body = await requestJson<{ messages?: MessageWire[] }>(
     "GET",
     `/conversations/${encodeURIComponent(conversationId)}/messages`,
   );
-  return (body.messages ?? []).map(messageFromWire);
+  return { messages: (body.messages ?? []).map(messageFromWire), summary: summaryFromBody(body) };
+}
+
+/** `DELETE /conversations/:id/summary` — the owner clears the summary; 404 when the flag is off. */
+export async function clearConversationSummary(conversationId: string): Promise<void> {
+  await requestJson<unknown>("DELETE", `/conversations/${encodeURIComponent(conversationId)}/summary`);
 }
 
 /** `POST /runs` — the run's event stream. */
 export async function startRun(input: StartRunInput, signal?: AbortSignal): Promise<Response> {
   return requestStream("POST", "/runs", input, { signal });
+}
+
+/**
+ * `POST /thread-runs` — an "@AI" draft for a channel message the caller wrote
+ * (C429). The service reads the channel itself; the body names only the run,
+ * the caller's conversation, the channel and the trigger message.
+ */
+export async function startThreadRun(
+  input: { runId: string; conversationId: string; channelId: string; messageId: string },
+  signal?: AbortSignal,
+): Promise<Response> {
+  return requestStream("POST", "/thread-runs", input, { signal });
 }
 
 /**

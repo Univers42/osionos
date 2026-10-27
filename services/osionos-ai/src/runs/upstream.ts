@@ -17,10 +17,19 @@ import { classifyFailure } from './failover.ts';
 import type { RunEvent, UpstreamRunInput } from './upstreamInput.ts';
 import { citationData, sourceChars } from './sources.ts';
 import { createToolPool } from '../tools/index.ts';
+import { clock, RESEARCH_LIMITS, RESEARCH_WEB_CAPS } from '../tools/limits.ts';
+import { createResearchSession } from '../research/session.ts';
+import type { ResearchSession } from '../research/session.ts';
 import { buildRunTools } from './toolSet.ts';
 import { mcpToolChars } from '../mcpClient/runTools.ts';
+import { config } from '../config.ts';
+import { readWebTaint } from '../web/settings.ts';
+import { newWebRun, webToolChars } from '../web/runWeb.ts';
 import { abortCode, failureMessage, pumpUpstream } from './streamPump.ts';
 import { isDataPolicyRefusal } from '../vision/policyRefusal.ts';
+import { scheduleSummary } from '../summary/summarize.ts';
+import { THREAD_SYSTEM_PROMPT, ThreadAccessLost } from '../threads/context.ts';
+import { setRunAnswer } from './repo.ts';
 
 /**
  * The upstream of a run: the model call, the events, the settlement.
@@ -66,7 +75,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	const agent = input.agent ?? null;
 	// The system prompt of THIS run: the base one, or the one of the agent,
 	// whose data-boundary line comes last (devil C38).
-	const system = systemPromptFor(agent, input.skillIndex);
+	const system = input.thread ? THREAD_SYSTEM_PROMPT : systemPromptFor(agent, input.skillIndex);
 
 	// The cancel controller is the run's; each attempt follows it.
 	const runController = new AbortController();
@@ -92,9 +101,11 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		(accountBlockText?.length ?? 0) +
 		(viewBlockText?.length ?? 0) +
 		(workspaceBlockText?.length ?? 0) +
-		mcpToolChars(input.mcpTools ?? []);
+		mcpToolChars(input.mcpTools ?? []) +
+		webToolChars(input.web === true) +
+		(input.summaryBlock?.length ?? 0);
 	const promptChars = promptCharCount({
-		text,
+		text: input.thread?.prompt ?? text,
 		historyChars: historyChars(history),
 		pageChars: quotedPageChars(pages) + memoryChars(memories) + fileChars(files),
 		sourceChars: sourceChars(sources),
@@ -106,7 +117,16 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	// time, and the extension is atomic: two runs never share it.
 	const steps = [{ target, amount: reserved }, ...(input.fallbacks ?? [])];
 	const records: AttemptRecord[] = [];
-	const runState = { signal: runController.signal, runId, userId: ownerId, day, promptChars };
+	const limits = input.research ? RESEARCH_LIMITS : undefined;
+	const startedAt = clock.now();
+	const runState = {
+		signal: runController.signal,
+		runId,
+		userId: ownerId,
+		day,
+		promptChars,
+		...(limits ? { limits, startedAt } : {}),
+	};
 	let index = 0;
 	let current = startAttempt(db, runState, steps[0]);
 	// The error of the current attempt: a later failure of OUR code must not hide it.
@@ -114,7 +134,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 	// The pool of the tools of THIS run: the tools of a run may not put
 	// more in its context than the reservation of the run counted, and one
 	// step may not add more than a step's share of it.
-	const pool = createToolPool();
+	const pool = limits ? createToolPool(limits.poolChars, limits.stepChars) : createToolPool();
+	let research: ResearchSession | undefined;
 
 	try {
 		await emit('run.started', {
@@ -131,6 +152,11 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		if (input.restedFrom) {
 			await emit('route', { from: input.restedFrom, to: target.modelId, reason: 'unavailable' });
 		}
+		// The window left earlier turns out: the reader learns it, and whether a
+		// summary of them is in the prompt (context C380). Flag off: never.
+		if (input.truncated) {
+			await emit('context.truncated', { summarized: input.truncated.summarized });
+		}
 
 		// The sources of the answer: one frame each, in the order the model
 		// sees them, before the first word of the answer. The number of a
@@ -142,6 +168,28 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// The tools of the assistant: the search of a workspace, the read of
 		// a page, and — when the bridge is configured — the writes that ask
 		// the user for the right to write.
+		// The taint is read only while the flag is on: a database without the
+		// web columns is never asked for them (C375).
+		const webTaint = config.webEnabled ? await readWebTaint(db, conversationId) : undefined;
+		const web =
+			input.web === true && webTaint
+				? newWebRun({
+						db,
+						redis,
+						runId,
+						userId: ownerId,
+						conversationId,
+						taint: webTaint,
+						typed: text,
+						...(limits ? { caps: RESEARCH_WEB_CAPS } : {}),
+						read: [
+							...pages.map((page) => page.text),
+							...sources.map((source) => source.snippet),
+							...files.map((file) => file.text),
+							...memories.map((memory) => memory.body),
+						],
+					})
+				: undefined;
 		const runTools = buildRunTools({
 			db,
 			user,
@@ -155,15 +203,19 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			skillIndex: input.skillIndex,
 			workspaceId: input.workspaceId,
 			...(input.mcpTools && input.mcpTools.length > 0 ? { mcp: { tools: input.mcpTools, redis } } : {}),
+			...(web ? { web } : {}),
+			...(webTaint ? { webTaint } : {}),
+			...(input.research ? { research: true } : {}),
 			emit: (type, data) => emit(type, data),
 		});
 		const tools = runTools.tools;
 
-		const userText = buildUserTurn(text, pages, sources, memories, abstained, {
+		const userText = input.thread ? input.thread.prompt : buildUserTurn(text, pages, sources, memories, abstained, {
 			files,
 			...(accountBlockText ? { account: accountBlockText } : {}),
 			...(viewBlockText ? { view: viewBlockText } : {}),
 			...(workspaceBlockText ? { workspace: workspaceBlockText } : {}),
+			...(input.summaryBlock ? { summary: input.summaryBlock } : {}),
 		});
 		const userContent = [
 			{ type: 'text' as const, text: userText },
@@ -174,9 +226,12 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			{ role: 'user', content: userContent } as ModelMessage,
 		];
 
-		const callModel = (attempt: Attempt) => {
+		if (limits) {
+			research = createResearchSession({ emit, counters: () => web?.counters, maxSteps: limits.maxSteps, startedAt });
+		}
+		const callModel = async (attempt: Attempt) => {
 			const providerOptions = providerOptionsFor(attempt.target, images.length, input.effort);
-			return pumpUpstream({
+			const pumped = await pumpUpstream({
 				model: attempt.target.model,
 				system,
 				messages,
@@ -203,7 +258,11 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 				onReasoning: async (delta) => {
 					await emit('reasoning.delta', { text: delta });
 				},
+				...(research ? research.hooks : {}),
 			});
+			// Held-back text goes out before the run ends, or fails over.
+			await research?.flush();
+			return pumped;
 		};
 		let outcome = await callModel(current);
 		while (outcome.error !== undefined) {
@@ -212,6 +271,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			if (move.kind === 'stay') break;
 			if (move.kind === 'refused') {
 				// The old money is back and the row holds none: only the end is left.
+				research?.end('budget_exhausted', false);
 				await markRun(db, runId, 'failed', 'budget_exhausted', attemptsUsage(records));
 				await emit('error', { code: 'budget_exhausted', message: failureMessage('budget_exhausted', failure) });
 				return;
@@ -238,6 +298,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		const outputTokens = settled.outputTokens;
 		const cost = costMicroUsd(current.target.pricing, settled);
 		await emit('usage', { inputTokens, outputTokens, costMicroUsd: cost });
+		// The asker left the channel, or the trigger went, while the model wrote:
+		// the draft is dropped before it is stored (C454).
+		if (input.thread && !(await input.thread.stillAllowed())) throw new ThreadAccessLost();
 
 		const assistant = await appendMessage(db, {
 			conversationId,
@@ -266,6 +329,9 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			runId,
 			usage: { inputTokens, outputTokens, costMicroUsd: cost },
 		});
+		// The one message the bridge may post (C432), named before the run reads
+		// 'succeeded': a run the bridge sees succeeded always has its answer.
+		if (input.thread && assistant) await setRunAnswer(db, runId, assistant.id);
 
 		const changed = await markRun(db, runId, 'succeeded', null, {
 			inputTokens,
@@ -279,9 +345,17 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			await settleTarget(db, current.target, { userId: ownerId, day, reserved: outcome.reserved, actual: cost });
 		}
 
+		research?.end('done', current.budget.deadlineHit === true);
 		await emit('done', { runId, assistantMessageId: assistant?.id ?? null, finishReason });
+		// The summary is written after `done`, off the run's response, by the
+		// target that answered (context C377, C381).
+		if (input.summarizeFrom) {
+			scheduleSummary({ db, target: current.target, runId, conversationId, ownerId, oldestKeptId: input.summarizeFrom.oldestKeptId, day });
+		}
 	} catch (error) {
-		const code = abortCode(current.controller.signal) ?? (isDataPolicyRefusal(error) ? 'vision_unavailable' : 'upstream_error');
+		const code = error instanceof ThreadAccessLost
+			? 'access_revoked'
+			: abortCode(current.controller.signal) ?? (isDataPolicyRefusal(error) ? 'vision_unavailable' : 'upstream_error');
 		// A cancelled or failed run settles what the upstream reported, or
 		// the estimate of what it streamed before it broke.
 		const billed = settled ?? usageForSettlement(runId, usage, {
@@ -297,13 +371,15 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		// The row of the run is closed BEFORE the terminal frame: a client
 		// that reads the row when it sees the frame reads the truth. The
 		// success path does the same.
-		const runStatus: RunStatus = code === 'cancelled' ? 'cancelled' : 'failed';
+		research?.end(code, current.budget.deadlineHit === true);
+		const runStatus: RunStatus = code === 'cancelled' || code === 'access_revoked' ? 'cancelled' : 'failed';
 		const changed = await markRun(db, runId, runStatus, code, attemptsUsage(records, { target: current.target, outcome: code, billed: cost }));
 		await emit('error', { code, message: failureMessage(code, error) });
 		if (changed) {
 			await settleTarget(db, current.target, { userId: ownerId, day, reserved: current.budget.reserved, actual: cost });
 		}
 	} finally {
+		research?.log();
 		runStore.releaseRun(runId);
 	}
 }

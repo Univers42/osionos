@@ -1,10 +1,11 @@
 import { config } from '../config.ts';
 import { handleHealth } from './health.ts';
-import { handleConversationItem, handleConversationMessages, handleConversations } from './conversations.ts';
+import { handleConversationItem, handleConversationMessages, handleConversationSummary, handleConversations } from './conversations.ts';
 import { handleModels } from './models.ts';
 import { handleCommands } from './commands.ts';
 import { handleAgents } from './agents.ts';
 import { handleAgentSettings } from './agentSettings.ts';
+import { handleWebSettings } from './webSettings.ts';
 import { handleAgentGet } from './agentsRead.ts';
 import { handleAgentArchive, handleAgentCreate, handleAgentUpdate } from './agentsWrite.ts';
 import { handleComplete } from './complete.ts';
@@ -12,6 +13,7 @@ import { handleVoiceTranscribe } from './voice.ts';
 import { handleImages } from './images.ts';
 import { handleMediaDescribe } from './mediaDescribe.ts';
 import { handleRunCancel, handleRunEvents, handleRuns } from './runs.ts';
+import { handleThreadRuns } from './threadRuns.ts';
 import {
 	handleConnectionDelete,
 	handleConnections,
@@ -54,6 +56,12 @@ export const ROUTES: RouteEntry[] = [
 		pattern: /^\/api\/ai\/conversations\/([^/]+)\/messages$/,
 		label: '/api/ai/conversations/:id/messages',
 		handle: handleConversationMessages,
+	},
+	{
+		methods: ['DELETE'],
+		pattern: /^\/api\/ai\/conversations\/([^/]+)\/summary$/,
+		label: '/api/ai/conversations/:id/summary',
+		handle: handleConversationSummary,
 	},
 	{
 		methods: ['PATCH', 'DELETE'],
@@ -234,6 +242,22 @@ export const ROUTES: RouteEntry[] = [
 				pattern: /^\/api\/ai\/workspaces\/([^/]+)\/agents\/settings$/,
 				label: '/api/ai/workspaces/:ws/agents/settings',
 				handle: handleAgentSettings,
+				anyMethod: true,
+			},
+		]
+		: []),
+	// "@AI" in a text channel (C450): off, the path does not exist.
+	...(config.threadAnswersEnabled
+		? [{ methods: ['POST'], pattern: /^\/api\/ai\/thread-runs$/, label: '/api/ai/thread-runs', handle: handleThreadRuns }]
+		: []),
+	// The web tools (C369): off, the switch of a workspace does not exist either.
+	...(config.webEnabled
+		? [
+			{
+				methods: [],
+				pattern: /^\/api\/ai\/workspaces\/([^/]+)\/web\/settings$/,
+				label: '/api/ai/workspaces/:ws/web/settings',
+				handle: handleWebSettings,
 				anyMethod: true,
 			},
 		]

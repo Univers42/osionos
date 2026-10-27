@@ -244,6 +244,37 @@ test("the lines fold to the last one when there are many of them", () => {
   assert.match(html, /Show the 4 steps/);
 });
 
+test("each step carries the icon of its tool; an unknown tool gets the generic one", () => {
+  const names = ["search_workspace", "read_page", "web_search", "web_fetch", "load_skill", "write_page"];
+  const activities: ToolActivityPart[] = names.slice(0, 3).map((toolName, index) => ({
+    type: "tool-activity",
+    toolCallId: `icon-${index}`,
+    toolName,
+    label: "",
+    status: "done",
+  }));
+  const rest: ToolActivityPart[] = names.slice(3).map((toolName, index) => ({
+    type: "tool-activity",
+    toolCallId: `icon-rest-${index}`,
+    toolName,
+    label: "",
+    status: "done",
+  }));
+  const html = lines(activities) + lines(rest);
+  for (const name of names.slice(0, 5)) assert.match(html, new RegExp(`data-tool-icon="${name}"`), name);
+  assert.match(html, /data-tool-icon="generic"/);
+  assert.doesNotMatch(html, /data-tool-icon="write_page"/, "an unknown tool name is never echoed");
+});
+
+test("a running step is lit in the accent and pulses only with motion; a failed one takes the danger tint", () => {
+  const html = lines([
+    { type: "tool-activity", toolCallId: "s-1", toolName: "search_workspace", label: "q", status: "running" },
+    { type: "tool-activity", toolCallId: "s-2", toolName: "read_page", label: "Page", status: "failed" },
+  ]);
+  assert.match(html, /border-\[var\(--osio-accent\)\][^"]*animate-pulse motion-reduce:animate-none/);
+  assert.match(html, /text-\[var\(--osio-danger\)\]/);
+});
+
 test("three lines are shown as they are", () => {
   const activities: ToolActivityPart[] = [1, 2, 3].map((index) => ({
     type: "tool-activity",
