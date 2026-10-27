@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import { test, expect } from "@playwright/test";
 
-import { openFreshPage } from "../../browser/core/app.mjs";
+import { openSeededView } from "../support/seededViews.mjs";
 
 const SEED_PATH = "src/shared/notion-database-sys/src/store/dbms/mongodb/_notion_state.json";
 
@@ -27,12 +27,7 @@ function seedCounts() {
 }
 
 async function openOverviewDashboard(page) {
-  await openFreshPage(page, "/");
-  await page.getByText("Workspace command center", { exact: true }).first().click();
-  const entry = page.getByText("Overview Dashboard", { exact: true }).last();
-  await entry.scrollIntoViewIfNeeded();
-  await entry.click();
-  await page.locator("[data-dash-row]").first().waitFor({ timeout: 30_000 });
+  await openSeededView(page, "Overview Dashboard");
 }
 
 test.describe("dashboard-one-model", () => {
