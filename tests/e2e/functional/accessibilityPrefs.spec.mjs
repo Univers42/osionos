@@ -268,24 +268,12 @@ test.describe("accessibility preferences", () => {
     expect((await storedAppearance(page)).linkUnderline).toBe("always");
   });
 
-  test("hovercards: off keeps a card from opening under the pointer; the keyboard opens it", async ({ page, baseURL }) => {
+  // The card itself is covered against a real person in peopleHovercards.spec.mjs. The Members
+  // table has no person card: the old row-based check here passed on the Role picker's <dialog>.
+  test("hovercards: off reaches the document", async ({ page, baseURL }) => {
     await seed(page, { hovercards: "off" });
     await openFreshPage(page, baseURL);
     await expect(html(page)).toHaveAttribute("data-hovercards", "off");
-
-    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
-    const region = page.getByRole("region", { name: "Settings", exact: true });
-    await region.waitFor();
-    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "People" }).click();
-    await region.getByRole("tab", { name: /Members/ }).click();
-
-    const row = region.locator("tbody tr").first();
-    await expect(row).toBeVisible();
-    await row.hover();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await row.locator("button").first().focus();
-    await page.keyboard.press("Enter");
-    await expect(page.getByRole("dialog")).toBeVisible();
   });
 
   test("url paste: plain leaves the URL as text", async ({ page, baseURL }) => {
