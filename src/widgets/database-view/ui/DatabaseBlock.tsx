@@ -46,6 +46,7 @@ import {
   recordPropertyEdits,
   type RecordValueResolver,
 } from '../model/recordPageProperties';
+import { HomeLiveGate } from './HomeLiveEmpty';
 import { useHealedLiveDatabaseId } from '../model/useHealedLiveDatabaseId';
 // Side effect: registers the account-wide data-source catalog with NDS (the
 // Source picker). Lives here (not only the barrel) because lazyViews imports
@@ -236,15 +237,17 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
         data-database-id={resolvedDatabaseId}
         data-database-view-id={resolvedInitialView}
       >
-        <HostedObjectDatabase
-          adapter={isTemplates ? getTemplatesDatabaseAdapter() : getRecentsDatabaseAdapter()}
-          databaseId={isTemplates ? TEMPLATES_DB_ID : RECENTS_DB_ID}
-          initialView={resolvedInitialView}
-          mode={resolvedMode}
-          renderPage={renderHomePeek}
-          className={mode === 'full' ? 'h-full' : undefined}
-          chrome="single-view"
-        />
+        <HomeLiveGate kind={isTemplates ? 'templates' : 'recents'}>
+          <HostedObjectDatabase
+            adapter={isTemplates ? getTemplatesDatabaseAdapter() : getRecentsDatabaseAdapter()}
+            databaseId={isTemplates ? TEMPLATES_DB_ID : RECENTS_DB_ID}
+            initialView={resolvedInitialView}
+            mode={resolvedMode}
+            renderPage={renderHomePeek}
+            className={mode === 'full' ? 'h-full' : undefined}
+            chrome="single-view"
+          />
+        </HomeLiveGate>
       </div>
     );
   }

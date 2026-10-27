@@ -67,16 +67,15 @@ const rootValue = (page, name) => page.evaluate((property) => getComputedStyle(d
 test.describe("database theme bridge", () => {
   // The bridge is imported by the components that render a database, so it is not in the render-blocking
   // entry stylesheet: a page without a database does not define it, and the database brings it along.
+  // The chart series are palette tokens since be202cf4c, so they are defined before any database loads.
   test("the bridge arrives with the database chunk, not with the entry stylesheet", async ({ page }) => {
     await bootWith(page);
     await openFreshPage(page, "/");
-    expect(await rootValue(page, "--osio-chart-1")).toBe("");
     expect(await rootValue(page, "--color-line-medium")).toBe("");
     const editor = await activateFirstEditor(page);
     await openSlashMenuFromEditor(editor, "/database");
     await slashCommandEntry(page, "Database - Inline").click();
     await page.locator(".osionos-database-block--inline").first().waitFor({ timeout: 15_000 });
-    expect(await rootValue(page, "--osio-chart-1")).not.toBe("");
     expect(await rootValue(page, "--color-line-medium")).not.toBe("");
   });
 
@@ -127,11 +126,21 @@ test.describe("database theme bridge", () => {
     expect(inBody).toBe(wanted);
   });
 
+  // The bar itself is no proof: a category that is a coloured select option paints its option's
+  // colour, which in Nord is the accent. The series colour the chart reads is --color-chart-1.
   test("a chart's first series is --osio-chart-1", async ({ page }) => {
     await openChart(page, { palette: "nord", mode: "dark" });
-    const bar = page.locator(".recharts-bar-rectangle path").first();
-    await expect(bar).toBeVisible({ timeout: 20_000 });
-    expect(await bar.evaluate((el) => getComputedStyle(el).fill)).toBe(await paintOf(page, "--osio-chart-1"));
+    const chart = page.locator(".recharts-wrapper").first();
+    await expect(chart.locator(".recharts-bar-rectangle path").first()).toBeVisible({ timeout: 20_000 });
+    const series = await chart.evaluate((root) => {
+      const probe = document.createElement("div");
+      probe.style.backgroundColor = "var(--color-chart-1)";
+      root.append(probe);
+      const colour = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return colour;
+    });
+    expect(series).toBe(await paintOf(page, "--osio-chart-1"));
   });
 
   // Recharts writes fill="#666" on every tick label; on a dark canvas that is 2.1:1 (Nord) and 3.0:1 (Calm).
