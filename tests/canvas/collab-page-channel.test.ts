@@ -32,7 +32,7 @@ import test from 'node:test';
 import { ApiError } from '../../packages/http-gate/src/errors.ts';
 import type { LiveWebSocketLike } from '../../src/shared/notion-database-sys/src/store/live/liveRealtimeSocket.ts';
 import { GrobaseRealtimeTransport } from '../../src/features/collab/api/realtimeTransportGrobase.adapter.ts';
-import { joinSharedSpace } from '../../src/features/collab/api/grobaseTransport.factory.ts';
+import { joinSharedSpace, resetNotifyTokenCache } from '../../src/features/collab/api/grobaseTransport.factory.ts';
 import {
   PageChannelUnavailableError, fetchSharedSpacePageToken,
 } from '../../src/features/collab/api/grobaseTransport.factory.ts';
@@ -395,6 +395,129 @@ class TopicBus {
     }
   }
 }
+
+
+test('T4a: a second user subscribes with its own notify token, never the first user\'s', async () => {
+  resetNotifyTokenCache();
+  RecordingSocket.reset();
+  const published: Array<{ event: string; payload: Record<string, unknown> }> = [];
+  const bus = new TopicBus();
+  let inboxToken = 'notify-A';
+  const fetchInbox = async () => ({ notifyToken: inboxToken, unread: 0 });
+
+  const a = await joinSharedSpace(WORKSPACE, 'A', {
+    url: 'ws://test', fetchToken: async () => 'workspace-token-a',
+    fetchInbox, subscribeTopic: (topic, onFrame) => bus.subscribe(topic, onFrame),
+    webSocketCtor: ctor, requestTimeoutMs: 20,
+    publish: async (_workspaceId, event, payload) => { published.push({ event, payload: payload as Record<string, unknown> }); },
+  });
+  await flush();
+  inboxToken = 'notify-B';
+  const b = await joinSharedSpace(WORKSPACE, 'B', {
+    url: 'ws://test', fetchToken: async () => 'workspace-token-b',
+    fetchInbox, subscribeTopic: (topic, onFrame) => bus.subscribe(topic, onFrame),
+    webSocketCtor: ctor, requestTimeoutMs: 20,
+    publish: async (_workspaceId, event, payload) => { published.push({ event, payload: payload as Record<string, unknown> }); },
+  });
+  await flush();
+
+  const { useSummonStore } = await import('../../src/features/collab/store/useSummonStore.ts');
+  useSummonStore.setState({ incoming: null });
+  b.onRequest((from: string, req: SummonReq) => new Promise<SummonRes>((resolve) => {
+    useSummonStore.getState().present({ fromId: from, route: req.route, message: req.message, resolve: (accepted) => resolve({ accepted }) });
+  }));
+
+  bus.deliver('user:notify-B', {
+    event_id: 'e', topic: 'user:notify-B', event_type: 'broadcast', sequence: 1, timestamp: 't',
+    payload: { event: 'collab.req', payload: { cid: 'cid-b', from: 'X', target: 'B', req: { kind: 'summon', route: PAGE_ONE } } },
+  });
+  await flush();
+  assert.equal(useSummonStore.getState().incoming?.fromId, 'X', 'B receives on its own notify token');
+  a.leave(); b.leave();
+});
+
+test('T4b: a rejected notify-token fetch is retried on the next join', async () => {
+  resetNotifyTokenCache();
+  RecordingSocket.reset();
+  const bus = new TopicBus();
+  let calls = 0;
+  const fetchInbox = async () => {
+    calls += 1;
+    if (calls === 1) throw new Error('inbox down');
+    return { notifyToken: 'notify-B', unread: 0 };
+  };
+
+  const first = await joinSharedSpace(WORKSPACE, 'B', {
+    url: 'ws://test', fetchToken: async () => 'workspace-token',
+    fetchInbox, subscribeTopic: (topic, onFrame) => bus.subscribe(topic, onFrame),
+    webSocketCtor: ctor, requestTimeoutMs: 20,
+    publish: async () => undefined,
+  });
+  await flush();
+  const second = await joinSharedSpace(WORKSPACE, 'B', {
+    url: 'ws://test', fetchToken: async () => 'workspace-token',
+    fetchInbox, subscribeTopic: (topic, onFrame) => bus.subscribe(topic, onFrame),
+    webSocketCtor: ctor, requestTimeoutMs: 20,
+    publish: async () => undefined,
+  });
+  await flush();
+
+  const { useSummonStore } = await import('../../src/features/collab/store/useSummonStore.ts');
+  useSummonStore.setState({ incoming: null });
+  second.onRequest((from: string, req: SummonReq) => new Promise<SummonRes>((resolve) => {
+    useSummonStore.getState().present({ fromId: from, route: req.route, message: req.message, resolve: (accepted) => resolve({ accepted }) });
+  }));
+
+  bus.deliver('user:notify-B', {
+    event_id: 'e', topic: 'user:notify-B', event_type: 'broadcast', sequence: 1, timestamp: 't',
+    payload: { event: 'collab.req', payload: { cid: 'cid-b', from: 'X', target: 'B', req: { kind: 'summon', route: PAGE_ONE } } },
+  });
+  await flush();
+  assert.equal(calls, 2, 'the failed fetch was not cached');
+  assert.equal(useSummonStore.getState().incoming?.fromId, 'X', 'the retry subscribed successfully');
+  first.leave(); second.leave();
+});
+
+test('T4c: a stale user fetch resolving after another user joined does not leak into it', async () => {
+  resetNotifyTokenCache();
+  RecordingSocket.reset();
+  const bus = new TopicBus();
+  let resolveA: ((value: { notifyToken: string | null; unread: number }) => void) | null = null;
+  const fetchInboxA = () => new Promise<{ notifyToken: string | null; unread: number }>((resolve) => { resolveA = resolve; });
+
+  const aPromise = joinSharedSpace(WORKSPACE, 'A', {
+    url: 'ws://test', fetchToken: async () => 'workspace-token-a',
+    fetchInbox: fetchInboxA, subscribeTopic: (topic, onFrame) => bus.subscribe(topic, onFrame),
+    webSocketCtor: ctor, requestTimeoutMs: 20,
+    publish: async () => undefined,
+  });
+
+  const b = await joinSharedSpace(WORKSPACE, 'B', {
+    url: 'ws://test', fetchToken: async () => 'workspace-token-b',
+    fetchInbox: async () => ({ notifyToken: 'notify-B', unread: 0 }),
+    subscribeTopic: (topic, onFrame) => bus.subscribe(topic, onFrame),
+    webSocketCtor: ctor, requestTimeoutMs: 20,
+    publish: async () => undefined,
+  });
+  await flush();
+
+  const { useSummonStore } = await import('../../src/features/collab/store/useSummonStore.ts');
+  const seenByB: string[] = [];
+  b.onRequest((from: string) => { seenByB.push(from); return Promise.resolve({ accepted: true }); });
+
+  resolveA?.({ notifyToken: 'notify-A', unread: 0 });
+  await aPromise;
+  await flush();
+
+  bus.deliver('user:notify-A', {
+    event_id: 'e', topic: 'user:notify-A', event_type: 'broadcast', sequence: 1, timestamp: 't',
+    payload: { event: 'collab.req', payload: { cid: 'cid-a', from: 'X', target: 'B', req: { kind: 'summon', route: PAGE_ONE } } },
+  });
+  await flush();
+  assert.deepEqual(seenByB, [], 'B never receives A\'s late-resolving summons');
+  aPromise.then((a) => a.leave());
+  b.leave();
+});
 
 // ── T5 ───────────────────────────────────────────────────────────────────────
 test('T5: 1000 events from one actor in a tick apply at most the 400 burst; another actor is unaffected', async () => {
