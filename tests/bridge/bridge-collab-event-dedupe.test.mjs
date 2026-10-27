@@ -145,6 +145,19 @@ describe('allow and deny are unchanged (C3, C4)', () => {
 		assert.equal(publishes.length, 0);
 	});
 
+	// The space gate (select=user_id) has its own answer; this fails the page-level role read only.
+	it('a members-table read error stays a 503 on a caret event, nothing published', async () => {
+		const mock = createPostgrestMock(world('editor'), { failWhen: (call) => (call.table === 'osionos_workspace_members' && call.params.get('select') === 'role,permissions' ? { status: 500, body: { message: 'boom' } } : null) });
+		const publishes = [];
+		await withBridge(config, (url, init) => {
+			if (String(url).endsWith('/v1/publish')) { publishes.push(init.body); return Promise.resolve(new Response('{}', { status: 200 })); }
+			return mock.fetchImpl(url, init);
+		}, async (base) => {
+			assert.equal((await event(base, 'caret', PAGE)).status, 503);
+		}, { env: { COLLAB_PAGE_TOPICS: '1', JWT_SECRET: SECRET } });
+		assert.equal(publishes.length, 0);
+	});
+
 	it('a malformed body is refused before any database read', async () => {
 		await run(world('editor'), async (base, { mock }) => {
 			mock.calls.length = 0;

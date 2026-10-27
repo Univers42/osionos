@@ -1171,19 +1171,27 @@ function workspaceAccessContext(authContext, workspaceId, member, permission) {
  * unreadable answer is a miss: deny on any miss). Org/teamspace membership lives in
  * osionos_workspace_members — the app token only carries the user's PRIVATE workspace.
  */
-async function callerWorkspaceMember(authContext, workspaceId, config, fetchImpl) {
-	let member;
+async function readCallerMembership(authContext, workspaceId, config, fetchImpl) {
 	if (authContext.workspaceIds.includes(workspaceId)) {
-		member = await sessionWorkspaceMember(authContext.userId, workspaceId, config, fetchImpl);
-	} else {
-		member = await workspaceMemberRow(authContext.userId, workspaceId, config, fetchImpl).catch(() => null);
+		return { member: await sessionWorkspaceMember(authContext.userId, workspaceId, config, fetchImpl), tableError: null };
 	}
-	// C557 parenthetical: the workspace owner keeps access even without a member row.
-	if (!member) {
-		const owner = await workspaceOwnerOf(workspaceId, config, fetchImpl).catch(() => null);
-		if (sameId(owner, authContext.userId)) member = { role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] };
+	try {
+		return { member: await workspaceMemberRow(authContext.userId, workspaceId, config, fetchImpl), tableError: null };
+	} catch (tableError) {
+		return { member: null, tableError };
 	}
-	return member;
+}
+
+/** C557 parenthetical: the workspace owner keeps access even without a member row. */
+async function withOwnerFallback(member, authContext, workspaceId, config, fetchImpl) {
+	if (member) return member;
+	const owner = await workspaceOwnerOf(workspaceId, config, fetchImpl).catch(() => null);
+	return sameId(owner, authContext.userId) ? { role: 'owner', permissions: ['create', 'read', 'update', 'delete', 'admin'] } : null;
+}
+
+async function callerWorkspaceMember(authContext, workspaceId, config, fetchImpl) {
+	const { member } = await readCallerMembership(authContext, workspaceId, config, fetchImpl);
+	return withOwnerFallback(member, authContext, workspaceId, config, fetchImpl);
 }
 
 export async function requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl = fetch) {
@@ -1515,11 +1523,19 @@ function createCollabEventAccess(session, config, fetchImpl) {
 		if (!cache.has(key)) cache.set(key, read());
 		return cache.get(key);
 	};
-	const member = (workspaceId) => once(members, String(workspaceId).toLowerCase(), () => callerWorkspaceMember(session, workspaceId, config, fetchImpl));
+	// One raw read; a members-table failure is a miss for the write context (as before) but
+	// a 503 for the page-level loader (as before): each consumer applies its own policy.
+	const raw = (workspaceId) => once(members, String(workspaceId).toLowerCase(), () => readCallerMembership(session, workspaceId, config, fetchImpl));
+	const member = async (workspaceId) => withOwnerFallback((await raw(workspaceId)).member, session, workspaceId, config, fetchImpl);
+	const strictMember = async (workspaceId) => {
+		const { member: row, tableError } = await raw(workspaceId);
+		if (tableError) throw tableError;
+		return withOwnerFallback(row, session, workspaceId, config, fetchImpl);
+	};
 	return {
 		pageRow: (pageId) => once(rows, String(pageId).toLowerCase(), () => fetchPageAuthRow(pageId, config, fetchImpl)),
 		member,
-		loader: createPageAccessLoader(session, config, fetchImpl, member),
+		loader: createPageAccessLoader(session, config, fetchImpl, strictMember),
 	};
 }
 
