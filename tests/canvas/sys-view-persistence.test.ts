@@ -167,8 +167,26 @@ test("mergeSysViews prefers the saved copy only for editable ids", async () => {
     editable: view("editable", { name: "saved-editable" }),
     locked: view("locked", { name: "saved-locked" }),
   };
-  const merged = state.mergeSysViews(loaded, saved, ["editable"]) as Record<string, { name: string }>;
+  const merged = state.mergeSysViews(loaded as never, saved as never, ["editable"]) as unknown as Record<string, { name: string }>;
   assert.equal(merged.default.name, "default");
   assert.equal(merged.locked.name, "shipped", "non-editable built-in keeps shipped definition");
   assert.equal(merged.editable.name, "saved-editable", "editable built-in prefers saved copy");
+});
+
+// The rule lives in the id lists: an editable built-in is left out of the owned ids, so
+// diffViews treats it like any saved view.
+test("an editable built-in is left out of the owned ids and listed as editable", async () => {
+  const sources = await import("../../src/widgets/database-view/model/sysDataSources.ts");
+  const entry = {
+    ...sources.SYS_SOURCES[0],
+    builtInViews: [
+      { id: "locked-chart", name: "Chart", type: "chart" as const, settings: {} },
+      { id: "home-dash", name: "Dashboard", type: "dashboard" as const, settings: {}, editable: true as const },
+    ],
+  };
+  assert.deepEqual(sources.sysBuiltInViewIds(entry), [entry.defaultViewId, "locked-chart"]);
+  assert.deepEqual(sources.sysEditableBuiltInViewIds(entry), ["home-dash"]);
+  const edited = view("home-dash", { name: "Mine" });
+  const diff = views.diffViews({ "home-dash": edited }, { "home-dash": view("home-dash") }, sources.sysBuiltInViewIds(entry));
+  assert.deepEqual(diff.saved.map(([id]: [string]) => id), ["home-dash"]);
 });
