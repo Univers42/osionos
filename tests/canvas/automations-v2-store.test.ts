@@ -75,6 +75,21 @@ test("a property edit runs from → to rules, and their writes chain", async () 
   assert.equal(store.getState().pages[id].properties.note, "stamped", "a step may name the property");
 });
 
+// Account and workspace rows arrive storing the option's text, not its id.
+test("a rule picked by option id fires on a row that stores the option's text", async () => {
+  const stamp = { ...rule("stamp", { type: "property_changed", propertyId: "note" }, [setStep("done", "yes")]),
+    conditions: [{ id: "c", propertyId: "stage", operator: "equals", value: "opt-done" }] } as AutomationRuleV2;
+  const tasks = DB("tasks", [stamp]);
+  tasks.properties.stage = { id: "stage", name: "Stage", type: "select", options: [{ id: "opt-done", value: "Done", color: "green" }] } as never;
+  const store = storeWith({ tasks });
+  const id = store.getState().addPage("tasks", {});
+  const page = store.getState().pages[id];
+  store.setState({ pages: { [id]: { ...page, properties: { ...page.properties, stage: "Done" } } } } as never);
+  store.getState().updatePageProperty(id, "note", "x");
+  await settle();
+  assert.equal(store.getState().pages[id].properties.done, "yes");
+});
+
 test("a rule whose trigger does not match leaves the row alone", async () => {
   const store = storeWith({ tasks: DB("tasks", [rule("stamp", { type: "property_changed", propertyId: "status", to: "done" }, [setStep("done", "yes")])]) });
   const id = store.getState().addPage("tasks", {});

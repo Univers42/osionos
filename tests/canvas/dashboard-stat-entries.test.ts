@@ -26,3 +26,12 @@ test("stat entries include every picker option", () => {
 test("a list of columns gives the same entries as the schema record", () => {
   assert.deepEqual(statEntries(Object.values(PROPERTIES)), statEntries(PROPERTIES));
 });
+
+test("each select option gets a count that filters on the option id", () => {
+  const status: SchemaProperty = {
+    id: "status", name: "Status", type: "select",
+    options: [{ id: "opt-accepted", value: "accepted", color: "green" }, { id: "opt-pending", value: "pending", color: "gray" }],
+  };
+  const entry = statEntries([status]).find((candidate) => candidate.label === "Count where Status is accepted");
+  assert.deepEqual(entry?.stat.where?.map(({ operator, value }) => ({ operator, value })), [{ operator: "equals", value: "opt-accepted" }]);
+});

@@ -126,14 +126,14 @@ test.describe("layout editor", () => {
     await page.goto(baseURL, { waitUntil: "domcontentloaded" });
 
     // Home was redesigned from a full-page layout canvas to a flat NDS-section
-    // stack (greeting heading + titled database sections) driven by the
-    // "Home variant" property — see createHomeDashboardPage/createHomeLayoutContent
-    // in src/widgets/{page-renderer/ui/MainContent.tsx,database-view/model/databaseViewCatalog.ts}.
+    // stack (greeting heading + titled database sections) — see
+    // createHomeDashboardPage/createHomeLayoutContent in
+    // src/widgets/{page-renderer/ui/MainContent.tsx,database-view/model/databaseViewCatalog.ts}.
     // The old `.osionos-page--layout-canvas`/16-cell/v-proj-dashboard assertions
     // now belong to the `/layout` "Layout full page" command, covered by the
     // "full-page layout command" test below.
     await expect(page.getByRole("textbox", { name: "Page title" })).toHaveText("Workspace command center");
-    await expect(page.getByRole("combobox", { name: "Home variant" })).toContainText("Dashboard");
+    await expect(page.locator('[data-block-type="heading_2"]', { hasText: "Your tasks" }).first()).toBeVisible();
     await expect(page.locator('[data-block-type="heading_1"]').first()).toBeVisible();
     await expect(page.locator('[data-block-type="heading_2"]', { hasText: "Recently visited" }).first()).toBeVisible();
     await expect(page.locator('.osionos-database-block[data-database-view-id="v-home-recents-gallery"]')).toBeVisible();
