@@ -85,33 +85,36 @@ function pageIdOk(value: Record<string, unknown>): boolean {
 /** Validate one inbound message into a CollabEvent, or null to drop it. */
 export function validateCollabEvent(value: unknown): CollabEvent | null {
   if (!isRecord(value) || typeof value.t !== 'string') return null;
-  const seqOk = typeof value.actor === 'string' && typeof value.seq === 'number';
+  const seqRequiredOk = typeof value.actor === 'string'
+    && typeof value.seq === 'number' && Number.isFinite(value.seq) && Number.isInteger(value.seq);
+  const seqOptionalOk = typeof value.actor === 'string'
+    && (value.seq === undefined || (typeof value.seq === 'number' && Number.isFinite(value.seq) && Number.isInteger(value.seq)));
   switch (value.t) {
     case 'caret':
-      return seqOk && pageIdOk(value) && isCaret(value.caret) ? (value as CollabEvent) : null;
+      return seqRequiredOk && pageIdOk(value) && isCaret(value.caret) ? (value as CollabEvent) : null;
     case 'selection':
-      if (!seqOk || !pageIdOk(value)) return null;
+      if (!seqRequiredOk || !pageIdOk(value)) return null;
       if (value.range === null) return value as CollabEvent;
       return isRecord(value.range) && isCaret(value.range.anchor) && isCaret(value.range.focus)
         ? (value as CollabEvent) : null;
     case 'focus':
-      return seqOk && pageIdOk(value) && (value.elementId === null || typeof value.elementId === 'string')
+      return seqRequiredOk && pageIdOk(value) && (value.elementId === null || typeof value.elementId === 'string')
         ? (value as CollabEvent) : null;
     case 'activity':
-      return seqOk && pageIdOk(value) && typeof value.kind === 'string' && ACTIVITY_KINDS.has(value.kind)
+      return seqRequiredOk && pageIdOk(value) && typeof value.kind === 'string' && ACTIVITY_KINDS.has(value.kind)
         && typeof value.targetId === 'string' ? (value as CollabEvent) : null;
     case 'nav':
-      return seqOk && pageIdOk(value) && typeof value.route === 'string' ? (value as CollabEvent) : null;
+      return seqRequiredOk && pageIdOk(value) && typeof value.route === 'string' ? (value as CollabEvent) : null;
     case 'note':
-      return pageIdOk(value) && typeof value.actor === 'string' && typeof value.noteId === 'string'
+      return seqOptionalOk && pageIdOk(value) && typeof value.noteId === 'string'
         && typeof value.op === 'string' && NOTE_OPS.has(value.op) && isRecord(value.anchor)
         && typeof value.anchor.blockId === 'string' ? (value as CollabEvent) : null;
     case 'file':
-      return pageIdOk(value) && typeof value.actor === 'string' && typeof value.fileId === 'string'
+      return seqOptionalOk && pageIdOk(value) && typeof value.fileId === 'string'
         && typeof value.op === 'string' && FILE_OPS.has(value.op) && typeof value.name === 'string'
         ? (value as CollabEvent) : null;
     case 'blocks':
-      if (!seqOk) return null;
+      if (!seqRequiredOk) return null;
       if (!isShortId(value.pageId)) return null;
       if (!Array.isArray(value.ops) || value.ops.length < 1 || value.ops.length > 500) return null;
       for (const op of value.ops) {
@@ -119,7 +122,7 @@ export function validateCollabEvent(value: unknown): CollabEvent | null {
       }
       return value as CollabEvent;
     case 'pages':
-      return seqOk && isShortId(value.workspaceId) ? (value as CollabEvent) : null;
+      return seqRequiredOk && isShortId(value.workspaceId) ? (value as CollabEvent) : null;
     default:
       return null; // unknown discriminant (incl. 'mouse'/'pointer') → dropped (R-A1)
   }

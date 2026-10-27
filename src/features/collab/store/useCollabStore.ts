@@ -51,7 +51,7 @@ export interface CollabSelf {
 /** Joins a Shared space and resolves the live channel (grobase factory in prod). */
 export type CollabJoinFn = (spaceId: string, selfId: string) => Promise<RealtimeChannel>;
 /** Joins ONE page's channel (`collabpage:<pageId>`). */
-export type CollabPageJoinFn = (spaceId: string, pageId: string, selfId: string) => Promise<RealtimeChannel>;
+export type CollabPageJoinFn = (spaceId: string, pageId: string, selfId: string, onClosed?: () => void) => Promise<RealtimeChannel>;
 
 interface CollabState {
   spaceId: string | null;
@@ -150,8 +150,12 @@ export const useCollabStore = create<CollabState>((set, get) => {
       set({
         pageId, pageStatus: 'connecting', pageMembers: [], pageChannel: null, pageError: null,
       });
+      const onClosed = () => {
+        if (myPageEpoch !== pageEpoch) return;
+        set({ pageStatus: 'unavailable', pageError: 'page channel closed', pageChannel: null });
+      };
       try {
-        const channel = await joinFn(spaceId, pageId, self.id);
+        const channel = await joinFn(spaceId, pageId, self.id, onClosed);
         if (myPageEpoch !== pageEpoch) { channel.leave(); return; } // navigated away
         channel.onPresence((states) => {
           if (myPageEpoch !== pageEpoch) return;

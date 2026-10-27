@@ -101,6 +101,8 @@ export interface GrobaseTransportConfig {
   renewToken?: () => Promise<string | null>;
   /** Subscribe this client's user topic for directed summons (mintedTopicSocket). */
   subscribeUserTopic?: (onFrame: (frame: UserTopicFrame) => void) => Unsubscribe;
+  /** Called when a reconnect is permanently refused (renewToken → null). */
+  onClosed?: () => void;
 }
 
 interface GatewayEvent { event_type: string; payload: unknown; }
@@ -145,21 +147,33 @@ function workspacePresence(meta: Record<string, unknown>, selfId: string): Parti
   return kept as Partial<PresenceState>;
 }
 
-/** Per-actor token bucket; an actor over the cap cannot starve another (C518). */
+/** Per-actor (uid) token bucket; an actor over the cap cannot starve another (C518). */
 class ActorRateLimiter {
   private readonly buckets = new Map<string, { tokens: number; at: number }>();
+  private static readonly MAX_ACTORS = 256;
 
   allow(actor: string, now = Date.now()): boolean {
-    const bucket = this.buckets.get(actor) ?? { tokens: RATE_BURST, at: now };
+    const key = actor.split(':')[0] || actor;
+    let bucket = this.buckets.get(key);
+    if (!bucket) {
+      if (this.buckets.size >= ActorRateLimiter.MAX_ACTORS) {
+        const oldest = this.buckets.keys().next().value;
+        if (oldest !== undefined) this.buckets.delete(oldest);
+      }
+      bucket = { tokens: RATE_BURST, at: now };
+    }
     const elapsed = Math.max(0, now - bucket.at);
     bucket.tokens = Math.min(RATE_BURST, bucket.tokens + (elapsed / 1000) * RATE_PER_SECOND);
     bucket.at = now;
     if (bucket.tokens < 1) {
-      this.buckets.set(actor, bucket);
+      // Refresh LRU position even on a drop.
+      this.buckets.delete(key);
+      this.buckets.set(key, bucket);
       return false;
     }
     bucket.tokens -= 1;
-    this.buckets.set(actor, bucket);
+    this.buckets.delete(key);
+    this.buckets.set(key, bucket);
     return true;
   }
 }
@@ -225,7 +239,9 @@ class GrobaseChannel implements RealtimeChannel {
     this.onReady = onReady;
     this.onFail = onFail;
     this.scope = config.scope ?? 'workspace';
-    this.pageId = config.pageId ?? (this.scope === 'page' ? topic.slice('collabpage:'.length) : null);
+    this.pageId = config.pageId
+      ? config.pageId.toLowerCase()
+      : (this.scope === 'page' ? topic.slice('collabpage:'.length).toLowerCase() : null);
   }
 
   stats(): ChannelStats { return { ...this.counters }; }
@@ -274,7 +290,7 @@ class GrobaseChannel implements RealtimeChannel {
         return;
       }
       if (this.closing) return;
-      if (fresh === null) { this.closing = true; return; } // revoked / no access → stop
+      if (fresh === null) { this.closing = true; this.config.onClosed?.(); return; } // revoked / no access → stop
       this.authToken = fresh;
     }
     this.open();
@@ -327,7 +343,8 @@ class GrobaseChannel implements RealtimeChannel {
   private acceptInbound(event: CollabEvent): boolean {
     if (this.scope === 'page') {
       if (event.t === 'pages') { this.counters.droppedPageTopicPagesEvent += 1; return false; }
-      if ((event as { pageId?: string }).pageId !== this.pageId) {
+      const eventPageId = (event as { pageId?: string }).pageId;
+      if ((typeof eventPageId === 'string' ? eventPageId.toLowerCase() : eventPageId) !== this.pageId) {
         this.counters.droppedPageMismatch += 1;
         return false;
       }
@@ -342,7 +359,19 @@ class GrobaseChannel implements RealtimeChannel {
   }
 
   private deliverPresence(states: PresenceState[]): void {
-    for (const handler of this.presenceHandlers) handler(states);
+    const delivered = this.scope === 'workspace'
+      ? states.map((state) => {
+          const record = state as unknown as Record<string, unknown>;
+          const kept: Record<string, unknown> = {};
+          for (const key of WORKSPACE_PRESENCE_KEYS) {
+            if (record[key] !== undefined) kept[key] = record[key];
+          }
+          if (typeof state.memberId !== 'string' || kept.memberId === undefined) kept.memberId = state.memberId;
+          if (kept.lastSeen === undefined) kept.lastSeen = state.lastSeen;
+          return kept as unknown as PresenceState;
+        })
+      : states;
+    for (const handler of this.presenceHandlers) handler(delivered);
   }
 
   broadcast(event: CollabEvent): void {
@@ -384,7 +413,8 @@ class GrobaseChannel implements RealtimeChannel {
   }
 
   request(target: string, req: SummonReq): Promise<SummonRes> {
-    const cid = globalThis.crypto?.randomUUID?.() ?? `r-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const raw = globalThis.crypto?.randomUUID?.() ?? `r-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const cid = raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64) || `r-${Date.now()}`;
     return new Promise<SummonRes>((resolve) => {
       // No bridge publishing → there is no directed channel; fail closed rather
       // than broadcast a summon (with its route) on the workspace socket.
