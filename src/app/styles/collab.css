@@ -1,0 +1,129 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   collab.css                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/27 12:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/10/27 12:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+/* Live-collaboration presence: member identity palette, the ink printed on it,
+   and the motion of remote carets. Split out of global.css so the contrast test
+   (tests/canvas/collab-ink-contrast.test.ts) parses ONE small file and every
+   colour pair it asserts is the pair the browser resolves.
+
+   Identity hues (AOC §6/R-A8): assignMemberColor() hashes a member onto
+   --collab-N, so the same person keeps the same colour across reconnects. The
+   collab feature references these tokens only, never raw hex. */
+:root {
+  --collab-1: #cc785c; /* terracotta */
+  --collab-2: #2e7d74; /* teal */
+  --collab-3: #4054b2; /* indigo */
+  --collab-4: #a86200; /* ochre; #b26a00 gave white ink only 4.24:1 */
+  --collab-5: #b23a6e; /* rose */
+  --collab-6: #3e7d32; /* green */
+  --collab-7: #7e4fb2; /* violet */
+  --collab-8: #1f6fb2; /* blue */
+  --collab-caret-w: 2px; /* remote caret line width */
+  --collab-selection-mix: 22%; /* member-colour alpha for selection tint */
+
+  /* Ink = text printed ON a member colour (name flag, initials chip). Two fixed
+     inks, chosen per colour so all sixteen light/dark pairs clear 4.5:1; the
+     terracotta is too pale for white text (3.28:1) and takes the deep ink. */
+  --collab-ink-pale: #ffffff;
+  --collab-ink-deep: #141210;
+  --collab-ink-1: var(--collab-ink-deep);
+  --collab-ink-2: var(--collab-ink-pale);
+  --collab-ink-3: var(--collab-ink-pale);
+  --collab-ink-4: var(--collab-ink-pale);
+  --collab-ink-5: var(--collab-ink-pale);
+  --collab-ink-6: var(--collab-ink-pale);
+  --collab-ink-7: var(--collab-ink-pale);
+  --collab-ink-8: var(--collab-ink-pale);
+}
+
+/* Source order matters: :root and [data-theme] have equal specificity, so this
+   block must stay after the one above. */
+[data-theme="dark"] {
+  --collab-1: #e0937a;
+  --collab-2: #5fb8ad;
+  --collab-3: #8593e0;
+  --collab-4: #e0a958;
+  --collab-5: #e08ab0;
+  --collab-6: #7fc27f;
+  --collab-7: #b79ae0;
+  --collab-8: #6fb0e0;
+  --collab-selection-mix: 30%;
+
+  /* Every dark-theme hue is light enough for the deep ink alone. */
+  --collab-ink-1: var(--collab-ink-deep);
+  --collab-ink-2: var(--collab-ink-deep);
+  --collab-ink-3: var(--collab-ink-deep);
+  --collab-ink-4: var(--collab-ink-deep);
+  --collab-ink-5: var(--collab-ink-deep);
+  --collab-ink-6: var(--collab-ink-deep);
+  --collab-ink-7: var(--collab-ink-deep);
+  --collab-ink-8: var(--collab-ink-deep);
+}
+
+/* Name flag and dot head share one slot and swap by opacity+scale. The base
+   rules are the static fallback (reduced motion swaps instantly); the motion
+   below only adds timing. */
+.collab-head {
+  opacity: 0;
+  transform: scale(0.6);
+}
+.collab-head[data-on] {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Keyboard focus on a roster avatar. global.css gives every button an unlayered
+   :focus-visible outline that beats any utility, so an accent ring written as a
+   utility never paints; this one is unlayered and a type selector more specific,
+   which wins whatever the import order. The avatar's own member-colour outline is
+   a utility, so this replaces it while focused instead of stacking on it. */
+button.collab-avatar:focus-visible {
+  outline: 2px solid var(--osio-accent);
+  outline-offset: 2px;
+}
+
+/* Entrance of the SummonPrompt card. */
+@keyframes collab-flag-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* One-shot: a remote member moved to a different control. The ring stays put
+   afterwards; only its arrival is animated. */
+@keyframes collab-ring-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* A mark follows its target in 90 ms. Off while the page scrolls: content
+     moves under the overlay every frame, and a lagging mark would drift off its
+     line. The flag is stable again 140 ms after the last scroll event. */
+  .collab-glide {
+    transition: transform 90ms ease-out;
+  }
+  .collab-layer[data-scrolling] .collab-glide {
+    transition: none;
+  }
+
+  /* Out faster than in (100 ms vs 150 ms). */
+  .collab-head {
+    transition: opacity 100ms ease-in, transform 100ms ease-in;
+  }
+  .collab-head[data-on] {
+    transition: opacity 150ms ease-out, transform 150ms ease-out;
+  }
+
+  .collab-ring-enter {
+    animation: collab-ring-in 250ms ease-out;
+  }
+}
