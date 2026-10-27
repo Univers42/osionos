@@ -48,6 +48,8 @@ const MEMBERS = 'osionos_workspace_members';
 const SESSIONS = 'osionos_sessions';
 const DIRECTORY = 'osionos_people_directory';
 const ACTIVITY = 'osionos_activity_events';
+// Read by the bridge's page access filter, once per workspace a page row names.
+const SHARE_RULES = 'osionos_share_rules';
 
 // The self-source tables answer the WHOLE row, not the projection: a route that spreads
 // a row must leak here, so the test sees the leak instead of trusting the select.
@@ -201,7 +203,7 @@ function stripNulls(value) {
 	return out;
 }
 
-export function createAccountStore({ profiles = [], settings = [], blocks = [], history = [], notifications = [], identities = [], deletions = [], audit = [], pages = [], tasks = [], published = [], connections = [], workspaces = [], members = [], sessions = [], directory = [], activity = [], fail = null } = {}) {
+export function createAccountStore({ profiles = [], settings = [], blocks = [], history = [], notifications = [], identities = [], deletions = [], audit = [], pages = [], tasks = [], published = [], connections = [], workspaces = [], members = [], sessions = [], directory = [], activity = [], shareRules = [], fail = null } = {}) {
 	const calls = [];
 	const tables = new Map([
 		[PROFILES, profiles.map((row) => ({ ...row }))],
@@ -213,6 +215,7 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 		[DELETIONS, deletions.map((row) => ({ ...row }))],
 		[AUDIT, audit.map((row) => ({ ...row }))],
 		[PAGES, pages.map((row) => ({ ...row }))],
+		[SHARE_RULES, shareRules.map((row) => ({ ...row }))],
 		[TASKS, tasks.map((row) => ({ ...row }))],
 		[PUBLISHED, published.map((row) => ({ ...row }))],
 		[CONNECTIONS, connections.map((row) => ({ ...row }))],

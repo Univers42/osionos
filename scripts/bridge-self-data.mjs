@@ -28,8 +28,13 @@
  * A store failure is a 503 and never an empty list: "you have none" and "the store is
  * down" are different answers, and only one of them is true.
  *
+ * A source of page rows (`my-pages`) also passes the bridge's page access filter, handed in
+ * as `pageAccessFilter`: owning a page outlives leaving its workspace. With no filter wired,
+ * or a filter that cannot read access, the answer is a 503, never the unchecked rows.
+ *
  * Caveat: the cap is a row count, not a page — a user with 5,000 pages sees the 200 the
- * query ordered first, and the rest are unreachable from this source.
+ * query ordered first, and the rest are unreachable from this source. The access filter
+ * runs after the cap, so a truncated answer can hold fewer than 200 rows.
  */
 
 import { rateLimit } from './bridge-guard.mjs';
@@ -196,15 +201,33 @@ async function readMembershipRows({ pg, session, now }, source) {
 	});
 }
 
-/** The rows of a source, read the way its scope says. */
+/** The rows the cap keeps, and whether it cut any: the read asks for one row more than the cap. */
+function capRows(rows) {
+	const truncated = rows.length > ROW_LIMIT;
+	return { rows: truncated ? rows.slice(0, ROW_LIMIT) : rows, truncated };
+}
+
+/** The pages the caller may still open, as the bridge's page access filter decides. */
+async function visiblePages({ pageAccessFilter, session, config }, rows) {
+	if (typeof pageAccessFilter !== 'function') {
+		throw Object.assign(new Error('no page access filter is wired'), { code: 'page_access_unwired' });
+	}
+	const visible = await pageAccessFilter(rows, session, config);
+	if (!Array.isArray(visible)) throw new Error('the page access filter answered a non-array');
+	return visible;
+}
+
+/** The rows of a source, read the way its scope says, and whether the cap cut them. */
 async function readSourceRows(context, source) {
-	if (source.scope.kind === 'membership') return readMembershipRows(context, source);
-	if (source.scope.kind === 'edge') return readEdgeRows(context, source);
-	const rows = await readFlatRows(context, source);
-	return rows.map((row) => sourceRow(source, row, {
+	if (source.scope.kind === 'membership') return capRows(await readMembershipRows(context, source));
+	if (source.scope.kind === 'edge') return capRows(await readEdgeRows(context, source));
+	const { rows, truncated } = capRows(await readFlatRows(context, source));
+	const kept = source.pageAccess ? await visiblePages(context, rows) : rows;
+	const projected = kept.map((row) => sourceRow(source, row, {
 		userId: context.session.userId,
 		session: context.session,
 	}));
+	return { rows: projected, truncated };
 }
 
 /** The bridge's clock: the one that stamped the session rows. */
@@ -229,7 +252,7 @@ function respondWithError(response, error, config) {
  * The account route of this module: GET /api/account/self-data/<source>. It answers true
  * when it handled the request and false when the path is not its own.
  */
-export function createSelfDataRoutes({ config, pg, kv, verifySession }) {
+export function createSelfDataRoutes({ config, pg, kv, verifySession, pageAccessFilter = null }) {
 	return async function handleAccountSelfData(url, request, response) {
 		const segment = selfDataSegment(url.pathname);
 		if (segment === null) return false;
@@ -244,22 +267,21 @@ export function createSelfDataRoutes({ config, pg, kv, verifySession }) {
 				return respondWithError(response, selfDataError(404, 'unknown_self_source', 'This data source does not exist.'), config);
 			}
 			await rateLimit(kv, ['self-data', session.userId], { limit: RATE_LIMIT, windowMs: RATE_WINDOW_MS });
-			let rows;
+			let answer;
 			try {
-				rows = await readSourceRows({ pg, config, session, now: bridgeNow(config) }, source);
+				answer = await readSourceRows({ pg, config, session, now: bridgeNow(config), pageAccessFilter }, source);
 			} catch (error) {
 				// A store failure is a 503 and never an empty list: "you have none" and "the
 				// store is down" are different answers, and only one of them is true.
 				console.warn(`[osionos-bridge] self data read failed: ${error?.code ?? error?.status ?? 'unknown'}`);
 				throw selfDataError(503, 'self_data_unavailable', 'Your data could not be read; try again shortly.');
 			}
-			const truncated = rows.length > ROW_LIMIT;
 			return sendJson(response, 200, {
 				ok: true,
 				source: source.id,
 				columns: answerColumns(source),
-				rows: truncated ? rows.slice(0, ROW_LIMIT) : rows,
-				truncated,
+				rows: answer.rows,
+				truncated: answer.truncated,
 			}, config);
 		} catch (error) {
 			return respondWithError(response, error, config);

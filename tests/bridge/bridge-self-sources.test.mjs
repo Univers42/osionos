@@ -28,7 +28,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SELF_SOURCES, selfSourceById } from '../../scripts/bridge-self-sources.mjs';
+import { PAGE_ACCESS_COLUMNS, SELF_SOURCES, selfSourceById } from '../../scripts/bridge-self-sources.mjs';
 
 // my-activity is registered only while the activity flag is on; the flag-off case is tested explicitly.
 process.env.OSIONOS_ACTIVITY = '1';
@@ -167,7 +167,9 @@ describe('the self source registry', () => {
 			}
 			for (const column of source.readColumns ?? []) {
 				assert.ok(main.includes(column), `${source.id} reads ${column} from ${source.table}`);
-				assert.ok(source.columns.includes(column), `${source.id} answers the column it reads`);
+				// The one column read and not answered is one the page access filter needs.
+				const forAccess = source.pageAccess === true && PAGE_ACCESS_COLUMNS.includes(column);
+				assert.ok(source.columns.includes(column) || forAccess, `${source.id} answers the column it reads`);
 			}
 		}
 	});
