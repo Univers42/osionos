@@ -50,12 +50,13 @@ test.describe("sys data sources", () => {
     await expect(inserted).toHaveAttribute("data-database-view-id", "my-pages-default");
   });
 
-  test("an unreachable source shows an error with Retry, never the demo seed", async ({ page }) => {
+  // A failed read with a server offers Retry: bridge-stub/sysSavedViews.spec.mjs.
+  test("a build with no server asks you to connect, with no Retry and never the demo seed", async ({ page }) => {
     test.skip(BRIDGED, "offline only: the bridge answers when PLAYWRIGHT_API_URL is set");
     await insertMyPages(page);
     const inserted = block(page, "sys:my-pages");
-    await expect(inserted.getByRole("alert")).toBeVisible({ timeout: 15_000 });
-    await expect(inserted.getByRole("button", { name: "Retry" })).toBeVisible();
+    await expect(inserted.getByRole("alert")).toContainText("Connect to see your pages.", { timeout: 15_000 });
+    await expect(inserted.getByRole("button", { name: "Retry" })).toHaveCount(0);
     await expect(inserted.getByText("Untitled Database")).toHaveCount(0);
   });
 

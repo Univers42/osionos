@@ -16,19 +16,11 @@
 
 import { test, expect } from "@playwright/test";
 
-import { openFreshPage } from "../../browser/core/app.mjs";
-
-async function openCommandCenter(page) {
-  await openFreshPage(page, "/");
-  await page.getByText("Workspace command center", { exact: true }).first().click();
-}
+import { openSeededView } from "../support/seededViews.mjs";
 
 test.describe("dashboard-truth", () => {
   test("the Featured tile counts the checked products", async ({ page }) => {
-    await openCommandCenter(page);
-    const entry = page.getByText("Overview Dashboard", { exact: true }).last();
-    await entry.scrollIntoViewIfNeeded();
-    await entry.click();
+    await openSeededView(page, "Overview Dashboard");
 
     const tile = page.locator("div.p-4", { has: page.getByText("Featured", { exact: true }) }).first();
     await expect(tile).toContainText("60");
@@ -37,11 +29,25 @@ test.describe("dashboard-truth", () => {
     await expect(page.getByText("Total Revenue", { exact: true })).toHaveCount(0);
   });
 
-  test("the command center names its data sources", async ({ page }) => {
-    await openCommandCenter(page);
-    const sources = page.locator("div.group", { has: page.getByText("Data sources", { exact: true }) }).first();
-    await expect(sources).toContainText("Products");
-    await expect(sources).toContainText("Inventory");
-    await expect(sources).not.toContainText("Untitled");
+  // The Home header once listed every demo database as its "data sources" (first as
+  // "Untitled" chips): it describes this account now, so it lists none of them.
+  test("the Home header names no demo data sources", async ({ page }) => {
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator('[data-block-type="heading_2"]', { hasText: "Your tasks" }).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText("Data sources", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Featured /view", { exact: true })).toHaveCount(0);
+  });
+
+  // A build with no server can never read your account: Home said so only after
+  // each block failed a load and logged it (12 console errors, develop CI 40465032837).
+  test("Home in a build with no server asks you to connect, and tries no load", async ({ page }) => {
+    const loadErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error" && message.text().includes("Load error")) loadErrors.push(message.text());
+    });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("Connect to see your tasks.", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('[data-database-id^="sys:"]').getByRole("button", { name: "Retry" })).toHaveCount(0);
+    expect(loadErrors).toEqual([]);
   });
 });
