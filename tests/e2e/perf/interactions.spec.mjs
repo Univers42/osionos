@@ -218,6 +218,10 @@ test("open a database view", async ({ page }) => {
     spec: SPEC, name: "database", floor, target: HEAVY_TARGET, budget: BUDGET.database, startEvent: "click",
     before: async () => {
       await openAndWait(page, START);
+      // Recent tabs stay mounted (4600c5b88), so a second click would only
+      // show the hidden tab again: closing it makes every round a real open.
+      const close = page.getByRole("button", { name: "Close Tasks database", exact: true });
+      if (await close.count()) await close.click();
       await expect(cells).toHaveCount(0);
     },
     action: () => explorerRow(page, "Tasks database").click(),
