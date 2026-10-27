@@ -61,6 +61,14 @@ test.describe("home account", () => {
     await expect(kpi(page, "Workspaces")).toHaveText("1");
   });
 
+  test("your own data on Home offers no New: the bridge would drop the row", async ({ page, baseURL }) => {
+    await stubSysViews(page, { sources: SOURCES });
+    await openHome(page, baseURL);
+    const accountData = page.locator('[data-database-id^="sys:"]');
+    await expect(accountData).toHaveCount(4);
+    await expect(accountData.getByRole("button", { name: /^New\b/ })).toHaveCount(0);
+  });
+
   test("New page on Home opens a new page", async ({ page, baseURL }) => {
     await stubSysViews(page, { sources: SOURCES });
     await openHome(page, baseURL);
