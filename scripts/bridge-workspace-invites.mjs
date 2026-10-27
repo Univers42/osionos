@@ -47,7 +47,7 @@ import {
   sendJson,
   workspaceMembership,
 } from './bridge-social-core.mjs';
-import { findAccountByEmail } from './bridge-gotrue-user.mjs';
+import { findAccountByEmail, readGotrueUser } from './bridge-gotrue-user.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import {
   TOKEN_SHAPE,
@@ -109,6 +109,18 @@ function inviteAnswer(config, { row, token }) {
   return { ok: true, invite: publicInvite(row), token, acceptUrl: `${config.appUrl}/?invite=${encodeURIComponent(token)}` };
 }
 
+/**
+ * The checks and the write every invite creation shares, whichever route reached it:
+ * the target is not the owner and not already a member, then one pending invite row.
+ */
+async function saveInviteForAccount(deps, session, { workspace, workspaceId, inviteeId, email, role, config }) {
+  if (isSameId(inviteeId, workspace.owner_id)) throw coded(409, 'is_owner', 'The workspace owner is already a member.');
+  if (await workspaceMembership(config, deps.fetchImpl, inviteeId, workspaceId)) {
+    throw coded(409, 'already_member', 'That account is already a member of this workspace.');
+  }
+  return saveInvite(config, deps.fetchImpl, { workspaceId, email, inviteeId, role: role.role, invitedBy: session.userId });
+}
+
 /** POST /api/workspaces/:id/invites {email, role} — owner/admin only. */
 async function invitePerson(deps, session, request, workspaceId, response, config) {
   const { workspace, role: actorRole } = await requireWorkspaceAdmin(config, deps.fetchImpl, session.userId, workspaceId);
@@ -125,12 +137,38 @@ async function invitePerson(deps, session, request, workspaceId, response, confi
   if (!account) throw coded(404, 'no_account', 'No osionos account uses that email yet. Ask them to sign up first, then invite them again.');
   const inviteeId = safeText(account.id, 80);
   if (!inviteeId) throw httpError('The invited account has no usable id.', 502);
-  if (isSameId(inviteeId, workspace.owner_id)) throw coded(409, 'is_owner', 'The workspace owner is already a member.');
-  if (await workspaceMembership(config, deps.fetchImpl, inviteeId, workspaceId)) {
-    throw coded(409, 'already_member', 'That account is already a member of this workspace.');
-  }
-  const saved = await saveInvite(config, deps.fetchImpl, { workspaceId, email, inviteeId, role: role.role, invitedBy: session.userId });
+  const saved = await saveInviteForAccount(deps, session, { workspace, workspaceId, inviteeId, email, role, config });
   return sendJson(response, 200, inviteAnswer(config, saved), config);
+}
+
+/**
+ * Create the SAME pending invite as POST /api/workspaces/:id/invites, addressed by user id
+ * instead of email (C513). No membership row is written: the invitee becomes a member only
+ * by accepting. Owner/admin only; non-admins get 403, never the old force-add.
+ */
+export async function createInviteForUser({ deps, session, workspaceId, userId, role = 'guest', config }) {
+  const workspace = await fetchWorkspace(config, deps.fetchImpl, workspaceId);
+  if (!workspace) throw httpError('Workspace not found.', 404);
+  let actorRole = 'owner';
+  if (!isSameId(workspace.owner_id, session.userId)) {
+    const membership = await workspaceMembership(config, deps.fetchImpl, session.userId, workspaceId);
+    if (String(membership?.role ?? '').toLowerCase() !== 'admin') {
+      throw httpError('Only the workspace owner or an admin may invite.', 403);
+    }
+    actorRole = 'admin';
+  }
+  const mapped = inviteRole(role);
+  if (mapped.name === 'admin' && actorRole !== 'owner') throw httpError('Only the workspace owner may invite an admin.', 403);
+  takeToken(`workspace-invite:${session.userId}`, INVITE_BUCKET);
+  // The invite row keeps the account's email for display; the userId already proves the
+  // account exists, so a directory failure here is an outage (502), never "no account".
+  const account = await readGotrueUser({ config, fetchImpl: deps.fetchImpl }, userId).catch(() => {
+    throw httpError('Could not look up that account.', 502);
+  });
+  const email = safeText(account?.email, 320).trim().toLowerCase();
+  const inviteeId = safeText(account?.id, 80) || String(userId);
+  if (!EMAIL_RE.test(email)) throw coded(404, 'no_account', 'No osionos account uses that id.');
+  return saveInviteForAccount(deps, session, { workspace, workspaceId, inviteeId, email, role: mapped, config });
 }
 
 /** GET /api/workspaces/:id/invites — owner/admin only. */

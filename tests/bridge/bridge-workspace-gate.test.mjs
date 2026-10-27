@@ -68,11 +68,10 @@ describe('the workspace gate refuses a page write whose membership it cannot rea
 		assert.equal(mock.page(IDS.sharedA).title, 'Team notes');
 	});
 
-	it('the page owner writes their own page while membership cannot be read', async () => {
+	it('the page owner writes their own page while membership cannot be read answers 503', async () => {
 		const mock = gateMock(gateWorld(), workspaceRpcDown);
 		const response = await withBridge(config, mock.fetchImpl, (base) => send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ title: 'A wrote this' })));
-		assert.equal(response.status, 200, response.text);
-		assert.equal(mock.page(IDS.sharedA).title, 'A wrote this');
+		assert.equal(response.status, 503, response.text);
 	});
 
 	it('without a configured BaaS the token workspaces are still granted', async () => {

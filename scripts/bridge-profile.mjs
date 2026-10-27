@@ -285,20 +285,27 @@ async function listProfileShares(deps, session, userId, response, config) {
 		for (const page of pages) pagesById.set(page.id, page);
 	}
 	const members = await memberWorkspacesAmong(config, deps.fetchImpl, session, [...pagesById.values()].map((page) => page.workspace_id));
+	const pageRows = [...pagesById.values()].filter((page) => canReadPageRowAsMember(page, session.userId, members));
+	// The SAME inherited rule as the page routes (C550): an ancestor no_access hides the
+	// page from the profile grid too.
+	const visibleRows = typeof deps.pageAccessFilter === 'function'
+		? await deps.pageAccessFilter(pageRows, session, config)
+		: pageRows;
+	const visible = new Set(visibleRows.map((page) => String(page.id).toLowerCase()));
 	const seen = new Set();
 	const items = [];
 	for (const row of list) {
 		if (seen.has(row.page_id)) continue; // one card per page (latest share), not every re-share
 		seen.add(row.page_id);
 		const page = pagesById.get(row.page_id);
-		if (page && !canReadPageRowAsMember(page, session.userId, members)) continue;
+		if (page && !visible.has(String(page.id).toLowerCase())) continue;
 		items.push({ pageId: row.page_id, title: page?.title || 'Untitled', icon: page?.icon ?? null, cover: page?.cover ?? null, sharedAt: row.created_at });
 	}
 	return sendJson(response, 200, { ok: true, shares: items }, config);
 }
 
-export function createProfileHandler({ config, verifySession, fetchImpl = fetch, env = process.env, kv = null, now = Date.now }) {
-	const deps = { fetchImpl, env, kv, now };
+export function createProfileHandler({ config, verifySession, fetchImpl = fetch, env = process.env, kv = null, now = Date.now, pageAccessFilter = null }) {
+	const deps = { fetchImpl, env, kv, now, pageAccessFilter };
 	return async function handleProfileRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		const isPeople = pathname === '/api/people';

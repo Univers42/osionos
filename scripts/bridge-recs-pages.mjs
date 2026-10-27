@@ -67,6 +67,13 @@ export async function readablePages(deps, config, session, rows) {
 		if (!canReadPageRowAsMember(row, session.userId, members)) continue;
 		readable.set(id, row);
 	}
+	// The SAME inherited rule as the page routes (C550): a recommendation never carries
+	// a page an ancestor no_access hides. bridge-api always injects the filter.
+	if (typeof deps.pageAccessFilter === 'function' && readable.size > 0) {
+		const visible = await deps.pageAccessFilter([...readable.values()], session, config);
+		const visibleIds = new Set(visible.map((row) => String(row?.id ?? '')));
+		for (const id of readable.keys()) if (!visibleIds.has(id)) readable.delete(id);
+	}
 	return readable;
 }
 

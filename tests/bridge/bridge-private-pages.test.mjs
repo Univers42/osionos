@@ -68,7 +68,7 @@ describe('page list and read show a member only readable pages', () => {
 
 describe('search returns only readable pages', () => {
 	const missingColumn = { status: 400, body: { code: '42703', details: null, hint: null, message: 'column osionos_pages.search_doc does not exist' } };
-	const scans = (mock) => mock.calls.filter((call) => call.table === 'osionos_pages' && !call.params.has('search_doc'));
+	const scans = (mock) => mock.calls.filter((call) => call.table === 'osionos_pages' && !call.params.has('search_doc') && call.params.get('select') !== 'id,parent_page_id');
 
 	it('filters full-text hits by the read rule', async () => {
 		const mock = createPostgrestMock(teamWorld());
