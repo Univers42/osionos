@@ -103,6 +103,33 @@ saved views (`sysDatabaseViews.ts`), server persistence for user databases
 - **Order: R1, then R2, then R3.** R1 fixes what is broken. R2 is what makes every
   shipped dashboard reproducible. R3 builds on both.
 
+## What shipped, and what it found (2026-10-27)
+
+- **R2b.** `DashboardViewWidget.insight` (`formulas` | `relations`) is a fourth
+  presentation. `layoutFromSettings` converts the old `formulaAnalytics` and
+  `relationAnalytics` flags to one insight widget over the host view. The picker
+  and the widget menu offer "Formula health" when the database has a formula
+  column, and "Relations & rollups" when it has a relation or rollup column.
+- **R3a.** `sys:` sources carry editable built-in views; a user's edit is saved under
+  the built-in's own id.
+- **R3b.** Home is now: the greeting; a row of three `/button` blocks (New page,
+  Preferences, Edit profile); Your tasks, Your pages, Your people and Your workspaces;
+  then Recently visited and Templates. Each of the four "Your" sections is a `sys:`
+  database on its starter dashboard (`sysHomeDashboards.ts`). Learn, Upcoming events
+  and Home views have left the seed. `HOME_DASHBOARD_VERSION` is 12.
+- **Found while building R3b: select filters compared different forms.** Seeded
+  databases store option ids in select cells. `sys:` and workspace databases store
+  the option's text, while the filter UI stores the id. A Status = accepted tile on
+  `sys:my-connections` therefore counted 0. `matchesPropertyFilter` maps both sides
+  to the option id, and view filters, dashboard filters, stat filters and
+  conditional colours all use it. Automation conditions (`ruleMatch.ts`) still
+  compare raw values, because a rule has no schema at hand.
+- **Found while building R3b: the widget menu drifted from the picker.** The menu
+  listed 5 charts and 3 "Top by" lists, while the picker listed every column, so
+  "Next due" could not be rebuilt. `chartEntries` and `recordEntries` are now the
+  single list for both. Records also gain "Earliest" and "Latest" by any date
+  column, with undated rows last.
+
 ## Left to the builder
 
 - The file split under `dashboard/notion/` (300 lines or fewer per file) and the chart
