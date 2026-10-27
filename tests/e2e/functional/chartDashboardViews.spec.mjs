@@ -74,12 +74,10 @@ test.describe("chart-and-dashboard-views", () => {
     await openDatabaseSurface(page);
     await addViewOfType(page, "Dashboard");
 
-    // Legacy auto-detect renders first, with the upgrade CTA.
-    await page.getByRole("button", { name: /Customize layout/ }).click();
-    await expect(page.getByText("Build your dashboard")).toBeVisible();
-
-    // First widget: embed an existing view of this database.
-    await page.getByRole("button", { name: /Add your first widget/ }).click();
+    // Dashboards are editable from the start; switch to edit mode, then add
+    // widgets on top of the auto-detected ones.
+    await page.getByRole("button", { name: /Edit layout/ }).click();
+    await page.getByRole("button", { name: /Add widget/ }).first().click();
     // exact: true — the empty-dashboard copy just above ("Mix views, numbers,
     // and charts — from this database or any other.") contains "this database"
     // as a substring, colliding with the AddWidgetPicker section label (renamed
@@ -89,7 +87,7 @@ test.describe("chart-and-dashboard-views", () => {
     const existing = page.locator('div:has(> button) >> text="This database"');
     void existing; // section label asserted above; pick the first view row:
     await page.locator('button:below(:text("This database"))').first().click();
-    await expect(page.getByText(/1\/12 widgets/)).toBeVisible();
+    await expect(page.getByText(/5\/12 widgets/)).toBeVisible();
 
     // Second widget: create a NEW chart view inline.
     // .first(): once the first widget lands, "Add widget" also matches the
@@ -98,7 +96,7 @@ test.describe("chart-and-dashboard-views", () => {
     await page.getByRole("button", { name: /Add widget/ }).first().click();
     await page.getByText("New view").waitFor();
     await page.locator('button:below(:text("New view"))', { hasText: "Chart" }).first().click();
-    await expect(page.getByText(/2\/12 widgets/)).toBeVisible();
+    await expect(page.getByText(/6\/12 widgets/)).toBeVisible();
     // The fresh chart widget shows its configure empty state inside the frame.
     await expect(page.getByText("Configure your chart")).toBeVisible();
 
@@ -107,7 +105,7 @@ test.describe("chart-and-dashboard-views", () => {
     await page.getByRole("button", { name: /Add filter/ }).click();
     await page.getByRole("button", { name: /Theme/ }).first().click();
     await expect(page.getByRole("button", { name: /Filters \(1\)/ })).toBeVisible();
-    await expect(page.getByText(/2\/12 widgets/)).toBeVisible();
+    await expect(page.getByText(/6\/12 widgets/)).toBeVisible();
 
     // Width resize: drag the divider between the two widgets.
     const splitter = page.locator('[role="separator"][aria-orientation="vertical"]').first();
@@ -124,6 +122,6 @@ test.describe("chart-and-dashboard-views", () => {
     // Delete the second widget via its actions menu.
     await page.locator('[aria-label="Widget actions"]').last().click();
     await page.getByText("Delete widget").click();
-    await expect(page.getByText(/1\/12 widgets/)).toBeVisible();
+    await expect(page.getByText(/5\/12 widgets/)).toBeVisible();
   });
 });

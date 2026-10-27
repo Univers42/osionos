@@ -23,6 +23,7 @@
  */
 
 import type { KnownDatabaseViewType } from "./databaseViewCatalog.meta";
+import { SYS_HOME_DASHBOARDS } from "./sysHomeDashboards";
 
 export type SysColumnType =
   | "text" | "select" | "multi_select" | "number" | "checkbox" | "date"
@@ -43,6 +44,8 @@ export interface SysSource {
   columnTypes: Record<string, SysColumnType>;
   /** Views shipped with the source beside the default table; only my-activity has one. */
   builtInViews?: SysBuiltInView[];
+  /** The values a select column can hold, offered as options even before a row holds them. */
+  columnOptions?: Record<string, readonly string[]>;
 }
 
 export interface SysBuiltInView {
@@ -81,12 +84,14 @@ export const SYS_SOURCES: SysSource[] = [
       surface: "select", visibility: "select", created_at: "created_time",
       updated_at: "last_edited_time", archived_at: "date",
     },
+    builtInViews: SYS_HOME_DASHBOARDS["my-pages"],
   }),
   source({
     source: "my-tasks", label: "My tasks", icon: "✅",
     description: "Every task from your pages, with its due date.",
     titleColumn: "content", hiddenColumns: ["page_id", "block_id", "workspace_id"],
     columnTypes: { checked: "checkbox", due_at: "date", updated_at: "last_edited_time" },
+    builtInViews: SYS_HOME_DASHBOARDS["my-tasks"],
   }),
   source({
     source: "my-published", label: "Published pages", icon: "🌐",
@@ -102,12 +107,16 @@ export const SYS_SOURCES: SysSource[] = [
       status: "select", source: "select", direction: "select",
       created_at: "created_time", responded_at: "date",
     },
+    // osionos_connections.status CHECK (models/osionos-social-migration.sql).
+    columnOptions: { status: ["pending", "accepted", "declined", "withdrawn", "blocked"] },
+    builtInViews: SYS_HOME_DASHBOARDS["my-connections"],
   }),
   source({
     source: "my-workspaces", label: "My workspaces", icon: "🗂️",
     description: "The workspaces you belong to, with your role in each.",
     titleColumn: "name", hiddenColumns: ["workspace_id", "id"],
     columnTypes: { role: "select", created_at: "created_time", updated_at: "last_edited_time" },
+    builtInViews: SYS_HOME_DASHBOARDS["my-workspaces"],
   }),
   source({
     source: "my-sessions", label: "My sessions", icon: "🔐",

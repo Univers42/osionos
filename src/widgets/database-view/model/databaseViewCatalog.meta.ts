@@ -181,6 +181,7 @@ export const SHOWCASE_VIEW_IDS = [
   "v-tasks-list",
   "v-prod-dashboard",
   "v-prod-analytics",
+  "v-prod-formula-dash",
   "v-proj-dashboard",
   "v-tasks-board",
   "v-proj-timeline",
