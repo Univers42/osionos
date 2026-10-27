@@ -44,7 +44,7 @@ const NAME_LIMIT = 200;
 const RATE_LIMIT = 60;
 const RATE_WINDOW_MS = 60_000;
 
-const VIEW_TYPES = new Set(['table', 'gallery', 'board', 'list', 'calendar', 'timeline', 'chart']);
+const VIEW_TYPES = new Set(['table', 'gallery', 'board', 'list', 'calendar', 'timeline', 'chart', 'dashboard']);
 const LIST_KEYS = ['filters', 'sorts', 'visibleProperties'];
 const OBJECT_KEYS = ['grouping', 'subGrouping'];
 const TOP_KEYS = new Set(['name', 'type', 'filterConjunction', 'settings', ...LIST_KEYS, ...OBJECT_KEYS]);
