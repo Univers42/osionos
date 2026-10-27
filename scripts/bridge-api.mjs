@@ -1534,10 +1534,18 @@ function createCollabEventAccess(session, config, fetchImpl) {
 		if (tableError) throw tableError;
 		return withOwnerFallback(row, session, workspaceId, config, fetchImpl);
 	};
+	// The level read starts before the route's membership verdict; a caller with no row
+	// is refused by that verdict, so its read stops here instead of fetching the
+	// workspace's parent map (~1 MB) for a request that is already a 403.
+	const memberOrStop = async (workspaceId) => {
+		const row = await strictMember(workspaceId);
+		if (!row) throw pageAccessUnavailable();
+		return row;
+	};
 	return {
 		pageRow: (pageId) => once(rows, String(pageId).toLowerCase(), () => fetchPageAuthRow(pageId, config, fetchImpl)),
 		member,
-		loader: createPageAccessLoader(session, config, fetchImpl, strictMember),
+		loader: createPageAccessLoader(session, config, fetchImpl, memberOrStop),
 	};
 }
 
@@ -5220,6 +5228,8 @@ export function createBridgeServer(options = {}) {
 			pageLevelFor: async (userId, pageId, workspaceId, scope) => {
 				const access = collabEventAccess(scope, config, fetchImpl);
 				if (access) {
+					// The scope answers for its session's user only; any other user reads unscoped.
+					if (!sameId(userId, scope.session.userId)) throw new Error('pageLevelFor: scope belongs to another user');
 					const scoped = await access.pageRow(pageId);
 					if (!scoped || !sameId(scoped.workspace_id, workspaceId)) return 'none';
 					return pageLevelForRow(scoped, scope.session, access.loader);
