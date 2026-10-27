@@ -23,12 +23,13 @@ interface CreatedEntry {
   name: string;
 }
 
-export function cloneTemplateDatabases(
-  content: Block[],
-  state: NotionState,
-  mintId: (prefix: string) => string,
-): { content: Block[]; state: NotionState; created: CreatedEntry[] } {
-  // Collect the databases actually embedded in this content, in first-seen order.
+interface IdMaps {
+  dbMap: Map<string, string>;
+  viewMap: Map<string, string>;
+  pageMap: Map<string, string>;
+}
+
+function collectEmbeddedDatabaseIds(content: Block[], state: NotionState): string[] {
   const toClone: string[] = [];
   const seen = new Set<string>();
   const collect = (blocks: Block[] | undefined): void => {
@@ -51,17 +52,20 @@ export function cloneTemplateDatabases(
     }
   };
   collect(content);
+  return toClone;
+}
 
-  if (toClone.length === 0) {
-    return { content, state, created: [] };
-  }
-
-  const clonedDbSet = new Set(toClone);
-
+function mintDbMap(toClone: string[], mintId: (prefix: string) => string): Map<string, string> {
   const dbMap = new Map<string, string>();
   for (const oldId of toClone) dbMap.set(oldId, mintId("db"));
+  return dbMap;
+}
 
-  // Map every view belonging to a cloned database, in viewOrder then creation order.
+function mintViewMap(
+  toClone: string[],
+  state: NotionState,
+  mintId: (prefix: string) => string,
+): Map<string, string> {
   const viewMap = new Map<string, string>();
   for (const oldDbId of toClone) {
     const db = state.databases[oldDbId];
@@ -80,8 +84,14 @@ export function cloneTemplateDatabases(
       if (!viewMap.has(vId)) viewMap.set(vId, mintId("v"));
     }
   }
+  return viewMap;
+}
 
-  // Map every page (record, incl. templates) belonging to a cloned database.
+function mintPageMap(
+  toClone: string[],
+  state: NotionState,
+  mintId: (prefix: string) => string,
+): Map<string, string> {
   const pageMap = new Map<string, string>();
   for (const oldDbId of toClone) {
     const pageIds: string[] = [];
@@ -92,102 +102,141 @@ export function cloneTemplateDatabases(
       if (!pageMap.has(pId)) pageMap.set(pId, mintId("page"));
     }
   }
+  return pageMap;
+}
 
-  const newDatabases: NotionState["databases"] = { ...state.databases };
-  const newViews: NotionState["views"] = { ...state.views };
-  const newPages: NotionState["pages"] = { ...state.pages };
+function mintIdMaps(
+  toClone: string[],
+  state: NotionState,
+  mintId: (prefix: string) => string,
+): IdMaps {
+  return {
+    dbMap: mintDbMap(toClone, mintId),
+    viewMap: mintViewMap(toClone, state, mintId),
+    pageMap: mintPageMap(toClone, state, mintId),
+  };
+}
 
-  for (const oldDbId of toClone) {
-    const oldDb = state.databases[oldDbId];
-    const newDbId = dbMap.get(oldDbId)!;
-    const newProps: Record<string, unknown> = {};
-    for (const [propId, prop] of Object.entries(oldDb.properties ?? {})) {
-      const clonedProp = structuredClone(prop) as {
-        relationConfig?: { databaseId?: string };
-      };
-      const rc = clonedProp.relationConfig;
-      if (rc && typeof rc.databaseId === "string" && clonedDbSet.has(rc.databaseId)) {
-        clonedProp.relationConfig = { ...rc, databaseId: dbMap.get(rc.databaseId)! };
-      }
-      newProps[propId] = clonedProp;
-    }
-    const newViewOrder = Array.isArray(oldDb.viewOrder)
-      ? oldDb.viewOrder.map((vId) => (viewMap.has(vId) ? viewMap.get(vId)! : vId))
-      : oldDb.viewOrder;
-    const newDefaultTemplateId =
-      typeof oldDb.defaultTemplateId === "string" && pageMap.has(oldDb.defaultTemplateId)
-        ? pageMap.get(oldDb.defaultTemplateId)!
-        : oldDb.defaultTemplateId;
-    newDatabases[newDbId] = {
-      ...structuredClone(oldDb),
-      id: newDbId,
-      properties: newProps as NotionState["databases"][string]["properties"],
-      viewOrder: newViewOrder,
-      defaultTemplateId: newDefaultTemplateId,
+function cloneDatabase(
+  oldDbId: string,
+  state: NotionState,
+  maps: IdMaps,
+  clonedDbSet: Set<string>,
+): { id: string; db: NotionState["databases"][string] } {
+  const oldDb = state.databases[oldDbId];
+  const newDbId = maps.dbMap.get(oldDbId)!;
+  const newProps: Record<string, unknown> = {};
+  for (const [propId, prop] of Object.entries(oldDb.properties ?? {})) {
+    const clonedProp = structuredClone(prop) as {
+      relationConfig?: { databaseId?: string };
     };
-  }
-
-  for (const [oldViewId, newViewId] of viewMap.entries()) {
-    const oldView = state.views[oldViewId];
-    const newDatabaseId = dbMap.has(oldView.databaseId) ? dbMap.get(oldView.databaseId)! : oldView.databaseId;
-    const clonedView = structuredClone(oldView);
-    clonedView.id = newViewId;
-    clonedView.databaseId = newDatabaseId;
-    const settings = clonedView.settings as { dashboardWidgets?: { viewId?: string }[] } | undefined;
-    if (settings && Array.isArray(settings.dashboardWidgets)) {
-      settings.dashboardWidgets = settings.dashboardWidgets.map((widget) => {
-        if (widget && typeof widget.viewId === "string" && viewMap.has(widget.viewId)) {
-          return { ...widget, viewId: viewMap.get(widget.viewId)! };
-        }
-        return widget;
-      });
+    const rc = clonedProp.relationConfig;
+    if (rc && typeof rc.databaseId === "string" && clonedDbSet.has(rc.databaseId)) {
+      clonedProp.relationConfig = { ...rc, databaseId: maps.dbMap.get(rc.databaseId)! };
     }
-    newViews[newViewId] = clonedView;
+    newProps[propId] = clonedProp;
   }
+  const newViewOrder = Array.isArray(oldDb.viewOrder)
+    ? oldDb.viewOrder.map((vId) => (maps.viewMap.has(vId) ? maps.viewMap.get(vId)! : vId))
+    : oldDb.viewOrder;
+  const newDefaultTemplateId =
+    typeof oldDb.defaultTemplateId === "string" && maps.pageMap.has(oldDb.defaultTemplateId)
+      ? maps.pageMap.get(oldDb.defaultTemplateId)!
+      : oldDb.defaultTemplateId;
+  const newDb = {
+    ...structuredClone(oldDb),
+    id: newDbId,
+    properties: newProps as NotionState["databases"][string]["properties"],
+    viewOrder: newViewOrder,
+    defaultTemplateId: newDefaultTemplateId,
+  };
+  return { id: newDbId, db: newDb };
+}
 
-  for (const [oldPageId, newPageId] of pageMap.entries()) {
-    const oldPage = state.pages[oldPageId];
-    const newDatabaseId = dbMap.has(oldPage.databaseId) ? dbMap.get(oldPage.databaseId)! : oldPage.databaseId;
-    const clonedPage = structuredClone(oldPage);
-    clonedPage.id = newPageId;
-    clonedPage.databaseId = newDatabaseId;
-    const props = (clonedPage.properties ?? {}) as Record<string, unknown>;
-    const newProps: Record<string, unknown> = { ...props };
-    for (const [propId, val] of Object.entries(props)) {
-      if (Array.isArray(val)) {
-        newProps[propId] = val.map((v) =>
-          typeof v === "string" && pageMap.has(v) ? pageMap.get(v)! : v,
-        );
-      } else if (typeof val === "string" && pageMap.has(val)) {
-        newProps[propId] = pageMap.get(val)!;
+function cloneView(
+  oldViewId: string,
+  state: NotionState,
+  maps: IdMaps,
+): { id: string; view: NotionState["views"][string] } {
+  const oldView = state.views[oldViewId];
+  const newViewId = maps.viewMap.get(oldViewId)!;
+  const newDatabaseId = maps.dbMap.has(oldView.databaseId)
+    ? maps.dbMap.get(oldView.databaseId)!
+    : oldView.databaseId;
+  const clonedView = structuredClone(oldView);
+  clonedView.id = newViewId;
+  clonedView.databaseId = newDatabaseId;
+  const settings = clonedView.settings as { dashboardWidgets?: { viewId?: string }[] } | undefined;
+  if (settings && Array.isArray(settings.dashboardWidgets)) {
+    settings.dashboardWidgets = settings.dashboardWidgets.map((widget) => {
+      if (widget && typeof widget.viewId === "string" && maps.viewMap.has(widget.viewId)) {
+        return { ...widget, viewId: maps.viewMap.get(widget.viewId)! };
       }
-    }
-    clonedPage.properties = newProps as NotionState["pages"][string]["properties"];
-    newPages[newPageId] = clonedPage;
+      return widget;
+    });
   }
+  return { id: newViewId, view: clonedView };
+}
 
+function cloneRecord(
+  oldPageId: string,
+  state: NotionState,
+  maps: IdMaps,
+): { id: string; page: NotionState["pages"][string] } {
+  const oldPage = state.pages[oldPageId];
+  const newPageId = maps.pageMap.get(oldPageId)!;
+  const newDatabaseId = maps.dbMap.has(oldPage.databaseId)
+    ? maps.dbMap.get(oldPage.databaseId)!
+    : oldPage.databaseId;
+  const clonedPage = structuredClone(oldPage);
+  clonedPage.id = newPageId;
+  clonedPage.databaseId = newDatabaseId;
+  const props = (clonedPage.properties ?? {}) as Record<string, unknown>;
+  const newProps: Record<string, unknown> = { ...props };
+  for (const [propId, val] of Object.entries(props)) {
+    if (Array.isArray(val)) {
+      newProps[propId] = val.map((v) =>
+        typeof v === "string" && maps.pageMap.has(v) ? maps.pageMap.get(v)! : v,
+      );
+    } else if (typeof val === "string" && maps.pageMap.has(val)) {
+      newProps[propId] = maps.pageMap.get(val)!;
+    }
+  }
+  clonedPage.properties = newProps as NotionState["pages"][string]["properties"];
+  return { id: newPageId, page: clonedPage };
+}
+
+function remapContentBlocks(content: Block[], maps: IdMaps): Block[] {
   const newContent = structuredClone(content) as Block[];
-  const remapBlocks = (blocks: Block[] | undefined): void => {
+  const remap = (blocks: Block[] | undefined): void => {
     if (!blocks) return;
     for (const block of blocks) {
       if (block.type === "database_inline" || block.type === "database_full_page") {
-        if (typeof block.databaseId === "string" && dbMap.has(block.databaseId)) {
-          block.databaseId = dbMap.get(block.databaseId)!;
-          if (typeof block.viewId === "string" && viewMap.has(block.viewId)) {
-            block.viewId = viewMap.get(block.viewId)!;
+        if (typeof block.databaseId === "string" && maps.dbMap.has(block.databaseId)) {
+          block.databaseId = maps.dbMap.get(block.databaseId)!;
+          if (typeof block.viewId === "string" && maps.viewMap.has(block.viewId)) {
+            block.viewId = maps.viewMap.get(block.viewId)!;
           }
         }
       }
-      if (block.children) remapBlocks(block.children);
+      if (block.children) remap(block.children);
       if (block.layoutCells) {
-        for (const cell of block.layoutCells) remapBlocks(cell.blocks);
+        for (const cell of block.layoutCells) remap(cell.blocks);
       }
     }
   };
-  remapBlocks(newContent);
+  remap(newContent);
+  return newContent;
+}
 
-  const created: CreatedEntry[] = toClone.map((oldDbId) => {
-    const newDbId = dbMap.get(oldDbId)!;
+function buildCreated(
+  toClone: string[],
+  maps: IdMaps,
+  newDatabases: NotionState["databases"],
+  newViews: NotionState["views"],
+): CreatedEntry[] {
+  return toClone.map((oldDbId) => {
+    const newDbId = maps.dbMap.get(oldDbId)!;
     const newDb = newDatabases[newDbId];
     let viewId = "";
     if (Array.isArray(newDb.viewOrder) && newDb.viewOrder.length > 0) {
@@ -202,6 +251,40 @@ export function cloneTemplateDatabases(
     }
     return { id: newDbId, viewId, name: newDb.name };
   });
+}
+
+export function cloneTemplateDatabases(
+  content: Block[],
+  state: NotionState,
+  mintId: (prefix: string) => string,
+): { content: Block[]; state: NotionState; created: CreatedEntry[] } {
+  const toClone = collectEmbeddedDatabaseIds(content, state);
+  if (toClone.length === 0) {
+    return { content, state, created: [] };
+  }
+
+  const clonedDbSet = new Set(toClone);
+  const maps = mintIdMaps(toClone, state, mintId);
+
+  const newDatabases: NotionState["databases"] = { ...state.databases };
+  const newViews: NotionState["views"] = { ...state.views };
+  const newPages: NotionState["pages"] = { ...state.pages };
+
+  for (const oldDbId of toClone) {
+    const { id, db } = cloneDatabase(oldDbId, state, maps, clonedDbSet);
+    newDatabases[id] = db;
+  }
+  for (const oldViewId of maps.viewMap.keys()) {
+    const { id, view } = cloneView(oldViewId, state, maps);
+    newViews[id] = view;
+  }
+  for (const oldPageId of maps.pageMap.keys()) {
+    const { id, page } = cloneRecord(oldPageId, state, maps);
+    newPages[id] = page;
+  }
+
+  const newContent = remapContentBlocks(content, maps);
+  const created = buildCreated(toClone, maps, newDatabases, newViews);
 
   const nextState = { databases: newDatabases, pages: newPages, views: newViews } as NotionState;
   return { content: newContent, state: nextState, created };

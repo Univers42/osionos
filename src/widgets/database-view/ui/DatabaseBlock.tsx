@@ -175,8 +175,8 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
             const jwt = useUserStore.getState().activePageJwt() ?? "";
             if (workspaceId) {
               void usePageStore.getState().createPageFromTemplate(pageId, workspaceId, jwt);
+              onClose();
             }
-            onClose();
           },
         }}
       />
