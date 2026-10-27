@@ -420,9 +420,11 @@ async function postMessage(deps, session, request, channelId, response, config) 
 		seen.add(uid);
 		notifs.push({ recipientId: uid, type: 'mention', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview });
 	}
+	let replyNotif = null;
 	if (replyAuthorId && !seen.has(replyAuthorId)) {
+		replyNotif = { recipientId: replyAuthorId, type: 'reply', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview };
 		seen.add(replyAuthorId);
-		notifs.push({ recipientId: replyAuthorId, type: 'reply', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview });
+		notifs.push(replyNotif);
 	}
 	if (channel.kind === 'dm') {
 		for (const r of Array.isArray(dmPeers) ? dmPeers : []) {
@@ -431,7 +433,21 @@ async function postMessage(deps, session, request, channelId, response, config) 
 			notifs.push({ recipientId: r.user_id, type: 'dm', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview });
 		}
 	}
-	if (notifs.length > 0) void emitNotifications(deps, config, notifs).catch(() => undefined);
+	if (notifs.length > 0) {
+		void (async () => {
+			// The reply is queued only while the quoted author still has channel access: a
+			// removed member (or a workspace leaver) gets no reply notification. The check
+			// rides the fire-and-forget emit, so the POST answer never waits on it.
+			if (replyNotif) {
+				try {
+					await requireChannelAccess(config, deps.fetchImpl, replyAuthorId, channel.id);
+				} catch {
+					notifs.splice(notifs.indexOf(replyNotif), 1);
+				}
+			}
+			if (notifs.length > 0) await emitNotifications(deps, config, notifs);
+		})().catch(() => undefined);
+	}
 	// Mirror the client Attachment shape: width/height/durationMs/waveform live
 	// under `metadata` (the editor reads attachment.metadata.*). Flattening them
 	// here froze voice-message playback progress for anyone rendering this live
