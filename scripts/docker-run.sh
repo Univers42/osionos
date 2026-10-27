@@ -97,7 +97,7 @@ case "${COMMAND}" in
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh tokens "$@"
     ;;
   test-e2e-perf)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e PLAYWRIGHT_PERF=1 browser-tests pnpm exec playwright test tests/e2e/perf --workers=1 "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e PLAYWRIGHT_PERF=1 -e PLAYWRIGHT_BUILD browser-tests pnpm exec playwright test tests/e2e/perf --workers=1 "$@"
     ;;
   test-canvas)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh test-canvas "$@"
