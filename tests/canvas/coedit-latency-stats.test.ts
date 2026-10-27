@@ -23,8 +23,9 @@ test("analyse joins keystrokes to observed length, posts, frames and DOM writes"
   });
   assert.equal(out.sent, 3);
   assert.equal(out.lost, 0);
-  assert.deepEqual(out.keyToDomMs?.max, 340 - 200);
+  assert.equal(out.keyToDomMs?.max, 330 - 0);
   assert.equal(out.keyToDomMs?.p50, 330 - 100);
+  assert.equal(out.keyToDomMs?.n, 3);
   assert.equal(out.hopsMs.keyToPost?.p50, 150);
   assert.equal(out.hopsMs.postToFrame?.p50, 60);
   assert.equal(out.hopsMs.frameToDom?.p50, 15);
