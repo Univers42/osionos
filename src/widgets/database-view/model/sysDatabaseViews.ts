@@ -40,9 +40,23 @@ function canonical(value: unknown): string {
 
 /** What to PUT and what to DELETE to turn `previous` into `next`. The default view and any
  *  built-in view (the app's, not the user's) are skipped. */
-export function diffViews(next: Views, previous: Views | undefined, builtIn: string | readonly string[]): { saved: [string, ViewConfig][]; removed: string[] } {
+export function diffViews(
+  next: Views,
+  previous: Views | undefined,
+  builtIn?: string | readonly string[] | { builtIn?: string | readonly string[]; editable?: string | readonly string[] } | null,
+  editable?: string | readonly string[],
+): { saved: [string, ViewConfig][]; removed: string[] } {
   const before = previous ?? {};
-  const owned = new Set(typeof builtIn === "string" ? [builtIn] : builtIn);
+  let ownedInput: string | readonly string[] | null | undefined = builtIn as string | readonly string[] | null | undefined;
+  let editableInput: string | readonly string[] | undefined = editable;
+  if (builtIn && typeof builtIn === "object" && !Array.isArray(builtIn)) {
+    ownedInput = (builtIn as { builtIn?: string | readonly string[] }).builtIn;
+    editableInput = (builtIn as { editable?: string | readonly string[] }).editable ?? editableInput;
+  }
+  const owned = new Set<string>(ownedInput == null ? [] : (typeof ownedInput === "string" ? [ownedInput] : ownedInput));
+  // Editable built-ins are the user's to change: never treat them as owned.
+  const editableSet = new Set<string>(editableInput == null ? [] : (typeof editableInput === "string" ? [editableInput] : editableInput));
+  for (const id of editableSet) owned.delete(id);
   const saved = Object.entries(next).filter(([id, view]) =>
     !owned.has(id) && (!(id in before) || canonical(before[id]) !== canonical(view)));
   const removed = Object.keys(before).filter((id) => !owned.has(id) && !(id in next));

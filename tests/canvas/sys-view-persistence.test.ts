@@ -121,3 +121,54 @@ test("deleteSavedView DELETEs one view id and returns the rest", async () => {
   assert.deepEqual(t.calls, [{ method: "DELETE", path: "/api/account/self-data/views/my-pages/v-a", body: undefined }]);
   assert.deepEqual(Object.keys(result), ["v-b"]);
 });
+
+test("diffViews reports an edited editable built-in as saved", () => {
+  const id = "chart-editable";
+  const original = view(id, { name: "Chart" });
+  const edited = view(id, { name: "Renamed chart" });
+  const owned = ["my-pages-default"]; // editable built-in excluded
+  const diff = views.diffViews({ [id]: edited }, { [id]: original }, owned);
+  assert.deepEqual(diff.saved.map(([x]: [string]) => x), [id]);
+  assert.deepEqual(diff.removed, []);
+});
+
+test("diffViews does not report an unedited editable built-in", () => {
+  const id = "chart-editable";
+  const v = view(id, { name: "Chart" });
+  const owned = ["my-pages-default"];
+  assert.deepEqual(views.diffViews({ [id]: v }, { [id]: v }, owned), { saved: [], removed: [] });
+});
+
+test("diffViews reports removal of an editable built-in", () => {
+  const id = "chart-editable";
+  const v = view(id, { name: "Chart" });
+  const owned = ["my-pages-default"];
+  const diff = views.diffViews({}, { [id]: v }, owned);
+  assert.deepEqual(diff.removed, [id]);
+});
+
+test("diffViews never reports a non-editable built-in", () => {
+  const id = "chart-locked";
+  const original = view(id, { name: "Chart" });
+  const edited = view(id, { name: "Renamed" });
+  const owned = ["my-pages-default", id];
+  assert.deepEqual(views.diffViews({ [id]: edited }, { [id]: original }, owned), { saved: [], removed: [] });
+  assert.deepEqual(views.diffViews({}, { [id]: original }, owned), { saved: [], removed: [] });
+});
+
+test("mergeSysViews prefers the saved copy only for editable ids", async () => {
+  const state = await import("../../src/widgets/database-view/model/sysDatabaseState.ts");
+  const loaded = {
+    default: view("default"),
+    locked: view("locked", { name: "shipped" }),
+    editable: view("editable", { name: "shipped-editable" }),
+  };
+  const saved = {
+    editable: view("editable", { name: "saved-editable" }),
+    locked: view("locked", { name: "saved-locked" }),
+  };
+  const merged = state.mergeSysViews(loaded, saved, ["editable"]) as Record<string, { name: string }>;
+  assert.equal(merged.default.name, "default");
+  assert.equal(merged.locked.name, "shipped", "non-editable built-in keeps shipped definition");
+  assert.equal(merged.editable.name, "saved-editable", "editable built-in prefers saved copy");
+});

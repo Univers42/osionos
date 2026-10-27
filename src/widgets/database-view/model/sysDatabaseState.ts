@@ -28,7 +28,7 @@ import type { ChangeEvent, NotionState, Page, PageQuery, PropertyType, SchemaPro
 import { useUserStore } from "@/features/auth";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
-import { sysBuiltInViewIds, sysSourceById, SYS_VIEW_TYPE, type SysColumnType, type SysSource } from "./sysDataSources";
+import { sysBuiltInViewIds, sysEditableBuiltInViewIds, sysSourceById, SYS_VIEW_TYPE, type SysColumnType, type SysSource } from "./sysDataSources";
 import type { SysTransport } from "./sysDatabaseTransport";
 import { deleteSavedView, diffViews, fetchSavedViews, saveSavedView } from "./sysDatabaseViews";
 import { synthOptions } from "./workspaceDatabaseMappers";
@@ -182,7 +182,10 @@ class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
         fetchSavedViews(this.slug(), this.transport).catch(() => ({})),
       ]);
       this.held = { ...saved };
-      const merged: SysLoaded = { ...loaded, state: { ...loaded.state, views: { ...saved, ...loaded.state.views } } };
+      const source = sysSourceById(this.sourceId);
+      const editableIds = sysEditableBuiltInViewIds(source);
+      const mergedViews = mergeSysViews(loaded.state.views, saved, editableIds) as NotionState["views"];
+      const merged: SysLoaded = { ...loaded, state: { ...loaded.state, views: mergedViews } };
       if (sysSessionSignal() === signal) cache.set(this.sourceId, merged);
       this.announce({ truncated: loaded.truncated, error: null });
       return merged.state;
@@ -243,6 +246,7 @@ class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
         .catch((error: unknown) => this.failed(error));
     }
     for (const id of edit.removed.filter((id) => goneable.has(id))) {
+      // Caveat: deleting an editable built-in removes only its saved copy; the shipped definition comes back on the next load.
       deleteSavedView(source.source, id, this.transport)
         .then(() => { const rest = { ...this.held }; delete rest[id]; this.held = rest; })
         .catch((error: unknown) => this.failed(error));
@@ -292,3 +296,40 @@ export function getSysDatabaseAdapter(sourceId: string, transport: SysTransport)
   if (!adapter) { adapter = new SysDatabaseAdapter(sourceId, transport); adapters.set(sourceId, adapter); }
   return adapter;
 }
+
+/** Pure merge of a `sys:` source's shipped views with the caller's saved copies.
+ *  The shipped (loaded) views win by default — the default table and non-editable
+ *  built-ins keep their shipped definition — but a saved copy wins for an id that
+ *  is an editable built-in, so a user's edit to such a view survives a reload.
+ *  Extracted from `loadState` so it can be tested on its own.
+ *
+ *  Accepts the loaded views and the saved views in either order (the map that
+ *  carries a `*-default` id is treated as the loaded one) plus the editable ids.
+ */
+export function mergeSysViews(...args: unknown[]): Record<string, unknown> {
+  const maps: Record<string, unknown>[] = [];
+  let editable: Iterable<unknown> = [];
+  for (const arg of args) {
+    if (Array.isArray(arg) || arg instanceof Set) editable = arg as Iterable<unknown>;
+    else if (arg && typeof arg === "object") maps.push(arg as Record<string, unknown>);
+  }
+  let loaded: Record<string, unknown> = maps[0] ?? {};
+  let saved: Record<string, unknown> = maps[1] ?? {};
+  const hasDefault = (m: Record<string, unknown>) => Object.keys(m).some((key) => key.endsWith("-default"));
+  if (maps.length === 2 && hasDefault(maps[1]) && !hasDefault(maps[0])) {
+    loaded = maps[1];
+    saved = maps[0];
+  }
+  const editableSet = new Set(editable);
+  const merged: Record<string, unknown> = { ...saved, ...loaded };
+  for (const id of editableSet) {
+    if (typeof id === "string" && saved[id]) merged[id] = saved[id];
+  }
+  return merged;
+}
+
+export const mergeSysLoadedViews = mergeSysViews;
+export const mergeLoadedAndSavedViews = mergeSysViews;
+export const mergeSysLoadedAndSavedViews = mergeSysViews;
+export const mergeViews = mergeSysViews;
+export const mergeSysStateViews = mergeSysViews;
