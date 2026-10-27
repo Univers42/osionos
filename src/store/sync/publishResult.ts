@@ -16,7 +16,7 @@
  *   "ok"       → written; advance the ledger. `ignored` lists the fields the bridge declined.
  *   "refused"  → 403: the page exists but this viewer may not write it (read-only, revoked).
  *   "gone"     → 404: the page no longer exists server-side; forget it, keep the local copy.
- *   "conflict" → 409: the server's copy moved under the client; merge it and re-send ONCE.
+ *   "conflict" → 409: the server's copy moved under the client; merge it and re-send (bounded).
  *   "failed"   → transient (offline / 5xx / 401 / 429 / no session / a malformed 409);
  *                leave the page pending and retry.
  *
