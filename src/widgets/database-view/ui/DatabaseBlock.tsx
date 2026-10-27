@@ -82,10 +82,15 @@ const OsionosPage = React.lazy(() =>
 );
 
 /** ObjectDatabase with the app's host integrations pre-wired: workspace people
- *  for person cells and "+ Invite" opening the Discover surface. */
-const HostedObjectDatabase: React.FC<ObjectDatabaseProps> = (props) => {
+ *  for person cells and "+ Invite" opening the Discover surface. `readOnlyRecords`
+ *  marks a source that drops new rows (your account data, recents, templates). */
+const HostedObjectDatabase: React.FC<ObjectDatabaseProps & { readOnlyRecords?: boolean }> = ({ readOnlyRecords, ...props }) => {
   const hostAdapters = useDatabaseHostAdapters();
-  return <ObjectDatabase {...props} hostAdapters={hostAdapters} />;
+  const adapters = React.useMemo(
+    () => (readOnlyRecords ? { ...hostAdapters, readOnlyRecords } : hostAdapters),
+    [hostAdapters, readOnlyRecords],
+  );
+  return <ObjectDatabase {...props} hostAdapters={adapters} />;
 };
 
 const INLINE_KNOWN_DATABASE_LOAD_LIMIT = 8;
@@ -237,6 +242,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
             renderPage={peek}
             className={mode === 'full' ? 'h-full' : undefined}
             chrome={mode === 'full' ? 'full' : 'inline'}
+            readOnlyRecords
           />
         )}
       />
@@ -266,6 +272,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
             renderPage={isTemplates ? renderTemplatesPeek : renderHomePeek}
             className={mode === 'full' ? 'h-full' : undefined}
             chrome="single-view"
+            readOnlyRecords
           />
         </HomeLiveGate>
       </div>
