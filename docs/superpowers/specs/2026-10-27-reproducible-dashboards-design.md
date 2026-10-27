@@ -122,13 +122,26 @@ saved views (`sysDatabaseViews.ts`), server persistence for user databases
   the option's text, while the filter UI stores the id. A Status = accepted tile on
   `sys:my-connections` therefore counted 0. `matchesPropertyFilter` maps both sides
   to the option id, and view filters, dashboard filters, stat filters and
-  conditional colours all use it. Automation conditions (`ruleMatch.ts`) still
-  compare raw values, because a rule has no schema at hand.
+  conditional colours all use it. Automation conditions and `property_changed`
+  triggers (`ruleMatch.ts`) use it too: the runner reads the database's schema
+  through the optional `AutomationHost.properties`, so a rule picked by option id
+  fires on a row that stores the text.
 - **Found while building R3b: the widget menu drifted from the picker.** The menu
   listed 5 charts and 3 "Top by" lists, while the picker listed every column, so
   "Next due" could not be rebuilt. `chartEntries` and `recordEntries` are now the
   single list for both. Records also gain "Earliest" and "Latest" by any date
   column, with undated rows last.
+- **Found after R3b: Home offered New on data the bridge would drop.** Every view
+  showed its create controls on `sys:` sources, recents and templates, and a row
+  added there vanished on the next reload. `HostAdapters.readOnlyRecords` hides
+  every create control in the engine (header, footer, table, grouped table, board,
+  list, gallery, timeline, calendar, agenda, feed, map), and the app sets it for
+  those three sources. `tests/canvas/read-only-records.test.ts` renders each view
+  both ways; the map view is not in it, because leaflet does not render on the server.
+- **Found after R3b: the offline build's Home failed every read.** With no API base,
+  each of the four account blocks tried its read, logged a console error (12 per
+  Home) and offered a Retry that could not work. The blocks now show "Connect to see
+  your …" without trying the read; a build with a server keeps Retry.
 
 ## Left to the builder
 
