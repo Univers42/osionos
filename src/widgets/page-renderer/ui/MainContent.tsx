@@ -29,7 +29,7 @@ import { derivePageState, savePagesCache } from "@/store/pageStore.helpers";
 import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 
-const HOME_DASHBOARD_VERSION = 11;
+const HOME_DASHBOARD_VERSION = 12;
 const HOME_DASHBOARD_FOCUS_VIEW_ID = "v-prod-table";
 
 function getHomeProfession(page: PageEntry | undefined): string | null {
