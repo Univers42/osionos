@@ -2,7 +2,7 @@ import type { QueryResultRow } from 'pg';
 import type { AuthUser } from '../auth.ts';
 import type { QueryRunner } from '../db.ts';
 import { pageAccessLevel } from '../../../../scripts/bridge-page-access.mjs';
-import { sameId } from '../../../../scripts/bridge-page-read.mjs';
+import { sameId, canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 
 /**
  * The page share rules of the bridge, for the AI read path.
@@ -61,6 +61,9 @@ export type AccessEntry = {
 
 /** Lower-case workspace id -> its entry. A workspace that is not here is closed. */
 export type AccessMaps = Map<string, AccessEntry>;
+
+/** A page row as query result, with its id and workspace_id guaranteed. */
+export type PageAccessRow = QueryResultRow & { id: string; workspace_id: string };
 
 // One past each limit, so a full answer proves the workspace is bigger than the limit
 // instead of being silently cut at it. The same limits as the bridge's loader.
@@ -215,7 +218,7 @@ async function readEntry(db: QueryRunner, userId: string, workspaceId: string, m
  * cannot be read is absent, and a members or owners read that fails closes all of them.
  * An id that is not a uuid is absent too, so one bad id cannot fail the cast for the rest.
  */
-export async function loadAccessMaps(db: QueryRunner, user: AuthUser, workspaceIds: readonly string[]): Promise<AccessMaps> {
+export async function loadAccessMaps(db: QueryRunner, user: Pick<AuthUser, 'userId'>, workspaceIds: readonly string[]): Promise<AccessMaps> {
 	const maps: AccessMaps = new Map();
 	const ids = [...new Set(workspaceIds.map(lowerId).filter((id) => UUID.test(id)))];
 	if (ids.length === 0) return maps;
@@ -239,7 +242,7 @@ export async function loadAccessMaps(db: QueryRunner, user: AuthUser, workspaceI
 }
 
 /** The rows the caller may read under the maps: a workspace absent from them is closed, and 'none' is dropped. */
-export function filterByRules<T extends { id: string; workspace_id: string }>(rows: readonly T[], user: AuthUser, maps: AccessMaps): T[] {
+export function filterByRules<T extends { id: string; workspace_id: string }>(rows: readonly T[], user: Pick<AuthUser, 'userId'>, maps: AccessMaps): T[] {
 	return rows.filter((row) => {
 		const entry = maps.get(lowerId(row.workspace_id));
 		return entry !== undefined && pageAccessLevel({ row, userId: user.userId, ...entry }) !== 'none';
@@ -247,7 +250,7 @@ export function filterByRules<T extends { id: string; workspace_id: string }>(ro
 }
 
 /** loadAccessMaps for the rows' workspaces, then filterByRules. Any thrown error is [], never the unfiltered rows. */
-export async function readableByRules<T extends { id: string; workspace_id: string }>(db: QueryRunner, user: AuthUser, rows: readonly T[]): Promise<T[]> {
+export async function readableByRules<T extends { id: string; workspace_id: string }>(db: QueryRunner, user: Pick<AuthUser, 'userId'>, rows: readonly T[]): Promise<T[]> {
 	if (rows.length === 0) return [];
 	try {
 		const maps = await loadAccessMaps(db, user, rows.map((row) => row.workspace_id));
@@ -256,4 +259,16 @@ export async function readableByRules<T extends { id: string; workspace_id: stri
 		warnFailedRead('all', error);
 		return [];
 	}
+}
+
+/**
+ * Both checks (member + share rules), fail closed: a page is readable only when
+ * both `canReadPageRowAsMember` allows it AND `readableByRules` keeps it.
+ * If either check fails, the page is excluded.
+ */
+export async function canReadPageWithRules(
+	db: QueryRunner, userId: string, row: PageAccessRow, workspaces: readonly string[],
+): Promise<boolean> {
+	if (!canReadPageRowAsMember(row, userId, workspaces)) return false;
+	return (await readableByRules(db, { userId }, [row])).length === 1;
 }
