@@ -82,6 +82,14 @@ const DIRECT_BUCKET = { capacity: 5, refillPerSec: 10 / 60, retainMs: 60 * 60_00
 const UUID_GLOBAL = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const CID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const TAB_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
+const YTEXT_KEYS = new Set(['t', 'actor', 'seq', 'pageId', 'blockId', 'e', 'kind', 'u', 'sv']);
+const YTEXT_BLOCK_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+const YTEXT_EPOCH_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+const YTEXT_MAX_UPDATE_CHARS = 49_152;
+const YTEXT_MAX_VECTOR_CHARS = 4096;
+// State-vector requests are cheap to send and costly to answer: 10/s per (user,page).
+const YTEXT_SV_BUCKET = { capacity: 10, refillPerSec: 10 };
 
 function levelAtLeast(level, required) {
 	return (ACCESS_RANK[level] ?? 0) >= ACCESS_RANK[required];
@@ -111,6 +119,30 @@ function normalizePublishedActor(sessionUserId, clientActor) {
 	const suffix = clientActor.slice(clientActor.indexOf(':') + 1);
 	if (!TAB_ID_RE.test(suffix)) throw httpError('invalid_actor', 422);
 	return `${sessionUserId}:${suffix}`;
+}
+
+function isBase64Field(value, maxChars) {
+	return typeof value === 'string' && value.length > 0 && value.length <= maxChars
+		&& value.length % 4 === 0 && BASE64_RE.test(value);
+}
+
+/**
+ * Validate a `t:'ytext'` payload and rebuild it from named fields, so nothing the
+ * client sent beyond the whitelist can reach the page topic (S12). Any failure is
+ * one 422 `invalid_ytext`. Caveat: checks shape only; base64 content is not decoded.
+ */
+function rebuildYtext(payload, actor, pageId) {
+	const bad = () => httpError('invalid_ytext', 422);
+	if (Object.keys(payload).some((key) => !YTEXT_KEYS.has(key))) throw bad();
+	const { blockId, e, kind, u, sv } = payload;
+	if (typeof blockId !== 'string' || !YTEXT_BLOCK_ID_RE.test(blockId)) throw bad();
+	if (typeof e !== 'string' || !YTEXT_EPOCH_RE.test(e)) throw bad();
+	const rebuilt = { t: 'ytext', actor, pageId, blockId, e, kind };
+	if (payload.seq !== undefined) rebuilt.seq = payload.seq;
+	if (kind === 'u' && sv === undefined && isBase64Field(u, YTEXT_MAX_UPDATE_CHARS)) rebuilt.u = u;
+	else if (kind === 'sv' && u === undefined && isBase64Field(sv, YTEXT_MAX_VECTOR_CHARS)) rebuilt.sv = sv;
+	else throw bad();
+	return rebuilt;
 }
 
 /**
@@ -397,7 +429,9 @@ async function mintPageRealtimeToken(deps, session, workspaceId, pageId, respons
 		canPublish: false, // Publishing goes through the page-authorized bridge route.
 		metadata: { level },
 	});
-	return sendJson(response, 200, { ok: true, token, expiresAt, topic, pageId, level }, config);
+	const reply = { ok: true, token, expiresAt, topic, pageId, level };
+	if (deps.ytextOn) reply.features = ['ytext'];
+	return sendJson(response, 200, reply, config);
 }
 
 /**
@@ -420,15 +454,18 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 			if (!published) throw httpError('Collaboration publish failed.', 503);
 			return;
 		}
-		if (!PAGE_SCOPED_EVENTS.has(payload.t)) throw httpError('unknown_event', 422);
+		const isYtext = payload.t === 'ytext' && deps.ytextOn;
+		if (!PAGE_SCOPED_EVENTS.has(payload.t) && !isYtext) throw httpError('unknown_event', 422);
 		if (payload.seq !== undefined) requireOptionalSeq(payload.seq);
 		if (!UUID_REGEX.test(String(payload.pageId ?? ''))) throw httpError('page_id_required', 422);
 		const pageId = requireUuid(payload.pageId, 'pageId').toLowerCase();
 		const publishedActor = normalizePublishedActor(session.userId, payload.actor);
+		const ytext = isYtext ? rebuildYtext(payload, publishedActor, pageId) : null;
+		if (ytext?.kind === 'sv') takeToken(`collab-ytext-sv:${session.userId}:${pageId}`, YTEXT_SV_BUCKET);
 		// Membership gates the answer, but the page reads start with it: the membership
 		// verdict is awaited first, so a non-member never sees a page-level answer.
 		const levelRead = softStart(() => timedHop('access', () => deps.pageLevelFor?.(session.userId, pageId, workspaceId, deps.scope)));
-		const blocksRead = payload.t === 'blocks' && Array.isArray(payload.ops) && deps.authorizeBlocks
+		const blocksRead = ((payload.t === 'blocks' && Array.isArray(payload.ops)) || ytext?.kind === 'u') && deps.authorizeBlocks
 			? softStart(() => timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope)))
 			: null;
 		await deps.requireMember();
@@ -438,15 +475,15 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 		// The level alone under-grants: a member with no page rule reads 'can_view' and
 		// writes through the membership's update permission (C558). Writes therefore go
 		// through the same gate PATCH /pages uses, never through the level.
-		const writes = payload.t === 'blocks' || payload.t === 'file'
+		const writes = payload.t === 'blocks' || payload.t === 'file' || ytext?.kind === 'u'
 			|| (payload.t === 'note' && !levelAtLeast(level, 'can_comment'));
 		if (writes) {
 			if ((payload.t === 'blocks' && !Array.isArray(payload.ops)) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
-			// A blocks write started its gate read next to the level read; the others start it now.
+			// A blocks/ytext write started its gate read next to the level read; the others start it now.
 			await (blocksRead ?? timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope)));
 		}
 		// The topic is lowercased; the published payload names the same page (C574).
-		const frame = { event: 'collab', payload: { ...payload, pageId, actor: publishedActor } };
+		const frame = { event: 'collab', payload: ytext ?? { ...payload, pageId, actor: publishedActor } };
 		const published = await timedHop('publish', () => publishRealtime({ topic: `collabpage:${pageId}`, eventType: 'broadcast', payload: frame, fetchImpl: deps.fetchImpl, env: deps.env }));
 		if (!published) throw httpError('Collaboration publish failed.', 503);
 		return;
@@ -497,6 +534,8 @@ async function publishCollabEvent(handlerDeps, session, request, workspaceId, re
 	}
 	if (Buffer.byteLength(JSON.stringify(body)) > 65_536) throw httpError('Collaboration event is too large.', 413);
 	const payload = body.payload;
+	// With page topics off a ytext event would reach the ungated workspace topic: refuse it.
+	if (body.event === 'collab' && payload.t === 'ytext' && deps.env?.COLLAB_PAGE_TOPICS !== '1') throw httpError('unknown_event', 422);
 	if (body.event === 'collab' && deps.env?.COLLAB_PAGE_TOPICS !== '1') {
 		const actor = payload.actor;
 		if (typeof actor !== 'string' || !(actor.toLowerCase() === session.userId.toLowerCase()
@@ -568,7 +607,12 @@ async function inviteMember(deps, session, request, workspaceId, response, confi
  * true when handled. deps: { config, verifySession, fetchImpl?, env? }.
  */
 export function createCollabHandler({ config, verifySession, fetchImpl = fetch, env = process.env, authorizeBlocks, pageLevelFor }) {
-	const deps = { fetchImpl, env, authorizeBlocks, pageLevelFor };
+	// Strict page versions are what make concurrent same-block writes safe to merge (S1).
+	const ytextOn = env?.COLLAB_YTEXT === '1';
+	if (ytextOn && !(env.COLLAB_PAGE_TOPICS === '1' && config?.strictPageVersion === true)) {
+		throw new Error('COLLAB_YTEXT=1 requires COLLAB_PAGE_TOPICS=1 and OSIONOS_PAGE_STRICT_VERSION=1');
+	}
+	const deps = { fetchImpl, env, authorizeBlocks, pageLevelFor, ytextOn };
 	return async function handleCollabRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		const wsPatch = /^\/api\/workspaces\/([0-9a-f-]{36})$/i.exec(pathname);
