@@ -39,7 +39,7 @@ const VIEWS = [
   view({
     id: PEOPLE_VIEW.membersTable, databaseId: PEOPLE_DB.members, name: "Table", type: "table",
     grouping: { propertyId: MEMBER.role, sort: "alphabetical" },
-    visibleProperties: [MEMBER.role, MEMBER.since],
+    visibleProperties: [MEMBER.name, MEMBER.role, MEMBER.since],
     settings: { showRowNumbers: false, openPagesIn: "side_peek" },
   }),
 ];

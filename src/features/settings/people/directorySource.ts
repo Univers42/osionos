@@ -41,7 +41,7 @@ const VIEWS = [
   }),
   view({
     id: PEOPLE_VIEW.directoryTable, databaseId: PEOPLE_DB.directory, name: "Table", type: "table",
-    visibleProperties: [DIR.username, DIR.headline, DIR.online],
+    visibleProperties: [DIR.name, DIR.username, DIR.headline, DIR.online],
     settings: { showRowNumbers: false, openPagesIn: "side_peek" },
   }),
 ];
