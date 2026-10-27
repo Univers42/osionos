@@ -80,7 +80,7 @@ function Pill({ person, side }: { person: Person; side: 'above' | 'below' }): Re
         onMouseDown={(event) => event.preventDefault()}
         onFocus={rememberOrigin}
         onClick={(event) => activate(event, () => useFollowStore.getState().follow(person.actor))}
-        className={`${BUTTON} w-8 justify-center rounded-r-full border-l border-[var(--osio-border-default)]`}
+        className={`${BUTTON} w-9 justify-center before:-right-2 rounded-r-full border-l border-[var(--osio-border-default)]`}
       >
         <Eye size={14} aria-hidden />
       </button>
