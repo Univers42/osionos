@@ -93,7 +93,6 @@ describe('moving a page with PATCH parentPageId', () => {
 			const mock = createPostgrestMock(parentWorld());
 			await withBridge(config, mock.fetchImpl, async (base) => {
 				const moved = await send(base, `/api/pages/${IDS.pageB}`, asB, patch({ parentPageId, content: CONTENT }));
-				// C552: a parent the caller may not nest under is the same 404 a missing id gets.
 				assert.equal(moved.status, 404, moved.text);
 				assert.equal(moved.body.message, 'Parent page not found.');
 				assert.equal(mock.page(IDS.pageB).parent_page_id, null);
