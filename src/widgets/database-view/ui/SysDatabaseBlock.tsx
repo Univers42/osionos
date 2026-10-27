@@ -14,6 +14,7 @@
 import React from "react";
 import type { ObjectDatabaseAdapter, ObjectDatabaseProps } from "@notion-db/object-database";
 
+import { API_BASE } from "@/shared/api/client";
 import { useToastStore } from "@/shared/ui";
 import { withRecordLimit } from "../model/recordLimitAdapter";
 import { sysSourceById } from "../model/sysDataSources";
@@ -35,7 +36,8 @@ interface SysDatabaseBlockProps {
 const OK_STATUS: SysStatus = { truncated: false, error: null };
 
 /** A `sys:` database: your own data from the bridge, read-only. A failed read shows an
- *  error with Retry; it never falls back to demo rows. */
+ *  error with Retry; it never falls back to demo rows. A build with no server never
+ *  tries the read: it asks you to connect. */
 export const SysDatabaseBlock: React.FC<SysDatabaseBlockProps> = ({ databaseId, initialViewId, mode = "inline", recordLimit, renderDatabase }) => {
   const source = sysSourceById(databaseId);
   const adapter = React.useMemo(() => getSysDatabaseAdapter(databaseId, sysTransport), [databaseId]);
@@ -64,12 +66,14 @@ export const SysDatabaseBlock: React.FC<SysDatabaseBlockProps> = ({ databaseId, 
       data-database-id={databaseId}
       data-database-view-id={view}
     >
-      {status.error ? (
+      {!API_BASE || status.error ? (
         <div role="alert" className="flex items-center gap-3 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-4 py-3 text-sm text-[var(--osio-fg-default)]">
           <span>Connect to see your {source?.label.replace(/^My\s+/i, "").toLowerCase() ?? "data"}.</span>
-          <button type="button" className="rounded-md px-2 py-1 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={retry}>
-            Retry
-          </button>
+          {API_BASE ? (
+            <button type="button" className="rounded-md px-2 py-1 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={retry}>
+              Retry
+            </button>
+          ) : null}
         </div>
       ) : (
         renderDatabase({

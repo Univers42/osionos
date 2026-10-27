@@ -37,4 +37,17 @@ test.describe("dashboard-truth", () => {
     await expect(page.getByText("Data sources", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Featured /view", { exact: true })).toHaveCount(0);
   });
+
+  // A build with no server can never read your account: Home said so only after
+  // each block failed a load and logged it (12 console errors, develop CI 40465032837).
+  test("Home in a build with no server asks you to connect, and tries no load", async ({ page }) => {
+    const loadErrors = [];
+    page.on("console", (message) => {
+      if (message.type() === "error" && message.text().includes("Load error")) loadErrors.push(message.text());
+    });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.getByText("Connect to see your tasks.", { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('[data-database-id^="sys:"]').getByRole("button", { name: "Retry" })).toHaveCount(0);
+    expect(loadErrors).toEqual([]);
+  });
 });
