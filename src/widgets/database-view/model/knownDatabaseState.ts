@@ -25,7 +25,7 @@ import seedState from "@/shared/notion-database-sys/src/store/dbms/mongodb/_noti
 import { defaultStatusSchema } from "@/shared/notion-database-sys/src/store/slices/statusDefaults";
 import { timed } from "@osionos/perf-probe";
 import { applyWikiSeed } from "./wikiSeed";
-import { applyHomeDemoSeed } from "./homeDemoSeed";
+import { applyHomeDemoSeed, rebaseHomeDemoDates } from "./homeDemoSeed";
 import { applyGradesSeed } from "./gradesSeed";
 import {
   ensureObjectDatabaseHydration,
@@ -160,7 +160,7 @@ export function loadKnownDatabaseState(): NotionState {
     }
     const loaded = loadPersistedKnownDatabaseState(raw, seeded);
     deletedPageIds = loaded.deletedPageIds;
-    return withStatusDefaults(loaded.state);
+    return withStatusDefaults(rebaseHomeDemoDates(loaded.state));
   } catch {
     deletedPageIds = new Set();
     return seeded;
