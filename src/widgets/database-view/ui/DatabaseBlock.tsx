@@ -299,7 +299,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
           mode={resolvedMode}
           renderPage={renderPage}
           className={mode === 'full' ? 'h-full' : undefined}
-          chrome={mode === 'full' ? 'single-view' : 'inline'}
+          chrome={mode === 'full' ? 'full' : 'inline'}
           onOpenFullPage={onOpenFullPage}
           onDatabaseRenamed={handleDatabaseRenamed}
         />

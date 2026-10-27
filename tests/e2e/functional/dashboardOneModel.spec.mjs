@@ -72,10 +72,25 @@ test.describe("dashboard-one-model", () => {
     const { checked } = seedCounts();
     await openOverviewDashboard(page);
 
+    // Add a fresh dashboard view through the app's own view tabs, then build a
+    // KPI tile on it from the picker (no converted widgets to lean on).
+    await page.locator('[aria-label="Add view"]:not([inert] *)').first().click();
+    await expect(page.getByText("Add a new view")).toBeVisible();
+    await page.getByRole("button", { name: "Dashboard", exact: true }).first().click();
+    await page.locator("[data-dash-row]:not([inert] *)").first().waitFor({ timeout: 30_000 });
+
     await page.getByRole("button", { name: /Edit layout/ }).click();
     await page.getByRole("button", { name: /Add widget/ }).first().click();
     await page.getByText("Count where Featured is checked").first().click();
+    await expect(page.getByText(/7\/12 widgets/)).toBeVisible();
     await expect(page.getByText(String(checked)).first()).toBeVisible();
+  });
+
+  test("a converted tile's menu has no Embedded view", async ({ page }) => {
+    await openOverviewDashboard(page);
+    await page.getByRole("button", { name: /Edit layout/ }).click();
+    await page.locator('[aria-label="Widget actions"]:not([inert] *)').first().click();
+    await expect(page.getByText("Embedded view")).toHaveCount(0);
   });
 
   test("screenshots", async ({ page }) => {
