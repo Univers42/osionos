@@ -129,10 +129,10 @@ function seed(jti) {
 }
 
 /** The world: the caller, their rows and the store behind the bridge. */
-async function world(t, { rows = {}, fail = null, kv } = {}) {
+async function world(t, { rows = {}, fail = null, kv, pageAccessFilter } = {}) {
 	const config = accountConfig();
 	const token = sessionToken(config, USER_A);
-	const built = await startAccountWorld(t, { config, rows: { ...seed(jtiOf(token)), ...rows }, fail, kv });
+	const built = await startAccountWorld(t, { config, rows: { ...seed(jtiOf(token)), ...rows }, fail, kv, pageAccessFilter });
 	return { ...built, token, tokenB: sessionToken(built.config, USER_B) };
 }
 
@@ -174,7 +174,12 @@ describe('GET /api/account/self-data/<source>', () => {
 		const { base, store, token } = await world(t);
 		await read(base, 'my-pages', { token });
 		const call = store.callsTo('osionos_pages').at(-1);
-		assert.equal(call.params.get('select'), selfSourceById('my-pages').columns.join(','));
+		const source = selfSourceById('my-pages');
+		assert.equal(call.params.get('select'), source.readColumns.join(','));
+		for (const column of ['workspace_id', 'owner_id', 'collaborators']) {
+			assert.ok(source.readColumns.includes(column), `the access filter reads ${column}`);
+			assert.ok(!source.columns.includes(column), `${column} is read for the filter and never answered`);
+		}
 		assert.notEqual(call.params.get('select'), '*');
 		assert.equal(call.params.get('limit'), '201', 'the read asks for one row more than the cap');
 	});
@@ -434,10 +439,19 @@ describe('GET /api/account/self-data/<source>', () => {
 	it('is mounted on the account seam, beside the other account routes', async (t) => {
 		const config = accountConfig();
 		const token = sessionToken(config, USER_A);
-		const built = await startBridgeWorld(t, { config, rows: seed(jtiOf(token)) });
+		// The real page access filter runs here: USER_A is a member of WORKSPACE_ONE and not
+		// of WORKSPACE, so the page owned there is one they left behind (C557).
+		const owned = (id, workspace) => ({
+			id, workspace_id: workspace, owner_id: USER_A, title: 'Owned', icon: null, cover: null,
+			surface: 'page', visibility: 'private', database_id: null, parent_page_id: null,
+			created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-20T00:00:00.000Z', archived_at: null, collaborators: [],
+		});
+		const pages = [owned(PAGE_A, WORKSPACE_ONE), owned(PAGE_B, WORKSPACE)];
+		const built = await startBridgeWorld(t, { config, rows: { ...seed(jtiOf(token)), pages } });
 		const response = await read(built.base, 'my-pages', { token });
 		assert.equal(response.status, 200);
 		assert.equal(response.body.source, 'my-pages');
+		assert.deepEqual(response.body.rows.map((row) => row.id), [PAGE_A], 'a page owned in a workspace the user left is not answered');
 		const preferences = await send(built.base, '/api/preferences', { token });
 		assert.equal(preferences.status, 200, 'the other module of the seam still answers its own path');
 	});
@@ -453,5 +467,74 @@ describe('my-activity with the activity flag off', () => {
 		assert.equal(response.body.code, 'unknown_self_source');
 		assert.equal(store.callsTo('osionos_activity_events').length, 0);
 		assert.equal(selfSourceById('my-activity'), null);
+	});
+});
+
+// Owning a page is not enough to see it: the owner may have left its workspace, or a share
+// rule may hide it (C557). The bridge hands in the filter that decides, and my-pages asks it.
+describe('GET /api/account/self-data/my-pages and page access', () => {
+	const OWNED_TWO = '16161616-1616-4616-8616-161616161616';
+	const ownedPage = (id, workspace, updated) => ({
+		id, workspace_id: workspace, owner_id: USER_A, title: `Page ${id.slice(0, 4)}`, icon: null, cover: null,
+		surface: 'page', visibility: 'private', database_id: null, parent_page_id: null,
+		created_at: '2026-10-01T00:00:00.000Z', updated_at: updated, archived_at: null, collaborators: [],
+	});
+	const pages = [ownedPage(PAGE_A, WORKSPACE_ONE, '2026-10-20T00:00:00.000Z'), ownedPage(OWNED_TWO, WORKSPACE_OTHER, '2026-10-21T00:00:00.000Z')];
+
+	it('answers only the pages the access filter keeps', async (t) => {
+		const seen = [];
+		const pageAccessFilter = async (rows, session) => {
+			seen.push({ rows, userId: session.userId });
+			return rows.filter((row) => row.workspace_id !== WORKSPACE_OTHER);
+		};
+		const { base, token } = await world(t, { rows: { pages }, pageAccessFilter });
+		const response = await read(base, 'my-pages', { token });
+		assert.equal(response.status, 200);
+		assert.deepEqual(response.body.rows.map((row) => row.id), [PAGE_A]);
+		assert.equal(seen.length, 1);
+		assert.equal(seen[0].userId, USER_A);
+		for (const column of ['id', 'workspace_id', 'owner_id', 'visibility', 'collaborators']) {
+			assert.ok(column in seen[0].rows[0], `the filter is handed ${column}`);
+		}
+		assert.equal(response.body.rows[0].workspace_id, undefined, 'what the filter reads is not answered');
+	});
+
+	it('is a 503 when access cannot be read, never an empty list', async (t) => {
+		const pageAccessFilter = async () => {
+			throw Object.assign(new Error('membership read failed'), { code: 'page_access_unavailable', status: 503 });
+		};
+		const { base, token } = await world(t, { rows: { pages }, pageAccessFilter });
+		const response = await read(base, 'my-pages', { token });
+		assert.equal(response.status, 503);
+		assert.equal(response.body.code, 'self_data_unavailable');
+		assert.equal(response.body.rows, undefined);
+	});
+
+	it('is a 503 when the bridge wired no access filter: owned pages are never answered unchecked', async (t) => {
+		const { base, token } = await world(t, { rows: { pages }, pageAccessFilter: null });
+		const response = await read(base, 'my-pages', { token });
+		assert.equal(response.status, 503);
+		assert.equal(response.body.rows, undefined);
+	});
+
+	it('says truncated from the rows read, not the rows the filter kept', async (t) => {
+		const many = Array.from({ length: 250 }, (_, index) => ownedPage(
+			`00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+			index % 2 === 0 ? WORKSPACE_ONE : WORKSPACE_OTHER,
+			'2026-10-20T00:00:00.000Z',
+		));
+		const pageAccessFilter = async (rows) => rows.filter((row) => row.workspace_id === WORKSPACE_ONE);
+		const { base, token } = await world(t, { rows: { pages: many }, pageAccessFilter });
+		const response = await read(base, 'my-pages', { token });
+		assert.equal(response.body.rows.length, 100, 'the filter sees the 200 rows the cap keeps');
+		assert.equal(response.body.truncated, true, 'more owned pages exist past the cap');
+	});
+
+	it('asks the filter only for page rows', async (t) => {
+		let calls = 0;
+		const pageAccessFilter = async (rows) => { calls += 1; return rows; };
+		const { base, token } = await world(t, { pageAccessFilter });
+		for (const source of SELF_SOURCES) await read(base, source.id, { token });
+		assert.equal(calls, 1, 'only my-pages answers page rows');
 	});
 });

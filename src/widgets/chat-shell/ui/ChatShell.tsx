@@ -14,7 +14,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { useChatStore, getInferencePort, conversationsOf, isUntouchedConversation } from "@/features/chat/model/useChatStore";
 import { useAgentRequest } from "@/features/chat/model/agentRequest";
-import { mergeAttachments, subscribeAssistantHandoff, toRunAttachments } from "@/features/chat/model/assistantHandoff";
+import { mergeAttachments, mergeHandoffText, subscribeAssistantHandoff, toRunAttachments } from "@/features/chat/model/assistantHandoff";
 import type { ComposerAttachment } from "@/features/chat/model/assistantHandoff";
 import { useConnectorStore } from "@/features/connectors/model/useConnectorStore";
 import { isAiConfigured } from "@/features/ai/api/aiClient";
@@ -114,7 +114,7 @@ export const ChatShell: React.FC = () => {
             pending.attachments.map((path) => ({ path, name: "image", kind: "image" as const })),
             MAX_ATTACHMENTS,
           ));
-        if (pending.text) setText((current) => (current.trim() ? current : pending.text));
+        if (pending.text) setText((current) => mergeHandoffText(current, pending.text));
         // The page the question is about: a chip by id; the service checks the access (C423).
         const { pageId } = pending;
         if (pageId) {
