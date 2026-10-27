@@ -64,7 +64,8 @@ test.describe("home account", () => {
   test("New page on Home opens a new page", async ({ page, baseURL }) => {
     await stubSysViews(page, { sources: SOURCES });
     await openHome(page, baseURL);
-    await page.getByRole("button", { name: "New page", exact: true }).click();
+    await page.locator('[data-draggable-block-id$="home-actions-block-button-new-page"]')
+      .getByRole("button", { name: "New page", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Page title" })).toBeVisible({ timeout: 15_000 });
   });
 
