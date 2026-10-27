@@ -48,12 +48,23 @@ export interface SysSource {
 export interface SysBuiltInView {
   id: string;
   name: string;
-  type: "chart";
+  type: "chart" | "dashboard";
   settings: Record<string, unknown>;
+  /** When set, the user may edit or remove this shipped view; their copy is saved under its own id. */
+  editable?: true;
 }
 
-/** Every view id the app owns for a source: never saved to or deleted from the bridge. */
-export const sysBuiltInViewIds = (entry: SysSource): string[] => [entry.defaultViewId, ...(entry.builtInViews ?? []).map((view) => view.id)];
+/** View ids the app owns for a source and that are never saved to or deleted from the bridge:
+ *  the default table view and any non-editable built-in. Editable built-ins are
+ *  deliberately excluded so a user's edit to one is saved under its own id. */
+export const sysBuiltInViewIds = (entry: SysSource): string[] => [
+  entry.defaultViewId,
+  ...(entry.builtInViews ?? []).filter((view) => !view.editable).map((view) => view.id),
+];
+
+/** The ids of a source's editable built-in views, if any. */
+export const sysEditableBuiltInViewIds = (entry: SysSource | null | undefined): string[] =>
+  (entry?.builtInViews ?? []).filter((view) => view.editable === true).map((view) => view.id);
 
 export const SYS_VIEW_TYPE: KnownDatabaseViewType = "table";
 

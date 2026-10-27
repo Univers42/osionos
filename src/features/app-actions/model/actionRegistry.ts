@@ -13,6 +13,9 @@
 import { useAccountDevicesStore } from "@/store/settings/useAccountDevicesStore";
 import { useUserPreferencesStore } from "@/store/settings/useUserPreferencesStore";
 import { useUserStore } from "@/features/auth";
+import { usePageStore } from "@/store/usePageStore";
+import { openSettings } from "@/features/settings/model/settingsNav";
+import { findSection } from "@/features/settings/model/sections";
 import type { ActionDefinition } from "@/entities/block/model/appActions";
 
 function revokeConfirmText(args: Record<string, unknown>): { title: string; message: string; actionLabel: string } {
@@ -58,6 +61,45 @@ export const APP_ACTIONS: Map<string, ActionDefinition> = new Map<string, Action
 				await useUserPreferencesStore.getState().reset(userId);
 				const error = useUserPreferencesStore.getState().error;
 				if (error) return { status: "failed", message: error };
+				return { status: "ok" };
+			},
+		},
+	],
+	[
+		"page.create",
+		{
+			name: "page.create",
+			label: "Create page",
+			params: { title: { type: "string", maxLength: 200 } },
+			confirm: "none",
+			sudo: "none",
+			destructive: false,
+			run: async (args) => {
+				const user = useUserStore.getState();
+				const workspace = user.activeWorkspace();
+				const jwt = user.activePageJwt() ?? "";
+				if (!workspace) return { status: "failed", message: "Open a workspace first" };
+				const title = typeof args.title === "string" ? args.title : "Untitled";
+				const page = await usePageStore.getState().addPage(workspace._id, title, jwt, undefined, undefined);
+				if (!page) return { status: "failed", message: "Could not create the page" };
+				usePageStore.getState().openPage({ id: page._id, workspaceId: workspace._id, kind: "page", title: page.title });
+				return { status: "ok" };
+			},
+		},
+	],
+	[
+		"settings.open",
+		{
+			name: "settings.open",
+			label: "Open settings",
+			params: { section: { type: "string", required: true, maxLength: 64 } },
+			confirm: "none",
+			sudo: "none",
+			destructive: false,
+			run: async (args) => {
+				const section = String(args.section ?? "");
+				if (!findSection(section)) return { status: "failed", message: `Unknown settings section: ${section}` };
+				openSettings(section as never);
 				return { status: "ok" };
 			},
 		},
