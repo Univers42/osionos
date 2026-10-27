@@ -85,8 +85,11 @@ function ancestorChain(pageId, parentOf) {
 }
 
 /**
- * The level `userId` keeps for `row`: 'none' | 'can_view' | 'can_comment' |
- * 'can_edit' | 'full_access'.
+ * The decision for one page: its level, and whether a share rule (or a broken chain
+ * that must fail closed) produced it rather than the visibility default. The write
+ * gates read `fromRule`: an explicit can_view/can_comment rule denies a write the
+ * membership would carry, while the default can_view leaves membership's `update`
+ * permission in charge (C558).
  *
  * @param {object} input
  * @param {object|null} input.row the osionos_pages row (id, owner_id, workspace_id, visibility, collaborators)
@@ -96,39 +99,66 @@ function ancestorChain(pageId, parentOf) {
  * @param {Map<string, string|null> | null} [input.parentOf] lower-case page id → lower-case parent id or null;
  *   null when the workspace has no rule, so the ancestor chain is never needed
  * @param {string[] | null} [input.teamIds] the caller's team ids, null when unread (fail closed for team grants)
- * @returns {'none'|'can_view'|'can_comment'|'can_edit'|'full_access'}
+ * @returns {{ level: 'none'|'can_view'|'can_comment'|'can_edit'|'full_access', fromRule: boolean }}
  */
-export function pageAccessLevel({ row, userId, member = null, rulesByPage = new Map(), parentOf = new Map(), teamIds = null } = {}) {
-	if (!row || typeof row !== 'object' || !userId) return NONE;
-	// Page owner: their own page stays readable under a denying ancestor (C510e).
-	if (sameId(row.owner_id, userId)) return 'full_access';
+function decidePageAccess({ row, userId, member = null, rulesByPage = new Map(), parentOf = new Map(), teamIds = null } = {}) {
+	if (!row || typeof row !== 'object' || !userId) return { level: NONE, fromRule: false };
+	// Page owner: their own page stays readable under a denying ancestor (C510e) — but
+	// only while they still belong to the page's workspace (C557). An ex-member owner is
+	// a non-member like any other.
+	if (sameId(row.owner_id, userId) && member) return { level: 'full_access', fromRule: false };
 	// Workspace owner/admin: the rules never reach them, but the page's own visibility
 	// still does — an admin does not become able to read another member's private page.
 	const role = typeof member?.role === 'string' ? member.role.toLowerCase() : '';
-	if (role === 'owner' || role === 'admin') return canReadPageRow(row, userId) ? 'full_access' : NONE;
+	if (role === 'owner' || role === 'admin') return { level: canReadPageRow(row, userId) ? 'full_access' : NONE, fromRule: false };
 	// A caller with no membership row is not a member of this workspace: fail closed.
-	if (!member) return NONE;
+	if (!member) return { level: NONE, fromRule: false };
 	// No rule in the workspace: no ancestor can grant or deny anything, so the caller need
 	// not have loaded the parent map (parentOf is null). This is the visibility default,
 	// never a fail-closed 'none' for a missing map or an unknown parent id.
 	if (!(rulesByPage instanceof Map) || rulesByPage.size === 0) {
-		return canReadPageRow(row, userId) ? 'can_view' : NONE;
+		return { level: canReadPageRow(row, userId) ? 'can_view' : NONE, fromRule: false };
 	}
 
 	const pageId = idOf(row.id);
-	if (!pageId) return NONE;
+	if (!pageId) return { level: NONE, fromRule: false };
 	const chain = ancestorChain(pageId, parentOf);
-	if (!chain) return NONE;
+	// A broken chain is not a rule, but it must still refuse a write (C551/C558).
+	if (!chain) return { level: NONE, fromRule: true };
 
 	const ctx = { userId, role: member.role, workspaceId: row.workspace_id, teamIds };
 	let nearest = null;
 	for (const id of chain) {
 		const level = bestShareLevel(rulesAt(rulesByPage, id), ctx, id);
 		// Deny wins even when a closer page grants: keep walking the whole chain.
-		if (level === 'no_access') return NONE;
+		if (level === 'no_access') return { level: NONE, fromRule: true };
 		if (nearest === null && level !== null) nearest = level;
 	}
-	if (nearest !== null) return nearest;
+	if (nearest !== null) return { level: nearest, fromRule: true };
 	// No matching rule anywhere: today's visibility rule decides.
-	return canReadPageRow(row, userId) ? 'can_view' : NONE;
+	return { level: canReadPageRow(row, userId) ? 'can_view' : NONE, fromRule: false };
+}
+
+/**
+ * The level `userId` keeps for `row`: 'none' | 'can_view' | 'can_comment' |
+ * 'can_edit' | 'full_access'.
+ *
+ * @param {Parameters<typeof decidePageAccess>[0]} input
+ * @returns {'none'|'can_view'|'can_comment'|'can_edit'|'full_access'}
+ */
+export function pageAccessLevel(input = {}) {
+	return decidePageAccess(input).level;
+}
+
+/**
+ * The rule-driven level only: `null` when the exemptions or the visibility default
+ * decided the page. A write gate replays this level as a rule; the default must stay
+ * `null` so membership's own `update` permission still decides (C558).
+ *
+ * @param {Parameters<typeof decidePageAccess>[0]} input
+ * @returns {'none'|'can_view'|'can_comment'|'can_edit'|'full_access'|null}
+ */
+export function pageRuleLevel(input = {}) {
+	const decision = decidePageAccess(input);
+	return decision.fromRule ? decision.level : null;
 }
