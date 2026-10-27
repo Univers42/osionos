@@ -49,6 +49,7 @@ import {
 } from './bridge-social-core.mjs';
 import { findAccountByEmail, readGotrueUser } from './bridge-gotrue-user.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { bumpAccessAfter } from './bridge-access-generation.mjs';
 import {
   TOKEN_SHAPE,
   findInviteByToken,
@@ -236,7 +237,7 @@ async function acceptInvite(deps, request, response, config) {
   // Claim the invite before the membership: of two racing accepts only one passes this, so the
   // other cannot publish a second "added".
   if (!(await markAccepted(config, deps.fetchImpl, invite.id, session.userId))) throw coded(410, 'invite_used', 'This invite was already used.');
-  await rest(config, deps.fetchImpl, 'osionos_workspace_members?on_conflict=workspace_id,user_id', {
+  await bumpAccessAfter(rest(config, deps.fetchImpl, 'osionos_workspace_members?on_conflict=workspace_id,user_id', {
     method: 'POST',
     body: {
       workspace_id: invite.workspace_id,
@@ -245,7 +246,7 @@ async function acceptInvite(deps, request, response, config) {
       permissions: PERMISSIONS_BY_DB_ROLE.get(invite.role) ?? ['read'],
     },
     prefer: 'resolution=ignore-duplicates,return=minimal',
-  });
+  }), { workspaceId: invite.workspace_id, userId: session.userId });
   const workspace = await fetchWorkspace(config, deps.fetchImpl, invite.workspace_id);
   const identities = await identitySummaries(config, deps.fetchImpl, [invite.invited_by]);
   await publishMembership(deps, session.userId, {
@@ -275,11 +276,11 @@ async function changeMemberRole(deps, session, request, workspaceId, targetId, r
   const touchesAdmin = role.name === 'admin' || String(rows[0].role ?? '').toLowerCase() === 'admin';
   if (touchesAdmin && actorRole !== 'owner') throw httpError('Only the workspace owner may grant or change an admin role.', 403);
   const timestamp = new Date().toISOString();
-  await rest(config, deps.fetchImpl, `osionos_workspace_members?workspace_id=eq.${workspaceId}&user_id=eq.${targetId}`, {
+  await bumpAccessAfter(rest(config, deps.fetchImpl, `osionos_workspace_members?workspace_id=eq.${workspaceId}&user_id=eq.${targetId}`, {
     method: 'PATCH',
     body: { role: role.role, permissions: role.permissions },
     prefer: 'return=minimal',
-  });
+  }), { workspaceId, userId: targetId });
   const identities = await identitySummaries(config, deps.fetchImpl, [targetId, session.userId]);
   await publishMembership(deps, targetId, {
     workspaceId,
@@ -317,10 +318,10 @@ async function removeMember(deps, session, workspaceId, targetId, response, conf
     `osionos_workspace_members?workspace_id=eq.${workspaceId}&user_id=eq.${targetId}&select=user_id&limit=1`,
   );
   if (!Array.isArray(rows) || rows.length === 0) throw httpError('Member not found.', 404);
-  await rest(config, deps.fetchImpl, `osionos_workspace_members?workspace_id=eq.${workspaceId}&user_id=eq.${targetId}`, {
+  await bumpAccessAfter(rest(config, deps.fetchImpl, `osionos_workspace_members?workspace_id=eq.${workspaceId}&user_id=eq.${targetId}`, {
     method: 'DELETE',
     prefer: 'return=minimal',
-  });
+  }), { workspaceId, userId: targetId });
   const identities = await identitySummaries(config, deps.fetchImpl, [session.userId]);
   await publishMembership(deps, targetId, {
     workspaceId,

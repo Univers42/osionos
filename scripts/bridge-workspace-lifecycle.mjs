@@ -37,6 +37,7 @@
 import { UUID_REGEX, identitySummaries, publishRealtime, sendJson } from './bridge-social-core.mjs';
 import { accountError, callerSession, clientMetaOf, readBody, respondWithError } from './bridge-account-sudo.mjs';
 import { rateLimit, requireSudo, writeAudit } from './bridge-guard.mjs';
+import { bumpAccessAfter } from './bridge-access-generation.mjs';
 
 const ROUTE = /^\/api\/workspaces\/([0-9a-f-]{36})(\/leave|\/cancel-delete|\/members\/transfer-ownership)?$/i;
 const GRACE_MS = 14 * 86_400_000;
@@ -95,7 +96,7 @@ async function deleteWorkspace(ctx, session, request, response, workspaceId) {
 	const deleteAfter = new Date(now + GRACE_MS).toISOString();
 	// The owner must keep a workspace of their own: a real account owns several, and the one
 	// that is left is the one the app signs them back into. The function decides it under lock.
-	const outcome = await service.rpc('osionos_workspace_mark_delete', { p_workspace: workspaceId, p_owner: session.userId, p_now: new Date(now).toISOString(), p_after: deleteAfter });
+	const outcome = await bumpAccessAfter(service.rpc('osionos_workspace_mark_delete', { p_workspace: workspaceId, p_owner: session.userId, p_now: new Date(now).toISOString(), p_after: deleteAfter }), { workspaceId });
 	const refusal = MARK_REFUSALS[outcome];
 	if (outcome !== 'marked') throw refusal ? accountError(...refusal) : accountError(409, 'delete_conflict', 'The workspace changed while deleting; reload and try again.');
 	return ctx.reply(response, 200, { ok: true, pendingDelete: true, workspaceId, deleteAfter });
@@ -109,7 +110,7 @@ async function cancelDelete(ctx, session, request, response, workspaceId) {
 	if (Date.parse(workspace.delete_after) <= Date.now()) throw accountError(409, 'grace_expired', 'The grace period is over; the workspace can no longer be restored.');
 	await audit(ctx, session, request, 'workspace.delete_cancelled', { workspaceId });
 	// The filter makes a cancel racing another cancel (or a sweep) match nothing, and nothing is a 409.
-	const cleared = await service.patch(`osionos_workspaces?id=eq.${workspaceId}&pending_delete_at=not.is.null&select=id`, { pending_delete_at: null, delete_after: null, updated_at: new Date().toISOString() }, { prefer: 'return=representation' });
+	const cleared = await bumpAccessAfter(service.patch(`osionos_workspaces?id=eq.${workspaceId}&pending_delete_at=not.is.null&select=id`, { pending_delete_at: null, delete_after: null, updated_at: new Date().toISOString() }, { prefer: 'return=representation' }), { workspaceId });
 	if (!Array.isArray(cleared) || cleared.length === 0) throw accountError(409, 'not_pending_delete', 'This workspace is not scheduled for deletion.');
 	return ctx.reply(response, 200, { ok: true, cancelled: true });
 }
@@ -142,11 +143,11 @@ async function leaveWorkspace(ctx, session, response, workspaceId) {
 	if (!membership) throw accountError(404, 'not_a_member', 'You are not a member of this workspace.');
 	if (membership.role === 'owner') throw isOwner();
 	// role=neq.owner: a transfer that made this caller the owner after the read above matches no row.
-	const removed = await service.del(`osionos_workspace_members?workspace_id=eq.${workspaceId}&user_id=eq.${session.userId}&role=neq.owner&select=user_id`, { prefer: 'return=representation' });
+	const removed = await bumpAccessAfter(service.del(`osionos_workspace_members?workspace_id=eq.${workspaceId}&user_id=eq.${session.userId}&role=neq.owner&select=user_id`, { prefer: 'return=representation' }), { workspaceId, userId: session.userId });
 	if (!Array.isArray(removed) || removed.length === 0) throw isOwner();
 	// ilike: the rule key keeps the user id as it was typed, so the match ignores case.
 	// Pending invites do not exist yet (an invite adds the member directly); P3-5-c revokes them here.
-	await service.del(`osionos_share_rules?workspace_id=eq.${workspaceId}&target_key=ilike.user:${session.userId}:`, { prefer: 'return=minimal' });
+	await bumpAccessAfter(service.del(`osionos_share_rules?workspace_id=eq.${workspaceId}&target_key=ilike.user:${session.userId}:`, { prefer: 'return=minimal' }), { workspaceId, userId: session.userId });
 	await announceLeft(ctx, session, workspace);
 	return ctx.reply(response, 200, { ok: true, left: true });
 }
@@ -163,7 +164,7 @@ async function transferOwnership(ctx, session, request, response, workspaceId) {
 	await audit(ctx, session, request, 'workspace.ownership_transferred', { workspaceId, toUserId });
 	// One function so the owner column and both member rows move together: PostgREST
 	// cannot write two rows in one transaction, and a half-done transfer is two owners or none.
-	const done = await service.rpc('osionos_workspace_transfer_ownership', { p_workspace: workspaceId, p_from: session.userId, p_to: toUserId });
+	const done = await bumpAccessAfter(service.rpc('osionos_workspace_transfer_ownership', { p_workspace: workspaceId, p_from: session.userId, p_to: toUserId }), { workspaceId, userId: [session.userId, toUserId] });
 	if (done !== true) throw accountError(409, 'transfer_conflict', 'The workspace changed while transferring; reload and try again.');
 	const rows = await service.get(`osionos_workspace_members?workspace_id=eq.${workspaceId}&select=user_id,role`);
 	const members = (Array.isArray(rows) ? rows : []).map((row) => ({ userId: row.user_id, role: row.role }));

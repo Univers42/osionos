@@ -18,6 +18,7 @@ import {
 	safeText,
 	sendJson,
 } from './bridge-social-core.mjs';
+import { bumpAccessAfter } from './bridge-access-generation.mjs';
 
 const ALLOWED_KEYS = new Set(['name', 'icon', 'landingPageId', 'sidebar', 'analytics']);
 const SIDEBAR_KEYS = new Set(['newSidebar', 'showApps']);
@@ -151,7 +152,7 @@ async function handlePatch(deps, session, workspaceId, request, response) {
 	const dbPatch = { settings: nextSettings, updated_at: new Date().toISOString() };
 	if (Object.hasOwn(patch, 'name')) dbPatch.name = patch.name;
 
-	await deps.pg.asService().patch(`osionos_workspaces?id=eq.${workspaceId}`, dbPatch, { prefer: 'return=minimal' });
+	await bumpAccessAfter(deps.pg.asService().patch(`osionos_workspaces?id=eq.${workspaceId}`, dbPatch, { prefer: 'return=minimal' }), { workspaceId });
 
 	const mergedName = Object.hasOwn(patch, 'name') ? patch.name : (workspace.name ?? 'Workspace');
 	const visibility = workspace.visibility ?? 'confidential';
