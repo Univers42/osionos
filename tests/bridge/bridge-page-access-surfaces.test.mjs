@@ -11,8 +11,11 @@ const asB = sessionHeaders(config, IDS.userB, IDS.homeB, [IDS.team]);
 
 const PARENT = 'b2000000-0000-4000-8000-000000000001';
 const HIDDEN = 'b2000000-0000-4000-8000-000000000002';
+const SIBLING = 'b2000000-0000-4000-8000-000000000003';
+const B_OWN = 'b2000000-0000-4000-8000-000000000004';
 const RULE = 'b2000000-0000-4000-8000-0000000000f1';
 const HIDDEN_TITLE = 'HIDDEN-H';
+const SIBLING_TITLE = 'VISIBLE-S';
 
 function page(id, parent, title) {
 	return {
@@ -25,7 +28,7 @@ function page(id, parent, title) {
 
 function world() {
 	const base = teamWorld({ memberRole: 'editor' });
-	base.osionos_pages = [page(PARENT, null, 'Parent'), page(HIDDEN, PARENT, HIDDEN_TITLE)];
+	base.osionos_pages = [page(PARENT, null, 'Parent'), page(HIDDEN, PARENT, HIDDEN_TITLE), page(SIBLING, null, SIBLING_TITLE), { ...page(B_OWN, null, 'B own'), owner_id: IDS.userB }];
 	base.osionos_share_rules = [{
 		id: RULE, workspace_id: IDS.team, resource_type: 'page', resource_id: PARENT,
 		target: { type: 'user', userId: IDS.userB }, permission: 'no_access', explicit: true,
@@ -117,6 +120,42 @@ describe('C550 surfaces never carry the denied page', () => {
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			const r = await send(base, '/api/social/reports', asB, post({ subjectKind: 'page', subjectId: HIDDEN, category: 'other' }));
 			assert.equal(r.status, 404, r.text);
+		});
+	});
+});
+
+describe('C555 missing surfaces', () => {
+	it('recs: /api/recs/for-you omits the denied page and keeps a visible one', async () => {
+		process.env.OSIONOS_RECS_FOR_YOU = '1';
+		const mock = createPostgrestMock(world(), { realWorkspaceRpc: true, rpc: { ai_rec_popular: () => [{ item_id: HIDDEN }, { item_id: SIBLING }] } });
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const r = await send(base, '/api/recs/for-you?limit=20', asB);
+			assert.equal(r.status, 200, r.text);
+			assert.equal(r.text.includes(HIDDEN), false);
+			assert.equal(r.text.includes(HIDDEN_TITLE), false);
+			assert.equal(r.text.includes(SIBLING), true);
+		});
+		delete process.env.OSIONOS_RECS_FOR_YOU;
+	});
+
+	it('subitems: listing pages under the denied parent omits H (visible sibling present at root)', async () => {
+		const mock = createPostgrestMock(world(), { realWorkspaceRpc: true });
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const r = await send(base, `/api/pages?workspaceId=${IDS.team}&parentPageId=${PARENT}`, asB);
+			assert.equal(r.status, 200, r.text);
+			assert.equal(r.text.includes(HIDDEN), false);
+			assert.equal(r.text.includes(HIDDEN_TITLE), false);
+		});
+	});
+
+	it('move: PATCH B own page with parentPageId=HIDDEN is 404 and unchanged', async () => {
+		const mock = createPostgrestMock(world(), { realWorkspaceRpc: true });
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const before = mock.page(B_OWN).parent_page_id;
+			const r = await send(base, `/api/pages/${B_OWN}`, asB, patch({ parentPageId: HIDDEN, content: [{ id: 'x', type: 'paragraph', content: 'changed' }] }));
+			assert.equal(r.status, 404, r.text);
+			assert.equal(r.body.message, 'Parent page not found.');
+			assert.equal(mock.page(B_OWN).parent_page_id, before);
 		});
 	});
 });
