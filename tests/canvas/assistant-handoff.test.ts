@@ -23,6 +23,7 @@ import test from "node:test";
 import {
   mediaPathOfAsset,
   mergeAttachments,
+  mergeHandoffText,
   useAssistantHandoff,
 } from "@/features/chat/model/assistantHandoff";
 
@@ -144,4 +145,15 @@ test("the composer takes the picture once, and never more than it holds", () => 
   assert.deepEqual(mergeAttachments([one], [one], 4), [one]);
   assert.deepEqual(mergeAttachments([one], [other], 4), [one, other]);
   assert.deepEqual(mergeAttachments([one, other], [third], 2), [one, other]);
+});
+
+test("a second quote lands under the draft, never over it, and never twice", () => {
+  const first = "> **Sales:**\n> 3 records\n\n";
+  const second = "> **Top products:**\n> 2 of 9 records\n\n";
+  assert.equal(mergeHandoffText("", first), first);
+  assert.equal(mergeHandoffText("  \n", first), first);
+  assert.equal(mergeHandoffText(first, second), `${first.trimEnd()}\n\n${second}`);
+  assert.equal(mergeHandoffText("compare these", second), `compare these\n\n${second}`);
+  assert.equal(mergeHandoffText(`${first}why?`, first), `${first}why?`);
+  assert.equal(mergeHandoffText("draft", "   "), "draft");
 });
