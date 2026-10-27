@@ -31,14 +31,17 @@ interface CollabRosterProps {
   onSummon?: (memberId: string, name: string) => void;
 }
 
-function Avatar({ member, onSummon }: { member: PresenceState; onSummon?: CollabRosterProps['onSummon'] }): React.ReactElement {
+function Avatar({ member, onSummon, onPage }: { member: PresenceState; onSummon?: CollabRosterProps['onSummon']; onPage: boolean }): React.ReactElement {
   const face = member.avatarRef
     ? <img src={member.avatarRef} alt="" className="h-full w-full object-cover" />
     : memberInitials(member.displayName);
   const ring = { ...RING, outline: `2px solid ${member.color}` };
   const cls = '-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-[var(--osio-bg-elevated)] bg-[var(--osio-bg-subtle)] text-2xs font-medium text-[var(--osio-fg-muted)] first:ml-0';
+  // Presence is split: the page channel says who is on THIS page; everyone else
+  // in the workspace roster is "in this space" (C501), never a leaky route.
+  const where = onPage ? 'is on this page' : 'is in this space';
   if (!onSummon) {
-    return <span title={member.displayName} aria-label={`${member.displayName} is here`} style={ring} className={cls}>{face}</span>;
+    return <span title={`${member.displayName} ${where}`} aria-label={`${member.displayName} ${where}`} style={ring} className={cls}>{face}</span>;
   }
   return (
     <button
@@ -56,19 +59,23 @@ function Avatar({ member, onSummon }: { member: PresenceState; onSummon?: Collab
 
 export const CollabRoster: React.FC<CollabRosterProps> = ({ onSummon }) => {
   const members = useCollabStore((state) => state.members);
+  const pageMembers = useCollabStore((state) => state.pageMembers);
   const status = useCollabStore((state) => state.status);
   if (status !== 'live' || members.length === 0) return null;
 
+  const onPage = new Set(pageMembers.map((member) => member.memberId));
   const { shown, overflow } = splitRoster(members);
-  const names = members.map((member) => member.displayName).join(', ');
+  const names = members.map((member) => `${member.displayName} ${onPage.has(member.memberId) ? 'here' : 'in this space'}`).join(', ');
 
   return (
     <div
       className="flex items-center"
       role="group"
-      aria-label={`${members.length} other ${members.length === 1 ? 'person' : 'people'} here: ${names}`}
+      aria-label={`${members.length} other ${members.length === 1 ? 'person' : 'people'} in this space: ${names}`}
     >
-      {shown.map((member) => <Avatar key={member.memberId} member={member} onSummon={onSummon} />)}
+      {shown.map((member) => (
+        <Avatar key={member.memberId} member={member} onSummon={onSummon} onPage={onPage.has(member.memberId)} />
+      ))}
       {overflow > 0 && (
         <span
           title={names}

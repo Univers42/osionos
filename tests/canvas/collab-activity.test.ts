@@ -52,16 +52,20 @@ class FakeChannel implements RealtimeChannel {
   leave(): void {}
 }
 
-test('the store folds a remote focus event into the active-control source', async () => {
+test('the store folds a remote focus event from the PAGE channel into the active-control source', async () => {
   const { useCollabStore } = await import('@/features/collab/store/useCollabStore');
   useCollabStore.getState().disconnect();
-  const channel = new FakeChannel();
-  await useCollabStore.getState().connect('space-1', { id: 'me', displayName: 'Me' }, async () => channel);
+  const workspace = new FakeChannel();
+  const page = new FakeChannel();
+  await useCollabStore.getState().connect('space-1', { id: 'me', displayName: 'Me' }, async () => workspace);
+  await useCollabStore.getState().connectPage(
+    'space-1', 'page-1', { id: 'me', displayName: 'Me' }, async () => page,
+  );
 
-  channel.eventHandler?.({ t: 'focus', actor: 'bob', seq: 1, elementId: 'toolbar.bold' });
+  page.eventHandler?.({ t: 'focus', actor: 'bob', seq: 1, pageId: 'page-1', elementId: 'toolbar.bold' });
   assert.equal(useCollabStore.getState().cursors.get('bob')?.focusedElementId, 'toolbar.bold');
 
-  channel.eventHandler?.({ t: 'focus', actor: 'bob', seq: 2, elementId: null });
+  page.eventHandler?.({ t: 'focus', actor: 'bob', seq: 2, pageId: 'page-1', elementId: null });
   assert.equal(useCollabStore.getState().cursors.get('bob')?.focusedElementId, null, 'blur clears the pulse');
   useCollabStore.getState().disconnect();
 });

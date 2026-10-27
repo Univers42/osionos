@@ -282,9 +282,14 @@ test("a page collaborator editor does not grant write without a workspace permis
   assert.deepEqual(writeAnswer(spot), { update: false, delete: false });
 });
 
-test("the page owner writes whatever their membership says", () => {
-  const spot: Spot = { member: "none", owner: "self", visibility: "private", collaborators: "none", published: false };
+test("the page owner writes while still a member, whatever the role", () => {
+  const spot: Spot = { member: "viewer", owner: "self", visibility: "private", collaborators: "none", published: false };
   assert.deepEqual(writeAnswer(spot), { update: true, delete: true });
+});
+
+test("a page owner who left the workspace writes nothing (C557)", () => {
+  const spot: Spot = { member: "none", owner: "self", visibility: "private", collaborators: "none", published: false };
+  assert.deepEqual(writeAnswer(spot), { update: false, delete: false });
 });
 
 test("an admin permission alone writes an ownerless page no more", () => {
@@ -404,9 +409,11 @@ const RULE_SPOTS: Array<[string, Partial<ShareSpot> & Pick<ShareSpot, "ruleLabel
   ["a can_edit rule for self grants write on a private page", { ruleLabel: "self-can_edit", rules: [forSelf("can_edit")] }, ALLOWED],
   ["a no_access rule for self denies write even with update permission",
     { member: "editor", visibility: "shared", ruleLabel: "self-no_access", rules: [forSelf("no_access")] }, DENIED],
-  // The page owner is exempt from share rules on the server; the client mirrors that.
-  ["a no_access rule for self denies write even for page owner",
-    { member: "none", owner: "self", ruleLabel: "self-no_access", rules: [forSelf("no_access")] }, ALLOWED],
+  // The page owner who is still a member is exempt from share rules on the server; the client mirrors that.
+  ["a no_access rule for self does not take the write from a member page owner",
+    { owner: "self", ruleLabel: "self-no_access", rules: [forSelf("no_access")] }, ALLOWED],
+  ["a no_access rule for self leaves an ex-member page owner without write",
+    { member: "none", owner: "self", ruleLabel: "self-no_access", rules: [forSelf("no_access")] }, DENIED],
   ["a can_comment rule does not grant write", { ruleLabel: "self-can_comment", rules: [forSelf("can_comment")] }, DENIED],
   ["a workspace-wide can_edit rule grants write", { ruleLabel: "wide-workspace-can_edit", rules: [workspaceWide("can_edit")] }, ALLOWED],
   ["a rule for another user does not affect self",

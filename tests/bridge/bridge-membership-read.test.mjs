@@ -52,9 +52,9 @@ describe('read: the member row comes with the page', () => {
 			assert.equal(shared.body._id, IDS.sharedA);
 			assert.equal(mock.calls.length, 4);
 			assert.deepEqual(mock.calls.map((call) => call.table), [
-				'osionos_pages', 'osionos_pages', 'osionos_share_rules', 'osionos_share_rules',
+				'osionos_pages', 'osionos_pages', 'osionos_share_rules', 'osionos_workspace_members',
 			]);
-			assert.equal(mock.calls.filter((call) => call.table === 'osionos_workspace_members').length, 0, 'no bare members read');
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_workspace_members').length, 1, 'the access map reads the caller member once');
 		});
 	});
 
@@ -81,7 +81,7 @@ describe('read: the member row comes with the page', () => {
 			const listed = await send(base, `/api/comments?pageId=${IDS.sharedA}`, asB());
 			assert.equal(listed.status, 200);
 			assert.deepEqual(mock.calls.map((call) => call.table), [
-				'osionos_pages', 'osionos_share_rules', 'osionos_share_rules', 'osionos_page_comments',
+				'osionos_pages', 'osionos_share_rules', 'osionos_workspace_members', 'osionos_page_comments',
 			]);
 		});
 	});
@@ -145,13 +145,12 @@ describe('read: 404 before 403, owner kept', () => {
 		});
 	});
 
-	it('a page owner who left the workspace still reads their own page', async () => {
+	it('a page owner who left the workspace is the 404 of a missing id (C557)', async () => {
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			removeMember(mock, IDS.team, IDS.userB);
 			const own = await send(base, pageRead(IDS.pageB), asB());
-			assert.equal(own.status, 200);
-			assert.equal(own.body._id, IDS.pageB);
-			assert.equal(mock.calls.length, 1);
+			assert.equal(own.status, 404);
+			assert.equal(own.body.message, PAGE_NOT_FOUND);
 		});
 	});
 

@@ -88,20 +88,28 @@ class FakeChannel implements RealtimeChannel {
   leave(): void {}
 }
 
-test('the store routes inbound caret events into the cursor map', async () => {
+test('the store routes inbound caret events from the PAGE channel into the cursor map', async () => {
   const { useCollabStore } = await import('@/features/collab/store/useCollabStore');
   useCollabStore.getState().disconnect();
-  const channel = new FakeChannel();
-  await useCollabStore.getState().connect('space-1', { id: 'me', displayName: 'Me' }, async () => channel);
+  const workspace = new FakeChannel();
+  const page = new FakeChannel();
+  await useCollabStore.getState().connect('space-1', { id: 'me', displayName: 'Me' }, async () => workspace);
+  await useCollabStore.getState().connectPage(
+    'space-1', 'page-1', { id: 'me', displayName: 'Me' }, async () => page,
+  );
 
-  channel.eventHandler?.(caret('bob', 1, 'blk', 7));
+  page.eventHandler?.(caret('bob', 1, 'blk', 7));
   assert.deepEqual(useCollabStore.getState().cursors.get('bob')?.caret, { blockId: 'blk', offset: 7 });
 
-  channel.eventHandler?.(caret('me', 9, 'blk', 0)); // own event echoed back
+  // Page state on the workspace channel is no longer folded (C501): it is dropped.
+  workspace.eventHandler?.(caret('amy', 1, 'blk', 2));
+  assert.equal(useCollabStore.getState().cursors.has('amy'), false, 'workspace events never reach cursors');
+
+  page.eventHandler?.(caret('me', 9, 'blk', 0)); // own event echoed back
   assert.equal(useCollabStore.getState().cursors.has('me'), false, 'store never renders its own caret');
 
-  // A presence snapshot without bob prunes bob's cursor.
-  channel.presenceHandler?.([{ memberId: 'me', displayName: 'Me', color: 'var(--collab-1)', route: '/', lastSeen: 1 }]);
+  // A page presence snapshot without bob prunes bob's cursor.
+  page.presenceHandler?.([{ memberId: 'me', displayName: 'Me', color: 'var(--collab-1)', route: 'page-1', lastSeen: 1 }]);
   assert.equal(useCollabStore.getState().cursors.has('bob'), false, 'departed member cursor pruned');
   useCollabStore.getState().disconnect();
 });

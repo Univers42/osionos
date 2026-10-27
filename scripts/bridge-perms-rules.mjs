@@ -33,6 +33,9 @@ const RESOURCE_TYPES = new Set(['workspace', 'page', 'database', 'block']);
 const PAGE_RESOURCE_TYPE = 'page';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LIST_LIMIT = 500;
+// A whole-workspace rule read is the page-access decision's single query (C511). It is
+// higher than LIST_LIMIT because it covers every page, and a full answer still fails closed.
+const WORKSPACE_RULES_LIMIT = 20000;
 const TIMEOUT_MS = 5000;
 const SELECT = 'id,workspace_id,resource_type,resource_id,target,permission,explicit,created_at,updated_at';
 
@@ -243,6 +246,27 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 	};
 
 	/**
+	 * EVERY page rule of ONE workspace in one read (C511): the page-access decision walks
+	 * the whole workspace's rules and parent chain, so asking page by page would cost one
+	 * query per row. Fails closed exactly like listForPage: a broken read, or a rule set
+	 * at the cap (which may be truncated), is a 503 — never a silent "no rules".
+	 */
+	const listForWorkspace = async (config, workspaceId) => {
+		const params = {
+			select: SELECT, workspace_id: `eq.${workspaceId}`, resource_type: `eq.${PAGE_RESOURCE_TYPE}`,
+			order: 'created_at.asc', limit: String(WORKSPACE_RULES_LIMIT),
+		};
+		try {
+			const rows = await call(config, query(params), { empty: null });
+			if (rows === null || rows.length >= WORKSPACE_RULES_LIMIT) throw shareRulesUnavailable();
+			return rows;
+		} catch (error) {
+			if (error?.code === 'share_rules_table_missing') return [];
+			throw shareRulesUnavailable();
+		}
+	};
+
+	/**
 	 * The caller's team ids in ONE workspace, read per request and never cached, or null when
 	 * the read cannot be trusted. null is not []: the evaluator reads it as "unknown" and lets a
 	 * team no_access rule still block, where [] would silently drop that deny.
@@ -274,6 +298,7 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 	return {
 		listForPage,
 		listForPages,
+		listForWorkspace,
 		teamIdsFor,
 		async list(config, workspaceId, resourceId) {
 			const params = { select: SELECT, workspace_id: `eq.${workspaceId}`, order: 'created_at.asc', limit: String(LIST_LIMIT) };

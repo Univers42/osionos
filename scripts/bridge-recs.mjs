@@ -238,8 +238,8 @@ async function answerSlate(deps, config, session, url, response) {
  * Build the /api/recs dispatcher: `await handler(url, request, response)` →
  * true when handled. deps: { config, verifySession, fetchImpl?, env? }.
  */
-export function createRecsHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
-	const deps = { fetchImpl, env };
+export function createRecsHandler({ config, verifySession, fetchImpl = fetch, env = process.env, pageAccessFilter = null }) {
+	const deps = { fetchImpl, env, pageAccessFilter };
 	return async function handleRecsRoute(url, request, response, requestConfig = config) {
 		const notInterested = url.pathname === NOT_INTERESTED_PATH;
 		if (!notInterested && url.pathname !== RECS_PATH) return false;

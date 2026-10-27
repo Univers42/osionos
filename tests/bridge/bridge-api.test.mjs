@@ -166,6 +166,7 @@ function createMockBaasFetch() {
 			if (table === 'osionos_workspace_members') {
 				return jsonResponse([{ ...ownerMember, workspace: { pages: selectedRows(pages, [], `eq.${workspaceId}`) } }]);
 			}
+			if (table === 'osionos_share_rules') return jsonResponse([]);
 			if (table !== 'osionos_pages') return jsonResponse({ message: 'not found' }, 404);
 
 			const method = init.method ?? 'GET';

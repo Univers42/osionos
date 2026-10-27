@@ -144,13 +144,23 @@ describe('collab file seed gate (AOC §4/§6)', () => {
 
 describe('collab invite gate (AOC §invites)', () => {
   const TARGET = '22222222-2222-4222-8222-222222222222';
+  const INVITE_ID = '33333333-3333-4333-8333-333333333333';
   function inviteFetch(ownerId, writes) {
     return async (urlString, opts) => {
       const url = String(urlString);
+      const method = (opts?.method ?? 'GET').toUpperCase();
+      if (url.includes('/auth/v1/admin/users/')) {
+        return { ok: true, status: 200, json: async () => ({ id: TARGET, email: 'target@example.com' }) };
+      }
       if (url.includes('osionos_workspaces')) {
         return { ok: true, status: 200, text: async () => JSON.stringify([{ id: SPACE, owner_id: ownerId, name: 'S', slug: 's', visibility: 'request_to_join' }]) };
       }
-      if (url.includes('osionos_workspace_members') && opts?.method === 'POST') { writes.push(url); return { ok: true, status: 201, text: async () => '' }; }
+      if (url.includes('osionos_workspace_invites') && method === 'POST') {
+        const body = JSON.parse(opts.body);
+        writes.push({ table: 'invites', body });
+        return { ok: true, status: 201, text: async () => JSON.stringify([{ id: INVITE_ID, email: body.email, role: body.role, invited_by: body.invited_by, created_at: body.created_at, expires_at: body.expires_at }]) };
+      }
+      if (url.includes('osionos_workspace_members') && method === 'POST') { writes.push({ table: 'members', url }); return { ok: true, status: 201, text: async () => '' }; }
       return { ok: true, status: 200, text: async () => '[]' };
     };
   }
@@ -163,14 +173,19 @@ describe('collab invite gate (AOC §invites)', () => {
     };
   }
 
-  it('lets the OWNER invite a teammate (200, membership written)', async () => {
+  it('lets the OWNER invite a teammate (200, PENDING invite, no membership)', async () => {
     const writes = [];
     // verifySession returns userId 'U'; make 'U' the owner.
     const url = new URL(`http://h/api/collaboration/${SPACE}/invite`);
     const res = fakeResponse();
     await handlerWith(inviteFetch('U', writes))(url, inviteBody(), res);
     assert.equal(res.statusCode, 200);
-    assert.equal(writes.length, 1, 'membership row written for the invitee');
+    assert.equal(res.body.pending, true);
+    assert.equal(res.body.inviteId, INVITE_ID);
+    assert.equal(res.body.role, 'viewer');
+    assert.deepEqual(writes.map((write) => write.table), ['invites'], 'one pending invite row, no membership');
+    assert.equal(writes[0].body.invited_user_id, TARGET);
+    assert.equal(writes[0].body.role, 'viewer');
   });
 
   it('denies a NON-owner inviting (403, no write)', async () => {
@@ -178,7 +193,7 @@ describe('collab invite gate (AOC §invites)', () => {
     const url = new URL(`http://h/api/collaboration/${SPACE}/invite`);
     const res = fakeResponse();
     await handlerWith(inviteFetch('SOMEONE-ELSE', writes))(url, inviteBody(), res);
-    assert.equal(res.statusCode, 403, 'only the owner may invite');
-    assert.equal(writes.length, 0, 'no membership write for a non-owner');
+    assert.equal(res.statusCode, 403, 'only the owner or an admin may invite');
+    assert.equal(writes.length, 0, 'no invite and no membership write for a non-admin');
   });
 });
