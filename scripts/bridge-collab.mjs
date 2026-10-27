@@ -434,16 +434,16 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 		await deps.requireMember();
 		const level = normalizedLevel(await levelRead);
 		if (level === 'none') throw httpError('Page not found.', 404);
-		if (payload.t === 'blocks' || payload.t === 'file') {
-			if (!levelAtLeast(level, 'can_edit')) throw httpError('Page write access is required.', 403);
-		} else if (payload.t === 'note') {
-			if (!levelAtLeast(level, 'can_comment')) throw httpError('Comment access is required.', 403);
-		} else if (!levelAtLeast(level, 'can_view')) {
-			throw httpError('Page read access is required.', 403);
-		}
-		if (payload.t === 'blocks') {
-			if (!blocksRead) throw httpError('Page write access is required.', 403);
-			await blocksRead;
+		if (!levelAtLeast(level, 'can_view')) throw httpError('Page read access is required.', 403);
+		// The level alone under-grants: a member with no page rule reads 'can_view' and
+		// writes through the membership's update permission (C558). Writes therefore go
+		// through the same gate PATCH /pages uses, never through the level.
+		const writes = payload.t === 'blocks' || payload.t === 'file'
+			|| (payload.t === 'note' && !levelAtLeast(level, 'can_comment'));
+		if (writes) {
+			if ((payload.t === 'blocks' && !Array.isArray(payload.ops)) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
+			// A blocks write started its gate read next to the level read; the others start it now.
+			await (blocksRead ?? timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope)));
 		}
 		// The topic is lowercased; the published payload names the same page (C574).
 		const frame = { event: 'collab', payload: { ...payload, pageId, actor: publishedActor } };
