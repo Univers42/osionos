@@ -196,6 +196,17 @@ export function mergeAttachments(
 }
 
 /**
+ * The composer's text with the quote of a hand-off: an empty composer takes
+ * it, a draft keeps its words and gets the quote under them, and a quote the
+ * draft already holds is not added twice. A second "Ask AI" while a draft is
+ * open used to be dropped, so the composer kept quoting the first widget.
+ */
+export function mergeHandoffText(current: string, incoming: string): string {
+  if (!incoming.trim() || current.includes(incoming.trim())) return current;
+  return current.trim() ? `${current.trimEnd()}\n\n${incoming}` : incoming;
+}
+
+/**
  * The attachments of a run: a media path is read by its capability path (with
  * the name the reader sees), anything else is a chat upload id.
  */
