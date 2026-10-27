@@ -69,6 +69,10 @@ export function mintRealtimeToken({ secret, userId, namespaces, ttlSeconds = REA
 	return { token: signRealtimeJwt(payload, secret), expiresAt: new Date(exp * 1000).toISOString() };
 }
 
+// Lets a subscribe-only token TRACK on its own topic: the gateway gates TRACK on publish
+// unless this opt-in is set, so without it nobody showed up in the roster or as a caret
+// (253 "Track denied" in 3 h, live 2026-10-27). It never grants a publish.
+const PRESENCE_ONLY = Object.freeze({ can_track: true });
 const PAGE_SCOPED_EVENTS = new Set(['blocks', 'caret', 'selection', 'focus', 'note', 'file', 'activity', 'nav']);
 const ACCESS_RANK = { none: 0, can_view: 1, can_comment: 2, can_edit: 3, full_access: 4 };
 // Page tokens: one bucket per user, ~1 page/s with a burst of 20. Kept apart from
@@ -361,6 +365,7 @@ async function mintCollabRealtimeToken(deps, session, workspaceId, response, con
 		userId: session.userId,
 		namespaces: [topic],
 		canPublish: false, // Publishing goes through the page-authorized bridge route.
+		metadata: PRESENCE_ONLY,
 	});
 	return sendJson(response, 200, { ok: true, token, expiresAt, topic, spaceId: workspaceId }, config);
 }
@@ -384,7 +389,7 @@ async function mintPageRealtimeToken(deps, session, workspaceId, pageId, respons
 		userId: session.userId,
 		namespaces: [topic],
 		canPublish: false, // Publishing goes through the page-authorized bridge route.
-		metadata: { level },
+		metadata: { level, ...PRESENCE_ONLY },
 	});
 	return sendJson(response, 200, { ok: true, token, expiresAt, topic, pageId, level }, config);
 }
