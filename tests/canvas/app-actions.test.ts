@@ -80,7 +80,7 @@ function makeRegistry() {
 }
 
 test("APP_ACTIONS holds exactly two entries and no test.* name", () => {
-	assert.equal(APP_ACTIONS.size, 2);
+	assert.equal(APP_ACTIONS.size, 4);
 	for (const name of APP_ACTIONS.keys()) assert.equal(name.startsWith("test."), false);
 });
 
@@ -615,4 +615,20 @@ test("APP_ACTIONS spy revoke calls store", async () => {
 	assert.equal(calledWith, "sess-1");
 	useAccountDevicesStore.setState({ revoke: original, error: null });
 	setActionGuardHandlers(null);
+});
+test("page.create validates title length and reports no workspace", async () => {
+	const run = createActionRunner(APP_ACTIONS);
+	assert.equal((await run("page.create", { title: "x".repeat(201) }, { mode: "live", trusted: true })).status, "failed");
+	const res = await run("page.create", {}, { mode: "live", trusted: true });
+	assert.equal(res.status, "failed");
+	assert.equal(res.status === "failed" && res.message, "Open a workspace first");
+});
+
+test("settings.open validates section and reports unknown section", async () => {
+	const run = createActionRunner(APP_ACTIONS);
+	assert.equal((await run("settings.open", {}, { mode: "live", trusted: true })).status, "failed");
+	assert.equal((await run("settings.open", { section: "x".repeat(65) }, { mode: "live", trusted: true })).status, "failed");
+	const res = await run("settings.open", { section: "no-such-section" }, { mode: "live", trusted: true });
+	assert.equal(res.status, "failed");
+	assert.ok(res.status === "failed" && res.message.includes("no-such-section"));
 });
