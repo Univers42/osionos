@@ -75,10 +75,13 @@ function accountPg(config, store) {
 }
 
 /** The account handler alone, on its own server: the routes without the rest of the bridge. */
-export async function startAccountWorld(t, { rows = {}, kv, config = accountConfig(), fail = null, otp = createOtpService(), env = { JWT_SECRET: ACCOUNT_JWT_SECRET }, now = null } = {}) {
+// The page access filter defaults to one that hides nothing; a test of the filter passes its own, or null.
+const SHOW_ALL_PAGES = async (rows) => rows;
+
+export async function startAccountWorld(t, { rows = {}, kv, config = accountConfig(), fail = null, otp = createOtpService(), env = { JWT_SECRET: ACCOUNT_JWT_SECRET }, now = null, pageAccessFilter = SHOW_ALL_PAGES } = {}) {
 	const store = createAccountStore({ ...rows, fail });
 	const pg = accountPg(config, store);
-	const handler = createAccountHandler({ config, pg, kv: kv ?? kvStub(), verifySession: verifyAppSessionToken, env, fetchImpl: otp.fetchImpl, now });
+	const handler = createAccountHandler({ config, pg, kv: kv ?? kvStub(), verifySession: verifyAppSessionToken, env, fetchImpl: otp.fetchImpl, now, pageAccessFilter });
 	const server = createServer(async (request, response) => {
 		const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
 		try {

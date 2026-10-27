@@ -5184,7 +5184,7 @@ export function createBridgeServer(options = {}) {
 			// of may mount the dbId the token names.
 			mountAccess: (session, dbId) => hasAccessibleMount(session, dbId, config, fetchImpl),
 		}),
-		account: createAccountHandler({ config, pg, kv, mfaEnv: env, mfaFetch: fetchImpl, mfaNow: options.now, verifySession: verifyAppSessionToken, readRefreshClaims: (identity) => readRefreshClaims(identity, { config, pg, fetchImpl }) }),
+		account: createAccountHandler({ config, pg, kv, pageAccessFilter, mfaEnv: env, mfaFetch: fetchImpl, mfaNow: options.now, verifySession: verifyAppSessionToken, readRefreshClaims: (identity) => readRefreshClaims(identity, { config, pg, fetchImpl }) }),
 	};
 	const patGate = createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, now: options.now, rateLimit: options.patRateLimit });
 	const server = createServer(async (request, response) => {
