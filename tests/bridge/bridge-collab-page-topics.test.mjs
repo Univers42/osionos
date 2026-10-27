@@ -31,6 +31,17 @@ const SECRET = 'synthetic-page-topic-secret';
 const ON = { COLLAB_PAGE_TOPICS: '1', JWT_SECRET: SECRET };
 const OFF = { JWT_SECRET: SECRET };
 const STRANGER = 'eeeeeeee-5555-4555-8555-eeeeeeeeeeee';
+// Dedicated senders for the rate-limit tests: each bucket is per user, so one test's
+// exhausted bucket never leaks into another test.
+const FLOOD_USER = 'f1000000-1111-4111-8111-f10000000f01';
+const DIRECT_USER = 'f2000000-1111-4111-8111-f20000000f02';
+const REPLY_USER = 'f3000000-1111-4111-8111-f30000000f03';
+const TOKEN_USER = 'f4000000-1111-4111-8111-f40000000f04';
+const MAIN_USER = 'f5000000-1111-4111-8111-f50000000f05';
+const EXTRA_USER = 'f6000000-1111-4111-8111-f60000000f06';
+const INVALID_USER = 'f7000000-1111-4111-8111-f70000000f07';
+const SHAPE_USER = 'f8000000-1111-4111-8111-f80000000f08';
+const RATE_MEMBERS = [FLOOD_USER, DIRECT_USER, REPLY_USER, TOKEN_USER, MAIN_USER, EXTRA_USER, INVALID_USER, SHAPE_USER];
 const PAGE_TOPIC = `collabpage:${IDS.sharedA}`;
 const WS_TOPIC = `collab:${IDS.team}`;
 
@@ -41,6 +52,9 @@ function world(mutate) {
     { user_id: IDS.userB, notify_token: 'notify-b' },
     { user_id: STRANGER, notify_token: 'notify-stranger' },
   ];
+  for (const userId of RATE_MEMBERS) {
+    seed.osionos_workspace_members.push({ workspace_id: IDS.team, user_id: userId, role: 'editor', permissions: ['create', 'read', 'update'] });
+  }
   mutate?.(seed);
   return seed;
 }
@@ -62,6 +76,7 @@ async function run(seed, env, fn) {
 
 const headersB = () => sessionHeaders(config, IDS.userB, IDS.homeB);
 const headersA = () => sessionHeaders(config, IDS.userA, IDS.homeA);
+const headersFor = (userId) => sessionHeaders(config, userId, IDS.homeB);
 const collab = (payload) => ({ event: 'collab', payload });
 const caret = (pageId) => collab({ t: 'caret', actor: `${IDS.userB}:tab-one`, seq: 1, pageId });
 const blocks = (pageId) => collab({ t: 'blocks', actor: `${IDS.userB}:tab-one`, seq: 1, pageId, ops: [{ k: 'del', id: 'block', v: 1 }] });
@@ -168,7 +183,8 @@ describe('T4 — the pages nudge stays on the workspace topic, reduced', () => {
     });
     assert.equal(publishes.length, 1);
     assert.equal(publishes[0].topic, WS_TOPIC);
-    assert.deepEqual(publishes[0].payload.payload, { t: 'pages', actor: `${IDS.userA}:tab`, seq: 4, workspaceId: IDS.team });
+    // C570: the actor suffix is not forwarded; the frame keeps the session user id.
+    assert.deepEqual(publishes[0].payload, { event: 'collab', payload: { t: 'pages', actor: IDS.userA, seq: 4, workspaceId: IDS.team } });
     const serialized = JSON.stringify(publishes[0]);
     assert.ok(!serialized.includes('Secret title'));
     assert.ok(!serialized.includes(IDS.privateA));
@@ -206,7 +222,7 @@ describe('T5 — summons and answers reach only the target inbox', () => {
     assert.equal(publishes.length, 0);
   });
 
-  it('forwards only { cid, res } of a collab.res to the recipient', async () => {
+  it('forwards only { cid, from, res } of a collab.res to the recipient', async () => {
     const res = { accepted: true };
     const { publishes } = await run(world(), ON, async (base) => {
       const result = await send(base, eventsPath, headersA(), post({
@@ -217,7 +233,108 @@ describe('T5 — summons and answers reach only the target inbox', () => {
     });
     assert.equal(publishes.length, 1);
     assert.equal(publishes[0].topic, 'user:notify-b');
-    assert.deepEqual(publishes[0].payload, { event: 'collab.res', payload: { cid: 'c1', res } });
+    assert.deepEqual(publishes[0].payload, { event: 'collab.res', payload: { cid: 'c1', from: IDS.userA, res } });
+  });
+});
+
+describe('C570 — flag-on frames are whitelisted', () => {
+  it('drops extra top-level body keys from the pages nudge', async () => {
+    const body = { event: 'collab', payload: { t: 'pages', actor: IDS.userA, seq: 1, workspaceId: IDS.team }, leak: 'top-secret', cid: 'nope' };
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post(body));
+      assert.equal(result.status, 200, result.text);
+    });
+    assert.equal(publishes.length, 1);
+    assert.deepEqual(Object.keys(publishes[0].payload), ['event', 'payload']);
+    assert.ok(!JSON.stringify(publishes[0]).includes('top-secret'));
+    assert.ok(!JSON.stringify(publishes[0]).includes('nope'));
+  });
+
+  it('publishes the session user id, not a client actor suffix', async () => {
+    const body = collab({ t: 'pages', actor: `${IDS.userA}:evil`, seq: 2, workspaceId: IDS.team });
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post(body));
+      assert.equal(result.status, 200, result.text);
+    });
+    assert.equal(publishes[0].payload.payload.actor, IDS.userA);
+  });
+
+  it('answers 422 invalid_seq for a non-integer seq', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      for (const seq of [1.5, '3']) {
+        const result = await send(base, eventsPath, headersA(), post(collab({ t: 'pages', actor: IDS.userA, seq, workspaceId: IDS.team })));
+        assert.equal(result.status, 422, result.text);
+        assert.equal(result.body.message, 'invalid_seq');
+      }
+    });
+    assert.equal(publishes.length, 0);
+  });
+
+  it('drops extra top-level body keys from page events, collab.req and collab.res', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      const page = await send(base, eventsPath, headersB(), post({ ...caret(IDS.sharedA), leak: 'page-top' }));
+      assert.equal(page.status, 200, page.text);
+      const req = await send(base, eventsPath, headersFor(EXTRA_USER), post({ event: 'collab.req', leak: 'req-top', payload: { cid: 'c-top', target: IDS.userB, req: { kind: 'summon', route: '/' } } }));
+      assert.equal(req.status, 200, req.text);
+      const res = await send(base, eventsPath, headersFor(EXTRA_USER), post({ event: 'collab.res', leak: 'res-top', payload: { cid: 'c-top', to: IDS.userB, res: { accepted: true } } }));
+      assert.equal(res.status, 200, res.text);
+    });
+    assert.equal(publishes.length, 3);
+    for (const published of publishes) assert.deepEqual(Object.keys(published.payload), ['event', 'payload']);
+    const serialized = JSON.stringify(publishes);
+    for (const leak of ['page-top', 'req-top', 'res-top']) assert.ok(!serialized.includes(leak));
+  });
+});
+
+describe('C572 — summon replies are validated and reduced', () => {
+  it('rejects a non-boolean accepted', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post({ event: 'collab.res', payload: { cid: 'c1', to: IDS.userB, res: { accepted: 'yes' } } }));
+      assert.equal(result.status, 422, result.text);
+      assert.equal(result.body.message, 'invalid_res');
+    });
+    assert.equal(publishes.length, 0);
+  });
+
+  it('rejects an invalid cid on collab.req and collab.res', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      for (const cid of ['x'.repeat(65), 'bad cid']) {
+        const req = await send(base, eventsPath, headersFor(INVALID_USER), post({ event: 'collab.req', payload: { cid, target: IDS.userB, req: { kind: 'summon', route: '/' } } }));
+        assert.equal(req.status, 422, req.text);
+        assert.equal(req.body.message, 'invalid_cid');
+        const res = await send(base, eventsPath, headersFor(INVALID_USER), post({ event: 'collab.res', payload: { cid, to: IDS.userB, res: { accepted: true } } }));
+        assert.equal(res.status, 422, res.text);
+        assert.equal(res.body.message, 'invalid_cid');
+      }
+    });
+    assert.equal(publishes.length, 0);
+  });
+
+  it('publishes cid, from and the accepted boolean only', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersFor(SHAPE_USER), post({
+        event: 'collab.res',
+        payload: { cid: 'c-shape', to: IDS.userB, res: { accepted: false, extra: 'drop' }, title: 'drop' },
+      }));
+      assert.equal(result.status, 200, result.text);
+    });
+    assert.equal(publishes.length, 1);
+    assert.deepEqual(publishes[0].payload, { event: 'collab.res', payload: { cid: 'c-shape', from: SHAPE_USER, res: { accepted: false } } });
+  });
+});
+
+describe('C574 — the published pageId matches the lowercased topic', () => {
+  it('lowercases an upper-case page uuid in the published payload', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersB(), post({
+        event: 'collab',
+        payload: { t: 'caret', actor: `${IDS.userB}:tab-one`, seq: 1, pageId: IDS.sharedA.toUpperCase() },
+      }));
+      assert.equal(result.status, 200, result.text);
+    });
+    assert.equal(publishes.length, 1);
+    assert.equal(publishes[0].topic, PAGE_TOPIC);
+    assert.equal(publishes[0].payload.payload.pageId, IDS.sharedA);
   });
 });
 
@@ -280,5 +397,85 @@ describe('T7 — a denied page never appears on any published topic', () => {
     const serialized = JSON.stringify(publishes);
     assert.ok(!serialized.includes(IDS.privateA));
     assert.ok(!serialized.includes('A private plan'));
+  });
+});
+
+describe('C571 — flag-on events are rate-limited', () => {
+  it('rate-limits the events route per sender', async () => {
+    // Freeze the bucket clock for the burst: the limiter refills 200 tokens/s, so a
+    // real-time flood on a fast host could otherwise keep up and never hit 429.
+    const { publishes, okCount, limited } = await run(world(), ON, async (base) => {
+      const body = (seq) => collab({ t: 'pages', actor: FLOOD_USER, seq, workspaceId: IDS.team });
+      const realNow = Date.now;
+      Date.now = () => 1_800_000_000_000;
+      try {
+        const results = await Promise.all(Array.from({ length: 450 }, (_, index) => send(base, eventsPath, headersFor(FLOOD_USER), post(body(index + 1)))));
+        const burstOk = results.filter((result) => result.status === 200).length;
+        const burstLimited = results.filter((result) => result.status === 429).length;
+        assert.equal(burstOk, 400, 'the burst of 400 is usable');
+        assert.equal(burstLimited, 50, 'requests past the burst are 429');
+
+        const after = [];
+        for (let index = 0; index < 5; index += 1) after.push(await send(base, eventsPath, headersFor(FLOOD_USER), post(body(1000 + index))));
+        assert.deepEqual(after.map((result) => result.status), [429, 429, 429, 429, 429]);
+        return { okCount: burstOk, limited: burstLimited };
+      } finally {
+        Date.now = realNow;
+      }
+    });
+    assert.equal(okCount, 400);
+    assert.equal(limited, 50);
+    assert.equal(publishes.length, 400, 'every 200 published one frame, every 429 published none');
+  });
+
+  it('rate-limits collab.req per (sender,target) at 5 burst', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      const statuses = [];
+      for (let index = 0; index < 6; index += 1) {
+        const result = await send(base, eventsPath, headersFor(DIRECT_USER), post({ event: 'collab.req', payload: { cid: `d${index}`, target: IDS.userB, req: { kind: 'summon', route: '/' } } }));
+        statuses.push(result.status);
+      }
+      assert.deepEqual(statuses, [200, 200, 200, 200, 200, 429]);
+    });
+    assert.equal(publishes.length, 5);
+  });
+
+  it('rate-limits collab.res per (sender,target) at 5 burst', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      const statuses = [];
+      for (let index = 0; index < 6; index += 1) {
+        const result = await send(base, eventsPath, headersFor(REPLY_USER), post({ event: 'collab.res', payload: { cid: `r${index}`, to: IDS.userA, res: { accepted: true } } }));
+        statuses.push(result.status);
+      }
+      assert.deepEqual(statuses, [200, 200, 200, 200, 200, 429]);
+    });
+    assert.equal(publishes.length, 5);
+  });
+});
+
+describe('C573 — page tokens have their own rate bucket', () => {
+  it('exhausting page tokens leaves the main token route working, and vice versa', async () => {
+    await run(world(), ON, async (base) => {
+      const pagePath = `/api/collaboration/${IDS.team}/pages/${IDS.sharedA}/realtime-token`;
+      const statuses = [];
+      for (let index = 0; index < 30; index += 1) {
+        const result = await send(base, pagePath, headersFor(TOKEN_USER), post({}));
+        statuses.push(result.status);
+      }
+      assert.ok(statuses.filter((status) => status === 200).length >= 20, 'the burst of 20 is usable');
+      assert.ok(statuses.includes(429), 'opening 30 pages in a burst is limited');
+
+      const main = await send(base, `/api/collaboration/${IDS.team}/realtime-token`, headersFor(TOKEN_USER), post({}));
+      assert.equal(main.status, 200, main.text);
+      assert.ok(main.body.token);
+
+      // The other direction proves the bucket KEY is not the main `realtime-token:` one:
+      // drain that main bucket, then a page token must still mint.
+      const mainResults = await Promise.all(Array.from({ length: 70 }, () => send(base, '/api/realtime/token', headersFor(MAIN_USER), post({ kind: 'objectdb' }))));
+      assert.ok(mainResults.some((result) => result.status === 429), 'the main token bucket is drained');
+      const pageAfterMain = await send(base, pagePath, headersFor(MAIN_USER), post({}));
+      assert.equal(pageAfterMain.status, 200, pageAfterMain.text);
+      assert.ok(pageAfterMain.body.token);
+    });
   });
 });
