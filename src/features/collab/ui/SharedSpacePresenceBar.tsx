@@ -40,6 +40,7 @@ import { CollabRoster } from './CollabRoster';
 import { CollabCaretLayer } from './CollabCaretLayer';
 import { SummonPrompt } from './SummonPrompt';
 import { useSharedSpacePresence } from './useSharedSpacePresence';
+import { useSharedSpacePage } from './useSharedSpacePage';
 import { useBroadcastLocalCaret } from './useBroadcastLocalCaret';
 import { useLiveBlockSync } from './useLiveBlockSync';
 import { useBroadcastLocalActivity } from './useBroadcastLocalActivity';
@@ -79,15 +80,18 @@ export const SharedSpacePresenceBar: React.FC = () => {
   });
   const self = persona?.id ? { id: persona.id, displayName: persona.name } : null;
 
+  // The active page id is both the page-channel binding and the summon target.
   const route = usePageStore((state) => state.activePage?.id ?? null);
 
   const fileInput = useRef<HTMLInputElement>(null);
   useSharedSpacePresence(spaceId, self);
-  useBroadcastLocalCaret(!!spaceId);
-  // Live block sync rides the same channel the roster rides: page edits reach
+  // A second, page-scoped socket: page data and page presence only (C501/C502).
+  useSharedSpacePage(spaceId, route, self);
+  useBroadcastLocalCaret(!!spaceId && !!route);
+  // Live block sync rides the page channel: edits on the page being viewed reach
   // every member block by block within a frame instead of the outbox debounce.
-  useLiveBlockSync(spaceId, self?.id ?? null);
-  useBroadcastLocalActivity(!!spaceId, route);
+  useLiveBlockSync(spaceId, self?.id ?? null, route);
+  useBroadcastLocalActivity(!!spaceId && !!route, route);
   useSummonInbox(!!spaceId);
   useSharedAnnounceToasts(!!spaceId);
 

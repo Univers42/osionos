@@ -29,15 +29,23 @@ export interface CaretState { blockId: string; offset: number; }
 export interface SelectionRange { anchor: CaretState; focus: CaretState; }
 export interface Anchor { blockId: string; offset?: number; }
 
+/**
+ * Presence as the gateway projects it. The workspace topic carries ONLY the
+ * identity allow-list (`memberId`, `displayName`, `color`, `avatarRef?`,
+ * `lastSeen`) — never a page id, route, caret, selection or focused element
+ * (C501). The page topic (`collabpage:<pageId>`) carries the page-relative
+ * fields, so "who is on which page" is learned from the page channel of the
+ * page being viewed and never leaks through `collab:<workspace>`.
+ */
 export interface PresenceState {
   memberId: string;
   displayName: string;
   color: string;                 // assigned, WCAG-safe (AOC R-A8)
   avatarRef?: string;
-  route: string;
-  caret?: CaretState | null;
-  selection?: SelectionRange | null;
-  focusedElementId?: string | null;
+  route?: string;                // page channel only
+  caret?: CaretState | null;     // page channel only
+  selection?: SelectionRange | null; // page channel only
+  focusedElementId?: string | null;  // page channel only
   lastSeen: number;
 }
 
@@ -60,21 +68,40 @@ export type BlockOp =
   | { k: 'del'; id: string; v: number }
   | { k: 'order'; parentId: string | null; ids: string[]; v: number };
 
-/** Every realtime message is exactly one of these (AOC §5 + R-P1). */
+/**
+ * Every realtime message is exactly one of these (AOC §5 + R-P1).
+ *
+ * Page-scoped events (`blocks`, `caret`, `selection`, `focus`, `note`, `file`,
+ * `activity`, `nav`) MUST carry the `pageId` they concern and travel only on
+ * that page's channel. The adapter stamps it on every outbound page event; the
+ * receiver drops a frame whose `pageId` differs from the channel's page (C502).
+ * Only `pages` rides the workspace topic (and carries no page id — C516).
+ */
 export type CollabEvent =
-  | { t: 'caret';     actor: string; seq: number; caret: CaretState }
-  | { t: 'selection'; actor: string; seq: number; range: SelectionRange | null }
-  | { t: 'focus';     actor: string; seq: number; elementId: string | null }
-  | { t: 'activity';  actor: string; seq: number; kind: ActivityKind; targetId: string }
-  | { t: 'nav';       actor: string; seq: number; route: string }
-  | { t: 'note';      actor: string; noteId: string; op: NoteOp; anchor: Anchor }
-  | { t: 'file';      actor: string; fileId: string; op: FileOp; name: string }
+  | { t: 'caret';     actor: string; seq: number; pageId?: string; caret: CaretState }
+  | { t: 'selection'; actor: string; seq: number; pageId?: string; range: SelectionRange | null }
+  | { t: 'focus';     actor: string; seq: number; pageId?: string; elementId: string | null }
+  | { t: 'activity';  actor: string; seq: number; pageId?: string; kind: ActivityKind; targetId: string }
+  | { t: 'nav';       actor: string; seq: number; pageId?: string; route: string }
+  | { t: 'note';      actor: string; pageId?: string; noteId: string; op: NoteOp; anchor: Anchor }
+  | { t: 'file';      actor: string; pageId?: string; fileId: string; op: FileOp; name: string }
   // Content plane: block-tree registers for one page, folded by the pure engine
   // (model/blockSync.ts). Never a feed item; validated at the boundary.
   | { t: 'blocks';    actor: string; seq: number; pageId: string; ops: BlockOp[] }
   // A sidebar-tree nudge: "this workspace's page list changed" — receivers
   // re-hydrate it, which merges additively and never drops local work.
   | { t: 'pages';     actor: string; seq: number; workspaceId: string };
+
+/** What a channel may carry: the workspace topic or one page's topic. */
+export type ChannelScope = 'workspace' | 'page';
+
+/** Receiver-side drop counters, exposed for tests (never console-spammed). */
+export interface ChannelStats {
+  droppedPageMismatch: number;
+  droppedRateLimit: number;
+  droppedWorkspacePageEvent: number;
+  droppedPageTopicPagesEvent: number;
+}
 
 export interface SummonReq { kind: 'summon'; route: string; anchor?: Anchor; message?: string; }
 export interface SummonRes { accepted: boolean; }
@@ -88,6 +115,9 @@ export interface RealtimeChannel {
 
   request(target: string, req: SummonReq): Promise<SummonRes>;           // directed, consent-gated (synthesized)
   onRequest(handler: (from: string, req: SummonReq) => Promise<SummonRes>): Unsubscribe;
+
+  /** Receiver-side drop counters (page mismatch, rate cap) for tests. */
+  stats?: () => ChannelStats;
 
   leave(): void;                                                          // tears down every subscription
 }

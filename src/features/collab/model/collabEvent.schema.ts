@@ -71,32 +71,43 @@ function isCaret(value: unknown): value is CaretState {
   return isRecord(value) && typeof value.blockId === 'string' && typeof value.offset === 'number';
 }
 
+/**
+ * A page-scoped event carries the page it concerns. `pageId` is optional on the
+ * wire type for callers that have not stamped it yet, but when present it MUST
+ * be a valid short id — a malformed one is dropped. The page channel separately
+ * requires it to equal its own page (C502); the workspace channel rejects every
+ * page-scoped event outright.
+ */
+function pageIdOk(value: Record<string, unknown>): boolean {
+  return value.pageId === undefined || isShortId(value.pageId);
+}
+
 /** Validate one inbound message into a CollabEvent, or null to drop it. */
 export function validateCollabEvent(value: unknown): CollabEvent | null {
   if (!isRecord(value) || typeof value.t !== 'string') return null;
   const seqOk = typeof value.actor === 'string' && typeof value.seq === 'number';
   switch (value.t) {
     case 'caret':
-      return seqOk && isCaret(value.caret) ? (value as CollabEvent) : null;
+      return seqOk && pageIdOk(value) && isCaret(value.caret) ? (value as CollabEvent) : null;
     case 'selection':
-      if (!seqOk) return null;
+      if (!seqOk || !pageIdOk(value)) return null;
       if (value.range === null) return value as CollabEvent;
       return isRecord(value.range) && isCaret(value.range.anchor) && isCaret(value.range.focus)
         ? (value as CollabEvent) : null;
     case 'focus':
-      return seqOk && (value.elementId === null || typeof value.elementId === 'string')
+      return seqOk && pageIdOk(value) && (value.elementId === null || typeof value.elementId === 'string')
         ? (value as CollabEvent) : null;
     case 'activity':
-      return seqOk && typeof value.kind === 'string' && ACTIVITY_KINDS.has(value.kind)
+      return seqOk && pageIdOk(value) && typeof value.kind === 'string' && ACTIVITY_KINDS.has(value.kind)
         && typeof value.targetId === 'string' ? (value as CollabEvent) : null;
     case 'nav':
-      return seqOk && typeof value.route === 'string' ? (value as CollabEvent) : null;
+      return seqOk && pageIdOk(value) && typeof value.route === 'string' ? (value as CollabEvent) : null;
     case 'note':
-      return typeof value.actor === 'string' && typeof value.noteId === 'string'
+      return pageIdOk(value) && typeof value.actor === 'string' && typeof value.noteId === 'string'
         && typeof value.op === 'string' && NOTE_OPS.has(value.op) && isRecord(value.anchor)
         && typeof value.anchor.blockId === 'string' ? (value as CollabEvent) : null;
     case 'file':
-      return typeof value.actor === 'string' && typeof value.fileId === 'string'
+      return pageIdOk(value) && typeof value.actor === 'string' && typeof value.fileId === 'string'
         && typeof value.op === 'string' && FILE_OPS.has(value.op) && typeof value.name === 'string'
         ? (value as CollabEvent) : null;
     case 'blocks':
