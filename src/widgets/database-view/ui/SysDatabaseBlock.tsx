@@ -66,7 +66,7 @@ export const SysDatabaseBlock: React.FC<SysDatabaseBlockProps> = ({ databaseId, 
     >
       {status.error ? (
         <div role="alert" className="flex items-center gap-3 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-4 py-3 text-sm text-[var(--osio-fg-default)]">
-          <span>Could not load {source?.label.toLowerCase() ?? "your data"}.</span>
+          <span>Connect to see your {source?.label.replace(/^My\s+/i, "").toLowerCase() ?? "data"}.</span>
           <button type="button" className="rounded-md px-2 py-1 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]" onClick={retry}>
             Retry
           </button>
