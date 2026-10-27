@@ -39,6 +39,7 @@ import {
 import { readRawBody } from './bridge-chat-media.mjs';
 import { ensureChatBucket, extFromMime, storageObjectKey, storagePut } from './bridge-storage-core.mjs';
 import { REALTIME_TOKEN_ISSUER, signRealtimeJwt } from './bridge-realtime-socket.mjs';
+import { createInviteForUser } from './bridge-workspace-invites.mjs';
 
 // Caveat: this token lives 1 h. The client does not re-mint it before expiry
 // (fetchSharedSpaceToken in src/features/collab/api/grobaseTransport.factory.ts is
@@ -326,18 +327,21 @@ async function seedSpaceFile(deps, session, url, request, workspaceId, response,
 }
 
 /**
- * POST /api/collaboration/:id/invite {userId} — OWNER invites a teammate into a
- * Shared space (AOC §invites), reusing the same membership write the join-request
- * approval uses. Owner-only (403 otherwise); idempotent (re-inviting a member is
- * a no-op). The invited user appears in the roster on their next connect.
+ * POST /api/collaboration/:id/invite {userId} — owner/admin creates a PENDING workspace
+ * invite for that account (C513), through the SAME create path as
+ * POST /api/workspaces/:id/invites. No member row is written: membership happens only
+ * when the invitee accepts. Guest maps to the invite table's read-only `viewer` role.
  */
 async function inviteMember(deps, session, request, workspaceId, response, config) {
-	await requireOwner(config, deps.fetchImpl, session.userId, workspaceId);
 	const payload = await readJsonBody(request);
 	const userId = safeText(payload.userId, 64);
 	if (!UUID_REGEX.test(userId)) throw httpError('userId must be a valid id.', 422);
-	await addMember(config, deps.fetchImpl, workspaceId, userId);
-	return sendJson(response, 200, { ok: true, workspaceId, userId, role: 'viewer' }, config);
+	const { row } = await createInviteForUser({
+		deps, session, workspaceId, userId, role: 'guest', config,
+	});
+	return sendJson(response, 200, {
+		ok: true, workspaceId, userId, role: 'viewer', inviteId: row?.id ?? null, pending: true,
+	}, config);
 }
 
 /**
