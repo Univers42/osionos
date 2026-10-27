@@ -27,6 +27,9 @@ const SMALL = 12;
 /** The number of neighbours the answer holds. */
 const K = 8;
 
+/** The number of source pages the recall of the big corpus is measured over. */
+const QUERIES = 24;
+
 /** A corpus of pages and their vectors, in a workspace. */
 async function corpus(workspaceId: string, count: number, offset = 0): Promise<void> {
 	await db.query(
@@ -39,7 +42,11 @@ async function corpus(workspaceId: string, count: number, offset = 0): Promise<v
 	// the distance between two pages depends only on how far apart they are.
 	// The nearest neighbours are then well defined — a corpus of equidistant
 	// points measures nothing but the index's luck, and a halfvec cannot hold
-	// a difference finer than its own precision.
+	// a difference finer than its own precision. The vectors go in shuffled,
+	// as pages do: sorted along the curve is the HNSW's worst insertion order.
+	// On a bare table (pgvector 0.8.0, m 16, ef_construction 64, ef_search
+	// 100), sorted, 3 builds in 80 left a source with none of its neighbours
+	// found (the mean over 25 sources fell to 0.89); shuffled, 0 in 100.
 	await db.query(
 		`with numbered as (
 			select id, workspace_id, row_number() over (order by id) as ord
@@ -57,7 +64,8 @@ async function corpus(workspaceId: string, count: number, offset = 0): Promise<v
 				end
 				order by g) as embedding
 			from generate_series(0, 383) g
-		) v`,
+		) v
+		order by random()`,
 		[workspaceId, offset],
 	);
 	await db.query('analyze public.ai_page_vectors');
@@ -100,11 +108,11 @@ function readablePlan(plan: string): string {
 	return plan.replace(/\[\[-0-9.,Ee+ ]+\]/g, '[the vector]');
 }
 
-/** The top pages of a query, and the plan of the statement. */
-async function topOf(sql: string, workspaceId: string, limit: number): Promise<{ ids: string[]; distances: number[]; plan: string; ms: number }> {
+/** The top pages of a query from a source page (any page of the workspace by default), and the plan of the statement. */
+async function topOf(sql: string, workspaceId: string, limit: number, sourcePageId: string | null = null): Promise<{ ids: string[]; distances: number[]; plan: string; ms: number }> {
 	const source = await db.query(
-		'select page_id, embedding::text as embedding from public.ai_page_vectors where workspace_id = $1 limit 1',
-		[workspaceId],
+		'select page_id, embedding::text as embedding from public.ai_page_vectors where workspace_id = $1 and ($2::uuid is null or page_id = $2) limit 1',
+		[workspaceId, sourcePageId],
 	);
 	const vector = String(source.rows[0]?.embedding ?? '');
 	// The settings of the route: the iterative scan and the width of the scan.
@@ -189,16 +197,31 @@ describe('the kNN of the related read (C105)', { skip: hasVectors ? false : 'the
 	it('the HNSW scan of a big corpus finds the exact neighbours, and the recall is measured', async () => {
 		const big = randomUUID();
 		await corpus(big, BIG, 1000);
-		const exact = await topOf(EXACT_SQL, big, K);
-		const hnsw = await topOf(HNSW_SQL, big, K * 4);
-		console.log(`[knn] the plan of the HNSW scan of a big corpus:\n${hnsw.plan}`);
-		console.log(`[knn] exact ${exact.ms} ms, hnsw ${hnsw.ms} ms, ${BIG} pages`);
-		console.log(`[knn] the exact distances: ${exact.distances.map((d) => d.toFixed(6)).join(' ')}`);
-		console.log(`[knn] the hnsw distances: ${hnsw.distances.map((d) => d.toFixed(6)).join(' ')}`);
-		const found = new Set(hnsw.ids);
-		const recall = exact.ids.slice(0, K).filter((id) => found.has(id)).length / K;
-		console.log(`[knn] recall@${K} of the HNSW scan: ${recall.toFixed(3)}`);
-		assert.match(hnsw.plan, /embedding_idx/, 'the HNSW scan uses the index');
-		assert.ok(recall >= 0.9, `the recall is ${recall}`);
+		// The recall of one query is a coin toss on the graph the index happened
+		// to build: the measure is the mean over sources spread through the corpus.
+		// Caveat: 25 sources sample the graph — a region the index left
+		// unreachable that holds under ~10% of the pages can still pass.
+		const sources = await db.query<{ page_id: string }>(
+			`select page_id from (
+				select page_id, row_number() over (order by page_id) as n
+				from public.ai_page_vectors where workspace_id = $1
+			) numbered where n % $2 = 1`,
+			[big, Math.floor(BIG / QUERIES)],
+		);
+		assert.ok(sources.rows.length >= QUERIES, `${sources.rows.length} sources`);
+		const recalls: number[] = [];
+		let plan = '';
+		for (const { page_id: sourcePageId } of sources.rows) {
+			const exact = await topOf(EXACT_SQL, big, K, sourcePageId);
+			const hnsw = await topOf(HNSW_SQL, big, K * 4, sourcePageId);
+			plan ||= hnsw.plan;
+			const found = new Set(hnsw.ids);
+			recalls.push(exact.ids.slice(0, K).filter((id) => found.has(id)).length / K);
+		}
+		const mean = recalls.reduce((sum, recall) => sum + recall, 0) / recalls.length;
+		console.log(`[knn] the plan of the HNSW scan of a big corpus:\n${plan}`);
+		console.log(`[knn] recall@${K} of the HNSW scan over ${recalls.length} sources: mean ${mean.toFixed(3)}, each ${recalls.map((recall) => recall.toFixed(2)).join(' ')}`);
+		assert.match(plan, /embedding_idx/, 'the HNSW scan uses the index');
+		assert.ok(mean >= 0.9, `the mean recall is ${mean}`);
 	});
 });
