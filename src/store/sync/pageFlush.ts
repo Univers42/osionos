@@ -14,8 +14,8 @@
  * One page's turn in the OUTBOX flush: publish it and book what came back. The rules
  * are the flush's, not the transport's:
  *   "ok"       → the ledger advances to this page's stamp.
- *   "conflict" → the 409 path: merge, re-send ONCE, and on a second conflict the local
- *                edit goes to a copy. The batch goes ON — a conflict is not a failure.
+ *   "conflict" → the 409 path: merge and re-send, at most MAX_REBASES times; past that
+ *                the local edit goes to a copy. The batch goes ON — a conflict is not a failure.
  *   "refused"  → 403, "gone" → 404: the edit is recovered (copied), never dropped.
  *                ONLY this route marks the page read-only: the server's verdict says
  *                the reader may not write it. A conflict copy leaves the page writable.
@@ -62,6 +62,8 @@ export interface FlushDeps {
   notify(notice: { kind: "warning" | "error"; title: string; description: string; sticky?: boolean }): void;
   /** Apply the merged content to the store — the store's own page update action. */
   applyContent(pageId: string, content: Block[]): PageEntry | null;
+  /** The store's current copy of a page: a conflict merges what the reader has NOW. */
+  latest?(pageId: string): PageEntry | null;
   /**
    * Keep the version a 200 answered on the stored page. The base registry is memory only:
    * without this, a reload PATCHes under the version the page was LOADED at, and the
@@ -92,10 +94,11 @@ export async function publishOutboxPage(job: FlushJob, deps: FlushDeps): Promise
     return "continue";
   }
   if (outcome.result === "conflict" && outcome.conflict) {
-    // A 409 is not a failure: the merge, the one re-send and the copy path happen
+    // A 409 is not a failure: the merge, the bounded re-sends and the copy path happen
     // here, and the rest of the batch goes on (C28).
     const resolved = await resolvePageConflict(page, outcome.conflict, {
       applyContent: deps.applyContent,
+      latest: deps.latest,
       resend: publish,
       copyPath: (copied) => recoverToCopy(copied, id, job.forgotten, "conflict", deps),
       notify: deps.notify,

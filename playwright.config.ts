@@ -66,6 +66,9 @@ const legacySecondBrainOn = process.env.VITE_LEGACY_SECOND_BRAIN === "true";
 // they run only through their own runner (`test:e2e:perf`, one worker), never in the
 // parallel suite next to other tests.
 const perfRun = process.env.PLAYWRIGHT_PERF === "1";
+// The co-editing latency spec needs a real bridge and two accounts (COEDIT_* env), so it
+// never rides the default suite: only `test:e2e:coedit` (PLAYWRIGHT_COEDIT=1) runs it.
+const coeditRun = process.env.PLAYWRIGHT_COEDIT === "1";
 // Opt-in (PLAYWRIGHT_BRIDGE_STUB=1): the app is built with a bridge URL, so code that only runs
 // when a bridge is configured (the handoff consume, the public-page fetch) is reachable. The
 // default offline run has `VITE_API_URL=""`, where such a test would pass vacuously. The specs
@@ -92,6 +95,7 @@ export default defineConfig({
     ...(bridgeStub ? [] : ["**/bridge-stub/**"]),
     ...(legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`)),
     ...(perfRun ? [] : ["**/perf/**"]),
+    ...(coeditRun ? [] : ["**/latency/**"]),
   ],
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),

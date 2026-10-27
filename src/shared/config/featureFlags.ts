@@ -18,6 +18,7 @@ export type FeatureFlagName =
   | "osio.canvas.v2"
   | "osio.profile.template"
   | "osio.collab.shared"
+  | "osio.collab.fastsend"
   | "osio.blockselect"
   | "osio.automations"
   | "osio.db.server"
@@ -229,4 +230,13 @@ export function isAccountDeleteEnabled(): boolean {
  *  the env says off). */
 export function isThemesEnabled(): boolean {
   return isFeatureFlagEnabled("osio.themes", true);
+}
+
+/** Live co-editing fast send: a draft change leaves as a realtime-only block
+ *  put within the frame instead of after the 250 ms idle commit, and realtime
+ *  publishes get their own HTTP lane. Default OFF; wire format is unchanged, so
+ *  mixed on/off clients interoperate. Turn on with `VITE_OSIO_COLLAB_FASTSEND=1`
+ *  or `?osio.collab.fastsend=1` per tab. */
+export function isCollabFastSendEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.collab.fastsend", false);
 }

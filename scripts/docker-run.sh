@@ -37,6 +37,7 @@ run_inside_container() {
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
     tokens) exec node scripts/build-tokens.mjs "$@" ;;
     test-e2e-perf) PLAYWRIGHT_PERF=1 exec pnpm exec playwright test tests/e2e/perf --workers=1 "$@" ;;
+    test-e2e-coedit) PLAYWRIGHT_COEDIT=1 exec pnpm exec playwright test tests/e2e/latency --workers=1 "$@" ;;
     test-canvas) exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test tests/canvas/*.test.ts "$@" ;;
     test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
     test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
@@ -99,6 +100,14 @@ case "${COMMAND}" in
   test-e2e-perf)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e PLAYWRIGHT_PERF=1 -e PLAYWRIGHT_BUILD browser-tests pnpm exec playwright test tests/e2e/perf --workers=1 "$@"
     ;;
+  test-e2e-coedit)
+    coedit_env=()
+    for name in PLAYWRIGHT_BASE_URL PLAYWRIGHT_API_URL PLAYWRIGHT_REUSE_EXISTING_SERVER COEDIT_API_URL COEDIT_OWNER_EMAIL COEDIT_OWNER_PASSWORD COEDIT_MEMBER_EMAIL COEDIT_MEMBER_PASSWORD COEDIT_PAGE_TITLE COEDIT_CHARS COEDIT_INTERVAL_MS COEDIT_SETTLE_MS; do
+      # Only set names are forwarded: an empty PLAYWRIGHT_BASE_URL would beat the config's default.
+      [[ -n "${!name:-}" ]] && coedit_env+=(-e "${name}")
+    done
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e PLAYWRIGHT_COEDIT=1 "${coedit_env[@]}" browser-tests pnpm exec playwright test tests/e2e/latency --workers=1 "$@"
+    ;;
   test-canvas)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh test-canvas "$@"
     ;;
@@ -128,7 +137,7 @@ case "${COMMAND}" in
       playground bash scripts/docker-run.sh mcp-claude "$@"
     ;;
   *)
-    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-e2e-perf|test-canvas|test-bench|test-doctor|test-bridge|quality|bench-layout|bridge-api|mcp-claude}" >&2
+    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-e2e-perf|test-e2e-coedit|test-canvas|test-bench|test-doctor|test-bridge|quality|bench-layout|bridge-api|mcp-claude}" >&2
     exit 2
     ;;
 esac
