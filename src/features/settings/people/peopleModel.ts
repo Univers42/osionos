@@ -21,6 +21,7 @@
 import type { NotionState, Page } from "@notion-db/object-database";
 import type { SelectOption, ViewConfig } from "@notion-db/contract-types";
 import type { StaticPersona } from "@/features/auth";
+import { optionId } from "@/widgets/database-view/model/workspaceDatabaseMappers";
 
 export type PeopleSourceKey = "contacts" | "directory" | "groups" | "guests" | "members";
 
@@ -73,7 +74,7 @@ const TAG_COLORS = [
 /** Distinct, stable, coloured select options for a fixed value set. */
 export function selectOptions(values: string[]): SelectOption[] {
   return values.map((value, index) => ({
-    id: `opt-${value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "opt"}`,
+    id: optionId(value),
     value,
     color: TAG_COLORS[index % TAG_COLORS.length],
   }));
