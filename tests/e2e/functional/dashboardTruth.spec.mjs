@@ -17,18 +17,11 @@
 import { test, expect } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
-
-async function openCommandCenter(page) {
-  await openFreshPage(page, "/");
-  await page.getByText("Workspace command center", { exact: true }).first().click();
-}
+import { openSeededView } from "../support/seededViews.mjs";
 
 test.describe("dashboard-truth", () => {
   test("the Featured tile counts the checked products", async ({ page }) => {
-    await openCommandCenter(page);
-    const entry = page.getByText("Overview Dashboard", { exact: true }).last();
-    await entry.scrollIntoViewIfNeeded();
-    await entry.click();
+    await openSeededView(page, "Overview Dashboard");
 
     const tile = page.locator("div.p-4", { has: page.getByText("Featured", { exact: true }) }).first();
     await expect(tile).toContainText("60");
@@ -37,11 +30,13 @@ test.describe("dashboard-truth", () => {
     await expect(page.getByText("Total Revenue", { exact: true })).toHaveCount(0);
   });
 
-  test("the command center names its data sources", async ({ page }) => {
-    await openCommandCenter(page);
-    const sources = page.locator("div.group", { has: page.getByText("Data sources", { exact: true }) }).first();
-    await expect(sources).toContainText("Products");
-    await expect(sources).toContainText("Inventory");
-    await expect(sources).not.toContainText("Untitled");
+  // The Home header once listed every demo database as its "data sources" (first as
+  // "Untitled" chips): it describes this account now, so it lists none of them.
+  test("the Home header names no demo data sources", async ({ page }) => {
+    await openFreshPage(page, "/");
+    await expect(page.locator('[data-block-type="heading_2"]', { hasText: "Your tasks" }).first()).toBeVisible({ timeout: 20_000 });
+    for (const label of ["Data sources", "Views", "Featured /view", "Untitled"]) {
+      await expect(page.getByText(label, { exact: true })).toHaveCount(0);
+    }
   });
 });

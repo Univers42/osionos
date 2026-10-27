@@ -99,7 +99,10 @@ test.describe("home account screenshots", () => {
         await page.setViewportSize({ width, height });
         await openHome(page, baseURL);
         await expect(kpi(page, "Requests")).toHaveText("1");
-        await page.screenshot({ path: `target/screens/home-account-${theme}-${width}.png`, fullPage: true });
+        // Home scrolls inside its pane, so each shot is one viewport: the top, then the people section.
+        await page.screenshot({ path: `target/screens/home-account-${theme}-${width}.png` });
+        await page.locator('[data-block-type="heading_2"]', { hasText: "Your people" }).first().scrollIntoViewIfNeeded();
+        await page.screenshot({ path: `target/screens/home-account-${theme}-${width}-people.png` });
       });
     }
   }
