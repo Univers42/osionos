@@ -44,6 +44,8 @@ import { REALTIME_TOKEN_ISSUER, signRealtimeJwt } from './bridge-realtime-socket
 import { createInviteForUser } from './bridge-workspace-invites.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { beginServerTiming, markHop, runWithServerTiming, timedHop } from './bridge-server-timing.mjs';
+import { bumpAccessAfter } from './bridge-access-generation.mjs';
+import { createCollabAuthCache } from './bridge-collab-auth-cache.mjs';
 
 // Caveat: this token lives 1 h. The client does not re-mint it before expiry
 // (fetchSharedSpaceToken in src/features/collab/api/grobaseTransport.factory.ts is
@@ -200,11 +202,11 @@ async function patchWorkspace(deps, session, request, workspaceId, response, con
 	}
 	if (Object.keys(patch).length === 0) throw httpError('Nothing to update.', 422);
 	patch.updated_at = new Date().toISOString();
-	await rest(config, deps.fetchImpl, `osionos_workspaces?id=eq.${workspaceId}`, {
+	await bumpAccessAfter(rest(config, deps.fetchImpl, `osionos_workspaces?id=eq.${workspaceId}`, {
 		method: 'PATCH',
 		body: patch,
 		prefer: 'return=minimal',
-	});
+	}), { workspaceId });
 	return sendJson(response, 200, { ok: true, workspaceId, ...patch }, config);
 }
 
@@ -259,11 +261,11 @@ async function getCollaboration(deps, session, workspaceId, response, config) {
 }
 
 async function addMember(config, fetchImpl, workspaceId, userId) {
-	await rest(config, fetchImpl, 'osionos_workspace_members?on_conflict=workspace_id,user_id', {
+	await bumpAccessAfter(rest(config, fetchImpl, 'osionos_workspace_members?on_conflict=workspace_id,user_id', {
 		method: 'POST',
 		body: { workspace_id: workspaceId, user_id: userId, role: 'viewer', permissions: ['read'] },
 		prefer: 'resolution=ignore-duplicates,return=minimal',
-	});
+	}), { workspaceId });
 }
 
 /**
@@ -409,6 +411,44 @@ async function mintPageRealtimeToken(deps, session, workspaceId, pageId, respons
 }
 
 /**
+ * The verdict class an event's allow is cached under: a read allow says nothing about a
+ * write. A blocks event without an op list is refused whatever the cache holds, so it has
+ * no class and always runs the check.
+ */
+function authCacheKind(payload) {
+	if (payload.t === 'blocks') return Array.isArray(payload.ops) ? 'write' : null;
+	if (payload.t === 'file') return 'write';
+	return payload.t === 'note' ? 'note' : 'read';
+}
+
+/**
+ * The authorization composite of one page-scoped event. It throws to deny and returns to
+ * allow, which is the contract the access cache stores an allow under.
+ */
+async function authorizePageEvent(deps, session, request, payload, pageId, workspaceId) {
+	// Membership gates the answer, but the page reads start with it: the membership
+	// verdict is awaited first, so a non-member never sees a page-level answer.
+	const levelRead = softStart(() => timedHop('access', () => deps.pageLevelFor?.(session.userId, pageId, workspaceId, deps.scope)));
+	const blocksRead = payload.t === 'blocks' && Array.isArray(payload.ops) && deps.authorizeBlocks
+		? softStart(() => timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope)))
+		: null;
+	await deps.requireMember();
+	const level = normalizedLevel(await levelRead);
+	if (level === 'none') throw httpError('Page not found.', 404);
+	if (!levelAtLeast(level, 'can_view')) throw httpError('Page read access is required.', 403);
+	// The level alone under-grants: a member with no page rule reads 'can_view' and
+	// writes through the membership's update permission (C558). Writes therefore go
+	// through the same gate PATCH /pages uses, never through the level.
+	const writes = payload.t === 'blocks' || payload.t === 'file'
+		|| (payload.t === 'note' && !levelAtLeast(level, 'can_comment'));
+	if (writes) {
+		if ((payload.t === 'blocks' && !Array.isArray(payload.ops)) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
+		// A blocks write started its gate read next to the level read; the others start it now.
+		await (blocksRead ?? timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope)));
+	}
+}
+
+/**
  * The flag-on routing of one collaboration event. Content goes only to the page
  * topic its readers may subscribe to; the workspace topic keeps the workspace-wide
  * `pages` nudge (reduced to ids-free keys) and nothing else.
@@ -433,26 +473,10 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 		if (!UUID_REGEX.test(String(payload.pageId ?? ''))) throw httpError('page_id_required', 422);
 		const pageId = requireUuid(payload.pageId, 'pageId').toLowerCase();
 		const publishedActor = normalizePublishedActor(session.userId, payload.actor);
-		// Membership gates the answer, but the page reads start with it: the membership
-		// verdict is awaited first, so a non-member never sees a page-level answer.
-		const levelRead = softStart(() => timedHop('access', () => deps.pageLevelFor?.(session.userId, pageId, workspaceId, deps.scope)));
-		const blocksRead = payload.t === 'blocks' && Array.isArray(payload.ops) && deps.authorizeBlocks
-			? softStart(() => timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope)))
-			: null;
-		await deps.requireMember();
-		const level = normalizedLevel(await levelRead);
-		if (level === 'none') throw httpError('Page not found.', 404);
-		if (!levelAtLeast(level, 'can_view')) throw httpError('Page read access is required.', 403);
-		// The level alone under-grants: a member with no page rule reads 'can_view' and
-		// writes through the membership's update permission (C558). Writes therefore go
-		// through the same gate PATCH /pages uses, never through the level.
-		const writes = payload.t === 'blocks' || payload.t === 'file'
-			|| (payload.t === 'note' && !levelAtLeast(level, 'can_comment'));
-		if (writes) {
-			if ((payload.t === 'blocks' && !Array.isArray(payload.ops)) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
-			// A blocks write started its gate read next to the level read; the others start it now.
-			await (blocksRead ?? timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope)));
-		}
+		await deps.authCache.authorize(
+			{ userId: session.userId, workspaceId, pageId, kind: authCacheKind(payload) },
+			() => authorizePageEvent(deps, session, request, payload, pageId, workspaceId),
+		);
 		// The topic is lowercased; the published payload names the same page (C574).
 		const frame = { event: 'collab', payload: { ...payload, pageId, actor: publishedActor } };
 		const published = await timedHop('publish', () => publishRealtime({ topic: `collabpage:${pageId}`, eventType: 'broadcast', payload: frame, fetchImpl: deps.fetchImpl, env: deps.env }));
@@ -576,7 +600,7 @@ async function inviteMember(deps, session, request, workspaceId, response, confi
  * true when handled. deps: { config, verifySession, fetchImpl?, env? }.
  */
 export function createCollabHandler({ config, verifySession, fetchImpl = fetch, env = process.env, authorizeBlocks, pageLevelFor }) {
-	const deps = { fetchImpl, env, authorizeBlocks, pageLevelFor };
+	const deps = { fetchImpl, env, authorizeBlocks, pageLevelFor, authCache: createCollabAuthCache({ env }) };
 	return async function handleCollabRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		const wsPatch = /^\/api\/workspaces\/([0-9a-f-]{36})$/i.exec(pathname);

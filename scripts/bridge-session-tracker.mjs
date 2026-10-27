@@ -32,6 +32,7 @@
  */
 
 import { BAAS_FETCH_TIMEOUT_MS } from './bridge-baas-body.mjs';
+import { bumpAccess } from './bridge-access-generation.mjs';
 
 export const POLL_INTERVAL_MS = 10_000;
 export const STALE_AFTER_MS = 60_000;
@@ -112,6 +113,9 @@ export class PolledSessionSet {
 
 	/** A write this process just made applies at once and survives a swap from a poll that began earlier. */
 	applyLocal(key, value) {
+		// Global: a cutoff or revoke names a session, and a cached allow is keyed by user, so it
+		// cannot say which entries that session fed.
+		bumpAccess();
 		this.writeSequence += 1;
 		this.localWrites.set(key, { value, sequence: this.writeSequence });
 		if (this.entries) this.merge(this.entries, key, value);
