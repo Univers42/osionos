@@ -28,6 +28,19 @@ type DraftCommitter = (
 ) => void;
 type DraftListener = () => void;
 
+/**
+ * `draft`: the editor text changed (not yet committed). `settled`: the draft
+ * ended — committed (content = the committed text), rebased or cleared
+ * (content = null: the store cannot say what the document holds).
+ */
+export interface DraftTapEvent {
+  kind: "draft" | "settled";
+  sourceKey: string;
+  blockId: string;
+  content: string | null;
+}
+type DraftTapListener = (event: DraftTapEvent) => void;
+
 interface DraftEntry {
   baseContent: string;
   draftContent: string;
@@ -39,6 +52,7 @@ const IDLE_COMMIT_DELAY_MS = 250;
 const draftEntries = new Map<string, DraftEntry>();
 const draftListeners = new Map<string, Set<DraftListener>>();
 const draftCommitters = new Map<string, DraftCommitter>();
+const draftTaps = new Set<DraftTapListener>();
 
 function draftKey(sourceKey: string, blockId: string): string {
   return `${sourceKey}\u0000${blockId}`;
@@ -60,6 +74,19 @@ function clearIdleTimer(entry: DraftEntry) {
 
 function notifyDraftKey(key: string) {
   draftListeners.get(key)?.forEach((listener) => listener());
+}
+
+/** Observe every draft change and settle; with no listener this is a no-op. */
+export function subscribeDraftTap(listener: DraftTapListener): () => void {
+  draftTaps.add(listener);
+  return () => {
+    draftTaps.delete(listener);
+  };
+}
+
+function emitDraftTap(kind: DraftTapEvent["kind"], sourceKey: string, blockId: string, content: string | null) {
+  if (draftTaps.size === 0) return;
+  for (const listener of Array.from(draftTaps)) listener({ kind, sourceKey, blockId, content });
 }
 
 function getOrCreateEntry(sourceKey: string, blockId: string, committedContent: string): DraftEntry {
@@ -138,6 +165,7 @@ export function setBlockDraft(
   entry.dirty = draftContent !== entry.baseContent;
   scheduleIdleCommit(sourceKey, blockId, entry);
   notifyDraftKey(key);
+  emitDraftTap("draft", sourceKey, blockId, draftContent);
 }
 
 export function commitBlockDraft(
@@ -159,6 +187,7 @@ export function commitBlockDraft(
   entry.dirty = false;
   committer(blockId, nextContent, reason);
   notifyDraftKey(key);
+  emitDraftTap("settled", sourceKey, blockId, nextContent);
   return true;
 }
 
@@ -209,6 +238,7 @@ export function rebaseBlockDraft(sourceKey: string, blockId: string, committedCo
   entry.draftContent = committedContent;
   entry.dirty = false;
   notifyDraftKey(key);
+  emitDraftTap("settled", sourceKey, blockId, committedContent);
 }
 
 export function clearBlockDraft(sourceKey: string, blockId: string) {
@@ -217,6 +247,7 @@ export function clearBlockDraft(sourceKey: string, blockId: string) {
   if (entry) clearIdleTimer(entry);
   draftEntries.delete(key);
   notifyDraftKey(key);
+  if (entry) emitDraftTap("settled", sourceKey, blockId, null);
 }
 
 export function clearBlockDraftsForSource(sourceKey: string) {
@@ -227,6 +258,7 @@ export function clearBlockDraftsForSource(sourceKey: string) {
     if (entry) clearIdleTimer(entry);
     draftEntries.delete(key);
     notifyDraftKey(key);
+    if (entry) emitDraftTap("settled", sourceKey, blockIdFromDraftKey(key), null);
   }
 }
 

@@ -49,6 +49,8 @@
 import { useEffect } from 'react';
 
 import { getActivePageJwt } from '@/shared/api/client';
+import { isCollabFastSendEnabled } from '@/shared/config/featureFlags';
+import { subscribeDraftTap } from '@/features/block-editor/model/blockDraftStore';
 import { usePageStore } from '@/store/usePageStore';
 import { hydrateWorkspace } from '@/store/sync/hydratePages';
 import { broadcastsSuppressed, withoutBroadcast } from '@/store/sync/broadcastGuard';
@@ -60,11 +62,13 @@ import {
   absorbBlockClock,
   applyBlockOps,
   diffBlocks,
+  type BlockDiffOp,
   nextBlockClock,
   recordBlockOps,
   splitBlockEvents,
   type BlockRegisterTable,
 } from '../model/blockSync';
+import { createFastSender } from '../model/fastSend';
 import { readLocalCaretAndSelection } from '../model/localCaret';
 import { useCollabStore } from '../store/useCollabStore';
 
@@ -118,12 +122,7 @@ function startLiveBlockSync(spaceId: string, selfId: string, pageId: string | nu
     times.set(blockId, Date.now());
   };
 
-  const flushPage = (pageId: string): void => {
-    const pending = pendingOut.get(pageId);
-    if (!pending) return;
-    pendingOut.delete(pageId);
-    const ops = diffBlocks(pending.prev, pending.next);
-    if (ops.length === 0) return;
+  const emitOps = (pageId: string, ops: BlockDiffOp[]): void => {
     // Stamp v per op (local op v = ++clock), record in the registers, split,
     // broadcast. The 60 KB splitter keeps ops in order; an op too big for
     // any event (a huge code/draw payload) is skipped inside it.
@@ -133,6 +132,14 @@ function startLiveBlockSync(spaceId: string, selfId: string, pageId: string | nu
       if (op.k === 'put') markLastLocalEdit(pageId, op.id);
     }
     for (const event of splitBlockEvents(pageId, selfId, stamped, nextSeq)) broadcast(event);
+  };
+
+  const flushPage = (pageId: string): void => {
+    const pending = pendingOut.get(pageId);
+    if (!pending) return;
+    pendingOut.delete(pageId);
+    const ops = diffBlocks(pending.prev, pending.next);
+    if (ops.length > 0) emitOps(pageId, ops);
   };
 
   const scheduleNudge = (): void => {
@@ -301,10 +308,21 @@ function startLiveBlockSync(spaceId: string, selfId: string, pageId: string | nu
 
   // ── Wiring ─────────────────────────────────────────────────────────────────
   const unsubStore = usePageStore.subscribe(onStoreChange);
+  // Flag off (default): no tap listener is registered, so the draft store and
+  // this hook behave exactly as before.
+  const unsubTap = pageId && isCollabFastSendEnabled()
+    ? subscribeDraftTap(createFastSender({
+        pageId,
+        readContent: () => usePageStore.getState().pageById(pageId)?.content,
+        emit: (ops) => emitOps(pageId, ops),
+        markLocalEdit: (blockId) => markLastLocalEdit(pageId, blockId),
+      }).onTap)
+    : null;
   // The store fans in both channels: workspace (`pages` nudge) + this page.
   const unsubEvent = useCollabStore.getState().onEvent(onEvent);
   return () => {
     unsubStore();
+    unsubTap?.();
     unsubEvent();
     for (const pending of pendingOut.values()) clearTimeout(pending.timer);
     pendingOut.clear();
