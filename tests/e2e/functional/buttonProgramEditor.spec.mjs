@@ -104,4 +104,14 @@ test.describe("button program editor", () => {
       "Notify: ok",
     ]);
   });
+
+  test("a button running page.create opens a page titled From a button", async ({ page, baseURL }) => {
+    await seed(page, baseURL, [button({ buttonProgram: program([{ op: "action", action: { type: "app_action", name: "page.create", args: { title: "From a button" } } }]) })]);
+    // With a token addPage POSTs /api/pages, which the offline build does not serve; with none
+    // it creates the page locally, as for an offline user. The shared seed's token stays for
+    // the specs that need one.
+    await page.evaluate(() => globalThis.__playgroundUserStore.setState({ activePageJwt: () => "" }));
+    await page.getByRole("button", { name: "Run it", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Page title" })).toHaveText("From a button", { timeout: 15_000 });
+  });
 });
