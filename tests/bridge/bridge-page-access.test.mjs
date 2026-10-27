@@ -19,6 +19,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { MAX_ANCESTOR_DEPTH, pageAccessLevel } from '../../scripts/bridge-page-access.mjs';
+import { MARKETPLACE_WORKSPACE_ID } from '../../scripts/bridge-page-read.mjs';
 
 const WS = '11111111-1111-4111-8111-111111111111';
 const ROOT = 'aaaaaaaa-0000-4000-8000-000000000001';
@@ -205,6 +206,14 @@ describe('the resolution order outside the matrix', () => {
 			assert.equal(level('wsOwner', 'child', new Map(), parentOf, shared), 'full_access');
 			assert.equal(level('wsOwner', 'child', new Map(), parentOf, PAGES.child), 'none');
 		}
+	});
+
+	it('C557: an owner without membership keeps their page only in the memberless marketplace', () => {
+		const left = { userId: PAGE_OWNER, member: null };
+		const decide = (row) => pageAccessLevel({ row, userId: left.userId, member: left.member, teamIds: [] });
+		assert.equal(decide(PAGES.root), 'none');
+		assert.equal(decide({ ...PAGES.root, workspace_id: MARKETPLACE_WORKSPACE_ID }), 'full_access');
+		assert.equal(pageAccessLevel({ row: { ...PAGES.root, workspace_id: MARKETPLACE_WORKSPACE_ID }, userId: OUTSIDER, member: null, teamIds: [] }), 'none');
 	});
 });
 

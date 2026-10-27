@@ -19,6 +19,7 @@ import type {
 import type { UserSession, Workspace } from "@/entities/user";
 import type { ShareAccessRule, ShareLevel } from "@/features/share/types";
 import { SHARE_LEVELS } from "@/features/share/types";
+import { MARKETPLACE_WORKSPACE_ID } from "@/features/marketplace/model/appMeta";
 import { useSyncExternalStore } from "react";
 
 /** The caller's own workspace membership — the osionos_workspace_members row. */
@@ -328,8 +329,9 @@ export function canWritePage(
   // refused on stays read-only even though the membership still grants the write.
   if (context.refusedPageIds?.has(page._id)) return false;
   const member = memberFor(context, page.workspaceId);
-  // C557: the page owner keeps the write only while still a member of the workspace.
-  if (sameUserId(page.ownerId, context.userId)) return member !== null;
+  // C557: the page owner keeps the write only while still a member of the workspace —
+  // except in the marketplace, which has no members and is governed by ownership alone.
+  if (sameUserId(page.ownerId, context.userId)) return member !== null || page.workspaceId === MARKETPLACE_WORKSPACE_ID;
   const level = isRuleExempt(member) ? null : shareLevelFor(rules, page, context.userId, member?.role ?? "");
   // C558: a matched rule decides alone — can_edit and above grant (and read), anything below refuses.
   if (level !== null) return levelRank(level) >= levelRank("can_edit");
