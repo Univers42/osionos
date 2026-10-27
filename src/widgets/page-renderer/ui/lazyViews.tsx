@@ -90,7 +90,7 @@ export const LazySettingsView = lazy(() =>
 
 // Its own chunk: the JSON editor brings Monaco's JSON language and worker.
 export const LazyThemeJsonView = lazy(() =>
-  import("@/features/theme-editor/ui/ThemeJsonView").then((m) => ({ default: m.ThemeJsonView })),
+  import("@/features/theme-editor/ui/ThemeJsonEditor").then((m) => ({ default: m.ThemeJsonEditor })),
 );
 
 export const LazyChatShell = lazy(() =>
