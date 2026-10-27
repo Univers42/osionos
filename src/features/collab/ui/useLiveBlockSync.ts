@@ -70,6 +70,7 @@ import {
 } from '../model/blockSync';
 import { createFastSender } from '../model/fastSend';
 import { readLocalCaretAndSelection } from '../model/localCaret';
+import { recordAppliedEdits } from '../model/remoteEditStore';
 import { useCollabStore } from '../store/useCollabStore';
 
 const BROADCAST_COALESCE_MS = 16; // one frame — a typed character must leave in a frame
@@ -221,6 +222,7 @@ function startLiveBlockSync(spaceId: string, selfId: string, pageId: string | nu
     withoutBroadcast(() => {
       usePageStore.getState().applyRemoteContent(pageId, result.blocks!);
     });
+    recordAppliedEdits(ops, actor, result.registers);
   };
 
   const releaseHold = (pageId: string, entry: { op: BlockOp; actor: string }): void => {

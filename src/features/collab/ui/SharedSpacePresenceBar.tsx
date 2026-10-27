@@ -39,6 +39,7 @@ import { uploadSharedFile } from '../api/uploadSharedFile';
 import { CollabRoster } from './CollabRoster';
 import { CollabCaretLayer } from './CollabCaretLayer';
 import { CollabFollowLayer } from './CollabFollowLayer';
+import { CollabEditFlash } from './CollabEditFlash';
 import { SummonPrompt } from './SummonPrompt';
 import { useSharedSpacePresence } from './useSharedSpacePresence';
 import { useSharedSpacePage } from './useSharedSpacePage';
@@ -143,6 +144,7 @@ export const SharedSpacePresenceBar: React.FC = () => {
       <input ref={fileInput} type="file" hidden onChange={onPickFile} />
       <CollabCaretLayer />
       <CollabFollowLayer />
+      <CollabEditFlash />
       <SummonPrompt />
     </>
   );

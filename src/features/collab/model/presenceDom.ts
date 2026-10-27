@@ -47,6 +47,12 @@ export function scrollerEl(): HTMLElement | null {
   return typeof document === 'undefined' ? null : document.querySelector<HTMLElement>(SCROLLER);
 }
 
+/** `clip-path` that confines an overlay to the editor, so a mark scrolled under the
+ *  top bar is cut off at the bar's edge instead of painting over it. */
+export function clipInset(viewport: Viewport): string {
+  return `inset(${viewport.top}px ${window.innerWidth - viewport.right}px ${window.innerHeight - viewport.bottom}px ${viewport.left}px)`;
+}
+
 /** The visible editor area in viewport px, or the window while no page is mounted. */
 export function viewportOf(scroller: HTMLElement | null): Viewport {
   if (scroller) return scroller.getBoundingClientRect();
