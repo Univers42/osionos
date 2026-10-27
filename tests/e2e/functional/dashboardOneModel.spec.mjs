@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import { test, expect } from "@playwright/test";
 
-import { openFreshPage } from "../../browser/core/app.mjs";
+import { openSeededView } from "../support/seededViews.mjs";
 
 const SEED_PATH = "src/shared/notion-database-sys/src/store/dbms/mongodb/_notion_state.json";
 
@@ -27,12 +27,7 @@ function seedCounts() {
 }
 
 async function openOverviewDashboard(page) {
-  await openFreshPage(page, "/");
-  await page.getByText("Workspace command center", { exact: true }).first().click();
-  const entry = page.getByText("Overview Dashboard", { exact: true }).last();
-  await entry.scrollIntoViewIfNeeded();
-  await entry.click();
-  await page.locator("[data-dash-row]").first().waitFor({ timeout: 30_000 });
+  await openSeededView(page, "Overview Dashboard");
 }
 
 test.describe("dashboard-one-model", () => {
@@ -47,8 +42,9 @@ test.describe("dashboard-one-model", () => {
 
     // The tile's number is the checked count, not the total.
     await expect(page.getByText(String(checked)).first()).toBeVisible();
-    // provenance mentions both counts
-    await expect(page.getByText(new RegExp(`${checked} of ${total}`))).toBeVisible();
+    // The provenance states the checked share of all records.
+    const share = Math.round((checked / total) * 100);
+    await expect(page.getByText(`Count where Featured is checked · ${share}% of ${total} records`)).toBeVisible();
   });
 
   test("rename persists across reload", async ({ page }) => {

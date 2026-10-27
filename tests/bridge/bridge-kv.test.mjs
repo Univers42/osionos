@@ -16,14 +16,19 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createKv } from '../../scripts/bridge-kv.mjs';
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// The clock is mocked: a real 20 ms TTL raced a loaded CI runner, which took longer than
+// that between the set and the next line's read (develop CI 40468680294).
+const mockClock = (t) => t.mock.timers.enable({ apis: ['Date', 'setInterval'] });
 
 describe('createKv memory backend', () => {
-	it('expires a value after its ttl and deletes it on demand', async () => {
+	it('expires a value after its ttl and deletes it on demand', async (t) => {
+		mockClock(t);
 		const kv = createKv({ memory: { sweepMs: 5 } });
 		await kv.set('short', 'value', 20);
 		assert.equal(await kv.get('short'), 'value');
-		await sleep(40);
+		t.mock.timers.tick(19);
+		assert.equal(await kv.get('short'), 'value');
+		t.mock.timers.tick(1);
 		assert.equal(await kv.get('short'), null);
 		await kv.set('gone', 'value', 1_000);
 		await kv.del('gone');
@@ -41,10 +46,13 @@ describe('createKv memory backend', () => {
 		kv.close();
 	});
 
-	it('counts in a fixed window and restarts after it expires', async () => {
+	it('counts in a fixed window and restarts after it expires', async (t) => {
+		mockClock(t);
 		const kv = createKv({});
 		assert.deepEqual([await kv.incrWithTtl('hits', 30), await kv.incrWithTtl('hits', 30)], [1, 2]);
-		await sleep(45);
+		t.mock.timers.tick(29);
+		assert.equal(await kv.incrWithTtl('hits', 30), 3);
+		t.mock.timers.tick(1);
 		assert.equal(await kv.incrWithTtl('hits', 30), 1);
 		kv.close();
 	});

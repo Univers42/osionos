@@ -494,12 +494,12 @@ test.describe("database-inline-header", () => {
     await page.getByTestId("add-view-panel").getByRole("button", { name: "Dashboard", exact: true }).click();
     await expect(block.getByText("Total Records")).toBeVisible();
 
-    // Viewport breakpoints lie in embeds: the stat grid renders 4 columns
-    // even though the inline container is far narrower than the window.
-    const statsGrid = block.locator("div.grid").first();
+    // Viewport breakpoints lie in embeds, so rows follow the container: the
+    // auto-detected row (Total Records + Recent Activity) sits side by side.
+    const statsGrid = block.locator("[data-dash-row]").first();
     const colCount = () => statsGrid.evaluate(
       el => getComputedStyle(el).gridTemplateColumns.split(" ").length);
-    expect(await colCount()).toBe(4);
+    expect(await colCount()).toBeGreaterThan(1);
 
     // Settings → Layout: the toggle sits right BEFORE Show page icon.
     await block.hover();
@@ -515,12 +515,12 @@ test.describe("database-inline-header", () => {
     expect(rBox.y).toBeLessThan(sBox.y);
 
     // Off by default (opt-in); switching it on relayouts by CONTAINER width:
-    // the same grid drops below 4 columns inside the narrow embed.
+    // the same row stacks inside the narrow embed.
     await expect(responsive).toHaveAttribute("aria-checked", "false");
     await responsive.click();
     await expect(responsive).toHaveAttribute("aria-checked", "true");
     await closeViewSettings(page);
-    expect(await colCount()).toBeLessThan(4);
+    expect(await colCount()).toBe(1);
   });
 
   test("view-tab menu: select-then-open, right-click direct, per-view actions", async ({ page }) => {
