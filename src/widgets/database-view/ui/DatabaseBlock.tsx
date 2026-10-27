@@ -163,6 +163,26 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     (pageId, _state, onClose) => <WorkspaceRecordPeek pageId={pageId} onClose={onClose} />,
     [],
   );
+  const renderTemplatesPeek = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
+    (pageId, _state, onClose) => (
+      <WorkspaceRecordPeek
+        pageId={pageId}
+        onClose={onClose}
+        action={{
+          label: "Use template",
+          onClick: () => {
+            const workspaceId = useUserStore.getState().activeWorkspace()?._id;
+            const jwt = useUserStore.getState().activePageJwt() ?? "";
+            if (workspaceId) {
+              void usePageStore.getState().createPageFromTemplate(pageId, workspaceId, jwt);
+              onClose();
+            }
+          },
+        }}
+      />
+    ),
+    [],
+  );
   // Notion-style row sub-items: every live record expands inline to its child
   // records + note sub-items as column-aligned rows. Stable identity so the
   // table's sub-items context never churns.
@@ -243,7 +263,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
             databaseId={isTemplates ? TEMPLATES_DB_ID : RECENTS_DB_ID}
             initialView={resolvedInitialView}
             mode={resolvedMode}
-            renderPage={renderHomePeek}
+            renderPage={isTemplates ? renderTemplatesPeek : renderHomePeek}
             className={mode === 'full' ? 'h-full' : undefined}
             chrome="single-view"
           />
