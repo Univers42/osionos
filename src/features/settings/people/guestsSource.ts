@@ -38,7 +38,7 @@ const SCHEMA: DatabaseSchema = {
 const VIEWS = [
   view({
     id: PEOPLE_VIEW.guestsTable, databaseId: PEOPLE_DB.guests, name: "Table", type: "table",
-    visibleProperties: [GUEST.role, GUEST.status, GUEST.since],
+    visibleProperties: [GUEST.email, GUEST.role, GUEST.status, GUEST.since],
     settings: { showRowNumbers: false, openPagesIn: "side_peek" },
   }),
 ];

@@ -45,7 +45,7 @@ const VIEWS = [
   view({
     id: PEOPLE_VIEW.groupsTable, databaseId: PEOPLE_DB.groups, name: "Table", type: "table",
     grouping: { propertyId: GROUP.kind, sort: "alphabetical" },
-    visibleProperties: [GROUP.kind, GROUP.role, GROUP.since],
+    visibleProperties: [GROUP.name, GROUP.kind, GROUP.role, GROUP.since],
     settings: { showRowNumbers: false, openPagesIn: "side_peek" },
   }),
 ];
