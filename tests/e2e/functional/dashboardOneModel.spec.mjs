@@ -47,8 +47,9 @@ test.describe("dashboard-one-model", () => {
 
     // The tile's number is the checked count, not the total.
     await expect(page.getByText(String(checked)).first()).toBeVisible();
-    // provenance mentions both counts
-    await expect(page.getByText(new RegExp(`${checked} of ${total}`))).toBeVisible();
+    // The provenance states the checked share of all records.
+    const share = Math.round((checked / total) * 100);
+    await expect(page.getByText(`Count where Featured is checked · ${share}% of ${total} records`)).toBeVisible();
   });
 
   test("rename persists across reload", async ({ page }) => {

@@ -28,7 +28,7 @@ import type { ChangeEvent, NotionState, Page, PageQuery, PropertyType, SchemaPro
 import { useUserStore } from "@/features/auth";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
-import { sysBuiltInViewIds, sysSourceById, SYS_VIEW_TYPE, type SysColumnType, type SysSource } from "./sysDataSources";
+import { sysBuiltInViewIds, sysEditableBuiltInViewIds, sysSourceById, SYS_VIEW_TYPE, type SysColumnType, type SysSource } from "./sysDataSources";
 import type { SysTransport } from "./sysDatabaseTransport";
 import { deleteSavedView, diffViews, fetchSavedViews, saveSavedView } from "./sysDatabaseViews";
 import { synthOptions } from "./workspaceDatabaseMappers";
@@ -182,7 +182,10 @@ class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
         fetchSavedViews(this.slug(), this.transport).catch(() => ({})),
       ]);
       this.held = { ...saved };
-      const merged: SysLoaded = { ...loaded, state: { ...loaded.state, views: { ...saved, ...loaded.state.views } } };
+      const source = sysSourceById(this.sourceId);
+      const editableIds = sysEditableBuiltInViewIds(source);
+      const mergedViews = mergeSysViews(loaded.state.views, saved, editableIds);
+      const merged: SysLoaded = { ...loaded, state: { ...loaded.state, views: mergedViews } };
       if (sysSessionSignal() === signal) cache.set(this.sourceId, merged);
       this.announce({ truncated: loaded.truncated, error: null });
       return merged.state;
@@ -243,6 +246,7 @@ class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
         .catch((error: unknown) => this.failed(error));
     }
     for (const id of edit.removed.filter((id) => goneable.has(id))) {
+      // Caveat: deleting an editable built-in removes only its saved copy; the shipped definition comes back on the next load.
       deleteSavedView(source.source, id, this.transport)
         .then(() => { const rest = { ...this.held }; delete rest[id]; this.held = rest; })
         .catch((error: unknown) => this.failed(error));
@@ -291,4 +295,12 @@ export function getSysDatabaseAdapter(sourceId: string, transport: SysTransport)
   let adapter = adapters.get(sourceId);
   if (!adapter) { adapter = new SysDatabaseAdapter(sourceId, transport); adapters.set(sourceId, adapter); }
   return adapter;
+}
+
+/** A `sys:` source's views after load: the shipped definitions win (the default table and
+ *  non-editable built-ins), except an editable built-in the user saved a copy of. */
+export function mergeSysViews(loaded: NotionState["views"], saved: NotionState["views"], editableIds: readonly string[]): NotionState["views"] {
+  const merged = { ...saved, ...loaded };
+  for (const id of editableIds) if (saved[id]) merged[id] = saved[id];
+  return merged;
 }
