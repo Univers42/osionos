@@ -24,6 +24,7 @@ import React, { useEffect, useReducer } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useCollabStore } from '../store/useCollabStore';
+import { memberIdOf } from '../model/collabActor';
 import { caretRectAt, controlRectFor, selectionRectsFor } from '../model/caretDom';
 
 const OVERLAY_Z = 45; // above editor content, below modals/toasts
@@ -68,7 +69,7 @@ export const CollabCaretLayer: React.FC = () => {
   const nodes: React.ReactElement[] = [];
 
   cursors.forEach((cursor) => {
-    const who = meta.get(cursor.actor);
+    const who = meta.get(memberIdOf(cursor.actor));
     if (!who) return;
     if (cursor.selection) {
       selectionRectsFor(cursor.selection).forEach((r, i) => nodes.push(

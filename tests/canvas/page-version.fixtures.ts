@@ -58,10 +58,12 @@ export interface FakeBridge {
   keepalives: Array<{ pageId: string; body: Record<string, unknown>; status: number }>;
   /** The pages whose EVERY write is refused — the server that never accepts a version. */
   refuses: Set<string>;
+  /** Other writers' contents, one landing on the page just before each write to it. */
+  racers: Map<string, Block[][]>;
 }
 
 export function createBridge(pages: Record<string, ServerPage>): FakeBridge {
-  return { pages: new Map(Object.entries(pages)), patches: [], keepalives: [], refuses: new Set() };
+  return { pages: new Map(Object.entries(pages)), patches: [], keepalives: [], refuses: new Set(), racers: new Map() };
 }
 
 function pageIdOf(path: string): string {
@@ -76,6 +78,11 @@ export function applyWrite(
 ): { status: number; body: Record<string, unknown> } {
   const page = bridge.pages.get(pageId);
   if (!page) return { status: 404, body: { ok: false, message: "This page was not found." } };
+  const raced = bridge.racers.get(pageId)?.shift();
+  if (raced) {
+    page.content = raced;
+    page.version += 1;
+  }
   const base = body.baseVersion;
   const stale = bridge.refuses.has(pageId) || (typeof base === "number" && base !== page.version);
   if (stale) {
