@@ -143,6 +143,34 @@ export function aiHubTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: AI_HUB_TAB_ID, workspaceId: "", kind: "ai-hub", title: "AI Hub", icon: "icon:sparkles" };
 }
 
+/** What a theme JSON tab edits. Its pageId encodes it, so a restored layout reopens the same document. */
+export type ThemeJsonTarget = { kind: "theme"; slug: string } | { kind: "new-theme" } | { kind: "import-theme" };
+
+export const THEME_JSON_PREFIX = "__theme_json__:";
+// A theme slug as scripts/bridge-theme-rules.mjs:themeSlug makes it: 1–24 characters, no dash at either end.
+const THEME_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,22}[a-z0-9])?$/;
+
+function themeJsonFile(target: ThemeJsonTarget): { id: string; title: string } {
+  if (target.kind === "theme") return { id: `theme:${target.slug}`, title: `${target.slug}.json` };
+  if (target.kind === "new-theme") return { id: "new", title: "new-theme.json" };
+  return { id: "import-theme", title: "import.json" };
+}
+
+/** The tab of one theme document; one per target, so a second open focuses it. */
+export function themeJsonTab(target: ThemeJsonTarget): WorkspaceTab {
+  const { id, title } = themeJsonFile(target);
+  return { tabId: genId("tab"), pageId: `${THEME_JSON_PREFIX}${id}`, workspaceId: "", kind: "theme-json", title, icon: "icon:code" };
+}
+
+export function parseThemeJsonPageId(pageId: string): ThemeJsonTarget | null {
+  if (!pageId.startsWith(THEME_JSON_PREFIX)) return null;
+  const id = pageId.slice(THEME_JSON_PREFIX.length);
+  if (id === "new") return { kind: "new-theme" };
+  if (id === "import-theme") return { kind: "import-theme" };
+  const slug = id.startsWith("theme:") ? id.slice("theme:".length) : "";
+  return THEME_SLUG.test(slug) ? { kind: "theme", slug } : null;
+}
+
 /** One pane with no tab: what is left after the user closes everything. The
  *  pane shows the empty-workspace start screen; nothing is opened for them. */
 export function emptyLayout(): { root: PaneNode; activePaneId: string } {
