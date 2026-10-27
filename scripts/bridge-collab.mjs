@@ -56,6 +56,9 @@ const REALTIME_TOKEN_TTL_SECONDS = 3600;
  * EXACT topic allow-list the gateway authorizes against (can_subscribe_to: an
  * entry must equal the topic's namespace; an empty list grants nothing), so the
  * token's reach is precisely the namespaces passed in — never a wildcard.
+ * `metadata.can_track: true` lets a subscribe-only token TRACK presence on a topic it
+ * may subscribe to (gateway AuthProvider::authorize_track); it never implies publish
+ * or broadcast. Only the two collab tokens carry it.
  */
 export function mintRealtimeToken({ secret, userId, namespaces, ttlSeconds = REALTIME_TOKEN_TTL_SECONDS, canPublish = true, metadata, now = Date.now() }) {
 	if (!secret) throw httpError('Realtime signing secret (JWT_SECRET) is not configured.', 503);
