@@ -110,19 +110,39 @@ function publishFor(spaceId: string) {
 }
 
 /** Cached notify token so collab does not re-fetch on every join. */
-let cachedNotifyToken: string | null | undefined;
-let notifyTokenInFlight: Promise<string | null> | null = null;
+interface NotifyTokenCacheEntry { userId: string; token: string; }
+let cachedNotifyToken: NotifyTokenCacheEntry | null = null;
+let notifyTokenInFlight: { userId: string; promise: Promise<string | null> } | null = null;
 
-export async function fetchNotifyToken(): Promise<string | null> {
-  if (cachedNotifyToken !== undefined) return cachedNotifyToken;
-  if (!notifyTokenInFlight) {
-    notifyTokenInFlight = fetchInbox()
-      .then((inbox) => inbox.notifyToken)
-      .catch(() => null)
-      .finally(() => { notifyTokenInFlight = null; });
+export function resetNotifyTokenCache(): void {
+  cachedNotifyToken = null;
+  notifyTokenInFlight = null;
+}
+
+export async function fetchNotifyToken(
+  userId?: string,
+  fetchInboxImpl: () => Promise<{ notifyToken: string | null; unread: number }> = fetchInbox,
+): Promise<string | null> {
+  const resolvedUserId = userId ?? '';
+  if (cachedNotifyToken?.userId === resolvedUserId) return cachedNotifyToken.token;
+  if (notifyTokenInFlight?.userId === resolvedUserId) return notifyTokenInFlight.promise;
+
+  const promise = fetchInboxImpl()
+    .then((inbox) => inbox.notifyToken)
+    .catch(() => null);
+
+  notifyTokenInFlight = { userId: resolvedUserId, promise };
+  const token = await promise;
+
+  // Discard a stale fetch that resolved after another user took over.
+  if (notifyTokenInFlight?.userId !== resolvedUserId) {
+    return token;
   }
-  const token = await notifyTokenInFlight;
-  cachedNotifyToken = token;
+  notifyTokenInFlight = null;
+  // Never cache null/failure: the next join retries.
+  if (token) {
+    cachedNotifyToken = { userId: resolvedUserId, token };
+  }
   return token;
 }
 
@@ -130,7 +150,8 @@ export interface SharedSpaceJoinDeps {
   url?: string;
   fetchToken?: (spaceId: string) => Promise<string>;
   fetchPageToken?: (spaceId: string, pageId: string) => Promise<PageChannelToken>;
-  fetchNotifyToken?: () => Promise<string | null>;
+  fetchNotifyToken?: (userId?: string) => Promise<string | null>;
+  fetchInbox?: () => Promise<{ notifyToken: string | null; unread: number }>;
   subscribeTopic?: (topic: string, onFrame: (frame: LiveRealtimeEventFrame) => void) => Unsubscribe;
   publish?: (workspaceId: string, event: string, payload: unknown) => Promise<void>;
   webSocketCtor?: LiveWebSocketCtor;
@@ -140,13 +161,13 @@ export interface SharedSpaceJoinDeps {
 /** Subscribe this client's user topic for directed summons (mintedTopicSocket). */
 function userTopicFor(
   selfId: string,
-  getNotifyToken: () => Promise<string | null>,
+  getNotifyToken: (userId: string) => Promise<string | null>,
   subscribe: (topic: string, onFrame: (frame: LiveRealtimeEventFrame) => void) => Unsubscribe,
 ) {
   return (onFrame: (frame: UserTopicFrame) => void): (() => void) => {
     let unsub: Unsubscribe | null = null;
     let cancelled = false;
-    void getNotifyToken().then((token) => {
+    void getNotifyToken(selfId).then((token) => {
       if (cancelled || !token) return;
       unsub = subscribe(userTopic(token), (frame) => onFrame(frame as UserTopicFrame));
       if (cancelled) {
@@ -188,7 +209,10 @@ export async function joinSharedSpace(
   if (!url) throw new Error('Realtime is not configured (VITE_BAAS_URL).');
   const fetchToken = deps.fetchToken ?? fetchSharedSpaceToken;
   const token = await fetchToken(spaceId);
-  const getNotify = deps.fetchNotifyToken ?? fetchNotifyToken;
+  const fetchInboxImpl = deps.fetchInbox ?? fetchInbox;
+  const getNotify = deps.fetchNotifyToken
+    ? (userId: string) => deps.fetchNotifyToken!(userId)
+    : (userId: string) => fetchNotifyToken(userId, fetchInboxImpl);
   const subscribe = deps.subscribeTopic ?? subscribeTopic;
   const transport = new GrobaseRealtimeTransport({
     url,
