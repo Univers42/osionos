@@ -53,7 +53,7 @@ import { usePageStore } from '@/store/usePageStore';
 import { hydrateWorkspace } from '@/store/sync/hydratePages';
 import { broadcastsSuppressed, withoutBroadcast } from '@/store/sync/broadcastGuard';
 import type { Block } from '@/entities/block';
-import type { BlockOp, CollabEvent, RealtimeChannel } from '../model/realtimeTransport.port';
+import type { BlockOp, CollabEvent } from '../model/realtimeTransport.port';
 import {
   absorbBlockClock,
   applyBlockOps,
@@ -92,16 +92,17 @@ const lastLocalEdit = new Map<string, Map<string, number>>();
  */
 const tabSuffix = crypto.randomUUID();
 
-export function useLiveBlockSync(spaceId: string | null, selfId: string | null): void {
-  // Re-subscribe whenever the channel appears (join is async) or drops.
+export function useLiveBlockSync(spaceId: string | null, selfId: string | null, pageId: string | null = null): void {
+  // Re-subscribe whenever either channel appears (joins are async) or drops.
   const channel = useCollabStore((state) => state.channel);
+  const pageChannel = useCollabStore((state) => state.pageChannel);
   useEffect(() => {
     if (!spaceId || !selfId || !channel) return undefined;
-    return startLiveBlockSync(spaceId, `${selfId}:${tabSuffix}`, channel);
-  }, [spaceId, selfId, channel]);
+    return startLiveBlockSync(spaceId, `${selfId}:${tabSuffix}`, pageId);
+  }, [spaceId, selfId, pageId, channel, pageChannel]);
 }
 
-function startLiveBlockSync(spaceId: string, selfId: string, channel: RealtimeChannel): () => void {
+function startLiveBlockSync(spaceId: string, selfId: string, pageId: string | null): () => void {
   const broadcast = useCollabStore.getState().broadcast;
   const nextSeq = useCollabStore.getState().nextSeq;
 
@@ -172,9 +173,13 @@ function startLiveBlockSync(spaceId: string, selfId: string, channel: RealtimeCh
       ) {
         structural = true;
       }
-      // Content plane: only a content-reference change while NOT applying a
-      // remote event goes out (the remote applies carry the guard flag).
-      // Initial loads and new pages already persist through their server write.
+      // Content plane: only the page this channel is bound to may broadcast;
+      // the page topic refuses any other page anyway, and diffing it here keeps
+      // a background page's edits off the wire entirely.
+      if (page._id !== pageId) continue;
+      // Only a content-reference change while NOT applying a remote event goes
+      // out (the remote applies carry the guard flag). Initial loads and new
+      // pages already persist through their server write.
       if (!before || before.content === undefined || page.content === undefined) continue;
       if (before === page || before.content === page.content) continue;
       if (caretBlockId) markLastLocalEdit(page._id, caretBlockId);
@@ -264,17 +269,18 @@ function startLiveBlockSync(spaceId: string, selfId: string, channel: RealtimeCh
       return;
     }
     if (event.t !== 'blocks' || event.actor === selfId) return; // self loopback echo
+    if (!pageId || event.pageId !== pageId) return; // receiver-side page guard (C502)
     // Lamport on EVERY receive, even for a page this tab has not loaded: a
     // dropped op still tells us the sender's clock, so our next local edit
     // outranks it instead of losing the LWW compare on the author's replica.
     for (const op of event.ops) absorbBlockClock(op.v);
-    const pageId = event.pageId;
-    const page = usePageStore.getState().pageById(pageId);
+    const targetPageId = event.pageId;
+    const page = usePageStore.getState().pageById(targetPageId);
     if (!page || page.content === undefined) return; // not loaded → ops dropped; next hydrate catches it
 
     // Focused block: hold a put the local caret is editing this instant.
     const caretBlockId = readLocalCaretAndSelection().caret?.blockId ?? null;
-    const edits = lastLocalEdit.get(pageId);
+    const edits = lastLocalEdit.get(targetPageId);
     const now = Date.now();
     const held: Array<{ op: BlockOp; actor: string }> = [];
     const immediate: BlockOp[] = [];
@@ -289,13 +295,14 @@ function startLiveBlockSync(spaceId: string, selfId: string, channel: RealtimeCh
         immediate.push(op);
       }
     }
-    if (immediate.length > 0) deliver(pageId, immediate, event.actor);
-    if (held.length > 0) armHold(pageId, held);
+    if (immediate.length > 0) deliver(targetPageId, immediate, event.actor);
+    if (held.length > 0) armHold(targetPageId, held);
   };
 
   // ── Wiring ─────────────────────────────────────────────────────────────────
   const unsubStore = usePageStore.subscribe(onStoreChange);
-  const unsubEvent = channel.onEvent(onEvent);
+  // The store fans in both channels: workspace (`pages` nudge) + this page.
+  const unsubEvent = useCollabStore.getState().onEvent(onEvent);
   return () => {
     unsubStore();
     unsubEvent();
