@@ -134,3 +134,23 @@ test("save with an error result keeps dirty true and adds an issue at path", () 
   assert.ok(draft.state.issues.some((issue: any) => issue.path.join(".") === "name" && issue.message === "name taken"));
   sessionStore.clear();
 });
+
+// Revert used to write the editor from the last rendered state, which still held
+// the edit: the editor kept "#999999" and its echo re-applied it after restore.
+test("revert hands back the saved text, and the editor echoing it keeps the draft clean", () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const preview = mock.fn();
+    const draft = createJsonDraft(makeConfig({ preview, initialText: () => '{"name":"A"}' }), () => undefined);
+    draft.setText('{"name":"B"}');
+    const text = draft.revert();
+    assert.equal(text, '{"name":"A"}');
+    draft.setText(text);
+    mock.timers.tick(200);
+    assert.equal(draft.state.dirty, false);
+    assert.equal(preview.mock.callCount(), 0);
+  } finally {
+    mock.timers.reset();
+    sessionStore.clear();
+  }
+});
