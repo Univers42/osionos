@@ -45,6 +45,15 @@ export function sameId(left, right) {
 	return typeof left === 'string' && typeof right === 'string' && left !== '' && left.toLowerCase() === right.toLowerCase();
 }
 
+// The marketplace workspace has no member rows: an app's author governs their pages by
+// ownership alone, so the C557 membership requirement never applies there.
+export const MARKETPLACE_WORKSPACE_ID = '5a4b1c2d-1111-4111-8111-000000000001';
+
+/** The page owner keeps their page: while a member of its workspace (C557), or in the marketplace. */
+export function ownerHoldsPage(row, userId, member) {
+	return isPageOwner(row, userId) && (Boolean(member) || sameId(row?.workspace_id, MARKETPLACE_WORKSPACE_ID));
+}
+
 function isPageOwner(row, userId) {
 	return sameId(row?.owner_id, userId);
 }
