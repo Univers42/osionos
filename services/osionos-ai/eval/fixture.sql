@@ -128,3 +128,33 @@ create table if not exists public.osionos_page_comments (
 	content text not null,
 	created_at timestamptz not null default now()
 );
+
+-- TEST-ONLY FIXTURE: the chat tables the thread-answers migration alters and
+-- reads (models/osionos-ai-thread-answers-migration.sql). The production
+-- tables (osionos-chat-migration.sql, osionos-thread-migration.sql,
+-- osionos-reply-migration.sql) carry foreign keys and more columns; this
+-- fixture holds the columns osionos_ai_channel_context reads.
+create table if not exists public.osionos_channels (
+	id uuid primary key default gen_random_uuid(),
+	workspace_id uuid not null,
+	kind text not null default 'text' check (kind in ('text', 'dm', 'voice', 'video')),
+	name text not null default 'general',
+	is_private boolean not null default false
+);
+
+create table if not exists public.osionos_channel_members (
+	channel_id uuid not null,
+	user_id uuid not null,
+	role text not null default 'member',
+	primary key (channel_id, user_id)
+);
+
+create table if not exists public.osionos_messages (
+	id uuid primary key default gen_random_uuid(),
+	channel_id uuid not null,
+	author_id uuid not null,
+	content text not null default '',
+	created_at timestamptz not null default now(),
+	deleted_at timestamptz,
+	thread_root_id uuid
+);

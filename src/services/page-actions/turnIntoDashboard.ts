@@ -22,11 +22,9 @@
  * sees what the view's own data rules allow, so the dashboard never widens a
  * read rule.
  *
- * The template module pulls the seed-database state, which is browser-only (a
- * 600KB seed blob plus the object-database store): it is imported ON DEMAND and
- * its cells are handed to the pure builder below. That keeps this module
- * loadable outside a browser (the canvas unit tests import it) and keeps the
- * seed blob out of the warm page-header chunk.
+ * The template module is imported ON DEMAND and its cells are handed to the
+ * pure builder below, which keeps the template out of the warm page-header
+ * chunk.
  */
 
 import type { Block, LayoutCell, LayoutConfig } from "@/entities/block";
@@ -41,7 +39,7 @@ const DASHBOARD_FOCUS_VIEW = "v-prod-table";
  *  stays off — a dashboard is edited, not presented. */
 const DASHBOARD_LAYOUT_CONFIG: Partial<LayoutConfig> = {
   columns: 12,
-  rows: 18,
+  rows: 19,
   rowHeight: 96,
   gap: 16,
   wrap: true,

@@ -12,9 +12,12 @@
 
 import type { SeedPage } from '../seedBlockHelpers';
 import { h1, h2, p, callout } from '../seedBlockHelpers';
-import { cell, metricCell, layoutGrid, dbInline } from './templateBlocks';
+import { dbInline } from './templateBlocks';
 
-/** A student's term at a glance: hero greeting, key metrics, assignments and schedule. */
+/**
+ * A student's term at a glance: greeting, assignments and schedule.
+ * No GPA or credit tiles: no database backs them, and a typed-in figure goes stale.
+ */
 export const studentDashboard: SeedPage = {
   _id: 'tpl-student-dashboard',
   title: 'Student Dashboard',
@@ -23,15 +26,8 @@ export const studentDashboard: SeedPage = {
   ownerId: 'mock-user-0',
   isTemplate: true,
   content: [
-    layoutGrid(1, [
-      cell({ colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 1 }, 'Greeting', [
-        h1('Student Dashboard'),
-        p('Your term at a glance — keep grades, deadlines, and classes in one place.'),
-      ]),
-      metricCell({ colStart: 7, colSpan: 2, rowStart: 1, rowSpan: 1 }, '3.7', 'GPA'),
-      metricCell({ colStart: 9, colSpan: 2, rowStart: 1, rowSpan: 1 }, '15', 'Credits this term'),
-      metricCell({ colStart: 11, colSpan: 2, rowStart: 1, rowSpan: 1 }, 'Fri', 'Next deadline'),
-    ]),
+    h1('Student Dashboard'),
+    p('Your term at a glance — keep grades, deadlines, and classes in one place.'),
     h2('Assignments'),
     dbInline('db-tasks', 'v-tasks-board'),
     h2('Schedule'),

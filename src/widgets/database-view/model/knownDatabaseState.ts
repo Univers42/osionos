@@ -25,7 +25,7 @@ import seedState from "@/shared/notion-database-sys/src/store/dbms/mongodb/_noti
 import { defaultStatusSchema } from "@/shared/notion-database-sys/src/store/slices/statusDefaults";
 import { timed } from "@osionos/perf-probe";
 import { applyWikiSeed } from "./wikiSeed";
-import { applyHomeDemoSeed } from "./homeDemoSeed";
+import { applyHomeDemoSeed, rebaseHomeDemoDates } from "./homeDemoSeed";
 import { applyGradesSeed } from "./gradesSeed";
 import {
   ensureObjectDatabaseHydration,
@@ -160,7 +160,7 @@ export function loadKnownDatabaseState(): NotionState {
     }
     const loaded = loadPersistedKnownDatabaseState(raw, seeded);
     deletedPageIds = loaded.deletedPageIds;
-    return withStatusDefaults(loaded.state);
+    return withStatusDefaults(rebaseHomeDemoDates(loaded.state));
   } catch {
     deletedPageIds = new Set();
     return seeded;
@@ -291,11 +291,16 @@ function cancelKnownDatabaseStateFlush() {
 
 class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   private readonly subscribers = new Set<(event: ChangeEvent) => void>();
+  private readonly options: KnownDatabaseAdapterOptions;
 
-  constructor(private readonly options: KnownDatabaseAdapterOptions = {}) {}
+  // A plain field, not a parameter property: node's type stripping (the canvas
+  // tests) cannot run parameter properties.
+  constructor(options: KnownDatabaseAdapterOptions = {}) {
+    this.options = options;
+  }
 
   async loadState(): Promise<NotionState> {
-    return applyAdapterOptions(cloneState(useKnownDatabaseStateStore.getState().state), this.options);
+    return applyAdapterOptions(shareState(useKnownDatabaseStateStore.getState().state), this.options);
   }
 
   async findPages(query: PageQuery): Promise<Page[]> {
@@ -703,6 +708,28 @@ function createId(prefix: string): string {
 
 function cloneState(state: NotionState): NotionState {
   return clone(state);
+}
+
+// Vite folds this chain to `true` in a production build; node tests have no env.
+const IS_PRODUCTION_BUILD = (import.meta as { env?: { PROD?: boolean } }).env?.PROD === true;
+
+/** Every mounted database reads the account state itself: a copy cost 19.5 ms
+ *  per open on 8,646 rows and one more copy of every row per mount. Sharing is
+ *  safe because the stores replace objects and never write into them.
+ *  Caveat: only dev and test builds freeze the state, so a write into it that
+ *  happens on a production-only path goes unnoticed there; the dev e2e suite
+ *  is the net. */
+function shareState(state: NotionState): NotionState {
+  if (!IS_PRODUCTION_BUILD) deepFreeze(state);
+  return state;
+}
+
+// Stops at an already-frozen object: the state is frozen on every open, and
+// only the objects an edit replaced are new since the last one.
+function deepFreeze(value: unknown): void {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return;
+  Object.freeze(value);
+  for (const child of Object.values(value)) deepFreeze(child);
 }
 
 function clone<T>(value: T): T {

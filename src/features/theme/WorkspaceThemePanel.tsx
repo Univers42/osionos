@@ -34,6 +34,9 @@ import {
   type ThemeMode,
 } from '@/shared/config/theme';
 import { useWorkspaceConfigStore } from '@/shared/config/workspaceConfigStore';
+import { isThemeBasePinned } from '@/shared/config/theme';
+import { useThemeLibrary, resolveTheme } from './model/useThemeLibrary';
+import { ThemeLibraryControls } from './ui/ThemeLibraryControls';
 
 import { AccentControl, ShapeControls, useAppearance } from './AppearanceControls';
 
@@ -71,6 +74,10 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
   const [mode, setMode] = useState<ThemeMode>(() => readStoredThemeMode());
   const [palette, setPalette] = useState<string>(() => readStoredPalette());
   const [appearance, changeAppearance] = useAppearance();
+  const activeThemeName = useThemeLibrary((s) => s.activeTheme);
+  const activeThemeDoc = activeThemeName ? resolveTheme(activeThemeName) : null;
+  const pinnedBase = Boolean(activeThemeDoc?.base) || isThemeBasePinned();
+  const pinnedPalette = Boolean(activeThemeDoc?.palette);
   const activeUserId = useUserStore((s) => s.activeUserId);
   const activeWorkspace = useUserStore((s) => s.activeWorkspace());
   const clearAppearance = useWorkspaceConfigStore((s) => s.clearAppearance);
@@ -92,6 +99,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
 
   return (
     <div className={compact ? 'space-y-4' : 'space-y-4 overflow-y-auto p-4'}>
+      <ThemeLibraryControls />
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">Mode</p>
         <div className="inline-flex rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-0.5">
@@ -100,6 +108,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
               key={id}
               type="button"
               aria-pressed={mode === id}
+              disabled={pinnedBase}
               onClick={() => selectMode(id)}
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-(--osio-dur-fast) ${
                 mode === id
@@ -111,6 +120,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
             </button>
           ))}
         </div>
+        {pinnedBase && <p className="mt-1 text-xs text-[var(--osio-fg-muted)]">Set by {activeThemeName}</p>}
       </div>
 
       <AccentControl appearance={appearance} paletteId={palette} onChange={changeAppearance} />
@@ -118,6 +128,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
 
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">Color theme</p>
+        {pinnedPalette && <p className="mb-2 text-xs text-[var(--osio-fg-muted)]">Set by {activeThemeName}</p>}
         <div className="grid gap-2.5 sm:grid-cols-2">
           {PALETTES.map((preset) => {
             const selected = palette === preset.id;
