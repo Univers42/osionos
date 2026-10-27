@@ -41,6 +41,8 @@ import { CollabCaretLayer } from './CollabCaretLayer';
 import { SummonPrompt } from './SummonPrompt';
 import { useSharedSpacePresence } from './useSharedSpacePresence';
 import { useSharedSpacePage } from './useSharedSpacePage';
+import { actorFor, randomTabId } from '../model/collabActor';
+const TAB_ID = randomTabId();
 import { useBroadcastLocalCaret } from './useBroadcastLocalCaret';
 import { useLiveBlockSync } from './useLiveBlockSync';
 import { useBroadcastLocalActivity } from './useBroadcastLocalActivity';
@@ -114,7 +116,7 @@ export const SharedSpacePresenceBar: React.FC = () => {
     if (!file || !id || !selfId) return;
     try {
       await seedSharedFile(id, file, {
-        selfId,
+        selfId: actorFor(selfId, TAB_ID),
         upload: (sp, f) => uploadSharedFile(sp, f as File),
         broadcast: (e) => useCollabStore.getState().broadcast(e),
       });

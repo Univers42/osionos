@@ -30,10 +30,13 @@ export function useSharedSpacePage(
 ): void {
   const connectPage = useCollabStore((state) => state.connectPage);
   const disconnectPage = useCollabStore((state) => state.disconnectPage);
+  const publishPresence = useCollabStore((state) => state.publishPresence);
   const selfId = self?.id ?? null;
   const displayName = self?.displayName ?? '';
   const avatarRef = self?.avatarRef;
 
+  // Presence details intentionally do not re-run this effect (C501/C502): the
+  // page channel is bound to ids, and renames flow through publishPresence below.
   useEffect(() => {
     if (!spaceId || !pageId || !selfId) {
       disconnectPage();
@@ -41,5 +44,11 @@ export function useSharedSpacePage(
     }
     void connectPage(spaceId, pageId, { id: selfId, displayName, avatarRef }, joinSharedSpacePage);
     return () => disconnectPage();
-  }, [spaceId, pageId, selfId, displayName, avatarRef, connectPage, disconnectPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spaceId, pageId, selfId, connectPage, disconnectPage]);
+
+  useEffect(() => {
+    if (!spaceId || !pageId || !selfId) return;
+    publishPresence({ displayName, avatarRef });
+  }, [spaceId, pageId, selfId, displayName, avatarRef, publishPresence]);
 }

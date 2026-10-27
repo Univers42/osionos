@@ -83,8 +83,8 @@ export type CollabEvent =
   | { t: 'focus';     actor: string; seq: number; pageId?: string; elementId: string | null }
   | { t: 'activity';  actor: string; seq: number; pageId?: string; kind: ActivityKind; targetId: string }
   | { t: 'nav';       actor: string; seq: number; pageId?: string; route: string }
-  | { t: 'note';      actor: string; pageId?: string; noteId: string; op: NoteOp; anchor: Anchor }
-  | { t: 'file';      actor: string; pageId?: string; fileId: string; op: FileOp; name: string }
+  | { t: 'note';      actor: string; seq?: number; pageId?: string; noteId: string; op: NoteOp; anchor: Anchor }
+  | { t: 'file';      actor: string; seq?: number; pageId?: string; fileId: string; op: FileOp; name: string }
   // Content plane: block-tree registers for one page, folded by the pure engine
   // (model/blockSync.ts). Never a feed item; validated at the boundary.
   | { t: 'blocks';    actor: string; seq: number; pageId: string; ops: BlockOp[] }

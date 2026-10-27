@@ -54,6 +54,8 @@ import { hydrateWorkspace } from '@/store/sync/hydratePages';
 import { broadcastsSuppressed, withoutBroadcast } from '@/store/sync/broadcastGuard';
 import type { Block } from '@/entities/block';
 import type { BlockOp, CollabEvent } from '../model/realtimeTransport.port';
+import { actorFor, randomTabId } from '../model/collabActor';
+const TAB_ID = randomTabId();
 import {
   absorbBlockClock,
   applyBlockOps,
@@ -90,15 +92,13 @@ const lastLocalEdit = new Map<string, Map<string, number>>();
  * set the store subscriber returns before it can queue a diff OR arm a pages
  * nudge, so a remote apply can never be echoed back onto the channel.
  */
-const tabSuffix = crypto.randomUUID();
-
 export function useLiveBlockSync(spaceId: string | null, selfId: string | null, pageId: string | null = null): void {
   // Re-subscribe whenever either channel appears (joins are async) or drops.
   const channel = useCollabStore((state) => state.channel);
   const pageChannel = useCollabStore((state) => state.pageChannel);
   useEffect(() => {
     if (!spaceId || !selfId || !channel) return undefined;
-    return startLiveBlockSync(spaceId, `${selfId}:${tabSuffix}`, pageId);
+    return startLiveBlockSync(spaceId, actorFor(selfId, TAB_ID), pageId);
   }, [spaceId, selfId, pageId, channel, pageChannel]);
 }
 
@@ -269,7 +269,7 @@ function startLiveBlockSync(spaceId: string, selfId: string, pageId: string | nu
       return;
     }
     if (event.t !== 'blocks' || event.actor === selfId) return; // self loopback echo
-    if (!pageId || event.pageId !== pageId) return; // receiver-side page guard (C502)
+    if (!pageId || (typeof event.pageId === 'string' ? event.pageId.toLowerCase() : event.pageId) !== pageId.toLowerCase()) return; // receiver-side page guard (C502)
     // Lamport on EVERY receive, even for a page this tab has not loaded: a
     // dropped op still tells us the sender's clock, so our next local edit
     // outranks it instead of losing the LWW compare on the author's replica.

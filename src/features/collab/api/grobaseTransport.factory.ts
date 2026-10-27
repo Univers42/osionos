@@ -1,6 +1,6 @@
 /* ************************************************************************** */
 /*                                                                            */
-/*                                                        :::      ::::::::   */
+/*                                                        :::      ::::::::    */
 /*   grobaseTransport.factory.ts                        :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
@@ -25,22 +25,30 @@
  *   subscribe-only; publishing still goes through the bridge event endpoint with
  *   the WORKSPACE id, which re-checks edit access.
  *
- * Directed summons use the per-user topic already served by
- * `mintedTopicSocket`: requests/replies are published through the bridge and
- * inbound envelopes arrive from `user:<selfId>`, never from the workspace
- * socket.
+ * Directed summons use the per-user topic served by `mintedTopicSocket`: the
+ * bridge publishes to `user:<notifyToken>` (the unguessable inbox token), so
+ * this factory fetches that token (cached for the session) and subscribes there.
+ * Inbound frames arrive wrapped as the gateway's broadcast EVENT shape.
  */
 
 import { ApiError, api, getActivePageJwt } from '@/shared/api/client';
 import { liveRealtimeUrl } from '@/shared/notion-database-sys/src/store/live/liveRealtime';
 import { subscribeTopic } from '@/services/realtime-messages/wsTransport';
 import { userTopic } from '@/services/realtime-messages/wsTopics';
-import type { RealtimeChannel } from '../model/realtimeTransport.port';
+import type { LiveRealtimeEventFrame, LiveWebSocketCtor } from '@/shared/notion-database-sys/src/store/live/liveRealtimeSocket';
+import type { RealtimeChannel, Unsubscribe } from '../model/realtimeTransport.port';
+import { fetchInbox } from '@/shared/chat/notifyApi';
 import { GrobaseRealtimeTransport, type UserTopicFrame } from './realtimeTransportGrobase.adapter';
 
 interface CollabTokenReply { token: string; topic: string; spaceId: string; expiresAt: string; }
 interface CollabPageTokenReply {
   ok?: boolean; token: string; expiresAt: string; topic: string; pageId: string; level?: string;
+}
+
+export interface PageChannelToken {
+  token: string;
+  topic: string;
+  pageId: string;
 }
 
 /** The caller may not read the page (404) or lost access (403): no page channel. */
@@ -69,7 +77,7 @@ type PageTokenPost = (
 /** Fetch a per-page subscribe-only token; 403/404 means "no page channel". */
 export async function fetchSharedSpacePageToken(
   spaceId: string, pageId: string, post: PageTokenPost = api.post as PageTokenPost,
-): Promise<string> {
+): Promise<PageChannelToken> {
   try {
     const reply = await post(
       `/api/collaboration/${encodeURIComponent(spaceId)}/pages/${encodeURIComponent(pageId)}/realtime-token`,
@@ -77,7 +85,11 @@ export async function fetchSharedSpacePageToken(
       getActivePageJwt() ?? undefined,
     );
     if (!reply?.token) throw new Error('The bridge did not return a page realtime token.');
-    return reply.token;
+    const normalizedPageId = String(reply.pageId ?? pageId).toLowerCase();
+    const topic = reply.topic
+      ? String(reply.topic).toLowerCase()
+      : `collabpage:${normalizedPageId}`;
+    return { token: reply.token, topic, pageId: normalizedPageId };
   } catch (error) {
     if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
       throw new PageChannelUnavailableError(error.message);
@@ -97,10 +109,57 @@ function publishFor(spaceId: string) {
   };
 }
 
+/** Cached notify token so collab does not re-fetch on every join. */
+let cachedNotifyToken: string | null | undefined;
+let notifyTokenInFlight: Promise<string | null> | null = null;
+
+export async function fetchNotifyToken(): Promise<string | null> {
+  if (cachedNotifyToken !== undefined) return cachedNotifyToken;
+  if (!notifyTokenInFlight) {
+    notifyTokenInFlight = fetchInbox()
+      .then((inbox) => inbox.notifyToken)
+      .catch(() => null)
+      .finally(() => { notifyTokenInFlight = null; });
+  }
+  const token = await notifyTokenInFlight;
+  cachedNotifyToken = token;
+  return token;
+}
+
+export interface SharedSpaceJoinDeps {
+  url?: string;
+  fetchToken?: (spaceId: string) => Promise<string>;
+  fetchPageToken?: (spaceId: string, pageId: string) => Promise<PageChannelToken>;
+  fetchNotifyToken?: () => Promise<string | null>;
+  subscribeTopic?: (topic: string, onFrame: (frame: LiveRealtimeEventFrame) => void) => Unsubscribe;
+  publish?: (workspaceId: string, event: string, payload: unknown) => Promise<void>;
+  webSocketCtor?: LiveWebSocketCtor;
+  requestTimeoutMs?: number;
+}
+
 /** Subscribe this client's user topic for directed summons (mintedTopicSocket). */
-function userTopicFor(selfId: string) {
-  return (onFrame: (frame: UserTopicFrame) => void): (() => void) =>
-    subscribeTopic(userTopic(selfId), (frame) => onFrame(frame as UserTopicFrame));
+function userTopicFor(
+  selfId: string,
+  getNotifyToken: () => Promise<string | null>,
+  subscribe: (topic: string, onFrame: (frame: LiveRealtimeEventFrame) => void) => Unsubscribe,
+) {
+  return (onFrame: (frame: UserTopicFrame) => void): (() => void) => {
+    let unsub: Unsubscribe | null = null;
+    let cancelled = false;
+    void getNotifyToken().then((token) => {
+      if (cancelled || !token) return;
+      unsub = subscribe(userTopic(token), (frame) => onFrame(frame as UserTopicFrame));
+      if (cancelled) {
+        unsub?.();
+        unsub = null;
+      }
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unsub?.();
+      unsub = null;
+    };
+  };
 }
 
 /** Workspace reconnect re-mints; 403/404 means removed → stop (C509). */
@@ -120,15 +179,27 @@ function renewWorkspaceToken(spaceId: string): () => Promise<string | null> {
  * directed summons + stamps presence). Throws if realtime is unconfigured or the
  * caller is not a member (the bridge returns 403).
  */
-export async function joinSharedSpace(spaceId: string, selfId: string): Promise<RealtimeChannel> {
-  const url = liveRealtimeUrl();
+export async function joinSharedSpace(
+  spaceId: string,
+  selfId: string,
+  deps: SharedSpaceJoinDeps = {},
+): Promise<RealtimeChannel> {
+  const url = deps.url ?? liveRealtimeUrl();
   if (!url) throw new Error('Realtime is not configured (VITE_BAAS_URL).');
-  const token = await fetchSharedSpaceToken(spaceId);
+  const fetchToken = deps.fetchToken ?? fetchSharedSpaceToken;
+  const token = await fetchToken(spaceId);
+  const getNotify = deps.fetchNotifyToken ?? fetchNotifyToken;
+  const subscribe = deps.subscribeTopic ?? subscribeTopic;
   const transport = new GrobaseRealtimeTransport({
-    url, selfId, workspaceId: spaceId, scope: 'workspace',
-    publish: publishFor(spaceId),
+    url,
+    selfId,
+    workspaceId: spaceId,
+    scope: 'workspace',
+    webSocketCtor: deps.webSocketCtor,
+    requestTimeoutMs: deps.requestTimeoutMs,
+    publish: deps.publish ?? publishFor(spaceId),
     renewToken: renewWorkspaceToken(spaceId),
-    subscribeUserTopic: userTopicFor(selfId),
+    subscribeUserTopic: userTopicFor(selfId, getNotify, subscribe),
   });
   return transport.join(spaceId, token);
 }
@@ -139,23 +210,36 @@ export async function joinSharedSpace(spaceId: string, selfId: string): Promise<
  * `PageChannelUnavailableError` and the app simply keeps no page channel.
  */
 export async function joinSharedSpacePage(
-  spaceId: string, pageId: string, selfId: string,
+  spaceId: string,
+  pageId: string,
+  selfId: string,
+  onClosed?: () => void,
+  deps: SharedSpaceJoinDeps = {},
 ): Promise<RealtimeChannel> {
-  const url = liveRealtimeUrl();
+  const url = deps.url ?? liveRealtimeUrl();
   if (!url) throw new Error('Realtime is not configured (VITE_BAAS_URL).');
-  const token = await fetchSharedSpacePageToken(spaceId, pageId);
+  const fetchPageToken = deps.fetchPageToken ?? fetchSharedSpacePageToken;
+  const pageToken = await fetchPageToken(spaceId, pageId);
   const transport = new GrobaseRealtimeTransport({
-    url, selfId, workspaceId: spaceId,
-    topic: `collabpage:${pageId}`, pageId, scope: 'page',
-    publish: publishFor(spaceId),
+    url,
+    selfId,
+    workspaceId: spaceId,
+    webSocketCtor: deps.webSocketCtor,
+    requestTimeoutMs: deps.requestTimeoutMs,
+    topic: pageToken.topic,
+    pageId: pageToken.pageId,
+    scope: 'page',
+    publish: deps.publish ?? publishFor(spaceId),
     renewToken: async () => {
       try {
-        return await fetchSharedSpacePageToken(spaceId, pageId);
+        const next = await fetchPageToken(spaceId, pageId);
+        return next.token;
       } catch (error) {
         if (error instanceof PageChannelUnavailableError) return null; // 403/404 → stop
         throw error;
       }
     },
+    onClosed,
   });
-  return transport.join(pageId, token);
+  return transport.join(pageToken.pageId, pageToken.token);
 }

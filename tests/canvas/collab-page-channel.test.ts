@@ -32,6 +32,7 @@ import test from 'node:test';
 import { ApiError } from '../../packages/http-gate/src/errors.ts';
 import type { LiveWebSocketLike } from '../../src/shared/notion-database-sys/src/store/live/liveRealtimeSocket.ts';
 import { GrobaseRealtimeTransport } from '../../src/features/collab/api/realtimeTransportGrobase.adapter.ts';
+import { joinSharedSpace } from '../../src/features/collab/api/grobaseTransport.factory.ts';
 import {
   PageChannelUnavailableError, fetchSharedSpacePageToken,
 } from '../../src/features/collab/api/grobaseTransport.factory.ts';
@@ -135,6 +136,36 @@ test('T1: the workspace socket never carries a page id, route, caret, selection 
   channel.leave();
 });
 
+test('T1: inbound workspace presence is stripped to the identity allow-list', async () => {
+  const { channel, socket } = await joinWorkspace();
+  const snapshots: PresenceState[][] = [];
+  channel.onPresence((members) => snapshots.push(members));
+  socket.deliver({
+    type: 'PRESENCE',
+    members: [{ conn_id: 'conn-B', meta: { memberId: 'B', displayName: 'B', color: 'var(--collab-2)', route: PAGE_ONE, caret: { blockId: 'b1', offset: 1 } } }],
+  });
+  await flush();
+  assert.equal(snapshots.length, 1);
+  assert.equal(snapshots[0][0].memberId, 'B');
+  assert.equal(snapshots[0][0].route, undefined, 'route is stripped from workspace presence');
+  assert.equal(snapshots[0][0].caret, undefined, 'caret is stripped from workspace presence');
+  channel.leave();
+});
+
+test('T1: inbound page presence keeps page-relative fields', async () => {
+  const { channel, socket } = await joinPage();
+  const snapshots: PresenceState[][] = [];
+  channel.onPresence((members) => snapshots.push(members));
+  socket.deliver({
+    type: 'PRESENCE',
+    members: [{ conn_id: 'conn-B', meta: { memberId: 'B', displayName: 'B', color: 'var(--collab-2)', route: PAGE_ONE, caret: { blockId: 'b1', offset: 1 } } }],
+  });
+  await flush();
+  assert.equal(snapshots.length, 1);
+  assert.equal(snapshots[0][0].route, PAGE_ONE, 'page channel keeps page-relative presence');
+  channel.leave();
+});
+
 // ── T2 ───────────────────────────────────────────────────────────────────────
 test('T2: page events are stamped and only the page channel, matching pageId, delivers them', async () => {
   const { channel, socket } = await joinPage();
@@ -174,6 +205,27 @@ test('T2: page events are stamped and only the page channel, matching pageId, de
   assert.equal(leaked.length, 0, 'workspace never accepts page-scoped events');
   assert.equal(workspace.channel.stats?.().droppedWorkspacePageEvent, 1);
   workspace.channel.leave();
+});
+
+test('T2: page ids are compared case-insensitively on both sides', async () => {
+  const upper = 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA';
+  const lower = upper.toLowerCase();
+  const { channel, socket } = await joinPage(upper, { topic: `collabpage:${lower}`, pageId: upper });
+  const received: CollabEvent[] = [];
+  channel.onEvent((event) => received.push(event));
+
+  channel.broadcast({ t: 'caret', actor: 'bob', seq: 1, caret: { blockId: 'b1', offset: 4 } });
+  await flush();
+  const outbound = socket.sent.map((frame) => JSON.parse(frame) as { type: string; payload?: CollabEvent })
+    .find((frame) => frame.type === 'BROADCAST');
+  assert.equal((outbound?.payload as { pageId?: string })?.pageId, lower, 'outbound page id is lowercased');
+
+  socket.deliver(eventFrame(`collabpage:${lower}`, 'collab', {
+    t: 'caret', actor: 'bob', seq: 2, pageId: upper, caret: { blockId: 'b1', offset: 9 },
+  }));
+  await flush();
+  assert.equal(received.length, 1, 'an upper-case inbound page id is accepted');
+  channel.leave();
 });
 
 // ── T3 ───────────────────────────────────────────────────────────────────────
@@ -236,18 +288,60 @@ test('T3: a reconnect without a permanent refusal re-mints and opens one fresh s
   channel.leave();
 });
 
+test('T3: a null renewToken notifies onClosed and leaves pageStatus non-live', async () => {
+  let closed = 0;
+  const { channel } = await joinPage(PAGE_ONE, {
+    backoff: { baseMs: 0, capMs: 0 },
+    renewToken: async () => null,
+    onClosed: () => { closed += 1; },
+  });
+  const first = RecordingSocket.instances.at(-1) as RecordingSocket;
+  first.drop();
+  await tick();
+  assert.equal(closed, 1, 'onClosed fires when renewal is permanently refused');
+  channel.leave();
+});
+
+test('T3: the store leaves "live" when the page channel closes', async () => {
+  const { useCollabStore } = await import('../../src/features/collab/store/useCollabStore.ts');
+  useCollabStore.getState().disconnect();
+  let onClosed: (() => void) | undefined;
+  await useCollabStore.getState().connectPage(
+    WORKSPACE, PAGE_ONE, { id: 'me', displayName: 'Me' },
+    async (_spaceId, _pageId, _selfId, cb) => {
+      onClosed = cb;
+      const transport = new GrobaseRealtimeTransport({
+        url: 'ws://test', selfId: 'me', workspaceId: WORKSPACE,
+        topic: `collabpage:${PAGE_ONE}`, pageId: PAGE_ONE, scope: 'page', webSocketCtor: ctor,
+        onClosed: cb,
+      });
+      return transport.join(PAGE_ONE, 'page-token');
+    },
+  );
+  await tick();
+  assert.equal(useCollabStore.getState().pageStatus, 'live');
+  onClosed?.();
+  await tick();
+  assert.notEqual(useCollabStore.getState().pageStatus, 'live', 'pageStatus leaves live after close');
+  useCollabStore.getState().disconnect();
+});
+
 // ── T4 ───────────────────────────────────────────────────────────────────────
-test('T4: summon requests/replies ride the user topic; an inbound summon reaches the inbox with `to`', async () => {
+test('T4: summons ride the notify-token topic and the bridge frame shape reaches the inbox', async () => {
   RecordingSocket.reset();
   const published: Array<{ event: string; payload: Record<string, unknown> }> = [];
-  let deliverUserFrame: ((frame: { event_type?: string; payload?: unknown }) => void) | null = null;
-  const transport = new GrobaseRealtimeTransport({
-    url: 'ws://test', selfId: 'B', workspaceId: WORKSPACE, scope: 'workspace', webSocketCtor: ctor,
+  const bus = new TopicBus();
+  const channel = await joinSharedSpace(WORKSPACE, 'B', {
+    url: 'ws://test',
+    fetchToken: async () => 'workspace-token',
+    fetchNotifyToken: async () => 'notify-token',
+    subscribeTopic: (topic, onFrame) => bus.subscribe(topic, onFrame),
+    webSocketCtor: ctor,
     requestTimeoutMs: 20,
-    publish: async (_workspaceId, event, payload) => { published.push({ event, payload: payload as Record<string, unknown> }); },
-    subscribeUserTopic: (onFrame) => { deliverUserFrame = onFrame; return () => { deliverUserFrame = null; }; },
+    publish: async (_workspaceId, event, payload) => {
+      published.push({ event, payload: payload as Record<string, unknown> });
+    },
   });
-  const channel = await transport.join(WORKSPACE, 'workspace-token');
 
   const { useSummonStore } = await import('../../src/features/collab/store/useSummonStore.ts');
   useSummonStore.setState({ incoming: null });
@@ -260,9 +354,13 @@ test('T4: summon requests/replies ride the user topic; an inbound summon reaches
     });
   }));
 
-  deliverUserFrame?.({
-    event_type: 'collab.req',
-    payload: { cid: 'cid-1', from: 'A', target: 'B', req: { kind: 'summon', route: PAGE_ONE, message: 'join me' } },
+  // Bridge shape: a gateway EVENT whose payload is `{ event, payload }`.
+  bus.deliver('user:notify-token', {
+    event_id: 'e', topic: 'user:notify-token', event_type: 'broadcast', sequence: 1, timestamp: 't',
+    payload: {
+      event: 'collab.req',
+      payload: { cid: 'cid-1', from: 'A', target: 'B', req: { kind: 'summon', route: PAGE_ONE, message: 'join me' } },
+    },
   });
   await flush();
   const incoming = useSummonStore.getState().incoming;
@@ -281,6 +379,23 @@ test('T4: summon requests/replies ride the user topic; an inbound summon reaches
   channel.leave();
 });
 
+class TopicBus {
+  private readonly listeners = new Map<string, Set<(frame: unknown) => void>>();
+
+  subscribe(topic: string, onFrame: (frame: unknown) => void): () => void {
+    const set = this.listeners.get(topic) ?? new Set();
+    set.add(onFrame);
+    this.listeners.set(topic, set);
+    return () => { set.delete(onFrame); };
+  }
+
+  deliver(topic: string, frame: unknown): void {
+    for (const listener of this.listeners.get(topic) ?? []) {
+      queueMicrotask(() => listener(frame));
+    }
+  }
+}
+
 // ── T5 ───────────────────────────────────────────────────────────────────────
 test('T5: 1000 events from one actor in a tick apply at most the 400 burst; another actor is unaffected', async () => {
   const { channel, socket } = await joinPage();
@@ -292,20 +407,20 @@ test('T5: 1000 events from one actor in a tick apply at most the 400 burst; anot
   try {
     for (let index = 0; index < 1000; index += 1) {
       socket.deliver(eventFrame(`collabpage:${PAGE_ONE}`, 'collab', {
-        t: 'caret', actor: 'flood', seq: index + 1, pageId: PAGE_ONE, caret: { blockId: 'b1', offset: index },
+        t: 'caret', actor: `flood:${index}`, seq: index + 1, pageId: PAGE_ONE, caret: { blockId: 'b1', offset: index },
       }));
     }
     await flush();
   } finally {
     Date.now = realNow;
   }
-  assert.equal(applied.length, 400, 'the flood is capped at the 400-event burst');
+  assert.equal(applied.length, 400, 'rotating tab suffixes still share the per-user bucket');
   assert.equal(channel.stats?.().droppedRateLimit, 600, 'the excess is counted, not console-spammed');
 
   socket.deliver(eventFrame(`collabpage:${PAGE_ONE}`, 'collab', {
-    t: 'caret', actor: 'other', seq: 1, pageId: PAGE_ONE, caret: { blockId: 'b1', offset: 0 },
+    t: 'caret', actor: 'other:0', seq: 1, pageId: PAGE_ONE, caret: { blockId: 'b1', offset: 0 },
   }));
   await flush();
-  assert.equal(applied.filter((actor) => actor === 'other').length, 1, 'a different actor has its own bucket');
+  assert.equal(applied.filter((actor) => actor === 'other:0').length, 1, 'a different actor has its own bucket');
   channel.leave();
 });
