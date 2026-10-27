@@ -16,8 +16,13 @@ test("stat entries include every picker option", () => {
   const labels = entries.map((entry) => entry.label);
   assert.ok(labels.includes("Count of records"));
   assert.ok(labels.includes("Count where Featured is checked"));
+  assert.ok(labels.includes("Count where Featured is not checked"));
   assert.ok(labels.includes("Distinct Category"));
   assert.ok(labels.includes("Min of Price"));
   assert.ok(labels.includes("Max of Stock"));
   assert.ok(labels.includes("Average Stock"));
+});
+
+test("a list of columns gives the same entries as the schema record", () => {
+  assert.deepEqual(statEntries(Object.values(PROPERTIES)), statEntries(PROPERTIES));
 });
