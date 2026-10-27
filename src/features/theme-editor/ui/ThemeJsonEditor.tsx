@@ -102,17 +102,6 @@ export function ThemeJsonEditor({ pageId }: { pageId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageId, target]);
 
-  React.useEffect(() => {
-    if (!isThemesEnabled() || !target) return;
-    const model = modelRef.current;
-    const instance = editorRef.current;
-    if (!model || !instance) return;
-    const text = draft.text;
-    if (model.getValue() !== text && document.activeElement !== instance.getDomNode()?.querySelector("textarea")) {
-      // Only push external text (revert) when the editor is not focused.
-    }
-  }, [draft.text, target]);
-
   // Markers + schema rebuild after each parse (issues change).
   React.useEffect(() => {
     if (!isThemesEnabled() || !target) return;
@@ -163,13 +152,12 @@ export function ThemeJsonEditor({ pageId }: { pageId: string }) {
   }, [draft.issues, draft.text, target]);
 
 
+  // The saved text comes from revert itself: `draft.state` is the last render's
+  // snapshot, which still holds the edit being thrown away.
   const handleRevert = React.useCallback(() => {
-    draft.revert();
-    const model = modelRef.current;
+    const savedText = draft.revert();
     const instance = editorRef.current;
-    if (model && instance) {
-      replaceEditorText(instance, draft.state.text);
-    }
+    if (instance) replaceEditorText(instance, savedText);
   }, [draft]);
 
   if (!isThemesEnabled()) return <Notice>Custom themes are turned off.</Notice>;

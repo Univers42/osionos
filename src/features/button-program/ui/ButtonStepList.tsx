@@ -97,7 +97,10 @@ const ValueField: React.FC<{ label: string; value: ProgramValue; onChange: (valu
   );
 };
 
-const ACTION_LABELS: Record<ProgramAction["type"], string> = {
+// Webhooks are database automation steps: a block button has no transport.
+type ButtonActionType = Exclude<ProgramAction["type"], "webhook">;
+
+const ACTION_LABELS: Record<ButtonActionType, string> = {
   notify: "Show a message",
   set_property: "Set a page property",
   page_action: "Run a page action",
@@ -111,14 +114,16 @@ const PAGE_ACTION_LABELS: Record<string, string> = Object.fromEntries(
   ]),
 );
 
-function blankAction(type: ProgramAction["type"]): ProgramAction {
+function blankAction(type: ButtonActionType): ProgramAction {
   if (type === "notify") return { type, message: "" };
   if (type === "page_action") return { type, name: Object.keys(DESTRUCTIVE_PAGE_ACTIONS)[0] };
   if (type === "app_action") return { type, name: "", args: {} };
   return { type, property: "", value: "" };
 }
 
-const ActionFields: React.FC<{ action: ProgramAction; onChange: (action: ProgramAction) => void }> = ({ action, onChange }) => (
+const ActionFields: React.FC<{ action: ProgramAction; onChange: (action: ProgramAction) => void }> = ({ action, onChange }) => action.type === "webhook" ? (
+  <p className="text-sm text-[var(--osio-fg-muted)]">Webhook to {action.url}: runs only in a database automation.</p>
+) : (
   <div className="flex flex-col gap-1">
     <Select
       label="Action"
