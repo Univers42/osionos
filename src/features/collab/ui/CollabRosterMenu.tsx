@@ -138,11 +138,9 @@ export const CollabRosterMenu: React.FC<CollabRosterMenuProps> = ({ member, onPa
               tabIndex={index === active ? 0 : -1}
               aria-disabled={!item.enabled || undefined}
               aria-describedby={item.reason ? reasonId : undefined}
-              aria-label={item.id === 'summon' ? `Summon ${member.displayName} to this page` : undefined}
-              title={item.id === 'summon' ? `Summon ${member.displayName} here` : undefined}
               onClick={() => run(item)}
               onMouseEnter={() => dispatch({ type: 'set', index })}
-              className={`flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] ${item.enabled
+              className={`flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] ${item.enabled
                 ? 'cursor-pointer text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]'
                 : 'cursor-not-allowed text-[var(--osio-fg-muted)]'}`}
             >

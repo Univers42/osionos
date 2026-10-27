@@ -21,8 +21,9 @@
  * the whole avatar pushed the initials (text, 4.5:1) and the ring (graphic, 3:1)
  * under WCAG AA, and the button is still active, so no exemption applied. The
  * accessible name says the same in words, with "typing" and "followed" when they
- * apply. The hit area is 32 px (the pseudo-element) around a
- * 28 px face, because the top bar is 40 px tall and the follow ring needs the rest.
+ * apply. The hit area (the pseudo-element) is 44 px tall, overflowing the 40 px top
+ * bar invisibly, but only 38 px wide: wider would cross half the roster's 10 px gap
+ * and let the neighbouring avatar take the tap.
  *
  * On keyboard focus the identity ring is replaced by the accent focus ring, 2 px
  * further out (collab.css). The ring is a utility on purpose: an inline outline would
@@ -95,7 +96,7 @@ export const CollabAvatar: React.FC<CollabAvatarProps> = ({ member, onPage, typi
           onOpen(member.memberId, event.currentTarget);
         }}
         style={{ '--collab-member': member.color } as React.CSSProperties}
-        className={`relative flex h-7 w-7 cursor-pointer items-center justify-center collab-avatar rounded-full before:absolute before:-inset-0.5 before:content-[''] transition-transform duration-(--osio-dur-fast) hover:z-10 motion-safe:hover:scale-110 active:scale-95 outline-offset-1 [outline-width:2px] [outline-color:var(--collab-member)] ${onPage ? '[outline-style:solid]' : '[outline-style:dashed]'}`}
+        className={`relative flex h-7 w-7 cursor-pointer items-center justify-center collab-avatar rounded-full before:absolute before:-inset-y-2 before:-inset-x-[5px] before:content-[''] transition-transform duration-(--osio-dur-fast) hover:z-10 motion-safe:hover:scale-110 active:scale-95 outline-offset-1 [outline-width:2px] [outline-color:var(--collab-member)] ${onPage ? '[outline-style:solid]' : '[outline-style:dashed]'}`}
       >
         <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-[var(--osio-bg-elevated)] bg-[var(--osio-bg-subtle)] text-2xs font-medium text-[var(--osio-fg-muted)]">
           {member.avatarRef
