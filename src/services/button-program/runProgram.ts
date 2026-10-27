@@ -170,8 +170,11 @@ function performAction(pageId: string, action: ResolvedAction): Promise<ActionOu
 		return Promise.resolve({ status: "ok" });
 	}
 	if (action.type === "page_action") return runProgramPageAction(pageId, action.name);
-	const sp = action as { type: "set_property"; property: string; value: unknown };
-	return writeProperty(pageId, sp.property, sp.value);
+	// A block button has no SSRF-guarded transport of its own; webhooks are
+	// database automation steps.
+	if (action.type === "webhook") return Promise.resolve({ status: "skipped", detail: "webhooks run in database automations" });
+	if (action.type === "set_property") return writeProperty(pageId, action.property, action.value);
+	return Promise.resolve({ status: "failed", detail: `no runner for ${action.type}` });
 }
 
 /**
