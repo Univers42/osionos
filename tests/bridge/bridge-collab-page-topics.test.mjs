@@ -426,7 +426,7 @@ describe('C574 — the published pageId matches the lowercased topic', () => {
 });
 
 describe('T6 — the page token is scoped to one page', () => {
-  it('mints claims with the page namespace, no publish and metadata.level', async () => {
+  it('mints claims with the page namespace, no publish, metadata.level and presence', async () => {
     const { publishes } = await run(world(), ON, async (base) => {
       const result = await send(base, `/api/collaboration/${IDS.team}/pages/${IDS.sharedA}/realtime-token`, headersB(), post({}));
       assert.equal(result.status, 200, result.text);
@@ -437,7 +437,7 @@ describe('T6 — the page token is scoped to one page', () => {
       assert.deepEqual(claims.namespaces, [PAGE_TOPIC]);
       assert.equal(claims.can_publish, false);
       assert.equal(claims.can_subscribe, true);
-      assert.deepEqual(claims.metadata, { level: 'can_view' });
+      assert.deepEqual(claims.metadata, { level: 'can_view', can_track: true });
     });
     assert.equal(publishes.length, 0);
   });
