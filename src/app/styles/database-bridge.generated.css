@@ -6,14 +6,6 @@
   --osio-table-header-bg: var(--osio-bg-subtle);
   --osio-table-row-hover: var(--osio-bg-hover);
   --osio-table-border: var(--osio-db-line);
-  --osio-chart-1: var(--osio-accent);
-  --osio-chart-2: var(--osio-block-tint-blue-fg);
-  --osio-chart-3: var(--osio-block-tint-green-fg);
-  --osio-chart-4: var(--osio-block-tint-orange-fg);
-  --osio-chart-5: var(--osio-block-tint-purple-fg);
-  --osio-chart-6: var(--osio-block-tint-pink-fg);
-  --osio-chart-7: var(--osio-block-tint-red-fg);
-  --osio-chart-8: var(--osio-block-tint-yellow-fg);
   --osio-chart-9: var(--osio-block-tint-brown-fg);
   --osio-chart-10: var(--osio-block-tint-gray-fg);
 }

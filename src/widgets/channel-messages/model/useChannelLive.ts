@@ -44,6 +44,8 @@ interface ChatEventPayload {
   threadRootId?: string | null;
   replyCount?: number;
   replyTo?: ReplyQuote | null;
+  isAi?: boolean;
+  aiRequestedBy?: { id?: string } | null;
 }
 
 export function applyChatEvent(messages: ChatMessage[], frame: LiveRealtimeEventFrame): ChatMessage[] {
@@ -71,6 +73,7 @@ export function applyChatEvent(messages: ChatMessage[], frame: LiveRealtimeEvent
       threadRootId: payload.threadRootId ?? null,
       replyCount: payload.replyCount ?? 0,
       replyTo: payload.replyTo ?? null,
+      ...(payload.isAi ? { isAi: true, aiRequestedBy: payload.aiRequestedBy?.id ?? null } : {}),
     }];
   }
   if (frame.event_type === 'message_updated') {
