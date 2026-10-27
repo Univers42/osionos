@@ -6,7 +6,7 @@ import { broadcastsSuppressed, withoutBroadcast } from '../../../src/store/sync/
 const block = (content: string) => ({ id: 'b', type: 'paragraph', content });
 const tick = () => new Promise((resolve) => setTimeout(resolve, 35));
 
-test('server loads never broadcast blocks, local edits do, and persona tabs do not drop each other', async () => {
+function harness(fastSend = false) {
   let state: any = { pages: { space: [{ _id: 'page' }] }, pageById: () => state.pages.space[0], applyRemoteContent(_id: string, content: any) { write([{ _id: 'page', content }]); } };
   const subs = new Set<any>();
   const events: any[] = [];
@@ -22,13 +22,19 @@ test('server loads never broadcast blocks, local edits do, and persona tabs do n
     readLocalCaretAndSelection: () => ({}),
   };
   const dependencies = {
-    react: { useEffect: bindings.useEffect },
+    react: { useEffect: bindings.useEffect, useCallback: (fn: any) => fn, useSyncExternalStore: () => '' },
+    'src/shared/config/featureFlags.ts': { isCollabFastSendEnabled: () => fastSend },
     'src/shared/api/client.ts': { getActivePageJwt: () => null },
     'src/store/usePageStore.ts': { usePageStore: bindings.usePageStore },
     'src/store/sync/hydratePages.ts': { hydrateWorkspace: async () => {} },
     'src/features/collab/model/localCaret.ts': { readLocalCaretAndSelection: bindings.readLocalCaretAndSelection },
     'src/features/collab/store/useCollabStore.ts': { useCollabStore: bindings.useCollabStore },
   };
+  return { dependencies, events, inbound, starts, write, state: () => state };
+}
+
+test('server loads never broadcast blocks, local edits do, and persona tabs do not drop each other', async () => {
+  const { dependencies, events, inbound, starts, write, state: readState } = harness();
   const tab1 = await isolatedModule('src/features/collab/ui/useLiveBlockSync.ts', dependencies);
   tab1.useLiveBlockSync('space', 'persona', 'page'); const stop1 = starts.pop()();
   write([{ _id: 'page', content: [block('loaded')] }]); await tick();
@@ -46,7 +52,7 @@ test('server loads never broadcast blocks, local edits do, and persona tabs do n
   assert.notEqual(events.at(-1).actor, actor1);
   const count = events.length;
   inbound.at(-1)({ t: 'blocks', pageId: 'page', actor: actor1, seq: 20, ops: [{ k: 'put', id: 'b', parentId: null, block: block('from tab1'), v: 1000 }] });
-  assert.equal(state.pages.space[0].content[0].content, 'from tab1');
+  assert.equal(readState().pages.space[0].content[0].content, 'from tab1');
   await tick(); assert.equal(events.length, count, 'remote apply does not echo');
   stop2();
 });
@@ -74,4 +80,25 @@ test('applyServerPages suppresses its store notification but flushes local draft
   assert.equal(taken, 1);
   assert.deepEqual(seen, [false, true]);
   assert.equal(broadcastsSuppressed(), false);
+});
+
+test('collabFastSend: flag off taps nothing; flag on sends a put in the same task and a corrective one on undo', async () => {
+  const drafts = await import('../../../src/features/block-editor/model/blockDraftStore.ts');
+  for (const flag of [false, true]) {
+    const { dependencies, events, starts, write } = harness(flag);
+    const mod = await isolatedModule('src/features/collab/ui/useLiveBlockSync.ts', dependencies);
+    mod.useLiveBlockSync('space', 'persona', 'page'); const stop = starts.pop()();
+    write([{ _id: 'page', content: [block('hello')] }]);
+    drafts.setBlockDraft('page:page', 'b', 'hello', 'hello!');
+    const sameTask = events.length;
+    drafts.setBlockDraft('page:page', 'b', 'hello', 'hello');
+    drafts.clearBlockDraft('page:page', 'b');
+    assert.equal(sameTask, flag ? 1 : 0, flag ? 'fast put left synchronously' : 'flag off: no tap, nothing leaves before the 16 ms diff');
+    assert.equal(events.length, flag ? 2 : 0);
+    if (flag) {
+      assert.equal(events[0].ops[0].block.content, 'hello!');
+      assert.equal(events[1].ops[0].block.content, 'hello', 'undo corrected the peer');
+    }
+    stop();
+  }
 });

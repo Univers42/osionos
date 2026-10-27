@@ -22,6 +22,7 @@
  * non-cursor event) so the store only re-renders subscribers on a real change.
  */
 
+import { memberIdOf } from './collabActor';
 import type { CollabEvent, CaretState, SelectionRange } from './realtimeTransport.port';
 
 export interface RemoteCursor {
@@ -45,7 +46,7 @@ function blank(actor: string): RemoteCursor {
  * are ignored here — they are handled by the durable feed, not the cursor layer.
  */
 export function applyCollabEvent(cursors: CursorMap, event: CollabEvent, selfId: string): CursorMap {
-  if (event.actor === selfId) return cursors;
+  if (memberIdOf(event.actor) === memberIdOf(selfId)) return cursors;
   if (event.t === 'note' || event.t === 'file' || event.t === 'activity') return cursors;
 
   const prev = cursors.get(event.actor) ?? blank(event.actor);
@@ -83,7 +84,7 @@ export function pruneStale(cursors: CursorMap, presentMemberIds: Set<string>): C
   let changed = false;
   const out = new Map(cursors);
   for (const actor of cursors.keys()) {
-    if (!presentMemberIds.has(actor)) { out.delete(actor); changed = true; }
+    if (!presentMemberIds.has(memberIdOf(actor))) { out.delete(actor); changed = true; }
   }
   return changed ? out : cursors;
 }

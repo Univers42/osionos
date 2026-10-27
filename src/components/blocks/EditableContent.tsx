@@ -71,6 +71,7 @@ import {
 } from "@/shared/ui/assets/inlineTextStyles";
 import { IconValueView } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
+import { collabLatencyMarks } from "@/shared/lib/perf/collabLatencyMarks";
 import { queueInputFlush } from "@/shared/lib/editor-input/queuedInput";
 import {
   canReadPage,
@@ -895,6 +896,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
           : null;
         const previousText = root.textContent ?? "";
         root.innerHTML = nextHtml;
+        collabLatencyMarks.blockTextWritten(root);
         if (savedOffsets) {
           // The rewrite may change the visible text before the caret (a mention's
           // hostname becoming its title); keep the caret after that text, not inside it.
