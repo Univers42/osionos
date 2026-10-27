@@ -157,7 +157,7 @@ test("a session change drops the cached rows and asks for a reload", async () =>
   off();
 });
 
-test("the My data slash group lists the seven sources as database views", () => {
+test("the My data slash group lists the seven sources first, as database views", () => {
   const commands = slash.buildSysSlashCommands();
   assert.equal(commands.length, 9);
   for (const c of commands.slice(0, 7)) {

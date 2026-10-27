@@ -184,7 +184,7 @@ class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
       this.held = { ...saved };
       const source = sysSourceById(this.sourceId);
       const editableIds = sysEditableBuiltInViewIds(source);
-      const mergedViews = mergeSysViews(loaded.state.views, saved, editableIds) as NotionState["views"];
+      const mergedViews = mergeSysViews(loaded.state.views, saved, editableIds);
       const merged: SysLoaded = { ...loaded, state: { ...loaded.state, views: mergedViews } };
       if (sysSessionSignal() === signal) cache.set(this.sourceId, merged);
       this.announce({ truncated: loaded.truncated, error: null });
@@ -297,39 +297,10 @@ export function getSysDatabaseAdapter(sourceId: string, transport: SysTransport)
   return adapter;
 }
 
-/** Pure merge of a `sys:` source's shipped views with the caller's saved copies.
- *  The shipped (loaded) views win by default — the default table and non-editable
- *  built-ins keep their shipped definition — but a saved copy wins for an id that
- *  is an editable built-in, so a user's edit to such a view survives a reload.
- *  Extracted from `loadState` so it can be tested on its own.
- *
- *  Accepts the loaded views and the saved views in either order (the map that
- *  carries a `*-default` id is treated as the loaded one) plus the editable ids.
- */
-export function mergeSysViews(...args: unknown[]): Record<string, unknown> {
-  const maps: Record<string, unknown>[] = [];
-  let editable: Iterable<unknown> = [];
-  for (const arg of args) {
-    if (Array.isArray(arg) || arg instanceof Set) editable = arg as Iterable<unknown>;
-    else if (arg && typeof arg === "object") maps.push(arg as Record<string, unknown>);
-  }
-  let loaded: Record<string, unknown> = maps[0] ?? {};
-  let saved: Record<string, unknown> = maps[1] ?? {};
-  const hasDefault = (m: Record<string, unknown>) => Object.keys(m).some((key) => key.endsWith("-default"));
-  if (maps.length === 2 && hasDefault(maps[1]) && !hasDefault(maps[0])) {
-    loaded = maps[1];
-    saved = maps[0];
-  }
-  const editableSet = new Set(editable);
-  const merged: Record<string, unknown> = { ...saved, ...loaded };
-  for (const id of editableSet) {
-    if (typeof id === "string" && saved[id]) merged[id] = saved[id];
-  }
+/** A `sys:` source's views after load: the shipped definitions win (the default table and
+ *  non-editable built-ins), except an editable built-in the user saved a copy of. */
+export function mergeSysViews(loaded: NotionState["views"], saved: NotionState["views"], editableIds: readonly string[]): NotionState["views"] {
+  const merged = { ...saved, ...loaded };
+  for (const id of editableIds) if (saved[id]) merged[id] = saved[id];
   return merged;
 }
-
-export const mergeSysLoadedViews = mergeSysViews;
-export const mergeLoadedAndSavedViews = mergeSysViews;
-export const mergeSysLoadedAndSavedViews = mergeSysViews;
-export const mergeViews = mergeSysViews;
-export const mergeSysStateViews = mergeSysViews;
