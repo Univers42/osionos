@@ -19,6 +19,7 @@ import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { IDS, send } from './support/bridge-harness.mjs';
 import { readablePageAccess, requireWorkspaceAccess } from '../../scripts/bridge-api.mjs';
+import { MARKETPLACE_WORKSPACE_ID } from '../../scripts/bridge-page-read.mjs';
 import {
 	ALL_PERMISSIONS, asA, asB, asOutsider, assertNoPageIds, config, deleteWorkspace, inMembershipWorld, membershipWorld,
 	removeMember, setMemberPermissions,
@@ -27,6 +28,7 @@ import {
 const NOT_SCOPED = 'App session is not scoped to this workspace.';
 const PERMISSION_DENIED = 'Workspace permission denied.';
 const PAGE_NOT_FOUND = 'Page not found.';
+const MARKETPLACE_APP = 'f2f2f2f2-7777-4777-8777-f2f2f2f2f2f2';
 const pageRead = (id) => `/api/pages/${id}`;
 const asRequest = (headers) => ({ headers });
 const ownerRow = { user_id: IDS.userA, role: 'owner', permissions: ALL_PERMISSIONS };
@@ -151,6 +153,23 @@ describe('read: 404 before 403, owner kept', () => {
 			const own = await send(base, pageRead(IDS.pageB), asB());
 			assert.equal(own.status, 404);
 			assert.equal(own.body.message, PAGE_NOT_FOUND);
+		});
+	});
+
+	it('a marketplace app owner, never a member there, reads and edits their private app page (C557)', async () => {
+		const world = membershipWorld();
+		world.osionos_workspaces.push({ id: MARKETPLACE_WORKSPACE_ID });
+		const app = { ...world.osionos_pages.find((page) => page.id === IDS.pageB), id: MARKETPLACE_APP, workspace_id: MARKETPLACE_WORKSPACE_ID, visibility: 'private' };
+		world.osionos_pages.push(app);
+		await inMembershipWorld(world, {}, async (base, mock) => {
+			assert.equal((await send(base, pageRead(MARKETPLACE_APP), asB())).status, 200);
+			const edit = await send(base, pageRead(MARKETPLACE_APP), asB(), { method: 'PATCH', body: JSON.stringify({ title: 'Renamed app' }) });
+			assert.equal(edit.status, 200);
+			assert.equal(mock.rows('osionos_pages').find((page) => page.id === MARKETPLACE_APP).title, 'Renamed app');
+			for (const method of ['GET', 'PATCH']) {
+				const stranger = await send(base, pageRead(MARKETPLACE_APP), asOutsider(), { method, body: method === 'PATCH' ? JSON.stringify({ title: 'x' }) : undefined });
+				assert.equal(stranger.status, 404, `${method} by a non-owner`);
+			}
 		});
 	});
 
