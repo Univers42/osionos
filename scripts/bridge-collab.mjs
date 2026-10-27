@@ -113,7 +113,6 @@ function normalizePublishedActor(sessionUserId, clientActor) {
 	return `${sessionUserId}:${suffix}`;
 }
 
-/** A present seq must be a finite integer; an absent seq stays absent (f1b). */
 /**
  * Start a read now and let the caller await it later. A rejection nobody awaits (the
  * caller bailed out first on the membership verdict) is swallowed, never unhandled.
@@ -124,6 +123,7 @@ function softStart(read) {
 	return started;
 }
 
+/** A present seq must be a finite integer; an absent seq stays absent (f1b). */
 function requireOptionalSeq(value) {
 	if (value === undefined) return undefined;
 	if (!Number.isInteger(value)) throw httpError('invalid_seq', 422);
