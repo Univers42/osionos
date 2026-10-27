@@ -75,6 +75,7 @@ import { createActivityEmitter } from './bridge-activity.mjs';
 import { createActivityConsent } from './bridge-activity-consent.mjs';
 import { startActivityMaintenance } from './bridge-activity-maintenance.mjs';
 import { createModerationConsoleHandler } from './bridge-moderation-console.mjs';
+import { runWsCanary } from './bridge-realtime-ws-lane.mjs';
 import { createRecsHealthHandler } from './bridge-recs-health.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
@@ -5240,6 +5241,8 @@ export function startBridgeServer(config = configFromEnv()) {
 	}
 	server.listen(config.port, '0.0.0.0', () => {
 		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
+		// Opt-in socket lane: HTTP carries every publish until the canary's echo arrives.
+		void runWsCanary(process.env);
 	});
 	return server;
 }
