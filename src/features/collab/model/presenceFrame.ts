@@ -134,9 +134,16 @@ export function measurePresence(
     });
   }
 
+  // Page order only expands a selection that crosses blocks. Every local edit replaces
+  // the content, so walking it unconditionally re-walked the whole page per keystroke;
+  // and an expanded range is looked up only where mounted, since a selector that
+  // matches nothing scans the whole document.
+  const spans = known.some(({ cursor }) => cursor.selection && cursor.selection.anchor.blockId !== cursor.selection.focus.blockId);
+  const mounted = spans ? new Set(rendered()) : null;
   const byActor = new Map(known.map(({ person }) => [person.actor, person]));
   const bars: GutterBar[] = [];
-  groupByBlock(known.map((entry) => entry.cursor), order()).forEach((actors, blockId) => {
+  groupByBlock(known.map((entry) => entry.cursor), spans ? order() : undefined).forEach((actors, blockId) => {
+    if (mounted && !mounted.has(blockId)) return;
     const rect = blockRectOf(blockId);
     if (!rect || classifyRect(rect, viewport) !== 'visible') return;
     const people = actors.flatMap((actor) => byActor.get(actor) ?? []);
