@@ -24,21 +24,18 @@ export async function createNewWorkspacePage(page) {
     .waitFor({ state: "visible", timeout: 5_000 })
     .then(() => true)
     .catch(() => false);
-  if (appeared) {
-    await newPageButton.click();
-  } else {
-    const addPrivatePageButton = page
-      .locator('button[title="Add to Private"], button[title="Add file"]')
-      .first();
-    // A phone-width shell can boot with the Explorer panel closed (CI, 390x844 and
-    // 375x812): its Add button never mounts until the Explorer rail tab opens it.
-    const explorerTab = page.getByRole("tab", { name: "Explorer" });
-    await addPrivatePageButton.or(explorerTab).first().waitFor({ state: "attached" });
-    if ((await addPrivatePageButton.count()) === 0) await explorerTab.click();
-    await addPrivatePageButton.waitFor({ state: "attached" });
-    await addPrivatePageButton.evaluate((node) => node.click());
-  }
+  // A phone-width shell can boot with the Explorer panel closed (CI, 390x844 and
+  // 375x812): the panel header holding "New page" never mounts until the Explorer
+  // rail tab opens it.
+  // Only when it is not mounted at all: the tab toggles, so clicking it on a slow
+  // boot whose panel is already open would close it.
+  const explorerTab = page.getByRole("tab", { name: "Explorer" });
+  const openedExplorer = !appeared && (await newPageButton.count()) === 0;
+  if (openedExplorer) await explorerTab.click();
+  await newPageButton.click();
   await page.getByRole("textbox", { name: "Page title" }).waitFor();
+  // Back to the rail the shell booted with: a 375px page beside the open panel is a sliver.
+  if (openedExplorer) await explorerTab.click();
 }
 
 /** The workbench explorer row of the page titled `title`. The row's text may start with the

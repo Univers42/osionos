@@ -215,3 +215,38 @@ describe('the section a source saves into', () => {
 		for (const source of SELF_SOURCES) assert.match(`sys-views-${source.id}`, /^[a-z][a-z0-9_-]{0,31}$/, source.id);
 	});
 });
+
+describe('dashboard views on a sys: source', () => {
+	const DASHBOARD_VIEW = {
+		name: 'Home dashboard', type: 'dashboard',
+		settings: {
+			dashboardRows: [{ id: 'r1', widgets: ['w1'] }],
+			dashboardWidgets: {
+				w1: { stat: { label: 'Pages', value: 3 }, chart: { type: 'bar' }, records: { limit: 5 } },
+			},
+		},
+	};
+
+	it('saves a dashboard view and reads it back unchanged', async (t) => {
+		const { base, token } = await world(t);
+		const saved = await put(base, token, 'my-pages', 'dash', DASHBOARD_VIEW);
+		assert.equal(saved.status, 200);
+		assert.deepEqual(saved.body.views.dash, DASHBOARD_VIEW);
+		const read = await send(base, url('my-pages'), { token });
+		assert.deepEqual(read.body.views.dash, DASHBOARD_VIEW);
+	});
+
+	it('still refuses an unknown type such as kanban', async (t) => {
+		const { base, token } = await world(t);
+		const response = await put(base, token, 'my-pages', 'dash', { ...DASHBOARD_VIEW, type: 'kanban' });
+		assert.equal(response.status, 422);
+		assert.equal(response.body.code, 'invalid_view');
+	});
+
+	it('still refuses a body over the 8 KB limit', async (t) => {
+		const { base, token } = await world(t);
+		const response = await put(base, token, 'my-pages', 'dash', { name: 'x'.repeat(8 * 1024) });
+		assert.equal(response.status, 422);
+		assert.equal(response.body.code, 'invalid_view');
+	});
+});
