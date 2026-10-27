@@ -47,10 +47,15 @@ export function realtimeWsLane(env, overrides = {}) {
 	return lane;
 }
 
-/** Socket first; false = the caller must take HTTP. */
+/**
+ * Socket first; false = the caller must take HTTP. A topic whose namespace (up to the first '/')
+ * is not granted is refused here: the gateway would drop it without an ack and nothing would
+ * fall back.
+ */
 export function publishViaLane(env, topic, eventType, payload) {
 	const lane = realtimeWsLane(env);
 	if (!lane || lane.status !== 'ok') return false;
+	if (!lane.granted.includes(String(topic).split('/')[0])) return false;
 	return lane.publisher.publishIfReady(topic, eventType, payload);
 }
 
