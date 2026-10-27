@@ -122,6 +122,12 @@ export async function rest(config, fetchImpl, path, { method = 'GET', body, pref
 	return readBaasJson(response, { service: 'service-role PostgREST', empty: null, fail: readFailure });
 }
 
+/** PostgREST answers a unique violation with 409 and SQLSTATE 23505; rest() reports it as a 502. */
+export function isUniqueViolation(error) {
+	const message = error instanceof Error ? error.message : '';
+	return error?.status === 502 && message.includes('409') && message.includes('23505');
+}
+
 /** The 502 a broken BaaS body raises here; readBaasJson only words the message. */
 function readFailure(message) {
 	return httpError(message, 502);

@@ -43,12 +43,17 @@ fi
 
 # The migrations become the positional arguments of test.sh, one per line of
 # the list; a name that is not a file stops the gate before anything starts.
+HARNESS_LABEL=ci
+HARNESS_DIR="$SERVICE_DIR/eval"
+# shellcheck source=../eval/harness.sh
+. "$HARNESS_DIR/harness.sh"
+MIGRATIONS=$(harness_migration_list "$MODELS_DIR")
 set --
-while IFS= read -r name; do
-	case "$name" in '' | '#'*) continue ;; esac
-	[ -f "$MODELS_DIR/$name" ] || { echo "[ci] missing migration $MODELS_DIR/$name" >&2; exit 2; }
-	set -- "$@" "$MODELS_DIR/$name"
-done <"$SERVICE_DIR/scripts/migrations.txt"
+while IFS= read -r migration; do
+	set -- "$@" "$migration"
+done <<EOF
+$MIGRATIONS
+EOF
 
 echo "[ci] suite on $# migrations"
 sh "$SERVICE_DIR/scripts/test.sh" "$@"

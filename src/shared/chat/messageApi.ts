@@ -61,6 +61,9 @@ export interface ChatMessage {
   threadRootId?: string | null;
   replyCount?: number;
   replyTo?: ReplyQuote | null;
+  /** A posted "@AI" answer: written by the AI, asked for by `aiRequestedBy`. */
+  isAi?: boolean;
+  aiRequestedBy?: string | null;
 }
 
 export interface ChatHistory {
@@ -104,6 +107,20 @@ export async function sendMessage(
   const reply = await api.post<{ message: ChatMessage }>(
     `/api/chat/channels/${encodeURIComponent(channelId)}/messages`,
     body,
+    getActivePageJwt() ?? undefined,
+  );
+  return reply.message;
+}
+
+/**
+ * Posts the answer of the caller's own "@AI" thread run (`POST
+ * /api/chat/channels/:id/ai-answers`). The bridge copies the run's stored
+ * answer; the client sends only the run id.
+ */
+export async function postAiAnswer(channelId: string, runId: string): Promise<ChatMessage> {
+  const reply = await api.post<{ message: ChatMessage }>(
+    `/api/chat/channels/${encodeURIComponent(channelId)}/ai-answers`,
+    { runId },
     getActivePageJwt() ?? undefined,
   );
   return reply.message;

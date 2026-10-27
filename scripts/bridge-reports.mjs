@@ -31,11 +31,13 @@
  */
 
 import { requireChannelAccess } from './bridge-chat.mjs';
+import { isAiAnswer } from './bridge-chat-ai.mjs';
 import { canReadPageRowAsMember } from './bridge-page-read.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import {
 	UUID_REGEX,
 	httpError,
+	isUniqueViolation,
 	memberWorkspacesAmong,
 	readJsonBody,
 	rest,
@@ -97,11 +99,12 @@ async function resolveUser(config, fetchImpl, subjectId) {
 
 /** The reported message: its author, and a reporter who may read its channel. */
 async function resolveMessage(config, fetchImpl, subjectId, session) {
-	const rows = await rest(config, fetchImpl, `osionos_messages?id=eq.${subjectId}&select=id,author_id,channel_id&limit=1`);
+	const rows = await rest(config, fetchImpl, `osionos_messages?id=eq.${subjectId}&select=*&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
 	if (!row) return null;
 	await requireChannelAccess(config, fetchImpl, session.userId, row.channel_id);
-	return { subjectUserId: row.author_id ?? null };
+	// A posted AI answer was written by no person, not even its requester (C439).
+	return { subjectUserId: isAiAnswer(row) ? null : row.author_id ?? null };
 }
 
 /** The reported channel: the reporter must be in it; its creator is the subject. */
@@ -187,12 +190,6 @@ async function findReport(config, fetchImpl, reporterId, subjectKind, subjectId)
 /** A duplicate answer: the report is already there, so the same 200 as the first. */
 function duplicateBody(row) {
 	return { ok: true, reportId: row.id, report: reportEntry(row), duplicate: true };
-}
-
-/** PostgREST answers a unique violation with 409 and SQLSTATE 23505 in the body. */
-function isUniqueViolation(error) {
-	const message = error instanceof Error ? error.message : '';
-	return error?.status === 502 && message.includes('409') && message.includes('23505');
 }
 
 /** POST /api/social/reports — file a report about a subject the server can see. */
