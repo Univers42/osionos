@@ -72,7 +72,6 @@ export function createJsonDraft<D>(config: DraftConfig<D>, onChange: (state: Dra
     doc: initialParse.doc,
   };
   let timer: ReturnType<typeof setTimeout> | null = null;
-  let disposed = false;
 
   function commit(next: DraftState<D>) {
     state = next;
@@ -126,9 +125,10 @@ export function createJsonDraft<D>(config: DraftConfig<D>, onChange: (state: Dra
     commit({ text: initial, issues: parsed.issues, dirty: false, restored: false, doc: parsed.doc });
   }
 
+  // Re-entrant on purpose: StrictMode's rehearsal unmount disposes the same
+  // draft the editor goes on using, and a one-shot latch then dropped the
+  // edits the real unmount had to keep.
   function dispose() {
-    if (disposed) return;
-    disposed = true;
     if (timer) { clearTimeout(timer); timer = null; }
     if (state.dirty) {
       storage.setItem(config.draftKey, state.text);
