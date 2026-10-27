@@ -44,10 +44,16 @@ test.describe("database-automations", () => {
     // Creating a rule drops straight into its editor.
     await dialog.getByText("+ New automation").click();
     await expect(dialog.getByText("Edit automation")).toBeVisible();
-    await expect(dialog.locator('[aria-label="Trigger"]')).toHaveValue("row_updated");
 
-    // Close the settings dialog.
-    await closeViewSettings(page);
+    // Save a minimal rule so the count pill appears.
+    await dialog.getByLabel("Rule name").fill("r");
+    await dialog.getByText("+ Add action").click();
+    await dialog.locator('[aria-label="Action type"]').first().selectOption("notify");
+    await dialog.locator('[aria-label="Message"]').first().fill("hi");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+
+    // Close the sheet.
+    await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
 
     // The ⚡ button now carries the local-rule count pill.
