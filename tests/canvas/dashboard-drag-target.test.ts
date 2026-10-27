@@ -19,21 +19,40 @@ function row(rowId: string, top: number, slots: number, opts: Partial<RowGeometr
   };
 }
 
-test("drag-target: slot index follows widget midpoints", () => {
+test("drag-target: a card's left/right edge zones insert a column beside it", () => {
   const rows = [row("r1", 0, 2)];
-  assert.deepEqual(hitTestDropTarget(rows, 50, 50).target, { rowId: "r1", index: 0 });
-  assert.deepEqual(hitTestDropTarget(rows, 150, 50).target, { rowId: "r1", index: 1 });
+  assert.deepEqual(hitTestDropTarget(rows, 20, 50).target, { rowId: "r1", index: 0 });
+  assert.deepEqual(hitTestDropTarget(rows, 180, 50).target, { rowId: "r1", index: 1 });
   assert.deepEqual(hitTestDropTarget(rows, 390, 50).target, { rowId: "r1", index: 2 });
-  assert.equal(hitTestDropTarget(rows, 50, 50).indicator?.kind, "slot");
+  const between = hitTestDropTarget(rows, 180, 50).indicator;
+  assert.equal(between?.kind, "slot");
+  assert.equal(between?.kind === "slot" && between.x, 200, "bar sits on the shared edge");
 });
 
-test("drag-target: full row blocks foreign widgets but not its own", () => {
+test("drag-target: mid-card of a wide chart snaps to its nearest edge, never the row's far left", () => {
+  // Live Scoreboard repro: full-width chart 769..1445 x 643..983, pointer x=1100.
+  const rows: RowGeometry[] = [{
+    rowId: "r1", top: 643, bottom: 983, left: 769, right: 1445, containsSource: false,
+    slots: [{ left: 769, right: 1445, cards: [{ top: 643, bottom: 983 }] }],
+  }];
+  for (let y = 650; y <= 980; y += 10) {
+    const { indicator } = hitTestDropTarget(rows, 1100, y);
+    assert.ok(indicator, `y=${y} resolves`);
+    assert.notEqual(indicator.kind === "slot" && indicator.x, 769, `y=${y} must not jump to the left edge`);
+    const expected = y < 813 ? 643 : 983;
+    assert.equal(indicator.kind === "stack" && indicator.y, expected, `y=${y} bar on the nearest edge`);
+  }
+  assert.equal(hitTestDropTarget(rows, 790, 813).indicator?.kind, "slot", "near the left edge inserts a column");
+});
+
+test("drag-target: full row blocks foreign widgets but keeps the refused bar", () => {
   const full = [row("r1", 0, 4)];
-  const resolution = hitTestDropTarget(full, 200, 50);
+  const resolution = hitTestDropTarget(full, 95, 50);
   assert.equal(resolution.target, null);
   assert.equal(resolution.blocked, true);
+  assert.equal(resolution.indicator?.kind, "slot", "blocked drops stay visible");
   const own = [row("r1", 0, 4, { containsSource: true })];
-  assert.ok(hitTestDropTarget(own, 200, 50).target, "reorder within own full row allowed");
+  assert.ok(hitTestDropTarget(own, 95, 50).target, "reorder within own full row allowed");
 });
 
 test("drag-target: gutters create a new row after the row above", () => {
@@ -68,7 +87,7 @@ test("drag-target: card bottom band and the hole below a short card stack into t
   assert.deepEqual(topBand.target?.intoStack, { col: 1, at: 0 }, "top band stacks above");
 });
 
-test("drag-target: full stacks block, mid-card still resolves to column insert", () => {
+test("drag-target: full stacks block their edges, side edges still insert columns", () => {
   const rows = [row("r1", 0, 2, {
     slots: [
       { left: 0, right: 200, cards: [{ top: 0, bottom: 33 }, { top: 39, bottom: 66 }, { top: 72, bottom: 100 }] },
@@ -78,8 +97,12 @@ test("drag-target: full stacks block, mid-card still resolves to column insert",
   const band = hitTestDropTarget(rows, 100, 3);
   assert.equal(band.target, null);
   assert.equal(band.blocked, true, "3-deep stack rejects a 4th");
-  const mid = hitTestDropTarget(rows, 300, 50);
-  assert.deepEqual(mid.target, { rowId: "r1", index: 2 }, "mid-card x-midpoint column insert");
+  assert.equal(band.indicator?.kind, "stack");
+  const gap = hitTestDropTarget(rows, 100, 36);
+  assert.equal(gap.blocked, true, "gap between stacked cards is a stack slot too");
+  assert.equal(gap.indicator?.kind === "stack" && gap.indicator.y, 36, "bar centred in the gap");
+  const side = hitTestDropTarget(rows, 380, 50);
+  assert.deepEqual(side.target, { rowId: "r1", index: 2 }, "right edge appends a column");
 });
 
 test("drag-target: trailing slack after the last column is a column-insert target", () => {
