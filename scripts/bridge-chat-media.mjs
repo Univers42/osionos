@@ -64,13 +64,14 @@ export function sanitizeAttachmentMetadata(raw) {
 
 /** Read the request stream into a Buffer with a hard byte cap (413 on overflow). */
 export async function readRawBody(request, maxBytes = MAX_UPLOAD_BYTES) {
+	const tooLarge = () => httpError(`Upload exceeds the ${maxBytes >= 1_048_576 ? `${Math.round(maxBytes / 1_048_576)}MB` : `${Math.round(maxBytes / 1024)}KB`} limit.`, 413);
 	// Reject up front when the declared size is over the cap, draining the body so
 	// the socket closes cleanly — a mid-stream throw resets the connection, which
 	// the browser reports as an opaque CORS/ERR_FAILED instead of a readable 413.
 	const declared = Number(request.headers['content-length']);
 	if (Number.isFinite(declared) && declared > maxBytes) {
 		request.resume();
-		throw httpError('Upload exceeds the 50MB limit.', 413);
+		throw tooLarge();
 	}
 	const chunks = [];
 	let size = 0;
@@ -78,7 +79,7 @@ export async function readRawBody(request, maxBytes = MAX_UPLOAD_BYTES) {
 		size += chunk.length;
 		if (size > maxBytes) {
 			request.resume();
-			throw httpError('Upload exceeds the 50MB limit.', 413);
+			throw tooLarge();
 		}
 		chunks.push(chunk);
 	}
