@@ -30,7 +30,7 @@ function paragraph(id: string, content: string): Block {
   return { id, type: "paragraph", content };
 }
 
-function harness(initial: string) {
+function harness(initial: string, throttle: { minGapMs: number; now?: () => number } = { minGapMs: 0 }) {
   let tree: Block[] = [paragraph("b1", initial), paragraph("b2", "other")];
   const emitted: BlockDiffOp[][] = [];
   const edits: string[] = [];
@@ -39,10 +39,11 @@ function harness(initial: string) {
     readContent: () => tree,
     emit: (ops) => emitted.push(ops),
     markLocalEdit: (id) => edits.push(id),
+    ...throttle,
   });
   const tap = (kind: DraftTap["kind"], content: string | null, blockId = "b1", sourceKey = SOURCE) =>
     sender.onTap({ kind, sourceKey, blockId, content });
-  return { tap, emitted, edits, setStore: (text: string) => { tree = [paragraph("b1", text), paragraph("b2", "other")]; } };
+  return { tap, emitted, edits, dispose: () => sender.dispose(), setStore: (text: string) => { tree = [paragraph("b1", text), paragraph("b2", "other")]; } };
 }
 
 const putText = (ops: BlockDiffOp[]) => (ops[0] as { block: { content: string } }).block.content;
@@ -136,4 +137,63 @@ test("out-of-order puts converge by Lamport version (seeded property)", () => {
     const expected = (newest.op as { block: { content: string } }).block.content;
     assert.deepEqual(finals, [expected, expected, expected], `round ${round}: every order ends on the highest version`);
   }
+});
+
+test("fast sender throttle: a burst sends the first draft at once and one trailing put with the latest text", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let clock = 0;
+  const h = harness("", { minGapMs: 33, now: () => clock });
+  const burst = "abcdefghijklmnopqrstuvwxyz";
+  for (let i = 1; i <= burst.length; i++) { h.tap("draft", burst.slice(0, i)); clock += 1; t.mock.timers.tick(1); }
+  assert.equal(h.emitted.length, 1, "inside the gap only the first keystroke leaves");
+  t.mock.timers.tick(33);
+  assert.equal(h.emitted.length, 2);
+  assert.equal(putText(h.emitted[1] as BlockDiffOp[]), burst, "the trailing put carries the last draft");
+  t.mock.timers.tick(1000);
+  assert.equal(h.emitted.length, 2, "nothing more once the burst has drained");
+});
+
+test("fast sender throttle: keystrokes slower than the gap each leave immediately", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let clock = 0;
+  const h = harness("", { minGapMs: 33, now: () => clock });
+  for (const text of ["a", "ab", "abc"]) { h.tap("draft", text); clock += 120; t.mock.timers.tick(120); }
+  assert.deepEqual(h.emitted.map((ops) => putText(ops)), ["a", "ab", "abc"]);
+});
+
+test("fast sender throttle: settle and dispose cancel the trailing put; settle still corrects", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let clock = 0;
+  const settled = harness("", { minGapMs: 33, now: () => clock });
+  settled.tap("draft", "a");
+  settled.tap("draft", "ab");
+  settled.setStore("abc");
+  settled.tap("settled", "abc");
+  t.mock.timers.tick(100);
+  assert.deepEqual(settled.emitted.map((ops) => putText(ops)), ["a", "abc"], "the settle sends the final text, the stale trailing put never fires");
+
+  const cancelled = harness("x", { minGapMs: 33, now: () => clock });
+  cancelled.tap("draft", "xy");
+  cancelled.tap("draft", "xyz");
+  cancelled.tap("settled", null);
+  t.mock.timers.tick(100);
+  assert.deepEqual(cancelled.emitted.map((ops) => putText(ops)), ["xy", "x"], "cancel restores the document text, not the pending draft");
+
+  const left = harness("", { minGapMs: 33, now: () => clock });
+  left.tap("draft", "a");
+  left.tap("draft", "ab");
+  left.dispose();
+  t.mock.timers.tick(100);
+  assert.equal(left.emitted.length, 1, "leaving the page drops the pending put");
+});
+
+test("fast sender throttle: a draft back to the sent text clears a pending put", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let clock = 0;
+  const h = harness("", { minGapMs: 33, now: () => clock });
+  h.tap("draft", "a");
+  h.tap("draft", "ab");
+  h.tap("draft", "a");
+  t.mock.timers.tick(100);
+  assert.equal(h.emitted.length, 1, "peers already hold 'a'; no trailing put");
 });

@@ -310,19 +310,21 @@ function startLiveBlockSync(spaceId: string, selfId: string, pageId: string | nu
   const unsubStore = usePageStore.subscribe(onStoreChange);
   // Flag off (default): no tap listener is registered, so the draft store and
   // this hook behave exactly as before.
-  const unsubTap = pageId && isCollabFastSendEnabled()
-    ? subscribeDraftTap(createFastSender({
+  const fastSender = pageId && isCollabFastSendEnabled()
+    ? createFastSender({
         pageId,
         readContent: () => usePageStore.getState().pageById(pageId)?.content,
         emit: (ops) => emitOps(pageId, ops),
         markLocalEdit: (blockId) => markLastLocalEdit(pageId, blockId),
-      }).onTap)
+      })
     : null;
+  const unsubTap = fastSender ? subscribeDraftTap(fastSender.onTap) : null;
   // The store fans in both channels: workspace (`pages` nudge) + this page.
   const unsubEvent = useCollabStore.getState().onEvent(onEvent);
   return () => {
     unsubStore();
     unsubTap?.();
+    fastSender?.dispose();
     unsubEvent();
     for (const pending of pendingOut.values()) clearTimeout(pending.timer);
     pendingOut.clear();
