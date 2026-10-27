@@ -14,5 +14,5 @@ test('collab-live-writes regressions', () => {
     fileURLToPath(new URL('./fixtures/collab-live-writes.ts', import.meta.url)),
   ], { encoding: 'utf8', timeout: 15_000, env });
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /# tests 3\b/, result.stdout + result.stderr);
+  assert.match(result.stdout, /# tests 4\b/, result.stdout + result.stderr);
 });

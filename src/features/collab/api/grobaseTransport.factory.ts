@@ -31,7 +31,8 @@
  * Inbound frames arrive wrapped as the gateway's broadcast EVENT shape.
  */
 
-import { ApiError, api, getActivePageJwt } from '@/shared/api/client';
+import { ApiError, api, getActivePageJwt, realtimeApi } from '@/shared/api/client';
+import { isCollabFastSendEnabled } from '@/shared/config/featureFlags';
 import { liveRealtimeUrl } from '@/shared/notion-database-sys/src/store/live/liveRealtime';
 import { subscribeTopic } from '@/services/realtime-messages/wsTransport';
 import { userTopic } from '@/services/realtime-messages/wsTopics';
@@ -101,7 +102,8 @@ export async function fetchSharedSpacePageToken(
 /** Bridge events for a page still carry the WORKSPACE id (the bridge maps the page). */
 function publishFor(spaceId: string) {
   return async (_workspaceId: string, event: string, payload: unknown): Promise<void> => {
-    await api.post(
+    const lane = isCollabFastSendEnabled() ? realtimeApi : api;
+    await lane.post(
       `/api/collaboration/${encodeURIComponent(spaceId)}/events`,
       { event, payload },
       getActivePageJwt() ?? undefined,
