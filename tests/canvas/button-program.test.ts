@@ -248,14 +248,16 @@ test("log: ordered, the five statuses, capped at 200 with a truncated tail", asy
 
 test("import graph: the model and the interpreter value-import nothing; this test imports no engine", () => {
   // Both live in the database engine (lib/program), whose automations run the
-  // same steps; the app paths re-export them. Still pure: the only import is
-  // the interpreter's type import of the model, so no wasm bridge loads.
+  // same steps; the app paths re-export them. Still pure: the only imports are
+  // type imports (the stored contract, and the interpreter's of the model), so
+  // no wasm bridge loads.
   const root = new URL("../../src/shared/notion-database-sys/src/lib/program/", import.meta.url);
   for (const file of ["buttonProgram.ts", "interpreter.ts"]) {
     const source = readFileSync(new URL(file, root), "utf8");
     assert.equal(/^import (?!type\b)/m.test(source), false, file);
     const imported = [...source.matchAll(/from\s+["']([^"']+)["']/g)].map((match) => match[1]);
-    assert.deepEqual(imported.filter((specifier) => specifier !== "./buttonProgram"), [], file);
+    const allowed = new Set(["./buttonProgram", "@notion-db/contract-types"]);
+    assert.deepEqual(imported.filter((specifier) => !allowed.has(specifier)), [], file);
   }
   const self = readFileSync(new URL("../canvas/button-program.test.ts", import.meta.url), "utf8");
   assert.equal(/^import .*(notion-database-sys|bridge|api\/client)/m.test(self), false);
