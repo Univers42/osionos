@@ -54,6 +54,7 @@ import { countingFetch } from './bridge-server-timing.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
 import { createRealtimeTokenHandler } from './bridge-realtime-token.mjs';
+import { createWhiteboardHandler } from './bridge-whiteboard.mjs';
 import { createIdeTokenHandler } from './bridge-ide-token.mjs';
 import { createConnectorHandler } from './bridge-connector.mjs';
 import { createOAuthHandler } from './bridge-oauth.mjs';
@@ -5102,11 +5103,14 @@ async function handleBridgePost(url, request, response, config, kv, pg, fetchImp
 }
 
 async function handleBridgeRequest(request, response, context) {
+	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
+	// Before the app's OPTIONS answer and the PAT gate: the whiteboard's v1 routes answer
+	// another origin, and only its own token (bridge-whiteboard.mjs).
+	if (await context.whiteboard?.(url, request, response, context.config)) return;
 	if (request.method === 'OPTIONS') {
 		writeOptionsResponse(response, context.config);
 		return;
 	}
-	const url = new URL(request.url ?? '/', `http://${request.headers.host ?? 'localhost'}`);
 	// A personal access token is exchanged for a masked internal session before any route reads it.
 	if (await context.patGate(request, response, url, context.config)) return;
 	// Workstream modules — each returns false when the path is not theirs:
@@ -5263,12 +5267,13 @@ export function createBridgeServer(options = {}) {
 		}),
 		account: createAccountHandler({ config, pg, kv, pageAccessFilter, mfaEnv: env, mfaFetch: fetchImpl, mfaNow: options.now, verifySession: verifyAppSessionToken, readRefreshClaims: (identity) => readRefreshClaims(identity, { config, pg, fetchImpl }) }),
 	};
+	const whiteboard = options.whiteboard ?? createWhiteboardHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env });
 	const patGate = createPatGate({ pg, fetchImpl, memberWorkspaceEntries, kv, now: options.now, rateLimit: options.patRateLimit });
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);
 			try {
-				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env, patGate });
+				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env, patGate, whiteboard });
 			} catch (error) {
 				if (!response.headersSent) errorJson(response, error, responseConfig);
 			}
