@@ -38,6 +38,7 @@ import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { applyStoredTheme } from "@/shared/config/themeApply";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
+import { ThemeSafeModeBanner } from "@/features/theme/ui/ThemeSafeModeBanner";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
@@ -351,6 +352,7 @@ const App: React.FC = () => {
           </main>
         </div>
 
+        <ThemeSafeModeBanner />
         <WorkspaceThemePanel />
         <ToastViewport />
         <ShareHost />
