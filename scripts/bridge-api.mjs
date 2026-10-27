@@ -50,6 +50,7 @@ import { UUID_REGEX, safeCompareText, safeText, signAppSessionToken, verifyAppSe
 // keeps importing the token helpers from here, as before the move.
 export { signAppSessionToken, verifyAppSessionToken } from './bridge-session-token.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { countingFetch } from './bridge-server-timing.mjs';
 import { createAgentHandler } from './bridge-agent.mjs';
 import { createRunnerHandler } from './bridge-runner.mjs';
 import { createRealtimeTokenHandler } from './bridge-realtime-token.mjs';
@@ -5114,7 +5115,7 @@ export function createBridgeServer(options = {}) {
 	const transport = !options.fetchImpl && process.env.OSIONOS_BAAS_KEEPALIVE === '1'
 		? (options.createTransport ?? createBaasTransport)({ baasUrl: config.baasUrl })
 		: null;
-	const fetchImpl = meter.wrapFetch(options.fetchImpl ?? transport?.fetch ?? fetch);
+	const fetchImpl = countingFetch(meter.wrapFetch(options.fetchImpl ?? transport?.fetch ?? fetch), options.env ?? process.env);
 	const spawnImpl = options.spawnImpl ?? spawn;
 	// The env the moderation slice reads: the mode (OSIONOS_MODERATION_ACTIONS)
 	// and the state flag (OSIONOS_MODERATION_STATE). A test injects its own.

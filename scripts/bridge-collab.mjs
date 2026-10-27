@@ -43,6 +43,7 @@ import { ensureChatBucket, extFromMime, storageObjectKey, storagePut } from './b
 import { REALTIME_TOKEN_ISSUER, signRealtimeJwt } from './bridge-realtime-socket.mjs';
 import { createInviteForUser } from './bridge-workspace-invites.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { beginServerTiming, markHop, runWithServerTiming, timedHop } from './bridge-server-timing.mjs';
 
 // Caveat: this token lives 1 h. The client does not re-mint it before expiry
 // (fetchSharedSpaceToken in src/features/collab/api/grobaseTransport.factory.ts is
@@ -413,7 +414,7 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 		if (!UUID_REGEX.test(String(payload.pageId ?? ''))) throw httpError('page_id_required', 422);
 		const pageId = requireUuid(payload.pageId, 'pageId').toLowerCase();
 		const publishedActor = normalizePublishedActor(session.userId, payload.actor);
-		const level = normalizedLevel(await deps.pageLevelFor?.(session.userId, pageId, workspaceId));
+		const level = normalizedLevel(await timedHop('access', () => deps.pageLevelFor?.(session.userId, pageId, workspaceId)));
 		if (level === 'none') throw httpError('Page not found.', 404);
 		if (payload.t === 'blocks' || payload.t === 'file') {
 			if (!levelAtLeast(level, 'can_edit')) throw httpError('Page write access is required.', 403);
@@ -424,11 +425,11 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 		}
 		if (payload.t === 'blocks') {
 			if (!Array.isArray(payload.ops) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
-			await deps.authorizeBlocks(request, pageId, workspaceId);
+			await timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId));
 		}
 		// The topic is lowercased; the published payload names the same page (C574).
 		const frame = { event: 'collab', payload: { ...payload, pageId, actor: publishedActor } };
-		const published = await publishRealtime({ topic: `collabpage:${pageId}`, eventType: 'broadcast', payload: frame, fetchImpl: deps.fetchImpl, env: deps.env });
+		const published = await timedHop('publish', () => publishRealtime({ topic: `collabpage:${pageId}`, eventType: 'broadcast', payload: frame, fetchImpl: deps.fetchImpl, env: deps.env }));
 		if (!published) throw httpError('Collaboration publish failed.', 503);
 		return;
 	}
@@ -462,7 +463,7 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
  * instead of the workspace topic; flag off keeps the historic workspace-topic path.
  */
 async function publishCollabEvent(deps, session, request, workspaceId, response, config) {
-	await requireSpaceMembership(config, deps.fetchImpl, session.userId, workspaceId);
+	await timedHop('membership', () => requireSpaceMembership(config, deps.fetchImpl, session.userId, workspaceId));
 	const body = await readJsonBody(request);
 	if (!['collab', 'collab.req', 'collab.res'].includes(body?.event) || !body?.payload || typeof body.payload !== 'object') {
 		throw httpError('Invalid collaboration event.', 422);
@@ -485,11 +486,11 @@ async function publishCollabEvent(deps, session, request, workspaceId, response,
 		if (payload.t === 'blocks') {
 			const pageId = requireUuid(payload.pageId, 'pageId');
 			if (!Array.isArray(payload.ops) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
-			await deps.authorizeBlocks(request, pageId, workspaceId);
+			await timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId));
 		}
 		if (payload.t === 'pages' && payload.workspaceId?.toLowerCase() !== workspaceId.toLowerCase()) throw httpError('Invalid event workspace.', 403);
 	}
-	const published = await publishRealtime({ topic: `collab:${workspaceId}`, eventType: 'broadcast', payload: body, fetchImpl: deps.fetchImpl, env: deps.env });
+	const published = await timedHop('publish', () => publishRealtime({ topic: `collab:${workspaceId}`, eventType: 'broadcast', payload: body, fetchImpl: deps.fetchImpl, env: deps.env }));
 	if (!published) throw httpError('Collaboration publish failed.', 503);
 	return sendJson(response, 200, { ok: true }, config);
 }
@@ -554,9 +555,11 @@ export function createCollabHandler({ config, verifySession, fetchImpl = fetch, 
 		const owns = pathname === '/api/collaboration' || wsRequests || wsMembers || collabId || collabJoin || rtToken || pageRtToken || events || uploads || invite || decideReq || (wsPatch && (request.method || '').toUpperCase() === 'PATCH');
 		if (!owns) return false;
 		const method = (request.method || 'GET').toUpperCase();
+		const timing = events && method === 'POST' ? beginServerTiming(deps.env, response) : null;
 		try {
 			const session = verifySession(bearerToken(request), requestConfig);
-			if (events && method === 'POST') return await publishCollabEvent(deps, session, request, requireUuid(events[1], 'workspaceId'), response, requestConfig);
+			markHop(timing, 'session');
+			if (events && method === 'POST') return await runWithServerTiming(timing, () => publishCollabEvent(deps, session, request, requireUuid(events[1], 'workspaceId'), response, requestConfig));
 			if (wsPatch && method === 'PATCH') return await patchWorkspace(deps, session, request, requireUuid(wsPatch[1], 'workspaceId'), response, requestConfig);
 			if (wsMembers && method === 'GET') return await listWorkspaceMembers(deps, session, requireUuid(wsMembers[1], 'workspaceId'), response, requestConfig);
 			if (wsRequests && method === 'GET') return await listJoinRequests(deps, session, requireUuid(wsRequests[1], 'workspaceId'), response, requestConfig);

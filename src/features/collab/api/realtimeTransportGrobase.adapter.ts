@@ -60,6 +60,7 @@ import type {
 } from '../model/realtimeTransport.port';
 import { validateCollabEvent, validateSummonReq } from '../model/collabEvent.schema';
 import { isPageScopedEvent } from '../model/pageScope';
+import { collabLatencyMarks } from '@/shared/lib/perf/collabLatencyMarks';
 import { backoffDelay, MAX_RECONNECT_ATTEMPTS, type BackoffOpts } from '../model/backoff';
 
 const COLLAB_EVENT = 'collab';      // broadcast label for a CollabEvent payload
@@ -297,6 +298,7 @@ class GrobaseChannel implements RealtimeChannel {
   }
 
   private handleFrame(data: unknown): void {
+    collabLatencyMarks.frameReceived();
     let frame: { type?: string; event?: GatewayEvent; members?: unknown; code?: string };
     try { frame = JSON.parse(String(data)); } catch { return; }
     if (frame.type === 'AUTH_OK') this.frame({ type: 'SUBSCRIBE', sub_id: 'collab', topic: this.topic });
