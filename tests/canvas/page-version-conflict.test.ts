@@ -10,13 +10,13 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// The 409 path: merge, re-send ONCE, and — when the merge cannot be done — the
-// loss-safe copy path.
+// The 409 path: merge, re-send (bounded by MAX_REBASES), and — when the merge cannot
+// be done or the bound runs out — the loss-safe copy path.
 //
 // C25: with no base (a reload kept the version but not the content it belongs to) the
 // merge refuses to guess: the server's copy stands and the local edit goes to a copy.
-// C28: a server that always refuses the version gets exactly TWO PATCHes for that page,
-// then the copy path — and the other pages of the batch are still published.
+// C28: a server that always refuses the version gets exactly 1 + MAX_REBASES PATCHes for
+// that page, then the copy path — and the other pages of the batch are still published.
 // C29: a keepalive the server refuses leaves the page pending, and the next load's
 // replay does not overwrite the server's copy.
 // Plus the two-client case: A and B edit one page concurrently, and after both flushes
@@ -33,6 +33,7 @@ import type { PageEntry } from "@/entities/page";
 import { canWritePage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { publishPage, publishPageKeepalive, type OutboxDeps } from "@/store/sync/pageOutbox";
 import { clearBase, setBase } from "@/store/sync/pageBase";
+import { MAX_REBASES } from "@/store/sync/pageConflict";
 import { publishOutboxPage, type FlushDeps } from "@/store/sync/pageFlush";
 import { keepPendingPages, withPendingPages } from "@/store/sync/pendingPages";
 import type { FakeBridge } from "./page-version.fixtures";
@@ -140,7 +141,7 @@ test("C25: with no base the merge refuses to guess — the server's copy stands,
   assert.match(notice.description, /private workspace/);
 });
 
-test("C28: a server that always refuses the version gets two PATCHes, the copy path, and the batch goes on", async () => {
+test("C28: a server that always refuses the version gets 1 + MAX_REBASES PATCHes, the copy path, and the batch goes on", async () => {
   const bridge = createBridge({
     p1: { version: 9, content: [para("b1", "theirs")] },
     p2: { version: 3, content: [para("b2", "other")] },
@@ -157,9 +158,9 @@ test("C28: a server that always refuses the version gets two PATCHes, the copy p
   assert.equal(step1, "continue", "a conflict does not stop the batch");
   const step2 = await publishOutboxPage(second, deps);
   assert.equal(step2, "continue");
-  // Exactly two PATCHes for the refused page: the write and the one re-send.
+  // The write, then MAX_REBASES re-sends — bounded, never a loop.
   const p1Patches = bridge.patches.filter((patch) => patch.pageId === "p1");
-  assert.equal(p1Patches.length, 2);
+  assert.equal(p1Patches.length, 1 + MAX_REBASES);
   // The copy path ran — the local edit is safe.
   assert.ok(recovery.calls.some(([name]) => name === "createCopy"), "the copy path did not run");
   // The other page of the batch was published.
@@ -213,13 +214,79 @@ test("two clients editing one page: after both flushes the server holds both edi
   assert.equal(step, "continue");
   // The re-send is pinned to the version the 409 carried.
   const p1Patches = bridge.patches.filter((patch) => patch.pageId === "p1");
-  assert.equal(p1Patches.length, 3, "A's write, B's refused write, and the one re-send");
+  assert.equal(p1Patches.length, 3, "A's write, B's refused write, and one re-send");
   assert.equal(p1Patches[1].body.baseVersion, 1, "B's write was pinned to the version B had read");
   assert.equal(p1Patches[2].body.baseVersion, 2, "the re-send is pinned to the version the 409 carried");
   // The server holds BOTH edits.
   const texts = (bridge.pages.get("p1")?.content ?? []).map((block) => block.content);
   assert.ok(texts.includes("A's edit"), "A's edit is gone");
   assert.ok(texts.includes("B's block"), "B's block is gone");
+  clearBase("p1");
+});
+
+test("three writers on one page: a re-send that meets another 409 merges again — no copy, every edit kept", async () => {
+  const base = [para("b1", "one"), para("b2", "two"), para("b3", "three")];
+  const bridge = createBridge({ p1: { version: 1, content: base } });
+  // A and B each land just before one of C's writes: C's write AND its first re-send are 409s.
+  bridge.racers.set("p1", [
+    [para("b1", "A's edit"), para("b2", "two"), para("b3", "three")],
+    [para("b1", "A's edit"), para("b2", "B's edit"), para("b3", "three")],
+  ]);
+  const recovery = fakeRecovery(pageEntry("p1", base), pageEntry("c1", []));
+  const { deps } = flushDepsFor(bridge, recovery);
+  setBase("p1", 1, base);
+  const c = pageEntry("p1", [para("b1", "one"), para("b2", "two"), para("b3", "C's edit")]);
+  const step = await publishOutboxPage(job(c, "p1"), deps);
+  assert.equal(step, "continue");
+  assert.equal(bridge.patches.length, 3, "the write, then two re-sends");
+  assert.ok(!recovery.calls.some(([name]) => name === "createCopy"), "the edit left the page for a copy");
+  const texts = (bridge.pages.get("p1")?.content ?? []).map((block) => block.content);
+  assert.deepEqual(texts, ["A's edit", "B's edit", "C's edit"]);
+  clearBase("p1");
+});
+
+test("a conflict merges the store's latest copy: text typed during the round-trip is not overwritten", async () => {
+  const bridge = createBridge({ p1: { version: 2, content: [para("b1", "theirs"), para("b2", "two")] } });
+  const { deps, applied } = flushDepsFor(bridge);
+  // The reader kept typing in b2 while the stale write was in flight.
+  deps.latest = () => pageEntry("p1", [para("b1", "base"), para("b2", "two, and more")]);
+  setBase("p1", 1, [para("b1", "base"), para("b2", "two")]);
+  const sent = pageEntry("p1", [para("b1", "base"), para("b2", "two, and")]);
+  const step = await publishOutboxPage(job(sent, "p1"), deps);
+  assert.equal(step, "continue");
+  const texts = (bridge.pages.get("p1")?.content ?? []).map((block) => block.content);
+  assert.deepEqual(texts, ["theirs", "two, and more"]);
+  assert.deepEqual(applied.at(-1)?.map((block) => block.content), ["theirs", "two, and more"]);
+  clearBase("p1");
+});
+
+test("past the bound, the copy holds the store's latest copy, not the last round's", async () => {
+  const bridge = createBridge({ p1: { version: 9, content: [para("b1", "theirs")] } });
+  bridge.refuses.add("p1");
+  const recovery = fakeRecovery(pageEntry("p1", [para("b1", "theirs")]), pageEntry("c1", []));
+  const { deps } = flushDepsFor(bridge, recovery);
+  let rounds = 0;
+  // The reader keeps typing: each round the store holds one more word.
+  deps.latest = () => pageEntry("p1", [para("b1", `mine ${"+".repeat(rounds++)}`)]);
+  setBase("p1", 4, [para("b1", "base")]);
+  await publishOutboxPage(job(pageEntry("p1", [para("b1", "mine")]), "p1"), deps);
+  const copy = recovery.calls.find(([name]) => name === "createCopy")?.[1] as { content: Block[] };
+  const last = `mine ${"+".repeat(rounds - 1)}`;
+  assert.ok(copy.content.some((block) => String(block.content).includes(last)), "the copy lost the latest typing");
+  clearBase("p1");
+});
+
+test("a store that refuses the merged content stops the conflict: nothing unmerged is re-sent", async () => {
+  const bridge = createBridge({ p1: { version: 2, content: [para("b1", "theirs")] } });
+  const { deps } = flushDepsFor(bridge);
+  const sent = pageEntry("p1", [para("b1", "base"), para("b2", "mine")]);
+  // updatePageContent is a no-op for a reader who lost write access: the store keeps its copy.
+  deps.applyContent = () => sent;
+  setBase("p1", 1, [para("b1", "base")]);
+  const step = await publishOutboxPage(job(sent, "p1"), deps);
+  assert.equal(step, "stop", "the page stays pending");
+  assert.equal(bridge.patches.length, 1, "only the first write: no unmerged re-send");
+  assert.deepEqual(bridge.pages.get("p1")?.content, [para("b1", "theirs")]);
   clearBase("p1");
 });
 
