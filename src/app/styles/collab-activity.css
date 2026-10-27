@@ -1,0 +1,62 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   collab-activity.css                                :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/27 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/10/27 00:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+/* What collaborators are DOING, as opposed to where they are (collab.css): the
+   typing indicator on a roster avatar and the flash over a block someone just
+   edited. Colours come from the --collab-* identity tokens in collab.css, so the
+   ink/background pairs checked by collab-ink-contrast.test.ts cover the flash label.
+   tests/canvas/collab-activity-motion.test.ts holds this file to the motion rules.
+
+   Static first: the rules outside the media block are the reduced-motion look
+   (three still dots; a 2px bar beside the edited block for its 900 ms), and the
+   block below only swaps in movement. The flash is 700 ms, longer than the 90-300 ms
+   of collab.css, because it is a one-shot fade-out the eye has to catch while it
+   reads something else; the typing dots loop, but exist only while someone types. */
+:root {
+  --collab-flash-mix: 16%; /* member-colour share of the edited-block tint */
+}
+
+@keyframes collab-flash-fade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes collab-typing-dot {
+  0%, 100% { opacity: 0.35; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-2px); }
+}
+
+.collab-edit-flash__tint {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .collab-edit-flash {
+    animation: collab-flash-fade 700ms ease-out both;
+  }
+  .collab-edit-flash__tint {
+    display: block;
+  }
+  .collab-edit-flash__bar {
+    display: none;
+  }
+
+  .collab-typing-dot {
+    animation: collab-typing-dot 1000ms ease-in-out infinite;
+  }
+  .collab-typing-dot:nth-child(2) {
+    animation-delay: 150ms;
+  }
+  .collab-typing-dot:nth-child(3) {
+    animation-delay: 300ms;
+  }
+}

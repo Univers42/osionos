@@ -30,7 +30,7 @@ import { memberIdOf } from './collabActor';
 import { inkFor, memberInitials } from './collabPresence';
 import { controlRectFor, selectionRectsFor } from './caretDom';
 import {
-  activeBlockOrder, blockRectOf, boxOf, placeCaret, renderedBlockIds, scrollerEl, viewportOf,
+  activeBlockOrder, blockRectOf, boxOf, clipInset, placeCaret, renderedBlockIds, scrollerEl, viewportOf,
   type Box,
 } from './presenceDom';
 import {
@@ -141,6 +141,5 @@ export function measurePresence(
   });
 
   const live = known.filter(({ cursor }) => cursor.caret).map(({ cursor }) => cursor.movedAt);
-  const clip = `inset(${viewport.top}px ${window.innerWidth - viewport.right}px ${window.innerHeight - viewport.bottom}px ${viewport.left}px)`;
-  return { viewport: boxOf(viewport), clip, carets, bars, above, below, idleIn: nextIdleDelay(live, now) };
+  return { viewport: boxOf(viewport), clip: clipInset(viewport), carets, bars, above, below, idleIn: nextIdleDelay(live, now) };
 }
