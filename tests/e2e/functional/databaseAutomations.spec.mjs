@@ -76,13 +76,14 @@ test.describe("database-automations", () => {
     // A new rule starts as "Row added"; this one must fire on an edit.
     await dialog.locator('[aria-label="Trigger"]').selectOption("property_changed");
     await dialog.locator('[aria-label="Property"]').selectOption({ label: "Trigger" });
-    await dialog.getByText("+ Add action").click();
+    // A new rule opens with one step: it becomes the write, a second one the message.
     await dialog.locator('[aria-label="Action type"]').first().selectOption("set_property");
     await dialog.locator('[aria-label="Column"]').first().selectOption({ label: "Target" });
     await dialog.locator('[aria-label="Value"]').first().fill("auto-set");
     await dialog.getByText("+ Add action").click();
     await dialog.locator('[aria-label="Action type"]').last().selectOption("notify");
     await dialog.locator('[aria-label="Message"]').last().fill("Rule fired");
+    await expect(dialog.locator('[aria-label="Action type"]')).toHaveCount(2);
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
