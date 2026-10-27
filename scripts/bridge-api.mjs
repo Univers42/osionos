@@ -65,6 +65,7 @@ import { createTasksHandler } from './bridge-tasks.mjs';
 import { createCommentsHandler } from './bridge-comments.mjs';
 import { createPublicHandler } from './bridge-public.mjs';
 import { createCollabHandler } from './bridge-collab.mjs';
+import { checkYtextPreconditions } from './bridge-ytext-preflight.mjs';
 import { createWorkspaceInvitesHandler } from './bridge-workspace-invites.mjs';
 import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
@@ -5305,11 +5306,23 @@ export function startBridgeServer(config = configFromEnv()) {
 			process.exit(0);
 		});
 	}
-	server.listen(config.port, '0.0.0.0', () => {
-		console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
-		// Opt-in socket lane: HTTP carries every publish until the canary's echo arrives.
-		void runWsCanary(process.env);
-	});
+	const listen = () => {
+		server.listen(config.port, '0.0.0.0', () => {
+			console.info(`[osionos-bridge] listening on 0.0.0.0:${config.port}`);
+			// Opt-in socket lane: HTTP carries every publish until the canary's echo arrives.
+			void runWsCanary(process.env);
+		});
+	};
+	if (process.env.COLLAB_YTEXT === '1') {
+		checkYtextPreconditions({ env: process.env, config })
+			.then(listen)
+			.catch((error) => {
+				console.error(`[osionos-bridge] ${error.message}`);
+				process.exit(1);
+			});
+	} else {
+		listen();
+	}
 	return server;
 }
 
