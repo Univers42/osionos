@@ -17,7 +17,7 @@ test('server loads never broadcast blocks, local edits do, and persona tabs do n
   const channel = { onEvent(fn: any) { inbound.push(fn); return () => {}; } };
   const bindings = {
     useEffect: (fn: any) => starts.push(fn),
-    useCollabStore: Object.assign(() => channel, { getState: () => ({ broadcast: (e: any) => events.push(e), nextSeq: () => ++seq }) }),
+    useCollabStore: Object.assign(() => channel, { getState: () => ({ broadcast: (e: any) => events.push(e), nextSeq: () => ++seq, onEvent: channel.onEvent }) }),
     usePageStore: { subscribe(fn: any) { subs.add(fn); return () => subs.delete(fn); }, getState: () => state },
     readLocalCaretAndSelection: () => ({}),
   };
@@ -30,7 +30,7 @@ test('server loads never broadcast blocks, local edits do, and persona tabs do n
     'src/features/collab/store/useCollabStore.ts': { useCollabStore: bindings.useCollabStore },
   };
   const tab1 = await isolatedModule('src/features/collab/ui/useLiveBlockSync.ts', dependencies);
-  tab1.useLiveBlockSync('space', 'persona'); const stop1 = starts.pop()();
+  tab1.useLiveBlockSync('space', 'persona', 'page'); const stop1 = starts.pop()();
   write([{ _id: 'page', content: [block('loaded')] }]); await tick();
   assert.deepEqual(events, [], 'undefined-to-loaded is not a local edit');
   withoutBroadcast(() => write([{ _id: 'page', content: [block('server changed')] }])); await tick();
@@ -41,7 +41,7 @@ test('server loads never broadcast blocks, local edits do, and persona tabs do n
   const actor1 = events[0].actor;
   stop1();
   const tab2 = await isolatedModule('src/features/collab/ui/useLiveBlockSync.ts', dependencies);
-  tab2.useLiveBlockSync('space', 'persona'); const stop2 = starts.pop()();
+  tab2.useLiveBlockSync('space', 'persona', 'page'); const stop2 = starts.pop()();
   write([{ _id: 'page', content: [block('tab2')] }]); await tick();
   assert.notEqual(events.at(-1).actor, actor1);
   const count = events.length;

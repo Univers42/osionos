@@ -21,6 +21,8 @@
 
 import { useEffect } from 'react';
 
+import { actorFor, randomTabId } from '../model/collabActor';
+const TAB_ID = randomTabId();
 import { useCollabStore } from '../store/useCollabStore';
 
 function controlIdOf(target: EventTarget | null): string | null {
@@ -35,17 +37,17 @@ export function useBroadcastLocalActivity(active: boolean, route: string | null)
 
   useEffect(() => {
     if (!active || !self || !route) return;
-    broadcast({ t: 'nav', actor: self.id, seq: nextSeq(), route });
+    broadcast({ t: 'nav', actor: actorFor(self.id, TAB_ID), seq: nextSeq(), route });
   }, [active, self, route, broadcast, nextSeq]);
 
   useEffect(() => {
     if (!active || !self || typeof document === 'undefined') return undefined;
     const onFocusIn = (event: FocusEvent) => {
       const id = controlIdOf(event.target);
-      if (id) broadcast({ t: 'focus', actor: self.id, seq: nextSeq(), elementId: id });
+      if (id) broadcast({ t: 'focus', actor: actorFor(self.id, TAB_ID), seq: nextSeq(), elementId: id });
     };
     const onFocusOut = (event: FocusEvent) => {
-      if (controlIdOf(event.target)) broadcast({ t: 'focus', actor: self.id, seq: nextSeq(), elementId: null });
+      if (controlIdOf(event.target)) broadcast({ t: 'focus', actor: actorFor(self.id, TAB_ID), seq: nextSeq(), elementId: null });
     };
     document.addEventListener('focusin', onFocusIn);
     document.addEventListener('focusout', onFocusOut);
