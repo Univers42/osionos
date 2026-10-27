@@ -37,7 +37,7 @@ import {
 
 /** The typed answer of a channel write: written, warned about, or failed. */
 export type SendOutcome =
-  | { ok: true }
+  | { ok: true; message?: ChatMessage }
   | { ok: false; warning: ModerationWarning }
   | { ok: false };
 
@@ -91,7 +91,7 @@ export async function sendChannelMessage(
       const withoutTemp = messages.filter((m) => m.id !== optimistic.id);
       return withoutTemp.some((m) => m.id === message.id) ? withoutTemp : [...withoutTemp, message];
     });
-    return { ok: true };
+    return { ok: true, message };
   } catch (error) {
     target.setMessages((messages) => messages.filter((m) => m.id !== optimistic.id));
     const warning = warningFrom(error);

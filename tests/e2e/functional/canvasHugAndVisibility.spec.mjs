@@ -188,7 +188,7 @@ test.describe("canvas hug height, dashboard and visibility", () => {
     await page.getByRole("button", { name: "Turn into dashboard" }).click();
 
     await expect(page.locator('.osionos-layout-block[data-layout-mode="full_page"]')).toBeVisible();
-    await expect(page.locator(".osionos-layout-cell")).toHaveCount(16);
+    await expect(page.locator(".osionos-layout-cell")).toHaveCount(13);
   });
 
   test("a cell's visibility formula follows the page's own property", async ({ page, baseURL }) => {

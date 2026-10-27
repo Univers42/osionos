@@ -16,7 +16,7 @@
 // [heading_1(value), paragraph(label)]).
 
 import type { Block, LayoutCell } from '@/entities/block';
-import { bid, h1, p } from '../seedBlockHelpers';
+import { bid } from '../seedBlockHelpers';
 
 /** Grid placement for a layout cell. */
 export interface Placement {
@@ -77,11 +77,6 @@ export function equation(latex: string): Block {
 /** A single fixed layout cell. */
 export function cell(placement: Placement, label: string, blocks: Block[]): LayoutCell {
   return { id: bid(), ...placement, label, blocks, sizing: 'fixed' };
-}
-
-/** A metric/stat card: big value over a small label. */
-export function metricCell(placement: Placement, value: string, label: string): LayoutCell {
-  return cell(placement, label, [h1(value), p(label)]);
 }
 
 /** A 12-column inline layout grid wrapping the given cells. */
