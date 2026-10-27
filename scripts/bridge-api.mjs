@@ -23,10 +23,11 @@ import { writeJsonResponse } from './bridge-json-response.mjs';
 import { LINK_EDGES_RPC, PAGE_ROWS_RPC, readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
-import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, readablePageRows, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
+import { canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, pageVisibility, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
 import { pageContentText, pagePublishText } from './bridge-page-text.mjs';
 import { liveReadableWorkspaces, privateWorkspaceOf } from './bridge-live-workspaces.mjs';
 import { bestShareLevel, shareDenies, shareGrantsRead, shareGrantsWrite } from './bridge-share-rules.mjs';
+import { pageAccessLevel } from './bridge-page-access.mjs';
 import { createShareRuleStore } from './bridge-perms-rules.mjs';
 import { QUERY_ROUTER_TABLE, moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
@@ -957,17 +958,111 @@ function pageWriteDenied() {
 	return Object.assign(new Error('You do not have permission to modify this page.'), { status: 403 });
 }
 
+/** The page-access read refuses (503) past this many pages of ONE workspace: never a partial chain. */
+const PAGE_ACCESS_MAX_PAGES = 20000;
+
+/** The 503 every page surface answers when the access map cannot be read (C511): never unfiltered rows. */
+function pageAccessUnavailable() {
+	return Object.assign(new Error('Page access could not be verified right now.'), { status: 503, code: 'page_access_unavailable' });
+}
+
+/** The workspace's live id → parent_page_id map, one query per request (C511). */
+async function parentMapForWorkspace(workspaceId, config, fetchImpl) {
+	let rows;
+	try {
+		rows = await listWorkspacePageRefs(workspaceId, config, fetchImpl);
+	} catch {
+		throw pageAccessUnavailable();
+	}
+	if (!Array.isArray(rows)) throw pageAccessUnavailable();
+	if (rows.length > PAGE_ACCESS_MAX_PAGES) throw pageAccessUnavailable();
+	const parentOf = new Map();
+	for (const row of rows) {
+		const id = typeof row?.id === 'string' ? row.id.toLowerCase() : '';
+		if (!id) continue;
+		parentOf.set(id, row.parent_page_id ? String(row.parent_page_id).toLowerCase() : null);
+	}
+	return parentOf;
+}
+
+/** Every page rule of the workspace, grouped by lower-case page id ('' = workspace-wide), one query. */
+async function rulesByPageForWorkspace(store, config, workspaceId) {
+	const rows = await store.listForWorkspace(config, workspaceId).catch(() => {
+		throw pageAccessUnavailable();
+	});
+	const rulesByPage = new Map();
+	for (const rule of Array.isArray(rows) ? rows : []) {
+		const key = rule?.resource_id == null ? '' : String(rule.resource_id).toLowerCase();
+		if (!rulesByPage.has(key)) rulesByPage.set(key, []);
+		rulesByPage.get(key).push(rule);
+	}
+	return rulesByPage;
+}
+
 /**
- * The share level the rules give the caller for one page: the best level among the rules
- * that match them, or null when none does. One listForPage read per request — the store
- * is created per call because the bridge's fetch is injected per request and the store
- * itself holds no state.
+ * One workspace's access map: the membership row, every rule, and the parent map. The
+ * three reads run together; a broken rules/parent read is a 503, never an empty map.
  */
-async function shareLevelForPage(config, workspaceId, pageId, userId, role, fetchImpl) {
+async function pageAccessEntry(authContext, workspaceId, config, fetchImpl) {
 	const store = createShareRuleStore({ fetchImpl });
-	const rules = await store.listForPage(config, workspaceId, pageId);
-	const teamIds = await teamIdsWhenRuled(store, config, workspaceId, userId, [rules]);
-	return bestShareLevel(rules, { userId, role, workspaceId, teamIds }, pageId);
+	const [rulesByPage, parentOf, member] = await Promise.all([
+		rulesByPageForWorkspace(store, config, workspaceId),
+		parentMapForWorkspace(workspaceId, config, fetchImpl),
+		// A membership read failure hides the workspace's pages from a filtered surface;
+		// it is not an outage of the page access map itself (rules/parent still 503).
+		workspaceMemberRow(authContext.userId, workspaceId, config, fetchImpl).catch(() => null),
+	]);
+	const allRules = [...rulesByPage.values()].flat();
+	const teamIds = member ? await teamIdsWhenRuled(store, config, workspaceId, authContext.userId, [allRules]) : null;
+	return { member, rulesByPage, parentOf, teamIds };
+}
+
+/**
+ * The per-request loader: at most ONE rules read and ONE parent read per workspace, shared
+ * by every row of that workspace in this request (C511). It caches by workspace id only for
+ * the life of the request; nothing crosses requests.
+ */
+function createPageAccessLoader(authContext, config, fetchImpl) {
+	const entries = new Map();
+	return {
+		entryFor(workspaceId) {
+			const key = String(workspaceId).toLowerCase();
+			if (!entries.has(key)) entries.set(key, pageAccessEntry(authContext, key, config, fetchImpl));
+			return entries.get(key);
+		},
+	};
+}
+
+/** The level of one row under an already-loaded access map. */
+function pageLevelFor(entry, row, userId) {
+	if (!entry) return 'none';
+	return pageAccessLevel({
+		row, userId, member: entry.member,
+		rulesByPage: entry.rulesByPage, parentOf: entry.parentOf, teamIds: entry.teamIds,
+	});
+}
+
+/** The level of one row, loading its workspace's access map once. */
+async function pageLevelForRow(row, authContext, loader) {
+	if (!row || !row.workspace_id) return 'none';
+	return pageLevelFor(await loader.entryFor(row.workspace_id), row, authContext.userId);
+}
+
+/**
+ * The rows of a page surface the caller may read, with inheritance applied. Rows are
+ * grouped by workspace so each workspace costs one rules read and one parent read.
+ */
+async function filterPageRowsForAccess(rows, authContext, loader) {
+	if (!Array.isArray(rows) || rows.length === 0) return [];
+	const workspaceIds = [...new Set(rows.map((row) => String(row?.workspace_id ?? '').toLowerCase()).filter(Boolean))];
+	const entries = new Map();
+	await Promise.all(workspaceIds.map(async (workspaceId) => {
+		entries.set(workspaceId, await loader.entryFor(workspaceId));
+	}));
+	return rows.filter((row) => {
+		const entry = entries.get(String(row?.workspace_id ?? '').toLowerCase());
+		return entry !== undefined && pageLevelFor(entry, row, authContext.userId) !== 'none';
+	});
 }
 
 /**
@@ -1203,10 +1298,10 @@ export async function readablePageAccess(request, pageId, permission, config, fe
 	const workspaceId = requireUuid(found.workspace_id, 'workspaceId');
 	const role = safeText(member.role, 16);
 	// The workspace owner/admin keep their access whatever the rules say, so they never
-	// pay for the rules read.
+	// pay for the access map. Every other caller goes through the ONE decision (C510-C512).
 	const level = role === 'owner' || role === 'admin'
 		? null
-		: await shareLevelForPage(config, workspaceId, pageId, token.userId, role, fetchImpl);
+		: pageLevelFor(await createPageAccessLoader(token, config, fetchImpl).entryFor(workspaceId), found, token.userId);
 	const row = requireReadablePage(found, token.userId, level);
 	return { authContext: workspaceAccessContext(token, workspaceId, member, permission), row };
 }
@@ -1274,7 +1369,9 @@ async function withoutUnreachableParent({ payload, ignored }, existing, authCont
  */
 function requireReadablePage(row, userId, level = null) {
 	if (!row) throw pageNotFound();
-	if (shareDenies(level)) throw pageNotFound();
+	// 'none' is pageAccessLevel's explicit refusal (deny on this page or an ancestor,
+	// broken parent chain, or no visibility rule that reads): the same 404 a missing id gets.
+	if (level === 'none' || shareDenies(level)) throw pageNotFound();
 	if (!canReadPageRow(row, userId) && !shareGrantsRead(level)) throw pageNotFound();
 	return row;
 }
@@ -1301,7 +1398,7 @@ async function pageWriteContext(request, pageId, config, fetchImpl) {
 	const role = safeText(member.role, 16);
 	const level = role === 'owner' || role === 'admin'
 		? null
-		: await shareLevelForPage(config, workspaceId, row.id, token.userId, role, fetchImpl);
+		: pageLevelFor(await createPageAccessLoader(token, config, fetchImpl).entryFor(workspaceId), row, token.userId);
 	return { token, row, member, workspaceId, owner: false, level };
 }
 
@@ -1341,10 +1438,15 @@ async function requirePageScopeAccess(request, pageId, payload, permission, conf
 	// say, so they never pay for the rules read.
 	const exempt = Boolean(found) && (sameId(found.owner_id, tokenContext.userId) || role === 'owner' || role === 'admin');
 	const level = found && !exempt
-		? await shareLevelForPage(config, found.workspace_id, normalizedPageId, tokenContext.userId, role, fetchImpl)
+		? pageLevelFor(await createPageAccessLoader(tokenContext, config, fetchImpl).entryFor(found.workspace_id), found, tokenContext.userId)
 		: null;
-	if (shareDenies(level)) throw pageNotFound();
-	const row = found && (canReadPageRow(found, tokenContext.userId) || shareGrantsRead(level)) ? found : null;
+	const visibilityReadable = Boolean(found) && canReadPageRow(found, tokenContext.userId);
+	// A rule-hidden page inside the caller's workspace is a 404 (it exists, the rule hides
+	// it). A page refused only by its visibility, or by a missing membership, takes the
+	// missing-page path instead: these side routes answer a missing id without confirming
+	// that the page exists, and a refused page must look exactly the same.
+	if (member && visibilityReadable && (level === 'none' || shareDenies(level))) throw pageNotFound();
+	const row = found && (visibilityReadable || shareGrantsRead(level)) ? found : null;
 	const pageAccess = row && await ownerOrWorkspaceAccess(request, row, permission, config, fetchImpl, member).catch((error) => {
 		if (error?.status === 404) return null;
 		throw error;
@@ -2585,7 +2687,10 @@ async function handlePageList(url, request, response, config, fetchImpl) {
 	// chunks so a workspace of thousands of pages is never one response.
 	const select = isFullList ? PAGE_LIST_SELECT : '*';
 	const rows = await readListedPages(token, workspaceId, { isFullList, filters, select }, config, fetchImpl);
-	json(response, 200, pageRowsToEntries(readablePageRows(rows, token.userId)), config);
+	// Every row goes through the ONE decision, ancestors included (C510/C512): a page
+	// under a no_access ancestor is absent here even when its own row carries no rule.
+	const loader = createPageAccessLoader(token, config, fetchImpl);
+	json(response, 200, pageRowsToEntries(await filterPageRowsForAccess(rows, token, loader)), config);
 	return true;
 }
 
@@ -2663,7 +2768,9 @@ export function pageSnippet(text, query) {
  */
 async function handlePageSearch(url, request, response, config, fetchImpl) {
 	const workspaceId = requireUuid(url.searchParams.get('workspaceId'), 'workspaceId');
-	const { userId } = await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const authContext = await requireWorkspaceAccess(request, workspaceId, 'read', config, fetchImpl);
+	const { userId } = authContext;
+	const accessLoader = createPageAccessLoader(authContext, config, fetchImpl);
 	const raw = (url.searchParams.get('q') || '').trim();
 	const query = raw.toLowerCase();
 	const limit = Math.min(Math.max(Number.parseInt(url.searchParams.get('limit') || '12', 10) || 12, 1), PAGE_SEARCH_MAX);
@@ -2678,7 +2785,7 @@ async function handlePageSearch(url, request, response, config, fetchImpl) {
 		rows = await baasRest(config, fetchImpl, path);
 	} catch (error) {
 		if (!isMissingSearchDocError(error)) throw error;
-		const scanned = readablePageRows(await listPageRowsInChunks(workspaceId, config, fetchImpl, {}, '*'), userId);
+		const scanned = await filterPageRowsForAccess(await listPageRowsInChunks(workspaceId, config, fetchImpl, {}, '*'), authContext, accessLoader);
 		json(response, 200, pageRowsToEntries(legacyRankedRows(scanned, query, limit)), config);
 		emitSearch();
 		return true;
@@ -2686,7 +2793,7 @@ async function handlePageSearch(url, request, response, config, fetchImpl) {
 	// Ponytail: PostgREST caps the hits at PAGE_SEARCH_MAX BEFORE this filter, so when most
 	// top matches are other members' private pages the result under-reports (fewer hits,
 	// never another member's private one). Narrowing in SQL (`or=`) is unproven, so it is left out.
-	const readable = readablePageRows(rows, userId);
+	const readable = await filterPageRowsForAccess(rows, authContext, accessLoader);
 	readable.sort((a, b) => pageTitleScore(b, query) - pageTitleScore(a, query));
 	const limited = readable.slice(0, limit);
 	const entries = pageRowsToEntries(limited);
@@ -3044,14 +3151,18 @@ async function listWorkspaceDatabases(workspaceIds, config, fetchImpl) {
 }
 
 /** Page graph across `workspaceIds` — the caller's own workspaces — of the pages the caller may read. */
-async function readablePageGraph(workspaceIds, userId, config, fetchImpl) {
+async function readablePageGraph(workspaceIds, authContext, config, fetchImpl) {
+	const { userId } = authContext;
+	const loader = createPageAccessLoader(authContext, config, fetchImpl);
 	const rows = [];
 	for (const workspaceId of workspaceIds) {
 		// Metadata only, and no archived rows: pagesToGraph reads nothing outside
 		// PAGE_LIST_SELECT and drops archived rows itself, so the graph is unchanged while
 		// the page content JSONB and the archived rows never cross the wire.
 		const wsRows = await listPageRows(workspaceId, config, fetchImpl, { archivedAt: null }, PAGE_LIST_SELECT);
-		rows.push(...wsRows.filter((row) => canReadPageRowAsMember(row, userId, workspaceIds)));
+		// Inheritance applies here too: a no_access ancestor hides its whole subtree from
+		// the graph, whatever the page's own row says (C510/C512).
+		rows.push(...await filterPageRowsForAccess(wsRows, authContext, loader));
 	}
 	// The inline [[page:]] edges, read live through the ONE edge-read module
 	// (C99): both endpoints are checked against their live page row, and an
@@ -3106,7 +3217,7 @@ async function handleGraphData(url, request, response, config, fetchImpl) {
 		: requested
 			? (accessible.includes(requested) ? [requested] : [])
 			: accessible;
-	const noteGraph = await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl);
+	const noteGraph = await readablePageGraph(workspaceIds, authContext, config, fetchImpl);
 	const recordGraph = await workspaceRecordGraph(authContext, workspaceIds, config, fetchImpl);
 	json(response, 200, mergeGraphs(noteGraph, recordGraph), config);
 	return true;
@@ -3337,9 +3448,12 @@ async function handleRecordSubitemsList(match, request, response, config, fetchI
 		archived_at: 'is.null',
 		order: 'created_at.asc',
 	})}`);
+	// Child notes are page rows: they take the same inherited decision as any other page.
+	const loader = createPageAccessLoader(authContext, config, fetchImpl);
+	const visibleChildren = await filterPageRowsForAccess(Array.isArray(childRows) ? childRows : [], authContext, loader);
 	json(response, 200, {
 		dbId, table, pk, parentNoteId,
-		children: pageRowsToEntries(Array.isArray(childRows) ? childRows : []),
+		children: pageRowsToEntries(visibleChildren),
 	}, config);
 	return true;
 }
@@ -3580,7 +3694,7 @@ async function handleGraphPages(url, request, response, config, fetchImpl) {
 		: requested
 			? (accessible.includes(requested) ? [requested] : [])
 			: accessible;
-	json(response, 200, await readablePageGraph(workspaceIds, authContext.userId, config, fetchImpl), config);
+	json(response, 200, await readablePageGraph(workspaceIds, authContext, config, fetchImpl), config);
 	return true;
 }
 
@@ -3610,58 +3724,23 @@ async function favoriteAuthRows(favoriteIds, config, fetchImpl) {
 	return byId;
 }
 
-/** workspace_id → { role, exempt, rules, teamIds } for the workspaces the caller is a member of; a throwing read omits the workspace (fail closed). */
-async function favoriteWorkspaceAccess(rowsToCheck, authContext, config, fetchImpl) {
-	const idsByWorkspace = new Map();
-	for (const row of rowsToCheck) {
-		if (!idsByWorkspace.has(row.workspace_id)) idsByWorkspace.set(row.workspace_id, []);
-		idsByWorkspace.get(row.workspace_id).push(String(row.id).toLowerCase());
-	}
-	const store = createShareRuleStore({ fetchImpl });
-	const access = new Map();
-	await Promise.all([...idsByWorkspace].map(async ([workspaceId, pageIds]) => {
-		try {
-			const member = await callerWorkspaceMember(authContext, workspaceId, config, fetchImpl);
-			if (!member) return;
-			const role = safeText(member.role, 16);
-			const exempt = role === 'owner' || role === 'admin';
-			const rules = new Map();
-			if (!exempt) {
-				for (const chunk of idChunks(pageIds)) for (const [id, list] of await store.listForPages(config, workspaceId, chunk)) rules.set(id, list);
-			}
-			const teamIds = exempt ? null : await teamIdsWhenRuled(store, config, workspaceId, authContext.userId, [...rules.values()]);
-			access.set(workspaceId, { role, exempt, rules, teamIds });
-		} catch { /* fail closed: every page of this workspace stays absent */ }
-	}));
-	return access;
-}
-
 /** GET /api/favorites — the session user's starred page ids (most-recent first). */
 async function handleFavoritesList(request, response, config, fetchImpl) {
 	const authContext = verifyAppSessionToken(bearerToken(request), config);
 	const query = postgrestQuery({ user_id: `eq.${authContext.userId}`, select: 'page_id', order: 'created_at.desc', limit: String(FAVORITES_LIST_LIMIT) });
 	const rows = await baasRest(config, fetchImpl, `osionos_page_favorites?${query}`);
 	const favoriteIds = (Array.isArray(rows) ? rows : []).map((row) => row.page_id);
-	// A page hidden by a no_access rule is a missing id, so it never shows in the
-	// caller's favorites even if it was starred before the rule landed.
+	// A page hidden by a no_access rule — on itself or an ancestor — is a missing id, so
+	// it never shows in the caller's favorites even if it was starred before the rule landed.
 	const authRows = await favoriteAuthRows(favoriteIds, config, fetchImpl);
-	const notOwned = [...authRows.values()].filter((row) => !sameId(row.owner_id, authContext.userId));
-	const access = await favoriteWorkspaceAccess(notOwned, authContext, config, fetchImpl);
+	const loader = createPageAccessLoader(authContext, config, fetchImpl);
 	const readableIds = [];
 	for (const pageId of favoriteIds) {
 		const row = authRows.get(String(pageId).toLowerCase());
 		if (!row) continue;
-		let level = null;
-		if (!sameId(row.owner_id, authContext.userId)) {
-			const workspace = access.get(row.workspace_id);
-			if (!workspace) continue;
-			if (!workspace.exempt) {
-				const rules = workspace.rules.get(String(row.id).toLowerCase());
-				if (!rules) continue;
-				level = bestShareLevel(rules, { userId: authContext.userId, role: workspace.role, workspaceId: row.workspace_id, teamIds: workspace.teamIds }, pageId);
-			}
-		}
-		try { requireReadablePage(row, authContext.userId, level); readableIds.push(pageId); } catch { /* hidden or unreadable */ }
+		// The page owner keeps their own page whatever the rules say (C510e).
+		if (sameId(row.owner_id, authContext.userId)) { readableIds.push(pageId); continue; }
+		if (await pageLevelForRow(row, authContext, loader) !== 'none') readableIds.push(pageId);
 	}
 	json(response, 200, { ok: true, pageIds: readableIds }, config);
 	return true;
@@ -3677,13 +3756,9 @@ async function handleFavoriteAdd(request, response, config, fetchImpl) {
 	// A page hidden by a no_access rule is a missing id, so a caller cannot favourite
 	// a page they are not allowed to see. The page owner and the workspace owner/admin
 	// keep their access whatever the rules say.
-	let level = null;
-	if (!sameId(row.owner_id, authContext.userId)) {
-		const member = await callerWorkspaceMember(authContext, row.workspace_id, config, fetchImpl);
-		const role = safeText(member?.role, 16);
-		const exempt = role === 'owner' || role === 'admin';
-		if (!exempt) level = await shareLevelForPage(config, row.workspace_id, pageId, authContext.userId, role, fetchImpl);
-	}
+	const level = sameId(row.owner_id, authContext.userId)
+		? null
+		: await pageLevelForRow(row, authContext, createPageAccessLoader(authContext, config, fetchImpl));
 	requireReadablePage(row, authContext.userId, level);
 	await ownerOrWorkspaceAccess(request, row, 'read', config, fetchImpl);
 	await baasRest(config, fetchImpl, 'osionos_page_favorites', {
@@ -3711,8 +3786,9 @@ function backlinkRefsFromRows(rows) {
 	return (Array.isArray(rows) ? rows : []).map((row) => ({ id: row.id, title: row.title || 'Untitled', icon: row.icon ?? null }));
 }
 
-// The columns canReadPageRow needs, besides the ref itself.
-const BACKLINK_SELECT = 'id,title,icon,owner_id,visibility,collaborators';
+// The columns the access decision needs, besides the ref itself. workspace_id is what
+// groups a backlink by its workspace, so its rules and parent chain can be loaded once.
+const BACKLINK_SELECT = 'id,title,icon,owner_id,workspace_id,visibility,collaborators';
 
 /**
  * GET /api/pages/:id/backlinks — inline [[page:]] backlinks + unlinked mentions.
@@ -3739,7 +3815,11 @@ async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 		{ targetIds: [pageId], userId: authContext.userId, workspaces: accessible },
 	).catch(() => ({ links: [], rows: new Map() }));
 	const sourceIds = [...new Set(links.map((link) => link.source).filter((id) => id && id !== pageId))];
-	const linked = backlinkRefsFromRows(sourceIds.map((id) => linkRows.get(String(id).toLowerCase())).filter(Boolean));
+	// Both lists go through the ONE decision, ancestors included: a backlink or mention of
+	// a page under a no_access ancestor never reaches the caller (C510/C512).
+	const loader = createPageAccessLoader(authContext, config, fetchImpl);
+	const linkedRows = sourceIds.map((id) => linkRows.get(String(id).toLowerCase())).filter(Boolean);
+	const linked = backlinkRefsFromRows(await filterPageRowsForAccess(linkedRows, authContext, loader));
 	const title = String(row.title || '').trim();
 	let mentions = [];
 	if (title) {
@@ -3750,7 +3830,8 @@ async function handlePageBacklinks(url, request, response, config, fetchImpl) {
 			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('workspace_id', chunk)}&archived_at=is.null&search_doc=wfts(english).${encodeURIComponent(`"${title}"`)}&select=${BACKLINK_SELECT}&limit=20`).catch(() => []);
 			return Array.isArray(rows) ? rows : [];
 		})).flat();
-		mentions = backlinkRefsFromRows(readablePageRows(hits, authContext.userId).filter((hit) => !excluded.has(hit.id)).slice(0, 20));
+		const readableHits = await filterPageRowsForAccess(hits, authContext, loader);
+		mentions = backlinkRefsFromRows(readableHits.filter((hit) => !excluded.has(hit.id)).slice(0, 20));
 	}
 	json(response, 200, { ok: true, linked, mentions }, config);
 	return true;
