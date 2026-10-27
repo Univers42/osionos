@@ -88,12 +88,17 @@ export async function resolvePageConflict(
   // was refused carried no content either, so there is nothing to save. It stays
   // pending and the next flush tries again.
   if (page.content === undefined) return { kind: "failed" };
+  // The store's copy when it has content, else the copy this resolution holds: what the
+  // reader has NOW goes into every merge and every copy.
+  const freshest = (held: PageEntry): PageEntry => {
+    const latest = deps.latest?.(page._id);
+    return latest?.content === undefined ? held : latest;
+  };
   let local = page;
   let server = conflict;
   let notified = false;
   for (let round = 0; round < MAX_REBASES; round++) {
-    const latest = deps.latest?.(page._id);
-    if (latest?.content !== undefined) local = latest;
+    local = freshest(local);
     const merged = mergePageContent(baseFor(local).content, local.content ?? [], server.content);
     if (merged.status === "unresolved") {
       // No base (a reload): the merge must not guess. The server's copy stands and the
@@ -102,7 +107,11 @@ export async function resolvePageConflict(
     }
     // The merged content goes into the store first: the editor shows what was saved and
     // the re-send carries exactly that.
-    const mergedPage = deps.applyContent(page._id, merged.content) ?? { ...local, content: merged.content };
+    const applied = deps.applyContent(page._id, merged.content);
+    // The store refused the merge (the reader lost write access mid-flush): re-sending
+    // what it holds would put the UNMERGED copy over the other writers' edits.
+    if (applied && !sameContent(applied.content, merged.content)) return { kind: "failed" };
+    const mergedPage = applied ?? { ...local, content: merged.content };
     // The server's copy is the new base: the re-send is pinned to the version it is at.
     setBase(page._id, server.version, server.content);
     if (merged.status === "conflicts" && !notified) {
@@ -118,12 +127,16 @@ export async function resolvePageConflict(
     if (outcome.result !== "conflict") return { kind: "failed" };
     local = mergedPage;
     // A 409 without the server's copy cannot be merged: the copy path keeps the edit.
-    if (!outcome.conflict) return copied(await deps.copyPath(mergedPage));
+    if (!outcome.conflict) return copied(await deps.copyPath(freshest(mergedPage)));
     server = outcome.conflict;
   }
   // Past the bound: the server keeps moving under the re-send. The copy path keeps the
   // local edit — and the server's copy — safe (C28).
-  return copied(await deps.copyPath(local));
+  return copied(await deps.copyPath(freshest(local)));
+}
+
+function sameContent(a: Block[] | undefined, b: Block[]): boolean {
+  return a === b || JSON.stringify(a) === JSON.stringify(b);
 }
 
 function copied(outcome: RecoveryOutcome): ConflictOutcome {

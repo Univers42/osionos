@@ -260,6 +260,36 @@ test("a conflict merges the store's latest copy: text typed during the round-tri
   clearBase("p1");
 });
 
+test("past the bound, the copy holds the store's latest copy, not the last round's", async () => {
+  const bridge = createBridge({ p1: { version: 9, content: [para("b1", "theirs")] } });
+  bridge.refuses.add("p1");
+  const recovery = fakeRecovery(pageEntry("p1", [para("b1", "theirs")]), pageEntry("c1", []));
+  const { deps } = flushDepsFor(bridge, recovery);
+  let rounds = 0;
+  // The reader keeps typing: each round the store holds one more word.
+  deps.latest = () => pageEntry("p1", [para("b1", `mine ${"+".repeat(rounds++)}`)]);
+  setBase("p1", 4, [para("b1", "base")]);
+  await publishOutboxPage(job(pageEntry("p1", [para("b1", "mine")]), "p1"), deps);
+  const copy = recovery.calls.find(([name]) => name === "createCopy")?.[1] as { content: Block[] };
+  const last = `mine ${"+".repeat(rounds - 1)}`;
+  assert.ok(copy.content.some((block) => String(block.content).includes(last)), "the copy lost the latest typing");
+  clearBase("p1");
+});
+
+test("a store that refuses the merged content stops the conflict: nothing unmerged is re-sent", async () => {
+  const bridge = createBridge({ p1: { version: 2, content: [para("b1", "theirs")] } });
+  const { deps } = flushDepsFor(bridge);
+  const sent = pageEntry("p1", [para("b1", "base"), para("b2", "mine")]);
+  // updatePageContent is a no-op for a reader who lost write access: the store keeps its copy.
+  deps.applyContent = () => sent;
+  setBase("p1", 1, [para("b1", "base")]);
+  const step = await publishOutboxPage(job(sent, "p1"), deps);
+  assert.equal(step, "stop", "the page stays pending");
+  assert.equal(bridge.patches.length, 1, "only the first write: no unmerged re-send");
+  assert.deepEqual(bridge.pages.get("p1")?.content, [para("b1", "theirs")]);
+  clearBase("p1");
+});
+
 test("a conflict copy keeps the page writable: a 409 is not a refusal", async () => {
   installSession();
   const bridge = createBridge({ p1: { version: 9, content: [para("b1", "theirs")] } });
