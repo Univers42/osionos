@@ -24,11 +24,12 @@
 
 import { useEffect, useState } from 'react';
 
+import { prefersReducedMotion } from '@/entities/page/ui/coverMedia';
 import { useCollabStore } from '../store/useCollabStore';
 import { memberIdOf } from '../model/collabActor';
 import { useFollowStore } from '../model/followStore';
 import {
-  boxOf, placeCaret, prefersReducedMotion, scrollerEl, viewportOf, type Box,
+  boxOf, placeCaret, scrollerEl, viewportOf, type Box,
 } from '../model/presenceDom';
 import { followScrollDelta } from '../model/presenceGeometry';
 

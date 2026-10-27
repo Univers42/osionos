@@ -43,7 +43,7 @@ interface CollabRosterMenuProps {
   anchor: HTMLElement;
   active: number;
   dispatch: React.Dispatch<MenuAction>;
-  /** `restoreFocus` returns focus to the avatar (Escape, a chosen action). */
+  /** `restoreFocus` returns focus to the avatar (Escape, Tab, a chosen action). */
   onClose: (restoreFocus: boolean) => void;
   onSummon?: (memberId: string, name: string) => void;
 }
@@ -101,7 +101,10 @@ export const CollabRosterMenu: React.FC<CollabRosterMenuProps> = ({ member, onPa
       case 'Home': dispatch({ type: 'set', index: 0 }); break;
       case 'End': dispatch({ type: 'set', index: count - 1 }); break;
       case 'Escape': event.stopPropagation(); onClose(true); break;
-      case 'Tab': onClose(false); return;
+      // Focus goes back to the avatar before the browser's own Tab runs from it, so it
+      // lands on the next control in the top bar, not at the end of <body> where this
+      // menu is portaled.
+      case 'Tab': onClose(true); return;
       default: return;
     }
     event.preventDefault();

@@ -15,15 +15,19 @@
  * typing badge while they edit, and a second ring while the editor follows them.
  * It is a button that opens the member's menu (ui/CollabRosterMenu.tsx).
  *
- * Status is shape first, colour second: a FILLED dot and full opacity mean the
- * member is on this page; a HOLLOW dot and 55% opacity mean they are elsewhere in
- * the space. The accessible name says the same in words, with "typing" and
- * "followed" when they apply. The hit area is 32 px (the pseudo-element) around a
+ * Status is shape first, colour second: a FILLED dot and a solid ring mean the
+ * member is on this page; a HOLLOW dot, a dashed ring and a dimmed photo mean they
+ * are elsewhere in the space. Only the photo is dimmed, never the button: opacity on
+ * the whole avatar pushed the initials (text, 4.5:1) and the ring (graphic, 3:1)
+ * under WCAG AA, and the button is still active, so no exemption applied. The
+ * accessible name says the same in words, with "typing" and "followed" when they
+ * apply. The hit area is 32 px (the pseudo-element) around a
  * 28 px face, because the top bar is 40 px tall and the follow ring needs the rest.
  *
- * Caveat: at 55% opacity the initials on a face without a photo fall under 4.5:1.
- * The name is in the accessible name and the menu header, but the initials alone do
- * not meet AA while the member is away.
+ * On keyboard focus the identity ring is replaced by the accent focus ring, 2 px
+ * further out (collab.css). The ring is a utility on purpose: an inline outline would
+ * beat that rule, and a Tailwind ring never paints, because global.css's unlayered
+ * :focus-visible box-shadow overrides it. The status dot keeps the member's colour.
  */
 
 import React from 'react';
@@ -90,12 +94,12 @@ export const CollabAvatar: React.FC<CollabAvatarProps> = ({ member, onPage, typi
           event.preventDefault();
           onOpen(member.memberId, event.currentTarget);
         }}
-        style={{ outline: `2px solid ${member.color}`, outlineOffset: '1px' }}
-        className={`relative flex h-7 w-7 cursor-pointer items-center justify-center rounded-full before:absolute before:-inset-0.5 before:content-[''] transition-transform duration-(--osio-dur-fast) hover:z-10 motion-safe:hover:scale-110 active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--osio-bg-elevated)] ${onPage ? '' : 'opacity-55'}`}
+        style={{ '--collab-member': member.color } as React.CSSProperties}
+        className={`relative flex h-7 w-7 cursor-pointer items-center justify-center collab-avatar rounded-full before:absolute before:-inset-0.5 before:content-[''] transition-transform duration-(--osio-dur-fast) hover:z-10 motion-safe:hover:scale-110 active:scale-95 outline-offset-1 [outline-width:2px] [outline-color:var(--collab-member)] ${onPage ? '[outline-style:solid]' : '[outline-style:dashed]'}`}
       >
         <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-[var(--osio-bg-elevated)] bg-[var(--osio-bg-subtle)] text-2xs font-medium text-[var(--osio-fg-muted)]">
           {member.avatarRef
-            ? <img src={member.avatarRef} alt="" className="h-full w-full object-cover" />
+            ? <img src={member.avatarRef} alt="" className={`h-full w-full object-cover ${onPage ? '' : 'opacity-55'}`} />
             : memberInitials(member.displayName)}
         </span>
       </button>

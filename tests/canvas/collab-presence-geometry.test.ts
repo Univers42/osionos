@@ -23,7 +23,7 @@ import test from 'node:test';
 import type { Block } from '@/entities/block/model/types';
 import {
   bandByOrder, blockOrderOf, centerDelta, classifyRect, CARET_IDLE_MS, flagPlacement,
-  followScrollDelta, groupByBlock, isCaretIdle, limitWithOverflow, nextIdleDelay,
+  followScrollDelta, groupByBlock, isCaretIdle, limitWithOverflow, nextIdleDelay, visibleBoxes,
 } from '@/features/collab/model/presenceGeometry';
 
 const VIEWPORT = { top: 100, bottom: 700 }; // 600px tall
@@ -39,6 +39,17 @@ test('classifyRect: above, visible and below, with the edge counting as outside'
   assert.equal(classifyRect({ top: 690, bottom: 710 }, VIEWPORT), 'visible', 'straddling the bottom edge is visible');
   assert.equal(classifyRect({ top: 700, bottom: 720 }, VIEWPORT), 'below', 'touching the bottom edge is hidden');
   assert.equal(classifyRect({ top: 900, bottom: 920 }, VIEWPORT), 'below');
+});
+
+test('visibleBoxes: keeps the lines of a selection that overlap the viewport, drops the rest', () => {
+  const line = (top: number) => ({ left: 0, top, width: 200, height: 20 });
+  const lines = [line(60), line(90), line(300), line(690), line(700), line(900)];
+  assert.deepEqual(
+    visibleBoxes(lines, VIEWPORT).map((box) => box.top),
+    [90, 300, 690],
+    'a line straddling an edge stays; one touching an edge, or past it, goes',
+  );
+  assert.deepEqual(visibleBoxes([], VIEWPORT), []);
 });
 
 test('flagPlacement: above while it fits, below once it would be clipped', () => {

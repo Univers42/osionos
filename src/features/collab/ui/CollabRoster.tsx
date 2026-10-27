@@ -49,7 +49,7 @@ export const CollabRoster: React.FC<CollabRosterProps> = ({ onSummon }) => {
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
 
   // The avatar that opened the menu; focus goes back to it, unless the menu closed
-  // because the person clicked or tabbed somewhere else on purpose.
+  // because the person clicked somewhere else on purpose.
   const close = useCallback((restoreFocus: boolean) => {
     dispatch({ type: 'close' });
     if (restoreFocus) anchor?.focus();

@@ -29,13 +29,30 @@ const MAX_PILLS = 3;
 const BUTTON = 'relative inline-flex h-8 cursor-pointer items-center gap-1.5 text-xs font-medium text-[var(--osio-fg-default)] before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[""] hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] motion-safe:transition-colors';
 
 function Pill({ person, side }: { person: Person; side: 'above' | 'below' }): React.ReactElement {
-  // Where focus was before the keyboard reached the pill, so a keyboard jump can
-  // hand it back: the pill unmounts once the caret is in view.
+  const group = useRef<HTMLDivElement>(null);
   const origin = useRef<HTMLElement | null>(null);
   const Arrow = side === 'above' ? ArrowUp : ArrowDown;
 
+  // Where focus was before the keyboard reached the pill, so a keyboard action can
+  // hand it back: the pill unmounts once the caret is in view. A move from one of
+  // the pill's own buttons to the other is not an origin, since both unmount together.
+  //
+  // Caveat: focus that arrived from outside the page (relatedTarget null, e.g. the
+  // browser's address bar) has nowhere to return to and is left to the browser.
+  const rememberOrigin = (event: React.FocusEvent): void => {
+    const from = event.relatedTarget;
+    if (from instanceof Node && group.current?.contains(from)) return;
+    origin.current = from instanceof HTMLElement ? from : null;
+  };
+  // `detail` 0 is a keyboard activation; a mouse press never left the editor.
+  const activate = (event: React.MouseEvent, action: () => void): void => {
+    action();
+    if (event.detail === 0) origin.current?.focus({ preventScroll: true });
+  };
+
   return (
     <div
+      ref={group}
       role="group"
       aria-label={person.name}
       className="pointer-events-auto flex items-stretch rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-elevated)] shadow-[var(--osio-shadow-menu)] motion-safe:animate-[collab-flag-in_150ms_ease-out]"
@@ -45,12 +62,11 @@ function Pill({ person, side }: { person: Person; side: 'above' | 'below' }): Re
         aria-label={`Jump to ${person.name}'s cursor (${side})`}
         // A mouse press must not move focus out of the editor.
         onMouseDown={(event) => event.preventDefault()}
-        onFocus={(event) => { origin.current = event.relatedTarget instanceof HTMLElement ? event.relatedTarget : null; }}
-        onClick={(event) => {
+        onFocus={rememberOrigin}
+        onClick={(event) => activate(event, () => {
           useFollowStore.getState().stop();
           jumpToActor(person.actor);
-          if (event.detail === 0) origin.current?.focus({ preventScroll: true });
-        }}
+        })}
         className={`${BUTTON} rounded-l-full pl-2.5 pr-2`}
       >
         <Arrow size={14} aria-hidden />
@@ -62,7 +78,8 @@ function Pill({ person, side }: { person: Person; side: 'above' | 'below' }): Re
         aria-label={`Follow ${person.name}`}
         title={`Follow ${person.name}`}
         onMouseDown={(event) => event.preventDefault()}
-        onClick={() => useFollowStore.getState().follow(person.actor)}
+        onFocus={rememberOrigin}
+        onClick={(event) => activate(event, () => useFollowStore.getState().follow(person.actor))}
         className={`${BUTTON} w-8 justify-center rounded-r-full border-l border-[var(--osio-border-default)]`}
       >
         <Eye size={14} aria-hidden />

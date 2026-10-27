@@ -22,6 +22,7 @@
  * page twice, measures only the first one.
  */
 
+import { prefersReducedMotion } from '@/entities/page/ui/coverMedia';
 import { usePageStore } from '@/store/usePageStore';
 import { caretRectAt } from './caretDom';
 import type { CaretState } from './realtimeTransport.port';
@@ -104,10 +105,6 @@ export function placeCaret(
   }
   const band = bandByOrder(caret.blockId, order(), rendered());
   return band ? { rect: null, band } : null;
-}
-
-export function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 }
 
 /**
