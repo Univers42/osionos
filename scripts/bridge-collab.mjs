@@ -79,6 +79,7 @@ const EVENT_BUCKET = { capacity: 400, refillPerSec: 200 };
 const DIRECT_BUCKET = { capacity: 5, refillPerSec: 10 / 60, retainMs: 60 * 60_000 };
 const UUID_GLOBAL = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const CID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const TAB_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 
 function levelAtLeast(level, required) {
 	return (ACCESS_RANK[level] ?? 0) >= ACCESS_RANK[required];
@@ -99,6 +100,22 @@ function requireCid(value) {
 function requireAccepted(res) {
 	if (!res || typeof res !== 'object' || typeof res.accepted !== 'boolean') throw httpError('invalid_res', 422);
 	return { accepted: res.accepted };
+}
+
+
+/** Force the actor prefix to the session user while keeping a valid tab suffix (f1b). */
+function normalizePublishedActor(sessionUserId, clientActor) {
+	if (typeof clientActor !== 'string' || !clientActor.includes(':')) return sessionUserId;
+	const suffix = clientActor.slice(clientActor.indexOf(':') + 1);
+	if (!TAB_ID_RE.test(suffix)) throw httpError('invalid_actor', 422);
+	return `${sessionUserId}:${suffix}`;
+}
+
+/** A present seq must be a finite integer; an absent seq stays absent (f1b). */
+function requireOptionalSeq(value) {
+	if (value === undefined) return undefined;
+	if (!Number.isInteger(value)) throw httpError('invalid_seq', 422);
+	return value;
 }
 
 async function isSpaceMember(config, fetchImpl, userId, workspaceId) {
@@ -380,14 +397,18 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 	if (body.event === 'collab') {
 		if (payload.t === 'pages') {
 			if (payload.workspaceId?.toLowerCase() !== workspaceId.toLowerCase()) throw httpError('Invalid event workspace.', 403);
-			if (!Number.isInteger(payload.seq)) throw httpError('invalid_seq', 422);
+			const actor = normalizePublishedActor(session.userId, payload.actor);
+			const seq = requireOptionalSeq(payload.seq);
 			// Whitelist only: nothing else the client sent reaches the workspace topic.
-			const frame = { event: 'collab', payload: { t: 'pages', actor: session.userId, seq: payload.seq, workspaceId } };
+			const pagePayload = { t: 'pages', actor, workspaceId };
+			if (seq !== undefined) pagePayload.seq = seq;
+			const frame = { event: 'collab', payload: pagePayload };
 			const published = await publishRealtime({ topic: `collab:${workspaceId}`, eventType: 'broadcast', payload: frame, fetchImpl: deps.fetchImpl, env: deps.env });
 			if (!published) throw httpError('Collaboration publish failed.', 503);
 			return;
 		}
 		if (!PAGE_SCOPED_EVENTS.has(payload.t)) throw httpError('unknown_event', 422);
+		if (payload.seq !== undefined) requireOptionalSeq(payload.seq);
 		if (!UUID_REGEX.test(String(payload.pageId ?? ''))) throw httpError('page_id_required', 422);
 		const pageId = requireUuid(payload.pageId, 'pageId').toLowerCase();
 		const level = normalizedLevel(await deps.pageLevelFor?.(session.userId, pageId, workspaceId));
@@ -444,7 +465,7 @@ async function publishCollabEvent(deps, session, request, workspaceId, response,
 	}
 	if (Buffer.byteLength(JSON.stringify(body)) > 65_536) throw httpError('Collaboration event is too large.', 413);
 	const payload = body.payload;
-	if (body.event === 'collab') {
+	if (body.event === 'collab' && deps.env?.COLLAB_PAGE_TOPICS !== '1') {
 		const actor = payload.actor;
 		if (typeof actor !== 'string' || !(actor.toLowerCase() === session.userId.toLowerCase()
 			|| actor.toLowerCase().startsWith(`${session.userId.toLowerCase()}:`))) throw httpError('Invalid event actor.', 403);

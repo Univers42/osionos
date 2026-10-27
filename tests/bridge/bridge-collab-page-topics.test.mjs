@@ -183,8 +183,8 @@ describe('T4 — the pages nudge stays on the workspace topic, reduced', () => {
     });
     assert.equal(publishes.length, 1);
     assert.equal(publishes[0].topic, WS_TOPIC);
-    // C570: the actor suffix is not forwarded; the frame keeps the session user id.
-    assert.deepEqual(publishes[0].payload, { event: 'collab', payload: { t: 'pages', actor: IDS.userA, seq: 4, workspaceId: IDS.team } });
+    // f1b: a valid tab suffix is preserved, with the session user forced as prefix.
+    assert.deepEqual(publishes[0].payload, { event: 'collab', payload: { t: 'pages', actor: `${IDS.userA}:tab`, seq: 4, workspaceId: IDS.team } });
     const serialized = JSON.stringify(publishes[0]);
     assert.ok(!serialized.includes('Secret title'));
     assert.ok(!serialized.includes(IDS.privateA));
@@ -250,13 +250,50 @@ describe('C570 — flag-on frames are whitelisted', () => {
     assert.ok(!JSON.stringify(publishes[0]).includes('nope'));
   });
 
-  it('publishes the session user id, not a client actor suffix', async () => {
-    const body = collab({ t: 'pages', actor: `${IDS.userA}:evil`, seq: 2, workspaceId: IDS.team });
+  it('forces the session user prefix onto a valid tab suffix', async () => {
+    const body = collab({ t: 'pages', actor: `${IDS.userA}:t1`, seq: 2, workspaceId: IDS.team });
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post(body));
+      assert.equal(result.status, 200, result.text);
+    });
+    assert.equal(publishes[0].payload.payload.actor, `${IDS.userA}:t1`);
+  });
+
+  it('replaces a foreign uid prefix with the session user id', async () => {
+    const body = collab({ t: 'pages', actor: `${STRANGER}:t1`, seq: 2, workspaceId: IDS.team });
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post(body));
+      assert.equal(result.status, 200, result.text);
+    });
+    assert.equal(publishes[0].payload.payload.actor, `${IDS.userA}:t1`);
+  });
+
+  it('answers 422 invalid_actor for a suffix outside the charset', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post(collab({ t: 'pages', actor: `${IDS.userA}:evil frame`, seq: 2, workspaceId: IDS.team })));
+      assert.equal(result.status, 422, result.text);
+      assert.equal(result.body.message, 'invalid_actor');
+    });
+    assert.equal(publishes.length, 0);
+  });
+
+  it('publishes the bare session id when no tab suffix is present', async () => {
+    const body = collab({ t: 'pages', actor: IDS.userA, seq: 2, workspaceId: IDS.team });
     const { publishes } = await run(world(), ON, async (base) => {
       const result = await send(base, eventsPath, headersA(), post(body));
       assert.equal(result.status, 200, result.text);
     });
     assert.equal(publishes[0].payload.payload.actor, IDS.userA);
+  });
+
+  it('accepts a pages nudge without a seq', async () => {
+    const body = collab({ t: 'pages', actor: `${IDS.userA}:tab`, workspaceId: IDS.team });
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post(body));
+      assert.equal(result.status, 200, result.text);
+    });
+    assert.equal(publishes.length, 1);
+    assert.deepEqual(publishes[0].payload, { event: 'collab', payload: { t: 'pages', actor: `${IDS.userA}:tab`, workspaceId: IDS.team } });
   });
 
   it('answers 422 invalid_seq for a non-integer seq', async () => {
@@ -266,6 +303,28 @@ describe('C570 — flag-on frames are whitelisted', () => {
         assert.equal(result.status, 422, result.text);
         assert.equal(result.body.message, 'invalid_seq');
       }
+    });
+    assert.equal(publishes.length, 0);
+  });
+
+  it('accepts note and file events without a seq', async () => {
+    const noteBody = collab({ t: 'note', actor: `${IDS.userA}:tab`, pageId: IDS.sharedA, note: { id: 'n1', body: 'hi' } });
+    const fileBody = collab({ t: 'file', actor: `${IDS.userA}:tab`, pageId: IDS.sharedA, file: { id: 'f1', name: 'spec.pdf' } });
+    const { publishes } = await run(world(), ON, async (base) => {
+      const noteResult = await send(base, eventsPath, headersA(), post(noteBody));
+      assert.equal(noteResult.status, 200, noteResult.text);
+      const fileResult = await send(base, eventsPath, headersA(), post(fileBody));
+      assert.equal(fileResult.status, 200, fileResult.text);
+    });
+    assert.equal(publishes.length, 2);
+    for (const published of publishes) assert.ok(!('seq' in published.payload.payload));
+  });
+
+  it('answers 422 invalid_seq when a page event carries a non-integer seq', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post(collab({ t: 'caret', actor: `${IDS.userA}:tab`, seq: 1.5, pageId: IDS.sharedA })));
+      assert.equal(result.status, 422, result.text);
+      assert.equal(result.body.message, 'invalid_seq');
     });
     assert.equal(publishes.length, 0);
   });
