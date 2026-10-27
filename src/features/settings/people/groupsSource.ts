@@ -20,6 +20,7 @@ import type { DatabaseSchema } from "@notion-db/contract-types";
 import { fetchChannels } from "@/shared/chat/channelApi";
 import { listCommunities } from "@/shared/social/communityApi";
 import { GROUP, PEOPLE_DB, PEOPLE_VIEW, personPage, selectOptions, singleDatabaseState, view, type PeopleCtx } from "./peopleModel";
+import { optionId } from "@/widgets/database-view/model/workspaceDatabaseMappers";
 
 const KIND_CHAT = "Group chat";
 const KIND_COMMUNITY = "Community";
@@ -59,7 +60,7 @@ export async function buildGroupsState(ctx: PeopleCtx): Promise<NotionState> {
     ...channels.filter((channel) => channel.kind === "group").map((channel) =>
       personPage(PEOPLE_DB.groups, `channel:${channel.id}`, {
         [GROUP.name]: channel.name,
-        [GROUP.kind]: KIND_CHAT,
+        [GROUP.kind]: optionId(KIND_CHAT),
         [GROUP.role]: channel.memberRole ?? "member",
         [GROUP.since]: channel.createdAt,
         [GROUP.src]: "channel",
@@ -67,7 +68,7 @@ export async function buildGroupsState(ctx: PeopleCtx): Promise<NotionState> {
     ...communities.map((community) =>
       personPage(PEOPLE_DB.groups, `community:${community.id}`, {
         [GROUP.name]: community.name,
-        [GROUP.kind]: KIND_COMMUNITY,
+        [GROUP.kind]: optionId(KIND_COMMUNITY),
         [GROUP.role]: community.memberRole ?? "member",
         [GROUP.since]: community.createdAt,
         [GROUP.src]: "community",

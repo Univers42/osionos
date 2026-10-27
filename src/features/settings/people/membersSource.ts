@@ -20,6 +20,7 @@ import type { DatabaseSchema } from "@notion-db/contract-types";
 import { useWorkspaceMembersStore } from "@/store/settings";
 import { memberLabel } from "../model/memberLabel";
 import { MEMBER, PEOPLE_DB, PEOPLE_VIEW, personPage, selectOptions, singleDatabaseState, view, type PeopleCtx } from "./peopleModel";
+import { optionId } from "@/widgets/database-view/model/workspaceDatabaseMappers";
 
 const SCHEMA: DatabaseSchema = {
   id: PEOPLE_DB.members,
@@ -52,7 +53,7 @@ export async function buildMembersState(ctx: PeopleCtx): Promise<NotionState> {
     const persona = personaById.get(member.userId);
     return personPage(PEOPLE_DB.members, member.userId, {
       [MEMBER.name]: memberLabel(member.userId, names, member.name),
-      [MEMBER.role]: member.role,
+      [MEMBER.role]: optionId(member.role),
       [MEMBER.since]: member.joinedAt,
     }, { icon: persona?.emoji });
   });
