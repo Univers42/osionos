@@ -48,6 +48,12 @@ export function classifyRect(rect: Span, viewport: Span): Band {
   return 'visible';
 }
 
+/** The boxes that overlap the visible `viewport`: a selection can span far more
+ *  lines than fit on screen, and only those lines are worth a DOM node. */
+export function visibleBoxes<T extends { top: number; height: number }>(boxes: readonly T[], viewport: Span): T[] {
+  return boxes.filter((box) => classifyRect({ top: box.top, bottom: box.top + box.height }, viewport) === 'visible');
+}
+
 /** The name flag sits above the caret; it flips below when it would be clipped
  *  by the top of the viewport. */
 export function flagPlacement(

@@ -34,7 +34,7 @@ import {
   type Box,
 } from './presenceDom';
 import {
-  classifyRect, flagPlacement, groupByBlock, isCaretIdle, nextIdleDelay,
+  classifyRect, flagPlacement, groupByBlock, isCaretIdle, nextIdleDelay, visibleBoxes,
 } from './presenceGeometry';
 
 export interface Person {
@@ -47,7 +47,7 @@ export interface Person {
 }
 
 export interface CaretMark extends Person {
-  caret: { left: number; top: number; height: number } | null; // set only while on screen
+  caret: { left: number; top: number; height: number } | null; // set only while on screen; selection and control draw without it
   flag: 'above' | 'below';
   idle: boolean;
   selection: Box[];
@@ -119,13 +119,16 @@ export function measurePresence(
     }
     const control = cursor.focusedElementId ? controlRectFor(cursor.focusedElementId) : null;
     const onScreen = place?.band === 'visible' ? place.rect : null;
-    if (!onScreen && !control) continue;
+    // Independent of the caret: the focus end may be scrolled out while the rest
+    // of the highlight is still in view. Both ends unmounted measures as [].
+    const selection = cursor.selection ? visibleBoxes(selectionRectsFor(cursor.selection).map(boxOf), viewport) : [];
+    if (!onScreen && !control && selection.length === 0) continue;
     carets.push({
       ...person,
       caret: onScreen,
       flag: onScreen ? flagPlacement(onScreen, viewport.top) : 'above',
       idle: isCaretIdle(cursor.movedAt, now),
-      selection: onScreen && cursor.selection ? selectionRectsFor(cursor.selection).map(boxOf) : [],
+      selection,
       controlId: cursor.focusedElementId,
       control: control ? boxOf(control) : null,
     });

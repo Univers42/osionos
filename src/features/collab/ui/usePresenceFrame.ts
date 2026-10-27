@@ -16,9 +16,12 @@
  * local edit, an idle timer), and the frame is the only React state: nothing here
  * re-renders the editor, which is only observed.
  *
- * `scrollingRef` is flipped as a DOM attribute rather than state, so starting and
- * stopping a scroll costs the overlay no render: CSS drops the 90 ms glide while
- * content moves under it every frame and restores it once the scroll settles.
+ * `data-scrolling` is flipped on the layer as a DOM attribute rather than state, so
+ * starting and stopping a scroll costs the overlay no render: CSS drops the 90 ms
+ * glide while content moves under it every frame and restores it once the scroll
+ * settles. It has its own effect, keyed on neither cursors nor members: a remote
+ * caret event landing inside the settle window must not cancel the timer that
+ * removes the attribute, or the glide stays off until the next scroll.
  */
 
 import { useEffect, useState, type RefObject } from 'react';
@@ -43,7 +46,6 @@ export function usePresenceFrame(layerRef: RefObject<HTMLElement | null>): Prese
     if (status !== 'live') return undefined;
     let raf: number | null = null;
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
-    let settleTimer: ReturnType<typeof setTimeout> | undefined;
     let observed: HTMLElement | null = null;
 
     const measure = (): void => {
@@ -63,26 +65,37 @@ export function usePresenceFrame(layerRef: RefObject<HTMLElement | null>): Prese
     const schedule = (): void => { raf ??= requestAnimationFrame(measure); };
     const edits = new MutationObserver(schedule);
 
-    const onScroll = (): void => {
-      const layer = layerRef.current;
-      layer?.setAttribute('data-scrolling', '');
-      clearTimeout(settleTimer);
-      settleTimer = setTimeout(() => layer?.removeAttribute('data-scrolling'), SCROLL_SETTLE_MS);
-      schedule();
-    };
-
     schedule();
-    window.addEventListener('scroll', onScroll, true); // capture: nested scrollers do not bubble
+    window.addEventListener('scroll', schedule, true); // capture: nested scrollers do not bubble
     window.addEventListener('resize', schedule);
     return () => {
-      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('scroll', schedule, true);
       window.removeEventListener('resize', schedule);
       edits.disconnect();
       if (raf !== null) cancelAnimationFrame(raf);
       clearTimeout(idleTimer);
-      clearTimeout(settleTimer);
     };
-  }, [cursors, members, status, pageId, layerRef]);
+  }, [cursors, members, status, pageId]);
+
+  useEffect(() => {
+    if (status !== 'live') return undefined;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    // The node the attribute was last set on: the layer unmounts whenever nothing
+    // is on screen, so the ref read at cleanup time could be a different node.
+    let flagged: HTMLElement | null = null;
+    const onScroll = (): void => {
+      flagged = layerRef.current;
+      flagged?.setAttribute('data-scrolling', '');
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(() => flagged?.removeAttribute('data-scrolling'), SCROLL_SETTLE_MS);
+    };
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      clearTimeout(settleTimer);
+      flagged?.removeAttribute('data-scrolling');
+    };
+  }, [status, layerRef]);
 
   return status === 'live' ? frame : null;
 }

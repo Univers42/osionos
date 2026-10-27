@@ -18,7 +18,11 @@
 
    Static first: the rules outside the media block are the reduced-motion look
    (three still dots; a 2px bar beside the edited block for its 900 ms), and the
-   block below only swaps in movement. The flash is 700 ms, longer than the 90-300 ms
+   block below only swaps in movement. Movement needs BOTH signals to allow it: the
+   OS media query and the in-app Reduce motion choice (html[data-motion="reduce"]).
+   The app choice cannot lean on global.css alone, which only makes a fade instant
+   and, with fill-mode both, would leave the flash invisible and its bar hidden.
+   The flash is 700 ms, longer than the 90-300 ms
    of collab.css, because it is a one-shot fade-out the eye has to catch while it
    reads something else; the typing dots loop, but exist only while someone types. */
 :root {
@@ -40,23 +44,23 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .collab-edit-flash {
+  :root:not([data-motion="reduce"]) .collab-edit-flash {
     animation: collab-flash-fade 700ms ease-out both;
   }
-  .collab-edit-flash__tint {
+  :root:not([data-motion="reduce"]) .collab-edit-flash__tint {
     display: block;
   }
-  .collab-edit-flash__bar {
+  :root:not([data-motion="reduce"]) .collab-edit-flash__bar {
     display: none;
   }
 
-  .collab-typing-dot {
+  :root:not([data-motion="reduce"]) .collab-typing-dot {
     animation: collab-typing-dot 1000ms ease-in-out infinite;
   }
-  .collab-typing-dot:nth-child(2) {
+  :root:not([data-motion="reduce"]) .collab-typing-dot:nth-child(2) {
     animation-delay: 150ms;
   }
-  .collab-typing-dot:nth-child(3) {
+  :root:not([data-motion="reduce"]) .collab-typing-dot:nth-child(3) {
     animation-delay: 300ms;
   }
 }

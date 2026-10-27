@@ -42,34 +42,37 @@ function Selection({ mark }: { mark: CaretMark }): React.ReactElement {
   );
 }
 
-export const CollabRemoteCaret: React.FC<{ mark: CaretMark }> = ({ mark }) => {
-  const { caret, flag, idle } = mark;
-  if (!caret) return null;
+function CaretLine({ mark, caret }: { mark: CaretMark; caret: NonNullable<CaretMark['caret']> }): React.ReactElement {
+  const { flag, idle } = mark;
   const flagSide = flag === 'above' ? 'bottom-full mb-0.5 origin-bottom-left' : 'top-full mt-0.5 origin-top-left';
   return (
-    <>
-      <Selection mark={mark} />
+    <span
+      className="collab-glide fixed left-0 top-0 will-change-transform"
+      style={{ transform: `translate3d(${caret.left - 1}px, ${caret.top}px, 0)`, height: caret.height }}
+    >
+      <span className="block rounded-[1px]" style={{ width: 'var(--collab-caret-w)', height: '100%', background: mark.color }} />
       <span
-        className="collab-glide fixed left-0 top-0 will-change-transform"
-        style={{ transform: `translate3d(${caret.left - 1}px, ${caret.top}px, 0)`, height: caret.height }}
+        data-on={idle ? '' : undefined}
+        className="collab-head absolute -left-0.5 -top-[3px] h-1.5 w-1.5 rounded-full"
+        style={{ background: mark.color }}
+      />
+      <span
+        data-on={idle ? undefined : ''}
+        className={`collab-head absolute left-0 whitespace-nowrap rounded-[4px] px-1 text-3xs font-semibold leading-4 ${flagSide}`}
+        style={{ background: mark.color, color: mark.ink, boxShadow: 'var(--osio-shadow-menu)' }}
       >
-        <span className="block rounded-[1px]" style={{ width: 'var(--collab-caret-w)', height: '100%', background: mark.color }} />
-        <span
-          data-on={idle ? '' : undefined}
-          className="collab-head absolute -left-0.5 -top-[3px] h-1.5 w-1.5 rounded-full"
-          style={{ background: mark.color }}
-        />
-        <span
-          data-on={idle ? undefined : ''}
-          className={`collab-head absolute left-0 whitespace-nowrap rounded-[4px] px-1 text-3xs font-semibold leading-4 ${flagSide}`}
-          style={{ background: mark.color, color: mark.ink, boxShadow: 'var(--osio-shadow-menu)' }}
-        >
-          {mark.name}
-        </span>
+        {mark.name}
       </span>
-    </>
+    </span>
   );
-};
+}
+
+export const CollabRemoteCaret: React.FC<{ mark: CaretMark }> = ({ mark }) => (
+  <>
+    <Selection mark={mark} />
+    {mark.caret && <CaretLine mark={mark} caret={mark.caret} />}
+  </>
+);
 
 /** The ring around a control a remote member is using. Static; it arrives with
  *  one 250 ms ring-in; the caller keys it by control id, so only a change of

@@ -56,6 +56,10 @@ const MEDIA = blocksOf(CSS, /@media\s*([^{]+)\{/g);
 const KEYFRAMES = blocksOf(CSS, /@keyframes\s+([\w-]+)\s*\{/g);
 const OUTSIDE = MEDIA.reduce((rest, { body }) => rest.replace(body, ''), CSS);
 
+/** The in-app Reduce motion choice (useAppearance sets data-motion on <html>). Every
+ *  motion rule carries it, so under data-motion="reduce" none of them matches. */
+const APP_GATE = ':root:not([data-motion="reduce"]) ';
+
 /** `selector -> declarations` for the flat rules of a stylesheet fragment. */
 function rulesOf(css: string): Map<string, string> {
   const flat = css.replace(/@keyframes[^{]+\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '');
@@ -72,7 +76,7 @@ test('all motion sits in one prefers-reduced-motion: no-preference block', () =>
 
 test('the only infinite animation is the typing dot', () => {
   const looping = [...rulesOf(MEDIA[0].body)].filter(([, body]) => /infinite/.test(body)).map(([selector]) => selector);
-  assert.deepEqual(looping, ['.collab-typing-dot']);
+  assert.deepEqual(looping, [`${APP_GATE}.collab-typing-dot`]);
   assert.doesNotMatch(OUTSIDE, /infinite/);
 });
 
@@ -86,7 +90,7 @@ test('keyframes move only opacity and transform', () => {
 });
 
 test('the flash fades over FLASH_FADE_MS and the mark outlives the fade', () => {
-  const flash = rulesOf(MEDIA[0].body).get('.collab-edit-flash') ?? '';
+  const flash = rulesOf(MEDIA[0].body).get(`${APP_GATE}.collab-edit-flash`) ?? '';
   assert.match(flash, new RegExp(`collab-flash-fade ${FLASH_FADE_MS}ms ease-out`), 'duration comes from the model constant');
   assert.match(flash, /\bboth\b/, 'fill-mode both: invisible at the end, so a late unmount shows no ghost');
   assert.ok(FLASH_TTL_MS > FLASH_FADE_MS, 'the mark lives past the end of its fade');
@@ -97,8 +101,16 @@ test('the still look needs no motion: a bar when reduced, a tint when motion is 
   assert.match(still.get('.collab-edit-flash__tint') ?? '', /display:\s*none/, 'reduced motion hides the fading tint');
   assert.equal(still.has('.collab-edit-flash__bar'), false, 'and shows the 2px bar, which has no rule to hide it');
   const moving = rulesOf(MEDIA[0].body);
-  assert.match(moving.get('.collab-edit-flash__tint') ?? '', /display:\s*block/);
-  assert.match(moving.get('.collab-edit-flash__bar') ?? '', /display:\s*none/);
+  assert.match(moving.get(`${APP_GATE}.collab-edit-flash__tint`) ?? '', /display:\s*block/);
+  assert.match(moving.get(`${APP_GATE}.collab-edit-flash__bar`) ?? '', /display:\s*none/);
+});
+
+test('data-motion="reduce" keeps the still look even when the OS allows motion', () => {
+  // global.css makes a reduced animation instant, and fill-mode `both` would then
+  // hold the flash at opacity 0 with its bar hidden: the edit would go unattributed.
+  for (const selector of rulesOf(MEDIA[0].body).keys()) {
+    assert.ok(selector.startsWith(APP_GATE), `${selector} must not match under data-motion="reduce"`);
+  }
 });
 
 test('the tint share is a token, 16 percent', () => {
