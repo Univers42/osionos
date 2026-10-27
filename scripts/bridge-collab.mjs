@@ -113,6 +113,16 @@ function normalizePublishedActor(sessionUserId, clientActor) {
 }
 
 /** A present seq must be a finite integer; an absent seq stays absent (f1b). */
+/**
+ * Start a read now and let the caller await it later. A rejection nobody awaits (the
+ * caller bailed out first on the membership verdict) is swallowed, never unhandled.
+ */
+function softStart(read) {
+	const started = (async () => read())();
+	started.catch(() => {});
+	return started;
+}
+
 function requireOptionalSeq(value) {
 	if (value === undefined) return undefined;
 	if (!Number.isInteger(value)) throw httpError('invalid_seq', 422);
@@ -400,6 +410,7 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 			if (payload.workspaceId?.toLowerCase() !== workspaceId.toLowerCase()) throw httpError('Invalid event workspace.', 403);
 			const actor = normalizePublishedActor(session.userId, payload.actor);
 			const seq = requireOptionalSeq(payload.seq);
+			await deps.requireMember();
 			// Whitelist only: nothing else the client sent reaches the workspace topic.
 			const pagePayload = { t: 'pages', actor, workspaceId };
 			if (seq !== undefined) pagePayload.seq = seq;
@@ -413,7 +424,14 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 		if (!UUID_REGEX.test(String(payload.pageId ?? ''))) throw httpError('page_id_required', 422);
 		const pageId = requireUuid(payload.pageId, 'pageId').toLowerCase();
 		const publishedActor = normalizePublishedActor(session.userId, payload.actor);
-		const level = normalizedLevel(await deps.pageLevelFor?.(session.userId, pageId, workspaceId));
+		// Membership gates the answer, but the page reads start with it: the membership
+		// verdict is awaited first, so a non-member never sees a page-level answer.
+		const levelRead = softStart(() => deps.pageLevelFor?.(session.userId, pageId, workspaceId, deps.scope));
+		const blocksRead = payload.t === 'blocks' && Array.isArray(payload.ops) && deps.authorizeBlocks
+			? softStart(() => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope))
+			: null;
+		await deps.requireMember();
+		const level = normalizedLevel(await levelRead);
 		if (level === 'none') throw httpError('Page not found.', 404);
 		if (payload.t === 'blocks' || payload.t === 'file') {
 			if (!levelAtLeast(level, 'can_edit')) throw httpError('Page write access is required.', 403);
@@ -423,8 +441,8 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 			throw httpError('Page read access is required.', 403);
 		}
 		if (payload.t === 'blocks') {
-			if (!Array.isArray(payload.ops) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
-			await deps.authorizeBlocks(request, pageId, workspaceId);
+			if (!blocksRead) throw httpError('Page write access is required.', 403);
+			await blocksRead;
 		}
 		// The topic is lowercased; the published payload names the same page (C574).
 		const frame = { event: 'collab', payload: { ...payload, pageId, actor: publishedActor } };
@@ -435,6 +453,7 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 	if (body.event === 'collab.req') {
 		const cid = requireCid(payload.cid);
 		const target = String(payload.target ?? '');
+		if (UUID_REGEX.test(target)) await deps.requireMember();
 		if (!UUID_REGEX.test(target) || !await isSpaceMember(config, deps.fetchImpl, target, workspaceId)) throw httpError('User not found.', 404);
 		// A summon that names a page of THIS Shared space needs the target to read it.
 		const routePageIds = await pagesOfWorkspace(config, deps.fetchImpl, routeUuids(payload.req?.route), workspaceId);
@@ -451,6 +470,7 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 	const cid = requireCid(payload.cid);
 	const res = requireAccepted(payload.res);
 	const to = String(payload.to ?? '');
+	if (UUID_REGEX.test(to)) await deps.requireMember();
 	if (!UUID_REGEX.test(to) || !await isSpaceMember(config, deps.fetchImpl, to, workspaceId)) throw httpError('User not found.', 404);
 	takeToken(`collab-direct:${session.userId}:${to}`, DIRECT_BUCKET);
 	await publishToUser(deps, config, to, { event: 'collab.res', payload: { cid, from: session.userId, res } });
@@ -461,8 +481,15 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
  * With COLLAB_PAGE_TOPICS=1 content is routed to `collabpage:<pageId>` (readers only)
  * instead of the workspace topic; flag off keeps the historic workspace-topic path.
  */
-async function publishCollabEvent(deps, session, request, workspaceId, response, config) {
-	await requireSpaceMembership(config, deps.fetchImpl, session.userId, workspaceId);
+async function publishCollabEvent(handlerDeps, session, request, workspaceId, response, config) {
+	// Per request and dropped with it: the membership verdict and the page reads shared
+	// by pageLevelFor and authorizeBlocks. Nothing is cached across requests.
+	let membership;
+	const deps = {
+		...handlerDeps,
+		scope: { session },
+		requireMember: () => (membership ??= requireSpaceMembership(config, handlerDeps.fetchImpl, session.userId, workspaceId)),
+	};
 	const body = await readJsonBody(request);
 	if (!['collab', 'collab.req', 'collab.res'].includes(body?.event) || !body?.payload || typeof body.payload !== 'object') {
 		throw httpError('Invalid collaboration event.', 422);
@@ -480,15 +507,18 @@ async function publishCollabEvent(deps, session, request, workspaceId, response,
 		await publishPageScopedEvent(deps, session, request, body, payload, workspaceId, config);
 		return sendJson(response, 200, { ok: true }, config);
 	}
-	// Flag off: byte-identical to the historic path.
+	// Flag off: same checks and wire bytes as the historic path.
 	if (body.event === 'collab') {
 		if (payload.t === 'blocks') {
 			const pageId = requireUuid(payload.pageId, 'pageId');
 			if (!Array.isArray(payload.ops) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
-			await deps.authorizeBlocks(request, pageId, workspaceId);
+			const blocksRead = softStart(() => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope));
+			await deps.requireMember();
+			await blocksRead;
 		}
 		if (payload.t === 'pages' && payload.workspaceId?.toLowerCase() !== workspaceId.toLowerCase()) throw httpError('Invalid event workspace.', 403);
 	}
+	await deps.requireMember();
 	const published = await publishRealtime({ topic: `collab:${workspaceId}`, eventType: 'broadcast', payload: body, fetchImpl: deps.fetchImpl, env: deps.env });
 	if (!published) throw httpError('Collaboration publish failed.', 503);
 	return sendJson(response, 200, { ok: true }, config);
