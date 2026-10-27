@@ -318,6 +318,18 @@ export async function startRun(input: StartRunInput, signal?: AbortSignal): Prom
 }
 
 /**
+ * `POST /thread-runs` — an "@AI" draft for a channel message the caller wrote
+ * (C429). The service reads the channel itself; the body names only the run,
+ * the caller's conversation, the channel and the trigger message.
+ */
+export async function startThreadRun(
+  input: { runId: string; conversationId: string; channelId: string; messageId: string },
+  signal?: AbortSignal,
+): Promise<Response> {
+  return requestStream("POST", "/thread-runs", input, { signal });
+}
+
+/**
  * `GET /runs/:runId/events` — the same stream, resumed after `lastEventId`.
  * The service answers 410 `run_expired` once the stream is gone.
  */
