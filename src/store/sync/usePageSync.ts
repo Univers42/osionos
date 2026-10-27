@@ -79,6 +79,7 @@ function flushDeps(): FlushDeps {
       usePageStore.getState().updatePageContent(pageId, content);
       return usePageStore.getState().pageById(pageId) ?? null;
     },
+    latest: (pageId) => usePageStore.getState().pageById(pageId) ?? null,
     recordVersion: (pageId, version) => usePageStore.getState().setPageContentVersion(pageId, version),
   };
 }

@@ -16,12 +16,12 @@
  * stable, self-excluded, non-jittery roster. Each member gets a deterministic,
  * WCAG-safe color (AOC R-A8) expressed as a `--collab-N` token reference — no
  * raw hex enters the codebase, so the style-token guard stays green and dark
- * mode is handled by the token definitions in global.css.
+ * mode is handled by the token definitions in app/styles/collab.css.
  */
 
 import type { PresenceState } from './realtimeTransport.port';
 
-/** Size of the curated --collab-1..N palette declared in global.css. */
+/** Size of the curated --collab-1..N palette declared in app/styles/collab.css. */
 export const COLLAB_PALETTE_SIZE = 8;
 
 /** Deterministic per-member color token (AOC R-A8). Stable across reconnects. */
@@ -29,6 +29,19 @@ export function assignMemberColor(memberId: string): string {
   let hash = 0;
   for (let i = 0; i < memberId.length; i += 1) hash = (hash * 31 + memberId.charCodeAt(i)) >>> 0;
   return `var(--collab-${(hash % COLLAB_PALETTE_SIZE) + 1})`;
+}
+
+/**
+ * The text colour to print ON a member colour (name flag, initials chip): the
+ * matching --collab-ink-N token, which collab.css pairs to clear 4.5:1 in both
+ * themes. Caveat: a colour that is not a --collab-N token (a hand-set value from
+ * a future transport) gets the deep ink, which is only readable on the light
+ * half of the spectrum; extend the palette instead of passing raw colours.
+ */
+export function inkFor(color: string): string {
+  const match = /^var\(--collab-(\d+)\)$/.exec(color);
+  const slot = match ? Number(match[1]) : 0;
+  return slot >= 1 && slot <= COLLAB_PALETTE_SIZE ? `var(--collab-ink-${slot})` : 'var(--collab-ink-deep)';
 }
 
 /** Two-letter avatar fallback when a member has no image. */

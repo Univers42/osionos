@@ -61,6 +61,8 @@ it('issues a subscribe-only collab token so direct socket publishes cannot bypas
     const claims = JSON.parse(Buffer.from(token.body.token.split('.')[1], 'base64url'));
     assert.equal(claims.can_publish, false);
     assert.equal(claims.can_subscribe, true);
+    // Presence only: the gateway lets this token TRACK on its own topic, never publish.
+    assert.deepEqual(claims.metadata, { can_track: true });
   }, { env: { JWT_SECRET: 'synthetic-collab-secret' } });
 });
 

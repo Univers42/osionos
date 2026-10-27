@@ -43,6 +43,9 @@ import { ensureChatBucket, extFromMime, storageObjectKey, storagePut } from './b
 import { REALTIME_TOKEN_ISSUER, signRealtimeJwt } from './bridge-realtime-socket.mjs';
 import { createInviteForUser } from './bridge-workspace-invites.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { beginServerTiming, markHop, runWithServerTiming, timedHop } from './bridge-server-timing.mjs';
+import { bumpAccessAfter } from './bridge-access-generation.mjs';
+import { createCollabAuthCache } from './bridge-collab-auth-cache.mjs';
 
 // Caveat: this token lives 1 h. The client does not re-mint it before expiry
 // (fetchSharedSpaceToken in src/features/collab/api/grobaseTransport.factory.ts is
@@ -56,6 +59,9 @@ const REALTIME_TOKEN_TTL_SECONDS = 3600;
  * EXACT topic allow-list the gateway authorizes against (can_subscribe_to: an
  * entry must equal the topic's namespace; an empty list grants nothing), so the
  * token's reach is precisely the namespaces passed in — never a wildcard.
+ * `metadata.can_track: true` lets a subscribe-only token TRACK presence on a topic it
+ * may subscribe to (gateway AuthProvider::authorize_track); it never implies publish
+ * or broadcast. Only the two collab tokens carry it.
  */
 export function mintRealtimeToken({ secret, userId, namespaces, ttlSeconds = REALTIME_TOKEN_TTL_SECONDS, canPublish = true, metadata, now = Date.now() }) {
 	if (!secret) throw httpError('Realtime signing secret (JWT_SECRET) is not configured.', 503);
@@ -69,6 +75,10 @@ export function mintRealtimeToken({ secret, userId, namespaces, ttlSeconds = REA
 	return { token: signRealtimeJwt(payload, secret), expiresAt: new Date(exp * 1000).toISOString() };
 }
 
+// Lets a subscribe-only token TRACK on its own topic: the gateway gates TRACK on publish
+// unless this opt-in is set, so without it nobody showed up in the roster or as a caret
+// (253 "Track denied" in 3 h, live 2026-10-27). It never grants a publish.
+const PRESENCE_ONLY = Object.freeze({ can_track: true });
 const PAGE_SCOPED_EVENTS = new Set(['blocks', 'caret', 'selection', 'focus', 'note', 'file', 'activity', 'nav']);
 const ACCESS_RANK = { none: 0, can_view: 1, can_comment: 2, can_edit: 3, full_access: 4 };
 // Page tokens: one bucket per user, ~1 page/s with a burst of 20. Kept apart from
@@ -110,6 +120,16 @@ function normalizePublishedActor(sessionUserId, clientActor) {
 	const suffix = clientActor.slice(clientActor.indexOf(':') + 1);
 	if (!TAB_ID_RE.test(suffix)) throw httpError('invalid_actor', 422);
 	return `${sessionUserId}:${suffix}`;
+}
+
+/**
+ * Start a read now and let the caller await it later. A rejection nobody awaits (the
+ * caller bailed out first on the membership verdict) is swallowed, never unhandled.
+ */
+function softStart(read) {
+	const started = (async () => read())();
+	started.catch(() => {});
+	return started;
 }
 
 /** A present seq must be a finite integer; an absent seq stays absent (f1b). */
@@ -182,11 +202,11 @@ async function patchWorkspace(deps, session, request, workspaceId, response, con
 	}
 	if (Object.keys(patch).length === 0) throw httpError('Nothing to update.', 422);
 	patch.updated_at = new Date().toISOString();
-	await rest(config, deps.fetchImpl, `osionos_workspaces?id=eq.${workspaceId}`, {
+	await bumpAccessAfter(rest(config, deps.fetchImpl, `osionos_workspaces?id=eq.${workspaceId}`, {
 		method: 'PATCH',
 		body: patch,
 		prefer: 'return=minimal',
-	});
+	}), { workspaceId });
 	return sendJson(response, 200, { ok: true, workspaceId, ...patch }, config);
 }
 
@@ -241,11 +261,11 @@ async function getCollaboration(deps, session, workspaceId, response, config) {
 }
 
 async function addMember(config, fetchImpl, workspaceId, userId) {
-	await rest(config, fetchImpl, 'osionos_workspace_members?on_conflict=workspace_id,user_id', {
+	await bumpAccessAfter(rest(config, fetchImpl, 'osionos_workspace_members?on_conflict=workspace_id,user_id', {
 		method: 'POST',
 		body: { workspace_id: workspaceId, user_id: userId, role: 'viewer', permissions: ['read'] },
 		prefer: 'resolution=ignore-duplicates,return=minimal',
-	});
+	}), { workspaceId });
 }
 
 /**
@@ -361,6 +381,7 @@ async function mintCollabRealtimeToken(deps, session, workspaceId, response, con
 		userId: session.userId,
 		namespaces: [topic],
 		canPublish: false, // Publishing goes through the page-authorized bridge route.
+		metadata: PRESENCE_ONLY,
 	});
 	return sendJson(response, 200, { ok: true, token, expiresAt, topic, spaceId: workspaceId }, config);
 }
@@ -384,9 +405,47 @@ async function mintPageRealtimeToken(deps, session, workspaceId, pageId, respons
 		userId: session.userId,
 		namespaces: [topic],
 		canPublish: false, // Publishing goes through the page-authorized bridge route.
-		metadata: { level },
+		metadata: { level, ...PRESENCE_ONLY },
 	});
 	return sendJson(response, 200, { ok: true, token, expiresAt, topic, pageId, level }, config);
+}
+
+/**
+ * The verdict class an event's allow is cached under: a read allow says nothing about a
+ * write. A blocks event without an op list is refused whatever the cache holds, so it has
+ * no class and always runs the check.
+ */
+function authCacheKind(payload) {
+	if (payload.t === 'blocks') return Array.isArray(payload.ops) ? 'write' : null;
+	if (payload.t === 'file') return 'write';
+	return payload.t === 'note' ? 'note' : 'read';
+}
+
+/**
+ * The authorization composite of one page-scoped event. It throws to deny and returns to
+ * allow, which is the contract the access cache stores an allow under.
+ */
+async function authorizePageEvent(deps, session, request, payload, pageId, workspaceId) {
+	// Membership gates the answer, but the page reads start with it: the membership
+	// verdict is awaited first, so a non-member never sees a page-level answer.
+	const levelRead = softStart(() => timedHop('access', () => deps.pageLevelFor?.(session.userId, pageId, workspaceId, deps.scope)));
+	const blocksRead = payload.t === 'blocks' && Array.isArray(payload.ops) && deps.authorizeBlocks
+		? softStart(() => timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope)))
+		: null;
+	await deps.requireMember();
+	const level = normalizedLevel(await levelRead);
+	if (level === 'none') throw httpError('Page not found.', 404);
+	if (!levelAtLeast(level, 'can_view')) throw httpError('Page read access is required.', 403);
+	// The level alone under-grants: a member with no page rule reads 'can_view' and
+	// writes through the membership's update permission (C558). Writes therefore go
+	// through the same gate PATCH /pages uses, never through the level.
+	const writes = payload.t === 'blocks' || payload.t === 'file'
+		|| (payload.t === 'note' && !levelAtLeast(level, 'can_comment'));
+	if (writes) {
+		if ((payload.t === 'blocks' && !Array.isArray(payload.ops)) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
+		// A blocks write started its gate read next to the level read; the others start it now.
+		await (blocksRead ?? timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope)));
+	}
 }
 
 /**
@@ -400,6 +459,7 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 			if (payload.workspaceId?.toLowerCase() !== workspaceId.toLowerCase()) throw httpError('Invalid event workspace.', 403);
 			const actor = normalizePublishedActor(session.userId, payload.actor);
 			const seq = requireOptionalSeq(payload.seq);
+			await deps.requireMember();
 			// Whitelist only: nothing else the client sent reaches the workspace topic.
 			const pagePayload = { t: 'pages', actor, workspaceId };
 			if (seq !== undefined) pagePayload.seq = seq;
@@ -413,28 +473,20 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 		if (!UUID_REGEX.test(String(payload.pageId ?? ''))) throw httpError('page_id_required', 422);
 		const pageId = requireUuid(payload.pageId, 'pageId').toLowerCase();
 		const publishedActor = normalizePublishedActor(session.userId, payload.actor);
-		const level = normalizedLevel(await deps.pageLevelFor?.(session.userId, pageId, workspaceId));
-		if (level === 'none') throw httpError('Page not found.', 404);
-		if (payload.t === 'blocks' || payload.t === 'file') {
-			if (!levelAtLeast(level, 'can_edit')) throw httpError('Page write access is required.', 403);
-		} else if (payload.t === 'note') {
-			if (!levelAtLeast(level, 'can_comment')) throw httpError('Comment access is required.', 403);
-		} else if (!levelAtLeast(level, 'can_view')) {
-			throw httpError('Page read access is required.', 403);
-		}
-		if (payload.t === 'blocks') {
-			if (!Array.isArray(payload.ops) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
-			await deps.authorizeBlocks(request, pageId, workspaceId);
-		}
+		await deps.authCache.authorize(
+			{ userId: session.userId, workspaceId, pageId, kind: authCacheKind(payload) },
+			() => authorizePageEvent(deps, session, request, payload, pageId, workspaceId),
+		);
 		// The topic is lowercased; the published payload names the same page (C574).
 		const frame = { event: 'collab', payload: { ...payload, pageId, actor: publishedActor } };
-		const published = await publishRealtime({ topic: `collabpage:${pageId}`, eventType: 'broadcast', payload: frame, fetchImpl: deps.fetchImpl, env: deps.env });
+		const published = await timedHop('publish', () => publishRealtime({ topic: `collabpage:${pageId}`, eventType: 'broadcast', payload: frame, fetchImpl: deps.fetchImpl, env: deps.env }));
 		if (!published) throw httpError('Collaboration publish failed.', 503);
 		return;
 	}
 	if (body.event === 'collab.req') {
 		const cid = requireCid(payload.cid);
 		const target = String(payload.target ?? '');
+		if (UUID_REGEX.test(target)) await deps.requireMember();
 		if (!UUID_REGEX.test(target) || !await isSpaceMember(config, deps.fetchImpl, target, workspaceId)) throw httpError('User not found.', 404);
 		// A summon that names a page of THIS Shared space needs the target to read it.
 		const routePageIds = await pagesOfWorkspace(config, deps.fetchImpl, routeUuids(payload.req?.route), workspaceId);
@@ -451,6 +503,7 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 	const cid = requireCid(payload.cid);
 	const res = requireAccepted(payload.res);
 	const to = String(payload.to ?? '');
+	if (UUID_REGEX.test(to)) await deps.requireMember();
 	if (!UUID_REGEX.test(to) || !await isSpaceMember(config, deps.fetchImpl, to, workspaceId)) throw httpError('User not found.', 404);
 	takeToken(`collab-direct:${session.userId}:${to}`, DIRECT_BUCKET);
 	await publishToUser(deps, config, to, { event: 'collab.res', payload: { cid, from: session.userId, res } });
@@ -461,8 +514,15 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
  * With COLLAB_PAGE_TOPICS=1 content is routed to `collabpage:<pageId>` (readers only)
  * instead of the workspace topic; flag off keeps the historic workspace-topic path.
  */
-async function publishCollabEvent(deps, session, request, workspaceId, response, config) {
-	await requireSpaceMembership(config, deps.fetchImpl, session.userId, workspaceId);
+async function publishCollabEvent(handlerDeps, session, request, workspaceId, response, config) {
+	// Per request and dropped with it: the membership verdict and the page reads shared
+	// by pageLevelFor and authorizeBlocks. Nothing is cached across requests.
+	let membership;
+	const deps = {
+		...handlerDeps,
+		scope: { session },
+		requireMember: () => (membership ??= timedHop('membership', () => requireSpaceMembership(config, handlerDeps.fetchImpl, session.userId, workspaceId))),
+	};
 	const body = await readJsonBody(request);
 	if (!['collab', 'collab.req', 'collab.res'].includes(body?.event) || !body?.payload || typeof body.payload !== 'object') {
 		throw httpError('Invalid collaboration event.', 422);
@@ -480,16 +540,19 @@ async function publishCollabEvent(deps, session, request, workspaceId, response,
 		await publishPageScopedEvent(deps, session, request, body, payload, workspaceId, config);
 		return sendJson(response, 200, { ok: true }, config);
 	}
-	// Flag off: byte-identical to the historic path.
+	// Flag off: same checks and wire bytes as the historic path.
 	if (body.event === 'collab') {
 		if (payload.t === 'blocks') {
 			const pageId = requireUuid(payload.pageId, 'pageId');
 			if (!Array.isArray(payload.ops) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
-			await deps.authorizeBlocks(request, pageId, workspaceId);
+			const blocksRead = softStart(() => timedHop('access', () => deps.authorizeBlocks(request, pageId, workspaceId, deps.scope)));
+			await deps.requireMember();
+			await blocksRead;
 		}
 		if (payload.t === 'pages' && payload.workspaceId?.toLowerCase() !== workspaceId.toLowerCase()) throw httpError('Invalid event workspace.', 403);
 	}
-	const published = await publishRealtime({ topic: `collab:${workspaceId}`, eventType: 'broadcast', payload: body, fetchImpl: deps.fetchImpl, env: deps.env });
+	await deps.requireMember();
+	const published = await timedHop('publish', () => publishRealtime({ topic: `collab:${workspaceId}`, eventType: 'broadcast', payload: body, fetchImpl: deps.fetchImpl, env: deps.env }));
 	if (!published) throw httpError('Collaboration publish failed.', 503);
 	return sendJson(response, 200, { ok: true }, config);
 }
@@ -537,7 +600,7 @@ async function inviteMember(deps, session, request, workspaceId, response, confi
  * true when handled. deps: { config, verifySession, fetchImpl?, env? }.
  */
 export function createCollabHandler({ config, verifySession, fetchImpl = fetch, env = process.env, authorizeBlocks, pageLevelFor }) {
-	const deps = { fetchImpl, env, authorizeBlocks, pageLevelFor };
+	const deps = { fetchImpl, env, authorizeBlocks, pageLevelFor, authCache: createCollabAuthCache({ env }) };
 	return async function handleCollabRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		const wsPatch = /^\/api\/workspaces\/([0-9a-f-]{36})$/i.exec(pathname);
@@ -554,9 +617,11 @@ export function createCollabHandler({ config, verifySession, fetchImpl = fetch, 
 		const owns = pathname === '/api/collaboration' || wsRequests || wsMembers || collabId || collabJoin || rtToken || pageRtToken || events || uploads || invite || decideReq || (wsPatch && (request.method || '').toUpperCase() === 'PATCH');
 		if (!owns) return false;
 		const method = (request.method || 'GET').toUpperCase();
+		const timing = events && method === 'POST' ? beginServerTiming(deps.env, response) : null;
 		try {
 			const session = verifySession(bearerToken(request), requestConfig);
-			if (events && method === 'POST') return await publishCollabEvent(deps, session, request, requireUuid(events[1], 'workspaceId'), response, requestConfig);
+			markHop(timing, 'session');
+			if (events && method === 'POST') return await runWithServerTiming(timing, () => publishCollabEvent(deps, session, request, requireUuid(events[1], 'workspaceId'), response, requestConfig));
 			if (wsPatch && method === 'PATCH') return await patchWorkspace(deps, session, request, requireUuid(wsPatch[1], 'workspaceId'), response, requestConfig);
 			if (wsMembers && method === 'GET') return await listWorkspaceMembers(deps, session, requireUuid(wsMembers[1], 'workspaceId'), response, requestConfig);
 			if (wsRequests && method === 'GET') return await listJoinRequests(deps, session, requireUuid(wsRequests[1], 'workspaceId'), response, requestConfig);

@@ -39,7 +39,7 @@ const VIEWS = [
   view({
     id: PEOPLE_VIEW.contactsTable, databaseId: PEOPLE_DB.contacts, name: "Table", type: "table",
     sorts: [{ id: "contacts-since", propertyId: CONTACT.since, direction: "desc" }],
-    visibleProperties: [CONTACT.headline, CONTACT.online, CONTACT.since],
+    visibleProperties: [CONTACT.name, CONTACT.headline, CONTACT.online, CONTACT.since],
     settings: { showRowNumbers: false, openPagesIn: "side_peek" },
   }),
   view({
