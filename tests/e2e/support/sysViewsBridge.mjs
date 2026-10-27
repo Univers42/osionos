@@ -29,12 +29,14 @@ const DEFAULT_SOURCES = [{
 
 /** Serves each `{ source, columns, rows }` and its saved views; `puts` and `deletes` list every write, by path. */
 export async function stubSysViews(page, { saveStatus = 200, sources = DEFAULT_SOURCES } = {}) {
-  const bridge = { views: {}, puts: [], deletes: [], rowRequests: 0 };
+  // `failRows`, when set, is the answer every rows read gets until it is cleared.
+  const bridge = { views: {}, puts: [], deletes: [], rowRequests: 0, failRows: null };
   for (const { source } of sources) bridge.views[source] = {};
   await stubBridge(page, (url, request) => {
     const rows = sources.find(({ source }) => url.pathname === `/api/account/self-data/${source}`);
     if (rows) {
       bridge.rowRequests += 1;
+      if (bridge.failRows) return bridge.failRows;
       return { json: { ok: true, source: rows.source, columns: rows.columns, rows: rows.rows, truncated: false } };
     }
     const owner = sources.find(({ source }) => url.pathname.startsWith(`/api/account/self-data/views/${source}`));
