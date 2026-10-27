@@ -110,13 +110,23 @@ describe('cascades reach only the descendants the caller can read', () => {
 	const writesTouching = (mock, id) => mock.calls.filter((call) => call.method !== 'GET' && call.table === 'osionos_pages' && String(call.params.get('id')).includes(id));
 	const authFetch = (mock) => mock.calls.find((call) => call.method === 'GET' && String(call.params.get('id')).startsWith('in.('));
 
-	it('archives and restores the readable child, never the unreadable one', async () => {
+describe('cascades reach only the descendants the caller can read', () => {
+	const cascadeWorld = () => {
+		const world = teamWorld();
+		world.osionos_pages.push(childPage(CHILD.mine, IDS.userA, null), childPage(CHILD.foreign, IDS.userB, '2026-10-02T00:00:00.000Z'));
+		return world;
+	};
+	const asA = sessionHeaders(config, IDS.userA, IDS.homeA);
+	const writesTouching = (mock, id) => mock.calls.filter((call) => call.method !== 'GET' && call.table === 'osionos_pages' && String(call.params.get('id')).includes(id));
+	const authFetch = (mock) => mock.calls.find((call) => call.method === 'GET' && String(call.params.get('id')).startsWith('in.('));
+
+	it('archives and restores the readable child, never the unreadable one — the unreadable child refuses the whole cascade (409)', async () => {
 		const mock = createPostgrestMock(cascadeWorld());
 		const foreign = structuredClone(mock.page(CHILD.foreign));
 		await withBridge(config, mock.fetchImpl, async (base) => {
-			assert.equal((await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ archivedAt: '2026-10-13T00:00:00.000Z' }))).status, 200);
-			assert.equal(mock.page(CHILD.mine).archived_at, '2026-10-13T00:00:00.000Z');
-			assert.equal((await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ archivedAt: null }))).status, 200);
+			const archived = await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ archivedAt: '2026-10-13T00:00:00.000Z' }));
+			assert.equal(archived.status, 409, archived.text);
+			assert.equal(archived.body.error, 'subtree_not_writable');
 			assert.equal(mock.page(CHILD.mine).archived_at, null);
 			assert.deepEqual(mock.page(CHILD.foreign), foreign);
 			assert.deepEqual(writesTouching(mock, CHILD.foreign), []);
@@ -124,17 +134,21 @@ describe('cascades reach only the descendants the caller can read', () => {
 		});
 	});
 
-	it('deletes the page and its readable child, never the unreadable one', async () => {
+	it('deletes the page and its readable child, never the unreadable one — the unreadable child refuses the whole cascade (409)', async () => {
 		const mock = createPostgrestMock(cascadeWorld());
 		const foreign = structuredClone(mock.page(CHILD.foreign));
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			const deleted = await send(base, `/api/pages/${IDS.sharedA}`, asA, { method: 'DELETE' });
-			assert.equal(deleted.status, 200, deleted.text);
-			assert.deepEqual(deleted.body.deletedIds.sort(), [IDS.sharedA, CHILD.mine].sort());
+			assert.equal(deleted.status, 409, deleted.text);
+			assert.equal(deleted.body.error, 'subtree_not_writable');
+			assert.notEqual(mock.page(IDS.sharedA), undefined);
+			assert.notEqual(mock.page(CHILD.mine), undefined);
 			assert.deepEqual(mock.page(CHILD.foreign), foreign);
 			assert.deepEqual(writesTouching(mock, CHILD.foreign), []);
+			assert.deepEqual(authFetch(mock).params.get('id').slice(4, -1).split(',').map((id) => id.replace(/^"(.*)"$/, '$1')).sort(), [CHILD.mine, CHILD.foreign].sort());
 		});
 	});
+});
 });
 
 describe('page owners are matched case-insensitively', () => {

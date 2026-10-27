@@ -145,13 +145,12 @@ describe('read: 404 before 403, owner kept', () => {
 		});
 	});
 
-	it('a page owner who left the workspace still reads their own page', async () => {
+	it('a page owner who left the workspace is the 404 of a missing id (C557)', async () => {
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			removeMember(mock, IDS.team, IDS.userB);
 			const own = await send(base, pageRead(IDS.pageB), asB());
-			assert.equal(own.status, 200);
-			assert.equal(own.body._id, IDS.pageB);
-			assert.equal(mock.calls.length, 1);
+			assert.equal(own.status, 404);
+			assert.equal(own.body.message, PAGE_NOT_FOUND);
 		});
 	});
 

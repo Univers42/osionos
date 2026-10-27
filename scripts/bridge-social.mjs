@@ -299,8 +299,8 @@ async function handleSocialOps(deps, session, request, url, response, config) {
  * Build the social-graph dispatcher: `await handler(url, request, response)` →
  * true when handled. deps: { config, verifySession, fetchImpl?, env?, kv?, now? }.
  */
-export function createSocialHandler({ config, verifySession, fetchImpl = fetch, env = process.env, kv = null, now = Date.now }) {
-	const deps = { fetchImpl, env, kv, now };
+export function createSocialHandler({ config, verifySession, fetchImpl = fetch, env = process.env, kv = null, now = Date.now, pageAccessFilter = null }) {
+	const deps = { fetchImpl, env, kv, now, pageAccessFilter };
 	return async function handleSocialRoute(url, request, response, requestConfig = config) {
 		const pathname = url.pathname;
 		const isConnections = pathname === '/api/connections';
