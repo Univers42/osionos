@@ -411,6 +411,7 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 		if (payload.seq !== undefined) requireOptionalSeq(payload.seq);
 		if (!UUID_REGEX.test(String(payload.pageId ?? ''))) throw httpError('page_id_required', 422);
 		const pageId = requireUuid(payload.pageId, 'pageId').toLowerCase();
+		const publishedActor = normalizePublishedActor(session.userId, payload.actor);
 		const level = normalizedLevel(await deps.pageLevelFor?.(session.userId, pageId, workspaceId));
 		if (level === 'none') throw httpError('Page not found.', 404);
 		if (payload.t === 'blocks' || payload.t === 'file') {
@@ -425,7 +426,7 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 			await deps.authorizeBlocks(request, pageId, workspaceId);
 		}
 		// The topic is lowercased; the published payload names the same page (C574).
-		const frame = { event: 'collab', payload: { ...payload, pageId } };
+		const frame = { event: 'collab', payload: { ...payload, pageId, actor: publishedActor } };
 		const published = await publishRealtime({ topic: `collabpage:${pageId}`, eventType: 'broadcast', payload: frame, fetchImpl: deps.fetchImpl, env: deps.env });
 		if (!published) throw httpError('Collaboration publish failed.', 503);
 		return;
@@ -440,7 +441,9 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 			if (normalizedLevel(await deps.pageLevelFor?.(target, pageId, workspaceId)) === 'none') throw httpError('Page not found.', 404);
 		}
 		takeToken(`collab-direct:${session.userId}:${target}`, DIRECT_BUCKET);
-		await publishToUser(deps, config, target, { event: 'collab.req', payload: { ...payload, cid, from: session.userId } });
+		const reqPayload = { ...payload, cid, from: session.userId };
+		if (payload.actor !== undefined) reqPayload.actor = normalizePublishedActor(session.userId, payload.actor);
+		await publishToUser(deps, config, target, { event: 'collab.req', payload: reqPayload });
 		return;
 	}
 	// collab.res: only { cid, from, res:{accepted} } reaches the recipient's inbox.

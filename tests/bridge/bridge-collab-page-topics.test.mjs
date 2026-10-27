@@ -329,6 +329,34 @@ describe('C570 — flag-on frames are whitelisted', () => {
     assert.equal(publishes.length, 0);
   });
 
+  it('forces the session user prefix on a page caret actor', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post(collab({ t: 'caret', actor: `${STRANGER}:t1`, seq: 1, pageId: IDS.sharedA })));
+      assert.equal(result.status, 200, result.text);
+    });
+    assert.equal(publishes.length, 1);
+    assert.equal(publishes[0].payload.payload.actor, `${IDS.userA}:t1`);
+  });
+
+  it('forces the session user prefix on a blocks actor', async () => {
+    const body = collab({ t: 'blocks', actor: `${STRANGER}:t1`, seq: 1, pageId: IDS.sharedA, ops: [{ k: 'del', id: 'block', v: 1 }] });
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post(body));
+      assert.equal(result.status, 200, result.text);
+    });
+    assert.equal(publishes.length, 1);
+    assert.equal(publishes[0].payload.payload.actor, `${IDS.userA}:t1`);
+  });
+
+  it('answers 422 invalid_actor for a forged page event suffix', async () => {
+    const { publishes } = await run(world(), ON, async (base) => {
+      const result = await send(base, eventsPath, headersA(), post(collab({ t: 'caret', actor: `${STRANGER}:evil frame`, seq: 1, pageId: IDS.sharedA })));
+      assert.equal(result.status, 422, result.text);
+      assert.equal(result.body.message, 'invalid_actor');
+    });
+    assert.equal(publishes.length, 0);
+  });
+
   it('drops extra top-level body keys from page events, collab.req and collab.res', async () => {
     const { publishes } = await run(world(), ON, async (base) => {
       const page = await send(base, eventsPath, headersB(), post({ ...caret(IDS.sharedA), leak: 'page-top' }));
