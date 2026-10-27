@@ -547,3 +547,28 @@ test('T5: 1000 events from one actor in a tick apply at most the 400 burst; anot
   assert.equal(applied.filter((actor) => actor === 'other:0').length, 1, 'a different actor has its own bucket');
   channel.leave();
 });
+
+// ── T5b (C11) ────────────────────────────────────────────────────────────────
+test('T5b: 150 events/s from one actor for 10 s are all delivered (fast send needs >= 120/s)', async () => {
+  const { channel, socket } = await joinPage();
+  let applied = 0;
+  channel.onEvent(() => { applied += 1; });
+
+  const realNow = Date.now;
+  let clock = 2_000_000;
+  Date.now = () => clock;
+  try {
+    for (let index = 0; index < 1500; index += 1) {
+      clock += 1000 / 150;
+      socket.deliver(eventFrame(`collabpage:${PAGE_ONE}`, 'collab', {
+        t: 'caret', actor: `typist:${index % 3}`, seq: index + 1, pageId: PAGE_ONE, caret: { blockId: 'b1', offset: index },
+      }));
+      await flush(); // inbound frames are handled asynchronously: settle each at its own timestamp
+    }
+  } finally {
+    Date.now = realNow;
+  }
+  assert.equal(applied, 1500, 'sustained 150/s sits under the 200/s refill, nothing dropped');
+  assert.equal(channel.stats?.().droppedRateLimit, 0);
+  channel.leave();
+});
