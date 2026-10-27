@@ -41,7 +41,10 @@
  * the TTL is the only bound: up to COLLAB_AUTH_CACHE_TTL_MS of stale allow.
  *
  * Caveat: a revoked or downgraded user can still publish for up to the TTL (at most 5 s)
- * after an out-of-process write. For an in-process write the window is the gap between the
+ * plus the duration of the one access check that stored the allow, after an
+ * out-of-process write: expiry counts from when the verdict landed, not from when its
+ * reads began, because anchoring it earlier would break the expiry-ordered eviction
+ * below. For an in-process write the window is the gap between the
  * rows landing and the writer's bump (one await): an event that hits an older entry in
  * that gap is still allowed. The map is capped at MAX_ENTRIES; at the cap the oldest
  * entries go, which only costs a re-check.
