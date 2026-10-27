@@ -30,7 +30,7 @@ export async function seed(page, baseURL, buttons) {
   }, { buttons, properties: PROPERTIES, ws: WS });
   await page.goto(baseURL, { waitUntil: "domcontentloaded" });
   await explorerRow(page, "Button host").click();
-  await page.evaluate(() => globalThis.__playgroundUserStore.setState({ activePageJwt: () => "e2e-page-jwt" }));
+  await page.evaluate(() => globalThis.__playgroundUserStore.setState({ activePageJwt: () => "" }));
 }
 
 export const cachedProperties = (page) =>
