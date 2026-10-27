@@ -173,6 +173,28 @@ describe('a store failure is never a silent "no rules"', () => {
 			return true;
 		});
 	});
+
+	it('every failed read logs which read failed and why, never the request URL or key', async () => {
+		const timeout = async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); };
+		const reset = async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('socket'), { code: 'ECONNRESET' }) }); };
+		const full = fakeFetch(Array.from({ length: 500 }, (_, index) => row({ id: `full-${index}` }))).fetchImpl;
+		const cases = [
+			['listForPage', timeout, 'TimeoutError'],
+			['listForPage', reset, 'TypeError cause ECONNRESET'],
+			['listForPage', fakeFetch([], { body: '' }).fetchImpl, 'empty body'],
+			['listForPage', full, 'over limit'],
+			['listForPages', timeout, 'TimeoutError'],
+			['listForWorkspace', reset, 'TypeError cause ECONNRESET'],
+		];
+		for (const [read, fetchImpl, reason] of cases) {
+			const lines = [];
+			const store = createShareRuleStore({ fetchImpl, log: (line) => lines.push(line) });
+			const call = read === 'listForPages' ? store.listForPages(CONFIG, WS, [PAGE]) : store[read](CONFIG, WS, PAGE);
+			await assert.rejects(call, { status: 503, code: 'share_rules_unavailable' }, `${read} ${reason}`);
+			assert.deepEqual(lines, [`[bridge-perms] ${read} rules read failed (${reason})`], `${read} ${reason}`);
+			assert.doesNotMatch(lines.join('\n'), /kong\.test|svc-key/);
+		}
+	});
 });
 
 const config = harnessConfig();
