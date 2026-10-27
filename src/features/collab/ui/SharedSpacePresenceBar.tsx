@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 16:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 16:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/27 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,6 +38,7 @@ import { seedSharedFile } from '../model/seedSharedFile';
 import { uploadSharedFile } from '../api/uploadSharedFile';
 import { CollabRoster } from './CollabRoster';
 import { CollabCaretLayer } from './CollabCaretLayer';
+import { CollabFollowLayer } from './CollabFollowLayer';
 import { SummonPrompt } from './SummonPrompt';
 import { useSharedSpacePresence } from './useSharedSpacePresence';
 import { useSharedSpacePage } from './useSharedSpacePage';
@@ -141,6 +142,7 @@ export const SharedSpacePresenceBar: React.FC = () => {
       </button>
       <input ref={fileInput} type="file" hidden onChange={onPickFile} />
       <CollabCaretLayer />
+      <CollabFollowLayer />
       <SummonPrompt />
     </>
   );
