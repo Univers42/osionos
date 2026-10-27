@@ -14,6 +14,20 @@ import type { Effort } from './effort.ts';
 
 /** The input of the upstream of a run, and the event it emits. */
 
+/**
+ * A thread run (C429): the model reads `prompt`, the channel window, under the
+ * thread system prompt; the transcript keeps the trigger and the answer only.
+ */
+export interface ThreadRun {
+	prompt: string;
+	channelId: string;
+	messageId: string;
+	/** When the window was read: the bridge refuses a post once a message changed after it (C443). */
+	readAt: Date;
+	/** Whether the asker can still read the channel and the trigger still stands (C454). */
+	stillAllowed: () => Promise<boolean>;
+}
+
 /** One event of a run, as the client sees it. */
 export interface RunEvent {
 	id: string;
@@ -95,4 +109,6 @@ export interface UpstreamRunInput {
 	truncated?: { summarized: boolean };
 	/** The run's window dropped turns the summary does not cover: after `done`, they are summarised (C378). */
 	summarizeFrom?: { oldestKeptId: string };
+	/** A thread run (C429): the model reads the channel window instead of the user turn. */
+	thread?: ThreadRun;
 }

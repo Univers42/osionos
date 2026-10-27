@@ -106,15 +106,22 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
         <div className="h-9 w-9 shrink-0" aria-hidden />
       ) : (
         <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--osio-accent)] text-xs font-semibold text-[var(--osio-accent-fg)]">
-          {message.authorAvatar
-            ? <img src={message.authorAvatar} alt="" className="h-full w-full object-cover" />
-            : message.authorName.slice(0, 1).toUpperCase()}
+          {message.isAi
+            ? <Sparkles size={16} aria-hidden />
+            : message.authorAvatar
+              ? <img src={message.authorAvatar} alt="" className="h-full w-full object-cover" />
+              : message.authorName.slice(0, 1).toUpperCase()}
         </div>
       )}
       <div className="min-w-0 flex-1">
         {!grouped && (
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="text-sm font-semibold">{message.authorName}</span>
+          {message.isAi && (
+            <span className="osio-chip text-xs text-[var(--osio-fg-muted)]">
+              {message.aiRequestedBy === userId ? 'AI answer, asked by you' : 'AI answer'}
+            </span>
+          )}
           <time className="text-xs text-[var(--osio-fg-subtle)]">{formatTime(message.createdAt)}</time>
           {message.editedAt && <span className="text-xs italic text-[var(--osio-fg-subtle)]">(edited)</span>}
           {isAuthor && <MessageTicks messageId={message.id} />}
@@ -175,11 +182,11 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
               <Sparkles size={14} />
             </IconButton>
           )}
+          {isAuthor && !message.isAi && (
+            <IconButton size="xs" label="Edit message" onClick={() => setEditing(true)}><Pencil size={14} /></IconButton>
+          )}
           {isAuthor && (
-            <>
-              <IconButton size="xs" label="Edit message" onClick={() => setEditing(true)}><Pencil size={14} /></IconButton>
-              <IconButton size="xs" label="Delete message" onClick={() => onDelete(message.id)}><Trash2 size={14} /></IconButton>
-            </>
+            <IconButton size="xs" label="Delete message" onClick={() => onDelete(message.id)}><Trash2 size={14} /></IconButton>
           )}
           {pickerOpen && (
             <div className="absolute right-0 top-7 z-10 flex gap-1 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 shadow-[var(--osio-shadow-menu)]">

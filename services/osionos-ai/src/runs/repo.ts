@@ -71,6 +71,7 @@ export async function insertRun(
 		agentVersion = null,
 		customAgentId = null,
 		customAgentVersion = null,
+		surface,
 	}: {
 		runId: string;
 		conversationId: string | null;
@@ -82,15 +83,29 @@ export async function insertRun(
 		agentVersion?: number | null;
 		customAgentId?: string | null;
 		customAgentVersion?: number | null;
+		/**
+		 * The channel message a thread run answers (C430): written with the row,
+		 * and only by the thread path. Absent, the two columns are not named,
+		 * so a database without them takes every other run as before.
+		 */
+		surface?: { channelId: string; messageId: string; readAt: Date };
 	},
 ): Promise<{ kind: 'inserted' | 'exists' | 'conflict' | 'missing' }> {
 	try {
 		const result = await db.query(
-			`insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind, agent_id, agent_version, custom_agent_id, custom_agent_version)
-			 values ($1, $2, $3, 'running', $4, $5, $6, $7, $8, $9)
-			 on conflict (id) do nothing
-			 returning id`,
-			[runId, conversationId, ownerId, model, kind, agentId, agentVersion, customAgentId, customAgentVersion],
+			surface
+				? `insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind, agent_id, agent_version, custom_agent_id, custom_agent_version, surface, surface_ref)
+				   values ($1, $2, $3, 'running', $4, $5, $6, $7, $8, $9, 'channel', $10::jsonb)
+				   on conflict (id) do nothing
+				   returning id`
+				: `insert into public.ai_runs (id, conversation_id, owner_id, status, model, kind, agent_id, agent_version, custom_agent_id, custom_agent_version)
+				   values ($1, $2, $3, 'running', $4, $5, $6, $7, $8, $9)
+				   on conflict (id) do nothing
+				   returning id`,
+			[
+				runId, conversationId, ownerId, model, kind, agentId, agentVersion, customAgentId, customAgentVersion,
+				...(surface ? [JSON.stringify({ channelId: surface.channelId, messageId: surface.messageId, readAt: surface.readAt.toISOString() })] : []),
+			],
 		);
 		return result.rowCount === 1 ? { kind: 'inserted' } : { kind: 'exists' };
 	} catch (error) {
@@ -99,6 +114,11 @@ export async function insertRun(
 		if (code === '23503') return { kind: 'missing' };
 		throw error;
 	}
+}
+
+/** The one assistant message of a thread run, the text the bridge may post (C432). */
+export async function setRunAnswer(db: Pool, runId: string, messageId: string): Promise<void> {
+	await db.query('update public.ai_runs set answer_message_id = $2::uuid where id = $1', [runId, messageId]);
 }
 
 /**

@@ -121,6 +121,9 @@ const envSchema = z.object({
 	// The rolling summary of the turns the history window drops (context
 	// C389). OFF unless exactly "on": the public overlay leaves it empty.
 	OSIONOS_AI_SUMMARY: z.string().optional(),
+	// "@AI" answers in a text channel (C450). OFF unless exactly "on": the
+	// public overlay leaves it empty, and off the route does not exist.
+	OSIONOS_AI_THREAD_ANSWERS: z.string().optional(),
 	// The one SearXNG the search tool calls (web C351): a deployment setting,
 	// never a user's or the model's. Unset, web_search does not exist.
 	OSIONOS_AI_SEARXNG_URL: z.string().url().optional(),
@@ -231,6 +234,7 @@ const rawEnv = {
 	OSIONOS_AI_RESEARCH: process.env.OSIONOS_AI_RESEARCH,
 	OSIONOS_AI_RESEARCH_PLATFORM_DAILY: process.env.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,
 	OSIONOS_AI_SUMMARY: process.env.OSIONOS_AI_SUMMARY,
+	OSIONOS_AI_THREAD_ANSWERS: process.env.OSIONOS_AI_THREAD_ANSWERS,
 	OSIONOS_AI_SEARXNG_URL: process.env.OSIONOS_AI_SEARXNG_URL || undefined,
 	OSIONOS_AI_WEB_CONTACT_URL: process.env.OSIONOS_AI_WEB_CONTACT_URL || undefined,
 	OSIONOS_AI_MCP_ALLOWED_HOSTS: process.env.OSIONOS_AI_MCP_ALLOWED_HOSTS,
@@ -423,6 +427,8 @@ export interface AiServiceConfig {
 	researchPlatformDaily: number;
 	/** Whether a conversation keeps a summary of the turns its history window drops (C389). */
 	summaryEnabled: boolean;
+	/** Whether a channel member can ask "@AI" for a draft answer (C450): exactly "on". */
+	threadAnswersEnabled: boolean;
 	/** The SearXNG base URL, without a trailing slash; undefined = no web_search. */
 	searxngUrl: string | undefined;
 	webContactUrl: string;
@@ -516,6 +522,7 @@ export const config: AiServiceConfig = Object.freeze({
 	researchEnabled: parsed.data.OSIONOS_AI_RESEARCH === 'on',
 	researchPlatformDaily: parsed.data.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,
 	summaryEnabled: parsed.data.OSIONOS_AI_SUMMARY === 'on',
+	threadAnswersEnabled: parsed.data.OSIONOS_AI_THREAD_ANSWERS === 'on',
 	searxngUrl: parsed.data.OSIONOS_AI_SEARXNG_URL?.replace(/\/+$/, ''),
 	webContactUrl: parsed.data.OSIONOS_AI_WEB_CONTACT_URL,
 	mcpAllowedHosts: Object.freeze(['localhost', '127.0.0.1', ...commaList(parsed.data.OSIONOS_AI_MCP_ALLOWED_HOSTS).map((h) => h.toLowerCase())]),

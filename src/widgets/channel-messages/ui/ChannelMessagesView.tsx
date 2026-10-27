@@ -42,6 +42,11 @@ import { useChannelInfo } from "../model/useChannelInfo";
 import { useChannelLive } from "../model/useChannelLive";
 import { useChannelReceipts } from "../model/useChannelReceipts";
 import { buildMessageRows, firstUnreadId } from "../model/messageGrouping";
+import { mentionsAi } from "../model/aiAnswerDraft";
+import { aiDraftStore, useAiDraft } from "../model/useAiAnswerDraft";
+import { isChannelAiAnswersEnabled } from "@/shared/config/featureFlags";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
+import { AiDraftCard } from "./AiDraftCard";
 import { CallPanel } from "./CallPanel";
 import { ChannelHeader } from "./ChannelHeader";
 import { MessageRow } from "./MessageRow";
@@ -157,16 +162,35 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   // The send answer: the reply target is cleared only when the message was
   // really written, and only a plain failure is toasted — a warning from L0
   // is the author's question, and the composer answers it.
+  const aiDraft = useAiDraft(channelId);
+  const canAskAi = channel?.kind === "text" && isChannelAiAnswersEnabled() && isAiConfigured();
+  const draftWorkspaceId = liveWorkspaceId || channel?.workspaceId || workspaceId;
   const handleSendOutcome = useCallback((outcome: SendOutcome): SendOutcome => {
     if (outcome.ok) {
       setReplyTarget(null);
+      // "@AI" drafts privately for the sender; the channel sees nothing until they post (C429).
+      if (canAskAi && outcome.message && mentionsAi(outcome.message.content)) {
+        aiDraftStore.getState().ask({
+          channelId,
+          workspaceId: draftWorkspaceId,
+          channelName: title || "messages",
+          triggerId: outcome.message.id,
+          userId: activeUserId,
+        });
+      }
       return outcome;
     }
     if (!("warning" in outcome)) {
       useToastStore.getState().push({ kind: "error", title: "Couldn't send message", description: "Check your connection and try again." });
     }
     return outcome;
-  }, []);
+  }, [canAskAi, channelId, draftWorkspaceId, title, activeUserId]);
+  const { setMessages } = history;
+  const postAiDraft = useCallback(async () => {
+    const message = await aiDraftStore.getState().post(channelId);
+    if (message) setMessages((current) => (current.some((m) => m.id === message.id) ? current : [...current, message]));
+  }, [channelId, setMessages]);
+  const canModerate = channel?.memberRole === "owner" || channel?.memberRole === "admin";
 
   const jumpToBottom = () => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -291,7 +315,7 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
                   <MessageRow
                     message={message}
                     grouped={index === 0 && windowStart > 0 ? false : grouped}
-                    isAuthor={message.authorId === activeUserId}
+                    isAuthor={message.isAi ? message.aiRequestedBy === activeUserId || canModerate : message.authorId === activeUserId}
                     canInteract={history.mode === "bridge"}
                     userId={activeUserId}
                     onEdit={handleEdit}
@@ -321,6 +345,17 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
         <TypingIndicator channelId={channelId} names={authorNames} />
       </div>
 
+      {aiDraft && (
+        <div className={compact ? "px-2" : "mx-auto w-full max-w-4xl px-4"}>
+          <AiDraftCard
+            draft={aiDraft}
+            onAccept={() => aiDraftStore.getState().accept(channelId)}
+            onPost={() => { void postAiDraft(); }}
+            onRetry={() => aiDraftStore.getState().retry(channelId)}
+            onDiscard={() => aiDraftStore.getState().discard(channelId)}
+          />
+        </div>
+      )}
       <MessageComposer
         key={channelId}
         channelId={channelId}

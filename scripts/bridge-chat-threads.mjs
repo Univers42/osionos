@@ -20,6 +20,7 @@
 
 import { httpError, identitySummaries, rest, sendJson } from './bridge-social-core.mjs';
 import { attachmentEntry } from './bridge-chat-media.mjs';
+import { authorSummary } from './bridge-chat-ai.mjs';
 
 export async function getThread(deps, session, rootId, response, config, { requireChannelAccess, messageEntry }) {
 	const rootRows = await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${rootId}&select=*&limit=1`);
@@ -45,7 +46,7 @@ export async function getThread(deps, session, rootId, response, config, { requi
 	const identities = await identitySummaries(config, deps.fetchImpl, ordered.map((r) => r.author_id));
 	const messages = ordered.map((r) => messageEntry(
 		r,
-		identities.get(r.author_id),
+		authorSummary(r, identities),
 		(reactionsByMessage.get(r.id) ?? []).map((x) => ({ userId: x.user_id, emoji: x.emoji })),
 		attachmentsByMessage.has(r.id) ? (attachmentsByMessage.get(r.id) ?? []).map(attachmentEntry) : null,
 		null,
