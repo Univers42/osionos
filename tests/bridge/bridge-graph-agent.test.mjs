@@ -18,7 +18,7 @@ import { createServer } from 'node:http';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createAgentHandler } from '../../scripts/bridge-agent.mjs';
-import { verifyAppSessionToken } from '../../scripts/bridge-api.mjs';
+import { pageAccessFilterFor, verifyAppSessionToken } from '../../scripts/bridge-api.mjs';
 import { IDS, createPostgrestMock, harnessConfig, send, sessionHeaders, teamWorld, withBridge } from './support/bridge-harness.mjs';
 
 const config = harnessConfig();
@@ -83,7 +83,9 @@ async function agentTool(name, input) {
 	const mock = createPostgrestMock(graphWorld());
 	const turns = [toolTurn(name, input), endTurn()];
 	const fetchImpl = async (url, init) => (String(url).startsWith('https://api.anthropic.com/') ? turns.shift() : mock.fetchImpl(url, init));
-	const handler = createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env: { ANTHROPIC_API_KEY: 'test-key' } });
+	const handler = createAgentHandler({
+		config, verifySession: verifyAppSessionToken, fetchImpl, env: { ANTHROPIC_API_KEY: 'test-key' }, pageAccessFilter: pageAccessFilterFor(config, fetchImpl),
+	});
 	const server = createServer((request, response) => void handler(new URL(request.url, 'http://bridge.local'), request, response));
 	await new Promise((done) => server.listen(0, '127.0.0.1', done));
 	try {
