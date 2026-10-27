@@ -16,7 +16,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import { closeViewSettings, fillCell, insertInlineDatabase } from "../support/databaseHelpers.mjs";
+import { fillCell, insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 /** Add a property of `type`, rename it in the auto-opened config panel, close. */
 async function addNamedProperty(page, block, typeLabel, name) {
@@ -72,13 +72,19 @@ test.describe("database-automations", () => {
     const dialog = page.locator("dialog");
     await dialog.getByText("+ New automation").click();
     await expect(dialog.getByText("Edit automation")).toBeVisible();
-    const action = dialog.locator('[aria-label="Action type"]').first();
-    await action.selectOption("set_property");
+    await dialog.getByLabel("Rule name").fill("r");
+    // A new rule starts as "Row added"; this one must fire on an edit.
+    await dialog.locator('[aria-label="Trigger"]').selectOption("property_changed");
+    await dialog.locator('[aria-label="Property"]').selectOption({ label: "Trigger" });
+    await dialog.getByText("+ Add action").click();
+    await dialog.locator('[aria-label="Action type"]').first().selectOption("set_property");
     await dialog.locator('[aria-label="Column"]').first().selectOption({ label: "Target" });
     await dialog.locator('[aria-label="Value"]').first().fill("auto-set");
     await dialog.getByText("+ Add action").click();
+    await dialog.locator('[aria-label="Action type"]').last().selectOption("notify");
     await dialog.locator('[aria-label="Message"]').last().fill("Rule fired");
-    await closeViewSettings(page);
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
 
     // Edit the Trigger cell → the rule writes Target and raises a toast.
