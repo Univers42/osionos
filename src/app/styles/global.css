@@ -31,6 +31,8 @@
    and they ship in its lazy chunk (tokens-bridge.test.ts lists those components). */
 /* Accent presets and the density, corner and text-size axes: attribute blocks on <html>. */
 @import "./appearance.css";
+/* Member identity colours, the ink printed on them, and remote-caret motion. */
+@import "./collab.css";
 /* highlight.js base theme intentionally NOT imported eagerly (perf P2): the
    .hljs-* rules further down fully recolor every token via --osio-syntax-*, so
    the upstream github.css was redundant and only bloated the render-blocking
@@ -545,50 +547,6 @@
      Values live here in the single token file; canvas.css only references them. */
   --osio-canvas-bg: #1e1e1e;
   --osio-canvas-dot: rgba(255, 255, 255, 0.18); /* dot-grid overlay on the stage */
-}
-
-/* Shared live-collaboration presence palette (AOC §6/R-A8). Eight curated,
-   WCAG-safe identity hues — assignMemberColor() hashes a member onto --collab-N
-   so the same person keeps the same color across reconnects. Used for roster
-   avatar rings, remote carets (a 2px line), selection tints, and focus pulses.
-   The collab feature references these tokens only (never raw hex), so the
-   style-token guard stays green and dark mode is handled right here. */
-:root {
-  --collab-1: #cc785c; /* terracotta */
-  --collab-2: #2e7d74; /* teal */
-  --collab-3: #4054b2; /* indigo */
-  --collab-4: #b26a00; /* ochre */
-  --collab-5: #b23a6e; /* rose */
-  --collab-6: #3e7d32; /* green */
-  --collab-7: #7e4fb2; /* violet */
-  --collab-8: #1f6fb2; /* blue */
-  --collab-caret-w: 2px; /* remote caret line width */
-  --collab-selection-mix: 22%; /* member-color alpha for selection tint */
-}
-
-[data-theme="dark"] {
-  --collab-1: #e0937a;
-  --collab-2: #5fb8ad;
-  --collab-3: #8593e0;
-  --collab-4: #e0a958;
-  --collab-5: #e08ab0;
-  --collab-6: #7fc27f;
-  --collab-7: #b79ae0;
-  --collab-8: #6fb0e0;
-  --collab-selection-mix: 30%;
-}
-
-/* Remote-caret name flag entrance — transform/opacity only, motion-safe gated. */
-@keyframes collab-flag-in {
-  from { opacity: 0; transform: translateY(2px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Active-control pulse: a remote member is interacting with this control (§4).
-   Opacity-only breathing — no layout, no width/height animation. */
-@keyframes collab-pulse {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 0.9; }
 }
 
 html,
