@@ -62,14 +62,30 @@ test.describe("template use from Home", () => {
     }
     await expect(page.getByText("Write Integration Tests")).toBeVisible();
 
+    // Add a row that belongs only to this page's Assignments database.
+    const uniqueTitle = `Private assignment ${Date.now()}`;
+    const assignmentsBlock = page.locator(`[data-database-id="${firstIds[0]}"]`).first();
+    await assignmentsBlock.getByRole("button", { name: "New", exact: true }).first().click({ force: true });
+    const titleBox = page.locator("aside[data-open-in]").getByRole("textbox", { name: "Page title" });
+    await titleBox.waitFor({ state: "visible", timeout: 10_000 });
+    await titleBox.fill(uniqueTitle);
+    await page.locator('aside[data-open-in] button').filter({ hasText: /^Close$/ }).first().click();
+    await expect(assignmentsBlock.getByText(uniqueTitle)).toBeVisible();
+
     await page.reload();
     await expect(page.getByRole("textbox", { name: "Page title" })).toHaveValue("Student Dashboard");
     await closeHomeTab(page);
     const reloadedIds = await databaseIds(page);
     expect(reloadedIds).toEqual(firstIds);
+    await expect(assignmentsBlock.getByText(uniqueTitle)).toBeVisible();
 
+    const closeFirstPage = page.getByRole("button", { name: /Close Student Dashboard/ });
+    if (await closeFirstPage.count()) await closeFirstPage.first().click();
     await useStudentDashboard(page);
     const secondIds = await databaseIds(page);
-    expect(secondIds).not.toEqual(firstIds);
+    for (const id of secondIds) {
+      expect(firstIds).not.toContain(id);
+    }
+    await expect(page.getByText(uniqueTitle)).toHaveCount(0);
   });
 });
