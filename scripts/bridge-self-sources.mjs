@@ -118,6 +118,14 @@ export function dedupeEdgesByPeer(rows, userId) {
 	return kept.sort((left, right) => connectionCreatedAtMs(right) - connectionCreatedAtMs(left));
 }
 
+/** What the bridge's page access filter reads from a page row; a page source reads them unanswered. */
+export const PAGE_ACCESS_COLUMNS = Object.freeze(['id', 'workspace_id', 'owner_id', 'visibility', 'collaborators']);
+
+const MY_PAGES_COLUMNS = [
+	'id', 'title', 'icon', 'cover', 'surface', 'visibility', 'database_id', 'parent_page_id',
+	'created_at', 'updated_at', 'archived_at',
+];
+
 export const SELF_SOURCES = [
 	{
 		id: 'my-pages',
@@ -125,10 +133,11 @@ export const SELF_SOURCES = [
 		table: 'osionos_pages',
 		scope: { kind: 'owner', column: 'owner_id' },
 		order: 'updated_at.desc',
-		columns: [
-			'id', 'title', 'icon', 'cover', 'surface', 'visibility', 'database_id', 'parent_page_id',
-			'created_at', 'updated_at', 'archived_at',
-		],
+		columns: MY_PAGES_COLUMNS,
+		// Owning a page is not access to it: an owner who left the workspace, or a share rule,
+		// hides it (C557). The bridge's page access filter decides, from PAGE_ACCESS_COLUMNS.
+		pageAccess: true,
+		readColumns: [...new Set([...MY_PAGES_COLUMNS, ...PAGE_ACCESS_COLUMNS])],
 	},
 	{
 		id: 'my-tasks',

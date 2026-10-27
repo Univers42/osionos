@@ -39,18 +39,20 @@ describe('list: membership and pages in one statement', () => {
 		});
 	});
 
-	it('/api/pages/all makes exactly 1 BaaS call and the meter reports baas_n=1', async () => {
+	it('/api/pages/all makes 3 BaaS calls: the list statement plus ONE rule read and the member', async () => {
 		const lines = [];
 		await inMembershipWorld(membershipWorld(), {}, async (base, mock) => {
 			const response = await fetch(`${base}${TEAM_ALL}`, { headers: asB() });
 			assert.equal(response.status, 200);
 			await response.arrayBuffer();
-			assert.equal(mock.calls.length, 1);
+			assert.equal(mock.calls.length, 3);
 			assert.equal(mock.calls[0].table, 'osionos_workspace_members');
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_share_rules').length, 1, 'one rules read');
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_pages' && call.params.get('select') === 'id,parent_page_id').length, 0, 'no rule, no parent map');
 			// The meter logs on the response's 'close', a tick after the client has the body.
 			for (let tries = 0; lines.length === 0 && tries < 50; tries++) await new Promise((resolve) => setTimeout(resolve, 10));
 			const line = JSON.parse(lines.find((entry) => entry.includes('/api/pages/all')));
-			assert.equal(line.baas_n, 1);
+			assert.equal(line.baas_n, 3);
 		}, { perf: true, perfLog: (entry) => lines.push(entry) });
 	});
 
@@ -76,7 +78,7 @@ describe('list: membership and pages in one statement', () => {
 		});
 	}
 
-	it('every filter shape the list emits is served in the one statement', async () => {
+	it('each filter shape is served by its list statement, each with one access map', async () => {
 		const world = membershipWorld({ memberRole: 'editor' });
 		world.osionos_pages.push({ ...world.osionos_pages[1], id: 'a9a9a9a9-1111-4111-8111-a9a9a9a9a9a9', database_id: 'db-1', surface: 'wiki', parent_page_id: IDS.sharedA });
 		await inMembershipWorld(world, {}, async (base, mock) => {
@@ -86,7 +88,8 @@ describe('list: membership and pages in one statement', () => {
 			const noDatabase = await send(base, `${TEAM_LIST}&databaseId=&parentPageId=`, asB());
 			assert.equal(noDatabase.status, 200);
 			assert.ok(!idsOf(noDatabase).includes('a9a9a9a9-1111-4111-8111-a9a9a9a9a9a9'));
-			assert.equal(mock.calls.length, 2);
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_workspace_members' && call.params.get('select').includes('osionos_pages!')).length, 2);
+			assert.equal(mock.calls.length, 6, 'two lists, each with its own 3-call access map');
 		});
 	});
 });
@@ -237,18 +240,21 @@ describe('list: the chunked path', () => {
 		return world;
 	};
 
-	it('n chunks make exactly n BaaS calls, each anchored, none to the rpc or the bare members table', async () => {
+	it('n chunks make exactly n anchored page calls, plus ONE access map', async () => {
 		await inMembershipWorld(bigWorld(450), {}, async (base, mock) => {
 			const result = await send(base, TEAM_LIST, asB());
 			assert.equal(result.status, 200);
 			assert.equal(result.body.length, 450 + 3);
-			assert.equal(mock.calls.length, 3);
-			for (const call of mock.calls) {
+			const pageCalls = mock.calls.filter((call) => call.params.get('select')?.includes('osionos_pages!workspace_id('));
+			assert.equal(pageCalls.length, 3);
+			for (const call of pageCalls) {
 				assert.equal(call.table, 'osionos_workspace_members');
-				assert.match(call.params.get('select'), /osionos_pages!workspace_id\(/);
 				assert.equal(call.params.get('user_id'), `eq.${IDS.userB}`);
 			}
-			assert.equal(mock.calls[1].params.get('workspace.pages.id') !== null, true);
+			assert.equal(pageCalls[1].params.get('workspace.pages.id') !== null, true);
+			assert.equal(mock.calls.length, 5, 'three chunks + rules + member');
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_share_rules').length, 1);
+			assert.equal(mock.calls.filter((call) => call.table === 'osionos_pages' && call.params.get('select') === 'id,parent_page_id').length, 0, 'no rule, no parent map');
 		});
 	});
 

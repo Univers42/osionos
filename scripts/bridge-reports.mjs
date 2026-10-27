@@ -91,64 +91,67 @@ function subjectIdFor(subjectKind, payload) {
 }
 
 /** The directory row of the reported user — the profiles table the bridge reads. */
-async function resolveUser(config, fetchImpl, subjectId) {
-	const rows = await rest(config, fetchImpl, `osionos_people_directory?user_id=eq.${subjectId}&select=user_id&limit=1`);
+async function resolveUser(ctx, config, subjectId) {
+	const rows = await rest(config, ctx.fetchImpl, `osionos_people_directory?user_id=eq.${subjectId}&select=user_id&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
 	return row ? { subjectUserId: subjectId } : null;
 }
 
 /** The reported message: its author, and a reporter who may read its channel. */
-async function resolveMessage(config, fetchImpl, subjectId, session) {
-	const rows = await rest(config, fetchImpl, `osionos_messages?id=eq.${subjectId}&select=*&limit=1`);
+async function resolveMessage(ctx, config, subjectId, session) {
+	const rows = await rest(config, ctx.fetchImpl, `osionos_messages?id=eq.${subjectId}&select=*&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
 	if (!row) return null;
-	await requireChannelAccess(config, fetchImpl, session.userId, row.channel_id);
+	await requireChannelAccess(config, ctx.fetchImpl, session.userId, row.channel_id);
 	// A posted AI answer was written by no person, not even its requester (C439).
 	return { subjectUserId: isAiAnswer(row) ? null : row.author_id ?? null };
 }
 
 /** The reported channel: the reporter must be in it; its creator is the subject. */
-async function resolveChannel(config, fetchImpl, subjectId, session) {
-	const { channel } = await requireChannelAccess(config, fetchImpl, session.userId, subjectId);
+async function resolveChannel(ctx, config, subjectId, session) {
+	const { channel } = await requireChannelAccess(config, ctx.fetchImpl, session.userId, subjectId);
 	return { subjectUserId: channel.created_by ?? null };
 }
 
 /** The reported workspace: the reporter is a member of it, or it is public. */
-async function resolveWorkspace(config, fetchImpl, subjectId, session) {
-	const rows = await rest(config, fetchImpl, `osionos_workspaces?id=eq.${subjectId}&select=id,owner_id,visibility&limit=1`);
+async function resolveWorkspace(ctx, config, subjectId, session) {
+	const rows = await rest(config, ctx.fetchImpl, `osionos_workspaces?id=eq.${subjectId}&select=id,owner_id,visibility&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
 	if (!row) return null;
-	const memberOf = await memberWorkspacesAmong(config, fetchImpl, session, [row.id]);
+	const memberOf = await memberWorkspacesAmong(config, ctx.fetchImpl, session, [row.id]);
 	if (memberOf.length === 0 && row.visibility !== 'public') return null;
 	return { subjectUserId: row.owner_id ?? null };
 }
 
-/** The reported page: the reporter must be able to read it (bridge-page-read.mjs). */
-async function resolvePage(config, fetchImpl, subjectId, session) {
-	const rows = await rest(config, fetchImpl, `osionos_pages?id=eq.${subjectId}&select=id,workspace_id,owner_id,visibility,collaborators,archived_at&limit=1`);
+/** The reported page: the reporter must be able to read it (the inherited page rule, C550). */
+async function resolvePage(ctx, config, subjectId, session) {
+	const rows = await rest(config, ctx.fetchImpl, `osionos_pages?id=eq.${subjectId}&select=id,workspace_id,owner_id,visibility,collaborators,archived_at&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
 	if (!row || row.archived_at) return null;
-	const memberOf = await memberWorkspacesAmong(config, fetchImpl, session, [row.workspace_id]);
+	const memberOf = await memberWorkspacesAmong(config, ctx.fetchImpl, session, [row.workspace_id]);
 	if (!canReadPageRowAsMember(row, session.userId, memberOf)) return null;
-	return { subjectUserId: row.owner_id ?? null };
+	const visible = typeof ctx.pageAccessFilter === 'function'
+		? await ctx.pageAccessFilter([row], session, config)
+		: [row];
+	return visible.length === 0 ? null : { subjectUserId: row.owner_id ?? null };
 }
 
 /** A comment: its author, on a page the reporter may read (the page rule). */
-async function resolveComment(config, fetchImpl, table, subjectId, session) {
-	const rows = await rest(config, fetchImpl, `${table}?id=eq.${subjectId}&select=id,author_id,page_id&limit=1`);
+async function resolveComment(ctx, config, table, subjectId, session) {
+	const rows = await rest(config, ctx.fetchImpl, `${table}?id=eq.${subjectId}&select=id,author_id,page_id&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
 	if (!row) return null;
-	const page = await resolvePage(config, fetchImpl, row.page_id, session);
+	const page = await resolvePage(ctx, config, row.page_id, session);
 	if (!page) return null;
 	return { subjectUserId: row.author_id ?? null };
 }
 
-async function resolveFeedComment(config, fetchImpl, subjectId, session) {
-	return resolveComment(config, fetchImpl, 'osionos_feed_comments', subjectId, session);
+async function resolveFeedComment(ctx, config, subjectId, session) {
+	return resolveComment(ctx, config, 'osionos_feed_comments', subjectId, session);
 }
 
-async function resolvePageComment(config, fetchImpl, subjectId, session) {
-	return resolveComment(config, fetchImpl, 'osionos_page_comments', subjectId, session);
+async function resolvePageComment(ctx, config, subjectId, session) {
+	return resolveComment(ctx, config, 'osionos_page_comments', subjectId, session);
 }
 
 /** One resolver per kind: { subjectUserId } or null when the subject is not reportable. */
@@ -168,9 +171,9 @@ const RESOLVERS = {
  * reporter whether the subject exists. Any other failure (a 5xx from PostgREST)
  * propagates — fail closed, never "not found".
  */
-async function resolveSubject(config, fetchImpl, session, subjectKind, subjectId) {
+async function resolveSubject(deps, config, session, subjectKind, subjectId) {
 	try {
-		return await RESOLVERS[subjectKind](config, fetchImpl, subjectId, session);
+		return await RESOLVERS[subjectKind](deps, config, subjectId, session);
 	} catch (error) {
 		if (error?.status === 403 || error?.status === 404) return null;
 		throw error;
@@ -201,7 +204,7 @@ async function createReport(deps, session, request, response, config) {
 	const subjectKind = safeText(payload.subjectKind, 32) || 'user';
 	if (!REPORT_SUBJECT_KINDS.includes(subjectKind)) throw httpError('Unknown report subject.', 422);
 	const subjectId = subjectIdFor(subjectKind, payload);
-	const subject = await resolveSubject(config, deps.fetchImpl, session, subjectKind, subjectId);
+	const subject = await resolveSubject(deps, config, session, subjectKind, subjectId);
 	if (!subject) throw httpError('Nothing to report here.', 404);
 	const prior = await findReport(config, deps.fetchImpl, session.userId, subjectKind, subjectId);
 	if (prior) return sendJson(response, 200, duplicateBody(prior), config);

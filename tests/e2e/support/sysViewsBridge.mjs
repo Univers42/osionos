@@ -58,7 +58,9 @@ export async function stubSysViews(page, { saveStatus = 200, sources = DEFAULT_S
 
 export async function openSysDatabase(page, baseURL) {
   await seedPage(page, baseURL, [{ id: "sys-views", type: "database_inline", content: "", databaseId: `sys:${SOURCE}`, viewId: `${SOURCE}-default` }]);
-  const block = page.locator(`.osionos-database-block[data-database-id="sys:${SOURCE}"]`);
+  // The Home tab stays mounted behind the seeded page, and Home has its own "Your pages"
+  // block over the same source: only the visible one is the block under test.
+  const block = page.locator(`.osionos-database-block[data-database-id="sys:${SOURCE}"]`).filter({ visible: true });
   await block.locator('[aria-label="Add view"]').waitFor({ timeout: 20_000 });
   await page.evaluate(() => globalThis.__playgroundUserStore.setState({ activePageJwt: () => "e2e-page-jwt" }));
   return block;

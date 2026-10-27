@@ -46,9 +46,10 @@ const { useToastStore } = await import("@osionos/ui/primitives/useToastStore");
 const OWNER = "11111111-1111-4111-8111-111111111111";
 const ROOT = "22222222-2222-4222-8222-222222222222";
 const CHILD = "33333333-3333-4333-8333-333333333333";
-const SESSION = { userId: OWNER, privateWorkspaces: [], sharedWorkspaces: [] };
+// C557: the page owner writes only while a member, so each tree's workspace joins the session.
+let session = { userId: OWNER, privateWorkspaces: [] as Array<{ _id: string }>, sharedWorkspaces: [] };
 Reflect.set(globalThis, "__playgroundUserStore", {
-  getState: () => ({ activeSession: () => SESSION }),
+  getState: () => ({ activeSession: () => session }),
   subscribe: () => () => undefined,
 });
 
@@ -61,6 +62,7 @@ const entry = (id: string, workspaceId: string, parentPageId: string | null) => 
 /** A two-page tree in a fresh workspace, behind the minimal set/get the actions use. */
 function tree() {
   const ws = `ws-app-removals-${(workspaceSeq += 1)}`;
+  session = { ...session, privateWorkspaces: [{ _id: ws }] };
   let state: Record<string, unknown> & { pages: Record<string, ReturnType<typeof entry>[]> } = {
     pages: { [ws]: [entry(ROOT, ws, null), entry(CHILD, ws, ROOT)] }, recents: [], activePage: null,
   };

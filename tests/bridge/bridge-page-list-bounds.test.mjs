@@ -72,6 +72,8 @@ function pageReadOf(call) {
 
 const pageReads = (mock) => mock.calls
 	.filter((call) => call.table === 'osionos_pages' || (call.table === 'osionos_workspace_members' && call.params.get('select').includes('osionos_pages!')))
+	// The access loader's id → parent_page_id map is metadata for filtering, not a page read.
+	.filter((call) => call.table !== 'osionos_pages' || (call.params.get('select') ?? '') !== 'id,parent_page_id')
 	.map((call) => (call.table === 'osionos_pages' ? call : pageReadOf(call)));
 const scanReads = (mock) => pageReads(mock).filter((call) => !call.params.has('search_doc'));
 
