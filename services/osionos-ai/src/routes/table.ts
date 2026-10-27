@@ -13,6 +13,7 @@ import { handleVoiceTranscribe } from './voice.ts';
 import { handleImages } from './images.ts';
 import { handleMediaDescribe } from './mediaDescribe.ts';
 import { handleRunCancel, handleRunEvents, handleRuns } from './runs.ts';
+import { handleThreadRuns } from './threadRuns.ts';
 import {
 	handleConnectionDelete,
 	handleConnections,
@@ -244,6 +245,10 @@ export const ROUTES: RouteEntry[] = [
 				anyMethod: true,
 			},
 		]
+		: []),
+	// "@AI" in a text channel (C450): off, the path does not exist.
+	...(config.threadAnswersEnabled
+		? [{ methods: ['POST'], pattern: /^\/api\/ai\/thread-runs$/, label: '/api/ai/thread-runs', handle: handleThreadRuns }]
 		: []),
 	// The web tools (C369): off, the switch of a workspace does not exist either.
 	...(config.webEnabled
