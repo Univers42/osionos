@@ -87,6 +87,10 @@ test.describe("theme editor", () => {
     await enterJson(page, '{\n  "name": "Persisted",\n  "colors": { "bg-page": "#999999" }\n}');
     await page.getByRole("button", { name: "Revert" }).first().click();
     await expect.poll(async () => (await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--osio-bg-page").trim())), { timeout: 2_000 }).toBe("#102030");
+    // The editor shows the saved text again, not the edit that was thrown away.
+    await expect(page.locator(".monaco-editor .view-lines").first()).toContainText("#102030");
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--osio-bg-page").trim())).toBe("#102030");
   });
 
   test("closing dirty keeps a draft and reopening shows Draft restored", async ({ page, baseURL }) => {
