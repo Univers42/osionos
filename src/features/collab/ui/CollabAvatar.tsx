@@ -21,9 +21,12 @@
  * the whole avatar pushed the initials (text, 4.5:1) and the ring (graphic, 3:1)
  * under WCAG AA, and the button is still active, so no exemption applied. The
  * accessible name says the same in words, with "typing" and "followed" when they
- * apply. The hit area (the pseudo-element) is 44 px tall, overflowing the 40 px top
- * bar invisibly, but only 38 px wide: wider would cross half the roster's 10 px gap
- * and let the neighbouring avatar take the tap.
+ * apply. The hit area (the pseudo-element) measures 38 x 40 px, not the 44 px tall it
+ * is drawn: upward it stops at the window's top edge, and downward the page column
+ * below the bar (painted later, overflow-hidden) takes the taps beyond the bar's
+ * 40 px. It is only 38 px wide because wider would cross half the roster's 10 px gap
+ * and let the neighbouring avatar take the tap. It meets WCAG 2.5.8 (24 px minimum),
+ * not the 44 px AAA target.
  *
  * On keyboard focus the identity ring is replaced by the accent focus ring, 2 px
  * further out (collab.css). The ring is a utility on purpose: an inline outline would

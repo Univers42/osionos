@@ -56,8 +56,25 @@ test('assignMemberColor is deterministic and within the palette (R-A8)', () => {
     const n = Number(token.replace(/\D/g, ''));
     assert.ok(n >= 1 && n <= COLLAB_PALETTE_SIZE);
   }
-  assert.equal(memberInitials('Dylan Lesieur'), 'DY');
+  assert.equal(memberInitials('Dylan Lesieur'), 'DL');
   assert.equal(memberInitials('  '), '?');
+});
+
+test('memberInitials takes first and last word initials, whole code points', () => {
+  assert.equal(memberInitials('osi-member'), 'OM');
+  assert.equal(memberInitials('osi-guest'), 'OG');
+  assert.equal(memberInitials('Dylan Lesieur'), 'DL');
+  assert.equal(memberInitials('Jean de la Fontaine'), 'JF');
+  assert.equal(memberInitials('alice'), 'AL');
+  assert.equal(memberInitials('a'), 'A');
+  assert.equal(memberInitials('  bob_smith  '), 'BS');
+  assert.equal(memberInitials('jo.doe@example.com'), 'JC', 'last word is "com": accepted');
+  assert.equal(memberInitials('--'), '?');
+  assert.equal(memberInitials(''), '?');
+  assert.equal(memberInitials('😀 Smile'), '😀S');
+  const astral = Array.from(memberInitials('𝒜b'));
+  assert.equal(astral.length, 2, 'two code points, none split');
+  assert.equal(astral[0], '𝒜');
 });
 
 test('rosterFromSnapshot dedups, drops self, and sorts by name', () => {

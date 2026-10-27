@@ -44,9 +44,35 @@ export function inkFor(color: string): string {
   return slot >= 1 && slot <= COLLAB_PALETTE_SIZE ? `var(--collab-ink-${slot})` : 'var(--collab-ink-deep)';
 }
 
-/** Two-letter avatar fallback when a member has no image. */
+// Module-level so the hot roster/presence path never rebuilds it.
+const NAME_WORD_SEPARATORS = /[\s\-_.@]+/;
+
+/** The first `count` code points of `text`, so an emoji or astral character is never split. */
+function leadingCodePoints(text: string, count: number): string {
+  let out = '';
+  let taken = 0;
+  for (const codePoint of text) {
+    out += codePoint;
+    taken += 1;
+    if (taken === count) break;
+  }
+  return out;
+}
+
+/**
+ * Avatar fallback when a member has no image: first and last word initials, so
+ * "osi-member" and "osi-guest" read OM and OG instead of both reading OS. A
+ * single word keeps its first two characters.
+ * Caveat: names sharing first and last initials still collide ("Om Ali" and
+ * "osi-member" are both OM); the colour ring is the second cue.
+ */
 export function memberInitials(name: string): string {
-  return name.trim().slice(0, 2).toUpperCase() || '?';
+  const words = name.trim().split(NAME_WORD_SEPARATORS).filter(Boolean);
+  if (words.length === 0) return '?';
+  const initials = words.length === 1
+    ? leadingCodePoints(words[0], 2)
+    : leadingCodePoints(words[0], 1) + leadingCodePoints(words[words.length - 1], 1);
+  return initials.toUpperCase();
 }
 
 /**
