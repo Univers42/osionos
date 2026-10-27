@@ -50,8 +50,8 @@ test.describe("database-view-overlays", () => {
 
   test("the dashboard drop line is placed against the window, not the pane", async ({ page }) => {
     const block = await databaseWithView(page, "Dashboard");
-    await block.getByRole("button", { name: "Customize layout" }).click();
-    await expect(block.getByText("Build your dashboard")).toBeVisible();
+    await block.getByRole("button", { name: /Edit layout/ }).click();
+    await expect(block.locator("[data-dash-row]").first()).toBeVisible();
     const indicator = page.locator("[data-dash-drop-indicator]");
     await expect(indicator).toHaveCount(1);
     expect((await placement(indicator)).inPane).toBe(false);

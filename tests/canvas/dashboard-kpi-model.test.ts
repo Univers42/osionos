@@ -42,6 +42,17 @@ test("an aggregate names its property and record base", () => {
   assert.equal(kpiProvenance({ fn: "avg", matched: 1, total: 55 }), "Average of — · 1 record");
 });
 
+test("a filtered count states its share of the records, as an unfiltered one does", () => {
+  assert.equal(
+    kpiProvenance({ fn: "count", matched: 60, total: 300, whereLabel: "Featured is checked" }),
+    "Count where Featured is checked · 20% of 300 records",
+  );
+  assert.equal(
+    kpiProvenance({ fn: "count", matched: 4, total: 4, whereLabel: "Done is checked" }),
+    "Count where Done is checked · All 4 records",
+  );
+});
+
 test("a where-filter reads as words, with the option's label for a select", () => {
   const properties = {
     status: { id: "status", name: "Status", type: "select", options: [{ id: "opt-accepted", value: "accepted", color: "green" }] },
