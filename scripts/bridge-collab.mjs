@@ -415,15 +415,14 @@ async function publishPageScopedEvent(deps, session, request, body, payload, wor
 		const publishedActor = normalizePublishedActor(session.userId, payload.actor);
 		const level = normalizedLevel(await deps.pageLevelFor?.(session.userId, pageId, workspaceId));
 		if (level === 'none') throw httpError('Page not found.', 404);
-		if (payload.t === 'blocks' || payload.t === 'file') {
-			if (!levelAtLeast(level, 'can_edit')) throw httpError('Page write access is required.', 403);
-		} else if (payload.t === 'note') {
-			if (!levelAtLeast(level, 'can_comment')) throw httpError('Comment access is required.', 403);
-		} else if (!levelAtLeast(level, 'can_view')) {
-			throw httpError('Page read access is required.', 403);
-		}
-		if (payload.t === 'blocks') {
-			if (!Array.isArray(payload.ops) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
+		if (!levelAtLeast(level, 'can_view')) throw httpError('Page read access is required.', 403);
+		// The level alone under-grants: a member with no page rule reads 'can_view' and
+		// writes through the membership's update permission (C558). Writes therefore go
+		// through the same gate PATCH /pages uses, never through the level.
+		const writes = payload.t === 'blocks' || payload.t === 'file'
+			|| (payload.t === 'note' && !levelAtLeast(level, 'can_comment'));
+		if (writes) {
+			if ((payload.t === 'blocks' && !Array.isArray(payload.ops)) || !deps.authorizeBlocks) throw httpError('Page write access is required.', 403);
 			await deps.authorizeBlocks(request, pageId, workspaceId);
 		}
 		// The topic is lowercased; the published payload names the same page (C574).
