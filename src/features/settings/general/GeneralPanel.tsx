@@ -51,6 +51,7 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
   const workspaceId = workspaceIdProp || activeWorkspaceId || '';
   const toast = useToastStore((state) => state.push);
   const deleteWorkspace = useUserStore((state) => state.deleteWorkspace);
+  const renameWorkspace = useUserStore((state) => state.renameWorkspace);
   const activeSession = useUserStore((state) => state.activeSession());
   const sessionWorkspaces = useMemo(
     () => [...(activeSession?.privateWorkspaces ?? []), ...(activeSession?.sharedWorkspaces ?? [])],
@@ -76,10 +77,12 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
   useEffect(() => {
     if (!workspaceNameDraft.trim() || workspaceNameDraft === settings.name) return;
     const timer = globalThis.setTimeout(() => {
-      update(resolvedUserId, workspaceId, { name: workspaceNameDraft.trim() });
+      const trimmedName = workspaceNameDraft.trim();
+      update(resolvedUserId, workspaceId, { name: trimmedName });
+      if (isOwner) renameWorkspace(workspaceId, trimmedName);
     }, 300);
     return () => globalThis.clearTimeout(timer);
-  }, [resolvedUserId, settings.name, update, workspaceId, workspaceNameDraft]);
+  }, [resolvedUserId, settings.name, update, workspaceId, workspaceNameDraft, renameWorkspace, isOwner]);
 
   // The store keeps a failed read in `error` instead of rejecting, so it is turned back into a rejection here.
   const hydration = useSettingsHydration(async () => {

@@ -5,7 +5,7 @@
 import { expect, test } from "@playwright/test";
 
 import { openFreshPage } from "../../browser/core/app.mjs";
-import { openSettings, region } from "../support/settingsHelpers.mjs";
+import { closeSettings, openSettings, region } from "../support/settingsHelpers.mjs";
 
 test.describe("workspace panels are honest (offline build)", () => {
   test("Billing: View invoice never invents an invoice", async ({ page, baseURL }) => {
@@ -70,6 +70,17 @@ test.describe("workspace panels are honest (offline build)", () => {
     await openSettings(page, "General");
     await region(page).getByRole("button", { name: "Reset to defaults" }).click();
     await expect(page.getByRole("dialog", { name: "Reset to defaults" })).toBeVisible();
+  });
+
+  test("General: renaming the workspace renames it in the switcher", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await openSettings(page, "General");
+    await region(page).getByLabel("Workspace name").fill("Renamed space");
+    // The icon is not what is under test here, so any icon before the name passes.
+    const header = page.getByRole("button", { name: /^\S+ Renamed space$/u }).first();
+    await expect(header).toBeVisible();
+    await closeSettings(page);
+    await expect(header).toBeVisible();
   });
 
   test("Library: Remove asset asks first", async ({ page, baseURL }) => {
