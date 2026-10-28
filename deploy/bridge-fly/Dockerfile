@@ -48,9 +48,10 @@ COPY scripts/moderation-lists/ ./scripts/moderation-lists/
 # Passkey management (list, rename, remove) on the account plane.
 COPY scripts/bridge-account-passkeys.mjs scripts/bridge-account-identities.mjs scripts/bridge-account-settings.mjs scripts/bridge-account-emails.mjs scripts/bridge-gotrue-user.mjs scripts/bridge-seal.mjs scripts/bridge-account-otp.mjs scripts/bridge-account-email-rows.mjs scripts/bridge-account-email-flow.mjs scripts/bridge-account-email-send.mjs scripts/bridge-account-email-primary.mjs ./scripts/
 
-# The collab access cache and the generation counters its writers bump. Off unless
-# COLLAB_AUTH_CACHE=1, but bridge-api.mjs imports both at boot, so they must be in the image.
-COPY scripts/bridge-access-generation.mjs scripts/bridge-collab-auth-cache.mjs ./scripts/
+# The collab access cache, the page parent-map cache, and the generation counters their writers
+# bump. Off unless COLLAB_AUTH_CACHE=1 / PAGE_MAP_CACHE=1, but bridge-api.mjs imports them at
+# boot, so they must be in the image.
+COPY scripts/bridge-access-generation.mjs scripts/bridge-collab-auth-cache.mjs scripts/bridge-page-map-cache.mjs ./scripts/
 
 ENV OSIONOS_BRIDGE_PORT=4000
 ENV HOME=/tmp

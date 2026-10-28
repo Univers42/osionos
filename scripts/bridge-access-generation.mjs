@@ -85,6 +85,12 @@ export function accessTicket(userId, workspaceId) {
 	return { epoch: state.epoch, user, workspace, userGeneration: state.users.get(user) ?? 0, workspaceGeneration: state.workspaces.get(workspace) ?? 0 };
 }
 
+/** The generations of a user-independent read (the page parent map): a user bump never kills it. */
+export function accessTicketWorkspace(workspaceId) {
+	const workspace = keyOf(workspaceId);
+	return { epoch: state.epoch, user: '', workspace, userGeneration: 0, workspaceGeneration: state.workspaces.get(workspace) ?? 0 };
+}
+
 /** False once any generation the ticket was read under has moved. */
 export function ticketIsCurrent(ticket) {
 	return ticket.epoch === state.epoch
