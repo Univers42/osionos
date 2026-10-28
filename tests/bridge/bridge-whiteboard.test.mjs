@@ -166,6 +166,20 @@ describe('whiteboard routes', () => {
 		});
 	});
 
+	it('refuse a scene under 8 MB that the stored, escaped copy takes over 8 MB', async () => {
+		await withWhiteboard(async ({ user }) => {
+			const client = await user();
+			const { slug } = await client.create();
+			const quoted = scene([{ ...element('big'), text: '"'.repeat(3 * 1024 * 1024) }]);
+			assert.ok(Buffer.byteLength(quoted) < 8 * 1024 * 1024);
+			const refused = await client.put(slug, quoted, 0);
+			assert.equal(refused.status, 413);
+			assert.equal(refused.body.error.code, 'payload_too_large');
+			assert.doesNotMatch(refused.body.error.message, /storage answered/);
+			assert.equal((await client.call(`${V1}/${slug}`)).body.rev, 0);
+		});
+	});
+
 	it('cap a scene at 8 MB and an account at 200 boards', async () => {
 		await withWhiteboard(async ({ mongo, user }) => {
 			const client = await user();
