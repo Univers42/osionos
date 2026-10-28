@@ -42,6 +42,7 @@ const state = await import("../../src/widgets/database-view/model/sysDatabaseSta
 const { buildSysSlashCommands } = await import("../../src/features/slash-commands/model/sysSlashCommands.ts");
 const { createHomeLayoutContent } = await import("../../src/widgets/database-view/model/databaseViewCatalog.ts");
 const { COLLECTION_SLASH_ITEMS } = await import("../../src/shared/ui/assets/collectionSlashItems.ts");
+const { useToastStore } = await import("@osionos/ui/primitives/useToastStore");
 const ENGINE = "../../src/shared/notion-database-sys/src/components/views/dashboard/notion/model";
 const { statEntries } = await import(`${ENGINE}/statEntries.ts`);
 const { chartEntries, recordEntries } = await import(`${ENGINE}/widgetEntries.ts`);
@@ -128,4 +129,18 @@ test("an unchanged starter dashboard is not saved on load; a renamed tile is, un
   adapter.persistState({ ...loaded, views: { ...loaded.views, [dashboard.id]: { ...dashboard, settings: { ...dashboard.settings, dashboardWidgets: widgets } } } }, loaded);
   await sleep();
   assert.deepEqual(writes, ["PUT /api/account/self-data/views/my-tasks/my-tasks-home-dashboard"]);
+});
+
+// The adapter is one per source, shared by every block that shows it: a refused save
+// is one event, so it says so once however many blocks are mounted.
+test("a refused view save shows one error toast", async () => {
+  state.clearSysSourceStateCache();
+  useToastStore.getState().clear();
+  const refusing = { ...transport("my-pages"), async put<T>(): Promise<T> { throw new Error("invalid_view"); } };
+  const adapter = state.getSysDatabaseAdapter("sys:my-pages", refusing);
+  const loaded = await adapter.loadState();
+  const added = { ...loaded.views, "v-new": { ...Object.values(loaded.views)[0], id: "v-new", name: "Mine" } };
+  adapter.persistState({ ...loaded, views: added }, loaded);
+  await sleep();
+  assert.deepEqual(useToastStore.getState().toasts.map((toast: { title: string }) => toast.title), ["Could not save this view: invalid_view"]);
 });
