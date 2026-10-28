@@ -61,6 +61,7 @@ import {
   rotateInvite,
   saveInvite,
 } from './bridge-workspace-invite-store.mjs';
+import { connectionStatus, inviteRequiresConnection } from './bridge-friendship.mjs';
 
 // role → the membership row it grants. `member` is the UI's editable member and
 // maps to the DB's `editor`; `guest` maps to the read-only `viewer`.
@@ -77,7 +78,7 @@ const INVITE_BUCKET = { capacity: 20, refillPerSec: 1 / 30 };
 // Accept is the only route a token holder reaches: 10 a minute per session bounds guessing.
 const ACCEPT_BUCKET = { capacity: 10, refillPerSec: 10 / 60 };
 
-const coded = (status, code, message) => Object.assign(httpError(message, status), { code });
+const coded = (status, code, message, extra = {}) => Object.assign(httpError(message, status), { code }, extra);
 
 function inviteRole(value) {
   const role = safeText(value, 16).toLowerCase();
@@ -114,10 +115,26 @@ function inviteAnswer(config, { row, token }) {
  * The checks and the write every invite creation shares, whichever route reached it:
  * the target is not the owner and not already a member, then one pending invite row.
  */
-async function saveInviteForAccount(deps, session, { workspace, workspaceId, inviteeId, email, role, config }) {
+async function saveInviteForAccount(deps, session, { workspace, workspaceId, inviteeId, email, role, config, isIdRoute = false }) {
   if (isSameId(inviteeId, workspace.owner_id)) throw coded(409, 'is_owner', 'The workspace owner is already a member.');
   if (await workspaceMembership(config, deps.fetchImpl, inviteeId, workspaceId)) {
     throw coded(409, 'already_member', 'That account is already a member of this workspace.');
+  }
+  if (inviteRequiresConnection(deps.env)) {
+    // C600/C601/C602/C603: friendship required only when flag on
+    const status = await connectionStatus(config, deps.fetchImpl, session.userId, inviteeId);
+    if (status === 'blocked') {
+      // The block is hidden behind the route's "no such account" answer: the
+      // inviter must not learn that the account exists and blocked them.
+      if (isIdRoute) throw coded(404, 'no_account', 'No osionos account uses that id.');
+      throw coded(404, 'no_account', 'No osionos account uses that email yet. Ask them to sign up first, then invite them again.');
+    }
+    if (status !== 'friends') {
+      if (isIdRoute) {
+        throw coded(409, 'not_connected', 'You can only invite people you are connected with.', { profileUserId: inviteeId });
+      }
+      throw coded(409, 'not_connected', 'You can only invite people you are connected with.');
+    }
   }
   return saveInvite(config, deps.fetchImpl, { workspaceId, email, inviteeId, role: role.role, invitedBy: session.userId });
 }
@@ -138,7 +155,7 @@ async function invitePerson(deps, session, request, workspaceId, response, confi
   if (!account) throw coded(404, 'no_account', 'No osionos account uses that email yet. Ask them to sign up first, then invite them again.');
   const inviteeId = safeText(account.id, 80);
   if (!inviteeId) throw httpError('The invited account has no usable id.', 502);
-  const saved = await saveInviteForAccount(deps, session, { workspace, workspaceId, inviteeId, email, role, config });
+  const saved = await saveInviteForAccount(deps, session, { workspace, workspaceId, inviteeId, email, role, config, isIdRoute: false });
   return sendJson(response, 200, inviteAnswer(config, saved), config);
 }
 
@@ -169,7 +186,7 @@ export async function createInviteForUser({ deps, session, workspaceId, userId, 
   const email = safeText(account?.email, 320).trim().toLowerCase();
   const inviteeId = safeText(account?.id, 80) || String(userId);
   if (!EMAIL_RE.test(email)) throw coded(404, 'no_account', 'No osionos account uses that id.');
-  return saveInviteForAccount(deps, session, { workspace, workspaceId, inviteeId, email, role: mapped, config });
+  return saveInviteForAccount(deps, session, { workspace, workspaceId, inviteeId, email, role: mapped, config, isIdRoute: true });
 }
 
 /** GET /api/workspaces/:id/invites — owner/admin only. */
@@ -190,6 +207,13 @@ async function liveInviteOrThrow(deps, session, workspaceId, inviteId, config) {
 async function resendInvite(deps, session, workspaceId, inviteId, response, config) {
   const live = await liveInviteOrThrow(deps, session, workspaceId, inviteId, config);
   takeToken(`workspace-invite:${session.userId}`, INVITE_BUCKET);
+  if (inviteRequiresConnection(deps.env)) {
+    const status = await connectionStatus(config, deps.fetchImpl, session.userId, live.invited_user_id);
+    if (status === 'blocked') throw coded(404, 'invite_not_found', 'Invite not found.');
+    if (status !== 'friends') {
+      throw coded(409, 'not_connected', 'You can only invite people you are connected with.');
+    }
+  }
   return sendJson(response, 200, inviteAnswer(config, await rotateInvite(config, deps.fetchImpl, live)), config);
 }
 
@@ -233,6 +257,15 @@ async function acceptInvite(deps, request, response, config) {
   refuseUnacceptable(invite, session.userId);
   if (await workspaceMembership(config, deps.fetchImpl, session.userId, invite.workspace_id)) {
     throw coded(409, 'already_member', 'You are already a member of this workspace.');
+  }
+  if (inviteRequiresConnection(deps.env)) {
+    const status = await connectionStatus(config, deps.fetchImpl, invite.invited_by, session.userId);
+    if (status === 'blocked') throw coded(410, 'invite_used', 'This invite was already used.');
+    if (status !== 'friends') {
+      // void invite atomically like markAccepted does (filtered PATCH)
+      await revokeInvite(config, deps.fetchImpl, invite.id);
+      throw coded(410, 'invite_used', 'This invite was already used.');
+    }
   }
   // Claim the invite before the membership: of two racing accepts only one passes this, so the
   // other cannot publish a second "added".
