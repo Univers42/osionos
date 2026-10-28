@@ -30,6 +30,7 @@
 import { httpError } from './bridge-social-core.mjs';
 import { readBaasJson } from './bridge-baas-body.mjs';
 import { bumpAccessAfter } from './bridge-access-generation.mjs';
+import { validateName, validateValue } from './bridge-member-attributes.mjs';
 
 const TABLE = 'osionos_share_rules';
 const TEAMS_TABLE = 'osionos_teams';
@@ -79,14 +80,7 @@ function normalizeTarget(target) {
 		return { type, teamId };
 	}
 	if (type === 'attribute') {
-		const name = boundedText(target.name, 32, 'target.name');
-		if (!/^[a-z][a-z0-9_]{0,31}$/.test(name)) throw httpError('target.name must be a lowercase identifier', 400);
-		const value = boundedText(target.value, 64, 'target.value');
-		if (value.length < 1) throw httpError('target.value is required', 400);
-		if (value.includes(':')) throw httpError('target.value must not contain ":"', 400);
-		if (value.startsWith(' ') || value.endsWith(' ')) throw httpError('target.value must not have leading or trailing spaces', 400);
-		if (/[\x00-\x1f\x7f]/.test(value)) throw httpError('target.value must not contain control characters', 400);
-		return { type, name, value };
+		return { type, name: validateName(target.name, 'target.name'), value: validateValue(target.value, 'target.value') };
 	}
 	throw httpError('target.type is invalid', 400);
 }

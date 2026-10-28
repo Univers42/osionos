@@ -1524,7 +1524,7 @@ async function pageWriteContext(request, pageId, config, fetchImpl, access = nul
 	const entry = exempt ? null : await (access ? access.loader : createPageAccessLoader(token, config, fetchImpl)).entryFor(workspaceId);
 	const level = exempt ? null : pageLevelFor(entry, row, token.userId);
 	const ruleLevel = exempt ? null : pageRuleLevelFor(entry, row, token.userId);
-	return { token, row, member, workspaceId, owner: false, level, ruleLevel, attributes: exempt ? null : (entry?.attributes ?? null) };
+	return { token, row, member, workspaceId, owner: false, level, ruleLevel };
 }
 
 /**
@@ -1545,7 +1545,7 @@ function requirePageWrite(context, permission) {
 	const syntheticRules = context.ruleLevel !== null
 		? [{ resource_type: 'page', resource_id: context.row?.id, target: { type: 'user', userId: context.token.userId }, permission: context.ruleLevel }]
 		: [];
-	if (!canWritePageRow(context.row, context.token.userId, context.member, permission, syntheticRules, null, context.attributes)) throw pageWriteDenied();
+	if (!canWritePageRow(context.row, context.token.userId, context.member, permission, syntheticRules)) throw pageWriteDenied();
 }
 
 /**
