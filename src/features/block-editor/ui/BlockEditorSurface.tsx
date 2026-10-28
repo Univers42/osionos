@@ -1336,6 +1336,19 @@ function isMediaHandleBlock(type: Block["type"]): boolean {
 	}
 }
 
+/** One body row: a media handle centres on this much of its anchor's top. */
+const MEDIA_HANDLE_ROW_PX = 28;
+
+/** The visible top of a media/embed block: its database title, else its first picture,
+ *  player, frame or link card, else an explicit `data-handle-anchor` (the empty row). */
+function findMediaHandleAnchor(article: HTMLElement, blockId: string): HTMLElement | null {
+	const scope = article.querySelector<HTMLElement>(`[data-block-id="${blockId}"]`) ?? article;
+	return (
+		scope.querySelector<HTMLElement>("[data-database-title]") ??
+		scope.querySelector<HTMLElement>("img, video, audio, iframe, a[href], [data-handle-anchor]")
+	);
+}
+
 function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleTop: string } {
 	switch (type) {
 		// Headings: big space above (new section), tight below (bind to content).
@@ -1514,7 +1527,19 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		// inline top a pre-conversion hover left behind (e.g. paragraph -> image
 		// keeps the same element), so the class fallback takes effect again.
 		if (isMediaHandleBlock(block.type)) {
-			handle.style.top = "";
+			const anchor = findMediaHandleAnchor(article, block.id);
+			if (!anchor) {
+				handle.style.top = "";
+				return;
+			}
+			// Centred on the anchor's first row (a picture's or card's top edge), or on
+			// the whole anchor when it is a single row (a title, the empty media row).
+			// The static class sat ~17px above them: it ignored the frame's my-3 and p-2.
+			const rect = anchor.getBoundingClientRect();
+			const single = rect.height < 2 * MEDIA_HANDLE_ROW_PX;
+			const row = Math.max(single ? rect.height : MEDIA_HANDLE_ROW_PX, handle.offsetHeight);
+			const top = toCssPx(rect.top - article.getBoundingClientRect().top, article) + (row - handle.offsetHeight) / 2;
+			handle.style.top = `${Math.max(0, Math.round(top))}px`;
 			return;
 		}
 		const leaf = article.querySelector<HTMLElement>(
