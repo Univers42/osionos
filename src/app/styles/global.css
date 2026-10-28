@@ -888,6 +888,16 @@ body {
   opacity: 1;
 }
 
+/* A marker (to-do box, toggle chevron) centred on the first line of the text beside
+   it, whatever that line's size: the marker carries the text's type classes, so 1lh
+   is that line. 0.125rem is the text's py-0.5. `top` + translate move the marker
+   without growing the row; a fixed mt-[3px] sat 4px high once the body line grew. */
+@utility osio-line-marker {
+  position: relative;
+  top: calc(0.125rem + 0.5lh);
+  translate: 0 -50%;
+}
+
 /* Accessibility baseline: honor the OS "reduce motion" preference — or the
    person's own choice, which wins over the OS in both directions.
    data-motion="reduce" collapses the motion whatever the OS says;
