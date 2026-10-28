@@ -41,7 +41,7 @@ import {
 import { readRawBody } from './bridge-chat-media.mjs';
 import { ensureChatBucket, extFromMime, storageObjectKey, storagePut } from './bridge-storage-core.mjs';
 import { REALTIME_TOKEN_ISSUER, signRealtimeJwt } from './bridge-realtime-socket.mjs';
-import { createInviteForUser } from './bridge-workspace-invites.mjs';
+import { createInviteForUser, inviteAnswer } from './bridge-workspace-invites.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { connectionStatus, inviteRequiresConnection } from './bridge-friendship.mjs';
 import { beginServerTiming, markHop, runWithServerTiming, timedHop } from './bridge-server-timing.mjs';
@@ -608,11 +608,14 @@ async function inviteMember(deps, session, request, workspaceId, response, confi
 	const payload = await readJsonBody(request);
 	const userId = safeText(payload.userId, 64);
 	if (!UUID_REGEX.test(userId)) throw httpError('userId must be a valid id.', 422);
-	const { row } = await createInviteForUser({
-		deps, session, workspaceId, userId, role: 'guest', config,
+	const saved = await createInviteForUser({
+		deps, session, workspaceId, userId, role: payload.role, config,
 	});
+	// Omitting role keeps the legacy response byte-identical; an explicit role opts into the link answer.
+	const answer = payload.role === undefined ? null : inviteAnswer(config, saved);
 	return sendJson(response, 200, {
-		ok: true, workspaceId, userId, role: 'viewer', inviteId: row?.id ?? null, pending: true,
+		ok: true, workspaceId, userId, role: saved.row?.role ?? 'viewer', inviteId: saved.row?.id ?? null, pending: true,
+		...(answer ? { invite: answer.invite, acceptUrl: answer.acceptUrl } : {}),
 	}, config);
 }
 
