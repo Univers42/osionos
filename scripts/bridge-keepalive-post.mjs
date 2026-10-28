@@ -23,8 +23,13 @@
  * the pool: the pool may hold more sockets the peer closed in the same sweep. A fresh socket is
  * never retried.
  *
+ * A socketPath selects a pooled local unix socket instead: the ssh -L forward to the gateway
+ * avoids the tailnet TCP/TLS handshake, while the http: URL still supplies the path, query and
+ * Host header.
+ *
  * Caveat: an idle socket the far side dropped without a FIN/RST (a NAT timeout) is found only by
- * the caller's abort timeout, not by the retry.
+ * the caller's abort timeout, not by the retry; and a peer that resets a reused socket after it
+ * read the whole request gets that publish twice (accepted for K1 and S8, devil 2026-10-27).
  */
 
 import http from 'node:http';
@@ -34,6 +39,7 @@ const AGENTS = {
 	'http:': new http.Agent({ keepAlive: true, maxFreeSockets: 16 }),
 	'https:': new https.Agent({ keepAlive: true, maxFreeSockets: 16 }),
 };
+const SOCKET_AGENTS = new Map();
 const TRANSPORTS = { 'http:': http, 'https:': https };
 const RESET_CODES = new Set(['ECONNRESET', 'EPIPE']);
 
@@ -44,13 +50,14 @@ function isStaleSocketError(error, request) {
 	return request.reusedSocket === true && (RESET_CODES.has(error?.code) || error?.message === 'socket hang up');
 }
 
-/** One POST attempt over `agent`; a stale-socket failure is tagged in `staleSocketErrors`. */
-function attempt(target, init, agent) {
+/** One POST attempt over `agent` (and `socketPath`, when set); a stale-socket failure is tagged in `staleSocketErrors`. */
+function attempt(target, init, agent, socketPath) {
 	const { headers, body, signal } = init;
 	return new Promise((resolve, reject) => {
 		const request = TRANSPORTS[target.protocol].request(target, {
 			method: init.method,
 			agent,
+			socketPath,
 			headers: { ...headers, 'Content-Length': Buffer.byteLength(body) },
 		});
 		const onAbort = () => request.destroy(signal.reason);
@@ -73,15 +80,27 @@ function attempt(target, init, agent) {
 	});
 }
 
-/** POST `init.body` to `url` over a pooled keep-alive socket; resolves `{ ok, status }`. */
-export async function keepAliveFetch(url, init) {
+/** The keep-alive agent of one unix socket, made once (S12: never the TCP pool). */
+function socketAgent(socketPath) {
+	let agent = SOCKET_AGENTS.get(socketPath);
+	if (!agent) {
+		agent = new http.Agent({ socketPath, keepAlive: true, maxSockets: 16, maxFreeSockets: 16 });
+		SOCKET_AGENTS.set(socketPath, agent);
+	}
+	return agent;
+}
+
+/** POST `init.body` to `url`, over `socketPath` when given (http: URLs only); resolves `{ ok, status }`. */
+export async function keepAliveFetch(url, init, socketPath) {
 	const target = new URL(url);
 	if (!AGENTS[target.protocol]) throw new Error(`unsupported protocol ${target.protocol}`);
+	if (socketPath && target.protocol !== 'http:') throw new Error('socketPath needs an http: URL');
 	init.signal?.throwIfAborted();
+	const agent = socketPath ? socketAgent(socketPath) : AGENTS[target.protocol];
 	try {
-		return await attempt(target, init, AGENTS[target.protocol]);
+		return await attempt(target, init, agent, socketPath);
 	} catch (error) {
 		if (!staleSocketErrors.has(error) || init.signal?.aborted) throw error;
-		return attempt(target, init, false);
+		return attempt(target, init, false, socketPath);
 	}
 }
