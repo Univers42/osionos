@@ -5,6 +5,7 @@ import { Embedder } from '../indexer/embedder.ts';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 import { ROW_ALLOWED_SQL, WORKSPACE_ALLOWED_SQL, liveMemberWorkspaces } from './acl.ts';
 import { RERANK_TIMEOUT_MS, RerankError, rerank } from './rerank.ts';
+import { readableByRules } from './shareRules.ts';
 
 /**
  * The retrieval: the chunks that answer a question, in one statement.
@@ -346,6 +347,9 @@ function snippet(content: string): string {
  * The related-pages read (retrieval/related.ts) re-checks its candidates the
  * same way: one rule, one place. It runs the read on the connection it holds,
  * so the parameter is a RUNNER and not a pool.
+ *
+ * A page must pass BOTH the membership check and the share rules; the rules are
+ * read once for the whole batch, never per page.
  */
 export async function readablePages(
 	db: QueryRunner,
@@ -356,8 +360,13 @@ export async function readablePages(
 	const pages = new Map<string, PageRow>();
 	if (ids.length === 0) return pages;
 	const result = await db.query<PageRow>(PAGES_SQL, [ids]);
+	const memberRows: PageRow[] = [];
 	for (const row of result.rows) {
 		if (!canReadPageRowAsMember(row, user.userId, workspaces)) continue;
+		memberRows.push(row);
+	}
+	const kept = await readableByRules(db, user, memberRows);
+	for (const row of kept) {
 		pages.set(String(row.id).toLowerCase(), row);
 	}
 	return pages;

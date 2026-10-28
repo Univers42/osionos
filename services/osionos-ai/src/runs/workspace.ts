@@ -15,6 +15,7 @@
 import type { Pool } from 'pg';
 import type { AuthUser } from '../auth.ts';
 import { liveMemberWorkspaces, pageRowReadableSql } from '../retrieval/acl.ts';
+import { ruleHiddenPageIds } from '../retrieval/shareRules.ts';
 
 export interface WorkspacePageEntry {
 	id: string;
@@ -71,6 +72,7 @@ const OVERVIEW_SQL = `
 		 where p.workspace_id = $1::uuid
 		   and p.archived_at is null
 		   and ${pageRowReadableSql('p', '$2')}
+		   and p.id <> all($4::uuid[])
 	),
 	roots as (
 		select r.* from readable r
@@ -100,6 +102,7 @@ const RECENT_SQL = `
 		 where p.workspace_id = $1::uuid
 		   and p.archived_at is null
 		   and ${pageRowReadableSql('p', '$2')}
+		   and p.id <> all($4::uuid[])
 	)
 	select r.id, r.title, r.updated_at, 0 as depth, 0 as child_count, 0 as total,
 	       (select q.id from readable q where q.id = r.parent_page_id) as parent_id
@@ -132,10 +135,12 @@ export async function loadWorkspaceOverview(
 ): Promise<WorkspaceOverview | null> {
 	const readable = await liveMemberWorkspaces(db, user);
 	if (!readable.includes(workspaceId)) return null;
+	const hidden = await ruleHiddenPageIds(db, user, workspaceId);
+	if (hidden === null) return null;
 	try {
 		const [treeResult, recentResult] = await Promise.all([
-			db.query<OverviewRow>(OVERVIEW_SQL, [workspaceId, user.userId, limits.entries]),
-			db.query<OverviewRow>(RECENT_SQL, [workspaceId, user.userId, limits.recent]),
+			db.query<OverviewRow>(OVERVIEW_SQL, [workspaceId, user.userId, limits.entries, hidden]),
+			db.query<OverviewRow>(RECENT_SQL, [workspaceId, user.userId, limits.recent, hidden]),
 		]);
 		const total = treeResult.rows.length > 0 ? Number(treeResult.rows[0].total) : 0;
 		return {

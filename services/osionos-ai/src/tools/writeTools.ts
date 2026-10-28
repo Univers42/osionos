@@ -1,7 +1,8 @@
 import type { Pool, QueryResultRow } from 'pg';
 import { z } from 'zod';
-import { canReadPageRowAsMember, sameId } from '../../../../scripts/bridge-page-read.mjs';
+import { sameId } from '../../../../scripts/bridge-page-read.mjs';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
+import { canReadPageWithRules } from '../retrieval/shareRules.ts';
 import { canAccessWorkspace } from '../workspaceAccess.ts';
 import { BLOCK_TYPES, TEXT_BLOCK_TYPES } from './blockTypes.ts';
 import type { ApprovalTarget } from '../approvals/types.ts';
@@ -178,7 +179,7 @@ export async function writablePage(ctx: WriteToolContext, pageId: string): Promi
 	const row = result.rows[0];
 	if (!row) return null;
 	const workspaces = await liveMemberWorkspaces(ctx.db, ctx.user);
-	if (!canReadPageRowAsMember(row, ctx.user.userId, workspaces)) return null;
+	if (!(await canReadPageWithRules(ctx.db, ctx.user.userId, row, workspaces))) return null;
 	if (!(await mayWritePage(ctx.db, ctx, row))) return null;
 	return row;
 }
