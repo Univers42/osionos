@@ -102,6 +102,28 @@ test.describe("column lead alignment", () => {
     await expect(page.getByText("Child", { exact: true })).toHaveCount(1);
   });
 
+  test("a gallery in a narrow column keeps a readable title and full-width cards on its text edge", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await openFreshPage(page, baseURL);
+    await seedColumns(page);
+    const database = page.locator('[data-column-id="lead-col-1"]');
+    await database.locator(".odb-view-body .grid > *").first().waitFor();
+    const layout = await database.evaluate((column) => {
+      const box = (selector) => column.querySelector(selector).getBoundingClientRect();
+      const grid = box(".odb-view-body .grid");
+      return {
+        titleWidth: Math.round(box("[data-database-title]").width),
+        edge: Math.round(box(".odb-topbar-row").left),
+        cardLeft: Math.round(box(".odb-view-body .grid > *").left),
+        cardWidth: Math.round(box(".odb-view-body .grid > *").width),
+        gridWidth: Math.round(grid.width),
+      };
+    });
+    expect(layout.titleWidth, "the title is not crushed by New").toBeGreaterThanOrEqual(90);
+    expect(layout.cardLeft, "cards start on the title's edge").toBe(layout.edge);
+    expect(layout.cardWidth, "one card fills a narrow column").toBe(layout.gridWidth);
+  });
+
   test("at 320 px the columns stack at full width and nothing runs off the page", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await openFreshPage(page, baseURL);
