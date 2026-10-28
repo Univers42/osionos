@@ -28,6 +28,10 @@ export function tokenRow(id, name, extra = {}) {
 export async function stubTokens(page, rows) {
   const state = { rows: [...rows], posts: [], deletes: [], auth: [], failList: null, failDelete: null };
   await stubBridge(page, (url, request) => {
+    // The home dashboard behind Settings reads the self-data sources in the background; an
+    // unstubbed 503 there logs a load error whenever it lands before the test ends.
+    const selfData = url.pathname.match(/^\/api\/account\/self-data\/(views\/)?([^/]+)/);
+    if (selfData) return { json: selfData[1] ? { ok: true, source: selfData[2], views: {} } : { ok: true, source: selfData[2], columns: [], rows: [], truncated: false } };
     const [, id] = url.pathname.match(/^\/api\/account\/tokens(?:\/([^/]+))?$/) ?? [];
     if (!url.pathname.startsWith("/api/account/tokens")) return undefined;
     state.auth.push(request.headers().authorization);

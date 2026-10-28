@@ -750,16 +750,25 @@ export async function dragBlockTo(page, fromIndex, toIndex, targetPosition = "ab
   });
 }
 
-export async function startSyntheticBlockDrag(page, fromIndex) {
+// Block drags run on pointer events (the handle is not natively draggable), so a
+// carried block is driven with the real mouse: press, move past the threshold.
+export async function startBlockDrag(page, fromIndex) {
   const handle = page
     .getByRole("button", { name: /Drag to reorder block/i })
     .nth(fromIndex);
-  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
-  await handle.dispatchEvent("dragstart", { dataTransfer });
-  return dataTransfer;
+  await blockLocator(page, fromIndex).hover();
+  const box = await handle.boundingBox();
+
+  if (!box) {
+    throw new Error("Could not resolve drag handle bounding box");
+  }
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 12, { steps: 3 });
 }
 
-export async function dragOverBlock(page, toIndex, dataTransfer, targetPosition = "above") {
+export async function dragOverBlock(page, toIndex, targetPosition = "above") {
   const target = blockLocator(page, toIndex);
   const targetBox = await target.boundingBox();
 
@@ -767,21 +776,17 @@ export async function dragOverBlock(page, toIndex, dataTransfer, targetPosition 
     throw new Error("Could not resolve drag target bounding box");
   }
 
-  await target.dispatchEvent("dragover", {
-    dataTransfer,
-    clientX: targetBox.x + Math.min(24, Math.max(8, targetBox.width / 2)),
-    clientY:
-      targetBox.y +
-      (targetPosition === "above" ? 2 : Math.max(4, targetBox.height - 2)),
-  });
+  await page.mouse.move(
+    targetBox.x + Math.min(24, Math.max(8, targetBox.width / 2)),
+    targetBox.y + (targetPosition === "above" ? 2 : Math.max(4, targetBox.height - 2)),
+    { steps: 3 },
+  );
 }
 
-export async function endSyntheticBlockDrag(page, fromIndex, dataTransfer) {
-  const handle = page
-    .getByRole("button", { name: /Drag to reorder block/i })
-    .nth(fromIndex);
-  await handle.dispatchEvent("dragend", { dataTransfer });
-  await dataTransfer.dispose();
+/** Ends a carried block without dropping it. */
+export async function cancelBlockDrag(page) {
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
 }
 
 export async function blockOpacity(page, index) {
