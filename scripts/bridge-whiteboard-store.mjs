@@ -33,6 +33,11 @@ const SUMMARY_FIELDS = 'slug,title,element_count,entry_count,bounds,rev,thumbnai
 // Caveat: sized for an 8 MB scene over the Funnel hop to b2b, not measured on it; a slower
 // link times a large save out (502) and the autosaver retries it.
 const MONGO_TIMEOUT_MS = 30_000;
+// mongo-api's JSON body limit (MONGO_API_JSON_LIMIT, default 8mb). The scene is stored as text,
+// so every quote in it is escaped once more: a request under the route's 8 MB cap can still be
+// a body mongo-api refuses. Measured here, on what is actually sent.
+const STORAGE_BODY_BYTES = 8 * 1024 * 1024;
+const TOO_LARGE = 'The board is over the 8MB storage limit.';
 
 export function mongoBase(env = process.env) {
 	const kong = `${String(env.OSIONOS_BAAS_URL ?? env.PUBLIC_BAAS_URL ?? 'http://localhost:8000').replace(/\/$/, '')}/mongo/v1`;
@@ -51,15 +56,20 @@ async function call(deps, userId, path, { method = 'GET', query = {}, body } = {
 	const url = new URL(`${deps.base}/collections/${path}`);
 	for (const [key, value] of Object.entries(query)) url.searchParams.set(key, String(value));
 	const headers = storageHeaders(userId, deps.env, { accept: 'application/json' });
-	if (body !== undefined) headers['content-type'] = 'application/json';
+	const payload = body === undefined ? undefined : JSON.stringify(body);
+	if (payload !== undefined) {
+		if (Buffer.byteLength(payload) > STORAGE_BODY_BYTES) throw httpError(TOO_LARGE, 413);
+		headers['content-type'] = 'application/json';
+	}
 	const response = await deps.fetchImpl(url, {
 		method,
 		headers,
-		body: body === undefined ? undefined : JSON.stringify(body),
+		body: payload,
 		signal: AbortSignal.timeout(MONGO_TIMEOUT_MS),
 	});
 	if (!response.ok) {
 		const text = await response.text().catch(() => '');
+		if (response.status === 413) throw httpError(TOO_LARGE, 413);
 		throw httpError(`Whiteboard storage answered ${response.status}: ${text.slice(0, 160)}`, statusFor(response.status));
 	}
 	return readBaasJson(response, { service: 'mongo-api', empty: null, fail: (message) => httpError(message, 502) });
