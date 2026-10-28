@@ -202,6 +202,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
             type="button"
             className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40"
             aria-label={`Add ${label.toLowerCase()}`}
+            data-handle-anchor
             onClick={() => setShowEmbed(true)}
           >
             <MediaBlockPreview block={block} />
