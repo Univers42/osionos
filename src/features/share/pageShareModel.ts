@@ -83,7 +83,7 @@ export function sharingWith(sharing: PageSharing, target: ShareEntry['target'], 
   if (level === 'no_access') return sharingWithout(sharing, target);
   if (target.type === 'workspace') return { ...sharing, visibility: 'shared' };
   if (target.type === 'public') throw new Error(PUBLISH_HINT);
-  if (target.type === 'role' || target.type === 'team') throw new Error(PAGE_TARGET_HINT);
+  if (target.type === 'role' || target.type === 'team' || target.type === 'attribute') throw new Error(PAGE_TARGET_HINT);
   const { person } = target;
   if (!members.some((member) => sameId(member.id, person.id))) {
     throw new Error(`${person.name} is not a member of this workspace. Add them to the workspace before sharing this page with them.`);
@@ -98,7 +98,7 @@ export function sharingWith(sharing: PageSharing, target: ShareEntry['target'], 
 
 export function sharingWithout(sharing: PageSharing, target: ShareEntry['target']): PageSharing {
   if (target.type === 'public') throw new Error(PUBLISH_HINT);
-  if (target.type === 'role' || target.type === 'team') throw new Error(PAGE_TARGET_HINT);
+  if (target.type === 'role' || target.type === 'team' || target.type === 'attribute') throw new Error(PAGE_TARGET_HINT);
   if (target.type === 'workspace') return { ...sharing, visibility: sharing.visibility === 'shared' ? 'private' : sharing.visibility };
   const { person } = target;
   return { ...sharing, collaborators: sharing.collaborators.filter((collaborator) => !sameId(collaborator.userId, person.id)) };
