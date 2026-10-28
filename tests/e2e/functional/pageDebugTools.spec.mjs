@@ -44,6 +44,7 @@ test("debug tools toggle overlays on and off from the page ··· menu", async (
   await expect(page.getByTestId("debug-ruler-chip")).toBeVisible();
   await expect(page.getByTestId("debug-ruler-chip")).toContainText("px");
   await expect(page.getByTestId("debug-perf-chip")).toContainText("fps", { timeout: 5000 });
+  await expect(page.getByTestId("debug-perf-chip")).toContainText(/keys \d+/);
 
   // Toggles are symmetric: everything off again, attributes and HUD gone.
   await page.getByRole("button", { name: "Open page configuration" }).click();
