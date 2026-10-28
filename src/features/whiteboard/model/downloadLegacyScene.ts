@@ -19,8 +19,8 @@ export function downloadJsonFile(fileName: string, content: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-/** Save the stored scene byte-for-byte. Nothing is parsed or re-serialised, so a scene
- *  the importer cannot read is still recoverable. */
+/** Save the stored scene byte-for-byte. Nothing is parsed or re-serialised, so even a
+ *  malformed scene is recoverable. */
 export function downloadLegacyScene(blockId: string, content: string): void {
   downloadJsonFile(legacyDrawFileName(blockId), content);
 }

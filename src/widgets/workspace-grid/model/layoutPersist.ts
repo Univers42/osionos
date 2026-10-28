@@ -82,7 +82,7 @@ export function consoleTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: CONSOLE_TAB_ID, workspaceId: "", kind: "console", title: "BaaS Console", icon: "icon:database" };
 }
 
-/** The Whiteboard tab: drawnosaurus embedded, opening its board gallery. Stable id, so
+/** The Whiteboard tab: hydrawn embedded, opening its board gallery. Stable id, so
  *  re-opening focuses the tab instead of duplicating it. */
 export function whiteboardTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: WHITEBOARD_TAB_ID, workspaceId: "", kind: "embed", title: "Whiteboard", icon: "icon:pen-tool", url: whiteboardAppUrl() };
