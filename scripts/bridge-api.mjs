@@ -30,6 +30,7 @@ import { bestShareLevel, shareDenies, shareGrantsRead, shareGrantsWrite } from '
 import { pageAccessLevel, pageRuleLevel } from './bridge-page-access.mjs';
 import { createShareRuleStore } from './bridge-perms-rules.mjs';
 import { QUERY_ROUTER_TABLE, moderationWarningBody, publishRealtime, readInChunks } from './bridge-social-core.mjs';
+import { publishPageAccess } from './bridge-page-access-fanout.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge-auth-exchange.mjs';
@@ -4369,6 +4370,11 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	}
 	if (carriesArchive && updateRow.archived_at === null) await cascade(updateRow.archived_at, false);
 	if (carriesArchive && updateRow.archived_at !== null && precondition !== null) await cascade(updateRow.archived_at, true);
+	// Only the owner's write keeps a `collaborators` key (withoutForeignSharingChanges).
+	if (Object.hasOwn(payload, 'collaborators')) {
+		const workspaceId = Object.hasOwn(updateRow, 'workspace_id') ? updateRow.workspace_id : existing.workspace_id;
+		await publishPageAccess({ workspaceId, pageId, before: existing.collaborators, after: payload.collaborators, fetchImpl });
+	}
 	// updated_at is stamped by pageUpdateRowFromPayload (no BEFORE-UPDATE trigger on
 	// osionos_pages), so the value we wrote IS the stored value — authoritative.
 	json(response, 200, { ok: true, updatedAt: updateRow.updated_at, version: pageVersionOf(updated), ...(ignored.length > 0 ? { ignored } : {}), ...(carriesArchive ? { cascadedIds } : {}) }, config);

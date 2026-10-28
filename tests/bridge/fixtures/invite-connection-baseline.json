@@ -170,7 +170,7 @@
 			},
 			{
 				"method": "GET",
-				"path": "osionos_people_directory?user_id=in.%28%22aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa%22%29&select=user_id%2Cdisplay_name%2Cprofile",
+				"path": "osionos_people_directory?user_id=in.%28%22aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa%22%2C%22bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb%22%29&select=user_id%2Cdisplay_name%2Cprofile",
 				"body": null
 			}
 		]
