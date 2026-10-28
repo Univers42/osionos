@@ -13,7 +13,7 @@
 import React, { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { Button, Input } from '@/shared/ui';
-import { validateName, validateValue } from './memberAttribute';
+import { validateName, validateValue } from '@/shared/lib/memberAttribute';
 import type { SharePerson, ShareTeam } from './types';
 
 interface SharePeoplePickerProps {

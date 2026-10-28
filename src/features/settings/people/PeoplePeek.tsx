@@ -27,7 +27,7 @@ import { isVideoCoverSource } from "@/entities/page/ui/coverMedia";
 import type { Page } from "@notion-db/object-database";
 import { useUserStore } from "@/features/auth";
 import { useWorkspaceMemberAttributesStore } from "@/store/settings";
-import { validateName, validateValue } from "./memberAttribute";
+import { validateName, validateValue } from "@/shared/lib/memberAttribute";
 import { TypedConfirmModal } from "../ui/ConfirmModals";
 import { isWorkspaceOwner } from "../model/workspaceOwnership";
 import { useHovercardsEnabled } from "@/shared/config/useAppearance";
