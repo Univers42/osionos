@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 import type { PageEntry } from "../../src/entities/page/index.ts";
-import { findEnvPage } from "../../src/features/variables/model/envFile.ts";
+import { isEnvPage } from "../../src/features/variables/model/envFile.ts";
 import { parseVariableDefinitions } from "../../src/features/variables/model/variableDefinitions.ts";
 import { resolveVariable, type VariableScope } from "../../src/features/variables/model/variableResolver.ts";
 import { defineBench } from "./harness.ts";
@@ -37,16 +37,23 @@ const ENV = Object.fromEntries([
 ]);
 const ENV_SOURCE = JSON.stringify(ENV, null, 2);
 
+// Worst realistic placement: two page-level env.json files over the workspace one, and
+// the property two pages up, so every lookup walks the layers and the page chain.
 function scope(): VariableScope {
+  const pageLayer = parseVariableDefinitions(JSON.stringify({ PROJECT: "x", CLIENT: "{{CLIENT}} (EU)" })).definitions;
   return {
-    definitions: parseVariableDefinitions(ENV_SOURCE).definitions,
-    page: { title: "Q4 plan", properties: [{ key: "status", label: "Status", type: "select", value: "In review" }] },
+    layers: [pageLayer, pageLayer, parseVariableDefinitions(ENV_SOURCE).definitions],
+    pages: [
+      { title: "Q4 plan" },
+      { title: "Sprint", properties: [{ key: "owner", label: "Owner", type: "person", value: "dl" }] },
+      { title: "Project", properties: [{ key: "status", label: "Status", type: "select", value: "In review" }] },
+    ],
     context: { locale: "en-US", numberLocale: "en-US", timeZone: "Europe/Paris", now: new Date("2026-10-28T14:05:09Z") },
     dateFormat: "relative",
   };
 }
 
-// A large workspace with env.json last, so the scan is the worst case.
+// A large workspace with env.json last; sync scans every page of it per keystroke.
 const PAGES = [
   ...Array.from({ length: 2_000 }, (_, i) => ({ _id: `p${i}`, title: `Page ${i}`, parentPageId: i % 3 ? `p${i - 1}` : null })),
   { _id: "env", title: "env.json", surface: "code" },
@@ -88,9 +95,9 @@ export const bench = defineBench("variables", [
     },
   },
   {
-    name: "find env.json in a 2,001-page workspace",
+    name: "scan a 2,001-page workspace for env.json files",
     budgetNs: 15_000,
-    setup: () => () => findEnvPage(PAGES),
+    setup: () => () => PAGES.filter(isEnvPage),
   },
   {
     name: "parse env.json with 200 variables",

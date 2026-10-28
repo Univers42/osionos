@@ -16,10 +16,23 @@ import { getActivePageJwt } from "@/shared/api/client";
 import { useUserPreferencesStore } from "@/store/settings/useUserPreferencesStore";
 import { usePageStore } from "@/store/usePageStore";
 
-import { findEnvPage } from "./envFile";
-import { useVariablesStore } from "./useVariablesStore";
+import { isEnvPage } from "./envFile";
+import { useVariablesStore, type EnvFileSource } from "./useVariablesStore";
 
 const PREFERENCE_KEYS = ["language", "dateFormat", "timezone", "autoTimezone", "numberFormat"] as const;
+
+/** `{{PAGE}}`, `{{page.X}}` and which env.json applies read these; nothing else of a page. */
+function scopeFieldsChanged(next: readonly PageEntry[] | undefined, previous: readonly PageEntry[] | undefined): boolean {
+  if (next === previous) return false;
+  if (!next || !previous || next.length !== previous.length) return true;
+  for (let i = 0; i < next.length; i += 1) {
+    const a = next[i];
+    const b = previous[i];
+    if (a === b) continue;
+    if (a._id !== b._id || a.title !== b.title || a.properties !== b.properties || a.parentPageId !== b.parentPageId || a.archivedAt !== b.archivedAt) return true;
+  }
+  return false;
+}
 
 /**
  * Keeps `useVariablesStore` in step with each workspace's `env.json`, the user's
@@ -28,31 +41,38 @@ const PREFERENCE_KEYS = ["language", "dateFormat", "timezone", "autoTimezone", "
 export function startVariablesSync(): () => void {
   const requested = new Set<string>();
 
+  const requestContent = (env: PageEntry) => {
+    // Content is lazy; fetch it once per page. No session yet → try on a later change.
+    const jwt = getActivePageJwt();
+    if (!jwt || requested.has(env._id)) return;
+    requested.add(env._id);
+    void usePageStore.getState().fetchPageContent(env._id, jwt);
+  };
+
   const syncWorkspace = (workspaceId: string, pages: readonly PageEntry[] | undefined) => {
-    const env = findEnvPage(pages);
-    const variables = useVariablesStore.getState();
-    if (!env) return variables.forget(workspaceId);
-    if (env.content === undefined) {
-      // Content is lazy; fetch it once per page. No session yet → try on a later change.
-      const jwt = getActivePageJwt();
-      if (jwt && !requested.has(env._id)) {
-        requested.add(env._id);
-        void usePageStore.getState().fetchPageContent(env._id, jwt);
-      }
-      return;
+    const files: EnvFileSource[] = [];
+    for (const page of pages ?? []) {
+      if (!isEnvPage(page)) continue;
+      if (page.content === undefined) requestContent(page);
+      else files.push({ pageId: page._id, parentPageId: page.parentPageId ?? null, source: codeBlockOf(page)?.content ?? "" });
     }
-    variables.setSource(workspaceId, env._id, codeBlockOf(env)?.content ?? "");
+    useVariablesStore.getState().setFiles(workspaceId, files);
   };
 
   for (const [workspaceId, pages] of Object.entries(usePageStore.getState().pages)) syncWorkspace(workspaceId, pages);
 
   // A keystroke anywhere replaces its workspace's page array, so this runs per edit:
-  // one linear scan of that workspace (tests/bench/variables.bench.ts measures it).
+  // two linear scans of that workspace (tests/bench/variables.bench.ts measures them).
   const stopPages = usePageStore.subscribe((state, previous) => {
     if (state.pages === previous.pages) return;
-    for (const workspaceId of Object.keys(state.pages)) {
-      if (state.pages[workspaceId] !== previous.pages[workspaceId]) syncWorkspace(workspaceId, state.pages[workspaceId]);
+    let scopeChanged = false;
+    for (const workspaceId of new Set([...Object.keys(state.pages), ...Object.keys(previous.pages)])) {
+      const next = state.pages[workspaceId];
+      if (next === previous.pages[workspaceId]) continue;
+      syncWorkspace(workspaceId, next);
+      scopeChanged ||= scopeFieldsChanged(next, previous.pages[workspaceId]);
     }
+    if (scopeChanged) useVariablesStore.getState().bump();
   });
 
   const stopPreferences = useUserPreferencesStore.subscribe((state, previous) => {
