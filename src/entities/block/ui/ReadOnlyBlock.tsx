@@ -30,6 +30,7 @@ import { timed } from '@osionos/perf-probe';
 import { InternalPageLink } from "@/entities/page";
 import { getBlockSurfaceClass, getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 import { usePageStore } from "@/store/usePageStore";
+import { renderVariableChip } from "@/features/variables/ui/VariableChip";
 import { runButtonBlock } from "@/services/button-program/runProgram";
 import { useRenderMode } from "./renderMode";
 import { buttonEffect } from "@/entities/block/model/buttonEffect";
@@ -98,6 +99,7 @@ function renderCachedInlineMarkdown(content: string): React.ReactNode {
 
   const rendered = timed("renderInlineToReact", () => renderInlineToReact(content, {
     internalLinkRenderer: renderInternalPageLink,
+    variableRenderer: renderVariableChip,
   }));
   inlineMarkdownCache.set(content, rendered);
 
