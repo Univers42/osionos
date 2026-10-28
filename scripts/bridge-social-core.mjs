@@ -84,13 +84,14 @@ export async function readJsonBody(request, maxBytes = DEFAULT_BODY_LIMIT) {
 	}
 }
 
-export function sendJson(response, status, body, config) {
+export function sendJson(response, status, body, config, headers = {}) {
 	writeJsonResponse(response, status, {
 		'content-type': 'application/json; charset=utf-8',
 		'cache-control': 'no-store',
 		'access-control-allow-origin': config.allowedOrigin,
 		'access-control-allow-credentials': 'true',
 		vary: 'Origin',
+		...headers,
 	}, body);
 	return true;
 }

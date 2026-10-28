@@ -119,6 +119,22 @@ function addressInfo(raw) {
 	return { address: canonical, prefix: `${prefixHost}/48` };
 }
 
+// ONE derivation of the client address: the configured header (never the left-most
+// X-Forwarded-For entry) else the socket peer, normalised by addressInfo. clientMeta and
+// the public-page throttle share it so the audit trail and the bucket cannot disagree.
+function clientInfo(request, { ipHeader } = {}) {
+	const header = typeof ipHeader === 'string' && ipHeader.trim() !== '' ? ipHeader.trim() : '';
+	const raw = header
+		? headerValue(request?.headers, header)
+		: request?.socket?.remoteAddress ?? null;
+	return addressInfo(raw);
+}
+
+/** The normalised client address (IPv4 or canonical IPv6), or null when it cannot be read. */
+export function clientAddress(request, { ipHeader } = {}) {
+	return clientInfo(request, { ipHeader })?.address ?? null;
+}
+
 // Caveat: truncation keeps the first 256 code points, so a client whose UA differs only
 // after that point is indistinguishable from a longer one (the column's own limit).
 function userAgentOf(headers) {
@@ -137,11 +153,7 @@ function userAgentOf(headers) {
  * (all of IPv4 hashes in seconds).
  */
 export function clientMeta(request, { ipHeader, hashSecret } = {}) {
-	const header = typeof ipHeader === 'string' && ipHeader.trim() !== '' ? ipHeader.trim() : '';
-	const raw = header
-		? headerValue(request?.headers, header)
-		: request?.socket?.remoteAddress ?? null;
-	const info = addressInfo(raw);
+	const info = clientInfo(request, { ipHeader });
 	const secret = typeof hashSecret === 'string' ? hashSecret : '';
 	const ipHash = info && secret.trim() !== ''
 		? createHmac('sha256', secret).update(`osb:ip:${info.address}`).digest('hex')
