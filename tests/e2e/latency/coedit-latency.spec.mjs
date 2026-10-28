@@ -22,49 +22,29 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 
-import { explorerRow } from "../../browser/core/app.mjs";
-import { analyse, parseServerTiming } from "./latencyStats.mjs";
+import { analyse, analysePairs } from "./latencyStats.mjs";
+import {
+  BLOCK,
+  bridgeSession,
+  env,
+  intEnv,
+  getUsers,
+  openAs,
+  startKeyLog,
+  watchEventPosts,
+  startObservingAll,
+  readUserData,
+  appendBlocks,
+  waitForBlockCounts,
+  waitForPresence,
+} from "./coeditPeers.mjs";
 
-const env = (name) => process.env[name] ?? "";
-const intEnv = (name, fallback) => Number.parseInt(env(name), 10) || fallback;
 const CHARS = intEnv("COEDIT_CHARS", 100);
 const INTERVAL_MS = intEnv("COEDIT_INTERVAL_MS", 150);
 const SETTLE_MS = intEnv("COEDIT_SETTLE_MS", 15_000);
-const BLOCK = '[role="textbox"][aria-multiline="true"]';
 const REPORT = path.join("test-results", "latency", "coedit-latency.json");
+const REPORT_N = path.join("test-results", "latency", "coedit-latency-n.json");
 const missing = ["COEDIT_OWNER_EMAIL", "COEDIT_OWNER_PASSWORD", "COEDIT_MEMBER_EMAIL", "COEDIT_MEMBER_PASSWORD", "COEDIT_PAGE_TITLE"].filter((name) => !env(name));
-
-test.skip(missing.length > 0, `needs ${missing.join(", ")}`);
-
-async function bridgeSession(apiUrl, email, password) {
-  const response = await fetch(`${apiUrl}/api/auth/login`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!response.ok) throw new Error(`bridge login failed for ${email}: HTTP ${response.status}`);
-  const body = await response.json();
-  return {
-    ok: true,
-    persona: { id: body.session.userId, email, password: "", name: email.split("@")[0], emoji: "T", roleBadge: "", persistInSessions: true },
-    session: body.session,
-    expiresAt: body.expiresAt,
-  };
-}
-
-/** A signed-in context whose page has the shared block open. `timing` turns the client marks on. */
-async function openAs(browser, baseURL, record, timing) {
-  const context = await browser.newContext({ baseURL });
-  await context.addInitScript(([record_, timing_]) => {
-    localStorage.setItem("osionos:bridge-session", JSON.stringify({ [record_.session.userId]: record_ }));
-    if (timing_) localStorage.setItem("osio:collab-timing", "1");
-  }, [record, timing]);
-  const page = await context.newPage();
-  await page.goto("/", { waitUntil: "domcontentloaded" });
-  await explorerRow(page, env("COEDIT_PAGE_TITLE")).click();
-  await page.locator(BLOCK).first().waitFor({ timeout: 30_000 });
-  return { context, page };
-}
 
 /** In the member page: record the block's text length every time the DOM mutates. */
 async function startObserving(page) {
@@ -82,26 +62,6 @@ async function startObserving(page) {
   }, BLOCK);
 }
 
-/** In the owner page: epoch time of every keydown while typing. */
-async function startKeyLog(page) {
-  await page.evaluate(() => {
-    globalThis.__coeditKeys = [];
-    document.addEventListener("keydown", () => globalThis.__coeditKeys.push(performance.timeOrigin + performance.now()), true);
-  });
-}
-
-function watchEventPosts(page) {
-  const posts = [];
-  page.on("requestfinished", async (request) => {
-    if (request.method() !== "POST" || !/\/api\/collaboration\/[^/]+\/events$/.test(request.url())) return;
-    const timing = request.timing();
-    if (timing.responseEnd < 0) return;
-    const headers = await (await request.response())?.allHeaders();
-    posts.push({ start: timing.startTime, end: timing.startTime + timing.responseEnd, serverTiming: parseServerTiming(headers?.["server-timing"]) });
-  });
-  return posts;
-}
-
 async function readMarks(page) {
   return page.evaluate(() => {
     const epoch = (entry) => performance.timeOrigin + entry.startTime;
@@ -115,6 +75,7 @@ async function readMarks(page) {
 }
 
 test("owner types, member observes: loss, p50, p95 and per-hop latency", async ({ browser, baseURL }) => {
+  test.skip(missing.length > 0, `needs ${missing.join(", ")}`);
   test.setTimeout(CHARS * INTERVAL_MS + SETTLE_MS + 120_000);
   const apiUrl = (env("COEDIT_API_URL") || env("PLAYWRIGHT_API_URL") || baseURL).replace(/\/$/, "");
   const [ownerRecord, memberRecord] = await Promise.all([
@@ -159,5 +120,99 @@ test("owner types, member observes: loss, p50, p95 and per-hop latency", async (
   } finally {
     await owner.context.close();
     await member.context.close();
+  }
+});
+
+const nUsers = getUsers();
+const nMissing = [];
+if (!env("COEDIT_PAGE_TITLE")) nMissing.push("COEDIT_PAGE_TITLE");
+if (nUsers.length < 3) nMissing.push("COEDIT_OWNER_/MEMBER_/USER_3..6 (need at least 3 users)");
+test("N peers: presence, then all-pairs key-to-DOM", async ({ browser, baseURL }) => {
+  test.skip(nMissing.length > 0, `needs ${nMissing.join(", ")}`);
+  test.setTimeout(CHARS * INTERVAL_MS + SETTLE_MS + 180_000);
+  const users = nUsers;
+  const apiUrl = (env("COEDIT_API_URL") || env("PLAYWRIGHT_API_URL") || baseURL).replace(/\/$/, "");
+  const records = await Promise.all(users.map((user) => bridgeSession(apiUrl, user.email, user.password)));
+  const opened = await Promise.all(users.map((user, index) => openAs(browser, baseURL, records[index], false)));
+  const userPages = users.map((user, index) => ({
+    ...user,
+    context: opened[index].context,
+    page: opened[index].page,
+    posts: watchEventPosts(opened[index].page),
+  }));
+  try {
+    const presenceResults = await Promise.all(userPages.map(async (user) => {
+      const result = await waitForPresence(user.page, users.length - 1, 15_000);
+      return { label: user.label, seen: result.count, ms: result.ms };
+    }));
+    const presenceReport = {
+      expected: users.length - 1,
+      seen: Object.fromEntries(presenceResults.map((result) => [result.label, result.seen])),
+      timeToPresenceMs: Object.fromEntries(presenceResults.map((result) => [result.label, result.ms])),
+    };
+
+    const initialCounts = await Promise.all(userPages.map((user) => user.page.locator(BLOCK).count()));
+    const initialMax = Math.max(...initialCounts);
+    await appendBlocks(userPages[0].page, users.length);
+    const totalBlocks = await waitForBlockCounts(userPages.map((user) => user.page), initialMax + users.length);
+    userPages.forEach((user, index) => { user.blockIndex = totalBlocks - users.length + index; });
+    await userPages[0].page.waitForTimeout(1_000);
+
+    await Promise.all(userPages.map(async (user) => {
+      await startObservingAll(user.page);
+      await startKeyLog(user.page);
+    }));
+    await Promise.all(userPages.map(async (user) => {
+      await user.page.locator(BLOCK).nth(user.blockIndex).click();
+    }));
+
+    await Promise.all(userPages.map(async (user) => {
+      for (let index = 0; index < CHARS; index += 1) {
+        await user.page.keyboard.press(String.fromCharCode(97 + (index % 26)));
+        await user.page.waitForTimeout(INTERVAL_MS);
+      }
+    }));
+
+    await userPages[0].page.waitForTimeout(SETTLE_MS);
+
+    const userData = await Promise.all(userPages.map(async (user) => {
+      const data = await readUserData(user.page);
+      return { label: user.label, blockIndex: user.blockIndex, posts: user.posts, keys: data.keys, blocks: data.blocks };
+    }));
+
+    const pairs = [];
+    for (let typistIndex = 0; typistIndex < users.length; typistIndex += 1) {
+      for (let observerIndex = 0; observerIndex < users.length; observerIndex += 1) {
+        if (typistIndex === observerIndex) continue;
+        const typist = userData[typistIndex];
+        const observer = userData[observerIndex];
+        const samples = observer.blocks.samples[typist.blockIndex] ?? [];
+        const baseLen = observer.blocks.base[typist.blockIndex] ?? 0;
+        pairs.push({
+          typist: typist.label,
+          observer: observer.label,
+          keys: typist.keys,
+          samples,
+          baseLen,
+          posts: typist.posts,
+        });
+      }
+    }
+
+    const result = analysePairs(pairs);
+    const report = {
+      measuredAt: new Date().toISOString(),
+      target: baseURL,
+      config: { chars: CHARS, intervalMs: INTERVAL_MS, settleMs: SETTLE_MS, peers: users.length },
+      presence: presenceReport,
+      pairs: result.pairs,
+      aggregate: result.aggregate,
+      slowest: result.slowest,
+    };
+    mkdirSync(path.dirname(REPORT_N), { recursive: true });
+    writeFileSync(REPORT_N, `${JSON.stringify(report, null, 2)}\n`);
+    console.log(`coedit-latency-n: peers ${users.length}, pairs ${pairs.length} -> ${REPORT_N}`);
+  } finally {
+    await Promise.all(userPages.map((user) => user.context.close()));
   }
 });
