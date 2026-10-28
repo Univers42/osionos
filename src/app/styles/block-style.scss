@@ -85,6 +85,40 @@ $surface-map: (
   border-radius: var(--osio-radius-xs);
 }
 
+// Side-by-side columns line up at their edges. The per-type space above a block
+// (a heading's section break, an embed's air) separates it from the block before
+// it; the first block of a column has none, so every type starts at one lead and
+// an image sits level with a database or a paragraph. Same for the space below
+// the last block. Unlayered, so it wins over the per-type pt-/pb- utilities.
+ul[data-parent-block-type="column"] {
+  > li:first-child > article {
+    padding-top: var(--spacing);
+    > [data-testid="block-drag-handle"] {
+      top: var(--spacing);
+    }
+  }
+  > li:last-child > article {
+    padding-bottom: calc(var(--spacing) * 0.5);
+  }
+}
+
+// Columns need room to sit side by side: at 320 px four columns got 27 px
+// each and a code card's toolbar ran out of its column (measured 2026-10-28).
+// Below 28rem of page width they stack, as Notion does on a phone, and the
+// resize separators between them go.
+.osio-columns {
+  container-type: inline-size;
+}
+@container (max-width: 28rem) {
+  .osio-columns-row {
+    flex-direction: column;
+    align-items: stretch;
+    > [role="separator"] {
+      display: none;
+    }
+  }
+}
+
 [data-s-border="none"] {
   border: 0;
 }

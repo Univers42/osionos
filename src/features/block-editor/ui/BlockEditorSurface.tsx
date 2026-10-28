@@ -151,8 +151,8 @@ function shouldRenderChildren(block: Block): boolean {
 
 function getNestedTreeClassName(parentBlockType: Block["type"] | null, isRoot: boolean) {
 	if (isRoot || !parentBlockType) return "";
-	if (parentBlockType === "bulleted_list" || parentBlockType === "numbered_list") return "ml-[3.25rem] mt-0.5";
-	if (parentBlockType === "to_do") return "ml-[2.75rem] mt-0.5";
+	if (parentBlockType === "bulleted_list" || parentBlockType === "numbered_list") return "ml-8 mt-0.5";
+	if (parentBlockType === "to_do") return "ml-6 mt-0.5";
 	if (parentBlockType === "toggle") return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--osio-border-default)]";
 	if (parentBlockType === "column") return "mt-0.5";
 	// Callout lines all share one left edge (flat surface, no "title"); different
@@ -1348,20 +1348,22 @@ function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleT
 		// Media / code / equation: generous, still asymmetric.
 		// Code: the handle centres on the card's language row, its first line.
 		case "code":      return { pt: "pt-3",   pb: "pb-1.5", handleTop: "top-6.5" };
-		case "equation":
+		case "equation":  return { pt: "pt-3",   pb: "pb-1.5", handleTop: "top-4" };
 		case "image":
 		case "video":
 		case "audio":
-		case "file":      return { pt: "pt-3",   pb: "pb-1.5", handleTop: "top-4" };
+		case "file":      return { pt: "pt-6",   pb: "pb-4.5", handleTop: "top-4" };
 		// Embeds read as native page content — the most air above.
-		case "database_inline":
+		case "database_inline": return { pt: "pt-6", pb: "pb-4", handleTop: "top-5" };
 		case "database_full_page":
 		case "graph_view":
 		case "draw":
 		case "whiteboard":
-		case "diagram":
+		case "diagram":   return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
+		// A link card's air lives here, not as a margin on the card, so it starts
+		// level with its neighbours at the top of a column.
 		case "embed":
-		case "bookmark":  return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
+		case "bookmark":  return { pt: "pt-5",  pb: "pb-3",   handleTop: "top-5" };
 		// Boxed blocks: medium.
 		case "callout":
 		case "quote":     return { pt: "pt-2",   pb: "pb-1",   handleTop: "top-3" };
@@ -1719,70 +1721,72 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 		if (block.type === "column_list") {
 			const columns = flattenColumns(block.children);
 			return (
-				<div className="flex items-start gap-0 rounded-md">
-					{columns.map((column, index) => (
-						<React.Fragment key={column.id}>
-							{/* Per-COLUMN surface style: each column carries its own colors,
-							    independent of its siblings and of the list. */}
-							<div
-								data-column-id={column.id}
-								className="min-w-0 rounded-md px-1"
-								style={{
-									flexGrow: normalizeColumnRatio(column, columns.length),
-									flexBasis: 0,
-									...getBlockSurfaceStyle(column),
-								}}
-							>
-								<BlockTree
-									blocks={column.children ?? EMPTY_BLOCKS}
-									pageId={pageId}
-									parentBlockType="column"
-									parentBlockId={column.id}
-									numberedDepth={numberedDepth}
-									bulletDepth={bulletDepth}
-									highlightedRootBlockId={isHighlighted ? block.id : null}
-									selectedBlockIds={selectedBlockIds}
-									isHighlightedBranch={isHighlighted}
-									moveBlock={moveBlock}
-									moveBlockAcrossTree={moveBlockAcrossTree}
-									updateContent={updateContent}
-									source={source}
-									sourceKey={sourceKey}
-									rootBlocks={rootBlocks}
-									draggedBlockId={draggedBlockId}
-									setDraggedBlockId={setDraggedBlockId}
-									onChange={onChange}
-									onKeyDown={onKeyDown}
-									onPaste={onPaste}
-									onDeleteBlock={onDeleteBlock}
-									onUpdateBlock={onUpdateBlock}
-									registerRef={registerRef}
-									focusBlock={focusBlock}
-									onBeforeStructuralEdit={onBeforeStructuralEdit}
-									onContextMenu={onContextMenu}
-									onRequestSlashMenu={onRequestSlashMenu}
-									renderBlockEditor={renderBlockEditor}
-								/>
-								<ColumnAppendZone
-									column={column}
-									rootBlocks={rootBlocks}
-									updateContent={updateContent}
-									focusBlock={focusBlock}
-								/>
-							</div>
-							{index < columns.length - 1 ? (
-								<ColumnResizeHandle
-									rootBlocks={rootBlocks}
-									updateContent={updateContent}
-									columnListId={block.id}
-									leftColumn={column}
-									rightColumn={columns[index + 1]}
-									columnCount={columns.length}
-									sourceKey={sourceKey}
-								/>
-							) : null}
-						</React.Fragment>
-					))}
+				<div className="osio-columns">
+					<div className="osio-columns-row flex items-start gap-0 rounded-md">
+						{columns.map((column, index) => (
+							<React.Fragment key={column.id}>
+								{/* Per-COLUMN surface style: each column carries its own colors,
+								    independent of its siblings and of the list. */}
+								<div
+									data-column-id={column.id}
+									className="min-w-0 rounded-md px-1"
+									style={{
+										flexGrow: normalizeColumnRatio(column, columns.length),
+										flexBasis: 0,
+										...getBlockSurfaceStyle(column),
+									}}
+								>
+									<BlockTree
+										blocks={column.children ?? EMPTY_BLOCKS}
+										pageId={pageId}
+										parentBlockType="column"
+										parentBlockId={column.id}
+										numberedDepth={numberedDepth}
+										bulletDepth={bulletDepth}
+										highlightedRootBlockId={isHighlighted ? block.id : null}
+										selectedBlockIds={selectedBlockIds}
+										isHighlightedBranch={isHighlighted}
+										moveBlock={moveBlock}
+										moveBlockAcrossTree={moveBlockAcrossTree}
+										updateContent={updateContent}
+										source={source}
+										sourceKey={sourceKey}
+										rootBlocks={rootBlocks}
+										draggedBlockId={draggedBlockId}
+										setDraggedBlockId={setDraggedBlockId}
+										onChange={onChange}
+										onKeyDown={onKeyDown}
+										onPaste={onPaste}
+										onDeleteBlock={onDeleteBlock}
+										onUpdateBlock={onUpdateBlock}
+										registerRef={registerRef}
+										focusBlock={focusBlock}
+										onBeforeStructuralEdit={onBeforeStructuralEdit}
+										onContextMenu={onContextMenu}
+										onRequestSlashMenu={onRequestSlashMenu}
+										renderBlockEditor={renderBlockEditor}
+									/>
+									<ColumnAppendZone
+										column={column}
+										rootBlocks={rootBlocks}
+										updateContent={updateContent}
+										focusBlock={focusBlock}
+									/>
+								</div>
+								{index < columns.length - 1 ? (
+									<ColumnResizeHandle
+										rootBlocks={rootBlocks}
+										updateContent={updateContent}
+										columnListId={block.id}
+										leftColumn={column}
+										rightColumn={columns[index + 1]}
+										columnCount={columns.length}
+										sourceKey={sourceKey}
+									/>
+								) : null}
+							</React.Fragment>
+						))}
+					</div>
 				</div>
 			);
 		}

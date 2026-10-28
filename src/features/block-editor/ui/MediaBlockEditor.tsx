@@ -69,7 +69,7 @@ const ImageBlockEditor: React.FC<{ block: Block; label: string; onEdit: () => vo
     <div className="relative" style={mediaWidthStyle(block)}>
       <button
         type="button"
-        className="block w-full rounded-lg p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/30"
+        className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/30"
         aria-label={`Edit ${label.toLowerCase()}`}
         onClick={onEdit}
       >
@@ -186,7 +186,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
       ref={editorRef}
       data-testid="media-block-editor"
       className={[
-        "group/media relative my-3 rounded-lg transition-colors",
+        "group/media relative rounded-lg transition-colors",
         shouldShowSettings ? "border border-[var(--osio-border-default)]" : "border border-transparent",
       ].join(" ")}
       style={surfaceStyle}
@@ -210,7 +210,7 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
       ) : isImage ? (
         <ImageBlockEditor block={block} label={label} onEdit={() => setShowSettings(true)} />
       ) : (
-        <div className="rounded-lg p-2" onPointerDown={() => setShowSettings(true)}>
+        <div className="rounded-lg" onPointerDown={() => setShowSettings(true)}>
           <MediaBlockPreview block={block} />
         </div>
       )}

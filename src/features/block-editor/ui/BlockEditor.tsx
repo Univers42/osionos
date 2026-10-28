@@ -366,7 +366,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
 
   const codeBlockHeader = useMemo(
     () => (
-      <div className="flex items-center gap-2 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
         <div className="flex shrink-0 items-center gap-2">
           <Braces size={16} aria-hidden className="text-[var(--osio-accent)]" />
           <div ref={langPickerRef} className="relative">
@@ -424,7 +424,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           name="code-file-name"
           autoComplete="off"
           spellCheck={false}
-          className="min-w-0 flex-1 bg-transparent font-mono text-2xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
+          className="min-w-16 flex-1 bg-transparent font-mono text-2xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
         />
         <div className="flex shrink-0 items-center gap-0.5">
           <button
@@ -484,6 +484,17 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
   // `$record` to other records (app title, `custom:*`) and keep their plain editor.
   const isProfileBound = useAccountProfileStore((s) => Boolean(block.recordRef && block.fieldBind) && isReadmePage(pageId, s.profile));
   if (isProfileBound) return <BoundFieldEditor block={block} onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)} onKeyDown={onKeyDown} />;
+
+  const listMarker = (marker: React.ReactNode) =>
+    block.children?.length ? (
+      <BlockListCollapse
+        collapsed={block.collapsed}
+        onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })}
+        marker={marker}
+      />
+    ) : (
+      marker
+    );
 
   switch (block.type) {
     case "heading_1":
@@ -627,24 +638,20 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
     case "bulleted_list": {
       const bulletStyle = getBulletMarker(bulletDepth);
       return (
-        <div className="group relative flex items-start gap-2 pl-5">
-          {block.children?.length ? (
-            <BlockListCollapse
-              collapsed={block.collapsed}
-              onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })}
-            />
-          ) : null}
-          <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
-            {bulletStyle === "disc" && (
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--osio-fg-subtle)] mt-[7px]" />
-            )}
-            {bulletStyle === "circle" && (
-              <span className="inline-block w-1.5 h-1.5 rounded-full border border-[var(--osio-fg-subtle)] mt-[7px]" />
-            )}
-            {bulletStyle === "square" && (
-              <span className="inline-block w-1.5 h-1.5 bg-[var(--osio-fg-subtle)] mt-[7px]" />
-            )}
-          </span>
+        <div className="group relative flex items-start gap-2">
+          {listMarker(
+            <span data-list-marker="" className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
+              {bulletStyle === "disc" && (
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--osio-fg-subtle)] mt-[7px]" />
+              )}
+              {bulletStyle === "circle" && (
+                <span className="inline-block w-1.5 h-1.5 rounded-full border border-[var(--osio-fg-subtle)] mt-[7px]" />
+              )}
+              {bulletStyle === "square" && (
+                <span className="inline-block w-1.5 h-1.5 bg-[var(--osio-fg-subtle)] mt-[7px]" />
+              )}
+            </span>,
+          )}
           <div className="flex-1">
             <EditableContent
               content={block.content}
@@ -667,16 +674,12 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
 
     case "numbered_list":
       return (
-        <div className="group relative flex items-start gap-2 pl-5">
-          {block.children?.length ? (
-            <BlockListCollapse
-              collapsed={block.collapsed}
-              onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })}
-            />
-          ) : null}
-          <span className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
-            {getNumberedMarker(numberedIndex, numberedDepth)}
-          </span>
+        <div className="group relative flex items-start gap-2">
+          {listMarker(
+            <span data-list-marker="" className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
+              {getNumberedMarker(numberedIndex, numberedDepth)}
+            </span>,
+          )}
           <div className="flex-1">
             <EditableContent
               content={block.content}
@@ -846,7 +849,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
 
     case "quote":
       return (
-        <div className="flex my-0 rounded-md px-1">
+        <div className="flex my-0 rounded-md">
           {block.children?.length ? (
             <BlockCollapseToggle collapsed={block.collapsed} onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })} />
           ) : null}
