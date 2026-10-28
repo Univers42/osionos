@@ -76,6 +76,9 @@ function matchesFilter(row, key, expr) {
 	if (expr.startsWith('eq.')) return sameText(columnValue(row, key), expr.slice(3));
 	if (expr.startsWith('neq.')) return !sameText(columnValue(row, key), expr.slice(4));
 	if (expr.startsWith('gt.')) return String(row[key] ?? '').toLowerCase() > expr.slice(3).toLowerCase();
+	if (expr.startsWith('gte.')) return String(row[key] ?? '').toLowerCase() >= expr.slice(4).toLowerCase();
+	if (expr.startsWith('lt.')) return String(row[key] ?? '').toLowerCase() < expr.slice(3).toLowerCase();
+	if (expr.startsWith('lte.')) return String(row[key] ?? '').toLowerCase() <= expr.slice(4).toLowerCase();
 	if (expr.startsWith('in.(') && expr.endsWith(')')) {
 		// The bridge quotes the ids of its `in` lists (inFilter), so the quotes come off here.
 		return expr.slice(4, -1).split(',').map((item) => item.replace(/^"(.*)"$/, '$1')).some((item) => sameText(row[key], item));
@@ -141,15 +144,23 @@ function readRows(rows, params) {
 }
 
 // The unique key a plain insert collides on when it names no on_conflict (real PostgREST
-// answers 409 / 23505 from the table's unique index).
-const UNIQUE_KEYS = { osionos_object_databases: 'owner_id,db_key' };
+// answers 409 / 23505 from the table's unique index). A table whose index is PARTIAL only
+// collides on rows the predicate accepts.
+const UNIQUE_KEYS = {
+	osionos_object_databases: 'owner_id,db_key',
+	osionos_page_access_requests: 'page_id,requester_id',
+};
+const UNIQUE_WHEN = {
+	osionos_page_access_requests: (row) => row.status === 'pending',
+};
 
 function upsertRows(rows, body, params, prefer, tableName) {
 	const conflictKeys = (params.get('on_conflict') ?? UNIQUE_KEYS[tableName] ?? 'id').split(',');
+	const inUnique = UNIQUE_WHEN[tableName] ?? (() => true);
 	const written = [];
 	for (const item of Array.isArray(body) ? body : [body]) {
 		const row = { id: randomUUID(), ...item };
-		const existing = rows.find((candidate) => conflictKeys.every((key) => sameText(candidate[key], row[key])));
+		const existing = rows.find((candidate) => inUnique(candidate) && conflictKeys.every((key) => sameText(candidate[key], row[key])));
 		if (existing && prefer.includes('ignore-duplicates')) continue;
 		if (existing && !prefer.includes('merge-duplicates')) return null;
 		if (existing) Object.assign(existing, item);
