@@ -15,7 +15,6 @@ import React from "react";
 import type { ObjectDatabaseAdapter, ObjectDatabaseProps } from "@notion-db/object-database";
 
 import { API_BASE } from "@/shared/api/client";
-import { useToastStore } from "@/shared/ui";
 import { withRecordLimit } from "../model/recordLimitAdapter";
 import { sysSourceById } from "../model/sysDataSources";
 import { getSysDatabaseAdapter, type SysStatus } from "../model/sysDatabaseState";
@@ -46,9 +45,6 @@ export const SysDatabaseBlock: React.FC<SysDatabaseBlockProps> = ({ databaseId, 
   const [status, setStatus] = React.useState<SysStatus>(OK_STATUS);
   const [attempt, setAttempt] = React.useState(0);
   React.useEffect(() => adapter.watchStatus(setStatus), [adapter]);
-  React.useEffect(() => adapter.watchSaveFailure((message) => {
-    useToastStore.getState().push({ kind: "error", title: `Could not save this view: ${message}` });
-  }), [adapter]);
 
   const view = initialViewId && source && initialViewId.startsWith(`${source.source}-`) ? initialViewId : source?.defaultViewId;
   // Only my-pages records are real osionos pages; the other rows have no page to open.
