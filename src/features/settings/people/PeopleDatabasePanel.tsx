@@ -38,6 +38,11 @@ interface PanelProps {
 }
 
 
+/** The bridge answers `not_connected` (F1 friendship gate) when the email belongs to someone the
+ *  inviter is not connected with; its raw message states the refusal but not the way out, so the
+ *  modal spells out the fix. Keyed on the store's error CODE — never on message text. */
+const NOT_CONNECTED_INVITE = "You are not connected with this person yet. Find them in Add members, send a connection request, and invite them once they accept.";
+
 /** Create-flow modal — a group (chat/community) or an email invite. */
 const CreatePeopleModal: React.FC<{
   kind: "group" | "guest"; workspaceId: string; invitedBy: string; onClose: () => void; onDone: () => void;
@@ -63,7 +68,8 @@ const CreatePeopleModal: React.FC<{
         const created = await inviteGuest(workspaceId, email, role, invitedBy);
         if (!created) {
           // The store reverted its optimistic row: show why instead of closing as if it worked.
-          setError(useWorkspaceInvitesStore.getState().error[workspaceId] ?? "Could not send the invite.");
+          const invites = useWorkspaceInvitesStore.getState();
+          setError(invites.errorCode[workspaceId] === "not_connected" ? NOT_CONNECTED_INVITE : invites.error[workspaceId] ?? "Could not send the invite.");
           return;
         }
         const workspaceName = useUserStore.getState().activeWorkspace()?.name ?? "your workspace";
