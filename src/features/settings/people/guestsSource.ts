@@ -30,7 +30,7 @@ const SCHEMA: DatabaseSchema = {
   properties: {
     [GUEST.email]: { id: GUEST.email, name: "Email", type: "title" },
     [GUEST.role]: { id: GUEST.role, name: "Role", type: "select", options: selectOptions(["admin", "member", "guest"]) },
-    [GUEST.status]: { id: GUEST.status, name: "Status", type: "select", options: selectOptions(["pending", "accepted", "revoked", "expired"]) },
+    [GUEST.status]: { id: GUEST.status, name: "Status", type: "select", options: selectOptions(["pending", "accepted", "declined", "revoked", "expired"]) },
     [GUEST.expires]: { id: GUEST.expires, name: "Expires", type: "date" },
     [GUEST.since]: { id: GUEST.since, name: "Invited", type: "date" },
   },
@@ -46,11 +46,13 @@ const VIEWS = [
 
 /** Status cell of one invite. `now` (epoch ms) is passed in — never read inside — so the
  *  mapping stays pure and every row of one build is classified against the same instant.
- *  Accepted and revoked are facts; only a still-pending invite can expire. */
+ *  A decline is a fact and wins over the revocation stamp it also sets (N21); accepted and
+ *  revoked are facts too. Only a still-pending invite can expire. */
 export function inviteStatus(
-  invite: { acceptedAt?: string | null; revokedAt?: string | null; expiresAt?: string | null },
+  invite: { acceptedAt?: string | null; revokedAt?: string | null; declinedAt?: string | null; expiresAt?: string | null },
   now: number,
-): "pending" | "accepted" | "revoked" | "expired" {
+): "pending" | "accepted" | "declined" | "revoked" | "expired" {
+  if (invite.declinedAt) return "declined";
   if (invite.revokedAt) return "revoked";
   if (invite.acceptedAt) return "accepted";
   return invite.expiresAt && new Date(invite.expiresAt).getTime() < now ? "expired" : "pending";

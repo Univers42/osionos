@@ -136,9 +136,21 @@ export interface WorkspaceInvite {
   expiresAt: string;
   acceptedAt?: string | null;
   revokedAt?: string | null;
+  /** Set when the invitee declined. A decline also sets revokedAt (one live predicate). */
+  declinedAt?: string | null;
   token?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/** One row of GET /api/invites/mine: the invitee's own pending invite, with display
+ *  names only. It carries no token, email or account id (N17/N18). */
+export interface MineInvite {
+  id: string;
+  workspaceName: string;
+  inviterName: string;
+  role: string;
+  expiresAt: string;
 }
 
 export interface ImportHistoryEntry {
