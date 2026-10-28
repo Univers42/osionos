@@ -73,6 +73,7 @@ import { RecordSubItemsPanel } from './RecordSubItemsPanel';
 import { SysDatabaseBlock } from './SysDatabaseBlock';
 import { isSysDatabaseId } from '../model/sysDataSources';
 import './databaseBlockEmbed.css';
+import { databaseShellClass } from '../model/databaseShellClass';
 
 // Async boundary: the full osionos page (and its editor tree) loads only when
 // a database row is opened — keeping the database view chunk free of the
@@ -196,10 +197,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
   if (liveDatabaseAdapter) {
     return (
       <div
-        className={[
-          'osionos-database-block w-full min-w-0',
-          mode === 'full' ? 'osionos-database-block--full h-full min-h-0 overflow-hidden' : 'osionos-database-block--inline my-2 overflow-auto',
-        ].join(' ')}
+        className={databaseShellClass(mode)}
         data-database-id={resolvedDatabaseId}
         data-database-view-id={resolvedInitialView}
       >
@@ -256,10 +254,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     const isTemplates = resolvedDatabaseId === TEMPLATES_DB_ID || resolvedInitialView === TEMPLATES_GALLERY_VIEW;
     return (
       <div
-        className={[
-          'osionos-database-block w-full min-w-0',
-          mode === 'full' ? 'osionos-database-block--full h-full min-h-0 overflow-hidden' : 'osionos-database-block--inline my-2 overflow-auto',
-        ].join(' ')}
+        className={databaseShellClass(mode)}
         data-database-id={resolvedDatabaseId}
         data-database-view-id={resolvedInitialView}
       >
@@ -292,10 +287,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
   if (knownViewId) {
     return (
       <div
-        className={[
-          'osionos-database-block w-full min-w-0',
-          mode === 'full' ? 'osionos-database-block--full h-full min-h-0 overflow-hidden' : 'osionos-database-block--inline my-2 overflow-auto',
-        ].join(' ')}
+        className={databaseShellClass(mode)}
         data-database-id={resolvedDatabaseId}
         data-database-view-id={knownViewId}
       >
@@ -316,10 +308,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
 
   return (
     <div
-      className={[
-        'osionos-database-block w-full min-w-0',
-        mode === 'full' ? 'osionos-database-block--full h-full min-h-0 overflow-hidden' : 'osionos-database-block--inline my-2 overflow-auto',
-      ].join(' ')}
+      className={databaseShellClass(mode)}
       data-database-id={resolvedDatabaseId}
       data-database-view-id={resolvedInitialView}
     >
