@@ -89,10 +89,10 @@ export function whiteboardTab(): WorkspaceTab {
 }
 
 /** One board, opened full-size from an inline whiteboard block. Keyed by slug, so opening
- *  the same board again focuses its tab. The slug is minted by the whiteboard service and
- *  never changes when the board is renamed, so a stored tab does not go stale. */
+ *  the same board again focuses its tab. The slug never changes when the board is renamed, so a
+ *  stored tab does not go stale. */
 export function whiteboardBoardTab(slug: string, title: string): WorkspaceTab {
-  return { tabId: genId("tab"), pageId: `${WHITEBOARD_TAB_ID}:${slug}`, workspaceId: "", kind: "embed", title: title || "Whiteboard", icon: "icon:pen-tool", url: boardUrl(slug) };
+  return { tabId: genId("tab"), pageId: `${WHITEBOARD_TAB_ID}:${slug}`, workspaceId: "", kind: "embed", title: title || "Whiteboard", icon: "icon:pen-tool", url: boardUrl(slug, title || undefined) };
 }
 
 /** A live external-database table tab (`baas:<dbId>:<table>` id). pageId == the

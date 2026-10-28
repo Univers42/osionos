@@ -1,19 +1,16 @@
-import { isBoardSlug } from "./boardRefs";
-
 /**
  * osionos' side of the hydrawn frame protocol (devil C596). Hydrawn runs on its own origin
- * and talks to the bridge's whiteboard routes with a short whiteboard token; it asks this page
- * for one, and, framed at `/new`, tells this page which board it just created.
+ * and talks to the bridge's whiteboard routes with a short whiteboard token, which it asks this
+ * page for.
  *
  * A message counts only when it comes from that frame's own window AND from the whiteboard
- * origin AND is exactly one of the two shapes; every reply goes to that origin, never `"*"`.
+ * origin AND has exactly the request's shape; every reply goes to that origin, never `"*"`.
  */
 
 export const TOKEN_REQUEST = "hydrawn:token-request";
 export const TOKEN_REPLY = "hydrawn:token";
-export const BOARD_CREATED = "hydrawn:board-created";
 
-export type HydrawnMessage = { kind: "token-request" } | { kind: "board-created"; slug: string };
+export type HydrawnMessage = { kind: "token-request" };
 
 export interface MintedToken {
   token: string;
@@ -40,7 +37,6 @@ export function readHydrawnMessage(event: Pick<MessageEvent, "data" | "origin" |
   if (origin === "" || frame == null || event.source !== frame || event.origin !== origin) return null;
   const { data } = event;
   if (hasExactly(data, "type") && data.type === TOKEN_REQUEST) return { kind: "token-request" };
-  if (hasExactly(data, "slug,type") && data.type === BOARD_CREATED && isBoardSlug(data.slug)) return { kind: "board-created", slug: data.slug };
   return null;
 }
 
