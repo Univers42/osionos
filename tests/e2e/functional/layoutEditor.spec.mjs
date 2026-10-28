@@ -165,7 +165,7 @@ test.describe("layout editor", () => {
     const targetBlock = cell.getByTestId("draggable-block").first();
 
     const sourceHandle = page.getByRole("button", { name: /Drag to reorder block/i }).first();
-    await syntheticDragDrop(page, sourceHandle, targetBlock);
+    await sourceHandle.dragTo(targetBlock, { targetPosition: { x: 16, y: 2 } });
 
     await expect(cell.locator('[role="textbox"][aria-multiline="true"]').first()).toHaveText("Outside");
   });
