@@ -122,15 +122,37 @@ test("a rename, a property edit or a move bumps the version and the values follo
   assert.equal(value("Task", "page.Status"), null);
 });
 
-test("archived, unloaded and second env.json files under one page are not read", () => {
+test("archived and unloaded files are not read; a second env.json under one page loses every clash", () => {
   const pages = usePageStore.getState().pages.w as unknown as Page[];
   setPages([
     ...pages.map((p) => (p._id === "env-project" ? { ...p, archivedAt: "2026-10-28T00:00:00Z" } : p)),
     env("env-sprint-unloaded", "Sprint", { PATH: "unloaded" }, { content: undefined }),
-    env("env-root-2", null, { PATH: "second" }),
+    env("env-root-2", null, { PATH: "second", ONLY_SECOND: "yes" }),
   ]);
   assert.equal(value("Task", "PATH"), "/bin");
   assert.equal(value("Task", "PROJECT_ONLY"), "no");
+  assert.equal(value("Task", "ONLY_SECOND"), "yes");
+});
+
+// A place outgrows one file (500 names, one 128 KB page) by splitting it by topic.
+test("env.<topic>.json files are read with their place's env.json, which wins a clash", () => {
+  const pages = usePageStore.getState().pages.w as unknown as Page[];
+  setPages([
+    ...pages,
+    env("env-billing", null, { CLIENT: "Billing", VAT: "from billing", BANK: "IBAN" }, { title: "env.billing.json" }),
+    env("env-a", null, { VAT: "from a" }, { title: "env.a.json" }),
+    env("env-sprint-team", "Sprint", { TEAM: "Blue" }, { title: "env.team.json" }),
+    env("not-env", null, { NOPE: "x" }, { title: "my env.json" }),
+    env("not-env-2", null, { NOPE: "x" }, { title: "env..json" }),
+    doc("Elsewhere", null),
+  ]);
+  assert.equal(value("Task", "CLIENT"), "Nobody", "env.json beats a topic file");
+  assert.equal(value("Task", "VAT"), "from a", "topic files by title");
+  assert.equal(value("Task", "BANK"), "IBAN");
+  assert.equal(value("Task", "TEAM"), "Blue", "a topic file alone under a page is that page's layer");
+  assert.equal(value("Elsewhere", "TEAM"), null);
+  assert.equal(value("Task", "NOPE"), null, "only env.json and env.<topic>.json are env files");
+  assert.deepEqual(variablePlacement("Task").owners.map((o) => o?._id ?? null), ["Sprint", "Project", null]);
 });
 
 test("a parentPageId cycle in bad data ends the chain at the first revisit", () => {
