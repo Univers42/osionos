@@ -23,23 +23,19 @@ function observedAt(samples, length) {
   return samples.find((sample) => sample.len >= length)?.t;
 }
 
-/**
- * keys: epoch ms of each keydown, in order. samples: [{t, len}] of the member's block text
- * length over time. baseLen: length before typing. posts: [{start, end, serverTiming}] of the
- * owner's events POSTs. frames/doms: epoch ms of the member's collab marks (may be empty).
- */
-export function analyse({ keys, samples, baseLen, posts = [], frames = [], doms = [] }) {
+function computeAnalysis({ keys, samples, baseLen, posts = [], frames = [], doms = [] }) {
   const sortedPosts = [...posts].sort((a, b) => a.start - b.start);
   const postStarts = sortedPosts.map((post) => post.start);
   const sortedFrames = [...frames].sort((a, b) => a - b);
   const sortedDoms = [...doms].sort((a, b) => a - b);
+  const sortedSamples = [...samples].sort((a, b) => a.t - b.t);
   const keyToDom = [];
   const keyToPost = [];
   const postToFrame = [];
   const frameToDom = [];
   let lost = 0;
   keys.forEach((keyAt, index) => {
-    const seenAt = observedAt(samples, baseLen + index + 1);
+    const seenAt = observedAt(sortedSamples, baseLen + index + 1);
     if (seenAt === undefined) { lost += 1; return; }
     keyToDom.push(seenAt - keyAt);
     const postAt = firstAtOrAfter(postStarts, keyAt);
@@ -55,7 +51,7 @@ export function analyse({ keys, samples, baseLen, posts = [], frames = [], doms 
   const serverHops = Object.fromEntries([...hopNames].map((name) => [
     name, summary(sortedPosts.map((post) => post.serverTiming?.[name])),
   ]));
-  return {
+  const result = {
     sent: keys.length,
     observed: keys.length - lost,
     lost,
@@ -70,6 +66,52 @@ export function analyse({ keys, samples, baseLen, posts = [], frames = [], doms 
     },
     posts: sortedPosts.length,
   };
+  return { result, keyToDom };
+}
+
+/**
+ * keys: epoch ms of each keydown, in order. samples: [{t, len}] of the observer's block text
+ * length over time. baseLen: length before typing. posts: [{start, end, serverTiming}] of the
+ * typist's events POSTs. frames/doms: epoch ms of the observer's collab marks (may be empty).
+ */
+export function analyse({ keys, samples, baseLen, posts = [], frames = [], doms = [] }) {
+  return computeAnalysis({ keys, samples, baseLen, posts, frames, doms }).result;
+}
+
+/** pairs: [{typist, observer, ...analyse input}] -> per pair, all-pairs aggregate, slowest pair by p95. */
+export function analysePairs(pairs = []) {
+  const computed = pairs.map((pair) => {
+    const { result, keyToDom } = computeAnalysis({
+      keys: pair.keys ?? [],
+      samples: pair.samples ?? [],
+      baseLen: pair.baseLen ?? 0,
+      posts: pair.posts ?? [],
+      frames: pair.frames ?? [],
+      doms: pair.doms ?? [],
+    });
+    return { pair, result, keyToDom };
+  });
+  const pairResults = computed.map(({ pair, result }) => ({
+    typist: pair.typist,
+    observer: pair.observer,
+    sent: result.sent,
+    lost: result.lost,
+    keyToDomMs: result.keyToDomMs,
+  }));
+  const allLatencies = computed.flatMap((entry) => entry.keyToDom);
+  const aggregate = {
+    sent: pairResults.reduce((total, pair) => total + pair.sent, 0),
+    lost: pairResults.reduce((total, pair) => total + pair.lost, 0),
+    keyToDomMs: summary(allLatencies),
+  };
+  let slowest = null;
+  for (const pairResult of pairResults) {
+    if (slowest === null) { slowest = pairResult; continue; }
+    const currentP95 = pairResult.keyToDomMs?.p95 ?? -Infinity;
+    const slowestP95 = slowest.keyToDomMs?.p95 ?? -Infinity;
+    if (currentP95 > slowestP95) slowest = pairResult;
+  }
+  return { pairs: pairResults, aggregate, slowest };
 }
 
 /** Server-Timing header -> { hop: ms }, with the PostgREST call count under `postgrest`. */
