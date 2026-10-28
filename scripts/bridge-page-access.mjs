@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/27 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/27 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/28 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -27,6 +27,13 @@
  *   4. else the visibility default — the read rule the bridge already applies, so a
  *      page with no rule behaves exactly as it did before inheritance.
  *
+ * A PRIVATE page (X1) takes a grant only from its owner: a rule on the page itself, or on
+ * an ancestor in the unbroken run of pages above it that the same owner holds and that are
+ * private too (sharing your private page shares its subpages). A workspace-wide grant, or
+ * one on another owner's (or a shared) ancestor, can only LOWER what the page already
+ * gives: a deny still denies, a can_view/can_comment still caps a collaborator's write,
+ * nothing raises. An ancestor missing from `pageMeta` ends the run (fail closed).
+ *
  * A workspace with no page rule at all never reaches step 2: no ancestor can change the
  * answer, so the caller skips the parent-map read (parentOf null) and the visibility
  * default/exemptions decide, exactly as before inheritance.
@@ -39,8 +46,8 @@
  * permission cannot become a deny, and it cannot become a grant either.
  */
 
-import { canReadPageRow, ownerHoldsPage } from './bridge-page-read.mjs';
-import { bestShareLevel } from './bridge-share-rules.mjs';
+import { canReadPageRow, ownerHoldsPage, pageVisibility, sameId } from './bridge-page-read.mjs';
+import { bestShareLevel, SHARE_LEVELS } from './bridge-share-rules.mjs';
 
 /** The ancestor walk stops (and denies) past this many pages: a cycle cannot loop forever. */
 export const MAX_ANCESTOR_DEPTH = 50;
@@ -54,11 +61,39 @@ function idOf(value) {
 	return value == null ? '' : String(value).toLowerCase();
 }
 
+/** The rules written about one page itself, without the workspace-wide ones. */
+function ownRulesAt(rulesByPage, pageId) {
+	const own = rulesByPage instanceof Map ? rulesByPage.get(pageId) : null;
+	return Array.isArray(own) ? own : [];
+}
+
 /** The rules of one page: its own, plus the workspace-wide ones (resource_id ''). */
 function rulesAt(rulesByPage, pageId) {
-	const own = rulesByPage instanceof Map ? rulesByPage.get(pageId) : null;
-	const wide = rulesByPage instanceof Map ? rulesByPage.get(WORKSPACE_WIDE) : null;
-	return [...(Array.isArray(own) ? own : []), ...(Array.isArray(wide) ? wide : [])];
+	return [...ownRulesAt(rulesByPage, pageId), ...ownRulesAt(rulesByPage, WORKSPACE_WIDE)];
+}
+
+function levelRank(level) {
+	return SHARE_LEVELS.indexOf(level);
+}
+
+/** An ancestor whose rules the private page's owner controls: same owner, itself private. */
+function ownerControls(meta, row) {
+	return Boolean(meta) && sameId(meta.owner_id, row.owner_id) && pageVisibility(meta.visibility) === 'private';
+}
+
+/**
+ * A private page's decision once no deny was met: an owner-controlled grant (capped by the
+ * nearest grant of any kind), else the visibility default — where a foreign can_view or
+ * can_comment still caps a collaborator, and a foreign higher grant is ignored.
+ */
+function privatePageDecision(row, userId, ownerNearest, nearest) {
+	if (ownerNearest !== null) {
+		const level = nearest !== null && levelRank(nearest) < levelRank(ownerNearest) ? nearest : ownerNearest;
+		return { level, fromRule: true };
+	}
+	if (!canReadPageRow(row, userId)) return { level: NONE, fromRule: false };
+	if (nearest !== null && levelRank(nearest) < levelRank('can_edit')) return { level: nearest, fromRule: true };
+	return { level: 'can_view', fromRule: false };
 }
 
 /**
@@ -99,9 +134,11 @@ function ancestorChain(pageId, parentOf) {
  * @param {Map<string, string|null> | null} [input.parentOf] lower-case page id → lower-case parent id or null;
  *   null when the workspace has no rule, so the ancestor chain is never needed
  * @param {string[] | null} [input.teamIds] the caller's team ids, null when unread (fail closed for team grants)
+ * @param {Map<string, { owner_id?: unknown, visibility?: unknown }> | null} [input.pageMeta] lower-case page id →
+ *   its owner and visibility, read with `parentOf`; only a private page reads it, a missing entry ends the run
  * @returns {{ level: 'none'|'can_view'|'can_comment'|'can_edit'|'full_access', fromRule: boolean }}
  */
-function decidePageAccess({ row, userId, member = null, rulesByPage = new Map(), parentOf = new Map(), teamIds = null } = {}) {
+function decidePageAccess({ row, userId, member = null, rulesByPage = new Map(), parentOf = new Map(), teamIds = null, pageMeta = null } = {}) {
 	if (!row || typeof row !== 'object' || !userId) return { level: NONE, fromRule: false };
 	// Page owner: their own page stays readable under a denying ancestor (C510e) — but
 	// only while they still belong to the page's workspace (C557), or in the memberless
@@ -127,13 +164,20 @@ function decidePageAccess({ row, userId, member = null, rulesByPage = new Map(),
 	if (!chain) return { level: NONE, fromRule: true };
 
 	const ctx = { userId, role: member.role, workspaceId: row.workspace_id, teamIds };
+	const isPrivate = pageVisibility(row.visibility) === 'private';
 	let nearest = null;
-	for (const id of chain) {
+	let ownerNearest = null;
+	let ownerRun = true;
+	for (const [index, id] of chain.entries()) {
 		const level = bestShareLevel(rulesAt(rulesByPage, id), ctx, id);
 		// Deny wins even when a closer page grants: keep walking the whole chain.
 		if (level === 'no_access') return { level: NONE, fromRule: true };
 		if (nearest === null && level !== null) nearest = level;
+		if (!isPrivate || ownerNearest !== null) continue;
+		if (index > 0) ownerRun = ownerRun && pageMeta instanceof Map && ownerControls(pageMeta.get(id), row);
+		if (ownerRun) ownerNearest = bestShareLevel(ownRulesAt(rulesByPage, id), ctx, id);
 	}
+	if (isPrivate) return privatePageDecision(row, userId, ownerNearest, nearest);
 	if (nearest !== null) return { level: nearest, fromRule: true };
 	// No matching rule anywhere: today's visibility rule decides.
 	return { level: canReadPageRow(row, userId) ? 'can_view' : NONE, fromRule: false };

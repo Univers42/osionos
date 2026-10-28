@@ -56,8 +56,12 @@ export type AccessEntry = {
 	member: WorkspaceMember | null;
 	rulesByPage: Map<string, ShareRuleRow[]>;
 	parentOf: Map<string, string | null> | null;
+	pageMeta: Map<string, PageMeta> | null;
 	teamIds: string[] | null;
 };
+
+/** A page's owner and visibility: a private page takes grants only from its owner's private ancestors (X1). */
+type PageMeta = { owner_id: string | null; visibility: string | null };
 
 /** Lower-case workspace id -> its entry. A workspace that is not here is closed. */
 export type AccessMaps = Map<string, AccessEntry>;
@@ -88,7 +92,7 @@ const MEMBERS_SQL = `select workspace_id, role, permissions
 const OWNERS_SQL = `select id, owner_id
 	from public.osionos_workspaces
 	where id = any($1::uuid[])`;
-const PARENTS_SQL = `select id, parent_page_id
+const PARENTS_SQL = `select id, parent_page_id, owner_id, visibility
 	from public.osionos_pages
 	where workspace_id = $1::uuid
 	limit $2::int`;
@@ -140,16 +144,21 @@ async function readRules(db: QueryRunner, workspaceId: string): Promise<Map<stri
 	return rulesByPage;
 }
 
-/** The workspace's id -> parent id map, every page of it. Throws past the limit: never a partial chain. */
-async function readParents(db: QueryRunner, workspaceId: string): Promise<Map<string, string | null>> {
-	const rows = await rowsOf<{ id: string; parent_page_id: string | null }>(db, PARENTS_SQL, [workspaceId, MAX_PAGES + 1]);
+type ParentRow = { id: string; parent_page_id: string | null; owner_id: string | null; visibility: string | null };
+
+/** The workspace's id -> parent id and id -> owner/visibility maps, every page of it. Throws past the limit: never a partial chain. */
+async function readParents(db: QueryRunner, workspaceId: string): Promise<Pick<AccessEntry, 'parentOf' | 'pageMeta'>> {
+	const rows = await rowsOf<ParentRow>(db, PARENTS_SQL, [workspaceId, MAX_PAGES + 1]);
 	if (rows.length > MAX_PAGES) throw overLimit('pages');
 	const parentOf = new Map<string, string | null>();
+	const pageMeta = new Map<string, PageMeta>();
 	for (const row of rows) {
 		const id = lowerId(row.id);
-		if (id) parentOf.set(id, row.parent_page_id ? lowerId(row.parent_page_id) : null);
+		if (!id) continue;
+		parentOf.set(id, row.parent_page_id ? lowerId(row.parent_page_id) : null);
+		pageMeta.set(id, { owner_id: row.owner_id ?? null, visibility: row.visibility ?? null });
 	}
-	return parentOf;
+	return { parentOf, pageMeta };
 }
 
 /**
@@ -203,11 +212,11 @@ function namesATeam(rulesByPage: Map<string, ShareRuleRow[]>): boolean {
 async function readEntry(db: QueryRunner, userId: string, workspaceId: string, member: WorkspaceMember | null): Promise<AccessEntry | null> {
 	try {
 		const rulesByPage = await readRules(db, workspaceId);
-		const [parentOf, teamIds] = await Promise.all([
-			rulesByPage.size > 0 ? readParents(db, workspaceId) : null,
+		const [parents, teamIds] = await Promise.all([
+			rulesByPage.size > 0 ? readParents(db, workspaceId) : { parentOf: null, pageMeta: null },
 			member && namesATeam(rulesByPage) ? readTeamIds(db, workspaceId, userId) : null,
 		]);
-		return { member, rulesByPage, parentOf, teamIds };
+		return { member, rulesByPage, ...parents, teamIds };
 	} catch (error) {
 		warnFailedRead(workspaceId, error);
 		return null;

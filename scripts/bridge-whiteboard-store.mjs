@@ -30,14 +30,16 @@ import { storageHeaders } from './bridge-storage-core.mjs';
 export const BOARDS = 'hydrawn_boards';
 export const THUMBNAILS = 'hydrawn_thumbnails';
 const SUMMARY_FIELDS = 'slug,title,element_count,entry_count,bounds,rev,thumbnail_at,created_at,updated_at';
-// Caveat: sized for an 8 MB scene over the Funnel hop to b2b, not measured on it; a slower
+// Caveat: sized for a 2 MB scene over the Funnel hop to b2b, not measured on it; a slower
 // link times a large save out (502) and the autosaver retries it.
 const MONGO_TIMEOUT_MS = 30_000;
-// mongo-api's JSON body limit (MONGO_API_JSON_LIMIT, default 8mb). The scene is stored as text,
-// so every quote in it is escaped once more: a request under the route's 8 MB cap can still be
-// a body mongo-api refuses. Measured here, on what is actually sent.
-const STORAGE_BODY_BYTES = 8 * 1024 * 1024;
-const TOO_LARGE = 'The board is over the 8MB storage limit.';
+// The grobase WAF's body limit on hydrawn_boards (2 MiB, nginx.conf) -- below mongo-api's
+// MONGO_API_JSON_LIMIT, so the WAF is the one that refuses, with a 400 the bridge would turn
+// into a 502. The scene is stored as text, so every quote in it is escaped once more: a
+// request under the route's 2 MB cap can still be a body the WAF refuses. Measured here, on
+// what is actually sent.
+const STORAGE_BODY_BYTES = 2 * 1024 * 1024;
+const TOO_LARGE = 'The board is over the 2MB storage limit.';
 
 export function mongoBase(env = process.env) {
 	const kong = `${String(env.OSIONOS_BAAS_URL ?? env.PUBLIC_BAAS_URL ?? 'http://localhost:8000').replace(/\/$/, '')}/mongo/v1`;
