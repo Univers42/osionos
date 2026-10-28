@@ -242,15 +242,17 @@ test("filled image keeps its drag handle at the top-left corner", async ({ page,
     .first()
     .evaluate((h) => {
       const article = h.closest("article");
+      const picture = article.querySelector("img").getBoundingClientRect();
+      const handle = h.getBoundingClientRect();
+      const row = picture.height < 56 ? picture.height : 28;
       return {
         opacity: getComputedStyle(h).opacity,
-        inlineTop: h.style.top,
-        offsetFromArticleTop:
-          h.getBoundingClientRect().top - article.getBoundingClientRect().top,
+        offsetFromPictureRow: handle.top + handle.height / 2 - (picture.top + row / 2),
+        offsetFromArticleTop: handle.top - article.getBoundingClientRect().top,
       };
     });
   expect(info.opacity).toBe("1");
-  expect(info.inlineTop, "leaf alignment must not touch media handles").toBe("");
+  expect(Math.abs(info.offsetFromPictureRow), "handle centres on the picture's top row").toBeLessThanOrEqual(1.5);
   expect(info.offsetFromArticleTop, "handle must sit at the top edge").toBeLessThan(40);
 });
 
