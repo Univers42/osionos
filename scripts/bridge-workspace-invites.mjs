@@ -107,7 +107,7 @@ async function publishMembership(deps, topic, payload) {
 const isSameId = (left, right) => String(left).toLowerCase() === String(right).toLowerCase();
 
 /** What the inviter gets once: the row's public fields, the plaintext token and the link. */
-function inviteAnswer(config, { row, token }) {
+export function inviteAnswer(config, { row, token }) {
   return { ok: true, invite: publicInvite(row), token, acceptUrl: `${config.appUrl}/?invite=${encodeURIComponent(token)}` };
 }
 
