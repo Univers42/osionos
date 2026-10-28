@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/27 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/27 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/28 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,7 +18,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_ANCESTOR_DEPTH, pageAccessLevel } from '../../scripts/bridge-page-access.mjs';
+import { MAX_ANCESTOR_DEPTH, pageAccessLevel, pageRuleLevel } from '../../scripts/bridge-page-access.mjs';
 import { MARKETPLACE_WORKSPACE_ID } from '../../scripts/bridge-page-read.mjs';
 
 const WS = '11111111-1111-4111-8111-111111111111';
@@ -40,6 +40,12 @@ const PAGES = {
 };
 
 const PARENT_OF = new Map([[ROOT, null], [CHILD, ROOT], [GRAND, CHILD]]);
+
+/** What the loader reads beside parentOf: each page's owner and visibility (X1). */
+function metaOf(pages) {
+	return new Map(Object.values(pages).map((page) => [page.id, { owner_id: page.owner_id, visibility: page.visibility }]));
+}
+const PAGE_META = metaOf(PAGES);
 
 const CALLERS = {
 	pageOwner: { userId: PAGE_OWNER, member: { role: 'editor' } },
@@ -64,7 +70,7 @@ function rules(pairs = []) {
 /** A workspace that HAS a rule, so the parent chain is walked — the rule itself is outside the tested chains. */
 const RULED_ELSEWHERE = rules([[GRAND, [rule(GRAND, 'can_view')]]]);
 
-function level(callerKey, pageKey, rulesByPage = new Map(), parentOf = PARENT_OF, rowOverride = null) {
+function level(callerKey, pageKey, rulesByPage = new Map(), parentOf = PARENT_OF, rowOverride = null, pageMeta = PAGE_META) {
 	const caller = CALLERS[callerKey];
 	return pageAccessLevel({
 		row: rowOverride ?? PAGES[pageKey],
@@ -73,6 +79,7 @@ function level(callerKey, pageKey, rulesByPage = new Map(), parentOf = PARENT_OF
 		rulesByPage,
 		parentOf,
 		teamIds: [],
+		pageMeta,
 	});
 }
 
@@ -166,10 +173,12 @@ describe('the resolution order outside the matrix', () => {
 		assert.equal(level('outsider', 'child', new Map(), PARENT_OF, shared), 'none');
 	});
 
-	it('reads a workspace-wide rule (resource_id \'\') on every page', () => {
+	it('reads a workspace-wide rule (resource_id \'\') on every shared page, never on a private one (X1)', () => {
 		const wide = rules([['', [rule('', 'can_view', { type: 'user', userId: VIEWER })]]]);
 		for (const page of ['root', 'child', 'grand']) {
-			assert.equal(level('viewer', page, wide), 'can_view', `workspace-wide rule applies to ${page}`);
+			const shared = { ...PAGES[page], visibility: 'shared' };
+			assert.equal(level('viewer', page, wide, PARENT_OF, shared), 'can_view', `workspace-wide rule applies to shared ${page}`);
+			assert.equal(level('viewer', page, wide), 'none', `workspace-wide rule skips private ${page}`);
 		}
 	});
 
@@ -214,6 +223,78 @@ describe('the resolution order outside the matrix', () => {
 		assert.equal(decide(PAGES.root), 'none');
 		assert.equal(decide({ ...PAGES.root, workspace_id: MARKETPLACE_WORKSPACE_ID }), 'full_access');
 		assert.equal(pageAccessLevel({ row: { ...PAGES.root, workspace_id: MARKETPLACE_WORKSPACE_ID }, userId: OUTSIDER, member: null, teamIds: [] }), 'none');
+	});
+});
+
+describe('X1: a private page takes a grant only from its owner', () => {
+	const toGuest = (permission) => rule(ROOT, permission);
+	/** ROOT held by another member: the R3/R4 shape (a grant on someone else's ancestor). */
+	const foreignRoot = new Map(PAGE_META).set(ROOT, { owner_id: EDITOR, visibility: 'private' });
+	const sharedRoot = new Map(PAGE_META).set(ROOT, { owner_id: PAGE_OWNER, visibility: 'shared' });
+	const asCollaborator = (page, role = 'editor') => ({ ...PAGES[page], collaborators: [{ userId: GUEST, role }] });
+
+	it('R1: a workspace-wide grant never opens a private page, and still opens a shared one', () => {
+		const wide = rules([['', [rule('', 'full_access')]]]);
+		assert.equal(level('guest', 'child', wide), 'none');
+		assert.equal(level('guest', 'child', wide, PARENT_OF, { ...PAGES.child, visibility: 'shared' }), 'full_access');
+	});
+
+	it('R2: a rule on the private page itself still grants (the owner wrote it, or it predates X1)', () => {
+		assert.equal(level('guest', 'child', rules([[CHILD, [rule(CHILD, 'can_edit')]]])), 'can_edit');
+	});
+
+	it('R3/R4: a grant on an ancestor another member holds never reaches the private page', () => {
+		const onRoot = rules([[ROOT, [toGuest('can_edit')]]]);
+		assert.equal(level('guest', 'child', onRoot, PARENT_OF, null, foreignRoot), 'none');
+		assert.equal(level('guest', 'grand', onRoot, PARENT_OF, null, foreignRoot), 'none');
+		assert.equal(level('guest', 'child', onRoot, PARENT_OF, { ...PAGES.child, visibility: 'shared' }, foreignRoot), 'can_edit');
+	});
+
+	it('a grant on the owner\'s own SHARED ancestor does not reach a private child', () => {
+		assert.equal(level('guest', 'child', rules([[ROOT, [toGuest('can_view')]]]), PARENT_OF, null, sharedRoot), 'none');
+	});
+
+	it('the owner\'s own private ancestor grant inherits down the whole run', () => {
+		const onRoot = rules([[ROOT, [toGuest('can_comment')]]]);
+		assert.equal(level('guest', 'child', onRoot), 'can_comment');
+		assert.equal(level('guest', 'grand', onRoot), 'can_comment');
+	});
+
+	it('a foreign ancestor ends the run: the owner\'s grant above it does not cross', () => {
+		const foreignChild = new Map(PAGE_META).set(CHILD, { owner_id: EDITOR, visibility: 'private' });
+		assert.equal(level('guest', 'grand', rules([[ROOT, [toGuest('can_view')]]]), PARENT_OF, null, foreignChild), 'none');
+	});
+
+	it('a deny on a foreign ancestor still denies the owner\'s own grant (fail closed)', () => {
+		const rulesByPage = rules([[CHILD, [rule(CHILD, 'can_edit')]], [ROOT, [toGuest('no_access')]]]);
+		assert.equal(level('guest', 'child', rulesByPage, PARENT_OF, null, foreignRoot), 'none');
+	});
+
+	it('a nearer foreign grant below the owner\'s grant still caps it, never raises it', () => {
+		const rulesByPage = rules([[ROOT, [toGuest('can_edit')]], ['', [rule('', 'can_view')]]]);
+		assert.equal(level('guest', 'grand', rulesByPage), 'can_view');
+	});
+
+	it('a collaborator keeps the visibility default; a wide can_view caps them, a wide can_edit does not raise them', () => {
+		assert.equal(level('guest', 'child', RULED_ELSEWHERE, PARENT_OF, asCollaborator('child')), 'can_view');
+		assert.equal(level('guest', 'child', rules([['', [rule('', 'can_comment')]]]), PARENT_OF, asCollaborator('child')), 'can_comment');
+		assert.equal(pageRuleLevel({ row: asCollaborator('child'), userId: GUEST, member: CALLERS.guest.member, rulesByPage: rules([['', [rule('', 'can_view')]]]), parentOf: PARENT_OF, teamIds: [], pageMeta: PAGE_META }), 'can_view');
+		const wideEdit = rules([['', [rule('', 'full_access')]]]);
+		assert.equal(level('guest', 'child', wideEdit, PARENT_OF, asCollaborator('child')), 'can_view');
+		assert.equal(pageRuleLevel({ row: asCollaborator('child'), userId: GUEST, member: CALLERS.guest.member, rulesByPage: wideEdit, parentOf: PARENT_OF, teamIds: [], pageMeta: PAGE_META }), null);
+	});
+
+	it('missing or partial pageMeta: an ancestor grant is ignored, the page\'s own rule still counts', () => {
+		const onRoot = rules([[ROOT, [toGuest('can_edit')]]]);
+		for (const pageMeta of [null, new Map(), new Map([[CHILD, PAGE_META.get(CHILD)]])]) {
+			assert.equal(level('guest', 'grand', onRoot, PARENT_OF, null, pageMeta), 'none');
+		}
+		assert.equal(level('guest', 'grand', rules([[GRAND, [rule(GRAND, 'can_view')]]]), PARENT_OF, null, null), 'can_view');
+	});
+
+	it('the owner and their rules: the owner keeps full access whatever a foreign rule says', () => {
+		const denyOwner = rules([['', [rule('', 'no_access', { type: 'user', userId: PAGE_OWNER })]]]);
+		assert.equal(level('pageOwner', 'grand', denyOwner), 'full_access');
 	});
 });
 
