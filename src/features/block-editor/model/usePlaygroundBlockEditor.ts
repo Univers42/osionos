@@ -78,6 +78,9 @@ import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import { insertPastedLink, isPasteMenuBlock } from "./pasteLinkMenu";
 import { useLinkSnapshotAttach } from "./useLinkSnapshotAttach";
 import { usePasteLinkMenu } from "./usePasteLinkMenu";
+import { pastedImageFile } from "./pastedImage";
+import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import {
   commitEditableBlockText,
   focusEditableBlock,
@@ -1633,11 +1636,31 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     caretPosition: getCaretRect,
   });
 
+  const pushToast = useToastStore((s) => s.push);
+  // Upload first, then insert: the page only ever holds the stored URL. A failed upload adds
+  // nothing — inlining it would put the picture back in the page body and localStorage.
+  const pasteImage = useCallback(
+    (blockId: string, file: File) => {
+      uploadPageMedia(file).then(
+        (url) => insertBlock(pageId, blockId, { id: crypto.randomUUID(), type: "image", content: "", asset: `url:${url}` }),
+        () => pushToast({ kind: "error", title: "Couldn't upload the picture", description: "It was not added. Check your connection, then paste it again." }),
+      );
+    },
+    [insertBlock, pageId, pushToast],
+  );
+
   const handlePaste = useCallback(
     (e: React.ClipboardEvent, blockId: string) => {
       flushPendingBlockDraft(blockId, "structural");
       const currentBlock = findBlockInTree(contentRef.current, blockId);
       if (!currentBlock || currentBlock.type === "code") return;
+
+      const image = pastedImageFile(e.clipboardData);
+      if (image) {
+        e.preventDefault();
+        pasteImage(blockId, image);
+        return;
+      }
 
       const rawMarkdown = e.clipboardData.getData("text/markdown");
       const rawPlainText = e.clipboardData.getData("text/plain");
@@ -1691,7 +1714,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       updatePageContent(pageId, replaceBlockInEditorTree(contentRef.current, blockId, replacement));
       focusBlock(parsed.at(-1)?.id ?? replacement.at(-1)?.id ?? blockId, true);
     },
-    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock, urlPaste, offerPasteMenu],
+    [flushPendingBlockDraft, pageId, updatePageContent, updateBlock, focusBlock, urlPaste, offerPasteMenu, pasteImage],
   );
 
   const handleContainerEnter = useCallback(
