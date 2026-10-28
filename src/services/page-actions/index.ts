@@ -79,9 +79,10 @@ export interface ImportedPagePayload {
   content: Block[];
 }
 
-function pageUrl(pageId: string): string {
+function pageUrl(pageId: string, workspaceId?: string | null): string {
   const url = new URL(globalThis.location.href);
   url.searchParams.set("page", pageId);
+  if (workspaceId) url.searchParams.set("ws", workspaceId);
   return url.toString();
 }
 
@@ -112,8 +113,8 @@ export function serializePageToMarkdown(page: PageEntry): string {
   return `# ${page.title || "Untitled"}\n\n${body}`.trim();
 }
 
-export async function copyPageLink(pageId: string): Promise<string> {
-  const link = pageUrl(pageId);
+export async function copyPageLink(pageId: string, workspaceId?: string | null): Promise<string> {
+  const link = pageUrl(pageId, workspaceId);
   await navigator.clipboard.writeText(link);
   return link;
 }
