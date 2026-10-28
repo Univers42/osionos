@@ -72,5 +72,39 @@ test.describe("markdown variables", () => {
     await editor.click();
     await page.keyboard.type("Hi {{COMPANY}}");
     await expect(page.locator('span.md-variable[data-var-expr="COMPANY"]').first()).toHaveText("Acme");
+    await page.keyboard.type(" {{CO");
+    await expect(page.getByTestId("variable-menu").getByRole("option").first()).toContainText(/COMPANY\s*Acme/);
+  });
+
+  test("the {{ menu offers names, then filters after |, and Enter writes the pick", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const editor = await activateFirstEditor(page);
+    await editor.click();
+    await page.keyboard.type("Due {{TOD");
+    const menu = page.getByTestId("variable-menu");
+    const first = menu.getByRole("option").first();
+    await expect(first).toContainText("TODAY");
+    await expect(first).toContainText("built-in");
+    await expect(first).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Enter");
+    await expect(menu).toHaveCount(0);
+    await expect(page.locator('span.md-variable[data-var-expr="TODAY"]')).toHaveCount(1);
+
+    await page.keyboard.type(" {{PAGE | up");
+    await expect(menu.getByRole("option").first()).toContainText("upper");
+    await page.keyboard.press("Enter");
+    await expect(page.locator('span.md-variable[data-var-expr="PAGE | upper"]')).toHaveCount(1);
+  });
+
+  test("Escape closes the {{ menu and keeps what was typed", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const editor = await activateFirstEditor(page);
+    await editor.click();
+    await page.keyboard.type("a {{NO");
+    const menu = page.getByTestId("variable-menu");
+    await expect(menu).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+    await expect.poll(() => caretBlockText(page)).toBe("a {{NO");
   });
 });

@@ -12,6 +12,7 @@
 
 import type { PageEntry } from "../../src/entities/page/index.ts";
 import { isEnvPage } from "../../src/features/variables/model/envFile.ts";
+import { rankSuggestions, variableSuggestions } from "../../src/features/variables/model/variableCatalog.ts";
 import { parseVariableDefinitions } from "../../src/features/variables/model/variableDefinitions.ts";
 import { resolveVariable, type VariableScope } from "../../src/features/variables/model/variableResolver.ts";
 import { defineBench } from "./harness.ts";
@@ -98,6 +99,15 @@ export const bench = defineBench("variables", [
     name: "scan a 2,001-page workspace for env.json files",
     budgetNs: 15_000,
     setup: () => () => PAGES.filter(isEnvPage),
+  },
+  {
+    name: "{{ menu: catalog + rank + 50 previews",
+    budgetNs: 60_000,
+    setup: () => {
+      const s = scope();
+      const placement = { ...s, owners: s.layers.map(() => ({ title: "Project" }) as PageEntry) };
+      return () => rankSuggestions(variableSuggestions(placement), "a", 50).map((item) => resolveVariable(item.insert, s));
+    },
   },
   {
     name: "parse env.json with 200 variables",
