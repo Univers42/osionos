@@ -5279,7 +5279,7 @@ export function createBridgeServer(options = {}) {
 				return pageLevelForRow(row, authContext, loader);
 			},
 		}),
-		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		realtimeToken: createRealtimeTokenHandler({
 			config,
 			verifySession: verifyAppSessionToken,
