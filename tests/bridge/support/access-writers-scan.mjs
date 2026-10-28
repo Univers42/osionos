@@ -23,10 +23,10 @@
 // writer of that shape needs a hand-added bump). A regex literal holding a quote can
 // derail the lexer; `clean` is false for such a file and the caller must not trust it.
 
-const ACCESS = /osionos_(?:workspace_members|share_rules|workspaces|teams|team_members|pages|workspace_transfer_ownership|workspace_mark_delete|account_erase|bridge_upsert_workspace)\b/g;
+const ACCESS = /osionos_(?:workspace_members|share_rules|workspaces|teams|team_members|pages|workspace_transfer_ownership|workspace_mark_delete|account_erase|bridge_upsert_workspace|member_attributes)\b/g;
 const METHOD = /method:\s*['"](?:POST|PATCH|PUT|DELETE)['"]/g;
 const WRITE_CALLS = new Set(['post', 'patch', 'del', 'upsert', 'rpc']);
-const STORE_FILES = new Set(['scripts/bridge-perms-rules.mjs']);
+const STORE_FILES = new Set(['scripts/bridge-perms-rules.mjs', 'scripts/bridge-member-attributes.mjs']);
 
 /**
  * `code`: the source with comments blanked. `shape`: the same with string text blanked to
