@@ -2,6 +2,8 @@ import { explorerRow } from "../../browser/core/app.mjs";
 import { parseServerTiming } from "./latencyStats.mjs";
 
 export const BLOCK = '[role="textbox"][aria-multiline="true"]';
+/** The open page's blocks. Tabs stay mounted when hidden, so an unscoped BLOCK can match another tab's editor first. */
+export const visibleBlocks = (page) => page.locator(BLOCK).filter({ visible: true });
 
 export const env = (name) => process.env[name] ?? "";
 export const intEnv = (name, fallback) => Number.parseInt(env(name), 10) || fallback;
@@ -47,8 +49,14 @@ export async function openAs(browser, baseURL, record, timing) {
   }, [record, timing]);
   const page = await context.newPage();
   await page.goto("/", { waitUntil: "domcontentloaded" });
+  // A peer lands in its own private workspace; a shared page is only in the explorer once its workspace is active.
+  const workspaceId = env("COEDIT_WORKSPACE_ID");
+  if (workspaceId) {
+    await page.waitForFunction(() => Boolean(globalThis.__playgroundUserStore));
+    await page.evaluate((id) => globalThis.__playgroundUserStore.getState().switchWorkspace(id), workspaceId);
+  }
   await explorerRow(page, env("COEDIT_PAGE_TITLE")).click();
-  await page.locator(BLOCK).first().waitFor({ timeout: 30_000 });
+  await visibleBlocks(page).first().waitFor({ timeout: 30_000 });
   return { context, page };
 }
 
@@ -67,7 +75,7 @@ export function watchEventPosts(page) {
 /** Records every block's text length on each DOM mutation, indexed by block position at start. */
 export async function startObservingAll(page) {
   await page.evaluate((selector) => {
-    const blocks = () => Array.from(document.querySelectorAll(selector));
+    const blocks = () => Array.from(document.querySelectorAll(selector)).filter((block) => block.checkVisibility());
     const samples = [];
     const base = [];
     const last = [];
@@ -108,7 +116,7 @@ export async function readUserData(page) {
 }
 
 export async function appendBlocks(page, count) {
-  await page.locator(BLOCK).last().click();
+  await visibleBlocks(page).last().click();
   await page.keyboard.press("Control+End");
   for (let index = 0; index < count; index += 1) {
     await page.keyboard.press("Enter");
@@ -119,11 +127,11 @@ export async function appendBlocks(page, count) {
 export async function waitForBlockCounts(pages, minCount) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
-    const counts = await Promise.all(pages.map((page) => page.locator(BLOCK).count()));
+    const counts = await Promise.all(pages.map((page) => visibleBlocks(page).count()));
     if (counts.every((count) => count >= minCount) && new Set(counts).size === 1) return counts[0];
     await pages[0].waitForTimeout(250);
   }
-  const finalCounts = await Promise.all(pages.map((page) => page.locator(BLOCK).count()));
+  const finalCounts = await Promise.all(pages.map((page) => visibleBlocks(page).count()));
   throw new Error(`block counts did not sync: ${finalCounts.join(",")}`);
 }
 
