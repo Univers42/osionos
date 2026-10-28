@@ -29,7 +29,7 @@ import { storageHeaders } from './bridge-storage-core.mjs';
 
 export const BOARDS = 'hydrawn_boards';
 export const THUMBNAILS = 'hydrawn_thumbnails';
-const SUMMARY_FIELDS = 'slug,title,element_count,entry_count,rev,thumbnail_at,created_at,updated_at';
+const SUMMARY_FIELDS = 'slug,title,element_count,entry_count,bounds,rev,thumbnail_at,created_at,updated_at';
 // Caveat: sized for an 8 MB scene over the Funnel hop to b2b, not measured on it; a slower
 // link times a large save out (502) and the autosaver retries it.
 const MONGO_TIMEOUT_MS = 30_000;

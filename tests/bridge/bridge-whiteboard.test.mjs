@@ -88,6 +88,26 @@ describe('whiteboard routes', () => {
 		});
 	});
 
+	// The gallery prints "Empty" for null bounds, so a drawn board must list with its extent.
+	it('list a saved board with the bounds of its live elements, as hydrawn sceneBounds does', async () => {
+		await withWhiteboard(async ({ user }) => {
+			const client = await user();
+			const { slug } = await client.create();
+			const elements = [
+				{ ...element('up-left'), x: 10, y: 20, width: -4, height: -5 },
+				{ ...element('far'), x: 30, y: 40, width: 2, height: 3 },
+				{ ...element('gone', true), x: 900, y: 900, width: 1, height: 1 },
+				{ ...element('no-size'), x: 'NaN', y: 0, width: 1, height: 1 },
+			];
+			const saved = await client.put(slug, scene(elements), 0);
+			assert.equal(saved.status, 200, saved.text);
+			const extent = { minX: 6, minY: 15, maxX: 32, maxY: 43 };
+			assert.deepEqual(saved.body.bounds, extent);
+			assert.deepEqual((await client.call(V1)).body.boards[0].bounds, extent);
+			assert.equal((await client.put(slug, scene([]), 1)).body.bounds, null);
+		});
+	});
+
 	it('refuse a save without If-Match or from a stale rev, and let one of 20 racing saves win', async () => {
 		await withWhiteboard(async ({ user }) => {
 			const client = await user();
