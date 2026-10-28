@@ -58,6 +58,7 @@ export type AccessEntry = {
 	parentOf: Map<string, string | null> | null;
 	pageMeta: Map<string, PageMeta> | null;
 	teamIds: string[] | null;
+	attributes: { name: string; value: string }[] | null;
 };
 
 /** A page's owner and visibility: a private page takes grants only from its owner's private ancestors (X1). */
@@ -74,6 +75,7 @@ export type PageAccessRow = QueryResultRow & { id: string; workspace_id: string 
 const MAX_RULES = 20_000;
 const MAX_PAGES = 20_000;
 const MAX_TEAMS = 500;
+const MAX_ATTRIBUTES = 500;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -99,6 +101,10 @@ const PARENTS_SQL = `select id, parent_page_id, owner_id, visibility
 const OWNED_PAGES_SQL = `select id from public.osionos_pages where id = any($1::uuid[]) and owner_id = $2::uuid`;
 const TEAMS_SQL = `select team_id
 	from public.osionos_team_members
+	where workspace_id = $1::uuid and user_id = $2::uuid
+	limit $3::int`;
+const ATTRIBUTES_SQL = `select name, value
+	from public.osionos_member_attributes
 	where workspace_id = $1::uuid and user_id = $2::uuid
 	limit $3::int`;
 
@@ -177,6 +183,17 @@ async function readTeamIds(db: QueryRunner, workspaceId: string, userId: string)
 	}
 }
 
+async function readAttributes(db: QueryRunner, workspaceId: string, userId: string): Promise<{ name: string; value: string }[] | null> {
+	try {
+		const rows = await rowsOf<{ name: string; value: string }>(db, ATTRIBUTES_SQL, [workspaceId, userId, MAX_ATTRIBUTES + 1]);
+		if (rows.length > MAX_ATTRIBUTES) return null;
+		return rows.map((row) => ({ name: String(row.name), value: String(row.value) }));
+	} catch (error) {
+		warnFailedRead(workspaceId, error);
+		return null;
+	}
+}
+
 /** The caller's member row of each workspace in one read (first row wins, as the bridge's limit 1). */
 async function readMembers(db: QueryRunner, userId: string, workspaceIds: string[]): Promise<Map<string, WorkspaceMember>> {
 	const rows = await rowsOf<{ workspace_id: string; role: string; permissions: unknown }>(db, MEMBERS_SQL, [userId, workspaceIds]);
@@ -204,6 +221,13 @@ function namesATeam(rulesByPage: Map<string, ShareRuleRow[]>): boolean {
 	return false;
 }
 
+function namesAnAttribute(rulesByPage: Map<string, ShareRuleRow[]>): boolean {
+	for (const rules of rulesByPage.values()) {
+		if (rules.some((rule) => rule.target?.type === 'attribute')) return true;
+	}
+	return false;
+}
+
 /**
  * One workspace's entry, or null when it cannot be read in full. Never throws: the
  * workspace is closed instead. The parent map is read only when a rule exists - with no
@@ -212,11 +236,12 @@ function namesATeam(rulesByPage: Map<string, ShareRuleRow[]>): boolean {
 async function readEntry(db: QueryRunner, userId: string, workspaceId: string, member: WorkspaceMember | null): Promise<AccessEntry | null> {
 	try {
 		const rulesByPage = await readRules(db, workspaceId);
-		const [parents, teamIds] = await Promise.all([
+		const [parents, teamIds, attributes] = await Promise.all([
 			rulesByPage.size > 0 ? readParents(db, workspaceId) : { parentOf: null, pageMeta: null },
 			member && namesATeam(rulesByPage) ? readTeamIds(db, workspaceId, userId) : null,
+			member && namesAnAttribute(rulesByPage) ? readAttributes(db, workspaceId, userId) : null,
 		]);
-		return { member, rulesByPage, ...parents, teamIds };
+		return { member, rulesByPage, ...parents, teamIds, attributes };
 	} catch (error) {
 		warnFailedRead(workspaceId, error);
 		return null;
