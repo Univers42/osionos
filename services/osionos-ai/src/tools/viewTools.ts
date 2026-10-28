@@ -1,8 +1,8 @@
 import type { QueryResultRow } from 'pg';
 import { z } from 'zod';
-import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 import { BUILTIN_AGENT_IDS } from '../agents/builtins.ts';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
+import { canReadPageWithRules } from '../retrieval/shareRules.ts';
 import type { AnyViewTool, ReadToolContext, ToolResult, ViewTool } from './types.ts';
 
 /** The shape of a uuid. */
@@ -72,7 +72,7 @@ export const openPage: ViewTool<z.infer<typeof openPageArgs>, { pageId: string; 
 		const workspaces = await liveMemberWorkspaces(ctx.db, ctx.user);
 		const result = await ctx.db.query<PageRow>(PAGE_SQL, [pageId]);
 		const row = result.rows[0];
-		if (!row || !canReadPageRowAsMember(row, ctx.user.userId, workspaces)) {
+		if (!row || !(await canReadPageWithRules(ctx.db, ctx.user.userId, row, workspaces))) {
 			return { ok: false, error: 'no page with that id in your workspaces' };
 		}
 		const targetRaw = typeof args.target === 'string' ? args.target : 'tab';
