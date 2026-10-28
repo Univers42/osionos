@@ -25,7 +25,6 @@ import { Button, IconValueView, Modal } from "@/shared/ui";
 import { useToastStore } from "@osionos/ui/primitives";
 import { isVideoCoverSource } from "@/entities/page/ui/coverMedia";
 import type { Page } from "@notion-db/object-database";
-import type { WorkspaceMemberRole } from "@/store/settings";
 import { useUserStore } from "@/features/auth";
 import { TypedConfirmModal } from "../ui/ConfirmModals";
 import { isWorkspaceOwner } from "../model/workspaceOwnership";
@@ -35,7 +34,7 @@ import { CONTACT, DIR, GROUP, GUEST, MEMBER, type PeopleSourceKey } from "./peop
 import {
   changeMemberRole, connectPerson, inviteContact, messagePerson, removeContact, removeMember, revokeGuest, transferOwnership,
 } from "./peopleActions";
-import { AcceptLinkModal, PEOPLE_INPUT_CLASS } from "./AcceptLinkModal";
+import { AcceptLinkModal, InviteError, InviteRoleSelect, type InviteRole } from "./AcceptLinkModal";
 import { presenceLabel, type PresenceState } from "./peopleSocialModel";
 import { useCanInviteMembers } from "./useCanInviteMembers";
 import { usePersonSocial } from "./usePersonSocial";
@@ -62,7 +61,7 @@ const ConfirmButton: React.FC<{ label: string; busyLabel?: string; onConfirm: ()
   );
 };
 
-const ROLE_CHOICES: Array<Exclude<WorkspaceMemberRole, "owner">> = ["admin", "member", "guest"];
+const ROLE_CHOICES: InviteRole[] = ["admin", "member", "guest"];
 
 export interface PersonSummary {
   id: string;
@@ -187,7 +186,7 @@ const ContactInvite: React.FC<{
   onInvited: () => void;
 }> = ({ workspaceId, personId, name, workspaceName, canGrantAdmin, onInvited }) => {
   const [picking, setPicking] = useState(false);
-  const [role, setRole] = useState<Exclude<WorkspaceMemberRole, "owner">>("member");
+  const [role, setRole] = useState<InviteRole>("member");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [acceptUrl, setAcceptUrl] = useState<string | null>(null);
@@ -214,12 +213,7 @@ const ContactInvite: React.FC<{
       {picking ? (<>
         <label className="block space-y-1 text-sm">
           <span>Role in {workspaceName}</span>
-          <select value={role} disabled={busy} className={PEOPLE_INPUT_CLASS}
-            onChange={(event) => setRole(event.target.value as Exclude<WorkspaceMemberRole, "owner">)}>
-            <option value="member">Member — can edit</option>
-            <option value="guest">Guest — can view</option>
-            {canGrantAdmin && <option value="admin">Admin</option>}
-          </select>
+          <InviteRoleSelect value={role} onChange={setRole} allowAdmin={canGrantAdmin} disabled={busy} />
         </label>
         <div className="flex gap-2">
           <Button tone="primary" disabled={busy} onClick={() => void send()}>{busy ? "…" : "Send invite"}</Button>
@@ -228,11 +222,7 @@ const ContactInvite: React.FC<{
       </>) : (
         <Button onClick={() => setPicking(true)}>Invite to workspace</Button>
       )}
-      {notice && (
-        <p role="alert" className="rounded-md bg-[color-mix(in_srgb,var(--osio-danger)_12%,transparent)] px-3 py-2 text-sm text-[var(--osio-danger)]">
-          {notice}
-        </p>
-      )}
+      {notice && <InviteError message={notice} />}
     </div>
   );
 };
@@ -305,7 +295,7 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
             workspaceName={workspace?.name ?? "your workspace"} canGrantAdmin={isViewerOwner}
             onInvited={() => { onChanged(); onClose(); }} />
         ) : (
-          <p className="mt-3 text-sm text-[var(--osio-fg-muted)]">Only people you connected with yourself can be invited.</p>
+          <p className="mt-3 text-sm text-osio-fg-muted">Only people you connected with yourself can be invited.</p>
         ))}
       </div>
       {confirmingTransfer && (

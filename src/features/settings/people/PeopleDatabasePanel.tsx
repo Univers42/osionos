@@ -21,14 +21,14 @@ import "@/app/styles/database-overrides.css";
 import { Button, Modal } from "@/shared/ui";
 import { useToastStore } from "@osionos/ui/primitives";
 import { useUserStore } from "@/features/auth";
-import { useWorkspaceInvitesStore, type WorkspaceMemberRole } from "@/store/settings";
+import { useWorkspaceInvitesStore } from "@/store/settings";
 import { PeopleSourceAdapter } from "./peopleSourceAdapter";
 import { PEOPLE_SOURCES } from "./peopleSources";
 import { PeoplePeek } from "./PeoplePeek";
 import { createGroup, inviteGuest } from "./peopleActions";
 import type { PeopleCtx, PeopleSourceKey } from "./peopleModel";
 import { useCanInviteMembers } from "./useCanInviteMembers";
-import { AcceptLinkModal, PEOPLE_INPUT_CLASS as INPUT_CLASS } from "./AcceptLinkModal";
+import { AcceptLinkModal, InviteError, InviteRoleSelect, PEOPLE_INPUT_CLASS as INPUT_CLASS, type InviteRole } from "./AcceptLinkModal";
 
 interface PanelProps {
   source: PeopleSourceKey;
@@ -44,7 +44,7 @@ const CreatePeopleModal: React.FC<{
 }> = ({ kind, workspaceId, invitedBy, onClose, onDone }) => {
   const [value, setValue] = useState("");
   const [groupKind, setGroupKind] = useState<"chat" | "community">("chat");
-  const [role, setRole] = useState<Exclude<WorkspaceMemberRole, "owner">>("member");
+  const [role, setRole] = useState<InviteRole>("member");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The accept link exists only now: the bridge keeps a hash, so closing this modal loses it.
@@ -96,18 +96,9 @@ const CreatePeopleModal: React.FC<{
             <option value="community">Community</option>
           </select>
         ) : (
-          <select value={role} onChange={(event) => setRole(event.target.value as Exclude<WorkspaceMemberRole, "owner">)} className={INPUT_CLASS}
-            aria-label="Role">
-            <option value="member">Member — can edit</option>
-            <option value="guest">Guest — can view</option>
-            <option value="admin">Admin</option>
-          </select>
+          <InviteRoleSelect value={role} onChange={setRole} allowAdmin ariaLabel="Role" />
         )}
-        {error && kind !== "group" && (
-          <p role="alert" className="rounded-md bg-[color-mix(in_srgb,var(--osio-danger)_12%,transparent)] px-3 py-2 text-sm text-[var(--osio-danger)]">
-            {error}
-          </p>
-        )}
+        {error && kind !== "group" && <InviteError message={error} />}
         <div className="flex justify-end gap-2">
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" tone="primary" disabled={busy}>{busy ? "…" : kind === "group" ? "Create" : "Invite"}</Button>

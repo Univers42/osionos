@@ -10,16 +10,36 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-/** The one-time invite link dialog, shared by the panel's email invite and the peek's
- *  contact invite. Its own module so PeoplePeek does not import PeopleDatabasePanel,
- *  which imports PeoplePeek. */
+/** The invite controls shared by the panel's email invite and the peek's contact invite:
+ *  the one-time link dialog, the role picker and the error line. Their own module so
+ *  PeoplePeek does not import PeopleDatabasePanel, which imports PeoplePeek. */
 
 import React, { useState } from "react";
 import { Button, Modal } from "@/shared/ui";
+import type { WorkspaceMemberRole } from "@/store/settings";
 
 /** The People modals' text field / select spec. */
 export const PEOPLE_INPUT_CLASS =
   "h-9 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]";
+
+export type InviteRole = Exclude<WorkspaceMemberRole, "owner">;
+
+export const InviteRoleSelect: React.FC<{
+  value: InviteRole; onChange: (role: InviteRole) => void; allowAdmin: boolean; disabled?: boolean; ariaLabel?: string;
+}> = ({ value, onChange, allowAdmin, disabled, ariaLabel }) => (
+  <select value={value} disabled={disabled} aria-label={ariaLabel} className={PEOPLE_INPUT_CLASS}
+    onChange={(event) => onChange(event.target.value as InviteRole)}>
+    <option value="member">Member — can edit</option>
+    <option value="guest">Guest — can view</option>
+    {allowAdmin && <option value="admin">Admin</option>}
+  </select>
+);
+
+export const InviteError: React.FC<{ message: string }> = ({ message }) => (
+  <p role="alert" className="rounded-md bg-[color-mix(in_srgb,var(--osio-danger)_12%,transparent)] px-3 py-2 text-sm text-[var(--osio-danger)]">
+    {message}
+  </p>
+);
 
 /** Shown once after an invite: no mail is sent, so the inviter passes the link on. */
 export const AcceptLinkModal: React.FC<{ link: string; onClose: () => void }> = ({ link, onClose }) => {
