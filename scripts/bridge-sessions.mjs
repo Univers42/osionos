@@ -48,6 +48,7 @@ import { assertSessionNotCutOff } from './bridge-session-cutoff.mjs';
 import { sessionRevocationsFromConfig } from './bridge-session-revocations.mjs';
 import { timestampMicros } from './bridge-session-tracker.mjs';
 import { wsLaneHealth } from './bridge-realtime-ws-lane.mjs';
+import { socketPublishRoute } from './bridge-publish-socket.mjs';
 
 const TOKEN_VERSION = 'osionos_v1';
 const SESSION_COLUMNS = 'id,created_at,expires_at,last_seen_at,auth_method,ip_prefix,user_agent,family_id';
@@ -106,6 +107,7 @@ export function bridgeBootIsDegraded(server) {
 export function bridgeHealthState(config) {
 	const cutoffs = config.sessionCutoffs;
 	const revocations = config.sessionRevocations;
+	const publishRoute = socketPublishRoute(process.env);
 	return {
 		ok: true,
 		service: 'osionos-bridge',
@@ -116,6 +118,8 @@ export function bridgeHealthState(config) {
 		kv: kvState(config),
 		// Present only when REALTIME_PUBLISH_WS_URL opts the lane in, so the default answer is unchanged.
 		...(wsLaneHealth().status === 'off' ? {} : { realtime_ws: wsLaneHealth() }),
+		// Present only when REALTIME_PUBLISH_SOCKET opts the socket in, so the default answer is unchanged.
+		...(publishRoute ? { publish_route: publishRoute.state() } : {}),
 		// Counts only, and only when OSIONOS_ACTIVITY=1 set the stats function on the config.
 		...(config.activityStats ? { activity: config.activityStats() } : {}),
 	};

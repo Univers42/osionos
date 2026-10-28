@@ -25,9 +25,13 @@
  * (http://mini-baas-kong:8000/realtime: Kong admits that key alone there). A ws://
  * or wss:// URL (grobase's /realtime/v1/ws, behind a Funnel link) publishes over
  * one authenticated socket instead: bridge-realtime-socket.mjs.
+ * REALTIME_PUBLISH_SOCKET (optional unix socket path; when set, the POST goes
+ * over it first and falls back to the URL only when nothing was sent).
  */
 
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
+import { keepAliveFetch } from './bridge-keepalive-post.mjs';
+import { socketPublishRoute } from './bridge-publish-socket.mjs';
 import { realtimeSocketPublisher } from './bridge-realtime-socket.mjs';
 import { publishViaLane } from './bridge-realtime-ws-lane.mjs';
 import { CHUNK_SIZE, idChunks, inFilter, runChunks } from './bridge-paging.mjs';
@@ -182,7 +186,7 @@ export async function readInChunks(ids, read, { size = CHUNK_SIZE } = {}) {
 }
 
 /** Best-effort publish to the Rust realtime gateway; never throws. */
-export async function publishRealtime({ topic, eventType, payload, fetchImpl = fetch, env = process.env }) {
+export async function publishRealtime({ topic, eventType, payload, fetchImpl = keepAliveFetch, env = process.env }) {
 	const base = (env.REALTIME_PUBLISH_URL || 'http://mini-baas-realtime:4000').replace(/\/$/, '');
 	if (/^wss?:\/\//i.test(base)) return realtimeSocketPublisher(base, env).publish(topic, eventType, payload);
 	if (publishViaLane(env, topic, eventType, payload)) return true;
@@ -190,12 +194,18 @@ export async function publishRealtime({ topic, eventType, payload, fetchImpl = f
 	const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
 	if (apikey) headers.apikey = apikey;
 	try {
-		const response = await fetchImpl(`${base}/v1/publish`, {
+		// ONE url + init: both routes must send the byte-identical request. Built inside the
+		// try so a payload JSON.stringify refuses still resolves false, as before.
+		const url = `${base}/v1/publish`;
+		const init = {
 			method: 'POST',
 			headers,
 			body: JSON.stringify({ topic, event_type: eventType, payload }),
 			signal: AbortSignal.timeout(PUBLISH_TIMEOUT_MS),
-		});
+		};
+		// send() resolves null only when nothing was written (unset, or a pre-send errno with
+		// the breaker handing this call back); anything else it answers is never re-sent (S8).
+		const response = (await socketPublishRoute(env)?.send(url, init)) ?? (await fetchImpl(url, init));
 		if (!response.ok) {
 			console.warn(`[osionos-bridge] realtime publish ${topic} failed with ${response.status}`);
 			return false;
