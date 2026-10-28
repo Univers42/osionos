@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { createPermsHandler, loadPermsSettings } from "../../scripts/bridge-perms.mjs";
+import { createPageAccessLoader, pageLevelFor } from "../../scripts/bridge-api.mjs";
 
 const USER = "11111111-1111-4111-8111-111111111111";
 const WS_A = "22222222-2222-4222-8222-222222222222";
@@ -101,6 +102,8 @@ function setup({
       peopleEnv, allowedOrigin: "https://localhost:3001",
     },
     ruleStore,
+    createPageAccessLoader,
+    pageLevelFor,
   });
   const call = async (method, path, { token = "good", body } = {}) => {
     const request = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))]);
@@ -207,7 +210,10 @@ test("engine validation errors pass through; engine crashes are a 502", async ()
 test("GET rules needs a workspaceId and read access to it", async () => {
   const { call } = setup({
     access: { [WS_A]: ["read"] },
-    rules: [{ _id: "a", workspaceId: WS_A, resourceId: "p" }, { _id: "b", workspaceId: WS_B, resourceId: "p" }],
+    rules: [
+      { _id: "a", workspaceId: WS_A, resourceType: "page", resourceId: null },
+      { _id: "b", workspaceId: WS_B, resourceType: "page", resourceId: null },
+    ],
   });
   assert.equal((await call("GET", "/api/perms/rules")).status, 400);
   const own = await call("GET", `/api/perms/rules?workspaceId=${WS_A}`);
