@@ -19,7 +19,7 @@ const harness = await startHarness();
 const db: Pool = harness.app.db;
 
 /** The number of pages of the big corpus: above the threshold of the exact scan. */
-const BIG = 2100;
+const BIG = 2106;
 
 /** The number of pages of the small corpus: below it. */
 const SMALL = 12;
@@ -27,47 +27,95 @@ const SMALL = 12;
 /** The number of neighbours the answer holds. */
 const K = 8;
 
+/**
+ * The number of pages of a group: the source is not in its own answer, so a
+ * group holds K + 1 pages and the exact top-K of a page is the rest of it.
+ */
+const GROUP = K + 1;
+
 /** The number of source pages the recall of the big corpus is measured over. */
 const QUERIES = 24;
 
 /** A corpus of pages and their vectors, in a workspace. */
 async function corpus(workspaceId: string, count: number, offset = 0): Promise<void> {
-	await db.query(
-		`insert into public.osionos_pages (id, workspace_id, owner_id, title, visibility, collaborators, content)
-		 select gen_random_uuid(), $1, $2, 'Page ' || g, 'shared', '[]'::jsonb, '[]'::jsonb
-		 from generate_series(1, $3) g`,
-		[workspaceId, USER_A, count],
-	);
-	// The vector of a page, built in SQL: the pages form groups of ten, and
-	// the distance between two pages depends only on how far apart they are.
-	// The nearest neighbours are then well defined — a corpus of equidistant
-	// points measures nothing but the index's luck, and a halfvec cannot hold
-	// a difference finer than its own precision. The vectors go in shuffled,
-	// as pages do: sorted along the curve is the HNSW's worst insertion order.
-	// On a bare table (pgvector 0.8.0, m 16, ef_construction 64, ef_search
-	// 100), sorted, 3 builds in 80 left a source with none of its neighbours
-	// found (the mean over 25 sources fell to 0.89); shuffled, 0 in 100.
-	await db.query(
-		`with numbered as (
-			select id, workspace_id, row_number() over (order by id) as ord
-			from public.osionos_pages where workspace_id = $1
-		)
-		insert into public.ai_page_vectors (workspace_id, page_id, embedding, embedding_model)
-		select n.workspace_id, n.id, v.embedding::halfvec, 'test'
-		from numbered n
-		cross join lateral (
-			select array_agg(
-				case
-					when g = 0 then 0.0
-					when g = 1 then ((n.ord + $2) % 10) * 0.01
-					else 0.1 * sin(g::float8 + floor((n.ord + $2) / 10) * 0.7)
-				end
-				order by g) as embedding
-			from generate_series(0, 383) g
-		) v
-		order by random()`,
-		[workspaceId, offset],
-	);
+	const client = await db.connect();
+	try {
+		await client.query('begin');
+		// The corpus is itself a build of the HNSW graph, not the read under
+		// test: the pool's 5 s statement timeout is the budget of one request,
+		// and a shared host can spend it on 2106 vectors of 384 dimensions.
+		await client.query("set local statement_timeout = '60s'");
+		await client.query(
+			`insert into public.osionos_pages (id, workspace_id, owner_id, title, visibility, collaborators, content)
+			 select gen_random_uuid(), $1, $2, 'Page ' || g, 'shared', '[]'::jsonb, '[]'::jsonb
+			 from generate_series(1, $3) g`,
+			[workspaceId, USER_A, count],
+		);
+		// The vector of a page, built in SQL in one statement. The pages form
+		// groups of K + 1 (the big corpus is a multiple of it, so all of its
+		// groups are full): the source is excluded from its own answer, so the
+		// exact top-K of a page in a full group is the eight other pages.
+		//
+		// The centre of a group is spread over all 384 dimensions by a hash of
+		// (group, dimension), uniform in [-0.1, 0.1], so the centres are close
+		// to orthogonal; each page adds a smaller hash of (group, member,
+		// dimension), uniform in [-0.02, 0.02], and a marker on its own
+		// dimension. In a full group the eighth neighbour is then the farthest
+		// page of the group, far from every page of every other group, and no
+		// tie can fall on the eighth place. (The old corpus was a circle times
+		// a segment: every vector lay in three dimensions, and the groups nine
+		// apart were 9 × 0.7 = 6.3 rad apart — 0.017 rad short of a full turn,
+		// so near-duplicate clusters left whole regions of the HNSW graph
+		// unreachable.)
+		//
+		// Measured on the big corpus: the 25 sources of the recall test had all
+		// eight of their neighbours in their own group; their eighth distance
+		// was 0.038–0.050 and the first page of another group was at least
+		// 0.782 away. The 234 groups have exactly nine pages each, and the 2106
+		// vectors are distinct.
+		//
+		// The vectors go in shuffled, as pages do: sorted along the curve is
+		// the HNSW's worst insertion order. Measured on this suite's shape
+		// (pgvector 0.8.0, m 16, ef_construction 64, ef_search 100): 20 runs
+		// of this file after the fixture, 0 failures, min mean recall 1.000,
+		// median 1.000. The old fixture passed 20 of 20 on the same host too;
+		// the CI run that failed had 3 of 25 sources with 0.00 of their eight
+		// neighbours (mean 0.880).
+		// Caveat: this corpus is still synthetic — it does not exercise the
+		// uneven density, the varying cluster size, or the near-duplicate
+		// clusters of real embeddings, only that the graph can reach a whole
+		// group.
+		await client.query(
+			`with numbered as (
+				select id, workspace_id, row_number() over (order by id) as ord
+				from public.osionos_pages where workspace_id = $1
+			), placed as (
+				select id, workspace_id,
+					$2::bigint + (ord - 1) / $3::int as grp,
+					(ord - 1) % $3::int as member
+				from numbered
+			)
+			insert into public.ai_page_vectors (workspace_id, page_id, embedding, embedding_model)
+			select p.workspace_id, p.id, v.embedding::halfvec, 'test'
+			from placed p
+			cross join lateral (
+				select array_agg(
+					0.1::float8 * (((hashtextextended(p.grp::text || ':' || g::text, 0) % 2001 + 2001) % 2001)::float8 / 1000.0 - 1.0)
+					+ 0.02::float8 * (((hashtextextended(p.grp::text || ':' || p.member::text || ':' || g::text, 0) % 2001 + 2001) % 2001)::float8 / 1000.0 - 1.0)
+					+ case when g = p.member then 0.04::float8 else 0.0::float8 end
+					order by g) as embedding
+				from generate_series(0, 383) g
+			) v
+			order by random()`,
+			[workspaceId, offset, GROUP],
+		);
+		await client.query('commit');
+	} catch (error) {
+		await client.query('rollback').catch(() => undefined);
+		throw error;
+	} finally {
+		client.release();
+	}
 	await db.query('analyze public.ai_page_vectors');
 	await db.query('analyze public.osionos_pages');
 }
@@ -197,8 +245,9 @@ describe('the kNN of the related read (C105)', { skip: hasVectors ? false : 'the
 	it('the HNSW scan of a big corpus finds the exact neighbours, and the recall is measured', async () => {
 		const big = randomUUID();
 		await corpus(big, BIG, 1000);
-		// The recall of one query is a coin toss on the graph the index happened
-		// to build: the measure is the mean over sources spread through the corpus.
+		// The measure is the mean over sources spread through the corpus: an
+		// unreachable group costs a source all eight of its neighbours, so the
+		// mean is the share of the graph the index can reach.
 		// Caveat: 25 sources sample the graph — a region the index left
 		// unreachable that holds under ~10% of the pages can still pass.
 		const sources = await db.query<{ page_id: string }>(
