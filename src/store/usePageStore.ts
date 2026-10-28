@@ -170,6 +170,7 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
   ...cachedPageState,
   pageRevisions: {},
   activePage: null,
+  deniedPage: null,
   navigationPath: [],
   recents: loadRecents(),
   loadingIds: new Set<string>(),
@@ -215,6 +216,7 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
         activePage: page,
         recents,
         showTrash: false,
+        deniedPage: null,
         navigationPath: newPath,
       };
     });
@@ -237,6 +239,10 @@ export const usePageStore = create<LivePageStore>((set, get) => ({
 
   setShowTrash: (show) => {
     set({ showTrash: show });
+  },
+
+  setDeniedPage: (page) => {
+    set({ deniedPage: page });
   },
 
   updateBlock: (pageId, blockId, updates) => {

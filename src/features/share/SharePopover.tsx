@@ -15,7 +15,10 @@ import { Link2, X } from 'lucide-react';
 import { ShareRow } from './ShareRow';
 import { SharePeoplePicker } from './SharePeoplePicker';
 import { useShareModel } from './useShareModel';
+import { AccessRequestsSection } from './AccessRequestsSection';
 import { PublishSection } from './PublishSection';
+import { usePageStore } from '@/store/usePageStore';
+import { getCurrentPageAccessContext } from '@/shared/lib/auth/pageAccess';
 import { isPublishEnabled } from '@/shared/config/featureFlags';
 import { PAGE_SHARE_LEVELS, WORKSPACE_SHARE_LEVELS } from './pageShareModel';
 import type { ShareResource } from './types';
@@ -39,6 +42,9 @@ interface SharePopoverProps {
 export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, centered = false }) => {
   const model = useShareModel(resource);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const page = usePageStore((s) => s.pageById(resource.resourceId));
+  const accessContext = getCurrentPageAccessContext();
+  const ownsPage = resource.resourceType === 'page' && !!page && !!accessContext && page.ownerId === accessContext.userId;
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
@@ -94,6 +100,14 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
           onPickTeam={(team) => { void model.setLevel({ type: 'team', team }, 'can_view'); }}
         />
       </div>
+
+      {ownsPage && (
+        <AccessRequestsSection
+          workspaceId={resource.workspaceId}
+          pageId={resource.resourceId}
+          onApproved={() => { void model.refresh(); }}
+        />
+      )}
 
       <div className="mt-3 max-h-[260px] space-y-0.5 overflow-y-auto">
         {model.loading && <p className="px-2 py-3 text-xs text-[var(--osio-fg-muted)]">Loading access…</p>}
