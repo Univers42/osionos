@@ -27,11 +27,8 @@ import {
 } from '@/shared/ui/assets/collectionEmoji';
 import { AuthDialog } from './AuthDialog';
 
-const INVITE_ACTION_CLASS =
-  "min-h-11 flex-1 rounded-[var(--osio-radius-control)] border border-[var(--osio-border-default)] " +
-  "px-3 text-sm font-medium text-[var(--osio-fg-default)] outline-none " +
-  "transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] " +
-  "focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] disabled:opacity-60";
+// 44 px touch target; the shared Button tones carry the border and focus ring in both themes.
+const INVITE_ACTION_CLASS = "min-h-11 flex-1";
 
 interface Props {
   onClose: () => void;
@@ -279,24 +276,23 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <button
-                        type="button"
+                      <Button
+                        tone="primary"
                         disabled={busyInviteId !== null}
                         onClick={() => void joinInvite(invite)}
                         aria-label={`Join ${invite.workspaceName}`}
                         className={INVITE_ACTION_CLASS}
                       >
                         {busyInviteId === invite.id ? "Joining…" : "Join"}
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
                         disabled={busyInviteId !== null}
                         onClick={() => void declinePending(invite)}
                         aria-label={`Decline ${invite.workspaceName}`}
                         className={INVITE_ACTION_CLASS}
                       >
                         Decline
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ))}
