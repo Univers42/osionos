@@ -257,7 +257,7 @@ describe('GET /api/workspaces/:id/invites', () => {
 		const result = await withBridge(config, mock.fetchImpl, (base) => send(base, invitePath, asOwner));
 		assert.equal(result.status, 200, result.text);
 		assert.deepEqual(result.body.map((entry) => entry.id), [NEWER.id, PENDING.id]);
-		assert.deepEqual(Object.keys(result.body[0]).sort(), ['acceptedAt', 'createdAt', 'email', 'expiresAt', 'id', 'invitedBy', 'revokedAt', 'role']);
+		assert.deepEqual(Object.keys(result.body[0]).sort(), ['acceptedAt', 'createdAt', 'declinedAt', 'email', 'expiresAt', 'id', 'invitedBy', 'revokedAt', 'role']);
 		assert.equal(result.body[1].role, 'member');
 		assert.equal(/token|hash|invited_user/i.test(result.text), false);
 	});

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { BOARD_CREATED, TOKEN_REQUEST, createTokenSource, originOf, readHydrawnMessage } from "../../src/features/whiteboard/model/hydrawnHost.ts";
+import { TOKEN_REQUEST, createTokenSource, originOf, readHydrawnMessage } from "../../src/features/whiteboard/model/hydrawnHost.ts";
 
 const ORIGIN = "https://whiteboard.example";
 const frame = { name: "hydrawn frame" };
@@ -24,10 +24,8 @@ test("a token request counts only from the frame, at the whiteboard origin, in i
   assert.equal(readHydrawnMessage(event({ type: TOKEN_REQUEST }, ORIGIN, null), null, ORIGIN), null);
 });
 
-test("a created board counts only with a valid slug", () => {
-  assert.deepEqual(readHydrawnMessage(event({ type: BOARD_CREATED, slug: "abcd1234efgh" }), frame, ORIGIN), { kind: "board-created", slug: "abcd1234efgh" });
-  assert.equal(readHydrawnMessage(event({ type: BOARD_CREATED, slug: "../x" }), frame, ORIGIN), null);
-  assert.equal(readHydrawnMessage(event({ type: BOARD_CREATED }), frame, ORIGIN), null);
+test("a board-created report from an older hydrawn is ignored", () => {
+  assert.equal(readHydrawnMessage(event({ type: "hydrawn:board-created", slug: "abcd1234efgh" }), frame, ORIGIN), null);
 });
 
 test("the token source reuses a fresh token, re-mints near expiry, and never crosses sessions", async () => {

@@ -18,7 +18,7 @@ async function openApp(page, baseURL) {
 test.describe("whiteboard rail icon", () => {
   test("is shown exactly once with an empty installed map and opens the whiteboard", async ({ page, baseURL }) => {
     await mockInstalled(page, {});
-    await mockHydrawn(page, { slug: "abc123def456" });
+    await mockHydrawn(page);
     await openApp(page, baseURL);
     await expect(whiteboardIcons(page)).toHaveCount(1);
 
@@ -32,7 +32,7 @@ test.describe("whiteboard rail icon", () => {
       "osionos.draw": { ...WHITEBOARD_INSTALLED["osionos.whiteboard"], identifier: "osionos.draw", title: "Draw" },
     };
     const probe = await mockInstalled(page, installed);
-    await mockHydrawn(page, { slug: "abc123def456" });
+    await mockHydrawn(page);
     await openApp(page, baseURL);
     await skipWhenOffline(page, probe);
     await expect(whiteboardIcons(page)).toHaveCount(1);

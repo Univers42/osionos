@@ -195,6 +195,28 @@ describe('whiteboard routes', () => {
 		});
 	});
 
+	it('create a board under a slug the client sent, once, however many times it is sent', async () => {
+		await withWhiteboard(async ({ user }) => {
+			const client = await user();
+			const post = (body) => client.call(V1, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+			const [first, second] = await Promise.all([post({ title: 'Inline', slug: 'clientslug12' }), post({ title: 'Other', slug: 'clientslug12' })]);
+			assert.deepEqual([first.status, second.status].sort(), [200, 201]);
+			assert.equal(first.body.slug, 'clientslug12');
+			assert.equal(second.body.slug, 'clientslug12');
+			assert.deepEqual((await client.call(V1)).body.boards.map((board) => [board.slug, board.title]), [['clientslug12', 'Inline']]);
+			assert.equal((await client.put('clientslug12', scene([element('a')]), 0)).status, 200);
+			for (const slug of ['../x', 'ABCDEFGH', 'short', 12345678]) assert.equal((await post({ title: 'Bad', slug })).status, 400, String(slug));
+			const stranger = await user();
+			const theirs = await stranger.call(V1, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"title":"Theirs","slug":"clientslug12"}' });
+			assert.equal(theirs.status, 201);
+			assert.equal(theirs.body.elementCount, 0);
+			assert.equal((await client.call(`${V1}/clientslug12`, { method: 'DELETE' })).status, 204);
+			const again = await post({ title: 'Again', slug: 'clientslug12' });
+			assert.equal(again.status, 409);
+			assert.equal(again.body.error.code, 'board_deleted');
+		});
+	});
+
 	it('page the gallery by cursor and drop a deleted board from it', async () => {
 		await withWhiteboard(async ({ user }) => {
 			const client = await user();

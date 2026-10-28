@@ -71,8 +71,11 @@ describe('C600 a non-connected invitee', () => {
 	it('C600 calls connectionStatus only at the five gated sites, with saveInviteForAccount owning invite creation', () => {
 		const expected = new Map([
 			['bridge-friendship.mjs', 1], // the definition
-			['bridge-workspace-invites.mjs', 3], // saveInviteForAccount, resendInvite, acceptInvite
+			['bridge-workspace-invites.mjs', 2], // saveInviteForAccount, resendInvite
+			['bridge-workspace-invite-accept.mjs', 1], // acceptInviteRow
 			['bridge-collab.mjs', 2], // joinCollaboration, decideJoinRequest
+			['bridge-page-access-requests.mjs', 1], // create: block either way
+			['bridge-page-access-request-decisions.mjs', 1], // decide: block either way
 		]);
 		const scripts = join(APP_ROOT, 'scripts');
 		for (const file of readdirSync(scripts).filter((name) => name.endsWith('.mjs'))) {
@@ -249,7 +252,7 @@ describe('C605 every membership writer is pinned', () => {
 		'scripts/bridge-api.mjs:ensureAdminWorkspaceMembership', // exempt: env-admin provisioning; the admin claim is the gate
 		'scripts/bridge-api.mjs:handleWorkspaceCreate', // exempt: workspace create writes the caller's own owner row
 		'scripts/bridge-collab.mjs:addMember', // gated: joinCollaboration public and decideJoinRequest approve check first
-		'scripts/bridge-workspace-invites.mjs:acceptInvite', // gated: invite accept re-checks the connection before the member POST
+		'scripts/bridge-workspace-invite-accept.mjs:acceptInviteRow', // gated: both accept routes re-check the connection before the member POST
 		'services/osionos-ai/eval/stack.ts:addMembers', // exempt: eval stack seeds a throwaway database
 		'services/osionos-ai/eval/wiki/import.mjs:workspaceSql', // exempt: offline wiki import tool, not a request path
 		'services/osionos-ai/load/seed.ts:<module>', // exempt: load-test seed script, not a request path
