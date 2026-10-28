@@ -49,7 +49,7 @@ interface TableDataRowProps {
 
 export const TableDataRow = React.memo(function TableDataRow({ row, rowIndex, columnCount, config, textStyle, selectedCell, commitHandlers, onColumnResize, onRowResize, onRowDragStart, onRowMenuKey, onCellKeyDown, onCellFocus }: Readonly<TableDataRowProps>) {
   const height = config.rowHeights?.[rowIndex];
-  const rowStyle: React.CSSProperties = { height: `var(--osio-table-row-${rowIndex}-height, ${toCssSize(height)})` };
+  const rowStyle: React.CSSProperties = { height: toCssSize(height) };
   return <tr className={`group/row ${getRowClassName(rowIndex, config)}`} style={rowStyle}>{Array.from({ length: columnCount }, (_, columnIndex) => {
     const alignment = config.columnAlignments?.[columnIndex] ?? null;
     const isHeader = (config.headerRow !== false && rowIndex === 0) || (config.headerColumn === true && columnIndex === 0);
@@ -241,7 +241,7 @@ function RowResizeDivider({ rowIndex, onPointerDown }: Readonly<{ rowIndex: numb
 export function createColumnStyles(columnCount: number, config: TableBlockConfig): React.CSSProperties[] {
   return Array.from({ length: columnCount }, (_, columnIndex) => {
     const width = config.columnWidths?.[columnIndex];
-    return { minWidth: config.minColumnWidth, width: `var(--osio-table-col-${columnIndex}-width, ${toCssSize(width)})`, maxWidth: config.wrap ? config.maxColumnWidth : undefined };
+    return { minWidth: config.minColumnWidth, width: toCssSize(width), maxWidth: config.wrap ? config.maxColumnWidth : undefined };
   });
 }
 
