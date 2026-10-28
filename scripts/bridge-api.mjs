@@ -4296,6 +4296,19 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	// (listed in `ignored` when they differed) while the rest of the edit is still written.
 	const sharingChecked = withoutForeignSharingChanges(pagePayload, existing, context.token.userId);
 	const { payload, ignored } = await withoutUnreachableParent(sharingChecked, existing, context.token, config, fetchImpl);
+	// Collaborator diff captured for the page_access fan-out below (only the owner's
+	// sharing write reaches here with a `collaborators` key). Ids only.
+	const pageAccessFanout = { added: [], removed: [] };
+	if (Object.hasOwn(payload, 'collaborators')) {
+		const oldIds = new Map((Array.isArray(existing.collaborators) ? existing.collaborators : [])
+			.filter((entry) => entry && typeof entry.userId === 'string')
+			.map((entry) => [String(entry.userId).toLowerCase(), entry.userId]));
+		const newIds = new Map((Array.isArray(payload.collaborators) ? payload.collaborators : [])
+			.filter((entry) => entry && typeof entry.userId === 'string')
+			.map((entry) => [String(entry.userId).toLowerCase(), entry.userId]));
+		for (const [key, id] of newIds) if (!oldIds.has(key)) pageAccessFanout.added.push(id);
+		for (const [key, id] of oldIds) if (!newIds.has(key)) pageAccessFanout.removed.push(id);
+	}
 	if (Object.keys(payload).length === 0 && Object.keys(pagePayload).length > 0) {
 		// Nothing left to write — not even updated_at, so the version did not move and
 		// the caller's baseVersion stays valid (that is why no version is answered here).
@@ -4362,6 +4375,18 @@ async function handlePageUpdate(url, request, response, config, fetchImpl) {
 	}
 	if (carriesArchive && updateRow.archived_at === null) await cascade(updateRow.archived_at, false);
 	if (carriesArchive && updateRow.archived_at !== null && precondition !== null) await cascade(updateRow.archived_at, true);
+	// Page access fan-out: tell added/removed collaborators their access changed.
+	// Ids only — no title or content; a revoked user learns nothing new. Visibility
+	// private→shared carries no per-user fan-out in this unit.
+	if (pageAccessFanout.added.length > 0 || pageAccessFanout.removed.length > 0) {
+		const fanoutWorkspaceId = Object.hasOwn(updateRow, 'workspace_id') ? updateRow.workspace_id : existing.workspace_id;
+		for (const userId of pageAccessFanout.added) {
+			await publishRealtime({ topic: `user:${userId}`, eventType: 'page_access', payload: { workspaceId: fanoutWorkspaceId, pageId, op: 'granted' }, fetchImpl });
+		}
+		for (const userId of pageAccessFanout.removed) {
+			await publishRealtime({ topic: `user:${userId}`, eventType: 'page_access', payload: { workspaceId: fanoutWorkspaceId, pageId, op: 'revoked' }, fetchImpl });
+		}
+	}
 	// updated_at is stamped by pageUpdateRowFromPayload (no BEFORE-UPDATE trigger on
 	// osionos_pages), so the value we wrote IS the stored value — authoritative.
 	json(response, 200, { ok: true, updatedAt: updateRow.updated_at, version: pageVersionOf(updated), ...(ignored.length > 0 ? { ignored } : {}), ...(carriesArchive ? { cascadedIds } : {}) }, config);
