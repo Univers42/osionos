@@ -16,7 +16,9 @@ import { api, getActivePageJwt } from '@/shared/api/client';
 
 export type NotificationType =
   | 'mention' | 'dm' | 'reply' | 'reaction' | 'connection' | 'system'
-  | 'feed_reaction' | 'feed_comment' | 'feed_share';
+  | 'feed_reaction' | 'feed_comment' | 'feed_share'
+  | 'page_comment' | 'task_due'
+  | 'page_access_request' | 'page_access_decision';
 
 export interface NotificationItem {
   id: string;
@@ -46,4 +48,22 @@ export async function fetchInbox(): Promise<{ notifyToken: string | null; unread
 
 export async function markAllNotificationsRead(): Promise<void> {
   await api.post('/api/notifications/read-all', {}, getActivePageJwt() ?? undefined);
+}
+
+/** Plain-text sentence for a notification, used by the inbox UI and toasts.
+ *  A page title is never interpolated into the access-decision sentence, even
+ *  when one is supplied, so a decline/approval cannot leak a private title. */
+export function notificationSentence(
+  notification: { type: NotificationType; preview?: string | null; channelId?: string | null },
+): string {
+  switch (notification.type) {
+    case 'page_access_request':
+      return notification.preview ? String(notification.preview) : 'Access requested';
+    case 'page_access_decision':
+      return notification.preview === 'declined'
+        ? 'Your access request was declined'
+        : 'Your access request was approved';
+    default:
+      return notification.preview ?? '';
+  }
 }
