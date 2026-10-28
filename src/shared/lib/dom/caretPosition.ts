@@ -23,17 +23,19 @@ export interface CaretPosition {
 }
 
 /**
- * Fixed-position style for a menu under the caret, flipped above it when it would
- * overflow the viewport bottom, and clamped inside the viewport either way.
+ * Fixed-position style for a menu under the caret, or above it when the cap does not fit
+ * below and more room is above. Above, the menu hangs from `bottom`: its real height is
+ * unknown here, and a `top` derived from the cap left short menus far over the caret.
+ * The menu shrinks to the chosen side and never covers the caret line.
  */
 export function caretPopoverStyle(position: CaretPosition, width: number, maxHeightCap: number): React.CSSProperties {
   const vw = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1024;
   const vh = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 768;
-  const maxHeight = Math.min(maxHeightCap, vh - MARGIN * 2);
-  const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), Math.max(min, max));
-  const belowTop = position.y + GAP;
-  const aboveTop = position.top - GAP - maxHeight;
-  const overflowsBelow = belowTop + maxHeight > vh - MARGIN;
-  const top = overflowsBelow && aboveTop >= MARGIN ? aboveTop : clamp(belowTop, MARGIN, vh - maxHeight - MARGIN);
-  return { top, left: clamp(position.x, MARGIN, vw - width - MARGIN), maxHeight };
+  const left = Math.min(Math.max(position.x, MARGIN), Math.max(MARGIN, vw - width - MARGIN));
+  const spaceBelow = vh - position.y - GAP - MARGIN;
+  const spaceAbove = position.top - GAP - MARGIN;
+  if (spaceBelow < maxHeightCap && spaceAbove > spaceBelow) {
+    return { bottom: vh - (position.top - GAP), left, maxHeight: Math.min(maxHeightCap, spaceAbove) };
+  }
+  return { top: position.y + GAP, left, maxHeight: Math.max(0, Math.min(maxHeightCap, spaceBelow)) };
 }
