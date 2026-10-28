@@ -93,8 +93,11 @@
     gap: 0.25rem 0.5rem;
   }
 
+  /* An 8rem basis, not 0: in a 150 px column New and the collapse toggle
+     shared the title's line and crushed it to 5 px (measured 2026-10-28).
+     Now they wrap below it when the three don't fit. */
   .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row > :first-child {
-    flex: 1 1 0%;
+    flex: 1 1 8rem;
     min-width: 0;
   }
 
@@ -125,6 +128,14 @@
     opacity: 1;
     pointer-events: auto;
   }
+}
+
+/* The records sit on the text edge with the title: a gallery's p-6 put its
+ * cards 24 px right of "Products" (list and calendar 16 px; measured
+ * 2026-10-28). The board keeps its inset — its lanes paint a surface. */
+.osionos-database-block--inline .osionos-object-database-single-view .odb-view-body,
+.osionos-database-block--inline .osionos-object-database-single-view .odb-pager {
+  padding-inline: 0;
 }
 
 /* A collapsed embed must stay restorable: keep its toggle visible at rest. */
