@@ -2838,8 +2838,8 @@ function writeOptionsResponse(response, config) {
 	response.writeHead(204, {
 		'access-control-allow-origin': config.allowedOrigin,
 		'access-control-allow-credentials': 'true',
-		'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-		'access-control-allow-headers': 'content-type, authorization, x-prismatica-bridge-timestamp, x-prismatica-bridge-signature',
+		'access-control-allow-methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+		'access-control-allow-headers': 'content-type, authorization, if-match, x-prismatica-bridge-timestamp, x-prismatica-bridge-signature',
 		vary: 'Origin',
 	});
 	response.end();
