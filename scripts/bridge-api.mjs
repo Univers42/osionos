@@ -69,6 +69,7 @@ import { createCollabHandler } from './bridge-collab.mjs';
 import { bumpAccessAfter, touchesPageAccess } from './bridge-access-generation.mjs';
 import { createPageMapCache } from './bridge-page-map-cache.mjs';
 import { createWorkspaceInvitesHandler } from './bridge-workspace-invites.mjs';
+import { createMemberAttributesHandler } from './bridge-member-attributes.mjs';
 import { createCommunityHandler } from './bridge-communities.mjs';
 import { createFeedHandler } from './bridge-feed.mjs';
 import { createPersonalizationHandler } from './bridge-personalization.mjs';
@@ -1067,7 +1068,8 @@ async function pageAccessEntry(authContext, workspaceId, config, fetchImpl, memb
 		? await parentMapForWorkspace(workspaceId, config, fetchImpl, withMeta)
 		: { parentOf: null, pageMeta: null };
 	const teamIds = member ? await teamIdsWhenRuled(store, config, workspaceId, authContext.userId, [allRules]) : null;
-	return { member, rulesByPage, parentOf, pageMeta, teamIds };
+	const attributes = member ? await attributesWhenRuled(store, config, workspaceId, authContext.userId, [allRules]) : null;
+	return { member, rulesByPage, parentOf, pageMeta, teamIds, attributes };
 }
 
 /**
@@ -1093,7 +1095,7 @@ export function pageLevelFor(entry, row, userId) {
 	if (!entry) return 'none';
 	return pageAccessLevel({
 		row, userId, member: entry.member,
-		rulesByPage: entry.rulesByPage, parentOf: entry.parentOf, pageMeta: entry.pageMeta, teamIds: entry.teamIds,
+		rulesByPage: entry.rulesByPage, parentOf: entry.parentOf, pageMeta: entry.pageMeta, teamIds: entry.teamIds, attributes: entry.attributes,
 	});
 }
 
@@ -1102,7 +1104,7 @@ function pageRuleLevelFor(entry, row, userId) {
 	if (!entry) return 'none';
 	return pageRuleLevel({
 		row, userId, member: entry.member,
-		rulesByPage: entry.rulesByPage, parentOf: entry.parentOf, pageMeta: entry.pageMeta, teamIds: entry.teamIds,
+		rulesByPage: entry.rulesByPage, parentOf: entry.parentOf, pageMeta: entry.pageMeta, teamIds: entry.teamIds, attributes: entry.attributes,
 	});
 }
 
@@ -1145,6 +1147,11 @@ export function pageAccessFilterFor(config, fetchImpl) {
 async function teamIdsWhenRuled(store, config, workspaceId, userId, ruleLists) {
 	const ruled = ruleLists.some((list) => (list ?? []).some((rule) => rule?.target?.type === 'team'));
 	return ruled ? store.teamIdsFor(config, workspaceId, userId) : null;
+}
+
+async function attributesWhenRuled(store, config, workspaceId, userId, ruleLists) {
+	const ruled = ruleLists.some((list) => (list ?? []).some((rule) => rule?.target?.type === 'attribute'));
+	return ruled ? store.attributesFor(config, workspaceId, userId) : null;
 }
 
 /** osionos_workspace_members row for (user, workspace) — org/teamspace membership. */
@@ -1367,10 +1374,10 @@ function mayMutatePage(row, userId, memberAccess, member = false) {
  * `rules` are the share rules for the page (scripts/bridge-share-rules.mjs): a can_edit
  * rule grants the write the membership did not carry, a no_access rule takes it away.
  */
-export function canWritePageRow(row, userId, member, permission, rules = null, teamIds = null) {
+export function canWritePageRow(row, userId, member, permission, rules = null, teamIds = null, attributes = null) {
 	// C557: the page owner keeps the write only while still a member of the workspace.
 	if (sameId(row?.owner_id, userId)) return ownerHoldsPage(row, userId, member);
-	const level = bestShareLevel(rules ?? [], { userId, role: member?.role, workspaceId: row?.workspace_id, teamIds }, row?.id);
+	const level = bestShareLevel(rules ?? [], { userId, role: member?.role, workspaceId: row?.workspace_id, teamIds, attributes }, row?.id);
 	// C558: a share rule below can_edit is an explicit refusal, independent of the read
 	// gate. Without this, a can_view/can_comment rule fell through to the membership's
 	// update permission and granted the write the rule meant to withhold. `null` means
@@ -1448,7 +1455,7 @@ async function canNestUnder(authContext, parentPageId, config, fetchImpl) {
 	const entry = await createPageAccessLoader(authContext, config, fetchImpl).entryFor(workspaceId);
 	const ruleLevel = pageRuleLevelFor(entry, parent, authContext.userId);
 	if (ruleLevel !== null) return shareGrantsWrite(ruleLevel);
-	return canWritePageRow(parent, authContext.userId, member, 'update', [], entry.teamIds);
+	return canWritePageRow(parent, authContext.userId, member, 'update', [], entry.teamIds, entry.attributes);
 }
 
 const MAX_PARENT_DEPTH = 64;
@@ -5180,6 +5187,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.social(url, request, response, context.config)) return;
 	if (await context.social.collab(url, request, response, context.config)) return;
 	if (await context.social.workspaceInvites(url, request, response, context.config)) return;
+	if (await context.social.memberAttributes(url, request, response, context.config)) return;
 	if (await context.social.realtimeToken(url, request, response, context.config)) return;
 	// The account plane: one seam, and the modules behind it decide what is theirs.
 	if (await context.social.account(url, request, response)) return;
@@ -5295,6 +5303,7 @@ export function createBridgeServer(options = {}) {
 			},
 		}),
 		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
+		memberAttributes: createMemberAttributesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		realtimeToken: createRealtimeTokenHandler({
 			config,
 			verifySession: verifyAppSessionToken,
