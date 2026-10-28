@@ -35,6 +35,25 @@ test("inviteStatus answers pending / expired / accepted / revoked", () => {
   assert.equal(inviteStatus({ ...past, acceptedAt: "2026-10-20T00:00:00Z", revokedAt: "2026-10-21T00:00:00Z" }, NOW), "revoked");
 });
 
+test("a declined invite reads as declined, before the revocation its decline also sets", async () => {
+  const declined = "2026-10-22T00:00:00Z";
+  assert.equal(inviteStatus({ declinedAt: declined, revokedAt: declined }, NOW), "declined");
+  assert.equal(inviteStatus({ declinedAt: declined, revokedAt: declined, acceptedAt: "2026-10-20T00:00:00Z" }, NOW), "declined");
+  // An old bridge's row has no declinedAt and keeps today's statuses.
+  assert.equal(inviteStatus({ revokedAt: declined }, NOW), "revoked");
+
+  useWorkspaceInvitesStore.setState({ data: { [WS]: [{
+    _id: "i2", workspaceId: WS, email: "d@example.com", role: "guest", invitedBy: "u-ada",
+    expiresAt: "2026-11-04T00:00:00Z", acceptedAt: null, revokedAt: declined, declinedAt: declined,
+    createdAt: "2026-10-21T00:00:00Z", updatedAt: declined,
+  }] } });
+  const state = await buildGuestsState(CTX);
+  const page = Object.values(state.pages)[0];
+  const database = Object.values(state.databases)[0];
+  const statusOption = database.properties[GUEST.status].options?.find((option) => option.id === page.properties[GUEST.status]);
+  assert.equal(statusOption?.value, "declined");
+});
+
 test("an expired pending invite builds an 'expired' Status cell and keeps its Expires date", async () => {
   useWorkspaceInvitesStore.setState({ data: { [WS]: [{
     _id: "i1", workspaceId: WS, email: "g@example.com", role: "guest", invitedBy: "u-ada",
