@@ -111,7 +111,10 @@ export function scanAccessWriters(path, source) {
 		const text = code.slice(open, closeOf(shape, open) + 1);
 		if (!WRITE_CALLS.has(callee) && !new RegExp(METHOD.source).test(text)) continue;
 		seen.add(open);
-		writers.push({ line: lineOf(source, open), callee, bumped: calls.some((call) => call.callee === 'bumpAccessAfter'), text: text.replace(/\s+/g, ' ') });
+		const bump = calls.find((call) => call.callee === 'bumpAccessAfter');
+		// `scope`: what follows the write inside bumpAccessAfter(...), i.e. its second argument.
+		const scope = bump ? code.slice(closeOf(shape, open) + 1, closeOf(shape, bump.open)).replace(/\s+/g, ' ').trim() : null;
+		writers.push({ line: lineOf(source, open), callee, bumped: Boolean(bump), scope, text: text.replace(/\s+/g, ' ') });
 	}
 	return { writers, clean };
 }
