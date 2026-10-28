@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useRef } from "react";
 import { Maximize2 } from "lucide-react";
 
 import { WHITEBOARD_BLOCK_DEFAULT_HEIGHT, WHITEBOARD_MIN_HEIGHT, type Block } from "@/entities/block";
@@ -9,9 +9,8 @@ import { EmbedFrame } from "@/widgets/embed-app/ui/EmbedFrame";
 import { whiteboardBoardTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 
-import { isBoardSlug, normalizeBoardTitle } from "../model/boardRefs";
-import { clearPendingBoard, requestNewBoard, usePendingBoards } from "../model/pendingBoards";
-import { boardUrl, newBoardUrl } from "../model/whiteboardClient";
+import { isBoardSlug, mintBoardSlug, normalizeBoardTitle } from "../model/boardRefs";
+import { boardUrl } from "../model/whiteboardClient";
 
 interface Props {
   block: Block;
@@ -33,22 +32,12 @@ const resolveHeightOwner = (grip: HTMLElement): HTMLElement | null => grip.paren
 export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const isNear = useHasBeenNearViewport(rootRef);
-  const isPending = usePendingBoards((state) => state.blockIds.has(block.id));
   const title = normalizeBoardTitle(block.content ?? "");
   const slug = block.boardSlug;
   const hasSlug = slug !== undefined && slug !== "";
   const isValidSlug = isBoardSlug(slug);
-  const frameUrl = isValidSlug ? embeddableUrl(boardUrl(slug)) : embeddableUrl(newBoardUrl(title));
+  const frameUrl = isValidSlug ? embeddableUrl(boardUrl(slug, title)) : "";
   const height = block.whiteboardHeight ?? WHITEBOARD_BLOCK_DEFAULT_HEIGHT;
-
-  // The `/new` frame created the board: binding the slug points the frame at the board.
-  const onBoardCreated = useCallback(
-    (boardSlug: string) => {
-      onUpdateBlock({ boardSlug });
-      clearPendingBoard(block.id);
-    },
-    [block.id, onUpdateBlock],
-  );
 
   const { isDragging, gripProps } = useHeightResizeGrip({
     height,
@@ -60,17 +49,17 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
   let body: React.ReactNode;
   if (hasSlug && !isValidSlug) {
     body = <Message>This whiteboard link is not valid, so the board was not loaded.</Message>;
-  } else if ((hasSlug || isPending) && frameUrl === "") {
+  } else if (hasSlug && frameUrl === "") {
     body = <Message>The whiteboard service is not configured for this build.</Message>;
   } else if (hasSlug) {
-    body = isNear ? <EmbedFrame url={frameUrl} title={title} interactive={!isDragging} loading="lazy" /> : null;
-  } else if (isPending) {
-    body = <EmbedFrame url={frameUrl} title={title} interactive={!isDragging} onBoardCreated={onBoardCreated} />;
+    // Mounted once near the viewport, then kept: an iframe the browser may defer (`loading="lazy"`)
+    // never fired `load` off-screen in Firefox, so the stall message came up on a working board.
+    body = isNear ? <EmbedFrame url={frameUrl} title={title} interactive={!isDragging} /> : null;
   } else {
     body = (
       <Message>
         <span>This whiteboard has no board yet.</span>
-        <button type="button" className={ACTION_BUTTON} onClick={() => requestNewBoard(block.id)}>
+        <button type="button" className={ACTION_BUTTON} onClick={() => onUpdateBlock({ boardSlug: mintBoardSlug() })}>
           Create board
         </button>
       </Message>

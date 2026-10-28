@@ -21,12 +21,6 @@ interface Props {
   /** False while a parent drags a resize grip: a cross-origin iframe swallows the
    *  pointer events, so the drag would stop at the frame's edge. */
   interactive?: boolean;
-  /** "lazy" for a frame that may start off-screen. The stall timer starts at mount, so
-   *  the caller must mount a lazy frame only once it is near the viewport (see
-   *  WhiteboardBlock); otherwise a frame the browser has not started loading reads as stalled. */
-  loading?: "eager" | "lazy";
-  /** A hydrawn frame at `/new` created this board (whiteboard frames only). */
-  onBoardCreated?: (slug: string) => void;
 }
 
 /** How long the iframe may stay blank before the pane says so. A cross-origin frame
@@ -46,12 +40,14 @@ const SANDBOX = "allow-scripts allow-same-origin allow-forms allow-popups allow-
 // Devil C600: hydrawn holds a whiteboard token, so its frame opens no popups at all.
 const WHITEBOARD_SANDBOX = "allow-scripts allow-same-origin allow-forms allow-modals allow-downloads";
 
-/** The sandboxed iframe plus the "not responding" message its stall timer swaps in.
+/** The sandboxed iframe plus the "not responding" message its stall timer lays over it.
+ *  The frame stays rendered under the message: a hidden (display:none) frame is one some
+ *  browsers stop loading, so a slow board could never answer. Its `load` lifts the message.
  *  Shared by the pane view and the inline whiteboard block. */
-export const EmbedFrame: React.FC<Props> = ({ url, title, interactive = true, loading = "eager", onBoardCreated }) => {
+export const EmbedFrame: React.FC<Props> = ({ url, title, interactive = true }) => {
   const [stalled, setStalled] = React.useState(false);
   const frameRef = React.useRef<HTMLIFrameElement>(null);
-  useHydrawnHost(frameRef, url, onBoardCreated);
+  useHydrawnHost(frameRef, url);
   // A ref, not state: the timer below reads it after the fact, and re-rendering on
   // `load` would only re-run an effect that must not restart its own deadline.
   const hasLoaded = React.useRef(false);
@@ -68,11 +64,11 @@ export const EmbedFrame: React.FC<Props> = ({ url, title, interactive = true, lo
   }, [url]);
 
   return (
-    <>
+    <div className="relative flex min-h-0 flex-1 flex-col">
       {stalled ? (
         <div
           data-testid="embed-unavailable"
-          className="flex h-full flex-1 flex-col items-center justify-center gap-2 px-6 text-center"
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[var(--osio-bg-page)] px-6 text-center"
         >
           <span className="text-sm font-semibold text-[var(--osio-fg-default)]">
             {title} is not responding
@@ -87,15 +83,14 @@ export const EmbedFrame: React.FC<Props> = ({ url, title, interactive = true, lo
         ref={frameRef}
         src={url}
         title={title}
-        loading={loading}
         onLoad={() => {
           hasLoaded.current = true;
           setStalled(false);
         }}
         style={interactive ? undefined : { pointerEvents: "none" }}
-        className={`w-full flex-1 border-0 bg-[var(--osio-bg-page)] ${stalled ? "hidden" : "h-full"}`}
+        className="h-full w-full flex-1 border-0 bg-[var(--osio-bg-page)]"
         sandbox={isWhiteboardFrameUrl(url) ? WHITEBOARD_SANDBOX : SANDBOX}
       />
-    </>
+    </div>
   );
 };

@@ -104,9 +104,12 @@ export function createWhiteboardStore({ fetchImpl = fetch, env = process.env } =
 			return Number(page?.meta?.total ?? 0);
 		},
 
-		/** The live board `slug`, with its scene text when `withScene`; null when there is none. */
-		findBoard(userId, slug, { withScene = false } = {}) {
-			return findOne(userId, BOARDS, liveFilter({ slug }), withScene ? `${SUMMARY_FIELDS},scene` : SUMMARY_FIELDS);
+		/** The live board `slug`, with its scene text when `withScene`; null when there is none.
+		 *  `deleted` also finds a deleted one, which carries `deleted_at`. */
+		findBoard(userId, slug, { withScene = false, deleted = false } = {}) {
+			const filter = deleted ? JSON.stringify({ slug }) : liveFilter({ slug });
+			const fields = deleted ? `${SUMMARY_FIELDS},deleted_at` : SUMMARY_FIELDS;
+			return findOne(userId, BOARDS, filter, withScene ? `${fields},scene` : fields);
 		},
 
 		async createBoard(userId, board) {

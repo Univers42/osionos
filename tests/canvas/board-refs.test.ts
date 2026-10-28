@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   isBoardSlug,
   MAX_BOARD_TITLE_LENGTH,
+  mintBoardSlug,
   normalizeBoardTitle,
   UNTITLED_BOARD,
 } from "../../src/features/whiteboard/model/boardRefs.ts";
@@ -14,6 +15,12 @@ test("isBoardSlug accepts only service-shaped slugs", () => {
   for (const bad of ["", "abc12", "a".repeat(33), "ABC123", "../../x", '"><script>', "abc 123", undefined, null, 42]) {
     assert.equal(isBoardSlug(bad), false, String(bad));
   }
+});
+
+test("mintBoardSlug mints distinct 12-character slugs the bridge accepts", () => {
+  const minted = Array.from({ length: 200 }, mintBoardSlug);
+  for (const slug of minted) assert.match(slug, /^[a-z0-9]{12}$/);
+  assert.equal(new Set(minted).size, minted.length);
 });
 
 test("normalizeBoardTitle collapses whitespace and defaults to Untitled", () => {
