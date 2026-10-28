@@ -81,6 +81,7 @@ import { createModerationConsoleHandler } from './bridge-moderation-console.mjs'
 import { runWsCanary } from './bridge-realtime-ws-lane.mjs';
 import { createRecsHealthHandler } from './bridge-recs-health.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
+import { createPageAccessRequestsHandler } from './bridge-page-access-requests.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
@@ -5128,14 +5129,15 @@ async function handleBridgeRequest(request, response, context) {
 	// A personal access token is exchanged for a masked internal session before any route reads it.
 	if (await context.patGate(request, response, url, context.config)) return;
 	// Workstream modules — each returns false when the path is not theirs:
-	// in-chat AI agent (SSE), perms proxy (WS-C), LiveKit tokens (WS-D),
-	// chat/profile/feed (WS-B).
+	// in-chat AI agent (SSE), perms proxy (WS-C), page access requests (Plan A),
+	// LiveKit tokens (WS-D), chat/profile/feed (WS-B).
 	if (await context.social.agent(url, request, response, context.config)) return;
 	if (await context.social.runner(url, request, response, context.config)) return;
 	if (await context.social.ideToken(url, request, response, context.config)) return;
 	if (await context.social.connector(url, request, response, context.config)) return;
 		if (await context.social.oauth(url, request, response, context.config)) return;
 	if (await context.social.perms(url, request, response, context.config)) return;
+	if (await context.social.accessRequests(url, request, response, context.config)) return;
 	if (await context.social.rtc(url, request, response, context.config)) return;
 	if (await context.social.chat(url, request, response, context.config)) return;
 	if (await context.social.notify(url, request, response, context.config)) return;
@@ -5222,6 +5224,7 @@ export function createBridgeServer(options = {}) {
 		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, pageAccessFilter }),
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl, createPageAccessLoader, pageLevelFor }),
+		accessRequests: createPageAccessRequestsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, createPageAccessLoader, pageLevelFor }),
 		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
