@@ -1,7 +1,7 @@
 import type { QueryResultRow } from 'pg';
 import { z } from 'zod';
-import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
+import { canReadPageWithRules } from '../retrieval/shareRules.ts';
 import { DEFAULT_LIMIT, retrieve } from '../retrieval/search.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import { pageBlock } from '../runs/prompt.ts';
@@ -199,7 +199,7 @@ export const readPage: ReadTool<z.infer<typeof readPageArgs>, ReadPageData> = {
 		const row = result.rows[0];
 		// A page that does not exist, and a page the caller may not read, are
 		// the same thing: the answer must not tell that it exists.
-		if (!row || !canReadPageRowAsMember(row, ctx.user.userId, workspaces)) {
+		if (!row || !(await canReadPageWithRules(ctx.db, ctx.user.userId, row, workspaces))) {
 			return { ok: false, error: 'no page with that id in your workspaces' };
 		}
 		const text = String(row.text ?? '');

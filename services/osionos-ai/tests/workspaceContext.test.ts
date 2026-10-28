@@ -87,6 +87,42 @@ describe('the workspace overview', () => {
 		assert.equal(await loadWorkspaceOverview(app.db, user(USER_A, WORKSPACE_A), WORKSPACE_B), null);
 	});
 
+	it('excludes a rule-hidden parent and child without hiding them from another member', async () => {
+		const caller = randomUUID();
+		const otherMember = randomUUID();
+		const hiddenRoot = await page(WORKSPACE_A, { title: 'Rule hidden root', ownerId: USER_A, visibility: 'shared', updatedAt: '2026-10-26T00:00:00Z' });
+		const hiddenChild = await page(WORKSPACE_A, { title: 'Rule hidden child', ownerId: USER_A, visibility: 'shared', parentId: hiddenRoot, updatedAt: '2026-10-27T00:00:00Z' });
+		const ruleId = randomUUID();
+		try {
+			await app.db.query(
+				`insert into public.osionos_workspace_members (workspace_id, user_id, role, permissions) values
+				 ($1, $2, 'member', array['read']), ($1, $3, 'member', array['read'])`,
+				[WORKSPACE_A, caller, otherMember],
+			);
+			await app.db.query(
+				`insert into public.osionos_share_rules (id, workspace_id, resource_type, resource_id, target, permission, explicit)
+				 values ($1, $2, 'page', $3, $4::jsonb, 'no_access', true)`,
+				[ruleId, WORKSPACE_A, hiddenRoot, JSON.stringify({ type: 'user', userId: caller })],
+			);
+			const closed = await loadWorkspaceOverview(app.db, user(caller, WORKSPACE_A), WORKSPACE_A);
+			const control = await loadWorkspaceOverview(app.db, user(otherMember, WORKSPACE_A), WORKSPACE_A);
+			assert.ok(closed);
+			assert.ok(control);
+			assert.equal(closed.pageCount, 2);
+			assert.equal(control.pageCount, 4);
+			assert.ok(![...closed.tree, ...closed.recent].some((entry) => entry.id === hiddenRoot || entry.id === hiddenChild));
+			assert.ok(!JSON.stringify(closed).includes('Rule hidden'));
+			for (const id of [hiddenRoot, hiddenChild]) {
+				assert.ok(control.tree.some((entry) => entry.id === id));
+				assert.ok(control.recent.some((entry) => entry.id === id));
+			}
+		} finally {
+			await app.db.query('delete from public.osionos_share_rules where id = $1', [ruleId]);
+			await app.db.query('delete from public.osionos_pages where id = any($1::uuid[])', [[hiddenRoot, hiddenChild]]);
+			await app.db.query('delete from public.osionos_workspace_members where workspace_id = $1 and user_id = any($2::uuid[])', [WORKSPACE_A, [caller, otherMember]]);
+		}
+	});
+
 	it('cuts at the entry limit and says so', async () => {
 		const overview = await loadWorkspaceOverview(app.db, user(USER_A, WORKSPACE_A), WORKSPACE_A, { entries: 2, recent: 1 });
 		assert.ok(overview);

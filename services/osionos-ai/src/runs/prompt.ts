@@ -10,6 +10,7 @@ import type { AccountContext } from './account.ts';
 import type { WorkspaceOverview, WorkspacePageEntry } from './workspace.ts';
 import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 import { config } from '../config.ts';
+import { readableByRules } from '../retrieval/shareRules.ts';
 
 /**
  * The prompt of a run: the system prompt, the history window, and the pages
@@ -227,11 +228,14 @@ export async function loadPageContext(
 	const result = await db.query<PageRow>(PAGES_SQL, [pageIds]);
 	// The ids of Postgres are lower-case; the client may send them in any case.
 	const byId = new Map(result.rows.map((row) => [String(row.id).toLowerCase(), row]));
+	const memberRows = result.rows.filter((row) => canReadPageRowAsMember(row, userId, workspaces));
+	const kept = await readableByRules(db, { userId }, memberRows);
+	const keptIds = new Set(kept.map((row) => String(row.id).toLowerCase()));
 	const pages: PageContext[] = [];
 	const skippedPageIds: string[] = [];
 	for (const id of pageIds) {
 		const row = byId.get(id.toLowerCase());
-		if (!row || !canReadPageRowAsMember(row, userId, workspaces)) {
+		if (!row || !keptIds.has(String(row.id).toLowerCase())) {
 			skippedPageIds.push(id);
 			continue;
 		}
