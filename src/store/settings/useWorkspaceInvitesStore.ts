@@ -15,7 +15,12 @@ import { persist } from 'zustand/middleware';
 
 import { API_BASE } from '@/shared/api/client';
 import { createLocalId, errorCode, errorMessage, nowIso, pushSettingsError, settingsJwt, trySettingsDelete, trySettingsGet, trySettingsPost, upsertById } from './settingsStoreUtils';
-import type { WorkspaceInvite, WorkspaceMemberRole } from './types';
+import type { MineInvite, WorkspaceInvite, WorkspaceMemberRole } from './types';
+
+/** The by-id accept either joins, or names the bridge code the dialog turns into a sentence. */
+export type InviteAcceptResult =
+  | { ok: true; workspaceId: string; role: string }
+  | { ok: false; code: string };
 
 interface WorkspaceInvitesStore {
   data: Record<string, WorkspaceInvite[]>;
@@ -28,6 +33,14 @@ interface WorkspaceInvitesStore {
   /** Accept links by invite id, shown once to the inviter. In memory only: the plaintext token
    *  exists nowhere else, and `partialize` below never writes this field. */
   acceptLinks: Record<string, string>;
+  /** The invitee's own pending invites (GET /api/invites/mine). In memory only. */
+  mine: MineInvite[];
+  mineLoading: boolean;
+  mineError: string | null;
+  /** True when /mine is not served (old bridge): no group, no badge, no error. */
+  mineUnavailable: boolean;
+  /** The invite the decision dialog is open on, set by the ?invite= boot link or a pending row. */
+  openedInviteId: string | null;
   requestInvite: () => void;
   consumeInviteRequest: () => boolean;
   hydrate: (workspaceId: string) => Promise<void>;
@@ -36,6 +49,14 @@ interface WorkspaceInvitesStore {
   resend: (workspaceId: string, inviteId: string) => Promise<void>;
   revoke: (workspaceId: string, inviteId: string) => Promise<void>;
   accept: (token: string) => Promise<string | null>;
+  /** Load the invitee's pending invites. An old bridge (404) answers [] with no error. */
+  fetchMine: () => Promise<MineInvite[]>;
+  /** Turn a link token into the invite id addressed to this account; null for every refusal. */
+  resolve: (token: string) => Promise<string | null>;
+  acceptById: (inviteId: string) => Promise<InviteAcceptResult>;
+  decline: (inviteId: string) => Promise<boolean>;
+  openInvite: (inviteId: string) => void;
+  closeInvite: () => void;
   reset: (workspaceId: string) => void;
 }
 
@@ -81,6 +102,11 @@ export const useWorkspaceInvitesStore = create<WorkspaceInvitesStore>()(
       errorCode: {},
       inviteRequested: false,
       acceptLinks: {},
+      mine: [],
+      mineLoading: false,
+      mineError: null,
+      mineUnavailable: false,
+      openedInviteId: null,
       requestInvite: () => set({ inviteRequested: true }),
       consumeInviteRequest: () => {
         if (!get().inviteRequested) return false;
@@ -165,6 +191,61 @@ export const useWorkspaceInvitesStore = create<WorkspaceInvitesStore>()(
           return null;
         }
       },
+      fetchMine: async () => {
+        set({ mineLoading: true, mineError: null });
+        try {
+          const remote = await trySettingsGet<{ invites?: MineInvite[] }>('/api/invites/mine');
+          // A null answer is the old bridge: the route is not served at all (N26 degrade).
+          const invites = remote?.invites ?? [];
+          set({ mine: invites, mineLoading: false, mineError: null, mineUnavailable: remote === null });
+          return invites;
+        } catch (error) {
+          set({ mineLoading: false, mineError: errorMessage(error) });
+          return get().mine;
+        }
+      },
+      resolve: async (token) => {
+        try {
+          const remote = await trySettingsPost<{ id?: string }>('/api/invites/resolve', { token });
+          return remote?.id ?? null;
+        } catch {
+          // 404 (wrong account, used, expired, declined, unknown) and an old bridge are
+          // indistinguishable to the caller on purpose: the boot toast says nothing.
+          return null;
+        }
+      },
+      acceptById: async (inviteId) => {
+        try {
+          const remote = await trySettingsPost<{ ok?: boolean; workspaceId?: string; role?: string }>(
+            `/api/invites/${encodeURIComponent(inviteId)}/accept`,
+            {},
+          );
+          if (!remote?.workspaceId) return { ok: false, code: remote === null ? 'not_found' : 'unknown' };
+          set((state) => ({ mine: state.mine.filter((invite) => invite.id !== inviteId) }));
+          return { ok: true, workspaceId: remote.workspaceId, role: remote.role ?? 'member' };
+        } catch (error) {
+          const status = (error as { status?: number } | null)?.status;
+          return { ok: false, code: errorCode(error) ?? (status === 404 ? 'not_found' : 'unknown') };
+        }
+      },
+      decline: async (inviteId) => {
+        const forget = () => set((state) => ({ mine: state.mine.filter((invite) => invite.id !== inviteId) }));
+        try {
+          await trySettingsPost<{ ok?: boolean }>(`/api/invites/${encodeURIComponent(inviteId)}/decline`, {});
+          forget();
+          return true;
+        } catch (error) {
+          // A 404 means the invite is already gone: the row still has to disappear.
+          if ((error as { status?: number } | null)?.status === 404) {
+            forget();
+            return true;
+          }
+          set({ mineError: errorMessage(error) });
+          return false;
+        }
+      },
+      openInvite: (inviteId) => set({ openedInviteId: inviteId }),
+      closeInvite: () => set({ openedInviteId: null }),
       reset: (workspaceId) => set((state) => ({ data: { ...state.data, [workspaceId]: [] }, error: { ...state.error, [workspaceId]: null } })),
     }),
     {
