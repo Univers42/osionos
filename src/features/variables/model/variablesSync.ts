@@ -54,7 +54,7 @@ export function startVariablesSync(): () => void {
     for (const page of pages ?? []) {
       if (!isEnvPage(page)) continue;
       if (page.content === undefined) requestContent(page);
-      else files.push({ pageId: page._id, parentPageId: page.parentPageId ?? null, source: codeBlockOf(page)?.content ?? "" });
+      else files.push({ pageId: page._id, title: page.title, parentPageId: page.parentPageId ?? null, source: codeBlockOf(page)?.content ?? "" });
     }
     useVariablesStore.getState().setFiles(workspaceId, files);
   };

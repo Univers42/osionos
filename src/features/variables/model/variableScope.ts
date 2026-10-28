@@ -17,6 +17,8 @@ import type { UserPreferences } from "@/store/settings/types";
 import { useUserPreferencesStore } from "@/store/settings/useUserPreferencesStore";
 import { usePageStore } from "@/store/usePageStore";
 
+import { ENV_FILE_TITLE } from "./envFile";
+import type { VariableDefinition } from "./variableDefinitions";
 import { resolveVariable, type VariableLayer, type VariableScope } from "./variableResolver";
 import type { FormatContext } from "./variableFormat";
 import { useVariablesStore, type EnvFile } from "./useVariablesStore";
@@ -52,12 +54,27 @@ function preferenceContext(preferences: UserPreferences | null): Omit<FormatCont
 
 const layersByParent = new WeakMap<readonly EnvFile[], Map<string, VariableLayer>>();
 
+// The files under one page make one layer: env.json first, then the env.<topic>.json files
+// by title, and a name in two of them takes the first. A lone file is used without a copy.
+function mergedLayer(group: EnvFile[]): VariableLayer {
+  if (group.length === 1) return group[0].definitions;
+  const ordered = [...group].sort((a, b) => Number(a.title !== ENV_FILE_TITLE) - Number(b.title !== ENV_FILE_TITLE) || a.title.localeCompare(b.title));
+  const layer = new Map<string, VariableDefinition>();
+  for (const file of ordered) for (const [name, definition] of file.definitions) if (!layer.has(name)) layer.set(name, definition);
+  return layer;
+}
+
 function envLayers(files: readonly EnvFile[]): Map<string, VariableLayer> {
   let byParent = layersByParent.get(files);
   if (!byParent) {
-    // Two env.json files under one page: the first wins, as findEnvPage picks it.
-    byParent = new Map();
-    for (const file of files) if (!byParent.has(file.parentPageId ?? ROOT)) byParent.set(file.parentPageId ?? ROOT, file.definitions);
+    const groups = new Map<string, EnvFile[]>();
+    for (const file of files) {
+      const key = file.parentPageId ?? ROOT;
+      const group = groups.get(key);
+      if (group) group.push(file);
+      else groups.set(key, [file]);
+    }
+    byParent = new Map([...groups].map(([key, group]) => [key, mergedLayer(group)]));
     layersByParent.set(files, byParent);
   }
   return byParent;
