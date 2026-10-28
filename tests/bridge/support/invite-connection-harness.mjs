@@ -102,8 +102,8 @@ function json(value, status = 200) {
 	return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
 }
 
-function backend(seed, users) {
-	const mock = createPostgrestMock(seed);
+function backend(seed, users, { failWhen } = {}) {
+	const mock = createPostgrestMock(seed, { failWhen });
 	const publishes = [];
 	const fetchImpl = async (url, init = {}) => {
 		const parsed = new URL(String(url));
@@ -134,8 +134,8 @@ function errorBody(error) {
 	};
 }
 
-export async function runScenario(name, { env = {}, seed = fixtureWorld(), users = [{ id: INVITEE, email: INVITEE_EMAIL }] } = {}) {
-	const baas = backend(seed, users);
+export async function runScenario(name, { env = {}, seed = fixtureWorld(), users = [{ id: INVITEE, email: INVITEE_EMAIL }], failWhen } = {}) {
+	const baas = backend(seed, users, { failWhen });
 	const verifySession = (userId) => ({ userId });
 	const workspace = createWorkspaceInvitesHandler({ config: CONFIG, verifySession, fetchImpl: baas.fetchImpl, env });
 	const collab = createCollabHandler({ config: CONFIG, verifySession, fetchImpl: baas.fetchImpl, env });
