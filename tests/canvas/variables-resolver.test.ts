@@ -10,8 +10,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// `{{NAME | filter}}` resolution: scope order, formats, filters, nesting guards, and the
-// env.json parser's caps. The clock and zone are pinned, so the strings are exact.
+// `{{NAME | filter}}` resolution: scope order, env.json layering, inherited properties,
+// formats, filters, nesting guards, and the env.json parser's caps. The clock and zone
+// are pinned, so the strings are exact.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -20,17 +21,18 @@ import { parseVariableDefinitions, VARIABLE_LIMITS } from "@/features/variables/
 import { resolveVariable, type VariableScope } from "@/features/variables/model/variableResolver";
 
 const NOW = new Date("2026-10-28T14:05:09Z");
+const layer = (env: object) => parseVariableDefinitions(JSON.stringify(env)).definitions;
 
 function scope(env: object = {}, overrides: Partial<VariableScope> = {}): VariableScope {
   return {
-    definitions: parseVariableDefinitions(JSON.stringify(env)).definitions,
-    page: { title: "Q4 plan", properties: [
+    layers: [layer(env)],
+    pages: [{ title: "Q4 plan", properties: [
       { key: "status", label: "Status", type: "select", value: "In review" },
       { key: "due", label: "Due date", type: "date", value: "2026-11-04" },
       { key: "done", label: "Done", type: "checkbox", value: true },
       { key: "tags", label: "Tags", type: "multi_select", value: ["a", "b"] },
       { key: "empty", label: "Empty", type: "text", value: null },
-    ] },
+    ] }],
     context: { locale: "en-US", numberLocale: "en-US", timeZone: "Europe/Paris", now: NOW },
     dateFormat: "relative",
     ...overrides,
@@ -110,6 +112,30 @@ test("nested values expand; cycles and depth are error chips, not hangs", () => 
   assert.equal(text("A", scope(env)), "{{A}}");
   const chain = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`V${i}`, i === 11 ? "end" : `{{V${i + 1}}}`]));
   assert.match(error("V0", scope(chain)) ?? "", /nested more than 8 deep/);
+});
+
+test("the closest env.json wins; a name inside its own value reads the next one out", () => {
+  const page = layer({ CLIENT: "Globex", GREETING: "{{GREETING}}, {{CLIENT}}", PATH: "{{PATH}}:/page", LOOP: "{{LOOP}}" });
+  const project = layer({ PATH: "{{PATH}}:/project" });
+  const root = layer({ CLIENT: "Acme", GREETING: "Hello", PATH: "/bin", ONLY_ROOT: "r" });
+  const nested = scope({}, { layers: [page, project, root] });
+  assert.equal(text("CLIENT", nested), "Globex");
+  assert.equal(text("ONLY_ROOT", nested), "r");
+  assert.equal(text("GREETING", nested), "Hello, Globex");
+  assert.equal(text("PATH", nested), "/bin:/project:/page");
+  assert.equal(error("LOOP", nested), "cycle: LOOP → LOOP", "nothing further out to read");
+  assert.equal(text("TODAY", scope({}, { layers: [layer({ TODAY: "{{TODAY}}!" })] })), "10/28/26!", "built-ins are the outermost layer");
+});
+
+test("page properties are inherited: the nearest page that has one wins", () => {
+  const pages = [
+    { title: "Sprint 3", properties: [{ key: "status", label: "Status", type: "select" as const, value: "Doing" }] },
+    { title: "Project", properties: [{ key: "client", label: "Client", type: "text" as const, value: "Acme" }, { key: "status", label: "Status", type: "select" as const, value: "Open" }] },
+  ];
+  const child = scope({}, { pages });
+  assert.equal(text("page.Client", child), "Acme");
+  assert.equal(text("page.Status", child), "Doing");
+  assert.equal(text("PAGE", child), "Sprint 3", "PAGE is the page itself, never an ancestor");
 });
 
 test("bad filters and formats are error chips naming the problem", () => {

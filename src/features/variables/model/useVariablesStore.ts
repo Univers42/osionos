@@ -14,42 +14,44 @@ import { create } from "zustand";
 
 import { parseVariableDefinitions, type VariableDefinition } from "./variableDefinitions";
 
-export interface WorkspaceVariables {
+/** One `env.json`: at the workspace root (`parentPageId` null) or under a page, for its subtree. */
+export interface EnvFile {
   pageId: string;
+  parentPageId: string | null;
   source: string;
   definitions: ReadonlyMap<string, VariableDefinition>;
   errors: string[];
 }
 
+export type EnvFileSource = Pick<EnvFile, "pageId" | "parentPageId" | "source">;
+
 interface VariablesState {
-  byWorkspace: Record<string, WorkspaceVariables>;
+  byWorkspace: Record<string, readonly EnvFile[]>;
   /**
-   * Bumped whenever any resolved value may have changed (definitions, preferences, the
-   * minute clock). Editors put it in their render-cache key; only blocks whose text
-   * holds `{{` subscribe to it, so plain blocks never re-render.
+   * Bumped whenever any resolved value may have changed (env files, page titles and
+   * properties, preferences, the minute clock). Editors put it in their render-cache
+   * key; only blocks whose text holds `{{` subscribe to it, so plain blocks never re-render.
    */
   version: number;
-  setSource: (workspaceId: string, pageId: string, source: string) => void;
-  forget: (workspaceId: string) => void;
+  setFiles: (workspaceId: string, files: readonly EnvFileSource[]) => void;
   bump: () => void;
 }
+
+const sameFile = (a: EnvFile, b: EnvFileSource) =>
+  a.pageId === b.pageId && a.parentPageId === b.parentPageId && a.source === b.source;
 
 export const useVariablesStore = create<VariablesState>()((set, get) => ({
   byWorkspace: {},
   version: 0,
-  setSource: (workspaceId, pageId, source) => {
-    const current = get().byWorkspace[workspaceId];
-    if (current && current.source === source && current.pageId === pageId) return;
-    const parsed = parseVariableDefinitions(source);
-    set((s) => ({ byWorkspace: { ...s.byWorkspace, [workspaceId]: { pageId, source, ...parsed } }, version: s.version + 1 }));
-  },
-  forget: (workspaceId) => {
-    if (!get().byWorkspace[workspaceId]) return;
-    set((s) => {
-      const byWorkspace = { ...s.byWorkspace };
-      delete byWorkspace[workspaceId];
-      return { byWorkspace, version: s.version + 1 };
+  setFiles: (workspaceId, files) => {
+    const current = get().byWorkspace[workspaceId] ?? [];
+    if (current.length === files.length && files.every((file, i) => sameFile(current[i], file))) return;
+    // Only a changed source is parsed again; unchanged files keep their definitions.
+    const next = files.map((file) => {
+      const kept = current.find((c) => c.pageId === file.pageId && c.source === file.source);
+      return kept && kept.parentPageId === file.parentPageId ? kept : { ...file, ...parseVariableDefinitions(file.source) };
     });
+    set((s) => ({ byWorkspace: { ...s.byWorkspace, [workspaceId]: next }, version: s.version + 1 }));
   },
   bump: () => set((s) => ({ version: s.version + 1 })),
 }));

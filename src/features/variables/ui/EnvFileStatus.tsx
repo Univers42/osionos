@@ -25,7 +25,7 @@ const SHOWN = 5;
  */
 export const EnvFileStatus: React.FC<{ pageId: string }> = ({ pageId }) => {
   const errors = useVariablesStore(
-    (s) => Object.values(s.byWorkspace).find((entry) => entry.pageId === pageId)?.errors ?? NO_ERRORS,
+    (s) => Object.values(s.byWorkspace).flat().find((file) => file.pageId === pageId)?.errors ?? NO_ERRORS,
   );
   if (errors.length === 0) return null;
   return (

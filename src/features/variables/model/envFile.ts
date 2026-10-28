@@ -14,7 +14,11 @@ import type { PageEntry } from "@/entities/page";
 
 export const ENV_FILE_TITLE = "env.json";
 
-/** The workspace's variables file: a root-level code page titled `env.json`. */
-export function findEnvPage(pages: readonly PageEntry[] | undefined): PageEntry | undefined {
-  return pages?.find((p) => p.surface === "code" && p.title === ENV_FILE_TITLE && !p.parentPageId && !p.archivedAt);
+export function isEnvPage(page: PageEntry): boolean {
+  return page.surface === "code" && page.title === ENV_FILE_TITLE && !page.archivedAt;
+}
+
+/** The env.json directly under `parentPageId`, or at the workspace root when it is omitted. */
+export function findEnvPage(pages: readonly PageEntry[] | undefined, parentPageId?: string): PageEntry | undefined {
+  return pages?.find((p) => isEnvPage(p) && (p.parentPageId ?? undefined) === parentPageId);
 }
