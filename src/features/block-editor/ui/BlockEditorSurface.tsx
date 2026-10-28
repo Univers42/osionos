@@ -149,8 +149,8 @@ function shouldRenderChildren(block: Block): boolean {
 
 function getNestedTreeClassName(parentBlockType: Block["type"] | null, isRoot: boolean) {
 	if (isRoot || !parentBlockType) return "";
-	if (parentBlockType === "bulleted_list" || parentBlockType === "numbered_list") return "ml-[3.25rem] mt-0.5";
-	if (parentBlockType === "to_do") return "ml-[2.75rem] mt-0.5";
+	if (parentBlockType === "bulleted_list" || parentBlockType === "numbered_list") return "ml-8 mt-0.5";
+	if (parentBlockType === "to_do") return "ml-6 mt-0.5";
 	if (parentBlockType === "toggle") return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--osio-border-default)]";
 	if (parentBlockType === "column") return "mt-0.5";
 	// Callout lines all share one left edge (flat surface, no "title"); different
