@@ -62,6 +62,7 @@ import { requestLinkDialog } from "../model/linkDialogRequests";
 import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities/block/model/blockTreeUtils";
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
+import { startPointerBlockDrag } from "./pointerBlockDrag";
 import { usePageContextMenu } from "../model/usePageContextMenu";
 import { clampViewportMenuPosition } from "@/shared/ui";
 
@@ -1400,12 +1401,6 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 }) => {
 	const [dropPosition, setDropPosition] = useState<DropPosition>(null);
 
-	const handleDragStart = useCallback((e: React.DragEvent<HTMLButtonElement>) => {
-		e.dataTransfer.setData(DND_TYPE, block.id);
-		e.dataTransfer.setData(DND_PAYLOAD_TYPE, JSON.stringify({ blockId: block.id, sourceKey, block } satisfies BlockDragPayload));
-		e.dataTransfer.effectAllowed = "move";
-		setDraggedBlockId(block.id);
-	}, [block, setDraggedBlockId, sourceKey]);
 
 	const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
 		if (!e.dataTransfer.types.includes(DND_TYPE)) return;
@@ -1468,6 +1463,17 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		setDraggedBlockId(null);
 		setDropPosition(null);
 	}, [setDraggedBlockId]);
+
+	const handlePointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+		startPointerBlockDrag(e.nativeEvent, e.currentTarget, {
+			data: {
+				[DND_TYPE]: block.id,
+				[DND_PAYLOAD_TYPE]: JSON.stringify({ blockId: block.id, sourceKey, block } satisfies BlockDragPayload),
+			},
+			onStart: () => setDraggedBlockId(block.id),
+			onEnd: handleDragEnd,
+		});
+	}, [block, handleDragEnd, setDraggedBlockId, sourceKey]);
 
 	const isDragged = draggedBlockId === block.id;
 	const isSelected = selectedBlockIds.has(block.id);
@@ -1553,11 +1559,9 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 			<button
 				ref={handleRef}
 				type="button"
-				draggable
 				data-testid="block-drag-handle"
-				onDragStart={handleDragStart}
-				onDragEnd={handleDragEnd}
-				className={`absolute -left-7 ${handleTop} cursor-grab rounded-md p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] osio-drag-handle active:cursor-grabbing`}
+				onPointerDown={handlePointerDown}
+				className={`absolute -left-7 ${handleTop} cursor-grab touch-none rounded-md p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] osio-drag-handle active:cursor-grabbing`}
 				aria-label="Open block menu, or drag to reorder block"
 				title="Click for menu · Drag to reorder"
 			>
