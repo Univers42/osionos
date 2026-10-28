@@ -33,6 +33,7 @@ import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/
 import { useUserStore } from "@/features/auth";
 import { rememberDatabaseWorkspace } from "@/widgets/database-view/model/objectDatabaseWorkspaces";
 import { useUrlPasteMode } from "@/shared/config/useAppearance";
+import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
 import {
   isIndentable,
   isParentable,
@@ -76,6 +77,7 @@ import { matchInternalCopy } from "./blockClipboard";
 import { useBlockContextMenu } from "./useBlockContextMenu";
 import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import { insertPastedLink, isPasteMenuBlock } from "./pasteLinkMenu";
+import { insertPastedImage, pastedImageFile, pastedImageSource } from "./pasteImage";
 import { useLinkSnapshotAttach } from "./useLinkSnapshotAttach";
 import { usePasteLinkMenu } from "./usePasteLinkMenu";
 import {
@@ -1638,6 +1640,21 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       flushPendingBlockDraft(blockId, "structural");
       const currentBlock = findBlockInTree(contentRef.current, blockId);
       if (!currentBlock || currentBlock.type === "code") return;
+
+      const image = pastedImageFile(e.clipboardData);
+      if (image) {
+        e.preventDefault();
+        const offsets = resolvePasteSelectionOffsets(e, currentBlock.content ?? "");
+        // Caveat: offsets are taken at paste time; text typed during the upload can shift
+        // where the picture lands (clamped, never out of range).
+        void pastedImageSource(image, uploadPageMedia).then((src) => {
+          const latest = findBlockInTree(contentRef.current, blockId);
+          if (!latest) return;
+          updateBlock(pageId, blockId, { content: insertPastedImage(latest.content ?? "", src, offsets) });
+          focusBlock(blockId, true);
+        });
+        return;
+      }
 
       const rawMarkdown = e.clipboardData.getData("text/markdown");
       const rawPlainText = e.clipboardData.getData("text/plain");
