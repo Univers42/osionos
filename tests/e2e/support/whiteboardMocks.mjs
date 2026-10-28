@@ -27,20 +27,17 @@ export const WHITEBOARD_INSTALLED = {
 
 export const HYDRAWN_ORIGIN = "https://localhost:3008";
 
-/** Mocks hydrawn (HYDRAWN_ORIGIN). `/new?title=` hands the title to `onCreate` and answers a page
- *  that reports board `slug` to its parent, as hydrawn's own `/new` does once the board exists;
- *  anything else is a stub page. Caveat: no token is ever requested, so this proves the frame
- *  protocol and the URLs, not storage; the bridge suite covers the routes. */
-export async function mockHydrawn(page, { slug, onCreate = () => {} }) {
+/** Mocks hydrawn (HYDRAWN_ORIGIN) with a stub page and returns the paths the app framed.
+ *  Caveat: no token is ever requested, so this proves the URLs, not storage; the bridge suite
+ *  covers the routes. */
+export async function mockHydrawn(page) {
+  const framed = [];
   await page.route(`${HYDRAWN_ORIGIN}/**`, (route) => {
     const url = new URL(route.request().url());
-    if (url.pathname === "/new") {
-      onCreate(url.searchParams.get("title"));
-      const report = JSON.stringify({ type: "hydrawn:board-created", slug });
-      return route.fulfill({ status: 200, contentType: "text/html", body: `<!doctype html><title>new</title><script>parent.postMessage(${report}, "*")</script>` });
-    }
+    framed.push(url.pathname);
     return route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>hydrawn</title><p>hydrawn</p>" });
   });
+  return framed;
 }
 
 /** Answers GET /api/marketplace/installed with `installed`; returns a probe for the offline guard. */

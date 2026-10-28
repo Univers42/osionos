@@ -14,7 +14,7 @@
  * The whiteboard: hydrawn's board API, served to the hydrawn frame from the user's grobase Mongo.
  *
  *   POST /api/whiteboard/token                  app session → whiteboard token (app CORS)
- *   GET|POST /api/whiteboard/v1/boards          list (no scenes) | create, slug minted here
+ *   GET|POST /api/whiteboard/v1/boards          list (no scenes) | create, slug minted here or sent
  *   GET|PUT|DELETE /api/whiteboard/v1/boards/:slug
  *   GET|PUT /api/whiteboard/v1/boards/:slug/thumbnail
  *
@@ -103,6 +103,22 @@ function preflight(request, response, origin) {
 	});
 	response.end();
 	return true;
+}
+
+// Caveat: per process. Two bridge replicas could each create the same client slug for one
+// user; live runs one bridge.
+const slugLocks = new Map();
+
+async function withSlugLock(key, run) {
+	const previous = slugLocks.get(key) ?? Promise.resolve();
+	const current = previous.then(run, run);
+	const settled = current.then(() => {}, () => {});
+	slugLocks.set(key, settled);
+	try {
+		return await current;
+	} finally {
+		if (slugLocks.get(key) === settled) slugLocks.delete(key);
+	}
 }
 
 function mintSlug() {
@@ -208,11 +224,28 @@ function createRoutes(store) {
 		return reply(ctx.response, 200, { boards: rows.map(summaryOf), nextCursor: rows.length > 0 && next < total ? String(next) : null }, ctx.cors);
 	}
 
+	// A slug sent by the client is the one osionos minted for an inline block, which opens the
+	// board before it exists; its first save creates it here. Creating it twice returns the
+	// first, so two tabs saving that first edit both land on one board. A deleted board's slug
+	// is refused: a second row under it would leave its thumbnail lookup ambiguous.
 	async function create(ctx) {
-		const title = titleOf((await readJsonBody(ctx.request, 4096))?.title);
+		const body = await readJsonBody(ctx.request, 4096);
+		const title = titleOf(body?.title);
+		const requested = body?.slug;
+		if (requested !== undefined && (typeof requested !== 'string' || !SLUG.test(requested))) throw fail(400, 'bad_slug', 'That is not a board slug.');
+		return requested === undefined ? createNew(ctx, mintSlug(), title) : withSlugLock(`${ctx.userId}:${requested}`, () => createOnce(ctx, requested, title));
+	}
+
+	async function createOnce(ctx, slug, title) {
+		const existing = await store.findBoard(ctx.userId, slug, { deleted: true });
+		if (existing?.deleted_at) throw fail(409, 'board_deleted', 'That board was deleted.');
+		return existing ? reply(ctx.response, 200, summaryOf(existing), ctx.cors) : createNew(ctx, slug, title);
+	}
+
+	async function createNew(ctx, slug, title) {
 		if (await store.countLive(ctx.userId) >= MAX_BOARDS) throw fail(403, 'board_limit', `A whiteboard account keeps at most ${MAX_BOARDS} boards.`);
 		const empty = JSON.stringify({ type: 'osidraw', version: 1, elements: [] });
-		const row = await store.createBoard(ctx.userId, { slug: mintSlug(), title, scene: empty, element_count: 0, entry_count: 0, rev: 0, thumbnail_at: null });
+		const row = await store.createBoard(ctx.userId, { slug, title, scene: empty, element_count: 0, entry_count: 0, rev: 0, thumbnail_at: null });
 		return reply(ctx.response, 201, summaryOf(row), ctx.cors);
 	}
 
