@@ -15,12 +15,25 @@
  *  database pages persist permission-engine policies (sharePermissionBridge.ts). */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { commitPageSharing, fetchPageSharing, fetchPeople, fetchWorkspacePeople, deleteRule, fetchRules, fetchTeams, saveRule } from './shareApi';
+import type { PageEntry } from '@/entities/page';
+import { commitPageSharing, fetchPageSharing, fetchPeople, fetchWorkspacePeople, deleteRule, fetchRules, fetchTeams, saveRule, type InheritedRuleRead } from './shareApi';
 import { createPolicy, deletePolicy, fetchPolicies, fetchRoles } from './sharePolicyApi';
 import { toAccessRule, toEnginePolicy } from './sharePermissionBridge';
 import { engineRoleName, entriesFromPolicies, entriesFromRules, entryKey, upsertEntry } from './shareModel.helpers';
 import { entriesFromPageAccess, sharingWith, sharingWithout, type PageSharing } from './pageShareModel';
 import type { EngineRole, ShareEntry, ShareLevel, SharePerson, ShareResource, ShareTeam } from './types';
+
+/** One "Inherited from parent pages" row: a rule a STRICT ancestor carries. */
+export interface InheritedShareRow {
+  key: string;
+  entry: ShareEntry;
+  fromPageId: string;
+  fromPageTitle: string;
+  /** Structural: true = the rule can affect this page (not "this person has access"). */
+  reaches: boolean;
+  /** An ancestor `no_access`: it overrides every access granted on this page. */
+  denied: boolean;
+}
 
 export interface ShareModel {
   loading: boolean;
@@ -31,16 +44,35 @@ export interface ShareModel {
   teams: ShareTeam[];
   roles: EngineRole[];
   entries: ShareEntry[];
+  /** Rules the page inherits from its parents, nearest ancestor first. */
+  inherited: InheritedShareRow[];
+  /** Some ancestor the caller cannot read carries a rule (the bridge's signal). */
+  hiddenInherited: boolean;
   setLevel: (target: ShareEntry['target'], level: ShareLevel) => Promise<void>;
   removeEntry: (entry: ShareEntry) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
+const EMPTY_PAGES: readonly PageEntry[] = [];
+const PARENT_FALLBACK_TITLE = 'a parent page';
+const PAGE_NOT_AVAILABLE = 'This page is not available.';
+
 function errorText(cause: unknown, fallback: string): string {
   return cause instanceof Error ? cause.message : fallback;
 }
 
-export function useShareModel(resource: ShareResource): ShareModel {
+/** A page the caller may not read answers 404, exactly like a missing one: say so. */
+function loadErrorText(cause: unknown): string {
+  const status = (cause as { status?: unknown } | null)?.status;
+  return status === 404 ? PAGE_NOT_AVAILABLE : errorText(cause, 'Could not load sharing state.');
+}
+
+/**
+ * Share dialog state + persistence. `pages` is the workspace's page tree from
+ * `usePageStore`: it only supplies the readable source-page titles of the inherited
+ * rows — the bridge computes which rules reach this page.
+ */
+export function useShareModel(resource: ShareResource, pages: readonly PageEntry[] = EMPTY_PAGES): ShareModel {
   const isLive = Boolean(resource.liveResourceName);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -51,11 +83,41 @@ export function useShareModel(resource: ShareResource): ShareModel {
   const [roles, setRoles] = useState<EngineRole[]>([]);
   const [liveEntries, setEntries] = useState<ShareEntry[]>([]);
   const [sharing, setSharing] = useState<PageSharing | null>(null);
+  const [inheritedRules, setInheritedRules] = useState<InheritedRuleRead[]>([]);
+  const [hiddenInherited, setHiddenInherited] = useState(false);
   const generation = useRef(0);
   const resourceKey = JSON.stringify([resource.workspaceId, resource.resourceId, resource.liveResourceName]);
   const [loadedResource, setLoadedResource] = useState<string | null>(null);
 
   const entries = useMemo(() => (isLive ? liveEntries : sharing ? entriesFromPageAccess(sharing, people, ruleEntries) : []), [isLive, liveEntries, people, ruleEntries, sharing]);
+
+  /** The readable ancestors' titles, keyed the way the bridge keys page ids. The walk
+   *  itself belongs to the bridge: this is only how a row names its source page. */
+  const pageTitles = useMemo(() => {
+    const titles = new Map<string, string>();
+    for (const page of pages) titles.set(page._id.toLowerCase(), page.title);
+    return titles;
+  }, [pages]);
+
+  /** Rows arrive with the rules read, in the bridge's order (nearest ancestor first):
+   *  derived, never fetched or held in a second piece of effect-synced state. */
+  const inherited = useMemo(() => {
+    const rows: InheritedShareRow[] = [];
+    for (const hit of inheritedRules) {
+      // A target the dialog cannot name shows no row, own rules included.
+      const entry = entriesFromRules([hit.rule], people, teams)[0];
+      if (!entry) continue;
+      rows.push({
+        key: `${hit.fromPageId}:${entry.key}:${hit.rule._id ?? ''}`,
+        entry,
+        fromPageId: hit.fromPageId,
+        fromPageTitle: pageTitles.get(hit.fromPageId.toLowerCase()) || PARENT_FALLBACK_TITLE,
+        reaches: hit.reaches === true,
+        denied: hit.rule.permission === 'no_access',
+      });
+    }
+    return rows;
+  }, [inheritedRules, pageTitles, people, teams]);
 
   const refresh = useCallback(async () => {
     const request = ++generation.current;
@@ -69,6 +131,8 @@ export function useShareModel(resource: ShareResource): ShareModel {
     setRuleEntries([]);
     setEntries([]);
     setSharing(null);
+    setInheritedRules([]);
+    setHiddenInherited(false);
     try {
       if (isLive) {
         const roster = await fetchPeople(resource.workspaceId);
@@ -88,9 +152,12 @@ export function useShareModel(resource: ShareResource): ShareModel {
         setRuleEntries(entriesFromRules(read.rules, roster, teamList));
         setPeople(roster);
         setSharing(current);
+        setInheritedRules(read.inherited ?? []);
+        setHiddenInherited(read.hiddenInherited === true);
       }
     } catch (cause) {
-      if (currentRequest()) setError(errorText(cause, 'Could not load sharing state.'));
+      // The read was cleared above: a failure never leaves an older page's rows behind.
+      if (currentRequest()) setError(loadErrorText(cause));
     } finally {
       if (currentRequest()) { setLoadedResource(resourceKey); setLoading(false); }
     }
@@ -162,5 +229,6 @@ export function useShareModel(resource: ShareResource): ShareModel {
     setEntries((current) => current.filter((existing) => existing.key !== entry.key));
   }, 'Could not remove access.'), [changePageSharing, isLive, run, sharing?.visibility]);
 
-  return { loading: loading || loadedResource !== resourceKey, busy, error, isLive, people, teams, roles, entries, setLevel, removeEntry, refresh };
+  /** Re-reads the rules, inherited rows included: one error path for the whole dialog. */
+  return { loading: loading || loadedResource !== resourceKey, busy, error, isLive, people, teams, roles, entries, inherited, hiddenInherited, setLevel, removeEntry, refresh };
 }

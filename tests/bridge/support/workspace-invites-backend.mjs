@@ -34,7 +34,7 @@ function json(value, status = 200) {
 	return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
 }
 
-export function world({ owner = OWNER, members = [], invites = [] } = {}) {
+export function world({ owner = OWNER, members = [], invites = [], ...extra } = {}) {
 	return {
 		osionos_workspaces: [{ id: IDS.team, owner_id: owner, name: 'Team', slug: 'team', visibility: 'confidential' }],
 		osionos_workspace_members: members,
@@ -43,6 +43,7 @@ export function world({ owner = OWNER, members = [], invites = [] } = {}) {
 			{ user_id: OWNER, display_name: 'Alice', profile: { avatar: 'alice.png' } },
 			{ user_id: INVITEE, display_name: 'Bob', profile: { avatar: 'bob.png' } },
 		],
+		...extra,
 	};
 }
 
