@@ -4,7 +4,7 @@ import type { Pool } from 'pg';
 import type { AuthUser } from '../src/auth.ts';
 import type { QueryRunner } from '../src/db.ts';
 import { readablePages } from '../src/retrieval/search.ts';
-import { canReadPageWithRules } from '../src/retrieval/shareRules.ts';
+import { canReadPageWithRules, ruleHiddenPageIds } from '../src/retrieval/shareRules.ts';
 import { loadPageContext } from '../src/runs/prompt.ts';
 import { readThreadMood } from '../src/sentiment/pulse.ts';
 import { readPage } from '../src/tools/readTools.ts';
@@ -109,6 +109,11 @@ function fakeDb(w: World): { db: QueryRunner; calls: Call[] } {
 			if (sql.includes('from public.osionos_pages') && sql.includes('where id = $1::uuid')) {
 				return { rows: w.pages.filter((p) => p.id === params[0]).slice(0, 1) };
 			}
+			if (sql.includes('where id = any($1::uuid[]) and owner_id = $2::uuid')) {
+				const ids = (params[0] as string[]).map((id) => id.toLowerCase());
+				const owner = String(params[1]).toLowerCase();
+				return { rows: w.pages.filter((p) => ids.includes(p.id.toLowerCase()) && p.owner_id.toLowerCase() === owner).map((p) => ({ id: p.id })) };
+			}
 			if (!table) throw new Error(`unexpected statement: ${sql}`);
 			return { rows: answer(w, table, params) };
 		},
@@ -185,6 +190,39 @@ describe('canReadPageWithRules', () => {
 		const { db } = fakeDb(w);
 		assert.equal(await canReadPageWithRules(db, USER, page(PAGE_D), [WS1]), false);
 		assert.equal(warn.mock.callCount(), 1);
+	});
+});
+
+describe('ruleHiddenPageIds', () => {
+	it('returns an explicitly denied page and its child, but not an unaffected page', async () => {
+		const { db } = fakeDb(aclWorld());
+		assert.deepEqual(await ruleHiddenPageIds(db, { userId: USER }, WS1), [PAGE_A, PAGE_C]);
+	});
+
+	it('returns an empty set without reading pages when the workspace has no rules', async () => {
+		const { db, calls } = fakeDb(world([page(PAGE_A), page(PAGE_C), page(PAGE_D)]));
+		assert.deepEqual(await ruleHiddenPageIds(db, { userId: USER }, WS1), []);
+		assert.equal(queried(calls, 'osionos_pages'), false);
+	});
+
+	it('fails closed when the rules read throws', async () => {
+		const w = aclWorld({ fail: [{ table: 'osionos_share_rules', workspaceId: WS1 }] });
+		const { db } = fakeDb(w);
+		assert.equal(await ruleHiddenPageIds(db, { userId: USER }, WS1), null);
+		assert.equal(warn.mock.callCount(), 1);
+	});
+
+	it('keeps a member-owned child readable under its denying ancestor', async () => {
+		const w = aclWorld({
+			pages: [page(PAGE_A), page(PAGE_C, { parent_page_id: PAGE_A, owner_id: USER }), page(PAGE_D)],
+		});
+		const { db } = fakeDb(w);
+		assert.deepEqual(await ruleHiddenPageIds(db, { userId: USER }, WS1), [PAGE_A]);
+	});
+
+	it('returns an empty set for the workspace owner', async () => {
+		const { db } = fakeDb(aclWorld());
+		assert.deepEqual(await ruleHiddenPageIds(db, { userId: WS_OWNER }, WS1), []);
 	});
 });
 

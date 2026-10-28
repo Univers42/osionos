@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { AuthUser } from '../auth.ts';
 import { liveMemberWorkspaces, pageRowReadableSql } from '../retrieval/acl.ts';
-import { canReadPageWithRules } from '../retrieval/shareRules.ts';
+import { canReadPageWithRules, ruleHiddenPageIds } from '../retrieval/shareRules.ts';
 
 /**
  * What the sentiment scores are allowed to show: weekly totals of a workspace
@@ -48,6 +48,7 @@ const PULSE_SQL = `
 	where p.workspace_id = $1::uuid
 	  and p.archived_at is null
 	  and ${pageRowReadableSql('p', '$2')}
+	  and p.id <> all($4::uuid[])
 	  and c.created_at < date_trunc('week', now())
 	  and c.created_at >= date_trunc('week', now()) - make_interval(weeks => $3::int)
 	group by date_trunc('week', c.created_at)
@@ -65,10 +66,13 @@ async function isEnabled(db: Pool, workspaceId: string): Promise<boolean> {
 /** The weekly totals of the last `weeks` completed weeks; a week below k is absent. */
 export async function readPulse(db: Pool, user: AuthUser, workspaceId: string, weeks: number): Promise<Pulse> {
 	if (!(await isEnabled(db, workspaceId))) return { enabled: false, weeks: [] };
+	const hidden = await ruleHiddenPageIds(db, user, workspaceId);
+	if (hidden === null) return { enabled: true, minAuthors: PULSE_MIN_AUTHORS, weeks: [] };
 	const result = await db.query<{ week_start: string; negative: number; neutral: number; positive: number }>(PULSE_SQL, [
 		workspaceId,
 		user.userId,
 		weeks,
+		hidden,
 	]);
 	return {
 		enabled: true,
