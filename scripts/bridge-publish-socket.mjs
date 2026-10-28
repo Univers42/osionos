@@ -21,7 +21,10 @@
  *
  * A connect failure (ENOENT / ECONNREFUSED / EACCES / ENOTSOCK) happens before anything was
  * written, so the caller still delivers this event over the URL (S8). Any other failure may
- * have written the request already, so it is reported failed and never re-sent. state()
+ * have written the request already, so it is reported failed and never re-sent. A 5xx answer
+ * is returned as is and also opens the breaker; a 4xx is the event's own fault, the same on
+ * both routes, so it leaves the breaker alone. Each trip bumps a generation: a success from an
+ * attempt that started before the trip cannot close the breaker it opened (S9). state()
  * exposes only the route and the errno class, never the socket path: it is a host path (S11).
  *
  * Caveat: a timeout cannot tell "not delivered" from "delivered late", so that one event is
@@ -53,21 +56,31 @@ function maySend(breaker, now) {
 	return true;
 }
 
+/** Opens the breaker for a full period; the new generation voids every attempt already in flight. */
+function trip(config, breaker, errorClass) {
+	breaker.generation += 1;
+	breaker.openUntil = config.now() + config.openMs;
+	breaker.lastError = errorClass;
+	breaker.probing = false;
+}
+
 /** One publish over the socket: the response, null (use the URL), or { ok: false, status: 0 }. */
 async function sendOverSocket(config, breaker, url, init) {
 	if (!maySend(breaker, config.now)) return null;
+	const generation = breaker.generation;
 	try {
 		// The caller's signal is replaced, never combined: the socket has its own, shorter
 		// deadline, and the caller's budget belongs to the URL fallback.
 		const response = await config.post(url, { ...init, signal: AbortSignal.timeout(config.timeoutMs) }, config.socketPath);
-		breaker.openUntil = null;
-		breaker.lastError = null;
-		breaker.probing = false;
+		if (response.status >= 500) trip(config, breaker, `HTTP_${response.status}`);
+		else if (generation === breaker.generation) {
+			breaker.openUntil = null;
+			breaker.lastError = null;
+			breaker.probing = false;
+		}
 		return response;
 	} catch (error) {
-		breaker.openUntil = config.now() + config.openMs;
-		breaker.lastError = error?.code || error?.name || 'Error';
-		breaker.probing = false;
+		trip(config, breaker, error?.code || error?.name || 'Error');
 		return PRE_SEND.has(error?.code) ? null : { ok: false, status: 0 };
 	}
 }
@@ -75,7 +88,7 @@ async function sendOverSocket(config, breaker, url, init) {
 /** A socket route over `socketPath`: send(url, init) to publish, state() for health. Never throws. */
 export function createSocketRoute({ socketPath, post = keepAliveFetch, now = Date.now, timeoutMs = SOCKET_TIMEOUT_MS, openMs = BREAKER_OPEN_MS }) {
 	const config = { socketPath, post, now, timeoutMs, openMs };
-	const breaker = { openUntil: null, lastError: null, probing: false };
+	const breaker = { openUntil: null, lastError: null, probing: false, generation: 0 };
 	return {
 		send: (url, init) => sendOverSocket(config, breaker, url, init),
 		state: () => ({ route: breaker.openUntil !== null ? 'socket-breaker-open' : 'socket', last_error: breaker.lastError }),

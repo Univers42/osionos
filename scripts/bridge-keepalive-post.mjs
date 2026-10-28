@@ -28,7 +28,8 @@
  * Host header.
  *
  * Caveat: an idle socket the far side dropped without a FIN/RST (a NAT timeout) is found only by
- * the caller's abort timeout, not by the retry.
+ * the caller's abort timeout, not by the retry; and a peer that resets a reused socket after it
+ * read the whole request gets that publish twice (accepted for K1 and S8, devil 2026-10-27).
  */
 
 import http from 'node:http';

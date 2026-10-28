@@ -135,6 +135,32 @@ describe('createSocketRoute send', () => {
 		assert.equal(calls.length, 2);
 	});
 
+	it('a success that started before a failure does not close the breaker it opened', async () => {
+		let settleOlder;
+		const older = new Promise((resolve) => { settleOlder = resolve; });
+		const { route, calls } = routeWith([older, coded('ECONNRESET')]);
+		const olderSend = route.send(PUBLISH_URL, INIT);
+		assert.deepEqual(await route.send(PUBLISH_URL, INIT), { ok: false, status: 0 });
+		settleOlder({ ok: true, status: 200 });
+		assert.deepEqual(await olderSend, { ok: true, status: 200 });
+		assert.deepEqual(route.state(), { route: 'socket-breaker-open', last_error: 'ECONNRESET' });
+		assert.equal(await route.send(PUBLISH_URL, INIT), null);
+		assert.equal(calls.length, 2);
+	});
+
+	it('a 5xx is returned, never re-sent, and opens the breaker; a 4xx does not', async () => {
+		const { route, calls } = routeWith([{ ok: false, status: 502 }]);
+		assert.deepEqual(await route.send(PUBLISH_URL, INIT), { ok: false, status: 502 });
+		assert.deepEqual(route.state(), { route: 'socket-breaker-open', last_error: 'HTTP_502' });
+		assert.equal(await route.send(PUBLISH_URL, INIT), null);
+		assert.equal(calls.length, 1);
+		const client = routeWith([{ ok: false, status: 413 }, { ok: true, status: 200 }]);
+		assert.deepEqual(await client.route.send(PUBLISH_URL, INIT), { ok: false, status: 413 });
+		assert.deepEqual(client.route.state(), { route: 'socket', last_error: null });
+		assert.deepEqual(await client.route.send(PUBLISH_URL, INIT), { ok: true, status: 200 });
+		assert.equal(client.calls.length, 2);
+	});
+
 	it('the socket deadline aborts a transport that never answers', async () => {
 		// AbortSignal.timeout is unref'd and the isolated test has no server holding the loop:
 		// keep it alive just long enough for the deadline to fire, like the real bridge does.
