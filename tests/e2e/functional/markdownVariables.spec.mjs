@@ -121,4 +121,25 @@ test.describe("markdown variables", () => {
     await expect(menu).toHaveCount(0);
     await expect.poll(() => caretBlockText(page)).toBe("a {{NO");
   });
+
+  // Reported 2026-10-28: near the window bottom a short "No match" menu opened ~240px
+  // above the caret, over unrelated blocks, because it was placed by its height cap.
+  test("near the window bottom the {{ menu opens right above the caret", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 1200, height: 560 });
+    await openFreshPage(page, baseURL);
+    const editor = await activateFirstEditor(page);
+    await editor.click();
+    for (let i = 0; i < 24; i += 1) await page.keyboard.press("Enter");
+    await page.keyboard.type("hello {{NAME");
+    const menu = page.getByTestId("variable-menu");
+    await expect(menu).toContainText("No match");
+    const caret = await page.evaluate(() => {
+      const rect = globalThis.getSelection().getRangeAt(0).getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom };
+    });
+    const box = await menu.boundingBox();
+    expect(caret.top).toBeGreaterThan(560 / 2);
+    expect(box.y + box.height).toBeLessThanOrEqual(caret.top);
+    expect(caret.top - (box.y + box.height)).toBeLessThanOrEqual(12);
+  });
 });
