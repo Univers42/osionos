@@ -1,7 +1,7 @@
 import type { QueryResultRow } from 'pg';
 import type { AuthUser } from '../auth.ts';
 import type { QueryRunner } from '../db.ts';
-import { pageAccessLevel } from '../../../../scripts/bridge-page-access.mjs';
+import { pageAccessLevel, pageRuleLevel } from '../../../../scripts/bridge-page-access.mjs';
 import { sameId, canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 
 /**
@@ -92,6 +92,7 @@ const PARENTS_SQL = `select id, parent_page_id
 	from public.osionos_pages
 	where workspace_id = $1::uuid
 	limit $2::int`;
+const OWNED_PAGES_SQL = `select id from public.osionos_pages where id = any($1::uuid[]) and owner_id = $2::uuid`;
 const TEAMS_SQL = `select team_id
 	from public.osionos_team_members
 	where workspace_id = $1::uuid and user_id = $2::uuid
@@ -239,6 +240,39 @@ export async function loadAccessMaps(db: QueryRunner, user: Pick<AuthUser, 'user
 		if (entry) maps.set(id, entry);
 	});
 	return maps;
+}
+
+/**
+ * The lower-case ids hidden from the caller by a share rule, for a SQL aggregate's deny set.
+ * null fails closed when the workspace's access map is unavailable: the caller may read nothing.
+ * Caveat: loadAccessMaps closes the whole workspace past 20,000 pages; one call can pass a uuid[]
+ * of up to 20,000 ids, and its reads are not one snapshot with the caller's own read.
+ */
+export async function ruleHiddenPageIds(db: QueryRunner, user: Pick<AuthUser, 'userId'>, workspaceId: string): Promise<string[] | null> {
+	try {
+		const maps = await loadAccessMaps(db, user, [workspaceId]);
+		const entry = maps.get(lowerId(workspaceId));
+		if (!entry) return null;
+		if (entry.rulesByPage.size === 0) return [];
+		if (!entry.parentOf) return null;
+		const hidden = new Set<string>();
+		for (const id of entry.parentOf.keys()) {
+			const level = pageRuleLevel({ row: { id, workspace_id: workspaceId, owner_id: null }, userId: user.userId, ...entry });
+			if (level === 'none') hidden.add(id);
+		}
+		if (hidden.size > 0) {
+			const owned = await rowsOf<{ id: string }>(db, OWNED_PAGES_SQL, [[...hidden], user.userId]);
+			for (const row of owned) {
+				const id = lowerId(row.id);
+				const level = pageRuleLevel({ row: { id, workspace_id: workspaceId, owner_id: user.userId }, userId: user.userId, ...entry });
+				if (level !== 'none') hidden.delete(id);
+			}
+		}
+		return [...hidden];
+	} catch (error) {
+		warnFailedRead(lowerId(workspaceId), error);
+		return null;
+	}
 }
 
 /** The rows the caller may read under the maps: a workspace absent from them is closed, and 'none' is dropped. */
