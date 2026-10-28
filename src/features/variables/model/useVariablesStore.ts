@@ -17,13 +17,15 @@ import { parseVariableDefinitions, type VariableDefinition } from "./variableDef
 /** One `env.json`: at the workspace root (`parentPageId` null) or under a page, for its subtree. */
 export interface EnvFile {
   pageId: string;
+  /** env.json, or an env.<topic>.json read with it. */
+  title: string;
   parentPageId: string | null;
   source: string;
   definitions: ReadonlyMap<string, VariableDefinition>;
   errors: string[];
 }
 
-export type EnvFileSource = Pick<EnvFile, "pageId" | "parentPageId" | "source">;
+export type EnvFileSource = Pick<EnvFile, "pageId" | "title" | "parentPageId" | "source">;
 
 interface VariablesState {
   byWorkspace: Record<string, readonly EnvFile[]>;
@@ -38,7 +40,7 @@ interface VariablesState {
 }
 
 const sameFile = (a: EnvFile, b: EnvFileSource) =>
-  a.pageId === b.pageId && a.parentPageId === b.parentPageId && a.source === b.source;
+  a.pageId === b.pageId && a.title === b.title && a.parentPageId === b.parentPageId && a.source === b.source;
 
 export const useVariablesStore = create<VariablesState>()((set, get) => ({
   byWorkspace: {},
@@ -49,7 +51,7 @@ export const useVariablesStore = create<VariablesState>()((set, get) => ({
     // Only a changed source is parsed again; unchanged files keep their definitions.
     const next = files.map((file) => {
       const kept = current.find((c) => c.pageId === file.pageId && c.source === file.source);
-      return kept && kept.parentPageId === file.parentPageId ? kept : { ...file, ...parseVariableDefinitions(file.source) };
+      return kept && kept.parentPageId === file.parentPageId && kept.title === file.title ? kept : { ...file, ...parseVariableDefinitions(file.source) };
     });
     set((s) => ({ byWorkspace: { ...s.byWorkspace, [workspaceId]: next }, version: s.version + 1 }));
   },
