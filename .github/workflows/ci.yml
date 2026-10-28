@@ -290,9 +290,11 @@ jobs:
 
       # The object-database sync runs after every edit and on every load; its budgets
       # fail the O(databases x rows) loops it replaced (numbers in the bench file).
-      - name: Object-database sync bench
+      # Variables resolve on every keystroke in a block holding {{…}}; their budgets
+      # keep a 50-chip block and the {{ menu inside the 20 ms typing target.
+      - name: Object-database sync and variables benches
         if: matrix.scope == 'root'
-        run: make test-bench BENCH=tests/bench/object-database-sync.bench.ts
+        run: make test-bench BENCH="tests/bench/object-database-sync.bench.ts tests/bench/variables.bench.ts"
 
       - name: SonarQube scan
         if: matrix.scope == 'root' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)

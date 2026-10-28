@@ -62,6 +62,7 @@ import {
 import { plainTextOfInlineSource, sliceInlineSource } from "./crossTextOps";
 import { insertBlockRelative } from "./blockContextMenu.helpers";
 import { useBlockHistory } from "./useBlockHistory";
+import { useVariableMenu } from "./useVariableMenu";
 import { isAutomationsEnabled } from "@/shared/config/featureFlags";
 import { getInlineMarkAtCaretEnd, placeCaretAfterInlineMark } from "./inlineMarkHelpers";
 import {
@@ -925,6 +926,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [],
   );
 
+  const { variableMenu, tryHandleVariableMenu, handleVariableSelect, closeVariableMenu } =
+    useVariableMenu({ pageId, getCaretRect, flushPendingBlockDraft, updateBlock, focusBlock });
+
   /** Persist block content edits in the page store. */
   const persistBlockText = useCallback(
     (blockId: string, text: string) => {
@@ -1134,6 +1138,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       if (tryHandleSlashMenu(blockId, text)) return;
       if (tryHandlePageSelectorMenu(blockId, text)) return;
+      if (tryHandleVariableMenu(blockId, text)) return;
       if (tryHandleEmojiMenu(blockId, text)) return;
       tryHandleMarkdownShortcut(blockId, text);
     },
@@ -1142,6 +1147,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       tryHandleCodeOrTable,
       tryHandleSlashMenu,
       tryHandlePageSelectorMenu,
+      tryHandleVariableMenu,
       tryHandleEmojiMenu,
       tryHandleMarkdownShortcut,
     ],
@@ -2237,6 +2243,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     setSlashMenu,
     pageSelector,
     setPageSelector,
+    variableMenu,
+    handleVariableSelect,
+    closeVariableMenu,
     emojiMenu,
     setEmojiMenu,
     handleEmojiSelect,
