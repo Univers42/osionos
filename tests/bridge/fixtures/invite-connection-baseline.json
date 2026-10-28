@@ -2,7 +2,7 @@
 	{
 		"name": "invitePerson",
 		"status": 200,
-		"body": "{\"ok\":true,\"invite\":{\"id\":\"<invite-id>\",\"email\":\"bob@example.com\",\"role\":\"guest\",\"invitedBy\":\"aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa\",\"expiresAt\":\"<timestamp>\",\"createdAt\":\"<timestamp>\",\"acceptedAt\":\"<timestamp>\",\"revokedAt\":null},\"token\":\"<token>\",\"acceptUrl\":\"<accept-url>\"}",
+		"body": "{\"ok\":true,\"invite\":{\"id\":\"<invite-id>\",\"email\":\"bob@example.com\",\"role\":\"guest\",\"invitedBy\":\"aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa\",\"expiresAt\":\"<timestamp>\",\"createdAt\":\"<timestamp>\",\"acceptedAt\":\"<timestamp>\",\"revokedAt\":null,\"declinedAt\":null},\"token\":\"<token>\",\"acceptUrl\":\"<accept-url>\"}",
 		"calls": [
 			{
 				"method": "GET",
@@ -104,7 +104,7 @@
 	{
 		"name": "resendInvite",
 		"status": 200,
-		"body": "{\"ok\":true,\"invite\":{\"id\":\"<invite-id>\",\"email\":\"bob@example.com\",\"role\":\"guest\",\"invitedBy\":\"aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa\",\"expiresAt\":\"<timestamp>\",\"createdAt\":\"<timestamp>\",\"acceptedAt\":\"<timestamp>\",\"revokedAt\":null},\"token\":\"<token>\",\"acceptUrl\":\"<accept-url>\"}",
+		"body": "{\"ok\":true,\"invite\":{\"id\":\"<invite-id>\",\"email\":\"bob@example.com\",\"role\":\"guest\",\"invitedBy\":\"aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa\",\"expiresAt\":\"<timestamp>\",\"createdAt\":\"<timestamp>\",\"acceptedAt\":\"<timestamp>\",\"revokedAt\":null,\"declinedAt\":null},\"token\":\"<token>\",\"acceptUrl\":\"<accept-url>\"}",
 		"calls": [
 			{
 				"method": "GET",
@@ -143,6 +143,11 @@
 				"body": null
 			},
 			{
+				"method": "GET",
+				"path": "osionos_workspaces?id=eq.c0c0c0c0-3333-4333-8333-c0c0c0c0c0c0&select=id%2Cowner_id%2Cname&limit=1",
+				"body": null
+			},
+			{
 				"method": "PATCH",
 				"path": "osionos_workspace_invites?id=eq.b0b0b0b0-0000-4000-8000-000000000002&accepted_at=is.null&revoked_at=is.null",
 				"body": {
@@ -162,11 +167,6 @@
 						"read"
 					]
 				}
-			},
-			{
-				"method": "GET",
-				"path": "osionos_workspaces?id=eq.c0c0c0c0-3333-4333-8333-c0c0c0c0c0c0&select=id%2Cowner_id%2Cname&limit=1",
-				"body": null
 			},
 			{
 				"method": "GET",
