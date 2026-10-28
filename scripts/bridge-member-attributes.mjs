@@ -37,22 +37,24 @@ import { bumpAccessAfter } from './bridge-access-generation.mjs';
 const ATTR_TABLE = 'osionos_member_attributes';
 const NAME_RE = /^[a-z][a-z0-9_]{0,31}$/;
 
-function valueError(message) {
-	return httpError(message, 400);
+/** An attribute name as the DB CHECK accepts it, or a 400 naming `field`. Shared with share-rule targets. */
+export function validateName(name, field = 'attribute name') {
+	const text = name == null ? '' : String(name);
+	if (!NAME_RE.test(text)) throw httpError(`${field} must match ^[a-z][a-z0-9_]{0,31}$`, 400);
+	return text;
 }
 
-function validateName(name) {
-	if (!NAME_RE.test(name)) throw httpError('attribute name must match ^[a-z][a-z0-9_]{0,31}$', 400);
-	return name;
-}
-
-function validateValue(value) {
+/**
+ * An attribute value as the DB CHECK accepts it, or a 400 naming `field`. No ":" because a
+ * share rule's target_key is `attribute:<name>:<value>`.
+ */
+export function validateValue(value, field = 'value') {
 	const text = value == null ? '' : String(value);
-	if (text.length < 1) throw valueError('value is required');
-	if (text.length > 64) throw valueError('value is too long');
-	if (text.includes(':')) throw valueError('value must not contain ":"');
-	if (text.startsWith(' ') || text.endsWith(' ')) throw valueError('value must not have leading or trailing spaces');
-	if (/[\x00-\x1f\x7f]/.test(text)) throw valueError('value must not contain control characters');
+	if (text.length < 1) throw httpError(`${field} is required`, 400);
+	if (text.length > 64) throw httpError(`${field} is too long`, 400);
+	if (text.includes(':')) throw httpError(`${field} must not contain ":"`, 400);
+	if (text.startsWith(' ') || text.endsWith(' ')) throw httpError(`${field} must not have leading or trailing spaces`, 400);
+	if (/[\x00-\x1f\x7f]/.test(text)) throw httpError(`${field} must not contain control characters`, 400);
 	return text;
 }
 
@@ -152,5 +154,3 @@ export function createMemberAttributesHandler({ config, verifySession, fetchImpl
 	};
 }
 
-export const createWorkspaceMemberAttributesHandler = createMemberAttributesHandler;
-export const createAttributesHandler = createMemberAttributesHandler;
