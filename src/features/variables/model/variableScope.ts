@@ -23,7 +23,7 @@ import { useVariablesStore, type EnvFile } from "./useVariablesStore";
 
 const NUMBER_LOCALES: Record<string, string> = { dot: "en-US", comma: "de-DE", space: "fr-FR" };
 const ROOT = "";
-// A parentPageId cycle in bad data must not hang a render.
+// Bounds the walk on a pathologically deep tree; a cycle stops earlier (pageChain).
 const MAX_CHAIN = 64;
 const hostTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -63,10 +63,14 @@ function envLayers(files: readonly EnvFile[]): Map<string, VariableLayer> {
   return byParent;
 }
 
+// A parentPageId cycle in bad data ends the chain at the first revisit; otherwise one
+// env.json would stack as many layers as the loop has laps.
 function pageChain(pageId: string): PageEntry[] {
   const { pageById } = usePageStore.getState();
   const chain: PageEntry[] = [];
-  for (let page = pageById(pageId); page && chain.length < MAX_CHAIN; page = page.parentPageId ? pageById(page.parentPageId) : undefined) {
+  const seen = new Set<string>();
+  for (let page = pageById(pageId); page && !seen.has(page._id) && chain.length < MAX_CHAIN; page = page.parentPageId ? pageById(page.parentPageId) : undefined) {
+    seen.add(page._id);
     chain.push(page);
   }
   return chain;
