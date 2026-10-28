@@ -11,13 +11,14 @@
 /* ************************************************************************** */
 
 // `{{NAME}}` variables in the live editor: the source keeps the braces, the reader sees
-// the value as an atomic chip, and typing carries on after it. Built-ins only — the
-// offline Playwright build has no workspace env.json (tests/canvas/variables-resolver.test.ts
-// covers definitions, formats and filters).
+// the value as an atomic chip, and typing carries on after it. The offline build starts
+// with no env.json, so one test creates it from Settings
+// (tests/canvas/variables-resolver.test.ts covers definitions, formats and filters).
 
 import { expect, test } from "@playwright/test";
 
-import { activateFirstEditor, openFreshPage } from "../../browser/core/app.mjs";
+import { activateFirstEditor, createNewWorkspacePage, openFreshPage } from "../../browser/core/app.mjs";
+import { openSettings } from "../support/settingsHelpers.mjs";
 
 async function caretBlockText(page) {
   return page.evaluate(() => {
@@ -59,5 +60,17 @@ test.describe("markdown variables", () => {
     const chip = page.locator("span.md-variable-error").first();
     await expect(chip).toBeVisible();
     await expect(chip).toHaveAttribute("title", /shout/);
+  });
+
+  test("Settings creates env.json and its starter values resolve in a page", async ({ page, baseURL }) => {
+    await page.goto(baseURL, { waitUntil: "domcontentloaded" });
+    await openSettings(page, "General");
+    await page.getByRole("button", { name: "Create env.json", exact: true }).click();
+    await expect(page.locator(".monaco-editor").first()).toBeVisible();
+    await createNewWorkspacePage(page);
+    const editor = await activateFirstEditor(page);
+    await editor.click();
+    await page.keyboard.type("Hi {{COMPANY}}");
+    await expect(page.locator('span.md-variable[data-var-expr="COMPANY"]').first()).toHaveText("Acme");
   });
 });
