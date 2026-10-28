@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/28 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -49,7 +49,7 @@ export const PEOPLE_VIEW = {
 export const CONTACT = { name: "c-name", headline: "c-headline", online: "c-online", since: "c-since", peer: "c-peer" } as const;
 export const DIR = { name: "d-name", username: "d-username", headline: "d-headline", online: "d-online" } as const;
 export const GROUP = { name: "g-name", kind: "g-kind", role: "g-role", members: "g-members", since: "g-since", src: "g-src" } as const;
-export const GUEST = { email: "gu-email", role: "gu-role", status: "gu-status", since: "gu-since" } as const;
+export const GUEST = { email: "gu-email", role: "gu-role", status: "gu-status", expires: "gu-expires", since: "gu-since" } as const;
 export const MEMBER = { name: "m-name", role: "m-role", since: "m-since" } as const;
 
 /** Read context handed to every source builder. */
