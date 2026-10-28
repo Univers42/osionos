@@ -36,6 +36,11 @@ const FIRST_BLOCKS = [
 ];
 
 async function seedColumns(page) {
+  // On a slow runner at 320 px the fresh page is not active yet when the seed runs.
+  await page.waitForFunction(async () => {
+    const { usePageStore } = await import("/src/store/usePageStore.ts");
+    return Boolean(usePageStore.getState().activePage);
+  });
   await page.evaluate(async (blocks) => {
     const { usePageStore } = await import("/src/store/usePageStore.ts");
     const store = usePageStore.getState();
