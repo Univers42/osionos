@@ -137,6 +137,10 @@ const DEFAULT_HANDOFF_TTL_MS = 90 * 1000;
 const DEFAULT_SESSION_TTL_SECONDS = 60 * 60;
 const DEFAULT_JSON_BODY_LIMIT_BYTES = 16_384;
 const PAGE_JSON_BODY_LIMIT_BYTES = 6 * 1024 * 1024;
+// The grobase WAF refuses a non-file body over 128 KB (SecRequestBodyNoFilesLimit 131072) and
+// lifts it only on a few named paths — osionos_pages is not one of them. Its 400 surfaced here
+// as a 502 the outbox retried forever, stalling every page queued behind it (live, 2026-10-28).
+const EDGE_PAGE_BODY_LIMIT_BYTES = 131_072;
 const DEFAULT_UNSPLASH_PER_PAGE = 12;
 const MAX_UNSPLASH_PER_PAGE = 30;
 const TRANSLATION_FETCH_TIMEOUT_MS = 6_000;
@@ -479,6 +483,13 @@ function baasFail(message) {
 	return Object.assign(new Error(message), { status: 502 });
 }
 
+/** Refuse a page write the edge would refuse, as a 413 the client can tell from a transient failure. */
+function assertPageWriteFitsEdge(path, method, payload) {
+	if (payload === undefined || (method !== 'POST' && method !== 'PATCH') || !/^osionos_pages(?:\?|$)/.test(path)) return;
+	if (Buffer.byteLength(payload) <= EDGE_PAGE_BODY_LIMIT_BYTES) return;
+	throw Object.assign(new Error('This page is too large to save (over 128 KB). Move pictures or long pasted text into files, then edit again.'), { status: 413, code: 'page_too_large' });
+}
+
 async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer } = {}) {
 	requireBaasConfig(config);
 	const headers = {
@@ -488,11 +499,13 @@ async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer 
 	};
 	if (body !== undefined) headers['Content-Type'] = 'application/json';
 	if (prefer) headers.Prefer = prefer;
+	const payload = body === undefined ? undefined : JSON.stringify(body);
+	assertPageWriteFitsEdge(path, method, payload);
 
 	const response = await fetchWithTimeout(fetchImpl, `${config.baasUrl}/rest/v1/${path}`, {
 		method,
 		headers,
-		body: body === undefined ? undefined : JSON.stringify(body),
+		body: payload,
 	}, BAAS_FETCH_TIMEOUT_MS);
 	if (!response.ok) {
 		const text = await response.text().catch(() => '');
