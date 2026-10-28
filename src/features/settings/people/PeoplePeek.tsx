@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/28 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,18 +22,21 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { Button, IconValueView, Modal } from "@/shared/ui";
+import { useToastStore } from "@osionos/ui/primitives";
 import { isVideoCoverSource } from "@/entities/page/ui/coverMedia";
 import type { Page } from "@notion-db/object-database";
-import type { WorkspaceMemberRole } from "@/store/settings";
 import { useUserStore } from "@/features/auth";
 import { TypedConfirmModal } from "../ui/ConfirmModals";
 import { isWorkspaceOwner } from "../model/workspaceOwnership";
 import { useHovercardsEnabled } from "@/shared/config/useAppearance";
+import { CONTACT_SOURCE } from "./contactsSource";
 import { CONTACT, DIR, GROUP, GUEST, MEMBER, type PeopleSourceKey } from "./peopleModel";
 import {
-  changeMemberRole, connectPerson, messagePerson, removeContact, removeMember, revokeGuest, transferOwnership,
+  changeMemberRole, connectPerson, inviteContact, messagePerson, removeContact, removeMember, revokeGuest, transferOwnership,
 } from "./peopleActions";
+import { AcceptLinkModal, InviteError, InviteRoleSelect, type InviteRole } from "./AcceptLinkModal";
 import { presenceLabel, type PresenceState } from "./peopleSocialModel";
+import { useCanInviteMembers } from "./useCanInviteMembers";
 import { usePersonSocial } from "./usePersonSocial";
 
 interface PeekProps {
@@ -58,7 +61,7 @@ const ConfirmButton: React.FC<{ label: string; busyLabel?: string; onConfirm: ()
   );
 };
 
-const ROLE_CHOICES: Array<Exclude<WorkspaceMemberRole, "owner">> = ["admin", "member", "guest"];
+const ROLE_CHOICES: InviteRole[] = ["admin", "member", "guest"];
 
 export interface PersonSummary {
   id: string;
@@ -170,13 +173,68 @@ export const PeopleHovercard: React.FC<{ person: PersonSummary; children: React.
   );
 };
 
+/** The manual-contact invite (C653): reveal a role picker, send, then the one-time link.
+ *  The bridge is the gate — a refusal (not_connected, already_member…) shows its message
+ *  inline; the accept link exists only now, so it is shown the moment it arrives. */
+const ContactInvite: React.FC<{
+  workspaceId: string;
+  personId: string;
+  name: string;
+  workspaceName: string;
+  /** Only the workspace owner may offer the admin role — same check as transfer below. */
+  canGrantAdmin: boolean;
+  onInvited: () => void;
+}> = ({ workspaceId, personId, name, workspaceName, canGrantAdmin, onInvited }) => {
+  const [picking, setPicking] = useState(false);
+  const [role, setRole] = useState<InviteRole>("member");
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [acceptUrl, setAcceptUrl] = useState<string | null>(null);
+
+  const send = async () => {
+    if (busy) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const invited = await inviteContact(workspaceId, personId, role);
+      useToastStore.getState().push({ kind: "success", title: `Invited ${name} to ${workspaceName}` });
+      if (invited.acceptUrl) setAcceptUrl(invited.acceptUrl);
+      else onInvited(); // a bridge with no link key yet: the toast is the whole success
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not send the invite.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (acceptUrl) return <AcceptLinkModal link={acceptUrl} onClose={onInvited} />;
+  return (
+    <div className="mt-3 space-y-2" data-contact-invite={personId}>
+      {picking ? (<>
+        <label className="block space-y-1 text-sm">
+          <span>Role in {workspaceName}</span>
+          <InviteRoleSelect value={role} onChange={setRole} allowAdmin={canGrantAdmin} disabled={busy} />
+        </label>
+        <div className="flex gap-2">
+          <Button tone="primary" disabled={busy} onClick={() => void send()}>{busy ? "…" : "Send invite"}</Button>
+          <Button disabled={busy} onClick={() => setPicking(false)}>Cancel</Button>
+        </div>
+      </>) : (
+        <Button onClick={() => setPicking(true)}>Invite to workspace</Button>
+      )}
+      {notice && <InviteError message={notice} />}
+    </div>
+  );
+};
+
 export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, connect, onClose, onChanged }) => {
   const props = page.properties;
   const viewerId = useUserStore((state) => state.activeUserId);
-  const isViewerOwner = useUserStore((state) => isWorkspaceOwner(
-    [...(state.activeSession()?.privateWorkspaces ?? []), ...(state.activeSession()?.sharedWorkspaces ?? [])].find((workspace) => workspace._id === workspaceId),
-    viewerId,
-  ));
+  const workspace = useUserStore((state) =>
+    [...(state.activeSession()?.privateWorkspaces ?? []), ...(state.activeSession()?.sharedWorkspaces ?? [])]
+      .find((entry) => entry._id === workspaceId));
+  const isViewerOwner = isWorkspaceOwner(workspace, viewerId);
+  const canInvite = useCanInviteMembers(workspaceId, viewerId);
   const [confirmingTransfer, setConfirmingTransfer] = useState(false);
   const done = (work: Promise<unknown>) => { void work.then(() => onChanged()).finally(() => onClose()); };
 
@@ -186,6 +244,9 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
   const subtitle = String(props[CONTACT.headline] ?? props[DIR.headline] ?? props[GROUP.kind] ?? props[GUEST.role] ?? props[MEMBER.role] ?? "");
 
   const personId = source === "contacts" ? String(props[CONTACT.peer] ?? "") : source === "directory" || source === "members" ? page.id : "";
+  // Only a manual edge is a friendship the invite flow may act on (C653); the bridge
+  // itself refuses everything else, so the colleague case explains instead of offering.
+  const contactSource = String(props[CONTACT_SOURCE] ?? "manual");
   return (
     <Modal open onClose={onClose} size="sm" title={title}>
       <div className="p-6">
@@ -228,6 +289,14 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
             <span className="text-sm text-[var(--osio-fg-muted)]">Your role: {String(props[GROUP.role] ?? "member")}</span>
           )}
         </div>
+
+        {source === "contacts" && canInvite && (contactSource === "manual" ? (
+          <ContactInvite workspaceId={workspaceId} personId={personId} name={title}
+            workspaceName={workspace?.name ?? "your workspace"} canGrantAdmin={isViewerOwner}
+            onInvited={() => { onChanged(); onClose(); }} />
+        ) : (
+          <p className="mt-3 text-sm text-osio-fg-muted">Only people you connected with yourself can be invited.</p>
+        ))}
       </div>
       {confirmingTransfer && (
         <TypedConfirmModal title="Transfer ownership" message={`Type ${title} to make them the owner. You stay on as an admin.`} confirmText={title} danger
