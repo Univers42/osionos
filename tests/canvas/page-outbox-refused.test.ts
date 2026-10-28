@@ -43,7 +43,7 @@ function fakes(fetched: Fetched, created: PageEntry | null): { calls: Call[]; de
   return { calls, deps };
 }
 
-test("publishResultFor: 403 refused, 404 gone, every other status failed", () => {
+test("publishResultFor: 403 refused, 404 gone, 5xx/401/429 failed", () => {
   const table: Array<[number, string]> = [[403, "refused"], [404, "gone"], [500, "failed"], [401, "failed"], [429, "failed"]];
   for (const [status, want] of table) assert.equal(publishResultFor(status), want, `status ${status}`);
 });

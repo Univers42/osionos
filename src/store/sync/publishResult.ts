@@ -17,6 +17,7 @@
  *   "refused"  → 403: the page exists but this viewer may not write it (read-only, revoked).
  *   "gone"     → 404: the page no longer exists server-side; forget it, keep the local copy.
  *   "conflict" → 409: the server's copy moved under the client; merge it and re-send (bounded).
+ *   "rejected" → 413: the page is too large for the edge; re-sending it unchanged never lands.
  *   "failed"   → transient (offline / 5xx / 401 / 429 / no session / a malformed 409);
  *                leave the page pending and retry.
  *
@@ -30,7 +31,7 @@
 import { ApiError } from "@osionos/http-gate";
 import type { Block } from "@/entities/block";
 
-export type PublishResult = "ok" | "refused" | "gone" | "failed" | "conflict";
+export type PublishResult = "ok" | "refused" | "gone" | "failed" | "conflict" | "rejected";
 
 /** The server's copy a 409 carried: the version it is at, and the content it holds. */
 export interface VersionConflict {
@@ -54,6 +55,7 @@ export interface PublishOutcome {
 export function publishResultFor(status: number): PublishResult {
   if (status === 403) return "refused";
   if (status === 404) return "gone";
+  if (status === 413) return "rejected";
   return "failed";
 }
 
