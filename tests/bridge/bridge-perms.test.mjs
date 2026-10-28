@@ -14,7 +14,7 @@
 // SERVICE key. Every route now needs an app session; engine-policy writes need an admin;
 // share rules follow live workspace membership (requireWorkspaceAccess), not the
 // workspace list frozen into the token at login.
-import test from "node:test";
+import test, { describe } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -61,7 +61,7 @@ function memoryRuleStore(seed) {
 function setup({
   isAdmin = false, access = {}, rules = [], people = "missing", secretUnset = false,
   upstreamDown = false, upstreamStatus = 200, serviceApikey = "svc-key", members = [USER],
-  roster = [USER], pageRows = [],
+  roster = [USER], pageRows = [], role,
 } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "perms-"));
   const ruleStore = memoryRuleStore(rules);
@@ -81,7 +81,7 @@ function setup({
       if (request.headers.authorization !== "Bearer good") throw Object.assign(new Error("x"), { status: 401 });
       const granted = access[workspaceId] ?? [];
       if (!granted.includes(permission)) throw Object.assign(new Error("Workspace permission denied."), { status: 403 });
-      return { userId: USER, workspaceId };
+      return { userId: USER, workspaceId, role };
     },
     fetchImpl: async (url, init) => {
       if (String(url).includes("osionos_workspace_members")) return Response.json(members.map((user_id) => ({ user_id })));
@@ -345,7 +345,7 @@ test('page owner who is only a viewer may post a page-scoped rule', async () => 
   const { call } = setup({
     isAdmin: false,
     access: { [WS_A]: ['read'] },
-    pageRows: [{ id: PAGE, owner_id: USER }],
+    pageRows: [{ id: PAGE, owner_id: USER, workspace_id: WS_A }],
   });
   const res = await call('POST', '/api/perms/rules', {
     body: { workspaceId: WS_A, resourceType: 'page', resourceId: PAGE, permission: 'no_access', target: { type: 'user', userId: '99999999-9999-4999-8999-999999999999' } },
@@ -359,12 +359,74 @@ test('a non-owner viewer is refused a page-scoped rule', async () => {
   const { call } = setup({
     isAdmin: false,
     access: { [WS_A]: ['read'] },
-    pageRows: [{ id: PAGE, owner_id: '99999999-9999-4999-8999-999999999999' }],
+    pageRows: [{ id: PAGE, owner_id: '99999999-9999-4999-8999-999999999999', workspace_id: WS_A }],
   });
   const res = await call('POST', '/api/perms/rules', {
     body: { workspaceId: WS_A, resourceType: 'page', resourceId: PAGE, permission: 'no_access', target: { type: 'user', userId: '11111111-2222-3333-4444-555555555555' } },
   });
   assert.equal(res.status, 403, JSON.stringify(res.body));
+});
+
+describe("X1: rules about somebody else's PRIVATE page", () => {
+  const OTHER = "99999999-9999-4999-8999-999999999999";
+  const READER = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
+  const PRIVATE = "77777777-0000-4777-8777-000000000001";
+  const SHARED = "77777777-0000-4777-8777-000000000002";
+  const pageRows = [
+    { id: PRIVATE, owner_id: OTHER, workspace_id: WS_A, visibility: "private" },
+    { id: SHARED, owner_id: OTHER, workspace_id: WS_A, visibility: "shared" },
+  ];
+  const admin = (extra = {}) => setup({ access: { [WS_A]: ["read", "update"] }, role: "admin", pageRows, ...extra });
+  const grant = (resourceId, permission = "can_view", workspaceId = WS_A) => ({
+    workspaceId, resourceType: "page", resourceId, permission, target: { type: "user", userId: READER },
+  });
+
+  test("an admin may not grant on another member's private page, and still may on a shared one", async () => {
+    const { call, storedRules } = admin();
+    assert.equal((await call("POST", "/api/perms/rules", { body: grant(PRIVATE) })).status, 403);
+    assert.equal((await call("POST", "/api/perms/rules", { body: grant(PRIVATE, "no_access") })).status, 403);
+    assert.equal((await call("POST", "/api/perms/rules", { body: grant(SHARED) })).status, 200);
+    assert.equal(storedRules().length, 1);
+  });
+
+  test("an admin may DELETE a grant on it (cleanup), never a deny", async () => {
+    const seed = [
+      { _id: "g1", ...grant(PRIVATE, "can_edit") },
+      { _id: "d1", ...grant(PRIVATE, "no_access") },
+    ];
+    const { call, storedRules } = admin({ rules: seed });
+    assert.equal((await call("DELETE", "/api/perms/rules/d1")).status, 404);
+    assert.equal((await call("DELETE", "/api/perms/rules/g1")).status, 200);
+    assert.deepEqual(storedRules().map((rule) => rule._id), ["d1"]);
+  });
+
+  test("the page owner may still write and delete rules on their own private page", async () => {
+    const own = [{ id: PRIVATE, owner_id: USER, workspace_id: WS_A, visibility: "private" }];
+    const { call, storedRules } = setup({ access: { [WS_A]: ["read"] }, pageRows: own });
+    const saved = await call("POST", "/api/perms/rules", { body: grant(PRIVATE, "can_edit") });
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.equal((await call("DELETE", `/api/perms/rules/${saved.body.rule._id}`)).status, 200);
+    assert.equal(storedRules().length, 0);
+  });
+
+  test("a rule naming a page of another workspace is refused for everyone, owner included", async () => {
+    const elsewhere = [{ id: PRIVATE, owner_id: USER, workspace_id: WS_B, visibility: "shared" }];
+    const { call } = admin({ pageRows: elsewhere });
+    assert.equal((await call("POST", "/api/perms/rules", { body: grant(PRIVATE) })).status, 403);
+  });
+
+  test("a non-v4 hex page id is still checked against its page (X1-C4)", async () => {
+    const legacy = "aaaaaaaa-0000-0000-0000-000000000001";
+    const { call } = admin({ pageRows: [{ id: legacy, owner_id: OTHER, workspace_id: WS_A, visibility: "private" }] });
+    assert.equal((await call("POST", "/api/perms/rules", { body: grant(legacy) })).status, 403);
+  });
+
+  test("an owner who left the workspace may no longer write rules about their page (C557)", async () => {
+    const own = [{ id: PRIVATE, owner_id: USER, workspace_id: WS_A, visibility: "private" }];
+    const { call, storedRules } = setup({ access: {}, pageRows: own });
+    assert.equal((await call("POST", "/api/perms/rules", { body: grant(PRIVATE) })).status, 403);
+    assert.equal(storedRules().length, 0);
+  });
 });
 
 test("sharing records one 'share' event for the caller, after a stored rule, and none for a refused write", async () => {
