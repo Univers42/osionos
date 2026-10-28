@@ -18,6 +18,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { URL } from 'node:url';
 
 import { createCollabHandler } from '../../scripts/bridge-collab.mjs';
 
@@ -27,7 +28,7 @@ const ADMIN = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
 const EDITOR = 'cccccccc-3333-4333-8333-cccccccccccc';
 const TARGET = 'dddddddd-4444-4444-8444-dddddddddddd';
 const INVITE_ID = '99999999-9999-4999-8999-999999999999';
-const CONFIG = { allowedOrigin: '*', baasUrl: 'http://baas.test', serviceKey: 'service-key' };
+const CONFIG = { allowedOrigin: '*', appUrl: 'https://app.test', baasUrl: 'http://baas.test', serviceKey: 'service-key' };
 
 function fakeResponse() {
   const written = { status: 0, body: null };
@@ -38,8 +39,8 @@ function fakeResponse() {
   };
 }
 
-function inviteRequest() {
-  const json = JSON.stringify({ userId: TARGET });
+function inviteRequest(role) {
+  const json = JSON.stringify({ userId: TARGET, ...(role === undefined ? {} : { role }) });
   return {
     method: 'POST',
     headers: { authorization: 'Bearer app-session', 'content-type': 'application/json' },
@@ -106,12 +107,12 @@ function handlerWith({ fetchImpl, userId }) {
   });
 }
 
-async function invite(backendOptions, userId) {
+async function invite(backendOptions, userId, role) {
   const baas = backend(backendOptions);
   const response = fakeResponse();
   const handled = await handlerWith({ fetchImpl: baas.fetchImpl, userId })(
     new URL(`http://h/api/collaboration/${SPACE}/invite`),
-    inviteRequest(),
+    inviteRequest(role),
     response,
     CONFIG,
   );
@@ -160,4 +161,30 @@ describe('collab invite is consent-only (T4 / C513)', () => {
     assert.equal(posts(calls, 'osionos_workspace_invites').length, 0);
     assert.equal(posts(calls, 'osionos_workspace_members').length, 0);
   });
+
+  it('maps an explicit member role to editor and returns the invite answer link', async () => {
+    const { response, calls } = await invite({}, OWNER, 'member');
+    assert.equal(response.status, 200);
+    assert.equal(response.body.role, 'editor');
+    assert.equal(response.body.invite.id, INVITE_ID);
+    assert.equal(response.body.invite.role, 'member');
+    assert.match(response.body.acceptUrl, /^https:\/\/app\.test\/\?invite=[A-Za-z0-9_-]{43}$/);
+    assert.equal(posts(calls, 'osionos_workspace_invites')[0].body.role, 'editor');
+  });
+
+  it('refuses an admin invite from a workspace admin', async () => {
+    const members = [{ workspace_id: SPACE, user_id: ADMIN, role: 'admin', permissions: ['admin'] }];
+    const { response, calls } = await invite({ members }, ADMIN, 'admin');
+    assert.equal(response.status, 403);
+    assert.equal(posts(calls, 'osionos_workspace_invites').length, 0);
+  });
+
+  for (const role of ['owner', 'x']) {
+    it(`refuses the unknown ${role} role with 422`, async () => {
+      const { response, calls } = await invite({}, OWNER, role);
+      assert.equal(response.status, 422);
+      assert.equal(response.body.message, 'role must be admin|member|guest.');
+      assert.equal(posts(calls, 'osionos_workspace_invites').length, 0);
+    });
+  }
 });
