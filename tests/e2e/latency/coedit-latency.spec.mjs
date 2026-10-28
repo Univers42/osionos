@@ -25,6 +25,7 @@ import { expect, test } from "@playwright/test";
 import { analyse, analysePairs } from "./latencyStats.mjs";
 import {
   BLOCK,
+  visibleBlocks,
   bridgeSession,
   env,
   intEnv,
@@ -50,7 +51,7 @@ const missing = ["COEDIT_OWNER_EMAIL", "COEDIT_OWNER_PASSWORD", "COEDIT_MEMBER_E
 async function startObserving(page) {
   await page.evaluate((selector) => {
     const samples = [];
-    const read = () => document.querySelector(selector)?.textContent?.length ?? 0;
+    const read = () => Array.from(document.querySelectorAll(selector)).find((block) => block.checkVisibility())?.textContent?.length ?? 0;
     let last = read();
     const now = () => performance.timeOrigin + performance.now();
     globalThis.__coeditSamples = samples;
@@ -87,9 +88,10 @@ test("owner types, member observes: loss, p50, p95 and per-hop latency", async (
   try {
     const posts = watchEventPosts(owner.page);
     await startObserving(member.page);
-    await startKeyLog(owner.page);
-    await owner.page.locator(BLOCK).first().click();
+    await visibleBlocks(owner.page).first().click();
     await owner.page.keyboard.press("Control+End");
+    // After the caret move: its two keydowns would shift every key-to-DOM pair by two keys.
+    await startKeyLog(owner.page);
 
     for (let index = 0; index < CHARS; index += 1) {
       await owner.page.keyboard.press(String.fromCharCode(97 + (index % 26)));
@@ -151,7 +153,7 @@ test("N peers: presence, then all-pairs key-to-DOM", async ({ browser, baseURL }
       timeToPresenceMs: Object.fromEntries(presenceResults.map((result) => [result.label, result.ms])),
     };
 
-    const initialCounts = await Promise.all(userPages.map((user) => user.page.locator(BLOCK).count()));
+    const initialCounts = await Promise.all(userPages.map((user) => visibleBlocks(user.page).count()));
     const initialMax = Math.max(...initialCounts);
     await appendBlocks(userPages[0].page, users.length);
     const totalBlocks = await waitForBlockCounts(userPages.map((user) => user.page), initialMax + users.length);
@@ -163,7 +165,7 @@ test("N peers: presence, then all-pairs key-to-DOM", async ({ browser, baseURL }
       await startKeyLog(user.page);
     }));
     await Promise.all(userPages.map(async (user) => {
-      await user.page.locator(BLOCK).nth(user.blockIndex).click();
+      await visibleBlocks(user.page).nth(user.blockIndex).click();
     }));
 
     await Promise.all(userPages.map(async (user) => {
