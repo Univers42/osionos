@@ -112,6 +112,13 @@ export function resolveWorkspaceConfig(config?: WorkspaceConfig): WorkspaceConfi
   };
 }
 
+// Writers start from what was stored, never from resolveWorkspaceConfig: storing
+// its filled-in defaults turned every workspace's header icon into 🌏 on any
+// settings save (2026-10-28).
+export function storedWorkspaceConfig(config?: WorkspaceConfig): WorkspaceConfig {
+  return { channels: [], ...config };
+}
+
 /**
  * Workspace channel types the bridge has a kind for. Everything else (thread,
  * forum, stage, archive, agent) is a text channel there — its createChannel
@@ -162,7 +169,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
       getConfig: (userId, workspaceId) => resolveWorkspaceConfig(get().configs[workspaceConfigKey(userId, workspaceId)]),
       addChannel: async (userId, workspaceId, name = 'new-channel', type = 'text', parentChannelId = null) => {
         const key = workspaceConfigKey(userId, workspaceId);
-        const current = resolveWorkspaceConfig(get().configs[key]);
+        const current = storedWorkspaceConfig(get().configs[key]);
         const now = new Date().toISOString();
         const channel: WorkspaceChannel = {
           id: await bridgeChannelId(workspaceId, name, type),
@@ -184,7 +191,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
       },
       updateChannel: async (userId, workspaceId, channelId, updates) => {
         const key = workspaceConfigKey(userId, workspaceId);
-        const current = resolveWorkspaceConfig(get().configs[key]);
+        const current = storedWorkspaceConfig(get().configs[key]);
         const nextConfig = {
           ...current,
           channels: current.channels.map((channel) => channel.id === channelId
@@ -195,7 +202,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
       },
       updateSettings: async (userId, workspaceId, updates) => {
         const key = workspaceConfigKey(userId, workspaceId);
-        const current = resolveWorkspaceConfig(get().configs[key]);
+        const current = storedWorkspaceConfig(get().configs[key]);
         const nextConfig: WorkspaceConfig = {
           ...current,
           ...updates,
@@ -206,7 +213,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
       },
       resetSettings: async (userId, workspaceId, defaults = {}) => {
         const key = workspaceConfigKey(userId, workspaceId);
-        const current = resolveWorkspaceConfig(get().configs[key]);
+        const current = storedWorkspaceConfig(get().configs[key]);
         const nextConfig = {
           ...current,
           name: defaults.name,
@@ -219,7 +226,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
       },
       clearAppearance: async (userId, workspaceId) => {
         const key = workspaceConfigKey(userId, workspaceId);
-        const current = resolveWorkspaceConfig(get().configs[key]);
+        const current = storedWorkspaceConfig(get().configs[key]);
         const nextConfig = { ...current, appearance: null };
         set((state) => ({ configs: { ...state.configs, [key]: nextConfig } }));
       },

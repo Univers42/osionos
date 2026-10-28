@@ -107,7 +107,7 @@ export function defaultWorkspaceSettings(workspaceId: string, name?: string): Wo
   return {
     workspaceId,
     name: name ?? 'Workspace',
-    icon: '🌏',
+    icon: undefined,
     landingPageId: null,
     sidebar: { newSidebar: true, showApps: true },
     analytics: { pageViews: true },
