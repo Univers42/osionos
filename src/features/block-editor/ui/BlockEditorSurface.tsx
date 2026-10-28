@@ -48,7 +48,7 @@ import { VariableMenu } from "@/features/variables/ui/VariableMenu";
 import { PasteLinkMenu } from "./PasteLinkMenu";
 import { EmojiPicker } from "@/shared/ui";
 import { ColorMenu } from "./ColorMenu";
-import { getBlockSurfaceStyle } from "../model/blockColors";
+import { getBlockSurfaceClass, getBlockSurfaceStyle, resolveBlockTint } from "../model/blockColors";
 import { appendBlockToColumn, insertColumnForTarget } from "../model/columnLayout";
 import { insertBlockRelative } from "../model/blockContextMenu.helpers";
 import { VIRTUAL_BLOCK_FOCUS_EVENT } from "../model/blockDomFocus";
@@ -911,7 +911,8 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 							// command opens the picker. Same picker + handler; mode picks the target field.
 							if (item.id === "inline:color" || item.id === "inline:background") {
 								const mode = item.id === "inline:background" ? "background" : "text";
-								const color = resolveColorName(parseSlashQuery(trigger?.filter ?? "").arg);
+								const arg = parseSlashQuery(trigger?.filter ?? "").arg;
+								const color = (mode === "background" && resolveBlockTint(arg)) || resolveColorName(arg);
 								handleSlashInlineSelect("", currentBlocks);
 								if (color && trigger) {
 									handleColorSelect(color, trigger.blockId, mode);
@@ -1810,7 +1811,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	}, [block.children, block.id, block.type, bulletDepth, draggedBlockId, focusBlock, isHighlighted, moveBlock, moveBlockAcrossTree, numberedDepth, onBeforeStructuralEdit, onChange, onContextMenu, onDeleteBlock, onKeyDown, onPaste, onRequestSlashMenu, onUpdateBlock, pageId, registerRef, renderBlockEditor, rootBlocks, selectedBlockIds, setDraggedBlockId, source, sourceKey, updateContent]);
 
 	return (
-		<div data-block-id={block.id} data-block-type={block.type} data-page-id={pageId} ref={refCb} onKeyDown={handleVoidNavKey} className="-mx-1 rounded-md px-1 focus:outline-none focus:ring-1 focus:ring-[var(--osio-accent)]" style={getBlockSurfaceStyle(block)}>
+		<div data-block-id={block.id} data-block-type={block.type} data-page-id={pageId} ref={refCb} onKeyDown={handleVoidNavKey} className={`${getBlockSurfaceClass(block) || "-mx-1 rounded-md px-1"} focus:outline-none focus:ring-1 focus:ring-[var(--osio-accent)]`} style={getBlockSurfaceStyle(block)}>
 			{renderBlockEditor({
 				pageId,
 				block: editorBlock,

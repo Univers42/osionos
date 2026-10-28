@@ -76,6 +76,15 @@ $surface-map: (
   }
 }
 
+// A text block with a background colour sits on the column edges with its text
+// inset, instead of a tight strip behind the glyphs. The corner stays small: a
+// tint is a highlight on the text, not a card.
+.osio-tint-panel {
+  margin-inline: 0;
+  padding: var(--spacing) calc(var(--spacing) * 2);
+  border-radius: var(--osio-radius-xs);
+}
+
 [data-s-border="none"] {
   border: 0;
 }

@@ -56,6 +56,10 @@ import { BindingSourcesProvider } from "@/features/bindings/ui/BindingSourcesPro
 
 type UserSessions = Record<string, UserSession>;
 
+const LazyNoAccessScreen = React.lazy(() =>
+  import("@/features/page-link/NoAccessScreen").then((module) => ({ default: module.NoAccessScreen })),
+);
+
 function ensureBridgeWorkspacePages(session: UserSession | null | undefined) {
   const workspaceIds = [
     ...(session?.privateWorkspaces ?? []),
@@ -171,6 +175,8 @@ const App: React.FC = () => {
   // so a refresh can reopen the page the user was last on.
   const [persistedActivePage] = useState(() => loadActivePage());
   const seeded = usePageStore((s) => s.seeded);
+  const deniedPage = usePageStore((s) => s.deniedPage);
+  const deniedPageId = deniedPage?.pageId ?? null;
   const ready = initialized;
 
   // Persist pages to the BaaS (source of truth) with hydrate-on-load + offline outbox;
@@ -348,9 +354,16 @@ const App: React.FC = () => {
             onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
           />
 
-          {/* Content area — the unified workbench (grid + dock + status bar). */}
+          {/* Content area — the unified workbench (grid + dock + status bar), or the
+              no-access screen when a shared link pointed at an unreadable page. */}
           <main className="flex-1 flex min-w-0 overflow-hidden relative">
-            <LazyWorkbench />
+            {deniedPageId ? (
+              <React.Suspense fallback={null}>
+                <LazyNoAccessScreen />
+              </React.Suspense>
+            ) : (
+              <LazyWorkbench />
+            )}
           </main>
         </div>
 
