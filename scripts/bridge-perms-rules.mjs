@@ -19,6 +19,12 @@
  * row ↔ API mapping (toApiRule) keeps the shape the Share dialog already reads. Failures are
  * generic: a missing table — normal on a machine restored from an older snapshot — and refused
  * credentials are 503 with a server log line, anything else 502.
+ *
+ * The READ route no longer answers `list` raw (G1b): bridge-perms.mjs decides each page's
+ * level with the shared page-access loader before a rule leaves the bridge, answers the page
+ * routes' 404 for a page the caller cannot see, and adds the `inherited` rows on request.
+ * `list` stays as the storage read the route filters (wide rules and, for the workspace
+ * owner/admin, the non-page types); it is not itself an authorization answer.
  */
 
 import { httpError } from './bridge-social-core.mjs';

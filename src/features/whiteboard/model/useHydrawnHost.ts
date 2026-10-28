@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, type RefObject } from "react";
 
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { whiteboardAppUrl } from "@/shared/config/whiteboardApp";
@@ -19,21 +19,15 @@ export function isWhiteboardFrameUrl(url: string): boolean {
   return origin !== "" && originOf(url) === origin;
 }
 
-/** Answers the hydrawn frame in `frameRef` while it shows `url`: its token requests, and
- *  the board it reports creating (`onBoardCreated`). Inert for any other frame. */
-export function useHydrawnHost(frameRef: RefObject<HTMLIFrameElement | null>, url: string, onBoardCreated?: (slug: string) => void): void {
-  const onCreated = useRef(onBoardCreated);
-  useEffect(() => {
-    onCreated.current = onBoardCreated;
-  }, [onBoardCreated]);
-
+/** Answers the token requests of the hydrawn frame in `frameRef` while it shows `url`.
+ *  Inert for any other frame. */
+export function useHydrawnHost(frameRef: RefObject<HTMLIFrameElement | null>, url: string): void {
   useEffect(() => {
     if (!isWhiteboardFrameUrl(url)) return;
     const origin = originOf(url);
     const onMessage = (event: MessageEvent) => {
       const frame = frameRef.current?.contentWindow ?? null;
       const message = readHydrawnMessage(event, frame, origin);
-      if (message?.kind === "board-created") onCreated.current?.(message.slug);
       if (message?.kind !== "token-request") return;
       void whiteboardToken().then((minted) => {
         if (minted) frame?.postMessage({ type: TOKEN_REPLY, token: minted.token, exp: minted.exp }, origin);
