@@ -20,6 +20,7 @@ export * from './useNotificationSettingsStore';
 export * from './useConnectionsStore';
 export * from './useWorkspaceSettingsStore';
 export * from './useWorkspaceMembersStore';
+export * from './useWorkspaceMemberAttributesStore';
 export * from './useWorkspaceInvitesStore';
 export * from './useImportHistoryStore';
 export * from './useBillingStore';

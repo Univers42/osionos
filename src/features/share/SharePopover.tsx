@@ -134,7 +134,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
   }, [centered]);
 
   const generalEntries = model.entries.filter((entry) => entry.target.type === 'workspace' || entry.target.type === 'public');
-  const peopleEntries = model.entries.filter((entry) => entry.target.type === 'user' || entry.target.type === 'role' || entry.target.type === 'team');
+  const peopleEntries = model.entries.filter((entry) => entry.target.type === 'user' || entry.target.type === 'role' || entry.target.type === 'team' || entry.target.type === 'attribute');
 
   // The ancestor page a rule is set on is where it is edited: open that page and step aside.
   const openInheritedSource = useCallback((row: InheritedShareRow) => {
@@ -184,6 +184,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
           disabled={model.busy || model.loading}
           onPick={(person) => { void model.setLevel({ type: 'user', person }, 'can_view'); }}
           onPickTeam={(team) => { void model.setLevel({ type: 'team', team }, 'can_view'); }}
+          onPickAttribute={(name, value) => { void model.setLevel({ type: 'attribute', name, value }, 'can_view'); }}
         />
       </div>
 
