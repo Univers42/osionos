@@ -125,7 +125,7 @@ export const LinkBlockEditor: React.FC<LinkBlockEditorProps> = ({ block, onKeyDo
       tabIndex={-1}
       aria-label={`${kind === "embed" ? "Embed" : "Bookmark"} block`}
       data-testid="link-block-editor"
-      className="group/link relative my-1"
+      className="group/link relative"
     >
       {body}
       {hasLink && actions.resolvingUrl === null ? (

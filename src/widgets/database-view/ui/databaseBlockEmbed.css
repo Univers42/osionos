@@ -67,12 +67,12 @@
 /* Invisible at rest, the toolbar still reserved its ~350px in flow: on live
  * "Citas · cubo de actividad" got 291 of 676px and truncated (measured
  * 2026-10-26). Out of flow, the title owns the row; on reveal the toolbar
- * floats over the row's right end, left of the collapse button (2rem + gap)
- * and the row's 1rem padding. */
+ * floats over the row's right end, left of the collapse button (2rem + gap);
+ * inline, the row has no side padding (below). */
 .osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row .odb-topbar-actions {
   position: absolute;
   inset-block: 0;
-  right: 3.125rem;
+  right: 2.125rem;
   padding-left: 1.5rem;
   background: linear-gradient(to right, transparent, var(--color-surface-primary) 1.5rem);
 }
@@ -146,4 +146,17 @@
   .osionos-database-block--inline .osionos-object-database-single-view .odb-filter-bar {
     transition: none;
   }
+}
+
+/* The title and the view tabs start on the text edge, like a heading: the
+ * package's px-4 / py-2 put "Products" 16px right of and 8px below the
+ * paragraph beside it in a column (measured 2026-10-28). The tabs row has no
+ * class of its own in the package, so it is found by its tab list. */
+.osionos-database-block--inline .osionos-object-database-single-view .odb-topbar-row {
+  padding-inline: 0;
+  padding-top: 0;
+}
+
+.osionos-database-block--inline .osionos-object-database-single-view .odb-topbar > :has(> .odb-view-tabs) {
+  padding-inline: 0;
 }

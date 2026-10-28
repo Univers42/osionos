@@ -33,6 +33,7 @@ import {
 // Side effect: registers the data-source catalog (Source picker) — lazyViews
 // imports this file directly, bypassing the barrel's registration.
 import "../model/dataSourceProvider";
+import { databaseShellClass } from "../model/databaseShellClass";
 
 interface WorkspaceDatabaseBlockProps {
   databaseId: string;
@@ -145,10 +146,7 @@ export const WorkspaceDatabaseBlock: React.FC<WorkspaceDatabaseBlockProps> = ({
   );
   return (
     <div
-      className={[
-        "osionos-database-block w-full min-w-0",
-        mode === "full" ? "osionos-database-block--full h-full min-h-0 overflow-hidden" : "osionos-database-block--inline my-2 overflow-auto",
-      ].join(" ")}
+      className={databaseShellClass(mode)}
       data-database-id={databaseId}
       data-database-view-id={initialViewId}
     >
