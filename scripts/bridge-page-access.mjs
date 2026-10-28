@@ -100,8 +100,11 @@ function privatePageDecision(row, userId, ownerNearest, nearest) {
  * The ancestor chain of one page, page first, root last. Returns null (fail closed)
  * when a parent cannot be proven to exist in the map, when a cycle is met, or when
  * the chain is longer than MAX_ANCESTOR_DEPTH.
+ *
+ * Exported so the share-rule read answers `inherited` from the SAME walk the decision
+ * uses (C608): a second copy could disagree with decidePageAccess on a broken chain.
  */
-function ancestorChain(pageId, parentOf) {
+export function ancestorChain(pageId, parentOf) {
 	if (!(parentOf instanceof Map) || !parentOf.has(pageId)) return null;
 	const chain = [];
 	const seen = new Set();
@@ -181,6 +184,46 @@ function decidePageAccess({ row, userId, member = null, rulesByPage = new Map(),
 	if (nearest !== null) return { level: nearest, fromRule: true };
 	// No matching rule anywhere: today's visibility rule decides.
 	return { level: canReadPageRow(row, userId) ? 'can_view' : NONE, fromRule: false };
+}
+
+/**
+ * Whether a rule on `ancestorId` structurally reaches `row` (C609). This is the ONE
+ * helper both the inherited read and the property test use; it never re-implements the
+ * owner-run walk.
+ *
+ * A deny always reaches. A grant reaches when the page is not private, or when the
+ * ancestor sits in the page's unbroken run of same-owner private ancestors. A can_view or
+ * can_comment grant reaches a private page from any ancestor: privatePageDecision gives a
+ * collaborator the nearest such grant, so only a foreign can_edit/full_access is ignored.
+ * `path` is the run from the page's parent down to the ancestor (inclusive), and
+ * `pageMeta` is the loader's id → { owner_id, visibility } map; a missing entry ends it.
+ *
+ * Caveat: structural only — ignores target exemptions (page owner, workspace owner/admin,
+ * non-member), shadowing by a nearer grant, and a foreign can_view that leaves a
+ * collaborator's can_view as it was; it over-reports, the safe direction. It is
+ * not "grants X access": a role or team target may match nobody, and a cheaper nearer
+ * grant wins. For a specific person's effective level, call decidePageAccess with that
+ * person's membership and teams.
+ *
+ * @param {object} input
+ * @param {{ permission?: string }} [input.rule] the stored rule
+ * @param {object|null} [input.row] the target page row
+ * @param {string} [input.ancestorId] the page the rule is written on
+ * @param {string[]} [input.path] parent … ancestor, lower-case page ids
+ * @param {Map<string, { owner_id?: unknown, visibility?: unknown }> | null} [input.pageMeta]
+ * @returns {boolean}
+ */
+export function ruleReachesPage({ rule, row, ancestorId, path = [], pageMeta = null } = {}) {
+	const permission = rule?.permission;
+	if (!SHARE_LEVELS.includes(permission)) return false;
+	if (permission === 'no_access') return true;
+	if (pageVisibility(row?.visibility) !== 'private') return true;
+	if (levelRank(permission) < levelRank('can_edit')) return true;
+	const pageId = idOf(row?.id);
+	// The page's own rule is chain index 0: the owner run has not started yet.
+	if (!pageId || idOf(ancestorId) === pageId) return true;
+	if (!(pageMeta instanceof Map) || path.length === 0) return false;
+	return path.every((id) => ownerControls(pageMeta.get(idOf(id)), row));
 }
 
 /**

@@ -1037,7 +1037,7 @@ async function ownerAwareMemberRow(authContext, workspaceId, config, fetchImpl) 
  * hide a page through inheritance, so it skips the ~1 MB id → parent read entirely. A
  * broken rules read is a 503; a broken parent read (when needed) is a 503 too.
  */
-async function pageAccessEntry(authContext, workspaceId, config, fetchImpl, memberFor = null) {
+async function pageAccessEntry(authContext, workspaceId, config, fetchImpl, memberFor = null, { forceMeta = false } = {}) {
 	const store = createShareRuleStore({ fetchImpl });
 	// memberFor: a request that already reads the caller's membership (collab events) hands
 	// it in so it is read once; it already applies the workspace-owner fallback below.
@@ -1051,7 +1051,9 @@ async function pageAccessEntry(authContext, workspaceId, config, fetchImpl, memb
 	// No rule: the ancestor chain cannot change any answer, and parentOf/pageMeta stay null.
 	// pageMeta only decides how far a GRANT reaches (X1), so a deny-only workspace skips its
 	// two columns: +72% payload on the largest live workspace (8735 pages, 2026-10-28).
-	const withMeta = allRules.some((rule) => rule?.permission !== 'no_access');
+	// The inherited rule read asks for it anyway (C604): a deny-only workspace still answers
+	// `reaches`, which needs each ancestor's owner and visibility.
+	const withMeta = forceMeta || allRules.some((rule) => rule?.permission !== 'no_access');
 	const { parentOf, pageMeta } = rulesByPage.size > 0
 		? await parentMapForWorkspace(workspaceId, config, fetchImpl, withMeta)
 		: { parentOf: null, pageMeta: null };
@@ -1063,20 +1065,22 @@ async function pageAccessEntry(authContext, workspaceId, config, fetchImpl, memb
  * The per-request loader: at most ONE rules read and ONE parent read per workspace, shared
  * by every row of that workspace in this request (C511). It caches by workspace id only for
  * the life of the request; nothing crosses requests.
+ * `forceMeta` is for the share-rule read's `inherited` answer (C604): it needs each
+ * ancestor's owner/visibility even in a workspace whose rules are all denies.
  */
-function createPageAccessLoader(authContext, config, fetchImpl, memberFor = null) {
+export function createPageAccessLoader(authContext, config, fetchImpl, memberFor = null, { forceMeta = false } = {}) {
 	const entries = new Map();
 	return {
 		entryFor(workspaceId) {
 			const key = String(workspaceId).toLowerCase();
-			if (!entries.has(key)) entries.set(key, pageAccessEntry(authContext, key, config, fetchImpl, memberFor));
+			if (!entries.has(key)) entries.set(key, pageAccessEntry(authContext, key, config, fetchImpl, memberFor, { forceMeta }));
 			return entries.get(key);
 		},
 	};
 }
 
 /** The level of one row under an already-loaded access map. */
-function pageLevelFor(entry, row, userId) {
+export function pageLevelFor(entry, row, userId) {
 	if (!entry) return 'none';
 	return pageAccessLevel({
 		row, userId, member: entry.member,
@@ -5230,7 +5234,7 @@ export function createBridgeServer(options = {}) {
 	const social = options.social ?? {
 		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, pageAccessFilter }),
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl }),
+		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl, createPageAccessLoader, pageLevelFor }),
 		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
