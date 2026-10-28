@@ -127,12 +127,33 @@ function summaryOf(row) {
 		slug: row.slug,
 		title: row.title,
 		elementCount: Number(row.element_count ?? 0),
-		bounds: null,
+		bounds: row.bounds ?? null,
 		rev: Number(row.rev ?? 0),
 		createdAt: String(row.created_at),
 		updatedAt: String(row.updated_at),
 		thumbnailAt: row.thumbnail_at ?? null,
 	};
+}
+
+/**
+ * hydrawn's sceneBounds (packages/contract/src/bounds.ts), denormalised on save as its own API
+ * does, so the gallery can frame a board without reading its scene.
+ * Caveat: an element whose x, y, width or height is not a finite number is left out rather than
+ * refused, so a malformed element can make the extent smaller than what the engine draws.
+ */
+function sceneBounds(elements) {
+	let bounds = null;
+	for (const { x, y, width, height, isDeleted } of elements) {
+		if (isDeleted || ![x, y, width, height].every(Number.isFinite)) continue;
+		const minX = width < 0 ? x + width : x;
+		const minY = height < 0 ? y + height : y;
+		const maxX = minX + Math.abs(width);
+		const maxY = minY + Math.abs(height);
+		bounds = bounds === null
+			? { minX, minY, maxX, maxY }
+			: { minX: Math.min(bounds.minX, minX), minY: Math.min(bounds.minY, minY), maxX: Math.max(bounds.maxX, maxX), maxY: Math.max(bounds.maxY, maxY) };
+	}
+	return bounds;
 }
 
 function sceneOf(row, withTombstones) {
@@ -211,7 +232,7 @@ function createRoutes(store) {
 			throw fail(422, 'shrink_refused', 'This save would drop most of the board; it was not stored.');
 		}
 		const elementCount = scene.elements.filter((element) => !element.isDeleted).length;
-		const patch = { scene: JSON.stringify(scene), element_count: elementCount, entry_count: entries, rev: rev + 1, ...(title ? { title } : {}) };
+		const patch = { scene: JSON.stringify(scene), element_count: elementCount, entry_count: entries, bounds: sceneBounds(scene.elements), rev: rev + 1, ...(title ? { title } : {}) };
 		const saved = await store.patchBoardAt(ctx.userId, row.id, rev, patch);
 		const board = { ...summaryOf({ ...row, ...saved, ...patch }), scene: sceneOf({ scene: patch.scene }, true) };
 		return reply(ctx.response, 200, board, ctx.cors, { etag: `"${board.rev}"` });
