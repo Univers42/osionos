@@ -73,6 +73,8 @@ describe('C600 a non-connected invitee', () => {
 			['bridge-friendship.mjs', 1], // the definition
 			['bridge-workspace-invites.mjs', 3], // saveInviteForAccount, resendInvite, acceptInvite
 			['bridge-collab.mjs', 2], // joinCollaboration, decideJoinRequest
+			['bridge-page-access-requests.mjs', 1], // create: block either way
+			['bridge-page-access-request-decisions.mjs', 1], // decide: block either way
 		]);
 		const scripts = join(APP_ROOT, 'scripts');
 		for (const file of readdirSync(scripts).filter((name) => name.endsWith('.mjs'))) {

@@ -223,6 +223,25 @@ export function createPermsHandler({
 	};
 }
 
+/**
+ * The ONE write sequence for a share rule: rebuild it from known fields, ask mayChangeRule
+ * whether this caller may write it about that page, then upsert. POST /api/perms/rules and
+ * an approved page access request both call this — a second copy could authorize one entry
+ * point differently from the other. `gate` reads the caller's workspace verdict (null when
+ * the workspace gate refused), `isMember` proves a page owner still belongs to the workspace.
+ */
+export async function writeShareRule(ctx, input, { fetchImpl, ruleStore, gate, isMember }) {
+	const rule = normalizeShareRule(input);
+	const workspace = await gate(rule);
+	const allowed = await mayChangeRule(ctx, rule, {
+		fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace), action: 'create',
+		isMember: () => isMember(rule, workspace),
+	});
+	if (!allowed) throw httpError('You cannot change that rule.', 403);
+	const saved = await ruleStore.upsert(ctx.requestConfig, rule);
+	return { saved, workspace };
+}
+
 const ENGINE_READ_TAILS = new Set(['people', 'roles', 'policies', 'bundle']);
 
 /** G6 F6: the roster/engine reads and decide answer with the bridge's service identity,
@@ -461,21 +480,18 @@ function createRuleRoutes({
 			}
 		}
 		if (method === 'POST' && tail === 'rules') {
-			const rule = normalizeShareRule(await readJsonBody(ctx.request));
 			// A page owner may change the rules about their own page even when the
 			// workspace membership alone would not (an owner who is only a viewer there);
 			// a workspace-wide rule still needs the workspace owner/admin. The workspace
 			// gate is therefore consulted but never allowed to throw before mayChangeRule
 			// has had its say — mirrors DELETE below.
-			const workspace = await access(ctx, rule.workspace_id, 'update').then((w) => w, () => null);
-			const allowed = await mayChangeRule(ctx, rule, {
-				fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace), action: 'create',
-				isMember: () => isMemberOf(ctx, rule.workspace_id, workspace),
+			const { saved, workspace } = await writeShareRule(ctx, await readJsonBody(ctx.request), {
+				fetchImpl, ruleStore,
+				gate: (rule) => access(ctx, rule.workspace_id, 'update').then((w) => w, () => null),
+				isMember: (rule, updateGate) => isMemberOf(ctx, rule.workspace_id, updateGate),
 			});
-			if (!allowed) return fail(response, 403);
-			const saved = await ruleStore.upsert(requestConfig, rule);
 			reply(response, 200, { rule: saved });
-			if (workspace) requestConfig.activity?.emit({ userId: workspace.userId }, 'share', 'editor', rule.workspace_id);
+			if (workspace) requestConfig.activity?.emit({ userId: workspace.userId }, 'share', 'editor', saved.workspaceId);
 			return true;
 		}
 		if (method === 'DELETE' && tail.startsWith('rules/')) return deleteRule(ctx, decodeURIComponent(tail.slice('rules/'.length)));
