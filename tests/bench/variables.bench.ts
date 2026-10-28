@@ -26,6 +26,16 @@ import { defineBench } from "./harness.ts";
 // 47.4 / 52.7 µs. Building an Intl.DateTimeFormat costs 44.8 µs against 0.77 µs to
 // format with a cached one, which is why variableFormat.ts caches them.
 //
+// Budgets are 1.5-2x the worst CI p95 of runs 40736824386 and 40749370032, not this
+// host's: the runner is 2-5x slower per case, the scan the most. Budgets of 3x the host p95
+// failed CI on 2026-10-28 (scan p95 18.87 µs over 15 µs) with no code change. What they
+// guard: lowercasing every title before the surface check made the scan 4-5x slower here
+// (p95 29.5-36.4 µs against 7.4), and a formatter rebuilt per chip costs ~60x a cached one
+// (the Intl reference rows), 50 times in the dense block.
+//
+// Caveat: on this host the lowercasing mutant sits at the 30 µs scan budget and can pass;
+// CI is the gate. On its ~2.5x slower runner that mutant is estimated at 70-90 µs, not run.
+//
 // Caveat: no React and no DOM here; the chip's share of a real keystroke is in
 // tests/e2e/perf/typing.spec.mjs, which these numbers only explain.
 
@@ -65,7 +75,7 @@ const BLOCK_EXPRESSIONS = Array.from({ length: 50 }, (_, i) => ["NOW", "CLIENT",
 export const bench = defineBench("variables", [
   {
     name: "resolve {{NOW}} (built-in, cached formatter)",
-    budgetNs: 4_000,
+    budgetNs: 6_000,
     setup: () => {
       const s = scope();
       return () => resolveVariable("NOW", s);
@@ -73,7 +83,7 @@ export const bench = defineBench("variables", [
   },
   {
     name: "resolve {{DUE | date:\"EEE d MMM\"}} (date-fns pattern)",
-    budgetNs: 7_000,
+    budgetNs: 12_000,
     setup: () => {
       const s = scope();
       return () => resolveVariable("DUE | date:\"EEE d MMM\"", s);
@@ -81,7 +91,7 @@ export const bench = defineBench("variables", [
   },
   {
     name: "resolve {{GREETING}} (two nested variables)",
-    budgetNs: 22_000,
+    budgetNs: 40_000,
     setup: () => {
       const s = scope();
       return () => resolveVariable("GREETING", s);
@@ -89,7 +99,7 @@ export const bench = defineBench("variables", [
   },
   {
     name: "resolve 50 chips (one dense block)",
-    budgetNs: 250_000,
+    budgetNs: 500_000,
     setup: () => {
       const s = scope();
       return () => BLOCK_EXPRESSIONS.map((expr) => resolveVariable(expr, s));
@@ -97,12 +107,12 @@ export const bench = defineBench("variables", [
   },
   {
     name: "scan a 2,001-page workspace for env.json files",
-    budgetNs: 15_000,
+    budgetNs: 30_000,
     setup: () => () => PAGES.filter(isEnvPage),
   },
   {
     name: "{{ menu: catalog + rank + 50 previews",
-    budgetNs: 60_000,
+    budgetNs: 90_000,
     setup: () => {
       const s = scope();
       const placement = { ...s, owners: s.layers.map(() => ({ title: "Project" }) as PageEntry) };
@@ -111,7 +121,7 @@ export const bench = defineBench("variables", [
   },
   {
     name: "parse env.json with 200 variables",
-    budgetNs: 160_000,
+    budgetNs: 200_000,
     setup: () => () => parseVariableDefinitions(ENV_SOURCE),
   },
   {
