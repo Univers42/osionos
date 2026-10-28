@@ -166,12 +166,12 @@ describe('whiteboard routes', () => {
 		});
 	});
 
-	it('refuse a scene under 8 MB that the stored, escaped copy takes over 8 MB', async () => {
+	it('refuse a scene under 2 MB that the stored, escaped copy takes over 2 MB', async () => {
 		await withWhiteboard(async ({ user }) => {
 			const client = await user();
 			const { slug } = await client.create();
-			const quoted = scene([{ ...element('big'), text: '"'.repeat(3 * 1024 * 1024) }]);
-			assert.ok(Buffer.byteLength(quoted) < 8 * 1024 * 1024);
+			const quoted = scene([{ ...element('big'), text: '"'.repeat(768 * 1024) }]);
+			assert.ok(Buffer.byteLength(quoted) < 2 * 1024 * 1024);
 			const refused = await client.put(slug, quoted, 0);
 			assert.equal(refused.status, 413);
 			assert.equal(refused.body.error.code, 'payload_too_large');
@@ -180,11 +180,11 @@ describe('whiteboard routes', () => {
 		});
 	});
 
-	it('cap a scene at 8 MB and an account at 200 boards', async () => {
+	it('cap a scene at 2 MB and an account at 200 boards', async () => {
 		await withWhiteboard(async ({ mongo, user }) => {
 			const client = await user();
 			const { slug } = await client.create();
-			const huge = scene([{ ...element('big'), text: 'x'.repeat(8 * 1024 * 1024) }]);
+			const huge = scene([{ ...element('big'), text: 'x'.repeat(2 * 1024 * 1024) }]);
 			const tooLarge = await client.put(slug, huge, 0);
 			assert.equal(tooLarge.status, 413);
 			assert.equal(tooLarge.body.error.code, 'payload_too_large');
