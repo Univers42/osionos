@@ -2,8 +2,7 @@ import { useCallback } from "react";
 
 import { createWhiteboardBlock, findBlockInTree, type Block } from "@/entities/block";
 import type { SlashMenuState } from "@/features/block-editor/model/playgroundBlockEditor.helpers";
-import { normalizeBoardTitle } from "@/features/whiteboard/model/boardRefs";
-import { requestNewBoard } from "@/features/whiteboard/model/pendingBoards";
+import { mintBoardSlug, normalizeBoardTitle } from "@/features/whiteboard/model/boardRefs";
 import { isWhiteboardReady } from "@/features/whiteboard/model/whiteboardAvailability";
 
 import { stripSlashQuery } from "./useSlashSelect";
@@ -16,9 +15,9 @@ interface UseSlashWhiteboardSelectOptions {
   insertBlock: (pageId: string, afterBlockId: string, block: Block) => void;
 }
 
-/** `/whiteboard <name>`: drop an inline whiteboard block whose frame opens hydrawn's `/new`
- *  page, which creates an empty board titled `<name>` and reports its slug back to the block.
- *  The block exists immediately, so the page never waits on the network.
+/** `/whiteboard <name>`: drop an inline whiteboard block holding a freshly minted board slug,
+ *  so its frame opens an empty canvas at once; hydrawn creates the board titled `<name>` on
+ *  the first save. Nothing waits on the network.
  *  The availability gate is re-checked here, at dispatch, because the menu list is only a view:
  *  a stale menu or a keypress on a row filtered out a moment ago must not create a board. */
 export function useSlashWhiteboardSelect({ pageId, slashMenu, setSlashMenu, updateBlock, insertBlock }: UseSlashWhiteboardSelectOptions) {
@@ -33,9 +32,7 @@ export function useSlashWhiteboardSelect({ pageId, slashMenu, setSlashMenu, upda
       if (source) updateBlock(pageId, blockId, { content: stripSlashQuery(source.content ?? "", slashMenu.anchor), placeholderText: undefined });
 
       const title = normalizeBoardTitle(argument);
-      const block = createWhiteboardBlock({ title });
-      insertBlock(pageId, blockId, block);
-      requestNewBoard(block.id);
+      insertBlock(pageId, blockId, createWhiteboardBlock({ title, boardSlug: mintBoardSlug() }));
     },
     [pageId, slashMenu, setSlashMenu, updateBlock, insertBlock],
   );

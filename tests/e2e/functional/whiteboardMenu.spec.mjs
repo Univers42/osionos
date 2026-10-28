@@ -9,8 +9,7 @@ import { HYDRAWN_ORIGIN, mockHydrawn } from "../support/whiteboardMocks.mjs";
 
 test.describe("View > Whiteboard", () => {
   test("opens the board gallery in a tab and creates no board", async ({ page, baseURL }) => {
-    const created = [];
-    await mockHydrawn(page, { slug: "abc123def456", onCreate: (title) => created.push(title) });
+    const framed = await mockHydrawn(page);
     await openFreshPage(page, baseURL);
 
     await page.getByRole("navigation", { name: "Application menu" }).getByRole("button", { name: "View", exact: true }).click();
@@ -18,6 +17,6 @@ test.describe("View > Whiteboard", () => {
 
     await expect(page.locator(`iframe[src^="${HYDRAWN_ORIGIN}"]`)).toBeVisible();
     await expect(page.locator('iframe[src*="/boards/"], iframe[src*="/new"]')).toHaveCount(0);
-    expect(created).toEqual([]);
+    expect(framed.filter((path) => path.startsWith("/boards/") || path === "/new")).toEqual([]);
   });
 });

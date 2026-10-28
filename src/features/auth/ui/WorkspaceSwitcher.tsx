@@ -10,15 +10,22 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { lazy, Suspense, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ChevronDown, PenSquare } from 'lucide-react';
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useUserStore } from '@/features/auth';
+import { useWorkspaceInvitesStore } from '@/store/settings';
+import { pendingInvitesBadge } from '@/features/settings/people/inviteInboxModel';
 
 // Lazy + deep path (NOT the auth barrel): the account-switcher popover (~37KB)
 // only mounts on click, so it must not be stapled to the warm entry chunk.
 const UserSwitcherPanel = lazy(() =>
   import('@/features/auth/ui/UserSwitcherPanel').then((m) => ({ default: m.UserSwitcherPanel })),
+);
+// The invite decision is opened by the ?invite= boot link or a pending row, so it
+// has to have a host even when the switcher menu is closed. Lazy, same reason.
+const InviteDecisionDialog = lazy(() =>
+  import('@/features/auth/ui/InviteDecisionDialog').then((m) => ({ default: m.InviteDecisionDialog })),
 );
 import { usePageStore } from '@/store/usePageStore';
 import {
@@ -48,6 +55,19 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
   const openPage        = usePageStore(s => s.openPage);
   const renameWorkspace = useUserStore(s => s.renameWorkspace);
   const activeUserId    = useUserStore(s => s.activeUserId);
+  const pendingInvites  = useWorkspaceInvitesStore(s => s.mine.length);
+  const fetchMine       = useWorkspaceInvitesStore(s => s.fetchMine);
+  const openedInviteId  = useWorkspaceInvitesStore(s => s.openedInviteId);
+  const closeInvite     = useWorkspaceInvitesStore(s => s.closeInvite);
+  const badge           = pendingInvitesBadge(pendingInvites);
+
+  // Once after sign-in, and again when the menu opens. No polling loop (N26).
+  useEffect(() => {
+    if (activeUserId) void fetchMine();
+  }, [activeUserId, fetchMine]);
+  useEffect(() => {
+    if (open) void fetchMine();
+  }, [open, fetchMine]);
   // Icon precedence: durable workspace config (Settings → Workspace → Icon) → session record.
   const configIcon = useWorkspaceConfigStore(s =>
     activeUserId && activeWorkspace ? s.configs[workspaceConfigKey(activeUserId, activeWorkspace._id)]?.icon : undefined);
@@ -123,6 +143,17 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
               {workspaceName}
             </span>
           )}
+
+          {badge && (
+            <span
+              title={badge.ariaLabel}
+              className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--osio-accent)] px-1 text-2xs font-semibold text-[var(--osio-accent-fg)]"
+            >
+              {/* aria-label on a plain span is not announced; the count reads as the sentence. */}
+              <span aria-hidden="true">{badge.count}</span>
+              <span className="sr-only">{badge.ariaLabel}</span>
+            </span>
+          )}
         </div>
 
         {/* Right-side buttons */}
@@ -169,6 +200,12 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
       {open && (
         <Suspense fallback={null}>
           <UserSwitcherPanel onClose={() => setOpen(false)} anchorElement={anchorEl} />
+        </Suspense>
+      )}
+
+      {openedInviteId && (
+        <Suspense fallback={null}>
+          <InviteDecisionDialog key={openedInviteId} inviteId={openedInviteId} onClose={closeInvite} />
         </Suspense>
       )}
     </div>

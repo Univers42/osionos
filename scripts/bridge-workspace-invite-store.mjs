@@ -27,7 +27,9 @@ export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const TOKEN_SHAPE = /^[A-Za-z0-9_-]{43}$/;
 
 const TABLE = 'osionos_workspace_invites';
-const PUBLIC_COLUMNS = 'id,email,role,invited_by,expires_at,created_at,accepted_at,revoked_at';
+const PUBLIC_COLUMNS = 'id,email,role,invited_by,expires_at,created_at,accepted_at,revoked_at,declined_at';
+// What /mine may hold in memory: no email, no token_hash, no invited_user_id.
+const MINE_COLUMNS = 'id,workspace_id,role,invited_by,expires_at,created_at,accepted_at,revoked_at,declined_at';
 const UI_ROLE = new Map([['admin', 'admin'], ['editor', 'member'], ['viewer', 'guest']]);
 
 export const hashToken = (token) => createHash('sha256').update(String(token)).digest('hex');
@@ -48,6 +50,7 @@ export function publicInvite(row) {
 		createdAt: row.created_at,
 		acceptedAt: row.accepted_at ?? null,
 		revokedAt: row.revoked_at ?? null,
+		declinedAt: row.declined_at ?? null,
 	};
 }
 
@@ -68,6 +71,28 @@ export async function findLiveInvite(config, fetchImpl, workspaceId, inviteId) {
 
 export async function findInviteByToken(config, fetchImpl, token) {
 	return first(await rest(config, fetchImpl, `${TABLE}?token_hash=eq.${hashToken(token)}&select=*&limit=1`));
+}
+
+/**
+ * The invitee's row by id. Deliberately NOT filtered by LIVE: acceptInviteRow must answer a
+ * used, declined or revoked row exactly as the token route does, not as an unknown id.
+ */
+export async function findInviteForUser(config, fetchImpl, inviteId, userId) {
+	return first(await rest(config, fetchImpl, `${TABLE}?id=eq.${inviteId}&invited_user_id=eq.${userId}&select=*&limit=1`));
+}
+
+/**
+ * The inbox read: this account's live, unexpired invites, newest first.
+ * Caveat: capped at 50; an invitee with more sees only the newest 50.
+ */
+export async function listLiveInvitesForUser(config, fetchImpl, userId, now = new Date()) {
+	const rows = await rest(
+		config,
+		fetchImpl,
+		`${TABLE}?invited_user_id=eq.${userId}&${LIVE}&expires_at=gt.${now.toISOString()}&select=${MINE_COLUMNS}&order=created_at.desc&limit=50`,
+	);
+	// The sort keeps newest-first a property of this module, not of the transport.
+	return (Array.isArray(rows) ? rows : []).sort((left, right) => String(right.created_at).localeCompare(String(left.created_at)));
 }
 
 /**
@@ -125,6 +150,20 @@ export async function markAccepted(config, fetchImpl, inviteId, userId) {
 	const rows = await rest(config, fetchImpl, `${TABLE}?id=eq.${inviteId}&${LIVE}`, {
 		method: 'PATCH',
 		body: { accepted_at: now, accepted_by: userId, updated_at: now },
+		prefer: 'return=representation',
+	});
+	return Array.isArray(rows) && rows.length > 0;
+}
+
+/**
+ * The invitee declines: one filtered PATCH on LIVE stamps revoked_at and declined_at together,
+ * so a racing accept cannot win. Zero rows means it was not live (or not theirs) either way.
+ */
+export async function declineInvite(config, fetchImpl, inviteId, userId) {
+	const now = new Date().toISOString();
+	const rows = await rest(config, fetchImpl, `${TABLE}?id=eq.${inviteId}&invited_user_id=eq.${userId}&${LIVE}`, {
+		method: 'PATCH',
+		body: { revoked_at: now, declined_at: now, updated_at: now },
 		prefer: 'return=representation',
 	});
 	return Array.isArray(rows) && rows.length > 0;

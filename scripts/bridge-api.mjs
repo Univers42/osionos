@@ -67,6 +67,7 @@ import { createCommentsHandler } from './bridge-comments.mjs';
 import { createPublicHandler } from './bridge-public.mjs';
 import { createCollabHandler } from './bridge-collab.mjs';
 import { bumpAccessAfter, touchesPageAccess } from './bridge-access-generation.mjs';
+import { createPageMapCache } from './bridge-page-map-cache.mjs';
 import { createWorkspaceInvitesHandler } from './bridge-workspace-invites.mjs';
 import { createMemberAttributesHandler } from './bridge-member-attributes.mjs';
 import { createCommunityHandler } from './bridge-communities.mjs';
@@ -82,6 +83,7 @@ import { createModerationConsoleHandler } from './bridge-moderation-console.mjs'
 import { runWsCanary } from './bridge-realtime-ws-lane.mjs';
 import { createRecsHealthHandler } from './bridge-recs-health.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
+import { createPageAccessRequestsHandler } from './bridge-page-access-requests.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
 import { createSocialHandler } from './bridge-social.mjs';
@@ -978,17 +980,24 @@ function pageWriteDenied() {
 /** The page-access read refuses (503) past this many pages of ONE workspace: never a partial chain. */
 const PAGE_ACCESS_MAX_PAGES = 20000;
 
+const pageMapCache = createPageMapCache();
+
 /** The 503 every page surface answers when the access map cannot be read (C511): never unfiltered rows. */
 function pageAccessUnavailable() {
 	return Object.assign(new Error('Page access could not be verified right now.'), { status: 503, code: 'page_access_unavailable' });
 }
 
 /**
- * The workspace's live id → parent_page_id map, one query per request (C511). With
- * `withMeta`, the same query also carries each page's owner and visibility for the
- * private-page grant rule (X1); otherwise pageMeta is null.
+ * The workspace's live id → parent_page_id map, one query per request (C511), or one per
+ * PAGE_MAP_CACHE_TTL_MS when PAGE_MAP_CACHE=1 (bridge-page-map-cache.mjs). With `withMeta`,
+ * the same query also carries each page's owner and visibility for the private-page grant
+ * rule (X1); otherwise pageMeta is null. Both maps are read-only.
  */
 async function parentMapForWorkspace(workspaceId, config, fetchImpl, withMeta) {
+	return pageMapCache.get({ baasUrl: config.baasUrl, workspaceId, withMeta }, () => readParentMap(workspaceId, config, fetchImpl, withMeta));
+}
+
+async function readParentMap(workspaceId, config, fetchImpl, withMeta) {
 	let rows;
 	try {
 		rows = await listWorkspacePageRefs(workspaceId, config, fetchImpl, withMeta);
@@ -5148,14 +5157,15 @@ async function handleBridgeRequest(request, response, context) {
 	// A personal access token is exchanged for a masked internal session before any route reads it.
 	if (await context.patGate(request, response, url, context.config)) return;
 	// Workstream modules — each returns false when the path is not theirs:
-	// in-chat AI agent (SSE), perms proxy (WS-C), LiveKit tokens (WS-D),
-	// chat/profile/feed (WS-B).
+	// in-chat AI agent (SSE), perms proxy (WS-C), page access requests (Plan A),
+	// LiveKit tokens (WS-D), chat/profile/feed (WS-B).
 	if (await context.social.agent(url, request, response, context.config)) return;
 	if (await context.social.runner(url, request, response, context.config)) return;
 	if (await context.social.ideToken(url, request, response, context.config)) return;
 	if (await context.social.connector(url, request, response, context.config)) return;
 		if (await context.social.oauth(url, request, response, context.config)) return;
 	if (await context.social.perms(url, request, response, context.config)) return;
+	if (await context.social.accessRequests(url, request, response, context.config)) return;
 	if (await context.social.rtc(url, request, response, context.config)) return;
 	if (await context.social.chat(url, request, response, context.config)) return;
 	if (await context.social.notify(url, request, response, context.config)) return;
@@ -5243,6 +5253,7 @@ export function createBridgeServer(options = {}) {
 		agent: createAgentHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, pageAccessFilter }),
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl, createPageAccessLoader, pageLevelFor }),
+		accessRequests: createPageAccessRequestsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, createPageAccessLoader, pageLevelFor }),
 		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
@@ -5291,7 +5302,7 @@ export function createBridgeServer(options = {}) {
 				return pageLevelForRow(row, authContext, loader);
 			},
 		}),
-		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
+		workspaceInvites: createWorkspaceInvitesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		memberAttributes: createMemberAttributesHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		realtimeToken: createRealtimeTokenHandler({
 			config,
