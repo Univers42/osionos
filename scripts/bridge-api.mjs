@@ -4416,7 +4416,8 @@ async function handlePageConfigPatch(url, request, response, config, fetchImpl) 
 	if (!pageId) return false;
 	const payload = await readJson(request, PAGE_JSON_BODY_LIMIT_BYTES);
 	const { authContext, workspaceId } = await requirePageScopeAccess(request, pageId, payload, 'update', config, fetchImpl);
-	const pageConfig = safeJsonObject(payload.config, 'config');
+	// Version snapshots are local-only (devil ruling 2026-10-28): dropped so old builds stop storing them.
+	const { versions: _versions, ...pageConfig } = safeJsonObject(payload.config, 'config');
 	const rows = await baasRest(config, fetchImpl, 'osionos_page_configurations?on_conflict=user_id,page_id', {
 		method: 'POST',
 		body: {
