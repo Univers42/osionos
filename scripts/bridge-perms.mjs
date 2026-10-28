@@ -279,7 +279,10 @@ function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply,
 			// gate is therefore consulted but never allowed to throw before mayChangeRule
 			// has had its say — mirrors DELETE below.
 			const workspace = await access(ctx, rule.workspace_id, 'update').then((w) => w, () => null);
-			const allowed = await mayChangeRule(ctx, rule, { fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace) });
+			const allowed = await mayChangeRule(ctx, rule, {
+				fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace), action: 'create',
+				isMember: () => isMemberOf(ctx, rule.workspace_id, workspace),
+			});
 			if (!allowed) return fail(response, 403);
 			const saved = await ruleStore.upsert(requestConfig, rule);
 			reply(response, 200, { rule: saved });
@@ -290,13 +293,22 @@ function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply,
 		return undefined;
 	};
 
+	/** A page owner still in the workspace: the `update` gate already proves it, else a `read` one. */
+	async function isMemberOf(ctx, workspaceId, updateGate) {
+		if (updateGate) return true;
+		return Boolean(await access(ctx, workspaceId, 'read').then((w) => w, () => null));
+	}
+
 	async function deleteRule(ctx, id) {
 		const rule = await ruleStore.byId(ctx.requestConfig, id);
 		if (!rule) return fail(ctx.response, 404);
 		// The page owner may change the rules about their page even when the workspace
 		// membership alone would not (an owner who is only a viewer there).
 		const workspace = await access(ctx, rule.workspaceId, 'update').then((w) => w, () => null);
-		const allowed = await mayChangeRule(ctx, rule, { fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace) });
+		const allowed = await mayChangeRule(ctx, rule, {
+			fetchImpl, workspaceRole: workspace?.role, gated: Boolean(workspace), action: 'delete',
+			isMember: () => isMemberOf(ctx, rule.workspaceId, workspace),
+		});
 		if (!allowed) return fail(ctx.response, 404);
 		if (!(await ruleStore.remove(ctx.requestConfig, id, rule.workspaceId))) return fail(ctx.response, 404);
 		return reply(ctx.response, 200, { deleted: true });
