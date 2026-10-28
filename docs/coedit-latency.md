@@ -40,3 +40,30 @@ Artifact: `test-results/latency/coedit-latency.json` (loss, `keyToDomMs` p50/p95
   last-write-wins; it is out of scope for the 20 ms target.
 - Not in CI: no existing CI job runs a multi-user e2e against a real bridge, and this one
   needs two accounts. It is excluded from the default suite (`PLAYWRIGHT_COEDIT=1` opts in).
+
+Caveat: N-user runs use one Chromium with N renderers on one host, which inflates the tail;
+it says nothing about remote peers.
+
+## N-peer run
+
+Inputs are env names only; never put values in a command line that is logged.
+
+```sh
+export COEDIT_OWNER_EMAIL=... COEDIT_OWNER_PASSWORD=...
+export COEDIT_MEMBER_EMAIL=... COEDIT_MEMBER_PASSWORD=...
+export COEDIT_USER_3_EMAIL=... COEDIT_USER_3_PASSWORD=...
+# optional: COEDIT_USER_4_* .. COEDIT_USER_6_*
+export COEDIT_PAGE_TITLE='<a page all users see, owner can edit>'
+pnpm test:e2e:coedit
+```
+
+Optional: `COEDIT_CHARS`, `COEDIT_INTERVAL_MS`, `COEDIT_SETTLE_MS`.
+Artifact: `test-results/latency/coedit-latency-n.json`.
+
+## Reading the pair matrix
+
+`coedit-latency-n.json` contains `pairs`: one entry per ordered typist->observer pair
+(`u1`..`uN`, never emails) with `sent`, `lost` and `keyToDomMs` (`p50`/`p95`/`max`),
+plus `aggregate` over all pairs and `slowest` (the worst p95 pair). `presence` reports
+`expected: N-1`, `seen: {<label>: count}` and `timeToPresenceMs`. Presence is reported,
+not asserted.

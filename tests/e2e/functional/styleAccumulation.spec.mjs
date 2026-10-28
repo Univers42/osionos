@@ -17,9 +17,9 @@
 import { expect, test } from "@playwright/test";
 
 import { activateFirstEditor, openFreshPage } from "../../browser/core/app.mjs";
+import { resolveTokenBackground } from "../../browser/core/tokens.mjs";
 
 const RED = "rgb(239, 68, 68)";
-const BLUE = "rgb(59, 130, 246)";
 
 /** Tags wrapping the typed word, outermost first (e.g. ["EM","STRONG"]). */
 async function markChain(page) {
@@ -82,5 +82,7 @@ test("/color and /background accumulate on one block", async ({ page, baseURL })
 
   // Both stick — setting a background used to silently replace the chosen text
   // colour with a contrast-safe default, making the two commands exclusive.
-  expect(applied).toEqual({ surface: BLUE, text: RED });
+  // "/background blue" is the faded blue block tint, not the blue text swatch.
+  const blueTint = await resolveTokenBackground(page, "--osio-block-tint-blue-bg");
+  expect(applied).toEqual({ surface: blueTint, text: RED });
 });

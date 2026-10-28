@@ -126,6 +126,9 @@ export interface PageStore {
   pagesIndex: Record<string, PageIndexEntry>; // O(1) page lookup index
   pageRevisions: Record<string, number>; // monotonically increments per page mutation
   activePage: ActivePage | null;
+  /** Page a shared link asked for but the caller cannot read. Drives the
+   *  no-access screen; cleared by any successful openPage. */
+  deniedPage: { pageId: string; workspaceId: string | null } | null;
   navigationPath: ActivePage[]; // breadcrumb path based on navigation history
   recents: ActivePage[]; // last 10 opened
   loadingIds: Set<string>; // workspaceIds currently fetching
@@ -218,6 +221,7 @@ export interface PageStore {
   ) => Promise<void>;
   clearWorkspace: (workspaceId: string) => void;
   setShowTrash: (show: boolean) => void;
+  setDeniedPage: (page: { pageId: string; workspaceId: string | null } | null) => void;
 
   updateBlock: (
     pageId: string,
