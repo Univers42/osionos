@@ -16,6 +16,7 @@ import { AlertTriangle, Play, Sparkles, SquareTerminal } from "lucide-react";
 import { LoadingPane, Tooltip } from "@/shared/ui";
 import { useUserStore } from "@/features/auth";
 import { usePageStore } from "@/store/usePageStore";
+import { EnvFileStatus } from "@/features/variables/ui/EnvFileStatus";
 import { codeBlockOf, createCodeFileBlock } from "../model/codeFile";
 import { languageById, languageForFileName } from "../model/ideLanguages";
 import { useCodeRunner } from "../model/useCodeRunner";
@@ -222,6 +223,7 @@ export const CodeFileView: React.FC<{ pageId: string }> = ({ pageId }) => {
         </div>
       )}
       <div ref={hostRef} className="min-h-0 flex-1 overflow-hidden" />
+      <EnvFileStatus pageId={pageId} />
       {showConsole && (
         <div className="h-56 shrink-0 overflow-hidden">
           <RunConsole lines={runner.lines} running={runner.running} exit={runner.exit} onClear={runner.clear} onStop={runner.stop} onClose={() => setShowConsole(false)} />
