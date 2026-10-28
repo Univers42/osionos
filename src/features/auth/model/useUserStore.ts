@@ -120,6 +120,25 @@ function savePersistedWorkspaces(sessions: Record<string, UserSession>) {
     Object.entries(sessions).map(([userId, session]) => [userId, session.privateWorkspaces]),
   );
   localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(workspacesByUser));
+  // Keep the bridge-session records' workspace lists in sync with the live sessions:
+  // the boot path restores from those records, so a create/join/rename/delete that
+  // updated `sessions` must also land there, otherwise a reload resurrects a stale list.
+  const bridgeMap = readPersistedBridgeSessions();
+  let changed = false;
+  for (const [userId, session] of Object.entries(sessions)) {
+    const record = bridgeMap[userId];
+    if (!record) continue;
+    bridgeMap[userId] = {
+      ...record,
+      session: {
+        ...record.session,
+        privateWorkspaces: session.privateWorkspaces,
+        sharedWorkspaces: session.sharedWorkspaces,
+      },
+    };
+    changed = true;
+  }
+  if (changed) savePersistedBridgeSessions(bridgeMap);
 }
 
 function readPersistedPersonas() {
@@ -656,15 +675,23 @@ export const useUserStore = create<RefreshingUserStore>((set, get) => ({
   refreshWorkspaces: async (userId: string) => {
     const session = get().sessions[userId];
     if (!session) return;
-    if (isBridgeSession(session)) return;
-    const workspaces = await fetchWorkspaces(apiJwtFromSessionToken(session.accessToken));
+    const workspaces = await fetchWorkspaces(session.accessToken);
+    // An unreachable bridge answers [] too; never wipe a good list from a failed read.
+    if (workspaces.length === 0) return;
     const { privateWorkspaces, sharedWorkspaces } = partition(workspaces, userId);
-    set(s => ({
-      sessions: {
-        ...s.sessions,
-        [userId]: { ...session, privateWorkspaces, sharedWorkspaces },
-      },
-    }));
+    set(s => {
+      const current = s.sessions[userId];
+      if (!current) return s;
+      return {
+        sessions: {
+          ...s.sessions,
+          [userId]: { ...current, privateWorkspaces, sharedWorkspaces },
+        },
+      };
+    });
+    // Persist the refreshed lists (incl. bridge-session records via savePersistedWorkspaces).
+    savePersistedWorkspaces(get().sessions);
+    savePersistedContext({ activeUserId: get().activeUserId, activeWorkspaceByUser: get().activeWorkspaceByUser });
   },
 
   // The bridge's workspace routes verify the osionos_v1 app session (verifyAppSessionToken),
