@@ -25,6 +25,7 @@
  */
 
 import type { ChangeEvent, NotionState, Page, PageQuery, PropertyType, SchemaProperty } from "@notion-db/object-database";
+import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { useUserStore } from "@/features/auth";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
@@ -162,7 +163,6 @@ export const clearSysSourceStateCache = (): void => { cache.clear(); };
 class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   private readonly subscribers = new Set<(event: ChangeEvent) => void>();
   private readonly watchers = new Set<(status: SysStatus) => void>();
-  private readonly failureWatchers = new Set<(message: string) => void>();
   // What the bridge holds, as of the last load or confirmed write. The host's own diff
   // alone re-saves a loaded view after a reload (its baseline is the pre-load state).
   private held: NotionState["views"] = {};
@@ -260,14 +260,11 @@ class SysDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   // The bridge names a source by its slug (`my-pages`); the database id is `sys:my-pages`.
   private slug(): string { return sysSourceById(this.sourceId)?.source ?? this.sourceId; }
 
+  // Here, not in the block: this adapter is shared by every block on the source, and one
+  // refused save must say so once, not once per mounted block.
   private failed(error: unknown): void {
-    const message = error instanceof Error ? error.message : "Could not save this view.";
-    for (const watcher of this.failureWatchers) watcher(message);
-  }
-
-  watchSaveFailure(callback: (message: string) => void): () => void {
-    this.failureWatchers.add(callback);
-    return () => { this.failureWatchers.delete(callback); };
+    const message = error instanceof Error ? error.message : "unknown error";
+    useToastStore.getState().push({ kind: "error", title: `Could not save this view: ${message}` });
   }
 
   subscribe(callback: (event: ChangeEvent) => void): () => void {
