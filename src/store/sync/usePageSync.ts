@@ -52,12 +52,45 @@ import { computeSyncActions, loadLedger } from "@osionos/outbox-ledger";
 import type { SyncLedger } from "@osionos/outbox-ledger";
 import type { PageEntry } from "@/entities/page";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
+import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
+import { dataUrlToFile, inlineImagesIn, replaceInlineImages } from "@/shared/lib/media/inlineImages";
 
 const DEBOUNCE_MS = 800;
 /** First retry delay when the server pushes back; doubles up to MAX_RETRY_MS. */
 const RETRY_MS = 15000;
 /** Cap on the exponential backoff so a recovered server is still picked up promptly. */
 const MAX_RETRY_MS = 120000;
+
+/**
+ * Pictures whose upload failed this session. Caveat: a transient failure (offline, a
+ * lapsed session) also lands here, so that picture stays inline until the next reload.
+ */
+const failedInlineUploads = new Set<string>();
+
+/**
+ * Move a page's base64 pictures to page-media storage and write the URLs into the store's
+ * CURRENT copy (synchronously, after the uploads), so nothing typed meanwhile is lost.
+ */
+async function externalizeInlineImages(page: PageEntry): Promise<PageEntry> {
+  const found = inlineImagesIn([page.cover, page.content]).filter((dataUrl) => !failedInlineUploads.has(dataUrl));
+  if (found.length === 0) return page;
+  const urls = new Map<string, string>();
+  for (const dataUrl of found) {
+    try {
+      urls.set(dataUrl, await uploadPageMedia(dataUrlToFile(dataUrl, "pasted-image")));
+    } catch {
+      failedInlineUploads.add(dataUrl);
+    }
+  }
+  const store = usePageStore.getState();
+  const latest = store.pageById(page._id);
+  if (urls.size === 0 || !latest) return page;
+  const content = latest.content && replaceInlineImages(latest.content, urls);
+  if (content && content !== latest.content) store.updatePageContent(page._id, content);
+  const cover = latest.cover && replaceInlineImages(latest.cover, urls);
+  if (cover !== latest.cover) store.patchPage(page._id, { cover });
+  return usePageStore.getState().pageById(page._id) ?? page;
+}
 
 /**
  * The world the flush works on: the bridge, the store and the toast. Built once per
@@ -81,6 +114,7 @@ function flushDeps(): FlushDeps {
     },
     latest: (pageId) => usePageStore.getState().pageById(pageId) ?? null,
     recordVersion: (pageId, version) => usePageStore.getState().setPageContentVersion(pageId, version),
+    externalize: externalizeInlineImages,
   };
 }
 
