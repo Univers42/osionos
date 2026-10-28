@@ -33,6 +33,7 @@ import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/
 import { useUserStore } from "@/features/auth";
 import { rememberDatabaseWorkspace } from "@/widgets/database-view/model/objectDatabaseWorkspaces";
 import { useUrlPasteMode } from "@/shared/config/useAppearance";
+import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
 import {
   isIndentable,
   isParentable,
@@ -62,6 +63,7 @@ import {
 import { plainTextOfInlineSource, sliceInlineSource } from "./crossTextOps";
 import { insertBlockRelative } from "./blockContextMenu.helpers";
 import { useBlockHistory } from "./useBlockHistory";
+import { useVariableMenu } from "./useVariableMenu";
 import { isAutomationsEnabled } from "@/shared/config/featureFlags";
 import { getInlineMarkAtCaretEnd, placeCaretAfterInlineMark } from "./inlineMarkHelpers";
 import {
@@ -76,6 +78,7 @@ import { matchInternalCopy } from "./blockClipboard";
 import { useBlockContextMenu } from "./useBlockContextMenu";
 import { sanitizeLinkBlockFields } from "@/entities/block/model/linkBlocks";
 import { insertPastedLink, isPasteMenuBlock } from "./pasteLinkMenu";
+import { insertPastedImage, pastedImageFile, pastedImageSource } from "./pasteImage";
 import { useLinkSnapshotAttach } from "./useLinkSnapshotAttach";
 import { usePasteLinkMenu } from "./usePasteLinkMenu";
 import {
@@ -925,6 +928,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     [],
   );
 
+  const { variableMenu, tryHandleVariableMenu, handleVariableSelect, closeVariableMenu } =
+    useVariableMenu({ pageId, getCaretRect, flushPendingBlockDraft, updateBlock, focusBlock });
+
   /** Persist block content edits in the page store. */
   const persistBlockText = useCallback(
     (blockId: string, text: string) => {
@@ -1134,6 +1140,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       if (tryHandleSlashMenu(blockId, text)) return;
       if (tryHandlePageSelectorMenu(blockId, text)) return;
+      if (tryHandleVariableMenu(blockId, text)) return;
       if (tryHandleEmojiMenu(blockId, text)) return;
       tryHandleMarkdownShortcut(blockId, text);
     },
@@ -1142,6 +1149,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       tryHandleCodeOrTable,
       tryHandleSlashMenu,
       tryHandlePageSelectorMenu,
+      tryHandleVariableMenu,
       tryHandleEmojiMenu,
       tryHandleMarkdownShortcut,
     ],
@@ -1638,6 +1646,21 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       flushPendingBlockDraft(blockId, "structural");
       const currentBlock = findBlockInTree(contentRef.current, blockId);
       if (!currentBlock || currentBlock.type === "code") return;
+
+      const image = pastedImageFile(e.clipboardData);
+      if (image) {
+        e.preventDefault();
+        const offsets = resolvePasteSelectionOffsets(e, currentBlock.content ?? "");
+        // Caveat: offsets are taken at paste time; text typed during the upload can shift
+        // where the picture lands (clamped, never out of range).
+        void pastedImageSource(image, uploadPageMedia).then((src) => {
+          const latest = findBlockInTree(contentRef.current, blockId);
+          if (!latest) return;
+          updateBlock(pageId, blockId, { content: insertPastedImage(latest.content ?? "", src, offsets) });
+          focusBlock(blockId, true);
+        });
+        return;
+      }
 
       const rawMarkdown = e.clipboardData.getData("text/markdown");
       const rawPlainText = e.clipboardData.getData("text/plain");
@@ -2237,6 +2260,9 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     setSlashMenu,
     pageSelector,
     setPageSelector,
+    variableMenu,
+    handleVariableSelect,
+    closeVariableMenu,
     emojiMenu,
     setEmojiMenu,
     handleEmojiSelect,

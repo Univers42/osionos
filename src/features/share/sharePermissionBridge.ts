@@ -54,7 +54,9 @@ export function toAccessRule(resource: ShareResource, entry: ShareEntry): ShareA
       ? { type: 'role' as const, role: entry.target.role }
       : entry.target.type === 'team'
         ? { type: 'team' as const, teamId: entry.target.team.id }
-        : { type: entry.target.type };
+        : entry.target.type === 'attribute'
+          ? { type: 'attribute' as const, name: entry.target.name, value: entry.target.value }
+          : { type: entry.target.type };
   return {
     _id: entry.sourceId,
     workspaceId: resource.workspaceId,

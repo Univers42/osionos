@@ -116,6 +116,44 @@ describe('sharing keys from a non-owner are ignored, never a 403', () => {
 	});
 });
 
+function recordingPublishes(mock) {
+	const frames = [];
+	const fetchImpl = async (url, init) => {
+		if (new URL(String(url)).pathname === '/v1/publish') {
+			frames.push(JSON.parse(init.body));
+			return new Response('{}', { status: 200 });
+		}
+		return mock.fetchImpl(url, init);
+	};
+	return { frames, fetchImpl };
+}
+
+describe('page_access fan-out on a sharing write', () => {
+	it('tells the user the owner added, by id, on their own topic', async () => {
+		const world = teamWorld({ memberRole: 'editor' });
+		world.osionos_workspace_members.push({ workspace_id: IDS.homeA, user_id: IDS.userB, role: 'viewer', permissions: ['read'] });
+		const mock = createPostgrestMock(world);
+		const { frames, fetchImpl } = recordingPublishes(mock);
+		await withBridge(config, fetchImpl, async (base) => {
+			const result = await send(base, `/api/pages/${IDS.privateA}`, asA, patch({ collaborators: [{ userId: IDS.userB, role: 'editor' }] }));
+			assert.equal(result.status, 200, result.text);
+		});
+		const access = frames.filter((frame) => frame.event_type === 'page_access');
+		assert.deepEqual(access.map((frame) => [frame.topic, frame.payload.op, frame.payload.pageId]), [[`user:${IDS.userB}`, 'granted', IDS.privateA]]);
+		assert.deepEqual(Object.keys(access[0].payload).sort(), ['op', 'pageId', 'workspaceId']);
+	});
+
+	it('publishes nothing for a non-owner whose collaborators change is ignored', async () => {
+		const mock = createPostgrestMock(teamWorld({ memberRole: 'editor' }));
+		const { frames, fetchImpl } = recordingPublishes(mock);
+		await withBridge(config, fetchImpl, async (base) => {
+			const result = await send(base, `/api/pages/${IDS.sharedA}`, asB, patch({ collaborators: [{ userId: IDS.userB, role: 'editor' }] }));
+			assert.equal(result.status, 200, result.text);
+		});
+		assert.equal(frames.filter((frame) => frame.event_type === 'page_access').length, 0);
+	});
+});
+
 describe('marketplace publishing and app pages', () => {
 	it('answers publishing an ownerless private app like a missing app and leaves it unchanged', async () => {
 		const mock = createPostgrestMock(marketWorld());

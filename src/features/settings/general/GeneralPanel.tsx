@@ -18,6 +18,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Copy, Building2 } from 'lucide-react';
 
 import { useUserStore } from '@/features/auth';
+import { findEnvPage } from '@/features/variables/model/envFile';
+import { openEnvFile } from '@/features/variables/model/openEnvFile';
 import { usePageStore } from '@/store/usePageStore';
 import { defaultWorkspaceSettings } from '@/store/settings/defaults';
 import { useWorkspaceMembersStore, useWorkspaceSettingsStore, type WorkspaceMember, type WorkspaceSettings, recordSettingsAction } from '@/store/settings';
@@ -140,6 +142,7 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
         <SettingRow stack title="Workspace name" description="Your workspace name can be up to 65 characters" action={<input aria-label="Workspace name" className="w-full max-w-[400px] rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-2 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]" value={workspaceNameDraft} maxLength={65} onChange={(event) => setWorkspaceNameDraft(event.target.value)} />} />
         <SettingRow stack title="Icon" description="Upload an image or pick an emoji. This icon will appear in your sidebar and notifications." action={<div className="relative"><button type="button" aria-label="Change workspace icon" className="flex h-[72px] w-[72px] items-center justify-center rounded-md border border-[var(--osio-border-default)] text-5xl" onClick={() => setIconPickerOpen((open) => !open)}><IconValueView value={settings.icon ?? '🌏'} size={44} /></button>{iconPickerOpen && <div className="absolute left-0 top-full z-[var(--osio-z-popover)] mt-2"><EmojiPicker current={settings.icon ?? '🌏'} onSelect={(value) => { update(resolvedUserId, workspaceId, { icon: value }); setIconPickerOpen(false); }} onRemove={() => { removeIcon(resolvedUserId, workspaceId); setIconPickerOpen(false); }} onClose={() => setIconPickerOpen(false)} /></div>}</div>} />
         <SettingRow title="Custom landing page" description={<>When a new member joins this workspace, a copy of this page will be added to their <b>Private</b> pages</>} action={<Button onClick={() => setModal({ name: 'page-selector' })}>{settings.landingPageId ? 'Change page' : 'Select page'}</Button>} />
+        <SettingRow title="Variables" description={<>Reusable values for any page: write <code>{'{{NAME}}'}</code> in text to show them. They live in this workspace&apos;s <code>env.json</code>.</>} action={<Button onClick={() => runAsync(openEnvFile(workspaceId).then((opened) => { if (!opened) toast({ kind: 'error', title: 'Could not create env.json' }); }))}>{findEnvPage(pages) ? 'Open env.json' : 'Create env.json'}</Button>} />
         <SettingRow title="Reset to defaults" description="Restore the default workspace name, icon, landing page, sidebar and analytics." action={<Button tone="ghost" onClick={() => setModal({ name: 'reset-workspace' })}>Reset to defaults</Button>} />
       </Section>
       <Section title="Export">

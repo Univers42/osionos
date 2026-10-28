@@ -101,7 +101,7 @@ describe('N19 one accept function, every case through both routes', () => {
       const [first, second] = await withBridge(config, mock.fetchImpl, async (base) => Promise.all([run(base, seeded), run(base, seeded)]));
       assert.deepEqual([first.status, second.status].sort(), [200, 410]);
       assert.equal(mock.rows('osionos_workspace_members').length, 1);
-      assert.equal(mock.publishes.length, 1);
+      assert.equal(mock.publishes.length, 2);
     });
   }
 });

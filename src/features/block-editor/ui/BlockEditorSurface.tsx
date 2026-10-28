@@ -44,6 +44,7 @@ import {
 } from "@/features/block-editor/model/usePlaygroundBlockEditor";
 import { BlockContextMenu } from "./BlockContextMenu";
 import { PageSelectorMenu } from "./PageSelectorMenu";
+import { VariableMenu } from "@/features/variables/ui/VariableMenu";
 import { PasteLinkMenu } from "./PasteLinkMenu";
 import { EmojiPicker } from "@/shared/ui";
 import { ColorMenu } from "./ColorMenu";
@@ -374,6 +375,9 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 		setSlashMenu,
 		pageSelector,
 		setPageSelector,
+		variableMenu,
+		handleVariableSelect,
+		closeVariableMenu,
 		emojiMenu,
 		setEmojiMenu,
 		handleEmojiSelect,
@@ -962,6 +966,17 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 				/>
 			) : null}
 
+			{variableMenu ? (
+				<VariableMenu
+					key={variableMenu.blockId}
+					pageId={pageId}
+					position={variableMenu.position}
+					trigger={variableMenu.trigger}
+					onSelect={handleVariableSelect}
+					onClose={closeVariableMenu}
+				/>
+			) : null}
+
 			{emojiMenu && typeof document !== "undefined"
 				? createPortal(
 						// IconPicker self-positions `absolute` under its parent, so anchor it to
@@ -1330,7 +1345,8 @@ function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleT
 		case "heading_5":
 		case "heading_6": return { pt: "pt-3", pb: "pb-0.5", handleTop: "top-4" };
 		// Media / code / equation: generous, still asymmetric.
-		case "code":
+		// Code: the handle centres on the card's language row, its first line.
+		case "code":      return { pt: "pt-3",   pb: "pb-1.5", handleTop: "top-6.5" };
 		case "equation":  return { pt: "pt-3",   pb: "pb-1.5", handleTop: "top-4" };
 		case "image":
 		case "video":
@@ -1352,7 +1368,8 @@ function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleT
 		case "quote":     return { pt: "pt-2",   pb: "pb-1",   handleTop: "top-3" };
 		// The one exception to the rhythm: a separator is a hairline, so it stays the
 		// tightest block — just enough shell pad to hover/select/drag it, no more.
-		case "divider":   return { pt: "pt-1",   pb: "pb-0.5", handleTop: "top-1" };
+		// The handle centres on the hairline (pt-1 down), not below it on the next block.
+		case "divider":   return { pt: "pt-1",   pb: "pb-0.5", handleTop: "-top-1.5" };
 		case "toggle":    return { pt: "pt-1.5", pb: "pb-0.5", handleTop: "top-2" };
 		// List items cluster tightly and evenly so a list reads as one unit.
 		case "bulleted_list":
@@ -1501,8 +1518,13 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		const styles = getComputedStyle(leaf);
 		let line = Number.parseFloat(styles.lineHeight);
 		if (Number.isNaN(line)) line = Number.parseFloat(styles.fontSize) * 1.5;
-		const leafTop = toCssPx(leaf.getBoundingClientRect().top - article.getBoundingClientRect().top, article);
-		const top = leafTop + (line - handle.offsetHeight) / 2;
+		// The first line starts below the leaf's padding and border (py-0.5 on body
+		// text): leaving them out put every text block's handle 2px above its line.
+		const lineTop =
+			toCssPx(leaf.getBoundingClientRect().top - article.getBoundingClientRect().top, article) +
+			Number.parseFloat(styles.borderTopWidth) +
+			Number.parseFloat(styles.paddingTop);
+		const top = lineTop + (line - handle.offsetHeight) / 2;
 		handle.style.top = `${Math.max(0, Math.round(top))}px`;
 		// block.type is a real dep: /image converts paragraph -> image UNDER THE
 		// SAME id, and a [block.id]-only closure kept aligning as a paragraph —
