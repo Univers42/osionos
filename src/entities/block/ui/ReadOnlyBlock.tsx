@@ -370,27 +370,29 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "column_list": {
       const columns = flattenColumns(block.children ?? []);
       return (
-        <div className="my-2 flex items-start gap-6">
-          {columns.map((column) => (
-            <div
-              key={column.id}
-              className="min-w-0 rounded-md"
-              style={{
-                // Same ratio floor as the editable renderer, and the same
-                // per-COLUMN surface style — columns stay independent.
-                flexGrow:
-                  typeof column.widthRatio === "number" && Number.isFinite(column.widthRatio)
-                    ? Math.max(0.08, column.widthRatio)
-                    : 1 / Math.max(columns.length, 1),
-                flexBasis: 0,
-                ...getBlockSurfaceStyle(column),
-              }}
-            >
-              {(column.children ?? []).map((child, childIndex) => (
-                <ReadOnlyBlock key={child.id} block={child} index={childIndex} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />
-              ))}
-            </div>
-          ))}
+        <div className="osio-columns my-2">
+          <div className="osio-columns-row flex items-start gap-6">
+            {columns.map((column) => (
+              <div
+                key={column.id}
+                className="min-w-0 rounded-md"
+                style={{
+                  // Same ratio floor as the editable renderer, and the same
+                  // per-COLUMN surface style — columns stay independent.
+                  flexGrow:
+                    typeof column.widthRatio === "number" && Number.isFinite(column.widthRatio)
+                      ? Math.max(0.08, column.widthRatio)
+                      : 1 / Math.max(columns.length, 1),
+                  flexBasis: 0,
+                  ...getBlockSurfaceStyle(column),
+                }}
+              >
+                {(column.children ?? []).map((child, childIndex) => (
+                  <ReadOnlyBlock key={child.id} block={child} index={childIndex} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
@@ -460,7 +462,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         </Suspense>
       );
       // Below-the-fold Home sections defer-mount (reserve height, no first-paint work).
-      return block.deferMount ? <DeferredMount>{databaseEmbed}</DeferredMount> : databaseEmbed;
+      return <div className="my-2">{block.deferMount ? <DeferredMount>{databaseEmbed}</DeferredMount> : databaseEmbed}</div>;
     }
 
     case "home_views": {

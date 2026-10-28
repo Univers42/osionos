@@ -366,7 +366,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
 
   const codeBlockHeader = useMemo(
     () => (
-      <div className="flex items-center gap-2 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
         <div className="flex shrink-0 items-center gap-2">
           <Braces size={16} aria-hidden className="text-[var(--osio-accent)]" />
           <div ref={langPickerRef} className="relative">
@@ -424,7 +424,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           name="code-file-name"
           autoComplete="off"
           spellCheck={false}
-          className="min-w-0 flex-1 bg-transparent font-mono text-2xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
+          className="min-w-16 flex-1 bg-transparent font-mono text-2xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
         />
         <div className="flex shrink-0 items-center gap-0.5">
           <button
@@ -846,7 +846,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
 
     case "quote":
       return (
-        <div className="flex my-0 rounded-md px-1">
+        <div className="flex my-0 rounded-md">
           {block.children?.length ? (
             <BlockCollapseToggle collapsed={block.collapsed} onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })} />
           ) : null}
