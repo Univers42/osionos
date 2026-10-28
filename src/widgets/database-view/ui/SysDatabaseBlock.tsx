@@ -21,6 +21,7 @@ import { sysSourceById } from "../model/sysDataSources";
 import { getSysDatabaseAdapter, type SysStatus } from "../model/sysDatabaseState";
 import { sysTransport } from "../model/sysDatabaseTransport";
 import { WorkspaceRecordPeek } from "./WorkspaceDatabaseBlock";
+import { databaseShellClass } from "../model/databaseShellClass";
 
 interface SysDatabaseBlockProps {
   databaseId: string;
@@ -59,10 +60,7 @@ export const SysDatabaseBlock: React.FC<SysDatabaseBlockProps> = ({ databaseId, 
 
   return (
     <div
-      className={[
-        "osionos-database-block w-full min-w-0",
-        mode === "full" ? "osionos-database-block--full h-full min-h-0 overflow-hidden" : "osionos-database-block--inline my-2 overflow-auto",
-      ].join(" ")}
+      className={databaseShellClass(mode)}
       data-database-id={databaseId}
       data-database-view-id={view}
     >

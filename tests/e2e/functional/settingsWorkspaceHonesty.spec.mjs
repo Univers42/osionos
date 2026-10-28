@@ -83,6 +83,15 @@ test.describe("workspace panels are honest (offline build)", () => {
     await expect(header).toBeVisible();
   });
 
+  test("General: a rename keeps the workspace icon", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await expect(page.getByRole("button", { name: /^⭐ / })).toBeVisible();
+    await openSettings(page, "General");
+    await region(page).getByLabel("Workspace name").fill("Kept icon");
+    // The new name in the header proves the debounced save ran; the icon must not change with it.
+    await expect(page.getByRole("button", { name: "⭐ Kept icon" }).first()).toBeVisible();
+  });
+
   test("Library: Remove asset asks first", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await openSettings(page, "Emoji & Library");
