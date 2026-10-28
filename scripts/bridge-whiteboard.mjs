@@ -43,7 +43,9 @@ const BOARD_PATH = /^\/api\/whiteboard\/v1\/boards\/([^/]+)(\/thumbnail)?$/;
 // hydrawn's slug rule (6-32) met with the bridge's minimum (C605); minted at 12.
 const SLUG = /^[a-z0-9]{8,32}$/;
 const SLUG_LENGTH = 12;
-const MAX_SCENE_BYTES = 8 * 1024 * 1024;
+// The grobase WAF parses every board body before Kong checks a key; past 2 MiB a few
+// concurrent saves OOM-kill its 256 MiB container (C621, measured 2026-10-28).
+const MAX_SCENE_BYTES = 2 * 1024 * 1024;
 const MAX_THUMBNAIL_BYTES = 512 * 1024;
 const MAX_ELEMENTS = 20_000;
 const MAX_ID_LENGTH = 128;
