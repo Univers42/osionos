@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:22 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/24 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/28 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,13 +14,15 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import { API_BASE } from '@/shared/api/client';
-import { createLocalId, errorMessage, nowIso, pushSettingsError, settingsJwt, trySettingsDelete, trySettingsGet, trySettingsPost, upsertById } from './settingsStoreUtils';
+import { createLocalId, errorCode, errorMessage, nowIso, pushSettingsError, settingsJwt, trySettingsDelete, trySettingsGet, trySettingsPost, upsertById } from './settingsStoreUtils';
 import type { WorkspaceInvite, WorkspaceMemberRole } from './types';
 
 interface WorkspaceInvitesStore {
   data: Record<string, WorkspaceInvite[]>;
   loading: Record<string, boolean>;
   error: Record<string, string | null>;
+  /** The bridge code of the last failed create (`not_connected` shows connection guidance, not the raw message). */
+  errorCode: Record<string, string | null>;
   /** Set by the sidebar CTA so the People panel opens its invite modal. */
   inviteRequested: boolean;
   /** Accept links by invite id, shown once to the inviter. In memory only: the plaintext token
@@ -76,6 +78,7 @@ export const useWorkspaceInvitesStore = create<WorkspaceInvitesStore>()(
       data: {},
       loading: {},
       error: {},
+      errorCode: {},
       inviteRequested: false,
       acceptLinks: {},
       requestInvite: () => set({ inviteRequested: true }),
@@ -109,10 +112,11 @@ export const useWorkspaceInvitesStore = create<WorkspaceInvitesStore>()(
             data: { ...state.data, [workspaceId]: upsertById(previous, invite) },
             acceptLinks: remote?.acceptUrl ? { ...state.acceptLinks, [invite._id]: remote.acceptUrl } : state.acceptLinks,
             error: { ...state.error, [workspaceId]: null },
+            errorCode: { ...state.errorCode, [workspaceId]: null },
           }));
           return invite;
         } catch (error) {
-          set((state) => ({ data: { ...state.data, [workspaceId]: previous }, error: { ...state.error, [workspaceId]: errorMessage(error) } }));
+          set((state) => ({ data: { ...state.data, [workspaceId]: previous }, error: { ...state.error, [workspaceId]: errorMessage(error) }, errorCode: { ...state.errorCode, [workspaceId]: errorCode(error) ?? null } }));
           pushSettingsError('Could not create invite', error);
           return null;
         }
