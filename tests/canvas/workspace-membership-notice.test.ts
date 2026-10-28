@@ -32,6 +32,13 @@ test("a added frame without a name/workspace still reads sensibly", () => {
   assert.equal(workspaceMembershipNotice({ op: "added" }), "Someone added you to a workspace");
 });
 
+test("a member_joined frame names the new member and the workspace", () => {
+  assert.equal(
+    workspaceMembershipNotice({ op: "member_joined", workspaceName: "Team", member: { userId: "u", name: "Bob" } }),
+    "Bob joined Team",
+  );
+});
+
 test("role and unknown ops have no toast", () => {
   assert.equal(workspaceMembershipNotice({ op: "role", workspaceName: "Team" }), null);
   assert.equal(workspaceMembershipNotice({ op: "join_requested" }), null);

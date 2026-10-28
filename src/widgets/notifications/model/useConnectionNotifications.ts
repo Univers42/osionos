@@ -36,11 +36,6 @@ import {
 } from '@/features/auth/model/userStore.helpers';
 import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { workspaceMembershipNotice, type WorkspaceMembershipPayload } from './workspaceMembershipNotice';
-import { settleMissingPage } from '@/store/evictLocalPage';
-import { savePagesCache, PAGE_OUTBOX_KEY } from '@/store/pageStore.helpers';
-import { isPageClean } from '@/store/sync/mergeServerPages';
-import { loadLedger } from '@osionos/outbox-ledger';
-import { getCurrentPageAccessContext, canEditPage } from '@/shared/lib/auth/pageAccess';
 
 /** Re-read /api/workspaces and replace the session's lists (bridge sessions included). */
 async function refreshWorkspaceLists(userId: string): Promise<void> {
@@ -70,6 +65,25 @@ function leaveRemovedWorkspace(userId: string, workspaceId: string | undefined):
   if (own) state.switchWorkspace(own);
 }
 
+export type PageAccessPayload = { workspaceId?: string; pageId?: string; op?: string };
+
+/**
+ * A share on a page changed for this user. A grant in the open workspace re-reads its page list
+ * (the tree hydrate is additive, so it never prunes). A revoke re-reads that page: the server
+ * answers 404 only when no other rule still lets this user read it, and the existing 404 path
+ * (createFetchPageContent → settleMissingPage) evicts a clean copy and keeps an unpublished edit.
+ */
+export function applyPageAccess(payload: PageAccessPayload): void {
+  const user = useUserStore.getState();
+  const jwt = user.activePageJwt() ?? '';
+  const activeId = user.activeWorkspace()?._id;
+  const pages = usePageStore.getState();
+  if (payload.workspaceId && payload.workspaceId === activeId) void pages.fetchPages(activeId, jwt, true);
+  if (payload.op === 'revoked' && payload.pageId && pages.pagesIndex[payload.pageId]) {
+    void pages.fetchPageContent(payload.pageId, jwt);
+  }
+}
+
 export function useConnectionNotifications(): void {
   const activeUserId = useUserStore((s) => s.activeUserId);
   useEffect(() => {
@@ -78,7 +92,8 @@ export function useConnectionNotifications(): void {
     return subscribeTopic(`user:${activeUserId}`, (frame) => {
       if (frame.event_type === 'workspace_membership') {
         const payload = (frame.payload ?? {}) as WorkspaceMembershipPayload;
-        if (payload.workspaceId) {
+        // A removed user can no longer read the roster; re-reading it would only 403.
+        if (payload.workspaceId && payload.op !== 'removed') {
           void useWorkspaceMembersStore.getState().hydrate(payload.workspaceId, activeUserId);
         }
         void refreshWorkspaceLists(activeUserId).then(() => {
@@ -91,30 +106,7 @@ export function useConnectionNotifications(): void {
         return;
       }
       if (frame.event_type === 'page_access') {
-        const payload = (frame.payload ?? {}) as { workspaceId?: string; pageId?: string; op?: string };
-        const userState = useUserStore.getState();
-        const activeWorkspace = userState.activeWorkspace();
-        if (payload.workspaceId && activeWorkspace?._id === payload.workspaceId) {
-          const jwt = userState.activePageJwt() ?? '';
-          void usePageStore.getState().fetchPages(activeWorkspace._id, jwt, true);
-        }
-        if (payload.op === 'revoked' && payload.pageId) {
-          const pageStore = usePageStore.getState();
-          const page = pageStore.pageById(payload.pageId);
-          const workspaceId = page?.workspaceId ?? payload.workspaceId;
-          if (page && workspaceId) {
-            const context = getCurrentPageAccessContext();
-            const canPublish = context !== null && canEditPage(page, context);
-            const ledger = loadLedger(PAGE_OUTBOX_KEY);
-            const isClean = isPageClean(page, ledger, canPublish);
-            const settled = settleMissingPage(pageStore, workspaceId, payload.pageId, isClean);
-            if (settled) {
-              usePageStore.setState(settled.state);
-              savePagesCache(usePageStore.getState().pages, workspaceId);
-              if (settled.toast) useToastStore.getState().push(settled.toast);
-            }
-          }
-        }
+        applyPageAccess((frame.payload ?? {}) as PageAccessPayload);
         return;
       }
       void useContactsStore.getState().hydrate();
