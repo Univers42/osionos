@@ -29,6 +29,8 @@ const FIRST_BLOCKS = [
   { type: "code", content: "const a = 1;", language: "js" },
   { type: "quote", content: "Quote" },
   { type: "to_do", content: "Todo", checked: false },
+  { type: "bulleted_list", content: "Bullet", children: [{ id: "lead-bullet-child", type: "paragraph", content: "Child" }] },
+  { type: "numbered_list", content: "Number" },
   { type: "equation", content: "E = mc^2" },
   { type: "bookmark", content: "", url: "https://example.com" },
 ];
@@ -45,14 +47,14 @@ async function seedColumns(page) {
     }));
     store.updatePageContent(store.activePage.id, [{ id: "lead-row", type: "column_list", content: "", children }]);
   }, FIRST_BLOCKS);
-  await page.locator('[data-column-id="lead-col-9"]').waitFor();
+  await page.locator('[data-column-id="lead-col-11"]').waitFor();
   await page.locator('[data-column-id="lead-col-1"] .odb-topbar-row').waitFor();
 }
 
 /** Offset of each column's first box from the column's own top-left. A box is
  *  what a reader sees as the block's edge: a picture, an editable line, a
- *  filled or bordered surface, or the database title row (which has none of
- *  those). The topmost, leftmost one wins, so a wrapped toolbar below the
+ *  filled or bordered surface, a list marker's box, or the database title row
+ *  (which has none of those). The topmost, leftmost one wins, so a wrapped toolbar below the
  *  title does not count. */
 const firstBoxOffsets = (page) => page.evaluate(() =>
   Array.from(document.querySelectorAll('[data-column-id^="lead-col-"]')).map((column) => {
@@ -62,6 +64,7 @@ const firstBoxOffsets = (page) => page.evaluate(() =>
       if (node.closest('[data-testid="block-drag-handle"]') || !node.checkVisibility({ opacityProperty: true })) return false;
       const style = getComputedStyle(node);
       return node.tagName === "IMG" || node.isContentEditable || node.matches(".odb-topbar-row")
+        || node.matches("[data-list-marker]")
         || style.backgroundColor !== "rgba(0, 0, 0, 0)" || parseFloat(style.borderTopWidth) > 0;
     }).map((node) => node.getBoundingClientRect()).filter((rect) => rect.height > 0);
     return {
@@ -81,12 +84,22 @@ test.describe("column lead alignment", () => {
     const [lead] = offsets;
     offsets.forEach((offset, index) => {
       expect(Math.abs(offset.top - lead.top), `${FIRST_BLOCKS[index].type} top`).toBeLessThanOrEqual(1);
-      // List rows keep a 1.25rem gutter for their collapse chevron, which the
-      // drag handle would otherwise overlap; they line up with each other.
-      if (FIRST_BLOCKS[index].type !== "to_do") {
-        expect(Math.abs(offset.left - lead.left), `${FIRST_BLOCKS[index].type} left`).toBeLessThanOrEqual(1);
-      }
+      expect(Math.abs(offset.left - lead.left), `${FIRST_BLOCKS[index].type} left`).toBeLessThanOrEqual(1);
     });
+  });
+
+  test("a list item's marker turns into its collapse toggle on hover", async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await openFreshPage(page, baseURL);
+    await seedColumns(page);
+    const textLeft = (text) => page.getByText(text, { exact: true }).evaluate((node) => Math.round(node.getBoundingClientRect().left));
+    expect(await textLeft("Child"), "a nested item starts under its parent's text").toBe(await textLeft("Bullet"));
+    const toggle = page.locator('[data-column-id="lead-col-8"] [data-list-collapse]');
+    await toggle.hover();
+    await toggle.click();
+    await expect(page.getByText("Child", { exact: true })).toHaveCount(0);
+    await toggle.click();
+    await expect(page.getByText("Child", { exact: true })).toHaveCount(1);
   });
 
   test("at 320 px the columns stack at full width and nothing runs off the page", async ({ page, baseURL }) => {

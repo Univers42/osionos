@@ -120,11 +120,11 @@ const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
 
 function getNestedChildrenClassName(type: Block["type"]) {
   if (type === "bulleted_list" || type === "numbered_list") {
-    return "ml-[3.25rem] mt-0.5";
+    return "ml-8 mt-0.5";
   }
 
   if (type === "to_do") {
-    return "ml-[2.75rem] mt-0.5";
+    return "ml-6 mt-0.5";
   }
 
   if (type === "toggle") {
@@ -279,7 +279,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       const bulletStyle = getBulletMarker(bulletDepth);
       return (
         <>
-          <div className="flex items-start gap-2 pl-5">
+          <div className="flex items-start gap-2">
             <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
               {bulletStyle === "disc" && (
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--osio-fg-subtle)] mt-[7px]" />
@@ -303,7 +303,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "numbered_list":
       return (
         <>
-          <div className="flex items-start gap-2 pl-5">
+          <div className="flex items-start gap-2">
             <span className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
               {getNumberedMarker(index + 1, numberedDepth)}
             </span>
@@ -318,7 +318,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "to_do":
       return (
         <>
-          <div className="flex items-start gap-2 pl-5">
+          <div className="flex items-start gap-2">
             <span
               className={[
                 "shrink-0 mt-[3px] w-4 h-4 rounded-xs border flex items-center justify-center",

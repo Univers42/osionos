@@ -51,17 +51,7 @@ export const TodoBlockEditor: React.FC<{
   }, [page, block.id, onUpdateBlock, updateBlock]);
 
   return (
-    <div className="group relative flex items-start gap-2 pl-5">
-      {block.children?.length ? (
-        <BlockListCollapse
-          collapsed={block.collapsed}
-          onToggle={() =>
-            (onUpdateBlock ?? ((id, u) => page && updateBlock(page.id, id, u)))(block.id, {
-              collapsed: !block.collapsed,
-            })
-          }
-        />
-      ) : null}
+    <div className="group relative flex items-start gap-2">
       <button
         type="button"
         data-testid="todo-checkbox"
@@ -106,6 +96,16 @@ export const TodoBlockEditor: React.FC<{
         />
         {isTasksEnabled() && <TodoDueDate dueAt={block.dueAt} checked={block.checked} onChange={setDueAt} />}
       </div>
+      {block.children?.length ? (
+        <BlockListCollapse
+          collapsed={block.collapsed}
+          onToggle={() =>
+            (onUpdateBlock ?? ((id, u) => page && updateBlock(page.id, id, u)))(block.id, {
+              collapsed: !block.collapsed,
+            })
+          }
+        />
+      ) : null}
     </div>
   );
 };
