@@ -22,6 +22,7 @@ import {
 } from "@/entities/block/model/tableBlocks";
 import { InternalPageLink } from "@/entities/page";
 import { renderInlineToReact } from "@osionos/markdown-engine/react";
+import { renderVariableChip } from "@/features/variables/ui/VariableChip";
 
 const MAX_AUTO_COLUMN_WIDTH = 420;
 
@@ -38,6 +39,7 @@ const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
     if (!content) return null;
     return renderInlineToReact(content, {
       internalLinkRenderer: renderInternalPageLink,
+      variableRenderer: renderVariableChip,
     });
   }, [content]);
 

@@ -42,6 +42,7 @@ import { ThemeSafeModeBanner } from "@/features/theme/ui/ThemeSafeModeBanner";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
+import { useVariablesSync } from "@/features/variables/model/useVariablesSync";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
 import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
@@ -197,6 +198,7 @@ const App: React.FC = () => {
 
   // Single document-level keyboard-shortcut dispatcher (flag osio.automations; inert when OFF).
   useAutomationDispatcher();
+  useVariablesSync();
 
   // Zen (focus) mode — Ctrl+K Ctrl+Z. Drives [data-zen] on the shell; global.css
   // hides every chrome region off it. Session-only: a reload always exits zen.

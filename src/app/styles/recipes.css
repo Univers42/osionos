@@ -214,3 +214,24 @@
   border-radius: var(--osio-radius-panel);
   box-shadow: var(--osio-e1);
 }
+
+/* `{{NAME}}` shown as its value. It sits in running text, so it keeps the line's
+   font and wraps with it instead of taking the fixed-height osio-chip shape. A
+   value that cannot be produced shows its source in the danger colour; the reason
+   is in the title. */
+.md-variable {
+  padding-inline: 0.2em;
+  border-radius: var(--osio-radius-xs);
+  background-color: var(--osio-accent-subtle);
+  color: var(--osio-accent-text);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  cursor: default;
+}
+
+.md-variable-error {
+  background-color: transparent;
+  color: var(--osio-danger);
+  text-decoration: underline wavy var(--osio-danger);
+  text-underline-offset: 0.2em;
+}
