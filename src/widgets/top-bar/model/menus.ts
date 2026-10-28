@@ -21,9 +21,7 @@ import type { SettingsSectionId } from "@/features/settings/model/sections";
 import { usePageStore } from "@/store/usePageStore";
 import { useIssueReportRequest } from "@/features/issues/model/issueReportRequest";
 import { whiteboardAppUrl } from "@/shared/config/appUrls";
-import { createBoardInNewTab } from "@/features/whiteboard/model/newBoardTab";
-import { whiteboardClient } from "@/features/whiteboard/model/whiteboardClient";
-import { consoleTab, homeTab, trashTab, whiteboardBoardTab, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { consoleTab, homeTab, trashTab, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { usePalette } from "./usePalette";
@@ -130,13 +128,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
         // Two gates, not one: the flag is the kill-switch, the URL is the capability.
         // A build with VITE_WHITEBOARD_APP_URL blanked cannot load the embed at all, so
         // the item is withheld rather than offered and then failing.
-        ...whiteboardViewItems(isWhiteboardEnabled() && whiteboardAppUrl() !== "", {
-          newBoard: () => void createBoardInNewTab(whiteboardClient, {
-            openBoard: (slug, title) => layout().openTab(whiteboardBoardTab(slug, title)),
-            reportError: (message) => useToastStore.getState().push({ kind: "error", title: "Could not create the whiteboard", description: message }),
-          }),
-          openWhiteboard: () => layout().openTab(whiteboardTab()),
-        }),
+        ...whiteboardViewItems(isWhiteboardEnabled() && whiteboardAppUrl() !== "", () => layout().openTab(whiteboardTab())),
       ],
     },
     {

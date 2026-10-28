@@ -174,7 +174,7 @@ export interface Block {
   mediaText?: string;       /** Text found in an image block (≤ 300 chars), from "Describe with AI"; indexed */
   placeholderText?: string; /** Temporary placeholder hint for empty transformed blocks */
   drawHeight?: number;      /** LEGACY 'draw' block canvas height in px. The retired Draw tool; its scene JSON still lives in `content`. */
-  boardSlug?: string;       /** 'whiteboard' block: slug of the drawnosaurus board it embeds. Unset until the board is created. */
+  boardSlug?: string;       /** 'whiteboard' block: slug of the hydrawn board it embeds. Unset until the board is created. */
   whiteboardHeight?: number; /** 'whiteboard' block frame height in px (default 520). `content` holds the board title. */
   diagramSpec?: unknown;    /** 'diagram' block: the stored SPEC (never the rendered output). Validated at use by parseDiagramSpec, never trusted as typed. */
   embed?: EmbedSnapshot;    /** Resolved link metadata for 'embed'/'bookmark' (and later media blocks). UNTRUSTED: parseEmbedSnapshot before use. `content` keeps the URL. */

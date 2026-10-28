@@ -13,7 +13,7 @@ function entry(identifier: string, active = true): InstalledEntry {
     identifier,
     title: identifier,
     launchKind: "embed",
-    launchUrl: "https://localhost:3007",
+    launchUrl: "https://localhost:3008",
     autoUpdate: false,
     active,
     installedAt: "2026-10-17T00:00:00Z",
