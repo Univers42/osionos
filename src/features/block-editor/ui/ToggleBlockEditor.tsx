@@ -138,7 +138,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
           onClick={handleToggle}
           aria-label={expanded ? "Collapse toggle" : "Expand toggle"}
           aria-expanded={expanded}
-          className="shrink-0 mt-[3px] w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center"
+          className={`osio-line-marker ${getToggleHeadingClass(block.headingLevel)} shrink-0 w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center`}
         >
           <ChevronRight
             size={14}

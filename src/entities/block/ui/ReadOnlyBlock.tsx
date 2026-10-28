@@ -321,7 +321,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
           <div className="flex items-start gap-2 pl-5">
             <span
               className={[
-                "shrink-0 mt-[3px] w-4 h-4 rounded-xs border flex items-center justify-center",
+                "osio-line-marker text-sm leading-relaxed shrink-0 w-4 h-4 rounded-xs border flex items-center justify-center",
                 block.checked
                   ? "bg-[var(--osio-accent)] border-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
                   : "border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]",
@@ -574,7 +574,7 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
         <button
           type="button"
           onClick={() => setExpanded((o) => !o)}
-          className="shrink-0 mt-[3px] w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center"
+          className={`osio-line-marker ${getToggleHeadingClass(block.headingLevel)} shrink-0 w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center`}
         >
           <ChevronRight
             size={14}
