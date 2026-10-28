@@ -19,7 +19,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { IDS, post, send, sessionHeaders, withBridge } from './support/bridge-harness.mjs';
-import { INVITEE, OWNER, asInvitee, asStranger, backend, config, world, writes } from './support/workspace-invites-backend.mjs';
+import { ADMIN, INVITEE, OWNER, asInvitee, asStranger, backend, config, world, writes } from './support/workspace-invites-backend.mjs';
 
 const ACCEPT = '/api/invites/accept';
 const TOKEN = 'T'.repeat(43);
@@ -46,10 +46,29 @@ describe('POST /api/invites/accept', () => {
 		const [stored] = mock.rows('osionos_workspace_invites');
 		assert.ok(stored.accepted_at);
 		assert.equal(stored.accepted_by, INVITEE);
-		assert.equal(mock.publishes.length, 1);
+		assert.equal(mock.publishes.length, 2);
 		assert.equal(mock.publishes[0].topic, `user:${INVITEE}`);
 		assert.equal(mock.publishes[0].payload.op, 'added');
 		assert.equal(mock.publishes[0].payload.role, 'viewer');
+		// The owner learns of the join once, by id and display name only.
+		const joined = mock.publishes.filter((frame) => frame.payload.op === 'member_joined');
+		assert.deepEqual(joined.map((frame) => frame.topic), [`user:${OWNER}`]);
+		assert.equal(joined[0].payload.workspaceId, IDS.team);
+		assert.equal(joined[0].payload.member.userId, INVITEE);
+		assert.equal(typeof joined[0].payload.member.name, 'string');
+		assert.doesNotMatch(JSON.stringify(joined[0].payload), /@/);
+	});
+
+	// Accepts share one 10-per-minute bucket per user across this file: fold new assertions into an
+	// existing accept rather than adding one, or the "accepting twice" case meets 429.
+	it('tells an inviter who is not the owner as well as the owner, and never the invitee', async () => {
+		const mock = backend({
+			seed: world({ invites: [row({ invited_by: ADMIN })], members: [{ workspace_id: IDS.team, user_id: ADMIN, role: 'admin', permissions: ['read', 'write'] }] }),
+		});
+		const result = await withBridge(config, mock.fetchImpl, accept(asInvitee));
+		assert.equal(result.status, 200, result.text);
+		const topics = mock.publishes.filter((frame) => frame.payload.op === 'member_joined').map((frame) => frame.topic).sort();
+		assert.deepEqual(topics, [`user:${ADMIN}`, `user:${OWNER}`].sort());
 	});
 
 	it('answers without a session with 401 sign_in_required and writes nothing', async () => {
@@ -107,7 +126,7 @@ describe('POST /api/invites/accept', () => {
 		assert.equal(second.status, 410, second.text);
 		assert.equal(second.body.code, 'invite_used');
 		assert.equal(members(mock).length, 1);
-		assert.equal(mock.publishes.length, 1);
+		assert.equal(mock.publishes.length, 2);
 	});
 
 	it('rate-limits the 11th accept of one session in a minute with 429', async () => {

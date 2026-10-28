@@ -99,7 +99,7 @@ export async function acceptInviteRow(deps, session, invite, config) {
     },
     prefer: 'resolution=ignore-duplicates,return=minimal',
   }), { workspaceId: invite.workspace_id, userId: session.userId });
-  const identities = await identitySummaries(config, deps.fetchImpl, [invite.invited_by]);
+  const identities = await identitySummaries(config, deps.fetchImpl, [invite.invited_by, session.userId]);
   await publishMembership(deps, session.userId, {
     workspaceId: invite.workspace_id,
     workspaceName: workspace?.name ?? 'Workspace',
@@ -107,6 +107,21 @@ export async function acceptInviteRow(deps, session, invite, config) {
     by: { userId: invite.invited_by, name: identities.get(invite.invited_by)?.name ?? 'Member' },
     op: 'added',
   });
+  // The owner and the inviter learn about the join live (dedup recipients; never the invitee twice).
+  const recipientMap = new Map();
+  const addRecipient = (id) => { if (id) recipientMap.set(String(id).toLowerCase(), String(id)); };
+  addRecipient(invite.invited_by);
+  addRecipient(workspace?.owner_id);
+  const inviteeName = identities.get(session.userId)?.name ?? 'Member';
+  for (const original of recipientMap.values()) {
+    if (isSameId(original, session.userId)) continue;
+    await publishMembership(deps, original, {
+      workspaceId: invite.workspace_id,
+      workspaceName: workspace?.name ?? 'Workspace',
+      op: 'member_joined',
+      member: { userId: session.userId, name: inviteeName },
+    });
+  }
   return { ok: true, workspaceId: invite.workspace_id, role: invite.role };
 }
 
