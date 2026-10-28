@@ -63,6 +63,7 @@ export interface ShareEntry {
     | { type: 'user'; person: SharePerson }
     | { type: 'role'; role: string }
     | { type: 'team'; team: ShareTeam }
+    | { type: 'attribute'; name: string; value: string }
     | { type: 'workspace' }
     | { type: 'public' };
   level: ShareLevel;
@@ -76,7 +77,7 @@ export interface ShareAccessRule {
   workspaceId: string;
   resourceId: string | null;
   resourceType: 'workspace' | 'page' | 'database' | 'block';
-  target: { type: 'user'; userId: string } | { type: 'role'; role: string } | { type: 'team'; teamId: string } | { type: 'workspace' } | { type: 'public' };
+  target: { type: 'user'; userId: string } | { type: 'role'; role: string } | { type: 'team'; teamId: string } | { type: 'attribute'; name: string; value: string } | { type: 'workspace' } | { type: 'public' };
   permission: ShareLevel;
   explicit: boolean;
 }
