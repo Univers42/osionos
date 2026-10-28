@@ -16,8 +16,9 @@ export interface WorkspaceMembershipPayload {
   workspaceId?: string;
   workspaceName?: string;
   role?: string;
-  op?: 'added' | 'role' | 'removed';
+  op?: 'added' | 'role' | 'removed' | 'member_joined';
   by?: { userId?: string; name?: string };
+  member?: { userId?: string; name?: string };
 }
 
 /** The toast copy for a membership frame, or null for ops with nothing to say. */
@@ -27,5 +28,6 @@ export function workspaceMembershipNotice(payload: unknown): string | null {
   const workspace = event.workspaceName || 'a workspace';
   if (event.op === 'added') return `${event.by?.name || 'Someone'} added you to ${workspace}`;
   if (event.op === 'removed') return `You were removed from ${workspace}`;
+  if (event.op === 'member_joined') return `${event.member?.name || 'Someone'} joined ${workspace}`;
   return null;
 }

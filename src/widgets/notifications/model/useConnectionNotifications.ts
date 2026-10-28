@@ -27,6 +27,8 @@ import { useEffect } from 'react';
 import { subscribeTopic } from '@/services/realtime-messages/wsTransport';
 import { useContactsStore } from '@/store/social/useContactsStore';
 import { useUserStore } from '@/features/auth/model/useUserStore';
+import { usePageStore } from '@/store/usePageStore';
+import { useWorkspaceMembersStore } from '@/store/settings/useWorkspaceMembersStore';
 import {
   fetchWorkspaces,
   pageApiJwtFromSessionToken,
@@ -34,6 +36,11 @@ import {
 } from '@/features/auth/model/userStore.helpers';
 import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { workspaceMembershipNotice, type WorkspaceMembershipPayload } from './workspaceMembershipNotice';
+import { settleMissingPage } from '@/store/evictLocalPage';
+import { savePagesCache, PAGE_OUTBOX_KEY } from '@/store/pageStore.helpers';
+import { isPageClean } from '@/store/sync/mergeServerPages';
+import { loadLedger } from '@osionos/outbox-ledger';
+import { getCurrentPageAccessContext, canEditPage } from '@/shared/lib/auth/pageAccess';
 
 /** Re-read /api/workspaces and replace the session's lists (bridge sessions included). */
 async function refreshWorkspaceLists(userId: string): Promise<void> {
@@ -71,12 +78,42 @@ export function useConnectionNotifications(): void {
     return subscribeTopic(`user:${activeUserId}`, (frame) => {
       if (frame.event_type === 'workspace_membership') {
         const payload = (frame.payload ?? {}) as WorkspaceMembershipPayload;
+        if (payload.workspaceId) {
+          void useWorkspaceMembersStore.getState().hydrate(payload.workspaceId, activeUserId);
+        }
         void refreshWorkspaceLists(activeUserId).then(() => {
           if (payload.op === 'removed') leaveRemovedWorkspace(activeUserId, payload.workspaceId);
         });
         const notice = workspaceMembershipNotice(payload);
         if (notice) {
           useToastStore.getState().push({ kind: payload.op === 'removed' ? 'info' : 'success', title: notice });
+        }
+        return;
+      }
+      if (frame.event_type === 'page_access') {
+        const payload = (frame.payload ?? {}) as { workspaceId?: string; pageId?: string; op?: string };
+        const userState = useUserStore.getState();
+        const activeWorkspace = userState.activeWorkspace();
+        if (payload.workspaceId && activeWorkspace?._id === payload.workspaceId) {
+          const jwt = userState.activePageJwt() ?? '';
+          void usePageStore.getState().fetchPages(activeWorkspace._id, jwt, true);
+        }
+        if (payload.op === 'revoked' && payload.pageId) {
+          const pageStore = usePageStore.getState();
+          const page = pageStore.pageById(payload.pageId);
+          const workspaceId = page?.workspaceId ?? payload.workspaceId;
+          if (page && workspaceId) {
+            const context = getCurrentPageAccessContext();
+            const canPublish = context !== null && canEditPage(page, context);
+            const ledger = loadLedger(PAGE_OUTBOX_KEY);
+            const isClean = isPageClean(page, ledger, canPublish);
+            const settled = settleMissingPage(pageStore, workspaceId, payload.pageId, isClean);
+            if (settled) {
+              usePageStore.setState(settled.state);
+              savePagesCache(usePageStore.getState().pages, workspaceId);
+              if (settled.toast) useToastStore.getState().push(settled.toast);
+            }
+          }
         }
         return;
       }
