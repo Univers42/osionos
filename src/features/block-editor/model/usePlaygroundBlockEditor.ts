@@ -534,7 +534,10 @@ function moveBlockInEditorTree(
     const fromIndex = list.findIndex((block) => block.id === blockId);
     if (fromIndex < 0) return false;
     const [moved] = list.splice(fromIndex, 1);
-    list.splice(Math.max(0, Math.min(targetIndex, list.length)), 0, moved);
+    // targetIndex is the drop slot counted BEFORE the removal: moving down, the
+    // removal shifted that slot up by one and the block landed below the indicator.
+    const slot = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    list.splice(Math.max(0, Math.min(slot, list.length)), 0, moved);
     return true;
   };
 

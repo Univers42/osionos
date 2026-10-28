@@ -80,8 +80,10 @@ export function clearGestureVars(element: HTMLElement): void {
   element.style.removeProperty("--osio-cell-dh");
 }
 
-/** Window auto-scroll while dragging near the vertical viewport edges. */
-export function createVerticalAutoScroller(): { update: (clientY: number) => void; stop: () => void } {
+/** Auto-scroll while dragging near the vertical edges of `container` (the window by default). */
+export function createVerticalAutoScroller(
+  container: HTMLElement | null = null,
+): { update: (clientY: number) => void; stop: () => void } {
   let pointerY = 0;
   let frame = 0;
   let active = true;
@@ -99,9 +101,11 @@ export function createVerticalAutoScroller(): { update: (clientY: number) => voi
   const tick = () => {
     frame = 0;
     if (!active) return;
-    const speed = speedAt(pointerY, document.documentElement.clientHeight);
+    const top = container?.getBoundingClientRect().top ?? 0;
+    const height = container?.clientHeight ?? document.documentElement.clientHeight;
+    const speed = speedAt(pointerY - top, height);
     if (!speed) return;
-    globalThis.scrollBy(0, speed);
+    (container ?? globalThis).scrollBy(0, speed);
     frame = requestAnimationFrame(tick);
   };
 
