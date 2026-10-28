@@ -132,6 +132,7 @@ interface GraphStudioViewProps {
 }
 
 export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedScope }) => {
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const book = useRef<LoadBook>({ token: 0, inFlight: 0, refused: null, seen: null });
   const [element, setElement] = useState<StudioElement | null>(null);
@@ -266,9 +267,22 @@ export const GraphStudioView: React.FC<GraphStudioViewProps> = ({ scope: fixedSc
     setAttempt((n) => n + 1);
   }, []);
 
+  // Inline in a page (fixed scope) the wheel scrolls the page; the studio canvas would cancel
+  // it to zoom. Ctrl+wheel and trackpad pinch (ctrlKey) still reach it and zoom.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!fixedScope || !root) return;
+    const passToPage = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) event.stopPropagation();
+    };
+    root.addEventListener("wheel", passToPage, { capture: true });
+    return () => root.removeEventListener("wheel", passToPage, { capture: true });
+  }, [fixedScope]);
+
   const overlay = overlayText(view);
   return (
     <div
+      ref={rootRef}
       data-testid="graph-studio-view"
       data-graph-state={view.phase}
       data-osio-fixed-scale
