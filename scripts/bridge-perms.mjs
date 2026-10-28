@@ -29,9 +29,17 @@
  *   DELETE /api/perms/policies/:id  → delete resource policy          (admin only)
  *   GET    /api/perms/bundle        → PolicyBundle (user_roles + policies)       (admin only)
  *   POST   /api/perms/decide        → ABAC decision {allow,reason,mode,mask?}
- *   GET    /api/perms/rules?workspaceId&resourceId → AccessRules      (workspace `read`)
+ *   GET    /api/perms/rules?workspaceId[&resourceId][&inherited=1] → AccessRules (workspace `read`)
  *   POST   /api/perms/rules         → upsert an AccessRule             (workspace `update`)
  *   DELETE /api/perms/rules/:id     → delete an AccessRule             (workspace `update`)
+ * The rules READ is scoped to what the caller can see (G1b): a page the caller's level on is
+ * 'none' — missing, in another workspace, private to somebody else, or denied by a rule on it
+ * or an ancestor — answers exactly like GET /api/pages/:id's missing page (404, same body).
+ * The list form returns the workspace-wide rules plus the rules of pages the caller can read;
+ * database/block/workspace-type rules only to the workspace owner/admin. `&inherited=1` adds
+ * the readable strict ancestors' rules, nearest first, each with a structural `reaches`, and
+ * `hiddenInherited` when an unreadable ancestor contributes nothing. Any failed read is a 503
+ * `page_access_unavailable`, never a filtered-looking rules array.
  * A rule ABOUT a page is the page owner's to change (the workspace owner/admin may change
  * any rule): the workspace gate alone would let any member carrying `update` rewrite who
  * may read somebody else's page.
@@ -54,14 +62,20 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bearerToken, httpError, rest } from './bridge-social-core.mjs';
-import { createShareRuleStore, normalizeShareRule } from './bridge-perms-rules.mjs';
-import { mayChangeRule } from './bridge-perms-rule-owners.mjs';
+import { createShareRuleStore, normalizeShareRule, toApiRule } from './bridge-perms-rules.mjs';
+import { mayChangeRule, PAGE_ID } from './bridge-perms-rule-owners.mjs';
+import { ancestorChain, ruleReachesPage } from './bridge-page-access.mjs';
+import { idChunks, inFilter, runChunks } from './bridge-paging.mjs';
+import { sameId } from './bridge-page-read.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = resolve(SCRIPT_DIR, '..');
 const REPO_ROOT = resolve(APP_ROOT, '../../..');
 const ROUTE_PREFIX = '/api/perms/';
 const JSON_BODY_LIMIT = 64 * 1024;
+// The columns canReadPageRow/decidePageAccess read for a level check; `collaborators` is the
+// one neither the parent map nor the rules store carries (F8).
+const PAGE_ROW_SELECT = 'id,workspace_id,owner_id,visibility,collaborators';
 const DEV_ENV_FILES = ['apps/grobase/.agency-tenant.env', 'apps/grobase/.env'];
 const PUBLIC_ERRORS = {
 	400: ['perms_bad_request', 'The request is invalid.'],
@@ -141,6 +155,9 @@ function loadPeople(peopleEnv) {
 export function createPermsHandler({
 	verifySession, requireWorkspaceAccess, fetchImpl = fetch,
 	settings = loadPermsSettings(), ruleStore = createShareRuleStore({ fetchImpl }),
+	// Injected by bridge-api.mjs so this module never imports it back (the two form a cycle):
+	// the SAME per-request access loader and level evaluator every page surface uses (C608).
+	createPageAccessLoader, pageLevelFor,
 }) {
 	const reply = (response, status, body) => {
 		response.writeHead(status, {
@@ -154,8 +171,34 @@ export function createPermsHandler({
 		const [error, message] = PUBLIC_ERRORS[status] ?? PUBLIC_ERRORS[400];
 		return reply(response, PUBLIC_ERRORS[status] ? status : 400, { error, message });
 	};
+	// C600/F9: the rules read answers a page the caller may not see EXACTLY like the page
+	// routes answer a missing id — the same status and byte-identical body.
+	const replyPageNotFound = (response) => {
+		response.writeHead(404, {
+			'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
+			'access-control-allow-origin': settings.allowedOrigin,
+			'access-control-allow-credentials': 'true', vary: 'Origin',
+		});
+		response.end(JSON.stringify({ ok: false, message: 'Page not found.' }));
+		return true;
+	};
+	// C602: a broken access read is never an empty-looking rule list.
+	const replyAccessUnavailable = (response) => {
+		response.writeHead(503, {
+			'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
+			'access-control-allow-origin': settings.allowedOrigin,
+			'access-control-allow-credentials': 'true', vary: 'Origin',
+		});
+		response.end(JSON.stringify({
+			ok: false, message: 'Page access could not be verified right now.', code: 'page_access_unavailable',
+		}));
+		return true;
+	};
 	const engine = createEngineProxy(settings, fetchImpl, reply, fail);
-	const rules = createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply, fail });
+	const rules = createRuleRoutes({
+		ruleStore, requireWorkspaceAccess, fetchImpl, reply, fail, replyPageNotFound, replyAccessUnavailable,
+		createPageAccessLoader, pageLevelFor,
+	});
 
 	return async function handlePerms(url, request, response, requestConfig) {
 		const pathname = url?.pathname ?? '';
@@ -259,17 +302,163 @@ function createEngineProxy(settings, fetchImpl, reply, fail) {
  *  `update` (a rule the caller may not change reads as not found). Who may change a rule
  *  ABOUT a page is decided in bridge-perms-rule-owners.mjs: a rule is an access grant, so
  *  the workspace gate alone would let any member carrying `update` rewrite who may read
- *  somebody else's page. */
-function createRuleRoutes({ ruleStore, requireWorkspaceAccess, fetchImpl, reply, fail }) {
+ *  somebody else's page.
+ *  The READ is scoped by the shared page-access loader (C600-C608): a page the caller's
+ *  level on is 'none' answers the page route's 404, and a failed read answers 503. */
+function createRuleRoutes({
+	ruleStore, requireWorkspaceAccess, fetchImpl, reply, fail, replyPageNotFound, replyAccessUnavailable,
+	createPageAccessLoader, pageLevelFor,
+}) {
 	const access = (ctx, workspaceId, permission) =>
 		requireWorkspaceAccess(ctx.request, workspaceId, permission, ctx.requestConfig, fetchImpl);
+	const pageAccessUnavailable = () => Object.assign(
+		new Error('Page access could not be verified right now.'),
+		{ status: 503, code: 'page_access_unavailable' },
+	);
+	// Only the { id } column set is safe to put in a PostgREST filter; PAGE_ID rejects an
+	// upper-case id only for the filter, not for the lookup (C614).
+	const pageIdOf = (value) => {
+		const text = String(value ?? '');
+		return PAGE_ID.test(text) ? text.toLowerCase() : null;
+	};
+	const loadAccess = (ctx, workspaceId, { forceMeta = false } = {}) => {
+		if (typeof createPageAccessLoader !== 'function' || typeof pageLevelFor !== 'function') throw pageAccessUnavailable();
+		return createPageAccessLoader(ctx.session, ctx.requestConfig, fetchImpl, null, { forceMeta }).entryFor(workspaceId);
+	};
+	// The caller's level on a row under the already-loaded map. A row of another workspace
+	// is not readable through THIS workspace's map, whatever its visibility.
+	const levelOn = (entry, row, workspaceId, userId) =>
+		row && sameId(row.workspace_id, workspaceId) ? pageLevelFor(entry, row, userId) : 'none';
+
+	/** ONE page row with the columns the level check needs; a failed read is a 503. */
+	const readPageRow = async (ctx, pageId) => {
+		try {
+			const rows = await rest(ctx.requestConfig, fetchImpl,
+				`osionos_pages?id=eq.${pageId}&select=${PAGE_ROW_SELECT}&limit=1`);
+			return Array.isArray(rows) ? rows[0] ?? null : null;
+		} catch {
+			throw pageAccessUnavailable();
+		}
+	};
+
+	/** id → row for `ids`, validated first and read in ≤50-id chunks, chunks in parallel. */
+	const readPageRows = async (ctx, ids) => {
+		const valid = [...new Set((ids ?? []).map(pageIdOf).filter(Boolean))];
+		if (valid.length === 0) return new Map();
+		let parts;
+		try {
+			parts = await runChunks(idChunks(valid), (chunk) => rest(ctx.requestConfig, fetchImpl,
+				`osionos_pages?${inFilter('id', chunk)}&select=${PAGE_ROW_SELECT}&limit=${chunk.length}`));
+		} catch {
+			throw pageAccessUnavailable();
+		}
+		const rows = new Map();
+		for (const row of parts.flat()) {
+			if (row?.id) rows.set(String(row.id).toLowerCase(), row);
+		}
+		return rows;
+	};
+
+	/** The strict ancestors' rules for a readable page (C608), from the decision's own walk. */
+	const inheritedRules = async (ctx, entry, pageId, row, workspaceId) => {
+		const chain = ancestorChain(pageId, entry.parentOf);
+		if (!chain) return { inherited: [], hiddenInherited: false };
+		const ancestors = chain.slice(1);
+		const rows = await readPageRows(ctx, ancestors);
+		const inherited = [];
+		let hiddenInherited = false;
+		for (const [index, ancestorId] of ancestors.entries()) {
+			const ancestorRow = rows.get(ancestorId);
+			// An unreadable ancestor contributes no id, title, target or rule: only the signal.
+			if (!ancestorRow || levelOn(entry, ancestorRow, workspaceId, ctx.session.userId) === 'none') {
+				hiddenInherited = true;
+				continue;
+			}
+			// Parent … ancestor inclusive: the run ruleReachesPage replays.
+			const path = chain.slice(1, index + 2);
+			for (const rule of entry.rulesByPage.get(ancestorId) ?? []) {
+				inherited.push({
+					rule: toApiRule(rule), fromPageId: ancestorId,
+					reaches: ruleReachesPage({ rule, row, ancestorId, path, pageMeta: entry.pageMeta }),
+				});
+			}
+		}
+		return { inherited, hiddenInherited };
+	};
+
+	/** C603/C605: wide rules + read page rules to a member; non-page types to owner/admin. */
+	const listVisibleRules = async (ctx, workspaceId, isAdmin) => {
+		const [all, entry] = await Promise.all([
+			ruleStore.list(ctx.requestConfig, workspaceId, null),
+			loadAccess(ctx, workspaceId),
+		]);
+		const pageIds = all
+			.filter((rule) => rule?.resourceType === 'page' && rule.resourceId)
+			.map((rule) => rule.resourceId);
+		const rows = await readPageRows(ctx, pageIds);
+		const readable = new Set();
+		for (const id of rows.keys()) {
+			if (levelOn(entry, rows.get(id), workspaceId, ctx.session.userId) !== 'none') readable.add(id);
+		}
+		const visible = all.filter((rule) => {
+			if (rule?.resourceType !== 'page') return isAdmin;
+			const id = rule.resourceId ? String(rule.resourceId).toLowerCase() : '';
+			return id === '' || readable.has(id);
+		});
+		return reply(ctx.response, 200, { rules: visible, teamRules: true });
+	};
+
+	/** The resourceId form. A non-page/non-UUID id is 404 for everyone (C614); a UUID that
+	 *  names no page may still be a database/block rule for the workspace owner/admin (C603). */
+	const resourceRules = async (ctx, workspaceId, rawResourceId, inherited, isAdmin) => {
+		const pageId = pageIdOf(rawResourceId);
+		if (!pageId) return replyPageNotFound(ctx.response);
+		// C601: the loader entry and the P row read start together, and BOTH are awaited, so an
+		// unknown id and an unreadable page make the same upstream calls.
+		const [entry, row] = await Promise.all([
+			loadAccess(ctx, workspaceId, { forceMeta: inherited }),
+			readPageRow(ctx, pageId),
+		]);
+		const level = levelOn(entry, row, workspaceId, ctx.session.userId);
+		if (level === 'none') {
+			// An existing page (foreign, private, denied) is a 404 for admins too: privacy beats
+			// the workspace owner/admin exemption (F6). A missing UUID may be a non-page rule.
+			// The admin read runs for an unreadable page as well as a missing one, so C601's
+			// unknown/unreadable call sets stay equal; its answer is discarded when the row exists.
+			if (!isAdmin) return replyPageNotFound(ctx.response);
+			const fallback = await ruleStore.list(ctx.requestConfig, workspaceId, pageId);
+			if (row) return replyPageNotFound(ctx.response);
+			const own = fallback.filter((rule) => rule?.resourceType !== 'page');
+			if (own.length === 0) return replyPageNotFound(ctx.response);
+			return reply(ctx.response, 200, { rules: own, teamRules: true });
+		}
+		// C607: wide rules answer the resource form only to the workspace owner/admin.
+		const rules = [
+			...(entry.rulesByPage.get(pageId) ?? []),
+			...(isAdmin ? entry.rulesByPage.get('') ?? [] : []),
+		].map(toApiRule);
+		const body = { rules, teamRules: true };
+		if (inherited) Object.assign(body, await inheritedRules(ctx, entry, pageId, row, workspaceId));
+		return reply(ctx.response, 200, body);
+	};
+
 	return async (ctx) => {
 		const { method, tail, url, response, requestConfig } = ctx;
 		if (method === 'GET' && tail === 'rules') {
 			const workspaceId = url.searchParams.get('workspaceId');
 			if (!workspaceId) return fail(response, 400);
-			await access(ctx, workspaceId, 'read');
-			return reply(response, 200, { rules: await ruleStore.list(requestConfig, workspaceId, url.searchParams.get('resourceId')), teamRules: true });
+			const resourceId = url.searchParams.get('resourceId');
+			const inherited = url.searchParams.get('inherited') === '1';
+			try {
+				const workspace = await access(ctx, workspaceId, 'read');
+				const isAdmin = workspace?.role === 'owner' || workspace?.role === 'admin';
+				if (resourceId == null || resourceId === '') return await listVisibleRules(ctx, workspaceId, isAdmin);
+				return await resourceRules(ctx, workspaceId, resourceId, inherited, isAdmin);
+			} catch (error) {
+				// C602: every failed access/rules/parent/page read is this 503, never a rules array.
+				if ((Number(error?.status) || 500) >= 500) return replyAccessUnavailable(response);
+				throw error;
+			}
 		}
 		if (method === 'POST' && tail === 'rules') {
 			const rule = normalizeShareRule(await readJsonBody(ctx.request));

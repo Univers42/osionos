@@ -45,7 +45,7 @@ import { rest } from './bridge-social-core.mjs';
 
 // Any 8-4-4-4-12 hex id, not only RFC v1-5: a rule naming a non-v4 page id must still be
 // checked against that page, never fall through to the workspace gate (X1-C4).
-const PAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const PAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The page a page rule is about, or null when it does not exist. */
 async function rulePage(config, fetchImpl, pageId) {
