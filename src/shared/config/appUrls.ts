@@ -50,7 +50,7 @@ export function currentPageOrigin(): string {
 
 const MAIL_URL = resolveAppUrl(VITE_ENV["VITE_MAIL_APP_URL"] as string | undefined, IS_DEV ? "http://localhost:3002" : "");
 const CALENDAR_URL = resolveAppUrl(VITE_ENV["VITE_CALENDAR_APP_URL"] as string | undefined, IS_DEV ? "http://localhost:3003" : "");
-const WHITEBOARD_URL = resolveAppUrl(VITE_ENV["VITE_WHITEBOARD_APP_URL"] as string | undefined, IS_DEV ? "https://localhost:3007" : "");
+const WHITEBOARD_URL = resolveAppUrl(VITE_ENV["VITE_WHITEBOARD_APP_URL"] as string | undefined, IS_DEV ? "https://localhost:3008" : "");
 
 export const mailAppUrl = (): string => MAIL_URL;
 export const calendarAppUrl = (): string => CALENDAR_URL;

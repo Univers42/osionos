@@ -68,7 +68,7 @@ const LinkBlockEditor = lazy(() =>
   import("./LinkBlockEditor").then((m) => ({ default: m.LinkBlockEditor })),
 );
 
-// The inline whiteboard (iframe of the drawnosaurus board) — lazy, same boundary.
+// The inline whiteboard (iframe of the hydrawn board) — lazy, same boundary.
 const WhiteboardBlock = lazy(() =>
   import("@/features/whiteboard/ui/WhiteboardBlock").then((m) => ({ default: m.WhiteboardBlock })),
 );
@@ -1100,7 +1100,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
       );
 
     case "draw":
-      return <LegacyDrawNotice block={block} onConvert={(updates) => commitBlockUpdate(block.id, updates)} />;
+      return <LegacyDrawNotice block={block} />;
 
     case "whiteboard":
       return (

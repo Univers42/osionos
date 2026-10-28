@@ -1,4 +1,4 @@
-/** Mirrors `slugSchema` in drawnosaurus `packages/contract/src/board.ts`. Slugs are
+/** Mirrors `slugSchema` in hydrawn `packages/contract/src/board.ts`. Slugs are
  *  minted by the service; osionos only ever stores and echoes them, so every URL built
  *  from page data (markdown fences, synced blocks) passes through this first: a stored
  *  `../..` or `"><script>` never reaches an iframe `src`. */

@@ -38,6 +38,17 @@ create table if not exists public.osionos_workspaces (
 	visibility text not null default 'confidential'
 );
 
+-- TEST-ONLY FIXTURE: the private workspace rows of the three test users
+-- (tests/retrievalSeed.ts: WORKSPACE_A is USER_A's, B is B's, C is C's). In
+-- production the bridge writes this row when it creates a private workspace, and
+-- the share-rule read path (src/retrieval/shareRules.ts) takes the owner from it:
+-- without the row the owner is a non-member and every page of theirs is closed.
+insert into public.osionos_workspaces (id, owner_id, name) values
+	('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'Workspace A'),
+	('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '22222222-2222-4222-8222-222222222222', 'Workspace B'),
+	('cccccccc-cccc-4ccc-8ccc-cccccccccccc', '33333333-3333-4333-8333-333333333333', 'Workspace C')
+on conflict (id) do nothing;
+
 -- TEST-ONLY FIXTURE: the columns of osionos_pages that the page context of a
 -- run reads (src/pageContext.ts), the columns the RAG triggers read (the
 -- enqueue trigger, the ACL sync trigger and the delete trigger of
@@ -67,6 +78,22 @@ create table if not exists public.osionos_pages (
 	archived_at timestamptz,
 	created_at timestamptz not null default now(),
 	updated_at timestamptz not null default now()
+);
+
+-- TEST-ONLY FIXTURE: the columns of osionos_share_rules that the AI read path
+-- reads (src/retrieval/shareRules.ts). Without the table every workspace would
+-- fail closed and the retrieval tests would see no page at all. The production
+-- table (models/osionos-share-rules-migration.sql) carries target_key, the
+-- identity constraint and the CHECKs; this fixture holds the same column types.
+create table if not exists public.osionos_share_rules (
+	id uuid primary key default gen_random_uuid(),
+	workspace_id uuid not null,
+	resource_type text not null default 'page',
+	resource_id text not null default '',
+	target jsonb not null,
+	permission text not null,
+	explicit boolean not null default true,
+	created_at timestamptz not null default now()
 );
 
 -- TEST-ONLY FIXTURE: the link store of the graph (C103). The production table

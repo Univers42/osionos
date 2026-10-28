@@ -80,11 +80,30 @@ function matchesFilter(row, key, expr) {
 		// The bridge quotes the ids of its `in` lists (inFilter), so the quotes come off here.
 		return expr.slice(4, -1).split(',').map((item) => item.replace(/^"(.*)"$/, '$1')).some((item) => sameText(row[key], item));
 	}
-	// A PostgREST `or=(a.eq.b,c.eq.d)` group: the row matches when ANY clause does.
+	// A PostgREST `or=(a.eq.b,and(c.eq.d,e.eq.f))` group: the row matches when ANY
+	// top-level clause does. Commas inside `and(...)` belong to that clause, not the or.
 	if (key === 'or' && expr.startsWith('(') && expr.endsWith(')')) {
-		return expr.slice(1, -1).split(',').some((clause) => {
-			const [column, ...rest] = clause.split('.');
-			return matchesFilter(row, column, rest.join('.'));
+		const inner = expr.slice(1, -1);
+		const clauses = [];
+		let depth = 0;
+		let start = 0;
+		for (let index = 0; index < inner.length; index += 1) {
+			const char = inner[index];
+			if (char === '(') depth += 1;
+			else if (char === ')') depth -= 1;
+			else if (char === ',' && depth === 0) {
+				clauses.push(inner.slice(start, index));
+				start = index + 1;
+			}
+		}
+		clauses.push(inner.slice(start));
+		return clauses.some((clause) => {
+			const and = /^and\((.*)\)$/.exec(clause);
+			const parts = and ? and[1].split(',') : [clause];
+			return parts.every((part) => {
+				const [column, ...rest] = part.split('.');
+				return matchesFilter(row, column, rest.join('.'));
+			});
 		});
 	}
 	if (expr.startsWith('not.in.(') && expr.endsWith(')')) {

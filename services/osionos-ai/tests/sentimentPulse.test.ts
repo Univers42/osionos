@@ -104,6 +104,28 @@ describe('the sentiment pulse and thread mood', { timeout: 60_000, skip: ready &
 		assert.equal(owner[0].negative, 5);
 	});
 
+	it('does not count comments on a rule-hidden page', async () => {
+		await optIn();
+		const hiddenPage = randomUUID();
+		const ruleId = randomUUID();
+		try {
+			await pool.query('insert into public.osionos_pages (id, workspace_id, owner_id, visibility) values ($1, $2, $3, \'public\')', [hiddenPage, WS_PRIVATE, AUTHOR]);
+			await pool.query(
+				`insert into public.osionos_share_rules (id, workspace_id, resource_type, resource_id, target, permission, explicit)
+				 values ($1, $2, 'page', $3, $4::jsonb, 'no_access', true)`,
+				[ruleId, WS_PRIVATE, hiddenPage, JSON.stringify({ type: 'user', userId: VIEWER })],
+			);
+			await seed(hiddenPage, 5, ['negative'], PAST);
+			await seed(PAGE_PUBLIC, 5, ['positive'], PAST);
+			const weekStart = (await pool.query(`select to_char(date_trunc('week', now()) - interval '1 week', 'YYYY-MM-DD') as w`)).rows[0].w;
+			assert.deepEqual((await pulse(VIEWER)).body.weeks, [{ weekStart, negative: 0, neutral: 0, positive: 5 }]);
+		} finally {
+			await pool.query('delete from public.osionos_share_rules where id = $1', [ruleId]);
+			await pool.query('delete from public.osionos_page_comments where page_id = $1', [hiddenPage]);
+			await pool.query('delete from public.osionos_pages where id = $1', [hiddenPage]);
+		}
+	});
+
 	it('C138 disabled: enabled false and no weeks; a non-member gets 404 on both routes', async () => {
 		await seed(PAGE_PUBLIC, 5, ['negative'], PAST);
 		assert.deepEqual((await pulse(VIEWER)).body, { enabled: false, weeks: [] });

@@ -20,11 +20,26 @@ const TOKEN = 'abcdef0123456789abcdef0123456789';
 const ON = { OSIONOS_PUBLISH_ENABLED: '1' };
 
 function mockResponse() {
-	return { statusCode: 0, body: null, writeHead(s) { this.statusCode = s; return this; }, end(p) { this.body = p ? JSON.parse(p) : null; } };
+	return {
+		statusCode: 0,
+		headers: {},
+		body: null,
+		writeHead(status, headers) { this.statusCode = status; this.headers = headers ?? {}; return this; },
+		end(payload) { this.body = payload ? JSON.parse(payload) : null; },
+	};
 }
 const request = (method) => ({ method, headers: { authorization: 'Bearer t' }, socket: { remoteAddress: '1.2.3.4' } });
+const getFrom = (remoteAddress, headers = {}) => ({ method: 'GET', headers, socket: { remoteAddress } });
 const verifySession = () => ({ userId: 'user-1' });
 const grantPage = (ownerId) => async () => ({ row: { owner_id: ownerId } });
+const emptyRows = async () => ({ ok: true, status: 200, text: async () => '[]' });
+const handlerWith = (fetchImpl, env = ON, handlerConfig = config) => createPublicHandler({
+	config: handlerConfig,
+	verifySession,
+	verifyPageAccess: grantPage('user-1'),
+	fetchImpl,
+	env,
+});
 
 describe('publish/public ACL + flag gate', () => {
 	it('404s the publish path when the feature flag is off', async () => {
@@ -56,5 +71,115 @@ describe('publish/public ACL + flag gate', () => {
 		const handler = createPublicHandler({ config, verifySession, verifyPageAccess: grantPage('user-1'), fetchImpl: async () => ({ ok: true, status: 200, text: async () => '[]' }), env: ON });
 		const handled = await handler(new URL('http://app/api/pages'), request('GET'), mockResponse(), config);
 		assert.equal(handled, false);
+	});
+});
+
+describe('public read throttle uses the proxy-derived address', () => {
+	it('429s the 31st request even when X-Forwarded-For rotates on one socket', async () => {
+		const handler = handlerWith(emptyRows);
+		// Start all 31 in one tick so the bucket sees them before the slow refill
+		// (0.5 token/s) can hand a throttled caller a fresh token.
+		const runs = Array.from({ length: 31 }, (_, index) => {
+			const response = mockResponse();
+			const done = handler(
+				new URL(`http://app/api/public/pages/${TOKEN}`),
+				getFrom('203.0.113.77', { 'x-forwarded-for': `198.51.100.${index + 1}` }),
+				response,
+				config,
+			);
+			return { response, done };
+		});
+		await Promise.all(runs.map((run) => run.done));
+		const statuses = runs.map((run) => run.response.statusCode);
+		assert.ok(statuses.slice(0, 30).every((status) => status === 404), 'the first 30 pass the bucket');
+		assert.equal(statuses[30], 429);
+	});
+
+	it('buckets by the configured header instead of the socket', async () => {
+		const handler = handlerWith(emptyRows, ON, { ...config, clientIpHeader: 'x-real-ip' });
+		const start = (ip, xff) => {
+			const response = mockResponse();
+			const done = handler(
+				new URL(`http://app/api/public/pages/${TOKEN}`),
+				getFrom('192.0.2.9', { 'x-real-ip': ip, 'x-forwarded-for': xff }),
+				response,
+				config,
+			);
+			return { response, done };
+		};
+		const first = Array.from({ length: 30 }, (_, index) => start('198.51.100.200', `198.51.100.${index + 1}`));
+		await Promise.all(first.map((run) => run.done));
+		assert.ok(first.every((run) => run.response.statusCode === 404));
+		const exhausted = start('198.51.100.200', '198.51.100.99');
+		await exhausted.done;
+		assert.equal(exhausted.response.statusCode, 429, 'the same header bucket is exhausted');
+		const other = start('198.51.100.201', '198.51.100.99');
+		await other.done;
+		assert.equal(other.response.statusCode, 404, 'another header value gets its own bucket');
+	});
+});
+
+describe('public read cache headers', () => {
+	it('lets a published 200 be cached for at most 60 seconds', async () => {
+		const page = [{ title: 'Snapshot', icon: null, content: [{ id: 'p', type: 'paragraph', content: 'hi' }], published_at: '2026-10-01T10:00:00.000Z' }];
+		const handler = handlerWith(async () => ({ ok: true, status: 200, text: async () => JSON.stringify(page) }));
+		const response = mockResponse();
+		await handler(new URL(`http://app/api/public/pages/${TOKEN}`), getFrom('198.51.100.10'), response, config);
+		assert.equal(response.statusCode, 200);
+		assert.equal(response.headers['cache-control'], 'public, max-age=60');
+	});
+
+	it('never caches a 404', async () => {
+		const handler = handlerWith(emptyRows);
+		const response = mockResponse();
+		await handler(new URL(`http://app/api/public/pages/${TOKEN}`), getFrom('198.51.100.11'), response, config);
+		assert.equal(response.statusCode, 404);
+		assert.equal(response.headers['cache-control'], 'no-store');
+	});
+});
+
+describe('publish writes a sanitised snapshot', () => {
+	const PRIVATE_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+	const privateMention = (id) => ({ id, type: 'paragraph', content: `see [[page:${PRIVATE_ID}]]` });
+	const publishRow = (content) => async () => ({
+		row: { owner_id: 'user-1', title: 'Public', icon: null, content },
+	});
+
+	it('stores content without the mentioned page uuid', async () => {
+		const calls = [];
+		const fetchImpl = async (url, options) => {
+			calls.push({ url: String(url), options });
+			return { ok: true, status: 200, text: async () => JSON.stringify([{ token: TOKEN }]) };
+		};
+		const handler = createPublicHandler({
+			config,
+			verifySession,
+			verifyPageAccess: publishRow([privateMention('p1'), { id: 'd', type: 'database_inline', databaseId: PRIVATE_ID }]),
+			fetchImpl,
+			env: ON,
+		});
+		const response = mockResponse();
+		await handler(new URL(`http://app/api/pages/${PAGE_ID}/publish`), request('POST'), response, config);
+		assert.equal(response.statusCode, 200);
+		const written = JSON.parse(calls[0].options.body);
+		assert.equal(JSON.stringify(written.content).includes(PRIVATE_ID), false);
+		assert.deepEqual(written.content.map((block) => block.type), ['paragraph']);
+	});
+
+	it('passes the access gate refusal through and writes nothing', async () => {
+		const refusal = Object.assign(new Error('You do not have access to this page.'), { status: 403 });
+		let writes = 0;
+		const handler = createPublicHandler({
+			config,
+			verifySession,
+			verifyPageAccess: async () => { throw refusal; },
+			fetchImpl: async () => { writes += 1; return { ok: true, status: 200, text: async () => '[]' }; },
+			env: ON,
+		});
+		const response = mockResponse();
+		await handler(new URL(`http://app/api/pages/${PAGE_ID}/publish`), request('POST'), response, config);
+		assert.equal(response.statusCode, 403);
+		assert.equal(response.body.message, refusal.message);
+		assert.equal(writes, 0);
 	});
 });
