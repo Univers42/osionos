@@ -59,3 +59,37 @@ export async function connectionStatus(config, fetchImpl, a, b) {
 	if (String(edge.source).toLowerCase() !== 'manual') return 'none';
 	return 'friends';
 }
+
+/**
+ * The same verdict for every inviter an inbox shows, in two reads instead of two per row:
+ * one block read and one edge read for the session. A block in either direction wins.
+ * Ids are lower-cased keys; a non-uuid or the session's own id is 'friends' and is skipped.
+ */
+export async function connectionStatuses(config, fetchImpl, userId, others) {
+	const me = String(userId ?? '').toLowerCase();
+	const wanted = new Set();
+	for (const id of others ?? []) {
+		const normalized = String(id ?? '').toLowerCase();
+		if (normalized === me || !isUuid(normalized)) continue;
+		wanted.add(normalized);
+	}
+	const statuses = new Map([...wanted].map((id) => [id, 'none']));
+	if (wanted.size === 0) return statuses;
+	const blocks = await rest(config, fetchImpl, `osionos_user_blocks?or=(blocker_id.eq.${me},blocked_id.eq.${me})&select=blocker_id,blocked_id`);
+	for (const row of Array.isArray(blocks) ? blocks : []) {
+		const blocker = String(row.blocker_id ?? '').toLowerCase();
+		const blocked = String(row.blocked_id ?? '').toLowerCase();
+		const other = blocker === me ? blocked : blocked === me ? blocker : '';
+		if (wanted.has(other)) statuses.set(other, 'blocked');
+	}
+	const edges = await rest(config, fetchImpl, `osionos_connections?or=(requester_id.eq.${me},addressee_id.eq.${me})&select=requester_id,addressee_id,status,source`);
+	for (const edge of Array.isArray(edges) ? edges : []) {
+		if (String(edge.status).toLowerCase() !== 'accepted') continue;
+		if (String(edge.source).toLowerCase() !== 'manual') continue;
+		const requester = String(edge.requester_id ?? '').toLowerCase();
+		const addressee = String(edge.addressee_id ?? '').toLowerCase();
+		const other = requester === me ? addressee : addressee === me ? requester : '';
+		if (wanted.has(other) && statuses.get(other) !== 'blocked') statuses.set(other, 'friends');
+	}
+	return statuses;
+}
