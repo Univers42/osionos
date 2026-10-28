@@ -23,6 +23,8 @@ An `env.json` is a code page with that title. It is an ordinary page, so it sync
 - A root-level `env.json` applies to the whole workspace. **Settings → General → Variables** creates it with three starter entries, or opens it if it exists.
 - An `env.json` placed under a page applies to that page and every page below it. The `{{` menu's footer creates one for the current page.
 - The closest file wins: a page's own `env.json` first, then its parent's, up to the workspace one.
+- A place can split its variables by topic: `env.billing.json`, `env.team.json` and any other `env.<topic>.json` beside an `env.json` are read with it, as one file. On a name defined twice, `env.json` wins, then the topic files in title order. Use them when one file reaches its limit.
+- Typing `{{NAME` for a name nothing defines offers **Create {{NAME}}** as the menu's last row. It asks for the value and the file: the one the page already reads from, this page's, or the workspace's. The entry is appended to that `env.json`, creating it if needed, and the rest of the file is left as written. If the file is open in the editor, the entry appears there.
 - A value that names its own variable reads the next file out, as in a shell's `PATH=$PATH:x`. With `"PATH": "/bin"` at the root and `"PATH": "{{PATH}}:/project"` under a project, pages in the project see `/bin:/project`. A name that refers to itself with nothing further out is a `cycle` error chip.
 
 An entry is either a bare value or an object with a `type`:
@@ -51,7 +53,7 @@ With that file these resolve to `Acme`, `3`, `20%`, `1 234,50 €`, `01 Dec 2026
 - Names start with a letter or `_` and then use letters, digits, `_` or `-`.
 - A text value may contain other variables (`"Hello {{CLIENT}}"`). Nesting stops at 8 levels, and a cycle (`A` → `B` → `A`) gives an error chip, not a hang.
 - A bad entry is skipped and the rest still load. The skipped entries are listed under the `env.json` editor.
-- Limits: 64,000 characters per file, 500 variables, 2,000 characters per value.
+- Limits: 64,000 characters per file, 500 variables, 2,000 characters per value. A page write over 128 KB is refused by the server's edge, so a single file cannot grow much further; more variables go in `env.<topic>.json` files, which have no total limit.
 
 **env.json is not a secrets store.** Anyone who can open it can read it, and every value is printed in plain text into the pages that use it, including shared and published ones.
 
@@ -104,11 +106,12 @@ Which format applies, first match wins:
 ## Limits
 
 - Chips render in text blocks, tables, callouts and media captions. Code blocks, database cells and page titles show the literal `{{…}}`.
-- The `{{` menu lists env names, properties and built-ins. It has no entry for a name that does not exist yet; add it to an `env.json` first.
+- The `{{` menu lists env names, properties and built-ins, and shows the first 50 matches. Create only appends: renaming or deleting an entry is done in the `env.json` editor.
 - `relative` rounds to the largest unit: 40 days away reads "next month".
 - A date pattern's offset tokens (`x`, `X`, `O`) print the browser's offset, not the variable's `timeZone`. Use a preset when the zone must be exact.
 - Typing cost, measured 2026-10-28:
   - `tests/bench/variables.bench.ts` (no React; run with `npm run test:bench -- tests/bench/variables.bench.ts`):
     - a 50-chip block resolves in 96 µs median, through three env.json layers and a three-page property chain;
     - building the menu (catalog, ranking and 50 previews) takes 14 µs.
+  - Scaled past the per-file limit in a scratch run (same machine, median): 5,000 variables parse in 1.65 ms and build the menu in 315 µs; 20,000 parse in 7.6 ms and build the menu in 1.46 ms. Looking up one name stays at ~65 ns at every size. Parsing runs when a file changes, not per keystroke.
   - `tests/e2e/perf/variableMenu.spec.mjs` times keydown to the painted frame on a production build. Opening the menu, re-ranking it and typing beside 10 chips each cost at most 0.5 ms over the harness floor (median; p95 ≤ 31.8 ms against a ~31 ms floor).
