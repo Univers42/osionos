@@ -52,6 +52,20 @@ test.describe("markdown variables", () => {
     await expect(page.locator("span.md-variable")).toHaveCount(0);
   });
 
+  // The focused block shows its source; the rendered block drops the backslash, no chip.
+  test("a backslash before {{ keeps the braces literal", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const editor = await activateFirstEditor(page);
+    await editor.click();
+    await page.keyboard.type("x \\{{NOW}} y");
+    await expect.poll(() => caretBlockText(page)).toBe("x \\{{NOW}} y");
+    await expect(page.locator("span.md-variable")).toHaveCount(0);
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("next");
+    await expect(page.getByText("x {{NOW}} y", { exact: true })).toBeVisible();
+    await expect(page.locator("span.md-variable")).toHaveCount(0);
+  });
+
   test("a bad filter renders an error chip naming the problem", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     const editor = await activateFirstEditor(page);
