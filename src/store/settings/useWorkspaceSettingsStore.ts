@@ -13,7 +13,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { resolveWorkspaceConfig, useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
+import { storedWorkspaceConfig, useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 import { defaultWorkspaceSettings } from './defaults';
 import { errorMessage, nowIso, pushSettingsError, scheduleSettingsWrite, stableDefault, trySettingsGet, trySettingsPatch } from './settingsStoreUtils';
 import type { WorkspaceSettings } from './types';
@@ -68,7 +68,7 @@ function syncWorkspaceConfig(userId: string, workspaceId: string, settings: Work
   if (!userId || !workspaceId) return;
   const key = workspaceConfigKey(userId, workspaceId);
   const store = useWorkspaceConfigStore.getState();
-  const current = resolveWorkspaceConfig(store.configs[key]);
+  const current = storedWorkspaceConfig(store.configs[key]);
   useWorkspaceConfigStore.setState({
     configs: {
       ...store.configs,
@@ -140,7 +140,7 @@ export const useWorkspaceSettingsStore = create<WorkspaceSettingsStore>()(
       reset: async (userId, workspaceId, name) => {
         if (!workspaceId) return;
         const previous = get().data[workspaceId];
-        const next = defaultWorkspaceSettings(workspaceId, name);
+        const next = { ...defaultWorkspaceSettings(workspaceId, name), icon: '🌏' };
         set((state) => ({ data: { ...state.data, [workspaceId]: next }, error: { ...state.error, [workspaceId]: null } }));
         syncWorkspaceConfig(userId, workspaceId, next);
         const remoteBody = {
