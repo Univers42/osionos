@@ -34,6 +34,7 @@ import { bumpAccessAfter } from './bridge-access-generation.mjs';
 const TABLE = 'osionos_share_rules';
 const TEAMS_TABLE = 'osionos_teams';
 const TEAM_MEMBERS_TABLE = 'osionos_team_members';
+const MEMBER_ATTRIBUTES_TABLE = 'osionos_member_attributes';
 const MIGRATION = 'models/osionos-share-rules-migration.sql';
 const LEVELS = new Set(['no_access', 'can_view', 'can_comment', 'can_edit', 'full_access']);
 const RESOURCE_TYPES = new Set(['workspace', 'page', 'database', 'block']);
@@ -77,6 +78,16 @@ function normalizeTarget(target) {
 		if (!teamId) throw httpError('target.teamId is required', 400);
 		return { type, teamId };
 	}
+	if (type === 'attribute') {
+		const name = boundedText(target.name, 32, 'target.name');
+		if (!/^[a-z][a-z0-9_]{0,31}$/.test(name)) throw httpError('target.name must be a lowercase identifier', 400);
+		const value = boundedText(target.value, 64, 'target.value');
+		if (value.length < 1) throw httpError('target.value is required', 400);
+		if (value.includes(':')) throw httpError('target.value must not contain ":"', 400);
+		if (value.startsWith(' ') || value.endsWith(' ')) throw httpError('target.value must not have leading or trailing spaces', 400);
+		if (/[\x00-\x1f\x7f]/.test(value)) throw httpError('target.value must not contain control characters', 400);
+		return { type, name, value };
+	}
 	throw httpError('target.type is invalid', 400);
 }
 
@@ -91,6 +102,7 @@ function teamNotFound() {
  * adding a twin.
  */
 function targetKey(target) {
+	if (target.type === 'attribute') return `attribute:${target.name ?? ''}:${target.value ?? ''}`;
 	const base = `${target.type}:${target.userId ?? ''}:${target.role ?? ''}`;
 	return target.teamId ? `${base}:${target.teamId}` : base;
 }
@@ -310,6 +322,23 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		}
 	};
 
+	/**
+	 * The caller's member attributes in ONE workspace, read per request and never cached, or null
+	 * when the read cannot be trusted. null is not []: the evaluator reads it as "unknown" and lets
+	 * an attribute no_access rule still block, where [] would silently drop that deny.
+	 */
+	const attributesFor = async (config, workspaceId, userId) => {
+		try {
+			const rows = await call(config, query({
+				select: 'name,value', workspace_id: `eq.${workspaceId}`, user_id: `eq.${userId}`, limit: String(LIST_LIMIT),
+			}), { from: MEMBER_ATTRIBUTES_TABLE, empty: null });
+			if (!Array.isArray(rows) || rows.length >= LIST_LIMIT) return null;
+			return rows.map((row) => ({ name: String(row.name), value: String(row.value) }));
+		} catch {
+			return null;
+		}
+	};
+
 	/** A team rule is written only for a live team of the rule's own workspace (service-role read). */
 	async function requireTeamInWorkspace(config, rule) {
 		const teamId = rule.target.teamId;
@@ -325,6 +354,7 @@ export function createShareRuleStore({ fetchImpl = fetch, table = TABLE, log = c
 		listForPages,
 		listForWorkspace,
 		teamIdsFor,
+		attributesFor,
 		async list(config, workspaceId, resourceId) {
 			const params = { select: SELECT, workspace_id: `eq.${workspaceId}`, order: 'created_at.asc', limit: String(LIST_LIMIT) };
 			if (resourceId == null) return (await call(config, query(params))).map(toApiRule);
