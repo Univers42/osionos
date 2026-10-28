@@ -11,9 +11,10 @@
 /* ************************************************************************** */
 
 // "/color <name>" tints the whole block's TEXT (block.textColor); "/background
-// <name>" tints its SURFACE (block.backgroundColor). Both take a direct colour
-// arg and both must work on every block SHAPE — a bare editable (paragraph), a
-// marker-wrapped list item (bulleted_list) and a sub-component (toggle).
+// <name>" tints its SURFACE (block.backgroundColor) with the named block tint.
+// Both take a direct colour arg and both must work on every block SHAPE — a bare
+// editable (paragraph), a marker-wrapped list item (bulleted_list) and a
+// sub-component (toggle).
 
 import { expect, test } from "@playwright/test";
 
@@ -59,6 +60,10 @@ async function blockStyle(page, type, where) {
       );
       if (!wrapper) return null;
       if (w === "surface") return getComputedStyle(wrapper).backgroundColor;
+      if (w === "inset") {
+        const style = getComputedStyle(wrapper);
+        return { top: parseFloat(style.paddingTop), left: parseFloat(style.paddingLeft) };
+      }
       const ce = wrapper.querySelector("[contenteditable]");
       return ce ? getComputedStyle(ce).color : null;
     },
@@ -79,7 +84,20 @@ test.describe("whole-block /color and /background take a colour arg on every blo
       await openFreshPage(page, baseURL);
       await makeBlock(page, create);
       await runSlash(page, "/background red");
-      expect(await blockStyle(page, type, "surface")).toBe(RED);
+      // A named background is the faded block tint, not the saturated text swatch.
+      const tint = await page.evaluate(() => {
+        const probe = document.createElement("div");
+        probe.style.backgroundColor = "var(--osio-block-tint-red-bg)";
+        document.body.append(probe);
+        const value = getComputedStyle(probe).backgroundColor;
+        probe.remove();
+        return value;
+      });
+      expect(await blockStyle(page, type, "surface")).toBe(tint);
+      // The tint is a panel: text never sits flush against its edges.
+      const inset = await blockStyle(page, type, "inset");
+      expect(inset.top).toBeGreaterThan(0);
+      expect(inset.left).toBeGreaterThan(4);
     });
   }
 });
