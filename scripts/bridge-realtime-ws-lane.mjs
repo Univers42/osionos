@@ -103,7 +103,13 @@ export function runWsCanary(env, { timeoutMs = CANARY_TIMEOUT_MS, WebSocketImpl 
 	return new Promise((resolve) => {
 		let socket;
 		let retry = null;
+		let finished = false;
+		// Once only: on Node 22, close() on a still-connecting socket dispatches error/close
+		// synchronously, which re-entered finish() while the lane was still pending and recursed
+		// until "Maximum call stack size exceeded" (gateway unreachable → uncaught exception).
 		const finish = (ok, reason = '') => {
+			if (finished) return;
+			finished = true;
 			clearTimeout(timer);
 			clearTimeout(retry);
 			try { socket?.close(); } catch { /* already closed */ }
