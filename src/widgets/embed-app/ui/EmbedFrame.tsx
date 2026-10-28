@@ -12,6 +12,8 @@
 
 import React from "react";
 
+import { isWhiteboardFrameUrl, useHydrawnHost } from "@/features/whiteboard/model/useHydrawnHost";
+
 interface Props {
   /** Already validated with `embeddableUrl`: this component trusts it. */
   url: string;
@@ -23,6 +25,8 @@ interface Props {
    *  the caller must mount a lazy frame only once it is near the viewport (see
    *  WhiteboardBlock); otherwise a frame the browser has not started loading reads as stalled. */
   loading?: "eager" | "lazy";
+  /** A hydrawn frame at `/new` created this board (whiteboard frames only). */
+  onBoardCreated?: (slug: string) => void;
 }
 
 /** How long the iframe may stay blank before the pane says so. A cross-origin frame
@@ -38,10 +42,16 @@ interface Props {
  *  `load` and declares a working pane dead, which is the bug this comment replaces. */
 const LOAD_GRACE_MS = 8000;
 
+const SANDBOX = "allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads";
+// Devil C600: hydrawn holds a whiteboard token, so its frame opens no popups at all.
+const WHITEBOARD_SANDBOX = "allow-scripts allow-same-origin allow-forms allow-modals allow-downloads";
+
 /** The sandboxed iframe plus the "not responding" message its stall timer swaps in.
  *  Shared by the pane view and the inline whiteboard block. */
-export const EmbedFrame: React.FC<Props> = ({ url, title, interactive = true, loading = "eager" }) => {
+export const EmbedFrame: React.FC<Props> = ({ url, title, interactive = true, loading = "eager", onBoardCreated }) => {
   const [stalled, setStalled] = React.useState(false);
+  const frameRef = React.useRef<HTMLIFrameElement>(null);
+  useHydrawnHost(frameRef, url, onBoardCreated);
   // A ref, not state: the timer below reads it after the fact, and re-rendering on
   // `load` would only re-run an effect that must not restart its own deadline.
   const hasLoaded = React.useRef(false);
@@ -74,6 +84,7 @@ export const EmbedFrame: React.FC<Props> = ({ url, title, interactive = true, lo
         </div>
       ) : null}
       <iframe
+        ref={frameRef}
         src={url}
         title={title}
         loading={loading}
@@ -83,7 +94,7 @@ export const EmbedFrame: React.FC<Props> = ({ url, title, interactive = true, lo
         }}
         style={interactive ? undefined : { pointerEvents: "none" }}
         className={`w-full flex-1 border-0 bg-[var(--osio-bg-page)] ${stalled ? "hidden" : "h-full"}`}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
+        sandbox={isWhiteboardFrameUrl(url) ? WHITEBOARD_SANDBOX : SANDBOX}
       />
     </>
   );

@@ -2086,7 +2086,6 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     setSlashMenu,
     updateBlock,
     insertBlock,
-    getBlocks: () => contentRef.current,
   });
   const handleSlashProfileFieldSelect = useSlashProfileFieldSelect({
     pageId,
