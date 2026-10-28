@@ -1,0 +1,13 @@
+{
+  "rule": { "type": "attribute", "name": "role", "value": "admin" },
+  "permission": "can_view",
+  "cases": [
+    { "name": "grant", "attributes": [{ "name": "role", "value": "admin" }], "guest": false, "workspaceId": "w1", "ruleWorkspaceId": "w1", "expectedMatch": true },
+    { "name": "deny", "attributes": [{ "name": "role", "value": "admin" }], "guest": false, "workspaceId": "w1", "ruleWorkspaceId": "w1", "permission": "no_access", "expectedMatch": true },
+    { "name": "null-read", "attributes": null, "guest": false, "workspaceId": "w1", "ruleWorkspaceId": "w1", "expectedMatch": false },
+    { "name": "guest", "attributes": [{ "name": "role", "value": "admin" }], "guest": true, "workspaceId": "w1", "ruleWorkspaceId": "w1", "expectedMatch": false },
+    { "name": "wrong-value", "attributes": [{ "name": "role", "value": "user" }], "guest": false, "workspaceId": "w1", "ruleWorkspaceId": "w1", "expectedMatch": false },
+    { "name": "wrong-name", "attributes": [{ "name": "team", "value": "admin" }], "guest": false, "workspaceId": "w1", "ruleWorkspaceId": "w1", "expectedMatch": false },
+    { "name": "other-workspace", "attributes": [{ "name": "role", "value": "admin" }], "guest": false, "workspaceId": "w2", "ruleWorkspaceId": "w1", "expectedMatch": false }
+  ]
+}

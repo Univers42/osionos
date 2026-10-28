@@ -137,11 +137,12 @@ export function ancestorChain(pageId, parentOf) {
  * @param {Map<string, string|null> | null} [input.parentOf] lower-case page id → lower-case parent id or null;
  *   null when the workspace has no rule, so the ancestor chain is never needed
  * @param {string[] | null} [input.teamIds] the caller's team ids, null when unread (fail closed for team grants)
+ * @param {{ name: string, value: string }[] | null} [input.attributes] the caller's member attributes, null when unread (fail closed for attribute grants)
  * @param {Map<string, { owner_id?: unknown, visibility?: unknown }> | null} [input.pageMeta] lower-case page id →
  *   its owner and visibility, read with `parentOf`; only a private page reads it, a missing entry ends the run
  * @returns {{ level: 'none'|'can_view'|'can_comment'|'can_edit'|'full_access', fromRule: boolean }}
  */
-function decidePageAccess({ row, userId, member = null, rulesByPage = new Map(), parentOf = new Map(), teamIds = null, pageMeta = null } = {}) {
+function decidePageAccess({ row, userId, member = null, rulesByPage = new Map(), parentOf = new Map(), teamIds = null, attributes = null, pageMeta = null } = {}) {
 	if (!row || typeof row !== 'object' || !userId) return { level: NONE, fromRule: false };
 	// Page owner: their own page stays readable under a denying ancestor (C510e) — but
 	// only while they still belong to the page's workspace (C557), or in the memberless
@@ -166,7 +167,7 @@ function decidePageAccess({ row, userId, member = null, rulesByPage = new Map(),
 	// A broken chain is not a rule, but it must still refuse a write (C551/C558).
 	if (!chain) return { level: NONE, fromRule: true };
 
-	const ctx = { userId, role: member.role, workspaceId: row.workspace_id, teamIds };
+	const ctx = { userId, role: member.role, workspaceId: row.workspace_id, teamIds, attributes };
 	const isPrivate = pageVisibility(row.visibility) === 'private';
 	let nearest = null;
 	let ownerNearest = null;

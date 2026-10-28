@@ -208,9 +208,9 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
 
   const copyLink = useCallback(async () => {
     if (!pageId) return;
-    await copyPageLink(pageId);
+    await copyPageLink(pageId, page?.workspaceId);
     await logAction('copy_link', 'Link copied');
-  }, [logAction, pageId]);
+  }, [logAction, pageId, page?.workspaceId]);
 
   const copyContents = useCallback(async () => {
     if (!page) return;

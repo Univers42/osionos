@@ -17,7 +17,9 @@ import { usePageStore } from '@/store/usePageStore';
 import { InheritedRow, ShareRow } from './ShareRow';
 import { SharePeoplePicker } from './SharePeoplePicker';
 import { useShareModel, type InheritedShareRow } from './useShareModel';
+import { AccessRequestsSection } from './AccessRequestsSection';
 import { PublishSection } from './PublishSection';
+import { getCurrentPageAccessContext } from '@/shared/lib/auth/pageAccess';
 import { isPublishEnabled } from '@/shared/config/featureFlags';
 import { PAGE_SHARE_LEVELS, WORKSPACE_SHARE_LEVELS } from './pageShareModel';
 import type { ShareResource } from './types';
@@ -104,6 +106,9 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
   const pages = usePageStore((state) => state.pages[resource.workspaceId] ?? EMPTY_PAGES);
   const model = useShareModel(resource, pages);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const page = usePageStore((s) => s.pageById(resource.resourceId));
+  const accessContext = getCurrentPageAccessContext();
+  const ownsPage = resource.resourceType === 'page' && !!page && !!accessContext && page.ownerId === accessContext.userId;
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
@@ -129,7 +134,7 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
   }, [centered]);
 
   const generalEntries = model.entries.filter((entry) => entry.target.type === 'workspace' || entry.target.type === 'public');
-  const peopleEntries = model.entries.filter((entry) => entry.target.type === 'user' || entry.target.type === 'role' || entry.target.type === 'team');
+  const peopleEntries = model.entries.filter((entry) => entry.target.type === 'user' || entry.target.type === 'role' || entry.target.type === 'team' || entry.target.type === 'attribute');
 
   // The ancestor page a rule is set on is where it is edited: open that page and step aside.
   const openInheritedSource = useCallback((row: InheritedShareRow) => {
@@ -179,8 +184,17 @@ export const SharePopover: React.FC<SharePopoverProps> = ({ resource, onClose, c
           disabled={model.busy || model.loading}
           onPick={(person) => { void model.setLevel({ type: 'user', person }, 'can_view'); }}
           onPickTeam={(team) => { void model.setLevel({ type: 'team', team }, 'can_view'); }}
+          onPickAttribute={(name, value) => { void model.setLevel({ type: 'attribute', name, value }, 'can_view'); }}
         />
       </div>
+
+      {ownsPage && (
+        <AccessRequestsSection
+          workspaceId={resource.workspaceId}
+          pageId={resource.resourceId}
+          onApproved={() => { void model.refresh(); }}
+        />
+      )}
 
       <div className="mt-3 max-h-[260px] space-y-0.5 overflow-y-auto">
         {model.loading && <p className="px-2 py-3 text-xs text-[var(--osio-fg-muted)]">Loading access…</p>}

@@ -12,6 +12,8 @@
 
 import React, { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
+import { Button, Input } from '@/shared/ui';
+import { validateName, validateValue } from '@/shared/lib/memberAttribute';
 import type { SharePerson, ShareTeam } from './types';
 
 interface SharePeoplePickerProps {
@@ -23,11 +25,38 @@ interface SharePeoplePickerProps {
   disabled?: boolean;
   onPick: (person: SharePerson) => void;
   onPickTeam?: (team: ShareTeam) => void;
+  onPickAttribute?: (name: string, value: string) => void;
+  onPickAttr?: (name: string, value: string) => void;
+  onAddAttribute?: (name: string, value: string) => void;
 }
 
 /** Search-and-pick over the workspace roster (mirrors the People panel UX). */
-export const SharePeoplePicker: React.FC<SharePeoplePickerProps> = ({ people, teams = [], excludedKeys, disabled = false, onPick, onPickTeam }) => {
+export const SharePeoplePicker: React.FC<SharePeoplePickerProps> = ({ people, teams = [], excludedKeys, disabled = false, onPick, onPickTeam, onPickAttribute, onPickAttr, onAddAttribute }) => {
   const [query, setQuery] = useState('');
+  const [attrName, setAttrName] = useState('');
+  const [attrValue, setAttrValue] = useState('');
+  const [attrError, setAttrError] = useState<string | null>(null);
+
+  const pickAttribute = (name: string, value: string) => {
+    const nameError = validateName(name);
+    const valueError = validateValue(value);
+    if (nameError || valueError) {
+      setAttrError(nameError ?? valueError);
+      return;
+    }
+    setAttrError(null);
+    const handler = onPickAttribute ?? onPickAttr ?? onAddAttribute;
+    handler?.(name.trim(), value.trim());
+    setAttrName('');
+    setAttrValue('');
+  };
+
+  const onAttrKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      pickAttribute(attrName, attrValue);
+    }
+  };
   const needle = query.trim().toLowerCase();
   const teamMatches = useMemo(() => {
     const excluded = new Set(excludedKeys);
@@ -93,6 +122,37 @@ export const SharePeoplePicker: React.FC<SharePeoplePickerProps> = ({ people, te
           ))}
         </div>
       )}
+      <div className="mt-2 space-y-1" data-attribute-target>
+        <p className="osio-menu-label">Attribute</p>
+        <div className="flex items-center gap-2">
+          <Input
+            value={attrName}
+            disabled={disabled}
+            onChange={(event) => setAttrName(event.target.value)}
+            onKeyDown={onAttrKeyDown}
+            placeholder="name"
+            aria-label="Attribute name"
+            className="min-w-0 flex-1"
+          />
+          <Input
+            value={attrValue}
+            disabled={disabled}
+            onChange={(event) => setAttrValue(event.target.value)}
+            onKeyDown={onAttrKeyDown}
+            placeholder="value"
+            aria-label="Attribute value"
+            className="min-w-0 flex-1"
+          />
+          <Button
+            type="button"
+            disabled={disabled}
+            onClick={() => pickAttribute(attrName, attrValue)}
+          >
+            Add
+          </Button>
+        </div>
+        {attrError && <p role="alert" className="text-xs text-[var(--osio-danger)]">{attrError}</p>}
+      </div>
     </div>
   );
 };
