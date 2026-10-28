@@ -19,6 +19,7 @@
 import { expect, test } from "@playwright/test";
 
 import { activateFirstEditor, openFreshPage } from "../../browser/core/app.mjs";
+import { resolveTokenBackground } from "../../browser/core/tokens.mjs";
 
 const RED = "rgb(239, 68, 68)"; // resolveColorName("red") -> #ef4444
 
@@ -85,14 +86,7 @@ test.describe("whole-block /color and /background take a colour arg on every blo
       await makeBlock(page, create);
       await runSlash(page, "/background red");
       // A named background is the faded block tint, not the saturated text swatch.
-      const tint = await page.evaluate(() => {
-        const probe = document.createElement("div");
-        probe.style.backgroundColor = "var(--osio-block-tint-red-bg)";
-        document.body.append(probe);
-        const value = getComputedStyle(probe).backgroundColor;
-        probe.remove();
-        return value;
-      });
+      const tint = await resolveTokenBackground(page, "--osio-block-tint-red-bg");
       expect(await blockStyle(page, type, "surface")).toBe(tint);
       // The tint is a panel: text never sits flush against its edges.
       const inset = await blockStyle(page, type, "inset");
