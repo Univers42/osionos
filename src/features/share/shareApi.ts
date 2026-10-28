@@ -22,7 +22,26 @@ import type { ShareAccessRule, SharePerson, ShareTeam } from './types';
 
 interface MembersResponse { members?: WorkspaceMember[] }
 interface PeopleResponse { people: SharePerson[] }
-interface RulesResponse { rules: Array<ShareAccessRule & { _id: string }>; teamRules?: boolean }
+/** One overlap between a page and a rule on a strict ancestor the caller may read. */
+export interface InheritedRuleRead {
+  rule: ShareAccessRule & { _id: string };
+  fromPageId: string;
+  /** Structural: true = this rule can affect the page (see the bridge's `reaches`). */
+  reaches: boolean;
+}
+interface RulesResponse {
+  rules: Array<ShareAccessRule & { _id: string }>;
+  teamRules?: boolean;
+  /** Absent on an old bridge (which ignores `inherited=1`). */
+  inherited?: InheritedRuleRead[];
+  hiddenInherited?: boolean;
+}
+export interface ShareRulesRead {
+  rules: Array<ShareAccessRule & { _id: string }>;
+  teamRules: boolean;
+  inherited: InheritedRuleRead[];
+  hiddenInherited: boolean;
+}
 interface TeamsResponse { teams?: Array<{ id?: unknown; name?: unknown; memberCount?: unknown }> }
 interface RuleResponse { rule: ShareAccessRule & { _id: string } }
 
@@ -38,7 +57,7 @@ export async function fetchPeople(workspaceId: string): Promise<SharePerson[]> {
 }
 
 async function fetchRulesRead(workspaceId: string, resourceId: string): Promise<RulesResponse> {
-  const query = `workspaceId=${encodeURIComponent(workspaceId)}&resourceId=${encodeURIComponent(resourceId)}`;
+  const query = `workspaceId=${encodeURIComponent(workspaceId)}&resourceId=${encodeURIComponent(resourceId)}&inherited=1`;
   return api.get<RulesResponse>(`/api/perms/rules?${query}`, permsBearer());
 }
 
@@ -55,12 +74,19 @@ export async function fetchTeams(workspaceId: string): Promise<ShareTeam[]> {
 }
 
 /**
- * Stored AccessRules for one resource only — the Share dialog's own view — and whether the server
- * says it enforces team rules. An absent flag means it does not: the dialog then hides Teams.
+ * Stored AccessRules for one resource only — the Share dialog's own view — plus the
+ * inherited rows the bridge derives from its strict ancestors and whether the server
+ * says it enforces team rules. `inherited`/`hiddenInherited` default to "none" when
+ * an OLD bridge ignores `inherited=1` (both fields absent). One read per dialog open.
  */
-export async function fetchRules(workspaceId: string, resourceId: string): Promise<{ rules: Array<ShareAccessRule & { _id: string }>; teamRules: boolean }> {
+export async function fetchRules(workspaceId: string, resourceId: string): Promise<ShareRulesRead> {
   const read = await fetchRulesRead(workspaceId, resourceId);
-  return { rules: (read.rules ?? []).filter((rule) => rule.resourceId?.toLowerCase() === resourceId.toLowerCase()), teamRules: read.teamRules === true };
+  return {
+    rules: (read.rules ?? []).filter((rule) => rule.resourceId?.toLowerCase() === resourceId.toLowerCase()),
+    teamRules: read.teamRules === true,
+    inherited: read.inherited ?? [],
+    hiddenInherited: read.hiddenInherited === true,
+  };
 }
 
 /** Upsert one AccessRule (same workspace/resource/target replaces). */
