@@ -89,6 +89,21 @@ function shareLevelFor(
   return best;
 }
 
+/**
+ * X1, as decidePageAccess (scripts/bridge-page-access.mjs) on the rules the client holds:
+ * on someone else's private page only the page's own rules grant; a workspace-wide rule
+ * can still deny, or cap a collaborator below can_edit, never raise. O(r).
+ */
+function pageRuleLevel(
+  rules: readonly ShareAccessRule[] | null | undefined, page: PageEntry, userId: string, role: string,
+): ShareLevel | null {
+  const level = shareLevelFor(rules, page, userId, role);
+  if (level === null || level === "no_access" || normalizePageVisibility(page.visibility) !== "private") return level;
+  const own = shareLevelFor(rules?.filter((rule) => (rule?.resourceId ?? "") !== ""), page, userId, role);
+  if (own !== null) return own;
+  return levelRank(level) < levelRank("can_edit") ? level : null;
+}
+
 /** Share rules never reach the page owner or the workspace owner/admin (readablePageAccess). */
 function isRuleExempt(member: PageMemberAccess | null): boolean {
   return member === null || member.role === "owner" || member.role === "admin";
@@ -332,7 +347,7 @@ export function canWritePage(
   // C557: the page owner keeps the write only while still a member of the workspace —
   // except in the marketplace, which has no members and is governed by ownership alone.
   if (sameUserId(page.ownerId, context.userId)) return member !== null || page.workspaceId === MARKETPLACE_WORKSPACE_ID;
-  const level = isRuleExempt(member) ? null : shareLevelFor(rules, page, context.userId, member?.role ?? "");
+  const level = isRuleExempt(member) ? null : pageRuleLevel(rules, page, context.userId, member?.role ?? "");
   // C558: a matched rule decides alone — can_edit and above grant (and read), anything below refuses.
   if (level !== null) return levelRank(level) >= levelRank("can_edit");
   if (!canReadPage(page, context)) return false;

@@ -969,23 +969,29 @@ function pageAccessUnavailable() {
 	return Object.assign(new Error('Page access could not be verified right now.'), { status: 503, code: 'page_access_unavailable' });
 }
 
-/** The workspace's live id → parent_page_id map, one query per request (C511). */
-async function parentMapForWorkspace(workspaceId, config, fetchImpl) {
+/**
+ * The workspace's live id → parent_page_id map, one query per request (C511). With
+ * `withMeta`, the same query also carries each page's owner and visibility for the
+ * private-page grant rule (X1); otherwise pageMeta is null.
+ */
+async function parentMapForWorkspace(workspaceId, config, fetchImpl, withMeta) {
 	let rows;
 	try {
-		rows = await listWorkspacePageRefs(workspaceId, config, fetchImpl);
+		rows = await listWorkspacePageRefs(workspaceId, config, fetchImpl, withMeta);
 	} catch {
 		throw pageAccessUnavailable();
 	}
 	if (!Array.isArray(rows)) throw pageAccessUnavailable();
 	if (rows.length > PAGE_ACCESS_MAX_PAGES) throw pageAccessUnavailable();
 	const parentOf = new Map();
+	const pageMeta = withMeta ? new Map() : null;
 	for (const row of rows) {
 		const id = typeof row?.id === 'string' ? row.id.toLowerCase() : '';
 		if (!id) continue;
 		parentOf.set(id, row.parent_page_id ? String(row.parent_page_id).toLowerCase() : null);
+		pageMeta?.set(id, { owner_id: row.owner_id ?? null, visibility: row.visibility ?? null });
 	}
-	return parentOf;
+	return { parentOf, pageMeta };
 }
 
 /** Every page rule of the workspace, grouped by lower-case page id ('' = workspace-wide), one query. */
@@ -1028,13 +1034,16 @@ async function pageAccessEntry(authContext, workspaceId, config, fetchImpl, memb
 			? memberFor(workspaceId).catch(() => { throw pageAccessUnavailable(); })
 			: ownerAwareMemberRow(authContext, workspaceId, config, fetchImpl),
 	]);
-	// No rule: the ancestor chain cannot change any answer, and parentOf stays null.
-	const parentOf = rulesByPage.size > 0
-		? await parentMapForWorkspace(workspaceId, config, fetchImpl)
-		: null;
 	const allRules = [...rulesByPage.values()].flat();
+	// No rule: the ancestor chain cannot change any answer, and parentOf/pageMeta stay null.
+	// pageMeta only decides how far a GRANT reaches (X1), so a deny-only workspace skips its
+	// two columns: +72% payload on the largest live workspace (8735 pages, 2026-10-28).
+	const withMeta = allRules.some((rule) => rule?.permission !== 'no_access');
+	const { parentOf, pageMeta } = rulesByPage.size > 0
+		? await parentMapForWorkspace(workspaceId, config, fetchImpl, withMeta)
+		: { parentOf: null, pageMeta: null };
 	const teamIds = member ? await teamIdsWhenRuled(store, config, workspaceId, authContext.userId, [allRules]) : null;
-	return { member, rulesByPage, parentOf, teamIds };
+	return { member, rulesByPage, parentOf, pageMeta, teamIds };
 }
 
 /**
@@ -1058,7 +1067,7 @@ function pageLevelFor(entry, row, userId) {
 	if (!entry) return 'none';
 	return pageAccessLevel({
 		row, userId, member: entry.member,
-		rulesByPage: entry.rulesByPage, parentOf: entry.parentOf, teamIds: entry.teamIds,
+		rulesByPage: entry.rulesByPage, parentOf: entry.parentOf, pageMeta: entry.pageMeta, teamIds: entry.teamIds,
 	});
 }
 
@@ -1067,7 +1076,7 @@ function pageRuleLevelFor(entry, row, userId) {
 	if (!entry) return 'none';
 	return pageRuleLevel({
 		row, userId, member: entry.member,
-		rulesByPage: entry.rulesByPage, parentOf: entry.parentOf, teamIds: entry.teamIds,
+		rulesByPage: entry.rulesByPage, parentOf: entry.parentOf, pageMeta: entry.pageMeta, teamIds: entry.teamIds,
 	});
 }
 
@@ -1727,11 +1736,11 @@ async function listMemberPageRows(token, workspaceId, read, config, fetchImpl) {
 	return pages;
 }
 
-async function listWorkspacePageRefs(workspaceId, config, fetchImpl) {
+async function listWorkspacePageRefs(workspaceId, config, fetchImpl, withMeta = false) {
 	// One row past the cap makes the guard above real: a workspace larger than
 	// PAGE_ACCESS_MAX_PAGES answers the cap+1 and is refused, never silently truncated.
 	// (A future PGRST_DB_MAX_ROWS below the cap would still truncate; live PostgREST has none.)
-	const query = postgrestQuery({ workspace_id: `eq.${workspaceId}`, select: 'id,parent_page_id', limit: String(PAGE_ACCESS_MAX_PAGES + 1) });
+	const query = postgrestQuery({ workspace_id: `eq.${workspaceId}`, select: withMeta ? 'id,parent_page_id,owner_id,visibility' : 'id,parent_page_id', limit: String(PAGE_ACCESS_MAX_PAGES + 1) });
 	return await baasRest(config, fetchImpl, `osionos_pages?${query}`) ?? [];
 }
 

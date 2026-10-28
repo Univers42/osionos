@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/13 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/13 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/28 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,7 +26,9 @@ import {
 // @ts-expect-error — bridge modules are plain JS (Node built-ins only), no types.
 import { canWritePageRow, pageRowToEntry } from "../../scripts/bridge-api.mjs";
 // @ts-expect-error — bridge modules are plain JS (Node built-ins only), no types.
-import { SHARE_LEVELS } from "../../scripts/bridge-share-rules.mjs";
+import { SHARE_LEVELS, shareGrantsWrite } from "../../scripts/bridge-share-rules.mjs";
+// @ts-expect-error — bridge modules are plain JS (Node built-ins only), no types.
+import { pageRuleLevel } from "../../scripts/bridge-page-access.mjs";
 import { MARKETPLACE_WORKSPACE_ID } from "../../src/features/marketplace/model/appMeta.ts";
 
 type Row = Record<string, unknown>;
@@ -83,11 +85,22 @@ function makeRule(target: ShareRule["target"], level: (typeof SHARE_LEVELS)[numb
 /**
  * The bridge's decision as the routes compose it (readablePageAccess + requirePageWrite):
  * a non-member never reaches the rules, and the workspace owner/admin keep their access
- * whatever the rules say, so they are evaluated with none.
+ * whatever the rules say, so they are evaluated with none. Everyone else gets the rule
+ * level pageRuleLevel decides (X1: a wide grant never raises a private page), replayed
+ * as one rule the way requirePageWrite does.
  */
 function serverWrite(row: Row, member: Member | null, permission: Permission, rules: ShareRule[]): boolean {
   const exempt = member === null || member.role === "owner" || member.role === "admin";
-  return canWritePageRow(row, SELF, member, permission, exempt ? [] : rules);
+  if (exempt) return canWritePageRow(row, SELF, member, permission, []);
+  const rulesByPage = new Map<string, ShareRule[]>();
+  for (const rule of rules) {
+    const key = rule.resourceId ?? "";
+    rulesByPage.set(key, [...(rulesByPage.get(key) ?? []), rule]);
+  }
+  const ruleLevel = pageRuleLevel({ row, userId: SELF, member, rulesByPage, parentOf: new Map([[PAGE, null]]), teamIds: [] });
+  if (ruleLevel !== null && !shareGrantsWrite(ruleLevel)) return false;
+  const replayed = ruleLevel === null ? [] : [makeRule({ type: "user", userId: SELF }, ruleLevel)];
+  return canWritePageRow(row, SELF, member, permission, replayed);
 }
 
 function pageRow(owner: string | null, visibility: string, collaborators: unknown, published: boolean): Row {
@@ -427,7 +440,11 @@ const RULE_SPOTS: Array<[string, Partial<ShareSpot> & Pick<ShareSpot, "ruleLabel
   ["a no_access rule for self leaves an ex-member page owner without write",
     { member: "none", owner: "self", ruleLabel: "self-no_access", rules: [forSelf("no_access")] }, DENIED],
   ["a can_comment rule does not grant write", { ruleLabel: "self-can_comment", rules: [forSelf("can_comment")] }, DENIED],
-  ["a workspace-wide can_edit rule grants write", { ruleLabel: "wide-workspace-can_edit", rules: [workspaceWide("can_edit")] }, ALLOWED],
+  // X1: a rule the private page's owner does not control never raises access.
+  ["a workspace-wide can_edit rule grants no write on another member's private page",
+    { ruleLabel: "wide-workspace-can_edit", rules: [workspaceWide("can_edit")] }, DENIED],
+  ["a workspace-wide can_edit rule grants write on a shared page",
+    { visibility: "shared", ruleLabel: "wide-workspace-can_edit", rules: [workspaceWide("can_edit")] }, ALLOWED],
   ["a rule for another user does not affect self",
     { ruleLabel: "other-can_edit", rules: [makeRule({ type: "user", userId: OTHER }, "can_edit", PAGE)] }, DENIED],
   ["a can_edit rule plus a no_access rule for same target: no_access wins",
