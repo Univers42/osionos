@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { AuthUser } from '../auth.ts';
-import { canReadPageRowAsMember } from '../../../../scripts/bridge-page-read.mjs';
 import { liveMemberWorkspaces, pageRowReadableSql } from '../retrieval/acl.ts';
+import { canReadPageWithRules } from '../retrieval/shareRules.ts';
 
 /**
  * What the sentiment scores are allowed to show: weekly totals of a workspace
@@ -113,7 +113,7 @@ export async function readThreadMood(db: Pool, user: AuthUser, pageId: string): 
 	const page = (await db.query(PAGE_SQL, [pageId])).rows[0];
 	if (!page) return null;
 	const workspaces = await liveMemberWorkspaces(db, user);
-	if (!canReadPageRowAsMember(page, user.userId, workspaces)) return null;
+	if (!(await canReadPageWithRules(db, user.userId, page, workspaces))) return null;
 	if (!(await isEnabled(db, String(page.workspace_id)))) return { mood: null };
 
 	const row = (await db.query<Record<string, number>>(MOOD_SQL, [pageId])).rows[0];

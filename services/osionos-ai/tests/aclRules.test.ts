@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it, mock } from 'node:test';
+import type { Pool } from 'pg';
 import type { AuthUser } from '../src/auth.ts';
 import type { QueryRunner } from '../src/db.ts';
 import { readablePages } from '../src/retrieval/search.ts';
 import { canReadPageWithRules } from '../src/retrieval/shareRules.ts';
+import { loadPageContext } from '../src/runs/prompt.ts';
+import { readThreadMood } from '../src/sentiment/pulse.ts';
+import { readPage } from '../src/tools/readTools.ts';
+import { openPage } from '../src/tools/viewTools.ts';
+import { writablePage } from '../src/tools/writeTools.ts';
 
 /**
  * The ACL read of the AI service against a fake database.
@@ -22,6 +28,7 @@ const WS_OWNER = '20000000-0000-4000-8000-000000000004';
 const PAGE_A = '4000000a-0000-4000-8000-00000000000a';
 const PAGE_C = '4000000c-0000-4000-8000-00000000000c';
 const PAGE_D = '4000000d-0000-4000-8000-00000000000d';
+const PAGE_MISSING = '40000000-0000-4000-8000-000000000000';
 const TABLES = ['osionos_share_rules', 'osionos_workspace_members', 'osionos_workspaces', 'osionos_pages', 'osionos_team_members'];
 
 type Row = Record<string, unknown>;
@@ -72,7 +79,21 @@ function fakeDb(w: World): { db: QueryRunner; calls: Call[] } {
 		async query(sql: string, params?: unknown[]) {
 			calls.push({ sql, params });
 			if (!Array.isArray(params)) throw new Error('query called without a params array');
-			if (sql.includes('archived_at is null')) {
+			const table = TABLES.find((name) => sql.includes(`public.${name}`));
+			if (table && w.fail.some((f) => f.table === table && (f.workspaceId === undefined || params.includes(f.workspaceId)))) {
+				throw new Error(`relation "public.${table}" does not exist`);
+			}
+			if (sql.includes('select m.workspace_id')) {
+				return { rows: w.members.filter((m) => m.user_id === params[0]).map((m) => ({ workspace_id: m.workspace_id })) };
+			}
+			if (sql.includes('where workspace_id = $1 and user_id = $2')) {
+				return { rows: w.members.filter((m) => m.workspace_id === params[0] && m.user_id === params[1]).slice(0, 1) };
+			}
+			if (sql.includes('public.ai_sentiment_settings')) return { rows: [{ enabled: true }] };
+			if (sql.includes('public.osionos_page_comments')) {
+				return { rows: [{ authors: 5, negative: 0, neutral: 0, positive: 5 }] };
+			}
+			if (sql.includes('archived_at is null') && Array.isArray(params[0])) {
 				const ids = params[0] as string[];
 				return {
 					rows: w.pages.filter((p) => ids.includes(p.id)).map((p) => ({
@@ -85,11 +106,10 @@ function fakeDb(w: World): { db: QueryRunner; calls: Call[] } {
 					})),
 				};
 			}
-			const table = TABLES.find((name) => sql.includes(`public.${name}`));
-			if (!table) throw new Error(`unexpected statement: ${sql}`);
-			if (w.fail.some((f) => f.table === table && (f.workspaceId === undefined || params.includes(f.workspaceId)))) {
-				throw new Error(`relation "public.${table}" does not exist`);
+			if (sql.includes('from public.osionos_pages') && sql.includes('where id = $1::uuid')) {
+				return { rows: w.pages.filter((p) => p.id === params[0]).slice(0, 1) };
 			}
+			if (!table) throw new Error(`unexpected statement: ${sql}`);
 			return { rows: answer(w, table, params) };
 		},
 	};
@@ -109,6 +129,32 @@ function aclWorld(extra: Partial<World> = {}): World {
 }
 
 const queried = (calls: Call[], table: string) => calls.some((call) => call.sql.includes(`public.${table}`));
+
+function toolWorld(extra: Partial<World> = {}): World {
+	const w = aclWorld(extra);
+	return {
+		...w,
+		pages: w.pages.map((p) => ({ ...p, collaborators: [{ userId: USER, role: 'editor' }] })),
+	};
+}
+
+function toolContext(db: QueryRunner) {
+	return { db: db as unknown as Pool, user: userAs(USER) };
+}
+
+const SITE_CALLS: readonly { name: string; call(db: QueryRunner, pageId: string): Promise<unknown> }[] = [
+	{ name: 'readPage', call: (db, pageId) => readPage.run(toolContext(db), { pageId }) },
+	{ name: 'openPage', call: (db, pageId) => openPage.run(toolContext(db), { pageId }) },
+	{ name: 'writablePage', call: (db, pageId) => writablePage(toolContext(db), pageId) },
+	{ name: 'readThreadMood', call: (db, pageId) => readThreadMood(db as unknown as Pool, userAs(USER), pageId) },
+	{
+		name: 'loadPageContext',
+		call: async (db, pageId) => {
+			const result = await loadPageContext(db as unknown as Pool, { userId: USER, memberWorkspaceIds: [WS1], pageIds: [pageId] });
+			return { pages: result.pages, skipped: result.skippedPageIds.includes(pageId) };
+		},
+	},
+];
 
 let warn: { mock: { callCount(): number } };
 beforeEach(() => {
@@ -162,5 +208,43 @@ describe('readablePages', () => {
 		const result = await readablePages(db, [PAGE_A, PAGE_C, PAGE_D], userAs(USER), [WS1]);
 		assert.deepEqual(result, new Map());
 		assert.equal(warn.mock.callCount(), 1);
+	});
+});
+
+describe('the other AI page reads apply share rules', () => {
+	for (const site of SITE_CALLS) {
+		describe(site.name, () => {
+			it('answers an inherited no_access exactly like a missing page', async () => {
+				const hidden = await site.call(fakeDb(toolWorld()).db, PAGE_C);
+				const missing = await site.call(fakeDb(toolWorld()).db, PAGE_MISSING);
+				assert.deepEqual(hidden, missing);
+			});
+
+			it('does not answer a page without a rule as missing', async () => {
+				const readable = await site.call(fakeDb(toolWorld()).db, PAGE_D);
+				const missing = await site.call(fakeDb(toolWorld()).db, PAGE_MISSING);
+				assert.notDeepEqual(readable, missing);
+			});
+
+			it('fails closed when the rules read throws', async () => {
+				const w = toolWorld({ fail: [{ table: 'osionos_share_rules' }] });
+				const closed = await site.call(fakeDb(w).db, PAGE_D);
+				const missing = await site.call(fakeDb(toolWorld()).db, PAGE_MISSING);
+				assert.deepEqual(closed, missing);
+			});
+		});
+	}
+
+	it('loadPageContext batches its rules read and preserves both output orders', async () => {
+		const { db, calls } = fakeDb(toolWorld());
+		const result = await loadPageContext(db as unknown as Pool, {
+			userId: USER,
+			memberWorkspaceIds: [WS1],
+			pageIds: [PAGE_A, PAGE_C, PAGE_D, PAGE_MISSING],
+		});
+		const ruleReads = calls.filter((call) => call.sql.includes('public.osionos_share_rules')).length;
+		assert.ok(ruleReads <= 1, `expected at most one share-rules read, got ${ruleReads}`);
+		assert.deepEqual(result.pages.map((p) => p.id), [PAGE_D]);
+		assert.deepEqual(result.skippedPageIds, [PAGE_A, PAGE_C, PAGE_MISSING]);
 	});
 });
