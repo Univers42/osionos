@@ -43,6 +43,7 @@ import { ensureChatBucket, extFromMime, storageObjectKey, storagePut } from './b
 import { REALTIME_TOKEN_ISSUER, signRealtimeJwt } from './bridge-realtime-socket.mjs';
 import { createInviteForUser } from './bridge-workspace-invites.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { connectionStatus, inviteRequiresConnection } from './bridge-friendship.mjs';
 import { beginServerTiming, markHop, runWithServerTiming, timedHop } from './bridge-server-timing.mjs';
 import { bumpAccessAfter } from './bridge-access-generation.mjs';
 import { createCollabAuthCache } from './bridge-collab-auth-cache.mjs';
@@ -277,6 +278,15 @@ async function joinCollaboration(deps, session, request, workspaceId, response, 
 	if (!workspace || !DISCOVERABLE.has(workspace.visibility)) throw httpError('Workspace not found.', 404);
 	const payload = await readJsonBody(request);
 	if (workspace.visibility === 'public') {
+		if (inviteRequiresConnection(deps.env)) {
+			const connection = await connectionStatus(config, deps.fetchImpl, workspace.owner_id, session.userId);
+			// A block answers like an unknown workspace; a plain non-friend is the
+			// explicit 409 the client can show.
+			if (connection === 'blocked') throw httpError('Workspace not found.', 404);
+			if (connection !== 'friends') {
+				throw Object.assign(httpError('You can only join workspaces through a connection with the owner.', 409), { code: 'not_connected' });
+			}
+		}
 		await addMember(config, deps.fetchImpl, workspaceId, session.userId);
 		return sendJson(response, 200, { ok: true, joined: true }, config);
 	}
@@ -338,7 +348,18 @@ async function decideJoinRequest(deps, session, request, requestId, response, co
 	if (!row) throw httpError('Join request not found.', 404);
 	await requireOwner(config, deps.fetchImpl, session.userId, row.workspace_id);
 	const status = action === 'approve' ? 'approved' : 'denied';
-	if (action === 'approve') await addMember(config, deps.fetchImpl, row.workspace_id, row.requester_id);
+	if (action === 'approve') {
+		if (inviteRequiresConnection(deps.env)) {
+			const connection = await connectionStatus(config, deps.fetchImpl, session.userId, row.requester_id);
+			// A block answers like an unknown request; a plain non-friend is the
+			// explicit 409 the owner can show.
+			if (connection === 'blocked') throw httpError('Join request not found.', 404);
+			if (connection !== 'friends') {
+				throw Object.assign(httpError('You can only approve join requests from people you are connected with.', 409), { code: 'not_connected' });
+			}
+		}
+		await addMember(config, deps.fetchImpl, row.workspace_id, row.requester_id);
+	}
 	await rest(config, deps.fetchImpl, `osionos_join_requests?id=eq.${requestId}`, {
 		method: 'PATCH',
 		body: { status, decided_by: session.userId, decided_at: new Date().toISOString() },
@@ -635,7 +656,12 @@ export function createCollabHandler({ config, verifySession, fetchImpl = fetch, 
 			if (decideReq && method === 'PATCH') return await decideJoinRequest(deps, session, request, requireUuid(decideReq[1], 'requestId'), response, requestConfig);
 			return sendJson(response, 405, { ok: false, message: `Method ${method} is not supported here.` }, requestConfig);
 		} catch (error) {
-			return sendJson(response, error?.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'Collaboration request failed.' }, requestConfig);
+			return sendJson(response, error?.status ?? 500, {
+				ok: false,
+				...(typeof error?.code === 'string' ? { code: error.code } : {}),
+				...(error?.profileUserId ? { profileUserId: error.profileUserId } : {}),
+				message: error instanceof Error ? error.message : 'Collaboration request failed.',
+			}, requestConfig);
 		}
 	};
 }

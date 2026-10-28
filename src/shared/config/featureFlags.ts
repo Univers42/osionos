@@ -169,12 +169,11 @@ export function isPublishEnabled(): boolean {
   return isFeatureFlagEnabled("osio.publish", false);
 }
 
-/** The Whiteboard tab: drawnosaurus embedded in an iframe (`tab.kind === "embed"`).
- *  A separate service that must be running; it also backs the inline `whiteboard` block
- *  and the built-in `osionos.whiteboard` app (rail icon, `/whiteboard`), which every account
- *  has without installing anything. Default ON: drawnosaurus is part of the default
- *  `make all` pipeline, so the service is up on the standard path. The flag is a
- *  kill-switch, and the app is additionally hidden when no URL is configured
+/** The Whiteboard tab: hydrawn's web app on its own origin, in an iframe
+ *  (`tab.kind === "embed"`), storing boards through the bridge's whiteboard routes. It also
+ *  backs the inline `whiteboard` block and the built-in `osionos.whiteboard` app (rail icon,
+ *  `/whiteboard`), which every account has without installing anything. Default ON: the
+ *  `hydrawn` service is part of groot's default pipeline. The flag is a kill-switch, and the app is additionally hidden when no URL is configured
  *  (`whiteboardAppUrl()`), so a build without `VITE_WHITEBOARD_APP_URL` never shows a
  *  tab that cannot load. Disable via `?osio.whiteboard=0`, the `osio.whiteboard`
  *  localStorage key, or `VITE_OSIO_WHITEBOARD=0`. */

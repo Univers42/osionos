@@ -1,16 +1,8 @@
 import type { MenuItemSpec } from "./workbenchMenuItems";
 
-export interface WhiteboardViewActionMap {
-  newBoard: () => void;
-  openWhiteboard: () => void;
-}
-
-/** The View-menu whiteboard items: a fresh board first (where New drawing was), then
- *  the gallery. `available` is false when the build cannot load the whiteboard at all. */
-export function whiteboardViewItems(available: boolean, actions: WhiteboardViewActionMap): MenuItemSpec[] {
+/** The View-menu Whiteboard item: hydrawn's gallery, where boards are created and opened.
+ *  `available` is false when the build cannot load the whiteboard at all. */
+export function whiteboardViewItems(available: boolean, openWhiteboard: () => void): MenuItemSpec[] {
   if (!available) return [];
-  return [
-    { id: "view.new-whiteboard", label: "New whiteboard", run: actions.newBoard },
-    { id: "view.whiteboard", label: "Whiteboard", run: actions.openWhiteboard },
-  ];
+  return [{ id: "view.whiteboard", label: "Whiteboard", run: openWhiteboard }];
 }

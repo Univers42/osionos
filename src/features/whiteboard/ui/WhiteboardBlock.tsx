@@ -1,5 +1,5 @@
 import React, { useCallback, useRef } from "react";
-import { ExternalLink, Maximize2 } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 
 import { WHITEBOARD_BLOCK_DEFAULT_HEIGHT, WHITEBOARD_MIN_HEIGHT, type Block } from "@/entities/block";
 import { useHasBeenNearViewport } from "@/shared/lib/dom/useHasBeenNearViewport";
@@ -10,9 +10,8 @@ import { whiteboardBoardTab } from "@/widgets/workspace-grid/model/layoutPersist
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 
 import { isBoardSlug, normalizeBoardTitle } from "../model/boardRefs";
-import { startBoardCreation, usePendingBoards } from "../model/pendingBoards";
-import { boardUrl } from "../model/whiteboardClient";
-import { JsonCanvasImport } from "./JsonCanvasImport";
+import { clearPendingBoard, requestNewBoard, usePendingBoards } from "../model/pendingBoards";
+import { boardUrl, newBoardUrl } from "../model/whiteboardClient";
 
 interface Props {
   block: Block;
@@ -34,26 +33,21 @@ const resolveHeightOwner = (grip: HTMLElement): HTMLElement | null => grip.paren
 export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
   const rootRef = useRef<HTMLDivElement>(null);
   const isNear = useHasBeenNearViewport(rootRef);
-  const pending = usePendingBoards((state) => state.byBlockId[block.id]);
+  const isPending = usePendingBoards((state) => state.blockIds.has(block.id));
   const title = normalizeBoardTitle(block.content ?? "");
   const slug = block.boardSlug;
   const hasSlug = slug !== undefined && slug !== "";
   const isValidSlug = isBoardSlug(slug);
-  const frameUrl = isValidSlug ? embeddableUrl(boardUrl(slug)) : "";
+  const frameUrl = isValidSlug ? embeddableUrl(boardUrl(slug)) : embeddableUrl(newBoardUrl(title));
   const height = block.whiteboardHeight ?? WHITEBOARD_BLOCK_DEFAULT_HEIGHT;
 
-  const createBoard = useCallback(() => {
-    void startBoardCreation(block.id, title, (boardSlug) => onUpdateBlock({ boardSlug }));
-  }, [block.id, title, onUpdateBlock]);
-
-  /** An imported canvas is a board of its own: the block binds to it and takes its
-   *  title. Offered only while the block has no board, so an import never replaces a
-   *  drawing someone already made. */
-  const onImported = useCallback(
-    (board: { slug: string; title: string }) => {
-      onUpdateBlock({ boardSlug: board.slug, content: board.title });
+  // The `/new` frame created the board: binding the slug points the frame at the board.
+  const onBoardCreated = useCallback(
+    (boardSlug: string) => {
+      onUpdateBlock({ boardSlug });
+      clearPendingBoard(block.id);
     },
-    [onUpdateBlock],
+    [block.id, onUpdateBlock],
   );
 
   const { isDragging, gripProps } = useHeightResizeGrip({
@@ -66,31 +60,19 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
   let body: React.ReactNode;
   if (hasSlug && !isValidSlug) {
     body = <Message>This whiteboard link is not valid, so the board was not loaded.</Message>;
-  } else if (hasSlug && frameUrl === "") {
+  } else if ((hasSlug || isPending) && frameUrl === "") {
     body = <Message>The whiteboard service is not configured for this build.</Message>;
   } else if (hasSlug) {
     body = isNear ? <EmbedFrame url={frameUrl} title={title} interactive={!isDragging} loading="lazy" /> : null;
-  } else if (pending?.status === "creating") {
-    body = <Message>Creating board “{title}”…</Message>;
-  } else if (pending?.status === "error") {
-    body = (
-      <Message>
-        <span role="alert">{pending.message}</span>
-        <button type="button" className={ACTION_BUTTON} onClick={createBoard}>
-          Retry
-        </button>
-      </Message>
-    );
+  } else if (isPending) {
+    body = <EmbedFrame url={frameUrl} title={title} interactive={!isDragging} onBoardCreated={onBoardCreated} />;
   } else {
     body = (
       <Message>
         <span>This whiteboard has no board yet.</span>
-        <span className="flex flex-wrap items-center justify-center gap-2">
-          <button type="button" className={ACTION_BUTTON} onClick={createBoard}>
-            Create board
-          </button>
-          <JsonCanvasImport onImported={onImported} />
-        </span>
+        <button type="button" className={ACTION_BUTTON} onClick={() => requestNewBoard(block.id)}>
+          Create board
+        </button>
       </Message>
     );
   }
@@ -100,22 +82,13 @@ export const WhiteboardBlock: React.FC<Props> = ({ block, onUpdateBlock }) => {
       <div className="flex shrink-0 items-center justify-between border-b border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 py-1.5">
         <span className="min-w-0 truncate text-xs font-semibold text-[var(--osio-fg-default)]">{title}</span>
         {isValidSlug ? (
-          <span className="flex shrink-0 items-center gap-1">
-            <button
-              type="button"
-              className={HEADER_BUTTON}
-              onClick={() => useWorkspaceLayout.getState().openTab(whiteboardBoardTab(slug, title))}
-            >
-              Open full <Maximize2 size={12} />
-            </button>
-            <button
-              type="button"
-              className={HEADER_BUTTON}
-              onClick={() => globalThis.open(boardUrl(slug), "_blank", "noopener,noreferrer")}
-            >
-              Open externally <ExternalLink size={12} />
-            </button>
-          </span>
+          <button
+            type="button"
+            className={HEADER_BUTTON}
+            onClick={() => useWorkspaceLayout.getState().openTab(whiteboardBoardTab(slug, title))}
+          >
+            Open full <Maximize2 size={12} />
+          </button>
         ) : null}
       </div>
       <div className="flex min-h-0 flex-1 flex-col">{body}</div>
