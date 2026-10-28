@@ -138,7 +138,7 @@ export function useShareModel(resource: ShareResource): ShareModel {
       return;
     }
     const previous = ruleEntries.find((entry) => entry.key === entryKey(target));
-    if (previous || target.type === 'team' || target.type === 'role') {
+    if (previous || target.type === 'team' || target.type === 'role' || target.type === 'attribute') {
       const saved = await saveRule(toAccessRule(resource, { key: entryKey(target), target, level, sourceId: previous?.sourceId }));
       setRuleEntries((current) => upsertEntry(current, { key: entryKey(target), target, level, sourceId: saved._id }));
     } else {
