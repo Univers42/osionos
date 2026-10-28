@@ -104,7 +104,9 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
         <div
           role="button"
           tabIndex={0}
-          onClick={() => { if (!renaming) setOpen(o => !o); }}
+          // The 2nd click of a double-click must not toggle: its pointerdown already closed the
+          // panel as an outside click, and reopening it steals focus from the rename input.
+          onClick={(event) => { if (!renaming && event.detail < 2) setOpen(o => !o); }}
           onKeyDown={(event) => { if (!renaming && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setOpen(o => !o); } }}
           className={[
             'flex items-center gap-2 flex-1 min-w-0 h-8 px-2 rounded-[6px]',
@@ -136,7 +138,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             />
           ) : (
             <span
-              onDoubleClick={(event) => { if (canRename) { event.stopPropagation(); setRenaming(true); } }}
+              onDoubleClick={(event) => { if (canRename) { event.stopPropagation(); setOpen(false); setRenaming(true); } }}
               title={canRename ? 'Double-click to rename' : undefined}
               className="flex-1 text-base font-semibold text-[var(--osio-fg-default)] truncate text-left leading-5"
             >
