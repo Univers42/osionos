@@ -19,6 +19,8 @@
 import React, { useEffect, useState } from "react";
 import { anyJsDebugToolEnabled, usePageDebugStore } from "./pageDebugStore";
 import {
+  getEventCountsSnapshot,
+  getEventLatencySplits,
   getEventTimingDurations,
   getReactCommitDurations,
   startEventTimingCapture,
@@ -131,6 +133,23 @@ function useCaretInspector(active: boolean): string | null {
   return info;
 }
 
+/**
+ * Keystroke to next paint, for the keys typed since the HUD opened. The browser reports
+ * only keys of 16 ms or more, so every other key counted by eventCounts was faster.
+ * Caveat: the probe keeps the last 5000 slow events; past that the slow count stops growing.
+ */
+function keyLatencyLine(keysAtStart: number, slowKeysAtStart: number): string {
+  const keys = (getEventCountsSnapshot().keydown ?? 0) - keysAtStart;
+  if (keys <= 0) return "";
+  const slow = getEventLatencySplits("keydown").slice(slowKeysAtStart);
+  if (!slow.length) return ` · keys ${keys}, all <16ms`;
+  const worst = slow.reduce((a, b) => (b.total > a.total ? b : a));
+  return (
+    ` · keys ${keys}, ${slow.length} ≥16ms, worst ${worst.total.toFixed(0)}ms` +
+    ` (wait ${worst.delay.toFixed(0)} · run ${worst.handlers.toFixed(0)} · paint ${worst.render.toFixed(0)})`
+  );
+}
+
 function usePerfHud(active: boolean): string | null {
   const [info, setInfo] = useState<string | null>(null);
   useEffect(() => {
@@ -156,6 +175,9 @@ function usePerfHud(active: boolean): string | null {
       taskObserver.observe({ type: "longtask", buffered: false });
     } catch { /* longtask unsupported */ }
 
+    const keysAtStart = getEventCountsSnapshot().keydown ?? 0;
+    const slowKeysAtStart = getEventLatencySplits("keydown").length;
+
     const timer = globalThis.setInterval(() => {
       const fps = frames;
       frames = 0;
@@ -171,7 +193,8 @@ function usePerfHud(active: boolean): string | null {
         ` · long tasks ${longTasks}${worstTask ? ` (worst ${worstTask.toFixed(0)}ms)` : ""}` +
         ` · events ${events.length}${slowEvents ? ` (${slowEvents} >100ms)` : ""}` +
         (heap !== null ? ` · heap ${(heap / 1048576).toFixed(0)}MB` : "") +
-        (commits ? ` · commits ${commits.length}${recent.length ? ` (avg ${avg.toFixed(1)}ms)` : ""}` : ""),
+        (commits ? ` · commits ${commits.length}${recent.length ? ` (avg ${avg.toFixed(1)}ms)` : ""}` : "") +
+        keyLatencyLine(keysAtStart, slowKeysAtStart),
       );
     }, 1000);
     return () => {
