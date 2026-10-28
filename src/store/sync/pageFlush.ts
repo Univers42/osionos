@@ -19,6 +19,9 @@
  *   "refused"  → 403, "gone" → 404: the edit is recovered (copied), never dropped.
  *                ONLY this route marks the page read-only: the server's verdict says
  *                the reader may not write it. A conflict copy leaves the page writable.
+ *   "rejected" → 413, too large for the edge: reported once per page per session, kept
+ *                unconfirmed (the edit stays local), and the batch goes ON — re-sending the
+ *                same body never lands, so stopping on it would stall every page behind it.
  *   "failed"   → transient (offline / 5xx / 429): STOP the batch and back off.
  *
  * A refused or copied page is booked as FORGOTTEN (its ledger entry goes): the edit it
@@ -70,7 +73,15 @@ export interface FlushDeps {
    * reader's own last write comes back as a 409.
    */
   recordVersion(pageId: string, version: number): void;
+  /**
+   * Move the page's base64 pictures to storage before it is sent, and answer the store's
+   * copy as it is after that (or the page itself when there was nothing to move).
+   */
+  externalize?(page: PageEntry): Promise<PageEntry>;
 }
+
+/** Pages already told they are too large to save: one notice per page per session. */
+const rejectedNoticed = new Set<string>();
 
 /**
  * Publish one page and book its outcome. O(1) besides the PATCH itself.
@@ -79,7 +90,9 @@ export interface FlushDeps {
  * forgotten.
  */
 export async function publishOutboxPage(job: FlushJob, deps: FlushDeps): Promise<"continue" | "stop"> {
-  const { page, id, stamp, confirmed, budget } = job;
+  const { id, confirmed, budget } = job;
+  const page = deps.externalize ? await deps.externalize(job.page) : job.page;
+  const stamp = page === job.page ? job.stamp : pageStamp(page);
   // The first write and the merged re-send both go through here.
   const publish = async (target: PageEntry): Promise<PublishOutcome> => {
     const answered = await deps.publish(target);
@@ -115,6 +128,18 @@ export async function publishOutboxPage(job: FlushJob, deps: FlushDeps): Promise
     budget.left -= 1;
     const outcome2 = await recoverToCopy(page, id, job.forgotten, "refused", deps);
     return outcome2 === "failed" ? "stop" : "continue";
+  }
+  if (outcome.result === "rejected") {
+    if (!rejectedNoticed.has(id)) {
+      rejectedNoticed.add(id);
+      deps.notify({
+        kind: "error",
+        title: `“${page.title || "Untitled"}” is too large to save`,
+        description: "Your latest changes to this page stay in this browser only. Remove large pasted text or pictures from it, and it saves again.",
+        sticky: true,
+      });
+    }
+    return "continue";
   }
   // Transient (offline / 5xx / 429): STOP. Hammering the rest of the batch is what
   // turns a rate-limited server into a self-sustaining 429/502 storm. Back off and
