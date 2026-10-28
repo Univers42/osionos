@@ -40,7 +40,7 @@ import {
   type ColorPickerPreset,
 } from "@univers42/ui-collection";
 import { shiftOffsetsForTextChange } from "@/shared/lib/editor-input/caretShift";
-import { parseInlineMarkdown } from "@osionos/markdown-engine";
+import { parseInlineMarkdown, type ResolvedVariable } from "@osionos/markdown-engine";
 import { sanitizeUrl } from "@osionos/markdown-engine/renderCore";
 import {
   applyInlineFormatting,
@@ -78,6 +78,8 @@ import {
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
+import { useVariablesStore } from "@/features/variables/model/useVariablesStore";
+import { variableResolverFor } from "@/features/variables/model/variableScope";
 import { findLinks, removeLink, replaceLink } from "./linkSourceEdit";
 import {
   plainTextOfInlineSource,
@@ -259,6 +261,7 @@ function renderInlineHtmlPreservingLineBreaks(
   source: string,
   renderSourceForEditing: boolean,
   renderLinkAsSource = false,
+  resolveVariable?: (expr: string) => ResolvedVariable | null,
 ): string {
   const lines = source.split("\n");
 
@@ -275,6 +278,8 @@ function renderInlineHtmlPreservingLineBreaks(
         // Links reveal as raw `[text](url)` only during a Ctrl/Cmd-click edit —
         // gesture-gated, NOT tied to focus, so plain click-to-open still works.
         renderLinkAsSource,
+        // `{{NAME}}` shows its value as an atomic chip; the source keeps `{{NAME}}`.
+        resolveVariable,
       }),
     )
     .join("<br />");
@@ -780,21 +785,26 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [recentInlineColors, resolvedTheme],
   );
 
+  // Only a block whose text holds `{{` subscribes to variable changes; every other
+  // block selects a constant 0 and never re-renders for them.
+  const variablesVersion = useVariablesStore((s) => (content.includes("{{") ? s.version : 0));
+  const resolveVariable = useMemo(() => variableResolverFor(pageId), [pageId]);
+
   const getRenderedInlineHtml = useCallback((nextContent: string, renderMathAsSource: boolean, renderLinkAsSource = false) => {
-    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${renderLinkAsSource ? "linksrc" : "link"}:${katexReady}:${nextContent}`;
+    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${renderLinkAsSource ? "linksrc" : "link"}:${katexReady}:${variablesVersion}:${nextContent}`;
     if (renderedContentCache.current.source === cacheKey) {
       return renderedContentCache.current.html;
     }
 
     const html = nextContent
-      ? renderInlineHtmlPreservingLineBreaks(nextContent, renderMathAsSource, renderLinkAsSource)
+      ? renderInlineHtmlPreservingLineBreaks(nextContent, renderMathAsSource, renderLinkAsSource, resolveVariable)
       : "";
     renderedContentCache.current = {
       source: cacheKey,
       html,
     };
     return html;
-  }, [katexReady]);
+  }, [katexReady, variablesVersion, resolveVariable]);
 
   useEffect(() => {
     const root = ref.current;
@@ -937,6 +947,12 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   useEffect(() => {
     if (katexReady && !isFocused.current) renderContent(content);
   }, [katexReady, content, renderContent]);
+
+  // A variable's value moved (env.json edit, preferences, the minute clock). The block
+  // being typed in keeps its chips until blur, so the caret is never disturbed mid-word.
+  useEffect(() => {
+    if (variablesVersion && !isFocused.current) renderContent(content);
+  }, [variablesVersion, content, renderContent]);
 
   useEffect(() => {
     if (selectionSnapshot) {
@@ -1083,9 +1099,18 @@ export const EditableContent: React.FC<EditableContentProps> = ({
           caret !== null &&
           isMidDelimiterRun(normalizedSource, inlineSourceCaretOffset(root, caret));
         if (!holdRestyle && (parsedHtml.includes("<") || root.innerHTML.includes("<"))) {
+          const previousText = root.textContent ?? "";
           root.innerHTML = parsedHtml;
           if (selectionOffsets) {
-            setInlineEditorSelectionOffsets(root, selectionOffsets);
+            // A completed `{{NOW}}` becomes a chip of a different length; keep the
+            // caret after it, not at the old offset inside the value. Scoped to
+            // variable text so every other restyle keeps its proven caret path.
+            setInlineEditorSelectionOffsets(
+              root,
+              normalizedSource.includes("{{")
+                ? shiftOffsetsForTextChange(selectionOffsets, previousText, root.textContent ?? "")
+                : selectionOffsets,
+            );
           }
         }
       }

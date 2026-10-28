@@ -71,6 +71,7 @@ function ruleTarget(rule) {
 	if (type === 'user') return { type, userId: typeof target.userId === 'string' ? target.userId : '' };
 	if (type === 'role') return { type, role: typeof target.role === 'string' ? target.role : '' };
 	if (type === 'team') return { type, teamId: typeof target.teamId === 'string' ? target.teamId : '' };
+	if (type === 'attribute') return { type, name: typeof target.name === 'string' ? target.name : '', value: typeof target.value === 'string' ? target.value : '' };
 	if (type === 'workspace' || type === 'public') return { type };
 	return null;
 }
@@ -93,8 +94,33 @@ function teamRuleMatches(rule, target, ctx) {
 }
 
 /**
+ * An attribute target names the caller when ctx.attributes (their member attributes in the
+ * rule's workspace, read once per request) holds an entry with the same name AND value.
+ * Comparison is exact and case-sensitive on both name and value.
+ *
+ * When ctx.attributes is not an array the read failed or was never made: a grant then
+ * matches nobody, but a no_access rule still matches, mirroring teamRuleMatches.
+ *
+ * A guest principal carries no attributes and never matches an attribute target, grant or
+ * deny alike.
+ */
+export function attributeRuleMatches(rule, target, ctx) {
+	// A guest principal carries no attributes and never matches an attribute target (C645).
+	const role = typeof ctx?.role === 'string' ? ctx.role.toLowerCase() : '';
+	if (role === 'guest') return false;
+	// An attribute target only applies within the rule's own workspace.
+	if (!sameId(field(rule, 'workspace_id', 'workspaceId'), ctx?.workspaceId)) return false;
+	if (!target.name) return false;
+	if (Array.isArray(ctx?.attributes)) {
+		return ctx.attributes.some((entry) => entry && entry.name === target.name && entry.value === target.value);
+	}
+	return rulePermission(rule) === 'no_access';
+}
+
+/**
  * Whether a rule is about the caller: a user target names them, a role target names their
- * role, a team target names a team they are in, a workspace target names their workspace, a public target names everyone. A rule
+ * role, a team target names a team they are in, an attribute target names a member attribute
+ * they carry, a workspace target names their workspace, a public target names everyone. A rule
  * about another resource type is not a page rule and never matches.
  */
 export function ruleMatchesCaller(rule, ctx) {
@@ -105,6 +131,7 @@ export function ruleMatchesCaller(rule, ctx) {
 	if (target.type === 'user') return sameId(target.userId, ctx?.userId);
 	if (target.type === 'role') return sameText(target.role, ctx?.role);
 	if (target.type === 'team') return teamRuleMatches(rule, target, ctx);
+	if (target.type === 'attribute') return attributeRuleMatches(rule, target, ctx);
 	if (target.type === 'workspace') return sameId(field(rule, 'workspace_id', 'workspaceId'), ctx?.workspaceId);
 	return target.type === 'public';
 }
