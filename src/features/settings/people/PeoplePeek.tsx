@@ -21,11 +21,13 @@
  *  focus has no such delay. */
 
 import React, { useEffect, useRef, useState } from "react";
-import { Button, IconValueView, Modal } from "@/shared/ui";
+import { Button, IconValueView, Input, Modal } from "@/shared/ui";
 import { useToastStore } from "@osionos/ui/primitives";
 import { isVideoCoverSource } from "@/entities/page/ui/coverMedia";
 import type { Page } from "@notion-db/object-database";
 import { useUserStore } from "@/features/auth";
+import { useWorkspaceMemberAttributesStore } from "@/store/settings";
+import { validateName, validateValue } from "@/shared/lib/memberAttribute";
 import { TypedConfirmModal } from "../ui/ConfirmModals";
 import { isWorkspaceOwner } from "../model/workspaceOwnership";
 import { useHovercardsEnabled } from "@/shared/config/useAppearance";
@@ -62,6 +64,7 @@ const ConfirmButton: React.FC<{ label: string; busyLabel?: string; onConfirm: ()
 };
 
 const ROLE_CHOICES: InviteRole[] = ["admin", "member", "guest"];
+const EMPTY_ATTRIBUTES: { name: string; value: string }[] = [];
 
 export interface PersonSummary {
   id: string;
@@ -234,7 +237,27 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
     [...(state.activeSession()?.privateWorkspaces ?? []), ...(state.activeSession()?.sharedWorkspaces ?? [])]
       .find((entry) => entry._id === workspaceId));
   const isViewerOwner = isWorkspaceOwner(workspace, viewerId);
+  const isAdmin = isViewerOwner || workspace?.role === 'admin';
+  const isSelf = page.id === viewerId;
+  const canViewAttributes = source === 'members' && (isAdmin || isSelf);
+  const canManageAttributes = source === 'members' && isAdmin;
   const canInvite = useCanInviteMembers(workspaceId, viewerId);
+  const hydrateAttributes = useWorkspaceMemberAttributesStore((state) => state.hydrate);
+  const attributes = useWorkspaceMemberAttributesStore((state) => state.data[`${workspaceId}:${page.id}`] ?? EMPTY_ATTRIBUTES);
+  const attrLoading = useWorkspaceMemberAttributesStore((state) => state.loading[`${workspaceId}:${page.id}`] ?? false);
+  const attrError = useWorkspaceMemberAttributesStore((state) => state.error[`${workspaceId}:${page.id}`] ?? null);
+  const setAttribute = useWorkspaceMemberAttributesStore((state) => state.set);
+  const removeAttribute = useWorkspaceMemberAttributesStore((state) => state.remove);
+  const [newAttrName, setNewAttrName] = useState('');
+  const [newAttrValue, setNewAttrValue] = useState('');
+  const [attrFormError, setAttrFormError] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState('');
+
+  useEffect(() => {
+    if (!canViewAttributes) return;
+    void hydrateAttributes(workspaceId, page.id);
+  }, [canViewAttributes, hydrateAttributes, page.id, workspaceId]);
   const [confirmingTransfer, setConfirmingTransfer] = useState(false);
   const done = (work: Promise<unknown>) => { void work.then(() => onChanged()).finally(() => onClose()); };
 
@@ -261,6 +284,83 @@ export const PeoplePeek: React.FC<PeekProps> = ({ source, page, workspaceId, con
         </div>
 
         {personId && <PersonCardBody person={{ id: personId, name: title }} />}
+
+        {canViewAttributes && (
+          <section className="mt-5 space-y-3" aria-labelledby="member-attributes-heading" data-member-attributes>
+            <h4 id="member-attributes-heading" className="text-sm font-semibold" style={{ color: 'var(--osio-fg-default)' }}>Attributes</h4>
+            {attrLoading && <p className="text-xs" style={{ color: 'var(--osio-fg-muted)' }}>Loading attributes…</p>}
+            {attrError && <p role="alert" className="text-xs" style={{ color: 'var(--osio-danger)' }}>{attrError}</p>}
+            {attributes.length === 0 && !attrLoading && (
+              <p className="text-xs" style={{ color: 'var(--osio-fg-muted)' }}>No attributes.</p>
+            )}
+            <ul className="space-y-2">
+              {attributes.map((attribute) => (
+                <li key={attribute.name} className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium" style={{ color: 'var(--osio-fg-default)' }}>{attribute.name}</span>
+                  <span className="text-sm" style={{ color: 'var(--osio-fg-muted)' }}>=</span>
+                  {canManageAttributes && editingName === attribute.name ? (
+                    <>
+                      <Input
+                        value={editingValue}
+                        onChange={(event) => setEditingValue(event.target.value)}
+                        aria-label={`Value for ${attribute.name}`}
+                        className="min-w-0 flex-1"
+                      />
+                      <Button tone="primary" onClick={() => {
+                        const error = validateValue(editingValue);
+                        if (error) { setAttrFormError(error); return; }
+                        setAttrFormError(null);
+                        void setAttribute(workspaceId, page.id, attribute.name, editingValue).then(() => setEditingName(null));
+                      }}>Save</Button>
+                      <Button onClick={() => setEditingName(null)}>Cancel</Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-sm" style={{ color: 'var(--osio-fg-default)' }}>{attribute.value}</span>
+                      {canManageAttributes && (
+                        <>
+                          <Button onClick={() => { setEditingName(attribute.name); setEditingValue(attribute.value); setAttrFormError(null); }}>Edit</Button>
+                          <Button tone="danger" onClick={() => void removeAttribute(workspaceId, page.id, attribute.name)}>Remove</Button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {canManageAttributes && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    value={newAttrName}
+                    onChange={(event) => setNewAttrName(event.target.value)}
+                    placeholder="name"
+                    aria-label="New attribute name"
+                    className="min-w-0 flex-1"
+                  />
+                  <Input
+                    value={newAttrValue}
+                    onChange={(event) => setNewAttrValue(event.target.value)}
+                    placeholder="value"
+                    aria-label="New attribute value"
+                    className="min-w-0 flex-1"
+                  />
+                  <Button tone="primary" onClick={() => {
+                    const nameError = validateName(newAttrName);
+                    const valueError = validateValue(newAttrValue);
+                    if (nameError || valueError) { setAttrFormError(nameError ?? valueError); return; }
+                    setAttrFormError(null);
+                    void setAttribute(workspaceId, page.id, newAttrName.trim(), newAttrValue.trim()).then(() => {
+                      setNewAttrName('');
+                      setNewAttrValue('');
+                    });
+                  }}>Add</Button>
+                </div>
+                {attrFormError && <p role="alert" className="text-xs" style={{ color: 'var(--osio-danger)' }}>{attrFormError}</p>}
+              </div>
+            )}
+          </section>
+        )}
 
         <div className="mt-5 flex flex-wrap gap-2">
           {source === "contacts" && (<>

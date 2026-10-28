@@ -87,6 +87,12 @@ if (globalThis.window !== undefined) {
   void import("@/features/settings/people/inviteDeepLink").then((module) => module.applyInviteDeepLink());
 }
 
+// A ?page=<id> link opens that page once the session resolves, or shows the
+// no-access screen when it cannot be read.
+if (globalThis.window !== undefined) {
+  void import("@/features/page-link/pageLinkBoot").then((module) => module.applyPageDeepLink());
+}
+
 const contentFallback = (
   <div className="flex h-full w-full items-center justify-center">
     <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--osio-accent)] border-t-transparent" />
