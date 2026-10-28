@@ -44,6 +44,7 @@ import {
 } from "@/features/block-editor/model/usePlaygroundBlockEditor";
 import { BlockContextMenu } from "./BlockContextMenu";
 import { PageSelectorMenu } from "./PageSelectorMenu";
+import { VariableMenu } from "@/features/variables/ui/VariableMenu";
 import { PasteLinkMenu } from "./PasteLinkMenu";
 import { EmojiPicker } from "@/shared/ui";
 import { ColorMenu } from "./ColorMenu";
@@ -374,6 +375,9 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 		setSlashMenu,
 		pageSelector,
 		setPageSelector,
+		variableMenu,
+		handleVariableSelect,
+		closeVariableMenu,
 		emojiMenu,
 		setEmojiMenu,
 		handleEmojiSelect,
@@ -959,6 +963,17 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 					onSelect={handlePageSelectorSelect}
 					onCreate={() => runEditorAction(handlePageSelectorCreate())}
 					onClose={() => setPageSelector(null)}
+				/>
+			) : null}
+
+			{variableMenu ? (
+				<VariableMenu
+					key={variableMenu.blockId}
+					pageId={pageId}
+					position={variableMenu.position}
+					trigger={variableMenu.trigger}
+					onSelect={handleVariableSelect}
+					onClose={closeVariableMenu}
 				/>
 			) : null}
 
