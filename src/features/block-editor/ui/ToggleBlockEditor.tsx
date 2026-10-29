@@ -159,6 +159,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
             onKeyDown={handleSummaryKeyDown}
             onRequestSlashMenu={onRequestSlashMenu}
             onAskAI={onAskAI}
+            blockId={block.id}
           />
         </div>
       </div>
