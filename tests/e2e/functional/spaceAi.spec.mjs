@@ -72,6 +72,16 @@ test.describe("Space on an empty paragraph", () => {
     await expect(aiPanel(page)).toBeVisible();
     await expect(editor).toHaveText(""); // the prompt took the caret, no space was typed
 
+    // Notion's bar: one line the width of the text column, sitting on the line.
+    const prompt = page.getByRole("textbox", { name: "Ask AI anything" });
+    await expect(prompt).toHaveAttribute("placeholder", "Edit with AI");
+    await expect(aiPanel(page).getByRole("button", { name: "Send" })).toBeDisabled();
+    await expect(page.getByTestId("ai-inline-answer")).toHaveCount(0);
+    const bar = await aiPanel(page).boundingBox();
+    const line = await editor.boundingBox();
+    expect(bar.width).toBeGreaterThanOrEqual(line.width);
+    expect(Math.abs(bar.y - line.y)).toBeLessThan(12);
+
     await page.keyboard.press("Escape");
     await expect(aiPanel(page)).toHaveCount(0);
     await expect(editor).toBeFocused();
