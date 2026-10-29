@@ -245,4 +245,21 @@ describe('user context (flag on)', () => {
 		assert.ok(!text.includes('PRIVATE') && !text.includes(USER_A) && user.after.body_sha256.length === 64);
 		assert.equal(audit.rows.find((row) => row.scope === 'workspace').after.body, 'WS BODY');
 	});
+
+	it('C1102: with the commands flag off a command is 400 to create, unlisted, 404 to change, not served', async () => {
+		const made = await call(items(), { method: 'POST', token: A(), body: { kind: 'command', slug: 'standup', ...fields() } });
+		assert.equal(made.status, 400);
+		const seeded = await app.db.query<{ id: string }>(
+			`insert into public.ai_context_items (kind, scope, owner_id, slug, name, description, body, created_by, updated_by)
+			 values ('command', 'user', $1, 'standup', 'n', 'd', 'HIDDEN TEMPLATE', $1, $1) returning id`,
+			[USER_A],
+		);
+		const id = seeded.rows[0]?.id as string;
+		const listed = ((await call(items(), { token: A() })).body as { items: { id: string }[] }).items;
+		assert.ok(!listed.some((item) => item.id === id), 'not listed');
+		assert.equal((await call(items(id), { method: 'PUT', token: A(), body: fields() })).status, 404);
+		assert.equal((await call(items(id), { method: 'DELETE', token: A() })).status, 404);
+		const served = JSON.stringify((await call('/api/ai/commands?surface=chat', { token: A() })).body);
+		assert.ok(!served.includes('HIDDEN TEMPLATE'));
+	});
 });

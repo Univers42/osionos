@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import { templateProblem } from '../commands/userCommands.ts';
 import { inTransaction } from '../db.ts';
 
 /**
  * The AI context items in the database (models/osionos-ai-context-migration.sql):
- * a user's own skills and rules, and a workspace's rules (U1, C1000-C1015).
+ * a user's own skills, rules and slash commands (U1 C1000-C1015, U2
+ * C1100-C1110), and a workspace's rules.
  *
  * Every write is ONE transaction: the row change and one ai_context_item_audit
  * row. The count of active items is checked inside it, under an advisory lock
@@ -14,10 +16,11 @@ import { inTransaction } from '../db.ts';
  * Who may write is the route's rule, not this file's.
  */
 
-export type ContextKind = 'skill' | 'rule';
+export type ContextKind = 'skill' | 'rule' | 'command';
 
 export const MAX_USER_SKILLS = 12;
 export const MAX_USER_RULES = 10;
+export const MAX_USER_COMMANDS = 20;
 export const MAX_WORKSPACE_RULES = 8;
 /** The longest rule body; the table's CHECK is the second wall. */
 export const RULE_BODY_MAX = 1200;
@@ -49,8 +52,12 @@ export interface ContextFields {
 /** Whose items: one user's own, or one workspace's rules. */
 export type ContextOwner = { scope: 'user'; ownerId: string } | { scope: 'workspace'; workspaceId: string };
 
-/** One active item of an owner: by id (user routes) or by kind and slug (workspace routes). */
-export type ItemRef = { id: string } | { kind: ContextKind; slug: string };
+/**
+ * One active item of an owner: by id among the kinds the deployment serves
+ * (user routes: a kind whose flag is off is not found), or by kind and slug
+ * (workspace routes).
+ */
+export type ItemRef = { id: string; kinds: readonly ContextKind[] } | { kind: ContextKind; slug: string };
 
 const COLUMNS =
 	'id, kind, scope, owner_id, workspace_id, slug, name, description, body, version, created_by, updated_by, created_at, updated_at, archived_at';
@@ -68,17 +75,24 @@ function lockKey(owner: ContextOwner): string {
 /** The cap of active items of that kind for that owner; a workspace holds rules only. */
 export function capOf(owner: ContextOwner, kind: ContextKind): number {
 	if (owner.scope === 'workspace') return kind === 'rule' ? MAX_WORKSPACE_RULES : 0;
+	if (kind === 'command') return MAX_USER_COMMANDS;
 	return kind === 'skill' ? MAX_USER_SKILLS : MAX_USER_RULES;
 }
 
-/** The active items of an owner, by kind then slug. The caps bound the list; the LIMIT is the second wall. */
-export async function listActiveItems(db: Pool, owner: ContextOwner): Promise<ContextItem[]> {
+/**
+ * The active items of those kinds of an owner, by kind then slug. The caps
+ * bound the list and the LIMIT is their sum: one kind can never crowd another
+ * out (C1100, 'command' sorts first). No kind, no query.
+ */
+export async function listActiveItems(db: Pool, owner: ContextOwner, kinds: readonly ContextKind[]): Promise<ContextItem[]> {
+	if (kinds.length === 0) return [];
 	const where = ownerClause(owner);
+	const limit = kinds.reduce((sum, kind) => sum + capOf(owner, kind), 0);
 	const result = await db.query<ContextItem>(
 		`select ${COLUMNS} from public.ai_context_items
-		 where ${where.sql} and archived_at is null
-		 order by kind, slug limit ${MAX_USER_SKILLS + MAX_USER_RULES}`,
-		[where.value],
+		 where ${where.sql} and kind = any($2::text[]) and archived_at is null
+		 order by kind, slug limit ${limit}`,
+		[where.value, kinds],
 	);
 	return result.rows;
 }
@@ -113,7 +127,7 @@ async function audit(
 	]);
 }
 
-export type CreateOutcome = { kind: 'created'; item: ContextItem } | { kind: 'limit' } | { kind: 'exists' };
+export type CreateOutcome = { kind: 'created'; item: ContextItem } | { kind: 'limit' } | { kind: 'exists' } | { kind: 'unavailable' };
 
 /** A new item at version 1, unless the owner is at the cap or the slug of that kind is taken. */
 export async function createItem(
@@ -151,17 +165,21 @@ export async function createItem(
 			return { kind: 'created', item } as const;
 		});
 	} catch (error) {
-		if ((error as { code?: unknown }).code === '23505') return { kind: 'exists' };
+		const { code, constraint } = error as { code?: unknown; constraint?: unknown };
+		if (code === '23505') return { kind: 'exists' };
+		// C1107: the kind is served before its migration ran on this database.
+		if (code === '23514' && constraint === 'ai_context_items_kind_check') return { kind: 'unavailable' };
 		throw error;
 	}
 }
 
-export type ChangeOutcome = { kind: 'changed'; item: ContextItem } | { kind: 'missing' } | { kind: 'too_long' };
+export type ChangeOutcome = { kind: 'changed'; item: ContextItem } | { kind: 'missing' } | { kind: 'too_long' } | { kind: 'bad_template' };
 
 /** The active item of that owner, locked, or null: another owner's id is null too (C1003). */
 async function lockActive(client: PoolClient, owner: ContextOwner, ref: ItemRef): Promise<ContextItem | null> {
 	const where = ownerClause(owner);
-	const [match, params] = 'id' in ref ? ['id = $2', [where.value, ref.id]] : ['kind = $2 and slug = $3', [where.value, ref.kind, ref.slug]];
+	const [match, params] =
+		'id' in ref ? ['id = $2 and kind = any($3::text[])', [where.value, ref.id, ref.kinds]] : ['kind = $2 and slug = $3', [where.value, ref.kind, ref.slug]];
 	const result = await client.query<ContextItem>(
 		`select ${COLUMNS} from public.ai_context_items
 		 where ${where.sql} and ${match} and archived_at is null for update`,
@@ -170,7 +188,7 @@ async function lockActive(client: PoolClient, owner: ContextOwner, ref: ItemRef)
 	return result.rows[0] ?? null;
 }
 
-/** Replaces name, description and body; the version goes up by one. A rule keeps its shorter cap. */
+/** Replaces name, description and body; the version goes up by one. A rule keeps its shorter cap, a command its one $ARGUMENTS. */
 export async function updateItem(
 	db: Pool,
 	input: ContextFields & { owner: ContextOwner; ref: ItemRef; actorId: string },
@@ -179,6 +197,7 @@ export async function updateItem(
 		const before = await lockActive(client, input.owner, input.ref);
 		if (!before) return { kind: 'missing' } as const;
 		if (before.kind === 'rule' && input.body.length > RULE_BODY_MAX) return { kind: 'too_long' } as const;
+		if (before.kind === 'command' && templateProblem(input.body)) return { kind: 'bad_template' } as const;
 		const updated = await client.query<ContextItem>(
 			`update public.ai_context_items
 			 set name = $2, description = $3, body = $4, version = version + 1, updated_by = $5, updated_at = now()
