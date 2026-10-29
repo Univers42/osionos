@@ -184,6 +184,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
   const present = useCallback(() => updatePageSetting({ presentationMode: !config.presentationMode }, 'present', config.presentationMode ? 'Presentation disabled' : 'Presentation enabled'), [config.presentationMode, updatePageSetting]);
   const toggleSmallText = useCallback(() => updatePageSetting({ smallText: !config.smallText }, 'small_text', 'Small text toggled'), [config.smallText, updatePageSetting]);
   const toggleFullWidth = useCallback(() => updatePageSetting({ fullWidth: !config.fullWidth }, 'full_width', 'Full width toggled'), [config.fullWidth, updatePageSetting]);
+  const toggleOutline = useCallback(() => updatePageSetting({ showOutline: !config.showOutline }, 'table_of_contents', config.showOutline ? 'Table of contents hidden' : 'Table of contents shown'), [config.showOutline, updatePageSetting]);
   const toggleLock = useCallback(() => updatePageSetting({ locked: !config.locked }, 'lock_page', config.locked ? 'Page unlocked' : 'Page locked'), [config.locked, updatePageSetting]);
   const toggleNotifications = useCallback(() => updatePageSetting({ notifications: { comments: !config.notifications.comments } }, 'notify_me', config.notifications.comments ? 'Notifications disabled' : 'Notifications enabled'), [config.notifications.comments, updatePageSetting]);
 
@@ -349,6 +350,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     present,
     toggleSmallText,
     toggleFullWidth,
+    toggleOutline,
     toggleLock,
     toggleNotifications,
     translate,

@@ -156,6 +156,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
         `osionos-page--font-${pageConfig.font}`,
         pageConfig.smallText ? "osionos-page--small-text" : "",
         pageConfig.fullWidth ? "osionos-page--full-width" : "",
+        !hasFullPageLayout && pageConfig.showOutline ? "osionos-page--outline" : "",
         hasFullPageLayout ? "osionos-page--layout-canvas" : "",
         hasHeaderCanvas ? "osionos-page--header-canvas" : "",
         hasHeaderBand ? "osionos-page--header-band" : "",
@@ -169,7 +170,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
       data-debug-blockinfo={debugTools.blockInfo ? "" : undefined}
       data-debug-overflow={debugTools.overflow ? "" : undefined}
     >
-      {!hasFullPageLayout && <PageOutlineRail pageId={pageId} />}
+      {!hasFullPageLayout && pageConfig.showOutline && <PageOutlineRail pageId={pageId} />}
 
       {chrome === "bar" && <PageHeaderBar key={pageId} {...headerBarProps} />}
 
