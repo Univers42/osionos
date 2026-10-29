@@ -328,6 +328,15 @@ missing variable stops the service and names the variable. The models are read
 from the disk only — the service never reaches the hub for them, and a check
 that cannot be loaded refuses every image rather than storing one unchecked.
 
+`OSIONOS_AI_USER_CONTEXT=on` serves a user's own skills and rules and the
+workspace rules (`osionos-ai-context-migration.sql`);
+`OSIONOS_AI_USER_COMMANDS=on` serves a user's own slash commands on the chat
+surface (`osionos-ai-context-commands-migration.sql`, after the first). Each
+needs its migration applied before it goes on, and only the exact value `on`
+turns it on. A command's template is expanded by the composer: the expanded
+message is held to the run's 32 000 characters like any other, so a long
+template plus long typing is refused by the run, not cut.
+
 The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_BULK_URL`
 (`OSIONOS_AI_EMBED_URL` when the bulk one is not set) and
 `OSIONOS_AI_EMBED_MODEL` (`intfloat/multilingual-e5-small`).
