@@ -51,7 +51,7 @@
 }
 
 /* Hide when the PANE (not the viewport) is phone-narrow. Above this the page
-   reserves the rail's strip (.osionos-page--outline in notionPage.css). The
+   reserves the rail's strip (notionPage.css). The
    old 1100px cut hid it in every split pane and on most laptop windows. */
 @container (max-width: 480px) {
   .rail {
@@ -251,19 +251,5 @@
   }
   100% {
     background-color: transparent;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ticks,
-  .tick,
-  .panel,
-  .rail[data-open] .panel,
-  .link {
-    transition: none;
-  }
-
-  :global([data-osio-toc-flash]) {
-    animation: none;
   }
 }

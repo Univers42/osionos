@@ -63,6 +63,8 @@ test.describe("page outline rail", () => {
     await writeLongPage(page, baseURL);
     await expect(ticksButton(page)).toBeVisible();
     await expect(rail(page).locator("[data-level]").filter({ visible: true })).toHaveCount(3);
+    // A closed rail holds no copy of the headings' text: getByText finds the heading alone.
+    await expect(page.getByText("Getting started", { exact: true })).toHaveCount(1);
     await page.screenshot({ path: testInfo.outputPath("toc-collapsed.png") });
 
     await ticksButton(page).hover();
@@ -74,6 +76,7 @@ test.describe("page outline rail", () => {
 
     await page.mouse.move(200, 200);
     await expect(panelLink(page, "Overview")).toBeHidden();
+    await expect(page.getByText("Getting started", { exact: true })).toHaveCount(1);
     await page.screenshot({ path: testInfo.outputPath("toc-collapsed-dark.png") });
   });
 
@@ -119,7 +122,6 @@ test.describe("page outline rail", () => {
 
     await pageMenu(page, /Table of contents/);
     await expect(page.locator("[data-osio-toc]")).toHaveCount(0);
-    await expect(page.locator(".osionos-page--outline")).toHaveCount(0);
 
     await pageMenu(page, /Table of contents/);
     await expect(ticksButton(page)).toBeVisible();
