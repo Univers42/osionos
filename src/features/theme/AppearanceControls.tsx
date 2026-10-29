@@ -1,6 +1,7 @@
 /**
  * The personal half of Settings > Appearance: an accent row (the presets and a
- * free hue) and segmented controls for density, corners and text size. Every
+ * free hue), segmented controls for density, corners and text size, and the
+ * caret (colour everywhere; shape and blink where the browser draws them). Every
  * change is written to <html> and to storage at once (theme.ts).
  */
 
@@ -9,12 +10,16 @@ import React, { useId, useSyncExternalStore } from 'react';
 import { MiniTabs } from '@/shared/ui';
 import {
   ACCENT_PRESETS,
+  CARET_COLORS,
   CUSTOM_ACCENT,
   FIXED_ACCENT_PALETTES,
   readCurrentAppearance,
   subscribeAppearance,
   updateAppearance,
   type Appearance,
+  type CaretBlink,
+  type CaretColor,
+  type CaretShape,
   type Density,
   type Roundness,
   type UiScale,
@@ -167,3 +172,76 @@ export const ShapeControls: React.FC<{ appearance: Appearance; onChange: (patch:
     />
   </>
 );
+
+const CARET_INKS: Record<CaretColor, { label: string; ink: string }> = {
+  accent: { label: 'Accent', ink: 'var(--osio-accent-text)' },
+  text: { label: 'Text', ink: 'var(--osio-fg-default)' },
+  blue: { label: 'Blue', ink: 'var(--osio-block-tint-blue-fg)' },
+  green: { label: 'Green', ink: 'var(--osio-block-tint-green-fg)' },
+  purple: { label: 'Purple', ink: 'var(--osio-block-tint-purple-fg)' },
+  red: { label: 'Red', ink: 'var(--osio-block-tint-red-fg)' },
+  orange: { label: 'Orange', ink: 'var(--osio-block-tint-orange-fg)' },
+  pink: { label: 'Pink', ink: 'var(--osio-block-tint-pink-fg)' },
+};
+
+// Firefox parses neither property, so its caret stays a blinking bar whatever is stored.
+const drawsCaretShape = (): boolean => typeof CSS !== 'undefined' && CSS.supports('caret-shape', 'block');
+
+export const CaretControls: React.FC<{ appearance: Appearance; onChange: (patch: Partial<Appearance>) => void }> = ({
+  appearance,
+  onChange,
+}) => {
+  const headingId = useId();
+  return (
+    <>
+      <div>
+        <p id={headingId} className={LABEL}>
+          Caret
+        </p>
+        <div role="group" aria-labelledby={headingId} className="flex flex-wrap items-center gap-3">
+          {CARET_COLORS.map((color) => (
+            <Swatch
+              key={color}
+              label={`${CARET_INKS[color].label} caret`}
+              colours={{ light: CARET_INKS[color].ink, dark: CARET_INKS[color].ink }}
+              selected={appearance.caretColor === color}
+              onSelect={() => onChange({ caretColor: color })}
+            />
+          ))}
+          <span className="text-xs text-[var(--osio-fg-muted)]">{CARET_INKS[appearance.caretColor].label}</span>
+        </div>
+        <input
+          type="text"
+          aria-label="Try the caret"
+          placeholder="Click here to try the caret"
+          className="mt-3 h-[var(--osio-control-h-md)] w-64 max-w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 text-sm text-[var(--osio-fg-default)]"
+        />
+      </div>
+      {drawsCaretShape() ? (
+        <>
+          <Segmented<CaretShape>
+            label="Caret shape"
+            value={appearance.caretShape}
+            options={[
+              { value: 'bar', label: 'Bar' },
+              { value: 'block', label: 'Block' },
+              { value: 'underscore', label: 'Underline' },
+            ]}
+            onChange={(caretShape) => onChange({ caretShape })}
+          />
+          <Segmented<CaretBlink>
+            label="Caret blink"
+            value={appearance.caretBlink}
+            options={[
+              { value: 'on', label: 'Blink' },
+              { value: 'off', label: 'Steady' },
+            ]}
+            onChange={(caretBlink) => onChange({ caretBlink })}
+          />
+        </>
+      ) : (
+        <p className="text-xs text-[var(--osio-fg-muted)]">This browser draws the caret as a blinking bar: its shape and blink can be changed in Chrome, Edge or Brave.</p>
+      )}
+    </>
+  );
+};

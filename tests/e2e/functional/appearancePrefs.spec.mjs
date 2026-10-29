@@ -32,6 +32,43 @@ async function openAppearanceSettings(page) {
 }
 
 test.describe("appearance preferences", () => {
+  test("the caret colour is personal and survives a reload; shape and blink only where drawn", async ({ page, baseURL, browserName }) => {
+    await seed(page);
+    await openFreshPage(page, baseURL);
+    await openAppearanceSettings(page);
+    const tryIt = page.getByRole("textbox", { name: "Try the caret" });
+    const pink = await page.evaluate(() => {
+      const probe = document.createElement("div");
+      probe.style.color = "var(--osio-block-tint-pink-fg)";
+      document.body.append(probe);
+      const value = getComputedStyle(probe).color;
+      probe.remove();
+      return value;
+    });
+    await page.getByRole("button", { name: "Pink caret", exact: true }).click();
+    await expect(html(page)).toHaveAttribute("data-caret-color", "pink");
+    await expect(tryIt).toHaveCSS("caret-color", pink);
+    expect((await storedAppearance(page)).caretColor).toBe("pink");
+
+    const shape = page.getByRole("group", { name: "Caret shape" });
+    if (browserName === "chromium") {
+      await shape.getByRole("tab", { name: "Block" }).click();
+      await expect(html(page)).toHaveAttribute("data-caret-shape", "block");
+      await expect(tryIt).toHaveCSS("caret-shape", "block");
+    } else {
+      await expect(shape).toHaveCount(0);
+      await expect(page.getByText("This browser draws the caret as a blinking bar")).toBeVisible();
+    }
+    await page.screenshot({ path: `test-results/caret-settings-${browserName}.png` });
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(html(page)).toHaveAttribute("data-caret-color", "pink");
+
+    await openAppearanceSettings(page);
+    await page.getByRole("button", { name: "Accent caret", exact: true }).click();
+    await expect(html(page)).not.toHaveAttribute("data-caret-color", /.*/);
+  });
+
   test("choosing an accent in Settings recolours the app and survives a reload", async ({ page, baseURL }) => {
     await seed(page);
     await openFreshPage(page, baseURL);
