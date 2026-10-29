@@ -14,6 +14,7 @@ import {
   ListTree,
   Link,
   Lock,
+  MoreHorizontal,
   MoveRight,
   Palette,
   Plug,
@@ -37,7 +38,8 @@ export interface PageMenuContext {
   onImport: () => void;
   onMoveTo: () => void;
   onUseAI: () => void;
-  onOpenAppearance: () => void;
+  /** Opens one side submenu by section id (a search hit on its row). */
+  onOpenSubmenu: (id: string) => void;
   onError: (message: string) => void;
   onClose: () => void;
   debugTools: Partial<Record<PageDebugToolId, boolean>>;
@@ -114,31 +116,43 @@ export function buildPageMenuSections(context: PageMenuContext): PageMenuSection
     { id: 'analytics', label: 'Updates & analytics', icon: <Clock size={16} />, keepOpen: true, run: run(() => actions.openAnalytics(), true) },
     { id: 'notify', label: 'Notify me', icon: <Bell size={16} />, hint: 'Comments', checked: actions.config.notifications.comments, keepOpen: true, run: run(() => actions.toggleNotifications(), true) },
     { id: 'connections', label: 'Connections', icon: <Plug size={16} />, hint: actions.config.connections.length ? 'MongoDB' : 'None', checked: actions.config.connections.length > 0, keepOpen: true, run: run(() => actions.manageConnections(), true) },
-    ...PAGE_DEBUG_TOOLS.map((tool) => ({
-      id: `debug-${tool.id}`,
-      label: tool.label,
-      icon: DEBUG_TOOL_ICONS[tool.id],
-      testId: `debug-tool-${tool.id}`,
-      keepOpen: true,
-      checked: !!context.debugTools[tool.id],
-      run: run(() => usePageDebugStore.getState().toggle(tool.id), true),
-    })),
   ];
+
+  const tools = PAGE_DEBUG_TOOLS.map((tool) => ({
+    id: `debug-${tool.id}`,
+    label: tool.label,
+    icon: DEBUG_TOOL_ICONS[tool.id],
+    testId: `debug-tool-${tool.id}`,
+    keepOpen: true,
+    checked: !!context.debugTools[tool.id],
+    run: run(() => usePageDebugStore.getState().toggle(tool.id), true),
+  }));
+  const toolsOn = tools.filter((tool) => tool.checked).length;
+  const submenuRow = (id: string, label: string, icon: React.ReactNode) =>
+    ({ id: `${id}-row`, label, icon, keepOpen: true, run: () => context.onOpenSubmenu(id) });
 
   return [
     { id: 'page', items: page },
     {
       id: 'appearance',
-      items: [{ id: 'appearance-row', label: 'Appearance & layout', icon: <Palette size={16} />, keepOpen: true, run: () => context.onOpenAppearance() }],
+      items: [submenuRow('appearance', 'Appearance & layout', <Palette size={16} />)],
       submenu: { label: 'Appearance & layout', icon: <Palette size={16} />, testId: 'page-menu-appearance', items: [...fonts, ...appearance] },
     },
-    { id: 'ai', items: [
+    { id: 'ai', continues: true, items: [
       { id: 'use-with-ai', label: 'Use with AI', icon: <Sparkles size={16} />, run: run(() => context.onUseAI()) },
       { id: 'lock', label: 'Lock page', icon: <Lock size={16} />, checked: actions.config.locked, keepOpen: true, run: run(() => actions.toggleLock(), true) },
     ] },
+    {
+      id: 'more',
+      items: [submenuRow('more', 'More', <MoreHorizontal size={16} />)],
+      submenu: { label: 'More', icon: <MoreHorizontal size={16} />, testId: 'page-menu-more', items: more },
+    },
+    {
+      id: 'tools',
+      continues: true,
+      items: [submenuRow('tools', 'Developer tools', <Bug size={16} />)],
+      submenu: { label: 'Developer tools', icon: <Bug size={16} />, hint: toolsOn ? `${toolsOn} on` : undefined, testId: 'page-menu-tools', items: tools },
+    },
     { id: 'trash', items: [{ id: 'trash', label: 'Move to Trash', icon: <Trash2 size={16} />, danger: true, run: run(() => actions.moveToTrash()) }] },
-    { id: 'more', label: 'More', items: more },
   ];
 }
-
-export const DEBUG_TOOL_HEADER = <><Bug size={11} className="shrink-0" />Tools</>;

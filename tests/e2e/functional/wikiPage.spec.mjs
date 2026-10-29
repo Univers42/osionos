@@ -18,7 +18,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { activateFirstEditor, openFreshPage, waitForRenderStability } from "../../browser/core/app.mjs";
+import { activateFirstEditor, openFreshPage, waitForRenderStability, openPageMenuPanel } from "../../browser/core/app.mjs";
 
 /** Turns the open page into a wiki, optionally with an icon; returns its id. */
 async function convertToWiki(page, icon) {
@@ -110,12 +110,10 @@ test.describe("wiki pages", () => {
     await openFreshPage(page, baseURL);
     await activateFirstEditor(page);
 
-    await page.getByRole("button", { name: "Open page configuration" }).click();
-    await page.getByRole("button", { name: "Turn into wiki" }).click();
+    await (await openPageMenuPanel(page, "more")).getByRole("button", { name: "Turn into wiki" }).click();
     await expect(wikiPages(page)).toBeVisible();
 
-    await page.getByRole("button", { name: "Open page configuration" }).click();
-    await page.getByRole("button", { name: "Turn into page" }).click();
+    await (await openPageMenuPanel(page, "more")).getByRole("button", { name: "Turn into page" }).click();
     await expect(wikiPages(page)).toHaveCount(0);
   });
 });

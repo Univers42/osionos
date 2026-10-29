@@ -23,6 +23,7 @@ import {
   embedMediaViaLink,
   openFreshPage,
   pasteText,
+  openPageMenuPanel,
 } from "../../browser/core/app.mjs";
 
 const html = (page) => page.locator("html");
@@ -243,8 +244,7 @@ test.describe("accessibility preferences", () => {
     await embedMediaViaLink(page, "image", "https://example.com/fixtures/anim-0.gif");
 
     // The raw-mode preview renders the page with the read-only renderer.
-    await page.getByRole("button", { name: "Open page configuration" }).click();
-    await page.getByRole("button", { name: "Raw / code mode" }).click();
+    await (await openPageMenuPanel(page, "more")).getByRole("button", { name: "Raw / code mode" }).click();
     const preview = page.locator("[data-raw-mode]");
     await expect(preview).toBeVisible();
     await expect(preview.getByTestId("media-block-image-canvas")).toBeVisible();

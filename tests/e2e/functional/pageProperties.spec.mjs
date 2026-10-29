@@ -18,7 +18,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { openFreshPage, waitForRenderStability } from "../../browser/core/app.mjs";
+import { openFreshPage, openPageMenuPanel, waitForRenderStability } from "../../browser/core/app.mjs";
 
 const PROPERTIES = [
   { key: "stage", label: "Stage", type: "select", value: "", options: ["Todo", "Doing", "Done"] },
@@ -217,30 +217,32 @@ test.describe("page properties", () => {
 });
 
 test.describe("page configuration menu", () => {
-  test("its language dropdown picks a language without closing the menu", async ({ page, baseURL }) => {
+  test("More › Translate lists the languages and picking one keeps the menu open", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Open page configuration" }).click();
-    const language = page.getByRole("combobox", { name: "Translation language" });
-    await expect(page.locator("select")).toHaveCount(0);
-    const before = await language.innerText();
-    await language.click();
-    const options = page.getByRole("option");
-    const target = options.filter({ hasNotText: before }).first();
-    const chosen = (await target.innerText()).split("\n")[0];
-    await target.click();
-    await expect(page.getByRole("listbox")).toHaveCount(0);
-    await expect(language).toBeVisible();
-    await expect(language).toHaveText(chosen);
+    const more = await openPageMenuPanel(page, "more");
+    const translate = more.getByTestId("page-menu-translate");
+    await translate.click();
+    const languages = page.getByTestId("page-menu-translate-panel");
+    // More opened on the left of the menu; the nested list keeps going left
+    // instead of landing on top of the menu.
+    const [moreBox, languagesBox] = [await more.boundingBox(), await languages.boundingBox()];
+    expect(languagesBox.x + languagesBox.width).toBeLessThan(moreBox.x + moreBox.width / 2);
+    await languages.getByRole("button", { name: "German", exact: true }).click();
+    await expect(translate).toContainText("German");
+    await expect(languages.getByRole("button", { name: "German", exact: true }).locator("svg")).toHaveCount(1);
+    await expect(page.getByTestId("page-config-menu")).toBeVisible();
   });
-  test("Escape closes only the language list and keeps focus on its combobox", async ({ page, baseURL }) => {
+  test("Escape closes only the language list and puts focus back on Translate", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
-    await page.getByRole("button", { name: "Open page configuration" }).click();
-    const language = page.getByRole("combobox", { name: "Translation language" });
-    await language.click();
-    await expect(page.getByRole("listbox")).toBeVisible();
+    const more = await openPageMenuPanel(page, "more");
+    const translate = more.getByTestId("page-menu-translate");
+    await translate.focus();
+    await page.keyboard.press("Enter");
+    const languages = page.getByTestId("page-menu-translate-panel");
+    await expect(languages.getByRole("button").first()).toBeFocused();
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("listbox")).toHaveCount(0);
-    await expect(language).toBeVisible();
-    await expect(language).toBeFocused();
+    await expect(languages).toHaveCount(0);
+    await expect(more).toBeVisible();
+    await expect(translate).toBeFocused();
   });
 });
