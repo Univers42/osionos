@@ -41,8 +41,11 @@ test.describe("Notion-style page chrome", () => {
     const root = page.locator(".osionos-page").first();
     await expect(root).toHaveClass(/osionos-page--font-serif/);
 
-    await submenu.getByRole("button", { name: "Full width", exact: true }).click();
+    const fullWidth = submenu.getByRole("button", { name: "Full width", exact: true });
+    await expect(fullWidth).toHaveAttribute("aria-pressed", "false");
+    await fullWidth.click();
     await expect(root).toHaveClass(/osionos-page--full-width/);
+    await expect(fullWidth).toHaveAttribute("aria-pressed", "true");
   });
 
   test("the workspace menu reads like a workspace card", async ({ page, baseURL }) => {
@@ -52,7 +55,10 @@ test.describe("Notion-style page chrome", () => {
     await expect(menu).toBeVisible();
 
     await expect(menu.getByRole("button", { name: /Settings/ })).toBeVisible();
-    await expect(menu.getByRole("button", { name: /Invite members/ })).toBeVisible();
+    const invite = menu.getByRole("button", { name: /Invite members/ });
+    await expect(invite).toBeVisible();
+    // One line, like Notion's card: the label never wraps under the icon.
+    expect((await invite.boundingBox()).height).toBeLessThanOrEqual(32);
     await expect(menu.getByText(/members?$/).first()).toBeVisible();
   });
 
