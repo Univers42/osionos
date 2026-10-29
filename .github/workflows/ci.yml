@@ -31,7 +31,11 @@ env:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only PR runs cancel each other. A push to develop/main finishes its run, so
+  # a busy branch still reaches a green checkpoint: 29 develop merges in 4 h
+  # (2026-10-29) cancelled every develop run before it ended. GitHub keeps only
+  # the newest pending run per group, so this queues at most one, not a backlog.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # A push to a branch with an open PR into main or develop starts this workflow twice: once for
