@@ -128,6 +128,11 @@ describe('user commands (commands flag on, context flag off)', () => {
 	});
 
 	it('C1107: before its migration, a command create is a clean 503', async () => {
+		// Restored as it was: later migrations widen the CHECK (U3 adds 'hook').
+		const original = await app.db.query<{ def: string }>(
+			"select pg_get_constraintdef(oid) as def from pg_constraint where conname = 'ai_context_items_kind_check'",
+		);
+		const restore = `alter table public.ai_context_items drop constraint ai_context_items_kind_check, add constraint ai_context_items_kind_check ${original.rows[0]?.def ?? ''}`;
 		await app.db.query(
 			"alter table public.ai_context_items drop constraint ai_context_items_kind_check, add constraint ai_context_items_kind_check check (kind in ('skill', 'rule'))",
 		);
@@ -136,9 +141,7 @@ describe('user commands (commands flag on, context flag off)', () => {
 			assert.equal(answer.status, 503);
 			assert.equal((answer.body as { error: { code: string } }).error.code, 'context_unavailable');
 		} finally {
-			await app.db.query(
-				"alter table public.ai_context_items drop constraint ai_context_items_kind_check, add constraint ai_context_items_kind_check check (kind in ('skill', 'rule', 'command'))",
-			);
+			await app.db.query(restore);
 		}
 	});
 });
