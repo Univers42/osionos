@@ -175,8 +175,8 @@ export type UrlPaste = "link" | "plain";
 /** The caret's ink: the accent, the text colour, or one of the block tint inks. */
 export const CARET_COLORS = ["accent", "text", "blue", "green", "purple", "red", "orange", "pink"] as const;
 export type CaretColor = (typeof CARET_COLORS)[number];
-/** Shape and blink are CSS caret-shape / caret-animation: Chromium draws them, Firefox ignores them. */
-export type CaretShape = "bar" | "block" | "underscore";
+/** "bar" blinking is the native caret; any other choice is drawn by the app (features/theme/model/drawnCaret.ts). */
+export type CaretShape = "bar" | "thick" | "block" | "underscore";
 export type CaretBlink = "on" | "off";
 
 export interface Appearance {
@@ -252,7 +252,7 @@ export function parseAppearance(raw: string | null): Appearance {
     hovercards: oneOf(stored.hovercards, ["on", "off"], DEFAULT_APPEARANCE.hovercards),
     urlPaste: oneOf(stored.urlPaste, ["link", "plain"], DEFAULT_APPEARANCE.urlPaste),
     caretColor: oneOf(stored.caretColor, CARET_COLORS, DEFAULT_APPEARANCE.caretColor),
-    caretShape: oneOf(stored.caretShape, ["bar", "block", "underscore"], DEFAULT_APPEARANCE.caretShape),
+    caretShape: oneOf(stored.caretShape, ["bar", "thick", "block", "underscore"], DEFAULT_APPEARANCE.caretShape),
     caretBlink: oneOf(stored.caretBlink, ["on", "off"], DEFAULT_APPEARANCE.caretBlink),
   };
 }
