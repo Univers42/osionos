@@ -1407,7 +1407,7 @@ button.osionos-page-breadcrumb:hover {
   min-height: 1.2em;
   word-break: break-word;
   white-space: pre-wrap;
-  caret-color: var(--osio-fg-default);
+  caret-color: var(--osio-caret);
   resize: none;
   overflow: hidden;
   /* Height follows the text in the normal layout pass (PageTitle.tsx keeps a JS fallback). */

@@ -38,7 +38,7 @@ import { isThemeBasePinned } from '@/shared/config/theme';
 import { useThemeLibrary, resolveTheme } from './model/useThemeLibrary';
 import { ThemeLibraryControls } from './ui/ThemeLibraryControls';
 
-import { AccentControl, ShapeControls, useAppearance } from './AppearanceControls';
+import { AccentControl, CaretControls, ShapeControls, useAppearance } from './AppearanceControls';
 
 interface WorkspaceThemeControlsProps {
   compact?: boolean;
@@ -125,6 +125,7 @@ export const WorkspaceThemeControls: React.FC<WorkspaceThemeControlsProps> = ({ 
 
       <AccentControl appearance={appearance} paletteId={palette} onChange={changeAppearance} />
       <ShapeControls appearance={appearance} onChange={changeAppearance} />
+      <CaretControls appearance={appearance} onChange={changeAppearance} />
 
       <div>
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">Color theme</p>

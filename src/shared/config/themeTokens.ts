@@ -129,6 +129,7 @@ export const EXCLUDED_TOKENS: readonly { pattern: RegExp; reason: string }[] = [
   { pattern: /^a-[a-z]+$/, reason: "accent ramp step; set accent, accent-fg and the other accent tokens" },
   { pattern: /^z-[a-z]+$/, reason: "stacking order, not appearance" },
   { pattern: /^accent-hue$/, reason: "written by the custom accent picker in Settings" },
+  { pattern: /^caret$/, reason: "a personal choice: the caret colour picker in Settings > Appearance" },
   { pattern: /^shadow-rgb$/, reason: "an rgb triplet the shadows mix, not a colour" },
   { pattern: /^fade-(top|bottom)$/, reason: "internal: set by a scrolling list as it scrolls" },
   { pattern: /^pane-zoom$/, reason: "internal: written by the pane zoom control" },
