@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { Redis } from 'ioredis';
 import { config } from '../config.ts';
+import { approvalToolNames, hookRefusal } from '../context/hooks.ts';
 import { checkDailyBuildLimit } from '../rateLimit.ts';
 import { resolveTarget } from '../gateway/resolve.ts';
 import { resolvePinnedAgent } from '../agents/resolve.ts';
@@ -346,6 +347,12 @@ export async function decideApproval(input: {
 		const continuationRunId = await continueRun(db, redis, user, declined, 'declined');
 		return { kind: 'decided', status: 'declined', approval: declined, continuationRunId };
 	}
+
+	// U3: a hook written after the card refuses the approve BEFORE the claim
+	// (C1125, C1126): the row stays pending, nothing is written, and a read
+	// that fails is a 503, never a pass. A decline never reads hooks.
+	const refusal = await hookRefusal(db, user.userId, approvalToolNames(row));
+	if (refusal) return { kind: 'refused', ...refusal };
 
 	// A builder pass spends the day's bucket BEFORE the claim (C161): at the
 	// limit the approval stays 'pending', and no write has started. A decline
