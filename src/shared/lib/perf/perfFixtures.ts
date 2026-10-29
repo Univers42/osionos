@@ -36,7 +36,7 @@ declare global {
   var __perfSeedFolder: ((childCount: number) => PerfFixtureFolder) | undefined;
   var __perfOpenCodePage: ((fileName?: string, text?: string) => string) | undefined;
   var __perfCodeText: ((pageId: string) => string | undefined) | undefined;
-  var __perfOpenBlockPage: ((blockCount: number) => string) | undefined;
+  var __perfOpenBlockPage: ((blockCount: number, text?: string) => string) | undefined;
   var __perfBlockCount: ((pageId: string) => number) | undefined;
   var __perfDurations: ((name: string) => number[]) | undefined;
   var __perfReset: (() => void) | undefined;
@@ -84,10 +84,10 @@ export function perfOpenCodePage(fileName = "perf.ts", text = "const a = 1;\n"):
   return id;
 }
 
-export function perfOpenBlockPage(blockCount: number): string {
+export function perfOpenBlockPage(blockCount: number, text = "with some text"): string {
   const id = `${FIXTURE_PREFIX}blocks-${Date.now()}`;
   const content = Array.from({ length: blockCount }, (_, index) => ({
-    id: `${id}-b${index}`, type: "paragraph" as const, content: `Block ${index} with some text`,
+    id: `${id}-b${index}`, type: "paragraph" as const, content: `Block ${index} ${text}`,
   }));
   const page = makeFixturePage(id, { title: `Blocks ${blockCount}`, content });
   addPages([page]);
