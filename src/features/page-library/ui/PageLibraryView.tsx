@@ -9,39 +9,42 @@
 /* ************************************************************************** */
 
 // The Notion-style Library: the workspace's pages as a tree table, with tabs for
-// Recents, Favorites, Shared, Private and Skills. Header stays quiet; rows are
-// 32px with thin separators; an expanded level ends with an "Add new" row.
+// Recents, Favorites, Shared, Private and Skills. The header is only the title
+// and "New page"; filter, search and sort are icons at the end of the tab row.
 
 import React, { useCallback, useMemo, useState } from "react";
-import { ArrowUpDown, Plus, Search } from "lucide-react";
+import { AtSign, Clock, FileText, History, Lock, Plus, Sparkles, Star, Users, type LucideIcon } from "lucide-react";
 import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { usePageStore } from "@/store/usePageStore";
 import { useWorkspaceMembersStore } from "@/store/settings/useWorkspaceMembersStore";
 import {
-  buildTree, filterByTitle, LIBRARY_SORTS, pagesForTab, parseLibraryTab,
-  visitedAtByPage, type LibrarySort, type LibraryTab,
+  buildTree, filterByCreator, filterByTitle, pagesForTab, parseLibraryTab,
+  visitedAtByPage, type LibraryCreator, type LibrarySort, type LibraryTab,
 } from "../model/pageLibraryModel";
 import { LIBRARY_GRID, LibraryTree } from "./LibraryTree";
 import { LibrarySkills } from "./LibrarySkills";
+import { LibraryToolbar } from "./LibraryToolbar";
 
 const TAB_KEY = "osionos:library:tab";
 const EMPTY_PAGES: PageEntry[] = [];
 
-const TAB_LABELS: Array<{ id: LibraryTab; label: string }> = [
-  { id: "recents", label: "Recents" },
-  { id: "favorites", label: "Favorites" },
-  { id: "shared", label: "Shared" },
-  { id: "private", label: "Private" },
-  { id: "skills", label: "Skills" },
+const TAB_LABELS: Array<{ id: LibraryTab; label: string; Icon: LucideIcon }> = [
+  { id: "recents", label: "Recents", Icon: Clock },
+  { id: "favorites", label: "Favorites", Icon: Star },
+  { id: "shared", label: "Shared", Icon: Users },
+  { id: "private", label: "Private", Icon: Lock },
+  { id: "skills", label: "Skills", Icon: Sparkles },
 ];
 
-const SORT_LABELS: Record<LibrarySort, string> = {
-  edited: "Last edited",
-  visited: "Last visited",
-  title: "Title",
-};
+const COLUMNS: Array<{ label: string; Icon: LucideIcon }> = [
+  { label: "Page name", Icon: FileText },
+  { label: "Created by", Icon: AtSign },
+  { label: "Source", Icon: Lock },
+  { label: "Last visited time", Icon: Clock },
+  { label: "Last edited time", Icon: History },
+];
 
 function storedTab(): LibraryTab {
   try {
@@ -62,6 +65,7 @@ export const PageLibraryView: React.FC = () => {
   const [tab, setTab] = useState<LibraryTab>(storedTab);
   const [sort, setSort] = useState<LibrarySort>("visited");
   const [query, setQuery] = useState("");
+  const [creator, setCreator] = useState<LibraryCreator>("anyone");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
 
   const workspaceId = workspace?._id ?? "";
@@ -83,7 +87,11 @@ export const PageLibraryView: React.FC = () => {
     () => pagesForTab(tab, pages, recents, favoriteIds, activeUserId),
     [tab, pages, recents, favoriteIds, activeUserId],
   );
-  const filtered = useMemo(() => filterByTitle(tabPages, query), [tabPages, query]);
+  const pagesById = useMemo(() => new Map(pages.map((page) => [page._id, page])), [pages]);
+  const filtered = useMemo(
+    () => filterByTitle(filterByCreator(tabPages, creator, activeUserId), query),
+    [tabPages, creator, activeUserId, query],
+  );
   const nodes = useMemo(() => buildTree(filtered, sort, visited), [filtered, sort, visited]);
 
   const chooseTab = useCallback((next: LibraryTab) => {
@@ -126,32 +134,8 @@ export const PageLibraryView: React.FC = () => {
 
   return (
     <div role="region" aria-label="Library" className="flex h-full min-h-0 flex-col bg-[var(--osio-bg-page)]">
-      <header className="flex flex-wrap items-center gap-3 border-b border-[var(--osio-border-soft)] px-[clamp(18px,4cqw,48px)] py-5">
-        <h1 className="mr-auto text-2xl font-semibold leading-8 text-[var(--osio-fg-default)]">Library</h1>
-        <label className="flex h-8 min-w-[180px] items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 text-sm text-[var(--osio-fg-muted)] focus-within:border-[var(--osio-accent)]">
-          <Search size={14} aria-hidden="true" />
-          <span className="sr-only">Search pages</span>
-          <input
-            type="search"
-            aria-label="Search pages"
-            placeholder="Search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="h-full min-w-0 flex-1 bg-transparent text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
-          />
-        </label>
-        <label className="flex h-8 items-center gap-1.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 text-sm text-[var(--osio-fg-muted)]">
-          <ArrowUpDown size={14} aria-hidden="true" />
-          <span className="sr-only">Sort pages</span>
-          <select
-            aria-label="Sort pages"
-            value={sort}
-            onChange={(event) => setSort(event.target.value as LibrarySort)}
-            className="h-full bg-transparent text-sm text-[var(--osio-fg-default)] outline-none"
-          >
-            {LIBRARY_SORTS.map((option) => <option key={option} value={option}>{SORT_LABELS[option]}</option>)}
-          </select>
-        </label>
+      <header className="flex flex-wrap items-center gap-3 px-[clamp(18px,4cqw,48px)] pb-3 pt-8">
+        <h1 className="mr-auto text-3xl font-bold leading-10 text-[var(--osio-fg-default)]">Library</h1>
         <button
           type="button"
           onClick={() => void addPage(null)}
@@ -162,26 +146,39 @@ export const PageLibraryView: React.FC = () => {
         </button>
       </header>
 
-      <div role="tablist" aria-label="Library tabs" className="flex flex-wrap items-center gap-1 px-[clamp(18px,4cqw,48px)] py-2">
-        {TAB_LABELS.map((entry) => {
-          const selected = entry.id === tab;
-          return (
-            <button
-              key={entry.id}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => chooseTab(entry.id)}
-              className={`rounded-full px-3 py-1 text-sm transition-colors duration-(--osio-dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] ${
-                selected
-                  ? "bg-[var(--osio-bg-subtle)] font-medium text-[var(--osio-fg-default)]"
-                  : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
-              }`}
-            >
-              {entry.label}
-            </button>
-          );
-        })}
+      <div className="flex flex-wrap items-center gap-1 px-[clamp(18px,4cqw,48px)] py-2">
+        <div role="tablist" aria-label="Library tabs" className="flex flex-wrap items-center gap-1">
+          {TAB_LABELS.map((entry) => {
+            const selected = entry.id === tab;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => chooseTab(entry.id)}
+                className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-sm transition-colors duration-(--osio-dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] ${
+                  selected
+                    ? "bg-[var(--osio-bg-subtle)] font-medium text-[var(--osio-fg-default)]"
+                    : "text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
+                }`}
+              >
+                <entry.Icon size={14} aria-hidden="true" />
+                {entry.label}
+              </button>
+            );
+          })}
+        </div>
+        {tab === "skills" ? null : (
+          <LibraryToolbar
+            query={query}
+            onQueryChange={setQuery}
+            sort={sort}
+            onSortChange={setSort}
+            creator={creator}
+            onCreatorChange={setCreator}
+          />
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto px-[clamp(18px,4cqw,48px)] pb-10">
@@ -189,12 +186,13 @@ export const PageLibraryView: React.FC = () => {
           <LibrarySkills workspaceId={workspaceId} />
         ) : (
           <>
-            <div className={`${LIBRARY_GRID} h-8 border-b border-[var(--osio-border-default)] text-xs font-medium text-[var(--osio-fg-muted)]`}>
-              <div className="px-2" style={{ paddingLeft: 10 }}>Page name</div>
-              <div className="px-2">Created by</div>
-              <div className="px-2">Source</div>
-              <div className="px-2">Last visited</div>
-              <div className="px-2">Last edited</div>
+            <div className={`${LIBRARY_GRID} h-9 min-w-[800px] border-b border-[var(--osio-border-default)] text-sm text-[var(--osio-fg-muted)]`}>
+              {COLUMNS.map(({ label, Icon }, index) => (
+                <div key={label} className={`flex min-w-0 items-center gap-1.5 ${index === 0 ? "pl-2.5 pr-2" : "px-2"}`}>
+                  <Icon size={14} aria-hidden="true" className="shrink-0" />
+                  <span className="truncate">{label}</span>
+                </div>
+              ))}
             </div>
             {nodes.length === 0 ? (
               <p className="px-2 py-8 text-sm text-[var(--osio-fg-muted)]">No pages here yet.</p>
@@ -203,6 +201,7 @@ export const PageLibraryView: React.FC = () => {
                 nodes={nodes}
                 names={names}
                 workspaceName={workspace?.name ?? ""}
+                pagesById={pagesById}
                 visited={visited}
                 expanded={expanded}
                 onToggle={toggle}

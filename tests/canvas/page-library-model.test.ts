@@ -17,8 +17,8 @@ import test from "node:test";
 
 import type { ActivePage, PageEntry } from "@/entities/page";
 import {
-  buildTree, filterByTitle, pagesForTab, sortPages, sourceLabel,
-  visibleRows, visitedAtByPage,
+  buildTree, filterByCreator, filterByTitle, pagesForTab, sortPages, sourceLabel,
+  sourceParent, visibleRows, visitedAtByPage,
 } from "@/features/page-library/model/pageLibraryModel";
 import { addRecent, parseRecents } from "@/store/pageStore.helpers";
 import { formatRelativeTime } from "@/shared/lib/relativeTime";
@@ -116,6 +116,21 @@ test("source label uses the workspace for public pages", () => {
   assert.equal(sourceLabel(page("a", { visibility: "private" }), "Team"), "Private");
   assert.equal(sourceLabel(page("a", { visibility: "shared" }), "Team"), "Shared");
   assert.equal(sourceLabel(page("a", { visibility: "public" }), "Team"), "Team");
+});
+
+test("a nested page names its parent as source; a missing or archived parent does not", () => {
+  const parent = page("parent");
+  const byId = new Map([parent, page("gone", { archivedAt: "2026-10-02T00:00:00.000Z" })].map((p) => [p._id, p]));
+  assert.equal(sourceParent(page("child", { parentPageId: "parent" }), byId), parent);
+  assert.equal(sourceParent(page("orphan", { parentPageId: "missing" }), byId), null);
+  assert.equal(sourceParent(page("stale", { parentPageId: "gone" }), byId), null);
+  assert.equal(sourceParent(page("root"), byId), null);
+});
+
+test("created-by filter keeps everyone's pages or only the user's", () => {
+  const pages = [page("mine"), page("theirs", { ownerId: "someone-else" }), page("MINE2", { ownerId: USER.toUpperCase() })];
+  assert.deepEqual(filterByCreator(pages, "anyone", USER).map((p) => p._id), ["mine", "theirs", "MINE2"]);
+  assert.deepEqual(filterByCreator(pages, "me", USER).map((p) => p._id), ["mine", "MINE2"]);
 });
 
 test("addRecent stamps visitedAt and preserves old entries that never had one", () => {
