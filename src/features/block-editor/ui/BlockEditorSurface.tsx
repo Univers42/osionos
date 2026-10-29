@@ -115,6 +115,8 @@ export interface SurfaceBlockEditorProps {
 	numberedDepth: number;
 	bulletDepth: number;
 	isSelected?: boolean;
+	/** Top-level page-body block: tables/databases bleed to the page edge before scrolling. */
+	wideBlock?: boolean;
 	onChange: (text: string) => void;
 	onKeyDown: (e: React.KeyboardEvent) => void;
 	onPaste?: (e: React.ClipboardEvent) => void;
@@ -133,6 +135,8 @@ interface BlockEditorSurfaceProps {
 	compact?: boolean;
 	className?: string;
 	emptyPlaceholder?: string;
+	/** The page body itself: its top-level tables/databases may bleed to the page edge. */
+	wideBlocks?: boolean;
 	renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
 }
 
@@ -368,6 +372,7 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	compact = false,
 	className = "",
 	emptyPlaceholder = "Click here to start writing...",
+	wideBlocks = false,
 	renderBlockEditor,
 }) => {
 	const surfaceId = useContext(EditorSurfaceIdContext);
@@ -754,7 +759,7 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 			<div data-testid="locked-page-body" className={`relative flex min-w-0 flex-col ${className}`}>
 				{blocks.length === 0 ? (
 					<p className="py-8 text-sm italic text-[var(--osio-fg-subtle)]">This page is locked and has no content.</p>
-				) : blocks.map((block, index) => <ReadOnlyBlock key={block.id} block={block} index={index} />)}
+				) : blocks.map((block, index) => <ReadOnlyBlock key={block.id} block={block} index={index} wideBlock={wideBlocks} />)}
 			</div>
 		);
 	}
@@ -778,6 +783,7 @@ const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 				blocks={blocks}
 				pageId={pageId}
 				isRoot
+				allowWideBlocks={wideBlocks}
 				highlightedRootBlockId={highlightedRootBlockId}
 				selectedBlockIds={selectedBlockIds}
 				moveBlock={stableMoveBlock}
@@ -1048,6 +1054,7 @@ interface BlockTreeProps {
 	isRoot?: boolean;
 	parentBlockType?: Block["type"] | null;
 	parentBlockId?: string | null;
+	allowWideBlocks?: boolean;
 	numberedDepth?: number;
 	bulletDepth?: number;
 	highlightedRootBlockId: string | null;
@@ -1080,6 +1087,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 	isRoot = false,
 	parentBlockType = null,
 	parentBlockId = null,
+	allowWideBlocks = false,
 	numberedDepth = 0,
 	bulletDepth = 0,
 	highlightedRootBlockId,
@@ -1191,6 +1199,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 							pageId={pageId}
 							block={block}
 							parentBlockId={parentBlockId}
+							wideBlock={allowWideBlocks && isRoot}
 							numberedIndex={numberedIndex}
 							numberedDepth={numberedDepth}
 							bulletDepth={bulletDepth}
@@ -1630,6 +1639,7 @@ interface EditableBlockProps {
 	pageId: string;
 	block: Block;
 	parentBlockId?: string | null;
+	wideBlock?: boolean;
 	numberedIndex: number;
 	numberedDepth: number;
 	bulletDepth: number;
@@ -1674,6 +1684,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	pageId,
 	block,
 	parentBlockId = null,
+	wideBlock = false,
 	numberedIndex,
 	numberedDepth,
 	bulletDepth,
@@ -1858,6 +1869,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 				numberedIndex,
 				numberedDepth,
 				bulletDepth,
+				wideBlock,
 				isSelected: selectedBlockIds.has(block.id),
 				onChange: handleChange,
 				onKeyDown: handleKey,

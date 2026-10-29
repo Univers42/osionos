@@ -79,6 +79,8 @@ interface BlockProps {
   index: number;
   bulletDepth?: number;
   numberedDepth?: number;
+  /** Top-level page-body block: tables/databases bleed to the page edge before scrolling. */
+  wideBlock?: boolean;
   properties?: readonly import("@/entities/page/model/types").PagePropertyEntry[] | Record<string, unknown>;
 }
 
@@ -186,11 +188,12 @@ function areReadOnlyBlockPropsEqual(previous: BlockProps, next: BlockProps): boo
     previous.index === next.index &&
     (previous.bulletDepth ?? 0) === (next.bulletDepth ?? 0) &&
     (previous.numberedDepth ?? 0) === (next.numberedDepth ?? 0) &&
+    (previous.wideBlock ?? false) === (next.wideBlock ?? false) &&
     previous.properties === next.properties
   );
 }
 
-const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0, properties }) => {
+const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0, wideBlock = false, properties }) => {
   // Per-block text/background colour set via the block colour menu; mirrors the
   // editable BlockEditor (getBlockSurfaceStyle), so read-only matches editing.
   const surface = getBlockSurfaceStyle(block);
@@ -450,7 +453,7 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       return <ButtonBlockReadOnly block={block} />;
 
     case "table_block":
-      return <TableBlockReadOnly block={block} />;
+      return <TableBlockReadOnly block={block} wide={wideBlock} />;
 
     case "database_inline": {
       const databaseEmbed = (
@@ -464,7 +467,12 @@ const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         </Suspense>
       );
       // Below-the-fold Home sections defer-mount (reserve height, no first-paint work).
-      return <div className="my-2">{block.deferMount ? <DeferredMount>{databaseEmbed}</DeferredMount> : databaseEmbed}</div>;
+      const databaseContent = block.deferMount ? <DeferredMount>{databaseEmbed}</DeferredMount> : databaseEmbed;
+      return (
+        <div className={wideBlock ? "osio-wide-block my-2" : "my-2"}>
+          {wideBlock ? <div data-wide-block-content>{databaseContent}</div> : databaseContent}
+        </div>
+      );
     }
 
     case "home_views": {
