@@ -12,7 +12,8 @@
 import React from "react";
 import type { ObjectDatabaseAdapter, ObjectDatabaseProps, ObjectDatabaseSubItemsController } from "@notion-db/object-database";
 import { databaseShellClass } from "../model/databaseShellClass";
-import { LIBRARY_DB_ID, LIBRARY_DEFAULT_VIEW } from "../model/libraryDatabaseModel";
+import { LIBRARY_DB_ID } from "../model/libraryDatabaseModel";
+import { LIBRARY_DEFAULT_VIEW } from "../model/libraryViews";
 import { getLibraryDatabaseAdapter } from "../model/libraryDatabaseState";
 import { createLibrarySubItemsController, openLibraryItem } from "../model/libraryItems";
 
