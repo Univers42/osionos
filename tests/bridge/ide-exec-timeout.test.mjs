@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { createDockerClient, DOCKER_REQUEST_TIMEOUT_MS } from "../../scripts/ide-docker.mjs";
+import { createDockerClient, DOCKER_REQUEST_TIMEOUT_MS, requestTimeoutMs } from "../../scripts/ide-docker.mjs";
 import { createIdeExecUpgradeHandler } from "../../scripts/bridge-ide-exec.mjs";
 
 const USER = "11111111-1111-4111-8111-111111111111";
@@ -98,20 +98,15 @@ test("a git/search exec (runExec) whose start never answers rejects inside the d
   }
 });
 
-test("the production timeout is 20 s and the override can only lower it", async () => {
+// #62: a pure check of the clamp. The earlier version raced a silent daemon against a 600 ms
+// timer, so its verdict rode on wall-clock scheduling and failed once on a loaded host.
+test("the production timeout is 20 s and the override can only lower it", () => {
   assert.equal(DOCKER_REQUEST_TIMEOUT_MS, 20_000);
-  const daemon = await silentStartDaemon();
-  try {
-    const env = { ...envFor(daemon.host), OSIONOS_IDE_DOCKER_TIMEOUT_MS: "999999" };
-    const docker = createDockerClient(env);
-    const pending = docker.runExec("ide-x", { Cmd: ["true"] }).catch((error) => error);
-    // A race, not Date.now(): a 600 ms timer may fire a millisecond early on Date.now()'s
-    // clock, which failed this test on 2026-10-23 (twice) with the request still waiting.
-    const settled = await Promise.race([pending.then(() => true), new Promise((resolve) => setTimeout(resolve, 600, false))]);
-    assert.equal(settled, false); // still waiting: 999999 was clamped to 20 s, not applied
-    daemon.close();
-    assert.ok(await pending);
-  } finally {
-    await daemon.close().catch(() => {});
-  }
+  assert.equal(requestTimeoutMs({}), 20_000);
+  assert.equal(requestTimeoutMs({ OSIONOS_IDE_DOCKER_TIMEOUT_MS: "999999" }), 20_000);
+  assert.equal(requestTimeoutMs({ OSIONOS_IDE_DOCKER_TIMEOUT_MS: "20001" }), 20_000);
+  assert.equal(requestTimeoutMs({ OSIONOS_IDE_DOCKER_TIMEOUT_MS: "300" }), 300);
+  assert.equal(requestTimeoutMs({ OSIONOS_IDE_DOCKER_TIMEOUT_MS: "49" }), 20_000);
+  assert.equal(requestTimeoutMs({ OSIONOS_IDE_DOCKER_TIMEOUT_MS: "1.5e3" }), 1_500);
+  assert.equal(requestTimeoutMs({ OSIONOS_IDE_DOCKER_TIMEOUT_MS: "soon" }), 20_000);
 });
