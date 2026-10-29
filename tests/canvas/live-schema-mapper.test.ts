@@ -137,7 +137,7 @@ test("humanizeName: snake/kebab/camel → Title Case", () => {
   assert.equal(humanizeName("customerId"), "Customer Id");
 });
 
-test("G7 types: binary/interval/geometry/vector read-only, bigint and time stay editable text", () => {
+test("G7 types: binary/interval/geometry/vector read-only, bigint a number, time text", () => {
   const wide: LiveTableSchema = {
     name: "wide",
     primary_key: ["id"],
@@ -156,6 +156,6 @@ test("G7 types: binary/interval/geometry/vector read-only, bigint and time stay 
   for (const name of ["blob", "span", "spot", "embedding"]) {
     assert.equal(properties[name].type, "id", name);
   }
-  assert.equal(properties.counter.type, "text"); // never number: 2^53 rounds digits
+  assert.equal(properties.counter.type, "number"); // PG DDL creates UI numbers as bigint
   assert.equal(properties.opens_at.type, "text");
 });
