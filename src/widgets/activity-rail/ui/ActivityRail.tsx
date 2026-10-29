@@ -129,7 +129,7 @@ export const ActivityRail = React.memo(function ActivityRail({ onOpenSettings }:
                 active={isActive(item)}
                 badge={badgeOf(item)}
                 onClick={() => runItem(item)}
-                onIntent={panel ? () => prefetchPanel(panel) : undefined}
+                onIntent={item.prefetch ?? (panel ? () => prefetchPanel(panel) : undefined)}
               />
             );
           })}
