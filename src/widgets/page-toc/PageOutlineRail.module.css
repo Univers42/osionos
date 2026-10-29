@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/24 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/29 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -31,27 +31,29 @@
   height: 0;                       /* zero flow height → 0 scroll inflation     */
   width: 0;                        /* zero flow width  → never widens scroll,
                                       never clipped by overflow-x: hidden        */
-  z-index: var(--osio-z-raised, 20);
+  /* One step under the pane's header bar (z raised, an EARLIER sibling, so a
+     tie paints the rail over its page menu), above the page's own layers (≤1). */
+  z-index: calc(var(--osio-z-raised) - 1);
   pointer-events: none;            /* children re-enable; the 0x0 box is inert  */
 }
 
 /* The visible rail: absolute, escapes the 0x0 anchor, contained by
    .osionos-page (position: relative). top: 50cqh = half the VISIBLE pane
-   height; translateY(-50%) centers on that midline at EVERY scroll offset. */
+   height; translateY(-50%) centers on that midline at EVERY scroll offset.
+   It is also the panel's containing block, so the panel opens in place of
+   the ticks instead of beside them. */
 .railInner {
   position: absolute;
-  inset-inline-end: 12px;          /* RTL-aware right inset                      */
+  inset-inline-end: 10px;          /* RTL-aware right inset                      */
   top: 50cqh;                      /* needs container-type: size on .osionos-page */
   transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
   pointer-events: auto;
 }
 
-/* Hide when the PANE (not the viewport) is too narrow. @container resolves
-   against .osionos-page's width because it is the query container. */
-@container (max-width: 1100px) {
+/* Hide when the PANE (not the viewport) is phone-narrow. Above this the page
+   reserves the rail's strip (notionPage.css). The
+   old 1100px cut hid it in every split pane and on most laptop windows. */
+@container (max-width: 480px) {
   .rail {
     display: none;
   }
@@ -63,23 +65,26 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 7px;
-  padding: 8px 6px;
+  gap: 8px;
+  max-height: 70cqh;
+  overflow: hidden;
+  padding: 10px 8px;
   /* It is a real <button> (keyboard disclosure) — strip the native chrome. */
   appearance: none;
   -webkit-appearance: none;
   margin: 0;
   border: 0;
+  border-radius: var(--osio-radius-sm);
   background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
+  transition: opacity var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease);
 }
 
 .ticks:focus-visible {
   outline: 2px solid var(--osio-accent);
   outline-offset: 2px;
-  border-radius: var(--osio-radius-sm);
 }
 
 .rail[data-open] .ticks {
@@ -87,55 +92,78 @@
   pointer-events: none;
 }
 
+/* Full-opacity fg-subtle keeps every tick at ≥3:1 on the page in all nine
+   palettes (WCAG 1.4.11); the old 0.55 opacity fell to ~2.6:1 in dark.
+   Level is carried by length alone, so colour stays free to mean "you are here". */
 .tick {
+  flex: none;
+  width: 10px;
   height: 2px;
   border-radius: var(--osio-radius-full);
   background: var(--osio-fg-subtle);
-  opacity: 0.55;
-  transition: background 120ms ease, opacity 120ms ease;
+  transition:
+    background var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease),
+    box-shadow var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease),
+    height var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease);
 }
 
-/* Length + thickness + opacity encode heading level. */
 .tick[data-level="1"] {
-  width: 22px;
-  height: 3px;
-  background: var(--osio-fg-default);
-  opacity: 1;
+  width: 20px;
 }
 
 .tick[data-level="2"] {
-  width: 16px;
-  height: 2px;
+  width: 15px;
+}
+
+.ticks:hover .tick {
   background: var(--osio-fg-muted);
-  opacity: 0.8;
 }
 
-.tick[data-level="3"] {
-  width: 10px;
+.tick[data-active],
+.ticks:hover .tick[data-active] {
+  height: 3px;
+  background: var(--osio-fg-strong);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--osio-fg-strong) 45%, transparent);
 }
 
-.tick[data-active] {
-  background: var(--osio-accent);
-  opacity: 1;
-}
+/* ── Expanded: heading panel, opened over the ticks ──────────────────── */
 
-/* ── Expanded: compact heading panel ─────────────────────────────────── */
-
+/* visibility (not display) so it can animate, and so a closed panel is out
+   of the tab order and the accessibility tree. */
 .panel {
-  display: none;
-  min-width: 180px;
-  max-width: 260px;
-  max-height: 60cqh;               /* clamp to the PANE, not the viewport       */
+  position: absolute;
+  inset-inline-end: 0;
+  top: 50%;
+  width: max-content;
+  min-width: 200px;
+  max-width: 280px;
+  max-height: 70cqh;               /* clamp to the PANE, not the viewport       */
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   padding: 6px;
   border: 1px solid var(--osio-border-default);
   border-radius: var(--osio-radius-lg);
   background: var(--osio-bg-elevated);
   box-shadow: var(--osio-shadow-menu);
+  transform-origin: right center;
+  transform: translate(6px, -50%) scale(0.97);
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease),
+    transform var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease),
+    visibility 0s linear var(--osio-dur-fast, 120ms);
 }
 
 .rail[data-open] .panel {
-  display: block;
+  transform: translate(0, -50%) scale(1);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--osio-dur-base, 180ms) var(--osio-ease-decelerate, ease-out),
+    transform var(--osio-dur-base, 180ms) var(--osio-ease-decelerate, ease-out),
+    visibility 0s;
 }
 
 .list {
@@ -148,30 +176,37 @@
 }
 
 .link {
+  --toc-indent: 12px;
+  position: relative;
   display: block;
   width: 100%;
-  padding: 4px 8px;
+  padding-block: 5px;
+  padding-inline: var(--toc-indent) 10px;
   border: 0;
   border-radius: var(--osio-radius-sm);
   background: transparent;
   color: var(--osio-fg-muted);
-  font-size: var(--osio-font-size-xs, 12px);
+  font: inherit;
+  font-size: var(--osio-font-size-sm, 13px);
   line-height: 1.4;
-  text-align: left;
+  text-align: start;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background var(--osio-dur-fast, 120ms) ease, color var(--osio-dur-fast, 120ms) ease;
+}
+
+.link[data-level="1"] {
+  color: var(--osio-fg-default);
 }
 
 .link[data-level="2"] {
-  padding-left: 18px;
+  --toc-indent: 24px;
 }
 
 .link[data-level="3"] {
-  padding-left: 28px;
-  color: var(--osio-fg-subtle);
+  --toc-indent: 36px;
 }
 
 .link:hover {
@@ -184,6 +219,18 @@
   font-weight: 600;
 }
 
+/* The same "you are here" bar the tick shows, carried into the list. */
+.link[data-active]::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc(var(--toc-indent) - 7px);
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: var(--osio-radius-full);
+  background: var(--osio-accent);
+}
+
 .link:focus-visible {
   /* outline (not box-shadow) so the ring is not clipped by the panel's
      overflow-y: auto at the scrolled top/bottom edges. */
@@ -191,9 +238,18 @@
   outline-offset: -2px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tick,
-  .link {
-    transition: none;
+/* The heading a jump landed on glows once, so the eye finds it. */
+:global([data-osio-toc-flash]) {
+  border-radius: var(--osio-radius-sm);
+  animation: tocFlash 1200ms var(--osio-ease-out, ease-out);
+}
+
+@keyframes tocFlash {
+  0%,
+  30% {
+    background-color: var(--osio-accent-subtle);
+  }
+  100% {
+    background-color: transparent;
   }
 }

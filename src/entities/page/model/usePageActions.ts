@@ -32,7 +32,7 @@ import {
   syncPageActionEvent,
   translatePage,
   turnIntoDashboardContent,
-  type PageActionName,
+  type PageEventName,
 } from '@/services/page-actions';
 import { saveAutosaveVersion } from './versionAutosave';
 
@@ -181,7 +181,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     usePageStore.setState({ activePage: null, showTrash: false, navigationPath: [] });
   }, []);
 
-  const logAction = useCallback(async (action: PageActionName, message: string, metadata: Record<string, unknown> = {}) => {
+  const logAction = useCallback(async (action: PageEventName, message: string, metadata: Record<string, unknown> = {}) => {
     if (!pageId) return;
     await recordAction(safeUserId, pageId, action, metadata);
     await syncPageActionEvent(pageId, action, jwt ?? undefined, metadata);
@@ -194,7 +194,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     await addVersion(safeUserId, pageId, { title: page.title || 'Untitled', content: page.content ?? [], label });
   }, [addVersion, page, pageId, safeUserId]);
 
-  const updatePageSetting = useCallback(async (updates: Partial<PageConfig>, action: PageActionName, message: string) => {
+  const updatePageSetting = useCallback(async (updates: Partial<PageConfig>, action: PageEventName, message: string) => {
     if (!pageId) return;
     await updateConfig(safeUserId, pageId, updates);
     await logAction(action, message, updates);
@@ -204,6 +204,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
   const present = useCallback(() => updatePageSetting({ presentationMode: !config.presentationMode }, 'present', config.presentationMode ? 'Presentation disabled' : 'Presentation enabled'), [config.presentationMode, updatePageSetting]);
   const toggleSmallText = useCallback(() => updatePageSetting({ smallText: !config.smallText }, 'small_text', 'Small text toggled'), [config.smallText, updatePageSetting]);
   const toggleFullWidth = useCallback(() => updatePageSetting({ fullWidth: !config.fullWidth }, 'full_width', 'Full width toggled'), [config.fullWidth, updatePageSetting]);
+  const toggleOutline = useCallback(() => updatePageSetting({ showOutline: !config.showOutline }, 'table_of_contents', config.showOutline ? 'Table of contents hidden' : 'Table of contents shown'), [config.showOutline, updatePageSetting]);
   const toggleLock = useCallback(() => updatePageSetting({ locked: !config.locked }, 'lock_page', config.locked ? 'Page unlocked' : 'Page locked'), [config.locked, updatePageSetting]);
   const toggleNotifications = useCallback(() => updatePageSetting({ notifications: { comments: !config.notifications.comments } }, 'notify_me', config.notifications.comments ? 'Notifications disabled' : 'Notifications enabled'), [config.notifications.comments, updatePageSetting]);
 
@@ -419,6 +420,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     present,
     toggleSmallText,
     toggleFullWidth,
+    toggleOutline,
     toggleLock,
     toggleNotifications,
     translate,

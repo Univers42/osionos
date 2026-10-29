@@ -6,99 +6,188 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/24 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/29 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { prefersReducedMotion } from "@/entities/page/ui/coverMedia";
+import { usePageStore } from "@/store/usePageStore";
+import { VIRTUAL_BLOCK_FOCUS_EVENT } from "@/features/block-editor/model/blockDomFocus";
+import { activeHeadingIndex, fillUnrenderedTops, headingsFromKey, outlineKey, type Heading } from "./outline";
 import styles from "./PageOutlineRail.module.css";
 
-interface Heading {
-  id: string;
-  text: string;
-  /** 1 = h1 (longest/opaque) … 3+ = short/faint. */
-  level: number;
+// Hover intent: a pointer crossing the rail on its way elsewhere must not
+// flash the panel open, and leaving it for a moment must not snap it shut.
+const OPEN_DELAY_MS = 70;
+const CLOSE_DELAY_MS = 220;
+const FLASH_MS = 1200;
+const JUMP_GAP_PX = 24;
+// Frames a jump waits for the virtualizer to mount, and folds to open, its target.
+const JUMP_FRAMES = 30;
+const FLASH_ATTR = "data-osio-toc-flash";
+
+const blockEl = (scroller: Element, id: string) =>
+  scroller.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`);
+
+function flash(el: HTMLElement) {
+  el.removeAttribute(FLASH_ATTR);
+  void el.offsetWidth; // restart the animation on a repeat jump
+  el.setAttribute(FLASH_ATTR, "");
+  globalThis.setTimeout(() => el.removeAttribute(FLASH_ATTR), FLASH_MS);
 }
 
-const HEADING_SELECTOR =
-  '[data-block-type="heading_1"],[data-block-type="heading_2"],[data-block-type="heading_3"]';
+/**
+ * Opens the outermost still-folded block on the way to a heading, through the
+ * block's own collapse button, so each kind (toggle, list item, quote) keeps
+ * its own rules.
+ * Caveat: matches the button by its "Expand…" label; a collapse control with
+ * another label is not opened and the jump lands on the fold instead.
+ */
+function unfoldTowards(scroller: Element, ancestors: readonly string[]) {
+  for (const id of ancestors) {
+    const el = blockEl(scroller, id);
+    if (!el) return;
+    const fold = Array.from(el.querySelectorAll<HTMLButtonElement>('button[aria-expanded="false"][aria-label^="Expand"]'))
+      .find((button) => button.closest("[data-block-id]") === el);
+    if (fold) return fold.click();
+  }
+}
 
-const levelOf = (el: Element): number => {
-  const t = el.getAttribute("data-block-type") || "";
-  if (t.endsWith("_1")) return 1;
-  if (t.endsWith("_2")) return 2;
-  return 3;
-};
+function scrollToBlock(scroller: HTMLElement, el: HTMLElement) {
+  const top = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+  scroller.scrollTo({ top: Math.max(0, top - JUMP_GAP_PX), behavior: prefersReducedMotion() ? "auto" : "smooth" });
+  flash(el);
+}
 
 /**
- * Notion-style hover TOC minimap pinned to the right edge of the reading column.
- * Reads headings straight from the rendered editor DOM (purely presentational +
- * a scroll observer), so it never duplicates the page's data-fetching.
+ * Notion-style "On this page" rail on the right edge of each page pane: tick
+ * marks (length = heading level, bright = section being read) that expand into
+ * a heading list on hover or keyboard focus. The outline is read from the page
+ * store, not the DOM, so headings a virtualized page has not rendered are listed.
  */
 export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [headings, setHeadings] = useState<Heading[]>([]);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const key = usePageStore((s) => outlineKey(s.pageById(pageId)?.content));
+  const headings = useMemo(() => headingsFromKey(key), [key]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  // The list mounts on open and unmounts once the panel has faded out, so a
+  // closed rail holds no second copy of every heading's text in the page.
+  const [listed, setListed] = useState(false);
 
-  // Collect headings from the scroll container; re-scan on DOM mutations.
+  const show = (next: boolean) => {
+    setOpen(next);
+    if (next || prefersReducedMotion()) setListed(next);
+  };
+  const schedule = (next: boolean, delay: number) => {
+    globalThis.clearTimeout(timer.current);
+    timer.current = globalThis.setTimeout(() => show(next), delay);
+  };
+  const openNow = () => {
+    globalThis.clearTimeout(timer.current);
+    show(true);
+  };
+  useEffect(() => () => globalThis.clearTimeout(timer.current), []);
+
+  // Scroll-spy, one measurement per frame.
   useEffect(() => {
-    const scroller = rootRef.current?.closest(".osionos-page");
-    // Focused editor panes wrap content in .osionos-page-body; the cheap
-    // read-only split-preview pane has no such wrapper, so fall back to the
-    // scroller itself — both still scope the heading scan to this one pane.
-    const body = scroller?.querySelector(".osionos-page-body") ?? scroller;
-    if (!scroller || !body) return;
-
-    const scan = () => {
-      const els = Array.from(body.querySelectorAll(HEADING_SELECTOR));
-      setHeadings(
-        els.map((el, i) => ({
-          id: el.getAttribute("data-block-id") || `h-${i}`,
-          text: (el.textContent || "").trim() || "Untitled",
-          level: levelOf(el),
-        })),
+    const scroller = rootRef.current?.closest<HTMLElement>(".osionos-page");
+    if (!scroller || headings.length === 0) return;
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const paneTop = scroller.getBoundingClientRect().top;
+      const tops = fillUnrenderedTops(
+        headings.map((h) => {
+          const el = blockEl(scroller, h.id);
+          return el ? el.getBoundingClientRect().top - paneTop : Number.NaN;
+        }),
       );
+      if (!tops) return;
+      const atBottom = scroller.scrollTop > 0 &&
+        scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+      setActiveId(headings[activeHeadingIndex(tops, atBottom)]?.id ?? null);
     };
-    scan();
-    const mo = new MutationObserver(scan);
-    mo.observe(body, { childList: true, subtree: true, characterData: true });
-    return () => mo.disconnect();
-  }, [pageId]);
-
-  // Scroll-spy: highlight the heading currently in view.
-  useEffect(() => {
-    const scroller = rootRef.current?.closest(".osionos-page");
-    const body = scroller?.querySelector(".osionos-page-body") ?? scroller;
-    if (!scroller || !body || headings.length === 0) return;
-    const els = Array.from(body.querySelectorAll(HEADING_SELECTOR));
-    if (els.length === 0) return;
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-        if (visible) {
-          setActiveId(visible.target.getAttribute("data-block-id"));
-        }
-      },
-      { root: scroller, rootMargin: "0px 0px -70% 0px", threshold: 0 },
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    measure();
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
   }, [headings]);
 
-  if (headings.length < 2) return null;
+  // Keep the section being read visible inside a long, scrolling panel.
+  useEffect(() => {
+    const panel = panelRef.current;
+    const link = panel?.querySelector<HTMLElement>("[data-active]");
+    if (!open || !panel || !link) return;
+    const above = link.offsetTop < panel.scrollTop;
+    const below = link.offsetTop + link.offsetHeight > panel.scrollTop + panel.clientHeight;
+    if (above || below) panel.scrollTop = link.offsetTop - panel.clientHeight / 2;
+  }, [open, activeId]);
 
-  const scrollTo = (id: string) => {
-    const scroller = rootRef.current?.closest(".osionos-page");
-    const target = scroller?.querySelector(`[data-block-id="${CSS.escape(id)}"]`);
-    if (!target) return;
-    const reduce = prefersReducedMotion();
-    target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  const jumpTo = (heading: Heading) => {
+    const scroller = rootRef.current?.closest<HTMLElement>(".osionos-page");
+    if (!scroller) return;
+    setActiveId(heading.id);
+    let frames = 0;
+    let requested = false;
+    const attempt = () => {
+      const target = blockEl(scroller, heading.id);
+      if (target) return scrollToBlock(scroller, target);
+      // Virtualized and off-render: the editor's virtualizer brings the root in.
+      if (!blockEl(scroller, heading.rootId) && !requested) {
+        requested = true;
+        document.dispatchEvent(new CustomEvent(VIRTUAL_BLOCK_FOCUS_EVENT, {
+          detail: { blockId: heading.rootId, placement: "start" },
+        }));
+      } else {
+        unfoldTowards(scroller, heading.ancestors);
+      }
+      if (++frames < JUMP_FRAMES) return void requestAnimationFrame(attempt);
+      const fallback = blockEl(scroller, heading.rootId);
+      if (fallback) scrollToBlock(scroller, fallback);
+    };
+    attempt();
   };
+
+  const links = () => Array.from(panelRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+  const focusLink = (pick: (all: HTMLButtonElement[], at: number) => number) => {
+    const all = links();
+    const at = all.indexOf(document.activeElement as HTMLButtonElement);
+    all[Math.max(0, Math.min(all.length - 1, pick(all, at)))]?.focus();
+  };
+  const focusActiveLink = () => {
+    openNow();
+    // The panel is visibility:hidden until this commit lands.
+    requestAnimationFrame(() => (panelRef.current?.querySelector<HTMLElement>("[data-active]") ?? links()[0])?.focus());
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    const inPanel = panelRef.current?.contains(document.activeElement) ?? false;
+    if (e.key === "Escape" && open) {
+      e.preventDefault();
+      show(false);
+      if (inPanel) buttonRef.current?.focus();
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!inPanel) return focusActiveLink();
+      focusLink((_, at) => at + (e.key === "ArrowDown" ? 1 : -1));
+    } else if ((e.key === "Home" || e.key === "End") && inPanel) {
+      e.preventDefault();
+      focusLink((all) => (e.key === "Home" ? 0 : all.length - 1));
+    }
+  };
+
+  // The anchor always renders: the scroll-spy needs its pane before any heading exists.
+  if (headings.length < 2) return <div ref={rootRef} className={styles.rail} aria-hidden="true" />;
 
   return (
     <div
@@ -106,28 +195,30 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
       data-osio-toc
       className={styles.rail}
       data-open={open || undefined}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
+      onMouseEnter={() => schedule(true, OPEN_DELAY_MS)}
+      onMouseLeave={() => {
+        // A keyboard user reading the list keeps it while the pointer wanders.
+        if (!rootRef.current?.querySelector(":focus-visible")) schedule(false, CLOSE_DELAY_MS);
+      }}
+      onFocus={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) openNow();
+      }}
       onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false);
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) schedule(false, 0);
       }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") setOpen(false);
-      }}
+      onKeyDown={onKeyDown}
     >
       <div className={styles.railInner}>
-        {/* The collapsed minimap is the keyboard entry point: a focusable
-            disclosure button. Tab lands here → the wrapper onFocus opens the
-            panel → the heading buttons become reachable. The tick spans are
-            decorative (the button's aria-label names the control). */}
+        {/* The minimap is the keyboard entry point: Tab lands here and opens
+            the list, ArrowDown / Enter moves into it, Escape returns here. */}
         <button
+          ref={buttonRef}
           type="button"
           className={styles.ticks}
           aria-label="On this page"
           aria-expanded={open}
-          aria-haspopup="true"
-          onClick={() => setOpen((value) => !value)}
+          aria-controls={`osio-toc-${pageId}`}
+          onClick={focusActiveLink}
         >
           {headings.map((h) => (
             <span
@@ -140,16 +231,26 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
           ))}
         </button>
 
-        <nav className={styles.panel} aria-label="On this page">
+        <nav
+          ref={panelRef}
+          id={`osio-toc-${pageId}`}
+          className={styles.panel}
+          aria-label="On this page"
+          onTransitionEnd={(e) => {
+            if (!open && e.target === e.currentTarget && e.propertyName === "opacity") setListed(false);
+          }}
+        >
           <ul className={styles.list}>
-            {headings.map((h) => (
+            {listed && headings.map((h) => (
               <li key={h.id}>
                 <button
                   type="button"
                   className={styles.link}
                   data-level={h.level}
                   data-active={h.id === activeId || undefined}
-                  onClick={() => scrollTo(h.id)}
+                  aria-current={h.id === activeId ? "location" : undefined}
+                  title={h.text}
+                  onClick={() => jumpTo(h)}
                 >
                   {h.text}
                 </button>

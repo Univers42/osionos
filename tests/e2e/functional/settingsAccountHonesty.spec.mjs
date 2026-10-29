@@ -90,14 +90,14 @@ test.describe("account-side settings honesty (offline build)", () => {
     await expect(dialog.getByRole("switch").first()).toHaveAttribute("aria-checked", after);
   });
 
-  // Move to Trash cannot be reached from a settings tab: opening any non-page
-  // tab clears the active page (layoutSync.ts), so the panel is its empty state.
-  test("Page settings says no page is open, and offers no AI-share action", async ({ page, baseURL }) => {
+  // Opening a settings tab clears the active page (layoutSync.ts), so the panel
+  // acts on the page read last and says which one, never on an unnamed page.
+  test("Page settings names the page it acts on, and offers no AI-share action", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     await openSettings(page, "Page settings");
 
-    await expect(region(page).getByText("No page open", { exact: true })).toBeVisible();
-    await expect(region(page).getByText("Open a page to see its settings.")).toBeVisible();
+    await expect(region(page).getByText("Page", { exact: true })).toBeVisible();
+    await expect(region(page).getByText("No page open", { exact: true })).toHaveCount(0);
     await expect(region(page).getByRole("button", { name: "Use", exact: true })).toHaveCount(0);
   });
 
