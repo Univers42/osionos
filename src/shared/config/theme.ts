@@ -172,6 +172,12 @@ export type AnimatedImages = "play" | "system" | "still";
 export type Hovercards = "on" | "off";
 /** "link" turns a pasted bare URL into a link; "plain" keeps the text. */
 export type UrlPaste = "link" | "plain";
+/** The caret's ink: the accent, the text colour, or one of the block tint inks. */
+export const CARET_COLORS = ["accent", "text", "blue", "green", "purple", "red", "orange", "pink"] as const;
+export type CaretColor = (typeof CARET_COLORS)[number];
+/** Shape and blink are CSS caret-shape / caret-animation: Chromium draws them, Firefox ignores them. */
+export type CaretShape = "bar" | "block" | "underscore";
+export type CaretBlink = "on" | "off";
 
 export interface Appearance {
   /** a preset id, or "custom" to use `hue`. */
@@ -186,6 +192,9 @@ export interface Appearance {
   animatedImages: AnimatedImages;
   hovercards: Hovercards;
   urlPaste: UrlPaste;
+  caretColor: CaretColor;
+  caretShape: CaretShape;
+  caretBlink: CaretBlink;
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -199,6 +208,9 @@ export const DEFAULT_APPEARANCE: Appearance = {
   animatedImages: "play",
   hovercards: "on",
   urlPaste: "link",
+  caretColor: "accent",
+  caretShape: "bar",
+  caretBlink: "on",
 };
 
 const APPEARANCE_STORAGE_KEY = "osionos:appearance";
@@ -239,6 +251,9 @@ export function parseAppearance(raw: string | null): Appearance {
     animatedImages: oneOf(stored.animatedImages, ["play", "system", "still"], DEFAULT_APPEARANCE.animatedImages),
     hovercards: oneOf(stored.hovercards, ["on", "off"], DEFAULT_APPEARANCE.hovercards),
     urlPaste: oneOf(stored.urlPaste, ["link", "plain"], DEFAULT_APPEARANCE.urlPaste),
+    caretColor: oneOf(stored.caretColor, CARET_COLORS, DEFAULT_APPEARANCE.caretColor),
+    caretShape: oneOf(stored.caretShape, ["bar", "block", "underscore"], DEFAULT_APPEARANCE.caretShape),
+    caretBlink: oneOf(stored.caretBlink, ["on", "off"], DEFAULT_APPEARANCE.caretBlink),
   };
 }
 
@@ -258,7 +273,10 @@ export function persistAppearance(appearance: Appearance) {
 
 /** The axes that live on <html> as an attribute. urlPaste is not one of them:
  *  it changes what a paste does, not what the document looks like. */
-const ATTRIBUTE_AXES = ["accent", "density", "radius", "uiScale", "linkUnderline", "motion", "animatedImages", "hovercards"] as const;
+const ATTRIBUTE_AXES = [
+  "accent", "density", "radius", "uiScale", "linkUnderline", "motion", "animatedImages", "hovercards",
+  "caretColor", "caretShape", "caretBlink",
+] as const;
 
 /** The appearance as it stands. applyAppearance() keeps it up to date, so a
  *  reader that needs a value with no <html> attribute (urlPaste) sees the live
