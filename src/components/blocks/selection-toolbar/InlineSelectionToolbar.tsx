@@ -165,6 +165,9 @@ const InlineSelectionToolbarImpl: React.FC<InlineSelectionToolbarProps> = ({
         close();
         return;
       }
+      // A click that collapsed the selection unmounts the panel a render later;
+      // until then the keys belong to the caret, not to the panel.
+      if (globalThis.getSelection()?.isCollapsed ?? true) return;
       // Shift+Arrow extends the selection in the editor; Alt/Cmd/Ctrl+Arrow
       // moves by word or line. Only Tab honours Shift (backwards navigation).
       if (event.key !== "Tab" && (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey)) {
