@@ -12,6 +12,7 @@ export const PageMenuRow: React.FC<{ item: PageMenuItem }> = ({ item }) => (
     data-testid={item.testId}
     data-tone={item.danger ? 'danger' : undefined}
     onClick={item.run}
+    aria-pressed={item.toggle ? Boolean(item.checked) : undefined}
     className="osio-menu-item"
     style={MENU_ROW_STYLE}
   >
@@ -22,6 +23,15 @@ export const PageMenuRow: React.FC<{ item: PageMenuItem }> = ({ item }) => (
     )}
     {item.shortcut && <span className="text-xs text-[var(--osio-fg-subtle)]">{item.shortcut}</span>}
     {item.hint && <span className="max-w-20 truncate text-xs text-[var(--osio-fg-subtle)]">{item.hint}</span>}
-    {item.checked && <Check size={14} className="shrink-0 text-[var(--osio-accent)]" />}
+    {item.toggle ? <MenuSwitch on={Boolean(item.checked)} /> : item.checked && <Check size={14} className="shrink-0 text-[var(--osio-accent)]" />}
   </button>
+);
+
+const MenuSwitch: React.FC<{ on: boolean }> = ({ on }) => (
+  <span
+    aria-hidden
+    className={`relative h-3.5 w-6 shrink-0 rounded-full transition-colors ${on ? 'bg-[var(--osio-accent)]' : 'bg-[var(--osio-border-strong)]'}`}
+  >
+    <span className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-[var(--osio-bg-surface)] transition-[left] ${on ? 'left-3' : 'left-0.5'}`} />
+  </span>
 );
