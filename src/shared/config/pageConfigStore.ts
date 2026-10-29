@@ -80,6 +80,10 @@ export interface PageConfig {
   font: PageFont;
   smallText: boolean;
   fullWidth: boolean;
+  /** The "On this page" rail on the right edge; on unless the page turns it off. */
+  showOutline: boolean;
+  /** The property rows under the title; on unless the page turns them off. */
+  showProperties: boolean;
   locked: boolean;
   presentationMode: boolean;
   rawMode: boolean;
@@ -121,6 +125,8 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
   font: 'default',
   smallText: false,
   fullWidth: false,
+  showOutline: true,
+  showProperties: true,
   locked: false,
   presentationMode: false,
   rawMode: false,

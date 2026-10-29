@@ -160,7 +160,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     anchors: [
       { id: "style", label: "Page style", keywords: ["font", "default", "serif", "mono"] },
       { id: "actions", label: "Page actions", keywords: ["copy", "duplicate", "trash", "present", "translate", "export"] },
-      { id: "page-switches", label: "Page switches", keywords: ["small text", "full width", "lock page"] },
+      { id: "page-switches", label: "Page switches", keywords: ["small text", "full width", "table of contents", "page properties", "lock page"] },
       { id: "history-connections", label: "History and connections", keywords: ["analytics", "version", "comments", "notify"] },
     ],
   },

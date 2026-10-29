@@ -142,6 +142,26 @@
   max-width: none;
 }
 
+/* "Page properties" off in Appearance & layout: the rows stay in the page data. */
+.osionos-page--hide-properties .osionos-page-property-panel {
+  display: none;
+}
+
+/* The "On this page" rail takes the pane's right 46px. Full width leaves 48px
+   of padding at most, so the column keeps 56px clear of it; below 481px the
+   rail hides (PageOutlineRail.module.css) and the padding is the page's own.
+   Keyed on the drawn rail (it carries data-osio-toc only from two headings
+   up), so a page with no rail keeps its own padding. */
+@container (min-width: 481px) {
+  .osionos-page:has(> [data-osio-toc]) .osionos-page-header,
+  .osionos-page:has(> [data-osio-toc]) .osionos-page-properties,
+  .osionos-page:has(> [data-osio-toc]) .osionos-page-notice,
+  .osionos-page:has(> [data-osio-toc]) .osionos-page-body,
+  .osionos-page:has(> [data-osio-toc]) .osionos-wiki-pages-wrap {
+    padding-right: max(56px, var(--page-content-padding-inline, clamp(16px, 11%, 96px)));
+  }
+}
+
 .osionos-page--layout-canvas .osionos-page-notice,
 .osionos-page--layout-canvas .osionos-page-body {
   max-width: none;
