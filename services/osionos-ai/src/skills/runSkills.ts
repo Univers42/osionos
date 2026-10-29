@@ -24,10 +24,10 @@ import type { WorkspaceSkill } from './repo.ts';
 
 /** One line of the index, and what the tool needs to load it. */
 export interface SkillIndexEntry {
-	/** The id the model passes to `load_skill`: a built-in id or a workspace slug. */
+	/** The id the model passes to `load_skill`: a built-in id, a workspace slug or a user slug. */
 	id: string;
 	version: number;
-	source: 'builtin' | 'workspace';
+	source: 'builtin' | 'workspace' | 'user';
 	description: string;
 	/** The row of a workspace skill: the tool loads by it, never by the slug alone. */
 	skillId?: string;
