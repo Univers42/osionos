@@ -136,6 +136,12 @@ test.describe("page outline rail", () => {
     await pageMenu(page, /Full width/);
     await page.locator(".osionos-page--full-width").waitFor();
     await expect(ticksButton(page)).toBeVisible();
+    // The page menu, still open, covers the rail rather than the reverse.
+    expect(await page.evaluate(() => {
+      const ticks = document.querySelector("[data-osio-toc] button").getBoundingClientRect();
+      const hit = document.elementFromPoint(ticks.left + ticks.width / 2, ticks.top + ticks.height / 2);
+      return Boolean(hit?.closest('[data-testid="page-config-menu"]'));
+    })).toBe(true);
     expect(await railClearance(page)).toBeGreaterThanOrEqual(0);
   });
 

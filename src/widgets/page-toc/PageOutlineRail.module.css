@@ -31,7 +31,9 @@
   height: 0;                       /* zero flow height → 0 scroll inflation     */
   width: 0;                        /* zero flow width  → never widens scroll,
                                       never clipped by overflow-x: hidden        */
-  z-index: var(--osio-z-raised, 20);
+  /* One step under the pane's header bar (z raised, an EARLIER sibling, so a
+     tie paints the rail over its page menu), above the page's own layers (≤1). */
+  z-index: calc(var(--osio-z-raised) - 1);
   pointer-events: none;            /* children re-enable; the 0x0 box is inert  */
 }
 
