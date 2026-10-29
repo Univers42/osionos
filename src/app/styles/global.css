@@ -872,6 +872,20 @@ body {
   }
 }
 
+/* The selection panel's entrance: the same 200 ms opacity/scale pop as the
+   slash menu, owned here so the panel and the menu cannot drift apart. */
+@keyframes osio-slash-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes osio-modal-in {
   from {
     opacity: 0;
