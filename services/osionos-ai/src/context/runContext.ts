@@ -113,8 +113,8 @@ export async function userContextForRun(
 	if (!config.userContextEnabled || !user) return undefined;
 	try {
 		const live = workspaceId ? await liveMemberWorkspaces(db, user) : [];
-		const workspaceRules = workspaceId && live.includes(workspaceId) ? await listActiveItems(db, { scope: 'workspace', workspaceId }) : [];
-		const userItems = await listActiveItems(db, { scope: 'user', ownerId: user.userId });
+		const workspaceRules = workspaceId && live.includes(workspaceId) ? await listActiveItems(db, { scope: 'workspace', workspaceId }, ['rule']) : [];
+		const userItems = await listActiveItems(db, { scope: 'user', ownerId: user.userId }, ['skill', 'rule']);
 		const built = buildUserContext({ workspaceRules, userItems, taken: takenSkillIds(input.skillIndex), skills: !input.research });
 		if (built.dropped.length > 0) console.warn(JSON.stringify({ event: 'user_context_dropped', dropped: built.dropped }));
 		return built.block === null ? undefined : built;
