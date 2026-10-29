@@ -142,6 +142,11 @@
   max-width: none;
 }
 
+/* "Page properties" off in Appearance & layout: the rows stay in the page data. */
+.osionos-page--hide-properties .osionos-page-property-panel {
+  display: none;
+}
+
 /* The "On this page" rail takes the pane's right 46px. Full width leaves 48px
    of padding at most, so the column keeps 56px clear of it; below 481px the
    rail hides (PageOutlineRail.module.css) and the padding is the page's own.

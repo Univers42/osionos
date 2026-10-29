@@ -11,7 +11,7 @@ interface Props {
 
 /**
  * The right-hand "Appearance & layout" panel: the three font tiles, then the
- * small-text, full-width and table-of-contents switches. Items arrive already wired to the page
+ * small-text, full-width, table-of-contents and page-properties switches. Items arrive already wired to the page
  * config, so a search result and the panel run the same action.
  */
 export const AppearanceSubmenu: React.FC<Props> = ({ items }) => {
