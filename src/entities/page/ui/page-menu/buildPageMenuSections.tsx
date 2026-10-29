@@ -18,6 +18,7 @@ import {
   Palette,
   Plug,
   Presentation,
+  Rows3,
   Sparkles,
   Trash2,
 } from 'lucide-react';
@@ -92,6 +93,7 @@ export function buildPageMenuSections(context: PageMenuContext): PageMenuSection
     { id: 'small-text', label: 'Small text', icon: <Clipboard size={16} />, checked: actions.config.smallText, toggle: true, keepOpen: true, run: run(() => actions.toggleSmallText(), true) },
     { id: 'full-width', label: 'Full width', icon: <LayoutDashboard size={16} />, checked: actions.config.fullWidth, toggle: true, keepOpen: true, run: run(() => actions.toggleFullWidth(), true) },
     { id: 'table-of-contents', label: 'Table of contents', icon: <ListTree size={16} />, checked: actions.config.showOutline, toggle: true, keepOpen: true, run: run(() => actions.toggleOutline(), true) },
+    { id: 'page-properties', label: 'Page properties', icon: <Rows3 size={16} />, checked: actions.config.showProperties, toggle: true, keepOpen: true, run: run(() => actions.toggleProperties(), true) },
   ];
 
   const more = [
