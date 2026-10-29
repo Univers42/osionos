@@ -686,6 +686,30 @@ export async function baasTenantMountsGet(config, fetchImpl, timeoutMs = BAAS_FE
 	return Array.isArray(body) ? body : (body?.mounts ?? []);
 }
 
+/** GET one mount's descriptor from the same self-serve subtree as the list, with the tenant
+ *  key. A 404 is a mount tenant-control does not know, or a tenant-control that predates
+ *  the route: either way there is no label to show, which is not an outage. */
+async function baasTenantDescriptorGet(config, fetchImpl, dbId, timeoutMs = BAAS_FETCH_TIMEOUT_MS) {
+	if (!config.baasApiKey) {
+		throw Object.assign(new Error('osionos tenant api key is not configured (set OSIONOS_BAAS_API_KEY).'), { status: 503 });
+	}
+	const url = `${config.tenantMountsUrl}/${encodeURIComponent(dbId)}/descriptor`;
+	const response = await engineFetchOrUnavailable(() => fetchWithTimeout(fetchImpl, url, {
+		method: 'GET',
+		headers: { Accept: 'application/json', Authorization: `Bearer ${config.baasApiKey}` },
+	}, timeoutMs), timeoutMs, 'The mount descriptor');
+	if (response.status === 404) {
+		await response.body?.cancel().catch(() => {});
+		throw Object.assign(new Error('grobase has no descriptor for this mount.'), { status: 404 });
+	}
+	if (!response.ok) {
+		await response.body?.cancel().catch(() => {});
+		const failure = tenantMountsFailure(response.status, url);
+		throw Object.assign(new Error(failure.message), { status: failure.status });
+	}
+	return readJsonBody(response, { service: 'mount descriptor', empty: {}, failureStatus: responseStatusForBaasFailure });
+}
+
 function postgrestQuery(params) {
 	const searchParams = new URLSearchParams();
 	for (const [key, value] of Object.entries(params)) {
@@ -3715,6 +3739,7 @@ const DB_SCHEMA_PATH = /^\/api\/databases\/([^/]+)\/schema$/;
 const DB_ROWS_PATH = /^\/api\/databases\/([^/]+)\/tables\/([^/]+)$/;
 const DB_DDL_PATH = /^\/api\/databases\/([^/]+)\/schema\/ddl$/;
 const DB_SQLRO_PATH = /^\/api\/databases\/([^/]+)\/sql-ro$/;
+const DB_DESCRIPTOR_PATH = /^\/api\/databases\/([^/]+)\/descriptor$/;
 // Full CRUD: reads (list/get/aggregate) + writes (insert/update/delete/upsert/
 // batch). The query-router enforces per-engine capability and owner-scopes every
 // write to the tenant; every route below ALSO enforces the per-user mount ACL
@@ -3774,6 +3799,24 @@ async function handleDatabaseSchema(match, request, response, config, fetchImpl)
 	}
 	const base = schema && typeof schema === 'object' ? schema : { tables: [], engine: 'unknown' };
 	json(response, 200, { dbId, ...base }, config);
+	return true;
+}
+
+// The keys grobase's mount descriptor may carry (tenant-control GET .../mounts/{id}/descriptor).
+// The bridge re-picks them so a future upstream field never reaches the browser unreviewed.
+const DESCRIPTOR_KEYS = ['id', 'name', 'engine', 'isolation', 'credential_mode', 'location', 'host', 'port', 'file', 'database', 'tls', 'created_at', 'last_healthy_at'];
+
+/** GET /api/databases/:dbId/descriptor — where the mount's data lives (engine, host or
+ *  file, database, requested TLS), credential-free. Gated like the schema: a READ. */
+async function handleDatabaseDescriptor(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	if (!canReadDatabase(member)) throw databasePermissionError('read');
+	const raw = config.tenantMountsUrl
+		? await baasTenantDescriptorGet(config, fetchImpl, dbId)
+		: await baasRegistryGet(config, fetchImpl, `/databases/${dbId}/descriptor`, config.baasTenantId);
+	const descriptor = Object.fromEntries(DESCRIPTOR_KEYS.filter((key) => raw && key in raw).map((key) => [key, raw[key]]));
+	json(response, 200, { dbId, descriptor }, config);
 	return true;
 }
 
@@ -3855,6 +3898,8 @@ async function handleDatabasesGet(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/databases') return handleDatabaseList(url, request, response, config, fetchImpl);
 	const schemaMatch = DB_SCHEMA_PATH.exec(url.pathname);
 	if (schemaMatch) return handleDatabaseSchema(schemaMatch, request, response, config, fetchImpl);
+	const descriptorMatch = DB_DESCRIPTOR_PATH.exec(url.pathname);
+	if (descriptorMatch) return handleDatabaseDescriptor(descriptorMatch, request, response, config, fetchImpl);
 	return false;
 }
 
