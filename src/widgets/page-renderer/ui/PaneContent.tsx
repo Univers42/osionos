@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { Suspense } from "react";
+import React, { Suspense, useState } from "react";
 
 import { ErrorBoundary, LoadingPane } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
@@ -33,6 +33,7 @@ import {
   LazyCodeFileView,
   LazyOsionosPage,
   LazyPageLibraryView,
+  readyPageLibraryView,
   LazyProfilePageView,
   LazySettingsView,
   LazyThemeJsonView,
@@ -198,7 +199,7 @@ const PaneContentImpl: React.FC<PaneContentProps> = ({ tab, paneId, chrome }) =>
     return (
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
-          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]"><LazyPageLibraryView /></div>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]"><PageLibraryPane /></div>
         </Suspense>
       </ErrorBoundary>
     );
@@ -280,3 +281,9 @@ const PaneContentImpl: React.FC<PaneContentProps> = ({ tab, paneId, chrome }) =>
 // but the tab/paneId here are stable per layout node, so this editor subtree is
 // skipped — the dominant cost when 8 panes are open.
 export const PaneContent = React.memo(PaneContentImpl);
+
+// Picked once per mount: swapping lazy -> ready mid-life would remount the view.
+const PageLibraryPane: React.FC = () => {
+  const [View] = useState(() => readyPageLibraryView() ?? LazyPageLibraryView);
+  return <View />;
+};
