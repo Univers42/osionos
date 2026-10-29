@@ -75,14 +75,21 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
   const headings = useMemo(() => headingsFromKey(key), [key]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  // The list mounts on open and unmounts once the panel has faded out, so a
+  // closed rail holds no second copy of every heading's text in the page.
+  const [listed, setListed] = useState(false);
 
+  const show = (next: boolean) => {
+    setOpen(next);
+    if (next || prefersReducedMotion()) setListed(next);
+  };
   const schedule = (next: boolean, delay: number) => {
     globalThis.clearTimeout(timer.current);
-    timer.current = globalThis.setTimeout(() => setOpen(next), delay);
+    timer.current = globalThis.setTimeout(() => show(next), delay);
   };
   const openNow = () => {
     globalThis.clearTimeout(timer.current);
-    setOpen(true);
+    show(true);
   };
   useEffect(() => () => globalThis.clearTimeout(timer.current), []);
 
@@ -167,7 +174,7 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
     const inPanel = panelRef.current?.contains(document.activeElement) ?? false;
     if (e.key === "Escape" && open) {
       e.preventDefault();
-      setOpen(false);
+      show(false);
       if (inPanel) buttonRef.current?.focus();
     } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
@@ -224,9 +231,17 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
           ))}
         </button>
 
-        <nav ref={panelRef} id={`osio-toc-${pageId}`} className={styles.panel} aria-label="On this page">
+        <nav
+          ref={panelRef}
+          id={`osio-toc-${pageId}`}
+          className={styles.panel}
+          aria-label="On this page"
+          onTransitionEnd={(e) => {
+            if (!open && e.target === e.currentTarget && e.propertyName === "opacity") setListed(false);
+          }}
+        >
           <ul className={styles.list}>
-            {headings.map((h) => (
+            {listed && headings.map((h) => (
               <li key={h.id}>
                 <button
                   type="button"
