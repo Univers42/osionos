@@ -192,4 +192,56 @@ test.describe("slash-command menu positioning & interaction", () => {
     await expect(page.getByTestId("color-menu")).toBeVisible();
     await expect(menu).toBeHidden();
   });
+
+  test("notion layout: sections, shortcuts, close", async ({ page }) => {
+    await openFreshPage(page, "/");
+    const editor = await activateFirstEditor(page);
+    await editor.click();
+    await page.keyboard.type("/");
+
+    const menu = slashMenu(page);
+    await expect(menu).toBeVisible();
+
+    // A fresh profile has no history: the catalog alone, sectioned.
+    await expect(menu.getByText("Basic blocks", { exact: true })).toBeVisible();
+    await expect(menu.getByText("Media", { exact: true })).toBeVisible();
+    await expect(menu.getByText("Suggested", { exact: true })).toHaveCount(0);
+
+    const headingRow = menu
+      .getByTestId("slash-command-entry")
+      .filter({ hasText: "Heading 1" })
+      .first();
+    await expect(headingRow).toContainText("#");
+
+    // The close row behaves exactly like Escape, and leaves the caret in the block.
+    await menu.getByTestId("slash-command-close").click();
+    await expect(menu).toHaveCount(0);
+    await page.waitForFunction(
+      () => document.activeElement?.getAttribute("role") === "textbox",
+      null,
+      { timeout: 3000 },
+    );
+
+    // Closing only dismissed the menu: the "/" is still in the block. Clear it and
+    // start the query again so the menu re-opens on a fresh "/".
+    await page.keyboard.press("Backspace");
+    await page.keyboard.type("/head");
+    await expect(slashMenu(page)).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(slashMenu(page)).toBeHidden();
+
+    // A new empty block after the heading: the pick is now a recent.
+    await page.keyboard.press("End");
+    await page.keyboard.press("Enter");
+    const next = getEditors(page).last();
+    await expect(next).toBeFocused();
+    await page.keyboard.type("/");
+
+    const suggestions = slashMenu(page);
+    await expect(suggestions).toBeVisible();
+    await expect(suggestions.getByText("Suggested", { exact: true })).toBeVisible();
+    const first = suggestions.locator('[role="option"]').first();
+    await expect(first).toContainText("Heading 1");
+    await expect(first).toContainText("Basic blocks");
+  });
 });
