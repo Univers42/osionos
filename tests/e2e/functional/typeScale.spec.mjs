@@ -21,7 +21,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { activateFirstEditor, explorerRow, openFreshPage } from "../../browser/core/app.mjs";
+import { activateFirstEditor, explorerRow, openFreshPage, openPageMenuPanel } from "../../browser/core/app.mjs";
 import { insertInlineDatabase } from "../support/databaseHelpers.mjs";
 
 /** Computed `property` of a throwaway element declaring `property: value`,
@@ -290,8 +290,7 @@ test.describe("type scale", () => {
     const editable = await headingLook(heading);
     const editableSize = await fontSizeOf(heading);
     const editableScale = await resolved(page, "font-size", "var(--text-2xl)", ".osionos-page-body");
-    await page.getByRole("button", { name: "Open page configuration" }).click();
-    await page.getByRole("button", { name: "Raw / code mode" }).click();
+    await (await openPageMenuPanel(page, "more")).getByRole("button", { name: "Raw / code mode" }).click();
     const readOnly = page.locator('[data-raw-mode] h1[data-block-type="heading_1"]').first();
     await readOnly.waitFor();
     expect(await headingLook(readOnly)).toEqual(editable);

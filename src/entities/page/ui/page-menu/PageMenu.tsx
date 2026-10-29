@@ -47,7 +47,8 @@ function searchResults(sections: ReturnType<typeof buildPageMenuSections>, query
 /**
  * The page "…" menu: a searchable, Notion-grouped panel. Search filters rows
  * one by one (submenu rows included, promoted to the top level) and Enter runs
- * the first visible one.
+ * the first visible one. Appearance, More and Developer tools each sit behind a
+ * side panel, one open at a time, so the menu fits without scrolling.
  */
 export const PageMenu: React.FC<PageMenuProps> = ({
   actions,
@@ -62,10 +63,12 @@ export const PageMenu: React.FC<PageMenuProps> = ({
   onClose,
 }) => {
   const [query, setQuery] = useState('');
-  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const debugTools = usePageDebugStore((state) => state.enabled);
 
-  const openAppearance = () => { setQuery(''); setAppearanceOpen(true); };
+  const openSubmenuFromSearch = (id: string) => { setQuery(''); setOpenSubmenu(id); };
+  const submenuToggle = (id: string) => (open: boolean) =>
+    setOpenSubmenu((current) => (open ? id : current === id ? null : current));
   const context: PageMenuContext = {
     actions,
     pageSurface,
@@ -75,7 +78,7 @@ export const PageMenu: React.FC<PageMenuProps> = ({
     onImport,
     onMoveTo,
     onUseAI,
-    onOpenAppearance: openAppearance,
+    onOpenSubmenu: openSubmenuFromSearch,
     onError,
     onClose,
     debugTools,
@@ -90,23 +93,21 @@ export const PageMenu: React.FC<PageMenuProps> = ({
       data-testid="page-config-menu"
       className="osio-surface-overlay absolute right-0 top-full z-[var(--osio-z-popover)] mt-2 flex max-h-[80vh] w-[260px] flex-col overflow-hidden"
     >
-      <div className="px-2 pb-2">
-        <div className="flex h-8 items-center gap-2 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2">
-          <Search size={14} className="text-[var(--osio-fg-muted)]" />
-          <input
-            autoFocus
-            value={query}
-            onChange={(event) => { setQuery(event.target.value); setAppearanceOpen(false); }}
-            onKeyDown={(event) => {
-              if (event.key !== 'Enter') return;
-              event.preventDefault();
-              firstVisible?.run();
-            }}
-            placeholder="Search actions..."
-            aria-label="Search actions"
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-          />
-        </div>
+      <div className="relative px-2 pb-1">
+        <Search size={14} aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--osio-fg-muted)]" />
+        <input
+          autoFocus
+          value={query}
+          onChange={(event) => { setQuery(event.target.value); setOpenSubmenu(null); }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            firstVisible?.run();
+          }}
+          placeholder="Search actions..."
+          aria-label="Search actions"
+          className="h-8 w-full rounded-[var(--osio-radius-sm)] bg-[var(--osio-bg-subtle)] pl-7 pr-2 text-sm outline-none placeholder:text-[var(--osio-fg-subtle)]"
+        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-1">
@@ -118,25 +119,30 @@ export const PageMenu: React.FC<PageMenuProps> = ({
           </div>
         ) : sections.map((section, index) => (
           <React.Fragment key={section.id}>
-            {index > 0 && <div className="osio-menu-separator" />}
+            {index > 0 && !section.continues && <div className="osio-menu-separator" />}
             {section.label && <div className="osio-menu-label">{section.label}</div>}
             {section.submenu ? (
               <MenuSubmenu
                 label={section.submenu.label}
                 icon={section.submenu.icon}
+                hint={section.submenu.hint}
                 testId={section.submenu.testId}
-                open={appearanceOpen}
-                onOpenChange={setAppearanceOpen}
+                open={openSubmenu === section.id}
+                onOpenChange={submenuToggle(section.id)}
               >
-                <AppearanceSubmenu items={section.submenu.items} />
+                {section.id === 'appearance' && <AppearanceSubmenu items={section.submenu.items} />}
+                {section.id === 'more' && (
+                  <MoreGroup
+                    items={section.submenu.items}
+                    translateLocale={actions.translateLocale}
+                    onTranslate={(locale) => {
+                      actions.setTranslateLocale(locale);
+                      runPageAction(actions.translate(locale), onError);
+                    }}
+                  />
+                )}
+                {section.id === 'tools' && section.submenu.items.map((item) => <PageMenuRow key={item.id} item={item} />)}
               </MenuSubmenu>
-            ) : section.id === 'more' ? (
-              <MoreGroup
-                items={section.items}
-                translateLocale={actions.translateLocale}
-                onTranslateLocale={actions.setTranslateLocale}
-                onApplyTranslate={() => runPageAction(actions.translate(actions.translateLocale), onError)}
-              />
             ) : section.items.map((item) => <PageMenuRow key={item.id} item={item} />)}
           </React.Fragment>
         ))}
@@ -151,9 +157,9 @@ export const PageMenu: React.FC<PageMenuProps> = ({
         )}
       </div>
 
-      <footer className="border-t border-[var(--osio-border-default)] px-2 py-2 text-xs text-[var(--osio-fg-subtle)]">
-        <p>Last edited {actions.editedAgo}</p>
-        <p>Word count: {actions.wordCount} words</p>
+      <footer className="mt-1 flex items-center justify-between gap-2 border-t border-[var(--osio-border-default)] px-3 pt-2 text-xs text-[var(--osio-fg-subtle)]">
+        <span className="truncate">Edited {actions.editedAgo}</span>
+        <span className="shrink-0 tabular-nums">{actions.wordCount} words</span>
       </footer>
     </div>
   );
