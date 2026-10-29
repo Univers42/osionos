@@ -127,11 +127,14 @@ test.describe("page outline rail", () => {
     await writeLongPage(page, baseURL);
     await expect(ticksButton(page)).toBeVisible();
 
+    const toggle = page.getByTestId("page-menu-appearance-panel").getByRole("button", { name: "Table of contents", exact: true });
     await pageMenu(page, "Table of contents");
     await expect(page.locator("[data-osio-toc]")).toHaveCount(0);
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
 
     await pageMenu(page, "Table of contents");
     await expect(ticksButton(page)).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
   });
 
   test("Settings › Page switches turns the rail off for the open page", async ({ page, baseURL }) => {
