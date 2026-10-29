@@ -249,3 +249,34 @@ test("C835: a private-workspace page in a shared Library lists and opens in its 
     [{ id: "p-kid-1", workspaceId: "pw835" }, { id: "s-page", workspaceId: "sw835" }],
   );
 });
+
+test("C1211: a curator drags a page row under a page of its workspace or out to its root", async () => {
+  await fresh();
+  signIn([session("u1211", ["pw1211"])], "u1211", { u1211: "pw1211" });
+  seedPages(
+    page("m-a", "pw1211", { ownerId: "u1211" }),
+    page("m-b", "pw1211", { ownerId: "u1211" }),
+    page("m-kid", "pw1211", { ownerId: "u1211", parentPageId: "m-a" }),
+  );
+  const { useToastStore } = await import("@/shared/ui");
+  const toasts = () => useToastStore.getState().toasts.length;
+  const parentOf = (id: string) => usePageStore.getState().pageById(id)?.parentPageId ?? null;
+  const curator = createLibrarySubItemsController(() => true);
+
+  await curator.moveRow?.("m-a", "m-b");
+  assert.equal(parentOf("m-a"), "m-b", "nested under the drop target");
+  await curator.moveRow?.("m-a", null);
+  assert.equal(parentOf("m-a"), null, "unnested to the workspace root");
+
+  useToastStore.getState().clear();
+  await assert.rejects(curator.moveRow?.("m-a", "m-kid") ?? Promise.resolve(), "never under its own sub-page");
+  await assert.rejects(curator.moveRow?.("skill:s1", "m-b") ?? Promise.resolve(), "only page rows move");
+  assert.equal(curator.canMoveRow?.("skill:s1"), false);
+  assert.equal(curator.canMoveRow?.("m-a"), true);
+
+  const member = createLibrarySubItemsController(() => false);
+  assert.equal(member.canMoveRow?.("m-a"), false, "a member gets no move grip");
+  await assert.rejects(member.moveRow?.("m-b", "m-a") ?? Promise.resolve());
+  assert.equal(parentOf("m-b"), null, "a refused move leaves the tree as it was");
+  assert.equal(toasts(), 3, "each refusal is said once");
+});
