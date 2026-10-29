@@ -119,6 +119,9 @@ const envSchema = z.object({
 	// the command kind. Needs osionos-ai-context-commands-migration.sql.
 	OSIONOS_AI_USER_COMMANDS: z.string().optional(),
 	OSIONOS_AI_USER_HOOKS: z.string().optional(),
+	// The `list_my_context` read tool (U5, C1140). OFF unless exactly "on", and
+	// only with OSIONOS_AI_USER_CONTEXT: off, no run is offered it.
+	OSIONOS_AI_CONTEXT_TOOL: z.string().optional(),
 	// The web tools, web_search and web_fetch (web C369). OFF unless exactly
 	// "on": the public overlay leaves it empty until C371 and C372 hold.
 	OSIONOS_AI_WEB: z.string().optional(),
@@ -242,6 +245,7 @@ const rawEnv = {
 	OSIONOS_AI_USER_CONTEXT: process.env.OSIONOS_AI_USER_CONTEXT,
 	OSIONOS_AI_USER_COMMANDS: process.env.OSIONOS_AI_USER_COMMANDS,
 	OSIONOS_AI_USER_HOOKS: process.env.OSIONOS_AI_USER_HOOKS,
+	OSIONOS_AI_CONTEXT_TOOL: process.env.OSIONOS_AI_CONTEXT_TOOL,
 	OSIONOS_AI_WEB: process.env.OSIONOS_AI_WEB,
 	OSIONOS_AI_RESEARCH: process.env.OSIONOS_AI_RESEARCH,
 	OSIONOS_AI_RESEARCH_PLATFORM_DAILY: process.env.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,
@@ -435,6 +439,8 @@ export interface AiServiceConfig {
 	userContextEnabled: boolean;
 	userCommandsEnabled: boolean;
 	userHooksEnabled: boolean;
+	/** `list_my_context` (C1140): its own flag AND the user context flag. */
+	contextToolEnabled: boolean;
 	webEnabled: boolean;
 	/** Whether research mode exists (C396, C415): exactly "on"; the run still needs the web. */
 	researchEnabled: boolean;
@@ -536,6 +542,7 @@ export const config: AiServiceConfig = Object.freeze({
 	userContextEnabled: parsed.data.OSIONOS_AI_USER_CONTEXT === 'on',
 	userCommandsEnabled: parsed.data.OSIONOS_AI_USER_COMMANDS === 'on',
 	userHooksEnabled: parsed.data.OSIONOS_AI_USER_HOOKS === 'on',
+	contextToolEnabled: parsed.data.OSIONOS_AI_CONTEXT_TOOL === 'on' && parsed.data.OSIONOS_AI_USER_CONTEXT === 'on',
 	webEnabled: parsed.data.OSIONOS_AI_WEB === 'on',
 	researchEnabled: parsed.data.OSIONOS_AI_RESEARCH === 'on',
 	researchPlatformDaily: parsed.data.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,

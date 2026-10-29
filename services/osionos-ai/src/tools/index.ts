@@ -10,6 +10,8 @@ import { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS } from './loop.ts';
 import { rememberTool } from './memoryTools.ts';
 import { loadSkillTool } from './skillTools.ts';
 import { VIEW_TOOLS } from './viewTools.ts';
+import { config } from '../config.ts';
+import { listMyContextTool } from '../context/listTool.ts';
 import { numberSources, sourceKey, type ToolSource } from '../runs/sources.ts';
 
 export { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS };
@@ -195,7 +197,15 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS, stepChars: numbe
  * The one exception is `build_plan` (its schema is large): it is counted only
  * when OSIONOS_AI_BUILDERS is on, the one case where it is sent.
  */
-export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...VIEW_TOOLS, ...writeTools(), loadSkillTool([]), rememberTool({ workspaceId: '', runId: '' })]);
+// C1141: list_my_context counts only while its flag is on, so the flag-off number is unchanged.
+export const TOOL_DEFINITION_CHARS = toolDefinitionChars([
+	...READ_TOOLS,
+	...VIEW_TOOLS,
+	...writeTools(),
+	loadSkillTool([]),
+	rememberTool({ workspaceId: '', runId: '' }),
+	...(config.contextToolEnabled ? [listMyContextTool({ skills: [], inPrompt: new Set() })] : []),
+]);
 
 /** The shape the count of the definitions reads. */
 interface ToolDefinition {

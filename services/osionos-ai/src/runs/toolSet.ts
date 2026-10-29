@@ -28,6 +28,7 @@ import type { WebRun, WebTaint } from '../web/tools.ts';
 import { guardTainted } from '../web/runWeb.ts';
 import { dropBlockedTools } from '../context/hooks.ts';
 import type { RunHooks } from '../context/hooks.ts';
+import { listMyContextTool } from '../context/listTool.ts';
 
 /**
  * The tools of a run.
@@ -96,6 +97,8 @@ export function buildRunTools(input: {
 	 * Absent is the run of today.
 	 */
 	userSkills?: readonly SkillIndexEntry[];
+	/** The context item ids the prompt of the run carries (U5: `list_my_context` says which). */
+	promptItemIds?: ReadonlySet<string>;
 	/**
 	 * The MCP tools of the caller, loaded before the run (C265).
 	 *
@@ -211,6 +214,18 @@ export function buildRunTools(input: {
 			: undefined;
 	const allowedSkills = [...skillIndex.entries, ...userSkills].map((entry) => entry.id);
 	const skillTools = allowedSkills.length > 0 ? [loadSkillTool(allowedSkills, undefined, loader, userLoader)] : [];
+	// C1144: a custom agent never gets list_my_context; a built-in one keeps it
+	// only when its list names it (keepAgentTools). No query until it is called.
+	const contextTools =
+		config.contextToolEnabled && user && !(agent && isCustomAgent(agent))
+			? [
+					listMyContextTool({
+						...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+						skills: [...skillIndex.entries, ...userSkills],
+						inPrompt: input.promptItemIds ?? new Set(),
+					}),
+				]
+			: [];
 	// C42: `remember` proposes; it needs the workspace the memory belongs to.
 	const proposalTools = input.workspaceId ? [rememberTool({ workspaceId: input.workspaceId, runId })] : [];
 
@@ -233,7 +248,7 @@ export function buildRunTools(input: {
 	run.tools = user
 		? {
 				...mcpTools,
-				...readToolSet({ db, user, agentId: agent ? agent.id : null }, hooks, pool, [...skillTools, ...proposalTools, ...VIEW_TOOLS, ...(input.web ? webTools(input.web) : [])]),
+				...readToolSet({ db, user, agentId: agent ? agent.id : null }, hooks, pool, [...skillTools, ...contextTools, ...proposalTools, ...VIEW_TOOLS, ...(input.web ? webTools(input.web) : [])]),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
 		: undefined;
