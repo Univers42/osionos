@@ -137,6 +137,22 @@ test.describe("page outline rail", () => {
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
   });
 
+  test("the page menu hides the page's properties and brings them back", async ({ page, baseURL }) => {
+    await writeLongPage(page, baseURL);
+    const properties = page.getByRole("group", { name: "Page properties" });
+    await expect(properties).toBeVisible();
+
+    const toggle = page.getByTestId("page-menu-appearance-panel").getByRole("button", { name: "Page properties", exact: true });
+    await pageMenu(page, "Page properties");
+    await expect(properties).toBeHidden();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await expect(ticksButton(page)).toBeVisible();
+
+    await pageMenu(page, "Page properties");
+    await expect(properties).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  });
+
   test("Settings › Page switches turns the rail off for the open page", async ({ page, baseURL }) => {
     await writeLongPage(page, baseURL);
     const pageTab = page.locator("[data-osio-tabstrip] [data-tab-id][data-active]");

@@ -58,7 +58,7 @@ export type PageActionName = (typeof PAGE_ACTION_NAMES)[number];
  * out of PAGE_ACTION_NAMES, the button vocabulary the vendored
  * DESTRUCTIVE_PAGE_ACTIONS must cover name for name.
  */
-export type PageEventName = PageActionName | "table_of_contents";
+export type PageEventName = PageActionName | "table_of_contents" | "page_properties";
 
 /**
  * The bridge client is loaded on demand: this module is imported by the canvas
