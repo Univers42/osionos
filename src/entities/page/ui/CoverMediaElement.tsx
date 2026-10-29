@@ -14,6 +14,7 @@ import React, { useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 
 import { useAnimatedImagesMode } from "@/shared/config/useAppearance";
+import { coverCrossOrigin } from "@/shared/lib/media/coverCrossOrigin";
 import { animatedMediaMayPlay, isVideoCoverSource, usePrefersReducedMotion } from "./coverMedia";
 
 interface CoverPointerHandlers {
@@ -78,6 +79,7 @@ const VideoCover: React.FC<VideoCoverProps> = ({ src, style, mayPlay, attachMedi
       <video
         ref={attachVideo}
         src={src}
+        crossOrigin={coverCrossOrigin(src)}
         data-testid="page-cover-video"
         className="osionos-page-cover-img"
         style={style}
