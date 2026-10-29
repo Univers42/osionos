@@ -142,8 +142,10 @@
   max-width: none;
 }
 
-/* "Page properties" off in Appearance & layout: the rows stay in the page data. */
-.osionos-page--hide-properties .osionos-page-property-panel {
+/* "Page properties" off in Appearance & layout hides every metadata row under the
+   title (typed properties and the folder/link/related rows); the data stays. */
+.osionos-page--hide-properties .osionos-page-property-panel,
+.osionos-page--hide-properties .osionos-page-connections {
   display: none;
 }
 
