@@ -8,6 +8,7 @@ import type { RunMemory } from '../memory/repo.ts';
 import type { AgentConfig } from '../agents/config.ts';
 import type { SkillIndex } from '../skills/runSkills.ts';
 import type { UserContext } from '../context/runContext.ts';
+import type { RunHooks } from '../context/hooks.ts';
 import type { RetrievedChunk } from '../retrieval/search.ts';
 import type { AuthUser } from '../auth.ts';
 import type { ChainStep } from './attempt.ts';
@@ -94,6 +95,8 @@ export interface UpstreamRunInput {
 	workspaceId?: string;
 	/** The MCP tools of the caller, loaded by the runner (C265): empty is today's run. */
 	mcpTools?: readonly McpToolEntry[];
+	/** The user's hooks (U3): absent with the flag off; unreadable means no tools (C1122). */
+	hooks?: RunHooks;
 	/** The account block of the caller, when requested. */
 	accountBlock?: string;
 	/** The view block of the caller, when reported. */
