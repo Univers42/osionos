@@ -13,7 +13,7 @@
  * What a Library row does: opening it opens the page or database it stands
  * for, and its sub-items are the page's readable child pages, in the page's own
  * workspace, so the table is the workspace tree. A skill, agent or command row
- * has nowhere to open yet and stays put. A new Doc, Rule or Hook is a page that
+ * opens its detail dialog instead (libraryItemDetail). A new Doc, Rule or Hook is a page that
  * carries a Kind property; the Kind only sorts it in the Library.
  */
 
