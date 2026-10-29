@@ -27,6 +27,7 @@ import { Loader2, Sparkles, X } from "lucide-react";
 
 import { listCommands, type AiCommand } from "../api/aiClient";
 import { useInlineAiStore } from "../model/inlineAiStore";
+import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
 import { errorWords } from "@/widgets/chat-shell/ui/errorWords";
 
 const PANEL_WIDTH = 420;
@@ -143,14 +144,18 @@ export const AiInlinePanel: React.FC = () => {
     useInlineAiStore.getState().discard();
   }, []);
 
-  // Esc throws the answer away — it was never written.
+  // Esc throws the answer away — it was never written. The caret goes back to
+  // the block the panel was anchored to (the prompt had taken focus), so the
+  // user keeps typing where they left off.
   useEffect(() => {
     if (!target) return undefined;
+    const blockId = target.blockId;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
       discard();
+      focusEditableBlock(blockId, "end");
     };
     document.addEventListener("keydown", handleKeyDown, true);
     return () => document.removeEventListener("keydown", handleKeyDown, true);
