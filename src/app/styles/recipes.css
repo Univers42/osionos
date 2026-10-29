@@ -81,8 +81,12 @@
   margin-inline: calc(50% - 50cqw);
   padding-left: calc(50cqw - 50%);
   padding-right: var(--osio-wide-gutter);
+  /* The bleed padding lies over the page gutter, where the block's drag handle
+   * sits: only the content box may take clicks, or the handle is unreachable. */
+  pointer-events: none;
 
   & [data-wide-block-content] {
+    pointer-events: auto;
     width: max-content;
     max-width: 100%;
     min-width: var(--osio-wide-text-width);
