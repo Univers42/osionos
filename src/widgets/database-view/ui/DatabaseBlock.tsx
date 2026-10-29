@@ -71,6 +71,8 @@ import { rememberDatabaseWorkspace } from '../model/objectDatabaseWorkspaces';
 import { WorkspaceDatabaseBlock, WorkspaceRecordPeek } from './WorkspaceDatabaseBlock';
 import { RecordSubItemsPanel } from './RecordSubItemsPanel';
 import { SysDatabaseBlock } from './SysDatabaseBlock';
+import { LibraryDatabaseBlock } from './LibraryDatabaseBlock';
+import { LIBRARY_DB_ID } from '../model/libraryDatabaseModel';
 import { isSysDatabaseId } from '../model/sysDataSources';
 import './databaseBlockEmbed.css';
 import { databaseShellClass } from '../model/databaseShellClass';
@@ -240,6 +242,30 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
             renderPage={peek}
             className={mode === 'full' ? 'h-full' : undefined}
             chrome={mode === 'full' ? 'full' : 'inline'}
+            readOnlyRecords
+          />
+        )}
+      />
+    );
+  }
+
+  // The Library: every workspace item as one read-only database; rows open the
+  // item itself and expand to its child pages.
+  if (resolvedDatabaseId === LIBRARY_DB_ID) {
+    return (
+      <LibraryDatabaseBlock
+        initialViewId={resolvedInitialView}
+        mode={mode}
+        renderDatabase={({ adapter, initialView, renderPage: open, subItems }) => (
+          <HostedObjectDatabase
+            adapter={adapter}
+            databaseId={LIBRARY_DB_ID}
+            initialView={initialView}
+            mode={resolvedMode}
+            renderPage={open}
+            subItems={subItems}
+            className={mode === 'full' ? 'h-full' : undefined}
+            chrome="inline"
             readOnlyRecords
           />
         )}
