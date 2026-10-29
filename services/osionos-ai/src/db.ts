@@ -75,6 +75,15 @@ export function createPool(databaseUrl: string, max = 10, queryTimeoutMs = QUERY
 	pool.on('error', (error: Error) => {
 		console.warn(JSON.stringify({ event: 'pool_error', code: error.name }));
 	});
+	// The pool watches only its IDLE clients. A held one whose socket died
+	// between two queries emitted an 'error' nobody listened to, and the
+	// indexer exited on ECONNRESET (5 restarts on live, 2026-10-29). The
+	// holder's next query fails, and release() drops the dead client.
+	pool.on('connect', (client) => {
+		client.on('error', (error: Error) => {
+			console.warn(JSON.stringify({ event: 'client_error', code: error.name }));
+		});
+	});
 	return pool;
 }
 
