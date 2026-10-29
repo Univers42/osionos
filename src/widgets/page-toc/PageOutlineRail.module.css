@@ -79,7 +79,7 @@
   color: inherit;
   font: inherit;
   cursor: pointer;
-  transition: opacity var(--osio-motion-fast, 120ms) var(--osio-ease-standard, ease);
+  transition: opacity var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease);
 }
 
 .ticks:focus-visible {
@@ -102,9 +102,9 @@
   border-radius: var(--osio-radius-full);
   background: var(--osio-fg-subtle);
   transition:
-    background var(--osio-motion-fast, 120ms) var(--osio-ease-standard, ease),
-    box-shadow var(--osio-motion-fast, 120ms) var(--osio-ease-standard, ease),
-    height var(--osio-motion-fast, 120ms) var(--osio-ease-standard, ease);
+    background var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease),
+    box-shadow var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease),
+    height var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease);
 }
 
 .tick[data-level="1"] {
@@ -151,9 +151,9 @@
   opacity: 0;
   visibility: hidden;
   transition:
-    opacity var(--osio-motion-fast, 120ms) var(--osio-ease-standard, ease),
-    transform var(--osio-motion-fast, 120ms) var(--osio-ease-standard, ease),
-    visibility 0s linear var(--osio-motion-fast, 120ms);
+    opacity var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease),
+    transform var(--osio-dur-fast, 120ms) var(--osio-ease-standard, ease),
+    visibility 0s linear var(--osio-dur-fast, 120ms);
 }
 
 .rail[data-open] .panel {
@@ -161,8 +161,8 @@
   opacity: 1;
   visibility: visible;
   transition:
-    opacity var(--osio-motion-standard, 180ms) var(--osio-ease-decelerate, ease-out),
-    transform var(--osio-motion-standard, 180ms) var(--osio-ease-decelerate, ease-out),
+    opacity var(--osio-dur-base, 180ms) var(--osio-ease-decelerate, ease-out),
+    transform var(--osio-dur-base, 180ms) var(--osio-ease-decelerate, ease-out),
     visibility 0s;
 }
 
@@ -194,7 +194,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-  transition: background var(--osio-motion-fast, 120ms) ease, color var(--osio-motion-fast, 120ms) ease;
+  transition: background var(--osio-dur-fast, 120ms) ease, color var(--osio-dur-fast, 120ms) ease;
 }
 
 .link[data-level="1"] {

@@ -103,8 +103,9 @@ test.describe("page outline rail", () => {
 
     await page.keyboard.press("ArrowDown");
     const focusedName = () => page.evaluate(() => document.activeElement?.textContent ?? "");
-    const start = await focusedName();
-    expect(SECTIONS.map(([, title]) => title)).toContain(start);
+    // The link takes focus a frame after the panel opens.
+    await expect.poll(focusedName).not.toBe("");
+    expect(SECTIONS.map(([, title]) => title)).toContain(await focusedName());
 
     await page.keyboard.press("Home");
     expect(await focusedName()).toBe("Overview");
