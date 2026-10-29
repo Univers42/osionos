@@ -11,6 +11,7 @@ import { revalidateStoredPlan } from '../builders/plan.ts';
 import { executePlan } from '../builders/execute.ts';
 import { donePageItems } from '../builders/items.ts';
 import { undoBuild } from '../builders/undo.ts';
+import { hookRefusal } from '../context/hooks.ts';
 import { UUID, requireUser } from './support.ts';
 import type { RouteContext } from './types.ts';
 
@@ -142,6 +143,14 @@ export async function handleApprovalResume(ctx: RouteContext): Promise<number> {
 	if (!sessionToken) {
 		sendError(ctx.response, 401, 'unauthorized');
 		return 401;
+	}
+	// A resume writes the rest of a build_plan: a hook written since the approve
+	// refuses it before the bucket or the row moves (C1127). The answer does not
+	// depend on the row, so it says nothing about a foreign id.
+	const refusal = await hookRefusal(ctx.deps.db, user.userId, ['build_plan']);
+	if (refusal) {
+		sendError(ctx.response, refusal.status, refusal.code);
+		return refusal.status;
 	}
 	// A resume is a build pass too (C161): the day's bucket is spent before the
 	// row moves, so an over-limit resume leaves the approval 'partial'.

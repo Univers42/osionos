@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import { templateProblem } from '../commands/userCommands.ts';
+import { MAX_USER_HOOKS, hookProblem } from './hooks.ts';
 import { inTransaction } from '../db.ts';
 
 /**
  * The AI context items in the database (models/osionos-ai-context-migration.sql):
- * a user's own skills, rules and slash commands (U1 C1000-C1015, U2
- * C1100-C1110), and a workspace's rules.
+ * a user's own skills, rules, slash commands and hooks (U1 C1000-C1015, U2
+ * C1100-C1110, U3 C1120-C1133), and a workspace's rules.
  *
  * Every write is ONE transaction: the row change and one ai_context_item_audit
  * row. The count of active items is checked inside it, under an advisory lock
@@ -16,7 +17,7 @@ import { inTransaction } from '../db.ts';
  * Who may write is the route's rule, not this file's.
  */
 
-export type ContextKind = 'skill' | 'rule' | 'command';
+export type ContextKind = 'skill' | 'rule' | 'command' | 'hook';
 
 export const MAX_USER_SKILLS = 12;
 export const MAX_USER_RULES = 10;
@@ -76,6 +77,7 @@ function lockKey(owner: ContextOwner): string {
 export function capOf(owner: ContextOwner, kind: ContextKind): number {
 	if (owner.scope === 'workspace') return kind === 'rule' ? MAX_WORKSPACE_RULES : 0;
 	if (kind === 'command') return MAX_USER_COMMANDS;
+	if (kind === 'hook') return MAX_USER_HOOKS;
 	return kind === 'skill' ? MAX_USER_SKILLS : MAX_USER_RULES;
 }
 
@@ -173,7 +175,7 @@ export async function createItem(
 	}
 }
 
-export type ChangeOutcome = { kind: 'changed'; item: ContextItem } | { kind: 'missing' } | { kind: 'too_long' } | { kind: 'bad_template' };
+export type ChangeOutcome = { kind: 'changed'; item: ContextItem } | { kind: 'missing' } | { kind: 'too_long' } | { kind: 'bad_template' } | { kind: 'bad_hook' };
 
 /** The active item of that owner, locked, or null: another owner's id is null too (C1003). */
 async function lockActive(client: PoolClient, owner: ContextOwner, ref: ItemRef): Promise<ContextItem | null> {
@@ -188,7 +190,7 @@ async function lockActive(client: PoolClient, owner: ContextOwner, ref: ItemRef)
 	return result.rows[0] ?? null;
 }
 
-/** Replaces name, description and body; the version goes up by one. A rule keeps its shorter cap, a command its one $ARGUMENTS. */
+/** Replaces name, description and body; the version goes up by one. A rule keeps its shorter cap, a command its one $ARGUMENTS, a hook its pattern lines. */
 export async function updateItem(
 	db: Pool,
 	input: ContextFields & { owner: ContextOwner; ref: ItemRef; actorId: string },
@@ -198,6 +200,7 @@ export async function updateItem(
 		if (!before) return { kind: 'missing' } as const;
 		if (before.kind === 'rule' && input.body.length > RULE_BODY_MAX) return { kind: 'too_long' } as const;
 		if (before.kind === 'command' && templateProblem(input.body)) return { kind: 'bad_template' } as const;
+		if (before.kind === 'hook' && hookProblem(input.body)) return { kind: 'bad_hook' } as const;
 		const updated = await client.query<ContextItem>(
 			`update public.ai_context_items
 			 set name = $2, description = $3, body = $4, version = version + 1, updated_by = $5, updated_at = now()

@@ -118,6 +118,7 @@ const envSchema = z.object({
 	// /api/ai/commands lists the built-ins only and the context routes refuse
 	// the command kind. Needs osionos-ai-context-commands-migration.sql.
 	OSIONOS_AI_USER_COMMANDS: z.string().optional(),
+	OSIONOS_AI_USER_HOOKS: z.string().optional(),
 	// The web tools, web_search and web_fetch (web C369). OFF unless exactly
 	// "on": the public overlay leaves it empty until C371 and C372 hold.
 	OSIONOS_AI_WEB: z.string().optional(),
@@ -240,6 +241,7 @@ const rawEnv = {
 	OSIONOS_AI_CUSTOM_AGENTS: process.env.OSIONOS_AI_CUSTOM_AGENTS,
 	OSIONOS_AI_USER_CONTEXT: process.env.OSIONOS_AI_USER_CONTEXT,
 	OSIONOS_AI_USER_COMMANDS: process.env.OSIONOS_AI_USER_COMMANDS,
+	OSIONOS_AI_USER_HOOKS: process.env.OSIONOS_AI_USER_HOOKS,
 	OSIONOS_AI_WEB: process.env.OSIONOS_AI_WEB,
 	OSIONOS_AI_RESEARCH: process.env.OSIONOS_AI_RESEARCH,
 	OSIONOS_AI_RESEARCH_PLATFORM_DAILY: process.env.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,
@@ -432,6 +434,7 @@ export interface AiServiceConfig {
 	customAgentsEnabled: boolean;
 	userContextEnabled: boolean;
 	userCommandsEnabled: boolean;
+	userHooksEnabled: boolean;
 	webEnabled: boolean;
 	/** Whether research mode exists (C396, C415): exactly "on"; the run still needs the web. */
 	researchEnabled: boolean;
@@ -532,6 +535,7 @@ export const config: AiServiceConfig = Object.freeze({
 	customAgentsEnabled: parsed.data.OSIONOS_AI_CUSTOM_AGENTS === 'on',
 	userContextEnabled: parsed.data.OSIONOS_AI_USER_CONTEXT === 'on',
 	userCommandsEnabled: parsed.data.OSIONOS_AI_USER_COMMANDS === 'on',
+	userHooksEnabled: parsed.data.OSIONOS_AI_USER_HOOKS === 'on',
 	webEnabled: parsed.data.OSIONOS_AI_WEB === 'on',
 	researchEnabled: parsed.data.OSIONOS_AI_RESEARCH === 'on',
 	researchPlatformDaily: parsed.data.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,

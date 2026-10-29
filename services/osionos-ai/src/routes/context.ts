@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { AuthUser } from '../auth.ts';
 import { RESERVED_COMMAND_NAMES, templateProblem } from '../commands/userCommands.ts';
 import { config } from '../config.ts';
+import { hookProblem } from '../context/hooks.ts';
 import { buildUserContext, takenSkillIds } from '../context/runContext.ts';
 import { RULE_BODY_MAX, archiveItem, createItem, listActiveItems, updateItem } from '../context/repo.ts';
 import type { ChangeOutcome, ContextItem, ContextKind, ContextOwner, CreateOutcome } from '../context/repo.ts';
@@ -18,7 +19,7 @@ import type { RouteContext } from './types.ts';
 /**
  * The AI context items: a user's own skills and rules and a workspace's rules
  * (U1, OSIONOS_AI_USER_CONTEXT), a user's own slash commands (U2,
- * OSIONOS_AI_USER_COMMANDS).
+ * OSIONOS_AI_USER_COMMANDS), a user's own hooks (U3, OSIONOS_AI_USER_HOOKS).
  *
  * GET    /api/ai/context/items[?workspace=<id>]   the caller's own items
  * POST   /api/ai/context/items                    { kind, slug, name, description, body }
@@ -37,7 +38,8 @@ import type { RouteContext } from './types.ts';
  * is a 400, a PUT or DELETE of an existing row of it a 404 like a stranger's
  * — the row waits, untouched, for the flag or for the user's erasure. A
  * command's slug is its name: a built-in or composer action name is a 409
- * `command_reserved`, a template with two $ARGUMENTS a 422.
+ * `command_reserved`, a template with two $ARGUMENTS a 422. A hook body that
+ * is not 1 to 32 pattern lines is a 422 `hook_pattern`.
  *
  * Caveat: `inPrompt` is computed against the workspace given in `?workspace=`
  * (its rules come first and its skill slugs take precedence); without it, as
@@ -48,11 +50,15 @@ import type { RouteContext } from './types.ts';
 const WRITES_PER_MINUTE = 20;
 const RATE_PREFIX = 'ai:rl:context';
 
-const itemCreateSchema = z.object({ kind: z.enum(['skill', 'rule', 'command']), ...createSchema.shape }).strict();
+const itemCreateSchema = z.object({ kind: z.enum(['skill', 'rule', 'command', 'hook']), ...createSchema.shape }).strict();
 
 /** The kinds this deployment serves on the user routes, by flag. */
 function servedKinds(): ContextKind[] {
-	return [...(config.userContextEnabled ? (['skill', 'rule'] as const) : []), ...(config.userCommandsEnabled ? (['command'] as const) : [])];
+	return [
+		...(config.userContextEnabled ? (['skill', 'rule'] as const) : []),
+		...(config.userCommandsEnabled ? (['command'] as const) : []),
+		...(config.userHooksEnabled ? (['hook'] as const) : []),
+	];
 }
 
 function refuse(ctx: RouteContext, status: number, code: string): number {
@@ -110,6 +116,7 @@ function answerChange(ctx: RouteContext, outcome: ChangeOutcome, action: 'update
 	if (outcome.kind === 'missing') return refuse(ctx, 404, 'not_found');
 	if (outcome.kind === 'too_long') return refuse(ctx, 422, 'rule_too_long');
 	if (outcome.kind === 'bad_template') return refuse(ctx, 422, 'command_template');
+	if (outcome.kind === 'bad_hook') return refuse(ctx, 422, 'hook_pattern');
 	logWrite(action, owner, outcome.item, actorId);
 	if (action === 'archive') {
 		sendNoContent(ctx.response);
@@ -139,6 +146,7 @@ export async function handleContextItemCreate(ctx: RouteContext): Promise<number
 	if (body.kind === 'rule' && body.body.length > RULE_BODY_MAX) return refuse(ctx, 422, 'rule_too_long');
 	if (body.kind === 'command' && RESERVED_COMMAND_NAMES.has(body.slug)) return refuse(ctx, 409, 'command_reserved');
 	if (body.kind === 'command' && templateProblem(body.body)) return refuse(ctx, 422, 'command_template');
+	if (body.kind === 'hook' && hookProblem(body.body)) return refuse(ctx, 422, 'hook_pattern');
 	// C1001: a built-in id is never a user skill's.
 	if (body.kind === 'skill' && BUILTIN_SKILL_IDS.includes(body.slug)) return refuse(ctx, 409, 'skill_builtin');
 	if (!(await writeAllowed(ctx, user.userId))) return refuse(ctx, 429, 'rate_limited');
