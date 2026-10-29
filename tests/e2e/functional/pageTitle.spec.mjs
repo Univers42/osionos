@@ -48,6 +48,7 @@ test.describe("page title", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openFreshPage(page, baseURL);
     await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByTestId("page-menu-appearance").click();
     await page.getByRole("button", { name: /Small text/ }).click();
     await page.locator(".osionos-page--small-text").waitFor();
     await clearAndTypePageTitle(page, LONG_TITLE.repeat(2));
@@ -56,6 +57,7 @@ test.describe("page title", () => {
     const small = (await title.boundingBox()).height;
 
     await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByTestId("page-menu-appearance").click();
     await page.getByRole("button", { name: /Small text/ }).click();
     await page.locator(".osionos-page--small-text").waitFor({ state: "detached" });
     await expect.poll(async () => (await title.boundingBox()).height).toBeGreaterThan(small);

@@ -202,6 +202,7 @@ test.describe("type scale", () => {
   test("Small text turns the reading scale off", async ({ page, baseURL }) => {
     const { paragraph } = await typeHeadingThenParagraph(page, baseURL);
     await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByTestId("page-menu-appearance").click();
     await page.getByRole("button", { name: /Small text/ }).click();
     await page.locator(".osionos-page--small-text").waitFor();
     expect(await fontSizeOf(paragraph)).toBe("14px");
@@ -275,6 +276,7 @@ test.describe("type scale", () => {
   test("the serif and mono page fonts come from the tokens", async ({ page, baseURL }) => {
     const { paragraph } = await typeHeadingThenParagraph(page, baseURL);
     await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByTestId("page-menu-appearance").click();
     await page.getByRole("button", { name: /^Ag\s*Serif$/ }).click();
     expect(await firstFamily(paragraph)).toBe("Newsreader");
     await page.getByRole("button", { name: /^Ag\s*Mono$/ }).click();
