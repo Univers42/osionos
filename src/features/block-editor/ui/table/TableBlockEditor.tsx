@@ -21,6 +21,7 @@ import { handleNavigateKey, handleTableCellKey } from "./tableKeyboard";
 import { TableDataRow, createColumnStyles, getColumnKey, getRowKey } from "./TableParts";
 import { AddAxisButton } from "./TableAddButton";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
+import { coalesceToFrame } from "@/shared/lib/dom/frameCoalescer";
 import { TableRowMenu } from "./TableRowMenu";
 import { applyTableMenuAction, type TableMenuAction } from "./tableMenuActions";
 import { useTableCommit } from "./useTableCommit";
@@ -100,11 +101,16 @@ export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageI
     const cell = event.currentTarget.closest("td");
     const startWidth = config.columnWidths?.[columnIndex] ?? (cell ? toCssPx(cell.getBoundingClientRect().width, cell) : 160);
     let latestWidth = startWidth;
+    // The width goes on the column's one <col>. A custom property on the <table> restyled
+    // every cell on every pointermove, and it outlived the drag, masking later config changes.
+    const column = tableRef.current?.querySelectorAll<HTMLElement>(":scope > colgroup > col")[columnIndex];
+    const paint = coalesceToFrame((width: number) => { if (column) column.style.width = `${width}px`; });
     const move = (moveEvent: PointerEvent) => {
       latestWidth = clampTableColumnWidth(startWidth + toCssPx(moveEvent.clientX - startX, tableRef.current), startWidth);
-      tableRef.current?.style.setProperty(`--osio-table-col-${columnIndex}-width`, `${latestWidth}px`);
+      paint.push(latestWidth);
     };
     const up = () => {
+      paint.flush();
       const widths = Array.from({ length: columnCount }, (_, index) => config.columnWidths?.[index]);
       widths[columnIndex] = latestWidth;
       commitConfig({ ...config, layoutMode: "fixed", columnWidths: widths });
@@ -120,11 +126,13 @@ export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageI
     const row = event.currentTarget.closest("tr");
     const startHeight = config.rowHeights?.[rowIndex] ?? (row ? toCssPx(row.getBoundingClientRect().height, row) : ROW_ESTIMATE_HEIGHT);
     let latestHeight = startHeight;
+    const paint = coalesceToFrame((height: number) => { if (row) row.style.height = `${height}px`; });
     const move = (moveEvent: PointerEvent) => {
       latestHeight = clampTableRowHeight(startHeight + toCssPx(moveEvent.clientY - startY, tableRef.current), startHeight);
-      tableRef.current?.style.setProperty(`--osio-table-row-${rowIndex}-height`, `${latestHeight}px`);
+      paint.push(latestHeight);
     };
     const up = () => {
+      paint.flush();
       const heights = Array.from({ length: data.length }, (_, index) => config.rowHeights?.[index]);
       heights[rowIndex] = latestHeight;
       commitConfig({ ...config, rowHeights: heights });
