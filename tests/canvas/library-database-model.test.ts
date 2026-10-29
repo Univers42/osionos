@@ -22,7 +22,7 @@ import {
   canCurateLibrary, LIB, LIBRARY_DB_ID, LIBRARY_KIND_KEY, libraryCategory, libraryChildren, libraryRecords,
   librarySchema, readableLibraryPages, type LibrarySources,
 } from "@/widgets/database-view/model/libraryDatabaseModel";
-import { libraryViews, mergeLibraryViews } from "@/widgets/database-view/model/libraryViews";
+import { curatedLibraryViews, libraryViews, mergeLibraryViews } from "@/widgets/database-view/model/libraryViews";
 
 const page = (id: string, extra: Partial<PageEntry> = {}): PageEntry =>
   ({ _id: id, title: id, workspaceId: "ws", updatedAt: "2026-10-01T00:00:00.000Z", ...extra }) as PageEntry;
@@ -157,31 +157,36 @@ test("every view filters on a property and option the schema has; the Agents tab
   }
 });
 
-const CURATOR = { canCurate: true, withAgents: true };
-
-test("a curator's views layer over the shipped ones; foreign or malformed ones are dropped", () => {
+test("the workspace's curated views layer over the shipped ones; foreign or malformed ones are dropped", () => {
   const edited = { ...libraryViews(true)["v-library-all"], name: "Everything" };
   const own = { ...edited, id: "v-mine", name: "Mine" };
   const merged = mergeLibraryViews({
     "v-library-all": edited, "v-mine": own,
     "v-foreign": { ...own, databaseId: "other" }, "v-bad": "nope",
-  }, CURATOR);
+  }, true);
   assert.equal(merged["v-library-all"].name, "Everything");
   assert.equal(merged["v-mine"].name, "Mine");
   assert.equal(merged["v-foreign"], undefined);
   assert.equal(merged["v-bad"], undefined);
   assert.equal(merged["v-library-skills"].name, "Skills");
-  assert.deepEqual(mergeLibraryViews("garbage", CURATOR), libraryViews(true));
+  assert.deepEqual(mergeLibraryViews("garbage", true), libraryViews(true));
 });
 
-test("anyone who cannot curate gets the shipped views whatever the browser holds; agents off drops the Agents view", () => {
-  const stored = {
-    "v-library-all": { ...libraryViews(true)["v-library-all"], filters: [] },
-    "v-mine": { ...libraryViews(true)["v-library-all"], id: "v-mine" },
-    "v-library-agents": { ...libraryViews(true)["v-library-agents"], name: "Bots" },
-  };
-  assert.deepEqual(mergeLibraryViews(stored, { canCurate: false, withAgents: true }), libraryViews(true));
-  assert.equal(mergeLibraryViews(stored, { canCurate: true, withAgents: false })["v-library-agents"], undefined);
+test("C908: a curated record cannot name a prototype key; agents off drops the Agents view", () => {
+  const view = libraryViews(true)["v-library-all"];
+  const agents = { ...libraryViews(true)["v-library-agents"], name: "Bots" };
+  // JSON.parse makes "__proto__" an own key, as a stored record read from the bridge would.
+  const stored = JSON.parse(`{"__proto__":${JSON.stringify(view)},"constructor":${JSON.stringify(view)},"prototype":${JSON.stringify(view)},"v-library-agents":${JSON.stringify(agents)}}`);
+  const merged = mergeLibraryViews(stored, false);
+  assert.deepEqual(Object.keys(merged).sort(), Object.keys(libraryViews(false)).sort());
+  assert.equal(Object.getPrototypeOf(merged), Object.prototype);
+  assert.equal(mergeLibraryViews(stored, true)["v-library-agents"].name, "Bots");
+});
+
+test("a curator saves only the views that differ from the shipped ones", () => {
+  const views = { ...libraryViews(true), "v-library-all": { ...libraryViews(true)["v-library-all"], name: "Everything" } };
+  assert.deepEqual(Object.keys(curatedLibraryViews(views)), ["v-library-all"]);
+  assert.deepEqual(curatedLibraryViews(libraryViews(true)), {});
 });
 
 test("children are the live pages directly under a page", () => {

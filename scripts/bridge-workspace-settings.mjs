@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/22 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/29 18:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,6 +19,7 @@ import {
 	sendJson,
 } from './bridge-social-core.mjs';
 import { bumpAccessAfter } from './bridge-access-generation.mjs';
+import { writeWorkspaceSettings } from './bridge-workspace-settings-write.mjs';
 
 const ALLOWED_KEYS = new Set(['name', 'icon', 'landingPageId', 'sidebar', 'analytics']);
 const SIDEBAR_KEYS = new Set(['newSidebar', 'showApps']);
@@ -31,7 +32,7 @@ function fail(status, code, message) {
 
 // Reads go through the injected pg client (the account mount carries no fetchImpl), with
 // the same osionos_workspace_members query as bridge-social-core's workspaceMembership.
-async function loadCaller(pg, userId, workspaceId) {
+export async function loadCaller(pg, userId, workspaceId) {
 	const service = pg.asService();
 	const workspaces = await service.get(`osionos_workspaces?id=eq.${workspaceId}&select=id,owner_id,name,settings,visibility&limit=1`);
 	const workspace = Array.isArray(workspaces) ? workspaces[0] ?? null : null;
@@ -132,31 +133,34 @@ async function handlePatch(deps, session, workspaceId, request, response) {
 	const payload = await readJsonBody(request);
 	const patch = await validateBody(payload);
 
-	const currentSettings = isObject(workspace.settings) ? { ...workspace.settings } : {};
-	const nextSettings = { ...currentSettings };
-	if (Object.hasOwn(patch, 'icon')) {
-		if (patch.icon === null) delete nextSettings.icon; else nextSettings.icon = patch.icon;
-	}
-	if (Object.hasOwn(patch, 'landingPageId')) {
-		if (patch.landingPageId === null) delete nextSettings.landingPageId; else nextSettings.landingPageId = patch.landingPageId;
-	}
-	if (Object.hasOwn(patch, 'sidebar')) {
-		if (patch.sidebar === null) delete nextSettings.sidebar;
-		else nextSettings.sidebar = { ...(isObject(currentSettings.sidebar) ? currentSettings.sidebar : {}), ...patch.sidebar };
-	}
-	if (Object.hasOwn(patch, 'analytics')) {
-		if (patch.analytics === null) delete nextSettings.analytics;
-		else nextSettings.analytics = { ...(isObject(currentSettings.analytics) ? currentSettings.analytics : {}), ...patch.analytics };
-	}
-
-	const dbPatch = { settings: nextSettings, updated_at: new Date().toISOString() };
-	if (Object.hasOwn(patch, 'name')) dbPatch.name = patch.name;
-
-	await bumpAccessAfter(deps.pg.asService().patch(`osionos_workspaces?id=eq.${workspaceId}`, dbPatch, { prefer: 'return=minimal' }), { workspaceId });
+	// Every key this route does not own (the Library views among them) rides along untouched.
+	const applyPatch = (currentSettings) => {
+		const nextSettings = { ...currentSettings };
+		if (Object.hasOwn(patch, 'icon')) {
+			if (patch.icon === null) delete nextSettings.icon; else nextSettings.icon = patch.icon;
+		}
+		if (Object.hasOwn(patch, 'landingPageId')) {
+			if (patch.landingPageId === null) delete nextSettings.landingPageId; else nextSettings.landingPageId = patch.landingPageId;
+		}
+		if (Object.hasOwn(patch, 'sidebar')) {
+			if (patch.sidebar === null) delete nextSettings.sidebar;
+			else nextSettings.sidebar = { ...(isObject(currentSettings.sidebar) ? currentSettings.sidebar : {}), ...patch.sidebar };
+		}
+		if (Object.hasOwn(patch, 'analytics')) {
+			if (patch.analytics === null) delete nextSettings.analytics;
+			else nextSettings.analytics = { ...(isObject(currentSettings.analytics) ? currentSettings.analytics : {}), ...patch.analytics };
+		}
+		return nextSettings;
+	};
+	const columns = Object.hasOwn(patch, 'name') ? { name: patch.name } : {};
+	const written = await writeWorkspaceSettings(deps.pg.asService(), workspaceId, applyPatch, {
+		columns,
+		wrap: (write) => bumpAccessAfter(write, { workspaceId }),
+	});
 
 	const mergedName = Object.hasOwn(patch, 'name') ? patch.name : (workspace.name ?? 'Workspace');
 	const visibility = workspace.visibility ?? 'confidential';
-	return sendJson(response, 200, normalizeSettings(nextSettings, mergedName, visibility), deps.config);
+	return sendJson(response, 200, normalizeSettings(written.settings, mergedName, visibility), deps.config);
 }
 
 export function createWorkspaceSettingsRoutes({ config, pg, verifySession }) {
