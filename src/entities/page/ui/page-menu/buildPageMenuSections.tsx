@@ -88,8 +88,8 @@ export function buildPageMenuSections(context: PageMenuContext): PageMenuSection
   }));
 
   const appearance = [
-    { id: 'small-text', label: 'Small text', icon: <Clipboard size={16} />, checked: actions.config.smallText, keepOpen: true, run: run(() => actions.toggleSmallText(), true) },
-    { id: 'full-width', label: 'Full width', icon: <LayoutDashboard size={16} />, checked: actions.config.fullWidth, keepOpen: true, run: run(() => actions.toggleFullWidth(), true) },
+    { id: 'small-text', label: 'Small text', icon: <Clipboard size={16} />, checked: actions.config.smallText, toggle: true, keepOpen: true, run: run(() => actions.toggleSmallText(), true) },
+    { id: 'full-width', label: 'Full width', icon: <LayoutDashboard size={16} />, checked: actions.config.fullWidth, toggle: true, keepOpen: true, run: run(() => actions.toggleFullWidth(), true) },
   ];
 
   const more = [
