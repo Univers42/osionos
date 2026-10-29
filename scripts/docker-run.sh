@@ -37,8 +37,8 @@ run_inside_container() {
     build-offline) exec sh -c 'VITE_API_URL= VITE_REQUIRE_BRIDGE_SESSION=false VITE_ALLOW_OFFLINE_MODE=true VITE_BAAS_URL= VITE_BAAS_API_KEY= VITE_BAAS_LIVE_MOUNTS= NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build' ;;
     preview) exec pnpm exec vite preview --host 0.0.0.0 "$@" ;;
     typecheck) exec sh -c 'pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit' ;;
-    lint) exec pnpm exec eslint src/ packages/ --max-warnings=0 "$@" ;;
-    lint-fix) exec pnpm exec eslint src/ packages/ --fix "$@" ;;
+    lint) exec pnpm exec eslint src/ packages/ scripts/ --max-warnings=0 "$@" ;;
+    lint-fix) exec pnpm exec eslint src/ packages/ scripts/ --fix "$@" ;;
     test-e2e) exec pnpm exec playwright test "$@" ;;
     test-e2e-serial) exec pnpm exec playwright test --workers=1 "$@" ;;
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
@@ -60,7 +60,7 @@ run_inside_container() {
     test-bench)
       [ $# -gt 0 ] || set -- tests/bench/*.bench.ts
       exec node --experimental-strip-types --expose-gc --experimental-loader ./tests/canvas/ts-extension-loader.mjs tests/bench/run.ts "$@" ;;
-    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && node scripts/check-token-refs.mjs && node scripts/build-tokens.mjs --check && bash scripts/check-built-with-blocks.sh && exec bash scripts/check-style-tokens.sh ;;
+    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ scripts/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && node scripts/check-token-refs.mjs && node scripts/build-tokens.mjs --check && bash scripts/check-built-with-blocks.sh && exec bash scripts/check-style-tokens.sh ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac
 }

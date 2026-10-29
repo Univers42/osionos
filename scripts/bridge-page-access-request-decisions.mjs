@@ -16,7 +16,7 @@
  * module crosses the 300-line ceiling.
  */
 
-import { httpError, identitySummaries, readJsonBody, safeText, sendJson } from './bridge-social-core.mjs';
+import { httpError, identitySummaries, readJsonBody, sendJson } from './bridge-social-core.mjs';
 import { connectionStatus } from './bridge-friendship.mjs';
 import { writeShareRule } from './bridge-perms.mjs';
 import { sameId, ownerHoldsPage } from './bridge-page-read.mjs';
@@ -33,7 +33,6 @@ import {
 	restorePending,
 } from './bridge-page-access-request-store.mjs';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_LIST = 50;
 const APPROVE_PERMISSIONS = new Set(['can_view', 'can_comment', 'can_edit']);
 const RULE_RANK = { no_access: 0, can_view: 1, can_comment: 2, can_edit: 3, full_access: 4 };

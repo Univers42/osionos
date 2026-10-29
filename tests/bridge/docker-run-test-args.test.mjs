@@ -11,33 +11,12 @@
 /* ************************************************************************** */
 
 // #63: `npm run test:bridge -- <file>` must run that file, not the whole suite plus it.
-// A fake `node` first on PATH records the argv docker-run.sh would hand the real one.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dockerRunCalls } from './support/docker-run-calls.mjs';
 
-const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-
-function runnerArgv(target, args) {
-	const bin = mkdtempSync(join(tmpdir(), 'docker-run-argv-'));
-	try {
-		writeFileSync(join(bin, 'node'), '#!/bin/sh\nprintf "%s\\n" "$@"\n');
-		chmodSync(join(bin, 'node'), 0o755);
-		const out = execFileSync('bash', ['scripts/docker-run.sh', target, ...args], {
-			cwd: APP_ROOT,
-			env: { ...process.env, OSIONOS_IN_DOCKER: '1', PATH: `${bin}:${process.env.PATH}` },
-			encoding: 'utf8',
-		});
-		return out.split('\n').filter(Boolean);
-	} finally {
-		rmSync(bin, { recursive: true, force: true });
-	}
-}
+const runnerArgv = (target, args) => dockerRunCalls(target, args)[0];
 
 const testFiles = (argv) => argv.filter((arg) => /\.test\.(mjs|ts)$/.test(arg));
 
