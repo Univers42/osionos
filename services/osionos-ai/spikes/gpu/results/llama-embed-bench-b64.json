@@ -1,0 +1,19 @@
+{
+  "base": "http://127.0.0.1:18090",
+  "style": "openai",
+  "model": "e5-small",
+  "queries": 300,
+  "passages": 1000,
+  "batch": 64,
+  "concurrency": 4,
+  "corpusChunks": 291,
+  "queryP50": 7.752473999999893,
+  "queryP95": 8.509051,
+  "queryP99": 9.551936999999953,
+  "queryMean": 7.746751713333338,
+  "backfillS": 3.2414957749999997,
+  "chunksPerSecond": 308.49955372840185,
+  "queryUnderLoadP50": 158.07739100000072,
+  "queryUnderLoadP95": 678.2048049999994,
+  "queryUnderLoadN": 13
+}

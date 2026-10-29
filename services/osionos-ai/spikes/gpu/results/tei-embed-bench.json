@@ -1,0 +1,19 @@
+{
+  "base": "http://127.0.0.1:4911",
+  "style": "tei",
+  "model": "intfloat/multilingual-e5-small",
+  "queries": 300,
+  "passages": 1000,
+  "batch": 32,
+  "concurrency": 4,
+  "corpusChunks": 291,
+  "queryP50": 7.012833999999998,
+  "queryP95": 8.486691999999948,
+  "queryP99": 10.131516999999803,
+  "queryMean": 7.092773296666665,
+  "backfillS": 17.824540004,
+  "chunksPerSecond": 56.10242955922511,
+  "queryUnderLoadP50": 1560.7249149999989,
+  "queryUnderLoadP95": 2270.521409000001,
+  "queryUnderLoadN": 13
+}

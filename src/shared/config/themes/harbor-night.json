@@ -1,0 +1,41 @@
+{
+  "name": "Harbor Night",
+  "base": "dark",
+  "palette": "nord",
+  "colors": {
+    "bg-canvas": "#0b1018",
+    "bg-page": "#0f1520",
+    "bg-surface": "#151d2a",
+    "bg-panel": "#121a26",
+    "bg-subtle": "#1a2331",
+    "bg-muted": "#202b3b",
+    "bg-hover": "#1d2736",
+    "bg-elevated": "#1b2433",
+    "fg-strong": "#f1f5f9",
+    "fg-default": "#dbe4ee",
+    "fg-muted": "#a3b2c2",
+    "fg-subtle": "#7d8ea1",
+    "border-default": "#263244",
+    "border-strong": "#34445a",
+    "accent": "#5fb3b3",
+    "accent-fg": "#0b1416",
+    "accent-hover": "#74c4c4",
+    "accent-subtle": "#17302f",
+    "accent-text": "#7fcaca",
+    "link": "#7fcaca",
+    "link-hover": "#9edcdc",
+    "danger": "#f2777a",
+    "danger-fg": "#1a0b0c",
+    "success": "#6cc497",
+    "warning": "#e5b567",
+    "topbar-bg": "#0b1018"
+  },
+  "layout": {
+    "radius": "10px",
+    "page-max-width": "880px",
+    "topbar-h": "44px"
+  },
+  "fonts": {
+    "font-ui": "\"Inter Variable\", system-ui, sans-serif"
+  }
+}

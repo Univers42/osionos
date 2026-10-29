@@ -15,7 +15,7 @@ import { notifyCreateFailure } from "./pageCreateFeedback";
 import { pageApiJwtFromSessionToken } from "@/features/auth/model/userStore.helpers";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { planDuplicate } from "./duplicatePlan";
-import { evictPageFromState } from "./evictLocalPage";
+import { settleMissingPage } from "./evictLocalPage";
 import {
   canDeletePage,
   canDuplicatePage,
@@ -26,6 +26,7 @@ import {
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 import { SEED_PAGES } from "../data/seedPages";
+import { isSeedTarget } from "./seedTarget";
 import {
   seedToEntry,
   localId,
@@ -42,8 +43,9 @@ import {
 import { replacePage } from "./replacePage";
 import { loadLedger } from "@osionos/outbox-ledger";
 import { applyServerPages } from "./sync/applyServerPages";
-import { resolveFetchedPage } from "./sync/mergeServerPages";
+import { isPageClean, resolveFetchedPage } from "./sync/mergeServerPages";
 import { PAGE_OUTBOX_KEY, pageStamp, saveOutboxLedger } from "./sync/pageStamp";
+import { setBase } from "./sync/pageBase";
 import { forgetAppRemovals, recordAppRemovals } from "./appRemovals";
 import {
   cascadeIdsFrom,
@@ -104,7 +106,7 @@ export function createSeedOnlinePages(set: SetFn, get: GetFn) {
         await get().fetchPages(realWsId, jwt);
         verifiedWorkspaces.add(realWsId);
       }
-      if ((get().pages[realWsId] ?? []).length > 0) continue;
+      if (!isSeedTarget(pagesPulledAt(realWsId), get().pages[realWsId])) continue;
       try {
         const page = await api.post<PageEntry>(
           "/api/pages",
@@ -201,6 +203,10 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
     try {
       const fullPage = await api.get<PageEntry>(`/api/pages/${pageId}`, pageJwt);
       if (!fullPage) return;
+      // The server's copy is the BASE the next write is made against: its content
+      // version and its content. It is remembered even when the local copy wins the
+      // merge below — the base is what the SERVER holds, not what the store shows.
+      setBase(pageId, fullPage.contentVersion ?? null, fullPage.content ?? null);
       // Decided on the page as it is NOW: an edit typed while the request was in flight must
       // stay unpublished-and-pending, never be recorded as the server's copy.
       const current = get().pageById(pageId);
@@ -221,14 +227,20 @@ export function createFetchPageContent(set: SetFn, get: GetFn) {
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        // The page is gone server-side — a stale localStorage ghost the additive
-        // hydrate (sync/applyServerPages) never prunes. Evict it from the
+        // The page is gone server-side or no longer readable (the bridge answers
+        // both 404) — e.g. a stale localStorage ghost the additive hydrate
+        // (sync/applyServerPages) never prunes. A clean copy is evicted from the
         // store + cache so it stops being re-fetched in a loop and drops out of
-        // the sidebar/tree instead of flooding the console with 404s. The rule
-        // itself lives in ./evictLocalPage (shared with the refused-edit
-        // recovery): actions cannot import the store, usePageStore imports them.
-        set((s) => evictPageFromState(s, page.workspaceId, pageId));
+        // the sidebar/tree; an unpublished edit stays for the outbox. The rule
+        // lives in ./evictLocalPage: actions cannot import the store, usePageStore imports them.
+        const current = get().pageById(pageId);
+        if (!current) return;
+        const isClean = isPageClean(current, loadLedger(PAGE_OUTBOX_KEY), context !== null && canEditPage(current, context));
+        const settled = settleMissingPage(get(), page.workspaceId, pageId, isClean);
+        if (!settled) return;
+        set(settled.state);
         savePagesCache(get().pages, page.workspaceId);
+        if (settled.toast) useToastStore.getState().push(settled.toast);
         return;
       }
       console.warn("[pageStore] fetchPageContent failed:", pageId, err);
@@ -777,12 +789,19 @@ export function createCreatePageFromTemplate(_set: SetFn, get: GetFn) {
     const template = get().pageById(templateId);
     if (!template?.isTemplate) return null;
     const content = instantiateTemplateContent(template.content);
+    let clonedContent = content;
+    try {
+      const glue = await import("@/widgets/database-view/model/templateDatabaseInstantiate");
+      clonedContent = glue.instantiateTemplateDatabases(content, workspaceId);
+    } catch (err) {
+      return notifyCreateFailure("Couldn't create the page from this template.", err);
+    }
     const page = await get().addPage(
       workspaceId,
       template.title || "Untitled",
       jwt,
       parentPageId,
-      { icon: template.icon, content },
+      { icon: template.icon, content: clonedContent },
     );
     if (page && options?.open !== false) {
       get().openPage({ id: page._id, workspaceId, kind: "page", title: page.title, icon: page.icon });

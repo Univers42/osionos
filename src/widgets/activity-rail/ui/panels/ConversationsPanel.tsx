@@ -14,14 +14,16 @@
 // direct messages. One filter box narrows all of them; the chips show one kind.
 // Channels and DMs keep their own create buttons; AI chats get theirs here.
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Bot, MessageSquarePlus, Search, Sparkles } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 
 import type { PageEntry } from "@/entities/page";
 import { useUserStore } from "@/features/auth";
-import { useChatStore } from "@/features/chat/model/useChatStore";
+import { ConversationRow } from "@/features/chat/ui/ConversationRow";
+import { useChatStore, conversationsOf, isUntouchedConversation } from "@/features/chat/model/useChatStore";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { matchingByName } from "@/shared/lib/text/matchingByName";
 import { usePageStore } from "@/store/usePageStore";
 import { ChannelList } from "@/widgets/channel-list";
@@ -56,12 +58,21 @@ const rowClass =
   "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--osio-focus-ring-color)]";
 
 const AiSection: React.FC<{ filter: string }> = ({ filter }) => {
-  const conversations = useChatStore(useShallow((s) => [...s.conversations]
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-    .slice(0, RECENT_AI_CHATS)));
+  const userId = useUserStore((s) => s.activeUserId);
+  // A chat opened and never used is not history; the open one is listed even while empty.
+  const conversations = useChatStore(useShallow((s) => {
+    const withMessages = new Set(s.messages.map((m) => m.conversationId));
+    return conversationsOf(s.conversations, userId)
+      .filter((c) => c.id === s.activeConversationId || !isUntouchedConversation(c, withMessages))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, RECENT_AI_CHATS);
+  }));
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id ?? "");
   const pages = usePageStore((s) => s.pages[workspaceId] ?? NO_PAGES);
   const agents = useMemo(() => pages.filter((p) => p.surface === "agent" && !p.archivedAt && !p.parentPageId), [pages]);
+  const syncServerConversations = useChatStore((s) => s.syncServerConversations);
+  // The conversations of the account, once: another browser may have started them.
+  useEffect(() => { if (workspaceId && isAiConfigured()) void syncServerConversations(workspaceId); }, [workspaceId, syncServerConversations]);
   const chats = matchingByName(conversations.map((c) => ({ ...c, name: c.title })), filter);
   const shownAgents = matchingByName(agents.map((a) => ({ ...a, name: a.title })), filter);
 
@@ -77,10 +88,10 @@ const AiSection: React.FC<{ filter: string }> = ({ filter }) => {
       <ul className="mt-1 space-y-0.5">
         {chats.map((chat) => (
           <li key={chat.id}>
-            <button type="button" className={rowClass} onClick={() => openAiChat(chat.id)}>
+            <ConversationRow conversation={chat} openClassName={rowClass} onOpen={() => openAiChat(chat.id)}>
               <Sparkles size={14} className="shrink-0" aria-hidden />
               <span className="truncate">{chat.title || "New chat"}</span>
-            </button>
+            </ConversationRow>
           </li>
         ))}
         {shownAgents.map((agent) => (

@@ -14,16 +14,21 @@
  * Grobase storage-router client for the osionos messenger media plane.
  *
  * The bridge proxies the raw bytes — browser-direct upload is impossible
- * (S3_PUBLIC_ENDPOINT is empty, no presign). Auth is compat-mode: a single
- * `x-user-id: <ownerId>` header (NO JWT, NO Kong). The router AUTO-PREFIXES the
- * object key with `{ownerId}/`, so callers pass key=`{sha256}.{ext}` and the
- * stored key becomes `{ownerId}/{sha256}.{ext}` — same owner + same content =
- * same object (idempotent overwrite → content dedup).
+ * (S3_PUBLIC_ENDPOINT is empty, no presign). The router reads the owner from
+ * `x-user-id` (compat mode). Reached through Kong — the default, and the only
+ * path from a host linked to grobase — that header is cleared, so each call also
+ * carries a one-minute token for the owner, which Kong verifies and turns back
+ * into `x-user-id`. The router AUTO-PREFIXES the object key with `{ownerId}/`,
+ * so callers pass key=`{sha256}.{ext}` and the stored key becomes
+ * `{ownerId}/{sha256}.{ext}` — same owner + same content = same object
+ * (idempotent overwrite → content dedup).
  *
  * Node built-ins only. Best-effort with clear errors (httpError 502/timeout).
  */
 
 import { httpError } from './bridge-social-core.mjs';
+import { signRealtimeJwt } from './bridge-realtime-socket.mjs';
+import { INLINE_TYPES, PAGE_TYPES, assertBytesMatch, baseMime } from './bridge-mime.mjs';
 
 const STORAGE_TIMEOUT_MS = 15_000;
 const BUCKET = 'chat';
@@ -48,12 +53,48 @@ const EXT_BY_MIME = {
 };
 
 export function storageBase(env = process.env) {
-	return (env.STORAGE_ROUTER_URL ?? 'http://mini-baas-storage-router:3040/storage/v1').replace(/\/$/, '');
+	const kong = `${String(env.OSIONOS_BAAS_URL ?? env.PUBLIC_BAAS_URL ?? 'http://localhost:8000').replace(/\/$/, '')}/storage/v1`;
+	return (env.STORAGE_ROUTER_URL ?? kong).replace(/\/$/, '');
+}
+
+const STORAGE_TOKEN_TTL_SECONDS = 60;
+
+/**
+ * Who a storage call acts for. `x-user-id` serves a router reached directly;
+ * Kong clears it and rebuilds it from the bearer token. Without JWT_SECRET no
+ * token is sent: a direct router still works and Kong refuses, never a forgery.
+ */
+export function storageHeaders(ownerId, env = process.env, extra = {}) {
+	const headers = { 'x-user-id': ownerId, ...extra };
+	const apiKey = env.KONG_PUBLIC_API_KEY ?? env.ANON_KEY;
+	if (apiKey) headers.apikey = apiKey;
+	if (env.JWT_SECRET) {
+		const iat = Math.floor(Date.now() / 1000);
+		const claims = { iss: 'supabase', aud: 'authenticated', role: 'authenticated', sub: ownerId, iat, exp: iat + STORAGE_TOKEN_TTL_SECONDS };
+		headers.authorization = `Bearer ${signRealtimeJwt(claims, env.JWT_SECRET)}`;
+	}
+	return headers;
+}
+
+/**
+ * The headers every stored object is served with. The policy is the one GitHub
+ * puts on raw user content: no script, no fetch, an opaque origin; inline styles
+ * only, for SVG.
+ */
+export function servedObjectHeaders(contentType) {
+	const mime = baseMime(contentType);
+	const inline = INLINE_TYPES.has(mime);
+	return {
+		'content-type': inline ? mime : 'application/octet-stream',
+		...(inline ? {} : { 'content-disposition': 'attachment' }),
+		'x-content-type-options': 'nosniff',
+		'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+	};
 }
 
 /** Pick a safe lowercase extension from a content type (fallback 'bin'). */
 export function extFromMime(contentType) {
-	const mime = String(contentType ?? '').split(';')[0].trim().toLowerCase();
+	const mime = baseMime(contentType);
 	if (EXT_BY_MIME[mime]) return EXT_BY_MIME[mime];
 	const tail = mime.split('/')[1] ?? '';
 	const safe = tail.replace(/[^a-z0-9]/g, '');
@@ -62,7 +103,7 @@ export function extFromMime(contentType) {
 
 /** Coarse media type bucket from a content type (image|video|audio|file). */
 export function typeFromMime(contentType) {
-	const mime = String(contentType ?? '').split(';')[0].trim().toLowerCase();
+	const mime = baseMime(contentType);
 	if (mime.startsWith('image/')) return 'image';
 	if (mime.startsWith('video/')) return 'video';
 	if (mime.startsWith('audio/')) return 'audio';
@@ -74,12 +115,12 @@ export function storageObjectKey(sha256, ext) {
 	return `${sha256}.${ext}`;
 }
 
-/** Ensure the private 'chat' bucket exists (idempotent — 'created:false' is OK). */
-export async function ensureChatBucket(ownerId, fetchImpl = fetch, env = process.env) {
+/** Ensure a bucket exists (idempotent — 'created:false' is OK). */
+export async function ensureBucket(ownerId, bucket, fetchImpl = fetch, env = process.env) {
 	try {
-		await fetchImpl(`${storageBase(env)}/bucket/${BUCKET}`, {
+		await fetchImpl(`${storageBase(env)}/bucket/${bucket}`, {
 			method: 'POST',
-			headers: { 'x-user-id': ownerId, 'content-type': 'application/json' },
+			headers: storageHeaders(ownerId, env, { 'content-type': 'application/json' }),
 			body: JSON.stringify({ public: false }),
 			signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
 		});
@@ -88,11 +129,23 @@ export async function ensureChatBucket(ownerId, fetchImpl = fetch, env = process
 	}
 }
 
-/** PUT raw bytes under bucket 'chat' as the owner. Returns the router JSON. */
-export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImpl = fetch, env = process.env) {
-	const response = await fetchImpl(`${storageBase(env)}/object/${BUCKET}/${encodeURIComponent(key)}`, {
+/** Ensure the private 'chat' bucket exists (idempotent — 'created:false' is OK). */
+export function ensureChatBucket(ownerId, fetchImpl = fetch, env = process.env) {
+	return ensureBucket(ownerId, BUCKET, fetchImpl, env);
+}
+
+/**
+ * PUT raw bytes under a bucket as the owner. Returns the router JSON. Every
+ * writer (page media, chat, collab seeds, avatars) comes through here, so the
+ * type of the bytes is checked here, before a byte is sent: a page type and an
+ * inline type whose bytes do not match it are both refused.
+ */
+export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
+	if (PAGE_TYPES.has(baseMime(contentType))) throw httpError('This file type cannot be uploaded.', 415);
+	assertBytesMatch(contentType, bodyBuffer);
+	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
 		method: 'PUT',
-		headers: { 'x-user-id': ownerId, 'content-type': contentType || 'application/octet-stream' },
+		headers: storageHeaders(ownerId, env, { 'content-type': contentType || 'application/octet-stream' }),
 		body: bodyBuffer,
 		signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
 	}).catch((error) => {
@@ -103,15 +156,15 @@ export async function storagePut(ownerId, key, contentType, bodyBuffer, fetchImp
 	try {
 		return JSON.parse(text);
 	} catch {
-		return { bucket: BUCKET, key };
+		return { bucket, key };
 	}
 }
 
 /** GET bytes for an object as the owner. Returns {status, buffer, contentType}. */
-export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.env) {
-	const response = await fetchImpl(`${storageBase(env)}/object/${BUCKET}/${encodeURIComponent(key)}`, {
+export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
+	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
 		method: 'GET',
-		headers: { 'x-user-id': ownerId },
+		headers: storageHeaders(ownerId, env),
 		signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
 	}).catch((error) => {
 		throw httpError(`Storage fetch failed: ${error instanceof Error ? error.message : 'unreachable'}`, 502);
@@ -125,4 +178,22 @@ export async function storageGet(ownerId, key, fetchImpl = fetch, env = process.
 		buffer: Buffer.from(arrayBuffer),
 		contentType: response.headers.get('content-type') || 'application/octet-stream',
 	};
+}
+
+/**
+ * DELETE an object as the owner. An object that is already gone is not an
+ * error: the caller wanted it gone, and it is.
+ */
+export async function storageDelete(ownerId, key, fetchImpl = fetch, env = process.env, bucket = BUCKET) {
+	const response = await fetchImpl(`${storageBase(env)}/object/${bucket}/${encodeURIComponent(key)}`, {
+		method: 'DELETE',
+		headers: storageHeaders(ownerId, env),
+		signal: AbortSignal.timeout(STORAGE_TIMEOUT_MS),
+	}).catch((error) => {
+		throw httpError(`Storage delete failed: ${error instanceof Error ? error.message : 'unreachable'}`, 502);
+	});
+	if (!response.ok && response.status !== 404) {
+		throw httpError(`Storage delete rejected (${response.status}).`, 502);
+	}
+	return true;
 }

@@ -14,15 +14,14 @@ import { useUserStore } from "@/features/auth";
 import { debugActiveFile, openOrCreateTasksFile, runActiveFile, runDefaultTask } from "@/features/ide/model/ideTasks";
 import { isQuickCaptureEnabled, isWhiteboardEnabled } from "@/shared/config/featureFlags";
 import { useQuickCapture } from "@/features/quick-capture/model/useQuickCapture";
-import { toggleThemeMode } from "@/shared/config/theme";
+import { isThemeBasePinned, toggleThemeMode } from "@/shared/config/theme";
 import { useUIStore } from "@/shared/config/uiStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
-import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
+import type { SettingsSectionId } from "@/features/settings/model/sections";
 import { usePageStore } from "@/store/usePageStore";
+import { useIssueReportRequest } from "@/features/issues/model/issueReportRequest";
 import { whiteboardAppUrl } from "@/shared/config/appUrls";
-import { createBoardInNewTab } from "@/features/whiteboard/model/newBoardTab";
-import { whiteboardClient } from "@/features/whiteboard/model/whiteboardClient";
-import { consoleTab, homeTab, trashTab, whiteboardBoardTab, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { consoleTab, homeTab, trashTab, whiteboardTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { usePalette } from "./usePalette";
@@ -46,10 +45,23 @@ export interface MenuGroup {
 
 /** App-level callbacks the menubar needs that live in React state (not a store). */
 export interface MenuContext {
-  openSettings: (tab?: SettingsTab) => void;
+  openSettings: (section?: SettingsSectionId) => void;
 }
 
 const DOCS_URL = "https://github.com/Univers42/osionos";
+
+/** The quick light/dark flip, which says why it does nothing while the active theme sets the mode. */
+function toggleThemeFromMenu() {
+  if (!isThemeBasePinned()) {
+    toggleThemeMode();
+    return;
+  }
+  useToastStore.getState().push({
+    kind: "info",
+    title: "Your theme sets light or dark",
+    description: "Choose another theme in Settings › Preferences to switch.",
+  });
+}
 
 /**
  * Build the menubar groups. Every item dispatches to an existing store action or
@@ -108,7 +120,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
     {
       id: "view", label: "View", items: [
         { id: "view.sidebar", label: "Show or hide the sidebar", accelerator: "Ctrl+Alt+B", run: () => useUIStore.getState().toggleDocked() },
-        { id: "view.theme", label: "Toggle theme", run: () => { toggleThemeMode(); }, separatorAfter: true },
+        { id: "view.theme", label: "Toggle theme", run: toggleThemeFromMenu, separatorAfter: true },
         ...workbenchViewMenu(),
         { id: "view.home", label: "Home", run: () => layout().openTab(homeTab()) },
         { id: "view.trash", label: "Trash", run: () => layout().openTab(trashTab()) },
@@ -116,13 +128,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
         // Two gates, not one: the flag is the kill-switch, the URL is the capability.
         // A build with VITE_WHITEBOARD_APP_URL blanked cannot load the embed at all, so
         // the item is withheld rather than offered and then failing.
-        ...whiteboardViewItems(isWhiteboardEnabled() && whiteboardAppUrl() !== "", {
-          newBoard: () => void createBoardInNewTab(whiteboardClient, {
-            openBoard: (slug, title) => layout().openTab(whiteboardBoardTab(slug, title)),
-            reportError: (message) => useToastStore.getState().push({ kind: "error", title: "Could not create the whiteboard", description: message }),
-          }),
-          openWhiteboard: () => layout().openTab(whiteboardTab()),
-        }),
+        ...whiteboardViewItems(isWhiteboardEnabled() && whiteboardAppUrl() !== "", () => layout().openTab(whiteboardTab())),
       ],
     },
     {
@@ -142,6 +148,7 @@ export function buildMenus(ctx: MenuContext): MenuGroup[] {
       id: "help", label: "Help", items: [
         { id: "help.docs", label: "Documentation", run: () => { globalThis.open(DOCS_URL, "_blank", "noopener"); } },
         { id: "help.shortcuts", label: "Keyboard shortcuts", run: () => ctx.openSettings("shortcuts") },
+        { id: "help.report", label: "Report an issue…", run: () => useIssueReportRequest.getState().open({ title: "", description: "" }) },
         { id: "help.about", label: "About osionos", run: () => useToastStore.getState().push({ kind: "info", title: "osionos", description: "Notion-style collaborative workspace" }) },
       ],
     },

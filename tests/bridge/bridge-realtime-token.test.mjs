@@ -17,12 +17,17 @@ import { createServer } from 'node:http';
 
 import { createRealtimeTokenHandler } from '../../scripts/bridge-realtime-token.mjs';
 import { mintRealtimeToken } from '../../scripts/bridge-collab.mjs';
+import { IDS, createPostgrestMock, harnessConfig, post, send, sessionHeaders, withBridge } from './support/bridge-harness.mjs';
 
 const SECRET = 'unit-test-jwt-secret';
 const WORKSPACE = 'c0c0c0c0-3333-4333-8333-c0c0c0c0c0c0';
 const OPEN_CHANNEL = 'a1a1a1a1-1111-4111-8111-a1a1a1a1a1a1';
 const PRIVATE_CHANNEL = 'a2a2a2a2-1111-4111-8111-a2a2a2a2a2a2';
 const NOTIFY_TOKEN = 'own-unguessable-notify-token';
+// A live database mounted in the workspace above, and one nobody mounts.
+const MOUNTED_DB = 'b1b1b1b1-1111-4111-8111-b1b1b1b1b1b1';
+const UNMOUNTED_DB = 'b2b2b2b2-2222-4222-8222-b2b2b2b2b2b2';
+const MOUNTS = [{ workspace_id: WORKSPACE, db_id: MOUNTED_DB }];
 
 const CHANNELS = {
 	[OPEN_CHANNEL]: { id: OPEN_CHANNEL, workspace_id: WORKSPACE, kind: 'text', is_private: false },
@@ -36,26 +41,51 @@ function decodeVerified(token) {
 }
 
 // Every caller is a workspace member; nobody is a member of the private channel.
-function fakeBaas(userId) {
+function fakeBaas(userId, { member = true, mounts = MOUNTS } = {}) {
 	return async (urlString) => {
 		const url = String(urlString);
 		let rows = [];
 		const channelId = /osionos_channels\?id=eq\.([0-9a-f-]+)/.exec(url)?.[1];
 		if (channelId) rows = [CHANNELS[channelId]].filter(Boolean);
-		else if (url.includes('osionos_workspace_members')) rows = [{ user_id: userId, role: 'member' }];
-		else if (url.includes('osionos_bridge_identities')) rows = [{ notify_token: NOTIFY_TOKEN }];
+		else if (url.includes('osionos_workspace_members')) {
+			rows = member ? [{ user_id: userId, workspace_id: WORKSPACE, role: 'member' }] : [];
+		} else if (url.includes('osionos_bridge_identities')) rows = [{ notify_token: NOTIFY_TOKEN }];
+		else if (url.includes('osionos_workspace_databases')) rows = mounts;
 		return { ok: true, status: 200, text: async () => JSON.stringify(rows) };
 	};
 }
 
+async function baasRows(fetchImpl, path) {
+	const response = await fetchImpl(`http://baas/rest/v1/${path}`);
+	return JSON.parse(await response.text());
+}
+
+/**
+ * The mount check the token module is given, built the way bridge-api.mjs builds
+ * it: the session's own workspaces ∪ the workspaces the user is a member of,
+ * then the dbId must be one of those workspaces' mounts.
+ */
+function mountAccessFor(fetchImpl) {
+	return async (session, dbId) => {
+		const memberRows = await baasRows(fetchImpl, `osionos_workspace_members?user_id=eq.${session.userId}&select=workspace_id`);
+		const memberIds = (Array.isArray(memberRows) ? memberRows : []).map((row) => String(row.workspace_id ?? '')).filter(Boolean);
+		const accessible = [...new Set([...(session.workspaceIds ?? []), ...memberIds])];
+		if (accessible.length === 0) return false;
+		const mounts = await baasRows(fetchImpl, `osionos_workspace_databases?workspace_id=in.(${accessible.join(',')})&select=workspace_id,db_id`);
+		return (Array.isArray(mounts) ? mounts : []).some((row) => row && row.db_id === dbId);
+	};
+}
+
 // A fresh user per test: the rate-limit buckets are module-level and keyed by user.
-async function withHandler(run) {
+async function withHandler(run, options = {}) {
 	const userId = randomUUID();
+	const fetchImpl = fakeBaas(userId, options);
 	const handler = createRealtimeTokenHandler({
 		config: { allowedOrigin: '*', baasUrl: 'http://baas', serviceKey: 'service-key' },
-		verifySession: () => ({ userId }),
-		fetchImpl: fakeBaas(userId),
+		verifySession: () => ({ userId, workspaceIds: options.workspaceIds ?? [WORKSPACE] }),
+		fetchImpl,
 		env: { JWT_SECRET: SECRET },
+		mountAccess: mountAccessFor(fetchImpl),
 	});
 	const server = createServer(async (request, response) => {
 		if (!await handler(new URL(request.url, 'http://h'), request, response)) response.writeHead(404).end();
@@ -134,6 +164,67 @@ describe('POST /api/realtime/token', () => {
 		});
 	});
 
+	it('grants a live database mounted in a workspace the caller belongs to', async () => {
+		await withHandler(async (ask, userId) => {
+			const { status, body } = await ask({ kind: 'table', dbId: MOUNTED_DB, table: 'transactions' });
+			assert.equal(status, 200);
+			const topic = `table:${MOUNTED_DB}:transactions`;
+			assert.equal(body.topic, topic);
+			const claims = decodeVerified(body.token);
+			assert.deepEqual(claims.namespaces, [topic]);
+			assert.equal(claims.can_subscribe, true);
+			assert.equal(claims.can_publish, false);
+			assert.equal(claims.sub, userId);
+		});
+	});
+
+	it('refuses a live database no workspace of the caller mounts', async () => {
+		await withHandler(async (ask) => {
+			const { status, body } = await ask({ kind: 'table', dbId: UNMOUNTED_DB, table: 'transactions' });
+			assert.equal(status, 403);
+			assert.equal(body.token, undefined);
+		});
+	});
+
+	it('refuses a live database for a caller who is no member of any workspace', async () => {
+		await withHandler(async (ask) => {
+			const { status, body } = await ask({ kind: 'table', dbId: MOUNTED_DB, table: 'transactions' });
+			assert.equal(status, 403);
+			assert.equal(body.token, undefined);
+		}, { member: false, workspaceIds: [] });
+	});
+
+	it('refuses a bad table name and a non-UUID database id', async () => {
+		await withHandler(async (ask) => {
+			for (const attempt of [
+				{ kind: 'table', dbId: MOUNTED_DB, table: '../x' },
+				{ kind: 'table', dbId: MOUNTED_DB, table: 'a/b' },
+				{ kind: 'table', dbId: MOUNTED_DB, table: '' },
+				{ kind: 'table', dbId: 'not-a-uuid', table: 'transactions' },
+				{ kind: 'table', table: 'transactions' },
+			]) {
+				const { status, body } = await ask(attempt);
+				assert.equal(status, 403, JSON.stringify(attempt));
+				assert.equal(body.token, undefined);
+			}
+		});
+	});
+
+	it('grants the caller their own object database and never another user\'s', async () => {
+		await withHandler(async (ask, userId) => {
+			const other = randomUUID();
+			for (const attempt of [{ kind: 'objectdb' }, { kind: 'objectdb', subject: other }, { kind: 'objectdb', ownerId: other }]) {
+				const { status, body } = await ask(attempt);
+				assert.equal(status, 200, JSON.stringify(attempt));
+				assert.equal(body.topic, `objectdb:${userId}`);
+				const claims = decodeVerified(body.token);
+				assert.deepEqual(claims.namespaces, [`objectdb:${userId}`]);
+				assert.equal(claims.can_publish, false);
+				assert.ok(!body.topic.includes(other));
+			}
+		});
+	});
+
 	it('rate-limits one user', async () => {
 		await withHandler(async (ask) => {
 			const statuses = [];
@@ -148,6 +239,64 @@ describe('POST /api/realtime/token', () => {
 			assert.equal((await ask({}, '/api/other')).status, 404);
 		});
 	});
+});
+
+describe('POST /api/realtime/token through the real bridge', () => {
+	const config = harnessConfig();
+
+	it('grants a mounted live database to a member and refuses an outsider', async () => {
+		const previous = process.env.JWT_SECRET;
+		process.env.JWT_SECRET = SECRET; // the bridge signs the realtime token with it
+		try {
+			const mock = createPostgrestMock({
+				osionos_workspace_members: [{ user_id: IDS.userB, workspace_id: IDS.team, role: 'editor', permissions: ['read', 'update'] }],
+				osionos_workspace_databases: [{ workspace_id: IDS.team, db_id: MOUNTED_DB }],
+			}, { realWorkspaceRpc: true });
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const member = sessionHeaders(config, IDS.userB, IDS.homeB, [IDS.team]);
+				const granted = await send(base, '/api/realtime/token', member, post({ kind: 'table', dbId: MOUNTED_DB, table: 'transactions' }));
+				assert.equal(granted.status, 200, granted.text);
+				assert.equal(granted.body.topic, `table:${MOUNTED_DB}:transactions`);
+				const claims = decodeVerified(granted.body.token);
+				assert.deepEqual(claims.namespaces, [`table:${MOUNTED_DB}:transactions`]);
+				assert.equal(claims.can_publish, false);
+
+				const outsider = await send(base, '/api/realtime/token', sessionHeaders(config, IDS.userA, IDS.homeA), post({ kind: 'table', dbId: MOUNTED_DB, table: 'transactions' }));
+				assert.equal(outsider.status, 403, outsider.text);
+				assert.equal(outsider.body.token, undefined);
+			});
+		} finally {
+			if (previous === undefined) delete process.env.JWT_SECRET;
+			else process.env.JWT_SECRET = previous;
+		}
+	});
+
+	for (const [label, member, expected] of [
+		['a membership without read permission', { role: 'viewer', permissions: [] }, 403],
+		['a read-only membership', { role: 'viewer', permissions: ['read'] }, 200],
+	]) {
+		it(`uses database read permission for ${label}`, async () => {
+			const previous = process.env.JWT_SECRET;
+			process.env.JWT_SECRET = SECRET;
+			try {
+				const mock = createPostgrestMock({
+					osionos_workspace_members: [{ user_id: IDS.userB, workspace_id: IDS.team, ...member }],
+					osionos_workspace_databases: [{ workspace_id: IDS.team, db_id: MOUNTED_DB }],
+				}, { realWorkspaceRpc: true });
+				await withBridge(config, mock.fetchImpl, async (base) => {
+					const headers = sessionHeaders(config, IDS.userB, IDS.homeB, [IDS.team]);
+					const result = await send(base, '/api/realtime/token', headers, post({ kind: 'table', dbId: MOUNTED_DB, table: 'transactions' }));
+					assert.equal(result.status, expected, result.text);
+					if (expected === 403) assert.equal(result.body.token, undefined);
+					else assert.deepEqual(decodeVerified(result.body.token).namespaces, [`table:${MOUNTED_DB}:transactions`]);
+				});
+			} finally {
+				if (previous === undefined) delete process.env.JWT_SECRET;
+				else process.env.JWT_SECRET = previous;
+			}
+		});
+	}
+
 });
 
 describe('mintRealtimeToken canPublish', () => {

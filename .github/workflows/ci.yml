@@ -19,10 +19,10 @@ on:
       - develop
   workflow_dispatch:
 
+# Write scopes live on the jobs that push (build-image on main, push-bridge-image on
+# main/develop): a feature-branch run of any job holds nothing it could tag a package with.
 permissions:
   contents: read
-  packages: write
-  id-token: write
 
 env:
   GHCR_IMAGE: ghcr.io/${{ github.repository_owner }}/osionos
@@ -34,11 +34,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A push to a branch with an open PR into main or develop starts this workflow twice: once for
+  # the push (refs/heads/<branch>), once for the PR (refs/pull/<n>/merge). The two concurrency
+  # groups differ, so both ran in full, and cancelling one by hand left a red, cancelled run on
+  # the PR. The push run now skips its jobs (shown as skipped, not failed): the PR run tests the
+  # same commit merged into its base. main and develop always run.
+  # Caveat: a PR opened after the push leaves that push run going (duplicate work, never a gap);
+  # an API error counts as "no PR", so the push run tests in full.
+  pr-dedupe:
+    name: Push already tested by an open PR
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      duplicate: ${{ steps.check.outputs.duplicate }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          duplicate=false
+          if [ "$EVENT" = push ] && [ "$BRANCH" != main ] && [ "$BRANCH" != develop ]; then
+            open=$(gh pr list -R "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json baseRefName \
+              -q '[.[] | select(.baseRefName == "main" or .baseRefName == "develop")] | length' 2>/dev/null || echo 0)
+            if [ "${open:-0}" -gt 0 ]; then duplicate=true; fi
+          fi
+          echo "duplicate=$duplicate" | tee -a "$GITHUB_OUTPUT"
+
   # Every job that builds or pulls an image goes through .github/actions/docker-hub-access
   # first: anonymous Docker Hub pulls from the shared runner IPs hit 429 (run 37990792990).
   build-image:
     name: Build & push Docker image
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -82,8 +116,108 @@ jobs:
           cache-from: type=gha,scope=osionos-prod
           cache-to: ${{ github.ref == 'refs/heads/main' && 'type=gha,scope=osionos-prod,mode=max' || '' }}
 
+  # The bridge image (scripts/bridge-*.mjs, no npm deps) is what groot's beta and release
+  # hosts run. Every branch proves the Dockerfile builds; only a push to main or develop
+  # pushes, and only that job holds the write scopes. The pushed digest is attested so the
+  # host can refuse any image whose Sigstore certificate was not minted by this workflow
+  # on that branch (groot ADR 0030, conditions C2/C14/C17).
+  build-bridge-image:
+    name: Build bridge image
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      # The Dockerfile's base is public.ecr.aws (groot parity); the named context routes that
+      # one pull through mirror.gcr.io, where the docker-hub-access mirror does not reach
+      # (run 40325175014: "toomanyrequests: Data limit exceeded" from ECR). Caveat: the key
+      # must equal the FROM string byte for byte — a retagged base silently goes back to ECR.
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/services/bridge/Dockerfile
+          build-contexts: |
+            public.ecr.aws/docker/library/node:22-bookworm-slim=docker-image://mirror.gcr.io/library/node:22-bookworm-slim
+          push: false
+          provenance: false
+          sbom: false
+
+  push-bridge-image:
+    name: Push & attest bridge image
+    needs: build-bridge-image
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      BRIDGE_IMAGE: ghcr.io/${{ github.repository_owner }}/osionos-bridge
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BRIDGE_IMAGE }}
+          tags: |
+            type=sha,prefix=sha-
+            type=ref,event=branch
+
+      # provenance/sbom off: the attest step below is the single signer, and the host
+      # verifies exactly one predicate type.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/services/bridge/Dockerfile
+          build-contexts: |
+            public.ecr.aws/docker/library/node:22-bookworm-slim=docker-image://mirror.gcr.io/library/node:22-bookworm-slim
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          sbom: false
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.BRIDGE_IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
   quality:
     name: quality (${{ matrix.scope }})
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -148,12 +282,49 @@ jobs:
         if: matrix.scope == 'root'
         run: make test-canvas
 
+      # The bridge holds the service-role key; its SSRF guard (tests/bridge/bridge-unfurl-*)
+      # and the Dockerfile closure check must fail the build, not only a developer's run.
+      - name: Bridge tests
+        if: matrix.scope == 'root'
+        run: make test-bridge
+
+      # The object-database sync runs after every edit and on every load; its budgets
+      # fail the O(databases x rows) loops it replaced (numbers in the bench file).
+      # Variables resolve on every keystroke in a block holding {{…}}; their budgets
+      # keep a 50-chip block and the {{ menu inside the 20 ms typing target.
+      - name: Object-database sync and variables benches
+        if: matrix.scope == 'root'
+        run: make test-bench BENCH="tests/bench/object-database-sync.bench.ts tests/bench/variables.bench.ts"
+
       - name: SonarQube scan
         if: matrix.scope == 'root' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
         run: make sonar
+
+  # The AI service (services/osionos-ai) has its own suite: a throwaway Postgres and Redis,
+  # the groot models migrations, node --test. Until 2026-10-26 no CI job ran it — the service
+  # shipped on local gates only — so a green check here is the first proof the service works.
+  # scripts/ci.sh is the same command a developer runs.
+  ai-service:
+    name: AI service (tsc + suite)
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Install, type-check and run the service suite
+        run: sh services/osionos-ai/scripts/ci.sh
 
   # The E2E suite is 421 tests. A single ubuntu-latest runner (4 vCPU) chews through it at
   # ~6 tests/min, i.e. ~70 min — it never fit the old 30-min single job (it was killed at
@@ -251,11 +422,54 @@ jobs:
             test-results
           if-no-files-found: ignore
 
+  # The default build has no bridge URL, so the framed-handoff consume and the public-page fetch
+  # never run there and a test of either would pass vacuously. This job builds with a stub bridge
+  # URL and runs only tests/e2e/bridge-stub, whose specs answer that host themselves.
+  test-bridge-stub:
+    name: Browser tests (stub bridge URL)
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "1"
+      TEST_WORKERS: 2
+      PLAYWRIGHT_BRIDGE_STUB: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Docker Hub access (mirror.gcr.io + optional login)
+        uses: ./.github/actions/docker-hub-access
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          token: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Run the stub-bridge specs
+        run: |
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml up -d --wait mongodb
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml run --rm --no-deps \
+            browser-tests pnpm exec playwright test
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-bridge-stub
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+
   # The production bundle (Dockerfile.prod's builder stage) must hold no legacy second brain
   # when built by default, and must still hold it when built with the gate ON: the ON build
   # is the control that proves the grep would see the legacy code if it were there.
   bundle-legacy-gate:
     name: Bundle legacy second brain (gate ${{ matrix.gate == 'true' && 'on' || 'default' }})
+    needs: pr-dedupe
+    if: needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -319,17 +533,19 @@ jobs:
   # shard is therefore a failure here, not a silent pass.
   test-gate:
     name: Browser tests
-    needs: [test, test-legacy-on, bundle-legacy-gate]
-    if: always()
+    needs: [pr-dedupe, test, test-legacy-on, test-bridge-stub, bundle-legacy-gate]
+    if: always() && needs.pr-dedupe.outputs.duplicate != 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Require every shard, the gate-on job and the bundle check to have succeeded
+      - name: Require every shard, the gate-on job, the stub-bridge job and the bundle check to have succeeded
         env:
           SHARDS_RESULT: ${{ needs.test.result }}
           GATE_ON_RESULT: ${{ needs.test-legacy-on.result }}
+          BRIDGE_STUB_RESULT: ${{ needs.test-bridge-stub.result }}
           BUNDLE_RESULT: ${{ needs.bundle-legacy-gate.result }}
         run: |
-          echo "shards: $SHARDS_RESULT; gate-on legacy: $GATE_ON_RESULT; bundle legacy gate: $BUNDLE_RESULT"
+          echo "shards: $SHARDS_RESULT; gate-on legacy: $GATE_ON_RESULT; stub bridge: $BRIDGE_STUB_RESULT; bundle legacy gate: $BUNDLE_RESULT"
           test "$SHARDS_RESULT" = "success"
           test "$GATE_ON_RESULT" = "success"
+          test "$BRIDGE_STUB_RESULT" = "success"
           test "$BUNDLE_RESULT" = "success"

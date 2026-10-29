@@ -1,28 +1,29 @@
-// The built-in whiteboard app: /whiteboard [name] creates a board and inserts an inline
-// block that iframes it. Every account has it with no install step, so none of these cases
-// installs anything or waits for the installed-apps endpoint. /draw and /drawing find it. The
-// drawnosaurus service (https://localhost:3007) is mocked, so no real board is created.
+// The built-in whiteboard app: /whiteboard [name] inserts an inline block holding a new board
+// slug and frames `/boards/<slug>?title=<name>` at once; hydrawn creates the board on the first
+// save. Every account has it with no install step, so none of these cases installs
+// anything or waits for the installed-apps endpoint. /draw and /drawing find it. Hydrawn
+// (https://localhost:3008) is mocked, so no real board is created.
 
 import { expect, test } from "@playwright/test";
 
 import {
   activateFirstEditor,
+  LIVE,
   openFreshPage,
   openSlashMenuFromEditor,
   selectSlashMenuEntry,
 } from "../../browser/core/app.mjs";
-import { mockInstalled, mockWhiteboardFailure, mockWhiteboardService } from "../support/whiteboardMocks.mjs";
+import { mockHydrawn, mockInstalled } from "../support/whiteboardMocks.mjs";
 
-const SLUG = "abc123def456";
+const BOARD = (title) => new RegExp(`/boards/[a-z0-9]{12}\\?title=${encodeURIComponent(title)}$`);
 
 const whiteboardRows = (page) => page.getByTestId("slash-command-entry").filter({ hasText: /whiteboard/i });
 
 test.describe("built-in whiteboard", () => {
   // /draw is a search word for the same command: the name after it is the board's name.
   for (const cmd of ["/whiteboard", "/draw"]) {
-    test(`${cmd} <name> creates a named board and embeds it inline`, async ({ page, baseURL }) => {
-      const created = [];
-      await mockWhiteboardService(page, { slug: SLUG, title: "Sprint plan", onCreate: (body) => created.push(body) });
+    test(`${cmd} <name> creates a new empty board and embeds it inline`, async ({ page, baseURL }) => {
+      const framed = await mockHydrawn(page);
       await openFreshPage(page, baseURL);
       const editor = await activateFirstEditor(page);
 
@@ -30,52 +31,40 @@ test.describe("built-in whiteboard", () => {
       await selectSlashMenuEntry(page, "Create board");
 
       const block = page.locator('[data-block-type="whiteboard"]');
-      await expect(block.locator("iframe")).toHaveAttribute("src", new RegExp(`/boards/${SLUG}$`));
+      await expect(block.locator("iframe")).toHaveAttribute("src", BOARD("Sprint plan"));
       await expect(block.getByText("Sprint plan")).toBeVisible();
-      expect(created).toEqual([{ title: "Sprint plan" }]);
+      expect(framed.filter((path) => path === "/new")).toEqual([]);
     });
   }
 
   test("/whiteboard Q3/Q4 plan keeps the slash inside the name", async ({ page, baseURL }) => {
-    const created = [];
-    await mockWhiteboardService(page, { slug: SLUG, title: "Sprint plan", onCreate: (body) => created.push(body) });
+    const framed = await mockHydrawn(page);
     await openFreshPage(page, baseURL);
     const editor = await activateFirstEditor(page);
 
     await openSlashMenuFromEditor(editor, "/whiteboard Q3/Q4 plan");
     await selectSlashMenuEntry(page, "Create board");
 
-    await expect(page.locator('[data-block-type="whiteboard"] iframe')).toHaveAttribute("src", new RegExp(`/boards/${SLUG}$`));
-    expect(created).toEqual([{ title: "Q3/Q4 plan" }]);
+    await expect(page.locator('[data-block-type="whiteboard"] iframe')).toHaveAttribute("src", BOARD("Q3/Q4 plan"));
+    expect(framed.filter((path) => path === "/new")).toEqual([]);
   });
 
   test("/whiteboard with no name creates an Untitled board; Open full opens it in its own tab", async ({ page, baseURL }) => {
-    const created = [];
-    await mockWhiteboardService(page, { slug: SLUG, title: "Sprint plan", onCreate: (body) => created.push(body) });
+    const framed = await mockHydrawn(page);
     await openFreshPage(page, baseURL);
     const editor = await activateFirstEditor(page);
     await openSlashMenuFromEditor(editor, "/whiteboard");
     await selectSlashMenuEntry(page, "Whiteboard");
 
+    const inline = page.locator('[data-block-type="whiteboard"] iframe');
+    await expect(inline).toHaveAttribute("src", BOARD("Untitled"));
+    const src = await inline.getAttribute("src");
     await page.locator('[data-block-type="whiteboard"]').getByRole("button", { name: /Open full/ }).click();
-    // The page tab goes inactive, so the inline block unmounts and the board tab's own frame remains.
-    await expect(page.locator('[data-block-type="whiteboard"]')).toHaveCount(0);
-    await expect(page.locator(`iframe[src$="/boards/${SLUG}"]`)).toBeVisible();
-    expect(created).toEqual([{ title: "Untitled" }]);
-  });
-
-  test("a failed creation shows Retry and does not retry on its own", async ({ page, baseURL }) => {
-    const posts = await mockWhiteboardFailure(page);
-    await openFreshPage(page, baseURL);
-    const editor = await activateFirstEditor(page);
-    await openSlashMenuFromEditor(editor, "/whiteboard");
-    await selectSlashMenuEntry(page, "Whiteboard");
-
-    const block = page.locator('[data-block-type="whiteboard"]');
-    await expect(block.getByRole("button", { name: "Retry" })).toBeVisible();
-    await expect(block.getByRole("alert")).toContainText("Board service is down.");
-    await page.waitForTimeout(1_500);
-    expect(posts.count).toBe(1);
+    // The page tab goes inactive (kept mounted but inert), so only the board tab's own frame is live.
+    await expect(page.locator(`[data-block-type="whiteboard"]${LIVE}`)).toHaveCount(0);
+    await expect(page.locator(`iframe[src="${src}"]${LIVE}`)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Open externally/ })).toHaveCount(0);
+    expect(framed.filter((path) => path === "/new")).toEqual([]);
   });
 
   test("the command is present with an empty installed map", async ({ page, baseURL }) => {

@@ -13,12 +13,14 @@
 /** Members = workspace membership (useWorkspaceMembersStore). The notion view
  *  is the display; role change / transfer / remove happen in the peek through
  *  the existing store actions (so the transfer-ownership confirm is preserved).
- *  Names/avatars resolve from the local personas (the member row has no name). */
+ *  Names come from the bridge roster (member.name), else the local personas. */
 
 import type { NotionState } from "@notion-db/object-database";
 import type { DatabaseSchema } from "@notion-db/contract-types";
 import { useWorkspaceMembersStore } from "@/store/settings";
+import { memberLabel } from "../model/memberLabel";
 import { MEMBER, PEOPLE_DB, PEOPLE_VIEW, personPage, selectOptions, singleDatabaseState, view, type PeopleCtx } from "./peopleModel";
+import { optionId } from "@/widgets/database-view/model/workspaceDatabaseMappers";
 
 const SCHEMA: DatabaseSchema = {
   id: PEOPLE_DB.members,
@@ -37,7 +39,7 @@ const VIEWS = [
   view({
     id: PEOPLE_VIEW.membersTable, databaseId: PEOPLE_DB.members, name: "Table", type: "table",
     grouping: { propertyId: MEMBER.role, sort: "alphabetical" },
-    visibleProperties: [MEMBER.role, MEMBER.since],
+    visibleProperties: [MEMBER.name, MEMBER.role, MEMBER.since],
     settings: { showRowNumbers: false, openPagesIn: "side_peek" },
   }),
 ];
@@ -46,11 +48,12 @@ const VIEWS = [
 export async function buildMembersState(ctx: PeopleCtx): Promise<NotionState> {
   const members = useWorkspaceMembersStore.getState().data[ctx.workspaceId] ?? [];
   const personaById = new Map(ctx.personas.map((persona) => [persona.id, persona]));
+  const names = new Map(ctx.personas.filter((persona) => persona.id && persona.name).map((persona) => [persona.id, persona.name]));
   const pages = members.map((member) => {
     const persona = personaById.get(member.userId);
     return personPage(PEOPLE_DB.members, member.userId, {
-      [MEMBER.name]: persona?.name ?? member.userId,
-      [MEMBER.role]: member.role,
+      [MEMBER.name]: memberLabel(member.userId, names, member.name),
+      [MEMBER.role]: optionId(member.role),
       [MEMBER.since]: member.joinedAt,
     }, { icon: persona?.emoji });
   });

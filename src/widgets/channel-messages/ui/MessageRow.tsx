@@ -6,19 +6,24 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/10 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/10 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 15:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useState } from 'react';
-import { Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react';
+import { Pencil, Reply, SmilePlus, Sparkles, Trash2 } from 'lucide-react';
 
 import { renderInlineToReact } from '@osionos/markdown-engine/react';
 import type { ChatMessage } from '@/shared/chat/messageApi';
 import { Button, IconButton } from '@/shared/ui';
+import { isAiConfigured } from '@/features/ai/api/aiClient';
+import { quoteForAssistant } from '@/features/chat/model/assistantHandoff';
+import { openAssistantWith } from '@/features/chat/model/openAssistantWith';
 
+import type { SendOutcome } from '../model/channelWrites';
 import { MessageAttachments } from './attachments/MessageAttachments';
 import { LinkPreviewCard } from './attachments/LinkPreviewCard';
+import { MessageEditForm } from './MessageEditForm';
 import { MessageTicks } from './MessageTicks';
 
 const QUICK_EMOJI = ['👍', '❤️', '🔥', '🎉'];
@@ -30,7 +35,12 @@ interface MessageRowProps {
   userId: string;
   /** Consecutive message from the same author — hide the avatar + name header. */
   grouped?: boolean;
-  onEdit: (messageId: string, content: string) => void;
+  /** Saves an edit. The answer is typed: a warning is not a failure. */
+  onEdit: (
+    messageId: string,
+    content: string,
+    options?: { acknowledgeWarning?: boolean },
+  ) => Promise<SendOutcome> | SendOutcome;
   onDelete: (messageId: string) => void;
   onReact: (messageId: string, emoji: string, add: boolean) => void;
   onReply: (message: ChatMessage) => void;
@@ -87,7 +97,6 @@ function renderContent(content: string): React.ReactNode {
 
 const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInteract, userId, grouped, onEdit, onDelete, onReact, onReply, onOpenThread }) => {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(message.content);
   const [pickerOpen, setPickerOpen] = useState(false);
   const isMentioned = Boolean(message.mentions?.includes(userId));
 
@@ -97,15 +106,22 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
         <div className="h-9 w-9 shrink-0" aria-hidden />
       ) : (
         <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--osio-accent)] text-xs font-semibold text-[var(--osio-accent-fg)]">
-          {message.authorAvatar
-            ? <img src={message.authorAvatar} alt="" className="h-full w-full object-cover" />
-            : message.authorName.slice(0, 1).toUpperCase()}
+          {message.isAi
+            ? <Sparkles size={16} aria-hidden />
+            : message.authorAvatar
+              ? <img src={message.authorAvatar} alt="" className="h-full w-full object-cover" />
+              : message.authorName.slice(0, 1).toUpperCase()}
         </div>
       )}
       <div className="min-w-0 flex-1">
         {!grouped && (
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="text-sm font-semibold">{message.authorName}</span>
+          {message.isAi && (
+            <span className="osio-chip text-xs text-[var(--osio-fg-muted)]">
+              {message.aiRequestedBy === userId ? 'AI answer, asked by you' : 'AI answer'}
+            </span>
+          )}
           <time className="text-xs text-[var(--osio-fg-subtle)]">{formatTime(message.createdAt)}</time>
           {message.editedAt && <span className="text-xs italic text-[var(--osio-fg-subtle)]">(edited)</span>}
           {isAuthor && <MessageTicks messageId={message.id} />}
@@ -118,19 +134,12 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
           </div>
         )}
         {editing ? (
-          <form
-            onSubmit={(event) => { event.preventDefault(); onEdit(message.id, draft); setEditing(false); }}
-            className="mt-1 flex flex-wrap items-center gap-2"
-          >
-            <input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Escape') setEditing(false); }}
-              className="min-w-0 flex-1 rounded-xs border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-2 py-1 text-sm outline-none focus:border-[var(--osio-accent)]"
-            />
-            <Button type="submit" tone="primary" size="sm">Save</Button>
-            <Button tone="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
-          </form>
+          <MessageEditForm
+            messageId={message.id}
+            content={message.content}
+            onEdit={onEdit}
+            onClose={() => setEditing(false)}
+          />
         ) : (
           <p className="whitespace-pre-wrap break-words text-sm leading-6">{renderContent(message.content)}</p>
         )}
@@ -168,11 +177,16 @@ const MessageRowImpl: React.FC<MessageRowProps> = ({ message, isAuthor, canInter
         <div className="absolute -top-2 right-2 hidden items-center gap-0.5 rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-0.5 shadow-osio-menu group-hover:flex">
           <IconButton size="xs" label="Reply" onClick={() => onReply(message)}><Reply size={14} /></IconButton>
           <IconButton size="xs" label="Add reaction" onClick={() => setPickerOpen((open) => !open)}><SmilePlus size={14} /></IconButton>
+          {isAiConfigured() && (
+            <IconButton size="xs" label="Ask AI about this message" onClick={() => openAssistantWith({ text: quoteForAssistant([{ author: message.authorName, text: message.content }]) })}>
+              <Sparkles size={14} />
+            </IconButton>
+          )}
+          {isAuthor && !message.isAi && (
+            <IconButton size="xs" label="Edit message" onClick={() => setEditing(true)}><Pencil size={14} /></IconButton>
+          )}
           {isAuthor && (
-            <>
-              <IconButton size="xs" label="Edit message" onClick={() => { setDraft(message.content); setEditing(true); }}><Pencil size={14} /></IconButton>
-              <IconButton size="xs" label="Delete message" onClick={() => onDelete(message.id)}><Trash2 size={14} /></IconButton>
-            </>
+            <IconButton size="xs" label="Delete message" onClick={() => onDelete(message.id)}><Trash2 size={14} /></IconButton>
           )}
           {pickerOpen && (
             <div className="absolute right-0 top-7 z-10 flex gap-1 rounded-lg border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-1 shadow-[var(--osio-shadow-menu)]">

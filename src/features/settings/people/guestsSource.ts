@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/28 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,6 +19,7 @@ import type { NotionState } from "@notion-db/object-database";
 import type { DatabaseSchema } from "@notion-db/contract-types";
 import { useWorkspaceInvitesStore } from "@/store/settings";
 import { GUEST, PEOPLE_DB, PEOPLE_VIEW, personPage, selectOptions, singleDatabaseState, view, type PeopleCtx } from "./peopleModel";
+import { optionId } from "@/widgets/database-view/model/workspaceDatabaseMappers";
 
 const SCHEMA: DatabaseSchema = {
   id: PEOPLE_DB.guests,
@@ -29,7 +30,8 @@ const SCHEMA: DatabaseSchema = {
   properties: {
     [GUEST.email]: { id: GUEST.email, name: "Email", type: "title" },
     [GUEST.role]: { id: GUEST.role, name: "Role", type: "select", options: selectOptions(["admin", "member", "guest"]) },
-    [GUEST.status]: { id: GUEST.status, name: "Status", type: "select", options: selectOptions(["pending", "accepted"]) },
+    [GUEST.status]: { id: GUEST.status, name: "Status", type: "select", options: selectOptions(["pending", "accepted", "declined", "revoked", "expired"]) },
+    [GUEST.expires]: { id: GUEST.expires, name: "Expires", type: "date" },
     [GUEST.since]: { id: GUEST.since, name: "Invited", type: "date" },
   },
 };
@@ -37,21 +39,36 @@ const SCHEMA: DatabaseSchema = {
 const VIEWS = [
   view({
     id: PEOPLE_VIEW.guestsTable, databaseId: PEOPLE_DB.guests, name: "Table", type: "table",
-    visibleProperties: [GUEST.role, GUEST.status, GUEST.since],
+    visibleProperties: [GUEST.email, GUEST.role, GUEST.status, GUEST.expires, GUEST.since],
     settings: { showRowNumbers: false, openPagesIn: "side_peek" },
   }),
 ];
 
-/** Build the Guests state from active (non-revoked) workspace invites. */
+/** Status cell of one invite. `now` (epoch ms) is passed in — never read inside — so the
+ *  mapping stays pure and every row of one build is classified against the same instant.
+ *  A decline is a fact and wins over the revocation stamp it also sets (N21); accepted and
+ *  revoked are facts too. Only a still-pending invite can expire. */
+export function inviteStatus(
+  invite: { acceptedAt?: string | null; revokedAt?: string | null; declinedAt?: string | null; expiresAt?: string | null },
+  now: number,
+): "pending" | "accepted" | "declined" | "revoked" | "expired" {
+  if (invite.declinedAt) return "declined";
+  if (invite.revokedAt) return "revoked";
+  if (invite.acceptedAt) return "accepted";
+  return invite.expiresAt && new Date(invite.expiresAt).getTime() < now ? "expired" : "pending";
+}
+
+/** Build the Guests state from every workspace invite; a revoked one stays listed as Revoked. */
 export async function buildGuestsState(ctx: PeopleCtx): Promise<NotionState> {
   const invites = useWorkspaceInvitesStore.getState().data[ctx.workspaceId] ?? [];
+  const now = Date.now();
   const pages = invites
-    .filter((invite) => !invite.revokedAt)
     .map((invite) =>
       personPage(PEOPLE_DB.guests, invite._id, {
         [GUEST.email]: invite.email,
-        [GUEST.role]: invite.role,
-        [GUEST.status]: invite.acceptedAt ? "accepted" : "pending",
+        [GUEST.role]: optionId(invite.role),
+        [GUEST.status]: optionId(inviteStatus(invite, now)),
+        [GUEST.expires]: invite.expiresAt,
         [GUEST.since]: invite.createdAt,
       }));
   return singleDatabaseState(SCHEMA, VIEWS, pages);

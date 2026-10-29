@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import type { Block } from '@/entities/block';
+import type { PageEntry } from '@/entities/page';
 
 let _counter = 0;
 export function bid(): string {
@@ -76,7 +77,7 @@ export interface SeedPage {
   archivedAt?:   string | null;
   isTemplate?:        boolean;
   isDefaultTemplate?: boolean;
-  templateSurface?:   string;
+  templateSurface?:   NonNullable<PageEntry["templateSurface"]>;
   surface?:           string;
   cover?:             string;
   content:       Block[];

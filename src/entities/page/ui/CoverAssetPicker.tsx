@@ -16,6 +16,7 @@ import { Image, Link, Upload } from "lucide-react";
 import { useUserStore } from "@/features/auth";
 import type { CoverPickerAsset } from "@/shared/ui/assets/collectionMedia";
 import { useAssetLibraryStore, type AccountAsset } from "@/shared/config/assetLibraryStore";
+import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
 import { CoverGalleryTab } from "./CoverGalleryTab";
 import { CoverLibraryTab } from "./CoverLibraryTab";
 import { CoverSearchTab } from "./CoverSearchTab";
@@ -99,7 +100,9 @@ export const CoverAssetPicker: React.FC<CoverAssetPickerProps> = ({
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    const source = await readFileAsDataUrl(file);
+    // Stored, not inlined: an inline cover rides in every page write and the page cache. The
+    // inline copy is only the offline fallback, and the outbox moves it to storage later.
+    const source = await uploadPageMedia(file).catch(() => readFileAsDataUrl(file));
     const asset = addAsset(activeUserId, {
       kind: "cover", name: file.name, source, origin: "upload",
       mimeType: file.type, size: file.size,

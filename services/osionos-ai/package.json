@@ -1,0 +1,33 @@
+{
+  "name": "@osionos/ai-service",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types src/server.ts",
+    "indexer": "node --experimental-strip-types src/indexer/main.ts",
+    "jobs": "node --experimental-strip-types src/jobs/main.ts",
+    "test": "sh scripts/test.sh"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "4.0.79",
+    "@ai-sdk/google": "4.0.95",
+    "@ai-sdk/openai-compatible": "3.0.68",
+    "@huggingface/transformers": "4.3.1",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "ai": "7.0.139",
+    "ioredis": "6.0.0",
+    "pg": "8.23.1",
+    "undici": "8.11.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/pg": "8.23.1",
+    "fast-check": "4.10.2",
+    "typescript": "5.7.3"
+  }
+}

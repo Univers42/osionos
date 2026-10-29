@@ -8,6 +8,7 @@ import test from "node:test";
 import {
   resolvePageSize,
   computePageWindow,
+  computeViewWindow,
 } from "../../src/shared/notion-database-sys/src/hooks/viewPagerMath.ts";
 
 test("resolvePageSize: 0 = All (Infinity), unset = default 50, else the value", () => {
@@ -70,4 +71,32 @@ test("computePageWindow: empty list stays on a valid single page", () => {
   assert.equal(w.end, 0);
   assert.equal(w.pageCount, 1);
   assert.equal(w.enabled, false);
+});
+
+test("computeViewWindow: load more appends in place, paging then steps by the window", () => {
+  const one = computeViewWindow(340, 50, 1, 0);
+  assert.deepEqual([one.start, one.end, one.pageCount], [0, 50, 7]);
+  const two = computeViewWindow(340, 50, 2, 0);
+  assert.deepEqual([two.start, two.end, two.pageCount, two.pageIndex], [0, 100, 4, 0], "rows 1-100 shown, 4 pages left");
+  const next = computeViewWindow(340, 50, 2, 100);
+  assert.deepEqual([next.start, next.end, next.pageIndex, next.hasPrev, next.hasNext], [100, 200, 1, true, true]);
+  const last = computeViewWindow(340, 50, 2, 300);
+  assert.deepEqual([last.start, last.end, last.hasNext], [300, 340, false]);
+});
+
+test("computeViewWindow: grown from a middle page keeps its first row", () => {
+  const w = computeViewWindow(340, 50, 2, 50);
+  assert.deepEqual([w.start, w.end, w.pageIndex], [50, 150, 1]);
+});
+
+test("computeViewWindow: show all overrides a finite limit but stays enabled", () => {
+  const w = computeViewWindow(340, 50, Infinity, 150);
+  assert.deepEqual([w.start, w.end, w.pageCount, w.hasNext, w.enabled], [0, 340, 1, false, true]);
+  assert.equal(computeViewWindow(340, Infinity, 1, 0).enabled, false, "the All limit hides nothing");
+});
+
+test("computeViewWindow: start past a shrunk list clamps onto the last rows", () => {
+  const w = computeViewWindow(30, 25, 1, 200);
+  assert.deepEqual([w.start, w.end], [25, 30]);
+  assert.deepEqual([computeViewWindow(0, 25, 3, 75).start, computeViewWindow(0, 25, 3, 75).end], [0, 0]);
 });

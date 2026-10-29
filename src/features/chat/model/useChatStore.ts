@@ -6,18 +6,76 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/21 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { create } from "zustand";
 
 import type { ChatMessage, Conversation, Project, SharedContextItem } from "./chatTypes";
-import { stubInferencePort } from "./inferencePort";
+import { stubInferencePort, type InferencePort } from "./inferencePort";
+import { PLATFORM_CONNECTION_ID, readAiSelection } from "@/features/ai/model/aiSelection";
+import type { RunContext } from "@/features/ai/model/aiContext";
+import { withAccountContext } from "@/features/ai/model/viewContext";
+import { parseAgentPrefix, type AgentSummary } from "@/features/ai/model/aiAgents";
+import { listAgents } from "@/features/ai/api/aiClient";
+import { chatMessageFromTranscript, textOfParts } from "./transcriptMessages";
+import { textAfterGap } from "./researchParts";
+import { assistantTurn, type AssistantTurn, type TurnStore } from "./assistantTurn";
+import { dispatchRunEvent } from "./runEventDispatch";
+import { failureCode, retryAfterOf } from "./runErrors";
+import { conversationApi } from "./conversationApi";
+import { useUserStore } from "@/features/auth";
+import { withMemoryDecision, type MemoryDecision } from "./memoryParts";
+import { withoutUnreadableMirrors } from "./storedChatRepair";
+import { useSummaryStore } from "./useSummaryStore";
+import { DEFAULT_CONVERSATION_TITLE, isDefaultConversationTitle } from "./conversationTitle";
 
 const STORAGE_KEY = "osionos.chat.v1";
 const now = () => new Date().toISOString();
 const uid = () => globalThis.crypto.randomUUID();
+
+/**
+ * The port the Assistant pane talks to. It is injected at app start: the AI
+ * service when one is configured, the offline stub otherwise. The default is
+ * the stub, so the pane keeps answering (visibly fakely) with no service.
+ */
+let inferencePort: InferencePort = stubInferencePort;
+
+/** Injects the port the pane talks to. Called once, at app start. */
+const activeOwnerId = (): string | undefined => useUserStore.getState().activeUserId || undefined;
+
+/**
+ * The conversations an account may see on this browser: its own, and the ones
+ * stored before conversations recorded their owner.
+ */
+export function conversationsOf(conversations: Conversation[], userId: string | undefined): Conversation[] {
+  return conversations.filter((c) => c.ownerId === undefined || c.ownerId === userId);
+}
+
+/**
+ * A chat opened and never used: its first title, no message here, none on the service.
+ * One that came from the service has no local message until it is opened, so the
+ * service id keeps it counted as used.
+ */
+export function isUntouchedConversation(conversation: Conversation, withMessages: ReadonlySet<string>): boolean {
+  return isDefaultConversationTitle(conversation.title) && !conversation.serverConversationId && !withMessages.has(conversation.id);
+}
+
+export function setInferencePort(port: InferencePort): void {
+  inferencePort = port;
+}
+
+/** The port in use right now. */
+export function getInferencePort(): InferencePort {
+  return inferencePort;
+}
+
+/** The server transcripts read or being read: a conversation is read once. */
+const transcriptsRequested = new Set<string>();
+
+/** The runs in flight, per conversation. A conversation speaks one at a time. */
+const activeRuns = new Map<string, AbortController>();
 
 interface ChatData {
   projects: Project[];
@@ -29,7 +87,7 @@ interface ChatData {
 function load(): ChatData {
   const empty: ChatData = { projects: [], conversations: [], messages: [], contextItems: [] };
   try {
-    return { ...empty, ...(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<ChatData>) };
+    return withoutUnreadableMirrors({ ...empty, ...(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") as Partial<ChatData>) });
   } catch {
     return empty;
   }
@@ -37,15 +95,45 @@ function load(): ChatData {
 
 export interface ChatStoreState extends ChatData {
   activeConversationId: string | null;
+  /** The built-in agents of the service — the shapes a run can take. */
+  agents: AgentSummary[];
+  /** Reads the list of the agents from the service. It never throws. */
+  loadAgents: () => Promise<void>;
   createProject: (name: string) => Project;
   renameProject: (id: string, name: string) => void;
   deleteProject: (id: string) => void;
   createConversation: (projectId?: string | null, opts?: { title?: string; connectorId?: string; model?: string }) => Conversation;
   renameConversation: (id: string, title: string) => void;
   deleteConversation: (id: string) => void;
+  /** Adds the conversations the account has on the service and this browser lacks. Never throws. */
+  syncServerConversations: (workspaceId: string) => Promise<void>;
+  /** Reads the transcript of a conversation that came from the service, once, when it has no local message. */
+  loadServerTranscript: (conversationId: string) => Promise<void>;
   setActive: (id: string | null) => void;
   setConversationModel: (id: string, connectorId: string, model: string) => void;
-  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string }) => Promise<void>;
+  send: (conversationId: string, text: string, sel?: { connectorId?: string; model?: string; connectionId?: string; agentId?: string; context?: RunContext; replaceFromRunId?: string; attachments?: Array<{ kind: "chat"; id: string } | { kind: "media"; path: string; name?: string }> }) => Promise<void>;
+  stop: (conversationId: string) => void;
+  /**
+   * The follow-up of a write the user just approved.
+   *
+   * The service continued the run on its own: the answer of the assistant
+   * after the write is a run of its own, and the client attaches to its
+   * stream — the way it resumes a run whose connection dropped.
+   */
+  followUp: (conversationId: string, runId: string) => Promise<void>;
+  /** Writes the user's decision on a memory chip into the part, so it persists in the message. */
+  decideMemoryProposal: (messageId: string, memoryId: string, decision: MemoryDecision) => void;
+  /** 👍/👎 on an answer: the same value again clears it, the other value replaces it. */
+  setFeedback: (messageId: string, value: "up" | "down") => void;
+  /**
+   * Edit & resend: drops this user message and every later one of its
+   * conversation, here and on the service (replaceFromRunId), then sends the
+   * new text as a new turn. Refused (false) while
+   * the conversation has a run in flight.
+   */
+  editAndResend: (messageId: string, text: string, choice?: { model?: string; connectionId?: string }) => Promise<boolean>;
+  /** Asks the question of an answer again, in place of that answer, with the model picked now. */
+  retryAnswer: (answerId: string) => Promise<boolean>;
   attachContext: (scope: SharedContextItem["scope"], scopeId: string, item: Pick<SharedContextItem, "kind" | "label" | "ref">) => void;
   detachContext: (id: string) => void;
   messagesFor: (conversationId: string) => ChatMessage[];
@@ -57,7 +145,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     const { projects, conversations, messages, contextItems } = get();
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, conversations, messages, contextItems })); } catch { /* quota */ }
   };
-  const addMessage = (conversationId: string, m: Pick<ChatMessage, "role" | "content" | "connectorId" | "model">) => {
+  const addMessage = (conversationId: string, m: Pick<ChatMessage, "role" | "content" | "connectorId" | "model" | "connectionId" | "agentId">) => {
     set((s) => ({
       messages: [...s.messages, { id: uid(), conversationId, createdAt: now(), ...m }],
       conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, updatedAt: now() } : c)),
@@ -65,9 +153,120 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     persist();
   };
 
+  /** What a turn of the assistant needs from the store. */
+  const turnStore: TurnStore = {
+    messages: () => get().messages,
+    addMessage: (message) => {
+      set((s) => ({
+        messages: [...s.messages, message],
+        conversations: s.conversations.map((c) => (c.id === message.conversationId ? { ...c, updatedAt: now() } : c)),
+      }));
+      persist();
+    },
+    patchMessage: (id, patch) => {
+      set((s) => ({ messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)) }));
+      persist();
+    },
+    conversationTitle: (conversationId) =>
+      get().conversations.find((c) => c.id === conversationId)?.title ?? "",
+    writeTitle: (conversationId, title) => {
+      set((s) => ({ conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, title } : c)) }));
+      persist();
+    },
+    noteTruncated: (conversationId, truncated) => useSummaryStore.getState().setTruncated(conversationId, truncated),
+  };
+
+  /**
+   * A resume that missed frames left the answer short (`resume.gap`, C402):
+   * its text is read back from the transcript once the run is over. A failed
+   * read keeps what arrived.
+   */
+  const refillAfterGap = async (conversationId: string, assistantId: string): Promise<void> => {
+    const message = get().messages.find((m) => m.id === assistantId);
+    const serverId = get().conversations.find((c) => c.id === conversationId)?.serverConversationId;
+    if (!message?.textGap || !message.runId || !serverId) return;
+    try {
+      const { messages: transcript } = await conversationApi().transcript(serverId);
+      const text = textAfterGap(message.runId, transcript.map((m) => ({ runId: m.runId, role: m.role, text: textOfParts(m.parts) })));
+      turnStore.patchMessage(assistantId, text === null ? { textGap: undefined } : { content: text, textGap: undefined });
+    } catch (error) {
+      console.warn("[chat] could not read back an answer after a gap", error);
+    }
+  };
+
+  /**
+   * Runs a turn of the assistant: the message of the turn, and the frames
+   * that fill it.
+   *
+   * The run is the port's: the port opens the stream, the frames come here,
+   * and the message of the turn ends with them.
+   */
+  const runTurn = async (
+    conversationId: string,
+    options: { connectorId: string; model: string; connectionId: string; agentId?: string },
+    open: (turn: AssistantTurn, signal: AbortSignal) => Promise<void>,
+  ): Promise<void> => {
+    const assistantId = uid();
+    turnStore.addMessage({
+      id: assistantId,
+      conversationId,
+      role: "assistant",
+      content: "",
+      createdAt: now(),
+      ...options,
+      status: "streaming",
+    });
+    const turn = assistantTurn(turnStore, assistantId, conversationId);
+    const controller = new AbortController();
+    activeRuns.set(conversationId, controller);
+    try {
+      await open(turn, controller.signal);
+      // The stream ended without a terminal frame (a stop, or a run that gave
+      // up): what arrived stays, and the answer is not marked as failed.
+      turn.finish();
+      await refillAfterGap(conversationId, assistantId);
+    } catch (error) {
+      turn.patchAssistant({ status: "error", errorCode: failureCode(error), retryAfterSeconds: retryAfterOf(error) });
+    } finally {
+      activeRuns.delete(conversationId);
+    }
+  };
+
+  /**
+   * Tells the service about a rename or a delete of a conversation it holds.
+   *
+   * The local store is the reader's copy: a refusal leaves the local change and
+   * logs one line. Caveat: a delete that failed on the service comes back at
+   * the next sync.
+   */
+  const mirrorToServer = (
+    what: string,
+    serverId: string | undefined,
+    call: (api: ReturnType<typeof conversationApi>, serverId: string) => Promise<unknown>,
+  ) => {
+    const api = conversationApi();
+    if (!serverId || !api.isConfigured()) return;
+    call(api, serverId).catch((error: unknown) => {
+      console.warn(`[chat] the service did not take the ${what} of conversation ${serverId}`, error);
+    });
+  };
+
   return {
     ...load(),
     activeConversationId: null,
+    agents: [],
+
+    loadAgents: async () => {
+      // The list of the agents lives on the service. A service that is not
+      // there, or a call that fails, leaves the list empty: the composer then
+      // offers the general assistant, which is the run of today.
+      try {
+        const agents = await listAgents();
+        set({ agents });
+      } catch {
+        set({ agents: [] });
+      }
+    },
 
     createProject: (name) => {
       const project: Project = { id: uid(), name: name.trim() || "Untitled project", createdAt: now() };
@@ -85,22 +284,85 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
     },
 
     createConversation: (projectId = null, opts = {}) => {
+      // An untouched chat of the same owner and project is reused: reopening the
+      // assistant, or "New chat" twice, does not pile empty chats into the history.
+      if (!opts.title?.trim() && !opts.connectorId && !opts.model) {
+        const { conversations, messages } = get();
+        const withMessages = new Set(messages.map((m) => m.conversationId));
+        const ownerId = activeOwnerId();
+        const untouched = conversations.find((c) => c.ownerId === ownerId && c.projectId === projectId && isUntouchedConversation(c, withMessages));
+        if (untouched) {
+          set({ activeConversationId: untouched.id });
+          return untouched;
+        }
+      }
       const conversation: Conversation = {
-        id: uid(), projectId, title: opts.title?.trim() || "New conversation",
-        connectorId: opts.connectorId, model: opts.model, createdAt: now(), updatedAt: now(),
+        id: uid(), projectId, title: opts.title?.trim() || DEFAULT_CONVERSATION_TITLE,
+        connectorId: opts.connectorId, model: opts.model, ownerId: activeOwnerId(), createdAt: now(), updatedAt: now(),
       };
       set((s) => ({ conversations: [conversation, ...s.conversations], activeConversationId: conversation.id }));
       persist();
       return conversation;
     },
-    renameConversation: (id, title) => { set((s) => ({ conversations: s.conversations.map((c) => (c.id === id ? { ...c, title } : c)) })); persist(); },
+    renameConversation: (id, title) => {
+      const serverId = get().conversations.find((c) => c.id === id)?.serverConversationId;
+      set((s) => ({ conversations: s.conversations.map((c) => (c.id === id ? { ...c, title } : c)) }));
+      persist();
+      mirrorToServer("rename", serverId, (api, sid) => api.rename(sid, title));
+    },
     deleteConversation: (id) => {
+      const serverId = get().conversations.find((c) => c.id === id)?.serverConversationId;
+      mirrorToServer("delete", serverId, (api, sid) => api.remove(sid));
       set((s) => ({
         conversations: s.conversations.filter((c) => c.id !== id),
         messages: s.messages.filter((m) => m.conversationId !== id),
         activeConversationId: s.activeConversationId === id ? null : s.activeConversationId,
       }));
       persist();
+    },
+    syncServerConversations: async (workspaceId) => {
+      const api = conversationApi();
+      if (!api.isConfigured()) return;
+      // Read before the await: the account may switch while the list is in flight.
+      const ownerId = activeOwnerId();
+      try {
+        const remote = await api.list(workspaceId);
+        // Read after the await: a conversation created meanwhile is not added twice.
+        const known = new Set(get().conversations.flatMap((c) => (c.serverConversationId ? [c.serverConversationId] : [])));
+        const added: Conversation[] = remote
+          .filter((r) => !known.has(r.id))
+          .map((r) => ({
+            id: uid(), projectId: null, title: r.title.trim() || "New conversation", model: r.model,
+            serverConversationId: r.id, ownerId, createdAt: r.createdAt, updatedAt: r.updatedAt,
+          }));
+        if (added.length === 0) return;
+        set((s) => ({ conversations: [...s.conversations, ...added] }));
+        persist();
+      } catch (error) {
+        console.warn("[chat] could not read the conversations of the account", error);
+      }
+    },
+    loadServerTranscript: async (conversationId) => {
+      const conversation = get().conversations.find((c) => c.id === conversationId);
+      const serverId = conversation?.serverConversationId;
+      const api = conversationApi();
+      if (!serverId || !api.isConfigured() || transcriptsRequested.has(serverId)) return;
+      if (get().messagesFor(conversationId).length > 0) return;
+      transcriptsRequested.add(serverId);
+      try {
+        const { messages: transcript, summary } = await api.transcript(serverId);
+        useSummaryStore.getState().setSummary(conversationId, summary);
+        const loaded: ChatMessage[] = transcript
+          .filter((m) => m.role !== "tool")
+          .map((m) => chatMessageFromTranscript(m, conversationId, uid()));
+        // A turn sent while the read was going is already there: the transcript goes before it.
+        set((s) => ({ messages: [...loaded, ...s.messages] }));
+        persist();
+      } catch (error) {
+        // A failed read may be tried again the next time the conversation opens.
+        transcriptsRequested.delete(serverId);
+        console.warn("[chat] could not read the transcript of a conversation", error);
+      }
     },
     setActive: (id) => set({ activeConversationId: id }),
     setConversationModel: (id, connectorId, model) => {
@@ -113,10 +375,143 @@ export const useChatStore = create<ChatStoreState>((set, get) => {
       if (!conversation || !text.trim()) return;
       const connectorId = sel?.connectorId ?? conversation.connectorId ?? "anthropic";
       const model = sel?.model ?? conversation.model ?? "auto";
-      addMessage(conversationId, { role: "user", content: text.trim(), connectorId, model });
-      const history = get().messagesFor(conversationId).map((m) => ({ role: m.role, content: m.content }));
-      const result = await stubInferencePort.complete({ connectorId, model, messages: history });
-      addMessage(conversationId, { role: "assistant", content: result.content, connectorId, model });
+      // Every run says which connection pays for it: the one the user picked,
+      // the one they remembered, or the platform's.
+      const connectionId = sel?.connectionId ?? readAiSelection()?.connectionId ?? PLATFORM_CONNECTION_ID;
+      // The agent of this message: the "@id " the message starts with wins
+      // over the picker's choice, and the prefix is stripped from the text.
+      const choice = parseAgentPrefix(text, get().agents);
+      const agentId = choice.agentId ?? sel?.agentId ?? null;
+      const port = getInferencePort();
+      const stream = port.stream;
+
+      // No streaming port: the offline path — one complete answer, no frames.
+      if (!stream) {
+        addMessage(conversationId, { role: "user", content: choice.text.trim(), connectorId, model, connectionId, ...(agentId ? { agentId } : {}) });
+        const history = get().messagesFor(conversationId).map((m) => ({ role: m.role, content: m.content }));
+        const result = await port.complete({ connectorId, model, connectionId, messages: history });
+        addMessage(conversationId, { role: "assistant", content: result.content, connectorId, model, connectionId, ...(agentId ? { agentId } : {}) });
+        return;
+      }
+
+      // A conversation speaks one at a time — the service refuses the second
+      // run of a conversation with a 409, so the pane refuses it too.
+      if (activeRuns.has(conversationId)) return;
+
+      const body = choice.text.trim();
+      addMessage(conversationId, { role: "user", content: body, connectorId, model, connectionId, ...(agentId ? { agentId } : {}) });
+
+      const rememberServerConversation = (serverConversationId: string) => {
+        set((s) => ({ conversations: s.conversations.map((c) => (c.id === conversationId ? { ...c, serverConversationId } : c)) }));
+        persist();
+      };
+
+      await runTurn(conversationId, { connectorId, model, connectionId, ...(agentId ? { agentId } : {}) }, (turn, signal) =>
+        stream(
+          {
+            conversationId,
+            text: body,
+            model,
+            connectorId,
+            connectionId,
+            // The agent of this run: the one the reader picked, or none.
+            ...(agentId ? { agentId } : {}),
+            title: conversation.title,
+            serverConversationId: conversation.serverConversationId,
+            attachments: sel?.attachments,
+            ...(sel?.replaceFromRunId ? { replaceFromRunId: sel.replaceFromRunId } : {}),
+            // What the answer may read: the pages the reader pointed at, plus
+            // account/view when the setting is on.
+            context: withAccountContext(sel?.context),
+            onServerConversationId: rememberServerConversation,
+          },
+          (event, data) => dispatchRunEvent(event, data, turn),
+          signal,
+        ),
+      );
+    },
+
+    stop: (conversationId) => {
+      // The abort reaches the port, which cancels the run on the service.
+      activeRuns.get(conversationId)?.abort();
+    },
+
+    followUp: async (conversationId, runId) => {
+      const port = getInferencePort();
+      // A port without a stream has no run to attach to.
+      if (!port.attach) return;
+      // A conversation speaks one at a time.
+      if (activeRuns.has(conversationId)) return;
+      const conversation = get().conversations.find((c) => c.id === conversationId);
+      if (!conversation) return;
+      // The follow-up belongs to the turn that asked for the write: it is paid
+      // for the same way.
+      const last = [...get().messagesFor(conversationId)].reverse().find((m) => m.role === "assistant");
+      const connectorId = last?.connectorId ?? conversation.connectorId ?? "anthropic";
+      const model = last?.model ?? conversation.model ?? "auto";
+      const connectionId = last?.connectionId ?? PLATFORM_CONNECTION_ID;
+      await runTurn(conversationId, { connectorId, model, connectionId }, (turn, signal) =>
+        port.attach!(runId, (event, data) => dispatchRunEvent(event, data, turn), signal),
+      );
+    },
+
+    decideMemoryProposal: (messageId, memoryId, decision) => {
+      set((s) => ({
+        messages: s.messages.map((m) =>
+          m.id === messageId && m.parts ? { ...m, parts: withMemoryDecision(m.parts, memoryId, decision) } : m,
+        ),
+      }));
+      persist();
+    },
+
+    setFeedback: (messageId, value) => {
+      set((s) => ({
+        messages: s.messages.map((m) => {
+          if (m.id !== messageId || m.role !== "assistant") return m;
+          const { feedback: current, ...rest } = m;
+          return current === value ? rest : { ...rest, feedback: value };
+        }),
+      }));
+      persist();
+    },
+
+    editAndResend: async (messageId, text, choice) => {
+      const original = get().messages.find((m) => m.id === messageId);
+      if (!original || original.role !== "user" || !text.trim()) return false;
+      const { conversationId } = original;
+      if (activeRuns.has(conversationId)) return false;
+      const inConversation = get().messagesFor(conversationId);
+      const from = inConversation.findIndex((m) => m.id === messageId);
+      const dropped = new Set(inConversation.slice(from).map((m) => m.id));
+      // The service holds the history: it drops from the first answered turn
+      // after the edited one. An unanswered edit has nothing stored to drop.
+      const replaceFromRunId = inConversation.slice(from + 1).find((m) => m.runId)?.runId;
+      set((s) => ({ messages: s.messages.filter((m) => !dropped.has(m.id)) }));
+      persist();
+      // The turn keeps the connection, model and agent it was first sent with,
+      // unless a retry names the model picked since.
+      await get().send(conversationId, text, {
+        connectorId: original.connectorId,
+        model: choice?.model || original.model,
+        connectionId: choice?.connectionId ?? original.connectionId,
+        agentId: original.agentId,
+        ...(replaceFromRunId ? { replaceFromRunId } : {}),
+      });
+      return true;
+    },
+
+    // A retry was a new turn under the failed one, the question asked twice and
+    // the model forgotten. It now replaces the answer, like an edit that keeps
+    // the words, with the model in the composer: after a rate limit on one
+    // model, the reader picks another and retries.
+    retryAnswer: async (answerId) => {
+      const answer = get().messages.find((m) => m.id === answerId);
+      if (!answer || answer.role !== "assistant") return false;
+      const turns = get().messagesFor(answer.conversationId);
+      const question = turns.slice(0, turns.findIndex((m) => m.id === answerId)).reverse().find((m) => m.role === "user");
+      if (!question) return false;
+      const picked = readAiSelection();
+      return get().editAndResend(question.id, question.content, picked ? { model: picked.model || "auto", connectionId: picked.connectionId } : undefined);
     },
 
     attachContext: (scope, scopeId, item) => {

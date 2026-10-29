@@ -17,7 +17,7 @@
 
 import { test, expect } from "@playwright/test";
 
-import { fillCell } from "../support/databaseHelpers.mjs";
+import { closeViewSettings, fillCell } from "../support/databaseHelpers.mjs";
 import {
   activateFirstEditor,
   openFreshPage,
@@ -77,6 +77,45 @@ test.describe("database-inline-header", () => {
     expect(registry).toContain("Untitled Database");
   });
 
+  test("clicking the inline title renames the database, and the name survives a reload", async ({ page }) => {
+    const block = await insertInlineDatabase(page);
+    await block.getByRole("button", { name: "Untitled Database", exact: true }).click();
+    const input = block.getByRole("textbox", { name: "Database title" });
+    await expect(input).toBeFocused();
+    await input.fill("Reading list");
+    await input.press("Enter");
+    await expect(block.getByRole("button", { name: "Reading list", exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.localStorage.getItem("osionos.databases.created.v1"))).toContain("Reading list");
+
+    await page.reload();
+    const reloaded = page.locator(".osionos-database-block--inline").first();
+    await reloaded.waitFor({ timeout: 15_000 });
+    await expect(reloaded.getByRole("button", { name: "Reading list", exact: true })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("Escape leaves the inline title unchanged", async ({ page }) => {
+    const block = await insertInlineDatabase(page);
+    await block.getByRole("button", { name: "Untitled Database", exact: true }).click();
+    const input = block.getByRole("textbox", { name: "Database title" });
+    await input.fill("Discarded");
+    await input.press("Escape");
+    await expect(block.getByRole("button", { name: "Untitled Database", exact: true })).toBeVisible();
+    await expect(block.getByText("Discarded")).toHaveCount(0);
+  });
+
+  test("the full-page title renames on a single click", async ({ page }) => {
+    const block = await insertInlineDatabase(page);
+    await block.locator('button[title="Open database"]').click();
+    const fullPage = page.locator(".osionos-database-block--full").first();
+    await fullPage.waitFor({ timeout: 15_000 });
+    await fullPage.getByRole("heading", { name: "Untitled Database" }).getByRole("button").click();
+    const input = fullPage.getByRole("textbox", { name: "Database name" });
+    await expect(input).toBeFocused();
+    await input.fill("Roadmap");
+    await input.press("Enter");
+    await expect(fullPage.getByRole("heading", { name: "Roadmap" })).toBeVisible();
+  });
+
   test("··· opens the view menu with the full action list", async ({ page }) => {
     const block = await insertInlineDatabase(page);
     await block.hover();
@@ -101,7 +140,7 @@ test.describe("database-inline-header", () => {
     await expect(block.locator(".osionos-db-single-body")).toBeVisible();
   });
 
-  test("a record cover persists and shows on the gallery card; New-page tile stays short", async ({ page }) => {
+  test("a record cover persists and shows on the gallery card; New-page tile is card height", async ({ page }) => {
     const block = await insertInlineDatabase(page);
 
     // Switch to a Gallery view (the add-view grid is portaled to body —
@@ -112,9 +151,11 @@ test.describe("database-inline-header", () => {
     await addViewPanel.getByRole("button", { name: "Gallery", exact: true }).click();
     await expect(block.getByTestId("gallery-new-page")).toBeVisible();
 
-    // The New-page tile is a short bar, not a card-height ghost.
-    const tileBox = await block.getByTestId("gallery-new-page").boundingBox();
-    expect(tileBox.height).toBeLessThan(60);
+    // Notion parity: the New-page tile fills its grid row, as tall as the card beside it.
+    const tile = block.getByTestId("gallery-new-page");
+    const tileBox = await tile.boundingBox();
+    const cardBox = await tile.locator("xpath=preceding-sibling::div[1]").boundingBox();
+    expect(Math.abs(tileBox.height - cardBox.height)).toBeLessThanOrEqual(1);
 
     // Create a record from the toolbar (opens the record page peek).
     await block.hover();
@@ -135,8 +176,9 @@ test.describe("database-inline-header", () => {
       .filter({ has: page.locator('img, [style*="gradient"]') });
     await expect(coveredCard).toHaveCount(1);
 
-    // Reopen the record — the cover persisted.
-    await coveredCard.click();
+    // Reopen the record through the card's title, whose hit area covers the
+    // card — the cover persisted.
+    await coveredCard.locator("xpath=..").getByRole("button", { name: "Untitled", exact: true }).click();
     await expect(peek.getByTestId("page-cover")).toBeVisible({ timeout: 10_000 });
   });
 
@@ -189,7 +231,7 @@ test.describe("database-inline-header", () => {
     }
     await dialog.getByText("Open pages in").first().click();
     await dialog.getByText("Center peek", { exact: true }).click();
-    await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+    await closeViewSettings(page);
 
     // New records now open centered — and the page actually renders inside
     // (regression: .osionos-page is size-contained; an auto-height panel
@@ -210,7 +252,7 @@ test.describe("database-inline-header", () => {
     }
     await dialog.getByText("Open pages in").first().click();
     await dialog.getByText("Full page", { exact: true }).click();
-    await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+    await closeViewSettings(page);
 
     await block.hover();
     await newBtn.click();
@@ -227,30 +269,31 @@ test.describe("database-inline-header", () => {
     // (count, not first-visible — the "New" row made that pass vacuously).
     await expect(block.locator("tbody tr")).toHaveCount(2); // starter + New
 
-    // The + panel: "Select type" header + searchable sectioned type grid.
-    // It floats LEFT of the table (over the page margin/sidebar) so it never
-    // covers the columns being edited; clamps to the viewport when cramped.
+    // The + panel: searchable sectioned type grid, hanging under the + like
+    // Notion's (left edges aligned), flipped to end-align near the right edge.
     const addBtn = block.locator('[aria-label="Add property"]');
     const addBox = await addBtn.boundingBox();
     await addBtn.click();
     await expect(page.getByText("Select type")).toBeVisible();
-    const tableBox = await block.locator("table").boundingBox();
-    const panelBox = await page.getByTestId("add-property-panel").boundingBox();
-    const expectedLeft = Math.max(8, tableBox.x - panelBox.width - 12);
-    expect(Math.abs(panelBox.x - expectedLeft)).toBeLessThan(4); // ±borders
+    // The panel pops in from scale(0.97): measured on its first frame, a 320px
+    // panel sits 4.8px off its resting place (failed so under suite load).
+    const panel = page.getByTestId("add-property-panel");
+    await panel.evaluate((node) => Promise.all(node.getAnimations().map((animation) => animation.finished)));
+    const panelBox = await panel.boundingBox();
+    const viewport = page.viewportSize();
+    const fitsRight = addBox.x + panelBox.width <= viewport.width - 8;
+    const expectedLeft = fitsRight ? addBox.x : addBox.x + addBox.width - panelBox.width;
+    expect(Math.abs(panelBox.x - Math.max(8, expectedLeft))).toBeLessThan(4); // ±borders
     expect(panelBox.y).toBeGreaterThanOrEqual(addBox.y + addBox.height);
-    // Shrink-to-fit invariant: the panel's right edge never crosses the
-    // table's left edge (it narrows down to its 280px floor first).
-    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(Math.max(tableBox.x + 2, 294));
+    expect(panelBox.x + panelBox.width).toBeLessThanOrEqual(viewport.width - 6);
 
-    // Regression (narrow margin): the fixed-400px panel used to clamp to
-    // x=8 and spill over the table's left columns on smaller windows.
+    // A narrow window keeps the panel inside the viewport.
     await page.keyboard.press("Escape");
     await page.setViewportSize({ width: 1000, height: 720 });
     await addBtn.click();
-    const nTableBox = await block.locator("table").boundingBox();
     const nPanelBox = await page.getByTestId("add-property-panel").boundingBox();
-    expect(nPanelBox.x + nPanelBox.width).toBeLessThanOrEqual(Math.max(nTableBox.x + 2, 294));
+    expect(nPanelBox.x).toBeGreaterThanOrEqual(6);
+    expect(nPanelBox.x + nPanelBox.width).toBeLessThanOrEqual(1000 - 6);
     await page.keyboard.press("Escape");
     await page.setViewportSize({ width: 1280, height: 720 });
     await addBtn.click();
@@ -272,10 +315,9 @@ test.describe("database-inline-header", () => {
 
     // Notion parity: a fresh table ships ONLY the mandatory Name column
     // (thead = Name + add-property + column-options controls).
-    // thead = drag gutter + Name + add-property + column-options.
     await expect(block.getByText("Tags", { exact: true })).toHaveCount(0);
     await expect(block.getByText("Status", { exact: true })).toHaveCount(0);
-    await expect(block.locator("thead th")).toHaveCount(4);
+    await expect(block.locator("thead th")).toHaveCount(3);
 
     // The mandatory Name column is renamable from its panel — and the panel
     // opens right below the column header (portaled past the size-contained
@@ -309,7 +351,7 @@ test.describe("database-inline-header", () => {
     await block.locator("thead").getByRole("button", { name: "Titre" }).click();
     await expect(page.getByRole("switch", { name: "Show page icon" })).toBeVisible();
     await page.getByRole("button", { name: "Insert right" }).click();
-    await expect(block.locator("thead th")).toHaveCount(5);
+    await expect(block.locator("thead th")).toHaveCount(4);
 
     // Change the new column's type — the panel reflects it live (svg/type row).
     await block.locator("thead").getByRole("button", { name: "New column" }).click();
@@ -319,7 +361,7 @@ test.describe("database-inline-header", () => {
 
     // Duplicate copies the property (with values) right of the original.
     await page.getByRole("button", { name: "Duplicate property" }).click();
-    await expect(block.locator("thead th")).toHaveCount(6);
+    await expect(block.locator("thead th")).toHaveCount(5);
     await expect(block.locator("thead").getByText("New column copy")).toBeVisible();
 
     // Sort ascending from the panel lights up the toolbar Sort counter.
@@ -330,12 +372,14 @@ test.describe("database-inline-header", () => {
     // Hide the duplicate from the view.
     await block.locator("thead").getByRole("button", { name: "New column copy" }).click();
     await page.getByRole("button", { name: "Hide in view" }).click();
-    await expect(block.locator("thead th")).toHaveCount(5);
+    await expect(block.locator("thead th")).toHaveCount(4);
   });
 
-  test("the title link opens the database origin as a full-page tab", async ({ page }) => {
+  test("the open arrow beside the title opens the database origin as a full-page tab", async ({ page }) => {
     const block = await insertInlineDatabase(page);
-    await block.locator('button[title="Open database"]').click();
+    // Clicking the name renames it; the arrow beside it opens the origin.
+    await block.locator('button[data-database-title]').hover();
+    await block.getByRole("button", { name: "Open database" }).click();
 
     // The origin surface: full-page database tab with the full chrome
     // (editable h1 title + view tabs).
@@ -362,7 +406,7 @@ test.describe("database-inline-header", () => {
     await expect(block.locator("tbody tr")).toHaveCount(2);
 
     // Fill the starter row's Text cell (Enter opens the inline editor).
-    await fillCell(page, block, 0, 3, "hello board");
+    await fillCell(page, block, 0, 2, "hello board");
 
     // The add-view panel: portaled Notion grid, fully on-screen, all 10 tiles.
     await block.hover();
@@ -379,7 +423,7 @@ test.describe("database-inline-header", () => {
 
     // Board: the card must SHOW the text value (used to render nothing).
     await panel.getByRole("button", { name: "Board", exact: true }).click();
-    const card = block.getByTestId("board-card-props").first();
+    const card = block.getByTestId("card-props").first();
     await expect(card).toBeVisible();
     await expect(card.getByText("hello board")).toBeVisible();
 
@@ -394,7 +438,7 @@ test.describe("database-inline-header", () => {
 
     const lastCard = cards.nth(2);
     const lastBox = await lastCard.boundingBox();
-    await cards.first().locator("button").dragTo(lastCard, {
+    await cards.first().locator('[draggable="true"]').dragTo(lastCard, {
       targetPosition: { x: Math.floor(lastBox.width / 2), y: Math.floor(lastBox.height - 4) },
     });
     await expect(cards.nth(2)).toContainText("hello board");
@@ -410,7 +454,7 @@ test.describe("database-inline-header", () => {
     await titleBox.click(); // close the auto-opened config panel
 
     // Open the cell editor and upload a markdown file AND a png together.
-    const filesCell = block.locator("tbody tr").first().locator("td").nth(2);
+    const filesCell = block.locator("tbody tr").first().locator("td").nth(1);
     await filesCell.dblclick();
     const editor = page.locator("dialog[open]");
     await expect(editor).toBeVisible();
@@ -450,12 +494,12 @@ test.describe("database-inline-header", () => {
     await page.getByTestId("add-view-panel").getByRole("button", { name: "Dashboard", exact: true }).click();
     await expect(block.getByText("Total Records")).toBeVisible();
 
-    // Viewport breakpoints lie in embeds: the stat grid renders 4 columns
-    // even though the inline container is far narrower than the window.
-    const statsGrid = block.locator("div.grid").first();
+    // Viewport breakpoints lie in embeds, so rows follow the container: the
+    // auto-detected row (Total Records + Recent Activity) sits side by side.
+    const statsGrid = block.locator("[data-dash-row]").first();
     const colCount = () => statsGrid.evaluate(
       el => getComputedStyle(el).gridTemplateColumns.split(" ").length);
-    expect(await colCount()).toBe(4);
+    expect(await colCount()).toBeGreaterThan(1);
 
     // Settings → Layout: the toggle sits right BEFORE Show page icon.
     await block.hover();
@@ -471,12 +515,12 @@ test.describe("database-inline-header", () => {
     expect(rBox.y).toBeLessThan(sBox.y);
 
     // Off by default (opt-in); switching it on relayouts by CONTAINER width:
-    // the same grid drops below 4 columns inside the narrow embed.
+    // the same row stacks inside the narrow embed.
     await expect(responsive).toHaveAttribute("aria-checked", "false");
     await responsive.click();
     await expect(responsive).toHaveAttribute("aria-checked", "true");
-    await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
-    expect(await colCount()).toBeLessThan(4);
+    await closeViewSettings(page);
+    expect(await colCount()).toBe(1);
   });
 
   test("view-tab menu: select-then-open, right-click direct, per-view actions", async ({ page }) => {
@@ -537,9 +581,9 @@ test.describe("database-inline-header", () => {
     await page.getByTestId("add-property-panel").getByRole("button", { name: "Text", exact: true }).click();
     await titleBox.click(); // close the auto-opened config panel
     await expect(page.getByTestId("property-config-panel")).toHaveCount(0);
-    await fillCell(page, block, 0, 2, "alpha");
+    await fillCell(page, block, 0, 1, "alpha");
     await block.getByRole("button", { name: "New", exact: true }).last().click();
-    await fillCell(page, block, 1, 2, "beta");
+    await fillCell(page, block, 1, 1, "beta");
 
     // Gallery view, grouped by Text via Layout settings.
     await block.hover();
@@ -559,7 +603,7 @@ test.describe("database-inline-header", () => {
     const sections = block.getByTestId("gallery-group-section");
     await expect(sections).toHaveCount(2);
     await expect(dialog.getByText("Group layout")).toBeVisible(); // new row appears
-    await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+    await closeViewSettings(page);
     const alphaSection = sections.filter({ hasText: "alpha" }).first();
     await expect(alphaSection.locator("div.grid")).toHaveCount(1);
     await alphaSection.getByRole("button", { name: /Collapse group/ }).click();
@@ -575,13 +619,13 @@ test.describe("database-inline-header", () => {
     }
     await dialog.getByText("Group layout").first().click();
     await dialog.getByText("Side panel (slice)", { exact: true }).click();
-    await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+    await closeViewSettings(page);
 
     const sidebar = block.getByTestId("group-slice-sidebar");
     await expect(sidebar).toBeVisible();
     await expect(sidebar.getByText("All")).toBeVisible();
     await expect(block.getByTestId("gallery-group-section")).toHaveCount(0); // flat body
-    const cards = block.locator("div.grid > button:not([data-testid='gallery-new-page'])");
+    const cards = block.locator("div.grid > div"); // cards; the New tile is a button
     await expect(cards).toHaveCount(2); // "All" slice
     await sidebar.getByRole("button", { name: /beta/ }).click();
     await expect(cards).toHaveCount(1); // sliced to beta

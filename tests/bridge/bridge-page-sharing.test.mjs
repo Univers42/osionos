@@ -102,7 +102,10 @@ describe('sharing keys from a non-owner are ignored, never a 403', () => {
 	}
 
 	it('lets the owner change visibility, collaborators and workspace', async () => {
-		const mock = createPostgrestMock(teamWorld({ memberRole: 'editor' }));
+		const world = teamWorld({ memberRole: 'editor' });
+		// A collaborator must be a member of the workspace the page ends up in.
+		world.osionos_workspace_members.push({ workspace_id: IDS.homeA, user_id: IDS.userB, role: 'viewer', permissions: ['read'] });
+		const mock = createPostgrestMock(world);
 		const collaborators = [{ userId: IDS.userB, role: 'viewer' }];
 		await withBridge(config, mock.fetchImpl, async (base) => {
 			const result = await send(base, `/api/pages/${IDS.privateA}`, asA, patch({ visibility: 'shared', collaborators, workspaceId: IDS.homeA }));
@@ -110,6 +113,44 @@ describe('sharing keys from a non-owner are ignored, never a 403', () => {
 			const stored = mock.page(IDS.privateA);
 			assert.deepEqual([stored.visibility, stored.collaborators, stored.workspace_id], ['shared', collaborators, IDS.homeA]);
 		});
+	});
+});
+
+function recordingPublishes(mock) {
+	const frames = [];
+	const fetchImpl = async (url, init) => {
+		if (new URL(String(url)).pathname === '/v1/publish') {
+			frames.push(JSON.parse(init.body));
+			return new Response('{}', { status: 200 });
+		}
+		return mock.fetchImpl(url, init);
+	};
+	return { frames, fetchImpl };
+}
+
+describe('page_access fan-out on a sharing write', () => {
+	it('tells the user the owner added, by id, on their own topic', async () => {
+		const world = teamWorld({ memberRole: 'editor' });
+		world.osionos_workspace_members.push({ workspace_id: IDS.homeA, user_id: IDS.userB, role: 'viewer', permissions: ['read'] });
+		const mock = createPostgrestMock(world);
+		const { frames, fetchImpl } = recordingPublishes(mock);
+		await withBridge(config, fetchImpl, async (base) => {
+			const result = await send(base, `/api/pages/${IDS.privateA}`, asA, patch({ collaborators: [{ userId: IDS.userB, role: 'editor' }] }));
+			assert.equal(result.status, 200, result.text);
+		});
+		const access = frames.filter((frame) => frame.event_type === 'page_access');
+		assert.deepEqual(access.map((frame) => [frame.topic, frame.payload.op, frame.payload.pageId]), [[`user:${IDS.userB}`, 'granted', IDS.privateA]]);
+		assert.deepEqual(Object.keys(access[0].payload).sort(), ['op', 'pageId', 'workspaceId']);
+	});
+
+	it('publishes nothing for a non-owner whose collaborators change is ignored', async () => {
+		const mock = createPostgrestMock(teamWorld({ memberRole: 'editor' }));
+		const { frames, fetchImpl } = recordingPublishes(mock);
+		await withBridge(config, fetchImpl, async (base) => {
+			const result = await send(base, `/api/pages/${IDS.sharedA}`, asB, patch({ collaborators: [{ userId: IDS.userB, role: 'editor' }] }));
+			assert.equal(result.status, 200, result.text);
+		});
+		assert.equal(frames.filter((frame) => frame.event_type === 'page_access').length, 0);
 	});
 });
 
@@ -168,7 +209,8 @@ describe('marketplace publishing and app pages', () => {
 			const byB = await send(base, `/api/pages/${IDS.privateA}`, asB, patch({ parentPageId: APPS.publishedB }));
 			assert.equal(byB.status, 404, byB.text);
 			const moved = await send(base, `/api/pages/${IDS.privateA}`, asA, patch({ parentPageId: APPS.publishedB }));
-			assert.deepEqual([moved.status, moved.body.ignored], [200, ['parentPageId']]);
+			assert.equal(moved.status, 404, moved.text);
+			assert.equal(moved.body.message, 'Parent page not found.');
 			mock.page(IDS.privateA).parent_page_id = APPS.publishedB; // a row placed there before moves were checked
 			const app = await send(base, `/api/marketplace/apps/${APPS.publishedB}`, asB);
 			assert.equal(app.status, 200, app.text);
@@ -250,4 +292,47 @@ describe('marketplace edit and publish answer an app the caller cannot read like
 			assert.equal(mock.page(APPS.draftA).title, 'Renamed by A');
 		});
 	});
+});
+
+describe('collaborator role changes', () => {
+	for (const role of ['owner', 'admin', '', null]) {
+		it(`rejects promotion of an existing collaborator to ${role}`, async () => {
+			const world = teamWorld();
+			world.osionos_pages.find((p) => p.id === IDS.sharedA).collaborators = [{ userId: IDS.userB, role: 'viewer' }];
+			const mock = createPostgrestMock(world);
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const result = await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ collaborators: [{ userId: IDS.userB.toUpperCase(), role }] }));
+				assert.equal(result.status, 422, result.text);
+				assert.equal(mock.page(IDS.sharedA).collaborators[0].role, 'viewer');
+			});
+		});
+	}
+	it('keeps unchanged legacy roles and accepts changes to supported roles', async () => {
+		const world = teamWorld();
+		world.osionos_pages.find((p) => p.id === IDS.sharedA).collaborators = [{ userId: IDS.userB, role: 'owner' }];
+		const mock = createPostgrestMock(world);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			assert.equal((await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ collaborators: [{ userId: IDS.userB, role: 'owner' }], title: 'Legacy' }))).status, 200);
+			assert.equal((await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ collaborators: [{ userId: IDS.userB, role: 'editor' }] }))).status, 200);
+		});
+	});
+});
+
+it('a versioned sharing PATCH preserves a concurrent grant', async () => {
+  const world = teamWorld();
+  world.osionos_pages.find((p) => p.id === IDS.sharedA).version = 4;
+  const mock = createPostgrestMock(world);
+  const concurrent = [{ userId: IDS.userB, role: 'editor' }];
+  const fetchImpl = async (url, init = {}) => {
+    if (init.method === 'PATCH' && String(url).includes('/rest/v1/osionos_pages')) {
+      mock.page(IDS.sharedA).version = 5;
+      mock.page(IDS.sharedA).collaborators = concurrent;
+    }
+    return mock.fetchImpl(url, init);
+  };
+  await withBridge(config, fetchImpl, async (base) => {
+    const result = await send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ baseVersion: 4, collaborators: [] }));
+    assert.equal(result.status, 409, result.text);
+    assert.deepEqual(mock.page(IDS.sharedA).collaborators, concurrent);
+  });
 });

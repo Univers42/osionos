@@ -25,7 +25,7 @@ import seedState from "@/shared/notion-database-sys/src/store/dbms/mongodb/_noti
 import { defaultStatusSchema } from "@/shared/notion-database-sys/src/store/slices/statusDefaults";
 import { timed } from "@osionos/perf-probe";
 import { applyWikiSeed } from "./wikiSeed";
-import { applyHomeDemoSeed } from "./homeDemoSeed";
+import { applyHomeDemoSeed, rebaseHomeDemoDates } from "./homeDemoSeed";
 import { applyGradesSeed } from "./gradesSeed";
 import {
   ensureObjectDatabaseHydration,
@@ -34,9 +34,15 @@ import {
 } from "./objectDatabaseBridgeSync";
 import { useDatabaseStore } from "@/store/useDatabaseStore";
 import { createKnownStateWriter, KNOWN_DATABASE_STATE_STORAGE_KEY } from "./knownDatabaseStorage";
+import {
+  deletedPageIdsBetween,
+  loadPersistedKnownDatabaseState,
+  serializeKnownDatabaseState,
+} from "./knownDatabasePersistedState";
 
 export { KNOWN_DATABASE_STATE_STORAGE_KEY };
 const KNOWN_DATABASE_STATE_FLUSH_DELAY_MS = 1000;
+const KNOWN_DATABASE_STATE_IDLE_TIMEOUT_MS = 2000;
 
 type KnownDatabaseStoreState = {
   state: NotionState;
@@ -59,6 +65,10 @@ export interface PersistableObjectDatabaseAdapter extends ObjectDatabaseAdapter 
 }
 
 const knownDatabaseAdapterCache = new Map<string, PersistableObjectDatabaseAdapter>();
+/** Pages the user deleted, persisted with the snapshot. Hydration and the
+ *  server union must never resurrect them (a lone snapshot cannot tell a
+ *  deletion from a fresh browser's not-yet-filled placeholder). */
+let deletedPageIds = new Set<string>();
 let pendingKnownDatabaseState: NotionState | null = null;
 let pendingKnownDatabaseStateMicrotask = false;
 let pendingKnownDatabaseStateDebounceHandle: ReturnType<typeof globalThis.setTimeout> | null = null;
@@ -74,7 +84,10 @@ type KnownDatabaseCancelIdleCallback = (handle: number) => void;
 export const useKnownDatabaseStateStore = create<KnownDatabaseStoreState>((set) => ({
   state: loadKnownDatabaseState(),
   replaceState: (state) => set({ state: persistKnownDatabaseState(state) }),
-  resetState: () => set({ state: persistKnownDatabaseState(seedSnapshot()) }),
+  resetState: () => {
+    deletedPageIds = new Set();
+    set({ state: persistKnownDatabaseState(seedSnapshot()) });
+  },
   updatePageProperty: (pageId, propertyId, value) => set((current) => {
     const page = current.state.pages[pageId];
     if (!page) return current;
@@ -141,11 +154,22 @@ export function loadKnownDatabaseState(): NotionState {
 
   try {
     const raw = globalThis.localStorage.getItem(KNOWN_DATABASE_STATE_STORAGE_KEY);
-    if (!raw) return seeded;
-    return withStatusDefaults(mergeWithSeedState(JSON.parse(raw) as Partial<NotionState>, seeded));
+    if (!raw) {
+      deletedPageIds = new Set();
+      return seeded;
+    }
+    const loaded = loadPersistedKnownDatabaseState(raw, seeded);
+    deletedPageIds = loaded.deletedPageIds;
+    return withStatusDefaults(rebaseHomeDemoDates(loaded.state));
   } catch {
+    deletedPageIds = new Set();
     return seeded;
   }
+}
+
+/** Tombstones to honour in the server sync (hydration union / replacement). */
+export function getDeletedPageIds(): ReadonlySet<string> {
+  return deletedPageIds;
 }
 
 export function persistKnownDatabaseState(state: NotionState): NotionState {
@@ -157,7 +181,7 @@ export function persistKnownDatabaseState(state: NotionState): NotionState {
   return state;
 }
 
-export function flushKnownDatabaseStatePersist() {
+export function flushKnownDatabaseStatePersist(pushNow = false) {
   cancelKnownDatabaseStateFlush();
 
   if (!pendingKnownDatabaseState) return;
@@ -166,23 +190,30 @@ export function flushKnownDatabaseStatePersist() {
   pendingKnownDatabaseState = null;
 
   if (globalThis.window !== undefined) {
-    // Snapshot once per debounced flush: the persisted copy (and the async
-    // server push below, which holds slices past this tick) must not alias
-    // the live store state the pending ref now points at.
-    const nextState = cloneState(pendingState);
-    timed("persistKnownDatabaseState", () => writeKnownState(JSON.stringify(nextState)));
+    // No snapshot: the store replaces objects and never mutates them (see
+    // persistKnownDatabaseState), so the pending ref is already a stable
+    // snapshot. structuredClone of the whole state was half of this flush —
+    // 54 ms with a 5k-row table, landing ~1 s after an edit, i.e. while the
+    // user is still typing.
+    timed("persistKnownDatabaseState", () => writeKnownState(serializeKnownDatabaseState(pendingState, deletedPageIds)));
     // Write-through: mirror every user-created database to the server (bridge →
     // Postgres, owner-isolated). No-ops offline / without a session — see module.
-    pushDirtyObjectDatabases(nextState, seedDatabaseIds());
+    // Its own task: hashing every user slice must not stack on the local write
+    // (a page being unloaded gets no later task, so it pushes now).
+    const push = () => pushDirtyObjectDatabases(pendingState, seedDatabaseIds(), deletedPageIds);
+    if (pushNow) push();
+    else globalThis.setTimeout(push, 0);
   }
 }
 
+// pagehide, not beforeunload: it fires after every beforeunload handler, so a
+// write the database host flushes from its own beforeunload still lands here.
 if (globalThis.window !== undefined) {
-  globalThis.addEventListener("beforeunload", flushKnownDatabaseStatePersist);
+  globalThis.addEventListener("pagehide", () => flushKnownDatabaseStatePersist(true));
 }
 
 // Makes room in the page caches when the origin is full (knownDatabaseStorage).
-const writeKnownState = createKnownStateWriter(flushKnownDatabaseStatePersist);
+const writeKnownState = createKnownStateWriter(() => flushKnownDatabaseStatePersist(true));
 
 function scheduleKnownDatabaseStatePersist(state: NotionState) {
   pendingKnownDatabaseState = state;
@@ -215,10 +246,14 @@ function scheduleIdleKnownDatabaseStateFlush() {
   }).requestIdleCallback;
 
   if (requestIdle) {
+    // A busy (or headless) page may grant no idle period at all; without a
+    // timeout the save waited for the next edit or unload (seen: >8 s).
+    // Caveat: an edit is still unsaved for up to debounce + timeout (3 s); a
+    // tab crash in that window loses it (a normal close flushes on unload).
     pendingKnownDatabaseStateIdleHandle = requestIdle(() => {
       pendingKnownDatabaseStateIdleHandle = null;
       flushKnownDatabaseStatePersist();
-    });
+    }, { timeout: KNOWN_DATABASE_STATE_IDLE_TIMEOUT_MS });
     return;
   }
 
@@ -256,11 +291,16 @@ function cancelKnownDatabaseStateFlush() {
 
 class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   private readonly subscribers = new Set<(event: ChangeEvent) => void>();
+  private readonly options: KnownDatabaseAdapterOptions;
 
-  constructor(private readonly options: KnownDatabaseAdapterOptions = {}) {}
+  // A plain field, not a parameter property: node's type stripping (the canvas
+  // tests) cannot run parameter properties.
+  constructor(options: KnownDatabaseAdapterOptions = {}) {
+    this.options = options;
+  }
 
   async loadState(): Promise<NotionState> {
-    return applyAdapterOptions(cloneState(useKnownDatabaseStateStore.getState().state), this.options);
+    return applyAdapterOptions(shareState(useKnownDatabaseStateStore.getState().state), this.options);
   }
 
   async findPages(query: PageQuery): Promise<Page[]> {
@@ -320,6 +360,7 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
 
   async deletePage(id: string): Promise<void> {
     const databaseId = useKnownDatabaseStateStore.getState().state.pages[id]?.databaseId;
+    deletedPageIds.add(id);
     this.updateState((state) => {
       const pages = { ...state.pages };
       delete pages[id];
@@ -402,6 +443,10 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
       useKnownDatabaseStateStore.getState().replaceState(state);
       return;
     }
+    // The host diffs its store against the pre-edit baseline: a page in the
+    // baseline that is gone from `state` is a user deletion. Remember it so a
+    // reload (or the server union) cannot bring it back.
+    for (const pageId of deletedPageIdsBetween(previousState, state)) deletedPageIds.add(pageId);
     const current = useKnownDatabaseStateStore.getState().state;
     useKnownDatabaseStateStore.getState().replaceState({
       databases: mergeChangedRecords(current.databases, state.databases, previousState.databases),
@@ -432,17 +477,6 @@ class KnownDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   }
 }
 
-function mergeWithSeedState(stored: Partial<NotionState>, seeded: NotionState): NotionState {
-  const storedDatabases = isRecord(stored.databases) ? stored.databases : {};
-  const storedPages = isRecord(stored.pages) ? stored.pages : {};
-  const storedViews = isRecord(stored.views) ? stored.views : {};
-  return {
-    databases: mergeDatabases(seeded.databases, storedDatabases),
-    pages: { ...seeded.pages, ...storedPages },
-    views: { ...seeded.views, ...storedViews },
-  };
-}
-
 function applyAdapterOptions(state: NotionState, options: KnownDatabaseAdapterOptions): NotionState {
   const fill = options.defaultLoadLimit && options.defaultLoadLimit > 0 ? Math.max(1, Math.round(options.defaultLoadLimit)) : undefined;
   const cap = options.recordCap && options.recordCap > 0 ? Math.max(1, Math.round(options.recordCap)) : undefined;
@@ -462,17 +496,6 @@ function applyAdapterOptions(state: NotionState, options: KnownDatabaseAdapterOp
       return [viewId, { ...view, settings: { ...view.settings, loadLimit: next } }];
     })),
   };
-}
-
-function mergeDatabases(seedDatabases: NotionState["databases"], storedDatabases: NotionState["databases"]): NotionState["databases"] {
-  const merged: NotionState["databases"] = { ...seedDatabases };
-  for (const [databaseId, database] of Object.entries(storedDatabases)) {
-    const seedDatabase = seedDatabases[databaseId];
-    merged[databaseId] = seedDatabase
-      ? { ...seedDatabase, ...database, properties: { ...seedDatabase.properties, ...database.properties } }
-      : database;
-  }
-  return merged;
 }
 
 function mergeChangedRecords<TRecord>(
@@ -589,14 +612,34 @@ function seedSnapshot(): NotionState {
   return applyGradesSeed(applyHomeDemoSeed(applyWikiSeed(cloneState(seedState as NotionState))));
 }
 
-let seedDatabaseIdsCache: ReadonlySet<string> | null = null;
+let seedIdsCache: { databases: ReadonlySet<string>; pages: ReadonlySet<string> } | null = null;
 
 /** The ids of every code-shipped seed database (the JSON seed + the wiki/home/
- *  grades appliers). Anything NOT in this set is a user-created database that
- *  syncs to the server; the seeds regenerate from code, so they stay local. */
+ *  grades appliers) and of every page it ships. Anything NOT in the database
+ *  set is a user-created database that syncs to the server; the seeds
+ *  regenerate from code, so they stay local. Cached: the seed snapshot is a
+ *  heavy structuredClone. */
+function seedIds(): { databases: ReadonlySet<string>; pages: ReadonlySet<string> } {
+  if (!seedIdsCache) {
+    const seed = seedSnapshot();
+    seedIdsCache = {
+      databases: new Set(Object.keys(seed.databases)),
+      pages: new Set(Object.keys(seed.pages)),
+    };
+  }
+  return seedIdsCache;
+}
+
 function seedDatabaseIds(): ReadonlySet<string> {
-  if (!seedDatabaseIdsCache) seedDatabaseIdsCache = new Set(Object.keys(seedSnapshot().databases));
-  return seedDatabaseIdsCache;
+  return seedIds().databases;
+}
+
+/** The pages the code seed still ships. The seed merge fills every page the
+ *  snapshot lacks, so a deleted seed row would come back unless it stays
+ *  tombstoned — and the server never holds seed pages, so it can never
+ *  confirm their death. */
+function seedPageIds(): ReadonlySet<string> {
+  return seedIds().pages;
 }
 
 /** After a server pull merges into the store, nudge every mounted object-database
@@ -622,9 +665,28 @@ function reconcileObjectDatabaseRegistry(userDbKeys: string[]): void {
   if (entries.length) useDatabaseStore.getState().ensureRegistered(entries);
 }
 
+/** Drop the tombstones the server no longer needs: the deleted row is gone
+ *  from every server slice, so the server agrees it is dead and the tombstone
+ *  is dead weight (it would pile up in localStorage for every deletion the
+ *  user ever made). The code seed is the one exception — it fills every page
+ *  the snapshot lacks and the server never holds seed pages — so a seed row's
+ *  tombstone stays until the seed itself drops that page. */
+function pruneDeletedPageIds(stillNeeded: ReadonlySet<string>): void {
+  const kept = new Set(stillNeeded);
+  for (const pageId of seedPageIds()) {
+    if (deletedPageIds.has(pageId)) kept.add(pageId);
+  }
+  if (kept.size === deletedPageIds.size) return; // nothing to drop
+  deletedPageIds = kept;
+  // Re-persist: the stored snapshot must shrink together with the tombstones.
+  persistKnownDatabaseState(useKnownDatabaseStateStore.getState().state);
+}
+
 const objectDatabaseSyncHooks: ObjectDatabaseSyncHooks = {
   getSeedIds: seedDatabaseIds,
   getLiveState: () => useKnownDatabaseStateStore.getState().state,
+  getDeletedPageIds: () => deletedPageIds,
+  pruneDeletedPageIds,
   applyMerged: (state) => useKnownDatabaseStateStore.getState().replaceState(state),
   notifyReloaded: notifyObjectDatabaseAdaptersReloaded,
   reconcileRegistry: reconcileObjectDatabaseRegistry,
@@ -644,12 +706,30 @@ function createId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 function cloneState(state: NotionState): NotionState {
   return clone(state);
+}
+
+// Vite folds this chain to `true` in a production build; node tests have no env.
+const IS_PRODUCTION_BUILD = (import.meta as { env?: { PROD?: boolean } }).env?.PROD === true;
+
+/** Every mounted database reads the account state itself: a copy cost 19.5 ms
+ *  per open on 8,646 rows and one more copy of every row per mount. Sharing is
+ *  safe because the stores replace objects and never write into them.
+ *  Caveat: only dev and test builds freeze the state, so a write into it that
+ *  happens on a production-only path goes unnoticed there; the dev e2e suite
+ *  is the net. */
+function shareState(state: NotionState): NotionState {
+  if (!IS_PRODUCTION_BUILD) deepFreeze(state);
+  return state;
+}
+
+// Stops at an already-frozen object: the state is frozen on every open, and
+// only the objects an edit replaced are new since the last one.
+function deepFreeze(value: unknown): void {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return;
+  Object.freeze(value);
+  for (const child of Object.values(value)) deepFreeze(child);
 }
 
 function clone<T>(value: T): T {

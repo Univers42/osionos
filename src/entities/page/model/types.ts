@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/12 23:14:08 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -69,12 +69,26 @@ export interface PageEntry {
   archivedAt?: string | null;
   /** Block content (only populated in offline/seed mode) */
   content?: Block[];
+  /**
+   * The version of this page's CONTENT the client last saw (the bridge's `version`
+   * column). It is the base the outbox PATCHes against — a stale one is a 409 the
+   * client merges instead of losing — and it travels with a pending page, so a
+   * reload still knows which version its edit was made against. Absent while the
+   * database has no version column (the migration ships separately).
+   */
+  contentVersion?: number;
   /** Editable properties shown below the page title. */
   properties?: PagePropertyEntry[];
   /** Surface classification (agents, home). "folder" = a container that groups children, acts as a graph hub, and never opens on click (a file may also act as a folder). "wiki" = a governed knowledge root: groups children like a folder but OPENS onto its own index content; articles inside carry governance properties (owner, status, verified, domain). "code" = an IDE / Dev-Mode source file: line-based, rendered by the Monaco editor (not the block editor), body stored as a single `code` block. */
   surface?: "page" | "agent" | "home" | "folder" | "wiki" | "app" | "code";
   /** Local version for generated home dashboard content. */
   homeDashboardVersion?: number;
+  /** Fingerprint of every block the Home page was seeded with, so a re-seed can
+   *  tell the user's edits from the seed's own changes. Client-local. */
+  homeSeedFingerprints?: Record<string, string>;
+  /** The profession the Home page was seeded from, so a profession change
+   *  (and only a profession change) replaces its content. Client-local. */
+  homeProfession?: string | null;
   /** True when this page is a database template (hidden from the normal tree/records). */
   isTemplate?: boolean;
   /** True when this template is the default used by the "New" button (one per workspace). */
@@ -112,6 +126,9 @@ export interface PageStore {
   pagesIndex: Record<string, PageIndexEntry>; // O(1) page lookup index
   pageRevisions: Record<string, number>; // monotonically increments per page mutation
   activePage: ActivePage | null;
+  /** Page a shared link asked for but the caller cannot read. Drives the
+   *  no-access screen; cleared by any successful openPage. */
+  deniedPage: { pageId: string; workspaceId: string | null } | null;
   navigationPath: ActivePage[]; // breadcrumb path based on navigation history
   recents: ActivePage[]; // last 10 opened
   loadingIds: Set<string>; // workspaceIds currently fetching
@@ -204,6 +221,7 @@ export interface PageStore {
   ) => Promise<void>;
   clearWorkspace: (workspaceId: string) => void;
   setShowTrash: (show: boolean) => void;
+  setDeniedPage: (page: { pageId: string; workspaceId: string | null } | null) => void;
 
   updateBlock: (
     pageId: string,
@@ -232,6 +250,8 @@ export interface PageStore {
     newType: BlockType,
   ) => void;
   updatePageContent: (pageId: string, blocks: Block[]) => void;
+  /** The content version a write landed at — kept on the page, never an edit (no revision, no updatedAt). */
+  setPageContentVersion: (pageId: string, version: number) => void;
   patchPage: (
     pageId: string,
     patch: Partial<PageEntry> | ((page: PageEntry) => Partial<PageEntry>),

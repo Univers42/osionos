@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { api, getActivePageJwt } from "@/shared/api/client";
+import { warningFrom, type ModerationWarning } from "@/shared/moderation/moderationWarning";
 import type { PageEntry, PagePropertyEntry } from "@/entities/page";
 
 import { registerMarketplaceTemplates } from "./registerMarketplace";
@@ -68,9 +69,38 @@ export async function updateApp(id: string, patch: { title?: string; icon?: stri
   return api.patch<PageEntry>(`/api/marketplace/apps/${id}`, patch, getActivePageJwt() ?? undefined).catch(() => null);
 }
 
-/** Publish a draft app to the public marketplace (owner-only; read-only-locks it). */
-export async function publishApp(id: string): Promise<PageEntry | null> {
-  return api.post<PageEntry>("/api/marketplace/publish", { pageId: id }, getActivePageJwt() ?? undefined).catch(() => null);
+/**
+ * The typed answer of a marketplace publish: published, warned about, or failed.
+ * A warning is not an error: L0 asked the author first, and the app is still
+ * private until the author answers.
+ */
+export type MarketplacePublishResult =
+  | { ok: true; app: PageEntry }
+  | { ok: false; warning: ModerationWarning }
+  | { ok: false; message: string };
+
+/**
+ * Publish a draft app to the public marketplace (owner-only; read-only-locks it).
+ *
+ * `acknowledgeWarning` is the author saying "publish it anyway": without it the
+ * bridge answers 409 and the app stays private.
+ */
+export async function publishApp(
+  id: string,
+  { acknowledgeWarning }: { acknowledgeWarning?: boolean } = {},
+): Promise<MarketplacePublishResult> {
+  try {
+    const app = await api.post<PageEntry>(
+      "/api/marketplace/publish",
+      acknowledgeWarning ? { pageId: id, acknowledgeWarning: true } : { pageId: id },
+      getActivePageJwt() ?? undefined,
+    );
+    return { ok: true, app };
+  } catch (error) {
+    const warning = warningFrom(error);
+    if (warning) return { ok: false, warning };
+    return { ok: false, message: error instanceof Error ? error.message : "The app could not be published." };
+  }
 }
 
 /** Fetch one app record + its child sub-pages (Details/Features/Changelog/…). */

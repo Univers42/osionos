@@ -44,10 +44,16 @@ test.describe("database-automations", () => {
     // Creating a rule drops straight into its editor.
     await dialog.getByText("+ New automation").click();
     await expect(dialog.getByText("Edit automation")).toBeVisible();
-    await expect(dialog.locator('[aria-label="Trigger"]')).toHaveValue("row_updated");
 
-    // Close the settings dialog via the backdrop.
-    await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+    // Save a minimal rule so the count pill appears.
+    await dialog.getByLabel("Rule name").fill("r");
+    await dialog.getByText("+ Add action").click();
+    await dialog.locator('[aria-label="Action type"]').first().selectOption("notify");
+    await dialog.locator('[aria-label="Message"]').first().fill("hi");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+
+    // Close the sheet.
+    await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
 
     // The ⚡ button now carries the local-rule count pill.
@@ -66,18 +72,25 @@ test.describe("database-automations", () => {
     const dialog = page.locator("dialog");
     await dialog.getByText("+ New automation").click();
     await expect(dialog.getByText("Edit automation")).toBeVisible();
-    const action = dialog.locator('[aria-label="Action type"]').first();
-    await action.selectOption("set_property");
+    await dialog.getByLabel("Rule name").fill("r");
+    // A new rule starts as "Row added"; this one must fire on an edit.
+    await dialog.locator('[aria-label="Trigger"]').selectOption("property_changed");
+    await dialog.locator('[aria-label="Property"]').selectOption({ label: "Trigger" });
+    // A new rule opens with one step: it becomes the write, a second one the message.
+    await dialog.locator('[aria-label="Action type"]').first().selectOption("set_property");
     await dialog.locator('[aria-label="Column"]').first().selectOption({ label: "Target" });
     await dialog.locator('[aria-label="Value"]').first().fill("auto-set");
     await dialog.getByText("+ Add action").click();
+    await dialog.locator('[aria-label="Action type"]').last().selectOption("notify");
     await dialog.locator('[aria-label="Message"]').last().fill("Rule fired");
-    await page.locator('button[aria-label="Close"][tabindex="-1"]').click();
+    await expect(dialog.locator('[aria-label="Action type"]')).toHaveCount(2);
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
 
     // Edit the Trigger cell → the rule writes Target and raises a toast.
-    await fillCell(page, block, 0, 2, "hello");
-    const targetCell = block.locator("tbody tr").first().locator("td").nth(3);
+    await fillCell(page, block, 0, 1, "hello");
+    const targetCell = block.locator("tbody tr").first().locator("td").nth(2);
     await expect(targetCell).toContainText("auto-set", { timeout: 10_000 });
     await expect(page.getByRole("status").filter({ hasText: "Rule fired" })).toBeVisible();
   });
@@ -106,9 +119,9 @@ test.describe("database-automations", () => {
     await page.getByRole("textbox", { name: "Page title" }).click(); // close config panel
 
     // Click the row's button → property set + toast.
-    await block.locator("tbody tr").first().locator("td").nth(3)
+    await block.locator("tbody tr").first().locator("td").nth(2)
       .getByRole("button", { name: "Button", exact: true }).click();
-    const targetCell = block.locator("tbody tr").first().locator("td").nth(2);
+    const targetCell = block.locator("tbody tr").first().locator("td").nth(1);
     await expect(targetCell).toContainText("pressed", { timeout: 10_000 });
     await expect(page.getByRole("status").filter({ hasText: "Button clicked" })).toBeVisible();
   });

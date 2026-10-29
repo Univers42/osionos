@@ -126,14 +126,14 @@ test.describe("layout editor", () => {
     await page.goto(baseURL, { waitUntil: "domcontentloaded" });
 
     // Home was redesigned from a full-page layout canvas to a flat NDS-section
-    // stack (greeting heading + titled database sections) driven by the
-    // "Home variant" property — see createHomeDashboardPage/createHomeLayoutContent
-    // in src/widgets/{page-renderer/ui/MainContent.tsx,database-view/model/databaseViewCatalog.ts}.
+    // stack (greeting heading + titled database sections) — see
+    // createHomeDashboardPage/createHomeLayoutContent in
+    // src/widgets/{page-renderer/ui/MainContent.tsx,database-view/model/databaseViewCatalog.ts}.
     // The old `.osionos-page--layout-canvas`/16-cell/v-proj-dashboard assertions
     // now belong to the `/layout` "Layout full page" command, covered by the
     // "full-page layout command" test below.
     await expect(page.getByRole("textbox", { name: "Page title" })).toHaveText("Workspace command center");
-    await expect(page.getByRole("combobox", { name: "Home variant" })).toContainText("Dashboard");
+    await expect(page.locator('[data-block-type="heading_2"]', { hasText: "Your tasks" }).first()).toBeVisible();
     await expect(page.locator('[data-block-type="heading_1"]').first()).toBeVisible();
     await expect(page.locator('[data-block-type="heading_2"]', { hasText: "Recently visited" }).first()).toBeVisible();
     await expect(page.locator('.osionos-database-block[data-database-view-id="v-home-recents-gallery"]')).toBeVisible();
@@ -165,7 +165,7 @@ test.describe("layout editor", () => {
     const targetBlock = cell.getByTestId("draggable-block").first();
 
     const sourceHandle = page.getByRole("button", { name: /Drag to reorder block/i }).first();
-    await syntheticDragDrop(page, sourceHandle, targetBlock);
+    await sourceHandle.dragTo(targetBlock, { targetPosition: { x: 16, y: 2 } });
 
     await expect(cell.locator('[role="textbox"][aria-multiline="true"]').first()).toHaveText("Outside");
   });
@@ -199,10 +199,12 @@ test.describe("layout editor", () => {
     const emptyState = page.locator(".osionos-layout-empty-state").first();
     await emptyState.getByRole("button", { name: /Use dashboard/i }).click();
     const cells = page.locator(".osionos-layout-cell");
-    await expect(cells).toHaveCount(16);
+    await expect(cells).toHaveCount(13);
 
-    const firstCell = cells.nth(0);
-    const secondCell = cells.nth(1);
+    // Cell 0 is the hero, spanning all 12 columns from column 1 like cell 1 below it, so a
+    // swap between them would move nothing this check can see: cells 1 and 2 sit side by side.
+    const firstCell = cells.nth(1);
+    const secondCell = cells.nth(2);
     const firstBefore = await firstCell.evaluate((node) => getComputedStyle(node).gridColumnStart);
     const secondBefore = await secondCell.evaluate((node) => getComputedStyle(node).gridColumnStart);
 
@@ -364,9 +366,10 @@ test.describe("layout editor", () => {
     await createInlineLayout(page, baseURL);
     await page.locator(".osionos-layout-empty-state").first().getByRole("button", { name: /Use dashboard/i }).click();
     const cells = page.locator(".osionos-layout-cell");
-    await expect(cells).toHaveCount(16);
-    const firstCell = cells.nth(0);
-    const secondCell = cells.nth(1);
+    await expect(cells).toHaveCount(13);
+    // Cells 1 and 2 sit side by side; cell 0 is the full-width hero above them.
+    const firstCell = cells.nth(1);
+    const secondCell = cells.nth(2);
     const beforeColumn = await firstCell.evaluate((node) => getComputedStyle(node).gridColumnStart);
     const beforeRow = await firstCell.evaluate((node) => getComputedStyle(node).gridRowStart);
     const firstBox = await firstCell.boundingBox();
@@ -437,7 +440,7 @@ test.describe("layout editor", () => {
     await expect(page.getByRole("textbox", { name: "Page title" })).toHaveText("Layout dashboard");
     await expect(page.locator(".osionos-page--layout-canvas")).toBeVisible();
     await expect(page.locator('.osionos-layout-block[data-layout-mode="full_page"]')).toBeVisible();
-    await expect(page.locator(".osionos-layout-cell")).toHaveCount(16);
+    await expect(page.locator(".osionos-layout-cell")).toHaveCount(13);
 
     await expect.poll(() => page.evaluate(() => {
       // Pages cache is split per-workspace under `osio:pages:<workspaceId>`

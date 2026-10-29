@@ -89,7 +89,9 @@ test.describe("analytics-dashboards-wave", () => {
     await page.getByText("Edit view", { exact: true }).click();
     await page.getByRole("menuitem", { name: "Conditional color" }).click();
     await page.getByRole("button", { name: /Add a color rule/ }).click();
-    await page.getByRole("button", { name: /Visibility/ }).first().click();
+    // The popover is portaled to <body>, after the table whose Visibility column
+    // header also matches; pick the property from the popover.
+    await page.locator('dialog[aria-label="View settings"]').getByRole("button", { name: /Visibility/ }).click();
     // Rule editor: `equals` + the first option value, then the green token.
     await expect(page.getByText("Edit color rule")).toBeVisible();
     const search = page.getByPlaceholder("Search for an option...");
@@ -105,20 +107,18 @@ test.describe("analytics-dashboards-wave", () => {
     await openDatabaseSurface(page);
     await page.locator('[aria-label="Add view"]').first().click();
     await page.getByRole("button", { name: "Dashboard", exact: true }).first().click();
-    await page.getByRole("button", { name: /Customize layout/ }).click();
-    await page.getByRole("button", { name: /Add your first widget/ }).click();
-    await page.locator('button:below(:text("This database"))').first().click();
-    // .first(): once the first widget lands, "Add widget" also matches the
-    // per-row hover button ("Add widget to this row") and the bottom
-    // dashed new-row button — the topmost, general toolbar one is DOM-first
-    // and is the one that keeps both widgets on the same row (needed below).
+    // Dashboards are editable from the start (auto-detected widgets); switch to
+    // edit mode, then build two more widgets on top of the auto-detected ones.
+    await page.getByRole("button", { name: /Edit layout/ }).click();
     await page.getByRole("button", { name: /Add widget/ }).first().click();
     await page.locator('button:below(:text("This database"))').first().click();
-    await expect(page.getByText(/2\/12 widgets/)).toBeVisible();
+    await page.getByRole("button", { name: /Add widget/ }).first().click();
+    await page.locator('button:below(:text("This database"))').first().click();
+    await expect(page.getByText(/6\/12 widgets/)).toBeVisible();
 
     // Both widgets share one row; drag the second grip into the gutter below.
     const grips = page.locator('[aria-label="Drag widget"]');
-    await expect(grips).toHaveCount(2);
+    await expect(grips).toHaveCount(6);
     const grip = grips.last();
     const gripBox = await grip.boundingBox();
     const row = page.locator("[data-dash-row]").first();
@@ -130,6 +130,6 @@ test.describe("analytics-dashboards-wave", () => {
     await page.mouse.up();
 
     // The move committed: two rows now exist.
-    await expect(page.locator("[data-dash-row]")).toHaveCount(2);
+    await expect(page.locator("[data-dash-row]")).toHaveCount(3);
   });
 });

@@ -13,10 +13,14 @@
 import { useCallback } from "react";
 
 import {
+  createLinkBlock,
   createMediaBlock,
+  DEFAULT_DIAGRAM_SPEC,
+  isLinkBlockType,
   type Block,
   type BlockType,
   type LayoutMode,
+  type LinkBlockType,
   type MediaBlockType,
   findBlockInTree,
 } from "@/entities/block";
@@ -250,6 +254,12 @@ export function useSlashSelect({
         updateBlock(pageId, blockId, { content: cleanContent || "E = mc^2" });
       }
 
+      // A diagram block holds a SPEC, never the rendered output: it starts with
+      // the default spec, and the block draws it from there.
+      if (selectedType === "diagram") {
+        updateBlock(pageId, blockId, { content: "", diagramSpec: DEFAULT_DIAGRAM_SPEC });
+      }
+
       // A new type re-mounts the editable (a list marker, a toggle wrapper): refocus it on the
       // next frame, at the START: placing it at the end left "/quote" in the converted block's
       // DOM (blockCreation.spec "pressing Enter on /quote" failed that way on 2026-10-13).
@@ -292,7 +302,7 @@ export function useSlashSelect({
   );
 
   const handleSlashMediaSelect = useCallback(
-    (mediaType: MediaBlockType, asset: string, content: Block[]) => {
+    (mediaType: MediaBlockType | LinkBlockType, asset: string, content: Block[], onTarget?: (blockId: string) => void) => {
       if (!slashMenu) return;
       const { blockId } = slashMenu;
 
@@ -309,18 +319,24 @@ export function useSlashSelect({
       }
 
       if (!block || cleanContent.trim().length > 0) {
-        const newBlock = createMediaBlock(mediaType, asset);
+        const newBlock = isLinkBlockType(mediaType) ? createLinkBlock(mediaType, asset) : createMediaBlock(mediaType, asset);
         insertBlock(pageId, blockId, newBlock);
+        onTarget?.(newBlock.id);
         focusBlock(newBlock.id);
         return;
       }
 
       changeBlockType(pageId, blockId, mediaType);
-      updateBlock(pageId, blockId, {
-        content: "",
-        asset,
-        placeholderText: undefined,
-      });
+      updateBlock(pageId, blockId, isLinkBlockType(mediaType)
+        ? { content: asset, placeholderText: undefined }
+        : {
+            content: "",
+            asset,
+            // The user's own file replaces the image: the "AI-generated" label goes.
+            aiGenerated: undefined,
+            placeholderText: undefined,
+          });
+      onTarget?.(blockId);
       focusBlock(blockId);
     },
     [

@@ -37,6 +37,7 @@ run_inside_container() {
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
     tokens) exec node scripts/build-tokens.mjs "$@" ;;
     test-e2e-perf) PLAYWRIGHT_PERF=1 exec pnpm exec playwright test tests/e2e/perf --workers=1 "$@" ;;
+    test-e2e-coedit) PLAYWRIGHT_COEDIT=1 exec pnpm exec playwright test tests/e2e/latency --workers=1 "$@" ;;
     test-canvas) exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test tests/canvas/*.test.ts "$@" ;;
     test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
     test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
@@ -48,7 +49,7 @@ run_inside_container() {
     test-bench)
       [ $# -gt 0 ] || set -- tests/bench/*.bench.ts
       exec node --experimental-strip-types --expose-gc --experimental-loader ./tests/canvas/ts-extension-loader.mjs tests/bench/run.ts "$@" ;;
-    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && node scripts/check-token-refs.mjs && node scripts/build-tokens.mjs --check && exec bash scripts/check-style-tokens.sh ;;
+    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && node scripts/check-token-refs.mjs && node scripts/build-tokens.mjs --check && bash scripts/check-built-with-blocks.sh && exec bash scripts/check-style-tokens.sh ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac
 }
@@ -97,7 +98,15 @@ case "${COMMAND}" in
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh tokens "$@"
     ;;
   test-e2e-perf)
-    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e PLAYWRIGHT_PERF=1 browser-tests pnpm exec playwright test tests/e2e/perf --workers=1 "$@"
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e PLAYWRIGHT_PERF=1 -e PLAYWRIGHT_BUILD browser-tests pnpm exec playwright test tests/e2e/perf --workers=1 "$@"
+    ;;
+  test-e2e-coedit)
+    coedit_env=()
+    for name in PLAYWRIGHT_BASE_URL PLAYWRIGHT_API_URL PLAYWRIGHT_REUSE_EXISTING_SERVER COEDIT_API_URL COEDIT_OWNER_EMAIL COEDIT_OWNER_PASSWORD COEDIT_MEMBER_EMAIL COEDIT_MEMBER_PASSWORD COEDIT_USER_3_EMAIL COEDIT_USER_3_PASSWORD COEDIT_USER_4_EMAIL COEDIT_USER_4_PASSWORD COEDIT_USER_5_EMAIL COEDIT_USER_5_PASSWORD COEDIT_USER_6_EMAIL COEDIT_USER_6_PASSWORD COEDIT_PAGE_TITLE COEDIT_WORKSPACE_ID COEDIT_CHARS COEDIT_INTERVAL_MS COEDIT_SETTLE_MS; do
+      # Only set names are forwarded: an empty PLAYWRIGHT_BASE_URL would beat the config's default.
+      [[ -n "${!name:-}" ]] && coedit_env+=(-e "${name}")
+    done
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps -e PLAYWRIGHT_COEDIT=1 "${coedit_env[@]}" browser-tests pnpm exec playwright test tests/e2e/latency --workers=1 "$@"
     ;;
   test-canvas)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh test-canvas "$@"
@@ -124,11 +133,11 @@ case "${COMMAND}" in
     OSIONOS_MCP_BRIDGE_URL="${OSIONOS_MCP_BRIDGE_URL:-http://host.docker.internal:4000}" \
     OSIONOS_MCP_API_URL="${OSIONOS_MCP_API_URL:-http://host.docker.internal:4000}" \
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm -T --no-deps \
-      -e OSIONOS_MCP_BRIDGE_URL -e OSIONOS_MCP_API_URL \
+      -e OSIONOS_MCP_BRIDGE_URL -e OSIONOS_MCP_API_URL -e OSIONOS_MCP_TOKEN \
       playground bash scripts/docker-run.sh mcp-claude "$@"
     ;;
   *)
-    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-e2e-perf|test-canvas|test-bench|test-doctor|test-bridge|quality|bench-layout|bridge-api|mcp-claude}" >&2
+    echo "Usage: $0 {build|preview|typecheck|lint|lint-fix|test-e2e|test-e2e-serial|test-e2e-smoke|test-e2e-perf|test-e2e-coedit|test-canvas|test-bench|test-doctor|test-bridge|quality|bench-layout|bridge-api|mcp-claude}" >&2
     exit 2
     ;;
 esac

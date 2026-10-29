@@ -28,7 +28,9 @@ export const TodoBlockEditor: React.FC<{
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
-}> = ({ block, pageId, style, onUpdateBlock, onChange, onKeyDown, onRequestSlashMenu }) => {
+  /** Open the AI panel on the selection (the selection toolbar). */
+  onAskAI?: (selectionText: string) => void;
+}> = ({ block, pageId, style, onUpdateBlock, onChange, onKeyDown, onRequestSlashMenu, onAskAI }) => {
   const updateBlock = usePageStore((s) => s.updateBlock);
   const page = usePageStore((s) => s.activePage);
 
@@ -49,17 +51,7 @@ export const TodoBlockEditor: React.FC<{
   }, [page, block.id, onUpdateBlock, updateBlock]);
 
   return (
-    <div className="group relative flex items-start gap-2 pl-5">
-      {block.children?.length ? (
-        <BlockListCollapse
-          collapsed={block.collapsed}
-          onToggle={() =>
-            (onUpdateBlock ?? ((id, u) => page && updateBlock(page.id, id, u)))(block.id, {
-              collapsed: !block.collapsed,
-            })
-          }
-        />
-      ) : null}
+    <div className="group relative flex items-start gap-2">
       <button
         type="button"
         data-testid="todo-checkbox"
@@ -67,7 +59,7 @@ export const TodoBlockEditor: React.FC<{
         aria-label={block.checked ? "Mark to-do as not done" : "Mark to-do as done"}
         onClick={toggleChecked}
         className={[
-          "shrink-0 mt-[3px] w-4 h-4 rounded-xs border flex items-center justify-center cursor-pointer",
+          "osio-line-marker text-sm leading-relaxed shrink-0 w-4 h-4 rounded-xs border flex items-center justify-center cursor-pointer",
           block.checked
             ? "bg-[var(--osio-accent)] border-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
             : "border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] hover:border-[var(--osio-fg-muted)]",
@@ -100,9 +92,21 @@ export const TodoBlockEditor: React.FC<{
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
+          onAskAI={onAskAI}
+          blockId={block.id}
         />
         {isTasksEnabled() && <TodoDueDate dueAt={block.dueAt} checked={block.checked} onChange={setDueAt} />}
       </div>
+      {block.children?.length ? (
+        <BlockListCollapse
+          collapsed={block.collapsed}
+          onToggle={() =>
+            (onUpdateBlock ?? ((id, u) => page && updateBlock(page.id, id, u)))(block.id, {
+              collapsed: !block.collapsed,
+            })
+          }
+        />
+      ) : null}
     </div>
   );
 };

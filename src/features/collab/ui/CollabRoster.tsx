@@ -6,76 +6,104 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 16:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 16:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/27 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 /**
- * The Shared-space roster (AOC §6): a compact stack of who else is present,
- * each avatar ringed in that member's identity color. Purely presentational —
- * it reads the collab store and renders; it never touches the transport. Names
- * convey identity alongside color (R-A8: never color alone). Overflow collapses
- * to "+N". Tokens only; no animation on the idle path.
+ * The Shared-space roster (AOC §6): a compact row of who else is present. Each
+ * avatar is a button that opens that member's menu (CollabRosterMenu): jump to
+ * their cursor, follow them, or summon them to this page. Purely presentational:
+ * it reads the collab, follow and remote-edit stores and renders; it never
+ * touches the transport. Names convey identity alongside colour (R-A8: never
+ * colour alone). Overflow collapses to "+N". Tokens only.
+ *
+ * Caveat: the "+N" overflow chip is not a menu, so a member past the visible
+ * limit (ROSTER_VISIBLE_LIMIT) can be summoned, jumped to or followed only once
+ * they sort into the visible set.
  */
 
-import React from 'react';
+import React, { useCallback, useReducer, useState } from 'react';
 
 import { useCollabStore } from '../store/useCollabStore';
-import { memberInitials, splitRoster } from '../model/collabPresence';
-import type { PresenceState } from '../model/realtimeTransport.port';
-
-const RING: React.CSSProperties = { outlineOffset: '1px' };
+import { splitRoster } from '../model/collabPresence';
+import { memberIdOf } from '../model/collabActor';
+import { useFollowStore } from '../model/followStore';
+import { MENU_CLOSED, menuReducer } from '../model/rosterMenu';
+import { CollabAvatar } from './CollabAvatar';
+import { CollabRosterMenu } from './CollabRosterMenu';
+import { useTypingMembers } from './useTypingMembers';
 
 interface CollabRosterProps {
-  /** Summon a member to the current page (AOC §7). Avatars are buttons when set. */
+  /** Summon a member to the current page (AOC §7). Shown in each member's menu when set. */
   onSummon?: (memberId: string, name: string) => void;
-}
-
-function Avatar({ member, onSummon }: { member: PresenceState; onSummon?: CollabRosterProps['onSummon'] }): React.ReactElement {
-  const face = member.avatarRef
-    ? <img src={member.avatarRef} alt="" className="h-full w-full object-cover" />
-    : memberInitials(member.displayName);
-  const ring = { ...RING, outline: `2px solid ${member.color}` };
-  const cls = '-ml-1.5 flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-[var(--osio-bg-elevated)] bg-[var(--osio-bg-subtle)] text-2xs font-medium text-[var(--osio-fg-muted)] first:ml-0';
-  if (!onSummon) {
-    return <span title={member.displayName} aria-label={`${member.displayName} is here`} style={ring} className={cls}>{face}</span>;
-  }
-  return (
-    <button
-      type="button"
-      title={`Summon ${member.displayName} here`}
-      aria-label={`Summon ${member.displayName} to this page`}
-      onClick={() => onSummon(member.memberId, member.displayName)}
-      style={ring}
-      className={`${cls} transition-transform duration-(--osio-dur-fast) hover:z-10 motion-safe:hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--osio-bg-elevated)]`}
-    >
-      {face}
-    </button>
-  );
 }
 
 export const CollabRoster: React.FC<CollabRosterProps> = ({ onSummon }) => {
   const members = useCollabStore((state) => state.members);
+  const pageMembers = useCollabStore((state) => state.pageMembers);
   const status = useCollabStore((state) => state.status);
+  const followedMemberId = useFollowStore((state) => (state.following === null ? null : memberIdOf(state.following)));
+  const typing = useTypingMembers();
+  const [menu, dispatch] = useReducer(menuReducer, MENU_CLOSED);
+  const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
+
+  // The avatar that opened the menu; focus goes back to it, unless the menu closed
+  // because the person clicked somewhere else on purpose.
+  const close = useCallback((restoreFocus: boolean) => {
+    dispatch({ type: 'close' });
+    if (restoreFocus) anchor?.focus();
+    setAnchor(null);
+  }, [anchor]);
+
+  const open = menu.openFor !== null && status === 'live' ? members.find((member) => member.memberId === menu.openFor) : undefined;
+  // Derived-state reset, in render and not an effect: the member left (or the
+  // channel dropped) while their menu was open, so the menu must not wait for a
+  // re-render to close or it would reopen on their return.
+  if (menu.openFor !== null && !open) { dispatch({ type: 'close' }); setAnchor(null); }
+
   if (status !== 'live' || members.length === 0) return null;
 
+  const onPage = new Set(pageMembers.map((member) => member.memberId));
   const { shown, overflow } = splitRoster(members);
-  const names = members.map((member) => member.displayName).join(', ');
+  const names = members.map((member) => `${member.displayName} ${onPage.has(member.memberId) ? 'here' : 'in this space'}`).join(', ');
 
   return (
     <div
-      className="flex items-center"
+      className="flex items-center gap-2.5"
       role="group"
-      aria-label={`${members.length} other ${members.length === 1 ? 'person' : 'people'} here: ${names}`}
+      aria-label={`${members.length} other ${members.length === 1 ? 'person' : 'people'} in this space: ${names}`}
     >
-      {shown.map((member) => <Avatar key={member.memberId} member={member} onSummon={onSummon} />)}
+      {shown.map((member) => (
+        <CollabAvatar
+          key={member.memberId}
+          member={member}
+          onPage={onPage.has(member.memberId)}
+          typing={typing.has(member.memberId)}
+          followed={followedMemberId === member.memberId}
+          open={menu.openFor === member.memberId}
+          onToggle={(memberId, trigger) => { setAnchor(trigger); dispatch({ type: 'toggle', memberId }); }}
+          onOpen={(memberId, trigger) => { setAnchor(trigger); dispatch({ type: 'open', memberId }); }}
+        />
+      ))}
       {overflow > 0 && (
         <span
           title={names}
-          className="-ml-1.5 flex h-7 min-w-7 items-center justify-center rounded-full border border-[var(--osio-bg-elevated)] bg-[var(--osio-bg-muted)] px-1 text-2xs font-semibold text-[var(--osio-fg-muted)]"
+          className="flex h-7 min-w-7 items-center justify-center rounded-full border border-[var(--osio-bg-elevated)] bg-[var(--osio-bg-muted)] px-1 text-2xs font-semibold text-[var(--osio-fg-muted)]"
         >
           +{overflow}
         </span>
+      )}
+      {open && anchor && (
+        <CollabRosterMenu
+          member={open}
+          onPage={onPage.has(open.memberId)}
+          anchor={anchor}
+          active={menu.active}
+          dispatch={dispatch}
+          onClose={close}
+          onSummon={onSummon}
+        />
       )}
     </div>
   );

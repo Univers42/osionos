@@ -32,6 +32,13 @@ export interface SharePerson {
   wsRole?: string;
 }
 
+/** A workspace team offered as a share target (`GET /api/workspaces/:id/teams`). */
+export interface ShareTeam {
+  id: string;
+  name: string;
+  memberCount: number;
+}
+
 /** An engine role row (`GET /api/perms/roles`). */
 export interface EngineRole {
   id: string;
@@ -55,10 +62,12 @@ export interface ShareEntry {
   target:
     | { type: 'user'; person: SharePerson }
     | { type: 'role'; role: string }
+    | { type: 'team'; team: ShareTeam }
+    | { type: 'attribute'; name: string; value: string }
     | { type: 'workspace' }
     | { type: 'public' };
   level: ShareLevel;
-  /** AccessRule _id (page mode) or policy id (live mode) backing this entry. */
+  /** Rule or live policy id; page collaborators and visibility have none. */
   sourceId?: string;
 }
 
@@ -68,7 +77,7 @@ export interface ShareAccessRule {
   workspaceId: string;
   resourceId: string | null;
   resourceType: 'workspace' | 'page' | 'database' | 'block';
-  target: { type: 'user'; userId: string } | { type: 'role'; role: string } | { type: 'workspace' } | { type: 'public' };
+  target: { type: 'user'; userId: string } | { type: 'role'; role: string } | { type: 'team'; teamId: string } | { type: 'attribute'; name: string; value: string } | { type: 'workspace' } | { type: 'public' };
   permission: ShareLevel;
   explicit: boolean;
 }

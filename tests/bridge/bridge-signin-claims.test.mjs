@@ -111,9 +111,6 @@ const BASELINES = [
 		options: { persistCommitsAfterReads: true },
 		seed: () => ({ identities: [identity('old@example.com', true)], osionos_workspaces: [home(), workspaceRow(ADMIN_WORKSPACE_ID, OTHER_USER, 'Admin', '2026-10-02T00:00:00.000Z')] }),
 		sequential: { workspaceIds: [PRIVATE_ID, ADMIN_WORKSPACE_ID], isAdmin: true },
-		// The one documented difference: the flag read runs before persist rewrites email_hash.
-		// It fails closed for one session (the next sign-in reads the new hash).
-		parallel: { workspaceIds: [PRIVATE_ID], isAdmin: false },
 	},
 	{
 		name: 'a user with 3 shared workspaces',

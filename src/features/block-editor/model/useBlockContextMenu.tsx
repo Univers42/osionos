@@ -16,6 +16,7 @@ import {
   ArrowUp,
   Copy,
   CopyPlus,
+  Eye,
   Link,
   MessageSquare,
   MoveRight,
@@ -39,8 +40,15 @@ import {
 } from "./blockColors";
 import { copyBlocks } from "./blockClipboard";
 import { getBlockDraftContent } from "./blockDraftStore";
+import { bindBlock, isBindableType, styleOf } from "@/features/profile-binding/model/bindingEdit";
+import { isReadmePage, PROFILE_FIELD_SETTINGS_EVENT } from "@/features/profile-binding/model/readmePage";
+import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
+import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
 import { useBlockColorProfileStore } from "@/shared/config/blockColorProfileStore";
 import { BLOCK_TRANSFORM_OPTIONS } from "./blockTransformOptions";
+import { linkTurnIntoOptions, turnLinkBlockInto, type LinkTurnTarget } from "./linkTurnInto";
+import type { SnapshotRequest } from "./linkSnapshotApply";
+import { updateBlockInTree } from "@/entities/block/model/blockTreeUtils";
 import {
   changeBlockTypeInTree,
   changeBlockToColumnsInTree,
@@ -60,6 +68,7 @@ interface UseBlockContextMenuOptions {
   sourceKey: string;
   updatePageContent: (pageId: string, blocks: Block[]) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
+  attachLinkSnapshot: (request: SnapshotRequest) => void;
 }
 
 interface OperationResult {
@@ -192,17 +201,38 @@ function createTableContextMenuSections(
   ];
 }
 
+function createButtonContextMenuSections(block: Block, onOpenSettings: () => void): BlockContextMenuSection[] {
+  if (block.type !== "button") return [];
+  return [
+    {
+      label: "Button",
+      items: [{ icon: <Settings2 size={16} />, label: "Button settings", onClick: onOpenSettings }],
+    },
+  ];
+}
+
+function createProfileFieldContextMenuSections(block: Block, isReadme: boolean, onOpen: (bind: boolean) => void): BlockContextMenuSection[] {
+  if (!isReadme) return [];
+  const isBound = Boolean(block.recordRef && block.fieldBind);
+  if (!isBound && !isBindableType(block)) return [];
+  const label = isBound ? "Profile field settings" : "Bind to profile field…";
+  return [{ label: "Profile field", items: [{ icon: <Settings2 size={16} />, label, onClick: () => onOpen(!isBound) }] }];
+}
+
 export function useBlockContextMenu({
   pageId,
   content,
   sourceKey,
   updatePageContent,
   focusBlock,
+  attachLinkSnapshot,
 }: Readonly<UseBlockContextMenuOptions>) {
   const [contextMenu, setContextMenu] = useState<BlockContextMenuState | null>(
     null,
   );
+  const [showWhenTarget, setShowWhenTarget] = useState<{ blockId: string; x: number; y: number } | null>(null);
   const colorProfiles = useBlockColorProfileStore((state) => state.profiles);
+  const isReadme = useAccountProfileStore((state) => isReadmePage(pageId, state.profile));
 
   const blockLocation = useMemo(() => {
     if (!contextMenu) return null;
@@ -301,6 +331,23 @@ export function useBlockContextMenu({
     [applyOperation, content, contextMenu],
   );
 
+  const handleLinkTurnInto = useCallback(
+    (target: LinkTurnTarget) => {
+      if (!blockLocation) return;
+      const source = { ...blockLocation.block, content: effectiveBlockContent };
+      const turned = turnLinkBlockInto(source, target);
+      if (!turned) return;
+      applyOperation({
+        blocks: updateBlockInTree(content, source.id, () => turned.block),
+        focusBlockId: source.id,
+      });
+      if (turned.needsSnapshot) {
+        attachLinkSnapshot({ kind: "block", blockId: source.id, url: turned.block.content ?? "" });
+      }
+    },
+    [applyOperation, attachLinkSnapshot, blockLocation, content, effectiveBlockContent],
+  );
+
   const handleToggleHeading = useCallback(
     (headingLevel: 1 | 2 | 3 | 4) => {
       if (!contextMenu) return;
@@ -380,9 +427,44 @@ export function useBlockContextMenu({
     [applyOperation, content, contextMenu],
   );
 
+  const handleButtonSettings = useCallback(() => {
+    if (!contextMenu) return;
+    globalThis.dispatchEvent(
+      new CustomEvent("osionos:button-settings", { detail: { pageId, blockId: contextMenu.blockId } }),
+    );
+    closeContextMenu();
+  }, [closeContextMenu, contextMenu, pageId]);
+
+  const handleShowWhen = useCallback(() => {
+    if (!contextMenu) return;
+    setShowWhenTarget({ blockId: contextMenu.blockId, x: contextMenu.x, y: contextMenu.y });
+    closeContextMenu();
+  }, [closeContextMenu, contextMenu]);
+
+  const closeShowWhen = useCallback(() => setShowWhenTarget(null), []);
+
+  const handleProfileFieldSettings = useCallback((bind: boolean) => {
+    if (!contextMenu || !blockLocation) return;
+    const { blockId } = contextMenu;
+    if (bind) {
+      const patch = bindBlock(blockLocation.block, "displayName", styleOf(blockLocation.block));
+      if (patch) updatePageContent(pageId, updateBlockInTree(content, blockId, (current) => ({ ...current, ...patch })));
+    }
+    globalThis.dispatchEvent(new CustomEvent(PROFILE_FIELD_SETTINGS_EVENT, { detail: { pageId, blockId } }));
+    closeContextMenu();
+  }, [blockLocation, closeContextMenu, content, contextMenu, pageId, updatePageContent]);
+
   const handleUnavailable = useCallback(() => {
     closeContextMenu();
   }, [closeContextMenu]);
+
+  /** "Ask AI" (Ctrl+J) — the AI panel opens under this block, with its input
+   *  focused: the user asks, the answer streams, nothing is written yet. */
+  const handleAskAI = useCallback(() => {
+    if (!contextMenu) return;
+    useInlineAiStore.getState().open({ pageId, blockId: contextMenu.blockId });
+    closeContextMenu();
+  }, [closeContextMenu, contextMenu, pageId]);
 
   const handleComment = useCallback(() => {
     if (!contextMenu) return;
@@ -448,7 +530,14 @@ export function useBlockContextMenu({
             label: option.label,
             active: option.type === blockLocation.block.type,
             onClick: () => handleChangeType(option.type),
-          })).concat([
+          })).concat(
+            linkTurnIntoOptions({ ...blockLocation.block, content: effectiveBlockContent }).map((option) => ({
+              icon: "🔗",
+              label: option.label,
+              active: option.active,
+              onClick: () => handleLinkTurnInto(option.target),
+            })),
+          ).concat([
             {
               icon: "▸H1",
               label: "Toggle heading 1",
@@ -506,6 +595,11 @@ export function useBlockContextMenu({
               onClick: () => handleColumns(5),
             },
           ]),
+        },
+        {
+          icon: <Eye size={16} />,
+          label: "Show when…",
+          onClick: handleShowWhen,
         },
         {
           icon: <Palette size={16} />,
@@ -599,6 +693,10 @@ export function useBlockContextMenu({
       handleSetTableConfig,
     );
 
+    const buttonSections = createButtonContextMenuSections(blockLocation.block, handleButtonSettings);
+
+    const profileFieldSections = createProfileFieldContextMenuSections(blockLocation.block, isReadme, handleProfileFieldSettings);
+
     const actionItems = [
       {
         icon: <Copy size={16} />,
@@ -645,6 +743,8 @@ export function useBlockContextMenu({
       ...moveSections,
       transformSection,
       ...tableSections,
+      ...buttonSections,
+      ...profileFieldSections,
       { label: "Actions", items: actionItems },
       {
         items: [
@@ -681,7 +781,7 @@ export function useBlockContextMenu({
             icon: <Sparkles size={16} />,
             label: "Ask AI",
             shortcut: "Ctrl+J",
-            onClick: handleUnavailable,
+            onClick: handleAskAI,
           },
         ],
       },
@@ -697,13 +797,19 @@ export function useBlockContextMenu({
     handleDelete,
     handleDuplicate,
     handleInsert,
+    handleLinkTurnInto,
     handleMove,
     handleColumns,
     handleComment,
     handleSetBlockStyle,
     handleSetTableConfig,
     handleToggleHeading,
+    handleButtonSettings,
+    handleShowWhen,
+    handleProfileFieldSettings,
+    isReadme,
     handleUnavailable,
+    handleAskAI,
   ]);
 
   return {
@@ -711,5 +817,8 @@ export function useBlockContextMenu({
     contextMenuSections,
     openContextMenu,
     closeContextMenu,
+    showWhenTarget,
+    closeShowWhen,
   };
 }
+

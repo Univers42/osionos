@@ -16,12 +16,12 @@
 
 import { expect, test } from "@playwright/test";
 
-import { activateFirstEditor, openFreshPage } from "../../browser/core/app.mjs";
+import { activateFirstEditor, openFreshPage, pageTitleEditor } from "../../browser/core/app.mjs";
 
 test("renaming a fresh page renames its tab and survives tab re-clicks", async ({ page, baseURL }) => {
   await openFreshPage(page, baseURL);
 
-  const titleBox = page.getByLabel("Page title");
+  const titleBox = pageTitleEditor(page);
   await titleBox.click();
   await titleBox.fill("Quarterly Plan");
   // Commit the title by moving focus into the document body.
@@ -34,11 +34,11 @@ test("renaming a fresh page renames its tab and survives tab re-clicks", async (
 
   // Re-clicking the tab must NOT revert the title (the stale-snapshot clobber).
   await page.locator('[data-tab-id][title="Quarterly Plan"]').click();
-  await expect(page.getByLabel("Page title")).toHaveValue("Quarterly Plan");
+  await expect(titleBox).toHaveValue("Quarterly Plan");
   await expect(page.locator('[data-tab-id][title="Untitled"]')).toHaveCount(0);
 
   // And bouncing via another tab (Home) and back keeps it intact too.
   await page.locator('[data-tab-id][title="Home"]').click();
   await page.locator('[data-tab-id][title="Quarterly Plan"]').click();
-  await expect(page.getByLabel("Page title")).toHaveValue("Quarterly Plan");
+  await expect(titleBox).toHaveValue("Quarterly Plan");
 });

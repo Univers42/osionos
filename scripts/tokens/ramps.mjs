@@ -115,6 +115,21 @@ function accentRamp(palette, mode, pins) {
   };
 }
 
+// Chart series 1-8 are their own colours, not the accent and the block tints: accent
+// #1F5BC4 beside tint blue #1E6DB0 was a normal-vision dE of 6.2 (floor 15), so two
+// categories read as one. Validated with the dataviz skill's validate_palette.js on the
+// default surfaces #FFFFFF / #23221F: worst adjacent CVD dE 8.6 / 8.4, normal-vision
+// dE 20.3 / 19.3.
+// Caveat: validated on the default palette's surfaces only; a palette with a tinted or
+// darker surface (midnight, solarized) was not re-run, and yellow is 2.57:1 on white,
+// so a series is never told by colour alone — charts keep their legend and data table.
+const CHART_SERIES = {
+  light: ["#2a6fd6", "#d9622b", "#14a06f", "#d99400", "#d6699a", "#2f8a1f", "#6a55d4", "#d64545"],
+  dark: ["#4a8ee8", "#d95926", "#199e70", "#c98500", "#d55181", "#3f9a2a", "#9085e9", "#e66767"],
+};
+
+const chartSeries = (mode) => CHART_SERIES[mode].map((hex, i) => [`--osio-chart-${i + 1}`, hex.toUpperCase()]);
+
 function statusColours(mode) {
   return Object.entries(STATUS_TONES[mode]).map(([name, lch]) => [`--osio-${name}`, tone(lch)]);
 }
@@ -138,6 +153,7 @@ export function modeTokens(palette, mode) {
       ...neutral,
       ...accentRamp(palette, mode, pins),
       ...Object.fromEntries(statusColours(mode)),
+      ...Object.fromEntries(chartSeries(mode)),
       ...blockTints(palette, mode, neutral, NEUTRAL_TONES[mode][4][0]),
     },
     pins,

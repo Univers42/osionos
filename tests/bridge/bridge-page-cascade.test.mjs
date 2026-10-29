@@ -63,7 +63,8 @@ function callerWorld(member, pages) {
 function cascadeIds(mock, method) {
 	return mock.calls
 		.filter((call) => call.method === method && call.table === 'osionos_pages' && String(call.params.get('id')).startsWith('in.('))
-		.flatMap((call) => call.params.get('id').slice(4, -1).split(','));
+		// The bridge quotes the ids of its `in` lists (inFilter), so the quotes come off here.
+		.flatMap((call) => call.params.get('id').slice(4, -1).split(',').map((id) => id.replace(/^"(.*)"$/, '$1')));
 }
 
 async function run(world, pageId, init, headers = asCaller) {
@@ -86,10 +87,10 @@ describe('a cascade reaches a descendant exactly when the direct route would acc
 						];
 						const readable = sharing.visibility === 'shared' || collaborators.length > 0;
 						const held = role.member?.permissions.includes(op.permission) ?? false;
-						const expected = xOwner === 'caller' || (readable && held);
+						const expected = role.member !== null && (xOwner === 'caller' || (readable && held));
 						const direct = await run(callerWorld(role.member, pages()), PAGE.child, op.init);
 						const cascade = await run(callerWorld(role.member, pages()), PAGE.parent, op.init);
-						assert.equal(cascade.response.status, 200, cascade.response.text);
+						assert.equal(cascade.response.status, role.member === null ? 404 : 200, cascade.response.text);
 						assert.equal(direct.response.status === 200, expected, `direct ${opName} of X: ${direct.response.status}`);
 						assert.equal(cascadeIds(cascade.mock, op.method).includes(PAGE.child), expected);
 						const stored = cascade.mock.page(PAGE.child);
@@ -197,4 +198,83 @@ describe('a cascade stops at the first descendant it skips', () => {
 			});
 		}
 	}
+});
+
+describe('C551: an inherited no_access rule skips the descendant and its subtree', () => {
+	const P = 'c3000000-0000-4000-8000-000000000001';
+	const M = 'c3000000-0000-4000-8000-000000000002';
+	const H = 'c3000000-0000-4000-8000-000000000003';
+	const RULE = 'c3000000-0000-4000-8000-0000000000f1';
+
+	function page(id, parent) {
+		return { id, workspace_id: IDS.team, owner_id: IDS.userA, visibility: 'shared', title: `p ${id.slice(-4)}`, collaborators: [], properties: [], parent_page_id: parent, archived_at: null, content: [], created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z' };
+	}
+
+	function world(withRule) {
+		const base = teamWorld({ memberRole: 'editor' });
+		// give B delete permission
+		const m = base.osionos_workspace_members.find((r) => r.user_id === IDS.userB);
+		if (m) m.permissions = ['create', 'read', 'update', 'delete'];
+		base.osionos_pages.push(page(P, null), page(M, P), page(H, M));
+		if (withRule) {
+			base.osionos_share_rules = [{
+				id: RULE, workspace_id: IDS.team, resource_type: 'page', resource_id: M,
+				target: { type: 'user', userId: IDS.userB }, permission: 'no_access', explicit: true,
+			}];
+		}
+		return base;
+	}
+
+	it('DELETE skips the rule-hidden descendant and its subtree, then deletes it once the rule is gone', async () => {
+		const mock = createPostgrestMock(world(true));
+		const asB = sessionHeaders(config, IDS.userB, IDS.homeB);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const deleted = await send(base, `/api/pages/${P}`, asB, { method: 'DELETE' });
+			assert.equal(deleted.status, 200, deleted.text);
+			// P and M deleted; H (hidden) kept.
+			assert.equal(mock.page(H) !== undefined, true);
+			assert.equal(mock.page(P), undefined);
+		});
+		// rule removed -> H deleted too
+		const mock2 = createPostgrestMock(world(false));
+		await withBridge(config, mock2.fetchImpl, async (base) => {
+			const deleted = await send(base, `/api/pages/${P}`, sessionHeaders(config, IDS.userB, IDS.homeB), { method: 'DELETE' });
+			assert.equal(deleted.status, 200, deleted.text);
+			assert.equal(mock2.page(H), undefined);
+		});
+	});
+
+	it('archive skips the rule-hidden descendant', async () => {
+		const mock = createPostgrestMock(world(true));
+		const asB = sessionHeaders(config, IDS.userB, IDS.homeB);
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const archived = await send(base, `/api/pages/${P}`, asB, patch({ archivedAt: '2026-10-13T00:00:00.000Z' }));
+			assert.equal(archived.status, 200, archived.text);
+			assert.equal(mock.page(H).archived_at, null);
+			assert.equal(mock.page(M).archived_at, null);
+		});
+	});
+});
+
+describe('C553: a truncated page-ref read fails the cascade with 503 and writes nothing', () => {
+	it('DELETE returns 503 and writes nothing when the ref read hits the cap', async () => {
+		const base = teamWorld();
+		const P = 'c4000000-0000-4000-8000-000000000001';
+		const C = 'c4000000-0000-4000-8000-000000000002';
+		base.osionos_pages.push({ id: P, workspace_id: IDS.team, owner_id: IDS.userA, visibility: 'shared', title: 'P', collaborators: [], properties: [], parent_page_id: null, archived_at: null, content: [], created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z' });
+		base.osionos_pages.push({ id: C, workspace_id: IDS.team, owner_id: IDS.userA, visibility: 'shared', title: 'C', collaborators: [], properties: [], parent_page_id: P, archived_at: null, content: [], created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z' });
+		const mock = createPostgrestMock(base);
+		const wrapped = async (url, init) => {
+			const u = new URL(String(url));
+			if (u.pathname.endsWith('/osionos_pages') && u.searchParams.get('select') === 'id,parent_page_id') {
+				const rows = Array.from({ length: 20001 }, (_, i) => ({ id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`, parent_page_id: null }));
+				return new Response(JSON.stringify(rows), { status: 200, headers: { 'content-type': 'application/json' } });
+			}
+			return mock.fetchImpl(url, init);
+		};
+		await withBridge(config, wrapped, async (b) => {
+			const r = await send(b, `/api/pages/${P}`, sessionHeaders(config, IDS.userA, IDS.homeA), { method: 'DELETE' });
+			assert.equal(r.status, 503, r.text);
+		});
+	});
 });

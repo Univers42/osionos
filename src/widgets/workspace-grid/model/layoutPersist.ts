@@ -27,6 +27,8 @@ export const MAIL_TAB_ID = "__mail__";
 export const CALENDAR_TAB_ID = "__calendar__";
 export const CHAT_TAB_ID = "__chat__";
 export const WHITEBOARD_TAB_ID = "__whiteboard__";
+export const SETTINGS_TAB_ID = "__settings__";
+export const AI_HUB_TAB_ID = "__ai_hub__";
 
 const STORAGE_KEY = "osionos.workspace.layout.v2";
 const LEGACY_PREFIX = "osionos.workspace.layout.v1";
@@ -80,17 +82,17 @@ export function consoleTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: CONSOLE_TAB_ID, workspaceId: "", kind: "console", title: "BaaS Console", icon: "icon:database" };
 }
 
-/** The Whiteboard tab: drawnosaurus embedded, opening its board gallery. Stable id, so
+/** The Whiteboard tab: hydrawn embedded, opening its board gallery. Stable id, so
  *  re-opening focuses the tab instead of duplicating it. */
 export function whiteboardTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: WHITEBOARD_TAB_ID, workspaceId: "", kind: "embed", title: "Whiteboard", icon: "icon:pen-tool", url: whiteboardAppUrl() };
 }
 
 /** One board, opened full-size from an inline whiteboard block. Keyed by slug, so opening
- *  the same board again focuses its tab. The slug is minted by the whiteboard service and
- *  never changes when the board is renamed, so a stored tab does not go stale. */
+ *  the same board again focuses its tab. The slug never changes when the board is renamed, so a
+ *  stored tab does not go stale. */
 export function whiteboardBoardTab(slug: string, title: string): WorkspaceTab {
-  return { tabId: genId("tab"), pageId: `${WHITEBOARD_TAB_ID}:${slug}`, workspaceId: "", kind: "embed", title: title || "Whiteboard", icon: "icon:pen-tool", url: boardUrl(slug) };
+  return { tabId: genId("tab"), pageId: `${WHITEBOARD_TAB_ID}:${slug}`, workspaceId: "", kind: "embed", title: title || "Whiteboard", icon: "icon:pen-tool", url: boardUrl(slug, title || undefined) };
 }
 
 /** A live external-database table tab (`baas:<dbId>:<table>` id). pageId == the
@@ -127,6 +129,46 @@ export function chatTab(): WorkspaceTab {
 /** The Communities tab — browse communities and their channels. */
 export function communityTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: COMMUNITY_TAB_ID, workspaceId: "", kind: "community", title: "Communities", icon: "icon:users" };
+}
+
+/** The settings tab — the retired modal rendered as a pane. Stable pageId, so a
+ *  second call to openTab focuses the existing tab instead of duplicating it. */
+export function settingsTab(): WorkspaceTab {
+  return { tabId: genId("tab"), pageId: SETTINGS_TAB_ID, workspaceId: "", kind: "settings", title: "Settings", icon: "icon:settings" };
+}
+
+/** The AI Hub tab — health, model, spend and every AI setting in one pane. Stable
+ *  pageId, so a second open focuses the existing tab. */
+export function aiHubTab(): WorkspaceTab {
+  return { tabId: genId("tab"), pageId: AI_HUB_TAB_ID, workspaceId: "", kind: "ai-hub", title: "AI Hub", icon: "icon:sparkles" };
+}
+
+/** What a theme JSON tab edits. Its pageId encodes it, so a restored layout reopens the same document. */
+export type ThemeJsonTarget = { kind: "theme"; slug: string } | { kind: "new-theme" } | { kind: "import-theme" };
+
+export const THEME_JSON_PREFIX = "__theme_json__:";
+// A theme slug as scripts/bridge-theme-rules.mjs:themeSlug makes it: 1–24 characters, no dash at either end.
+const THEME_SLUG = /^[a-z0-9](?:[a-z0-9-]{0,22}[a-z0-9])?$/;
+
+function themeJsonFile(target: ThemeJsonTarget): { id: string; title: string } {
+  if (target.kind === "theme") return { id: `theme:${target.slug}`, title: `${target.slug}.json` };
+  if (target.kind === "new-theme") return { id: "new", title: "new-theme.json" };
+  return { id: "import-theme", title: "import.json" };
+}
+
+/** The tab of one theme document; one per target, so a second open focuses it. */
+export function themeJsonTab(target: ThemeJsonTarget): WorkspaceTab {
+  const { id, title } = themeJsonFile(target);
+  return { tabId: genId("tab"), pageId: `${THEME_JSON_PREFIX}${id}`, workspaceId: "", kind: "theme-json", title, icon: "icon:code" };
+}
+
+export function parseThemeJsonPageId(pageId: string): ThemeJsonTarget | null {
+  if (!pageId.startsWith(THEME_JSON_PREFIX)) return null;
+  const id = pageId.slice(THEME_JSON_PREFIX.length);
+  if (id === "new") return { kind: "new-theme" };
+  if (id === "import-theme") return { kind: "import-theme" };
+  const slug = id.startsWith("theme:") ? id.slice("theme:".length) : "";
+  return THEME_SLUG.test(slug) ? { kind: "theme", slug } : null;
 }
 
 /** One pane with no tab: what is left after the user closes everything. The

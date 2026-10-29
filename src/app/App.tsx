@@ -22,6 +22,7 @@ import { useNotifyLive } from "@/store/chat/useNotifyLive";
 import { useFavoritesStore } from "@/store/favorites/favoritesStore";
 import { QuickCaptureModal } from "@/features/quick-capture/ui/QuickCaptureModal";
 import { WorkspaceIntentModal } from "@/features/workspace-onboarding/ui/WorkspaceIntentModal";
+import { ProfessionPickerModal } from "@/features/professions/ui/ProfessionPickerModal";
 import { usePresenceHeartbeat } from "@/shared/people/usePresenceHeartbeat";
 import { useZenMode } from "@/shared/config/useZenMode";
 import { useTemplateRecurrence } from "@/store/sync/templateRecurrence";
@@ -34,19 +35,30 @@ import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersi
 import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
 import { LazyCanvasDebugRoute, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
 import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
+import { applyStoredTheme } from "@/shared/config/themeApply";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
 import { WorkspaceThemePanel } from "@/features/theme/WorkspaceThemePanel";
-import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
+import { ThemeSafeModeBanner } from "@/features/theme/ui/ThemeSafeModeBanner";
+import { openSettings } from "@/features/settings/model/settingsNav";
+import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
+import { useVariablesSync } from "@/features/variables/model/useVariablesSync";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
-import type { SettingsTab } from "@osionos/ui/primitives/useSettingsSearchIndex";
 import { ToastViewport } from "@osionos/ui/primitives";
 import { ShareHost } from "@/features/share/ShareHost";
+import { IssueReportHost } from "@/features/issues/ui/IssueReportHost";
 import { ExportHost } from "@/features/page-export/ui/ExportHost";
+import { ActionGuardHost } from "@/features/app-actions/ui/ActionGuardHost";
+import { AiInlinePanel } from "@/features/ai/ui/AiInlinePanel";
 import { TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
+import { BindingSourcesProvider } from "@/features/bindings/ui/BindingSourcesProvider";
 
 type UserSessions = Record<string, UserSession>;
+
+const LazyNoAccessScreen = React.lazy(() =>
+  import("@/features/page-link/NoAccessScreen").then((module) => ({ default: module.NoAccessScreen })),
+);
 
 function ensureBridgeWorkspacePages(session: UserSession | null | undefined) {
   const workspaceIds = [
@@ -154,16 +166,17 @@ const App: React.FC = () => {
   const initialized = useUserStore((s) => s.initialized);
   const error = useUserStore((s) => s.error);
   const activeUserId = useUserStore((s) => s.activeUserId);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>("general");
-  const openSettings = (tab?: SettingsTab) => {
-    setSettingsTab(tab ?? "general");
-    setSettingsOpen(true);
-  };
+  // The way back from OpenRouter: the app comes back with ?code&state, and the
+  // panel that finishes the sign-in opens right away.
+  useEffect(() => {
+    if (readOAuthReturn(globalThis.location?.href ?? "")) openSettings("ai_connections");
+  }, []);
   // Captured once at first render, before init effects can reset activePage,
   // so a refresh can reopen the page the user was last on.
   const [persistedActivePage] = useState(() => loadActivePage());
   const seeded = usePageStore((s) => s.seeded);
+  const deniedPage = usePageStore((s) => s.deniedPage);
+  const deniedPageId = deniedPage?.pageId ?? null;
   const ready = initialized;
 
   // Persist pages to the BaaS (source of truth) with hydrate-on-load + offline outbox;
@@ -191,6 +204,7 @@ const App: React.FC = () => {
 
   // Single document-level keyboard-shortcut dispatcher (flag osio.automations; inert when OFF).
   useAutomationDispatcher();
+  useVariablesSync();
 
   // Zen (focus) mode — Ctrl+K Ctrl+Z. Drives [data-zen] on the shell; global.css
   // hides every chrome region off it. Session-only: a reload always exits zen.
@@ -225,6 +239,7 @@ const App: React.FC = () => {
   // Run once on mount
   useEffect(() => {
     applyStoredAppearance();
+    applyStoredTheme();
 
     if (initialized) {
       return;
@@ -315,44 +330,59 @@ const App: React.FC = () => {
   }
 
   return (
-    <div
-      data-testid="app-shell"
-      data-zen={zen ? "1" : undefined}
-      className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
-    >
-      {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
-      <TopBar onOpenSettings={openSettings} />
+    <BindingSourcesProvider>
+      <div
+        data-testid="app-shell"
+        data-zen={zen ? "1" : undefined}
+        className="relative flex flex-col h-screen w-screen overflow-hidden bg-[var(--osio-bg-canvas)]"
+      >
+        {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
+        <TopBar onOpenSettings={openSettings} />
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {/* Left sidebar */}
-        <ActivitySidebar
-          onOpenSettings={() => openSettings()}
-          onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
-          onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
-        />
+        <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          {/* Left sidebar */}
+          <ActivitySidebar
+            onOpenSettings={() => openSettings()}
+            onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
+            onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
+          />
 
-        {/* Hidden sidebar: the left edge reveals it over the page (no floating button). */}
-        <SidebarEdgePeek
-          onOpenSettings={() => openSettings()}
-          onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
-          onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
-        />
+          {/* Hidden sidebar: the left edge reveals it over the page (no floating button). */}
+          <SidebarEdgePeek
+            onOpenSettings={() => openSettings()}
+            onOpenTrash={() => useWorkspaceLayout.getState().openTab(trashTab())}
+            onOpenConsole={() => useWorkspaceLayout.getState().openTab(consoleTab())}
+          />
 
-        {/* Content area — the unified workbench (grid + dock + status bar). */}
-        <main className="flex-1 flex min-w-0 overflow-hidden relative">
-          <LazyWorkbench />
-        </main>
+          {/* Content area — the unified workbench (grid + dock + status bar), or the
+              no-access screen when a shared link pointed at an unreadable page. */}
+          <main className="flex-1 flex min-w-0 overflow-hidden relative">
+            {deniedPageId ? (
+              <React.Suspense fallback={null}>
+                <LazyNoAccessScreen />
+              </React.Suspense>
+            ) : (
+              <LazyWorkbench />
+            )}
+          </main>
+        </div>
+
+        <ThemeSafeModeBanner />
+        <WorkspaceThemePanel />
+        <ToastViewport />
+        <ShareHost />
+        <IssueReportHost />
+        <ExportHost />
+        <ActionGuardHost />
+        <AiInlinePanel />
+        <ContactDock />
+        <QuickCaptureModal />
+        <WorkspaceIntentModal />
+        {/* The profession picker: the Modal primitive returns null until the store's
+            `open` flag is set, so the warm path renders nothing. */}
+        <ProfessionPickerModal />
       </div>
-
-      <WorkspaceThemePanel />
-      {settingsOpen && <LazySettingsCenter initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />}
-      <ToastViewport />
-      <ShareHost />
-      <ExportHost />
-      <ContactDock />
-      <QuickCaptureModal />
-      <WorkspaceIntentModal />
-    </div>
+    </BindingSourcesProvider>
   );
 };
 

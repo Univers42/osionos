@@ -19,6 +19,7 @@ export type CommandId =
   | "heading3"
   | "openPalette"
   | "openSearch"
+  | "openSettings"
   | "newPage"
   | "toggleSidebar"
   | "openSearchPanel"
@@ -33,7 +34,8 @@ export type CommandId =
   | "italic"
   | "underline"
   | "inlineCode"
-  | "link";
+  | "link"
+  | "reportIssue";
 
 /** Context-predicate names (the VSCode `when`-clause). */
 export type WhenName =

@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 16:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 16:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/27 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,9 +38,15 @@ import { seedSharedFile } from '../model/seedSharedFile';
 import { uploadSharedFile } from '../api/uploadSharedFile';
 import { CollabRoster } from './CollabRoster';
 import { CollabCaretLayer } from './CollabCaretLayer';
+import { CollabFollowLayer } from './CollabFollowLayer';
+import { CollabEditFlash } from './CollabEditFlash';
 import { SummonPrompt } from './SummonPrompt';
 import { useSharedSpacePresence } from './useSharedSpacePresence';
+import { useSharedSpacePage } from './useSharedSpacePage';
+import { actorFor, randomTabId } from '../model/collabActor';
+const TAB_ID = randomTabId();
 import { useBroadcastLocalCaret } from './useBroadcastLocalCaret';
+import { useLiveBlockSync } from './useLiveBlockSync';
 import { useBroadcastLocalActivity } from './useBroadcastLocalActivity';
 import { useSummonInbox } from './useSummonInbox';
 import { useSharedAnnounceToasts } from './useSharedAnnounceToasts';
@@ -78,12 +84,18 @@ export const SharedSpacePresenceBar: React.FC = () => {
   });
   const self = persona?.id ? { id: persona.id, displayName: persona.name } : null;
 
+  // The active page id is both the page-channel binding and the summon target.
   const route = usePageStore((state) => state.activePage?.id ?? null);
 
   const fileInput = useRef<HTMLInputElement>(null);
   useSharedSpacePresence(spaceId, self);
-  useBroadcastLocalCaret(!!spaceId);
-  useBroadcastLocalActivity(!!spaceId, route);
+  // A second, page-scoped socket: page data and page presence only (C501/C502).
+  useSharedSpacePage(spaceId, route, self);
+  useBroadcastLocalCaret(!!spaceId && !!route);
+  // Live block sync rides the page channel: edits on the page being viewed reach
+  // every member block by block within a frame instead of the outbox debounce.
+  useLiveBlockSync(spaceId, self?.id ?? null, route);
+  useBroadcastLocalActivity(!!spaceId && !!route, route);
   useSummonInbox(!!spaceId);
   useSharedAnnounceToasts(!!spaceId);
 
@@ -106,7 +118,7 @@ export const SharedSpacePresenceBar: React.FC = () => {
     if (!file || !id || !selfId) return;
     try {
       await seedSharedFile(id, file, {
-        selfId,
+        selfId: actorFor(selfId, TAB_ID),
         upload: (sp, f) => uploadSharedFile(sp, f as File),
         broadcast: (e) => useCollabStore.getState().broadcast(e),
       });
@@ -131,6 +143,8 @@ export const SharedSpacePresenceBar: React.FC = () => {
       </button>
       <input ref={fileInput} type="file" hidden onChange={onPickFile} />
       <CollabCaretLayer />
+      <CollabFollowLayer />
+      <CollabEditFlash />
       <SummonPrompt />
     </>
   );

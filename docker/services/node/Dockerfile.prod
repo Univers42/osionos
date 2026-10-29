@@ -21,6 +21,8 @@ COPY src ./src
 COPY packages ./packages
 COPY config ./config
 COPY scripts/vite ./scripts/vite
+# The theme rules are shared with the bridge, so they live in scripts/ (src imports them).
+COPY scripts/bridge-theme-rules.mjs ./scripts/bridge-theme-rules.mjs
 
 ARG VITE_API_URL=""
 ARG VITE_APP_VERSION="dev"

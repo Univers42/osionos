@@ -23,6 +23,7 @@ import { Braces, Check, ChevronDown, Code, Copy, Eye, Hash, Moon, Sun } from "lu
 import { EquationView } from "@/shared/ui";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
+import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
 import { PlaceholderBlock } from "./PlaceholderBlock";
 import {
   getBlockPlaceholder,
@@ -52,11 +53,22 @@ import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 import type { SurfaceBlockEditorProps } from "./BlockEditorSurface";
+import { BoundFieldEditor } from "@/features/profile-binding/ui/BoundFieldEditor";
+import { isReadmePage } from "@/features/profile-binding/model/readmePage";
+import { useAccountProfileStore } from "@/store/settings/useAccountProfileStore";
+import { ButtonBlockEditor } from "@/features/button-program/ui/ButtonSettingsPopover";
 import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
+import { VisibleWhenGate } from "@/entities/block/ui/VisibleWhenGate";
 
-// The inline whiteboard (iframe of the drawnosaurus board) — lazy, same boundary.
+// embed/bookmark are void blocks (their content is a URL, not text), so they never reach
+// EditableContent. Lazy, like the whiteboard: the frame and card code stays off the warm chunk.
+const LinkBlockEditor = lazy(() =>
+  import("./LinkBlockEditor").then((m) => ({ default: m.LinkBlockEditor })),
+);
+
+// The inline whiteboard (iframe of the hydrawn board) — lazy, same boundary.
 const WhiteboardBlock = lazy(() =>
   import("@/features/whiteboard/ui/WhiteboardBlock").then((m) => ({ default: m.WhiteboardBlock })),
 );
@@ -64,6 +76,12 @@ const WhiteboardBlock = lazy(() =>
 // The Home "view launcher" (home_views block) — lazy, same boundary discipline.
 const HomeViewsBlock = lazy(() =>
   import("@/widgets/database-view/ui/HomeViewsBlock").then((m) => ({ default: m.HomeViewsBlock })),
+);
+
+// The diagram block: a stored SPEC drawn live through the locked renderer —
+// lazy, same boundary (the mermaid renderer is a heavy chunk of its own).
+const DiagramBlock = lazy(() =>
+  import("@/features/diagram/ui/DiagramBlock").then((m) => ({ default: m.DiagramBlock })),
 );
 
 // Database blocks are rare in an edited document. Lazy-boundary them (same
@@ -113,6 +131,8 @@ interface BlockEditorProps {
   numberedDepth: number;
   bulletDepth: number;
   isSelected?: boolean;
+  /** Top-level page-body block: tables/databases bleed to the page edge before scrolling. */
+  wideBlock?: boolean;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent) => void;
@@ -124,13 +144,14 @@ interface BlockEditorProps {
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
 }
 
-export const BlockEditor: React.FC<BlockEditorProps> = ({
+const BlockEditorImpl: React.FC<BlockEditorProps> = ({
   pageId,
   block,
   numberedIndex,
   numberedDepth,
   bulletDepth,
   isSelected = false,
+  wideBlock = false,
   onChange,
   onKeyDown,
   onPaste,
@@ -207,6 +228,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       commitBlockUpdate(block.id, { type: type as Block["type"] });
     },
     [commitBlockUpdate, block.id],
+  );
+
+  // "Ask AI" from the selection toolbar: the panel opens under the block with
+  // the SELECTION as its input. A skill runs immediately, exactly like the
+  // matching slash command; "Edit with AI" only opens the panel.
+  const handleAskAI = useCallback(
+    (selectionText: string, command?: string, instruction?: string) => {
+      const store = useInlineAiStore.getState();
+      store.open({ pageId, blockId: block.id, selectionText }, command);
+      if (!command) return;
+      if (command === "ask" && !instruction) return;
+      void store.run(command, instruction);
+    },
+    [block.id, pageId],
   );
 
   const handleResizePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -339,7 +374,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
   const codeBlockHeader = useMemo(
     () => (
-      <div className="flex items-center gap-2 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-t-xl border-b border-[var(--osio-code-border)] bg-[var(--osio-code-header-bg)] px-3 py-2">
         <div className="flex shrink-0 items-center gap-2">
           <Braces size={16} aria-hidden className="text-[var(--osio-accent)]" />
           <div ref={langPickerRef} className="relative">
@@ -397,7 +432,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           name="code-file-name"
           autoComplete="off"
           spellCheck={false}
-          className="min-w-0 flex-1 bg-transparent font-mono text-2xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
+          className="min-w-16 flex-1 bg-transparent font-mono text-2xs text-[var(--osio-code-fg)] outline-none placeholder:text-[var(--osio-code-fg-muted)]"
         />
         <div className="flex shrink-0 items-center gap-0.5">
           <button
@@ -453,6 +488,22 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     [block.language, block.id, block.fileName, block.codeTheme, codeShowLineNumbers, showLangPicker, langQuery, isRenderable, codeView, copiedCode, handleLangSelect, commitBlockUpdate, handleCopyCode, langPickerRef],
   );
 
+  // Only the owner's README binds to the profile; marketplace and profession templates bind
+  // `$record` to other records (app title, `custom:*`) and keep their plain editor.
+  const isProfileBound = useAccountProfileStore((s) => Boolean(block.recordRef && block.fieldBind) && isReadmePage(pageId, s.profile));
+  if (isProfileBound) return <BoundFieldEditor block={block} onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)} onKeyDown={onKeyDown} />;
+
+  const listMarker = (marker: React.ReactNode) =>
+    block.children?.length ? (
+      <BlockListCollapse
+        collapsed={block.collapsed}
+        onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })}
+        marker={marker}
+      />
+    ) : (
+      marker
+    );
+
   switch (block.type) {
     case "heading_1":
       return (
@@ -468,6 +519,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
     case "heading_2":
@@ -484,6 +537,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
     case "heading_3":
@@ -500,6 +555,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -517,6 +574,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -534,6 +593,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -551,6 +612,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -568,6 +631,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -588,24 +653,20 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
     case "bulleted_list": {
       const bulletStyle = getBulletMarker(bulletDepth);
       return (
-        <div className="group relative flex items-start gap-2 pl-5">
-          {block.children?.length ? (
-            <BlockListCollapse
-              collapsed={block.collapsed}
-              onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })}
-            />
-          ) : null}
-          <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
-            {bulletStyle === "disc" && (
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--osio-fg-subtle)] mt-[7px]" />
-            )}
-            {bulletStyle === "circle" && (
-              <span className="inline-block w-1.5 h-1.5 rounded-full border border-[var(--osio-fg-subtle)] mt-[7px]" />
-            )}
-            {bulletStyle === "square" && (
-              <span className="inline-block w-1.5 h-1.5 bg-[var(--osio-fg-subtle)] mt-[7px]" />
-            )}
-          </span>
+        <div className="group relative flex items-start gap-2">
+          {listMarker(
+            <span data-list-marker="" className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
+              {bulletStyle === "disc" && (
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--osio-fg-subtle)] mt-[7px]" />
+              )}
+              {bulletStyle === "circle" && (
+                <span className="inline-block w-1.5 h-1.5 rounded-full border border-[var(--osio-fg-subtle)] mt-[7px]" />
+              )}
+              {bulletStyle === "square" && (
+                <span className="inline-block w-1.5 h-1.5 bg-[var(--osio-fg-subtle)] mt-[7px]" />
+              )}
+            </span>,
+          )}
           <div className="flex-1">
             <EditableContent
               content={block.content}
@@ -619,6 +680,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               pageId={pageId}
               blockType={block.type}
               onTurnInto={handleTurnInto}
+              onAskAI={handleAskAI}
+              blockId={block.id}
             />
           </div>
         </div>
@@ -627,16 +690,12 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "numbered_list":
       return (
-        <div className="group relative flex items-start gap-2 pl-5">
-          {block.children?.length ? (
-            <BlockListCollapse
-              collapsed={block.collapsed}
-              onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })}
-            />
-          ) : null}
-          <span className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
-            {getNumberedMarker(numberedIndex, numberedDepth)}
-          </span>
+        <div className="group relative flex items-start gap-2">
+          {listMarker(
+            <span data-list-marker="" className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
+              {getNumberedMarker(numberedIndex, numberedDepth)}
+            </span>,
+          )}
           <div className="flex-1">
             <EditableContent
               content={block.content}
@@ -650,6 +709,8 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               pageId={pageId}
               blockType={block.type}
               onTurnInto={handleTurnInto}
+              onAskAI={handleAskAI}
+              blockId={block.id}
             />
           </div>
         </div>
@@ -665,6 +726,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onChange={onChange}
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
+          onAskAI={handleAskAI}
         />
       );
 
@@ -679,6 +741,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           onKeyDown={onKeyDown}
           focusBlock={focusBlock}
           onRequestSlashMenu={onRequestSlashMenu}
+          onAskAI={handleAskAI}
         />
       );
 
@@ -803,7 +866,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
 
     case "quote":
       return (
-        <div className="flex my-0 rounded-md px-1">
+        <div className="flex my-0 rounded-md">
           {block.children?.length ? (
             <BlockCollapseToggle collapsed={block.collapsed} onToggle={() => commitBlockUpdate(block.id, { collapsed: !block.collapsed })} />
           ) : null}
@@ -818,6 +881,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
+              onAskAI={handleAskAI}
+              pageId={pageId}
+              blockId={block.id}
             />
             {!block.collapsed && renderChildren?.()}
           </div>
@@ -875,6 +941,9 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
               onKeyDown={onKeyDown}
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
+              onAskAI={handleAskAI}
+              pageId={pageId}
+              blockId={block.id}
             />
             {hasChildren ? (
               <div className="min-w-0 max-w-full">{renderChildren?.()}</div>
@@ -967,12 +1036,13 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           data-table-block-shell
           aria-label="Table block"
         >
-          <div className="osio-block-scroll-x">
+          <div className={wideBlock ? "osio-wide-block" : "osio-block-scroll-x"}>
             <TableBlockEditor
               block={block}
               pageId={pageId}
               style={editableStyle}
               textStyle={editableStyle}
+              wide={wideBlock}
               onDeleteTable={onDeleteCodeBlock}
               onBeforeStructuralEdit={onBeforeStructuralEdit}
             />
@@ -999,15 +1069,17 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           aria-label="Database block"
           className="relative group/dbblock"
         >
-          <div className="osio-block-scroll-x">
-            <Suspense fallback={null}>
-              <DatabaseBlock
-                databaseId={block.databaseId}
-                initialViewId={block.viewId}
-                mode="inline"
-                recordLimit={block.recordLimit}
-              />
-            </Suspense>
+          <div className={wideBlock ? "osio-wide-block" : "osio-block-scroll-x"}>
+            <div data-wide-block-content={wideBlock ? "" : undefined} className={wideBlock ? undefined : "contents"}>
+              <Suspense fallback={null}>
+                <DatabaseBlock
+                  databaseId={block.databaseId}
+                  initialViewId={block.viewId}
+                  mode="inline"
+                  recordLimit={block.recordLimit}
+                />
+              </Suspense>
+            </div>
           </div>
         </div>
       );
@@ -1055,7 +1127,7 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
       );
 
     case "draw":
-      return <LegacyDrawNotice block={block} onConvert={(updates) => commitBlockUpdate(block.id, updates)} />;
+      return <LegacyDrawNotice block={block} />;
 
     case "whiteboard":
       return (
@@ -1074,6 +1146,41 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
             <WhiteboardBlock block={block} onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)} />
           </Suspense>
         </div>
+      );
+
+    case "diagram":
+      return (
+        <div tabIndex={-1} aria-label="Diagram block" className="relative my-0">
+          <Suspense fallback={null}>
+            <DiagramBlock
+              block={block}
+              pageId={pageId}
+              editable
+              onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+            />
+          </Suspense>
+        </div>
+      );
+
+    case "embed":
+    case "bookmark":
+      return (
+        <Suspense fallback={null}>
+          <LinkBlockEditor
+            block={block}
+            onKeyDown={onKeyDown}
+            onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+          />
+        </Suspense>
+      );
+
+    case "button":
+      return (
+        <ButtonBlockEditor
+          block={block}
+          hostPageId={pageId}
+          onUpdateBlock={(updates) => commitBlockUpdate(block.id, updates)}
+        />
       );
 
     case "home_views":
@@ -1099,8 +1206,24 @@ export const BlockEditor: React.FC<BlockEditorProps> = ({
           pageId={pageId}
           blockType={block.type}
           onTurnInto={handleTurnInto}
+          onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
   }
 };
 
+
+const BlockEditor: React.FC<BlockEditorProps> = (props) => {
+  const visibleWhen = typeof props.block?.visibleWhen === "string" ? props.block.visibleWhen.trim() : "";
+  if (visibleWhen) {
+    return (
+      <VisibleWhenGate block={props.block} mode="edit">
+        <BlockEditorImpl {...props} />
+      </VisibleWhenGate>
+    );
+  }
+  return <BlockEditorImpl {...props} />;
+};
+
+export { BlockEditor };

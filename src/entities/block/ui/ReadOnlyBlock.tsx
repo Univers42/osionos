@@ -22,13 +22,18 @@ import { CodeBlockReadOnly } from "./CodeBlockReadOnly";
 import { MediaBlockReadOnly } from "./MediaBlockReadOnly";
 import { TableBlockReadOnly } from "./TableBlockReadOnly";
 import { LayoutBlockReadOnly } from "./LayoutBlockReadOnly";
+import { VisibleWhenGate } from "./VisibleWhenGate";
 import { BoundFieldReadOnly } from "./BoundFieldReadOnly";
 import { DeferredMount } from "./DeferredMount";
 import { renderInlineToReact } from '@osionos/markdown-engine/react';
 import { timed } from '@osionos/perf-probe';
 import { InternalPageLink } from "@/entities/page";
-import { getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
+import { getBlockSurfaceClass, getBlockSurfaceStyle } from "@/features/block-editor/model/blockColors";
 import { usePageStore } from "@/store/usePageStore";
+import { renderVariableChip } from "@/features/variables/ui/VariableChip";
+import { runButtonBlock } from "@/services/button-program/runProgram";
+import { useRenderMode } from "./renderMode";
+import { buttonEffect } from "@/entities/block/model/buttonEffect";
 import { GraphViewBlock } from "@/widgets/graph-studio-view/GraphViewBlock";
 
 // Async boundary: database blocks are rare in rendered pages. Loading the
@@ -47,9 +52,20 @@ const LegacyDrawNotice = lazy(() =>
   import("@/features/whiteboard/ui/LegacyDrawNotice").then((m) => ({ default: m.LegacyDrawNotice })),
 );
 
+// Embeds/bookmarks pull in the iframe and card UI — kept off the warm chunk.
+const ReadOnlyLinkBlock = lazy(() =>
+  import("./ReadOnlyLinkBlock").then((m) => ({ default: m.ReadOnlyLinkBlock })),
+);
+
 // The Home "view launcher" (home_views block) — lazy, same discipline.
 const HomeViewsBlock = lazy(() =>
   import("@/widgets/database-view/ui/HomeViewsBlock").then((m) => ({ default: m.HomeViewsBlock })),
+);
+
+// The diagram block: the stored SPEC drawn live. On a public page it draws
+// nothing (devil C110) — the component itself knows the route.
+const DiagramBlock = lazy(() =>
+  import("@/features/diagram/ui/DiagramBlock").then((m) => ({ default: m.DiagramBlock })),
 );
 
 const databaseLoadingFallback = (
@@ -63,6 +79,9 @@ interface BlockProps {
   index: number;
   bulletDepth?: number;
   numberedDepth?: number;
+  /** Top-level page-body block: tables/databases bleed to the page edge before scrolling. */
+  wideBlock?: boolean;
+  properties?: readonly import("@/entities/page/model/types").PagePropertyEntry[] | Record<string, unknown>;
 }
 
 const INLINE_MARKDOWN_CACHE_LIMIT = 2000;
@@ -82,6 +101,7 @@ function renderCachedInlineMarkdown(content: string): React.ReactNode {
 
   const rendered = timed("renderInlineToReact", () => renderInlineToReact(content, {
     internalLinkRenderer: renderInternalPageLink,
+    variableRenderer: renderVariableChip,
   }));
   inlineMarkdownCache.set(content, rendered);
 
@@ -104,11 +124,11 @@ const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
 
 function getNestedChildrenClassName(type: Block["type"]) {
   if (type === "bulleted_list" || type === "numbered_list") {
-    return "ml-[3.25rem] mt-0.5";
+    return "ml-8 mt-0.5";
   }
 
   if (type === "to_do") {
-    return "ml-[2.75rem] mt-0.5";
+    return "ml-6 mt-0.5";
   }
 
   if (type === "toggle") {
@@ -167,14 +187,17 @@ function areReadOnlyBlockPropsEqual(previous: BlockProps, next: BlockProps): boo
     previous.block === next.block &&
     previous.index === next.index &&
     (previous.bulletDepth ?? 0) === (next.bulletDepth ?? 0) &&
-    (previous.numberedDepth ?? 0) === (next.numberedDepth ?? 0)
+    (previous.numberedDepth ?? 0) === (next.numberedDepth ?? 0) &&
+    (previous.wideBlock ?? false) === (next.wideBlock ?? false) &&
+    previous.properties === next.properties
   );
 }
 
-const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0 }) => {
+const ReadOnlyBlockBody: React.FC<BlockProps> = ({ block, index, bulletDepth = 0, numberedDepth = 0, wideBlock = false, properties }) => {
   // Per-block text/background colour set via the block colour menu; mirrors the
   // editable BlockEditor (getBlockSurfaceStyle), so read-only matches editing.
   const surface = getBlockSurfaceStyle(block);
+  const tint = getBlockSurfaceClass(block);
   // Admin template binding: a block bound to the record in context ($record, or
   // the legacy $viewedUser alias) renders that field, regardless of its base type.
   if (block.recordRef && block.fieldBind) {
@@ -185,11 +208,11 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       return (
         <>
           {block.content ? (
-            <p className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 min-h-[1.5em]" style={surface}>
+            <p className={`text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 min-h-[1.5em] ${tint}`} style={surface}>
               <InlineMarkdown content={block.content} />
             </p>
           ) : (
-            <p className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 min-h-[1.5em]" style={surface}>
+            <p className={`text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 min-h-[1.5em] ${tint}`} style={surface}>
               <span className="text-[var(--osio-fg-subtle)]">&nbsp;</span>
             </p>
           )}
@@ -200,7 +223,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_1":
       return (
         <>
-          <h1 data-block-type="heading_1" data-block-id={block.id} className="osio-h1 text-[var(--osio-fg-default)] mt-6 mb-1" style={surface}>
+          <h1 data-block-type="heading_1" data-block-id={block.id} className={`osio-h1 text-[var(--osio-fg-default)] mt-6 mb-1 ${tint}`} style={surface}>
             <InlineMarkdown content={block.content} />
           </h1>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -210,7 +233,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_2":
       return (
         <>
-          <h2 data-block-type="heading_2" data-block-id={block.id} className="osio-h2 text-[var(--osio-fg-default)] mt-5 mb-1" style={surface}>
+          <h2 data-block-type="heading_2" data-block-id={block.id} className={`osio-h2 text-[var(--osio-fg-default)] mt-5 mb-1 ${tint}`} style={surface}>
             <InlineMarkdown content={block.content} />
           </h2>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -220,7 +243,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_3":
       return (
         <>
-          <h3 data-block-type="heading_3" data-block-id={block.id} className="osio-h3 text-[var(--osio-fg-default)] mt-4 mb-0.5" style={surface}>
+          <h3 data-block-type="heading_3" data-block-id={block.id} className={`osio-h3 text-[var(--osio-fg-default)] mt-4 mb-0.5 ${tint}`} style={surface}>
             <InlineMarkdown content={block.content} />
           </h3>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -230,7 +253,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_4":
       return (
         <>
-          <h4 className="osio-h4 text-[var(--osio-fg-default)] mt-3 mb-0.5" style={surface}>
+          <h4 className={`osio-h4 text-[var(--osio-fg-default)] mt-3 mb-0.5 ${tint}`} style={surface}>
             <InlineMarkdown content={block.content} />
           </h4>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -240,7 +263,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_5":
       return (
         <>
-          <h5 className="text-sm font-semibold text-[var(--osio-fg-default)] mt-2 mb-0.5 leading-snug" style={surface}>
+          <h5 className={`text-sm font-semibold text-[var(--osio-fg-default)] mt-2 mb-0.5 leading-snug ${tint}`} style={surface}>
             <InlineMarkdown content={block.content} />
           </h5>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -250,7 +273,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "heading_6":
       return (
         <>
-          <h6 className="text-xs font-semibold text-[var(--osio-fg-muted)] mt-2 mb-0.5 leading-snug uppercase tracking-wide" style={surface}>
+          <h6 className={`text-xs font-semibold text-[var(--osio-fg-muted)] mt-2 mb-0.5 leading-snug uppercase tracking-wide ${tint}`} style={surface}>
             <InlineMarkdown content={block.content} />
           </h6>
           {renderNestedChildren(block, bulletDepth, numberedDepth)}
@@ -261,7 +284,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       const bulletStyle = getBulletMarker(bulletDepth);
       return (
         <>
-          <div className="flex items-start gap-2 pl-5">
+          <div className="flex items-start gap-2">
             <span className="text-sm leading-relaxed py-0.5 select-none shrink-0 w-6 text-center">
               {bulletStyle === "disc" && (
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--osio-fg-subtle)] mt-[7px]" />
@@ -273,7 +296,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
                 <span className="inline-block w-1.5 h-1.5 bg-[var(--osio-fg-subtle)] mt-[7px]" />
               )}
             </span>
-            <span className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1" style={surface}>
+            <span className={`text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1 ${tint}`} style={surface}>
               <InlineMarkdown content={block.content} />
             </span>
           </div>
@@ -285,11 +308,11 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "numbered_list":
       return (
         <>
-          <div className="flex items-start gap-2 pl-5">
+          <div className="flex items-start gap-2">
             <span className="text-sm leading-relaxed py-0.5 text-[var(--osio-fg-muted)] select-none shrink-0 w-6 text-center font-medium">
               {getNumberedMarker(index + 1, numberedDepth)}
             </span>
-            <span className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1" style={surface}>
+            <span className={`text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 flex-1 ${tint}`} style={surface}>
               <InlineMarkdown content={block.content} />
             </span>
           </div>
@@ -300,10 +323,10 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "to_do":
       return (
         <>
-          <div className="flex items-start gap-2 pl-5">
+          <div className="flex items-start gap-2">
             <span
               className={[
-                "shrink-0 mt-[3px] w-4 h-4 rounded-xs border flex items-center justify-center",
+                "osio-line-marker text-sm leading-relaxed shrink-0 w-4 h-4 rounded-xs border flex items-center justify-center",
                 block.checked
                   ? "bg-[var(--osio-accent)] border-[var(--osio-accent)] text-[var(--osio-accent-fg)]"
                   : "border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)]",
@@ -327,6 +350,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
                 block.checked
                   ? "text-[var(--osio-fg-muted)] line-through"
                   : "text-[var(--osio-fg-default)]",
+                tint,
               ].join(" ")}
               style={surface}
             >
@@ -351,27 +375,29 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "column_list": {
       const columns = flattenColumns(block.children ?? []);
       return (
-        <div className="my-2 flex items-start gap-6">
-          {columns.map((column) => (
-            <div
-              key={column.id}
-              className="min-w-0 rounded-md"
-              style={{
-                // Same ratio floor as the editable renderer, and the same
-                // per-COLUMN surface style — columns stay independent.
-                flexGrow:
-                  typeof column.widthRatio === "number" && Number.isFinite(column.widthRatio)
-                    ? Math.max(0.08, column.widthRatio)
-                    : 1 / Math.max(columns.length, 1),
-                flexBasis: 0,
-                ...getBlockSurfaceStyle(column),
-              }}
-            >
-              {(column.children ?? []).map((child, childIndex) => (
-                <ReadOnlyBlock key={child.id} block={child} index={childIndex} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />
-              ))}
-            </div>
-          ))}
+        <div className="osio-columns my-2">
+          <div className="osio-columns-row flex items-start gap-6">
+            {columns.map((column) => (
+              <div
+                key={column.id}
+                className="min-w-0 rounded-md"
+                style={{
+                  // Same ratio floor as the editable renderer, and the same
+                  // per-COLUMN surface style — columns stay independent.
+                  flexGrow:
+                    typeof column.widthRatio === "number" && Number.isFinite(column.widthRatio)
+                      ? Math.max(0.08, column.widthRatio)
+                      : 1 / Math.max(columns.length, 1),
+                  flexBasis: 0,
+                  ...getBlockSurfaceStyle(column),
+                }}
+              >
+                {(column.children ?? []).map((child, childIndex) => (
+                  <ReadOnlyBlock key={child.id} block={child} index={childIndex} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
@@ -388,7 +414,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
     case "quote": {
       const { body, cite } = splitQuoteAttribution(block.content);
       return (
-        <blockquote className="my-0.5 flex" style={surface}>
+        <blockquote className={`my-0.5 flex ${tint}`} style={surface}>
           <div className="mr-3 w-1 shrink-0 rounded-full bg-[var(--osio-fg-muted)]" />
           <div className="min-w-0 flex-1">
             <span className={`${getToggleHeadingClass(block.headingLevel)} block py-0.5 italic text-[var(--osio-fg-default)]`}>
@@ -427,7 +453,7 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
       return <ButtonBlockReadOnly block={block} />;
 
     case "table_block":
-      return <TableBlockReadOnly block={block} />;
+      return <TableBlockReadOnly block={block} wide={wideBlock} />;
 
     case "database_inline": {
       const databaseEmbed = (
@@ -441,7 +467,12 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         </Suspense>
       );
       // Below-the-fold Home sections defer-mount (reserve height, no first-paint work).
-      return block.deferMount ? <DeferredMount>{databaseEmbed}</DeferredMount> : databaseEmbed;
+      const databaseContent = block.deferMount ? <DeferredMount>{databaseEmbed}</DeferredMount> : databaseEmbed;
+      return (
+        <div className={wideBlock ? "osio-wide-block my-2" : "my-2"}>
+          {wideBlock ? <div data-wide-block-content>{databaseContent}</div> : databaseContent}
+        </div>
+      );
     }
 
     case "home_views": {
@@ -489,11 +520,30 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         </div>
       );
 
+    case "diagram":
+      return (
+        <div className="my-3">
+          <Suspense fallback={null}>
+            <DiagramBlock block={block} />
+          </Suspense>
+        </div>
+      );
+
+    case "embed":
+    case "bookmark":
+      return (
+        <div className="my-3">
+          <Suspense fallback={databaseLoadingFallback}>
+            <ReadOnlyLinkBlock block={block} />
+          </Suspense>
+        </div>
+      );
+
     case "toggle":
       return <ToggleBlockReadOnly block={block} bulletDepth={bulletDepth} numberedDepth={numberedDepth} />;
 
     case "layout":
-      return <LayoutBlockReadOnly block={block} />;
+      return <LayoutBlockReadOnly block={block} properties={properties} />;
 
     default:
       return (
@@ -505,6 +555,19 @@ const ReadOnlyBlockImpl: React.FC<BlockProps> = ({ block, index, bulletDepth = 0
         </>
       );
   }
+};
+
+const ReadOnlyBlockImpl: React.FC<BlockProps> = (props) => {
+  const { block } = props;
+  const visibleWhen = typeof block?.visibleWhen === "string" ? block.visibleWhen.trim() : "";
+  if (visibleWhen) {
+    return (
+      <VisibleWhenGate block={block} mode="view">
+        <ReadOnlyBlockBody {...props} />
+      </VisibleWhenGate>
+    );
+  }
+  return <ReadOnlyBlockBody {...props} />;
 };
 
 export const ReadOnlyBlock = React.memo(ReadOnlyBlockImpl, areReadOnlyBlockPropsEqual);
@@ -523,7 +586,7 @@ const ToggleBlockReadOnly: React.FC<{ block: Block; bulletDepth: number; numbere
         <button
           type="button"
           onClick={() => setExpanded((o) => !o)}
-          className="shrink-0 mt-[3px] w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center"
+          className={`osio-line-marker ${getToggleHeadingClass(block.headingLevel)} shrink-0 w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center`}
         >
           <ChevronRight
             size={14}
@@ -571,14 +634,43 @@ function buttonPageRef(href: string | undefined): string | null {
  * Read-only CTA/link button. Presentational + safe — never renders raw user HTML.
  * `page://<id>` opens the workspace page; a `/...` path is an anchor; anything
  * else (or empty) renders a plain styled button with no navigation.
+ * A block carrying a `buttonProgram` runs it on click and ignores the href: the
+ * program is the button's behaviour (an invalid one toasts and does nothing).
+ * `hostPageId` is given by the editor; read-only callers do not know their page.
  */
-const ButtonBlockReadOnly: React.FC<{ block: Block }> = ({ block }) => {
+export const ButtonBlockReadOnly: React.FC<{ block: Block; hostPageId?: string }> = ({ block, hostPageId }) => {
   const label = block.buttonLabel || block.content || "Button";
   const href = block.buttonHref;
   const className = `${BUTTON_BASE_CLASS} ${buttonVariantClass(block.buttonVariant)}`;
   const pageId = buttonPageRef(href);
   const openPage = usePageStore((s) => s.openPage);
   const page = usePageStore((s) => (pageId ? s.pageById(pageId) : undefined));
+  const mode = useRenderMode();
+  const effect = buttonEffect(block, mode);
+
+  if (block.buttonProgram !== undefined) {
+    if (effect === "none") {
+      return (
+        <div className="py-1">
+          <button
+            type="button"
+            className={className}
+            aria-disabled="true"
+            title="Buttons run on the page itself"
+          >
+            {label}
+          </button>
+        </div>
+      );
+    }
+    return (
+      <div className="py-1">
+        <button type="button" className={className} onClick={() => void runButtonBlock(block, hostPageId)}>
+          {label}
+        </button>
+      </div>
+    );
+  }
 
   if (pageId) {
     return (

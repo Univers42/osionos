@@ -25,12 +25,31 @@
  * (http://mini-baas-kong:8000/realtime: Kong admits that key alone there). A ws://
  * or wss:// URL (grobase's /realtime/v1/ws, behind a Funnel link) publishes over
  * one authenticated socket instead: bridge-realtime-socket.mjs.
+ * REALTIME_PUBLISH_SOCKET (optional unix socket path; when set, the POST goes
+ * over it first and falls back to the URL only when nothing was sent).
  */
 
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
+import { keepAliveFetch } from './bridge-keepalive-post.mjs';
+import { socketPublishRoute } from './bridge-publish-socket.mjs';
 import { realtimeSocketPublisher } from './bridge-realtime-socket.mjs';
+import { publishViaLane } from './bridge-realtime-ws-lane.mjs';
+import { CHUNK_SIZE, idChunks, inFilter, runChunks } from './bridge-paging.mjs';
+import { writeJsonResponse } from './bridge-json-response.mjs';
+// bridge-avatar.mjs imports this module back (for the error shape and the JSON
+// body), so the two modules form a cycle. It is safe: publicAvatar is a hoisted
+// function declaration and every call into it happens at request time.
+import { publicAvatar } from './bridge-avatar.mjs';
+import { moderationMode } from './bridge-moderation.mjs';
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/**
+ * A table name the query-router may address. Hyphens and dots stay (Mongo-style
+ * names: og-notes, a.b); `.`, `..` and a leading dot do not. ONE copy: the
+ * query-router path builder (bridge-api.mjs) and the realtime token grant
+ * (bridge-realtime-token.mjs) must agree on what a table may be called.
+ */
+export const QUERY_ROUTER_TABLE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,119}$/;
 const PUBLISH_TIMEOUT_MS = 1_500;
 const DEFAULT_BODY_LIMIT = 16_384;
 
@@ -65,15 +84,15 @@ export async function readJsonBody(request, maxBytes = DEFAULT_BODY_LIMIT) {
 	}
 }
 
-export function sendJson(response, status, body, config) {
-	response.writeHead(status, {
+export function sendJson(response, status, body, config, headers = {}) {
+	writeJsonResponse(response, status, {
 		'content-type': 'application/json; charset=utf-8',
 		'cache-control': 'no-store',
 		'access-control-allow-origin': config.allowedOrigin,
 		'access-control-allow-credentials': 'true',
 		vary: 'Origin',
-	});
-	response.end(JSON.stringify(body));
+		...headers,
+	}, body);
 	return true;
 }
 
@@ -109,25 +128,85 @@ export async function rest(config, fetchImpl, path, { method = 'GET', body, pref
 	return readBaasJson(response, { service: 'service-role PostgREST', empty: null, fail: readFailure });
 }
 
+/** PostgREST answers a unique violation with 409 and SQLSTATE 23505; rest() reports it as a 502. */
+export function isUniqueViolation(error) {
+	const message = error instanceof Error ? error.message : '';
+	return error?.status === 502 && message.includes('409') && message.includes('23505');
+}
+
 /** The 502 a broken BaaS body raises here; readBaasJson only words the message. */
 function readFailure(message) {
 	return httpError(message, 502);
 }
 
+/**
+ * The number of rows a filtered read matches, without the rows: one request with
+ * `Prefer: count=exact`, the total read from the `Content-Range` header.
+ * A missing or malformed header is a 502 — a count that cannot be read is not a zero.
+ */
+export async function restCount(config, fetchImpl, path) {
+	if (!config.baasUrl || !config.serviceKey) {
+		throw httpError('osionos BaaS service-role access is not configured.', 503);
+	}
+	const response = await fetchImpl(`${config.baasUrl}/rest/v1/${path}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			apikey: config.serviceKey,
+			Authorization: `Bearer ${config.serviceKey}`,
+			Prefer: 'count=exact',
+			Range: '0-0',
+		},
+		signal: AbortSignal.timeout(BAAS_FETCH_TIMEOUT_MS),
+	});
+	if (!response.ok) {
+		const status = response.status === 401 || response.status === 403 ? 403 : (response.status === 404 ? 404 : 502);
+		const text = await response.text().catch(() => '');
+		throw httpError(`BaaS request failed with ${response.status}: ${text.slice(0, 160)}`, status);
+	}
+	const total = countFromRange(response.headers?.get?.('content-range'));
+	if (total === null) throw httpError('The BaaS count header is missing or malformed.', 502);
+	return total;
+}
+
+/** The total after the `/` of a `Content-Range` header; null when it is not a count. */
+export function countFromRange(header) {
+	if (typeof header !== 'string') return null;
+	const match = /^(?:\*|\d+-\d+)\/(\d+)$/.exec(header.trim());
+	return match ? Number(match[1]) : null;
+}
+
+/**
+ * The rows of a read over `ids`, read in chunks of at most 50 with at most four requests in
+ * flight. `read` answers the rows of one chunk; a chunk that fails fails the whole read,
+ * unless the caller catches it per chunk (a best-effort read).
+ */
+export async function readInChunks(ids, read, { size = CHUNK_SIZE } = {}) {
+	const parts = await runChunks(idChunks(ids, size), read);
+	return parts.flatMap((part) => (Array.isArray(part) ? part : []));
+}
+
 /** Best-effort publish to the Rust realtime gateway; never throws. */
-export async function publishRealtime({ topic, eventType, payload, fetchImpl = fetch, env = process.env }) {
+export async function publishRealtime({ topic, eventType, payload, fetchImpl = keepAliveFetch, env = process.env }) {
 	const base = (env.REALTIME_PUBLISH_URL || 'http://mini-baas-realtime:4000').replace(/\/$/, '');
 	if (/^wss?:\/\//i.test(base)) return realtimeSocketPublisher(base, env).publish(topic, eventType, payload);
+	if (publishViaLane(env, topic, eventType, payload)) return true;
 	const apikey = (env.REALTIME_PUBLISH_APIKEY ?? '').trim();
 	const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
 	if (apikey) headers.apikey = apikey;
 	try {
-		const response = await fetchImpl(`${base}/v1/publish`, {
+		// ONE url + init: both routes must send the byte-identical request. Built inside the
+		// try so a payload JSON.stringify refuses still resolves false, as before.
+		const url = `${base}/v1/publish`;
+		const init = {
 			method: 'POST',
 			headers,
 			body: JSON.stringify({ topic, event_type: eventType, payload }),
 			signal: AbortSignal.timeout(PUBLISH_TIMEOUT_MS),
-		});
+		};
+		// send() resolves null only when nothing was written (unset, or a pre-send errno with
+		// the breaker handing this call back); anything else it answers is never re-sent (S8).
+		const response = (await socketPublishRoute(env)?.send(url, init)) ?? (await fetchImpl(url, init));
 		if (!response.ok) {
 			console.warn(`[osionos-bridge] realtime publish ${topic} failed with ${response.status}`);
 			return false;
@@ -155,6 +234,29 @@ export async function workspaceMembership(config, fetchImpl, userId, workspaceId
 	return Array.isArray(rows) ? rows[0] ?? null : null;
 }
 
+/** One osionos_workspaces row (id, owner_id, name) or null. */
+export async function fetchWorkspace(config, fetchImpl, workspaceId) {
+	const rows = await rest(config, fetchImpl, `osionos_workspaces?id=eq.${workspaceId}&select=id,owner_id,name&limit=1`);
+	return Array.isArray(rows) ? rows[0] ?? null : null;
+}
+
+/**
+ * The owner, or a member whose row says `admin`. A plain member is a 403; a user with no
+ * relation to the workspace gets the same 404 as a workspace that does not exist, so the
+ * answer is no oracle for which workspace ids are real.
+ */
+export async function requireWorkspaceAdmin(config, fetchImpl, userId, workspaceId) {
+	const workspace = await fetchWorkspace(config, fetchImpl, workspaceId);
+	if (!workspace) throw httpError('Workspace not found.', 404);
+	if (String(workspace.owner_id).toLowerCase() === String(userId).toLowerCase()) return { workspace, role: 'owner' };
+	const membership = await workspaceMembership(config, fetchImpl, userId, workspaceId);
+	if (!membership) throw httpError('Workspace not found.', 404);
+	if (String(membership.role ?? '').toLowerCase() !== 'admin') {
+		throw httpError('Only the workspace owner or an admin may do this.', 403);
+	}
+	return { workspace, role: 'admin', membership };
+}
+
 /**
  * The ids in `workspaceIds` the session belongs to: its own token workspaces plus its
  * osionos_workspace_members rows (lower-cased). Throws on a backend failure, so a caller
@@ -164,12 +266,12 @@ export async function memberWorkspacesAmong(config, fetchImpl, session, workspac
 	const wanted = [...new Set(workspaceIds.filter((id) => UUID_REGEX.test(String(id))).map((id) => id.toLowerCase()))];
 	const own = new Set((session.workspaceIds ?? []).map((id) => String(id).toLowerCase()));
 	const others = wanted.filter((id) => !own.has(id));
-	const rows = others.length === 0 ? [] : await rest(
+	const rows = others.length === 0 ? [] : await readInChunks(others, (chunk) => rest(
 		config,
 		fetchImpl,
-		`osionos_workspace_members?user_id=eq.${session.userId}&workspace_id=in.(${others.join(',')})&select=workspace_id`,
-	);
-	return [...wanted.filter((id) => own.has(id)), ...(Array.isArray(rows) ? rows : []).map((row) => String(row.workspace_id).toLowerCase())];
+		`osionos_workspace_members?user_id=eq.${session.userId}&${inFilter('workspace_id', chunk)}&select=workspace_id`,
+	));
+	return [...wanted.filter((id) => own.has(id)), ...rows.map((row) => String(row.workspace_id).toLowerCase())];
 }
 
 /**
@@ -180,7 +282,8 @@ export async function memberWorkspacesAmong(config, fetchImpl, session, workspac
  * bridge-collab / bridge-profile so the block-aware filter lives in one place.
  */
 export async function blockedViewerBy(config, fetchImpl, viewerId) {
-	if (!UUID_REGEX.test(String(viewerId))) return new Set();
+	const self = String(viewerId ?? '').toLowerCase();
+	if (!UUID_REGEX.test(self)) return new Set();
 	const rows = await rest(
 		config,
 		fetchImpl,
@@ -188,8 +291,13 @@ export async function blockedViewerBy(config, fetchImpl, viewerId) {
 	);
 	const hidden = new Set();
 	for (const row of Array.isArray(rows) ? rows : []) {
-		// the "other" party in each block edge is the one to hide from the viewer
-		hidden.add(row.blocker_id === viewerId ? row.blocked_id : row.blocker_id);
+		// the "other" party in each block edge is the one to hide from the viewer;
+		// ids are compared case-insensitively so a block row whose casing differs
+		// still hides its subject.
+		const blocker = String(row?.blocker_id ?? '').toLowerCase();
+		const blocked = String(row?.blocked_id ?? '').toLowerCase();
+		const other = blocker === self ? blocked : (blocked === self ? blocker : null);
+		if (other) hidden.add(other);
 	}
 	return hidden;
 }
@@ -223,90 +331,9 @@ export function directoryFuzzyFilter(query) {
 	return `&or=(${clauses.join(',')})`;
 }
 
-const SHARED_WORKSPACES_LIMIT = 200;
-const COMEMBERS_PER_WORKSPACE_LIMIT = 500;
-const COLLEAGUE_INSERT_CAP = 500;
-
-/**
- * The one read that answers "who shares a workspace with `userId`": the caller's member rows
- * (anchor, `user_id=eq.`), each with its workspace's other members. Both limits are the old
- * ones (200 workspaces, 500 co-members); the nested limit is per workspace, so the insert
- * is capped again in insertColleagueEdges.
- */
-export function coMemberPath(userId) {
-	const query = new URLSearchParams({
-		user_id: `eq.${userId}`,
-		select: 'user_id,workspace_id,workspace:osionos_workspaces!workspace_id(members:osionos_workspace_members!workspace_id(user_id))',
-		limit: String(SHARED_WORKSPACES_LIMIT),
-		'workspace.members.user_id': `neq.${userId}`,
-		'workspace.members.limit': String(COMEMBERS_PER_WORKSPACE_LIMIT),
-	});
-	return `osionos_workspace_members?${query}`;
-}
-
 /** Every edge touching `userId`, newest first, whatever its status: the sync and the list share this read. */
 export function connectionEdgesPath(userId) {
 	return `osionos_connections?or=(requester_id.eq.${userId},addressee_id.eq.${userId})&select=*&order=created_at.desc`;
-}
-
-/**
- * Distinct co-member ids from a coMemberPath answer, or null when any anchor row belongs to
- * another user: a dropped `user_id=eq.` anchor would otherwise make everyone a colleague.
- */
-export function coMembersFromRows(rows, userId) {
-	const self = String(userId).toLowerCase();
-	const anchors = Array.isArray(rows) ? rows : [];
-	if (anchors.some((row) => String(row?.user_id).toLowerCase() !== self)) return null;
-	const peers = new Set();
-	for (const row of anchors) {
-		if (!UUID_REGEX.test(String(row.workspace_id))) continue;
-		for (const member of Array.isArray(row.workspace?.members) ? row.workspace.members : []) {
-			if (UUID_REGEX.test(String(member?.user_id)) && String(member.user_id).toLowerCase() !== self) peers.add(member.user_id);
-		}
-	}
-	return [...peers];
-}
-
-/** Co-members of every workspace `userId` belongs to. Best-effort: a failure is a warn and no peers, never a throw. */
-export async function sharedWorkspacePeers(config, fetchImpl, userId) {
-	if (!UUID_REGEX.test(String(userId))) return [];
-	try {
-		const peers = coMembersFromRows(await rest(config, fetchImpl, coMemberPath(userId)), userId);
-		if (peers !== null) return peers;
-		console.warn('[osionos-bridge] colleague sync skipped: the co-member read answered another user\'s rows');
-	} catch (error) {
-		console.warn(`[osionos-bridge] colleague sync skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
-	}
-	return [];
-}
-
-/**
- * Insert an accepted source='colleague' edge to each of `peers` (the caller already removed
- * every peer with an edge, in any status and direction) and return the rows this call
- * inserted. on_conflict=pair_key + ignore-duplicates guards UNIQUE(pair_key) against a
- * concurrent insert or an inverse-direction row, and with return=representation answers
- * only the rows it really inserted. Best-effort: a failure is a warn and no rows.
- */
-export async function insertColleagueEdges(config, fetchImpl, userId, peers) {
-	if (peers.length === 0) return [];
-	try {
-		const respondedAt = new Date().toISOString();
-		const rows = await rest(config, fetchImpl, 'osionos_connections?on_conflict=pair_key', {
-			method: 'POST',
-			body: peers.slice(0, COLLEAGUE_INSERT_CAP).map((peer) => ({
-				requester_id: userId,
-				addressee_id: peer,
-				status: 'accepted',
-				source: 'colleague',
-				responded_at: respondedAt,
-			})),
-			prefer: 'resolution=ignore-duplicates,return=representation',
-		});
-		return Array.isArray(rows) ? rows.filter((row) => row && typeof row === 'object') : [];
-	} catch (error) {
-		console.warn(`[osionos-bridge] colleague insert skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
-		return [];
-	}
 }
 
 const createdAtMs = (row) => {
@@ -314,10 +341,10 @@ const createdAtMs = (row) => {
 	return Number.isFinite(ms) ? ms : Number.NEGATIVE_INFINITY;
 };
 
-/** Edge rows from several reads as one list: one row per id (the first list wins), newest created_at first. */
-export function mergeEdgesNewestFirst(...lists) {
+/** The edge rows of one read: one row per id, newest created_at first. */
+export function edgesNewestFirst(rows) {
 	const byId = new Map();
-	for (const row of lists.flat()) if (!byId.has(row.id ?? row)) byId.set(row.id ?? row, row);
+	for (const row of Array.isArray(rows) ? rows : []) if (!byId.has(row.id ?? row)) byId.set(row.id ?? row, row);
 	return [...byId.values()].sort((left, right) => {
 		const [l, r] = [createdAtMs(left), createdAtMs(right)];
 		return l === r ? 0 : (r > l ? 1 : -1);
@@ -365,8 +392,18 @@ export async function emitNotifications(deps, config, notifs) {
 		prefer: 'return=minimal',
 	});
 	const ids = [...new Set(valid.map((n) => n.recipientId))];
-	const tokenRows = await rest(config, deps.fetchImpl, `osionos_bridge_identities?user_id=in.(${ids.join(',')})&select=user_id,notify_token`);
-	const tokenByUser = new Map((Array.isArray(tokenRows) ? tokenRows : []).map((r) => [r.user_id, r.notify_token]));
+	// The token lookup is best-effort per chunk: a chunk that fails costs its recipients the
+	// live toast, never the notifications that are already stored.
+	const tokenRows = await readInChunks(ids, async (chunk) => {
+		try {
+			const rows = await rest(config, deps.fetchImpl, `osionos_bridge_identities?${inFilter('user_id', chunk)}&select=user_id,notify_token`);
+			return Array.isArray(rows) ? rows : [];
+		} catch (error) {
+			console.warn(`[osionos-bridge] notification token lookup skipped: ${error instanceof Error ? error.message : 'unknown error'}`);
+			return [];
+		}
+	});
+	const tokenByUser = new Map(tokenRows.map((r) => [r.user_id, r.notify_token]));
 	for (const n of valid) {
 		const token = tokenByUser.get(n.recipientId);
 		if (!token) continue;
@@ -380,23 +417,89 @@ export async function emitNotifications(deps, config, notifs) {
 	}
 }
 
-/** display_name + profile for a set of user ids → Map(userId → {name, avatar}). */
+/** display_name + profile for a set of user ids → Map(userId → {name, avatar, headline}). */
 export async function identitySummaries(config, fetchImpl, userIds) {
 	const ids = [...new Set(userIds)].filter((id) => UUID_REGEX.test(String(id)));
 	if (ids.length === 0) return new Map();
-	const rows = await rest(
-		config,
-		fetchImpl,
-		`osionos_people_directory?user_id=in.(${ids.join(',')})&select=user_id,display_name,profile,last_seen_at`,
-	);
+	const rows = await readInChunks(ids, async (chunk) => {
+		const part = await rest(
+			config,
+			fetchImpl,
+			`osionos_people_directory?${inFilter('user_id', chunk)}&select=user_id,display_name,profile`,
+		);
+		return Array.isArray(part) ? part : [];
+	});
 	const map = new Map();
-	for (const row of Array.isArray(rows) ? rows : []) {
+	for (const row of rows) {
 		const profile = row.profile && typeof row.profile === 'object' && !Array.isArray(row.profile) ? row.profile : {};
 		map.set(row.user_id, {
 			name: typeof row.display_name === 'string' && row.display_name ? row.display_name : 'Member',
-			avatar: typeof profile.avatar === 'string' ? profile.avatar : null,
-			lastSeenAt: row.last_seen_at ?? null,
+			// The ONE projection of a user avatar: a `data:` URL never leaves the bridge.
+			avatar: publicAvatar(typeof profile.avatar === 'string' ? profile.avatar : null, config),
+			headline: typeof profile.headline === 'string' ? profile.headline : null,
 		});
 	}
 	return map;
+}
+
+/**
+ * C94: is this subject PUBLIC-readable? The page is public, or the page's
+ * WORKSPACE is public — the SAME rule the M4b enqueue trigger uses, so the
+ * bridge and the trigger never disagree about what is in scope.
+ *
+ * A private page of a confidential workspace is not: an automated scan of it is
+ * out of scope, and the moderation must not become a way to read it. A row
+ * that is not there (a live-database id) is not public either.
+ *
+ * @param {{ visibility?: unknown, workspace_id?: unknown } | null} page the page row
+ */
+export async function publicReadablePage(config, fetchImpl, page) {
+	if (!page) return false;
+	if (page.visibility === 'public') return true;
+	const workspaceId = page.workspace_id;
+	if (typeof workspaceId !== 'string' || !workspaceId) return false;
+	const rows = await rest(config, fetchImpl, `osionos_workspaces?id=eq.${workspaceId}&select=visibility&limit=1`);
+	const workspace = Array.isArray(rows) ? rows[0] : null;
+	return workspace?.visibility === 'public';
+}
+
+/**
+ * The 409 a write answers when L0 wants the author's answer first (C85). The
+ * CODES and the matched TERMS go back to the AUTHOR, who is the only one who
+ * may see them (C94): the terms are their own words, and the codes are what a
+ * console would later show without them.
+ *
+ * `details` carries the same two lists because the app's HTTP client keeps the
+ * error envelope's known fields only (message, code, details) — a flat
+ * `reasons`/`terms` would be dropped on the way to the author's UI.
+ */
+export function moderationWarningBody(decision) {
+	return {
+		ok: false,
+		code: 'moderation_warning',
+		message: 'This may hurt someone. Edit it, or post it anyway.',
+		reasons: decision.codes,
+		terms: decision.terms,
+		details: { reasons: decision.codes, terms: decision.terms },
+	};
+}
+
+/**
+ * The moderation mode and the state flag, read where a handler reads its
+ * config. The flag OSIONOS_MODERATION_STATE=1 goes on only AFTER the groot
+ * migration that adds moderation_state and ai_moderation_events: the readers'
+ * `or=` filter 400s against a database without the column.
+ */
+export function moderationSettings(env) {
+	return { mode: moderationMode(env), stateEnabled: env?.OSIONOS_MODERATION_STATE === '1' };
+}
+
+/**
+ * The reader filter (C87): a comment nobody held, or the caller's own — so a
+ * held comment is seen by its author and by nobody else. Added ONLY when the
+ * state column exists: the filter names moderation_state, and PostgREST 400s
+ * on a column the database does not have.
+ */
+export function visibleOrOwnFilter(session, stateEnabled) {
+	return stateEnabled ? `&or=(moderation_state.eq.visible,author_id.eq.${session.userId})` : '';
 }

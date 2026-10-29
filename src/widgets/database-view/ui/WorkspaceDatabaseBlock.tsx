@@ -33,6 +33,7 @@ import {
 // Side effect: registers the data-source catalog (Source picker) — lazyViews
 // imports this file directly, bypassing the barrel's registration.
 import "../model/dataSourceProvider";
+import { databaseShellClass } from "../model/databaseShellClass";
 
 interface WorkspaceDatabaseBlockProps {
   databaseId: string;
@@ -45,7 +46,11 @@ interface WorkspaceDatabaseBlockProps {
 /** A record peek that opens the EXISTING osionos page (records are real pages).
  *  Exported so the Home live carousels (Recents/Templates) reuse the same
  *  "card → open the real page" seam through DatabaseBlock. */
-export const WorkspaceRecordPeek: React.FC<{ pageId: string; onClose: () => void }> = ({ pageId, onClose }) => {
+export const WorkspaceRecordPeek: React.FC<{
+  pageId: string;
+  onClose: () => void;
+  action?: { label: string; onClick: () => void };
+}> = ({ pageId, onClose, action }) => {
   const osionosPage = usePageStore((state) => state.pageById(pageId));
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[var(--osio-z-modal)] flex justify-end bg-[var(--osio-overlay)]">
@@ -60,6 +65,15 @@ export const WorkspaceRecordPeek: React.FC<{ pageId: string; onClose: () => void
           <span className="text-xs font-medium uppercase tracking-wide text-[var(--osio-fg-muted)]">
             Workspace record · osionos page
           </span>
+          {action ? (
+            <button
+              type="button"
+              className="rounded-md bg-[var(--osio-accent)] px-2 py-1 text-sm font-medium text-[var(--osio-accent-fg)] hover:bg-[var(--osio-accent-hover)]"
+              onClick={action.onClick}
+            >
+              {action.label}
+            </button>
+          ) : null}
           <button
             type="button"
             className="rounded-md px-2 py-1 text-sm text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)]"
@@ -132,10 +146,7 @@ export const WorkspaceDatabaseBlock: React.FC<WorkspaceDatabaseBlockProps> = ({
   );
   return (
     <div
-      className={[
-        "osionos-database-block w-full min-w-0",
-        mode === "full" ? "osionos-database-block--full h-full min-h-0 overflow-hidden" : "osionos-database-block--inline my-2 overflow-auto",
-      ].join(" ")}
+      className={databaseShellClass(mode)}
       data-database-id={databaseId}
       data-database-view-id={initialViewId}
     >

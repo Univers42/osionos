@@ -13,7 +13,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { api, getActiveJwt } from '@/shared/api/client';
 import { chatBridgeAvailable, createChannel as createBridgeChannel } from '@/shared/chat/channelApi';
 
 export type WorkspaceChannelType = 'text' | 'thread' | 'forum' | 'audio' | 'video' | 'stage' | 'archive' | 'agent';
@@ -98,6 +97,9 @@ export function workspaceConfigKey(userId: string, workspaceId: string): string 
   return `${userId}:${workspaceId}`;
 }
 
+// Caveat: this store is the device-local mirror only; the org settings live in
+// useWorkspaceSettingsStore and that route is the single server writer. The
+// former persistWorkspaceConfigToApi PATCH to /api/workspaces/:id/config is gone.
 export function resolveWorkspaceConfig(config?: WorkspaceConfig): WorkspaceConfig {
   return {
     channels: config?.channels ?? [],
@@ -110,14 +112,11 @@ export function resolveWorkspaceConfig(config?: WorkspaceConfig): WorkspaceConfi
   };
 }
 
-async function persistWorkspaceConfigToApi(workspaceId: string, config: WorkspaceConfig) {
-  const jwt = getActiveJwt();
-  if (!jwt) return;
-  try {
-    await api.patch(`/api/workspaces/${workspaceId}/config`, { config }, jwt);
-  } catch {
-    // Offline mode keeps local persisted config. Mongo endpoint can sync later.
-  }
+// Writers start from what was stored, never from resolveWorkspaceConfig: storing
+// its filled-in defaults turned every workspace's header icon into 🌏 on any
+// settings save (2026-10-28).
+export function storedWorkspaceConfig(config?: WorkspaceConfig): WorkspaceConfig {
+  return { channels: [], ...config };
 }
 
 /**
@@ -170,7 +169,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
       getConfig: (userId, workspaceId) => resolveWorkspaceConfig(get().configs[workspaceConfigKey(userId, workspaceId)]),
       addChannel: async (userId, workspaceId, name = 'new-channel', type = 'text', parentChannelId = null) => {
         const key = workspaceConfigKey(userId, workspaceId);
-        const current = resolveWorkspaceConfig(get().configs[key]);
+        const current = storedWorkspaceConfig(get().configs[key]);
         const now = new Date().toISOString();
         const channel: WorkspaceChannel = {
           id: await bridgeChannelId(workspaceId, name, type),
@@ -185,7 +184,6 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
         };
         const nextConfig = { ...current, channels: [...current.channels, channel] };
         set((state) => ({ configs: { ...state.configs, [key]: nextConfig } }));
-        await persistWorkspaceConfigToApi(workspaceId, nextConfig);
         return channel;
       },
       addThread: async (userId, workspaceId, parentChannelId, name = 'new-thread') => {
@@ -193,7 +191,7 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
       },
       updateChannel: async (userId, workspaceId, channelId, updates) => {
         const key = workspaceConfigKey(userId, workspaceId);
-        const current = resolveWorkspaceConfig(get().configs[key]);
+        const current = storedWorkspaceConfig(get().configs[key]);
         const nextConfig = {
           ...current,
           channels: current.channels.map((channel) => channel.id === channelId
@@ -201,11 +199,10 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
             : channel),
         };
         set((state) => ({ configs: { ...state.configs, [key]: nextConfig } }));
-        await persistWorkspaceConfigToApi(workspaceId, nextConfig);
       },
       updateSettings: async (userId, workspaceId, updates) => {
         const key = workspaceConfigKey(userId, workspaceId);
-        const current = resolveWorkspaceConfig(get().configs[key]);
+        const current = storedWorkspaceConfig(get().configs[key]);
         const nextConfig: WorkspaceConfig = {
           ...current,
           ...updates,
@@ -213,11 +210,10 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
           analytics: { ...DEFAULT_WORKSPACE_SETTINGS.analytics, ...current.analytics, ...updates.analytics },
         };
         set((state) => ({ configs: { ...state.configs, [key]: nextConfig } }));
-        await persistWorkspaceConfigToApi(workspaceId, nextConfig);
       },
       resetSettings: async (userId, workspaceId, defaults = {}) => {
         const key = workspaceConfigKey(userId, workspaceId);
-        const current = resolveWorkspaceConfig(get().configs[key]);
+        const current = storedWorkspaceConfig(get().configs[key]);
         const nextConfig = {
           ...current,
           name: defaults.name,
@@ -227,14 +223,12 @@ export const useWorkspaceConfigStore = create<WorkspaceConfigStore>()(
           analytics: { ...DEFAULT_WORKSPACE_SETTINGS.analytics, ...defaults.analytics },
         };
         set((state) => ({ configs: { ...state.configs, [key]: nextConfig } }));
-        await persistWorkspaceConfigToApi(workspaceId, nextConfig);
       },
       clearAppearance: async (userId, workspaceId) => {
         const key = workspaceConfigKey(userId, workspaceId);
-        const current = resolveWorkspaceConfig(get().configs[key]);
+        const current = storedWorkspaceConfig(get().configs[key]);
         const nextConfig = { ...current, appearance: null };
         set((state) => ({ configs: { ...state.configs, [key]: nextConfig } }));
-        await persistWorkspaceConfigToApi(workspaceId, nextConfig);
       },
     }),
     { name: 'osionos:workspace-configurations' },

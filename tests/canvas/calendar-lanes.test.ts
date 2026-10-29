@@ -9,6 +9,7 @@ import {
   segmentIntoWeeks, packWeekLanes, visibleSegments, overflowByDay,
 } from "../../src/shared/notion-database-sys/src/components/views/calendar/model/calendarLanes.ts";
 import { buildMonthGrid } from "../../src/shared/notion-database-sys/src/components/views/calendar/model/calendarGrid.ts";
+import { lanesThatFit } from "../../src/shared/notion-database-sys/src/components/views/calendar/calendarConfig.ts";
 import type { CalEvent, WeekSegment } from "../../src/shared/notion-database-sys/src/components/views/calendar/model/calendarTypes.ts";
 
 // July 2026, Monday start: Jul 1 is a Wednesday; grid runs Mon Jun 29 → Sun Aug 2.
@@ -191,4 +192,12 @@ test("calendar-lanes: deterministic under a fixed input permutation", () => {
   assert.deepEqual(packedB, packedA, "packed segments identical regardless of input order");
   assert.deepEqual(overflowByDay(packedB, grid, 2), overflowByDay(packedA, grid, 2));
   assert.deepEqual(visibleSegments(packedB, 2), visibleSegments(packedA, 2));
+});
+
+test("calendar-lanes: lanesThatFit — a taller month row shows more lanes, never fewer than the floor", () => {
+  // 26px day header + 18px "+N more" line, 22px per lane.
+  assert.equal(lanesThatFit(110, 3), 3);
+  assert.equal(lanesThatFit(220, 3), 8);
+  assert.equal(lanesThatFit(40, 3), 3);
+  assert.equal(lanesThatFit(Number.NaN, 3), 3);
 });

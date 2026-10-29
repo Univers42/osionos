@@ -27,7 +27,7 @@ test("an installed Draw becomes Whiteboard and keeps the user's choices", () => 
     title: "Whiteboard",
     icon: "icon:pen-tool",
     launchKind: "embed",
-    launchUrl: "https://localhost:3007",
+    launchUrl: "https://localhost:3008",
   });
   assert.equal(map["osionos.mail"], mail);
 });

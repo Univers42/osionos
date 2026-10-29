@@ -18,6 +18,7 @@ import { getTableAlignmentClassName, getTablePaddingClassName } from "@/entities
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
 import { usePageStore } from "@/store/usePageStore";
 import { parseInlineMarkdown } from "@osionos/markdown-engine";
+import { resolveVariableInActivePage, useVariablesVersion } from "@/features/variables/ui/VariableChip";
 import { normalizeInlineLinkHref } from "@osionos/markdown-engine/inline";
 import type { CellCommit, CellFocusHandler, CellKeyHandler } from "./tableTypes";
 
@@ -49,7 +50,7 @@ interface TableDataRowProps {
 
 export const TableDataRow = React.memo(function TableDataRow({ row, rowIndex, columnCount, config, textStyle, selectedCell, commitHandlers, onColumnResize, onRowResize, onRowDragStart, onRowMenuKey, onCellKeyDown, onCellFocus }: Readonly<TableDataRowProps>) {
   const height = config.rowHeights?.[rowIndex];
-  const rowStyle: React.CSSProperties = { height: `var(--osio-table-row-${rowIndex}-height, ${toCssSize(height)})` };
+  const rowStyle: React.CSSProperties = { height: toCssSize(height) };
   return <tr className={`group/row ${getRowClassName(rowIndex, config)}`} style={rowStyle}>{Array.from({ length: columnCount }, (_, columnIndex) => {
     const alignment = config.columnAlignments?.[columnIndex] ?? null;
     const isHeader = (config.headerRow !== false && rowIndex === 0) || (config.headerColumn === true && columnIndex === 0);
@@ -132,12 +133,14 @@ function renderCellHtml(value: string): string {
     editorChrome: true,
     externalLinks: true,
     resolveInternalLinkTitle: resolveInternalPageLinkTitle,
+    resolveVariable: resolveVariableInActivePage,
   });
 }
 
 const EditableTableCell = React.memo(function EditableTableCell({ cellId, initialValue, rowIndex, columnIndex, alignment, onCommit, isHeader, onKeyDown, onFocus }: Readonly<EditableTableCellProps>) {
   const cellRef = useRef<HTMLDivElement | null>(null);
   const initialValueRef = useRef(initialValue);
+  const variablesVersion = useVariablesVersion(initialValue);
 
   useLayoutEffect(() => {
     initialValueRef.current = initialValue;
@@ -147,7 +150,7 @@ const EditableTableCell = React.memo(function EditableTableCell({ cellId, initia
     if (node.innerHTML !== targetHtml) {
       node.innerHTML = targetHtml;
     }
-  }, [cellId, initialValue]);
+  }, [cellId, initialValue, variablesVersion]);
 
   // Event-time read of the uncontrolled contentEditable (onBlur/keydown —
   // never during render); the analyzer cannot prove call sites.
@@ -241,7 +244,7 @@ function RowResizeDivider({ rowIndex, onPointerDown }: Readonly<{ rowIndex: numb
 export function createColumnStyles(columnCount: number, config: TableBlockConfig): React.CSSProperties[] {
   return Array.from({ length: columnCount }, (_, columnIndex) => {
     const width = config.columnWidths?.[columnIndex];
-    return { minWidth: config.minColumnWidth, width: `var(--osio-table-col-${columnIndex}-width, ${toCssSize(width)})`, maxWidth: config.wrap ? config.maxColumnWidth : undefined };
+    return { minWidth: config.minColumnWidth, width: toCssSize(width), maxWidth: config.wrap ? config.maxColumnWidth : undefined };
   });
 }
 

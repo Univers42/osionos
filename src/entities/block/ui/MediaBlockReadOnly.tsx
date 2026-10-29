@@ -28,6 +28,7 @@ import type { Block } from "@/entities/block";
 import { MediaBlockPreview } from "./MediaBlockPreview";
 import { parseInlineMarkdown } from "@osionos/markdown-engine";
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
+import { resolveVariableInActivePage, useVariablesVersion } from "@/features/variables/ui/VariableChip";
 
 interface MediaBlockReadOnlyProps {
   block: Block;
@@ -38,6 +39,7 @@ function renderInlineMarkdown(content: string) {
   return {
     __html: parseInlineMarkdown(content, {
       resolveInternalLinkTitle: resolveInternalPageLinkTitle,
+      resolveVariable: resolveVariableInActivePage,
     }),
   };
 }
@@ -45,6 +47,7 @@ function renderInlineMarkdown(content: string) {
 export const MediaBlockReadOnly: React.FC<MediaBlockReadOnlyProps> = ({
   block,
 }) => {
+  useVariablesVersion(block.content);
   return (
     <div className="my-3 space-y-2">
       <MediaBlockPreview block={block} />

@@ -138,7 +138,9 @@ test.describe("database-templates", () => {
     await page.getByRole("button", { name: "Weekly Report", exact: true }).first().click();
 
     // The instance shows the placeholder prompt as a ghost; single-click fills it.
-    const fillBlock = page.locator(".osionos-page [data-placeholder-block]").first();
+    // It opens in a new tab: the template's own tab stays mounted, hidden, and
+    // holds the same block, so only the visible one is the instance's.
+    const fillBlock = page.locator(".osionos-page [data-placeholder-block]").filter({ visible: true }).first();
     await expect(fillBlock).toBeVisible({ timeout: 15_000 });
     await expect(fillBlock).toContainText("Project name");
 

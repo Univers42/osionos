@@ -1,12 +1,12 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   usePageSync.ts                                      :+:      :+:    :+:   */
+/*   usePageSync.ts                                     :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/03 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/03 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/21 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -24,11 +24,12 @@
  * subscription is gated to page-relevant store changes; the ledger is reloaded per flush so
  * hydrate's seeds are honoured. No-op without a bridge. Mount once near the app root.
  *
- * One PATCH comes back in one of four results, each with its own rule:
- *   "ok"      → written; advance the ledger. `ignored` lists the fields the bridge declined.
- *   "refused" → 403: the viewer may not write the page; the edit is recovered, never dropped.
- *   "gone"    → 404: the page is gone server-side; the recovery evicts the local copy.
- *   "failed"  → transient (offline / 5xx / 429 / no session); leave pending and retry.
+ * One PATCH comes back in one of five results, each with its own rule (./pageFlush):
+ *   "ok"       → written; advance the ledger. `ignored` lists the fields the bridge declined.
+ *   "refused"  → 403: the viewer may not write the page; the edit is recovered, never dropped.
+ *   "gone"     → 404: the page is gone server-side; the recovery evicts the local copy.
+ *   "conflict" → 409: the server's copy moved; merge, re-send once, and keep going.
+ *   "failed"   → transient (offline / 5xx / 429); leave pending and retry.
  */
 
 import { useEffect, useRef } from "react";
@@ -37,29 +38,22 @@ import { derivePageState, flushScheduledPagesCachePersist } from "@/store/pageSt
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useUserStore } from "@/features/auth";
 import { API_BASE } from "@/shared/api/client";
-import {
-  canEditPage,
-  getCurrentPageAccessContext,
-  markPageWriteRefused,
-} from "@/shared/lib/auth/pageAccess";
+import { canEditPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { flushAllBlockDrafts } from "@/features/block-editor/model/blockDraftStore";
 import { buildDesiredPages, PAGE_OUTBOX_KEY, saveOutboxLedger } from "./pageStamp";
 import { publishPage, publishPageKeepalive } from "./pageOutbox";
+import { publishOutboxPage, settleRecoveringMarks, type FlushDeps } from "./pageFlush";
+import { pruneBases } from "./pageBase";
 import { createPendingKeeper, createUnloadGuard } from "./pendingPages";
 import { hydratePagesFromBaas } from "./hydratePages";
-import { recoverRefusedEdit } from "./refusedEditRecovery";
 import { refusedEditDeps } from "./refusedEditDeps";
-import {
-  MAX_RECOVERIES_PER_FLUSH,
-  OUTBOX_RECOVERING_KEY,
-  applyRecoveryOutcome,
-  clearRecoveringMarks,
-  ignoredWarning,
-} from "./outboxRecovery";
+import { MAX_RECOVERIES_PER_FLUSH } from "./outboxRecovery";
 import { computeSyncActions, loadLedger } from "@osionos/outbox-ledger";
 import type { SyncLedger } from "@osionos/outbox-ledger";
 import type { PageEntry } from "@/entities/page";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
+import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
+import { dataUrlToFile, inlineImagesIn, replaceInlineImages } from "@/shared/lib/media/inlineImages";
 
 const DEBOUNCE_MS = 800;
 /** First retry delay when the server pushes back; doubles up to MAX_RETRY_MS. */
@@ -68,75 +62,60 @@ const RETRY_MS = 15000;
 const MAX_RETRY_MS = 120000;
 
 /**
- * One page's turn in the flush. `budget` is shared so the batch stays bounded. Outcomes are
- * booked in `confirmed` / `forgotten`, never on a loaded ledger: the flush applies them to
- * the ledger it reloads after the awaits.
+ * Pictures whose upload failed this session. Caveat: a transient failure (offline, a
+ * lapsed session) also lands here, so that picture stays inline until the next reload.
  */
-interface OutboxPageJob {
-  page: PageEntry;
-  id: string;
-  stamp: string;
-  confirmed: SyncLedger;
-  forgotten: Set<string>;
-  budget: { left: number };
+const failedInlineUploads = new Set<string>();
+
+/**
+ * Move a page's base64 pictures to page-media storage and write the URLs into the store's
+ * CURRENT copy (synchronously, after the uploads), so nothing typed meanwhile is lost.
+ */
+async function externalizeInlineImages(page: PageEntry): Promise<PageEntry> {
+  const found = inlineImagesIn([page.cover, page.content]).filter((dataUrl) => !failedInlineUploads.has(dataUrl));
+  if (found.length === 0) return page;
+  const urls = new Map<string, string>();
+  for (const dataUrl of found) {
+    try {
+      urls.set(dataUrl, await uploadPageMedia(dataUrlToFile(dataUrl, "pasted-image")));
+    } catch {
+      failedInlineUploads.add(dataUrl);
+    }
+  }
+  const store = usePageStore.getState();
+  const latest = store.pageById(page._id);
+  if (urls.size === 0 || !latest) return page;
+  const content = latest.content && replaceInlineImages(latest.content, urls);
+  if (content && content !== latest.content) store.updatePageContent(page._id, content);
+  const cover = latest.cover && replaceInlineImages(latest.cover, urls);
+  if (cover !== latest.cover) store.patchPage(page._id, { cover });
+  return usePageStore.getState().pageById(page._id) ?? page;
 }
 
 /**
- * Publish one page and book its outcome. O(1) besides the PATCH itself.
- * A refusal or a missing page is not dropped here — the work still belongs to the
- * viewer, so it goes through the recovery before anything is forgotten.
+ * The world the flush works on: the bridge, the store and the toast. Built once per
+ * flush — the reads inside it happen when they are needed, not when it is built.
  */
-async function publishOutboxPage(job: OutboxPageJob): Promise<"continue" | "stop"> {
-  const { page, id, stamp, confirmed, budget } = job;
-  const { result, ignored } = await publishPage(page);
-  if (result === "ok") {
-    confirmed[id] = stamp; // advance ONLY on confirm
-    const warn = ignoredWarning(page.title, ignored);
-    if (warn) refusedEditDeps().notify(warn);
-    return "continue";
-  }
-  if (result === "refused" || result === "gone") {
-    if (budget.left <= 0) return "stop"; // this flush already spent its recoveries
-    budget.left -= 1;
-    return recoverRefusedPublish(page, id, job.forgotten);
-  }
-  // Transient (offline / 5xx / 429): STOP. Hammering the rest of the batch is what
-  // turns a rate-limited server into a self-sustaining 429/502 storm. Back off and
-  // resume next cycle — the pages already confirmed above stay advanced.
-  return "stop";
-}
-
-/**
- * Run the recovery for one refused/gone page. The mark is written BEFORE the network
- * call so a hydrate landing mid-recovery keeps the local copy (it holds the only copy
- * of the refused edit), and cleared by applyRecoveryOutcome once the edit is safely
- * moved. O(1) besides the recovery's own GET + POST.
- */
-async function recoverRefusedPublish(
-  page: PageEntry, id: string, forgotten: Set<string>,
-): Promise<"continue" | "stop"> {
-  const recovering = loadLedger(OUTBOX_RECOVERING_KEY);
-  recovering[id] = new Date().toISOString();
-  saveOutboxLedger(OUTBOX_RECOVERING_KEY, recovering);
-  const outcome = await recoverRefusedEdit(
-    page,
-    getCurrentPageAccessContext()?.privateWorkspaceIds[0] ?? null,
-    refusedEditDeps(),
-  );
-  // applyRecoveryOutcome books on a ledger: it gets this page's entry alone, and a removal
-  // there becomes a `forgotten` booking for the flush to apply.
-  const entry: SyncLedger = { [id]: "" };
-  const step = applyRecoveryOutcome(entry, recovering, id, outcome, markPageWriteRefused);
-  if (!Object.hasOwn(entry, id)) forgotten.add(id);
-  saveOutboxLedger(OUTBOX_RECOVERING_KEY, recovering);
-  return step;
-}
-
-/** A settled page no longer needs hydrate to protect its local copy. O(k). */
-function settleRecoveringMarks(ids: string[]): void {
-  if (ids.length === 0) return;
-  const recovering = loadLedger(OUTBOX_RECOVERING_KEY);
-  if (clearRecoveringMarks(recovering, ids)) saveOutboxLedger(OUTBOX_RECOVERING_KEY, recovering);
+function flushDeps(): FlushDeps {
+  return {
+    publish: (page) => publishPage(page),
+    recovery: refusedEditDeps(),
+    privateWorkspaceId: () => getCurrentPageAccessContext()?.privateWorkspaceIds[0] ?? null,
+    notify: (notice) => {
+      // A sticky notice never times out of sight (a lost edit is something the reader
+      // must act on); the conflict merge is a plain notice — it blocks nothing.
+      const { sticky, ...rest } = notice;
+      useToastStore.getState().push(sticky ? { ...rest, durationMs: null } : rest);
+    },
+    applyContent: (pageId, content) => {
+      // The store's own page update action: the editor re-renders what was saved.
+      usePageStore.getState().updatePageContent(pageId, content);
+      return usePageStore.getState().pageById(pageId) ?? null;
+    },
+    latest: (pageId) => usePageStore.getState().pageById(pageId) ?? null,
+    recordVersion: (pageId, version) => usePageStore.getState().setPageContentVersion(pageId, version),
+    externalize: externalizeInlineImages,
+  };
 }
 
 export function usePageSync(): void {
@@ -228,11 +207,12 @@ export function usePageSync(): void {
         let failed = false;
         const budget = { left: MAX_RECOVERIES_PER_FLUSH };
         const settled: string[] = [];
+        const deps = flushDeps();
         for (const id of toPublish) {
           const page = payloads.get(id);
           const stamp = desired.get(id);
           if (!page || stamp === undefined) continue;
-          const step = await publishOutboxPage({ page, id, stamp, confirmed, forgotten, budget });
+          const step = await publishOutboxPage({ page, id, stamp, confirmed, forgotten, budget }, deps);
           if (step === "stop") { failed = true; break; }
           settled.push(id);
         }
@@ -250,6 +230,9 @@ export function usePageSync(): void {
         // The same two fields that arm it below: an edit made during the awaits keeps it armed.
         if (left.length === 0 && now.pages === pagesAtStart && now.pageRevisions === revisionsAtStart) guard.disarm();
         settleRecoveringMarks([...settled, ...toUnpublish]);
+        // A page that left the store leaves its base behind: the version it was at is
+        // nobody's business now.
+        pruneBases(new Set(Object.values(now.pages).flatMap((list) => list.map((page) => page._id))));
         if (failed) scheduleRetry(); else clearRetry();
       } finally {
         flushing = false;
@@ -271,11 +254,9 @@ export function usePageSync(): void {
     // pagehide listener would also run, but AFTER ours is not guaranteed — the
     // explicit call is idempotent), (4) fire best-effort keepalive PATCHes for
     // every unconfirmed page. The ledger is NOT advanced — nothing can confirm
-    // during unload — so the next session publishes them again. That is an
-    // overwrite, not an idempotent replay: the bridge takes the client's
-    // updatedAt with no precondition, so an edit made on another device in
-    // between is lost to it. When step 2 fails, the beforeunload guard has
-    // already asked the user to stay.
+    // during unload — so the next session publishes them again, pinned to the
+    // version they were made against: a server copy that moved meanwhile is a
+    // conflict to merge, not an edit to overwrite.
     const flushOnUnload = () => {
       if (!hydratedRef.current) return; // pre-hydrate the ledger is empty — everything would spray
       flushAllBlockDrafts("unmount");

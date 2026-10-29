@@ -7,7 +7,7 @@ import { isTextEntryTarget } from "@/features/block-editor/model/marqueeGeometry
 
 import { isChordPrefix, matchAutomation } from "./automationMatch";
 import { commandById } from "./commandRegistry";
-import { normalizeComboFromEvent } from "./combo";
+import { ariaShortcutsInclude, normalizeComboFromEvent } from "./combo";
 import { isComboRecording } from "./recordingState";
 import { useAutomationStore } from "./useAutomationStore";
 import type { Automation, CommandContext } from "./types";
@@ -103,6 +103,10 @@ export function useAutomationDispatcher(): void {
       // never runs). The dialog on top owns the keyboard.
       const target = event.target;
       if (target instanceof Element && target.closest('.osionos-layout-grid, [role="application"], [role="dialog"]')) return;
+      // A widget that lists a key in aria-keyshortcuts handles it itself: the
+      // database grid's Ctrl+V pastes into its cells, not blocks into the page.
+      const keyOwner = target instanceof Element ? target.closest("[aria-keyshortcuts]") : null;
+      if (keyOwner && ariaShortcutsInclude(keyOwner.getAttribute("aria-keyshortcuts") ?? "", event)) return;
 
       // Arm a chord whose first step this is. Deliberately NOT exclusive: "mod+k"
       // still runs Search below, so adding the chord costs no existing binding.

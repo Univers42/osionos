@@ -14,19 +14,27 @@
 
 import { policyToLevel } from './sharePermissionBridge';
 import type {
-  EnginePolicyRow, EngineRole, ShareAccessRule, ShareEntry, SharePerson,
+  EnginePolicyRow, EngineRole, ShareAccessRule, ShareEntry, SharePerson, ShareTeam,
 } from './types';
 
 export function entryKey(target: ShareEntry['target']): string {
   if (target.type === 'user') return `user:${target.person.id}`;
   if (target.type === 'role') return `role:${target.role}`;
+  if (target.type === 'team') return `team:${target.team.id}`;
+  if (target.type === 'attribute') return `attribute:${target.name}:${target.value}`;
   return target.type;
 }
 
-/** Stored AccessRules → dialog entries (normal page mode). */
+/**
+ * Stored AccessRules → dialog entries (normal page mode).
+ * Caveat: a team or attribute deny is not mirrored client-side (shared/lib/auth/pageAccess.ts does
+ * not know the team/attribute target and fails open on it); the server decides, so a denied page may
+ * show until the next read.
+ */
 export function entriesFromRules(
   rules: Array<ShareAccessRule & { _id: string }>,
   people: SharePerson[],
+  teams: ShareTeam[] = [],
 ): ShareEntry[] {
   const entries: ShareEntry[] = [];
   for (const rule of rules) {
@@ -36,6 +44,15 @@ export function entriesFromRules(
       if (person) target = { type: 'user', person };
     } else if (rule.target.type === 'role') {
       target = { type: 'role', role: (rule.target as { role?: string }).role ?? '' };
+    } else if (rule.target.type === 'team') {
+      // A rule naming a team the list does not hold (deleted, or the list is hidden) shows no row.
+      const teamId = (rule.target as { teamId?: string }).teamId?.toLowerCase();
+      const team = teams.find((candidate) => candidate.id.toLowerCase() === teamId);
+      if (team) target = { type: 'team', team };
+    } else if (rule.target.type === 'attribute') {
+      const name = (rule.target as { name?: string }).name;
+      const value = (rule.target as { value?: string }).value;
+      if (typeof name === 'string' && typeof value === 'string') target = { type: 'attribute', name, value };
     } else {
       target = { type: rule.target.type };
     }

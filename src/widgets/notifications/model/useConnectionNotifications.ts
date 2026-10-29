@@ -27,6 +27,8 @@ import { useEffect } from 'react';
 import { subscribeTopic } from '@/services/realtime-messages/wsTransport';
 import { useContactsStore } from '@/store/social/useContactsStore';
 import { useUserStore } from '@/features/auth/model/useUserStore';
+import { usePageStore } from '@/store/usePageStore';
+import { useWorkspaceMembersStore } from '@/store/settings/useWorkspaceMembersStore';
 import {
   fetchWorkspaces,
   pageApiJwtFromSessionToken,
@@ -63,6 +65,25 @@ function leaveRemovedWorkspace(userId: string, workspaceId: string | undefined):
   if (own) state.switchWorkspace(own);
 }
 
+export type PageAccessPayload = { workspaceId?: string; pageId?: string; op?: string };
+
+/**
+ * A share on a page changed for this user. A grant in the open workspace re-reads its page list
+ * (the tree hydrate is additive, so it never prunes). A revoke re-reads that page: the server
+ * answers 404 only when no other rule still lets this user read it, and the existing 404 path
+ * (createFetchPageContent → settleMissingPage) evicts a clean copy and keeps an unpublished edit.
+ */
+export function applyPageAccess(payload: PageAccessPayload): void {
+  const user = useUserStore.getState();
+  const jwt = user.activePageJwt() ?? '';
+  const activeId = user.activeWorkspace()?._id;
+  const pages = usePageStore.getState();
+  if (payload.workspaceId && payload.workspaceId === activeId) void pages.fetchPages(activeId, jwt, true);
+  if (payload.op === 'revoked' && payload.pageId && pages.pagesIndex[payload.pageId]) {
+    void pages.fetchPageContent(payload.pageId, jwt);
+  }
+}
+
 export function useConnectionNotifications(): void {
   const activeUserId = useUserStore((s) => s.activeUserId);
   useEffect(() => {
@@ -71,6 +92,10 @@ export function useConnectionNotifications(): void {
     return subscribeTopic(`user:${activeUserId}`, (frame) => {
       if (frame.event_type === 'workspace_membership') {
         const payload = (frame.payload ?? {}) as WorkspaceMembershipPayload;
+        // A removed user can no longer read the roster; re-reading it would only 403.
+        if (payload.workspaceId && payload.op !== 'removed') {
+          void useWorkspaceMembersStore.getState().hydrate(payload.workspaceId, activeUserId);
+        }
         void refreshWorkspaceLists(activeUserId).then(() => {
           if (payload.op === 'removed') leaveRemovedWorkspace(activeUserId, payload.workspaceId);
         });
@@ -78,6 +103,10 @@ export function useConnectionNotifications(): void {
         if (notice) {
           useToastStore.getState().push({ kind: payload.op === 'removed' ? 'info' : 'success', title: notice });
         }
+        return;
+      }
+      if (frame.event_type === 'page_access') {
+        applyPageAccess((frame.payload ?? {}) as PageAccessPayload);
         return;
       }
       void useContactsStore.getState().hydrate();
