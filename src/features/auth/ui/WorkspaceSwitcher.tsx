@@ -11,11 +11,15 @@
 /* ************************************************************************** */
 
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { ChevronDown, PenSquare } from 'lucide-react';
+import { ChevronDown, FileText, MessageSquare, PenSquare, Table } from 'lucide-react';
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useUserStore } from '@/features/auth';
 import { useWorkspaceInvitesStore } from '@/store/settings';
 import { pendingInvitesBadge } from '@/features/settings/people/inviteInboxModel';
+import { useClickOutside, useEscapeKey } from '@/shared/ui';
+import { createDatabasePageInPrivateWorkspace } from '@/entities/page/model/createDatabasePage';
+import { chatTab } from '@/widgets/workspace-grid/model/layoutPersist';
+import { useWorkspaceLayout } from '@/widgets/workspace-grid/model/workspaceLayout';
 
 // Lazy + deep path (NOT the auth barrel): the account-switcher popover (~37KB)
 // only mounts on click, so it must not be stapled to the warm entry chunk.
@@ -97,6 +101,34 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
     else setAnchorEl(null);
   }, [open]);
 
+  // Split compose control: the pen makes a page as before, the chevron offers
+  // the other things the sidebar can create.
+  const [composeOpen, setComposeOpen] = useState(false);
+  const composeRef = useRef<HTMLDivElement>(null);
+  useClickOutside(composeRef, () => setComposeOpen(false), composeOpen);
+  useEscapeKey(() => setComposeOpen(false), composeOpen);
+
+  async function createPageFromCompose() {
+    setComposeOpen(false);
+    await handleNewPage();
+  }
+
+  function createChatFromCompose() {
+    setComposeOpen(false);
+    useWorkspaceLayout.getState().openTab(chatTab());
+  }
+
+  async function createDatabaseFromCompose() {
+    setComposeOpen(false);
+    await createDatabasePageInPrivateWorkspace();
+  }
+
+  const composeItems = [
+    { id: 'page', label: 'Page', Icon: FileText, run: createPageFromCompose },
+    { id: 'chat', label: 'Chat', Icon: MessageSquare, run: createChatFromCompose },
+    { id: 'database', label: 'Database', Icon: Table, run: createDatabaseFromCompose },
+  ];
+
   return (
     <div ref={anchorRef} className="relative mx-2 mt-1.5 mb-1.5">
       <div className="flex items-center h-8 w-full">
@@ -160,20 +192,55 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
 
         {/* Right-side buttons */}
         <div className="flex items-center gap-0.5 ml-auto">
-          {/* New page / compose button */}
-          <button
-            type="button"
-            onClick={handleNewPage}
-            className={[
-              'flex items-center justify-center w-7 h-7 rounded-xs shrink-0',
-              'text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]',
-              'transition-colors duration-(--osio-dur-fast) cursor-pointer',
-            ].join(' ')}
-            title="New page"
-          >
-            <PenSquare size={18} />
-          </button>
-
+          {/* New page / compose split control */}
+          <div ref={composeRef} className="relative flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={handleNewPage}
+              className={[
+                'flex items-center justify-center w-7 h-7 rounded-xs shrink-0',
+                'text-[var(--osio-fg-default)] hover:bg-[var(--osio-bg-hover)]',
+                'transition-colors duration-(--osio-dur-fast) cursor-pointer',
+              ].join(' ')}
+              title="New page"
+            >
+              <PenSquare size={18} />
+            </button>
+            <button
+              type="button"
+              aria-label="New…"
+              aria-haspopup="menu"
+              aria-expanded={composeOpen}
+              onClick={() => setComposeOpen(value => !value)}
+              className={[
+                'flex items-center justify-center w-5 h-7 rounded-xs shrink-0',
+                'text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)]',
+                'transition-colors duration-(--osio-dur-fast) cursor-pointer',
+              ].join(' ')}
+              title="New"
+            >
+              <ChevronDown size={13} />
+            </button>
+            {composeOpen && (
+              <div
+                data-testid="compose-menu"
+                className="osio-surface-overlay absolute right-0 top-full z-[var(--osio-z-popover)] mt-1 w-44 p-1"
+              >
+                {composeItems.map(({ id, label, Icon, run }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => void run()}
+                    className="osio-menu-item"
+                    style={{ height: 'var(--osio-control-h-md)' }}
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]"><Icon size={16} /></span>
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Dropdown chevron */}
           <button

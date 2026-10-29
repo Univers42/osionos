@@ -28,6 +28,7 @@ export const pageHeaderMenuScenarios = [
       await openFreshPage(page, appUrl);
       await waitForRenderStability(page);
       await page.getByRole("button", { name: "Open page configuration" }).click();
+      await page.getByPlaceholder("Search actions...").fill("Small text");
       await waitForRenderStability(page);
 
       await expect(page.getByText("Small text")).toBeVisible();
@@ -47,6 +48,7 @@ export const pageHeaderMenuScenarios = [
       await openFreshPage(page, appUrl);
       await waitForRenderStability(page);
       await page.getByRole("button", { name: "Open page configuration" }).click();
+      await page.getByPlaceholder("Search actions...").fill("Small text");
       await waitForRenderStability(page);
 
       await expect(page.getByText("Small text")).toBeVisible();
