@@ -52,7 +52,7 @@ async function expectMenuRows(page, menu) {
     return { height: style.height, radius: style.borderTopLeftRadius, paddingLeft: style.paddingLeft };
   });
   expect(box.height).toBe(await tokenValue(page, "height", "--osio-control-h-sm"));
-  expect(box.radius).toBe(await tokenValue(page, "border-top-left-radius", "--osio-radius-sm"));
+  expect(box.radius).toBe(await tokenValue(page, "border-top-left-radius", "--osio-radius-xs"));
 }
 
 async function openPage(page, baseURL) {
