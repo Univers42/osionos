@@ -20,6 +20,9 @@ export type LibraryTab = (typeof LIBRARY_TABS)[number];
 export const LIBRARY_SORTS = ["edited", "visited", "title"] as const;
 export type LibrarySort = (typeof LIBRARY_SORTS)[number];
 
+export const LIBRARY_CREATORS = ["anyone", "me"] as const;
+export type LibraryCreator = (typeof LIBRARY_CREATORS)[number];
+
 export interface LibraryNode {
   page: PageEntry;
   depth: number;
@@ -53,6 +56,19 @@ export function sourceLabel(page: PageEntry, workspaceName: string): string {
   if (page.visibility === "public") return workspaceName || "Workspace";
   if (isSharedPage(page)) return "Shared";
   return "Private";
+}
+
+/** The parent a nested page lives under, which the Source column names instead
+ *  of its audience. Null for a top-level page or a parent the list cannot see. */
+export function sourceParent(page: PageEntry, byId: ReadonlyMap<string, PageEntry>): PageEntry | null {
+  if (!page.parentPageId) return null;
+  const parent = byId.get(page.parentPageId);
+  return parent && isListablePage(parent) ? parent : null;
+}
+
+/** The "Created by" filter: "me" keeps only the pages the user owns. */
+export function filterByCreator(pages: readonly PageEntry[], creator: LibraryCreator, userId: string): PageEntry[] {
+  return creator === "me" ? pages.filter((page) => isOwnedBy(page, userId)) : [...pages];
 }
 
 /** Last visit per page id, newest first when the recents list is newest-first. */

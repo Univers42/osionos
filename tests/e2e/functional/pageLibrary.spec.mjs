@@ -9,8 +9,9 @@
 /* ************************************************************************** */
 
 // The Library full view: reachable from the rail, its five tabs, creating a page
-// that lands first in Recents with a hover OPEN pill, and a parent/child tree that
-// expands to reveal the child plus an "Add new" row.
+// that lands first in Recents with a hover OPEN pill, a parent/child tree that
+// expands to reveal the child plus an "Add new" row, and the tab-row icons
+// (search, created-by filter, sort).
 
 import { expect, test } from "@playwright/test";
 
@@ -76,7 +77,34 @@ test.describe("the Library", () => {
     await chevron.click();
     await expect(chevron).toHaveAttribute("aria-expanded", "true");
 
-    await expect(library.getByTestId("library-row").filter({ hasText: child }).first()).toBeVisible();
+    const childRow = library.getByTestId("library-row").filter({ hasText: child }).first();
+    await expect(childRow).toBeVisible();
+    // Source names the parent the child lives under.
+    await expect(childRow).toContainText(parent);
     await expect(library.getByTestId("library-add-new").first()).toBeVisible();
+
+    await library.getByRole("button", { name: "Search", exact: true }).click();
+    const search = library.getByRole("searchbox", { name: "Search pages" });
+    await expect(search).toBeFocused();
+    await search.fill(child);
+    await expect(library.getByTestId("library-row")).toHaveCount(1);
+    await search.press("Escape");
+    await expect(search).toHaveCount(0);
+    await expect(library.getByRole("button", { name: "Search", exact: true })).toBeVisible();
+
+    await library.getByRole("button", { name: "Filter", exact: true }).click();
+    const createdBy = page.getByRole("menu", { name: "Created by" });
+    await expect(createdBy.getByRole("menuitemradio", { name: "Anyone" })).toHaveAttribute("aria-checked", "true");
+    await createdBy.getByRole("menuitemradio", { name: "Me" }).click();
+    await expect(createdBy).toHaveCount(0);
+    await expect(row).toBeVisible();
+
+    await library.getByRole("button", { name: "Sort", exact: true }).click();
+    const sortBy = page.getByRole("menu", { name: "Sort by" });
+    for (const label of ["Last visited", "Last edited", "Title"]) {
+      await expect(sortBy.getByRole("menuitemradio", { name: label })).toBeVisible();
+    }
+    await sortBy.getByRole("menuitemradio", { name: "Title" }).click();
+    await expect(sortBy).toHaveCount(0);
   });
 });
