@@ -162,32 +162,23 @@ test("C822: a user-scope agent cache is per user and workspace", async () => {
 const edited = (state: NotionState, name: string): NotionState =>
   ({ ...state, views: { ...state.views, "v-library-all": { ...state.views["v-library-all"], name } } });
 
-test("C830: a non-curator gets the shipped views and writes none; an admin's edit is honoured", async () => {
+test("C913: views kept in this browser by L1 are ignored, and no role writes them", async () => {
   await fresh();
   const key = "osionos:library:views:v1:u830:sh830";
   const shipped = libraryViews(false);
   const stored = JSON.stringify({ "v-library-all": { ...shipped["v-library-all"], name: "Seeded" } });
   files.set(key, stored);
-  const as = (role: string) => {
+  // No bridge here (API_BASE is unset under node): the curated views never arrive, so even an
+  // admin stays on the shipped views, locked. library-server-views.test.ts drives the bridge.
+  for (const role of ["editor", "viewer", "admin"]) {
     signIn([session("u830", [], [workspace("sh830", { role })])], "u830", { u830: "sh830" });
-    return load();
-  };
-
-  for (const role of ["editor", "viewer"]) {
-    const state = await as(role);
-    assert.deepEqual(state.views, shipped, `${role}: the shipped views only, whatever this browser holds`);
-    assert.equal(state.databases[LIBRARY_DB_ID].locked, true);
+    const state = await load();
+    assert.deepEqual(state.views, shipped, `${role}: the shipped views, whatever this browser holds`);
+    assert.equal(state.databases[LIBRARY_DB_ID].locked, true, `${role}: locked until the bridge says otherwise`);
     adapter.persistState?.(edited(state, "Edited"), state);
-    assert.equal(writes.filter((written) => written === key).length, 0, `${role}: the views key is never written`);
+    assert.equal(writes.length, 0, `${role}: nothing is written to this browser`);
     assert.equal(files.get(key), stored);
   }
-
-  const admin = await as("admin");
-  assert.equal(admin.databases[LIBRARY_DB_ID].locked, false);
-  assert.equal(admin.views["v-library-all"].name, "Seeded", "an admin gets the stored edit");
-  adapter.persistState?.(edited(admin, "Edited"), admin);
-  assert.equal(writes.filter((written) => written === key).length, 1);
-  assert.equal((await load()).views["v-library-all"].name, "Edited");
 });
 
 test("C833: with agents off there is no listAgents call and no Agents view", async () => {
@@ -200,9 +191,7 @@ test("C833: with agents off there is no listAgents call and no Agents view", asy
   ];
   for (const [user, space, body] of cases) {
     if (body) agentSettings.set(space, body);
-    // The viewer's own private workspace: a curator, so a stored Agents view would be honoured if agents were on.
     signIn([session(user, [space])], user, { [user]: space });
-    files.set(`osionos:library:views:v1:${user}:${space}`, JSON.stringify({ "v-library-agents": agentsView }));
     await load();
     await settle();
     assert.equal(calls(`/workspaces/${space}/agents/settings`), 1, `${space}: the settings were asked`);

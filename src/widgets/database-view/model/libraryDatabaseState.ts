@@ -16,14 +16,13 @@
  * databases registered on this device, and the skills, agents and commands of
  * the AI service (libraryRemoteSources.ts). Records are real ids, so a row opens
  * the page or database it stands for. Record edits are discarded by a reload.
- * View edits are kept for a curator (owner or admin) and refused for anyone else:
- * the schema arrives locked, the kit's store guard drops the edit, and nothing is
- * written here.
+ * The views are the workspace's (libraryServerViews.ts): every member sees what its
+ * owner and admins curated, and only they may change it — the bridge refuses anyone
+ * else with 403. For a non-curator the schema arrives locked, the kit's store guard
+ * drops a view edit, and nothing is sent.
  *
- * Caveat: a curator's views persist in this browser's localStorage, per user and
- * workspace — another device, and every other member, starts from the shipped
- * views, and a deleted shipped view comes back on reload. Upgrade path (L2): views
- * in the workspace settings, written through the owner/admin PATCH.
+ * Caveat: a curated record holds the views that differ from the shipped ones, so a
+ * shipped view an admin deleted comes back on reload.
  * Caveat: the Database rows are the databases registered on this device
  * (useDatabaseStore), not every database the workspace holds.
  * Caveat: a locked view also refuses the kit's quieter writes (column widths,
@@ -43,39 +42,8 @@ import {
   canCurateLibrary, LIBRARY_DB_ID, libraryRecords, librarySchema, readableLibraryPages, type LibrarySources,
 } from "./libraryDatabaseModel";
 import { libraryRemote, type LibraryRemote } from "./libraryRemoteSources";
-import { libraryViews, mergeLibraryViews } from "./libraryViews";
-
-function viewsKey(): string | null {
-  const users = useUserStore.getState();
-  const workspaceId = users.activeWorkspace()?._id;
-  return workspaceId ? `osionos:library:views:v1:${users.activeUserId ?? "anon"}:${workspaceId}` : null;
-}
-
-function readStoredViews(): unknown {
-  const key = viewsKey();
-  if (!key) return null;
-  try {
-    const raw = globalThis.localStorage?.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Only the views that differ from the shipped ones are written, so a later
- *  change to a shipped view still reaches a curator who never touched it. */
-function writeStoredViews(views: NotionState["views"]): void {
-  const key = viewsKey();
-  if (!key) return;
-  const shipped = libraryViews(true);
-  const own = Object.fromEntries(Object.entries(views).filter(([id, view]) =>
-    view.databaseId === LIBRARY_DB_ID && JSON.stringify(view) !== JSON.stringify(shipped[id])));
-  try {
-    globalThis.localStorage?.setItem(key, JSON.stringify(own));
-  } catch (error) {
-    console.warn("[library] views not saved on this device", error);
-  }
-}
+import { libraryServerViews, saveLibraryViews } from "./libraryServerViews";
+import { curatedLibraryViews, libraryViews, mergeLibraryViews } from "./libraryViews";
 
 function ownerNames(workspaceId: string): Map<string, string> {
   const names = new Map<string, string>();
@@ -88,13 +56,18 @@ function ownerNames(workspaceId: string): Map<string, string> {
   return names;
 }
 
+interface Viewer { workspaceId: string; access: PageAccessContext; canCurate: boolean }
+
 /** Who is looking: none for a signed-out or workspace-less viewer, who gets an empty,
- *  locked Library and no request at all. */
-function viewer(): { workspaceId: string; access: PageAccessContext; canCurate: boolean } | null {
+ *  locked Library and no request at all. A curator is one the bridge says curates AND
+ *  whose session still says owner or admin, so a refresh that demotes relocks at once. */
+function viewer(onChange: () => void): (Viewer & { stored: unknown }) | null {
   const workspace = useUserStore.getState().activeWorkspace();
   const access = getCurrentPageAccessContext();
   if (!workspace || !access) return null;
-  return { workspaceId: workspace._id, access, canCurate: canCurateLibrary(workspace, access.userId, new Set(access.privateWorkspaceIds)) };
+  const server = libraryServerViews(access.userId, workspace._id, onChange);
+  const byRole = canCurateLibrary(workspace, access.userId, new Set(access.privateWorkspaceIds));
+  return { workspaceId: workspace._id, access, canCurate: byRole && server?.canCurate === true, stored: server?.views ?? null };
 }
 
 function sources(workspaceId: string, access: PageAccessContext, remote: LibraryRemote): LibrarySources {
@@ -149,11 +122,14 @@ class LibraryDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   async removeProperty(): Promise<void> { /* read-only schema */ }
   async changePropertyType(_databaseId: string, _propertyId: string, _newType: PropertyType): Promise<void> { /* read-only schema */ }
 
-  // Arrow: the host calls it detached. A curator's view edit is kept; a record edit
+  // Arrow: the host calls it detached. A curator's view edit is saved; a record edit
   // reloads. Comparing content, not identity, lets the reload settle.
   persistState = (next: NotionState, previous?: NotionState): void => {
     if (!previous) return;
-    if (viewer()?.canCurate && JSON.stringify(next.views) !== JSON.stringify(previous.views)) writeStoredViews(next.views);
+    const current = viewer(this.reload);
+    if (current?.canCurate && JSON.stringify(next.views) !== JSON.stringify(previous.views)) {
+      saveLibraryViews(current.access.userId, current.workspaceId, curatedLibraryViews(next.views), this.reload);
+    }
     if (JSON.stringify(stripViews(next)) !== JSON.stringify(stripViews(previous))) this.reload();
   };
 
@@ -178,15 +154,14 @@ class LibraryDatabaseAdapter implements PersistableObjectDatabaseAdapter {
   }
 
   private state(): NotionState {
-    const current = viewer();
+    const current = viewer(this.reload);
     if (!current) return EMPTY_STATE();
-    const { workspaceId, access, canCurate } = current;
+    const { workspaceId, access, canCurate, stored } = current;
     const remote = libraryRemote(access.userId, workspaceId, this.reload);
-    const viewAccess = { canCurate, withAgents: remote.agents !== null };
     return {
       databases: { [LIBRARY_DB_ID]: librarySchema(canCurate) },
       pages: libraryRecords(sources(workspaceId, access, remote)),
-      views: mergeLibraryViews(canCurate ? readStoredViews() : null, viewAccess),
+      views: mergeLibraryViews(stored, remote.agents !== null),
     };
   }
 
