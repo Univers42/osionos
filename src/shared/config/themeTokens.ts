@@ -135,6 +135,7 @@ export const EXCLUDED_TOKENS: readonly { pattern: RegExp; reason: string }[] = [
   { pattern: /^splitter-hit-min$/, reason: "internal: the pane splitter's hit area" },
   { pattern: /^transition-(colors|press)$/, reason: "shorthand: a list of transitions built from dur-* and ease-*" },
   { pattern: /^motion-(fast|slow|standard)$/, reason: "shorthand: a duration and a curve; set dur-* and ease-*" },
+  { pattern: /^wide-/, reason: "local layout utility: measured from the page scroller, not a theme setting" },
 ];
 
 const BY_KEY = new Map(THEME_TOKENS.map((token) => [token.key, token]));

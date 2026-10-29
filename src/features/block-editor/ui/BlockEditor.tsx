@@ -131,6 +131,8 @@ interface BlockEditorProps {
   numberedDepth: number;
   bulletDepth: number;
   isSelected?: boolean;
+  /** Top-level page-body block: tables/databases bleed to the page edge before scrolling. */
+  wideBlock?: boolean;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent) => void;
@@ -149,6 +151,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
   numberedDepth,
   bulletDepth,
   isSelected = false,
+  wideBlock = false,
   onChange,
   onKeyDown,
   onPaste,
@@ -1015,12 +1018,13 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           data-table-block-shell
           aria-label="Table block"
         >
-          <div className="osio-block-scroll-x">
+          <div className={wideBlock ? "osio-wide-block" : "osio-block-scroll-x"}>
             <TableBlockEditor
               block={block}
               pageId={pageId}
               style={editableStyle}
               textStyle={editableStyle}
+              wide={wideBlock}
               onDeleteTable={onDeleteCodeBlock}
               onBeforeStructuralEdit={onBeforeStructuralEdit}
             />
@@ -1047,15 +1051,17 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           aria-label="Database block"
           className="relative group/dbblock"
         >
-          <div className="osio-block-scroll-x">
-            <Suspense fallback={null}>
-              <DatabaseBlock
-                databaseId={block.databaseId}
-                initialViewId={block.viewId}
-                mode="inline"
-                recordLimit={block.recordLimit}
-              />
-            </Suspense>
+          <div className={wideBlock ? "osio-wide-block" : "osio-block-scroll-x"}>
+            <div data-wide-block-content={wideBlock ? "" : undefined} className={wideBlock ? undefined : "contents"}>
+              <Suspense fallback={null}>
+                <DatabaseBlock
+                  databaseId={block.databaseId}
+                  initialViewId={block.viewId}
+                  mode="inline"
+                  recordLimit={block.recordLimit}
+                />
+              </Suspense>
+            </div>
           </div>
         </div>
       );
