@@ -94,3 +94,9 @@ test("encode direction: text and multi_select round-trip (full goldens in live-e
   assert.equal(encodeLiveValue("x", prop("text"), undefined), "x");
   assert.deepEqual(encodeLiveValue(["a"], prop("multi_select"), undefined), ["a"]);
 });
+
+test("bigint FK writes: exact values as numbers, beyond 2^53 as the digit string", () => {
+  const bigintFk = { ...FK_COLUMN, native_type: "int8", normalized_type: "bigint" } as LiveColumnSchema;
+  assert.equal(encodeLiveValue(["baas:db-1:customers:9007199254740993"], prop("relation"), bigintFk), "9007199254740993");
+  assert.equal(encodeLiveValue(["baas:db-1:customers:7"], prop("relation"), bigintFk), 7);
+});
