@@ -19,7 +19,7 @@
  * entry. Consumers wrap usage in <Suspense>.
  */
 
-import { lazy } from "react";
+import { lazy, type ComponentType } from "react";
 
 export const LazyOsionosPage = lazy(() =>
   import("@/pages/notion-page/ui/NotionPage").then((m) => ({ default: m.OsionosPage })),
@@ -102,10 +102,28 @@ export const LazyAiHubView = lazy(() =>
 );
 
 // The Notion-style Library: its own chunk so the tree table never rides the
-// warm pane path.
-export const LazyPageLibraryView = lazy(() =>
-  import("@/features/page-library").then((m) => ({ default: m.PageLibraryView })),
-);
+// warm pane path. The rail prefetches it on hover and the pane then renders the
+// loaded component directly: React.lazy suspends once even for a cached chunk and
+// React holds the reveal back ~300ms (live first open 319ms, 2026-10-29).
+const loadPageLibraryView = () =>
+  import("@/features/page-library").then((m) => ({ default: m.PageLibraryView }));
+let readyLibraryView: ComponentType | undefined;
+
+export const LazyPageLibraryView = lazy(loadPageLibraryView);
+
+/** Starts the Library chunk download; a failure is left to the lazy path's error boundary. */
+export function prefetchPageLibraryView(): void {
+  if (readyLibraryView) return;
+  loadPageLibraryView().then(
+    (module) => { readyLibraryView = module.default; },
+    () => undefined,
+  );
+}
+
+/** The Library component once its prefetch has finished, else undefined. */
+export function readyPageLibraryView(): ComponentType | undefined {
+  return readyLibraryView;
+}
 
 // Deep import (never a barrel): the code editor pulls the Monaco core + its
 // language grammars, a large chunk that must never leak onto the warm pane path. Only reached
