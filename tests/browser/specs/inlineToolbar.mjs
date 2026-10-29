@@ -657,12 +657,11 @@ export const inlineToolbarScenarios = [
   defineScenario(
     "11. Inline Text Selection & Formatting Toolbar",
     "AI skills",
-    "Ask AI opens the skill menu and the Comment button is present",
+    "the panel lists the AI skills and the Comment row",
     async ({ page, appUrl }) => {
       const editor = await createFormattedParagraph(page, appUrl);
       await selectText(editor, "alpha");
       await expect(toolbarButton(page, "Comment")).toBeVisible();
-      await toolbarButton(page, "Ask AI").click();
       for (const label of ["Improve writing", "Proofread", "Explain", "Reformat", "Edit with AI"]) {
         await expect(page.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
       }

@@ -12,7 +12,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
-import { TOOLBAR_ICON } from "./ToolbarButton";
+import { ToolbarIconButton, TOOLBAR_ICON } from "./ToolbarButton";
 
 interface MoreMenuProps {
   shortcutsOpen: boolean;
@@ -20,7 +20,11 @@ interface MoreMenuProps {
   onOpenSlashMenu: () => void;
 }
 
-/** The toolbar's "More" menu: the shortcuts reference and the slash menu. */
+/**
+ * The last grid cell: a popover with the two actions that no longer have a
+ * permanent row. It renders INSIDE the panel root so the shared test helper
+ * (`button[title=...]` scoped to the panel) still finds both rows.
+ */
 export const MoreMenu: React.FC<MoreMenuProps> = ({
   shortcutsOpen,
   onToggleShortcuts,
@@ -47,51 +51,49 @@ export const MoreMenu: React.FC<MoreMenuProps> = ({
   }, [close, open]);
 
   return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        title="More"
-        aria-label="More"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-pressed={shortcutsOpen}
-        className="grid h-8 min-w-8 place-items-center rounded-md border border-transparent px-2 text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]"
-        onMouseDown={(event) => event.preventDefault()}
+    <div ref={rootRef} className="relative h-9 w-9">
+      <ToolbarIconButton
+        label="More"
+        active={shortcutsOpen}
         onClick={() => setOpen((value) => !value)}
       >
         <MoreHorizontal className={TOOLBAR_ICON} aria-hidden />
-      </button>
+      </ToolbarIconButton>
 
       {open ? (
         <div
           role="menu"
           aria-label="More"
-          className="absolute right-0 top-full z-[var(--osio-z-max)] mt-1.5 w-52 osio-surface-overlay p-1"
+          className="absolute right-0 top-full z-[var(--osio-z-max)] mt-1 w-52 osio-surface-overlay p-1"
           onMouseDown={(event) => event.preventDefault()}
         >
           <button
             type="button"
             role="menuitem"
-            title="Keyboard shortcuts"
-            className="osio-menu-item h-7"
-            onClick={() => {
-              onToggleShortcuts();
-              close();
-            }}
-          >
-            Keyboard shortcuts
-          </button>
-          <button
-            type="button"
-            role="menuitem"
             title="Open slash menu"
+            data-selection-panel-control
             className="osio-menu-item h-7"
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => {
               onOpenSlashMenu();
               close();
             }}
           >
             Open slash menu
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            title="Keyboard shortcuts"
+            data-selection-panel-control
+            className="osio-menu-item h-7"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              onToggleShortcuts();
+              close();
+            }}
+          >
+            Keyboard shortcuts
           </button>
         </div>
       ) : null}

@@ -1041,6 +1041,13 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     setShowShortcuts((current) => !current);
   }, []);
 
+  const handleCloseSelectionToolbar = useCallback(() => {
+    lastSelectionSnapshotRef.current = null;
+    setSelectionSnapshot(null);
+    setOpenPalette(null);
+    setShowShortcuts(false);
+  }, []);
+
   const handleFormatBold = useCallback(
     () => handleToggleInlineFormat("bold"),
     [handleToggleInlineFormat],
@@ -1374,6 +1381,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
               onOpenLinkPicker={handleAddLink}
               onClearFormat={handleClearFormat}
               onToggleMath={handleToggleMath}
+              onClose={handleCloseSelectionToolbar}
               blockType={blockType}
               blockId={blockId}
               pageId={pageId}
