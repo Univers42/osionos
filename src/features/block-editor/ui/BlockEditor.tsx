@@ -228,10 +228,15 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
   );
 
   // "Ask AI" from the selection toolbar: the panel opens under the block with
-  // the SELECTION as its input. Nothing is written until the user accepts.
+  // the SELECTION as its input. A skill runs immediately, exactly like the
+  // matching slash command; "Edit with AI" only opens the panel.
   const handleAskAI = useCallback(
-    (selectionText: string) => {
-      useInlineAiStore.getState().open({ pageId, blockId: block.id, selectionText });
+    (selectionText: string, command?: string, instruction?: string) => {
+      const store = useInlineAiStore.getState();
+      store.open({ pageId, blockId: block.id, selectionText }, command);
+      if (!command) return;
+      if (command === "ask" && !instruction) return;
+      void store.run(command, instruction);
     },
     [block.id, pageId],
   );
@@ -512,6 +517,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
     case "heading_2":
@@ -529,6 +535,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
     case "heading_3":
@@ -546,6 +553,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -564,6 +572,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -582,6 +591,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -600,6 +610,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -618,6 +629,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -666,6 +678,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               blockType={block.type}
               onTurnInto={handleTurnInto}
               onAskAI={handleAskAI}
+              blockId={block.id}
             />
           </div>
         </div>
@@ -694,6 +707,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               blockType={block.type}
               onTurnInto={handleTurnInto}
               onAskAI={handleAskAI}
+              blockId={block.id}
             />
           </div>
         </div>
@@ -865,6 +879,8 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
               onAskAI={handleAskAI}
+              pageId={pageId}
+              blockId={block.id}
             />
             {!block.collapsed && renderChildren?.()}
           </div>
@@ -923,6 +939,8 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
               onAskAI={handleAskAI}
+              pageId={pageId}
+              blockId={block.id}
             />
             {hasChildren ? (
               <div className="min-w-0 max-w-full">{renderChildren?.()}</div>
@@ -1183,6 +1201,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
   }
