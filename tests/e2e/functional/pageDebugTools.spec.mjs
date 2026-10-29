@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// ··· → Tools: page debug toggles. Each tool flips a data-debug-* attribute on
+// ··· → Developer tools: page debug toggles. Each tool flips a data-debug-* attribute on
 // the page root (CSS overlays) or mounts the JS HUD; toggles keep the menu
 // open, persist, and turn fully off again.
 
@@ -23,6 +23,7 @@ test("debug tools toggle overlays on and off from the page ··· menu", async (
   const pageRoot = page.locator(".osionos-page").first();
 
   await page.getByRole("button", { name: "Open page configuration" }).click();
+  await page.getByTestId("page-menu-tools").click();
 
   // CSS tools: outlines + surface tint stamp attributes on the page root.
   await page.getByTestId("debug-tool-outlines").click();
@@ -48,6 +49,7 @@ test("debug tools toggle overlays on and off from the page ··· menu", async (
 
   // Toggles are symmetric: everything off again, attributes and HUD gone.
   await page.getByRole("button", { name: "Open page configuration" }).click();
+  await page.getByTestId("page-menu-tools").click();
   await page.getByTestId("debug-tool-outlines").click();
   await page.getByTestId("debug-tool-surfaces").click();
   await page.getByTestId("debug-tool-caret").click();
