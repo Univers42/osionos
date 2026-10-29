@@ -26,7 +26,11 @@ test.use(PERF_USE);
 const SPEC = "held-key";
 const REPEAT_MS = 33; // ~30 Hz, the common desktop auto-repeat rate
 const PRESSES = 90;
-const LONG_TEXT = "lorem ipsum dolor sit amet ".repeat(8).trim();
+const TEXTS = {
+  plain: "lorem ipsum dolor sit amet ".repeat(8).trim(),
+  // Real blocks carry marks; a block with markup takes the innerHTML-rewrite path per key.
+  styled: "lorem **ipsum** dolor *sit* amet `code` ".repeat(4) + "lorem ipsum dolor sit amet ".repeat(4).trim(),
+};
 
 const KEYS = {
   Backspace: { type: "rawKeyDown", key: "Backspace", code: "Backspace", windowsVirtualKeyCode: 8 },
@@ -34,8 +38,18 @@ const KEYS = {
 };
 
 function installRecorder() {
-  const rec = { keys: [], frames: [], loafs: [] };
+  const rec = { keys: [], frames: [], loafs: [], rewrites: 0, caretSets: 0 };
   globalThis.__held = rec;
+  // A rewrite tears down the focused block's DOM, which recreates the caret: counted per key.
+  new MutationObserver((list) => {
+    for (const record of list) {
+      if (record.removedNodes.length && record.target instanceof Element && record.target.closest("[role=textbox]")) rec.rewrites += 1;
+    }
+  }).observe(document.body, { childList: true, subtree: true });
+  for (const method of ["addRange", "setBaseAndExtent", "collapse"]) {
+    const original = Selection.prototype[method];
+    Selection.prototype[method] = function (...args) { rec.caretSets += 1; return original.apply(this, args); };
+  }
   document.addEventListener("keydown", (event) => {
     rec.keys.push({ delay: performance.now() - event.timeStamp });
   }, true);
@@ -103,6 +117,8 @@ async function heldCase(page, browserName, caseName, name) {
     browserName,
     lagMs,
     keysHandled: rec.keys.length,
+    domRewrites: rec.rewrites,
+    caretSets: rec.caretSets,
     inputDelay: summarize(rec.keys.map((key) => key.delay)),
     frameInterval: summarize(frameIntervals(rec.frames)),
     longFrames: rec.loafs.length,
@@ -117,8 +133,8 @@ async function heldCase(page, browserName, caseName, name) {
   expect(rec.keys.length).toBe(PRESSES);
 }
 
-async function caretAtEndOfLastBlock(page, count) {
-  const pageId = await page.evaluate(({ n, text }) => globalThis.__perfOpenBlockPage(n, text), { n: count, text: LONG_TEXT });
+async function caretAtEndOfLastBlock(page, count, text) {
+  const pageId = await page.evaluate(({ n, text }) => globalThis.__perfOpenBlockPage(n, text), { n: count, text });
   const last = page.locator(`[data-block-id="${pageId}-b${count - 1}"] [role="textbox"]`);
   await last.click();
   await page.keyboard.press("End");
@@ -127,14 +143,19 @@ async function caretAtEndOfLastBlock(page, count) {
 
 // workspacePages: a real workspace holds hundreds to thousands of pages, and a keystroke
 // replaces the workspace's page array, so every page-store subscriber runs per key.
-for (const { blocks, workspacePages } of [{ blocks: 10, workspacePages: 0 }, { blocks: 40, workspacePages: 0 }, { blocks: 40, workspacePages: 3000 }]) {
+for (const { blocks, workspacePages, text } of [
+  { blocks: 10, workspacePages: 0, text: "plain" },
+  { blocks: 10, workspacePages: 0, text: "styled" },
+  { blocks: 40, workspacePages: 0, text: "plain" },
+  { blocks: 40, workspacePages: 3000, text: "plain" },
+]) {
   for (const name of ["Backspace", "Space"]) {
-    test(`held ${name}, ${blocks} blocks, ${workspacePages} workspace pages`, async ({ page, browserName }) => {
+    test(`held ${name}, ${blocks} ${text} blocks, ${workspacePages} workspace pages`, async ({ page, browserName }) => {
       test.setTimeout(180_000);
       await bootApp(page);
       if (workspacePages) await page.evaluate((n) => globalThis.__perfSeedPages(n), workspacePages);
-      await caretAtEndOfLastBlock(page, blocks);
-      await heldCase(page, browserName, `${name}.blocks${blocks}.pages${workspacePages}`, name);
+      await caretAtEndOfLastBlock(page, blocks, TEXTS[text]);
+      await heldCase(page, browserName, `${name}.${text}.blocks${blocks}.pages${workspacePages}`, name);
     });
   }
 }
