@@ -41,7 +41,7 @@ import {
   TextCursor,
   Trash2,
 } from 'lucide-react';
-import { BookOpen, LayoutDashboard } from 'lucide-react';
+import { BookOpen, LayoutDashboard, ListTree } from 'lucide-react';
 import { PAGE_DEBUG_TOOLS, usePageDebugStore, type PageDebugToolId } from '@/shared/debug/pageDebugStore';
 
 import {
@@ -259,6 +259,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                       <MenuButton icon={<Presentation size={16} />} label="Present" shortcut="Ctrl+Alt+P" checked={actions.config.presentationMode} badge="Beta" onClick={() => runPageAction(actions.present(), showActionError)} />
                       <MenuButton icon={<Text size={16} />} label="Small text" checked={actions.config.smallText} onClick={() => runPageAction(actions.toggleSmallText(), showActionError)} />
                       <MenuButton icon={<Maximize2 size={16} />} label="Full width" checked={actions.config.fullWidth} onClick={() => runPageAction(actions.toggleFullWidth(), showActionError)} />
+                      <MenuButton icon={<ListTree size={16} />} label="Table of contents" checked={actions.config.showOutline} onClick={() => runPageAction(actions.toggleOutline(), showActionError)} />
                       {canToggleWiki && (
                         <MenuButton icon={<BookOpen size={16} />} label={pageSurface === 'wiki' ? 'Turn into page' : 'Turn into wiki'} onClick={toggleWiki} />
                       )}

@@ -79,6 +79,8 @@ export interface PageConfig {
   font: PageFont;
   smallText: boolean;
   fullWidth: boolean;
+  /** The "On this page" rail on the right edge; on unless the page turns it off. */
+  showOutline: boolean;
   locked: boolean;
   presentationMode: boolean;
   rawMode: boolean;
@@ -120,6 +122,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
   font: 'default',
   smallText: false,
   fullWidth: false,
+  showOutline: true,
   locked: false,
   presentationMode: false,
   rawMode: false,

@@ -29,6 +29,7 @@ export type PageActionName =
   | "present"
   | "small_text"
   | "full_width"
+  | "table_of_contents"
   | "lock_page"
   | "translate"
   | "import"
