@@ -10,14 +10,19 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Check, ChevronRight } from "lucide-react";
 import { BlockTypePreview } from "@/entities/block/ui/BlockTypePreview";
-import { TURN_INTO_OPTIONS, turnIntoLabel } from "./turnIntoOptions";
+import {
+  TURN_INTO_OPTIONS,
+  turnIntoRowLabel,
+} from "./turnIntoOptions";
 
 interface TurnIntoMenuProps {
   blockType: string;
   onTurnInto: (type: string) => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 const optionIndex = (blockType: string) =>
@@ -26,21 +31,48 @@ const optionIndex = (blockType: string) =>
     TURN_INTO_OPTIONS.findIndex((option) => option.type === blockType),
   );
 
-/** The "Turn into" trigger and its block-type submenu, with a live preview card. */
+/**
+ * The panel's first row and its flyout. The flyout opens to the right of the
+ * panel, flips left when there is no room, and keeps the live preview card the
+ * old horizontal menu introduced.
+ */
 export const TurnIntoMenu: React.FC<TurnIntoMenuProps> = ({
   blockType,
   onTurnInto,
+  open,
+  onOpenChange,
 }) => {
-  const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(() => optionIndex(blockType));
-  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const flyoutRef = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => onOpenChange(false), [onOpenChange]);
 
-  const close = useCallback(() => setOpen(false), []);
+  // Place the flyout without a state round-trip: right of the panel by
+  // default, flipped left when that would cross the viewport edge.
+  useLayoutEffect(() => {
+    const flyout = flyoutRef.current;
+    const trigger = triggerRef.current?.getBoundingClientRect();
+    if (!open || !flyout || !trigger) return;
+    const width = flyout.offsetWidth;
+    const panelRight = trigger.right + 6;
+    const noRoomRight = panelRight + 4 + width > window.innerWidth - 8;
+    const roomLeft = trigger.left - 6 - 4 - width >= 8;
+    const flip = noRoomRight && roomLeft;
+    if (flip) {
+      flyout.style.left = "";
+      flyout.style.right = `${window.innerWidth - (trigger.left - 6 - 4)}px`;
+    } else {
+      flyout.style.right = "";
+      flyout.style.left = `${panelRight + 4}px`;
+    }
+    flyout.style.top = `${trigger.top}px`;
+    flyout.style.flexDirection = flip ? "row-reverse" : "row";
+  }, [open]);
 
-  const toggle = useCallback(() => {
-    if (!open) setActiveIndex(optionIndex(blockType));
-    setOpen(!open);
-  }, [blockType, open]);
+  const openMenu = useCallback(() => {
+    setActiveIndex(optionIndex(blockType));
+    onOpenChange(true);
+  }, [blockType, onOpenChange]);
 
   const pick = useCallback(
     (index: number) => {
@@ -52,13 +84,13 @@ export const TurnIntoMenu: React.FC<TurnIntoMenuProps> = ({
     [close, onTurnInto],
   );
 
-  // Keyboard navigation stays on the document: focusing the panel would blur the
-  // contentEditable, which drops the selection the toolbar exists for.
+  // Keyboard navigation stays on the document: focusing the panel would blur
+  // the contentEditable, which drops the selection the panel exists for.
   useEffect(() => {
     if (!open) return undefined;
     const last = TURN_INTO_OPTIONS.length - 1;
     const onDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) close();
+      if (!flyoutRef.current?.contains(event.target as Node)) close();
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -68,13 +100,13 @@ export const TurnIntoMenu: React.FC<TurnIntoMenuProps> = ({
         });
       } else if (event.key === "Enter" || event.key === " ") {
         pick(activeIndex);
-      } else if (event.key === "Escape") {
+      } else if (event.key === "Escape" || event.key === "ArrowLeft") {
         close();
       } else {
         return;
       }
       event.preventDefault();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
     };
     document.addEventListener("mousedown", onDown, true);
     document.addEventListener("keydown", onKey, true);
@@ -85,28 +117,45 @@ export const TurnIntoMenu: React.FC<TurnIntoMenuProps> = ({
   }, [activeIndex, close, open, pick]);
 
   const active = TURN_INTO_OPTIONS[activeIndex] ?? TURN_INTO_OPTIONS[0];
+  const CurrentIcon =
+    TURN_INTO_OPTIONS.find((option) => option.type === blockType)?.icon ??
+    TURN_INTO_OPTIONS[0].icon;
 
   return (
-    <div ref={rootRef} className="relative">
+    <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
+        title="Turn into"
+        aria-label="Turn into"
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Turn into"
-        className="flex h-7 items-center gap-1 rounded-md px-1.5 text-sm text-[var(--osio-fg-default)] transition-colors hover:bg-[var(--osio-bg-hover)]"
+        data-selection-panel-control
+        className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium text-[var(--osio-fg-default)] transition-colors hover:bg-[var(--osio-menu-item-hover-bg)] data-[kb-active=true]:bg-[var(--osio-menu-item-hover-bg)]"
         onMouseDown={(event) => event.preventDefault()}
-        onClick={toggle}
+        onMouseEnter={openMenu}
+        onClick={openMenu}
       >
-        <span className="max-w-24 truncate">{turnIntoLabel(blockType)}</span>
-        <ChevronDown className="h-3.5 w-3.5 text-[var(--osio-fg-subtle)]" />
+        <CurrentIcon aria-hidden className="h-[18px] w-[18px] shrink-0" />
+        <span className="flex-1 truncate text-left">
+          {turnIntoRowLabel(blockType)}
+        </span>
+        <ChevronRight
+          aria-hidden
+          className="h-4 w-4 shrink-0 text-[var(--osio-fg-subtle)]"
+        />
       </button>
 
       {open ? (
-        <div className="absolute left-0 top-full z-[var(--osio-z-max)] mt-1.5 flex items-start gap-2">
+        <div
+          ref={flyoutRef}
+          className="fixed z-[var(--osio-z-max)] flex items-start gap-2"
+          style={{ left: "calc(100% + 4px)" }}
+        >
           <div
             role="menu"
             aria-label="Turn into"
-            className="w-60 shrink-0 osio-surface-overlay p-1"
+            className="max-h-[70vh] w-60 shrink-0 overflow-y-auto osio-surface-overlay p-1"
             onMouseDown={(event) => event.preventDefault()}
           >
             <p className="osio-menu-label">Turn into</p>
