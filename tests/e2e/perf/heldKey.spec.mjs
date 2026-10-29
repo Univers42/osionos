@@ -143,19 +143,25 @@ async function caretAtEndOfLastBlock(page, count, text) {
 
 // workspacePages: a real workspace holds hundreds to thousands of pages, and a keystroke
 // replaces the workspace's page array, so every page-store subscriber runs per key.
-for (const { blocks, workspacePages, text } of [
+// caret: a drawn caret (features/theme/model/drawnCaret.ts) measures the selection every frame.
+for (const { blocks, workspacePages, text, caret = "bar" } of [
   { blocks: 10, workspacePages: 0, text: "plain" },
+  { blocks: 10, workspacePages: 0, text: "plain", caret: "thick" },
   { blocks: 10, workspacePages: 0, text: "styled" },
   { blocks: 40, workspacePages: 0, text: "plain" },
   { blocks: 40, workspacePages: 3000, text: "plain" },
 ]) {
   for (const name of ["Backspace", "Space"]) {
-    test(`held ${name}, ${blocks} ${text} blocks, ${workspacePages} workspace pages`, async ({ page, browserName }) => {
+    test(`held ${name}, ${blocks} ${text} blocks, ${workspacePages} workspace pages, ${caret} caret`, async ({ page, browserName }) => {
       test.setTimeout(180_000);
+      if (caret !== "bar") {
+        await page.addInitScript((shape) => localStorage.setItem("osionos:appearance", JSON.stringify({ caretShape: shape })), caret);
+      }
       await bootApp(page);
       if (workspacePages) await page.evaluate((n) => globalThis.__perfSeedPages(n), workspacePages);
       await caretAtEndOfLastBlock(page, blocks, TEXTS[text]);
-      await heldCase(page, browserName, `${name}.${text}.blocks${blocks}.pages${workspacePages}`, name);
+      await heldCase(page, browserName, `${name}.${text}.blocks${blocks}.pages${workspacePages}.caret-${caret}`, name);
+      if (caret !== "bar") await expect(page.locator(".osio-drawn-caret")).toBeVisible();
     });
   }
 }

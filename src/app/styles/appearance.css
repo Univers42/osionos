@@ -23,18 +23,41 @@
 :root[data-caret-color="orange"] { --osio-caret: var(--osio-block-tint-orange-fg); }
 :root[data-caret-color="pink"] { --osio-caret: var(--osio-block-tint-pink-fg); }
 
-/* Chromium only (Firefox 148 parses neither): the other browsers keep a blinking bar. */
-:root[data-caret-shape="block"] :where([contenteditable="true"], [role="textbox"], textarea, input) {
-  caret-shape: block;
+/* A chosen shape or a steady caret is drawn by the app (features/theme/model/drawnCaret.ts)
+   over a transparent native caret; data-native-caret marks an editable it could not measure. */
+:root[data-caret-drawn] [contenteditable="true"]:not([data-native-caret]) {
+  caret-color: transparent;
 }
 
-:root[data-caret-shape="underscore"] :where([contenteditable="true"], [role="textbox"], textarea, input) {
-  caret-shape: underscore;
+.osio-drawn-caret {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--osio-z-max);
+  pointer-events: none;
+  border-radius: 1px;
+  background: var(--osio-caret);
+  animation: osio-caret-blink 1.06s steps(1) infinite;
 }
 
-:root[data-caret-blink="off"] :where([contenteditable="true"], [role="textbox"], textarea, input) {
-  caret-animation: manual;
+:root[data-caret-shape="block"] .osio-drawn-caret { opacity: 0.4; }
+:root[data-caret-blink="off"] .osio-drawn-caret { animation: none; }
+
+/* The global reduce-motion reset (global.css) would stop the blink; the native caret blinks
+   under reduced motion too, and "Steady" is the person's own switch for it. */
+:root:root:not([data-caret-blink="off"]) .osio-drawn-caret {
+  animation-duration: 1.06s !important;
+  animation-iteration-count: infinite !important;
 }
+
+@keyframes osio-caret-blink {
+  50% { opacity: 0; }
+}
+
+/* Inputs keep their native caret: Chromium draws a block or underscore there, Firefox a bar. */
+:root[data-caret-shape="block"] :where(textarea, input) { caret-shape: block; }
+:root[data-caret-shape="underscore"] :where(textarea, input) { caret-shape: underscore; }
+:root[data-caret-blink="off"] :where(textarea, input) { caret-animation: manual; }
 
 /* Compact: smaller controls everywhere; shell.css takes the frame gap and the
    pane radius to 0 on the same attribute. */

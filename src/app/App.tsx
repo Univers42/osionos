@@ -34,6 +34,7 @@ import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPage
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
 import { LazyCanvasDebugRoute, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
+import { startDrawnCaret } from "@/features/theme/model/drawnCaret";
 import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { applyStoredTheme } from "@/shared/config/themeApply";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
@@ -235,6 +236,8 @@ const App: React.FC = () => {
       },
     );
   }, [objectDbActiveUser]);
+
+  useEffect(() => startDrawnCaret(), []);
 
   // Run once on mount
   useEffect(() => {
