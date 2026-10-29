@@ -55,7 +55,13 @@ const EXTRA_ALIASES = {
   "@osionos/ui": new URL("../../packages/osionos-ui/src/index.ts", import.meta.url).href,
   "@osionos/http-gate": new URL("../../packages/http-gate/src/index.ts", import.meta.url).href,
   "@osionos/http-gate/react": new URL("../../packages/http-gate/src/react.ts", import.meta.url).href,
+  "@notion-db/contract-types": new URL("../../src/shared/notion-database-sys/packages/contract-types/src/index.ts", import.meta.url).href,
 };
+
+// AdapterError declares its fields as constructor parameter properties, which node's
+// type stripping refuses (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX): this file goes through the
+// TypeScript compiler like a .tsx does.
+const COMPILED_TS_MODULES = new Set([EXTRA_ALIASES["@notion-db/contract-types"]]);
 
 // Prefix aliases: "@osionos/ui/atoms/Button" -> packages/osionos-ui/src/atoms/Button.
 // Mirrors the trailing-slash regex entries in vite.config.ts.
@@ -212,7 +218,7 @@ export async function load(url, context, nextLoad) {
   // compiled here — the markdown engine's React renderer is one (it calls
   // React.createElement, so it holds no JSX) and a component of the app is
   // another (it holds JSX, and node's type stripping cannot read that).
-  if (isFile && path.endsWith(".tsx")) {
+  if (isFile && (path.endsWith(".tsx") || COMPILED_TS_MODULES.has(path))) {
     const file = fileURLToPath(path);
     const compiled = withJsonAttributes(await compileTsx(file, await readFile(file, "utf8")));
     return { format: "module", source: isAppFile(file) ? withEnv(compiled) : compiled, shortCircuit: true };
