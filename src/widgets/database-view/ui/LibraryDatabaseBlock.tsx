@@ -15,7 +15,9 @@ import { databaseShellClass } from "../model/databaseShellClass";
 import { LIBRARY_DB_ID } from "../model/libraryDatabaseModel";
 import { LIBRARY_DEFAULT_VIEW } from "../model/libraryViews";
 import { getLibraryDatabaseAdapter } from "../model/libraryDatabaseState";
+import { libraryItemRef } from "../model/libraryItemDetail";
 import { createLibrarySubItemsController, openLibraryItem } from "../model/libraryItems";
+import { LibraryItemDialog } from "./LibraryItemDialog";
 
 interface LibraryDatabaseBlockProps {
   initialViewId?: string;
@@ -27,7 +29,7 @@ interface LibraryDatabaseBlockProps {
   }) => React.ReactNode;
 }
 
-/** Opening a row leaves the Library for the item itself, so the peek closes at once. */
+/** Opening a page or database row leaves the Library for it, so the peek closes at once. */
 const LibraryItemOpen: React.FC<{ itemId: string; onClose: () => void }> = ({ itemId, onClose }) => {
   React.useEffect(() => {
     openLibraryItem(itemId);
@@ -40,7 +42,10 @@ const LibraryItemOpen: React.FC<{ itemId: string; onClose: () => void }> = ({ it
 export const LibraryDatabaseBlock: React.FC<LibraryDatabaseBlockProps> = ({ initialViewId, mode = "full", renderDatabase }) => {
   const subItems = React.useMemo(() => createLibrarySubItemsController(), []);
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps["renderPage"]>>(
-    (pageId, _state, onClose) => <LibraryItemOpen itemId={pageId} onClose={onClose} />,
+    (pageId, _state, onClose) => {
+      const itemRef = libraryItemRef(pageId);
+      return itemRef ? <LibraryItemDialog itemRef={itemRef} onClose={onClose} /> : <LibraryItemOpen itemId={pageId} onClose={onClose} />;
+    },
     [],
   );
   const view = initialViewId ?? LIBRARY_DEFAULT_VIEW;
