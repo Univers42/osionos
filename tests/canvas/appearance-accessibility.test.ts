@@ -141,3 +141,22 @@ test("updateAppearance merges with the live appearance instead of a caller's cop
     assert.equal(next.urlPaste, "plain");
   });
 });
+
+test("the caret choices round-trip, fall back on their own, and ride their attributes", () => {
+  const value = { caretColor: "pink", caretShape: "block", caretBlink: "off" };
+  assert.deepEqual(stored(value), { ...DEFAULT_APPEARANCE, ...value });
+  const bad = stored({ caretColor: "#ff0000", caretShape: "underscore", caretBlink: "sometimes" });
+  assert.equal(bad.caretColor, "accent");
+  assert.equal(bad.caretShape, "underscore");
+  assert.equal(bad.caretBlink, "on");
+  withRoot((root) => {
+    applyAppearance({ ...DEFAULT_APPEARANCE, caretColor: "text", caretShape: "underscore", caretBlink: "off" });
+    assert.equal(root.dataset.caretColor, "text");
+    assert.equal(root.dataset.caretShape, "underscore");
+    assert.equal(root.dataset.caretBlink, "off");
+    applyAppearance(DEFAULT_APPEARANCE);
+    assert.equal(root.dataset.caretColor, undefined);
+    assert.equal(root.dataset.caretShape, undefined);
+    assert.equal(root.dataset.caretBlink, undefined);
+  });
+});
