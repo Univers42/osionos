@@ -11,6 +11,29 @@
   /* The UI text size, on body through --osio-font-size-base; never on html,
      where it would redefine 1rem. text-sm and base follow it. */
   --osio-font-size-ui: 14px;
+  /* The caret ink (global.css): the accent's text-safe shade unless chosen. */
+  --osio-caret: var(--osio-accent-text);
+}
+
+:root[data-caret-color="text"] { --osio-caret: var(--osio-fg-default); }
+:root[data-caret-color="blue"] { --osio-caret: var(--osio-block-tint-blue-fg); }
+:root[data-caret-color="green"] { --osio-caret: var(--osio-block-tint-green-fg); }
+:root[data-caret-color="purple"] { --osio-caret: var(--osio-block-tint-purple-fg); }
+:root[data-caret-color="red"] { --osio-caret: var(--osio-block-tint-red-fg); }
+:root[data-caret-color="orange"] { --osio-caret: var(--osio-block-tint-orange-fg); }
+:root[data-caret-color="pink"] { --osio-caret: var(--osio-block-tint-pink-fg); }
+
+/* Chromium only (Firefox 148 parses neither): the other browsers keep a blinking bar. */
+:root[data-caret-shape="block"] :where([contenteditable="true"], [role="textbox"], textarea, input) {
+  caret-shape: block;
+}
+
+:root[data-caret-shape="underscore"] :where([contenteditable="true"], [role="textbox"], textarea, input) {
+  caret-shape: underscore;
+}
+
+:root[data-caret-blink="off"] :where([contenteditable="true"], [role="textbox"], textarea, input) {
+  caret-animation: manual;
 }
 
 /* Compact: smaller controls everywhere; shell.css takes the frame gap and the
