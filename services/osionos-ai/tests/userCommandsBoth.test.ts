@@ -43,4 +43,25 @@ describe('user context and commands (both flags on)', () => {
 		const listed = ((await call('/api/ai/context/items', { token: tokenFor(USER_A, WORKSPACE_A) })).body as { items: unknown[] }).items;
 		assert.equal(listed.length, MAX_USER_COMMANDS + MAX_USER_RULES + MAX_USER_SKILLS);
 	});
+
+	it('C1102: every kind is writable; a command change keeps its kind and never reaches the run', async () => {
+		await app.db.query('delete from public.ai_context_items');
+		const keys = await app.redis.keys('ai:rl:context*');
+		if (keys.length > 0) await app.redis.del(...keys);
+		const token = tokenFor(USER_A, WORKSPACE_A);
+		const post = (kind: string, slug: string, body: string) =>
+			call('/api/ai/context/items', { method: 'POST', token, body: { kind, slug, name: 'n', description: 'd', body } });
+		const made = { command: await post('command', 'standup', 'Standup: $ARGUMENTS'), rule: await post('rule', 'tone', 'Be short.'), skill: await post('skill', 'notes', 'b') };
+		assert.deepEqual(Object.values(made).map((answer) => answer.status), [201, 201, 201]);
+		const id = (made.command.body as { id: string }).id;
+		const put = await call(`/api/ai/context/items/${id}`, { method: 'PUT', token, body: { name: 'n', description: 'd', body: 'NEW TEMPLATE $ARGUMENTS' } });
+		assert.equal(put.status, 200);
+		assert.equal((put.body as { kind: string }).kind, 'command');
+		const user = { userId: USER_A, workspaceId: WORKSPACE_A, memberWorkspaces: [], isAdmin: false, issuedAtMs: 0 };
+		const context = await userContextForRun(app.db as Pool, { user, workspaceId: undefined, research: false, skillIndex: buildSkillIndex([], []) });
+		assert.ok(!JSON.stringify(context).includes('NEW TEMPLATE'), 'a command is never run context');
+		assert.equal((await call(`/api/ai/context/items/${id}`, { method: 'DELETE', token })).status, 204);
+		const listed = ((await call('/api/ai/context/items', { token })).body as { items: { kind: string }[] }).items;
+		assert.deepEqual(listed.map((item) => item.kind).sort(), ['rule', 'skill']);
+	});
 });
