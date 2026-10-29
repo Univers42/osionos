@@ -20,14 +20,14 @@ const mk = (id: string, workspaceId: string): ActivePage => ({ id, workspaceId, 
 
 test("addRecent caps per workspace and never evicts another workspace", () => {
   let recents: ActivePage[] = [];
-  for (let i = 0; i < 12; i += 1) recents = addRecent(recents, mk(`a${i}`, "wsA"));
-  assert.equal(recents.filter((r) => r.workspaceId === "wsA").length, 10); // capped at 10
+  for (let i = 0; i < 60; i += 1) recents = addRecent(recents, mk(`a${i}`, "wsA"));
+  assert.equal(recents.filter((r) => r.workspaceId === "wsA").length, 50); // capped at 50
 
   recents = addRecent(recents, mk("b0", "wsB"));
   recents = addRecent(recents, mk("b1", "wsB"));
 
-  // Adding to wsB must NOT evict wsA's 10 entries — recents never cross workspaces.
-  assert.equal(recents.filter((r) => r.workspaceId === "wsA").length, 10);
+  // Adding to wsB must NOT evict wsA's 50 entries — recents never cross workspaces.
+  assert.equal(recents.filter((r) => r.workspaceId === "wsA").length, 50);
   assert.equal(recents.filter((r) => r.workspaceId === "wsB").length, 2);
 });
 
