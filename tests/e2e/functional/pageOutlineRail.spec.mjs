@@ -17,7 +17,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { activateFirstEditor, openFreshPage } from "../../browser/core/app.mjs";
+import { activateFirstEditor, clearAndTypePageTitle, explorerRow, openFreshPage } from "../../browser/core/app.mjs";
 
 const SECTIONS = [
   ["# ", "Overview"],
@@ -151,6 +151,22 @@ test.describe("page outline rail", () => {
     await pageMenu(page, "Page properties");
     await expect(properties).toBeVisible();
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("Page properties off also hides the folder and link rows under the title", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const parent = `Connections parent ${Date.now()}`;
+    await clearAndTypePageTitle(page, parent);
+    await explorerRow(page, parent).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Add child page", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Page title" })).toBeVisible();
+
+    const connections = page.getByRole("group", { name: "Page connections" });
+    await expect(connections).toContainText(parent);
+    await pageMenu(page, "Page properties");
+    await expect(connections).toBeHidden();
+    await pageMenu(page, "Page properties");
+    await expect(connections).toBeVisible();
   });
 
   test("Settings › Page switches turns the rail off for the open page", async ({ page, baseURL }) => {
