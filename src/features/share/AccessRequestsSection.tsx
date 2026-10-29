@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 
 import { trySettingsGet, trySettingsPost, errorCode } from '@/store/settings/settingsStoreUtils';
 import { ApiError } from '@/shared/api/client';
+import { formatRelativeTime as relativeTime } from '@/shared/lib/relativeTime';
 import { useToastStore } from '@osionos/ui/primitives';
 
 interface AccessRequest {
@@ -49,19 +50,6 @@ function permissionLabel(value: string): string {
   if (value === 'can_comment') return 'Can comment';
   if (value === 'can_edit') return 'Can edit';
   return 'Can view';
-}
-
-function relativeTime(iso: string): string {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return '';
-  const diff = Date.now() - then;
-  const minutes = Math.round(diff / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
 }
 
 export const AccessRequestsSection: React.FC<Props> = ({ workspaceId, pageId, onApproved }) => {

@@ -16,9 +16,9 @@ import { addRecent, saveRecents } from "@/store/pageStore.helpers";
 import { usePageStore } from "@/store/usePageStore";
 import type { WorkspaceTab } from "./layoutTree";
 
-/** The legacy ActivePage projection of a tab (null for Home/Trash/Folder/Console/Settings/AI Hub/theme JSON). */
+/** The legacy ActivePage projection of a tab (null for Home/Trash/Folder/Console/Settings/AI Hub/Library/theme JSON). */
 export function tabToActivePage(tab: WorkspaceTab): ActivePage | null {
-  if (tab.kind === "home" || tab.kind === "trash" || tab.kind === "folder" || tab.kind === "console" || tab.kind === "settings" || tab.kind === "ai-hub" || tab.kind === "theme-json") return null;
+  if (tab.kind === "home" || tab.kind === "trash" || tab.kind === "folder" || tab.kind === "console" || tab.kind === "settings" || tab.kind === "ai-hub" || tab.kind === "page-library" || tab.kind === "theme-json") return null;
   return {
     id: tab.pageId,
     workspaceId: tab.workspaceId,
