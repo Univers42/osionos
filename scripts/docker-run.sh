@@ -20,6 +20,13 @@ shift || true
 
 cd "${ROOT_DIR}"
 
+# A test-file argument replaces the suite glob (test:canvas/test:bridge -- <file>); flags alone keep it.
+has_test_file() {
+  local arg
+  for arg in "$@"; do [[ -f ${arg} ]] && return 0; done
+  return 1
+}
+
 run_inside_container() {
   case "${COMMAND}" in
     # Monaco's ESM tree (~2.5k modules) pushed `vite build` past Node's default ~2 G
@@ -38,9 +45,13 @@ run_inside_container() {
     tokens) exec node scripts/build-tokens.mjs "$@" ;;
     test-e2e-perf) PLAYWRIGHT_PERF=1 exec pnpm exec playwright test tests/e2e/perf --workers=1 "$@" ;;
     test-e2e-coedit) PLAYWRIGHT_COEDIT=1 exec pnpm exec playwright test tests/e2e/latency --workers=1 "$@" ;;
-    test-canvas) exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test tests/canvas/*.test.ts "$@" ;;
+    test-canvas)
+      has_test_file "$@" || set -- tests/canvas/*.test.ts "$@"
+      exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test "$@" ;;
     test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
-    test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
+    test-bridge)
+      has_test_file "$@" || set -- tests/bridge/*.test.mjs "$@"
+      exec node --test "$@" ;;
     bridge-api) exec node scripts/bridge-api.mjs "$@" ;;
     mcp-claude) exec node scripts/osionos-mcp-server.mjs "$@" ;;
     lighthouse) exec node scripts/lighthouse.mjs "$@" ;;
