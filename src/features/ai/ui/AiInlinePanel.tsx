@@ -10,8 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 /**
- * The "Ask AI" panel: anchored under the block, the answer streams into it,
- * and the user decides what happens to it.
+ * The "Ask AI" panel: Notion's "Edit with AI" bar, the width of the text
+ * column. On an empty block it takes the block's place (Space on an empty
+ * line); on a block with text it hangs under it, so the text stays readable.
+ * The answer streams below the bar and the user decides what happens to it.
  *
  * Nothing is written into the page here. **Replace** / **Insert below** are
  * the only doors, and they live in the store (which owns the writes).
@@ -23,41 +25,25 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, Sparkles, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-import { listCommands, type AiCommand } from "../api/aiClient";
 import { useInlineAiStore } from "../model/inlineAiStore";
 import { focusEditableBlock } from "@/features/block-editor/model/blockDomFocus";
 import { errorWords } from "@/widgets/chat-shell/ui/errorWords";
+import { AiPromptBar } from "./AiPromptBar";
 
-const PANEL_WIDTH = 420;
+const MIN_WIDTH = 360;
 const VIEWPORT_MARGIN = 12;
 const ANCHOR_GAP = 8;
+/** The bar reaches this far past the text on each side, as in Notion. */
+const COLUMN_BLEED = 12;
+/** The empty block this attribute marks grows to the bar's height (global.css). */
+const PROMPT_HOST_ATTR = "data-ai-prompt-host";
 
-/** The editor commands of the service — fetched ONCE per session. */
-let editorCommands: AiCommand[] = [];
-let editorCommandsLoaded = false;
-
-/** The service's editor commands, fetched once and remembered for the session. */
-export function editorCommandsOnce(): Promise<AiCommand[]> {
-  if (editorCommandsLoaded) return Promise.resolve(editorCommands);
-  editorCommandsLoaded = true;
-  return listCommands("editor")
-    .then((commands) => {
-      editorCommands = commands;
-      return commands;
-    })
-    .catch(() => {
-      // No service, no commands: the free-text input still works.
-      editorCommands = [];
-      return editorCommands;
-    });
-}
-
-/** "action-items" → "Action items" — the label of a service command. */
-function commandLabel(name: string): string {
-  const words = name.replace(/[-_]+/g, " ").trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
+interface PanelAnchor {
+  top: number;
+  left: number;
+  width: number;
 }
 
 /** The block element the panel hangs under. */
@@ -71,6 +57,25 @@ function blockElement(blockId: string): HTMLElement | null {
 const PANEL_BUTTON =
   "rounded-lg px-2.5 py-1 text-xs font-medium text-[var(--osio-fg-default)] transition-colors hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] disabled:cursor-not-allowed disabled:opacity-50";
 
+/** True when the block has no text — the bar then takes the line's place. */
+function isEmptyBlock(element: HTMLElement): boolean {
+  return (element.textContent ?? "").trim().length === 0;
+}
+
+/** The bar spans the text column, a little wider on each side, inside the viewport. */
+function measureAnchor(element: HTMLElement): PanelAnchor {
+  const rect = element.getBoundingClientRect();
+  const viewportWidth = globalThis.innerWidth || 1024;
+  const maxWidth = viewportWidth - VIEWPORT_MARGIN * 2;
+  const width = Math.min(Math.max(rect.width + COLUMN_BLEED * 2, MIN_WIDTH), maxWidth);
+  const left = Math.min(
+    Math.max(rect.left - COLUMN_BLEED, VIEWPORT_MARGIN),
+    viewportWidth - width - VIEWPORT_MARGIN,
+  );
+  const top = element.hasAttribute(PROMPT_HOST_ATTR) ? rect.top : rect.bottom + ANCHOR_GAP;
+  return { top, left, width };
+}
+
 export const AiInlinePanel: React.FC = () => {
   const target = useInlineAiStore((state) => state.target);
   const command = useInlineAiStore((state) => state.command);
@@ -80,42 +85,29 @@ export const AiInlinePanel: React.FC = () => {
   const selection = useInlineAiStore((state) => state.selection);
 
   const [instruction, setInstruction] = useState("");
-  const [commands, setCommands] = useState<AiCommand[]>([]);
-  const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
+  const [anchor, setAnchor] = useState<PanelAnchor | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const streaming = status === "streaming";
+  const hasAnswer = status !== "idle" || text.length > 0;
 
-  // The service's command list — once per session, and only when the panel
-  // actually opens (an app with no AI service must not ask for it).
+  // An empty block hosts the bar: it grows to the bar's height so the next
+  // block is not covered, and gives the room back when the bar closes.
   useEffect(() => {
     if (!target) return undefined;
-    let alive = true;
-    void editorCommandsOnce().then((list) => {
-      if (alive) setCommands(list);
-    });
-    return () => {
-      alive = false;
-    };
+    const element = blockElement(target.blockId);
+    if (!element || !isEmptyBlock(element)) return undefined;
+    element.setAttribute(PROMPT_HOST_ATTR, "");
+    return () => element.removeAttribute(PROMPT_HOST_ATTR);
   }, [target]);
 
-  // The panel hangs under its block: re-anchor on every scroll and resize.
+  // The bar follows its block: re-anchor on every scroll and resize.
   useEffect(() => {
     if (!target) return undefined;
     const measure = () => {
       const element = blockElement(target.blockId);
-      if (!element) {
-        setAnchor(null);
-        return;
-      }
-      const rect = element.getBoundingClientRect();
-      const viewportWidth = globalThis.innerWidth || 1024;
-      const left = Math.min(
-        Math.max(rect.left, VIEWPORT_MARGIN),
-        Math.max(VIEWPORT_MARGIN, viewportWidth - PANEL_WIDTH - VIEWPORT_MARGIN),
-      );
-      setAnchor({ top: rect.bottom + ANCHOR_GAP, left });
+      setAnchor(element ? measureAnchor(element) : null);
     };
     measure();
     globalThis.addEventListener("scroll", measure, true);
@@ -166,14 +158,6 @@ export const AiInlinePanel: React.FC = () => {
     void useInlineAiStore.getState().run("ask", instruction);
   }, [instruction, streaming]);
 
-  const runCommand = useCallback(
-    (name: string) => {
-      if (streaming) return;
-      void useInlineAiStore.getState().run(name);
-    },
-    [streaming],
-  );
-
   const retry = useCallback(() => {
     const store = useInlineAiStore.getState();
     void store.run(store.command, store.instruction || undefined);
@@ -195,23 +179,16 @@ export const AiInlinePanel: React.FC = () => {
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [discard, target]);
 
-  const style = useMemo<React.CSSProperties>(() => {
-    const viewportWidth = globalThis.innerWidth || 1024;
-    const left = anchor
-      ? Math.min(
-          Math.max(anchor.left, VIEWPORT_MARGIN),
-          Math.max(VIEWPORT_MARGIN, viewportWidth - PANEL_WIDTH - VIEWPORT_MARGIN),
-        )
-      : VIEWPORT_MARGIN;
-    return {
+  const style = useMemo<React.CSSProperties>(
+    () => ({
       position: "fixed",
       top: anchor?.top ?? VIEWPORT_MARGIN,
-      left,
-      width: PANEL_WIDTH,
-      maxWidth: `calc(100vw - ${VIEWPORT_MARGIN * 2}px)`,
+      left: anchor?.left ?? VIEWPORT_MARGIN,
+      width: anchor?.width ?? MIN_WIDTH,
       zIndex: 10003,
-    };
-  }, [anchor]);
+    }),
+    [anchor],
+  );
 
   if (!target || typeof document === "undefined") return null;
 
@@ -224,112 +201,64 @@ export const AiInlinePanel: React.FC = () => {
       className="osio-surface-overlay flex flex-col overflow-hidden rounded-xl border border-[var(--osio-border-default)] shadow-osio-e4"
       style={style}
     >
-      <div className="flex items-center gap-2 border-b border-[var(--osio-menu-separator)] px-2 py-1.5">
-        <Sparkles size={14} className="shrink-0 text-[var(--osio-fg-muted)]" aria-hidden />
-        <input
-          ref={inputRef}
-          value={instruction}
-          onChange={(event) => setInstruction(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter") return;
-            event.preventDefault();
-            runAsk();
-          }}
-          placeholder="Ask AI anything…"
-          aria-label="Ask AI anything"
-          className="min-w-0 flex-1 bg-transparent px-1 py-1 text-sm text-[var(--osio-fg-default)] outline-none placeholder:text-[var(--osio-fg-subtle)]"
-        />
-        <button
-          type="button"
-          onClick={discard}
-          title="Discard"
-          aria-label="Discard the answer"
-          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
-        >
-          <X size={14} aria-hidden />
-        </button>
-      </div>
+      <AiPromptBar
+        inputRef={inputRef}
+        value={instruction}
+        busy={streaming}
+        onChange={setInstruction}
+        onSubmit={runAsk}
+      />
 
-      {commands.length > 0 ? (
-        <div className="flex flex-wrap gap-1 border-b border-[var(--osio-menu-separator)] px-2 py-1.5">
-          {commands.map((entry) => (
-            <button
-              key={entry.name}
-              type="button"
-              title={entry.description}
-              onClick={() => runCommand(entry.name)}
-              disabled={streaming}
-              className="rounded-md px-2 py-0.5 text-2xs font-medium text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {commandLabel(entry.name)}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {hasAnswer ? (
+        <>
+          <div
+            aria-live="polite"
+            aria-atomic="false"
+            data-testid="ai-inline-answer"
+            className="max-h-64 overflow-y-auto whitespace-pre-wrap border-t border-[var(--osio-menu-separator)] px-4 py-2 text-sm leading-relaxed text-[var(--osio-fg-default)]"
+          >
+            {status === "error" ? (
+              <p className="text-[var(--osio-fg-muted)]">{errorWords(errorCode ?? undefined)}</p>
+            ) : (
+              text || <p className="text-[var(--osio-fg-subtle)]">Thinking…</p>
+            )}
+          </div>
 
-      <div
-        aria-live="polite"
-        aria-atomic="false"
-        data-testid="ai-inline-answer"
-        className="max-h-64 min-h-16 overflow-y-auto whitespace-pre-wrap px-3 py-2 text-sm leading-relaxed text-[var(--osio-fg-default)]"
-      >
-        {status === "error" ? (
-          <p className="text-[var(--osio-fg-muted)]">{errorWords(errorCode ?? undefined)}</p>
-        ) : text ? (
-          text
-        ) : (
-          <p className="text-[var(--osio-fg-subtle)]">
-            {streaming ? "Thinking…" : "The answer shows up here."}
-          </p>
-        )}
-      </div>
-
-      <div className="flex items-center gap-1 border-t border-[var(--osio-menu-separator)] px-2 py-1.5">
-        {streaming ? (
-          <button type="button" onClick={() => useInlineAiStore.getState().stop()} className={PANEL_BUTTON}>
-            <span className="inline-flex items-center gap-1">
-              <Loader2 size={12} className="animate-spin" aria-hidden />
-              Stop
-            </span>
-          </button>
-        ) : (
-          <>
-            {/* The `diagram` command answers with a SPEC, not with text: it is
-                inserted as a diagram block, so there is nothing to replace. */}
-            {command !== "diagram" ? (
-              <button
-                type="button"
-                onClick={() => accept("replace")}
-                disabled={!text}
-                className={PANEL_BUTTON}
-              >
-                Replace
+          <div className="flex items-center gap-1 border-t border-[var(--osio-menu-separator)] px-2 py-1.5">
+            {streaming ? (
+              <button type="button" onClick={() => useInlineAiStore.getState().stop()} className={PANEL_BUTTON}>
+                <span className="inline-flex items-center gap-1">
+                  <Loader2 size={12} className="animate-spin" aria-hidden />
+                  Stop
+                </span>
               </button>
+            ) : (
+              <>
+                {/* The `diagram` command answers with a SPEC, not with text: it is
+                    inserted as a diagram block, so there is nothing to replace. */}
+                {command !== "diagram" ? (
+                  <button type="button" onClick={() => accept("replace")} disabled={!text} className={PANEL_BUTTON}>
+                    Replace
+                  </button>
+                ) : null}
+                <button type="button" onClick={() => accept("insert-below")} disabled={!text} className={PANEL_BUTTON}>
+                  Insert below
+                </button>
+                <button type="button" onClick={retry} className={PANEL_BUTTON}>
+                  Retry
+                </button>
+              </>
+            )}
+            <span className="flex-1" />
+            {selection?.model ? (
+              <span className="text-2xs text-[var(--osio-fg-subtle)]">{selection.model}</span>
             ) : null}
-            <button
-              type="button"
-              onClick={() => accept("insert-below")}
-              disabled={!text}
-              className={PANEL_BUTTON}
-            >
-              Insert below
+            <button type="button" onClick={discard} className={PANEL_BUTTON}>
+              Discard
             </button>
-            <button type="button" onClick={retry} className={PANEL_BUTTON}>
-              Retry
-            </button>
-          </>
-        )}
-        <span className="flex-1" />
-        {selection?.model ? (
-          <span className="text-2xs text-[var(--osio-fg-subtle)]">{selection.model}</span>
-        ) : null}
-        <span className="text-2xs text-[var(--osio-fg-subtle)]">
-          {command ? commandLabel(command) : ""}
-        </span>
-        <button type="button" onClick={discard} className={PANEL_BUTTON}>
-          Discard
-        </button>
-      </div>
+          </div>
+        </>
+      ) : null}
     </div>,
     document.body,
   );
