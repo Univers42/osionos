@@ -19,6 +19,7 @@ import {
   Files,
   GitBranch,
   Globe,
+  Library,
   ListTodo,
   Mail,
   MessagesSquare,
@@ -34,7 +35,7 @@ import { calendarAppUrl, mailAppUrl } from "@/shared/config/appUrls";
 import type { ActivePanel } from "@/shared/config/uiStore";
 import type { CommandId } from "@/features/automations/model/types";
 import { roleAtLeast, type PlatformRole } from "@/features/auth/model/platformRole";
-import { adminTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import { adminTab, libraryTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 import { isWhiteboardReady } from "@/features/whiteboard/model/whiteboardAvailability";
 
@@ -89,6 +90,7 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
       // ponytail: nav LABEL renamed Public→Shared (AOC §12); panel id stays "public"
       // (R-R3) so the persisted uiStore activePanel keeps resolving.
       { id: "public", label: "Shared", Icon: Globe, action: { kind: "panel", panel: "public" } },
+      { id: "library", label: "Library", Icon: Library, action: { kind: "workspaceTab", makeTab: libraryTab } },
       // The moderator's entry too: the sections inside the space are what the role gates.
       { id: "admin", label: "Admin", Icon: Shield, action: { kind: "workspaceTab", makeTab: adminTab }, requiredRole: "moderator" },
     ],

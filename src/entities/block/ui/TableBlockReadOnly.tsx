@@ -28,6 +28,8 @@ const MAX_AUTO_COLUMN_WIDTH = 420;
 
 interface TableBlockReadOnlyProps {
   block: Block;
+  /** A top-level block of the page body: bleed to the page edges before scrolling. */
+  wide?: boolean;
 }
 
 function renderInternalPageLink(pageId: string) {
@@ -46,7 +48,7 @@ const InlineMarkdown: React.FC<{ content: string }> = ({ content }) => {
   return <>{renderedContent}</>;
 };
 
-export const TableBlockReadOnly: React.FC<TableBlockReadOnlyProps> = ({ block }) => {
+export const TableBlockReadOnly: React.FC<TableBlockReadOnlyProps> = ({ block, wide = false }) => {
   const data = useMemo(() => normalizeTableData(block.tableData), [block.tableData]);
   const columnCount = getTableColumnCount(data);
   const config = useMemo(() => resolveTableConfig(block, columnCount, data.length), [block, columnCount, data.length]);
@@ -59,11 +61,13 @@ export const TableBlockReadOnly: React.FC<TableBlockReadOnlyProps> = ({ block })
     );
   }
 
-  const tableClassName = [
-    "text-sm",
-    config.layoutMode === "fit" ? "min-w-full w-full" : "min-w-full w-max",
-    config.layoutMode === "fixed" ? "table-fixed" : "table-auto",
-  ].join(" ");
+  const tableClassName = wide
+    ? ["text-sm", config.layoutMode === "fixed" ? "table-fixed" : "table-auto"].join(" ")
+    : [
+        "text-sm",
+        config.layoutMode === "fit" ? "min-w-full w-full" : "min-w-full w-max",
+        config.layoutMode === "fixed" ? "table-fixed" : "table-auto",
+      ].join(" ");
 
   const columnStyles = Array.from({ length: columnCount }, (_, columnIndex) => {
     const explicitWidth = config.columnWidths?.[columnIndex];
@@ -80,39 +84,43 @@ export const TableBlockReadOnly: React.FC<TableBlockReadOnlyProps> = ({ block })
   });
 
   return (
-    <div className="osio-scrollbar-hidden my-2 overflow-x-auto overflow-y-visible rounded-lg border border-[var(--osio-db-line)] bg-[var(--osio-bg-surface)]">
-      <table className={tableClassName} style={{ tableLayout: config.layoutMode === "fixed" ? "fixed" : "auto" }}>
-        <colgroup>
-          {columnStyles.map((columnStyle, columnIndex) => (
-            <col
-              key={`col-${columnIndex}`} // NOSONAR - table columns are position-based in tableData
-              style={columnStyle}
-            />
-          ))}
-        </colgroup>
-        <tbody>
-          {data.map((row, rowIndex) => (
-            <tr
-              key={`row-${rowIndex}`} // NOSONAR - table rows are position-based in tableData
-              className={getRowClassName(rowIndex, config)}
-              style={config.rowHeights?.[rowIndex] ? { height: config.rowHeights[rowIndex] } : undefined}
-            >
-              {Array.from({ length: columnCount }, (_, columnIndex) => {
-                const cell = row[columnIndex] ?? "";
-                const alignment = config.columnAlignments?.[columnIndex] ?? null;
-                return (
-                  <td
-                    key={`cell-${rowIndex}-${columnIndex}`} // NOSONAR - table cells are position-based in tableData
-                    className={getCellClassName(config, alignment, rowIndex, columnIndex)}
-                  >
-                    <InlineMarkdown content={cell} />
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className={wide ? "osio-wide-block my-2" : "osio-scrollbar-hidden my-2 overflow-x-auto overflow-y-visible rounded-lg border border-[var(--osio-db-line)] bg-[var(--osio-bg-surface)]"}>
+      <div data-wide-block-content={wide ? "" : undefined} className={wide ? undefined : "contents"}>
+        <div data-wide-block-scroller={wide ? "" : undefined} className={wide ? undefined : "contents"}>
+          <table data-wide-block-table={wide ? "" : undefined} className={tableClassName} style={{ tableLayout: config.layoutMode === "fixed" ? "fixed" : "auto" }}>
+            <colgroup>
+              {columnStyles.map((columnStyle, columnIndex) => (
+                <col
+                  key={`col-${columnIndex}`} // NOSONAR - table columns are position-based in tableData
+                  style={columnStyle}
+                />
+              ))}
+            </colgroup>
+            <tbody>
+              {data.map((row, rowIndex) => (
+                <tr
+                  key={`row-${rowIndex}`} // NOSONAR - table rows are position-based in tableData
+                  className={getRowClassName(rowIndex, config)}
+                  style={config.rowHeights?.[rowIndex] ? { height: config.rowHeights[rowIndex] } : undefined}
+                >
+                  {Array.from({ length: columnCount }, (_, columnIndex) => {
+                    const cell = row[columnIndex] ?? "";
+                    const alignment = config.columnAlignments?.[columnIndex] ?? null;
+                    return (
+                      <td
+                        key={`cell-${rowIndex}-${columnIndex}`} // NOSONAR - table cells are position-based in tableData
+                        className={getCellClassName(config, alignment, rowIndex, columnIndex)}
+                      >
+                        <InlineMarkdown content={cell} />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };
