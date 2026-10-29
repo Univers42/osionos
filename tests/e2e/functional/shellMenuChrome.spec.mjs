@@ -176,6 +176,9 @@ test.describe("shell menus draw the overlay chrome", () => {
     await page.setViewportSize({ width: 1440, height: 420 });
     // The tree is virtualised and this short a sidebar mounts only the first rows, so the lowest
     // mounted page row stands in for the page just created, which is scrolled out of the list.
+    // The rename reaches the file rel asynchronously; until it does, the new
+    // row is still "Untitled" and maps to no page, so no menu could open.
+    await expect(page.locator('[role="treeitem"][data-rel$="Quarterly plan.omd"]')).toHaveCount(1);
     // A Private/Shared section row is not a page and opens no page menu.
     await page.locator('[role="treeitem"][data-rel$=".omd"]').last().click({ button: "right" });
     const menu = page.getByRole("menu");

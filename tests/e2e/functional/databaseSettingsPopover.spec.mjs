@@ -77,7 +77,10 @@ test.describe("database-settings-popover", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     const block = await insertInlineDatabase(page);
     await page.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByTestId("page-menu-appearance").click();
     await page.getByRole("button", { name: "Full width" }).click();
+    // The first Escape leaves the Appearance submenu, the second closes the menu.
+    await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     const { dialog } = await openSettings(page, block);
     const m = await measure(page);

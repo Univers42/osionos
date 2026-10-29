@@ -31,6 +31,7 @@ import { useSlashProfileFieldSelect } from "@/features/slash-commands/model/useS
 import { createHeaderBandBlock } from "@/features/slash-commands/model/profileHeaderPreset";
 import { contentWithoutHeader, isRemovableHeader } from "@/entities/block/model/headerCanvas";
 import { useUserStore } from "@/features/auth";
+import { createDatabasePageInPrivateWorkspace as createDatabasePage } from "@/entities/page/model/createDatabasePage";
 import { rememberDatabaseWorkspace } from "@/widgets/database-view/model/objectDatabaseWorkspaces";
 import { useUrlPasteMode } from "@/shared/config/useAppearance";
 import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
@@ -2063,36 +2064,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
   );
 
   const createDatabasePageInPrivateWorkspace = useCallback(
-    async (title = "Untitled database") => {
-      const session = useUserStore.getState().activeSession();
-      const privateWorkspaceId = session?.privateWorkspaces[0]?._id;
-      if (!privateWorkspaceId) return null;
-
-      const jwt = session?.accessToken ?? "";
-      const databaseReference = useDatabaseStore.getState().createInlineDatabase(title);
-      rememberDatabaseWorkspace(databaseReference.databaseId, privateWorkspaceId);
-      const page = await usePageStore
-        .getState()
-        .addDatabasePage(
-          privateWorkspaceId,
-          title,
-          jwt,
-          databaseReference.databaseId,
-        );
-
-      if (!page) return null;
-
-      usePageStore.getState().openPage({
-        id: page._id,
-        workspaceId: privateWorkspaceId,
-        kind: "database",
-        title: page.title,
-        icon: page.icon,
-        databaseId: page.databaseId ?? databaseReference.databaseId,
-      });
-
-      return { id: page._id };
-    },
+    (title = "Untitled database") => createDatabasePage(title),
     [],
   );
 

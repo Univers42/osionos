@@ -32,6 +32,7 @@ import {
   LazyChatShell,
   LazyCodeFileView,
   LazyOsionosPage,
+  LazyPageLibraryView,
   LazyProfilePageView,
   LazySettingsView,
   LazyThemeJsonView,
@@ -188,6 +189,16 @@ const PaneContentImpl: React.FC<PaneContentProps> = ({ tab, paneId, chrome }) =>
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
           <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]"><LazyAiHubView /></div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "page-library") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]"><LazyPageLibraryView /></div>
         </Suspense>
       </ErrorBoundary>
     );

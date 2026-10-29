@@ -474,7 +474,8 @@ export async function editorHasFocus(editor) {
 export async function selectSlashMenuEntry(page, label, options = {}) {
   const entry = slashMenu(page)
     .getByTestId("slash-command-entry")
-    .filter({ hasText: new RegExp(label, "i") })
+    // The label alone: the row also carries a shortcut hint ("-", "[]").
+    .filter({ has: page.locator("[data-slash-label]", { hasText: new RegExp(label, "i") }) })
     .first();
   await entry.waitFor({ timeout: options.timeout ?? 30_000 });
   await entry.scrollIntoViewIfNeeded();
