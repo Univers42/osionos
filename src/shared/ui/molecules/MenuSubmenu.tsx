@@ -24,7 +24,8 @@ function firstFocusable(panel: HTMLElement | null): HTMLElement | null {
  * A menu row that opens a side panel: hover or ArrowRight/Enter opens it,
  * Escape/ArrowLeft returns to the row. The panel is portalled to the body (a
  * scrolling menu would clip it) and fixed next to the row: it flips left when
- * that would leave the viewport, and slides up when it is taller than the room.
+ * that would leave the viewport — and a nested panel keeps its parent's side so
+ * it never lands on the menu — and slides up when it is taller than the room.
  */
 export const MenuSubmenu: React.FC<MenuSubmenuProps> = ({ label, icon, hint, open, onOpenChange, children, testId }) => {
   const rowRef = useRef<HTMLButtonElement>(null);
@@ -45,7 +46,9 @@ export const MenuSubmenu: React.FC<MenuSubmenuProps> = ({ label, icon, hint, ope
     if (!open || !panelRef.current || !rowRef.current) return;
     const row = rowRef.current.getBoundingClientRect();
     const panel = panelRef.current.getBoundingClientRect();
-    const flip = row.right + GAP + panel.width > globalThis.innerWidth - VIEWPORT_MARGIN;
+    const parentFlipped = rowRef.current.closest('[data-submenu-side="left"]') !== null;
+    const flip = parentFlipped || row.right + GAP + panel.width > globalThis.innerWidth - VIEWPORT_MARGIN;
+    panelRef.current.dataset.submenuSide = flip ? 'left' : 'right';
     const left = flip ? row.left - panel.width - GAP : row.right + GAP;
     const top = Math.max(VIEWPORT_MARGIN, Math.min(row.top, globalThis.innerHeight - panel.height - VIEWPORT_MARGIN));
     panelRef.current.style.left = `${Math.max(VIEWPORT_MARGIN, left)}px`;
@@ -57,7 +60,11 @@ export const MenuSubmenu: React.FC<MenuSubmenuProps> = ({ label, icon, hint, ope
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event: KeyboardEvent) => {
-      const inPanel = panelRef.current?.contains(event.target as Node) ?? false;
+      const target = event.target as Element | null;
+      const inPanel = panelRef.current?.contains(target) ?? false;
+      // A deeper submenu (its panel is another portal) closes first; this level
+      // closes on the next press, once focus is back in its own panel.
+      if (!inPanel && target?.closest?.('[data-page-menu-layer]')) return;
       if (event.key === 'Escape' || (event.key === 'ArrowLeft' && inPanel)) {
         event.stopPropagation();
         onOpenChange(false);

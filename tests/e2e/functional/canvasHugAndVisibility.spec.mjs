@@ -22,6 +22,7 @@ import {
   openFreshPage,
   openSlashMenuFromEditor,
   slashCommandEntry,
+  openPageMenuPanel,
 } from "../../browser/core/app.mjs";
 import { setupCanvasFlag } from "../../browser/core/layout.mjs";
 
@@ -184,8 +185,7 @@ test.describe("canvas hug height, dashboard and visibility", () => {
     await openFreshPage(page, baseURL);
     await expect(page.locator(".osionos-layout-cell")).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Open page configuration" }).click();
-    await page.getByRole("button", { name: "Turn into dashboard" }).click();
+    await (await openPageMenuPanel(page, "more")).getByRole("button", { name: "Turn into dashboard" }).click();
 
     await expect(page.locator('.osionos-layout-block[data-layout-mode="full_page"]')).toBeVisible();
     await expect(page.locator(".osionos-layout-cell")).toHaveCount(13);
