@@ -245,6 +245,31 @@
   background-color: var(--osio-menu-separator);
 }
 
+/* The slash menu's entrance: a short pop from its top-left corner. The motion
+ * lives behind no-preference, so reduced motion gets the panel with no animation
+ * at all (global.css also neutralises any animation it might inherit). */
+@keyframes osio-slash-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@utility osio-slash-menu-in {
+  transform-origin: 0% top;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .osio-slash-menu-in {
+    animation: osio-slash-menu-in 200ms ease both;
+  }
+}
+
 /* A scroll region that still has rows out of sight fades the edge they are
  * behind. `useWholeRowScroll` sets `data-fade-top` / `data-fade-bottom`; when
  * everything fits neither is set and the region is not masked at all. */
