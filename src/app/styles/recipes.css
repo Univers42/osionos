@@ -57,6 +57,72 @@
   --osio-tooltip-radius: var(--osio-radius-sm);
 }
 
+/* WHY: a table or inline database wider than the page's text column must start
+ * on the text edge and grow right into the page gutter, scrolling only once it
+ * reaches the page edge. `50%` is half the text column, `50cqw` half the page
+ * scroller (the size container), so the negative margin cancels the body's
+ * centring and the left padding puts the text-column offset back. The right
+ * padding keeps only the page gutter, which is the room the block may grow
+ * into. The content box is shrink-to-fit with the text column as its floor, so
+ * a narrow table still fills the column exactly as before. */
+@utility osio-wide-block {
+  --osio-wide-gutter: var(--page-content-padding-inline, clamp(16px, 11%, 96px));
+  /* The same page setting, but resolved against the page scroller: a percentage
+   * inside the token would re-resolve against the text column here (the wide
+   * block's containing block), which is narrower than the page. */
+  --osio-wide-page-gutter: clamp(16px, 11cqw, 96px);
+  --osio-wide-text-width: calc(
+    min(100cqw, var(--page-content-max-width, var(--osio-page-max-width, 900px))) -
+      var(--osio-wide-page-gutter) - var(--osio-wide-page-gutter)
+  );
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: none;
+  margin-inline: calc(50% - 50cqw);
+  padding-left: calc(50cqw - 50%);
+  padding-right: var(--osio-wide-gutter);
+  /* The bleed padding lies over the page gutter, where the block's drag handle
+   * sits: only the content box may take clicks, or the handle is unreachable. */
+  pointer-events: none;
+
+  & [data-wide-block-content] {
+    pointer-events: auto;
+    width: max-content;
+    max-width: 100%;
+    min-width: var(--osio-wide-text-width);
+  }
+
+  & [data-wide-block-scroller] {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    scroll-padding-inline: var(--osio-wide-gutter);
+  }
+
+  & [data-wide-block-table] {
+    width: max-content;
+    min-width: 100%;
+    border: 1px solid var(--osio-db-line);
+    border-radius: var(--osio-radius-lg);
+    background-color: var(--osio-bg-surface);
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  & [data-wide-block-table] tr:last-child > td {
+    border-bottom-width: 0;
+  }
+
+  /* A full-width page has no centred body margin to grow into: the text column
+   * already ends at the page gutter. */
+  :where(.osionos-page--full-width) & {
+    --osio-wide-page-gutter: clamp(16px, 4vw, 48px);
+    --osio-wide-text-width: calc(
+      100cqw - var(--osio-wide-page-gutter) - var(--osio-wide-page-gutter)
+    );
+  }
+}
+
 @utility osio-surface-overlay {
   background-color: var(--osio-overlay-bg);
   border: 1px solid var(--osio-overlay-border);

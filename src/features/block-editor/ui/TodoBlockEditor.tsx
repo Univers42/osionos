@@ -93,6 +93,7 @@ export const TodoBlockEditor: React.FC<{
           onKeyDown={onKeyDown}
           onRequestSlashMenu={onRequestSlashMenu}
           onAskAI={onAskAI}
+          blockId={block.id}
         />
         {isTasksEnabled() && <TodoDueDate dueAt={block.dueAt} checked={block.checked} onChange={setDueAt} />}
       </div>
