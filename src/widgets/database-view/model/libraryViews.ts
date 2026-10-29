@@ -11,11 +11,9 @@
 
 /**
  * The Library's shipped views: the old Library tabs, one per scope, one per
- * category. For a viewer who does not curate the Library (librarySchema) the
- * database is locked in this browser and the shipped views are the only ones.
- *
- * Caveat: the lock is a guard rail in this browser, not a server rule — a curator's
- * view edits are kept on their device only and nobody else sees them.
+ * category, with the workspace's curated views on top (libraryServerViews.ts). The
+ * bridge refuses a curated record from anyone but the owner or an admin, and checks
+ * its shape (scripts/bridge-library-views-shape.mjs); this merge checks it again.
  */
 
 import type { ViewConfig } from "@notion-db/contract-types";
@@ -76,20 +74,27 @@ export function libraryViews(withAgents: boolean): NotionState["views"] {
   return views;
 }
 
-export interface LibraryViewAccess { canCurate: boolean; withAgents: boolean }
+const NOT_A_VIEW_ID = new Set(["__proto__", "constructor", "prototype"]);
 
-/** The shipped views with the curator's own on top: an edited shipped view keeps the
- *  edit, a view the curator added is appended, one bound elsewhere is dropped. Anyone
- *  else gets the shipped views only, whatever this browser holds. */
-export function mergeLibraryViews(stored: unknown, access: LibraryViewAccess): NotionState["views"] {
-  const views = libraryViews(access.withAgents);
-  if (!access.canCurate || !stored || typeof stored !== "object" || Array.isArray(stored)) return views;
+/** The shipped views with the workspace's curated ones on top: an edited shipped view
+ *  keeps the edit, an added view is appended, one bound elsewhere is dropped. */
+export function mergeLibraryViews(stored: unknown, withAgents: boolean): NotionState["views"] {
+  const views = libraryViews(withAgents);
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) return views;
   for (const [id, view] of Object.entries(stored as Record<string, unknown>)) {
-    if (id === "__proto__" || !view || typeof view !== "object") continue;
-    if (id === AGENTS_VIEW && !access.withAgents) continue;
+    if (NOT_A_VIEW_ID.has(id) || !view || typeof view !== "object") continue;
+    if (id === AGENTS_VIEW && !withAgents) continue;
     const candidate = view as ViewConfig;
     if (candidate.databaseId !== LIBRARY_DB_ID || typeof candidate.type !== "string") continue;
     views[id] = { ...candidate, id };
   }
   return views;
+}
+
+/** What a curator saves: only the views that differ from the shipped ones, so a later
+ *  change to a shipped view still reaches a workspace that never touched it. */
+export function curatedLibraryViews(views: NotionState["views"]): NotionState["views"] {
+  const shipped = libraryViews(true);
+  return Object.fromEntries(Object.entries(views).filter(([id, view]) =>
+    view.databaseId === LIBRARY_DB_ID && JSON.stringify(view) !== JSON.stringify(shipped[id])));
 }
