@@ -26,6 +26,7 @@
 import { getInferencePort, useChatStore } from "@/features/chat/model/useChatStore";
 import type { InferencePort } from "@/features/chat/model/inferencePort";
 import type { RunContext } from "@/features/ai/model/aiContext";
+import { citationFromEvent, type Citation } from "@/features/chat/model/citations";
 
 /** The tab shows only when the app can answer: the AI service is configured. */
 export function aiDockTabVisible(configured: boolean): boolean {
@@ -59,6 +60,8 @@ export interface AiDockTurn {
   onServerConversationId?: (id: string) => void;
   /** The answer, as it arrives. */
   onDelta: (text: string) => void;
+  /** A source the answer cites as `[n]`; frames arrive before the text, in any order. */
+  onCitation?: (citation: Citation) => void;
   /** The turn ended. */
   onDone?: () => void;
   /** The turn failed. */
@@ -105,6 +108,11 @@ export async function runAiDockTurn(turn: AiDockTurn): Promise<void> {
     (event, data) => {
       if (event === "text.delta" && typeof data.text === "string") {
         turn.onDelta(data.text);
+        return;
+      }
+      if (event === "citation") {
+        const citation = citationFromEvent(data);
+        if (citation) turn.onCitation?.(citation);
         return;
       }
       if (event === "done") {

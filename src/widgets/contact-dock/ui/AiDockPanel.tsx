@@ -29,7 +29,10 @@ import { isAiConfigured } from '@/features/ai/api/aiClient';
 import { PLATFORM_CONNECTION_ID, readAiSelection } from '@/features/ai/model/aiSelection';
 import { withAccountContext } from '@/features/ai/model/viewContext';
 import { useUserStore } from '@/features/auth';
-import { ANSWER_TABLE_CLASS, renderAssistantMarkdown } from '@/features/chat/model/assistantMarkdown';
+import { ANSWER_TABLE_CLASS } from '@/features/chat/model/assistantMarkdown';
+import type { Citation } from '@/features/chat/model/citations';
+import { renderCitationSources, renderCitedAnswer } from '@/features/chat/model/citedAnswer';
+import { openCitation } from '@/features/chat/model/openCitation';
 import { IconButton } from '@/shared/ui';
 import { errorWords } from '@/widgets/chat-shell/ui/errorWords';
 
@@ -39,23 +42,30 @@ interface AiMessage {
   id: string;
   role: 'user' | 'assistant';
   body: string;
+  citations?: Citation[];
 }
 
 interface AiDockPanelProps {
   onClose: () => void;
 }
 
+const NO_CITATIONS: Citation[] = [];
+
 function newId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
-/** The assistant's answer, as markdown. */
-const DockAnswer: React.FC<{ body: string }> = ({ body }) => {
-  const elements = useMemo(() => renderAssistantMarkdown(body), [body]);
+/** The assistant's answer, as markdown, its `[n]` marked and its sources listed — as in the Assistant pane. */
+export const DockAnswer: React.FC<{ body: string; citations?: Citation[] }> = ({ body, citations = NO_CITATIONS }) => {
+  const elements = useMemo(() => renderCitedAnswer(body, citations, openCitation), [body, citations]);
   return (
-    <div className={`${ANSWER_TABLE_CLASS} [&_a]:text-[var(--osio-accent)] [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:my-1 [&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-xs [&_pre]:bg-[var(--osio-bg-muted)] [&_pre]:p-1.5 [&_pre]:font-mono [&_pre]:text-2xs [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4`}>
-      {elements}
-    </div>
+    <>
+      <div className={`${ANSWER_TABLE_CLASS} [&_a]:text-[var(--osio-accent)] [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_p]:my-1 [&_pre]:my-1 [&_pre]:overflow-x-auto [&_pre]:rounded-xs [&_pre]:bg-[var(--osio-bg-muted)] [&_pre]:p-1.5 [&_pre]:font-mono [&_pre]:text-2xs [&_strong]:font-semibold [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-4`}>
+        {elements}
+      </div>
+      {/* The bubble is bg-subtle, the pane's chip colour: lift the chips off it. */}
+      <div className="[&_li>*]:bg-[var(--osio-bg-elevated)]">{renderCitationSources(citations, openCitation)}</div>
+    </>
   );
 };
 
@@ -70,8 +80,8 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
   const serverConversationId = useRef<string | undefined>(undefined);
   const workspaceId = useUserStore((s) => s.activeWorkspace()?._id);
 
-  const patch = (id: string, body: string) =>
-    setMessages((cur) => cur.map((m) => (m.id === id ? { ...m, body } : m)));
+  const patch = (id: string, change: Partial<AiMessage>) =>
+    setMessages((cur) => cur.map((m) => (m.id === id ? { ...m, ...change } : m)));
 
   async function run() {
     const prompt = draft.trim();
@@ -82,6 +92,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
     const reply: AiMessage = { id: newId('a'), role: 'assistant', body: '' };
     setMessages((cur) => [...cur, { id: newId('u'), role: 'user', body: prompt }, reply]);
     const text = { value: '' };
+    const cited: Citation[] = [];
     // The choice the user made in the Assistant: the same connection and model.
     const selection = readAiSelection();
     const dockContext = withAccountContext(undefined);
@@ -98,12 +109,16 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
         onServerConversationId: (id) => { serverConversationId.current = id; },
         onDelta: (chunk) => {
           text.value += chunk;
-          patch(reply.id, text.value);
+          patch(reply.id, { body: text.value });
           endRef.current?.scrollIntoView({ block: 'end' });
+        },
+        onCitation: (citation) => {
+          cited.push(citation);
+          patch(reply.id, { citations: [...cited].sort((left, right) => left.n - right.n) });
         },
         onError: (code) => setError(errorWords(code)),
       });
-      if (!text.value.trim()) patch(reply.id, 'No response.');
+      if (!text.value.trim()) patch(reply.id, { body: 'No response.' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Assistant is unavailable.');
     } finally {
@@ -143,7 +158,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
           >
             {m.role === 'assistant' ? (
               m.body ? (
-                <DockAnswer body={m.body} />
+                <DockAnswer body={m.body} citations={m.citations} />
               ) : (
                 <span className="text-[var(--osio-fg-muted)]">…</span>
               )
