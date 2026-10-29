@@ -435,7 +435,7 @@ export function buildUserTurn(
 	sources: readonly RetrievedChunk[] = [],
 	memories: readonly RunMemory[] = [],
 	abstained = false,
-	context: { account?: string; view?: string; workspace?: string; summary?: string; files?: readonly FittedFile[] } = {},
+	context: { account?: string; view?: string; workspace?: string; summary?: string; files?: readonly FittedFile[]; userContext?: string } = {},
 ): string {
 	const blocks: string[] = [];
 	if (context.account) blocks.push(context.account);
@@ -443,6 +443,7 @@ export function buildUserTurn(
 	if (context.workspace) blocks.push(context.workspace);
 	if (context.summary) blocks.push(context.summary);
 	if (memories.length > 0) blocks.push(memoriesBlock(memories));
+	if (context.userContext) blocks.push(context.userContext);
 	blocks.push(...pages.map((page) => pageBlock(page)));
 	blocks.push(...(context.files ?? []).map((file) => fileBlock(file)));
 	if (abstained && sources.length === 0) blocks.push(ABSTAIN_INSTRUCTION);

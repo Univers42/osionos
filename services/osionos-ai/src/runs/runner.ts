@@ -46,6 +46,7 @@ import { fitFiles } from '../files/excerpt.ts';
 import type { FittedFile } from '../files/excerpt.ts';
 import { THREAD_SYSTEM_PROMPT } from '../threads/context.ts';
 import type { ThreadRun } from './upstreamInput.ts';
+import { userContextForRun } from '../context/runContext.ts';
 
 export type { RunEvent };
 
@@ -324,6 +325,11 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// the upstream call still lists them.
 	const memories = await memoriesForRun(db, input.user, input.workspaceId);
 	await recordMemoryPins(db, runId, memories);
+	// U1: the user's rules and own skills, for the user turn. A thread run
+	// answers with its own prompt only. Flag off: no query (C1010).
+	const userContext = input.thread
+		? undefined
+		: await userContextForRun(db, { user: input.user, workspaceId: input.workspaceId, research: input.research === true, skillIndex });
 	const day = today();
 	// The account block, when the client asks for it: who is asking.
 	let accountBlockText: string | undefined;
@@ -356,7 +362,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		(workspaceBlockText?.length ?? 0) +
 		mcpToolChars(mcpTools) +
 		webToolChars(web) +
-		(summaryBlockText?.length ?? 0);
+		(summaryBlockText?.length ?? 0) +
+		(userContext?.block?.length ?? 0);
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
@@ -444,6 +451,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			...(input.research ? { research: true } : {}),
 			workspaceId: input.workspaceId,
 			...(summaryBlockText ? { summaryBlock: summaryBlockText } : {}),
+			...(userContext ? { userContext } : {}),
 			...(summary && window.dropped ? { truncated: { summarized: summaryBlockText !== undefined } } : {}),
 			...(summary?.behind && window.oldestKeptId ? { summarizeFrom: { oldestKeptId: window.oldestKeptId } } : {}),
 			...(accountBlockText ? { accountBlock: accountBlockText } : {}),
