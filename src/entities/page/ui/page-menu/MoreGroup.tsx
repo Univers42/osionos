@@ -33,7 +33,7 @@ export const MoreGroup: React.FC<Props> = ({ items, translateLocale, onTranslate
         return (
           <div key={item.id} className="flex min-h-[var(--osio-control-h-md)] items-center gap-2 rounded-[var(--osio-radius-sm)] px-2 py-1 text-sm hover:bg-[var(--osio-menu-item-hover-bg)]">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--osio-fg-muted)]"><Languages size={16} /></span>
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+            <span className="flex-1 whitespace-nowrap">{item.label}</span>
             <Dropdown
               variant="inline"
               width={176}

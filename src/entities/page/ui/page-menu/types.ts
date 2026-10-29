@@ -11,6 +11,8 @@ export interface PageMenuItem {
   shortcut?: string;
   badge?: string;
   checked?: boolean;
+  /** Show `checked` as an on/off switch on the right (Notion's Small text / Full width). */
+  toggle?: boolean;
   danger?: boolean;
   /** Render the label as a font sample tile instead of a row. */
   font?: PageFont;
