@@ -276,8 +276,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                     aria-selected={isActive}
                     data-testid="slash-command-entry"
                     data-command-label={item.label}
-                    className="osio-menu-item"
-                    style={{ height: 32 }}
+                    className="osio-menu-item h-[var(--osio-control-h-md)]"
                     onMouseEnter={() => setActiveIdx(idx)}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => handleCommandSelect(item)}
@@ -285,7 +284,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center text-base text-[var(--osio-fg-muted)] [&>svg]:h-5 [&>svg]:w-5">
                       {item.icon}
                     </span>
-                    <span className="block min-w-0 flex-1 truncate">
+                    <span data-slash-label className="block min-w-0 flex-1 truncate">
                       {item.kind === "whiteboard" && arg ? `Create board “${arg}”` : item.label}
                       {isSuggested ? (
                         <span className="text-[var(--osio-fg-subtle)]">{` · ${slashSectionLabel(item.section)}`}</span>
@@ -306,8 +305,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       <button
         type="button"
         data-testid="slash-command-close"
-        className="osio-menu-item shrink-0"
-        style={{ height: 32 }}
+        className="osio-menu-item h-[var(--osio-control-h-md)] shrink-0"
         onMouseDown={(event) => event.preventDefault()}
         onClick={onClose}
       >

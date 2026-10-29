@@ -93,6 +93,8 @@ const MENUS = [
   },
   {
     name: "slash menu",
+    // Notion's slash rows are 32px, a step taller than the other menus.
+    rowHeightToken: "--osio-control-h-md",
     open: async (page) => {
       await typeInFreshEditor(page, "/");
       return { panel: slashMenu(page), row: slashMenu(page).getByRole("option").first() };
@@ -155,7 +157,7 @@ const MENUS = [
 ];
 
 test.describe("editor menu chrome", () => {
-  for (const { name, open } of MENUS) {
+  for (const { name, open, rowHeightToken = "--osio-control-h-sm" } of MENUS) {
     test(`${name} wears the overlay chrome`, async ({ page, baseURL }) => {
       await openFreshPage(page, baseURL);
       const { panel, row } = await open(page);
@@ -163,7 +165,7 @@ test.describe("editor menu chrome", () => {
       expect(await readChrome(panel)).toEqual(await referenceChrome(page));
       if (!row) return;
       const metrics = await rowMetrics(row);
-      expect(metrics.height).toBe(await resolveToken(page, "height", "--osio-control-h-sm"));
+      expect(metrics.height).toBe(await resolveToken(page, "height", rowHeightToken));
       expect(metrics.radius).toBe(await resolveToken(page, "border-top-left-radius", "--osio-radius-sm"));
     });
   }
