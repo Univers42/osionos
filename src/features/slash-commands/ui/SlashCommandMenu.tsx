@@ -22,6 +22,7 @@ import {
   PROFILE_FIELD_COMMAND_ID,
   slashSectionLabel,
 } from "@/features/slash-commands/model/slashMenuCatalog";
+import { placeSlashMenu } from "@/features/slash-commands/model/slashMenuPlacement";
 import { readSlashRecents, recordSlashUse } from "@/features/slash-commands/model/slashRecents";
 import { useWholeRowScroll } from "@/shared/lib/dom/useWholeRowScroll";
 import { isSlashCommandAvailable } from "@/features/slash-commands/model/slashAvailability";
@@ -44,19 +45,11 @@ import type {
   SlashWhiteboardCommand,
   SlashDictateCommand,
 } from "@/features/slash-commands/model/types";
+import { SlashCommandPreview } from "./SlashCommandPreview";
 
 type SelectableSlashCommand = Exclude<SlashCommand, SlashMediaPickerCommand>;
 
-const MENU_MARGIN = 8;
-const MENU_GAP = 6;
-const COMMAND_MENU_WIDTH = 324;
-const COMMAND_MENU_MAX_HEIGHT = 448;
-
 const AVAILABILITY = { isAppReady: isBuiltInAppReady };
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), Math.max(min, max));
-}
 
 interface SlashCommandMenuProps {
   pageId?: string;
@@ -197,26 +190,10 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     };
   }, [onClose]);
 
-  const menuStyle = useMemo<React.CSSProperties>(() => {
+  const placement = useMemo(() => {
     const viewportWidth = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1024;
     const viewportHeight = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 768;
-    // The panel is 324px wide but never wider than the viewport minus its margin,
-    // and at most 40vh tall (448px cap) — the placement maths uses the real size.
-    const menuWidth = Math.min(COMMAND_MENU_WIDTH, viewportWidth - MENU_MARGIN * 2);
-    const menuHeight = Math.min(COMMAND_MENU_MAX_HEIGHT, viewportHeight * 0.4);
-    const left = clamp(position.x, MENU_MARGIN, viewportWidth - menuWidth - MENU_MARGIN);
-
-    const spaceAbove = position.top - MENU_GAP - MENU_MARGIN;
-    const spaceBelow = viewportHeight - position.y - MENU_GAP - MENU_MARGIN;
-    // Prefer ABOVE the caret: pin the panel's BOTTOM edge just above the "/" (via
-    // `bottom`, so the bottom-left corner sits right on the caret line with NO gap
-    // whatever the item count) and grow upward. Flip below only when the caret is
-    // too near the top of the viewport to fit a usable panel above it.
-    const placeAbove = spaceAbove >= Math.min(menuHeight, 180) || spaceAbove >= spaceBelow;
-
-    return placeAbove
-      ? { left, bottom: viewportHeight - (position.top - MENU_GAP), maxHeight: Math.min(menuHeight, spaceAbove) }
-      : { left, top: position.y + MENU_GAP, maxHeight: Math.min(menuHeight, spaceBelow) };
+    return placeSlashMenu({ x: position.x, y: position.y, top: position.top }, viewportWidth, viewportHeight);
   }, [position.x, position.y, position.top]);
 
   useWholeRowScroll(listRef, ordered);
@@ -229,90 +206,93 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   // editor page sets `container-type: size`, which would otherwise make it the
   // containing block and drift the menu off the caret).
   return createPortal(
-    <div
-      ref={ref}
-      data-testid="slash-command-menu"
-      // z-index above the layout canvas's escalated stack (notionPage.css):
-      // the cell inspector/settings panels sit at `--osio-z-popover + 20/21`,
-      // and `.osionos-layout-grid[data-canvas-active]` rises to `+ 24` so a
-      // selected cell's own resize handles clear its own inspector — typing
-      // "/" inside that same cell opens this menu at the caret, so it must
-      // stay the topmost, clickable layer above ALL of that, never obscured
-      // by a passive side panel or by the active grid itself.
-      className="osio-surface-overlay osio-slash-menu-in fixed z-[calc(var(--osio-z-popover)+26)] flex w-[324px] min-w-[180px] max-w-[calc(100vw-24px)] flex-col overflow-hidden"
-      style={menuStyle}
-    >
+    <>
       <div
-        ref={listRef}
-        id="slash-command-list"
-        role="listbox"
-        className="osio-scroll-fade relative min-h-0 flex-1 overflow-y-auto"
-        style={{ "--osio-scroll-fade-size": "34px" } as React.CSSProperties}
+        ref={ref}
+        data-testid="slash-command-menu"
+        // z-index above the layout canvas's escalated stack (notionPage.css):
+        // the cell inspector/settings panels sit at `--osio-z-popover + 20/21`,
+        // and `.osionos-layout-grid[data-canvas-active]` rises to `+ 24` so a
+        // selected cell's own resize handles clear its own inspector — typing
+        // "/" inside that same cell opens this menu at the caret, so it must
+        // stay the topmost, clickable layer above ALL of that, never obscured
+        // by a passive side panel or by the active grid itself.
+        className="osio-surface-overlay osio-slash-menu-in fixed z-[calc(var(--osio-z-popover)+26)] flex w-[324px] min-w-[180px] max-w-[calc(100vw-24px)] flex-col overflow-hidden"
+        style={placement.menu}
       >
-        {ordered.length === 0 ? (
-          <div className="px-2 py-6 text-center text-xs text-[var(--osio-fg-muted)]">
-            No results
-          </div>
-        ) : (
-          sections.map((section, sectionIndex) => (
-            <React.Fragment key={section.id}>
-              {sectionIndex > 0 && <div className="osio-menu-separator" />}
-              {section.label ? (
-                <p className="osio-menu-label">
-                  {section.label}
-                </p>
-              ) : null}
-              {section.items.map((item) => {
-                commandIndex += 1;
-                const idx = commandIndex;
-                const isActive = idx === effectiveActiveIdx;
-                const isSuggested = section.id === "suggested";
-                return (
-                  <button
-                    key={`${section.id}:${item.id}`}
-                    id={`slash-cmd-${idx}`}
-                    type="button"
-                    role="option"
-                    aria-selected={isActive}
-                    data-testid="slash-command-entry"
-                    data-command-label={item.label}
-                    className="osio-menu-item h-[var(--osio-control-h-md)]"
-                    onMouseEnter={() => setActiveIdx(idx)}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => handleCommandSelect(item)}
-                  >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center text-base text-[var(--osio-fg-muted)] [&>svg]:h-5 [&>svg]:w-5">
-                      {item.icon}
-                    </span>
-                    <span data-slash-label className="block min-w-0 flex-1 truncate">
-                      {item.kind === "whiteboard" && arg ? `Create board “${arg}”` : item.label}
-                      {isSuggested ? (
-                        <span className="text-[var(--osio-fg-subtle)]">{` · ${slashSectionLabel(item.section)}`}</span>
+        <div
+          ref={listRef}
+          id="slash-command-list"
+          role="listbox"
+          className="osio-scroll-fade relative min-h-0 flex-1 overflow-y-auto"
+          style={{ "--osio-scroll-fade-size": "34px" } as React.CSSProperties}
+        >
+          {ordered.length === 0 ? (
+            <div className="px-2 py-6 text-center text-xs text-[var(--osio-fg-muted)]">
+              No results
+            </div>
+          ) : (
+            sections.map((section, sectionIndex) => (
+              <React.Fragment key={section.id}>
+                {sectionIndex > 0 && <div className="osio-menu-separator" />}
+                {section.label ? (
+                  <p className="osio-menu-label">
+                    {section.label}
+                  </p>
+                ) : null}
+                {section.items.map((item) => {
+                  commandIndex += 1;
+                  const idx = commandIndex;
+                  const isActive = idx === effectiveActiveIdx;
+                  const isSuggested = section.id === "suggested";
+                  return (
+                    <button
+                      key={`${section.id}:${item.id}`}
+                      id={`slash-cmd-${idx}`}
+                      type="button"
+                      role="option"
+                      aria-selected={isActive}
+                      data-testid="slash-command-entry"
+                      data-command-label={item.label}
+                      className="osio-menu-item h-[var(--osio-control-h-md)]"
+                      onMouseEnter={() => setActiveIdx(idx)}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => handleCommandSelect(item)}
+                    >
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center text-base text-[var(--osio-fg-muted)] [&>svg]:h-5 [&>svg]:w-5">
+                        {item.icon}
+                      </span>
+                      <span data-slash-label className="block min-w-0 flex-1 truncate">
+                        {item.kind === "whiteboard" && arg ? `Create board “${arg}”` : item.label}
+                        {isSuggested ? (
+                          <span className="text-[var(--osio-fg-subtle)]">{` · ${slashSectionLabel(item.section)}`}</span>
+                        ) : null}
+                      </span>
+                      {item.shortcut ? (
+                        <span className="ml-auto shrink-0 pl-2 text-xs text-[var(--osio-fg-subtle)]">{item.shortcut}</span>
                       ) : null}
-                    </span>
-                    {item.shortcut ? (
-                      <span className="ml-auto shrink-0 pl-2 text-xs text-[var(--osio-fg-subtle)]">{item.shortcut}</span>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </React.Fragment>
-          ))
-        )}
-      </div>
+                    </button>
+                  );
+                })}
+              </React.Fragment>
+            ))
+          )}
+        </div>
 
-      <div className="osio-menu-separator shrink-0" />
-      <button
-        type="button"
-        data-testid="slash-command-close"
-        className="osio-menu-item h-[var(--osio-control-h-md)] shrink-0"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={onClose}
-      >
-        <span className="min-w-0 flex-1 truncate">Close menu</span>
-        <span className="ml-auto shrink-0 pl-2 text-xs text-[var(--osio-fg-subtle)]">esc</span>
-      </button>
-    </div>,
+        <div className="osio-menu-separator shrink-0" />
+        <button
+          type="button"
+          data-testid="slash-command-close"
+          className="osio-menu-item h-[var(--osio-control-h-md)] shrink-0"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onClose}
+        >
+          <span className="min-w-0 flex-1 truncate">Close menu</span>
+          <span className="ml-auto shrink-0 pl-2 text-xs text-[var(--osio-fg-subtle)]">esc</span>
+        </button>
+      </div>
+      {placement.preview ? <SlashCommandPreview command={ordered[effectiveActiveIdx]} style={placement.preview} /> : null}
+    </>,
     document.body,
   );
 };
