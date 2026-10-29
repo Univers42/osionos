@@ -14,6 +14,8 @@ import type { ReadTool } from './types.ts';
  * C38, C40): a built-in comes from the code, a workspace skill from the
  * database at load time — the version the index LISTED, even when the skill
  * was edited since (`loadListedVersion`), and nothing when it was archived.
+ * A user's own skill (U1) has no audited copy of its text: an edit or archive
+ * after the index was built RETRACTS it for the rest of the run (C1009).
  */
 
 /** What a load holds. */
@@ -21,7 +23,7 @@ export interface LoadSkillData {
 	id: string;
 	version: number;
 	body: string;
-	source: 'builtin' | 'workspace';
+	source: 'builtin' | 'workspace' | 'user';
 }
 
 /** Loose, like the other read tools: a wrong shape must not end the run. */
@@ -29,9 +31,9 @@ const loadSkillArgs = z.object({
 	id: z.unknown().optional().describe('the id of the skill, as the <skills> index lists it'),
 });
 
-/** The workspace skills a run listed, and how to read one of them. */
+/** The workspace (or user) skills a run listed, and how to read one of them. */
 export interface WorkspaceSkillLoader {
-	/** The listed entries of the workspace, by id (the slug). */
+	/** The listed entries, by id (the slug). */
 	entries: ReadonlyMap<string, { version: number; skillId: string }>;
 	/** The body of that version of that skill, or null when it is gone. */
 	load(skillId: string, version: number): Promise<string | null>;
@@ -39,12 +41,14 @@ export interface WorkspaceSkillLoader {
 
 /**
  * The tool for a run whose index lists `allowed` (built-in ids, and the ids of
- * `workspace`). `find` is a seam for tests; production uses the built-in list.
+ * `workspace` and `user`). `find` is a seam for tests; production uses the
+ * built-in list.
  */
 export function loadSkillTool(
 	allowed: readonly string[],
 	find: (id: string) => BuiltinSkill | null = findBuiltinSkill,
 	workspace?: WorkspaceSkillLoader,
+	user?: WorkspaceSkillLoader,
 ): ReadTool<z.infer<typeof loadSkillArgs>, LoadSkillData> {
 	return {
 		name: 'load_skill',
@@ -60,6 +64,12 @@ export function loadSkillTool(
 				const body = await workspace.load(listed.skillId, listed.version);
 				if (body === null) return refusal;
 				return { ok: true, data: { id, version: listed.version, body, source: 'workspace' } };
+			}
+			const own = user?.entries.get(id);
+			if (own && user) {
+				const body = await user.load(own.skillId, own.version);
+				if (body === null) return { ok: false, error: 'that skill was changed or removed during this answer; go on without it' };
+				return { ok: true, data: { id, version: own.version, body, source: 'user' } };
 			}
 			const skill = find(id);
 			if (!skill) return refusal;

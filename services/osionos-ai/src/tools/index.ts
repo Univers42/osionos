@@ -45,7 +45,7 @@ export interface ToolOutcome {
 	/** The trimmed text the proposal stored; it travels with `memoryId`. */
 	memoryBody?: string;
 	/** The skill a `load_skill` call loaded: pinned in the history of the run (devil C40). */
-	skill?: { id: string; version: number; source: 'builtin' | 'workspace' };
+	skill?: { id: string; version: number; source: 'builtin' | 'workspace' | 'user' };
 	/** The view change a view tool asked for: the client applies it. */
 	view?: 
 		| { action: 'open_page'; pageId: string; title: string; target: 'current' | 'tab' | 'split' }
@@ -312,7 +312,7 @@ export function readToolSet(
 					toolName: tool.name,
 					ok: true,
 					found: cites.length,
-					...('pin' in tool && tool.pin ? { skill: (tool as { pin: (data: unknown) => { id: string; version: number; source: 'builtin' | 'workspace' } }).pin(result.data) } : {}),
+					...('pin' in tool && tool.pin ? { skill: (tool as { pin: (data: unknown) => { id: string; version: number; source: 'builtin' | 'workspace' | 'user' } }).pin(result.data) } : {}),
 					...('proposed' in tool && tool.proposed
 						? { memoryId: tool.proposed(result.data).id, memoryBody: tool.proposed(result.data).body }
 						: {}),
