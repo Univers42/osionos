@@ -193,10 +193,10 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
           </div>
         </div>
         <div className="mt-3 flex gap-2">
-          <Button size="sm" className="flex-1" onClick={() => { openSettings('general'); onClose(); }}>
+          <Button size="sm" className="flex-1 whitespace-nowrap" onClick={() => { openSettings('general'); onClose(); }}>
             <Settings size={12} aria-hidden /> Settings
           </Button>
-          <Button size="sm" className="flex-1" onClick={() => { openSettings('people'); onClose(); }}>
+          <Button size="sm" className="flex-1 whitespace-nowrap" onClick={() => { openSettings('people'); onClose(); }}>
             <Users size={12} aria-hidden /> Invite members
           </Button>
         </div>
