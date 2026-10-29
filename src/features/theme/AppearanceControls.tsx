@@ -1,7 +1,7 @@
 /**
  * The personal half of Settings > Appearance: an accent row (the presets and a
  * free hue), segmented controls for density, corners and text size, and the
- * caret (colour everywhere; shape and blink where the browser draws them). Every
+ * caret (colour, shape and blink; a shape or a steady caret is drawn by the app). Every
  * change is written to <html> and to storage at once (theme.ts).
  */
 
@@ -184,9 +184,6 @@ const CARET_INKS: Record<CaretColor, { label: string; ink: string }> = {
   pink: { label: 'Pink', ink: 'var(--osio-block-tint-pink-fg)' },
 };
 
-// Firefox parses neither property, so its caret stays a blinking bar whatever is stored.
-const drawsCaretShape = (): boolean => typeof CSS !== 'undefined' && CSS.supports('caret-shape', 'block');
-
 export const CaretControls: React.FC<{ appearance: Appearance; onChange: (patch: Partial<Appearance>) => void }> = ({
   appearance,
   onChange,
@@ -210,38 +207,38 @@ export const CaretControls: React.FC<{ appearance: Appearance; onChange: (patch:
           ))}
           <span className="text-xs text-[var(--osio-fg-muted)]">{CARET_INKS[appearance.caretColor].label}</span>
         </div>
-        <input
-          type="text"
+        {/* Editable text, not an input: the drawn caret follows text, and a block needs a letter under it. */}
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          role="textbox"
           aria-label="Try the caret"
-          placeholder="Click here to try the caret"
-          className="mt-3 h-[var(--osio-control-h-md)] w-64 max-w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 text-sm text-[var(--osio-fg-default)]"
-        />
+          spellCheck={false}
+          className="mt-3 w-64 max-w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-2 py-1.5 text-sm text-[var(--osio-fg-default)]"
+        >
+          Click here and type to try it
+        </div>
       </div>
-      {drawsCaretShape() ? (
-        <>
-          <Segmented<CaretShape>
-            label="Caret shape"
-            value={appearance.caretShape}
-            options={[
-              { value: 'bar', label: 'Bar' },
-              { value: 'block', label: 'Block' },
-              { value: 'underscore', label: 'Underline' },
-            ]}
-            onChange={(caretShape) => onChange({ caretShape })}
-          />
-          <Segmented<CaretBlink>
-            label="Caret blink"
-            value={appearance.caretBlink}
-            options={[
-              { value: 'on', label: 'Blink' },
-              { value: 'off', label: 'Steady' },
-            ]}
-            onChange={(caretBlink) => onChange({ caretBlink })}
-          />
-        </>
-      ) : (
-        <p className="text-xs text-[var(--osio-fg-muted)]">This browser draws the caret as a blinking bar: its shape and blink can be changed in Chrome, Edge or Brave.</p>
-      )}
+      <Segmented<CaretShape>
+        label="Caret shape"
+        value={appearance.caretShape}
+        options={[
+          { value: 'bar', label: 'Thin' },
+          { value: 'thick', label: 'Thick' },
+          { value: 'block', label: 'Block' },
+          { value: 'underscore', label: 'Underline' },
+        ]}
+        onChange={(caretShape) => onChange({ caretShape })}
+      />
+      <Segmented<CaretBlink>
+        label="Caret blink"
+        value={appearance.caretBlink}
+        options={[
+          { value: 'on', label: 'Blink' },
+          { value: 'off', label: 'Steady' },
+        ]}
+        onChange={(caretBlink) => onChange({ caretBlink })}
+      />
     </>
   );
 };
