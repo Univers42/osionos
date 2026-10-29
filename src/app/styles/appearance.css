@@ -58,3 +58,11 @@
   text-decoration: underline;
   text-underline-offset: 0.14em;
 }
+
+/* Page chrome switches (Settings > Preferences > Page layout). Hidden with
+   CSS, not unmounted, so turning one back on is instant and the editor keeps
+   its state. */
+:root[data-page-outline="hide"] [data-osio-toc],
+:root[data-page-properties="hide"] .osionos-page-properties {
+  display: none;
+}

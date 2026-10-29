@@ -23,6 +23,7 @@ import { PanelStatus, Section, SettingRow } from '../ui/settingsKit';
 import { runAsync } from '../model/settingsCalls';
 import { useSettingsHydration } from '../model/settingsHydration';
 import { AccessibilitySettings } from './AccessibilitySettings';
+import { PageLayoutSettings } from './PageLayoutSettings';
 import { DATE_FORMAT_OPTIONS, NUMBER_FORMAT_OPTIONS, OPEN_ON_START_OPTIONS, WEEK_START_OPTIONS, setAutoTimezone, setTimezone } from './options';
 import { AccountExportSection } from '../ui/AccountExportSection';
 import { RecommendationPrivacy } from '../ui/RecommendationPrivacy';
@@ -78,6 +79,7 @@ export const PreferencesPanel: React.FC<{ activeUserId: string }> = ({ activeUse
           <WorkspaceThemeControls compact />
         </div>
       </Section>
+      <PageLayoutSettings />
       <AccessibilitySettings />
       <Section title="Input options">
         <SettingRow title="Use Enter to add a new line" description="Applies to chat, comments, and other input fields. Press Cmd/Ctrl + Enter to send." action={<Toggle checked={Boolean(preferences?.enterAddsNewline)} onChange={(checked) => update({ enterAddsNewline: checked })} label="Use Enter to add a new line" />} />

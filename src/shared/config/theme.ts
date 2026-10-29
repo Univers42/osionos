@@ -172,6 +172,8 @@ export type AnimatedImages = "play" | "system" | "still";
 export type Hovercards = "on" | "off";
 /** "link" turns a pasted bare URL into a link; "plain" keeps the text. */
 export type UrlPaste = "link" | "plain";
+/** Whether a page draws its table-of-contents rail and its property rows. */
+export type PageChrome = "show" | "hide";
 
 export interface Appearance {
   /** a preset id, or "custom" to use `hue`. */
@@ -186,6 +188,8 @@ export interface Appearance {
   animatedImages: AnimatedImages;
   hovercards: Hovercards;
   urlPaste: UrlPaste;
+  pageOutline: PageChrome;
+  pageProperties: PageChrome;
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -199,6 +203,8 @@ export const DEFAULT_APPEARANCE: Appearance = {
   animatedImages: "play",
   hovercards: "on",
   urlPaste: "link",
+  pageOutline: "show",
+  pageProperties: "show",
 };
 
 const APPEARANCE_STORAGE_KEY = "osionos:appearance";
@@ -239,6 +245,8 @@ export function parseAppearance(raw: string | null): Appearance {
     animatedImages: oneOf(stored.animatedImages, ["play", "system", "still"], DEFAULT_APPEARANCE.animatedImages),
     hovercards: oneOf(stored.hovercards, ["on", "off"], DEFAULT_APPEARANCE.hovercards),
     urlPaste: oneOf(stored.urlPaste, ["link", "plain"], DEFAULT_APPEARANCE.urlPaste),
+    pageOutline: oneOf(stored.pageOutline, ["show", "hide"], DEFAULT_APPEARANCE.pageOutline),
+    pageProperties: oneOf(stored.pageProperties, ["show", "hide"], DEFAULT_APPEARANCE.pageProperties),
   };
 }
 
@@ -258,7 +266,7 @@ export function persistAppearance(appearance: Appearance) {
 
 /** The axes that live on <html> as an attribute. urlPaste is not one of them:
  *  it changes what a paste does, not what the document looks like. */
-const ATTRIBUTE_AXES = ["accent", "density", "radius", "uiScale", "linkUnderline", "motion", "animatedImages", "hovercards"] as const;
+const ATTRIBUTE_AXES = ["accent", "density", "radius", "uiScale", "linkUnderline", "motion", "animatedImages", "hovercards", "pageOutline", "pageProperties"] as const;
 
 /** The appearance as it stands. applyAppearance() keeps it up to date, so a
  *  reader that needs a value with no <html> attribute (urlPaste) sees the live

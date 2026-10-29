@@ -31,6 +31,7 @@ import {
   type Hovercards,
   type LinkUnderline,
   type MotionPreference,
+  type PageChrome,
   type UrlPaste,
 } from "./theme";
 
@@ -108,5 +109,23 @@ export function useHovercardsChoice(): Hovercards {
     subscribeAppearance,
     () => (attribute("data-hovercards") === "off" ? "off" : "on"),
     () => "on",
+  );
+}
+
+/** Whether pages draw their table-of-contents rail. */
+export function usePageOutline(): PageChrome {
+  return useSyncExternalStore(
+    subscribeAppearance,
+    () => (attribute("data-page-outline") === "hide" ? "hide" : "show"),
+    () => "show",
+  );
+}
+
+/** Whether pages draw their property rows under the title. */
+export function usePageProperties(): PageChrome {
+  return useSyncExternalStore(
+    subscribeAppearance,
+    () => (attribute("data-page-properties") === "hide" ? "hide" : "show"),
+    () => "show",
   );
 }
