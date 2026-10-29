@@ -66,3 +66,9 @@ export const TURN_INTO_LABEL_BY_TYPE = new Map(
 export function turnIntoLabel(blockType?: string): string {
   return (blockType && TURN_INTO_LABEL_BY_TYPE.get(blockType as BlockType)) || "Text";
 }
+
+/** The panel row says "Normal Text" for a paragraph, where the menu says "Text". */
+export function turnIntoRowLabel(blockType?: string): string {
+  const label = turnIntoLabel(blockType);
+  return label === "Text" ? "Normal Text" : label;
+}
