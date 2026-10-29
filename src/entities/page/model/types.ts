@@ -113,6 +113,8 @@ export interface ActivePage {
   cover?: string;
   coverPosition?: number;
   databaseId?: string | null;
+  /** Epoch ms of the last visit. Optional so recents saved before this field still load. */
+  visitedAt?: number;
 }
 
 export interface PageIndexEntry {
@@ -130,7 +132,7 @@ export interface PageStore {
    *  no-access screen; cleared by any successful openPage. */
   deniedPage: { pageId: string; workspaceId: string | null } | null;
   navigationPath: ActivePage[]; // breadcrumb path based on navigation history
-  recents: ActivePage[]; // last 10 opened
+  recents: ActivePage[]; // last 50 opened per workspace
   loadingIds: Set<string>; // workspaceIds currently fetching
   seeded: boolean; // true once seed data is loaded
   showTrash: boolean; // true when archived files view is active

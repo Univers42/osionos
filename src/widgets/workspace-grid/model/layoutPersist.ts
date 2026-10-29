@@ -29,6 +29,7 @@ export const CHAT_TAB_ID = "__chat__";
 export const WHITEBOARD_TAB_ID = "__whiteboard__";
 export const SETTINGS_TAB_ID = "__settings__";
 export const AI_HUB_TAB_ID = "__ai_hub__";
+export const PAGE_LIBRARY_TAB_ID = "__page_library__";
 
 const STORAGE_KEY = "osionos.workspace.layout.v2";
 const LEGACY_PREFIX = "osionos.workspace.layout.v1";
@@ -141,6 +142,12 @@ export function settingsTab(): WorkspaceTab {
  *  pageId, so a second open focuses the existing tab. */
 export function aiHubTab(): WorkspaceTab {
   return { tabId: genId("tab"), pageId: AI_HUB_TAB_ID, workspaceId: "", kind: "ai-hub", title: "AI Hub", icon: "icon:sparkles" };
+}
+
+/** The Library tab — every workspace page as a tree. Stable pageId, so a second
+ *  open focuses the existing tab. */
+export function libraryTab(): WorkspaceTab {
+  return { tabId: genId("tab"), pageId: PAGE_LIBRARY_TAB_ID, workspaceId: "", kind: "page-library", title: "Library", icon: "icon:library" };
 }
 
 /** What a theme JSON tab edits. Its pageId encodes it, so a restored layout reopens the same document. */

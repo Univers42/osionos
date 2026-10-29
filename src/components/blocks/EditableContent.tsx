@@ -552,15 +552,19 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   }, [cancelPendingChangeFrame, emitChange]);
 
   const scheduleChange = useCallback((source: string) => {
-    pendingChangeRef.current = source;
     // Menu triggers ("/", "[[", ":") must reach onChange at their exact char
     // boundary: rAF coalescing swallows it under fast typing ("/toggle" arrives in
     // one frame and never ends with "/"), so the slash/page/emoji menus silently
     // fail to open. Flush those keystrokes synchronously; all others stay batched.
+    // The batch goes out first: Backspace then "/" in one frame is "/" -> "" -> "/",
+    // and collapsed to "/" it equals the last emitted text, so the menu never re-opened
+    // (slashMenuPositioning "notion layout", 2 of 3 runs, 2026-10-29).
     if (/[/:[]$/.test(source)) {
       flushPendingChange();
+      emitChange(source);
       return;
     }
+    pendingChangeRef.current = source;
     if (pendingChangeFrameRef.current !== null) return;
 
     // A draft commit before the frame (a menu taking Enter) flushes this batch first.
@@ -569,7 +573,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       pendingChangeFrameRef.current = null;
       flushPendingChange();
     });
-  }, [flushPendingChange]);
+  }, [emitChange, flushPendingChange]);
 
 
   const renderContent = useCallback(
