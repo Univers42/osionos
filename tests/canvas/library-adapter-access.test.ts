@@ -162,32 +162,23 @@ test("C822: a user-scope agent cache is per user and workspace", async () => {
 const edited = (state: NotionState, name: string): NotionState =>
   ({ ...state, views: { ...state.views, "v-library-all": { ...state.views["v-library-all"], name } } });
 
-test("C830: a non-curator gets the shipped views and writes none; an admin's edit is honoured", async () => {
+test("C913: views kept in this browser by L1 are ignored, and no role writes them", async () => {
   await fresh();
   const key = "osionos:library:views:v1:u830:sh830";
   const shipped = libraryViews(false);
   const stored = JSON.stringify({ "v-library-all": { ...shipped["v-library-all"], name: "Seeded" } });
   files.set(key, stored);
-  const as = (role: string) => {
+  // No bridge here (API_BASE is unset under node): the curated views never arrive, so even an
+  // admin stays on the shipped views, locked. library-server-views.test.ts drives the bridge.
+  for (const role of ["editor", "viewer", "admin"]) {
     signIn([session("u830", [], [workspace("sh830", { role })])], "u830", { u830: "sh830" });
-    return load();
-  };
-
-  for (const role of ["editor", "viewer"]) {
-    const state = await as(role);
-    assert.deepEqual(state.views, shipped, `${role}: the shipped views only, whatever this browser holds`);
-    assert.equal(state.databases[LIBRARY_DB_ID].locked, true);
+    const state = await load();
+    assert.deepEqual(state.views, shipped, `${role}: the shipped views, whatever this browser holds`);
+    assert.equal(state.databases[LIBRARY_DB_ID].locked, true, `${role}: locked until the bridge says otherwise`);
     adapter.persistState?.(edited(state, "Edited"), state);
-    assert.equal(writes.filter((written) => written === key).length, 0, `${role}: the views key is never written`);
+    assert.equal(writes.length, 0, `${role}: nothing is written to this browser`);
     assert.equal(files.get(key), stored);
   }
-
-  const admin = await as("admin");
-  assert.equal(admin.databases[LIBRARY_DB_ID].locked, false);
-  assert.equal(admin.views["v-library-all"].name, "Seeded", "an admin gets the stored edit");
-  adapter.persistState?.(edited(admin, "Edited"), admin);
-  assert.equal(writes.filter((written) => written === key).length, 1);
-  assert.equal((await load()).views["v-library-all"].name, "Edited");
 });
 
 test("C833: with agents off there is no listAgents call and no Agents view", async () => {
@@ -200,9 +191,7 @@ test("C833: with agents off there is no listAgents call and no Agents view", asy
   ];
   for (const [user, space, body] of cases) {
     if (body) agentSettings.set(space, body);
-    // The viewer's own private workspace: a curator, so a stored Agents view would be honoured if agents were on.
     signIn([session(user, [space])], user, { [user]: space });
-    files.set(`osionos:library:views:v1:${user}:${space}`, JSON.stringify({ "v-library-agents": agentsView }));
     await load();
     await settle();
     assert.equal(calls(`/workspaces/${space}/agents/settings`), 1, `${space}: the settings were asked`);
@@ -259,4 +248,35 @@ test("C835: a private-workspace page in a shared Library lists and opens in its 
     opened.map(({ id, workspaceId }) => ({ id, workspaceId })),
     [{ id: "p-kid-1", workspaceId: "pw835" }, { id: "s-page", workspaceId: "sw835" }],
   );
+});
+
+test("C1211: a curator drags a page row under a page of its workspace or out to its root", async () => {
+  await fresh();
+  signIn([session("u1211", ["pw1211"])], "u1211", { u1211: "pw1211" });
+  seedPages(
+    page("m-a", "pw1211", { ownerId: "u1211" }),
+    page("m-b", "pw1211", { ownerId: "u1211" }),
+    page("m-kid", "pw1211", { ownerId: "u1211", parentPageId: "m-a" }),
+  );
+  const { useToastStore } = await import("@/shared/ui");
+  const toasts = () => useToastStore.getState().toasts.length;
+  const parentOf = (id: string) => usePageStore.getState().pageById(id)?.parentPageId ?? null;
+  const curator = createLibrarySubItemsController(() => true);
+
+  await curator.moveRow?.("m-a", "m-b");
+  assert.equal(parentOf("m-a"), "m-b", "nested under the drop target");
+  await curator.moveRow?.("m-a", null);
+  assert.equal(parentOf("m-a"), null, "unnested to the workspace root");
+
+  useToastStore.getState().clear();
+  await assert.rejects(curator.moveRow?.("m-a", "m-kid") ?? Promise.resolve(), "never under its own sub-page");
+  await assert.rejects(curator.moveRow?.("skill:s1", "m-b") ?? Promise.resolve(), "only page rows move");
+  assert.equal(curator.canMoveRow?.("skill:s1"), false);
+  assert.equal(curator.canMoveRow?.("m-a"), true);
+
+  const member = createLibrarySubItemsController(() => false);
+  assert.equal(member.canMoveRow?.("m-a"), false, "a member gets no move grip");
+  await assert.rejects(member.moveRow?.("m-b", "m-a") ?? Promise.resolve());
+  assert.equal(parentOf("m-b"), null, "a refused move leaves the tree as it was");
+  assert.equal(toasts(), 3, "each refusal is said once");
 });

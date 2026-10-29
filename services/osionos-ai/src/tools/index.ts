@@ -10,6 +10,8 @@ import { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS } from './loop.ts';
 import { rememberTool } from './memoryTools.ts';
 import { loadSkillTool } from './skillTools.ts';
 import { VIEW_TOOLS } from './viewTools.ts';
+import { config } from '../config.ts';
+import { listMyContextTool } from '../context/listTool.ts';
 import { numberSources, sourceKey, type ToolSource } from '../runs/sources.ts';
 
 export { MAX_STEPS, TOOL_OUTPUT_CHARS, TOOL_POOL_CHARS };
@@ -45,7 +47,7 @@ export interface ToolOutcome {
 	/** The trimmed text the proposal stored; it travels with `memoryId`. */
 	memoryBody?: string;
 	/** The skill a `load_skill` call loaded: pinned in the history of the run (devil C40). */
-	skill?: { id: string; version: number; source: 'builtin' | 'workspace' };
+	skill?: { id: string; version: number; source: 'builtin' | 'workspace' | 'user' };
 	/** The view change a view tool asked for: the client applies it. */
 	view?: 
 		| { action: 'open_page'; pageId: string; title: string; target: 'current' | 'tab' | 'split' }
@@ -195,7 +197,15 @@ export function createToolPool(chars: number = TOOL_POOL_CHARS, stepChars: numbe
  * The one exception is `build_plan` (its schema is large): it is counted only
  * when OSIONOS_AI_BUILDERS is on, the one case where it is sent.
  */
-export const TOOL_DEFINITION_CHARS = toolDefinitionChars([...READ_TOOLS, ...VIEW_TOOLS, ...writeTools(), loadSkillTool([]), rememberTool({ workspaceId: '', runId: '' })]);
+// C1141: list_my_context counts only while its flag is on, so the flag-off number is unchanged.
+export const TOOL_DEFINITION_CHARS = toolDefinitionChars([
+	...READ_TOOLS,
+	...VIEW_TOOLS,
+	...writeTools(),
+	loadSkillTool([]),
+	rememberTool({ workspaceId: '', runId: '' }),
+	...(config.contextToolEnabled ? [listMyContextTool({ skills: [], inPrompt: new Set() })] : []),
+]);
 
 /** The shape the count of the definitions reads. */
 interface ToolDefinition {
@@ -312,7 +322,7 @@ export function readToolSet(
 					toolName: tool.name,
 					ok: true,
 					found: cites.length,
-					...('pin' in tool && tool.pin ? { skill: (tool as { pin: (data: unknown) => { id: string; version: number; source: 'builtin' | 'workspace' } }).pin(result.data) } : {}),
+					...('pin' in tool && tool.pin ? { skill: (tool as { pin: (data: unknown) => { id: string; version: number; source: 'builtin' | 'workspace' | 'user' } }).pin(result.data) } : {}),
 					...('proposed' in tool && tool.proposed
 						? { memoryId: tool.proposed(result.data).id, memoryBody: tool.proposed(result.data).body }
 						: {}),

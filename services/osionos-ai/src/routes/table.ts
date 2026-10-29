@@ -32,6 +32,16 @@ import { handleSentimentSettings } from './sentimentSettings.ts';
 import { handleAccessTokenDelete, handleAccessTokens } from './accessTokens.ts';
 import { handleSkillArchive, handleSkillCreate, handleSkillsList, handleSkillUpdate } from './skills.ts';
 import {
+	handleContextItemArchive,
+	handleContextItemCreate,
+	handleContextItemUpdate,
+	handleContextItemsList,
+	handleWorkspaceRuleArchive,
+	handleWorkspaceRuleCreate,
+	handleWorkspaceRuleUpdate,
+	handleWorkspaceRulesList,
+} from './context.ts';
+import {
 	handleMemoriesList,
 	handleMemoryApprove,
 	handleMemoryArchive,
@@ -192,6 +202,25 @@ export const ROUTES: RouteEntry[] = [
 	{ methods: ['POST'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillCreate },
 	{ methods: ['PUT'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillUpdate },
 	{ methods: ['DELETE'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillArchive },
+	// U1-U3: the user's skills, rules, commands and hooks. Every flag off: 404
+	// (C1010); a kind whose flag is off is refused inside (C1102).
+	...(config.userContextEnabled || config.userCommandsEnabled || config.userHooksEnabled
+		? [
+				{ methods: ['GET'], pattern: /^\/api\/ai\/context\/items$/, label: '/api/ai/context/items', handle: handleContextItemsList },
+				{ methods: ['POST'], pattern: /^\/api\/ai\/context\/items$/, label: '/api/ai/context/items', handle: handleContextItemCreate },
+				{ methods: ['PUT'], pattern: /^\/api\/ai\/context\/items\/([^/]+)$/, label: '/api/ai/context/items/:id', handle: handleContextItemUpdate },
+				{ methods: ['DELETE'], pattern: /^\/api\/ai\/context\/items\/([^/]+)$/, label: '/api/ai/context/items/:id', handle: handleContextItemArchive },
+			]
+		: []),
+	// U1: a workspace's rules. Flag off: 404 (C1010).
+	...(config.userContextEnabled
+		? [
+				{ methods: ['GET'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/rules$/, label: '/api/ai/workspaces/:ws/rules', handle: handleWorkspaceRulesList },
+				{ methods: ['POST'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/rules$/, label: '/api/ai/workspaces/:ws/rules', handle: handleWorkspaceRuleCreate },
+				{ methods: ['PUT'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/rules\/([^/]+)$/, label: '/api/ai/workspaces/:ws/rules/:slug', handle: handleWorkspaceRuleUpdate },
+				{ methods: ['DELETE'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/rules\/([^/]+)$/, label: '/api/ai/workspaces/:ws/rules/:slug', handle: handleWorkspaceRuleArchive },
+			]
+		: []),
 	{
 		methods: ['GET'],
 		pattern: /^\/api\/ai\/workspaces\/([^/]+)\/sentiment\/pulse$/,

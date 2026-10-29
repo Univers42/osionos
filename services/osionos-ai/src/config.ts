@@ -110,6 +110,18 @@ const envSchema = z.object({
 	// Off, the /api/ai/mcp-servers paths do not exist.
 	OSIONOS_AI_MCP_CLIENT: z.string().optional(),
 	OSIONOS_AI_CUSTOM_AGENTS: z.string().optional(),
+	// User skills and rules, workspace rules (U1, C1010). OFF unless exactly
+	// "on": off, the /api/ai/context and /rules paths do not exist and a run
+	// reads none of ai_context_items.
+	OSIONOS_AI_USER_CONTEXT: z.string().optional(),
+	// A user's own slash commands (U2, C1110). OFF unless exactly "on": off,
+	// /api/ai/commands lists the built-ins only and the context routes refuse
+	// the command kind. Needs osionos-ai-context-commands-migration.sql.
+	OSIONOS_AI_USER_COMMANDS: z.string().optional(),
+	OSIONOS_AI_USER_HOOKS: z.string().optional(),
+	// The `list_my_context` read tool (U5, C1140). OFF unless exactly "on", and
+	// only with OSIONOS_AI_USER_CONTEXT: off, no run is offered it.
+	OSIONOS_AI_CONTEXT_TOOL: z.string().optional(),
 	// The web tools, web_search and web_fetch (web C369). OFF unless exactly
 	// "on": the public overlay leaves it empty until C371 and C372 hold.
 	OSIONOS_AI_WEB: z.string().optional(),
@@ -230,6 +242,10 @@ const rawEnv = {
 	OSIONOS_AI_PAT: process.env.OSIONOS_AI_PAT,
 	OSIONOS_AI_MCP_CLIENT: process.env.OSIONOS_AI_MCP_CLIENT,
 	OSIONOS_AI_CUSTOM_AGENTS: process.env.OSIONOS_AI_CUSTOM_AGENTS,
+	OSIONOS_AI_USER_CONTEXT: process.env.OSIONOS_AI_USER_CONTEXT,
+	OSIONOS_AI_USER_COMMANDS: process.env.OSIONOS_AI_USER_COMMANDS,
+	OSIONOS_AI_USER_HOOKS: process.env.OSIONOS_AI_USER_HOOKS,
+	OSIONOS_AI_CONTEXT_TOOL: process.env.OSIONOS_AI_CONTEXT_TOOL,
 	OSIONOS_AI_WEB: process.env.OSIONOS_AI_WEB,
 	OSIONOS_AI_RESEARCH: process.env.OSIONOS_AI_RESEARCH,
 	OSIONOS_AI_RESEARCH_PLATFORM_DAILY: process.env.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,
@@ -420,6 +436,11 @@ export interface AiServiceConfig {
 	patEnabled: boolean;
 	mcpClientEnabled: boolean;
 	customAgentsEnabled: boolean;
+	userContextEnabled: boolean;
+	userCommandsEnabled: boolean;
+	userHooksEnabled: boolean;
+	/** `list_my_context` (C1140): its own flag AND the user context flag. */
+	contextToolEnabled: boolean;
 	webEnabled: boolean;
 	/** Whether research mode exists (C396, C415): exactly "on"; the run still needs the web. */
 	researchEnabled: boolean;
@@ -518,6 +539,10 @@ export const config: AiServiceConfig = Object.freeze({
 	// Exactly "on" (C288): no trim, no case folding, so a stray value stays off.
 	mcpClientEnabled: parsed.data.OSIONOS_AI_MCP_CLIENT === 'on',
 	customAgentsEnabled: parsed.data.OSIONOS_AI_CUSTOM_AGENTS === 'on',
+	userContextEnabled: parsed.data.OSIONOS_AI_USER_CONTEXT === 'on',
+	userCommandsEnabled: parsed.data.OSIONOS_AI_USER_COMMANDS === 'on',
+	userHooksEnabled: parsed.data.OSIONOS_AI_USER_HOOKS === 'on',
+	contextToolEnabled: parsed.data.OSIONOS_AI_CONTEXT_TOOL === 'on' && parsed.data.OSIONOS_AI_USER_CONTEXT === 'on',
 	webEnabled: parsed.data.OSIONOS_AI_WEB === 'on',
 	researchEnabled: parsed.data.OSIONOS_AI_RESEARCH === 'on',
 	researchPlatformDaily: parsed.data.OSIONOS_AI_RESEARCH_PLATFORM_DAILY,

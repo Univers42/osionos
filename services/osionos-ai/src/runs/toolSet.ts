@@ -5,8 +5,9 @@ import { rememberTool } from '../tools/memoryTools.ts';
 import { loadSkillTool } from '../tools/skillTools.ts';
 import type { WorkspaceSkillLoader } from '../tools/skillTools.ts';
 import { buildSkillIndex } from '../skills/runSkills.ts';
-import type { SkillIndex } from '../skills/runSkills.ts';
+import type { SkillIndex, SkillIndexEntry } from '../skills/runSkills.ts';
 import { loadListedVersion, recordSkillPin } from '../skills/repo.ts';
+import { loadUserSkillBody } from '../context/repo.ts';
 import { readToolSet } from '../tools/index.ts';
 import { VIEW_TOOLS } from '../tools/viewTools.ts';
 import type { ToolOutcome, ToolPool } from '../tools/index.ts';
@@ -25,6 +26,9 @@ import type { AgentConfig } from '../agents/config.ts';
 import { webTools } from '../web/tools.ts';
 import type { WebRun, WebTaint } from '../web/tools.ts';
 import { guardTainted } from '../web/runWeb.ts';
+import { dropBlockedTools } from '../context/hooks.ts';
+import type { RunHooks } from '../context/hooks.ts';
+import { listMyContextTool } from '../context/listTool.ts';
 
 /**
  * The tools of a run.
@@ -89,6 +93,13 @@ export function buildRunTools(input: {
 	skillIndex?: SkillIndex;
 	workspaceId?: string;
 	/**
+	 * The user's own skills the user turn lists (U1, OSIONOS_AI_USER_CONTEXT).
+	 * Absent is the run of today.
+	 */
+	userSkills?: readonly SkillIndexEntry[];
+	/** The context item ids the prompt of the run carries (U5: `list_my_context` says which). */
+	promptItemIds?: ReadonlySet<string>;
+	/**
 	 * The MCP tools of the caller, loaded before the run (C265).
 	 *
 	 * Empty or absent is the run of today: not one key is added.
@@ -111,6 +122,11 @@ export function buildRunTools(input: {
 	 * tools are not in the request at all.
 	 */
 	research?: boolean;
+	/**
+	 * The user's hooks (U3): the tools they name leave the set LAST, after every
+	 * other narrowing, so no step can add one back. Unreadable: no tools at all.
+	 */
+	hooks?: RunHooks;
 	/** The event of the run. */
 	emit: (type: string, data: unknown) => Promise<void>;
 }): RunTools {
@@ -185,8 +201,31 @@ export function buildRunTools(input: {
 					load: (skillId, version) => loadListedVersion(db, { workspaceId: input.workspaceId as string, skillId, version }),
 				}
 			: undefined;
-	const skillTools =
-		skillIndex.entries.length > 0 ? [loadSkillTool(skillIndex.entries.map((entry) => entry.id), undefined, loader)] : [];
+	// C1003: a user skill loads only as the run user's own row, by id and version.
+	const userSkills = user ? (input.userSkills ?? []) : [];
+	const userLoader: WorkspaceSkillLoader | undefined =
+		userSkills.length > 0 && user
+			? {
+					entries: new Map(
+						userSkills.flatMap((entry) => (entry.skillId ? [[entry.id, { version: entry.version, skillId: entry.skillId }] as const] : [])),
+					),
+					load: (itemId, version) => loadUserSkillBody(db, { ownerId: user.userId, itemId, version }),
+				}
+			: undefined;
+	const allowedSkills = [...skillIndex.entries, ...userSkills].map((entry) => entry.id);
+	const skillTools = allowedSkills.length > 0 ? [loadSkillTool(allowedSkills, undefined, loader, userLoader)] : [];
+	// C1144: a custom agent never gets list_my_context; a built-in one keeps it
+	// only when its list names it (keepAgentTools). No query until it is called.
+	const contextTools =
+		config.contextToolEnabled && user && !(agent && isCustomAgent(agent))
+			? [
+					listMyContextTool({
+						...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+						skills: [...skillIndex.entries, ...userSkills],
+						inPrompt: input.promptItemIds ?? new Set(),
+					}),
+				]
+			: [];
 	// C42: `remember` proposes; it needs the workspace the memory belongs to.
 	const proposalTools = input.workspaceId ? [rememberTool({ workspaceId: input.workspaceId, runId })] : [];
 
@@ -209,7 +248,7 @@ export function buildRunTools(input: {
 	run.tools = user
 		? {
 				...mcpTools,
-				...readToolSet({ db, user, agentId: agent ? agent.id : null }, hooks, pool, [...skillTools, ...proposalTools, ...VIEW_TOOLS, ...(input.web ? webTools(input.web) : [])]),
+				...readToolSet({ db, user, agentId: agent ? agent.id : null }, hooks, pool, [...skillTools, ...contextTools, ...proposalTools, ...VIEW_TOOLS, ...(input.web ? webTools(input.web) : [])]),
 				...(config.bridgeUrl ? writeToolSet({ db, user }, hooks, pool, approval) : {}),
 			}
 		: undefined;
@@ -220,6 +259,7 @@ export function buildRunTools(input: {
 	if (run.tools) run.tools = keepAgentTools(run.tools, agent);
 	if (run.tools && input.webTaint) run.tools = guardTainted(run.tools, input.webTaint, hooks, pool);
 	if (run.tools && input.research) run.tools = keepResearchTools(run.tools);
+	if (run.tools && input.hooks) run.tools = input.hooks.kind === 'patterns' ? dropBlockedTools(run.tools, input.hooks.patterns) : undefined;
 	return run;
 }
 
