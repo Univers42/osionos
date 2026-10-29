@@ -508,6 +508,7 @@ export const inlineToolbarScenarios = [
     async ({ page, appUrl }) => {
       const editor = await createFormattedParagraph(page, appUrl);
       await selectText(editor, "alpha");
+      await toolbarButton(page, "More").click();
       await toolbarButton(page, "Open slash menu").click();
       await expect(slashMenu(page)).toContainText("Heading");
       await expect(toolbarButton(page, "Bold")).toHaveCount(0);
@@ -590,6 +591,7 @@ export const inlineToolbarScenarios = [
     async ({ page, appUrl }) => {
       const editor = await createFormattedParagraph(page, appUrl);
       await selectText(editor, "alpha");
+      await toolbarButton(page, "More").click();
       await toolbarButton(page, "Keyboard shortcuts").click();
       await expect(page.locator("text=Underline")).toBeVisible();
       await expect(page.locator("text=Ctrl/Cmd + U")).toBeVisible();
@@ -630,6 +632,40 @@ export const inlineToolbarScenarios = [
       await toolbarButton(page, "Turn into").click();
       await page.getByRole("menuitem", { name: "Heading 1" }).click();
       await expect(page.locator('article[data-block-type="heading_1"]')).toBeVisible();
+    },
+  ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "Turn into",
+    "the Turn into submenu marks the current type and previews the hovered one",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "alpha");
+      await toolbarButton(page, "Turn into").click();
+      const menu = page.getByRole("menu", { name: "Turn into" });
+      await expect(menu.getByRole("menuitem", { name: "Heading 1", exact: true })).toBeVisible();
+      await expect(
+        menu.getByRole("menuitem", { name: "Text", exact: true }).getByTestId("turn-into-current-check"),
+      ).toBeVisible();
+      await menu.getByRole("menuitem", { name: "Heading 1", exact: true }).hover();
+      await expect(page.getByTestId("block-type-preview")).toBeVisible();
+      await expect(page.locator('[data-block-type-preview="heading_1"]')).toBeVisible();
+      await menu.getByRole("menuitem", { name: "Heading 1", exact: true }).click();
+      await expect(page.locator('article[data-block-type="heading_1"]')).toBeVisible();
+    },
+  ),
+  defineScenario(
+    "11. Inline Text Selection & Formatting Toolbar",
+    "AI skills",
+    "Ask AI opens the skill menu and the Comment button is present",
+    async ({ page, appUrl }) => {
+      const editor = await createFormattedParagraph(page, appUrl);
+      await selectText(editor, "alpha");
+      await expect(toolbarButton(page, "Comment")).toBeVisible();
+      await toolbarButton(page, "Ask AI").click();
+      for (const label of ["Improve writing", "Proofread", "Explain", "Reformat", "Edit with AI"]) {
+        await expect(page.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
+      }
     },
   ),
 ];
