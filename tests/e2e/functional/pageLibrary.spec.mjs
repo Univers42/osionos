@@ -38,7 +38,10 @@ test.describe("the Library", () => {
     await expect(library.locator('table[data-table-style="minimal"]')).toBeVisible();
     await expect(library.locator("thead")).toContainText("Category");
 
-    await library.getByRole("button", { name: "New page", exact: true }).click();
+    // The Library's own New menu: the table's "New page" is hidden while the Library
+    // is locked, which it is for everyone until the bridge says who curates it.
+    await library.getByRole("button", { name: "New", exact: true }).click();
+    await page.getByRole("menu", { name: "New in the Library" }).getByRole("menuitem").filter({ hasText: "A blank page" }).click();
     await expect(page.getByRole("textbox", { name: "Page title" })).toBeVisible();
     const title = `Library page ${Date.now()}`;
     await clearAndTypePageTitle(page, title);
