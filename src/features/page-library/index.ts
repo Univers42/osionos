@@ -9,4 +9,3 @@
 /* ************************************************************************** */
 
 export { PageLibraryView } from "./ui/PageLibraryView";
-export * from "./model/pageLibraryModel";
