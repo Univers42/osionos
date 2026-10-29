@@ -13,7 +13,7 @@ export interface MenuSubmenuProps {
   testId?: string;
 }
 
-const GAP = 2;
+const GAP = 4;
 const VIEWPORT_MARGIN = 8;
 
 function firstFocusable(panel: HTMLElement | null): HTMLElement | null {
@@ -47,10 +47,14 @@ export const MenuSubmenu: React.FC<MenuSubmenuProps> = ({ label, icon, hint, ope
     const row = rowRef.current.getBoundingClientRect();
     const panel = panelRef.current.getBoundingClientRect();
     const parentFlipped = rowRef.current.closest('[data-submenu-side="left"]') !== null;
-    const flip = parentFlipped || row.right + GAP + panel.width > globalThis.innerWidth - VIEWPORT_MARGIN;
+    // Placed off the menu's frame, not the inset row, so the two panels' borders
+    // never cross; its first row lines up with the row that opened it.
+    const frame = rowRef.current.closest('.osio-surface-overlay')?.getBoundingClientRect() ?? row;
+    const flip = parentFlipped || frame.right + GAP + panel.width > globalThis.innerWidth - VIEWPORT_MARGIN;
     panelRef.current.dataset.submenuSide = flip ? 'left' : 'right';
-    const left = flip ? row.left - panel.width - GAP : row.right + GAP;
-    const top = Math.max(VIEWPORT_MARGIN, Math.min(row.top, globalThis.innerHeight - panel.height - VIEWPORT_MARGIN));
+    const left = flip ? frame.left - panel.width - GAP : frame.right + GAP;
+    const inset = (panelRef.current.firstElementChild?.getBoundingClientRect().top ?? panel.top) - panel.top;
+    const top = Math.max(VIEWPORT_MARGIN, Math.min(row.top - inset, globalThis.innerHeight - panel.height - VIEWPORT_MARGIN));
     panelRef.current.style.left = `${Math.max(VIEWPORT_MARGIN, left)}px`;
     panelRef.current.style.top = `${top}px`;
   }, [open]);
