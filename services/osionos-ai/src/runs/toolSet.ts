@@ -5,8 +5,9 @@ import { rememberTool } from '../tools/memoryTools.ts';
 import { loadSkillTool } from '../tools/skillTools.ts';
 import type { WorkspaceSkillLoader } from '../tools/skillTools.ts';
 import { buildSkillIndex } from '../skills/runSkills.ts';
-import type { SkillIndex } from '../skills/runSkills.ts';
+import type { SkillIndex, SkillIndexEntry } from '../skills/runSkills.ts';
 import { loadListedVersion, recordSkillPin } from '../skills/repo.ts';
+import { loadUserSkillBody } from '../context/repo.ts';
 import { readToolSet } from '../tools/index.ts';
 import { VIEW_TOOLS } from '../tools/viewTools.ts';
 import type { ToolOutcome, ToolPool } from '../tools/index.ts';
@@ -88,6 +89,11 @@ export function buildRunTools(input: {
 	 */
 	skillIndex?: SkillIndex;
 	workspaceId?: string;
+	/**
+	 * The user's own skills the user turn lists (U1, OSIONOS_AI_USER_CONTEXT).
+	 * Absent is the run of today.
+	 */
+	userSkills?: readonly SkillIndexEntry[];
 	/**
 	 * The MCP tools of the caller, loaded before the run (C265).
 	 *
@@ -185,8 +191,19 @@ export function buildRunTools(input: {
 					load: (skillId, version) => loadListedVersion(db, { workspaceId: input.workspaceId as string, skillId, version }),
 				}
 			: undefined;
-	const skillTools =
-		skillIndex.entries.length > 0 ? [loadSkillTool(skillIndex.entries.map((entry) => entry.id), undefined, loader)] : [];
+	// C1003: a user skill loads only as the run user's own row, by id and version.
+	const userSkills = user ? (input.userSkills ?? []) : [];
+	const userLoader: WorkspaceSkillLoader | undefined =
+		userSkills.length > 0 && user
+			? {
+					entries: new Map(
+						userSkills.flatMap((entry) => (entry.skillId ? [[entry.id, { version: entry.version, skillId: entry.skillId }] as const] : [])),
+					),
+					load: (itemId, version) => loadUserSkillBody(db, { ownerId: user.userId, itemId, version }),
+				}
+			: undefined;
+	const allowedSkills = [...skillIndex.entries, ...userSkills].map((entry) => entry.id);
+	const skillTools = allowedSkills.length > 0 ? [loadSkillTool(allowedSkills, undefined, loader, userLoader)] : [];
 	// C42: `remember` proposes; it needs the workspace the memory belongs to.
 	const proposalTools = input.workspaceId ? [rememberTool({ workspaceId: input.workspaceId, runId })] : [];
 

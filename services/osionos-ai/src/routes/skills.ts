@@ -25,7 +25,7 @@ import type { RouteContext } from './types.ts';
  * The caps are the database's (devil C47).
  */
 
-const fieldsShape = {
+export const fieldsShape = {
 	name: z.string().trim().min(1).max(80),
 	description: z
 		.string()
@@ -35,8 +35,8 @@ const fieldsShape = {
 		.refine((value) => !/[\r\n]/.test(value), 'description must be one line'),
 	body: z.string().min(1).max(6000),
 };
-const updateSchema = z.object(fieldsShape).strict();
-const createSchema = z
+export const updateSchema = z.object(fieldsShape).strict();
+export const createSchema = z
 	.object({ slug: z.string().regex(/^[a-z][a-z0-9-]{1,31}$/, 'slug must be kebab-case, 2 to 32 characters'), ...fieldsShape })
 	.strict();
 
@@ -63,7 +63,7 @@ function toContract(skill: WorkspaceSkill, inIndex: boolean): Record<string, unk
 }
 
 /** Refuses and returns null unless the caller holds `needed` in the workspace. */
-async function gate(ctx: RouteContext, needed: 'member' | 'admin'): Promise<{ user: AuthUser; workspaceId: string } | null> {
+export async function gate(ctx: RouteContext, needed: 'member' | 'admin'): Promise<{ user: AuthUser; workspaceId: string } | null> {
 	const user = requireUser(ctx);
 	if (!user) return null;
 	const workspaceId = ctx.params[0] ?? '';
