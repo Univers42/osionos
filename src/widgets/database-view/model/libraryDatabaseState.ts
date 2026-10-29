@@ -153,6 +153,8 @@ class LibraryDatabaseAdapter implements PersistableObjectDatabaseAdapter {
     };
   }
 
+  canCurate(): boolean { return viewer(this.reload)?.canCurate ?? false; }
+
   private state(): NotionState {
     const current = viewer(this.reload);
     if (!current) return EMPTY_STATE();
@@ -171,6 +173,12 @@ class LibraryDatabaseAdapter implements PersistableObjectDatabaseAdapter {
 }
 
 let cachedAdapter: LibraryDatabaseAdapter | null = null;
+
+/** The viewer may rearrange the Library: the same check that unlocks its views. */
+export function libraryViewerCanCurate(): boolean {
+  cachedAdapter ??= new LibraryDatabaseAdapter();
+  return cachedAdapter.canCurate();
+}
 
 /** Cached singleton: every item the viewer can reach from the active workspace, as one database. */
 export function getLibraryDatabaseAdapter(): PersistableObjectDatabaseAdapter {
