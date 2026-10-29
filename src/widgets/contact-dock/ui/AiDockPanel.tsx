@@ -28,6 +28,7 @@ import { Send, Sparkles, X } from 'lucide-react';
 import { isAiConfigured } from '@/features/ai/api/aiClient';
 import { PLATFORM_CONNECTION_ID, readAiSelection } from '@/features/ai/model/aiSelection';
 import { withAccountContext } from '@/features/ai/model/viewContext';
+import { useUserStore } from '@/features/auth';
 import { ANSWER_TABLE_CLASS, renderAssistantMarkdown } from '@/features/chat/model/assistantMarkdown';
 import { IconButton } from '@/shared/ui';
 import { errorWords } from '@/widgets/chat-shell/ui/errorWords';
@@ -67,6 +68,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
   // The local conversation, and the server-side one it is mapped to.
   const conversationId = useRef(`dock-${crypto.randomUUID()}`);
   const serverConversationId = useRef<string | undefined>(undefined);
+  const workspaceId = useUserStore((s) => s.activeWorkspace()?._id);
 
   const patch = (id: string, body: string) =>
     setMessages((cur) => cur.map((m) => (m.id === id ? { ...m, body } : m)));
@@ -91,6 +93,7 @@ export const AiDockPanel: React.FC<AiDockPanelProps> = ({ onClose }) => {
         connectionId: selection?.connectionId ?? PLATFORM_CONNECTION_ID,
         ...(selection?.model ? { model: selection.model } : {}),
         ...(serverConversationId.current ? { serverConversationId: serverConversationId.current } : {}),
+        ...(workspaceId ? { workspaceId } : {}),
         ...(dockContext ? { context: dockContext } : {}),
         onServerConversationId: (id) => { serverConversationId.current = id; },
         onDelta: (chunk) => {
