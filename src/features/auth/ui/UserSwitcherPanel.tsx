@@ -18,17 +18,13 @@ import { IconValueView } from '@osionos/ui/atoms/IconValueView';
 import { useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 import { useUserStore } from '@/features/auth';
 import { useWorkspaceInvitesStore } from '@/store/settings';
-import { inviteErrorSentence, inviteExpiryText } from '@/features/settings/people/inviteInboxModel';
+import { inviteErrorSentence } from '@/features/settings/people/inviteInboxModel';
 import { enterJoinedWorkspace } from '@/features/settings/people/enterJoinedWorkspace';
 import { useWorkspaceOnboarding } from '@/features/workspace-onboarding/model/useWorkspaceOnboarding';
 import { openSettings } from '@/features/settings/model/settingsNav';
-import {
-  COLLECTION_ROLE_BADGES,
-} from '@/shared/ui/assets/collectionEmoji';
 import { AuthDialog } from './AuthDialog';
-
-// 44 px touch target; the shared Button tones carry the border and focus ring in both themes.
-const INVITE_ACTION_CLASS = "min-h-11 flex-1";
+import { PendingInvitesSection } from './workspace-menu/PendingInvitesSection';
+import { PersonaSection } from './workspace-menu/PersonaSection';
 
 interface Props {
   onClose: () => void;
@@ -77,6 +73,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
     [activeSession],
   );
   const activeWorkspace = selectedWorkspace ?? workspaces[0];
+  const workspaceIcon = workspaceConfigs[workspaceConfigKey(activeId ?? '', activeWorkspace?._id ?? '')]?.icon ?? activeWorkspace?.icon;
 
   useEffect(() => {
     function updatePosition() {
@@ -173,6 +170,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
       <div
         ref={ref}
         style={panelStyle}
+        data-testid="workspace-menu"
         className={[
           'osio-surface-overlay z-[var(--osio-z-popover)] w-[300px]',
           'max-h-[calc(100vh-80px)] overflow-y-auto overflow-x-hidden',
@@ -180,8 +178,10 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
       >
       <header className="rounded-[var(--osio-radius-control)] bg-[var(--osio-bg-subtle)] p-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--osio-bg-muted)]">
-            <IconValueView value={activePersona?.emoji ?? '🌏'} size={28} />
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--osio-radius-sm)] bg-[var(--osio-bg-muted)]">
+            {workspaceIcon
+              ? <IconValueView value={workspaceIcon} size={24} />
+              : <span className="text-sm font-semibold text-[var(--osio-fg-default)]">{(activeWorkspace?.name?.[0] ?? 'W').toUpperCase()}</span>}
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-[var(--osio-fg-default)]">
@@ -197,7 +197,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
             <Settings size={12} aria-hidden /> Settings
           </Button>
           <Button size="sm" className="flex-1" onClick={() => { openSettings('people'); onClose(); }}>
-            <Users size={12} aria-hidden /> People
+            <Users size={12} aria-hidden /> Invite members
           </Button>
         </div>
       </header>
@@ -221,6 +221,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
             type="button"
             onClick={() => { switchWorkspace(workspace._id); onClose(); }}
             className="osio-menu-item"
+            style={{ height: 'var(--osio-control-h-md)' }}
           >
             <span className="flex h-5 w-5 items-center justify-center rounded-xs bg-[var(--osio-bg-muted)] text-xs">
               {icon
@@ -245,135 +246,30 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
       {showPendingInvites && (
         <>
           <div className="osio-menu-separator" />
-          <div role="group" aria-label="Pending invites" aria-busy={mineLoading && mine.length === 0}>
-            <div className="osio-menu-label flex items-center justify-between">
-              <span className="truncate">Pending invites</span>
-              {mine.length > 0 && (
-                <span className="shrink-0 text-2xs text-[var(--osio-fg-muted)]">{mine.length}</span>
-              )}
-            </div>
-
-            {mineError && mine.length === 0 ? (
-              <div className="flex items-center justify-between gap-2 px-2 py-1">
-                <span role="alert" className="text-xs text-[var(--osio-danger)]">Could not load invites.</span>
-                <Button size="sm" onClick={() => void fetchMine()}>Retry</Button>
-              </div>
-            ) : mineLoading && mine.length === 0 ? (
-              <div className="space-y-2 px-2 py-2" aria-hidden="true">
-                <div className="h-4 w-4/5 animate-pulse rounded-xs bg-[var(--osio-bg-muted)]" />
-                <div className="h-11 w-full animate-pulse rounded-[var(--osio-radius-control)] bg-[var(--osio-bg-muted)]" />
-              </div>
-            ) : (
-              <div className="max-h-[min(50vh,20rem)] overflow-y-auto">
-                {mine.map((invite) => (
-                  <div key={invite.id} className="flex flex-col gap-2 px-2 py-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[var(--osio-fg-default)] [overflow-wrap:anywhere]">
-                        {invite.workspaceName}
-                      </p>
-                      <p className="text-xs text-[var(--osio-fg-muted)] [overflow-wrap:anywhere]">
-                        {invite.inviterName} · {invite.role} · {inviteExpiryText(invite.expiresAt)}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        tone="primary"
-                        disabled={busyInviteId !== null}
-                        onClick={() => void joinInvite(invite)}
-                        aria-label={`Join ${invite.workspaceName}`}
-                        className={INVITE_ACTION_CLASS}
-                      >
-                        {busyInviteId === invite.id ? "Joining…" : "Join"}
-                      </Button>
-                      <Button
-                        disabled={busyInviteId !== null}
-                        onClick={() => void declinePending(invite)}
-                        aria-label={`Decline ${invite.workspaceName}`}
-                        className={INVITE_ACTION_CLASS}
-                      >
-                        Decline
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <PendingInvitesSection
+            mine={mine}
+            mineLoading={mineLoading}
+            mineError={mineError}
+            busyInviteId={busyInviteId}
+            onRetry={() => void fetchMine()}
+            onJoin={(invite) => void joinInvite(invite)}
+            onDecline={(invite) => void declinePending(invite)}
+          />
         </>
       )}
 
       <div className="osio-menu-separator" />
-      <div>
-        {personas.map(p => {
-          const session  = sessions[p.id ?? ''];
-          const isLoggedIn = Boolean(session);
-          const isActive = p.id === activeId;
-          const isSelected = p.id === selectedAccountId;
-
-          return (
-            <div
-              key={p.email}
-              className={[
-                'w-full flex items-center gap-3 rounded-[var(--osio-radius-sm)] px-2 py-2 text-left',
-                'transition-colors duration-(--osio-dur-fast)',
-                isLoggedIn ? '' : 'opacity-60',
-                isActive
-                  ? 'bg-[var(--osio-bg-muted)]'
-                  : 'hover:bg-[var(--osio-menu-item-hover-bg)]',
-              ].join(' ')}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedAccountId(p.id);
-                  if (p.id) switchUser(p.id);
-                }}
-                className="flex min-w-0 flex-1 items-center gap-3 text-left"
-              >
-                <IconValueView value={p.emoji} size={20} />
-
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1">
-                    <span className="truncate text-sm font-medium text-[var(--osio-fg-default)]">
-                      {p.name}
-                    </span>
-                    <span className="shrink-0">
-                      <IconValueView
-                        value={
-                          COLLECTION_ROLE_BADGES[p.roleBadge.toLowerCase()] ??
-                          COLLECTION_ROLE_BADGES.guest
-                        }
-                        size={12}
-                      />
-                    </span>
-                  </span>
-                  <span className="block truncate text-xs text-[var(--osio-fg-muted)]">
-                    {p.email}
-                  </span>
-                </span>
-
-                {isActive && (
-                  <Check size={16} className="shrink-0 text-[var(--osio-accent)]" />
-                )}
-              </button>
-
-              {isSelected && p.id && (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void logoutUser(p.id);
-                  }}
-                  title="Sign out of all devices"
-                  className="ml-auto h-[var(--osio-control-h-xs)] shrink-0 rounded-[var(--osio-radius-sm)] px-1.5 text-xs font-medium text-[var(--osio-danger)] hover:bg-[var(--osio-danger-subtle-bg-hover)]"
-                >
-                  Log out
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <PersonaSection
+        personas={personas}
+        sessions={sessions}
+        activeId={activeId}
+        selectedAccountId={selectedAccountId}
+        onSelect={(id) => {
+          setSelectedAccountId(id ?? null);
+          if (id) switchUser(id);
+        }}
+        onLogout={(id) => void logoutUser(id)}
+      />
 
       <div className="osio-menu-separator" />
       <footer>
