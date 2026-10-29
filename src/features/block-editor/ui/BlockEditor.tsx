@@ -23,6 +23,7 @@ import { Braces, Check, ChevronDown, Code, Copy, Eye, Hash, Moon, Sun } from "lu
 import { EquationView } from "@/shared/ui";
 
 import { EditableContent } from "@/components/blocks/EditableContent";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
 import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
 import { PlaceholderBlock } from "./PlaceholderBlock";
 import {
@@ -61,6 +62,10 @@ import { LegacyDrawNotice } from "@/features/whiteboard/ui/LegacyDrawNotice";
 import { LayoutBlockEditor } from "./canvas";
 import { TableBlockEditor } from "./table/TableBlockEditor";
 import { VisibleWhenGate } from "@/entities/block/ui/VisibleWhenGate";
+
+// The same build-time switch the slash menu and the chat port read. Hoisted so
+// a paragraph render never re-reads the env / rebuilds the base URL.
+const AI_CONFIGURED = isAiConfigured();
 
 // embed/bookmark are void blocks (their content is a URL, not text), so they never reach
 // EditableContent. Lazy, like the whiteboard: the frame and card code stays off the warm chunk.
@@ -620,7 +625,12 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           content={block.content}
           className="text-sm text-[var(--osio-fg-default)] leading-relaxed py-0.5 min-h-[1.5em]"
           style={editableStyle}
-          placeholder={getBlockPlaceholder(block, "Type '/' for commands…")}
+          placeholder={getBlockPlaceholder(
+            block,
+            AI_CONFIGURED
+              ? "Press 'space' for AI or '/' for commands…"
+              : "Type '/' for commands…",
+          )}
           onChange={onChange}
           onKeyDown={onKeyDown}
           onPaste={onPaste}

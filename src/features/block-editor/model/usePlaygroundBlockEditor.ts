@@ -34,6 +34,9 @@ import { useUserStore } from "@/features/auth";
 import { rememberDatabaseWorkspace } from "@/widgets/database-view/model/objectDatabaseWorkspaces";
 import { useUrlPasteMode } from "@/shared/config/useAppearance";
 import { uploadPageMedia } from "@/shared/lib/media/pageMediaUpload";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
+import { useInlineAiStore } from "@/features/ai/model/inlineAiStore";
+import { shouldOpenAiOnSpace } from "./spaceAiShortcut";
 import {
   isIndentable,
   isParentable,
@@ -1158,6 +1161,41 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
     ],
   );
 
+  // Notion parity: Space on an EMPTY paragraph opens the inline AI prompt
+  // ("Press 'space' for AI") instead of typing a space. Everything else — a
+  // non-empty block, another block type, a modified or composing key, a
+  // read-only surface, an app with no AI service — keeps the plain space.
+  const handleEmptySpaceAi = useCallback(
+    (e: React.KeyboardEvent, blockId: string, block: Block, isEmpty: boolean): boolean => {
+      // Cheap guard first: the predicate (and isAiConfigured) only runs on the
+      // one combination that could act, never on ordinary typing.
+      if (e.key !== " " || block.type !== "paragraph" || !isEmpty) return false;
+
+      const editable =
+        (e.currentTarget as HTMLElement | null)?.isContentEditable ?? true;
+      const open = shouldOpenAiOnSpace({
+        key: e.key,
+        mods: {
+          shift: e.shiftKey,
+          ctrl: e.ctrlKey,
+          alt: e.altKey,
+          meta: e.metaKey,
+        },
+        composing: e.nativeEvent.isComposing,
+        type: block.type,
+        isEmpty,
+        editable,
+        aiConfigured: isAiConfigured(),
+      });
+      if (!open) return false;
+
+      e.preventDefault();
+      useInlineAiStore.getState().open({ pageId, blockId });
+      return true;
+    },
+    [pageId],
+  );
+
   const handleParagraphSpaceShortcut = useCallback(
     (e: React.KeyboardEvent, blockId: string, block: Block): boolean => {
       if (e.key !== " " || block.type !== "paragraph") return false;
@@ -1932,6 +1970,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
 
       const handled =
         handleBlockIndentation(e, blockId, nextBlock, nextContent) ||
+        handleEmptySpaceAi(e, blockId, nextBlock, isEmpty) ||
         handleParagraphSpaceShortcut(e, blockId, nextBlock) ||
         handleContainerHeadingSpaceShortcut(e, blockId, nextBlock) ||
         handleHeadingToggleSpaceShortcut(e, blockId, nextBlock) ||
@@ -1957,6 +1996,7 @@ export function usePlaygroundBlockEditor(editorSource: PlaygroundBlockEditorSour
       handleUndoRedo,
       maybePushStructuralSnapshot,
       handleBlockIndentation,
+      handleEmptySpaceAi,
       handleParagraphSpaceShortcut,
       handleContainerHeadingSpaceShortcut,
       handleHeadingToggleSpaceShortcut,
