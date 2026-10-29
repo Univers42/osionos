@@ -59,6 +59,20 @@ test.describe("mount source badge (bridge stub)", () => {
     await expect(details.getByText("inline", { exact: true })).toBeVisible();
   });
 
+  test("the Source settings screen shows the binding, with nothing to edit", async ({ page, baseURL }) => {
+    await stubLiveTable(page, "postgresql", { json: { descriptor: {
+      id: DB_ID, name: "shop", engine: "postgresql", location: "network",
+      host: "db.internal", port: 5432, database: "shop", tls: "verify", credential_mode: "inline",
+    } } });
+    await openOrders(page, baseURL);
+    await page.getByRole("button", { name: "View settings" }).click();
+    await page.getByRole("menuitem", { name: /^Source/ }).click();
+    const binding = page.getByRole("region", { name: "Current connection" });
+    await expect(binding).toContainText("PostgreSQL · db.internal:5432/shop", { timeout: 15_000 });
+    await expect(binding).toContainText("TLS, certificate verified · credentials: inline");
+    await expect(binding.locator("button, input, select, textarea")).toHaveCount(0);
+  });
+
   test("a file mount shows its file and no TLS claim", async ({ page, baseURL }) => {
     await stubLiveTable(page, "sqlite", { json: { descriptor: {
       id: DB_ID, name: "shop", engine: "sqlite", location: "file", file: "/data/shop.db", tls: "n/a",
