@@ -101,6 +101,12 @@ export const LazyAiHubView = lazy(() =>
   import("@/widgets/ai-hub").then((m) => ({ default: m.AiHubView })),
 );
 
+// The Notion-style Library: its own chunk so the tree table never rides the
+// warm pane path.
+export const LazyPageLibraryView = lazy(() =>
+  import("@/features/page-library").then((m) => ({ default: m.PageLibraryView })),
+);
+
 // Deep import (never a barrel): the code editor pulls the Monaco core + its
 // language grammars, a large chunk that must never leak onto the warm pane path. Only reached
 // for surface==='code' pages.
