@@ -53,6 +53,17 @@ export async function openFreshPage(page, appUrl) {
   await createNewWorkspacePage(page);
 }
 
+/** Opens the page "…" menu (if closed) and one of its side panels: "appearance", "more" or "tools". */
+export async function openPageMenuPanel(page, panel) {
+  if (!(await page.getByTestId("page-config-menu").isVisible())) {
+    await page.getByRole("button", { name: "Open page configuration" }).first().click();
+  }
+  await page.getByTestId(`page-menu-${panel}`).click();
+  const submenu = page.getByTestId(`page-menu-${panel}-panel`);
+  await submenu.waitFor();
+  return submenu;
+}
+
 export async function openHarnessPage(page, appUrl, relativePath) {
   await page.goto(new URL(relativePath, appUrl).toString(), {
     waitUntil: "domcontentloaded",

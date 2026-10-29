@@ -17,6 +17,7 @@ import {
   clearAndType,
   getEditors,
   openFreshPage,
+  openPageMenuPanel,
   pressEnter,
   pressTab,
   waitForRenderStability,
@@ -170,8 +171,7 @@ export const markdownCombinationScenarios = [
       expect(await blockTypes()).toEqual(["heading_4", "toggle"]);
 
       // Open raw mode, then Save (re-parses the serialized markdown).
-      await page.locator('button[aria-label="Open page configuration"]').first().click();
-      await page.getByRole("button", { name: "Raw / code mode" }).click();
+      await (await openPageMenuPanel(page, "more")).getByRole("button", { name: "Raw / code mode" }).click();
       const raw = page.locator("[data-raw-mode]");
       await raw.waitFor();
       await raw.getByRole("button", { name: "Save" }).click({ force: true });
@@ -193,8 +193,7 @@ export const markdownCombinationScenarios = [
       await waitForRenderStability(page);
       expect(await summarySizeClass(getEditors(page).first())).toBe("2");
 
-      await page.locator('button[aria-label="Open page configuration"]').first().click();
-      await page.getByRole("button", { name: "Raw / code mode" }).click();
+      await (await openPageMenuPanel(page, "more")).getByRole("button", { name: "Raw / code mode" }).click();
       const raw = page.locator("[data-raw-mode]");
       await raw.waitFor();
       // The compact "##>" opener is the editor's own toggle-heading dialect.

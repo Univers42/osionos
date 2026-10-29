@@ -19,14 +19,39 @@ test.describe("Notion-style page chrome", () => {
     await openFreshPage(page, baseURL);
     const menu = await openPageMenu(page);
 
-    for (const label of ["Copy link", "Move to", "Appearance & layout", "Move to Trash"]) {
+    for (const label of ["Copy link", "Move to", "Appearance & layout", "More", "Developer tools", "Move to Trash"]) {
       await expect(menu.getByRole("button", { name: label, exact: true })).toBeVisible();
     }
+    // More and Developer tools sit behind side panels, so the menu fits without scrolling.
+    await expect(menu.getByRole("button", { name: "Raw / code mode", exact: true })).toHaveCount(0);
+    await expect(menu.getByTestId("debug-tool-outlines")).toHaveCount(0);
+    const scroller = menu.locator(".overflow-y-auto");
+    expect(await scroller.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
 
     await menu.getByPlaceholder("Search actions...").fill("trash");
     await expect(menu.getByRole("button", { name: "Move to Trash", exact: true })).toBeVisible();
     await expect(menu.getByRole("button", { name: "Copy link", exact: true })).toHaveCount(0);
     await expect(menu.getByRole("button")).toHaveCount(1);
+
+    // A row behind a side panel is still one search away.
+    await menu.getByPlaceholder("Search actions...").fill("raw");
+    await expect(menu.getByRole("button", { name: "Raw / code mode", exact: true })).toBeVisible();
+  });
+
+  test("More and Developer tools open side panels, one at a time", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const menu = await openPageMenu(page);
+    await menu.getByTestId("page-menu-more").click();
+    const more = page.getByTestId("page-menu-more-panel");
+    await expect(more.getByRole("button", { name: "Raw / code mode", exact: true })).toBeVisible();
+
+    await menu.getByTestId("page-menu-tools").click();
+    const tools = page.getByTestId("page-menu-tools-panel");
+    await expect(more).toHaveCount(0);
+    await tools.getByTestId("debug-tool-outlines").click();
+    await expect(page.locator(".osionos-page").first()).toHaveAttribute("data-debug-outlines", "");
+    await expect(menu.getByTestId("page-menu-tools")).toContainText("1 on");
+    await tools.getByTestId("debug-tool-outlines").click();
   });
 
   test("Appearance & layout picks a font and turns full width on", async ({ page, baseURL }) => {

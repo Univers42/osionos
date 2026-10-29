@@ -228,6 +228,7 @@ async function importMarkdownFile(page, filePath) {
   const configBtn = page.locator('button[aria-label="Open page configuration"]').first();
   await configBtn.waitFor({ state: "visible", timeout: 10_000 });
   await configBtn.click();
+  await page.getByTestId("page-menu-more").click();
 
   // Wait for the Import menu item to be visible
   const importBtn = page.locator('button:has-text("Import"), [role="menuitem"]:has-text("Import")').first();
