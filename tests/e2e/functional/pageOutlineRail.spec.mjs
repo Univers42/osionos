@@ -125,6 +125,25 @@ test.describe("page outline rail", () => {
     await expect(ticksButton(page)).toBeVisible();
   });
 
+  test("Settings › Page switches turns the rail off for the open page", async ({ page, baseURL }) => {
+    await writeLongPage(page, baseURL);
+    const pageTab = page.locator("[data-osio-tabstrip] [data-tab-id][data-active]");
+    const pageTabId = await pageTab.getAttribute("data-tab-id");
+    await page.getByRole("button", { name: "Settings", exact: true }).first().click();
+    const search = page.getByRole("searchbox", { name: "Search settings" });
+    await search.fill("table of contents");
+    await search.press("Enter");
+
+    const toggle = page.getByRole("switch", { name: "Table of contents" });
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
+
+    await page.locator(`[data-osio-tabstrip] [data-tab-id="${pageTabId}"]`).click();
+    await expect(page.locator(".osionos-page-header")).toBeVisible();
+    await expect(page.locator("[data-osio-toc]")).toHaveCount(0);
+  });
+
   test("shows in a pane narrower than the old 1100px cut, clear of the text, full width too", async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 1000, height: 800 });
     await writeLongPage(page, baseURL);

@@ -21,7 +21,12 @@ import { EmptyState, Section, SettingRow } from '../ui/settingsKit';
 import { runMaybeAsync } from '../model/settingsCalls';
 
 export const PageSettingsPanel = () => {
-  const activePage = usePageStore((state) => state.activePage);
+  // Settings is a tab, and focusing it clears activePage; the page it configures
+  // is then the one read last, still in the tree.
+  const activePage = usePageStore((state) => state.activePage
+    ?? state.recents.find((recent) => recent.kind === 'page' && state.pageById(recent.id))
+    ?? null);
+  const title = usePageStore((state) => (activePage ? state.pageById(activePage.id)?.title : undefined)) || 'Untitled';
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [confirmTrash, setConfirmTrash] = useState(false);
   const actions = usePageActions(activePage?.id ?? '', activePage?.workspaceId ?? '');
@@ -38,6 +43,7 @@ export const PageSettingsPanel = () => {
 
   return (
     <>
+      <SettingRow title="Page" description={title} />
       <Section title="Style"><div className="grid gap-2 sm:grid-cols-3">{(['default', 'serif', 'mono'] as const).map((font) => <Button key={font} className={`justify-start ${actions.config.font === font ? 'border-[var(--osio-accent)]' : ''}`} onClick={() => runMaybeAsync(actions.setFont(font))}><span className={`text-base ${fontSampleClass(font)}`}>Ag</span>{font[0].toUpperCase() + font.slice(1)}</Button>)}</div></Section>
       <Section title="Actions">
         <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={16} />Copy link</span>} description="Ctrl+Alt+L" action={<Button onClick={() => runMaybeAsync(actions.copyLink())}>Copy</Button>} />
