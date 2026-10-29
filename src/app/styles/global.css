@@ -420,7 +420,9 @@
   --osio-radius-chip: var(--osio-radius-sm); /* 6 — badges, chips, tiny controls */
   --osio-radius-control: var(--osio-radius); /* 8 — buttons, inputs, tabs, rows */
   --osio-radius-panel: var(--osio-radius-lg); /* 12 — cards, panels */
-  --osio-radius-overlay: var(--osio-radius-lg); /* 12 — menus, popovers, modals */
+  /* 8 — menus, popovers, dialogs. With the 4px overlay padding a menu row at
+     radius-xs (4) sits concentric inside it; at 12 over 6 the frame read bubbly. */
+  --osio-radius-overlay: var(--osio-radius);
   /* (--osio-radius-card:14 = canvas cells; --osio-radius-full = pills.) */
 
   /* Canonical control heights — one density system for the whole app. */
