@@ -21,14 +21,18 @@ export interface PageMenuItem {
   run: () => void;
 }
 
-/** A group of rows, optionally behind a side submenu (Appearance & layout). */
+/** A group of rows, optionally behind a side submenu (Appearance & layout, More, Developer tools). */
 export interface PageMenuSection {
   id: string;
   label?: string;
+  /** Same group as the section above: no separator between them. */
+  continues?: boolean;
   items: PageMenuItem[];
   submenu?: {
     label: string;
     icon: ReactNode;
+    /** Right-aligned state on the row, e.g. how many tools are on. */
+    hint?: string;
     testId?: string;
     items: PageMenuItem[];
   };
