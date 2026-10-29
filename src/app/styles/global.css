@@ -999,3 +999,9 @@ body {
 [data-zen="1"] .osionos-page-cover-controls {
   display: none;
 }
+
+/* An empty line the "Edit with AI" bar sits on grows to the bar's height
+   (h-15 in AiPromptBar), so the bar never covers the next block. */
+[data-ai-prompt-host] {
+  min-height: 3.75rem;
+}
