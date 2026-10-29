@@ -77,9 +77,12 @@ export function newWebRun(input: {
 export const TAINTED_REFUSAL =
 	'This conversation has read web content, so this tool is off in it. Start a new conversation to use it.';
 
-/** The tools a web page must never reach: memory, skills, bulk plans, third-party servers (C359). */
+/**
+ * The tools a web page must never reach: memory, skills, bulk plans, third-party
+ * servers (C359), and the list of the user's own context (U5).
+ */
 function isGuarded(name: string): boolean {
-	return name === 'remember' || name === 'load_skill' || name === 'build_plan' || name.startsWith('mcp_');
+	return name === 'remember' || name === 'load_skill' || name === 'list_my_context' || name === 'build_plan' || name.startsWith('mcp_');
 }
 
 /**

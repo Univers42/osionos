@@ -328,6 +328,37 @@ missing variable stops the service and names the variable. The models are read
 from the disk only — the service never reaches the hub for them, and a check
 that cannot be loaded refuses every image rather than storing one unchecked.
 
+`OSIONOS_AI_USER_CONTEXT=on` serves a user's own skills and rules and the
+workspace rules (`osionos-ai-context-migration.sql`);
+`OSIONOS_AI_USER_COMMANDS=on` serves a user's own slash commands on the chat
+surface (`osionos-ai-context-commands-migration.sql`, after the first). Each
+needs its migration applied before it goes on, and only the exact value `on`
+turns it on. A command's template is expanded by the composer: the expanded
+message is held to the run's 32 000 characters like any other, so a long
+template plus long typing is refused by the run, not cut.
+
+`OSIONOS_AI_USER_HOOKS=on` serves a user's own hooks
+(`osionos-ai-context-hooks-migration.sql`, after the commands one): up to 10,
+each 1 to 32 lines of tool names the AI may not use for that user — an exact
+name, or a prefix ending in `*` (`mcp_ab12cd34_*` blocks one MCP server). A
+hook only takes away: the run is offered the tools minus the blocked ones, and
+the approve of a card for a blocked tool is a 403 `blocked_by_hook` with the
+card left pending. Blocking `create_page` or `add_blocks` blocks `build_plan`.
+A hook is never put in a prompt. When the hooks cannot be read, a run gets no
+tools at all and an approve is a 503 `hooks_unavailable`; a decline never reads
+them. Turning the flag off stops every hook at once: the rows stay
+and are not read. An `mcp_call` line blocks every MCP tool.
+
+`OSIONOS_AI_CONTEXT_TOOL=on`, with `OSIONOS_AI_USER_CONTEXT=on`, offers a run
+the read tool `list_my_context`: the caller's own skills, rules, commands,
+hooks and agents, and the run workspace's rules and agents while the caller is
+a live member, as names and descriptions only. It never returns a rule body, a
+command template or agent instructions; a hook shows its pattern lines. Each
+kind appears only while its own flag is on. The answer is capped at 4000
+characters on whole entries, with a count of the rest. A custom agent is never
+offered the tool, and a built-in agent only when its list names it; a hook can
+take it away like any other tool. It needs no migration and writes nothing.
+
 The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_BULK_URL`
 (`OSIONOS_AI_EMBED_URL` when the bulk one is not set) and
 `OSIONOS_AI_EMBED_MODEL` (`intfloat/multilingual-e5-small`).

@@ -110,7 +110,7 @@ export interface ReadTool<TArgs, TData> extends AssistantTool<TArgs, TData> {
 	 * The skill a result loaded, when it loaded one: the tool result event
 	 * carries it, so the history of a run pins what was loaded (devil C40).
 	 */
-	pin?(data: TData): { id: string; version: number; source: 'builtin' | 'workspace' };
+	pin?(data: TData): { id: string; version: number; source: 'builtin' | 'workspace' | 'user' };
 }
 
 /**

@@ -760,7 +760,9 @@ export function pageRowToEntry(row) {
 }
 
 function workspaceRowToEntry(row, member = {}) {
-	const settings = row?.settings && typeof row.settings === 'object' && !Array.isArray(row.settings) ? row.settings : {};
+	const stored = row?.settings && typeof row.settings === 'object' && !Array.isArray(row.settings) ? row.settings : {};
+	// The Library views ride only their own route (bridge-library-views.mjs), never every session's list.
+	const settings = Object.fromEntries(Object.entries(stored).filter(([key]) => key !== 'library'));
 	return {
 		_id: row.id,
 		id: row.id,

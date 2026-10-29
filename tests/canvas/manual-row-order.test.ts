@@ -9,6 +9,7 @@ import {
   buildManualRowOrder,
   compareWithManualOrder,
   manualOrderRank,
+  rowDropZone,
 } from "../../src/shared/notion-database-sys/src/lib/manualRowOrder.ts";
 
 test("manual-row-order: drag down lands after the target", () => {
@@ -43,4 +44,14 @@ test("manual-row-order: empty order behaves as creation order", () => {
   const pages = [{ id: "b", createdAt: "2" }, { id: "a", createdAt: "1" }];
   const sorted = [...pages].sort((x, y) => compareWithManualOrder(x, y, null));
   assert.deepEqual(sorted.map((p) => p.id), ["a", "b"]);
+});
+
+test("manual-row-order: a row drop is an edge in the outer quarters and nests in the middle", () => {
+  const both = { edges: true, nest: true };
+  assert.equal(rowDropZone(2, 40, both), "before");
+  assert.equal(rowDropZone(20, 40, both), "nest");
+  assert.equal(rowDropZone(38, 40, both), "after");
+  assert.equal(rowDropZone(2, 40, { edges: false, nest: true }), "nest", "no edges: the whole row nests");
+  assert.equal(rowDropZone(20, 40, { edges: true, nest: false }), "slot", "no nesting: today's take-the-slot reorder");
+  assert.equal(rowDropZone(20, 40, { edges: false, nest: false }), null, "nothing to do: not a drop target");
 });

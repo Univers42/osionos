@@ -23,3 +23,6 @@ osionos-ai-runs-agents-migration.sql
 osionos-ai-web-migration.sql
 osionos-ai-summary-migration.sql
 osionos-ai-thread-answers-migration.sql
+osionos-ai-context-migration.sql
+osionos-ai-context-commands-migration.sql
+osionos-ai-context-hooks-migration.sql

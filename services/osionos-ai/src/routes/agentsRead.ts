@@ -35,19 +35,32 @@ export function agentView(agent: StoredAgent, extra: { needsReview: boolean; ins
 	};
 }
 
-/** The workspaces the caller has a member row in. The row is only a candidate list: canReadAgents decides. */
-async function memberWorkspaceIds(db: Pool, user: AuthUser): Promise<string[]> {
-	const result = await db.query<{ workspace_id: string }>(
-		'select workspace_id from public.osionos_workspace_members where user_id = $1 limit 100',
-		[user.userId],
-	);
-	const checks = await Promise.all(result.rows.map((row) => canReadAgents(db, user, row.workspace_id)));
-	return result.rows.filter((_, index) => checks[index]).map((row) => row.workspace_id);
+/**
+ * The workspaces whose agents the caller may read: the ones they have a member
+ * row in, or only `only` — none for `null`. A candidate is never enough:
+ * canReadAgents decides.
+ */
+async function readableWorkspaceIds(db: Pool, user: AuthUser, only?: string | null): Promise<string[]> {
+	if (only === null) return [];
+	const candidates = only
+		? [only]
+		: (
+				await db.query<{ workspace_id: string }>(
+					'select workspace_id from public.osionos_workspace_members where user_id = $1 limit 100',
+					[user.userId],
+				)
+			).rows.map((row) => row.workspace_id);
+	const checks = await Promise.all(candidates.map((workspaceId) => canReadAgents(db, user, workspaceId)));
+	return candidates.filter((_, index) => checks[index]);
 }
 
-/** The custom agents the caller may see: their own, and the workspaces' they live-read. */
-export async function listCustomViews(db: Pool, user: AuthUser) {
-	const agents = await listAgents(db, user.userId, await memberWorkspaceIds(db, user));
+/**
+ * The custom agents the caller may see: their own, and the workspaces' they
+ * live-read — or, with `only`, that one workspace's, and with `null` none
+ * (`list_my_context`, C1143).
+ */
+export async function listCustomViews(db: Pool, user: AuthUser, only?: string | null) {
+	const agents = await listAgents(db, user.userId, await readableWorkspaceIds(db, user, only));
 	const reviewed = new Map<string, boolean>();
 	const views = [];
 	for (const agent of agents) {

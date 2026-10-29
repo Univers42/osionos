@@ -46,6 +46,8 @@ import { fitFiles } from '../files/excerpt.ts';
 import type { FittedFile } from '../files/excerpt.ts';
 import { THREAD_SYSTEM_PROMPT } from '../threads/context.ts';
 import type { ThreadRun } from './upstreamInput.ts';
+import { userContextForRun } from '../context/runContext.ts';
+import { hooksForRun } from '../context/hooks.ts';
 
 export type { RunEvent };
 
@@ -324,6 +326,11 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// the upstream call still lists them.
 	const memories = await memoriesForRun(db, input.user, input.workspaceId);
 	await recordMemoryPins(db, runId, memories);
+	// U1: the user's rules and own skills, for the user turn. A thread run
+	// answers with its own prompt only. Flag off: no query (C1010).
+	const userContext = input.thread
+		? undefined
+		: await userContextForRun(db, { user: input.user, workspaceId: input.workspaceId, research: input.research === true, skillIndex });
 	const day = today();
 	// The account block, when the client asks for it: who is asking.
 	let accountBlockText: string | undefined;
@@ -347,6 +354,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// Only the general assistant gets them (C308): an agent never does. Flag
 	// off: no query, nothing (C291).
 	const mcpTools = config.mcpClientEnabled && input.user && !agent && !input.research ? await loadMcpTools(db, ownerId) : [];
+	// U3: the user's hooks, read once; the run drops the tools they name (C1120).
+	const hooks = await hooksForRun(db, input.user?.userId);
 	// C355 / C369: the web tools, when the flag, the workspace switch and this
 	// message all say so, and never for an agent.
 	const web = await webOnForRun(db, { asked: input.web, user: input.user, agentful: agent !== null, workspaceId: input.workspaceId });
@@ -356,7 +365,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 		(workspaceBlockText?.length ?? 0) +
 		mcpToolChars(mcpTools) +
 		webToolChars(web) +
-		(summaryBlockText?.length ?? 0);
+		(summaryBlockText?.length ?? 0) +
+		(userContext?.block?.length ?? 0);
 	// The reservation is TWO step ceilings: the first step of the loop, and
 	// the answer that must follow it. The steps after that ask the ledger
 	// for what they need, one at a time (src/runs/loopBudget.ts).
@@ -440,10 +450,12 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			skillIndex,
 			memories,
 			mcpTools,
+			...(hooks ? { hooks } : {}),
 			web,
 			...(input.research ? { research: true } : {}),
 			workspaceId: input.workspaceId,
 			...(summaryBlockText ? { summaryBlock: summaryBlockText } : {}),
+			...(userContext ? { userContext } : {}),
 			...(summary && window.dropped ? { truncated: { summarized: summaryBlockText !== undefined } } : {}),
 			...(summary?.behind && window.oldestKeptId ? { summarizeFrom: { oldestKeptId: window.oldestKeptId } } : {}),
 			...(accountBlockText ? { accountBlock: accountBlockText } : {}),
