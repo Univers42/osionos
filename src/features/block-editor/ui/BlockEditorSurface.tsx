@@ -12,7 +12,7 @@
 
 import React, { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { defaultRangeExtractor, useVirtualizer, type Range } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
 
 import type { Block } from "@/entities/block";
@@ -358,6 +358,18 @@ function getDropIndicatorClassName(position: Exclude<DropPosition, null>) {
 
 function resolveScrollElement(root: HTMLElement | null): HTMLElement | null {
 	return root?.closest<HTMLElement>(".osionos-page") ?? null;
+}
+
+// Index of the root item holding the caret: the nearest block ancestor of the focused
+// element that is a root item (nested blocks are not in the root list).
+function focusedRootIndex(indexById: ReadonlyMap<string, number>): number | null {
+	let node = document.activeElement?.closest<HTMLElement>("[data-block-id]") ?? null;
+	while (node) {
+		const index = indexById.get(node.dataset.blockId ?? "");
+		if (index !== undefined) return index;
+		node = node.parentElement?.closest<HTMLElement>("[data-block-id]") ?? null;
+	}
+	return null;
 }
 
 function getVirtualFocusBlockId(event: Event): string | null {
@@ -1114,7 +1126,6 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 	renderBlockEditor,
 }) => {
 		const listRef = useRef<HTMLUListElement | null>(null);
-		const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
 		const [scrollMargin, setScrollMargin] = useState(0);
 		const renderItems = useMemo(() => {
 			let numberedCounter = 0;
@@ -1129,12 +1140,24 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 			});
 		}, [blocks, bulletDepth, highlightedRootBlockId, isHighlightedBranch, numberedDepth]);
 		const shouldVirtualize = isRoot && blocks.length >= ROOT_BLOCK_VIRTUALIZATION_THRESHOLD;
+		// The caret's block is never unmounted by the window: an Enter that crosses the
+		// threshold, or a scroll away from the caret, used to drop focus to <body> and lose
+		// the keys typed next (blockEditOps.spec "virtualisation threshold").
+		const rangeExtractor = useCallback((range: Range) => {
+			const indexes = defaultRangeExtractor(range);
+			const caret = focusedRootIndex(new Map(renderItems.map((item, index) => [item.block.id, index])));
+			if (caret === null || indexes.includes(caret)) return indexes;
+			return [...indexes, caret].sort((a, b) => a - b);
+		}, [renderItems]);
 		const virtualizer = useVirtualizer({
 			count: shouldVirtualize ? renderItems.length : 0,
-			getScrollElement: () => scrollElement,
+			// Observed from mount for the root list, so the render that crosses the threshold
+			// already knows the viewport; with a 0 size the range is null and no row renders.
+			getScrollElement: () => (isRoot ? resolveScrollElement(listRef.current) : null),
 			estimateSize: (index) => estimateBlockHeight(renderItems[index]?.block ?? blocks[0]),
 			getItemKey: (index) => renderItems[index]?.block.id ?? index,
 			overscan: ROOT_BLOCK_VIRTUALIZATION_OVERSCAN,
+			rangeExtractor,
 			scrollMargin,
 		});
 
@@ -1145,7 +1168,6 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 			if (!root || !nextScrollElement) return;
 
 			const updateScrollMargin = () => {
-				setScrollElement(nextScrollElement);
 				setScrollMargin(measureScrollMargin(root, nextScrollElement));
 			};
 
@@ -1298,6 +1320,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 
 	return (
 		<ul
+			ref={isRoot ? listRef : undefined}
 			data-testid={isRoot ? "block-tree-root" : `${parentBlockType ?? "nested"}-children`}
 			data-parent-block-type={parentBlockType ?? ""}
 			data-parent-block-id={parentBlockId ?? ""}
