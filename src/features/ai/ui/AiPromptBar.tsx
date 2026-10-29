@@ -28,12 +28,12 @@ interface AiPromptBarProps {
 export const AiPromptBar: React.FC<AiPromptBarProps> = ({ inputRef, value, busy, onChange, onSubmit }) => {
   const canSend = !busy && value.trim().length > 0;
   return (
-    <div className="flex h-12 items-center gap-3 px-3">
+    <div className="flex h-15 items-center gap-3 px-4">
       <span
         aria-hidden
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--osio-border-default)] bg-[var(--osio-bg-muted)] text-[var(--osio-fg-default)]"
       >
-        <Sparkles size={14} />
+        <Sparkles size={16} />
       </span>
       <input
         ref={inputRef}
@@ -54,9 +54,9 @@ export const AiPromptBar: React.FC<AiPromptBarProps> = ({ inputRef, value, busy,
         disabled={!canSend}
         title="Send"
         aria-label="Send"
-        className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--osio-fg-muted)] text-[var(--osio-bg-surface)] transition-opacity enabled:hover:bg-[var(--osio-fg-default)] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+        className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[var(--osio-fg-muted)] text-[var(--osio-bg-surface)] transition-opacity enabled:hover:bg-[var(--osio-fg-default)] disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
       >
-        <ArrowUp size={14} strokeWidth={2.5} aria-hidden />
+        <ArrowUp size={12} strokeWidth={2.75} aria-hidden />
       </button>
     </div>
   );

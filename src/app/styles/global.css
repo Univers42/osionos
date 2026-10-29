@@ -1001,7 +1001,7 @@ body {
 }
 
 /* An empty line the "Edit with AI" bar sits on grows to the bar's height
-   (h-12 in AiPromptBar), so the bar never covers the next block. */
+   (h-15 in AiPromptBar), so the bar never covers the next block. */
 [data-ai-prompt-host] {
-  min-height: 3rem;
+  min-height: 3.75rem;
 }
