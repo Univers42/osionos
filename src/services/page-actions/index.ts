@@ -54,6 +54,13 @@ export const PAGE_ACTION_NAMES = [
 export type PageActionName = (typeof PAGE_ACTION_NAMES)[number];
 
 /**
+ * What a page logs: every action, plus switches a button cannot run. Those stay
+ * out of PAGE_ACTION_NAMES, the button vocabulary the vendored
+ * DESTRUCTIVE_PAGE_ACTIONS must cover name for name.
+ */
+export type PageEventName = PageActionName | "table_of_contents";
+
+/**
  * The bridge client is loaded on demand: this module is imported by the canvas
  * unit tests too, and those run under plain node — where `import.meta.env` does
  * not exist — so a static import would make the whole module unloadable there.
@@ -362,7 +369,7 @@ export async function translatePage(
 
 export async function syncPageActionEvent(
   pageId: string,
-  action: PageActionName,
+  action: PageEventName,
   jwt: string | undefined,
   payload: Record<string, unknown> = {},
 ) {
