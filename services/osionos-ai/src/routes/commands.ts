@@ -24,9 +24,21 @@ export async function handleCommands(ctx: RouteContext): Promise<number> {
 	}
 	const surface = (asked as CommandSurfaceFilter | null) ?? undefined;
 	const status = 200;
-	const own = config.userCommandsEnabled && surface !== 'editor'
-		? toUserCommands(await listActiveItems(ctx.deps.db, { scope: 'user', ownerId: user.userId }, ['command']))
-		: [];
+	const own = config.userCommandsEnabled && surface !== 'editor' ? await ownCommands(ctx, user.userId) : [];
 	sendJson(ctx.response, status, { commands: [...builtinCommands(surface), ...own] });
 	return status;
+}
+
+/**
+ * A failed read of the user's commands (the U2 table not migrated yet, a dead
+ * connection) costs the user's own commands, never the built-ins: the palette
+ * keeps working on an empty list.
+ */
+async function ownCommands(ctx: RouteContext, userId: string): Promise<ReturnType<typeof toUserCommands>> {
+	try {
+		return toUserCommands(await listActiveItems(ctx.deps.db, { scope: 'user', ownerId: userId }, ['command']));
+	} catch (error) {
+		console.warn(JSON.stringify({ event: 'user_commands_unavailable', code: (error as Error).name }));
+		return [];
+	}
 }

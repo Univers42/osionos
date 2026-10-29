@@ -261,5 +261,7 @@ describe('user context (flag on)', () => {
 		assert.equal((await call(items(id), { method: 'DELETE', token: A() })).status, 404);
 		const served = JSON.stringify((await call('/api/ai/commands?surface=chat', { token: A() })).body);
 		assert.ok(!served.includes('HIDDEN TEMPLATE'));
+		await run();
+		assert.ok(!JSON.stringify(mock.lastBody()).includes('HIDDEN TEMPLATE'), 'not in a run');
 	});
 });

@@ -18,6 +18,7 @@ const { app, mock, bridge, call, tokenFor, createConversation, postRun } = await
 const { SYSTEM_PROMPT } = await import('../src/runs/prompt.ts');
 const { RESERVED_COMMAND_NAMES } = await import('../src/commands/userCommands.ts');
 const { MAX_USER_COMMANDS } = await import('../src/context/repo.ts');
+const { builtinCommands } = await import('../src/commands/builtins.ts');
 
 after(async () => {
 	await app.close();
@@ -113,6 +114,17 @@ describe('user commands (commands flag on, context flag off)', () => {
 		assert.deepEqual(both.map((answer) => answer.status).sort(), [201, 409]);
 		const active = await app.db.query("select count(*)::int as n from public.ai_context_items where kind = 'command' and archived_at is null");
 		assert.equal(active.rows[0]?.n, MAX_USER_COMMANDS);
+	});
+
+	it('a failed read of the user commands still serves the built-ins', async () => {
+		await app.db.query('alter table public.ai_context_items rename to ai_context_items_away');
+		try {
+			const answer = await call('/api/ai/commands?surface=chat', { token: A() });
+			assert.equal(answer.status, 200);
+			assert.deepEqual(answer.body, { commands: builtinCommands('chat') });
+		} finally {
+			await app.db.query('alter table public.ai_context_items_away rename to ai_context_items');
+		}
 	});
 
 	it('C1107: before its migration, a command create is a clean 503', async () => {
