@@ -111,11 +111,21 @@ export function instantiateTemplateContent(content: Block[] | undefined): Block[
   return clone;
 }
 
+/** Parse the stored recents list. Entries written before `visitedAt` existed
+ *  still load: the field is simply absent until their next visit. */
+export function parseRecents(raw: string | null): ActivePage[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as ActivePage[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function loadRecents(): ActivePage[] {
   try {
-    return JSON.parse(
-      localStorage.getItem(RECENTS_KEY) ?? "[]",
-    ) as ActivePage[];
+    return parseRecents(localStorage.getItem(RECENTS_KEY));
   } catch {
     return [];
   }
@@ -132,14 +142,17 @@ export function saveRecents(recents: ActivePage[]) {
 /** Prepend `page` to recents, deduped, capped PER WORKSPACE — opening pages in
  *  one workspace never evicts another workspace's recents. The list stays flat
  *  (each entry carries its workspaceId); the sidebar shows only the active
- *  workspace's slice, so recents never cross workspaces. */
+ *  workspace's slice, so recents never cross workspaces. The cap is 50 so the
+ *  Library's Recents tab can list more than a sidebar shortcut's worth. */
 export function addRecent(
   recents: ActivePage[],
   page: ActivePage,
-  perWorkspaceLimit = 10,
+  perWorkspaceLimit = 50,
+  now = Date.now(),
 ): ActivePage[] {
+  const visited = { ...page, visitedAt: now };
   const sameWorkspace = [
-    page,
+    visited,
     ...recents.filter((r) => r.workspaceId === page.workspaceId && r.id !== page.id),
   ].slice(0, perWorkspaceLimit);
   const otherWorkspaces = recents.filter((r) => r.workspaceId !== page.workspaceId);
