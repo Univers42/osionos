@@ -9,11 +9,12 @@
 /* ************************************************************************** */
 
 /** "just now", "5m ago", "3h ago", "2d ago", "4w ago", "3mo ago", "2y ago".
- *  An unparseable or missing value yields "" so callers can render their own dash. */
+ *  An unparseable, missing or non-positive value yields "" so callers can render their
+ *  own dash: 0 stands for "never recorded" (a recent stored before visit times), not 1970. */
 export function formatRelativeTime(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "";
   const then = typeof value === "number" ? value : Date.parse(value);
-  if (Number.isNaN(then)) return "";
+  if (Number.isNaN(then) || then <= 0) return "";
   const minutes = Math.round((Date.now() - then) / 60_000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;

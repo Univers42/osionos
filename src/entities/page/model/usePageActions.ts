@@ -174,6 +174,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
   }, [addVersion, page, pageId, pageRevision, safeUserId]);
 
   const editedLabel = useMemo(() => formatEditedLabel(page?.updatedAt, clockNow), [clockNow, page?.updatedAt]);
+  const editedAgo = useMemo(() => formatEditedAgo(page?.updatedAt, clockNow), [clockNow, page?.updatedAt]);
   const wordCount = useMemo(() => wordCountFromPage(page), [page]);
 
   const openHome = useCallback(() => {
@@ -404,6 +405,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     actionMessage,
     config,
     detailPanel,
+    editedAgo,
     editedLabel,
     page,
     setFont,

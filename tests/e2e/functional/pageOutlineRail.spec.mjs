@@ -41,11 +41,17 @@ async function writeLongPage(page, baseURL) {
 
 const rail = (page) => page.locator("[data-osio-toc]").first();
 const ticksButton = (page) => rail(page).getByRole("button", { name: "On this page" });
-// A checkable item leaves the menu open, so open it only when it is shut.
+// A switch in Appearance & layout leaves the menu and its panel open, so open
+// them only when they are shut.
 const pageMenu = async (page, item) => {
-  const entry = page.getByRole("button", { name: item });
-  if (!(await entry.isVisible())) await page.getByRole("button", { name: "Open page configuration" }).click();
-  await entry.click();
+  const panel = page.getByTestId("page-menu-appearance-panel");
+  if (!(await panel.isVisible())) {
+    if (!(await page.getByTestId("page-config-menu").isVisible())) {
+      await page.getByRole("button", { name: "Open page configuration" }).click();
+    }
+    await page.getByTestId("page-menu-appearance").click();
+  }
+  await panel.getByRole("button", { name: item, exact: true }).click();
 };
 
 // Where the text column's content ends, and where the rail's ticks begin.
@@ -121,10 +127,10 @@ test.describe("page outline rail", () => {
     await writeLongPage(page, baseURL);
     await expect(ticksButton(page)).toBeVisible();
 
-    await pageMenu(page, /Table of contents/);
+    await pageMenu(page, "Table of contents");
     await expect(page.locator("[data-osio-toc]")).toHaveCount(0);
 
-    await pageMenu(page, /Table of contents/);
+    await pageMenu(page, "Table of contents");
     await expect(ticksButton(page)).toBeVisible();
   });
 
@@ -155,7 +161,7 @@ test.describe("page outline rail", () => {
     await expect(ticksButton(page)).toBeVisible();
     expect(await railClearance(page)).toBeGreaterThanOrEqual(0);
 
-    await pageMenu(page, /Full width/);
+    await pageMenu(page, "Full width");
     await page.locator(".osionos-page--full-width").waitFor();
     await expect(ticksButton(page)).toBeVisible();
     // The page menu, still open, covers the rail rather than the reverse.

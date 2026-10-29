@@ -24,3 +24,4 @@ export * from "./atoms/EquationView";
 export * from "./atoms/PanelSectionLabel";
 export * from "./atoms/Textarea";
 export * from "./molecules/NoteComposeModal";
+export * from "./molecules/MenuSubmenu";
