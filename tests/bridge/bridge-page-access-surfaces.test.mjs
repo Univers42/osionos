@@ -115,6 +115,21 @@ describe('C550 surfaces never carry the denied page', () => {
 			assert.equal(r.text.includes(HIDDEN_TITLE), false);
 		});
 	});
+	it('backlinks of a readable page drop a source the caller is denied (#60)', async () => {
+		const base = world();
+		base.osionos_page_links = [
+			{ source_page_id: HIDDEN, target_page_id: SIBLING, workspace_id: IDS.team },
+			{ source_page_id: B_OWN, target_page_id: SIBLING, workspace_id: IDS.team },
+		];
+		const mock = createPostgrestMock(base, { realWorkspaceRpc: true });
+		await withBridge(config, mock.fetchImpl, async (base) => {
+			const r = await send(base, `/api/pages/${SIBLING}/backlinks`, asB);
+			assert.equal(r.status, 200, r.text);
+			assert.deepEqual(r.body.linked.map((ref) => ref.id), [B_OWN]);
+			assert.equal(r.text.includes(HIDDEN), false);
+			assert.equal(r.text.includes(HIDDEN_TITLE), false);
+		});
+	});
 	it('reports: POST /api/social/reports on the hidden page is 404', async () => {
 		const mock = createPostgrestMock(world(), { realWorkspaceRpc: true });
 		await withBridge(config, mock.fetchImpl, async (base) => {
