@@ -79,7 +79,7 @@ async function fillByRole(page, name, value) {
 }
 
 function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, (match) => String.raw`\${match}`);
+  return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 async function readJson(url, options = {}) {

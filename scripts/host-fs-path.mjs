@@ -42,7 +42,7 @@ export function pathRefusal(relPath, opts = {}) {
   }
   if (platform !== "win32") return null;
   if (relPath.includes("\\")) return "EUNSUP";
-  if (/[<>\"|?*]/.test(relPath)) return "EUNSUP";
+  if (/[<>"|?*]/.test(relPath)) return "EUNSUP";
   if (/[\x00-\x1f]/.test(relPath)) return "EUNSUP";
   for (const seg of parts) {
     if (seg.includes(":")) return "EUNSUP";

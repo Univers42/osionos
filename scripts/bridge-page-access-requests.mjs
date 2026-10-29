@@ -39,7 +39,6 @@ import { bearerToken, httpError, identitySummaries, readJsonBody, safeText, send
 import { takeToken } from './bridge-ratelimit.mjs';
 import { connectionStatus } from './bridge-friendship.mjs';
 import { createShareRuleStore } from './bridge-perms-rules.mjs';
-import { writeShareRule } from './bridge-perms.mjs';
 import { pushToUser } from './bridge-push.mjs';
 import { sameId, ownerHoldsPage } from './bridge-page-read.mjs';
 import {
@@ -51,7 +50,6 @@ import {
 	ownerMemberRow,
 	pageRow,
 	pendingCount,
-	requestRow,
 } from './bridge-page-access-request-store.mjs';
 import {
 	approve as approveRequest,
