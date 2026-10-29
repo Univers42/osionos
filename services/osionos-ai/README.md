@@ -349,6 +349,16 @@ tools at all and an approve is a 503 `hooks_unavailable`; a decline never reads
 them. Turning the flag off stops every hook at once: the rows stay
 and are not read. An `mcp_call` line blocks every MCP tool.
 
+`OSIONOS_AI_CONTEXT_TOOL=on`, with `OSIONOS_AI_USER_CONTEXT=on`, offers a run
+the read tool `list_my_context`: the caller's own skills, rules, commands,
+hooks and agents, and the run workspace's rules and agents while the caller is
+a live member, as names and descriptions only. It never returns a rule body, a
+command template or agent instructions; a hook shows its pattern lines. Each
+kind appears only while its own flag is on. The answer is capped at 4000
+characters on whole entries, with a count of the rest. A custom agent is never
+offered the tool, and a built-in agent only when its list names it; a hook can
+take it away like any other tool. It needs no migration and writes nothing.
+
 The indexer reads `OSIONOS_AI_DATABASE_URL`, `OSIONOS_AI_EMBED_BULK_URL`
 (`OSIONOS_AI_EMBED_URL` when the bulk one is not set) and
 `OSIONOS_AI_EMBED_MODEL` (`intfloat/multilingual-e5-small`).
