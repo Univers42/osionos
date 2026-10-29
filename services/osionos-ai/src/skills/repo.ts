@@ -177,7 +177,7 @@ export async function loadListedVersion(
 export interface SkillPin {
 	id: string;
 	version: number;
-	source: 'builtin' | 'workspace';
+	source: 'builtin' | 'workspace' | 'user';
 }
 
 /** Appends the pin to the run, once: a pin the run already holds is not repeated. */

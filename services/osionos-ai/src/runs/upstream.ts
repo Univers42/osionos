@@ -103,7 +103,8 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 		(workspaceBlockText?.length ?? 0) +
 		mcpToolChars(input.mcpTools ?? []) +
 		webToolChars(input.web === true) +
-		(input.summaryBlock?.length ?? 0);
+		(input.summaryBlock?.length ?? 0) +
+		(input.userContext?.block?.length ?? 0);
 	const promptChars = promptCharCount({
 		text: input.thread?.prompt ?? text,
 		historyChars: historyChars(history),
@@ -187,6 +188,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 							...sources.map((source) => source.snippet),
 							...files.map((file) => file.text),
 							...memories.map((memory) => memory.body),
+							...(input.userContext?.block ? [input.userContext.block] : []),
 						],
 					})
 				: undefined;
@@ -202,6 +204,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			agent,
 			skillIndex: input.skillIndex,
 			workspaceId: input.workspaceId,
+			...(input.userContext && input.userContext.skills.length > 0 ? { userSkills: input.userContext.skills } : {}),
 			...(input.mcpTools && input.mcpTools.length > 0 ? { mcp: { tools: input.mcpTools, redis } } : {}),
 			...(web ? { web } : {}),
 			...(webTaint ? { webTaint } : {}),
@@ -216,6 +219,7 @@ export async function runUpstream(input: UpstreamRunInput): Promise<void> {
 			...(viewBlockText ? { view: viewBlockText } : {}),
 			...(workspaceBlockText ? { workspace: workspaceBlockText } : {}),
 			...(input.summaryBlock ? { summary: input.summaryBlock } : {}),
+			...(input.userContext?.block ? { userContext: input.userContext.block } : {}),
 		});
 		const userContent = [
 			{ type: 'text' as const, text: userText },
