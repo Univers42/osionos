@@ -166,7 +166,7 @@ test.describe("editor menu chrome", () => {
       if (!row) return;
       const metrics = await rowMetrics(row);
       expect(metrics.height).toBe(await resolveToken(page, "height", rowHeightToken));
-      expect(metrics.radius).toBe(await resolveToken(page, "border-top-left-radius", "--osio-radius-sm"));
+      expect(metrics.radius).toBe(await resolveToken(page, "border-top-left-radius", "--osio-radius-xs"));
     });
   }
 
