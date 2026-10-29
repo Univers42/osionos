@@ -21,6 +21,7 @@ import {
   visibleRows, visitedAtByPage,
 } from "@/features/page-library/model/pageLibraryModel";
 import { addRecent, parseRecents } from "@/store/pageStore.helpers";
+import { formatRelativeTime } from "@/shared/lib/relativeTime";
 
 const USER = "user-me";
 const WS = "ws-1";
@@ -128,4 +129,10 @@ test("addRecent stamps visitedAt and preserves old entries that never had one", 
   assert.equal(next.find((entry) => entry.id === "old")?.visitedAt, undefined);
   assert.equal(next.find((entry) => entry.id === "older")?.visitedAt, 12);
   assert.equal(visitedAtByPage(next).get("new"), 1_700_000_000_000);
+});
+
+test("a recent with no recorded visit shows no time, not decades ago", () => {
+  const visited = visitedAtByPage([{ id: "legacy" } as ActivePage]);
+  assert.equal(formatRelativeTime(visited.get("legacy")), "");
+  assert.equal(formatRelativeTime(Date.now() - 3 * 3_600_000), "3h ago");
 });
