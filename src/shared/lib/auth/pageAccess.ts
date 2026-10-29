@@ -218,7 +218,7 @@ function memberFor(context: PageAccessContext, workspaceId: string): PageMemberA
  * 16-char prefix and never matches "owner" / "admin". Control characters go by code
  * point: the matching regex class trips eslint's no-control-regex.
  */
-function normalizeRole(value: unknown): string {
+export function normalizeRole(value: unknown): string {
   const text = String(value ?? "").normalize("NFKC");
   const printable = [...text]
     .filter((char) => (char.codePointAt(0) ?? 0) > 0x1f && char !== "\u007f").join("");
