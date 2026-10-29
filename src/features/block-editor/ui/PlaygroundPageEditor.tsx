@@ -35,6 +35,7 @@ export const PlaygroundPageEditor: React.FC<PlaygroundPageEditorProps> = ({
       pageId={pageId}
       source={{ kind: "page", pageId }}
       locked={locked}
+      wideBlocks
       renderBlockEditor={renderBlockEditor}
     />
   );

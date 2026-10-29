@@ -131,6 +131,8 @@ interface BlockEditorProps {
   numberedDepth: number;
   bulletDepth: number;
   isSelected?: boolean;
+  /** Top-level page-body block: tables/databases bleed to the page edge before scrolling. */
+  wideBlock?: boolean;
   onChange: (text: string) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   onPaste?: (e: React.ClipboardEvent) => void;
@@ -149,6 +151,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
   numberedDepth,
   bulletDepth,
   isSelected = false,
+  wideBlock = false,
   onChange,
   onKeyDown,
   onPaste,
@@ -228,10 +231,15 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
   );
 
   // "Ask AI" from the selection toolbar: the panel opens under the block with
-  // the SELECTION as its input. Nothing is written until the user accepts.
+  // the SELECTION as its input. A skill runs immediately, exactly like the
+  // matching slash command; "Edit with AI" only opens the panel.
   const handleAskAI = useCallback(
-    (selectionText: string) => {
-      useInlineAiStore.getState().open({ pageId, blockId: block.id, selectionText });
+    (selectionText: string, command?: string, instruction?: string) => {
+      const store = useInlineAiStore.getState();
+      store.open({ pageId, blockId: block.id, selectionText }, command);
+      if (!command) return;
+      if (command === "ask" && !instruction) return;
+      void store.run(command, instruction);
     },
     [block.id, pageId],
   );
@@ -512,6 +520,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
     case "heading_2":
@@ -529,6 +538,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
     case "heading_3":
@@ -546,6 +556,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -564,6 +575,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -582,6 +594,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -600,6 +613,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -618,6 +632,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
 
@@ -666,6 +681,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               blockType={block.type}
               onTurnInto={handleTurnInto}
               onAskAI={handleAskAI}
+              blockId={block.id}
             />
           </div>
         </div>
@@ -694,6 +710,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               blockType={block.type}
               onTurnInto={handleTurnInto}
               onAskAI={handleAskAI}
+              blockId={block.id}
             />
           </div>
         </div>
@@ -865,6 +882,8 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
               onAskAI={handleAskAI}
+              pageId={pageId}
+              blockId={block.id}
             />
             {!block.collapsed && renderChildren?.()}
           </div>
@@ -923,6 +942,8 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
               onPaste={onPaste}
               onRequestSlashMenu={onRequestSlashMenu}
               onAskAI={handleAskAI}
+              pageId={pageId}
+              blockId={block.id}
             />
             {hasChildren ? (
               <div className="min-w-0 max-w-full">{renderChildren?.()}</div>
@@ -1015,12 +1036,13 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           data-table-block-shell
           aria-label="Table block"
         >
-          <div className="osio-block-scroll-x">
+          <div className={wideBlock ? "osio-wide-block" : "osio-block-scroll-x"}>
             <TableBlockEditor
               block={block}
               pageId={pageId}
               style={editableStyle}
               textStyle={editableStyle}
+              wide={wideBlock}
               onDeleteTable={onDeleteCodeBlock}
               onBeforeStructuralEdit={onBeforeStructuralEdit}
             />
@@ -1047,15 +1069,17 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           aria-label="Database block"
           className="relative group/dbblock"
         >
-          <div className="osio-block-scroll-x">
-            <Suspense fallback={null}>
-              <DatabaseBlock
-                databaseId={block.databaseId}
-                initialViewId={block.viewId}
-                mode="inline"
-                recordLimit={block.recordLimit}
-              />
-            </Suspense>
+          <div className={wideBlock ? "osio-wide-block" : "osio-block-scroll-x"}>
+            <div data-wide-block-content={wideBlock ? "" : undefined} className={wideBlock ? undefined : "contents"}>
+              <Suspense fallback={null}>
+                <DatabaseBlock
+                  databaseId={block.databaseId}
+                  initialViewId={block.viewId}
+                  mode="inline"
+                  recordLimit={block.recordLimit}
+                />
+              </Suspense>
+            </div>
           </div>
         </div>
       );
@@ -1183,6 +1207,7 @@ const BlockEditorImpl: React.FC<BlockEditorProps> = ({
           blockType={block.type}
           onTurnInto={handleTurnInto}
           onAskAI={handleAskAI}
+          blockId={block.id}
         />
       );
   }
