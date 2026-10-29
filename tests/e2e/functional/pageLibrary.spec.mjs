@@ -8,9 +8,9 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-// The Library full view: reachable from the rail, its five tabs, creating a page
-// that lands first in Recents with a hover OPEN pill, and a parent/child tree that
-// expands to reveal the child plus an "Add new" row.
+// The Library is the real database view: every workspace item is a row with a
+// Category, the old tabs are database views (plus Templates and Skills), a new
+// page lands first in Recents, and a parent expands to its child as a sub-item.
 
 import { expect, test } from "@playwright/test";
 
@@ -22,17 +22,21 @@ import {
 
 const railLibrary = (page) => page.getByRole("tab", { name: "Library", exact: true });
 const libraryRegion = (page) => page.getByRole("region", { name: "Library", exact: true });
+const viewTab = (library, name) => library.locator(`[data-view-tab][aria-label="${name}"]`);
+const libraryRow = (library, text) => library.locator("tr[data-page-id]").filter({ hasText: text }).first();
 
 test.describe("the Library", () => {
-  test("opens from the rail, shows its tabs, and a new page lands first in Recents", async ({ page, baseURL }) => {
+  test("is the database view: its views, the Minimal table, and a new page first in Recents", async ({ page, baseURL }) => {
     await page.goto(baseURL, { waitUntil: "domcontentloaded" });
     await railLibrary(page).click();
 
     const library = libraryRegion(page);
-    await expect(library).toBeVisible();
-    for (const label of ["Recents", "Favorites", "Shared", "Private", "Skills"]) {
-      await expect(library.getByRole("tab", { name: label, exact: true })).toBeVisible();
+    await expect(library.getByRole("heading", { name: "Library", level: 1 })).toBeVisible();
+    for (const name of ["All files", "Recents", "Favorites", "Shared", "Private", "Templates", "Skills"]) {
+      await expect(viewTab(library, name)).toBeVisible({ timeout: 15_000 });
     }
+    await expect(library.locator('table[data-table-style="minimal"]')).toBeVisible();
+    await expect(library.locator("thead")).toContainText("Category");
 
     await library.getByRole("button", { name: "New page", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Page title" })).toBeVisible();
@@ -40,16 +44,22 @@ test.describe("the Library", () => {
     await clearAndTypePageTitle(page, title);
 
     await railLibrary(page).click();
-    await expect(library).toBeVisible();
-    await expect(library.getByRole("tab", { name: "Recents", exact: true })).toHaveAttribute("aria-selected", "true");
-
-    const firstRow = library.getByTestId("library-row").first();
-    await expect(firstRow).toContainText(title, { timeout: 15_000 });
-    await firstRow.hover();
-    await expect(firstRow.getByTestId("library-open")).toBeVisible();
+    await viewTab(library, "Recents").click();
+    const row = library.locator("tr[data-page-id]").first();
+    await expect(row).toContainText(title, { timeout: 15_000 });
+    await expect(row).toContainText("Page");
   });
 
-  test("a parent with a child shows a chevron and expanding reveals the child and Add new", async ({ page, baseURL }) => {
+  test("templates are files too: the Templates view lists them", async ({ page, baseURL }) => {
+    await page.goto(baseURL, { waitUntil: "domcontentloaded" });
+    await railLibrary(page).click();
+    const library = libraryRegion(page);
+    await viewTab(library, "Templates").click();
+    const rows = library.locator("tr[data-page-id]");
+    await expect(rows.first()).toContainText("Template", { timeout: 15_000 });
+  });
+
+  test("a parent expands to its child page as a sub-item, and a row opens its page", async ({ page, baseURL }) => {
     test.setTimeout(120_000);
     await page.goto(baseURL, { waitUntil: "domcontentloaded" });
     await createNewWorkspacePage(page);
@@ -66,17 +76,19 @@ test.describe("the Library", () => {
     await clearAndTypePageTitle(page, child);
 
     await railLibrary(page).click();
+    // All files is the default view; clicking the active tab would open its menu.
     const library = libraryRegion(page);
-    await expect(library).toBeVisible();
-
-    const row = library.getByTestId("library-row").filter({ hasText: parent }).first();
+    const row = libraryRow(library, parent);
     await expect(row).toBeVisible({ timeout: 15_000 });
-    const chevron = row.getByTestId("library-chevron");
-    await expect(chevron).toHaveAttribute("aria-expanded", "false");
-    await chevron.click();
-    await expect(chevron).toHaveAttribute("aria-expanded", "true");
+    await row.hover();
+    await row.getByRole("button", { name: "Expand sub-items" }).click();
+    // A sub-item shows its cells as the column does: the option's label, not its id.
+    const childRow = library.locator("tr").filter({ hasText: child }).first();
+    await expect(childRow).toContainText("Page");
+    await expect(childRow).not.toContainText("opt-page");
 
-    await expect(library.getByTestId("library-row").filter({ hasText: child }).first()).toBeVisible();
-    await expect(library.getByTestId("library-add-new").first()).toBeVisible();
+    await row.hover();
+    await row.getByRole("button", { name: "OPEN", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Page title" })).toHaveValue(parent);
   });
 });
