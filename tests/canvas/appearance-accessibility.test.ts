@@ -141,3 +141,18 @@ test("updateAppearance merges with the live appearance instead of a caller's cop
     assert.equal(next.urlPaste, "plain");
   });
 });
+
+test("the page layout switches parse, fall back, and ride their own attribute", () => {
+  assert.deepEqual(stored({ pageOutline: "hide", pageProperties: "hide" }), { ...DEFAULT_APPEARANCE, pageOutline: "hide", pageProperties: "hide" });
+  const bad = stored({ pageOutline: "maybe", pageProperties: 1 });
+  assert.equal(bad.pageOutline, "show");
+  assert.equal(bad.pageProperties, "show");
+  withRoot((root) => {
+    applyAppearance({ ...DEFAULT_APPEARANCE, pageOutline: "hide", pageProperties: "hide" });
+    assert.equal(root.dataset.pageOutline, "hide");
+    assert.equal(root.dataset.pageProperties, "hide");
+    applyAppearance(DEFAULT_APPEARANCE);
+    assert.equal(root.dataset.pageOutline, undefined);
+    assert.equal(root.dataset.pageProperties, undefined);
+  });
+});

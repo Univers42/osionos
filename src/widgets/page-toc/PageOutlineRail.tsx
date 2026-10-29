@@ -24,6 +24,11 @@ interface Heading {
 const HEADING_SELECTOR =
   '[data-block-type="heading_1"],[data-block-type="heading_2"],[data-block-type="heading_3"]';
 
+// The editor's block <article> names its block in data-draggable-block-id; the
+// heading it renders (and the read-only page) use data-block-id.
+const blockIdOf = (el: Element): string | null =>
+  el.getAttribute("data-block-id") ?? el.getAttribute("data-draggable-block-id");
+
 const levelOf = (el: Element): number => {
   const t = el.getAttribute("data-block-type") || "";
   if (t.endsWith("_1")) return 1;
@@ -52,14 +57,18 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
     if (!scroller || !body) return;
 
     const scan = () => {
-      const els = Array.from(body.querySelectorAll(HEADING_SELECTOR));
-      setHeadings(
-        els.map((el, i) => ({
-          id: el.getAttribute("data-block-id") || `h-${i}`,
-          text: (el.textContent || "").trim() || "Untitled",
-          level: levelOf(el),
-        })),
-      );
+      // An editor block and the heading it renders both carry the block's
+      // data attributes; keep the outer one (document order) so each heading
+      // is listed once.
+      const seen = new Set<string>();
+      const next: Heading[] = [];
+      body.querySelectorAll(HEADING_SELECTOR).forEach((el, i) => {
+        const id = blockIdOf(el) || `h-${i}`;
+        if (seen.has(id)) return;
+        seen.add(id);
+        next.push({ id, text: (el.textContent || "").trim() || "Untitled", level: levelOf(el) });
+      });
+      setHeadings(next);
     };
     scan();
     const mo = new MutationObserver(scan);
@@ -81,7 +90,7 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
           .filter((e) => e.isIntersecting)
           .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
         if (visible) {
-          setActiveId(visible.target.getAttribute("data-block-id"));
+          setActiveId(blockIdOf(visible.target));
         }
       },
       { root: scroller, rootMargin: "0px 0px -70% 0px", threshold: 0 },
@@ -90,7 +99,10 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
     return () => io.disconnect();
   }, [headings]);
 
-  if (headings.length < 2) return null;
+  // The anchor stays mounted below two headings: the scan effect finds the
+  // pane through rootRef, so returning null here meant it never ran and the
+  // rail never appeared.
+  const hasOutline = headings.length >= 2;
 
   const scrollTo = (id: string) => {
     const scroller = rootRef.current?.closest(".osionos-page");
@@ -104,6 +116,7 @@ export const PageOutlineRail: React.FC<{ pageId: string }> = ({ pageId }) => {
     <div
       ref={rootRef}
       data-osio-toc
+      hidden={!hasOutline}
       className={styles.rail}
       data-open={open || undefined}
       onMouseEnter={() => setOpen(true)}

@@ -50,8 +50,11 @@
 }
 
 /* Hide when the PANE (not the viewport) is too narrow. @container resolves
-   against .osionos-page's width because it is the query container. */
-@container (max-width: 1100px) {
+   against .osionos-page's width because it is the query container. The rail
+   (~46 px) sits in the column's inline padding (11% of the pane, up to 96 px),
+   which holds it down to ~720 px; the old 1100 px cut hid it on every laptop
+   with the sidebar open. */
+@container (max-width: 720px) {
   .rail {
     display: none;
   }

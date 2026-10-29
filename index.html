@@ -31,7 +31,7 @@
 		<!-- Appearance bootstrap: apply the stored light/dark mode, color palette and
 		     personal appearance (accent, density, corners, text size, and the
 		     accessibility choices: link underlines, motion, animated images,
-		     hovercards) BEFORE first paint so there is no flash of the default
+		     hovercards, and the page outline / properties switches) BEFORE first paint so there is no flash of the default
 		     theme. Mirrors src/shared/config/theme.ts; App.tsx re-validates and
 		     re-applies on mount (an unknown accent id set here is dropped there). -->
 		<script>
@@ -49,7 +49,8 @@
 					// nothing. (urlPaste has no attribute: it changes what a paste does.)
 					var axes = { density: ['compact'], radius: ['sharp', 'round'], uiScale: ['small', 'large'],
 						linkUnderline: ['always'], motion: ['reduce', 'full'],
-						animatedImages: ['system', 'still'], hovercards: ['off'] };
+						animatedImages: ['system', 'still'], hovercards: ['off'],
+						pageOutline: ['hide'], pageProperties: ['hide'] };
 					for (var k in axes) if (axes[k].indexOf(a[k]) > -1) ds[k] = a[k];
 					if (typeof a.accent === 'string' && /^[a-z]+$/.test(a.accent) && a.accent !== 'cobalt') ds.accent = a.accent;
 					var h = typeof a.hue === 'number' ? Math.round(a.hue) : -1;
