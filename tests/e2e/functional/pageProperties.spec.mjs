@@ -226,7 +226,8 @@ test.describe("page configuration menu", () => {
     // More opened on the left of the menu; the nested list keeps going left
     // instead of landing on top of the menu.
     const [moreBox, languagesBox] = [await more.boundingBox(), await languages.boundingBox()];
-    expect(languagesBox.x + languagesBox.width).toBeLessThan(moreBox.x + moreBox.width / 2);
+    expect(languagesBox.x + languagesBox.width).toBeLessThanOrEqual(moreBox.x);
+    expect(Math.abs(languagesBox.y - (await translate.boundingBox()).y + 5)).toBeLessThanOrEqual(1);
     await languages.getByRole("button", { name: "German", exact: true }).click();
     await expect(translate).toContainText("German");
     await expect(languages.getByRole("button", { name: "German", exact: true }).locator("svg")).toHaveCount(1);
