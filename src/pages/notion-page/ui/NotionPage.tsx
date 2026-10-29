@@ -169,7 +169,7 @@ export const OsionosPage: React.FC<OsionosPageProps> = ({ pageId, activePageRef,
       data-debug-blockinfo={debugTools.blockInfo ? "" : undefined}
       data-debug-overflow={debugTools.overflow ? "" : undefined}
     >
-      {!hasFullPageLayout && <PageOutlineRail pageId={pageId} />}
+      {!hasFullPageLayout && pageConfig.showOutline && <PageOutlineRail pageId={pageId} />}
 
       {chrome === "bar" && <PageHeaderBar key={pageId} {...headerBarProps} />}
 

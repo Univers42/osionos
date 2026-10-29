@@ -21,7 +21,12 @@ import { EmptyState, Section, SettingRow } from '../ui/settingsKit';
 import { runMaybeAsync } from '../model/settingsCalls';
 
 export const PageSettingsPanel = () => {
-  const activePage = usePageStore((state) => state.activePage);
+  // Settings is a tab, and focusing it clears activePage; the page it configures
+  // is then the one read last, still in the tree.
+  const activePage = usePageStore((state) => state.activePage
+    ?? state.recents.find((recent) => recent.kind === 'page' && state.pageById(recent.id))
+    ?? null);
+  const title = usePageStore((state) => (activePage ? state.pageById(activePage.id)?.title : undefined)) || 'Untitled';
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [confirmTrash, setConfirmTrash] = useState(false);
   const actions = usePageActions(activePage?.id ?? '', activePage?.workspaceId ?? '');
@@ -38,6 +43,7 @@ export const PageSettingsPanel = () => {
 
   return (
     <>
+      <SettingRow title="Page" description={title} />
       <Section title="Style"><div className="grid gap-2 sm:grid-cols-3">{(['default', 'serif', 'mono'] as const).map((font) => <Button key={font} className={`justify-start ${actions.config.font === font ? 'border-[var(--osio-accent)]' : ''}`} onClick={() => runMaybeAsync(actions.setFont(font))}><span className={`text-base ${fontSampleClass(font)}`}>Ag</span>{font[0].toUpperCase() + font.slice(1)}</Button>)}</div></Section>
       <Section title="Actions">
         <SettingRow title={<span className="inline-flex items-center gap-2"><Copy size={16} />Copy link</span>} description="Ctrl+Alt+L" action={<Button onClick={() => runMaybeAsync(actions.copyLink())}>Copy</Button>} />
@@ -49,7 +55,7 @@ export const PageSettingsPanel = () => {
         <SettingRow title={<span className="inline-flex items-center gap-2"><Import size={16} />Import</span>} action={<><input ref={importInputRef} type="file" accept=".json,.md,.markdown,.txt" className="hidden" onChange={handleImport} /><Button onClick={() => importInputRef.current?.click()}>Import</Button></>} />
         <SettingRow title={<span className="inline-flex items-center gap-2"><FileDown size={16} />Export</span>} action={<Button onClick={() => runMaybeAsync(actions.exportPage())}>Export</Button>} />
       </Section>
-      <Section title="Page switches"><SettingRow title="Small text" action={<Toggle checked={actions.config.smallText} onChange={() => runMaybeAsync(actions.toggleSmallText())} label="Small text" />} /><SettingRow title="Full width" action={<Toggle checked={actions.config.fullWidth} onChange={() => runMaybeAsync(actions.toggleFullWidth())} label="Full width" />} /><SettingRow title="Lock page" action={<Toggle checked={actions.config.locked} onChange={() => runMaybeAsync(actions.toggleLock())} label="Lock page" />} /></Section>
+      <Section title="Page switches"><SettingRow title="Small text" action={<Toggle checked={actions.config.smallText} onChange={() => runMaybeAsync(actions.toggleSmallText())} label="Small text" />} /><SettingRow title="Full width" action={<Toggle checked={actions.config.fullWidth} onChange={() => runMaybeAsync(actions.toggleFullWidth())} label="Full width" />} /><SettingRow title="Table of contents" action={<Toggle checked={actions.config.showOutline} onChange={() => runMaybeAsync(actions.toggleOutline())} label="Table of contents" />} /><SettingRow title="Lock page" action={<Toggle checked={actions.config.locked} onChange={() => runMaybeAsync(actions.toggleLock())} label="Lock page" />} /></Section>
       <Section title="History & connections">
         <SettingRow title="Updates & analytics" description={`Actions ${actions.config.analytics.actions} · Copies ${actions.config.analytics.copies}`} action={<Button onClick={actions.openAnalytics}>Open</Button>} />
         <SettingRow title="Version history" description={`${actions.versions.length} saved versions`} action={<Button onClick={actions.openVersionHistory}>Open</Button>} />
