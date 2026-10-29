@@ -202,9 +202,9 @@ export const ROUTES: RouteEntry[] = [
 	{ methods: ['POST'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills$/, label: '/api/ai/workspaces/:ws/skills', handle: handleSkillCreate },
 	{ methods: ['PUT'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillUpdate },
 	{ methods: ['DELETE'], pattern: /^\/api\/ai\/workspaces\/([^/]+)\/skills\/([^/]+)$/, label: '/api/ai/workspaces/:ws/skills/:slug', handle: handleSkillArchive },
-	// U1/U2: the user's skills, rules and commands. Both flags off: 404 (C1010);
-	// a kind whose flag is off is refused inside (C1102).
-	...(config.userContextEnabled || config.userCommandsEnabled
+	// U1-U3: the user's skills, rules, commands and hooks. Every flag off: 404
+	// (C1010); a kind whose flag is off is refused inside (C1102).
+	...(config.userContextEnabled || config.userCommandsEnabled || config.userHooksEnabled
 		? [
 				{ methods: ['GET'], pattern: /^\/api\/ai\/context\/items$/, label: '/api/ai/context/items', handle: handleContextItemsList },
 				{ methods: ['POST'], pattern: /^\/api\/ai\/context\/items$/, label: '/api/ai/context/items', handle: handleContextItemCreate },

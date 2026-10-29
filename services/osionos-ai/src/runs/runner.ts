@@ -47,6 +47,7 @@ import type { FittedFile } from '../files/excerpt.ts';
 import { THREAD_SYSTEM_PROMPT } from '../threads/context.ts';
 import type { ThreadRun } from './upstreamInput.ts';
 import { userContextForRun } from '../context/runContext.ts';
+import { hooksForRun } from '../context/hooks.ts';
 
 export type { RunEvent };
 
@@ -353,6 +354,8 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 	// Only the general assistant gets them (C308): an agent never does. Flag
 	// off: no query, nothing (C291).
 	const mcpTools = config.mcpClientEnabled && input.user && !agent && !input.research ? await loadMcpTools(db, ownerId) : [];
+	// U3: the user's hooks, read once; the run drops the tools they name (C1120).
+	const hooks = await hooksForRun(db, input.user?.userId);
 	// C355 / C369: the web tools, when the flag, the workspace switch and this
 	// message all say so, and never for an agent.
 	const web = await webOnForRun(db, { asked: input.web, user: input.user, agentful: agent !== null, workspaceId: input.workspaceId });
@@ -447,6 +450,7 @@ export async function startRun(input: StartRunInput): Promise<StartRunOutcome> {
 			skillIndex,
 			memories,
 			mcpTools,
+			...(hooks ? { hooks } : {}),
 			web,
 			...(input.research ? { research: true } : {}),
 			workspaceId: input.workspaceId,

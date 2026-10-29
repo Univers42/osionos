@@ -104,7 +104,9 @@ export function mcpToolSet(ctx: McpRunContext): ToolSet {
 					},
 					workspaceId: ctx.workspaceId,
 					tool: 'mcp_call',
-					args: { ...stored },
+					// The name the model called, for a hook's match at decide time (U3,
+					// C1123); outside `stored`, so the dedupe hash is unchanged.
+					args: { ...stored, modelName: entry.modelName },
 					argsSha256: argsSha256(stored),
 				});
 				if (!row) return refuse('the request is already waiting', 'This request is already waiting for the user. Do not ask again.');
