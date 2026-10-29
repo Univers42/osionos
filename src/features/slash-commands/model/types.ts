@@ -34,6 +34,8 @@ export interface SlashCommandBase {
   icon: ReactNode;
   description: string;
   section: string;
+  /** The markdown prefix that creates this block (`#`, `-`, `>`, …). */
+  shortcut?: string;
   calloutIcon?: string;
   /** Built-in app identifier that must be ready (flag on, URL configured) for this command to exist. */
   requiresApp?: string;

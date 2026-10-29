@@ -12,7 +12,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Search } from "lucide-react";
 
 import type { MediaBlockType } from "@/entities/block";
 import {
@@ -21,7 +20,9 @@ import {
   parseSlashQuery,
   PLACEHOLDER_COMMAND_ID,
   PROFILE_FIELD_COMMAND_ID,
+  slashSectionLabel,
 } from "@/features/slash-commands/model/slashMenuCatalog";
+import { readSlashRecents, recordSlashUse } from "@/features/slash-commands/model/slashRecents";
 import { useWholeRowScroll } from "@/shared/lib/dom/useWholeRowScroll";
 import { isSlashCommandAvailable } from "@/features/slash-commands/model/slashAvailability";
 import { isBuiltInAppReady } from "@/features/whiteboard/model/whiteboardAvailability";
@@ -48,8 +49,8 @@ type SelectableSlashCommand = Exclude<SlashCommand, SlashMediaPickerCommand>;
 
 const MENU_MARGIN = 8;
 const MENU_GAP = 6;
-const COMMAND_MENU_WIDTH = 264;
-const COMMAND_MENU_MAX_HEIGHT = 420;
+const COMMAND_MENU_WIDTH = 324;
+const COMMAND_MENU_MAX_HEIGHT = 448;
 
 const AVAILABILITY = { isAppReady: isBuiltInAppReady };
 
@@ -95,11 +96,20 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     [filter, isTemplatePage, isReadme],
   );
   // Typing a query → one flat, relevance-ranked list so the best match sits on top
-  // and arrow-to-pick is predictable. No query → the sectioned catalog.
-  const sections = useMemo(
-    () => (command ? [{ id: "results", label: "", items: filtered }] : groupSlashCommands(filtered)),
-    [command, filtered],
-  );
+  // and arrow-to-pick is predictable. No query → Suggested recents, then the
+  // sectioned catalog. Recents are read ONCE on open, never per keystroke.
+  const [recents] = useState(readSlashRecents);
+  const sections = useMemo(() => {
+    if (command) return [{ id: "results", label: "", items: filtered }];
+    const byId = new Map(filtered.map((item) => [item.id, item]));
+    const suggested = recents
+      .map((id) => byId.get(id))
+      .filter((item): item is SlashCommand => Boolean(item));
+    const base = groupSlashCommands(filtered);
+    return suggested.length > 0
+      ? [{ id: "suggested", label: slashSectionLabel("suggested"), items: suggested }, ...base]
+      : base;
+  }, [command, filtered, recents]);
   // sections may re-sort vs the flat `filtered` array. Highlight AND selection index
   // against THIS ordered list (the exact render order) or Enter fires a different
   // item than is shown.
@@ -128,13 +138,16 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
 
   const handleCommandSelect = useCallback(
     (command: SlashCommand) => {
+      if (command.kind !== "media-picker" && !isSlashCommandAvailable(command, AVAILABILITY)) return;
+      // Every pick — click or Enter, typed block or media — passes through here:
+      // the one place a "Suggested" recent is recorded.
+      recordSlashUse(command.id);
       if (command.kind === "media-picker") {
         // Notion-style: drop an empty media block; its void row opens the embed
         // dialog on click. No up-front asset picker in the menu.
         onMediaSelect(command.mediaKind, "");
         return;
       }
-      if (!isSlashCommandAvailable(command, AVAILABILITY)) return;
       onSelect(command as SelectableSlashCommand);
     },
     [onMediaSelect, onSelect],
@@ -187,7 +200,11 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   const menuStyle = useMemo<React.CSSProperties>(() => {
     const viewportWidth = typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1024;
     const viewportHeight = typeof globalThis.innerHeight === "number" ? globalThis.innerHeight : 768;
-    const left = clamp(position.x, MENU_MARGIN, viewportWidth - COMMAND_MENU_WIDTH - MENU_MARGIN);
+    // The panel is 324px wide but never wider than the viewport minus its margin,
+    // and at most 40vh tall (448px cap) — the placement maths uses the real size.
+    const menuWidth = Math.min(COMMAND_MENU_WIDTH, viewportWidth - MENU_MARGIN * 2);
+    const menuHeight = Math.min(COMMAND_MENU_MAX_HEIGHT, viewportHeight * 0.4);
+    const left = clamp(position.x, MENU_MARGIN, viewportWidth - menuWidth - MENU_MARGIN);
 
     const spaceAbove = position.top - MENU_GAP - MENU_MARGIN;
     const spaceBelow = viewportHeight - position.y - MENU_GAP - MENU_MARGIN;
@@ -195,11 +212,11 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
     // `bottom`, so the bottom-left corner sits right on the caret line with NO gap
     // whatever the item count) and grow upward. Flip below only when the caret is
     // too near the top of the viewport to fit a usable panel above it.
-    const placeAbove = spaceAbove >= Math.min(COMMAND_MENU_MAX_HEIGHT, 180) || spaceAbove >= spaceBelow;
+    const placeAbove = spaceAbove >= Math.min(menuHeight, 180) || spaceAbove >= spaceBelow;
 
     return placeAbove
-      ? { left, bottom: viewportHeight - (position.top - MENU_GAP), maxHeight: Math.min(COMMAND_MENU_MAX_HEIGHT, spaceAbove) }
-      : { left, top: position.y + MENU_GAP, maxHeight: Math.min(COMMAND_MENU_MAX_HEIGHT, spaceBelow) };
+      ? { left, bottom: viewportHeight - (position.top - MENU_GAP), maxHeight: Math.min(menuHeight, spaceAbove) }
+      : { left, top: position.y + MENU_GAP, maxHeight: Math.min(menuHeight, spaceBelow) };
   }, [position.x, position.y, position.top]);
 
   useWholeRowScroll(listRef, ordered);
@@ -222,30 +239,19 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
       // "/" inside that same cell opens this menu at the caret, so it must
       // stay the topmost, clickable layer above ALL of that, never obscured
       // by a passive side panel or by the active grid itself.
-      className="fixed z-[calc(var(--osio-z-popover)+26)] osio-surface-overlay flex w-[264px] flex-col overflow-hidden"
+      className="osio-surface-overlay osio-slash-menu-in fixed z-[calc(var(--osio-z-popover)+26)] flex w-[324px] min-w-[180px] max-w-[calc(100vw-24px)] flex-col overflow-hidden"
       style={menuStyle}
     >
-      {/* Status echo of the command + arg you're typing after the "/" (the caret
-          lives in the block, not here). Feedback only — never captures focus, and
-          hidden entirely until you type, so there's no input-looking box on open. */}
-      {command ? (
-        <div
-          className="flex shrink-0 items-center gap-2 border-b border-[var(--osio-menu-separator)] px-2 py-2"
-          aria-hidden="true"
-        >
-          <Search size={14} className="shrink-0 text-[var(--osio-fg-subtle)]" />
-          <span data-testid="slash-command-search" className="min-w-0 flex-1 truncate text-sm">
-            <span className="text-[var(--osio-fg-default)]">/{command}</span>
-            {arg ? <span className="text-[var(--osio-fg-subtle)]">{` ${arg}`}</span> : null}
-          </span>
-          <span className="shrink-0 text-2xs tabular-nums text-[var(--osio-fg-muted)]">{ordered.length}</span>
-        </div>
-      ) : null}
-
-      <div ref={listRef} id="slash-command-list" role="listbox" className="osio-scroll-fade relative min-h-0 flex-1 overflow-y-auto">
+      <div
+        ref={listRef}
+        id="slash-command-list"
+        role="listbox"
+        className="osio-scroll-fade relative min-h-0 flex-1 overflow-y-auto"
+        style={{ "--osio-scroll-fade-size": "34px" } as React.CSSProperties}
+      >
         {ordered.length === 0 ? (
           <div className="px-2 py-6 text-center text-xs text-[var(--osio-fg-muted)]">
-            No blocks match “/{command}”.
+            No results
           </div>
         ) : (
           sections.map((section, sectionIndex) => (
@@ -260,9 +266,10 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                 commandIndex += 1;
                 const idx = commandIndex;
                 const isActive = idx === effectiveActiveIdx;
+                const isSuggested = section.id === "suggested";
                 return (
                   <button
-                    key={item.id}
+                    key={`${section.id}:${item.id}`}
                     id={`slash-cmd-${idx}`}
                     type="button"
                     role="option"
@@ -270,16 +277,23 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                     data-testid="slash-command-entry"
                     data-command-label={item.label}
                     className="osio-menu-item"
+                    style={{ height: 32 }}
                     onMouseEnter={() => setActiveIdx(idx)}
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => handleCommandSelect(item)}
                   >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[var(--osio-radius-sm)] bg-[var(--osio-bg-subtle)] text-xs text-[var(--osio-fg-muted)] [&>svg]:h-3.5 [&>svg]:w-3.5">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center text-base text-[var(--osio-fg-muted)] [&>svg]:h-5 [&>svg]:w-5">
                       {item.icon}
                     </span>
                     <span className="block min-w-0 flex-1 truncate">
                       {item.kind === "whiteboard" && arg ? `Create board “${arg}”` : item.label}
+                      {isSuggested ? (
+                        <span className="text-[var(--osio-fg-subtle)]">{` · ${slashSectionLabel(item.section)}`}</span>
+                      ) : null}
                     </span>
+                    {item.shortcut ? (
+                      <span className="ml-auto shrink-0 pl-2 text-xs text-[var(--osio-fg-subtle)]">{item.shortcut}</span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -288,13 +302,18 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2 border-t border-[var(--osio-menu-separator)] px-2 py-1.5 text-2xs text-[var(--osio-fg-muted)]">
-        <span>↑↓ navigate</span>
-        <span aria-hidden>·</span>
-        <span>↵ select</span>
-        <span aria-hidden>·</span>
-        <span>esc dismiss</span>
-      </div>
+      <div className="osio-menu-separator shrink-0" />
+      <button
+        type="button"
+        data-testid="slash-command-close"
+        className="osio-menu-item shrink-0"
+        style={{ height: 32 }}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={onClose}
+      >
+        <span className="min-w-0 flex-1 truncate">Close menu</span>
+        <span className="ml-auto shrink-0 pl-2 text-xs text-[var(--osio-fg-subtle)]">esc</span>
+      </button>
     </div>,
     document.body,
   );
