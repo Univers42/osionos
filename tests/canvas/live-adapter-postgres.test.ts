@@ -97,6 +97,12 @@ test('pg getPage builds a numeric pk filter so SQL matches the integer column', 
   assert.equal(page.id, 'baas:pg-commerce:orders:1234');
 });
 
+test('pg bigint pk filter keeps every digit beyond 2^53', () => {
+  const ledger = { ...ORDERS, columns: ORDERS.columns.map((c) => (c.name === 'id' ? { ...c, native_type: 'int8', normalized_type: 'bigint' as const } : c)) };
+  assert.deepEqual(livePkFilter(ledger, '1234'), { id: 1234 });
+  assert.deepEqual(livePkFilter(ledger, '9007199254740993'), { id: '9007199254740993' });
+});
+
 test('pg persistState cell edit drains as a single-op update with an idempotency key', async () => {
   const { writes } = newWrites();
   const prev = buildLiveState(PG_SCHEMA, REF, { orders: PG_ROWS });
