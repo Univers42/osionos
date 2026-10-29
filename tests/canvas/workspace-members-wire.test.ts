@@ -57,3 +57,21 @@ test("a PATCH answer ({ok, member}) maps to one member with the UI role", () => 
   assert.equal(workspaceMemberFromWire("ws-1", { ok: true, member: { userId: "u-1", role: "editor" } })?.role, "member");
   assert.equal(workspaceMemberFromWire("ws-1", { ok: true })?.userId, undefined);
 });
+
+test("W1: the bridge's name is kept trimmed and capped, anything else leaves it unset", () => {
+  const members = workspaceMembersFromWire("ws-1", {
+    ok: true,
+    members: [
+      { userId: "u1", name: " Ada ", role: "editor" },
+      { userId: "u2", name: "", role: "viewer" },
+      { userId: "u3", name: 42 },
+      { userId: "u4", name: "x".repeat(300) },
+    ],
+  });
+  assert.deepEqual(members?.map((m) => m.name), ["Ada", undefined, undefined, "x".repeat(120)]);
+});
+
+test("W2: persisted rows keep a string name and lose a numeric one without being dropped", () => {
+  const clean = sanitizePersistedMembers({ "ws-1": [{ userId: "u1", name: "Ada" }, { userId: "u2", name: 7 }, { userId: "u3" }] });
+  assert.deepEqual(clean["ws-1"].map((m) => [m.userId, m.name]), [["u1", "Ada"], ["u2", undefined], ["u3", undefined]]);
+});

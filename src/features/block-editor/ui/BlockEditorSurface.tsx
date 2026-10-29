@@ -10,13 +10,17 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus } from "lucide-react";
 
 import type { Block } from "@/entities/block";
-import { flattenColumns, isParentable, selfRendersChildren } from "@/entities/block";
+import { flattenColumns, findBlockInTree, isParentable, selfRendersChildren } from "@/entities/block";
+import { dictationSession } from "@/features/voice/model/useDictation";
+import { insertTranscript } from "@/features/voice/model/insertTranscript";
+import { dictationLanguage } from "@/features/voice/model/language";
+import { useVoiceSettingsStore } from "@/store/settings";
 import {
 	estimateBlockHeight,
 	measureScrollMargin,
@@ -24,8 +28,15 @@ import {
 	ROOT_BLOCK_VIRTUALIZATION_THRESHOLD,
 } from "@/entities/block/model/blockVirtualization";
 import { ReadOnlyBlock } from "@/entities/block/ui/ReadOnlyBlock";
+import { BlockVisibilityPopover } from "./visibility/BlockVisibilityPopover";
+import { VisibilityScopeProvider } from "@/entities/block/model/visibilityScope";
+import { ReadOnlyEmbedModeContext } from "@/entities/block/ui/readOnlyEmbedMode";
+import { RenderModeProvider } from "@/entities/block/ui/renderMode";
 import { SlashCommandMenu } from "@/features/slash-commands";
 import { parseSlashQuery } from "@/features/slash-commands/model/slashMenuCatalog";
+import { complete as completeRoute } from "@/features/ai/api/aiClient";
+import { registerInlineAiDeps, useInlineAiStore } from "@/features/ai/model/inlineAiStore";
+import { parseMarkdownClipboard } from "@/services/page-actions/blockClipboardSerialize";
 import { resolveColorName } from "@osionos/ui/molecules/IconPicker/ColorSwatches";
 import {
 	usePlaygroundBlockEditor,
@@ -33,22 +44,28 @@ import {
 } from "@/features/block-editor/model/usePlaygroundBlockEditor";
 import { BlockContextMenu } from "./BlockContextMenu";
 import { PageSelectorMenu } from "./PageSelectorMenu";
+import { VariableMenu } from "@/features/variables/ui/VariableMenu";
+import { PasteLinkMenu } from "./PasteLinkMenu";
 import { EmojiPicker } from "@/shared/ui";
 import { ColorMenu } from "./ColorMenu";
-import { getBlockSurfaceStyle } from "../model/blockColors";
+import { getBlockSurfaceClass, getBlockSurfaceStyle, resolveBlockTint } from "../model/blockColors";
 import { appendBlockToColumn, insertColumnForTarget } from "../model/columnLayout";
 import { insertBlockRelative } from "../model/blockContextMenu.helpers";
 import { VIRTUAL_BLOCK_FOCUS_EVENT } from "../model/blockDomFocus";
-import { commitBlockDraft, useBlockDraftContent } from "../model/blockDraftStore";
+import { commitBlockDraft, getBlockDraftContent, useBlockDraftContent } from "../model/blockDraftStore";
 import { useSurfaceMarquee } from "../model/useSurfaceMarquee";
 import { useCrossTextSelection } from "../model/useCrossTextSelection";
 import { useBlockSelection, selectIdsForSurface } from "../model/blockSelectionStore";
 import { useEditorCommandBus, type EditorHandle } from "../model/editorCommandBus";
 import { isTextEntryTarget } from "../model/marqueeGeometry";
+import { EditorSurfaceIdContext } from "../model/editorSurfaceId";
+import { requestLinkDialog } from "../model/linkDialogRequests";
 import { expandSelectionWithDescendants, removeBlocksFromTree } from "@/entities/block/model/blockTreeUtils";
 import { isBlockSelectEnabled } from "@/shared/config/featureFlags";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
+import { startPointerBlockDrag } from "./pointerBlockDrag";
 import { usePageContextMenu } from "../model/usePageContextMenu";
+import { clampViewportMenuPosition } from "@/shared/ui";
 
 // useEvent: an identity-STABLE wrapper whose call always runs the latest fn. The
 // callbacks returned by usePlaygroundBlockEditor get a fresh identity on every
@@ -98,6 +115,8 @@ export interface SurfaceBlockEditorProps {
 	numberedDepth: number;
 	bulletDepth: number;
 	isSelected?: boolean;
+	/** Top-level page-body block: tables/databases bleed to the page edge before scrolling. */
+	wideBlock?: boolean;
 	onChange: (text: string) => void;
 	onKeyDown: (e: React.KeyboardEvent) => void;
 	onPaste?: (e: React.ClipboardEvent) => void;
@@ -116,6 +135,8 @@ interface BlockEditorSurfaceProps {
 	compact?: boolean;
 	className?: string;
 	emptyPlaceholder?: string;
+	/** The page body itself: its top-level tables/databases may bleed to the page edge. */
+	wideBlocks?: boolean;
 	renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
 }
 
@@ -134,8 +155,8 @@ function shouldRenderChildren(block: Block): boolean {
 
 function getNestedTreeClassName(parentBlockType: Block["type"] | null, isRoot: boolean) {
 	if (isRoot || !parentBlockType) return "";
-	if (parentBlockType === "bulleted_list" || parentBlockType === "numbered_list") return "ml-[3.25rem] mt-0.5";
-	if (parentBlockType === "to_do") return "ml-[2.75rem] mt-0.5";
+	if (parentBlockType === "bulleted_list" || parentBlockType === "numbered_list") return "ml-8 mt-0.5";
+	if (parentBlockType === "to_do") return "ml-6 mt-0.5";
 	if (parentBlockType === "toggle") return "ml-6 mt-0.5 pl-3 border-l-2 border-[var(--osio-border-default)]";
 	if (parentBlockType === "column") return "mt-0.5";
 	// Callout lines all share one left edge (flat surface, no "title"); different
@@ -344,23 +365,31 @@ function getVirtualFocusBlockId(event: Event): string | null {
 	return typeof detail?.blockId === "string" ? detail.blockId : null;
 }
 
-export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
+const BlockEditorSurfaceBody: React.FC<BlockEditorSurfaceProps> = ({
 	pageId,
 	source,
 	locked = false,
 	compact = false,
 	className = "",
 	emptyPlaceholder = "Click here to start writing...",
+	wideBlocks = false,
 	renderBlockEditor,
 }) => {
+	const surfaceId = useContext(EditorSurfaceIdContext);
 	const {
 		slashMenu,
 		setSlashMenu,
 		pageSelector,
 		setPageSelector,
+		variableMenu,
+		handleVariableSelect,
+		closeVariableMenu,
 		emojiMenu,
 		setEmojiMenu,
 		handleEmojiSelect,
+		pasteMenu,
+		choosePaste,
+		dismissPasteMenu,
 		colorMenu,
 		setColorMenu,
 		handleColorSelect,
@@ -368,6 +397,8 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		contextMenuSections,
 		openContextMenu,
 		closeContextMenu,
+		showWhenTarget,
+		closeShowWhen,
 		handleBlockChange,
 		handleKeyDown,
 		handlePaste,
@@ -378,6 +409,8 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		handleSlashCreatePageSelect,
 		handleSlashInlineSelect,
 		handleSlashWhiteboardSelect,
+		handleSlashProfileFieldSelect,
+		handleSlashAiImageSelect,
 		handlePageSelectorSelect,
 		handlePageSelectorCreate,
 		handleAddBlock,
@@ -388,6 +421,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 		source: resolvedSource,
 		sourceKey,
 		updateBlock,
+		insertBlock,
 		deleteBlock,
 		updateContent,
 		commitContent,
@@ -402,6 +436,14 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 	} = usePlaygroundBlockEditor(source ?? pageId);
 	const [draggedBlockId, setDraggedBlockId] = useState<string | null>(null);
 	const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+	// The dictation: its state, and the language of the settings.
+	const voiceSettings = useVoiceSettingsStore((state) => state.data);
+	const [dictation, setDictation] = useState(() => dictationSession.getState());
+	useEffect(() => dictationSession.subscribe(setDictation), []);
+	const visibilityPopoverBlockId = showWhenTarget?.blockId ?? null;
+	const visibilityPopoverPosition = showWhenTarget
+		? clampViewportMenuPosition(showWhenTarget.x, showWhenTarget.y, { width: Math.min(384, globalThis.innerWidth * 0.9), maxHeight: 320, margin: 12 })
+		: null;
 	const selectionRootRef = useRef<HTMLDivElement | null>(null);
 	const blocksRef = useRef<Block[]>(blocks);
 	// Pointer-down position on the bottom append zone, to tell a click from a drag.
@@ -503,6 +545,26 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 			if (surfaceRegistry.get(sourceKey) === entry) surfaceRegistry.delete(sourceKey);
 		};
 	}, [flushPendingDrafts, sourceKey, updateContent]);
+
+	// The inline AI writes through THIS editor: its tree, its drafts. The
+	// bundle is keyed by page, so a second editor on another page never
+	// answers for this one.
+	useEffect(() => {
+		return registerInlineAiDeps(pageId, {
+			complete: completeRoute,
+			updateBlock,
+			insertBlock,
+			flushPendingDrafts,
+			markdownToBlocks: parseMarkdownClipboard,
+			getBlockSource: (_pid, blockId) => {
+				const block = findBlockInTree(blocksRef.current, blockId);
+				// null: this editor does not hold that block (another editor of
+				// the same page does).
+				if (!block) return null;
+				return getBlockDraftContent(sourceKey, blockId, block.content);
+			},
+		});
+	}, [flushPendingDrafts, insertBlock, pageId, sourceKey, updateBlock]);
 
 	useEffect(() => {
 		const syncFocusedBlock = () => {
@@ -697,7 +759,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 			<div data-testid="locked-page-body" className={`relative flex min-w-0 flex-col ${className}`}>
 				{blocks.length === 0 ? (
 					<p className="py-8 text-sm italic text-[var(--osio-fg-subtle)]">This page is locked and has no content.</p>
-				) : blocks.map((block, index) => <ReadOnlyBlock key={block.id} block={block} index={index} />)}
+				) : blocks.map((block, index) => <ReadOnlyBlock key={block.id} block={block} index={index} wideBlock={wideBlocks} />)}
 			</div>
 		);
 	}
@@ -721,6 +783,7 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 				blocks={blocks}
 				pageId={pageId}
 				isRoot
+				allowWideBlocks={wideBlocks}
 				highlightedRootBlockId={highlightedRootBlockId}
 				selectedBlockIds={selectedBlockIds}
 				moveBlock={stableMoveBlock}
@@ -774,6 +837,17 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 				</button>
 			)}
 
+			{dictation.status === "recording" ? (
+				<div
+					role="status"
+					data-testid="dictation-recording"
+					className="mx-auto mb-2 flex w-fit items-center gap-2 rounded-md border border-[var(--osio-accent)] px-2 py-1 text-2xs text-[var(--osio-fg-default)]"
+				>
+					<span className="h-1.5 w-1.5 rounded-full bg-[var(--osio-accent)] animate-pulse" />
+					Listening… {dictation.secondsLeft}s left
+				</div>
+			) : null}
+
 			{slashMenu ? (
 				<SlashCommandMenu
 					key={slashMenu.blockId}
@@ -783,6 +857,10 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 					onSelect={(item) => {
 						const currentBlocks = flushPendingDrafts("shortcut");
 						blocksRef.current = currentBlocks;
+						if (item.kind === "link-block") {
+							handleSlashMediaSelect(item.blockType, "", currentBlocks, (id) => requestLinkDialog(surfaceId, id, item.hintId));
+							return;
+						}
 						if (item.kind === "turn-into") {
 							handleSlashTurnIntoSelect(item.blockType, currentBlocks, {
 								calloutIcon: item.calloutIcon,
@@ -793,6 +871,38 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 						}
 						if (item.kind === "create-page") {
 							runEditorAction(handleSlashCreatePageSelect(currentBlocks));
+							return;
+						}
+						if (item.kind === "ai") {
+							const trigger = slashMenu;
+							// The "/summarize" the user just typed is text in the block:
+							// take it out before the AI reads the block.
+							handleSlashInlineSelect("", currentBlocks);
+							if (trigger) {
+								useInlineAiStore.getState().open({ pageId, blockId: trigger.blockId }, item.command);
+								// "ask" opens the panel with its input focused; every other
+								// command runs at once.
+								if (item.command !== "ask") {
+									void useInlineAiStore.getState().run(item.command);
+								}
+							}
+							return;
+						}
+						if (item.kind === "dictate") {
+							// The dictation writes at the caret: the "/dictate" leaves
+							// the block, and the transcript lands where it was.
+							const trigger = slashMenu;
+							handleSlashInlineSelect("", currentBlocks);
+							if (trigger) {
+								const anchor = trigger.anchor ?? 0;
+								void dictationSession.start((text) => {
+									const block = findBlockInTree(blocksRef.current, trigger.blockId);
+									if (!block) return;
+									const content = insertTranscript(block.content ?? "", text, anchor);
+									updateBlock(pageId, trigger.blockId, { content });
+									focusBlock(trigger.blockId, true);
+								}, dictationLanguage(voiceSettings));
+							}
 							return;
 						}
 						if (item.kind === "inline") {
@@ -808,7 +918,8 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 							// command opens the picker. Same picker + handler; mode picks the target field.
 							if (item.id === "inline:color" || item.id === "inline:background") {
 								const mode = item.id === "inline:background" ? "background" : "text";
-								const color = resolveColorName(parseSlashQuery(trigger?.filter ?? "").arg);
+								const arg = parseSlashQuery(trigger?.filter ?? "").arg;
+								const color = (mode === "background" && resolveBlockTint(arg)) || resolveColorName(arg);
 								handleSlashInlineSelect("", currentBlocks);
 								if (color && trigger) {
 									handleColorSelect(color, trigger.blockId, mode);
@@ -822,6 +933,14 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 						}
 						if (item.kind === "whiteboard") {
 							handleSlashWhiteboardSelect(parseSlashQuery(slashMenu.filter).arg, currentBlocks);
+							return;
+						}
+						if (item.kind === "profile-field") {
+							handleSlashProfileFieldSelect();
+							return;
+						}
+						if (item.kind === "ai-image") {
+							handleSlashAiImageSelect(parseSlashQuery(slashMenu.filter).arg, currentBlocks);
 							return;
 						}
 						if (item.kind === "database-view") {
@@ -851,6 +970,17 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 					onSelect={handlePageSelectorSelect}
 					onCreate={() => runEditorAction(handlePageSelectorCreate())}
 					onClose={() => setPageSelector(null)}
+				/>
+			) : null}
+
+			{variableMenu ? (
+				<VariableMenu
+					key={variableMenu.blockId}
+					pageId={pageId}
+					position={variableMenu.position}
+					trigger={variableMenu.trigger}
+					onSelect={handleVariableSelect}
+					onClose={closeVariableMenu}
 				/>
 			) : null}
 
@@ -891,8 +1021,29 @@ export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = ({
 				/>
 			) : null}
 
+			{pasteMenu ? (
+				<PasteLinkMenu
+					position={pasteMenu.position}
+					initialChoice={pasteMenu.initialChoice}
+					onChoose={choosePaste}
+					onDismiss={dismissPasteMenu}
+				/>
+			) : null}
+
 			<BlockContextMenu menu={contextMenu} sections={contextMenuSections} onClose={closeContextMenu} />
 			<BlockContextMenu menu={pageMenuState} sections={pageMenuSections} onClose={closePageMenu} />
+			{/* Portal to <body>: the pane's `contain: paint` would otherwise anchor
+			    `position: fixed` to the pane and clip the popover at its edge. */}
+			{visibilityPopoverBlockId && findBlockById(blocks, visibilityPopoverBlockId) ? createPortal(
+				<div style={visibilityPopoverPosition ? { position: "fixed", left: visibilityPopoverPosition.left, top: visibilityPopoverPosition.top, zIndex: 50 } : undefined}>
+					<BlockVisibilityPopover
+						block={findBlockById(blocks, visibilityPopoverBlockId)!}
+						onSave={(updates) => { updateBlock(pageId, visibilityPopoverBlockId, updates); closeShowWhen(); }}
+						onClose={closeShowWhen}
+					/>
+				</div>,
+				document.body,
+			) : null}
 		</div>
 	);
 };
@@ -903,6 +1054,7 @@ interface BlockTreeProps {
 	isRoot?: boolean;
 	parentBlockType?: Block["type"] | null;
 	parentBlockId?: string | null;
+	allowWideBlocks?: boolean;
 	numberedDepth?: number;
 	bulletDepth?: number;
 	highlightedRootBlockId: string | null;
@@ -935,6 +1087,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 	isRoot = false,
 	parentBlockType = null,
 	parentBlockId = null,
+	allowWideBlocks = false,
 	numberedDepth = 0,
 	bulletDepth = 0,
 	highlightedRootBlockId,
@@ -1046,6 +1199,7 @@ const BlockTree: React.FC<BlockTreeProps> = ({
 							pageId={pageId}
 							block={block}
 							parentBlockId={parentBlockId}
+							wideBlock={allowWideBlocks && isRoot}
 							numberedIndex={numberedIndex}
 							numberedDepth={numberedDepth}
 							bulletDepth={bulletDepth}
@@ -1182,10 +1336,26 @@ function isMediaHandleBlock(type: Block["type"]): boolean {
 		case "graph_view":
 		case "draw":
 		case "whiteboard":
+		case "diagram":
+		case "embed":
+		case "bookmark":
 			return true;
 		default:
 			return false;
 	}
+}
+
+/** One body row: a media handle centres on this much of its anchor's top. */
+const MEDIA_HANDLE_ROW_PX = 28;
+
+/** The visible top of a media/embed block: its database title, else its first picture,
+ *  player, frame or link card, else an explicit `data-handle-anchor` (the empty row). */
+function findMediaHandleAnchor(article: HTMLElement, blockId: string): HTMLElement | null {
+	const scope = article.querySelector<HTMLElement>(`[data-block-id="${blockId}"]`) ?? article;
+	return (
+		scope.querySelector<HTMLElement>("[data-database-title]") ??
+		scope.querySelector<HTMLElement>("img, video, audio, iframe, a[href], [data-handle-anchor]")
+	);
 }
 
 function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleTop: string } {
@@ -1198,24 +1368,31 @@ function getBlockSpacing(type: Block["type"]): { pt: string; pb: string; handleT
 		case "heading_5":
 		case "heading_6": return { pt: "pt-3", pb: "pb-0.5", handleTop: "top-4" };
 		// Media / code / equation: generous, still asymmetric.
-		case "code":
-		case "equation":
+		// Code: the handle centres on the card's language row, its first line.
+		case "code":      return { pt: "pt-3",   pb: "pb-1.5", handleTop: "top-6.5" };
+		case "equation":  return { pt: "pt-3",   pb: "pb-1.5", handleTop: "top-4" };
 		case "image":
 		case "video":
 		case "audio":
-		case "file":      return { pt: "pt-3",   pb: "pb-1.5", handleTop: "top-4" };
+		case "file":      return { pt: "pt-6",   pb: "pb-4.5", handleTop: "top-4" };
 		// Embeds read as native page content — the most air above.
-		case "database_inline":
+		case "database_inline": return { pt: "pt-6", pb: "pb-4", handleTop: "top-5" };
 		case "database_full_page":
 		case "graph_view":
 		case "draw":
-		case "whiteboard": return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
+		case "whiteboard":
+		case "diagram":   return { pt: "pt-4",  pb: "pb-2",   handleTop: "top-5" };
+		// A link card's air lives here, not as a margin on the card, so it starts
+		// level with its neighbours at the top of a column.
+		case "embed":
+		case "bookmark":  return { pt: "pt-5",  pb: "pb-3",   handleTop: "top-5" };
 		// Boxed blocks: medium.
 		case "callout":
 		case "quote":     return { pt: "pt-2",   pb: "pb-1",   handleTop: "top-3" };
 		// The one exception to the rhythm: a separator is a hairline, so it stays the
 		// tightest block — just enough shell pad to hover/select/drag it, no more.
-		case "divider":   return { pt: "pt-1",   pb: "pb-0.5", handleTop: "top-1" };
+		// The handle centres on the hairline (pt-1 down), not below it on the next block.
+		case "divider":   return { pt: "pt-1",   pb: "pb-0.5", handleTop: "-top-1.5" };
 		case "toggle":    return { pt: "pt-1.5", pb: "pb-0.5", handleTop: "top-2" };
 		// List items cluster tightly and evenly so a list reads as one unit.
 		case "bulleted_list":
@@ -1263,12 +1440,6 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 }) => {
 	const [dropPosition, setDropPosition] = useState<DropPosition>(null);
 
-	const handleDragStart = useCallback((e: React.DragEvent<HTMLButtonElement>) => {
-		e.dataTransfer.setData(DND_TYPE, block.id);
-		e.dataTransfer.setData(DND_PAYLOAD_TYPE, JSON.stringify({ blockId: block.id, sourceKey, block } satisfies BlockDragPayload));
-		e.dataTransfer.effectAllowed = "move";
-		setDraggedBlockId(block.id);
-	}, [block, setDraggedBlockId, sourceKey]);
 
 	const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
 		if (!e.dataTransfer.types.includes(DND_TYPE)) return;
@@ -1332,6 +1503,17 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		setDropPosition(null);
 	}, [setDraggedBlockId]);
 
+	const handlePointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+		startPointerBlockDrag(e.nativeEvent, e.currentTarget, {
+			data: {
+				[DND_TYPE]: block.id,
+				[DND_PAYLOAD_TYPE]: JSON.stringify({ blockId: block.id, sourceKey, block } satisfies BlockDragPayload),
+			},
+			onStart: () => setDraggedBlockId(block.id),
+			onEnd: handleDragEnd,
+		});
+	}, [block, handleDragEnd, setDraggedBlockId, sourceKey]);
+
 	const isDragged = draggedBlockId === block.id;
 	const isSelected = selectedBlockIds.has(block.id);
 	const { pt, pb, handleTop } = getBlockSpacing(block.type);
@@ -1354,7 +1536,19 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		// inline top a pre-conversion hover left behind (e.g. paragraph -> image
 		// keeps the same element), so the class fallback takes effect again.
 		if (isMediaHandleBlock(block.type)) {
-			handle.style.top = "";
+			const anchor = findMediaHandleAnchor(article, block.id);
+			if (!anchor) {
+				handle.style.top = "";
+				return;
+			}
+			// Centred on the anchor's first row (a picture's or card's top edge), or on
+			// the whole anchor when it is a single row (a title, the empty media row).
+			// The static class sat ~17px above them: it ignored the frame's my-3 and p-2.
+			const rect = anchor.getBoundingClientRect();
+			const single = rect.height < 2 * MEDIA_HANDLE_ROW_PX;
+			const row = Math.max(single ? rect.height : MEDIA_HANDLE_ROW_PX, handle.offsetHeight);
+			const top = toCssPx(rect.top - article.getBoundingClientRect().top, article) + (row - handle.offsetHeight) / 2;
+			handle.style.top = `${Math.max(0, Math.round(top))}px`;
 			return;
 		}
 		const leaf = article.querySelector<HTMLElement>(
@@ -1364,8 +1558,13 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		const styles = getComputedStyle(leaf);
 		let line = Number.parseFloat(styles.lineHeight);
 		if (Number.isNaN(line)) line = Number.parseFloat(styles.fontSize) * 1.5;
-		const leafTop = toCssPx(leaf.getBoundingClientRect().top - article.getBoundingClientRect().top, article);
-		const top = leafTop + (line - handle.offsetHeight) / 2;
+		// The first line starts below the leaf's padding and border (py-0.5 on body
+		// text): leaving them out put every text block's handle 2px above its line.
+		const lineTop =
+			toCssPx(leaf.getBoundingClientRect().top - article.getBoundingClientRect().top, article) +
+			Number.parseFloat(styles.borderTopWidth) +
+			Number.parseFloat(styles.paddingTop);
+		const top = lineTop + (line - handle.offsetHeight) / 2;
 		handle.style.top = `${Math.max(0, Math.round(top))}px`;
 		// block.type is a real dep: /image converts paragraph -> image UNDER THE
 		// SAME id, and a [block.id]-only closure kept aligning as a paragraph —
@@ -1381,7 +1580,10 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 		block.type === "database_full_page" ||
 		block.type === "graph_view" ||
 		block.type === "draw" ||
-		block.type === "whiteboard";
+		block.type === "whiteboard" ||
+		block.type === "diagram" ||
+		block.type === "embed" ||
+		block.type === "bookmark";
 	const shellChrome = isEmbedBlock ? "" : "rounded-md";
 
 	return (
@@ -1408,11 +1610,9 @@ const DraggablePlaygroundBlock: React.FC<DraggablePlaygroundBlockProps> = ({
 			<button
 				ref={handleRef}
 				type="button"
-				draggable
 				data-testid="block-drag-handle"
-				onDragStart={handleDragStart}
-				onDragEnd={handleDragEnd}
-				className={`absolute -left-7 ${handleTop} cursor-grab rounded-md p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] osio-drag-handle active:cursor-grabbing`}
+				onPointerDown={handlePointerDown}
+				className={`absolute -left-7 ${handleTop} cursor-grab touch-none rounded-md p-0.5 text-[var(--osio-fg-subtle)] opacity-0 transition-colors transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-muted)] osio-drag-handle active:cursor-grabbing`}
 				aria-label="Open block menu, or drag to reorder block"
 				title="Click for menu · Drag to reorder"
 			>
@@ -1439,6 +1639,7 @@ interface EditableBlockProps {
 	pageId: string;
 	block: Block;
 	parentBlockId?: string | null;
+	wideBlock?: boolean;
 	numberedIndex: number;
 	numberedDepth: number;
 	bulletDepth: number;
@@ -1483,6 +1684,7 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	pageId,
 	block,
 	parentBlockId = null,
+	wideBlock = false,
 	numberedIndex,
 	numberedDepth,
 	bulletDepth,
@@ -1555,70 +1757,72 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 		if (block.type === "column_list") {
 			const columns = flattenColumns(block.children);
 			return (
-				<div className="flex items-start gap-0 rounded-md">
-					{columns.map((column, index) => (
-						<React.Fragment key={column.id}>
-							{/* Per-COLUMN surface style: each column carries its own colors,
-							    independent of its siblings and of the list. */}
-							<div
-								data-column-id={column.id}
-								className="min-w-0 rounded-md px-1"
-								style={{
-									flexGrow: normalizeColumnRatio(column, columns.length),
-									flexBasis: 0,
-									...getBlockSurfaceStyle(column),
-								}}
-							>
-								<BlockTree
-									blocks={column.children ?? EMPTY_BLOCKS}
-									pageId={pageId}
-									parentBlockType="column"
-									parentBlockId={column.id}
-									numberedDepth={numberedDepth}
-									bulletDepth={bulletDepth}
-									highlightedRootBlockId={isHighlighted ? block.id : null}
-									selectedBlockIds={selectedBlockIds}
-									isHighlightedBranch={isHighlighted}
-									moveBlock={moveBlock}
-									moveBlockAcrossTree={moveBlockAcrossTree}
-									updateContent={updateContent}
-									source={source}
-									sourceKey={sourceKey}
-									rootBlocks={rootBlocks}
-									draggedBlockId={draggedBlockId}
-									setDraggedBlockId={setDraggedBlockId}
-									onChange={onChange}
-									onKeyDown={onKeyDown}
-									onPaste={onPaste}
-									onDeleteBlock={onDeleteBlock}
-									onUpdateBlock={onUpdateBlock}
-									registerRef={registerRef}
-									focusBlock={focusBlock}
-									onBeforeStructuralEdit={onBeforeStructuralEdit}
-									onContextMenu={onContextMenu}
-									onRequestSlashMenu={onRequestSlashMenu}
-									renderBlockEditor={renderBlockEditor}
-								/>
-								<ColumnAppendZone
-									column={column}
-									rootBlocks={rootBlocks}
-									updateContent={updateContent}
-									focusBlock={focusBlock}
-								/>
-							</div>
-							{index < columns.length - 1 ? (
-								<ColumnResizeHandle
-									rootBlocks={rootBlocks}
-									updateContent={updateContent}
-									columnListId={block.id}
-									leftColumn={column}
-									rightColumn={columns[index + 1]}
-									columnCount={columns.length}
-									sourceKey={sourceKey}
-								/>
-							) : null}
-						</React.Fragment>
-					))}
+				<div className="osio-columns">
+					<div className="osio-columns-row flex items-start gap-0 rounded-md">
+						{columns.map((column, index) => (
+							<React.Fragment key={column.id}>
+								{/* Per-COLUMN surface style: each column carries its own colors,
+								    independent of its siblings and of the list. */}
+								<div
+									data-column-id={column.id}
+									className="min-w-0 rounded-md px-1"
+									style={{
+										flexGrow: normalizeColumnRatio(column, columns.length),
+										flexBasis: 0,
+										...getBlockSurfaceStyle(column),
+									}}
+								>
+									<BlockTree
+										blocks={column.children ?? EMPTY_BLOCKS}
+										pageId={pageId}
+										parentBlockType="column"
+										parentBlockId={column.id}
+										numberedDepth={numberedDepth}
+										bulletDepth={bulletDepth}
+										highlightedRootBlockId={isHighlighted ? block.id : null}
+										selectedBlockIds={selectedBlockIds}
+										isHighlightedBranch={isHighlighted}
+										moveBlock={moveBlock}
+										moveBlockAcrossTree={moveBlockAcrossTree}
+										updateContent={updateContent}
+										source={source}
+										sourceKey={sourceKey}
+										rootBlocks={rootBlocks}
+										draggedBlockId={draggedBlockId}
+										setDraggedBlockId={setDraggedBlockId}
+										onChange={onChange}
+										onKeyDown={onKeyDown}
+										onPaste={onPaste}
+										onDeleteBlock={onDeleteBlock}
+										onUpdateBlock={onUpdateBlock}
+										registerRef={registerRef}
+										focusBlock={focusBlock}
+										onBeforeStructuralEdit={onBeforeStructuralEdit}
+										onContextMenu={onContextMenu}
+										onRequestSlashMenu={onRequestSlashMenu}
+										renderBlockEditor={renderBlockEditor}
+									/>
+									<ColumnAppendZone
+										column={column}
+										rootBlocks={rootBlocks}
+										updateContent={updateContent}
+										focusBlock={focusBlock}
+									/>
+								</div>
+								{index < columns.length - 1 ? (
+									<ColumnResizeHandle
+										rootBlocks={rootBlocks}
+										updateContent={updateContent}
+										columnListId={block.id}
+										leftColumn={column}
+										rightColumn={columns[index + 1]}
+										columnCount={columns.length}
+										sourceKey={sourceKey}
+									/>
+								) : null}
+							</React.Fragment>
+						))}
+					</div>
 				</div>
 			);
 		}
@@ -1658,13 +1862,14 @@ const EditableBlockBase: React.FC<EditableBlockProps> = ({
 	}, [block.children, block.id, block.type, bulletDepth, draggedBlockId, focusBlock, isHighlighted, moveBlock, moveBlockAcrossTree, numberedDepth, onBeforeStructuralEdit, onChange, onContextMenu, onDeleteBlock, onKeyDown, onPaste, onRequestSlashMenu, onUpdateBlock, pageId, registerRef, renderBlockEditor, rootBlocks, selectedBlockIds, setDraggedBlockId, source, sourceKey, updateContent]);
 
 	return (
-		<div data-block-id={block.id} data-block-type={block.type} ref={refCb} onKeyDown={handleVoidNavKey} className="-mx-1 rounded-md px-1 focus:outline-none focus:ring-1 focus:ring-[var(--osio-accent)]" style={getBlockSurfaceStyle(block)}>
+		<div data-block-id={block.id} data-block-type={block.type} data-page-id={pageId} ref={refCb} onKeyDown={handleVoidNavKey} className={`${getBlockSurfaceClass(block) || "-mx-1 rounded-md px-1"} focus:outline-none focus:ring-1 focus:ring-[var(--osio-accent)]`} style={getBlockSurfaceStyle(block)}>
 			{renderBlockEditor({
 				pageId,
 				block: editorBlock,
 				numberedIndex,
 				numberedDepth,
 				bulletDepth,
+				wideBlock,
 				isSelected: selectedBlockIds.has(block.id),
 				onChange: handleChange,
 				onKeyDown: handleKey,
@@ -1826,3 +2031,18 @@ const ColumnResizeHandle: React.FC<ColumnResizeHandleProps> = ({
 		</div>
 	);
 };
+
+/** Every block this surface renders, editable or locked, belongs to a page the viewer
+ *  opened on purpose, so embeds play. Hover previews and other `static` surfaces never
+ *  mount this component. */
+export const BlockEditorSurface: React.FC<BlockEditorSurfaceProps> = (props) => (
+	<EditorSurfaceIdContext.Provider value={useId()}>
+		<RenderModeProvider mode="live">
+			<ReadOnlyEmbedModeContext.Provider value="live">
+				<VisibilityScopeProvider pageId={props.pageId}>
+					<BlockEditorSurfaceBody {...props} />
+				</VisibilityScopeProvider>
+			</ReadOnlyEmbedModeContext.Provider>
+		</RenderModeProvider>
+	</EditorSurfaceIdContext.Provider>
+);

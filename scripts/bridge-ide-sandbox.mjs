@@ -30,7 +30,7 @@
 import { bearerToken, readJsonBody } from './bridge-social-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { createDockerClient } from './ide-docker.mjs';
-import { requireSandboxIdentity, deriveNames, deriveHomeVolume, buildContainerSpec } from './ide-sandbox-spec.mjs';
+import { requireSandboxIdentity, deriveNames, deriveHomeVolume, buildContainerSpec, buildKeySyncSpec } from './ide-sandbox-spec.mjs';
 import { HOME_REPAIR, runVolumeInit } from './ide-volume-init.mjs';
 import { containerHasActivity, disposeSessionsFor, pruneActivity } from './ide-term-sessions.mjs';
 
@@ -216,7 +216,21 @@ export function ensureSandbox(env, names, opts = {}) {
   return attempt;
 }
 
-export function createIdeSandboxHandler({ config, verifySession, env = process.env, ensure = ensureSandbox }) {
+/** Writes the keys a session request carried into the box. {} when it carried none; {keys:"stale"}
+ *  when the write failed for any reason, because a key problem must never fail the session.
+ *  Caveat: a stale box keeps the allowed_signers of its last good sync, so a key deleted since
+ *  stays trusted there until the next sync succeeds. */
+async function syncKeysAfterEnsure(docker, names, keys) {
+  if (keys === undefined) return {};
+  try {
+    const { exitCode } = await docker.runExec(names.containerName, buildKeySyncSpec(keys));
+    return exitCode === 0 ? {} : { keys: 'stale' };
+  } catch {
+    return { keys: 'stale' };
+  }
+}
+
+export function createIdeSandboxHandler({ config, verifySession, env = process.env, ensure = ensureSandbox, createDocker = createDockerClient }) {
   const ensureContainer = (names) => ensure(env, names);
 
   return async function handleIdeSandboxRoute(url, request, response, requestConfig = config) {
@@ -263,7 +277,7 @@ export function createIdeSandboxHandler({ config, verifySession, env = process.e
       return true;
     }
 
-    const docker = createDockerClient(env);
+    const docker = createDocker(env);
     try {
       if (method === 'DELETE') {
         disposeSessionsFor(`${identity.userId}|${names.containerName}`);
@@ -277,7 +291,8 @@ export function createIdeSandboxHandler({ config, verifySession, env = process.e
         return true;
       }
       const result = await ensureContainer(names);
-      jsonReply(response, 200, { ok: true, sandbox: names.digest, ...result }, requestConfig);
+      const keys = await syncKeysAfterEnsure(docker, names, payload?.keys);
+      jsonReply(response, 200, { ok: true, sandbox: names.digest, ...result, ...keys }, requestConfig);
     } catch (error) {
       if (isUserFacingRefusal(error)) {
         const headers = error.retryAfterSec ? { 'retry-after': String(error.retryAfterSec) } : {};

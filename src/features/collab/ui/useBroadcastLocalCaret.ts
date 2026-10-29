@@ -21,6 +21,8 @@
 import { useEffect, useRef } from 'react';
 
 import { readLocalCaretAndSelection } from '../model/localCaret';
+import { actorFor, randomTabId } from '../model/collabActor';
+const TAB_ID = randomTabId();
 import { useCollabStore } from '../store/useCollabStore';
 
 export function useBroadcastLocalCaret(active: boolean): void {
@@ -40,12 +42,12 @@ export function useBroadcastLocalCaret(active: boolean): void {
         const key = `s:${selection.anchor.blockId}:${selection.anchor.offset}:${selection.focus.blockId}:${selection.focus.offset}`;
         if (key === last.current) return;
         last.current = key;
-        broadcast({ t: 'selection', actor: self.id, seq: nextSeq(), range: selection });
+        broadcast({ t: 'selection', actor: actorFor(self.id, TAB_ID), seq: nextSeq(), range: selection });
       } else if (caret) {
         const key = `c:${caret.blockId}:${caret.offset}`;
         if (key === last.current) return;
         last.current = key;
-        broadcast({ t: 'caret', actor: self.id, seq: nextSeq(), caret });
+        broadcast({ t: 'caret', actor: actorFor(self.id, TAB_ID), seq: nextSeq(), caret });
       }
     };
     const schedule = () => { if (raf.current == null) raf.current = requestAnimationFrame(flush); };

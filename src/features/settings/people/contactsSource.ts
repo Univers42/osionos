@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/28 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -18,6 +18,10 @@ import type { NotionState } from "@notion-db/object-database";
 import type { DatabaseSchema } from "@notion-db/contract-types";
 import { listConnections } from "@/shared/social/connectionApi";
 import { CONTACT, PEOPLE_DB, PEOPLE_VIEW, personPage, singleDatabaseState, view } from "./peopleModel";
+
+/** Hidden: how the edge came to be — 'manual' | 'colleague'. The peek's invite
+ *  affordance turns on it: a colleague edge is not a friendship, so no invite (C653). */
+export const CONTACT_SOURCE = "c-source";
 
 const SCHEMA: DatabaseSchema = {
   id: PEOPLE_DB.contacts,
@@ -32,6 +36,8 @@ const SCHEMA: DatabaseSchema = {
     [CONTACT.since]: { id: CONTACT.since, name: "Connected", type: "date" },
     // Hidden: the peer user id (page id is the connection id) — used by the peek.
     [CONTACT.peer]: { id: CONTACT.peer, name: "User id", type: "text" },
+    // Hidden: 'manual' | 'colleague' — drives the peek's invite affordance.
+    [CONTACT_SOURCE]: { id: CONTACT_SOURCE, name: "Source", type: "text" },
   },
 };
 
@@ -39,7 +45,7 @@ const VIEWS = [
   view({
     id: PEOPLE_VIEW.contactsTable, databaseId: PEOPLE_DB.contacts, name: "Table", type: "table",
     sorts: [{ id: "contacts-since", propertyId: CONTACT.since, direction: "desc" }],
-    visibleProperties: [CONTACT.headline, CONTACT.online, CONTACT.since],
+    visibleProperties: [CONTACT.name, CONTACT.headline, CONTACT.online, CONTACT.since],
     settings: { showRowNumbers: false, openPagesIn: "side_peek" },
   }),
   view({
@@ -59,6 +65,8 @@ export async function buildContactsState(): Promise<NotionState> {
       [CONTACT.online]: Boolean(edge.peer.online),
       [CONTACT.since]: edge.createdAt,
       [CONTACT.peer]: edge.peer.id,
+      // An older payload without a source still defaults to manual, like the bridge.
+      [CONTACT_SOURCE]: edge.source ?? "manual",
     }, { cover: edge.peer.avatar }));
   return singleDatabaseState(SCHEMA, VIEWS, pages);
 }

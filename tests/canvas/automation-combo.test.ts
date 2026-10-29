@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ariaShortcutsInclude,
   formatCombo,
   isModifierKey,
   normalizeComboFromEvent,
@@ -49,4 +50,19 @@ test("isModifierKey / formatCombo", () => {
   assert.ok(["Control", "Shift", "Alt", "Meta"].every(isModifierKey));
   assert.ok(!isModifierKey("z"));
   assert.equal(formatCombo("mod+shift+z"), "Ctrl + Shift + Z");
+});
+
+test("ariaShortcutsInclude: a widget's aria-keyshortcuts claims exactly the keys it lists", () => {
+  const grid = "ArrowUp Shift+ArrowUp Space Delete Control+C Meta+V Control+Shift+V";
+  assert.ok(ariaShortcutsInclude(grid, key({ ctrlKey: true, key: "c" })));
+  assert.ok(ariaShortcutsInclude(grid, key({ metaKey: true, key: "v" })));
+  assert.ok(ariaShortcutsInclude(grid, key({ ctrlKey: true, shiftKey: true, key: "V" })), "modifiers compare as a set");
+  assert.ok(ariaShortcutsInclude("Shift+Control+V", key({ ctrlKey: true, shiftKey: true, key: "V" })));
+  assert.ok(ariaShortcutsInclude(grid, key({ shiftKey: true, key: "ArrowUp" })));
+  assert.ok(ariaShortcutsInclude(grid, key({ key: " " })), "Space is ARIA's name for the space key");
+  assert.ok(ariaShortcutsInclude(grid, key({ key: "Delete" })));
+  assert.ok(!ariaShortcutsInclude(grid, key({ ctrlKey: true, key: "v" })), "Control+V is not in the list");
+  assert.ok(!ariaShortcutsInclude(grid, key({ ctrlKey: true, key: "k" })), "global shortcuts stay global");
+  assert.ok(!ariaShortcutsInclude(grid, key({ key: "ArrowUp", altKey: true })));
+  assert.ok(!ariaShortcutsInclude("", key({ key: "Delete" })));
 });

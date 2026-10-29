@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/26 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/28 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,15 +21,14 @@ import "@/app/styles/database-overrides.css";
 import { Button, Modal } from "@/shared/ui";
 import { useToastStore } from "@osionos/ui/primitives";
 import { useUserStore } from "@/features/auth";
-import { useWorkspaceInvitesStore, type WorkspaceMemberRole } from "@/store/settings";
+import { useWorkspaceInvitesStore } from "@/store/settings";
 import { PeopleSourceAdapter } from "./peopleSourceAdapter";
 import { PEOPLE_SOURCES } from "./peopleSources";
 import { PeoplePeek } from "./PeoplePeek";
 import { createGroup, inviteGuest } from "./peopleActions";
 import type { PeopleCtx, PeopleSourceKey } from "./peopleModel";
-
-const INPUT_CLASS =
-  "h-9 w-full rounded-md border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] px-3 text-sm outline-none transition-colors duration-(--osio-dur-fast) focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]";
+import { useCanInviteMembers } from "./useCanInviteMembers";
+import { AcceptLinkModal, InviteError, InviteRoleSelect, PEOPLE_INPUT_CLASS as INPUT_CLASS, type InviteRole } from "./AcceptLinkModal";
 
 interface PanelProps {
   source: PeopleSourceKey;
@@ -38,15 +37,23 @@ interface PanelProps {
   onCountsChange?: () => void;
 }
 
+
+/** The bridge answers `not_connected` (F1 friendship gate) when the email belongs to someone the
+ *  inviter is not connected with; its raw message states the refusal but not the way out, so the
+ *  modal spells out the fix. Keyed on the store's error CODE — never on message text. */
+const NOT_CONNECTED_INVITE = "You are not connected with this person yet. Find them in Add members, send a connection request, and invite them once they accept.";
+
 /** Create-flow modal — a group (chat/community) or an email invite. */
 const CreatePeopleModal: React.FC<{
   kind: "group" | "guest"; workspaceId: string; invitedBy: string; onClose: () => void; onDone: () => void;
 }> = ({ kind, workspaceId, invitedBy, onClose, onDone }) => {
   const [value, setValue] = useState("");
   const [groupKind, setGroupKind] = useState<"chat" | "community">("chat");
-  const [role, setRole] = useState<Exclude<WorkspaceMemberRole, "owner">>("member");
+  const [role, setRole] = useState<InviteRole>("member");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The accept link exists only now: the bridge keeps a hash, so closing this modal loses it.
+  const [acceptLink, setAcceptLink] = useState<string | null>(null);
 
   const submit = async (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -61,11 +68,18 @@ const CreatePeopleModal: React.FC<{
         const created = await inviteGuest(workspaceId, email, role, invitedBy);
         if (!created) {
           // The store reverted its optimistic row: show why instead of closing as if it worked.
-          setError(useWorkspaceInvitesStore.getState().error[workspaceId] ?? "Could not send the invite.");
+          const invites = useWorkspaceInvitesStore.getState();
+          setError(invites.errorCode[workspaceId] === "not_connected" ? NOT_CONNECTED_INVITE : invites.error[workspaceId] ?? "Could not send the invite.");
           return;
         }
         const workspaceName = useUserStore.getState().activeWorkspace()?.name ?? "your workspace";
-        useToastStore.getState().push({ kind: "success", title: `Added ${email} to ${workspaceName}` });
+        useToastStore.getState().push({ kind: "success", title: `Invited ${email} to ${workspaceName}` });
+        const link = useWorkspaceInvitesStore.getState().acceptLinks[created._id];
+        if (link) {
+          setAcceptLink(link);
+          onDone();
+          return;
+        }
       }
       onDone();
       onClose();
@@ -73,6 +87,8 @@ const CreatePeopleModal: React.FC<{
       setError(inviteError instanceof Error ? inviteError.message : "Could not send the invite.");
     } finally { setBusy(false); }
   };
+
+  if (acceptLink) return <AcceptLinkModal link={acceptLink} onClose={onClose} />;
 
   return (
     <Modal open onClose={onClose} size="sm" title={kind === "group" ? "New group" : "Invite people"}>
@@ -86,18 +102,9 @@ const CreatePeopleModal: React.FC<{
             <option value="community">Community</option>
           </select>
         ) : (
-          <select value={role} onChange={(event) => setRole(event.target.value as Exclude<WorkspaceMemberRole, "owner">)} className={INPUT_CLASS}
-            aria-label="Role">
-            <option value="member">Member — can edit</option>
-            <option value="guest">Guest — can view</option>
-            <option value="admin">Admin</option>
-          </select>
+          <InviteRoleSelect value={role} onChange={setRole} allowAdmin ariaLabel="Role" />
         )}
-        {error && kind !== "group" && (
-          <p role="alert" className="rounded-md bg-[color-mix(in_srgb,var(--osio-danger)_12%,transparent)] px-3 py-2 text-sm text-[var(--osio-danger)]">
-            {error}
-          </p>
-        )}
+        {error && kind !== "group" && <InviteError message={error} />}
         <div className="flex justify-end gap-2">
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" tone="primary" disabled={busy}>{busy ? "…" : kind === "group" ? "Create" : "Invite"}</Button>
@@ -125,7 +132,8 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
     const frame = requestAnimationFrame(() => setMountedFrame(true));
     return () => cancelAnimationFrame(frame);
   }, []);
-  const activeCreating = creating ?? (inviteRequested && mountedFrame ? "guest" : null);
+  const canInvite = useCanInviteMembers(ctx.workspaceId, ctx.activeUserId);
+  const activeCreating = creating ?? (inviteRequested && mountedFrame && canInvite ? "guest" : null);
   const closeCreate = () => {
     if (inviteRequested) useWorkspaceInvitesStore.getState().consumeInviteRequest();
     setCreating(null);
@@ -175,7 +183,7 @@ export const PeopleDatabasePanel: React.FC<PanelProps> = ({ source, ctx, onCount
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search people"
             className={`${INPUT_CLASS} max-w-[240px]`} />
         )}
-        {descriptor.create && (
+        {descriptor.create && (descriptor.create.kind !== "guest" || canInvite) && (
           <div className="ml-auto">
             <Button tone="primary" onClick={() => setCreating(descriptor.create!.kind)}>{descriptor.create.label}</Button>
           </div>

@@ -18,7 +18,7 @@
  * URL.createObjectURL on the local File before send — is passed through as-is.
  */
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { API_BASE, getActivePageJwt } from '@/shared/api/client';
 
@@ -26,10 +26,20 @@ function isLocalPreview(url: string): boolean {
   return url.startsWith('blob:') || url.startsWith('data:');
 }
 
-export function useAuthedObjectUrl(url: string | undefined): string | undefined {
+export interface AuthedObject {
+  src: string | undefined;
+  /** The server refused the bytes or could not serve them; `retry` asks again. */
+  failed: boolean;
+  retry: () => void;
+}
+
+export function useAuthedObject(url: string | undefined): AuthedObject {
   // Local preview urls (blob:/data:) are usable as-is — derive, never set in effect.
   const local = url && isLocalPreview(url) ? url : undefined;
   const [fetched, setFetched] = useState<string | undefined>(undefined);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   useEffect(() => {
     if (!url || isLocalPreview(url)) return;
@@ -45,13 +55,18 @@ export function useAuthedObjectUrl(url: string | undefined): string | undefined 
         objectUrl = URL.createObjectURL(blob);
         setFetched(objectUrl);
       })
-      .catch(() => { if (!cancelled) setFetched(undefined); });
+      .catch(() => { if (!cancelled) setFailed(true); });
     return () => {
       cancelled = true;
       setFetched(undefined);
+      setFailed(false);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [url]);
+  }, [url, attempt]);
 
-  return local ?? fetched;
+  return { src: local ?? fetched, failed: !local && failed, retry };
+}
+
+export function useAuthedObjectUrl(url: string | undefined): string | undefined {
+  return useAuthedObject(url).src;
 }

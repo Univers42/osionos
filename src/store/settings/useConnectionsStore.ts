@@ -13,7 +13,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { getActivePageJwt } from '@/shared/api/client';
 import { defaultConnections } from './defaults';
 import { createLocalId, errorMessage, nowIso, pushSettingsError, removeById, scheduleSettingsWrite, trySettingsDelete, trySettingsGet, trySettingsPatch, trySettingsPost, upsertById } from './settingsStoreUtils';
 import type { ConnectionRecord, ConnectionStatus } from './types';
@@ -62,7 +61,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
         if (!userId) return;
         set({ loading: true, error: null });
         try {
-          const remote = await trySettingsGet<{ connections: ConnectionRecord[] }>('/api/app-connections', getActivePageJwt());
+          const remote = await trySettingsGet<{ connections: ConnectionRecord[] }>('/api/app-connections');
           const rows = remote?.connections ?? null;
           set({ data: rows ?? (get().data.length ? get().data : defaultConnections(userId, email)), loading: false, error: null });
         } catch (error) {
@@ -74,7 +73,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
       connect: async (input) => {
         const previous = get().data;
         try {
-          const remote = await trySettingsPost<{ connection: ConnectionRecord }>('/api/app-connections', input, getActivePageJwt());
+          const remote = await trySettingsPost<{ connection: ConnectionRecord }>('/api/app-connections', input);
           const connection = remote?.connection ?? localConnection(input);
           set({ data: upsertById(previous, connection), error: null });
           return connection;
@@ -109,7 +108,7 @@ export const useConnectionsStore = create<ConnectionsStore>()(
         // accepts a real row uuid, so skip the call and keep the optimistic drop.
         if (connectionId.startsWith('connection-')) return;
         try {
-          await trySettingsDelete<void>(`/api/app-connections/${encodeURIComponent(connectionId)}`, getActivePageJwt());
+          await trySettingsDelete<void>(`/api/app-connections/${encodeURIComponent(connectionId)}`);
         } catch (error) {
           set({ data: previous, error: errorMessage(error) });
           pushSettingsError('Could not remove connection', error);

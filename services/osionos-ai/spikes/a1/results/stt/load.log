@@ -1,0 +1,24 @@
+load 13.17 > 6, waiting 5 min
+load 9.82 > 6, waiting 5 min
+load 9.00 > 6, waiting 5 min
+load 9.55 > 6, waiting 5 min
+load 9.46 > 6, waiting 5 min
+load 11.36 > 6, waiting 5 min
+load still high after 30 min, running anyway
+== Systran/faster-whisper-small before:  01:43:37 up  9:03,  1 user,  load average: 7.85, 8.99, 9.27
+               total        used        free      shared  buff/cache   available
+Mem:              31          20           1           0           8          10
+Swap:             24          18           6
+== Systran/faster-whisper-small after:  02:00:00 up  9:19,  1 user,  load average: 12.52, 14.56, 13.04
+               total        used        free      shared  buff/cache   available
+Mem:              31          22           0           0           8           8
+Swap:             24          19           5
+load 12.52 > 6, waiting 5 min
+== deepdml/faster-whisper-large-v3-turbo-ct2 before:  02:05:00 up  9:24,  1 user,  load average: 5.93, 9.98, 11.54
+               total        used        free      shared  buff/cache   available
+Mem:              31          17           4           0           9          13
+Swap:             24          13          11
+== deepdml/faster-whisper-large-v3-turbo-ct2 after:  02:39:48 up  9:59,  1 user,  load average: 9.81, 9.37, 9.60
+               total        used        free      shared  buff/cache   available
+Mem:              31          20           2           0           7          10
+Swap:             24          17           7

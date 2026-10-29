@@ -19,26 +19,10 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  Baseline,
-  Bold,
-  Code,
-  Highlighter,
-  Italic,
-  Keyboard,
-  Link,
-  Radical,
-  RemoveFormatting,
-  Slash,
-  Strikethrough,
-  Underline,
-} from "lucide-react";
 import { getLoadedKatex, loadKatex, onKatexReady, renderMathToHtml } from "@/shared/lib/math/katexRuntime";
-import {
-  ColorPickerBoard,
-  type ColorPickerPreset,
-} from "@univers42/ui-collection";
-import { parseInlineMarkdown } from "@osionos/markdown-engine";
+import type { ColorPickerPreset } from "@univers42/ui-collection";
+import { shiftOffsetsForTextChange } from "@/shared/lib/editor-input/caretShift";
+import { parseInlineMarkdown, type ResolvedVariable } from "@osionos/markdown-engine";
 import { sanitizeUrl } from "@osionos/markdown-engine/renderCore";
 import {
   applyInlineFormatting,
@@ -63,20 +47,27 @@ import {
   type InlineEditorSelectionSnapshot as SelectionSnapshot,
 } from "@osionos/markdown-engine/dom";
 import {
-  getInlineColorOption,
   normalizeInlineColorToken,
   type InlineColorOption,
 } from "@/shared/ui/assets/inlineTextStyles";
+import { IconValueView } from "@/shared/ui";
 import { usePageStore } from "@/store/usePageStore";
+import { collabLatencyMarks } from "@/shared/lib/perf/collabLatencyMarks";
 import { queueInputFlush } from "@/shared/lib/editor-input/queuedInput";
 import {
   canReadPage,
   getCurrentPageAccessContext,
 } from "@/shared/lib/auth/pageAccess";
 import { resolveInternalPageLinkTitle } from "@/entities/page/model/resolveInternalPageLinkTitle";
+import { useVariablesStore } from "@/features/variables/model/useVariablesStore";
+import { variableResolverFor } from "@/features/variables/model/variableScope";
 import { findLinks, removeLink, replaceLink } from "./linkSourceEdit";
+import {
+  plainTextOfInlineSource,
+  sliceInlineSource,
+} from "@/shared/lib/text/inlineSource";
 import { LinkEditorPanel, type LinkEditorAnchor } from "./LinkEditorPanel";
-import { TurnIntoMenu } from "./TurnIntoMenu";
+import { InlineSelectionToolbar } from "./selection-toolbar/InlineSelectionToolbar";
 
 interface EditableContentProps {
   content: string;
@@ -92,8 +83,16 @@ interface EditableContentProps {
   onBlur?: React.FocusEventHandler<HTMLDivElement>;
   /** Current block type — powers the selection toolbar's "Turn into" dropdown. */
   blockType?: string;
+  /** This block's id — the comments panel anchors a new comment to it. */
+  blockId?: string;
   /** Convert this block to another type (from the "Turn into" dropdown). */
   onTurnInto?: (type: string) => void;
+  /** Open the AI panel on the current selection, optionally running a skill. */
+  onAskAI?: (
+    selectionText: string,
+    command?: string,
+    instruction?: string,
+  ) => void;
 }
 
 type PaletteKind = "text" | "background" | null;
@@ -249,6 +248,7 @@ function renderInlineHtmlPreservingLineBreaks(
   source: string,
   renderSourceForEditing: boolean,
   renderLinkAsSource = false,
+  resolveVariable?: (expr: string) => ResolvedVariable | null,
 ): string {
   const lines = source.split("\n");
 
@@ -265,6 +265,8 @@ function renderInlineHtmlPreservingLineBreaks(
         // Links reveal as raw `[text](url)` only during a Ctrl/Cmd-click edit —
         // gesture-gated, NOT tied to focus, so plain click-to-open still works.
         renderLinkAsSource,
+        // `{{NAME}}` shows its value as an atomic chip; the source keeps `{{NAME}}`.
+        resolveVariable,
       }),
     )
     .join("<br />");
@@ -380,288 +382,6 @@ function buildInlineColorPresets(
   ];
 }
 
-const TOOLBAR_BUTTON_BASE =
-  "grid h-8 min-w-8 place-items-center rounded-md border border-transparent px-2 text-xs font-semibold text-[var(--osio-fg-muted)] transition-colors hover:bg-[var(--osio-bg-subtle)] hover:text-[var(--osio-fg-default)]";
-
-const TOOLBAR_ACTIVE_BUTTON =
-  "border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] text-[var(--osio-fg-default)]";
-
-interface InlineSelectionToolbarProps {
-  selection: SelectionSnapshot;
-  palette: PaletteKind;
-  colorPresets: ColorPickerPreset[];
-  defaultColor: string;
-  shortcutsOpen: boolean;
-  onTogglePalette: (palette: Exclude<PaletteKind, null>) => void;
-  onToggleShortcuts: () => void;
-  onFormatBold: () => void;
-  onFormatItalic: () => void;
-  onFormatStrike: () => void;
-  onFormatCode: () => void;
-  onFormatUnderline: () => void;
-  onFormatTextColor: (color: InlineColorOption) => void;
-  onFormatBackgroundColor: (color: InlineColorOption) => void;
-  onOpenSlashMenu: () => void;
-  onOpenLinkPicker: () => void;
-  onClearFormat: () => void;
-  onToggleMath: () => void;
-  blockType?: string;
-  onTurnInto?: (type: string) => void;
-}
-
-const ToolbarDivider = () => (
-  <span aria-hidden className="mx-0.5 h-5 w-px shrink-0 bg-[var(--osio-border-default)]" />
-);
-
-const TOOLBAR_ICON = "h-[18px] w-[18px]";
-
-// One icon button shape for the whole toolbar — keeps the 12 controls identical
-// (Notion-style: muted SVG that brightens on hover; `active` shows the pressed pill).
-const ToolbarIconButton: React.FC<{
-  label: string;
-  onClick: () => void;
-  active?: boolean;
-  children: React.ReactNode;
-}> = ({ label, onClick, active, children }) => (
-  <button
-    type="button"
-    title={label}
-    aria-label={label}
-    aria-pressed={active}
-    className={[TOOLBAR_BUTTON_BASE, active ? TOOLBAR_ACTIVE_BUTTON : ""].join(" ")}
-    onMouseDown={(event) => event.preventDefault()}
-    onClick={onClick}
-  >
-    {children}
-  </button>
-);
-
-const InlineSelectionToolbar: React.FC<InlineSelectionToolbarProps> = ({
-  selection,
-  palette,
-  colorPresets,
-  defaultColor,
-  shortcutsOpen,
-  onTogglePalette,
-  onToggleShortcuts,
-  onFormatBold,
-  onFormatItalic,
-  onFormatStrike,
-  onFormatCode,
-  onFormatUnderline,
-  onFormatTextColor,
-  onFormatBackgroundColor,
-  onOpenSlashMenu,
-  onOpenLinkPicker,
-  onClearFormat,
-  onToggleMath,
-  blockType,
-  onTurnInto,
-}) => (
-  <div
-    data-testid="inline-selection-toolbar"
-    className="fixed z-[var(--osio-z-max)] -translate-x-1/2"
-    style={{
-      left: selection.rect.left + selection.rect.width / 2,
-      top: Math.max(12, selection.rect.top - 58),
-    }}
-    onMouseDownCapture={(event) => {
-      event.preventDefault();
-    }}
-    onPointerDownCapture={(event) => {
-      event.preventDefault();
-    }}
-  >
-    <div className="relative rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] px-1.5 py-1 shadow-osio-e4">
-      <div className="flex items-center gap-0.5">
-        {blockType && onTurnInto ? (
-          <>
-            <TurnIntoMenu blockType={blockType} onTurnInto={onTurnInto} />
-            <ToolbarDivider />
-          </>
-        ) : null}
-        <ToolbarIconButton
-          label="Text color"
-          active={palette === "text"}
-          onClick={() => onTogglePalette("text")}
-        >
-          <Baseline className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarIconButton
-          label="Background color"
-          active={palette === "background"}
-          onClick={() => onTogglePalette("background")}
-        >
-          <Highlighter className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarIconButton label="Bold" onClick={onFormatBold}>
-          <Bold className={TOOLBAR_ICON} strokeWidth={2.5} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarIconButton label="Italic" onClick={onFormatItalic}>
-          <Italic className={TOOLBAR_ICON} strokeWidth={2.5} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarIconButton label="Underline" onClick={onFormatUnderline}>
-          <Underline className={TOOLBAR_ICON} strokeWidth={2.5} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarIconButton label="Clear formatting" onClick={onClearFormat}>
-          <RemoveFormatting className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarDivider />
-        <ToolbarIconButton label="Add link" onClick={onOpenLinkPicker}>
-          <Link className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarIconButton label="Strikethrough" onClick={onFormatStrike}>
-          <Strikethrough className={TOOLBAR_ICON} strokeWidth={2.5} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarIconButton label="Inline code" onClick={onFormatCode}>
-          <Code className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarIconButton label="Equation" onClick={onToggleMath}>
-          <Radical className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarDivider />
-        <ToolbarIconButton
-          label="Keyboard shortcuts"
-          active={shortcutsOpen}
-          onClick={onToggleShortcuts}
-        >
-          <Keyboard className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
-        </ToolbarIconButton>
-        <ToolbarIconButton label="Open slash menu" onClick={onOpenSlashMenu}>
-          <Slash className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
-        </ToolbarIconButton>
-      </div>
-
-      {palette && (
-        <div
-          data-testid={
-            palette === "text"
-              ? "inline-text-color-palette"
-              : "inline-background-color-palette"
-          }
-          className="absolute left-0 top-full mt-2 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 w-45 h-60 shadow-osio-e4"
-        >
-          <ColorPickerBoard
-            defaultValue={defaultColor}
-            label={palette === "text" ? "Text color" : "Background color"}
-            presets={colorPresets}
-            showInput={false}
-            size={158}
-            variant="wheel"
-            styles={{
-              root: {
-                fontSize: "13px",
-              },
-              header: {
-                marginBottom: "0px",
-              },
-              eyebrow: {
-                display: "none",
-              },
-              title: {
-                fontSize: "14px",
-                lineHeight: 1,
-              },
-              selectedValue: {
-                display: "none",
-              },
-              presets: {
-                gridTemplateColumns: "repeat(4, 14px)",
-                justifyContent: "start",
-                gap: "4px",
-                marginTop: "5px",
-                marginBottom: "0px",
-                marginLeft: "0px",
-                marginRight: "0px",
-              },
-              presetButton: {
-                gap: 0,
-                padding: "0px",
-                width: "14px",
-                minWidth: "14px",
-                maxWidth: "14px",
-                height: "14px",
-                minHeight: "14px",
-                maxHeight: "14px",
-              },
-              presetSwatch: {
-                width: "14px",
-                height: "14px",
-              },
-              presetLabel: {
-                display: "none",
-              },
-            }}
-            onChangeComplete={(value) => {
-              const option = getInlineColorOption(value);
-              if (!option) {
-                return;
-              }
-
-              if (palette === "text") {
-                onFormatTextColor(option);
-              } else {
-                onFormatBackgroundColor(option);
-              }
-            }}
-          />
-        </div>
-      )}
-
-      {shortcutsOpen && (
-        <div className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-[var(--osio-border-default)] bg-[var(--osio-bg-surface)] p-2 shadow-osio-e4">
-          <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--osio-fg-subtle)]">
-            Keyboard shortcuts
-          </p>
-          <ul className="space-y-1">
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
-              <span>Bold</span>
-              <span className="text-[var(--osio-fg-muted)]">
-                Ctrl/Cmd + B
-              </span>
-            </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
-              <span>Italic</span>
-              <span className="text-[var(--osio-fg-muted)]">
-                Ctrl/Cmd + I
-              </span>
-            </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
-              <span>Underline</span>
-              <span className="text-[var(--osio-fg-muted)]">
-                Ctrl/Cmd + U
-              </span>
-            </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
-              <span>Inline code</span>
-              <span className="text-[var(--osio-fg-muted)]">
-                Ctrl/Cmd + E
-              </span>
-            </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
-              <span>Strikethrough</span>
-              <span className="text-[var(--osio-fg-muted)]">
-                Ctrl/Cmd + Shift + X
-              </span>
-            </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
-              <span>Add link</span>
-              <span className="text-[var(--osio-fg-muted)]">
-                Ctrl/Cmd + Shift + L
-              </span>
-            </li>
-            <li className="flex items-center justify-between rounded-md px-2 py-1 text-sm text-[var(--osio-fg-default)]">
-              <span>Delete previous word</span>
-              <span className="text-[var(--osio-fg-muted)]">
-                Ctrl + Backspace
-              </span>
-            </li>
-          </ul>
-        </div>
-      )}
-    </div>
-  </div>
-);
 
 export const EditableContent: React.FC<EditableContentProps> = ({
   content,
@@ -676,7 +396,9 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   onFocus,
   onBlur,
   blockType,
+  blockId,
   onTurnInto,
+  onAskAI,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
   const isComposing = useRef(false);
@@ -749,21 +471,26 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     [recentInlineColors, resolvedTheme],
   );
 
+  // Only a block whose text holds `{{` subscribes to variable changes; every other
+  // block selects a constant 0 and never re-renders for them.
+  const variablesVersion = useVariablesStore((s) => (content.includes("{{") ? s.version : 0));
+  const resolveVariable = useMemo(() => variableResolverFor(pageId), [pageId]);
+
   const getRenderedInlineHtml = useCallback((nextContent: string, renderMathAsSource: boolean, renderLinkAsSource = false) => {
-    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${renderLinkAsSource ? "linksrc" : "link"}:${katexReady}:${nextContent}`;
+    const cacheKey = `${renderMathAsSource ? "source" : "rendered"}:${renderLinkAsSource ? "linksrc" : "link"}:${katexReady}:${variablesVersion}:${nextContent}`;
     if (renderedContentCache.current.source === cacheKey) {
       return renderedContentCache.current.html;
     }
 
     const html = nextContent
-      ? renderInlineHtmlPreservingLineBreaks(nextContent, renderMathAsSource, renderLinkAsSource)
+      ? renderInlineHtmlPreservingLineBreaks(nextContent, renderMathAsSource, renderLinkAsSource, resolveVariable)
       : "";
     renderedContentCache.current = {
       source: cacheKey,
       html,
     };
     return html;
-  }, [katexReady]);
+  }, [katexReady, variablesVersion, resolveVariable]);
 
   useEffect(() => {
     const root = ref.current;
@@ -863,9 +590,16 @@ export const EditableContent: React.FC<EditableContentProps> = ({
         const savedOffsets = isFocused.current
           ? getInlineEditorSelectionOffsets(root)
           : null;
+        const previousText = root.textContent ?? "";
         root.innerHTML = nextHtml;
+        collabLatencyMarks.blockTextWritten(root);
         if (savedOffsets) {
-          setInlineEditorSelectionOffsets(root, savedOffsets);
+          // The rewrite may change the visible text before the caret (a mention's
+          // hostname becoming its title); keep the caret after that text, not inside it.
+          setInlineEditorSelectionOffsets(
+            root,
+            shiftOffsetsForTextChange(savedOffsets, previousText, root.textContent ?? ""),
+          );
         }
       }
     },
@@ -899,6 +633,12 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   useEffect(() => {
     if (katexReady && !isFocused.current) renderContent(content);
   }, [katexReady, content, renderContent]);
+
+  // A variable's value moved (env.json edit, preferences, the minute clock). The block
+  // being typed in keeps its chips until blur, so the caret is never disturbed mid-word.
+  useEffect(() => {
+    if (variablesVersion && !isFocused.current) renderContent(content);
+  }, [variablesVersion, content, renderContent]);
 
   useEffect(() => {
     if (selectionSnapshot) {
@@ -936,6 +676,17 @@ export const EditableContent: React.FC<EditableContentProps> = ({
       setShowShortcuts(false);
     }
   }, [linkPicker, openPalette]);
+
+  // The selected text, in plain words: the AI works on the SELECTION, not on
+  // the whole block. The offsets are plain-text ones, the currency of the
+  // inline editor.
+  const selectedText = useMemo(() => {
+    const snapshot = selectionSnapshot ?? lastSelectionSnapshotRef.current;
+    if (!snapshot) return "";
+    return plainTextOfInlineSource(
+      sliceInlineSource(canonicalSourceRef.current, snapshot.start, snapshot.end),
+    );
+  }, [selectionSnapshot]);
 
   // Only the FOCUSED block listens for selectionchange. Previously every mounted
   // block attached its own document-level listener, so each caret move (i.e. every
@@ -1034,9 +785,18 @@ export const EditableContent: React.FC<EditableContentProps> = ({
           caret !== null &&
           isMidDelimiterRun(normalizedSource, inlineSourceCaretOffset(root, caret));
         if (!holdRestyle && (parsedHtml.includes("<") || root.innerHTML.includes("<"))) {
+          const previousText = root.textContent ?? "";
           root.innerHTML = parsedHtml;
           if (selectionOffsets) {
-            setInlineEditorSelectionOffsets(root, selectionOffsets);
+            // A completed `{{NOW}}` becomes a chip of a different length; keep the
+            // caret after it, not at the old offset inside the value. Scoped to
+            // variable text so every other restyle keeps its proven caret path.
+            setInlineEditorSelectionOffsets(
+              root,
+              normalizedSource.includes("{{")
+                ? shiftOffsetsForTextChange(selectionOffsets, previousText, root.textContent ?? "")
+                : selectionOffsets,
+            );
           }
         }
       }
@@ -1262,6 +1022,45 @@ export const EditableContent: React.FC<EditableContentProps> = ({
 
     setLinkPicker({ mode: "chooser", query: "" });
   }, [selectionSnapshot]);
+
+  // Stable toolbar callbacks: the memoised bar must not re-render just because
+  // this block did (each new arrow function would defeat React.memo).
+  const handleTogglePalette = useCallback(
+    (palette: Exclude<PaletteKind, null>) => {
+      setOpenPalette((current) => (current === palette ? null : palette));
+    },
+    [],
+  );
+
+  const handleToggleShortcuts = useCallback(() => {
+    setOpenPalette(null);
+    setShowShortcuts((current) => !current);
+  }, []);
+
+  const handleFormatBold = useCallback(
+    () => handleToggleInlineFormat("bold"),
+    [handleToggleInlineFormat],
+  );
+  const handleFormatItalic = useCallback(
+    () => handleToggleInlineFormat("italic"),
+    [handleToggleInlineFormat],
+  );
+  const handleFormatUnderline = useCallback(
+    () => handleToggleInlineFormat("underline"),
+    [handleToggleInlineFormat],
+  );
+  const handleFormatStrike = useCallback(
+    () => handleToggleInlineFormat("strikethrough"),
+    [handleToggleInlineFormat],
+  );
+  const handleFormatTextColor = useCallback(
+    (color: InlineColorOption) => handleApplyColor("text", color),
+    [handleApplyColor],
+  );
+  const handleFormatBackgroundColor = useCallback(
+    (color: InlineColorOption) => handleApplyColor("background", color),
+    [handleApplyColor],
+  );
 
   const handleInlineFormattingShortcut = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -1558,30 +1357,25 @@ export const EditableContent: React.FC<EditableContentProps> = ({
               colorPresets={inlineColorPresets}
               defaultColor={defaultInlineColor}
               shortcutsOpen={showShortcuts}
-              onTogglePalette={(palette) =>
-                setOpenPalette((current) =>
-                  current === palette ? null : palette,
-                )
-              }
-              onToggleShortcuts={() => {
-                setOpenPalette(null);
-                setShowShortcuts((current) => !current);
-              }}
-              onFormatBold={() => handleToggleInlineFormat("bold")}
-              onFormatItalic={() => handleToggleInlineFormat("italic")}
-              onFormatUnderline={() => handleToggleInlineFormat("underline")}
-              onFormatStrike={() => handleToggleInlineFormat("strikethrough")}
+              onTogglePalette={handleTogglePalette}
+              onToggleShortcuts={handleToggleShortcuts}
+              onFormatBold={handleFormatBold}
+              onFormatItalic={handleFormatItalic}
+              onFormatUnderline={handleFormatUnderline}
+              onFormatStrike={handleFormatStrike}
               onFormatCode={handleToggleCode}
-              onFormatTextColor={(color) => handleApplyColor("text", color)}
-              onFormatBackgroundColor={(color) =>
-                handleApplyColor("background", color)
-              }
+              onFormatTextColor={handleFormatTextColor}
+              onFormatBackgroundColor={handleFormatBackgroundColor}
               onOpenSlashMenu={handleOpenSlashMenu}
               onOpenLinkPicker={handleAddLink}
               onClearFormat={handleClearFormat}
               onToggleMath={handleToggleMath}
               blockType={blockType}
+              blockId={blockId}
+              pageId={pageId}
               onTurnInto={onTurnInto}
+              selectionText={selectedText}
+              onAskAI={onAskAI}
             />,
             document.body,
           )
@@ -1717,7 +1511,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
                           }
                         >
                           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--osio-bg-subtle)] text-xs text-[var(--osio-fg-muted)]">
-                            {workspacePage.icon ?? "□"}
+                            {workspacePage.icon ? <IconValueView value={workspacePage.icon} size={12} /> : "□"}
                           </span>
                           <span className="min-w-0 flex-1 truncate">
                             {workspacePage.title || "Untitled"}

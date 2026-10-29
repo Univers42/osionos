@@ -1,0 +1,6 @@
+{
+	"slug": "beta",
+	"title": "Beta pack",
+	"description": "The beta fixture pack.",
+	"docs": ["beta/one.md", "beta/two.md"]
+}

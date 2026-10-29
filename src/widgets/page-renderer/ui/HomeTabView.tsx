@@ -16,6 +16,7 @@ import { useHomeVariantStore, type HomeVariant } from "@/widgets/home-variants/m
 
 import { getHomeDashboardPageId } from "@/widgets/database-view/model/databaseViewCatalog.meta";
 import { WS_FILES_DB_ID, WS_FILES_TABLE_VIEW } from "@/widgets/database-view/model/workspaceDatabaseConstants";
+import { ForYouStrip } from "@/features/recs/ui/ForYouStrip";
 import { usePageStore } from "@/store/usePageStore";
 import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
@@ -80,6 +81,18 @@ function renderHomeVariantContent(
     );
   }
   if (variant === "workspace") return <LazyHomeWorkspaceMode />;
-  if (homeDashboardPage) return <LazyOsionosPage pageId={homeDashboardPage._id} chrome={chrome} />;
+  if (homeDashboardPage) {
+    // The dashboard is a column: the "For you" strip above the page, and the
+    // page itself with the height and the scroll it always had (flex-1 min-h-0
+    // — the strip takes what it needs, the page takes the rest).
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <ForYouStrip />
+        <div className="min-h-0 flex-1">
+          <LazyOsionosPage pageId={homeDashboardPage._id} chrome={chrome} />
+        </div>
+      </div>
+    );
+  }
   return <LoadingPane />;
 }

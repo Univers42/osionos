@@ -66,6 +66,15 @@ const legacySecondBrainOn = process.env.VITE_LEGACY_SECOND_BRAIN === "true";
 // they run only through their own runner (`test:e2e:perf`, one worker), never in the
 // parallel suite next to other tests.
 const perfRun = process.env.PLAYWRIGHT_PERF === "1";
+// The co-editing latency spec needs a real bridge and two accounts (COEDIT_* env), so it
+// never rides the default suite: only `test:e2e:coedit` (PLAYWRIGHT_COEDIT=1) runs it.
+const coeditRun = process.env.PLAYWRIGHT_COEDIT === "1";
+// Opt-in (PLAYWRIGHT_BRIDGE_STUB=1): the app is built with a bridge URL, so code that only runs
+// when a bridge is configured (the handoff consume, the public-page fetch) is reachable. The
+// default offline run has `VITE_API_URL=""`, where such a test would pass vacuously. The specs
+// answer every request to the stub host themselves; nothing leaves the machine.
+const bridgeStub = process.env.PLAYWRIGHT_BRIDGE_STUB === "1";
+const BRIDGE_STUB_URL = "https://bridge.invalid";
 const LEGACY_ON_SPECS = [
   "legacy-second-brain-gate.spec.mjs",
   "legacy-graph-engine-audit.spec.mjs",
@@ -81,9 +90,12 @@ const chromiumExecutablePath = process.env.PW_CHROMIUM_PATH || undefined;
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  testMatch: bridgeStub ? ["**/bridge-stub/**/*.spec.mjs"] : undefined,
   testIgnore: [
+    ...(bridgeStub ? [] : ["**/bridge-stub/**"]),
     ...(legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`)),
     ...(perfRun ? [] : ["**/perf/**"]),
+    ...(coeditRun ? [] : ["**/latency/**"]),
   ],
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
@@ -124,8 +136,9 @@ export default defineConfig({
     env: {
       ...process.env,
       // Empty = offline build. tests/e2e/functional/sign-out-everywhere.spec.ts needs a bridge
-      // origin (it stubs every /api call), so it runs only when this is set to the baseURL.
-      VITE_API_URL: process.env.PLAYWRIGHT_API_URL ?? "",
+      // origin (it stubs every /api call), so it runs only when PLAYWRIGHT_API_URL is set to the
+      // baseURL; the bridge-stub mode builds against its own stub origin.
+      VITE_API_URL: bridgeStub ? BRIDGE_STUB_URL : (process.env.PLAYWRIGHT_API_URL ?? ""),
       VITE_ALLOW_OFFLINE_MODE: "true",
       VITE_REQUIRE_BRIDGE_SESSION: "false",
     },

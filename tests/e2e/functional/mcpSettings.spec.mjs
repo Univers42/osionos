@@ -22,8 +22,9 @@ import { openFreshPage } from "../../browser/core/app.mjs";
 async function openMcpSettings(page, baseURL) {
   await openFreshPage(page, baseURL);
   await page.getByRole("button", { name: "Settings", exact: true }).first().click();
-  // Settings nav items are role="tab", not buttons.
-  await page.getByRole("tab", { name: "osionos MCP" }).click();
+  // Section rows are navigation buttons inside the settings tab's region.
+  await page.getByRole("region", { name: "Settings", exact: true }).waitFor();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "osionos MCP" }).click();
   // The panel must actually mount (it used to blank on an unpersisted workspace).
   await expect(page.getByTestId("mcp-panel")).toBeVisible();
 }
@@ -59,8 +60,9 @@ test.describe("osionos MCP settings", () => {
     // (5) Disconnect all users → back to 0 connected.
     await panelTab(page, /Manage/).click();
     await page.getByTestId("mcp-disconnect-all").click();
-    await expect(page.getByTestId("mcp-disconnect-all-confirm")).toBeVisible();
-    await page.getByTestId("mcp-disconnect-all-confirm-btn").click();
+    const confirm = page.getByRole("dialog", { name: "Disconnect all users from osionos MCP" });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole("button", { name: "Disconnect all users" }).click();
     await expect(page.getByTestId("mcp-connected-count")).toHaveText("0");
   });
 

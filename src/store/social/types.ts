@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/28 12:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -30,6 +30,10 @@ export interface ContactEdge {
   status: ConnectionStatus;
   direction: ConnectionDirection;
   introMessage: string | null;
+  /** How the edge came to be: a person requested it ('manual') or a shared workspace
+   *  created it ('colleague'). Only the manual kind is a friendship an invite may
+   *  act on (C653); an older payload without it reads as 'manual', the bridge default. */
+  source: 'manual' | 'colleague';
   createdAt: string;
 }
 
@@ -41,7 +45,14 @@ export interface BlockedUser {
   createdAt?: string;
 }
 
-export type ReportSubjectKind = 'user' | 'message' | 'page' | 'workspace' | 'channel';
+export type ReportSubjectKind =
+  | 'user'
+  | 'message'
+  | 'page'
+  | 'workspace'
+  | 'channel'
+  | 'feed_comment'
+  | 'page_comment';
 
 export interface ReportPayload {
   subjectUserId?: string;

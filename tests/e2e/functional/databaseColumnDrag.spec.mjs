@@ -25,20 +25,24 @@ test.describe("database-column-drag", () => {
     const nameTh = block.locator("th", { hasText: "Name" }).first();
     const before = (await nameTh.boundingBox()).width;
 
-    const separator = block.locator('[aria-label="Resize column"]').first();
+    // Each handle is named for its column ("Resize Name column").
+    const separator = block.getByRole("separator", { name: /^Resize .+ column$/ }).first();
     const box = await separator.boundingBox();
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    const grab = box.x + box.width / 2;
+    await page.mouse.move(grab, box.y + box.height / 2);
     await page.mouse.down();
-    await page.mouse.move(box.x + 80, box.y + box.height / 2, { steps: 5 });
+    await page.mouse.move(grab + 80, box.y + box.height / 2, { steps: 5 });
 
     // Mid-drag: the rubber-band marquee must not exist.
     await expect(page.locator('[data-testid="marquee-rect"]')).toHaveCount(0);
     await page.mouse.up();
 
-    // No block got rubber-band selected, and the resize itself worked.
+    // No block got rubber-band selected, and the column edge followed the
+    // pointer: a table narrower than its block used to stretch the columns, so
+    // the edge moved +24 px for an +80 px drag.
     await expect(page.locator('[data-selected="true"]')).toHaveCount(0);
     const after = (await nameTh.boundingBox()).width;
-    expect(after - before).toBeGreaterThan(30);
+    expect(Math.abs(after - before - 80)).toBeLessThanOrEqual(2);
   });
 
   test("dragging a column header marks the source and reorders live", async ({ page }) => {
@@ -58,12 +62,12 @@ test.describe("database-column-drag", () => {
       clientX: Math.round(nameBox.x + 4),
       clientY: Math.round(nameBox.y + 5),
     });
-    await expect(block.locator("thead th").nth(1)).toContainText("Notes");
-    await expect(block.locator("thead th").nth(2)).toContainText("Name");
+    await expect(block.locator("thead th").nth(0)).toContainText("Notes");
+    await expect(block.locator("thead th").nth(1)).toContainText("Name");
 
     // Ending the drag keeps the new order and clears the source marker.
     await textTh.dispatchEvent("dragend");
-    await expect(block.locator("thead th").nth(1)).toContainText("Notes");
+    await expect(block.locator("thead th").nth(0)).toContainText("Notes");
     await expect(block.locator("th", { hasText: "Notes" }).first()).not.toHaveClass(/opacity-40/);
   });
 });

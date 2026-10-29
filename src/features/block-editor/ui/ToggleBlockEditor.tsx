@@ -29,6 +29,8 @@ interface ToggleBlockEditorProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   focusBlock: (blockId: string, cursorEnd?: boolean) => void;
   onRequestSlashMenu?: (position: { x: number; y: number; top: number }) => void;
+  /** Open the AI panel on the selection (the selection toolbar). */
+  onAskAI?: (selectionText: string) => void;
 }
 
 /* ── Component ──────────────────────────────────────────────────────── */
@@ -51,6 +53,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
   onKeyDown,
   focusBlock,
   onRequestSlashMenu,
+  onAskAI,
 }) => {
   const [expanded, setExpanded] = useState(!block.collapsed);
   const updateBlock = usePageStore((s) => s.updateBlock);
@@ -135,7 +138,7 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
           onClick={handleToggle}
           aria-label={expanded ? "Collapse toggle" : "Expand toggle"}
           aria-expanded={expanded}
-          className="shrink-0 mt-[3px] w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center"
+          className={`osio-line-marker ${getToggleHeadingClass(block.headingLevel)} shrink-0 w-5 h-5 rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center`}
         >
           <ChevronRight
             size={14}
@@ -155,6 +158,8 @@ export const ToggleBlockEditor: React.FC<ToggleBlockEditorProps> = ({
             onChange={onChange}
             onKeyDown={handleSummaryKeyDown}
             onRequestSlashMenu={onRequestSlashMenu}
+            onAskAI={onAskAI}
+            blockId={block.id}
           />
         </div>
       </div>

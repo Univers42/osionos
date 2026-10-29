@@ -121,3 +121,10 @@ test("refused credentials are a 503, anything else a 502 — never the database'
     await assert.rejects(store.list(CONFIG, WS), (error) => error.status === expected && !/internal detail/.test(error.message), `upstream ${status}`);
   }
 });
+
+test("list for a resource also answers the workspace-wide rules, lower-cased id, no duplicates of the dialog's own filter", async () => {
+  const { calls, fetchImpl } = fakeFetch(({ url }) => [200, [row({ resource_id: url.searchParams.get("resource_id") === "eq." ? "" : "p1", id: url.searchParams.get("resource_id") === "eq." ? "wide" : RULE_ID })]]);
+  const rules = await createShareRuleStore({ fetchImpl }).list(CONFIG, WS, "P1");
+  assert.deepEqual(calls.map(({ url }) => url.searchParams.get("resource_id")).sort(), ["eq.", "eq.p1"]);
+  assert.deepEqual(rules.map((rule) => [rule._id, rule.resourceId]), [[RULE_ID, "p1"], ["wide", null]]);
+});

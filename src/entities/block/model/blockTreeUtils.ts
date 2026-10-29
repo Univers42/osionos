@@ -96,3 +96,38 @@ export function removeBlocksFromTree(blocks: Block[], idSet: Set<string>): Block
   }
   return result;
 }
+
+/** A copy of `blocks` where the block `blockId` (at any depth) is replaced by
+ *  `update(block)`. Returns the same array when the id is absent. */
+export function updateBlockInTree(blocks: Block[], blockId: string, update: (block: Block) => Block): Block[] {
+  let changed = false;
+  const next = blocks.map((block) => {
+    if (block.id === blockId) {
+      const updated = update(block);
+      if (updated !== block) changed = true;
+      return updated;
+    }
+    if (!block.children?.length) return block;
+    const children = updateBlockInTree(block.children, blockId, update);
+    if (children === block.children) return block;
+    changed = true;
+    return { ...block, children };
+  });
+  return changed ? next : blocks;
+}
+
+/** A copy of `blocks` with `inserted` right after the block `afterBlockId` (at any
+ *  depth, as its next sibling). Returns the same array when the id is absent. */
+export function insertBlockAfterInTree(blocks: Block[], afterBlockId: string, inserted: Block): Block[] {
+  const index = blocks.findIndex((block) => block.id === afterBlockId);
+  if (index >= 0) return [...blocks.slice(0, index + 1), inserted, ...blocks.slice(index + 1)];
+  let changed = false;
+  const next = blocks.map((block) => {
+    if (!block.children?.length) return block;
+    const children = insertBlockAfterInTree(block.children, afterBlockId, inserted);
+    if (children === block.children) return block;
+    changed = true;
+    return { ...block, children };
+  });
+  return changed ? next : blocks;
+}

@@ -15,6 +15,7 @@ import { persist } from 'zustand/middleware';
 
 import { listReports, submitReport } from '@/shared/social/reportApi';
 import { errorMessage, pushSettingsError } from '@/store/settings/settingsStoreUtils';
+import { shareInFlight } from '@/store/social/sharedHydrate';
 import type { Report, ReportPayload } from '@/store/social/types';
 
 interface ReportsStore {
@@ -33,16 +34,15 @@ export const useReportsStore = create<ReportsStore>()(
       data: [],
       loading: false,
       error: null,
-      hydrate: async () => {
+      hydrate: shareInFlight(async () => {
         set({ loading: true, error: null });
         try {
           const reports = await listReports();
           set({ data: reports, loading: false, error: null });
         } catch (error) {
           set({ loading: false, error: errorMessage(error) });
-          pushSettingsError('Reports unavailable', error);
         }
-      },
+      }),
       submit: async (payload) => {
         try {
           const report = await submitReport(payload);

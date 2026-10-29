@@ -11,21 +11,25 @@
 /* ************************************************************************** */
 
 import React, { useCallback, useMemo, useState } from "react";
-import { Captions, Download, Link, Maximize2, MessageSquare, MoreHorizontal } from "lucide-react";
+import { Captions, Download, Link, Maximize2, MessageSquare, MoreHorizontal, ScanText } from "lucide-react";
 import { BlockContextMenu } from "../BlockContextMenu";
 import type { BlockContextMenuState } from "../../model/blockContextMenu.helpers";
 import { useImageBlockActions } from "./useImageBlockActions";
 import { buildImageMenuSections } from "./imageBlockMenu";
+import type { DescribeImageState } from "./useDescribeImage";
 
 interface ImageHoverToolbarProps {
   pageId: string;
   blockId: string;
   url: string | undefined;
   altText: string;
+  /** The block's own asset — what "Ask AI" hands over to the Assistant. */
+  asset?: string;
   onCaption: () => void;
   onFullScreen: () => void;
   onReplace: () => void;
   onAltText: () => void;
+  describe?: DescribeImageState;
 }
 
 const BTN =
@@ -36,13 +40,15 @@ export const ImageHoverToolbar: React.FC<ImageHoverToolbarProps> = ({
   blockId,
   url,
   altText,
+  asset,
   onCaption,
   onFullScreen,
   onReplace,
   onAltText,
+  describe,
 }) => {
   const [menu, setMenu] = useState<BlockContextMenuState | null>(null);
-  const actions = useImageBlockActions(pageId, blockId, url, altText);
+  const actions = useImageBlockActions(pageId, blockId, url, altText, asset);
 
   const openMenu = useCallback(
     (event: React.MouseEvent) => {
@@ -89,8 +95,9 @@ export const ImageHoverToolbar: React.FC<ImageHoverToolbarProps> = ({
         comment: withClose(actions.comment),
         suggestEdits: withClose(actions.suggestEdits),
         askAI: withClose(actions.askAI),
+        describe: describe?.available ? { run: withClose(describe.run), running: describe.running } : undefined,
       }),
-    [actions, onAltText, onCaption, onFullScreen, onReplace, withClose],
+    [actions, describe, onAltText, onCaption, onFullScreen, onReplace, withClose],
   );
 
   return (
@@ -115,6 +122,19 @@ export const ImageHoverToolbar: React.FC<ImageHoverToolbarProps> = ({
         <button type="button" aria-label="Copy link" title="Copy link" className={BTN} onClick={(e) => runToolbar(e, actions.copyImageUrl)}>
           <Link size={16} />
         </button>
+        {describe?.available ? (
+          <button
+            type="button"
+            aria-label="Describe with AI"
+            title="Describe with AI"
+            aria-busy={describe.running}
+            disabled={describe.running}
+            className={`${BTN} disabled:opacity-50`}
+            onClick={(e) => runToolbar(e, describe.run)}
+          >
+            <ScanText size={16} className={describe.running ? "animate-pulse" : undefined} />
+          </button>
+        ) : null}
         <button type="button" aria-label="More options" title="More" className={BTN} onClick={openMenu}>
           <MoreHorizontal size={16} />
         </button>

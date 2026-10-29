@@ -1,0 +1,56 @@
+== TEI /info ==
+{
+  "model_id": "intfloat/multilingual-e5-small",
+  "model_sha": null,
+  "model_dtype": "float32",
+  "served_model_name": "intfloat/multilingual-e5-small",
+  "model_type": {
+    "embedding": {
+      "pooling": "mean"
+    }
+  },
+  "max_concurrent_requests": 512,
+  "max_input_length": 512,
+  "max_batch_tokens": 16384,
+  "max_batch_requests": 8,
+  "max_client_batch_size": 32,
+  "auto_truncate": true,
+  "tokenization_workers": 7,
+  "version": "1.9.4",
+  "sha": "e80ef225ed0e6cb1717ce632a6a84b6cf211bb67",
+  "docker_label": "sha-e80ef22"
+}
+TEI /health: (empty)
+
+== (a) QUERY LATENCY (sequential, n=300) ==
+  ... 100/300 queries done
+  ... 200/300 queries done
+  ... 300/300 queries done
+sequential query                   n=300    p50=7.54 ms  p95=8.99 ms  p99=10.35 ms  min=5.67  max=14.44  mean=7.60
+sample query: "query: webhook subscription onboarding activation webhook cohort latency scope quarter integration onboarding stakeholder" (13 words)
+
+== PASSAGE CALIBRATION ==
+calibrated word count: 201 -> 349 tokens (target 350)
+sample passage (first 160 chars): "passage: discount headcount approval milestone sandbox approval onboarding backlog contract approval benchmark onboarding dispute webhook margin quarter margin ..."
+measured tokens/passage over 25 samples: mean=343.2 min=324 max=357
+
+== (b) BACKFILL (2000 passages x ~343 tokens, batch=32, concurrency=4) ==
+  ... 25/63 batches (784/2000 passages) 17.6 chunks/s
+  ... 50/63 batches (1584/2000 passages) 17.9 chunks/s
+backfill total: 111.25 s for 2000 passages -> 17.98 chunks/s
+
+== (c) CONCURRENT SINGLE QUERIES (concurrency=16, n=300) ==
+concurrency-16 query               n=300    p50=69.66 ms  p95=75.93 ms  p99=77.42 ms  min=10.29  max=77.95  mean=68.83
+
+== SANITY (cosine) ==
+embedding dim: 384
+cosine(query, relevant)   = 0.841464
+cosine(query, irrelevant) = 0.673054
+SANITY (relevant > irrelevant): PASS
+
+== SUMMARY ==
+GATE TEI query p95 < 30 ms: PASS (8.99)
+TEI backfill: 17.98 chunks/s
+TEI concurrency-16 query p95: 75.93 ms
+TEI sequential query p50/p95/p99: 7.54 / 8.99 / 10.35 ms
+TEI embedding dim: 384  sanity: PASS

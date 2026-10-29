@@ -12,6 +12,7 @@
 
 import {
   Bell,
+  Bug,
   CalendarRange,
   CircleAlert,
   Database,
@@ -24,12 +25,17 @@ import {
   PenTool,
   Play,
   Search,
+  Shield,
+  Sparkles,
   Store,
   type LucideIcon,
 } from "lucide-react";
 import { calendarAppUrl, mailAppUrl } from "@/shared/config/appUrls";
 import type { ActivePanel } from "@/shared/config/uiStore";
 import type { CommandId } from "@/features/automations/model/types";
+import { roleAtLeast, type PlatformRole } from "@/features/auth/model/platformRole";
+import { adminTab } from "@/widgets/workspace-grid/model/layoutPersist";
+import type { WorkspaceTab } from "@/widgets/workspace-grid/model/layoutTree";
 import { isWhiteboardReady } from "@/features/whiteboard/model/whiteboardAvailability";
 
 /** Fixed rail width (px) — matches the .rail CSS width. */
@@ -41,12 +47,13 @@ export const PANEL_TRANSITION_WIDTH = 140;
 export const RAIL_HIDE_WIDTH = 24;
 
 /** The apps whose rail item opens a tab of its own. */
-export type RailApp = "mail" | "calendar" | "whiteboard";
+export type RailApp = "mail" | "calendar" | "whiteboard" | "ai-hub";
 
 /** A rail item selects a side panel or opens an embedded app tab. */
 export type RailAction =
   | { kind: "panel"; panel: ActivePanel }
-  | { kind: "tab"; app: RailApp };
+  | { kind: "tab"; app: RailApp }
+  | { kind: "workspaceTab"; makeTab: () => WorkspaceTab };
 
 export interface RailItem {
   id: string;
@@ -57,6 +64,8 @@ export interface RailItem {
   commandId?: CommandId;
   /** Hides the item while it answers false; absent means always shown. */
   isAvailable?: () => boolean;
+  /** Hides the item below this platform role. Cosmetic: the bridge is the authority. */
+  requiredRole?: PlatformRole;
 }
 
 export interface RailGroup {
@@ -80,6 +89,8 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
       // ponytail: nav LABEL renamed Public→Shared (AOC §12); panel id stays "public"
       // (R-R3) so the persisted uiStore activePanel keeps resolving.
       { id: "public", label: "Shared", Icon: Globe, action: { kind: "panel", panel: "public" } },
+      // The moderator's entry too: the sections inside the space are what the role gates.
+      { id: "admin", label: "Admin", Icon: Shield, action: { kind: "workspaceTab", makeTab: adminTab }, requiredRole: "moderator" },
     ],
   },
   {
@@ -89,6 +100,7 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
       { id: "scm", label: "Source Control", Icon: GitBranch, action: { kind: "panel", panel: "scm" } },
       { id: "run", label: "Run", Icon: Play, action: { kind: "panel", panel: "run" } },
       { id: "problems", label: "Problems", Icon: CircleAlert, action: { kind: "panel", panel: "problems" } },
+      { id: "issues", label: "Issues", Icon: Bug, action: { kind: "panel", panel: "issues" } },
     ],
   },
   {
@@ -96,6 +108,7 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
     label: "Conversations",
     items: [
       { id: "conversations", label: "Conversations", Icon: MessagesSquare, action: { kind: "panel", panel: "conversations" }, commandId: "focusConversations" },
+      { id: "ai-hub", label: "AI Hub", Icon: Sparkles, action: { kind: "tab", app: "ai-hub" } },
       { id: "notifications", label: "Notifications", Icon: Bell, action: { kind: "panel", panel: "notifications" } },
     ],
   },
@@ -112,7 +125,12 @@ export const RAIL_GROUPS: readonly RailGroup[] = [
 ];
 
 /** The items of a group the user can reach right now: a public build never offers a
- *  Mail/Calendar icon whose URL is blank, which would open a dead iframe. */
-export function visibleRailItems(group: RailGroup): readonly RailItem[] {
-  return group.items.filter((item) => item.isAvailable?.() ?? true);
+ *  Mail/Calendar icon whose URL is blank, which would open a dead iframe. A role of
+ *  `null` (signed in without one, or signed out) loses every role-gated item; an omitted
+ *  role skips the role filter, for callers that only care about availability. */
+export function visibleRailItems(group: RailGroup, role?: PlatformRole | null): readonly RailItem[] {
+  return group.items.filter((item) => {
+    if (role !== undefined && item.requiredRole && !roleAtLeast(role, item.requiredRole)) return false;
+    return item.isAvailable?.() ?? true;
+  });
 }

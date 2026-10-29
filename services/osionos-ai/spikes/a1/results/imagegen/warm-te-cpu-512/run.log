@@ -1,0 +1,8 @@
+idle_vram_bytes 1951543296
+server_ready_s 1.728385798
+{"call":1,"wall_ms":21325,"request":{"url":"http://ai-a1-sd-server:1234/v1/images/generations","keys":["model","n","prompt","size"],"n":1,"size":"512x512"},"images":1,"bytes":492142,"png":true,"decoded":"512x512","mediaType":"image/png","usage":{},"warnings":[]}
+{"call":2,"wall_ms":19440,"request":{"url":"http://ai-a1-sd-server:1234/v1/images/generations","keys":["model","n","prompt","size"],"n":1,"size":"512x512"},"images":1,"bytes":529668,"png":true,"decoded":"512x512","mediaType":"image/png","usage":{},"warnings":[]}
+{"call":3,"wall_ms":19481,"request":{"url":"http://ai-a1-sd-server:1234/v1/images/generations","keys":["model","n","prompt","size"],"n":1,"size":"512x512"},"images":1,"bytes":573387,"png":true,"decoded":"512x512","mediaType":"image/png","usage":{},"warnings":[]}
+{"call":4,"wall_ms":19137,"request":{"url":"http://ai-a1-sd-server:1234/v1/images/generations","keys":["model","n","prompt","size"],"n":1,"size":"512x512"},"images":1,"bytes":492142,"png":true,"decoded":"512x512","mediaType":"image/png","usage":{},"warnings":[]}
+{"call":5,"wall_ms":19267,"request":{"url":"http://ai-a1-sd-server:1234/v1/images/generations","keys":["model","n","prompt","size"],"n":1,"size":"512x512"},"images":1,"bytes":529668,"png":true,"decoded":"512x512","mediaType":"image/png","usage":{},"warnings":[]}
+peak_vram_bytes 7792066560 (7.26 GiB)

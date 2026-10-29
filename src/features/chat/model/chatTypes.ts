@@ -12,6 +12,21 @@
 
 /** Chat Shell domain model (§5). Local-first; persisted via useChatStore. */
 
+import type { AiPart } from "@/features/ai/api/aiClient";
+
+import type { ToolActivityPart } from "./toolActivity";
+import type { PermissionPart } from "./approvalParts";
+import type { MemoryProposalPart } from "./memoryParts";
+import type { HandoffPart } from "./agentHandoff";
+import type { ResearchPart } from "./researchParts";
+
+/**
+ * The parts of a message: the service's own (the sources of the answer), the
+ * calls the assistant made to its tools, and the cards of the writes it asked
+ * for, the memories it proposed, and where a research run stands.
+ */
+export type ChatMessagePart = AiPart | ToolActivityPart | PermissionPart | MemoryProposalPart | HandoffPart | ResearchPart;
+
 export type MessageRole = "user" | "assistant" | "system";
 
 export interface ChatMessage {
@@ -22,6 +37,28 @@ export interface ChatMessage {
   createdAt: string;
   connectorId?: string;
   model?: string;
+  /** The connection the answer was paid for — the user's own, or the platform's. */
+  connectionId?: string;
+  /** The agent that shaped the answer: a built-in id, or a custom agent's uuid. */
+  agentId?: string;
+  /** The message parts, in the service's shape, and the calls of the tools. */
+  parts?: ChatMessagePart[];
+  /** The run that produced this message, once the service answered. */
+  runId?: string;
+  /** Where the answer stands: streaming, done, or failed. */
+  status?: "streaming" | "done" | "error";
+  /** The service's code when the answer failed. */
+  errorCode?: string;
+  /** The seconds the service asked the client to wait, when it did. */
+  retryAfterSeconds?: number | null;
+  /** The model that gave the answer, when the run moved on from the one chosen. */
+  answeredBy?: string;
+  /** Why it moved on: the service's closed set. */
+  routeReason?: "rate_limited" | "upstream_error" | "unavailable";
+  /** A resume missed frames (`resume.gap`): at the end the text is re-read from the transcript (C402). */
+  textGap?: boolean;
+  /** The reader's verdict on an answer. Local only: no service route takes it yet. */
+  feedback?: "up" | "down";
 }
 
 export interface Conversation {
@@ -32,6 +69,13 @@ export interface Conversation {
   /** Selected default connector + model for this conversation. */
   connectorId?: string;
   model?: string;
+  /** The conversation on the AI service, once it has one. */
+  serverConversationId?: string;
+  /**
+   * The account that started it. The store is per browser, not per account, so the
+   * lists show a conversation only to its owner; one without an owner predates this.
+   */
+  ownerId?: string;
   createdAt: string;
   updatedAt: string;
 }

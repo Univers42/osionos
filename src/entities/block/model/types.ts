@@ -10,6 +10,10 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import type { EmbedSnapshot } from '@/shared/lib/embed/embedInfo';
+import type { ButtonProgram } from './buttonProgram';
+import type { BlockStyle } from './blockStyle';
+
 /**
  * Standalone Block types for the playground application.
  * This replaces the external @src/types/database dependency.
@@ -47,6 +51,9 @@ export type BlockType =
   | 'graph_view'
   | 'draw'
   | 'whiteboard'
+  | 'diagram'
+  | 'embed'
+  | 'bookmark'
   | 'home_views'
   | 'placeholder';
 
@@ -116,6 +123,22 @@ export interface LayoutCell {
   fontSize?: LayoutCellFontSize;
   /** Named section key (e.g. "header"/"about") — drives per-section template write-grants. */
   section?: string;
+  /**
+   * Height pinned on a hug cell, in whole px (see the canvas "Save measured
+   * height" action). The cell renders at that height until "Auto height"
+   * clears it again.
+   * Caveat: a pinned height is a snapshot of the width the cell was measured
+   * at — a wider or narrower pane re-measures the content and the pinned
+   * value goes stale.
+   */
+  measuredHeight?: number;
+  /**
+   * A formula that decides whether the cell is rendered at all, evaluated
+   * against the page's own properties. Empty (or absent) means always visible.
+   * Caveat: it runs in every reader's browser, so a formula that branches on a
+   * value leaks that value's existence to every reader of the page.
+   */
+  visibilityFormula?: string;
 }
 
 /** A single content block in a page. */
@@ -136,21 +159,30 @@ export interface Block {
   color?: string;			/** Color for callouts, etc. */
   textColor?: string;		/** Optional block text color */
   backgroundColor?: string; /** Optional block background color */
+  style?: BlockStyle;		/** Typed style overrides (SB-1a); wins over flat fields */
   headingLevel?: 1 | 2 | 3 | 4 | 5 | 6; /** Optional heading style inside composed blocks */
   widthRatio?: number;      /** Relative width for column blocks */
   collapsed?: boolean;		/** Whether a toggle is collapsed */
   asset?: string;           /** Serialized ui-collection asset value for media blocks */
+  /** Image made by the AI: its provenance (never the prompt). Shown as an "AI-generated" label. */
+  aiGenerated?: { model: string; runId: string; createdAt: string };
   mediaWidth?: number;      /** Display width percentage for media blocks */
   mediaShape?: 'rounded' | 'circle'; /** Image crop shape (circle = avatar; default rounded) */
   mediaAspect?: string;     /** CSS aspect-ratio for image blocks (e.g. "16 / 9"); "original"/unset = natural */
   mediaAlt?: string;        /** Alt text for image media blocks (accessibility + failed-load text) */
+  mediaTags?: string[];     /** Tags of an image block (≤ 10, each ≤ 40 chars, lowercase): written by "Describe with AI", editable; indexed */
+  mediaText?: string;       /** Text found in an image block (≤ 300 chars), from "Describe with AI"; indexed */
   placeholderText?: string; /** Temporary placeholder hint for empty transformed blocks */
   drawHeight?: number;      /** LEGACY 'draw' block canvas height in px. The retired Draw tool; its scene JSON still lives in `content`. */
-  boardSlug?: string;       /** 'whiteboard' block: slug of the drawnosaurus board it embeds. Unset until the board is created. */
+  boardSlug?: string;       /** 'whiteboard' block: slug of the hydrawn board it embeds. Unset until the board is created. */
   whiteboardHeight?: number; /** 'whiteboard' block frame height in px (default 520). `content` holds the board title. */
+  diagramSpec?: unknown;    /** 'diagram' block: the stored SPEC (never the rendered output). Validated at use by parseDiagramSpec, never trusted as typed. */
+  embed?: EmbedSnapshot;    /** Resolved link metadata for 'embed'/'bookmark' (and later media blocks). UNTRUSTED: parseEmbedSnapshot before use. `content` keeps the URL. */
+  embedHeight?: number;     /** 'embed' block frame height in px for a generic page; clampEmbedHeight at use. */
   buttonLabel?: string;     /** Visible label for a 'button' block (falls back to content) */
   buttonHref?: string;      /** Button target: internal page link `page://<id>`, a `/...` path, else presentational */
   buttonVariant?: 'primary' | 'secondary'; /** Button style for a 'button' block (default: primary) */
+  buttonProgram?: ButtonProgram; /** The steps a 'button' block runs on click (re-parsed on every click) */
   tableData?: string[][];	/** Table data (array of rows, each row is array of cell strings) */
   tableConfig?: TableBlockConfig; /** Presentation and sizing options for simple table blocks */
   databaseId?: string;		/** Database reference ID (for database_inline / database_full_page) */
@@ -165,5 +197,13 @@ export interface Block {
   layoutConfig?: Partial<LayoutConfig>;
   layoutCells?: LayoutCell[];
   schemaVersion?: number;
+  /**
+   * A formula that decides whether the block is rendered at all, evaluated
+   * against the page's own properties. Empty (or absent) means always visible.
+   * Caveat: it runs in every reader's browser, so a formula that branches on a
+   * value leaks that value's existence to every reader of the page.
+   */
+  visibleWhen?: string;
+  conflictOf?: string;		/** The id of the block this one is a conflict copy of — the merge kept both variants */
   [key: string]: unknown;	/** Arbitrary metadata */
 }

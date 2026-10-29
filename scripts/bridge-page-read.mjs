@@ -24,6 +24,17 @@
 const PAGE_VISIBILITIES = new Set(['private', 'shared', 'public']);
 const SHARING_KEYS = ['visibility', 'collaborators', 'workspaceId'];
 
+/**
+ * The read rule of a page for a member of its workspace. The row carries the
+ * raw columns: workspace_id, visibility, owner_id and collaborators.
+ *
+ * @typedef {object} PageReadRow
+ * @property {unknown} [workspace_id]
+ * @property {unknown} [visibility]
+ * @property {unknown} [owner_id]
+ * @property {unknown} [collaborators]
+ */
+
 export function pageVisibility(value) {
 	return PAGE_VISIBILITIES.has(value) ? value : 'private';
 }
@@ -32,6 +43,15 @@ export function pageVisibility(value) {
 // lower-case, a token may carry upper-case.
 export function sameId(left, right) {
 	return typeof left === 'string' && typeof right === 'string' && left !== '' && left.toLowerCase() === right.toLowerCase();
+}
+
+// The marketplace workspace has no member rows: an app's author governs their pages by
+// ownership alone, so the C557 membership requirement never applies there.
+export const MARKETPLACE_WORKSPACE_ID = '5a4b1c2d-1111-4111-8111-000000000001';
+
+/** The page owner keeps their page: while a member of its workspace (C557), or in the marketplace. */
+export function ownerHoldsPage(row, userId, member) {
+	return isPageOwner(row, userId) && (Boolean(member) || sameId(row?.workspace_id, MARKETPLACE_WORKSPACE_ID));
 }
 
 function isPageOwner(row, userId) {
@@ -62,6 +82,11 @@ export function canReadPageRow(row, userId) {
  * Readable on a surface that spans workspaces (feed, profile gallery, graph): the caller
  * belongs to the row's workspace AND canReadPageRow allows it, so a page shared with one
  * workspace never reaches someone outside it. `memberWorkspaceIds`: the caller's workspaces.
+ *
+ * @param {PageReadRow | null | undefined} row the raw row of the page
+ * @param {string} userId the caller
+ * @param {readonly string[]} memberWorkspaceIds the workspaces the caller is a member of
+ * @returns {boolean}
  */
 export function canReadPageRowAsMember(row, userId, memberWorkspaceIds) {
 	return [...memberWorkspaceIds].some((workspaceId) => sameId(workspaceId, row?.workspace_id)) && canReadPageRow(row, userId);

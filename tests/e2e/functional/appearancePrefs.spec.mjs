@@ -26,7 +26,8 @@ async function seed(page, appearance) {
 
 async function openAppearanceSettings(page) {
   await page.getByRole("button", { name: "Settings", exact: true }).first().click();
-  await page.getByRole("tab", { name: "Preferences" }).click();
+  await page.getByRole("region", { name: "Settings", exact: true }).waitFor();
+  await page.getByRole("navigation", { name: "Settings sections" }).getByRole("button", { name: "Preferences" }).click();
   await page.getByRole("group", { name: "Accent" }).waitFor();
 }
 

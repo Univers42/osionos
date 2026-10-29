@@ -22,7 +22,6 @@ export const todoList: SeedPage = {
   workspaceId: 'mock-ws-private-0',
   ownerId: 'mock-user-0',
   isTemplate: true,
-  templateSurface: 'todo-list',
   content: [
     h1('To-Do List'),
     p('Capture everything here, then sort it into Today, This week, and Someday so nothing slips.'),

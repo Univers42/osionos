@@ -14,6 +14,8 @@ import React, { useState } from "react";
 
 import { Modal } from "@osionos/ui/primitives/Modal";
 import { Button } from "@osionos/ui/atoms/Button";
+import { ModerationWarningNotice } from "@/shared/moderation/ModerationWarningNotice";
+import type { ModerationWarning } from "@/shared/moderation/moderationWarning";
 import type { PageEntry, PagePropertyEntry } from "@/entities/page";
 
 import { APP_KEYS, readAppMeta } from "../model/appMeta";
@@ -36,6 +38,8 @@ export const MarketplaceAppEditor: React.FC<Props> = ({ app, onClose, onSaved })
     description: meta.description, version: meta.version, launchUrl: meta.launchUrl, categories: meta.categories.join(", "), verified: meta.verified,
   });
   const [busy, setBusy] = useState(false);
+  const [warning, setWarning] = useState<ModerationWarning | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
   const set = (k: keyof typeof f, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
 
   const properties = (): PagePropertyEntry[] => [
@@ -58,13 +62,26 @@ export const MarketplaceAppEditor: React.FC<Props> = ({ app, onClose, onSaved })
     setBusy(false);
     onSaved();
   };
-  const publish = async () => {
+  // The modal closes ONLY when the app is really published: a warning from L0
+  // keeps it open (the author edits the fields, or publishes anyway), and so
+  // does any other failure.
+  const publish = async (acknowledgeWarning = false) => {
     setBusy(true);
-    await updateApp(app._id, { title: f.title, icon: f.icon, properties: properties() });
-    await publishApp(app._id);
-    setBusy(false);
-    onSaved();
-    onClose();
+    try {
+      await updateApp(app._id, { title: f.title, icon: f.icon, properties: properties() });
+      const result = await publishApp(app._id, { acknowledgeWarning });
+      if (!result.ok) {
+        setWarning("warning" in result ? result.warning : null);
+        setFailed("message" in result ? result.message : null);
+        return;
+      }
+      setWarning(null);
+      setFailed(null);
+      onSaved();
+      onClose();
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -92,8 +109,20 @@ export const MarketplaceAppEditor: React.FC<Props> = ({ app, onClose, onSaved })
           <div className="flex gap-2">
             <Button tone="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
             <Button tone="default" onClick={save} disabled={busy}>Save</Button>
-            {!meta.published ? <Button tone="primary" onClick={publish} disabled={busy}>Publish</Button> : null}
+            {!meta.published ? <Button tone="primary" onClick={() => void publish()} disabled={busy}>Publish</Button> : null}
           </div>
+        </div>
+        {/* The warning is announced, not shouted: the author hears it once. */}
+        <div aria-live="polite">
+          {warning && (
+            <ModerationWarningNotice
+              warning={warning}
+              onEdit={() => setWarning(null)}
+              onConfirm={() => void publish(true)}
+              confirmLabel="Publish anyway"
+            />
+          )}
+          {failed && <p className="text-xs text-[var(--osio-danger)]">{failed}</p>}
         </div>
       </div>
     </Modal>

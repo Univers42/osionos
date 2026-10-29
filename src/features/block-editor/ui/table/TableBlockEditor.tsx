@@ -21,6 +21,7 @@ import { handleNavigateKey, handleTableCellKey } from "./tableKeyboard";
 import { TableDataRow, createColumnStyles, getColumnKey, getRowKey } from "./TableParts";
 import { AddAxisButton } from "./TableAddButton";
 import { toCssPx } from "@/shared/lib/dom/cssZoom";
+import { coalesceToFrame } from "@/shared/lib/dom/frameCoalescer";
 import { TableRowMenu } from "./TableRowMenu";
 import { applyTableMenuAction, type TableMenuAction } from "./tableMenuActions";
 import { useTableCommit } from "./useTableCommit";
@@ -35,11 +36,13 @@ interface TableBlockEditorProps {
   pageId: string;
   style?: React.CSSProperties;
   textStyle?: React.CSSProperties;
+  /** A top-level block of the page body: bleed to the page edges before scrolling. */
+  wide?: boolean;
   onDeleteTable?: () => void;
   onBeforeStructuralEdit?: () => void;
 }
 
-export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageId, style, textStyle, onDeleteTable, onBeforeStructuralEdit }) => {
+export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageId, style, textStyle, wide = false, onDeleteTable, onBeforeStructuralEdit }) => {
   const tableRef = useRef<HTMLTableElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const { data, columnCount, config, latestDataRef, scheduleCellCommit, commitStructure, commitConfig, cellCommitHandlers } = useTableCommit(block, pageId);
@@ -100,11 +103,16 @@ export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageI
     const cell = event.currentTarget.closest("td");
     const startWidth = config.columnWidths?.[columnIndex] ?? (cell ? toCssPx(cell.getBoundingClientRect().width, cell) : 160);
     let latestWidth = startWidth;
+    // The width goes on the column's one <col>. A custom property on the <table> restyled
+    // every cell on every pointermove, and it outlived the drag, masking later config changes.
+    const column = tableRef.current?.querySelectorAll<HTMLElement>(":scope > colgroup > col")[columnIndex];
+    const paint = coalesceToFrame((width: number) => { if (column) column.style.width = `${width}px`; });
     const move = (moveEvent: PointerEvent) => {
       latestWidth = clampTableColumnWidth(startWidth + toCssPx(moveEvent.clientX - startX, tableRef.current), startWidth);
-      tableRef.current?.style.setProperty(`--osio-table-col-${columnIndex}-width`, `${latestWidth}px`);
+      paint.push(latestWidth);
     };
     const up = () => {
+      paint.flush();
       const widths = Array.from({ length: columnCount }, (_, index) => config.columnWidths?.[index]);
       widths[columnIndex] = latestWidth;
       commitConfig({ ...config, layoutMode: "fixed", columnWidths: widths });
@@ -120,11 +128,13 @@ export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageI
     const row = event.currentTarget.closest("tr");
     const startHeight = config.rowHeights?.[rowIndex] ?? (row ? toCssPx(row.getBoundingClientRect().height, row) : ROW_ESTIMATE_HEIGHT);
     let latestHeight = startHeight;
+    const paint = coalesceToFrame((height: number) => { if (row) row.style.height = `${height}px`; });
     const move = (moveEvent: PointerEvent) => {
       latestHeight = clampTableRowHeight(startHeight + toCssPx(moveEvent.clientY - startY, tableRef.current), startHeight);
-      tableRef.current?.style.setProperty(`--osio-table-row-${rowIndex}-height`, `${latestHeight}px`);
+      paint.push(latestHeight);
     };
     const up = () => {
+      paint.flush();
       const heights = Array.from({ length: data.length }, (_, index) => config.rowHeights?.[index]);
       heights[rowIndex] = latestHeight;
       commitConfig({ ...config, rowHeights: heights });
@@ -181,13 +191,17 @@ export const TableBlockEditor: React.FC<TableBlockEditorProps> = ({ block, pageI
   }, [config, latestDataRef, runStructuralEdit]);
 
   const columnStyles = useMemo(() => createColumnStyles(columnCount, config), [columnCount, config]);
-  const tableClassName = ["text-sm", config.layoutMode === "fit" ? "min-w-full w-full" : "min-w-full w-max", config.layoutMode === "fixed" ? "table-fixed" : "table-auto"].join(" ");
+  // Wide mode owns the table's width and chrome (the CSS utility), so the
+  // fill/nowrap utilities that would fight `width: max-content` stay off.
+  const tableClassName = wide
+    ? ["text-sm", config.layoutMode === "fixed" ? "table-fixed" : "table-auto"].join(" ")
+    : ["text-sm", config.layoutMode === "fit" ? "min-w-full w-full" : "min-w-full w-max", config.layoutMode === "fixed" ? "table-fixed" : "table-auto"].join(" ");
   const activeCellId = activeCell ? `${activeCell.rowIndex}:${activeCell.columnIndex}` : null;
 
   return (
-    <div ref={rootRef} className="group/table relative my-2" data-can-delete-table={Boolean(onDeleteTable)} style={style}>
-      <div className="overflow-x-auto overflow-y-visible rounded-lg border border-[var(--osio-db-line)] bg-[var(--osio-bg-surface)]">
-        <table ref={tableRef} role="grid" tabIndex={0} data-table-grid aria-label="Editable table — arrow keys navigate cells" onKeyDown={handleGridKeyDown} onFocus={handleGridFocus} aria-rowcount={data.length} aria-colcount={columnCount} aria-activedescendant={activeCellId ? `tcell-${activeCellId.replace(":", "-")}` : undefined} aria-keyshortcuts="Tab Shift+Tab ArrowUp ArrowDown ArrowLeft ArrowRight Enter Escape Ctrl+Shift+ArrowUp Ctrl+Shift+ArrowDown Ctrl+Shift+ArrowLeft Ctrl+Shift+ArrowRight Ctrl+Shift+Backspace Ctrl+Delete" className={`${tableClassName} focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40`} style={{ tableLayout: config.layoutMode === "fixed" ? "fixed" : "auto" }}>
+    <div ref={rootRef} className="group/table relative my-2" data-wide-block-content={wide ? "" : undefined} data-can-delete-table={Boolean(onDeleteTable)} style={style}>
+      <div data-wide-block-scroller={wide ? "" : undefined} className={wide ? undefined : "overflow-x-auto overflow-y-visible rounded-lg border border-[var(--osio-db-line)] bg-[var(--osio-bg-surface)]"}>
+        <table ref={tableRef} role="grid" tabIndex={0} data-table-grid data-wide-block-table={wide ? "" : undefined} aria-label="Editable table — arrow keys navigate cells" onKeyDown={handleGridKeyDown} onFocus={handleGridFocus} aria-rowcount={data.length} aria-colcount={columnCount} aria-activedescendant={activeCellId ? `tcell-${activeCellId.replace(":", "-")}` : undefined} aria-keyshortcuts="Tab Shift+Tab ArrowUp ArrowDown ArrowLeft ArrowRight Enter Escape Ctrl+Shift+ArrowUp Ctrl+Shift+ArrowDown Ctrl+Shift+ArrowLeft Ctrl+Shift+ArrowRight Ctrl+Shift+Backspace Ctrl+Delete" className={`${tableClassName} focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40`} style={{ tableLayout: config.layoutMode === "fixed" ? "fixed" : "auto" }}>
           <colgroup>{columnStyles.map((columnStyle, columnIndex) => <col key={getColumnKey(columnIndex)} style={columnStyle} />)}</colgroup>
           <tbody>{data.map((row, rowIndex) => (
             <TableDataRow key={getRowKey(rowIndex)} row={row} rowIndex={rowIndex} columnCount={columnCount} config={config} textStyle={textStyle} selectedCell={activeCellId} commitHandlers={cellCommitHandlers[rowIndex]} onColumnResize={startColumnResize} onRowResize={startRowResize} onRowDragStart={startRowDrag} onRowMenuKey={openRowMenu} onCellKeyDown={handleCellKeyDown} onCellFocus={handleCellFocus} />

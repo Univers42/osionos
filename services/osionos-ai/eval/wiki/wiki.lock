@@ -1,0 +1,57 @@
+# wiki.lock — every pin of the Simple English Wikipedia import.
+#
+# The file is read by fetch.sh (shell) and by extract.py (python): both parse
+# the KEY=value lines and ignore the comments. Nothing is downloaded, read or
+# run that is not written down here.
+#
+# Source: Simple English Wikipedia, CC BY-SA 4.0.
+# Two sources are pinned: the parquet of the Hugging Face mirror (the first
+# choice) and the dump of dumps.wikimedia.org (the fallback when the mirror
+# answers 429). Both hold the same articles.
+
+# --- the source: the Hugging Face parquet of Simple English Wikipedia ---
+HF_REPO=wikimedia/wikipedia
+HF_CONFIG=20231101.simple
+HF_REVISION=b04c8d1ceb2f5cd4588862100d08de323dccfbaa
+HF_FILE=20231101.simple/train-00000-of-00001.parquet
+HF_URL=https://huggingface.co/datasets/wikimedia/wikipedia/resolve/b04c8d1ceb2f5cd4588862100d08de323dccfbaa/20231101.simple/train-00000-of-00001.parquet
+HF_SHA256=31bded16768a47c286becd292079122f5d7d4397a17b87d4250a00ccd581e6f0
+HF_BYTES=156885218
+
+# --- the fallback: the dump of dumps.wikimedia.org ---
+DUMP_DATE=20261001
+DUMP_FILE=simplewiki-20261001-pages-articles-multistream.xml.bz2
+DUMP_URL=https://dumps.wikimedia.org/simplewiki/20261001/simplewiki-20261001-pages-articles-multistream.xml.bz2
+DUMP_SHA1=8a12322b4c2081e31592c426f0d130d30296449a
+DUMP_BYTES=387919857
+
+# --- the container that reads the parquet and the dump ---
+PYTHON_IMAGE=python@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+PYTHON_VERSION=3.12
+# The wheels are pinned, and the container installs exactly these two.
+PYARROW_VERSION=21.0.0
+MWPARSERFROMHELL_VERSION=0.7.2
+
+# --- the throwaway stack the import is measured on ---
+NODE_IMAGE=node@sha256:c3de60bf2f9dd0ac6370e6117950ff62d6e339527e7472301c9c78a017978392
+NODE_VERSION=22
+PG_IMAGE=pgvector/pgvector@sha256:a132765ec351c65111b5b675928a3a0515a466a40f97277329db8b8209ad8bc9
+PG_VERSION=0.8.0-pg16
+TEI_IMAGE=ghcr.io/huggingface/text-embeddings-inference@sha256:2538ea1c9640d3763b15af668039d24172d063b42337b0c27796fc2be180c78d
+TEI_VERSION=cpu-1.9.4
+TEI_MODEL=intfloat/multilingual-e5-small
+TEI_MODEL_VOLUME=osionos_ai_models_tei
+
+# --- where the data lives: a Docker volume, never the repository ---
+DATA_VOLUME=osionos_ai_wiki_data
+DATA_DIR=wikipedia
+ARTICLES_FILE=articles.jsonl
+
+# --- the shape of the import ---
+# The articles that are not imported: a redirect is not an article, a
+# disambiguation page is a list of other articles, and a stub teaches nothing.
+MIN_ARTICLE_CHARS=300
+BATCH_PAGES=500
+# The lane of the queue of an imported page: 1 is the bulk lane, so a person
+# who edits a page never waits behind the import.
+BULK_LANE=1

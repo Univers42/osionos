@@ -10,15 +10,22 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { lazy, Suspense, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ChevronDown, PenSquare } from 'lucide-react';
 import { IconValueView } from "@osionos/ui/atoms/IconValueView";
 import { useUserStore } from '@/features/auth';
+import { useWorkspaceInvitesStore } from '@/store/settings';
+import { pendingInvitesBadge } from '@/features/settings/people/inviteInboxModel';
 
 // Lazy + deep path (NOT the auth barrel): the account-switcher popover (~37KB)
 // only mounts on click, so it must not be stapled to the warm entry chunk.
 const UserSwitcherPanel = lazy(() =>
   import('@/features/auth/ui/UserSwitcherPanel').then((m) => ({ default: m.UserSwitcherPanel })),
+);
+// The invite decision is opened by the ?invite= boot link or a pending row, so it
+// has to have a host even when the switcher menu is closed. Lazy, same reason.
+const InviteDecisionDialog = lazy(() =>
+  import('@/features/auth/ui/InviteDecisionDialog').then((m) => ({ default: m.InviteDecisionDialog })),
 );
 import { usePageStore } from '@/store/usePageStore';
 import {
@@ -48,6 +55,19 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
   const openPage        = usePageStore(s => s.openPage);
   const renameWorkspace = useUserStore(s => s.renameWorkspace);
   const activeUserId    = useUserStore(s => s.activeUserId);
+  const pendingInvites  = useWorkspaceInvitesStore(s => s.mine.length);
+  const fetchMine       = useWorkspaceInvitesStore(s => s.fetchMine);
+  const openedInviteId  = useWorkspaceInvitesStore(s => s.openedInviteId);
+  const closeInvite     = useWorkspaceInvitesStore(s => s.closeInvite);
+  const badge           = pendingInvitesBadge(pendingInvites);
+
+  // Once after sign-in, and again when the menu opens. No polling loop (N26).
+  useEffect(() => {
+    if (activeUserId) void fetchMine();
+  }, [activeUserId, fetchMine]);
+  useEffect(() => {
+    if (open) void fetchMine();
+  }, [open, fetchMine]);
   // Icon precedence: durable workspace config (Settings → Workspace → Icon) → session record.
   const configIcon = useWorkspaceConfigStore(s =>
     activeUserId && activeWorkspace ? s.configs[workspaceConfigKey(activeUserId, activeWorkspace._id)]?.icon : undefined);
@@ -84,7 +104,9 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
         <div
           role="button"
           tabIndex={0}
-          onClick={() => { if (!renaming) setOpen(o => !o); }}
+          // The 2nd click of a double-click must not toggle: its pointerdown already closed the
+          // panel as an outside click, and reopening it steals focus from the rename input.
+          onClick={(event) => { if (!renaming && event.detail < 2) setOpen(o => !o); }}
           onKeyDown={(event) => { if (!renaming && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setOpen(o => !o); } }}
           className={[
             'flex items-center gap-2 flex-1 min-w-0 h-8 px-2 rounded-[6px]',
@@ -116,11 +138,22 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
             />
           ) : (
             <span
-              onDoubleClick={(event) => { if (canRename) { event.stopPropagation(); setRenaming(true); } }}
+              onDoubleClick={(event) => { if (canRename) { event.stopPropagation(); setOpen(false); setRenaming(true); } }}
               title={canRename ? 'Double-click to rename' : undefined}
               className="flex-1 text-base font-semibold text-[var(--osio-fg-default)] truncate text-left leading-5"
             >
               {workspaceName}
+            </span>
+          )}
+
+          {badge && (
+            <span
+              title={badge.ariaLabel}
+              className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--osio-accent)] px-1 text-2xs font-semibold text-[var(--osio-accent-fg)]"
+            >
+              {/* aria-label on a plain span is not announced; the count reads as the sentence. */}
+              <span aria-hidden="true">{badge.count}</span>
+              <span className="sr-only">{badge.ariaLabel}</span>
             </span>
           )}
         </div>
@@ -169,6 +202,12 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
       {open && (
         <Suspense fallback={null}>
           <UserSwitcherPanel onClose={() => setOpen(false)} anchorElement={anchorEl} />
+        </Suspense>
+      )}
+
+      {openedInviteId && (
+        <Suspense fallback={null}>
+          <InviteDecisionDialog key={openedInviteId} inviteId={openedInviteId} onClose={closeInvite} />
         </Suspense>
       )}
     </div>

@@ -13,23 +13,29 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, MoreHorizontal, Plus, Settings, Users } from 'lucide-react';
-import { Button, IconButton } from '@/shared/ui';
+import { Button, IconButton, useToastStore } from '@/shared/ui';
 import { IconValueView } from '@osionos/ui/atoms/IconValueView';
 import { useWorkspaceConfigStore, workspaceConfigKey } from '@/shared/config/workspaceConfigStore';
 import { useUserStore } from '@/features/auth';
+import { useWorkspaceInvitesStore } from '@/store/settings';
+import { inviteErrorSentence, inviteExpiryText } from '@/features/settings/people/inviteInboxModel';
+import { enterJoinedWorkspace } from '@/features/settings/people/enterJoinedWorkspace';
 import { useWorkspaceOnboarding } from '@/features/workspace-onboarding/model/useWorkspaceOnboarding';
+import { openSettings } from '@/features/settings/model/settingsNav';
 import {
   COLLECTION_ROLE_BADGES,
 } from '@/shared/ui/assets/collectionEmoji';
-import { LazySettingsCenter } from '@/features/settings/LazySettingsCenter';
 import { AuthDialog } from './AuthDialog';
+
+// 44 px touch target; the shared Button tones carry the border and focus ring in both themes.
+const INVITE_ACTION_CLASS = "min-h-11 flex-1";
 
 interface Props {
   onClose: () => void;
   anchorElement?: HTMLElement | null;
 }
 
-// SettingsPanel removed — use `SettingsCenter` component instead.
+// SettingsPanel removed — use the settings tab view (`ui/SettingsView.tsx`) instead.
 
 /**
  * Floating dropdown that lists all 3 pre-logged-in personas.
@@ -48,15 +54,23 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
   const activeSession = useUserStore(s => s.activeSession());
   const selectedWorkspace = useUserStore(s => s.activeWorkspace());
   const [authOpen, setAuthOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'settings' | 'people' | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [position, setPosition] = useState({ top: 48, left: 8 });
+  const mine = useWorkspaceInvitesStore((state) => state.mine);
+  const mineLoading = useWorkspaceInvitesStore((state) => state.mineLoading);
+  const mineError = useWorkspaceInvitesStore((state) => state.mineError);
+  const mineUnavailable = useWorkspaceInvitesStore((state) => state.mineUnavailable);
+  const fetchMine = useWorkspaceInvitesStore((state) => state.fetchMine);
+  const acceptById = useWorkspaceInvitesStore((state) => state.acceptById);
+  const declineInvite = useWorkspaceInvitesStore((state) => state.decline);
+  const refreshWorkspaces = useUserStore((s) => s.refreshWorkspaces);
+  const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
 
   // Track whether a modal is open to prevent outside-click from closing the panel
   const modalOpenRef = useRef(false);
   useEffect(() => {
-    modalOpenRef.current = authOpen || settingsTab !== null;
-  }, [authOpen, settingsTab]);
+    modalOpenRef.current = authOpen;
+  }, [authOpen]);
 
   const workspaces = useMemo(
     () => activeSession ? [...activeSession.privateWorkspaces, ...activeSession.sharedWorkspaces] : [],
@@ -100,22 +114,53 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
     return () => document.removeEventListener('pointerdown', onPointerDown);
   }, [onClose, anchorElement]);
 
-  // Close on Escape (but only close sub-modal first if one is open)
+  // Close on Escape (but only close the sub-modal first if one is open)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
+      if (useWorkspaceInvitesStore.getState().openedInviteId) return;
       if (authOpen) { setAuthOpen(false); return; }
-      if (settingsTab) { setSettingsTab(null); return; }
       onClose();
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, authOpen, settingsTab]);
+  }, [onClose, authOpen]);
 
   function handleNewWorkspace() {
     onClose();
     useWorkspaceOnboarding.getState().setOpen(true);
   }
+
+  async function joinInvite(invite: (typeof mine)[number]) {
+    if (busyInviteId) return;
+    setBusyInviteId(invite.id);
+    const result = await acceptById(invite.id);
+    setBusyInviteId(null);
+    if (!result.ok) {
+      useToastStore.getState().push({ kind: "error", title: inviteErrorSentence(result.code) });
+      return;
+    }
+    useToastStore.getState().push({ kind: "success", title: "You joined the workspace" });
+    await enterJoinedWorkspace(result.workspaceId, {
+      refreshWorkspaces: () => refreshWorkspaces(activeId ?? ""),
+      switchWorkspace,
+    });
+    onClose();
+  }
+
+  async function declinePending(invite: (typeof mine)[number]) {
+    if (busyInviteId) return;
+    setBusyInviteId(invite.id);
+    const declined = await declineInvite(invite.id);
+    setBusyInviteId(null);
+    if (!declined) {
+      useToastStore.getState().push({ kind: "error", title: inviteErrorSentence("unknown") });
+      return;
+    }
+    useToastStore.getState().push({ kind: "success", title: "Invite declined" });
+  }
+
+  const showPendingInvites = !mineUnavailable && (mine.length > 0 || mineLoading || Boolean(mineError));
 
   const panelStyle: React.CSSProperties = {
     position: 'fixed',
@@ -148,10 +193,10 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
           </div>
         </div>
         <div className="mt-3 flex gap-2">
-          <Button size="sm" className="flex-1" onClick={() => setSettingsTab('settings')}>
+          <Button size="sm" className="flex-1" onClick={() => { openSettings('general'); onClose(); }}>
             <Settings size={12} aria-hidden /> Settings
           </Button>
-          <Button size="sm" className="flex-1" onClick={() => setSettingsTab('people')}>
+          <Button size="sm" className="flex-1" onClick={() => { openSettings('people'); onClose(); }}>
             <Users size={12} aria-hidden /> People
           </Button>
         </div>
@@ -174,7 +219,7 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
           <button
             key={workspace._id}
             type="button"
-            onClick={() => switchWorkspace(workspace._id)}
+            onClick={() => { switchWorkspace(workspace._id); onClose(); }}
             className="osio-menu-item"
           >
             <span className="flex h-5 w-5 items-center justify-center rounded-xs bg-[var(--osio-bg-muted)] text-xs">
@@ -196,6 +241,66 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
           <Plus size={16} /> New workspace
         </button>
       </div>
+
+      {showPendingInvites && (
+        <>
+          <div className="osio-menu-separator" />
+          <div role="group" aria-label="Pending invites" aria-busy={mineLoading && mine.length === 0}>
+            <div className="osio-menu-label flex items-center justify-between">
+              <span className="truncate">Pending invites</span>
+              {mine.length > 0 && (
+                <span className="shrink-0 text-2xs text-[var(--osio-fg-muted)]">{mine.length}</span>
+              )}
+            </div>
+
+            {mineError && mine.length === 0 ? (
+              <div className="flex items-center justify-between gap-2 px-2 py-1">
+                <span role="alert" className="text-xs text-[var(--osio-danger)]">Could not load invites.</span>
+                <Button size="sm" onClick={() => void fetchMine()}>Retry</Button>
+              </div>
+            ) : mineLoading && mine.length === 0 ? (
+              <div className="space-y-2 px-2 py-2" aria-hidden="true">
+                <div className="h-4 w-4/5 animate-pulse rounded-xs bg-[var(--osio-bg-muted)]" />
+                <div className="h-11 w-full animate-pulse rounded-[var(--osio-radius-control)] bg-[var(--osio-bg-muted)]" />
+              </div>
+            ) : (
+              <div className="max-h-[min(50vh,20rem)] overflow-y-auto">
+                {mine.map((invite) => (
+                  <div key={invite.id} className="flex flex-col gap-2 px-2 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[var(--osio-fg-default)] [overflow-wrap:anywhere]">
+                        {invite.workspaceName}
+                      </p>
+                      <p className="text-xs text-[var(--osio-fg-muted)] [overflow-wrap:anywhere]">
+                        {invite.inviterName} · {invite.role} · {inviteExpiryText(invite.expiresAt)}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        tone="primary"
+                        disabled={busyInviteId !== null}
+                        onClick={() => void joinInvite(invite)}
+                        aria-label={`Join ${invite.workspaceName}`}
+                        className={INVITE_ACTION_CLASS}
+                      >
+                        {busyInviteId === invite.id ? "Joining…" : "Join"}
+                      </Button>
+                      <Button
+                        disabled={busyInviteId !== null}
+                        onClick={() => void declinePending(invite)}
+                        aria-label={`Decline ${invite.workspaceName}`}
+                        className={INVITE_ACTION_CLASS}
+                      >
+                        Decline
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <div className="osio-menu-separator" />
       <div>
@@ -281,7 +386,6 @@ export const UserSwitcherPanel: React.FC<Props> = ({ onClose, anchorElement }) =
       </footer>
       </div>
       {authOpen && <AuthDialog onClose={() => setAuthOpen(false)} />}
-      {settingsTab && <LazySettingsCenter initialTab={settingsTab === 'people' ? 'people' : 'general'} onClose={() => setSettingsTab(null)} />}
     </>
   );
 

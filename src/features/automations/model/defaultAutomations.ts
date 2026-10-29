@@ -29,6 +29,8 @@ export const DEFAULT_AUTOMATIONS: Automation[] = [
   shortcut("heading-3", "Heading 3", "mod+alt+3", "heading3", "editorFocused"),
   shortcut("open-palette", "Command palette", "mod+shift+p", "openPalette", "always"),
   shortcut("open-search", "Search", "mod+k", "openSearch", "always"),
+  // Ctrl+, is the IDE convention for Settings, and no seeded shortcut binds it.
+  shortcut("open-settings", "Settings", "mod+,", "openSettings", "always"),
   // Ctrl+N is the browser's new window and cannot be taken; Alt makes it ours.
   shortcut("new-page", "New page", "mod+alt+n", "newPage", "always"),
   // Ctrl+B is Bold and Ctrl+\ splits a pane, so the sidebar joins the Ctrl+Alt family.

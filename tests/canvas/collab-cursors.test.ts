@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { applyCollabEvent, pruneStale, type CursorMap } from '@/features/collab/model/remoteCursors';
+import { actorFor, memberIdOf } from '@/features/collab/model/collabActor';
 import type {
   CollabEvent, PresenceState, RealtimeChannel, SummonReq, SummonRes, Unsubscribe,
 } from '@/features/collab/model/realtimeTransport.port';
@@ -88,20 +89,56 @@ class FakeChannel implements RealtimeChannel {
   leave(): void {}
 }
 
-test('the store routes inbound caret events into the cursor map', async () => {
+test('the store routes inbound caret events from the PAGE channel into the cursor map', async () => {
   const { useCollabStore } = await import('@/features/collab/store/useCollabStore');
   useCollabStore.getState().disconnect();
-  const channel = new FakeChannel();
-  await useCollabStore.getState().connect('space-1', { id: 'me', displayName: 'Me' }, async () => channel);
+  const workspace = new FakeChannel();
+  const page = new FakeChannel();
+  await useCollabStore.getState().connect('space-1', { id: 'me', displayName: 'Me' }, async () => workspace);
+  await useCollabStore.getState().connectPage(
+    'space-1', 'page-1', { id: 'me', displayName: 'Me' }, async () => page,
+  );
 
-  channel.eventHandler?.(caret('bob', 1, 'blk', 7));
+  page.eventHandler?.(caret('bob', 1, 'blk', 7));
   assert.deepEqual(useCollabStore.getState().cursors.get('bob')?.caret, { blockId: 'blk', offset: 7 });
 
-  channel.eventHandler?.(caret('me', 9, 'blk', 0)); // own event echoed back
+  // Page state on the workspace channel is no longer folded (C501): it is dropped.
+  workspace.eventHandler?.(caret('amy', 1, 'blk', 2));
+  assert.equal(useCollabStore.getState().cursors.has('amy'), false, 'workspace events never reach cursors');
+
+  page.eventHandler?.(caret('me', 9, 'blk', 0)); // own event echoed back
   assert.equal(useCollabStore.getState().cursors.has('me'), false, 'store never renders its own caret');
 
-  // A presence snapshot without bob prunes bob's cursor.
-  channel.presenceHandler?.([{ memberId: 'me', displayName: 'Me', color: 'var(--collab-1)', route: '/', lastSeen: 1 }]);
+  // A page presence snapshot without bob prunes bob's cursor.
+  page.presenceHandler?.([{ memberId: 'me', displayName: 'Me', color: 'var(--collab-1)', route: 'page-1', lastSeen: 1 }]);
   assert.equal(useCollabStore.getState().cursors.has('bob'), false, 'departed member cursor pruned');
   useCollabStore.getState().disconnect();
+});
+
+test('memberIdOf strips the tab half and leaves bare ids alone', () => {
+  for (const [actor, member] of [['u1:tabA', 'u1'], ['u1', 'u1'], ['u-2:t_3-x', 'u-2'], ['', '']]) {
+    assert.equal(memberIdOf(actor), member);
+  }
+});
+
+test('uid:tab cursors survive a presence snapshot keyed by memberId (table-driven)', () => {
+  const uids = ['alice', 'u-1', 'A_b-9', '0f8fad5b-d9cb-469f-a165-70867728950e'];
+  const tabs = ['t1', 'abc_DEF-9', 'x'.repeat(32)];
+  for (const uid of uids) {
+    for (const tab of tabs) {
+      let cursors: CursorMap = new Map();
+      cursors = applyCollabEvent(cursors, caret(actorFor(uid, tab), 1, 'b1', 2), 'me:mytab');
+      assert.equal(pruneStale(cursors, new Set([uid])), cursors, `${uid}:${tab} kept while ${uid} present`);
+      assert.equal(pruneStale(cursors, new Set(['other'])).size, 0, `${uid}:${tab} dropped once gone`);
+    }
+  }
+});
+
+test('self filter drops own events from any tab; per-tab cursors of a peer stay separate', () => {
+  let cursors: CursorMap = new Map();
+  cursors = applyCollabEvent(cursors, caret('me:tab2', 1, 'b1', 1), 'me:tab1');
+  assert.equal(cursors.size, 0);
+  cursors = applyCollabEvent(cursors, caret('bob:t1', 1, 'b1', 1), 'me:tab1');
+  cursors = applyCollabEvent(cursors, caret('bob:t2', 1, 'b1', 5), 'me:tab1');
+  assert.deepEqual([...cursors.keys()], ['bob:t1', 'bob:t2']);
 });

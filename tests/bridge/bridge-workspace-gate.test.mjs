@@ -60,18 +60,18 @@ describe('the workspace gate refuses a page write whose membership it cannot rea
 		assert.equal(mock.page(IDS.sharedA).title, 'Team notes');
 	});
 
-	it('a member row missing for the target workspace refuses', async () => {
+	// Outside the page's workspace the write answers like a missing id (C136), token or not.
+	it('a member row missing for the target workspace refuses with the 404 of a missing id', async () => {
 		const mock = gateMock(gateWorld({ memberRow: false }));
 		const response = await withBridge(config, mock.fetchImpl, (base) => send(base, `/api/pages/${IDS.sharedA}`, asB, patch({ title: 'B wrote this' })));
-		assert.equal(response.status, 403, response.text);
+		assert.equal(response.status, 404, response.text);
 		assert.equal(mock.page(IDS.sharedA).title, 'Team notes');
 	});
 
-	it('the page owner writes their own page while membership cannot be read', async () => {
+	it('the page owner writes their own page while membership cannot be read answers 503', async () => {
 		const mock = gateMock(gateWorld(), workspaceRpcDown);
 		const response = await withBridge(config, mock.fetchImpl, (base) => send(base, `/api/pages/${IDS.sharedA}`, asA, patch({ title: 'A wrote this' })));
-		assert.equal(response.status, 200, response.text);
-		assert.equal(mock.page(IDS.sharedA).title, 'A wrote this');
+		assert.equal(response.status, 503, response.text);
 	});
 
 	it('without a configured BaaS the token workspaces are still granted', async () => {

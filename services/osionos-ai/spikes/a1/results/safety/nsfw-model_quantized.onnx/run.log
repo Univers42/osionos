@@ -1,0 +1,64 @@
+# the output check on the generated images, the model AdamCodd/vit-base-nsfw-detector, the file model_quantized.onnx
+host_uptime 140548.04 2198914.46
+host_loadavg 17.42 11.19 8.35 5/6931 59
+
+model AdamCodd/vit-base-nsfw-detector
+dtype q8
+sets /mnt/storage/nsfw
+
+label model_quantized.onnx
+dtype q8
+model AdamCodd/vit-base-nsfw-detector
+localModelPath /mnt/storage/nsfw/models
+allowRemoteModels false
+manifest /mnt/storage/nsfw/manifest.tsv
+images 352
+node v22.23.4
+platform linux x64
+uptime_s 140548.1
+load_ms 219.6
+rss_after_load_mb 294.6
+warmup_images 3
+sequential_ms {"n":352,"min":119.4564790000004,"p50":142.5582364999991,"p95":335.70026309999713,"max":2291.7328000000007,"mean":195.01182836363623}
+decode_ms {"n":352,"min":1.3807329999999638,"p50":5.290302499999598,"p95":10.627925099999992,"max":35.51918200000364,"mean":5.73747295454555}
+infer_ms {"n":352,"min":116.11143299999821,"p50":137.1723779999993,"p95":330.1968253499988,"max":2282.6289970000007,"mean":189.27435540909076}
+concurrent_ms {"n":352,"min":121.97845300000336,"p50":383.7033825000035,"p95":536.2066782000074,"max":701.7656980000029,"mean":362.49977696306775}
+rss_after_run_mb 438.9
+scores 352
+out /results/nsfw-model_quantized.onnx/scores.tsv
+== the scores of the safe images, nsfw-model_quantized.onnx
+set    images       min       p50       p95       max
+gen        50    0.0029    0.0209    0.0884    0.8167
+a1          2    0.0063    0.0100    0.0133    0.0136
+coco      300    0.0006    0.0139    0.1536    0.5674
+
+== the false positives, nsfw-model_quantized.onnx
+set    threshold  flagged  images     rate   wilson 95 %
+gen         0.50        1      50   2.00%   [0.35%, 10.50%]
+gen         0.70        1      50   2.00%   [0.35%, 10.50%]
+gen         0.90        0      50   0.00%   [0.00%, 7.14%]
+a1          0.50        0       2   0.00%   [0.00%, 65.76%]
+a1          0.70        0       2   0.00%   [0.00%, 65.76%]
+a1          0.90        0       2   0.00%   [0.00%, 65.76%]
+coco        0.50        2     300   0.67%   [0.18%, 2.40%]
+coco        0.70        0     300   0.00%   [0.00%, 1.26%]
+coco        0.90        0     300   0.00%   [0.00%, 1.26%]
+
+== the five highest of every set, nsfw-model_quantized.onnx
+gen     1  93261             0.8167
+gen     2  508586            0.0983
+gen     3  54654             0.0892
+gen     4  65350             0.0875
+gen     5  177893            0.0784
+a1      1  01.png            0.0136
+a1      2  03.png            0.0063
+coco    1  000000187243      0.5674
+coco    2  000000172946      0.5197
+coco    3  000000079031      0.3864
+coco    4  000000065350      0.3345
+coco    5  000000332570      0.3287
+
+== the time of one image, nsfw-model_quantized.onnx
+ images       p50       p95       max
+    352     142.6     335.7    2291.7
+

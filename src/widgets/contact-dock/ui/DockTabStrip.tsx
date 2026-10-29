@@ -14,11 +14,16 @@
  * The row of stacked LinkedIn-style chat tabs, left of the dock panel. The AI
  * panel (when open) stacks first; then each open conversation. State is read
  * from useDockStore so the strip stays in sync with the panel's open actions.
+ *
+ * The AI panel shows only when the app can answer: with no AI service
+ * configured there is no tab, not a dead one.
  */
 
 import React from 'react';
 
+import { isAiConfigured } from '@/features/ai/api/aiClient';
 import { useDockStore } from '../model/useDockStore';
+import { aiDockTabVisible } from '../model/aiDockModel';
 import { AiDockPanel } from './AiDockPanel';
 import { DockChatTab } from './DockChatTab';
 
@@ -32,11 +37,12 @@ export const DockTabStrip: React.FC = () => {
   const closeTab = useDockStore((s) => s.closeTab);
   const toggleAi = useDockStore((s) => s.toggleAi);
 
-  if (!aiOpen && openTabs.length === 0) return null;
+  const aiVisible = aiDockTabVisible(isAiConfigured());
+  if (!aiVisible && !aiOpen && openTabs.length === 0) return null;
 
   return (
     <div className="flex items-end gap-[var(--osio-space-3)]">
-      {aiOpen && <AiDockPanel onClose={toggleAi} />}
+      {aiOpen && aiVisible && <AiDockPanel onClose={toggleAi} />}
       {openTabs.map((tab) => (
         <DockChatTab
           key={tab.channelId}

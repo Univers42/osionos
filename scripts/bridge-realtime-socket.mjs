@@ -40,6 +40,7 @@ const DEFAULT_TIMING = {
 	reauthLeadMs: 120_000,
 	pingIntervalMs: 25_000,
 	queueLimit: 256,
+	maxBufferedBytes: 1_048_576,
 	backoffFirstMs: 500,
 	backoffCapMs: 30_000,
 	dropLogIntervalMs: 60_000,
@@ -60,9 +61,9 @@ export function signRealtimeJwt(claims, secret) {
 
 /** Publish anywhere, subscribe nowhere. `["*"]` reaches collab: and xapp: too, because baas
  *  protects no namespace (REALTIME_PROTECTED_NAMESPACES empty): the REST route's reach. */
-export function publisherClaims(nowMs, ttlSeconds = DEFAULT_TIMING.tokenTtlSeconds) {
+export function publisherClaims(nowMs, ttlSeconds = DEFAULT_TIMING.tokenTtlSeconds, namespaces = ['*']) {
 	const iat = Math.floor(nowMs / 1000);
-	return { iss: REALTIME_TOKEN_ISSUER, sub: PUBLISHER_SUBJECT, can_publish: true, can_subscribe: false, namespaces: ['*'], iat, exp: iat + ttlSeconds };
+	return { iss: REALTIME_TOKEN_ISSUER, sub: PUBLISHER_SUBJECT, can_publish: true, can_subscribe: false, namespaces, iat, exp: iat + ttlSeconds };
 }
 
 function hostOf(url) {
@@ -80,6 +81,7 @@ export class RealtimeSocketPublisher {
 	#log;
 	#timing;
 	#WebSocket;
+	#namespaces;
 	#queue = [];
 	#socket = null;
 	#ready = false;
@@ -91,7 +93,8 @@ export class RealtimeSocketPublisher {
 	#warnedNoSecret = false;
 	#closed = false;
 
-	constructor({ url, secret, log = console.warn, timing = {}, WebSocketImpl = globalThis.WebSocket }) {
+	constructor({ url, secret, log = console.warn, timing = {}, WebSocketImpl = globalThis.WebSocket, namespaces = ['*'] }) {
+		this.#namespaces = namespaces;
 		this.#url = url;
 		this.#host = hostOf(url);
 		this.#secret = secret;
@@ -121,6 +124,36 @@ export class RealtimeSocketPublisher {
 		this.#enqueue({ type: 'PUBLISH', topic, event_type: eventType, payload: payload ?? null });
 		if (this.#isReady()) this.#flush();
 		else this.#scheduleConnect();
+		return true;
+	}
+
+	/**
+	 * Write one event straight to the authenticated socket, or refuse so the caller can use
+	 * another route: the socket is not open, or the queue still holds events from before.
+	 * A refusal also wakes the reconnect, so the socket heals while HTTP carries the traffic.
+	 *
+	 * Caveat: true means written to the socket, not delivered. The gateway acks no PUBLISH, so
+	 * a frame lost as the socket drops, or one the gateway refuses for a namespace the token
+	 * does not grant, is invisible here; the startup canary (bridge-realtime-ws-lane.mjs)
+	 * proves the path once, not every frame.
+	 */
+	publishIfReady(topic, eventType, payload) {
+		if (!this.#secret) return this.#refuseWithoutSecret();
+		if (!this.#isReady() || this.#queue.length > 0) {
+			this.#scheduleConnect();
+			return false;
+		}
+		// A backed-up send buffer is the "queue full" of a ready socket: the peer reads slower
+		// than we write, so this event would wait behind it.
+		if (this.#socket.bufferedAmount > this.#timing.maxBufferedBytes) return false;
+		let payloadJson;
+		try {
+			payloadJson = JSON.stringify(payload ?? null);
+		} catch {
+			return false;
+		}
+		if (Buffer.byteLength(payloadJson) > MAX_PAYLOAD_BYTES) return false;
+		this.#socket.send(`{"type":"PUBLISH","topic":${JSON.stringify(topic)},"event_type":${JSON.stringify(eventType)},"payload":${payloadJson}}`);
 		return true;
 	}
 
@@ -197,7 +230,7 @@ export class RealtimeSocketPublisher {
 	}
 
 	#authenticate(socket) {
-		const claims = publisherClaims(Date.now(), this.#timing.tokenTtlSeconds);
+		const claims = publisherClaims(Date.now(), this.#timing.tokenTtlSeconds, this.#namespaces);
 		socket.send(JSON.stringify({ type: 'AUTH', token: signRealtimeJwt(claims, this.#secret) }));
 	}
 

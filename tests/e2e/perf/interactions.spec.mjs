@@ -163,15 +163,17 @@ test("open quick-find palette (Ctrl+K)", async ({ page }) => {
 test("open settings", async ({ page }) => {
   test.setTimeout(240_000);
   const floor = await boot(page);
-  const close = page.getByRole("button", { name: "Close settings" });
+  const close = page.getByRole("button", { name: "Close Settings" });
   await runInteraction(page, {
     spec: SPEC, name: "settings", floor, target: OPEN_TARGET, budget: BUDGET.settings, startEvent: "click",
     before: async () => {
       if (await close.count()) await close.click();
-      await expect(close).toHaveCount(0);
+      await expect(page.getByRole("region", { name: "Settings", exact: true })).toHaveCount(0);
     },
     action: () => page.getByRole("button", { name: "Settings", exact: true }).first().click(),
-    until: { selector: 'button[aria-label="Close settings"]' },
+    // Only inside the tab's view: the search role renders with the lazy chunk,
+    // so the measurement covers the chunk fetch, not just the tab opening.
+    until: { selector: '[role="region"][aria-label="Settings"] [role="search"]' },
   });
 });
 
@@ -216,6 +218,10 @@ test("open a database view", async ({ page }) => {
     spec: SPEC, name: "database", floor, target: HEAVY_TARGET, budget: BUDGET.database, startEvent: "click",
     before: async () => {
       await openAndWait(page, START);
+      // Recent tabs stay mounted (4600c5b88), so a second click would only
+      // show the hidden tab again: closing it makes every round a real open.
+      const close = page.getByRole("button", { name: "Close Tasks database", exact: true });
+      if (await close.count()) await close.click();
       await expect(cells).toHaveCount(0);
     },
     action: () => explorerRow(page, "Tasks database").click(),

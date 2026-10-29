@@ -1,0 +1,6 @@
+{
+	"name": "@osionos/ai-wiki-eval",
+	"private": true,
+	"type": "module",
+	"main": "index.mjs"
+}

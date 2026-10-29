@@ -41,7 +41,7 @@ export function workspaceMembersFromWire(workspaceId: string, body: unknown): Wo
   for (const row of rows) {
     if (!isRecord(row) || typeof row.userId !== 'string' || !row.userId) continue;
     const role = ROLE_FROM_DB[typeof row.role === 'string' ? row.role : ''] ?? 'guest';
-    members.push({ ...memberShell(workspaceId, row.userId), ...pickDates(row), role });
+    members.push({ ...memberShell(workspaceId, row.userId), ...pickDates(row), ...pickName(row.name), role });
   }
   return members;
 }
@@ -50,6 +50,15 @@ export function workspaceMembersFromWire(workspaceId: string, body: unknown): Wo
 function memberShell(workspaceId: string, userId: string): WorkspaceMember {
   const timestamp = new Date().toISOString();
   return { _id: `wm-${workspaceId}-${userId}`, workspaceId, userId, role: 'guest', joinedAt: timestamp, createdAt: timestamp, updatedAt: timestamp, removedAt: null };
+}
+
+// Caveat: the cap is a guess at "longer than any real display name"; a longer one is cut mid-word.
+const NAME_LIMIT = 120;
+
+/** The bridge's display name, trimmed and capped; anything else leaves the row unnamed. */
+function pickName(value: unknown): { name?: string } {
+  const name = typeof value === 'string' ? value.trim().slice(0, NAME_LIMIT) : '';
+  return name ? { name } : {};
 }
 
 /** Keeps the dates a legacy row carries; the bridge sends none. */
@@ -72,7 +81,10 @@ export function sanitizePersistedMembers(data: unknown): Record<string, Workspac
   if (!isRecord(data)) return {};
   const clean: Record<string, WorkspaceMember[]> = {};
   for (const [workspaceId, members] of Object.entries(data)) {
-    if (Array.isArray(members)) clean[workspaceId] = members.filter((m): m is WorkspaceMember => isRecord(m) && typeof m.userId === 'string');
+    if (!Array.isArray(members)) continue;
+    clean[workspaceId] = members
+      .filter((m): m is WorkspaceMember => isRecord(m) && typeof m.userId === 'string')
+      .map((m) => (m.name === undefined || typeof m.name === 'string' ? m : { ...m, name: undefined }));
   }
   return clean;
 }

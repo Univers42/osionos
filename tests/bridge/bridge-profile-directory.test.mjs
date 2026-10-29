@@ -22,8 +22,9 @@ const config = harnessConfig();
 const asA = sessionHeaders(config, IDS.userA, IDS.homeA);
 const asB = sessionHeaders(config, IDS.userB, IDS.homeB);
 const PRIVATE_FIELDS = ['bio', 'location', 'headline', 'customFields', 'workspaceId', 'role', 'online', 'lastSeenAt', 'username', 'joinedAt'];
+const STORED_AVATAR = `/api/media/avatars/${IDS.userA}/abc-160.webp`;
 
-function world({ optedOut = false, blocks = [] } = {}) {
+function world({ optedOut = false, blocks = [], avatarUrl = null } = {}) {
 	const mock = createPostgrestMock({
 		osionos_bridge_identities: [{
 			user_id: IDS.userA, display_name: 'Alice', username: 'alice', directory_opt_out: optedOut,
@@ -31,6 +32,7 @@ function world({ optedOut = false, blocks = [] } = {}) {
 			created_at: '2026-10-01T00:00:00.000Z', last_seen_at: new Date().toISOString(),
 		}],
 		osionos_workspace_members: [{ workspace_id: IDS.team, user_id: IDS.userA, role: 'owner', permissions: ['read'] }],
+		osionos_profiles: [{ user_id: IDS.userA, display_name: 'Alice', avatar_url: avatarUrl }],
 	}, {
 		// The mock has no `or=` filter; the block lookup is answered directly.
 		failWhen: (call) => (call.table === 'osionos_user_blocks' ? { status: 200, body: blocks } : null),
@@ -45,9 +47,22 @@ describe('GET /api/profile/:userId', () => {
 		await withBridge(config, world({ optedOut: true }), async (base) => {
 			const { status, body } = await profileOf(base, asB);
 			assert.equal(status, 200);
-			assert.deepEqual(body, { ok: true, userId: IDS.userA, name: 'Alice', avatar: 'data:image/png;base64,AAAA' });
+			// A `data:` URL never leaves the bridge (P0-6).
+			assert.deepEqual(body, { ok: true, userId: IDS.userA, name: 'Alice', avatar: null });
 			for (const field of PRIVATE_FIELDS) assert.ok(!(field in body), field);
 		});
+	});
+
+	it('shows the stored avatar as an absolute URL', async () => {
+		process.env.OSIONOS_BRIDGE_PUBLIC_URL = 'https://bridge.test';
+		try {
+			await withBridge(config, world({ avatarUrl: STORED_AVATAR }), async (base) => {
+				const { body } = await profileOf(base, asB);
+				assert.equal(body.avatar, `https://bridge.test${STORED_AVATAR}`);
+			});
+		} finally {
+			delete process.env.OSIONOS_BRIDGE_PUBLIC_URL;
+		}
 	});
 
 	it('answers a viewer who blocked or was blocked by the user with the minimal card only', async () => {

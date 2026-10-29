@@ -28,6 +28,7 @@ import { useToastStore } from "@osionos/ui/primitives";
 import { ExplorerRowMenu } from "./ExplorerRowMenu";
 import type { ExplorerRowKind } from "@/features/ide/model/explorerRows";
 import type { ExplorerMenuRequest } from "@/features/ide/ui/useExplorerController";
+import { useCanInviteMembers } from "@/features/settings/people/useCanInviteMembers";
 
 interface Props {
   onOpenSettings?: () => void;
@@ -52,6 +53,8 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
   const { ops, importFolder, exportProject } = useWorkspaceFileOps();
   const workspaceName = useUserStore((s) => s.activeWorkspace()?.name ?? "project");
   const [showInviteCTA, setShowInviteCTA] = useState(true);
+  const activeUserId = useUserStore((s) => s.activeUserId);
+  const canInvite = useCanInviteMembers(activeWorkspaceId ?? undefined, activeUserId);
   const [menu, setMenu] = useState<ExplorerMenuRequest | null>(null);
   const importRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -139,7 +142,7 @@ export const ExplorerPanel: React.FC<Props> = ({ onOpenSettings, onOpenTrash, on
         onOpenSettings={onOpenSettings}
         onOpenTrash={onOpenTrash}
         onOpenConsole={onOpenConsole}
-        showInviteCTA={showInviteCTA}
+        showInviteCTA={showInviteCTA && canInvite}
         onDismissInvite={() => setShowInviteCTA(false)}
       />
       <input

@@ -66,3 +66,21 @@ test("chat store: create conversation, send → user + stub assistant turns, pro
   const raw = globalThis.localStorage.getItem("osionos.chat.v1");
   assert.ok(raw && raw.includes(conversation.id));
 });
+
+test("chat store: a new chat reuses the untouched one instead of piling empty chats into the history", async () => {
+  shimLocalStorage();
+  const { useChatStore } = await import("@/features/chat/model/useChatStore");
+  const s = () => useChatStore.getState();
+
+  const first = s().createConversation(null);
+  const again = s().createConversation(null);
+  assert.equal(again.id, first.id, "an empty chat is reopened, not copied");
+  assert.equal(s().activeConversationId, first.id);
+
+  await s().send(first.id, "hello", { connectorId: "anthropic", model: "auto" });
+  const next = s().createConversation(null);
+  assert.notEqual(next.id, first.id, "a used chat is history: the next one is new");
+
+  const named = s().createConversation(null, { title: "Named" });
+  assert.notEqual(named.id, next.id, "a chat asked for by name is always a new one");
+});

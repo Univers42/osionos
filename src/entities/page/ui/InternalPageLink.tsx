@@ -13,6 +13,7 @@
 import React from "react";
 import { FileText, Database } from "lucide-react";
 import { usePageStore } from "@/store/usePageStore";
+import { IconValueView } from "@/shared/ui";
 import { getInternalPageLinkMetadata } from "@/entities/page/model/internalLinkMetadata";
 
 interface InternalPageLinkProps {
@@ -55,7 +56,7 @@ export const InternalPageLink: React.FC<InternalPageLinkProps> = ({ pageId }) =>
       style={{ display: "inline-flex" }}
     >
       <span className="flex items-center justify-center text-base mr-1.5">
-        {linkMetadata.icon || <Icon className="h-3.5 w-3.5" />}
+        {linkMetadata.icon ? <IconValueView value={linkMetadata.icon} size={14} /> : <Icon className="h-3.5 w-3.5" />}
       </span>
       <span className="text-sm underline">
         {linkMetadata.title}

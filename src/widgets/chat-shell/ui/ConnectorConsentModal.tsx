@@ -31,7 +31,7 @@ export const ConnectorConsentModal: React.FC<{
 }> = ({ descriptor, onAuthorize, onClose }) => (
   <Modal open={Boolean(descriptor)} onClose={onClose} title={descriptor ? `Connect ${descriptor.displayName}` : ""}>
     {descriptor ? (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 p-6">
         <p className="text-sm text-[var(--osio-fg-muted)]">
           You&apos;ll authorize via the provider — <strong>no API key required</strong>. {descriptor.displayName} will be able to:
         </p>

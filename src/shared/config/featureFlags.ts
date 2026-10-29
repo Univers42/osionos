@@ -18,6 +18,7 @@ export type FeatureFlagName =
   | "osio.canvas.v2"
   | "osio.profile.template"
   | "osio.collab.shared"
+  | "osio.collab.fastsend"
   | "osio.blockselect"
   | "osio.automations"
   | "osio.db.server"
@@ -31,7 +32,11 @@ export type FeatureFlagName =
   | "osio.sqlrun"
   | "osio.publish"
   | "osio.whiteboard"
-  | "osio.panezoom";
+  | "osio.panezoom"
+  | "osio.ai.images"
+  | "osio.ai.channel"
+  | "osio.account.delete"
+  | "osio.themes";
 
 /**
  * Resolution (URL -> localStorage -> env -> fallback) lives in @osionos/feature-flags.
@@ -164,12 +169,11 @@ export function isPublishEnabled(): boolean {
   return isFeatureFlagEnabled("osio.publish", false);
 }
 
-/** The Whiteboard tab: drawnosaurus embedded in an iframe (`tab.kind === "embed"`).
- *  A separate service that must be running; it also backs the inline `whiteboard` block
- *  and the built-in `osionos.whiteboard` app (rail icon, `/whiteboard`), which every account
- *  has without installing anything. Default ON: drawnosaurus is part of the default
- *  `make all` pipeline, so the service is up on the standard path. The flag is a
- *  kill-switch, and the app is additionally hidden when no URL is configured
+/** The Whiteboard tab: hydrawn's web app on its own origin, in an iframe
+ *  (`tab.kind === "embed"`), storing boards through the bridge's whiteboard routes. It also
+ *  backs the inline `whiteboard` block and the built-in `osionos.whiteboard` app (rail icon,
+ *  `/whiteboard`), which every account has without installing anything. Default ON: the
+ *  `hydrawn` service is part of groot's default pipeline. The flag is a kill-switch, and the app is additionally hidden when no URL is configured
  *  (`whiteboardAppUrl()`), so a build without `VITE_WHITEBOARD_APP_URL` never shows a
  *  tab that cannot load. Disable via `?osio.whiteboard=0`, the `osio.whiteboard`
  *  localStorage key, or `VITE_OSIO_WHITEBOARD=0`. */
@@ -187,4 +191,51 @@ export function isWhiteboardEnabled(): boolean {
  *  `VITE_OSIO_PANEZOOM=0`. */
 export function isPaneZoomEnabled(): boolean {
   return supportsCssZoom() && isFeatureFlagEnabled("osio.panezoom", true);
+}
+
+/** AI image generation: `/imagine <prompt>` drops an image block the engine
+ *  fills, and the block carries the "AI-generated" label. Default OFF: the
+ *  service refuses images when ITS own flag is off (it answers 404
+ *  `not_found`), so a stack without the engine must not offer the entry.
+ *  Enable client via `?osio.ai.images=1`, the `osio.ai.images` localStorage
+ *  key, or `VITE_OSIO_AI_IMAGES=1`. */
+export function isAiImagesEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.ai.images", false);
+}
+
+/** "@AI" in a text channel drafts an answer only the asker sees, and posts it
+ *  on their click (C429). Default OFF: the AI service and the bridge refuse it
+ *  while their own flags (OSIONOS_AI_THREAD_ANSWERS, OSIONOS_THREAD_ANSWERS) are
+ *  off. Enable via `?osio.ai.channel=1`, the `osio.ai.channel` localStorage
+ *  key, or `VITE_OSIO_AI_CHANNEL=1`. */
+export function isChannelAiAnswersEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.ai.channel", false);
+}
+
+/** The "Delete my account" row and its grace-period banner in Profile. Default OFF:
+ *  the bridge route exists, but the purge that follows the grace period belongs to a
+ *  later package, so a request would schedule a deletion nothing executes yet. Enable
+ *  via `?osio.account.delete=1`, the `osio.account.delete` localStorage key, or
+ *  `VITE_OSIO_ACCOUNT_DELETE=1`. */
+export function isAccountDeleteEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.account.delete", false);
+}
+
+/** Custom JSON themes: the Advanced (JSON) button in Preferences, the theme
+ *  editor tab, the theme and profile commands in `>`, and applying a stored
+ *  theme at all. Default ON; the kill switch is `?osio.themes=0`, the
+ *  `osio.themes` localStorage key, or `VITE_OSIO_THEMES=0` (index.html reads
+ *  the first two before first paint; the boot pass clears what it applied when
+ *  the env says off). */
+export function isThemesEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.themes", true);
+}
+
+/** Live co-editing fast send: a draft change leaves as a realtime-only block
+ *  put within the frame instead of after the 250 ms idle commit, and realtime
+ *  publishes get their own HTTP lane. Default OFF; wire format is unchanged, so
+ *  mixed on/off clients interoperate. Turn on with `VITE_OSIO_COLLAB_FASTSEND=1`
+ *  or `?osio.collab.fastsend=1` per tab. */
+export function isCollabFastSendEnabled(): boolean {
+  return isFeatureFlagEnabled("osio.collab.fastsend", false);
 }

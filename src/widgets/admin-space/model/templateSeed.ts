@@ -11,15 +11,11 @@
 /* ************************************************************************** */
 
 import type { Block, LayoutCell } from "@/entities/block";
+import { bound } from "@/data/templates/templateBlocks";
 import type { TemplateSurface } from "@/widgets/page-renderer/model/useTemplateForSurface";
 
 let counter = 0;
 const blockId = (): string => `tmpl-${Date.now().toString(36)}-${(counter++).toString(36)}`;
-
-/** A field bound to the record in context ($record) — renders the user/app value. */
-function bound(fieldBind: string, headingLevel?: 1 | 2 | 3): Block {
-  return { id: blockId(), type: headingLevel ? (`heading_${headingLevel}` as Block["type"]) : "paragraph", content: "", recordRef: "$record", fieldBind, headingLevel };
-}
 
 function heading(text: string, level: 1 | 2 | 3): Block {
   return { id: blockId(), type: `heading_${level}` as Block["type"], content: text, headingLevel: level };
@@ -49,17 +45,17 @@ export function seedTemplateContent(surface: TemplateSurface): Block[] {
   if (surface === "marketplace-app") {
     return [
       layout([
-        cell("header", 1, 12, 1, 2, [bound("title", 1), bound("company")]),
-        cell("about", 1, 8, 3, 3, [heading("About this app", 3), bound("description")]),
-        cell("meta", 9, 4, 3, 3, [heading("Details", 3), bound("version"), bound("company")]),
+        cell("header", 1, 12, 1, 2, [bound(blockId(), "title", 1), bound(blockId(), "company")]),
+        cell("about", 1, 8, 3, 3, [heading("About this app", 3), bound(blockId(), "description")]),
+        cell("meta", 9, 4, 3, 3, [heading("Details", 3), bound(blockId(), "version"), bound(blockId(), "company")]),
       ]),
     ];
   }
   return [
     layout([
-      cell("header", 1, 12, 1, 2, [bound("displayName", 1), bound("headline")]),
-      cell("about", 1, 8, 3, 3, [heading("About", 3), bound("bio")]),
-      cell("meta", 9, 4, 3, 3, [heading("Details", 3), bound("role"), bound("location")]),
+      cell("header", 1, 12, 1, 2, [bound(blockId(), "displayName", 1), bound(blockId(), "headline")]),
+      cell("about", 1, 8, 3, 3, [heading("About", 3), bound(blockId(), "bio")]),
+      cell("meta", 9, 4, 3, 3, [heading("Details", 3), bound(blockId(), "role"), bound(blockId(), "location")]),
     ]),
   ];
 }

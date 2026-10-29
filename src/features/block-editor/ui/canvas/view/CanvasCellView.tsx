@@ -12,12 +12,14 @@
 
 import React, { useCallback } from "react";
 
+import type { PropertyMap } from "@/shared/notion-database-sys/src/lib/engine/bridge";
 import type { SurfaceBlockEditorProps } from "../../BlockEditorSurface";
 import type { LazyMounter } from "../controller/lazyMount";
 import { frameEquals, roundFrameForDom } from "../model/geometry";
 import { gridCellFromFrame } from "../model/migration";
 import { legacySizingFromCanvas } from "../model/migrationMaps";
 import type { CanvasCell, CanvasFrame, CanvasGridConfig } from "../model/types";
+import { evaluateCellVisibility } from "@/entities/block/model/visibility";
 import { CanvasCellChrome } from "./CanvasCellChrome";
 import { CanvasCellSurface } from "./CanvasCellSurface";
 import { CanvasResizeHandles, type CanvasResizeEdge } from "./CanvasResizeHandles";
@@ -31,6 +33,10 @@ export interface CanvasCellViewProps {
   preview: boolean;
   pageId: string;
   layoutBlockId: string;
+  /** The page's own properties — the context this cell's formula is evaluated against. */
+  properties: PropertyMap;
+  /** True once the WASM formula engine has booted (it loads lazily). */
+  formulaEngineReady: boolean;
   lazyMounter: LazyMounter;
   renderBlockEditor: (props: SurfaceBlockEditorProps) => React.ReactNode;
   onSelectCell: (cellId: string, additive: boolean) => void;
@@ -54,7 +60,8 @@ function isInteractivePointerTarget(target: EventTarget | null): boolean {
 // object identity for untouched cells, so comparing the cell reference (plus
 // the few presentation inputs) replaces the legacy field-by-field comparator
 // and its stale-config bug class. Callbacks are identity-ignored — the stage
-// keeps them stable and internally reads live refs.
+// keeps them stable and internally reads live refs. The formula's context
+// counts: a property edit must re-answer the cell's visibility formula.
 function cellViewPropsEqual(prev: CanvasCellViewProps, next: CanvasCellViewProps): boolean {
   return prev.cell === next.cell &&
     prev.selected === next.selected &&
@@ -62,6 +69,8 @@ function cellViewPropsEqual(prev: CanvasCellViewProps, next: CanvasCellViewProps
     prev.gridConfig === next.gridConfig &&
     prev.pageId === next.pageId &&
     prev.layoutBlockId === next.layoutBlockId &&
+    prev.properties === next.properties &&
+    prev.formulaEngineReady === next.formulaEngineReady &&
     frameEquals(prev.displayFrame, next.displayFrame);
 }
 
@@ -73,6 +82,7 @@ const CanvasCellViewComponent: React.FC<CanvasCellViewProps> = ({
   preview,
   pageId,
   layoutBlockId,
+  properties,
   lazyMounter,
   renderBlockEditor,
   onSelectCell,
@@ -103,6 +113,12 @@ const CanvasCellViewComponent: React.FC<CanvasCellViewProps> = ({
     (node: HTMLDivElement | null) => onMeasureCell(cell.id, hugHeight ? node : null),
     [cell.id, hugHeight, onMeasureCell],
   );
+
+  // The cell re-checks its own visibility: the stage keeps hidden cells out of
+  // its render list, and this keeps the invariant local to the component that
+  // draws the chrome, the editor and the resize handles — a hidden cell leaves
+  // nothing behind in the DOM.
+  if (!evaluateCellVisibility(cell.visibilityFormula, properties)) return null;
 
   return (
     <section

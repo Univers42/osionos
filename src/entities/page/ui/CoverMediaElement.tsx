@@ -6,13 +6,16 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/12 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/12 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-import React from "react";
+import React, { useRef, useState } from "react";
+import { Pause, Play } from "lucide-react";
 
-import { isVideoCoverSource } from "./coverMedia";
+import { useAnimatedImagesMode } from "@/shared/config/useAppearance";
+import { coverCrossOrigin } from "@/shared/lib/media/coverCrossOrigin";
+import { animatedMediaMayPlay, isVideoCoverSource, usePrefersReducedMotion } from "./coverMedia";
 
 interface CoverPointerHandlers {
   onPointerDown: (event: React.PointerEvent) => void;
@@ -34,6 +37,79 @@ interface CoverMediaElementProps {
   handlers: CoverPointerHandlers;
 }
 
+interface VideoCoverProps {
+  src: string;
+  style: React.CSSProperties;
+  /** Whether the cover may animate on its own. */
+  mayPlay: boolean;
+  attachMedia: (el: HTMLElement | null) => void;
+  handlers: CoverPointerHandlers;
+}
+
+/**
+ * A video cover. When it may play, it plays: muted, looped, autoplaying —
+ * a video cover is user-chosen ambient motion. When it may not (the person
+ * chose "still", or the OS asks for reduced motion), it shows its first frame
+ * and offers a play/pause button instead, so the motion is theirs to start.
+ */
+const VideoCover: React.FC<VideoCoverProps> = ({ src, style, mayPlay, attachMedia, handlers }) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+
+  // The ref also kicks play() imperatively: React sets `muted` as a property
+  // only (no DOM attribute), which some autoplay policies evaluate too late.
+  const attachVideo = (el: HTMLVideoElement | null) => {
+    attachMedia(el);
+    videoRef.current = el;
+    if (!el) return;
+    el.defaultMuted = true;
+    el.muted = true;
+    if (mayPlay) void el.play().catch(() => {});
+  };
+
+  const toggle = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (el.paused) void el.play().catch(() => {});
+    else el.pause();
+  };
+
+  return (
+    <div className="relative h-full w-full">
+      <video
+        ref={attachVideo}
+        src={src}
+        crossOrigin={coverCrossOrigin(src)}
+        data-testid="page-cover-video"
+        className="osionos-page-cover-img"
+        style={style}
+        muted
+        loop
+        playsInline
+        autoPlay={mayPlay}
+        preload={mayPlay ? "auto" : "metadata"}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onLoadedData={(event) => { if (mayPlay) void event.currentTarget.play().catch(() => {}); }}
+        {...handlers}
+      />
+      {mayPlay ? null : (
+        <button
+          type="button"
+          data-testid="page-cover-video-toggle"
+          aria-label={playing ? "Pause cover video" : "Play cover video"}
+          aria-pressed={playing}
+          onClick={toggle}
+          className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-[var(--osio-radius-control)] bg-[var(--osio-bg-surface)] px-2 py-1 text-xs font-medium text-[var(--osio-fg-default)] shadow-[var(--osio-shadow-sm)]"
+        >
+          {playing ? <Pause size={14} aria-hidden /> : <Play size={14} aria-hidden />}
+          {playing ? "Pause" : "Play"}
+        </button>
+      )}
+    </div>
+  );
+};
+
 /**
  * The cover media itself: CSS gradient, muted looping <video>, or <img>.
  * Reposition works identically for image and video (both are object-fit:
@@ -47,6 +123,9 @@ export const CoverMediaElement: React.FC<CoverMediaElementProps> = ({
   attachMedia,
   handlers,
 }) => {
+  const animatedImages = useAnimatedImagesMode();
+  const reducedMotion = usePrefersReducedMotion();
+
   if (isGradient) {
     return (
       <div
@@ -59,35 +138,14 @@ export const CoverMediaElement: React.FC<CoverMediaElementProps> = ({
 
   const style = { objectPosition: `center ${position}%` };
 
-  if (isVideoCoverSource(src)) {
-    // A video cover is user-chosen ambient motion (always muted+looped), so it
-    // plays even under prefers-reduced-motion — on this stack that media query
-    // is often just GTK "animations off" (gtk-enable-animations=false), which
-    // would otherwise freeze every cover on frame 1. The ref also kicks play()
-    // imperatively: React sets `muted` as a property only (no DOM attribute),
-    // which some autoplay policies evaluate too late.
-    const attachVideo = (el: HTMLVideoElement | null) => {
-      attachMedia(el);
-      if (el) {
-        el.defaultMuted = true;
-        el.muted = true;
-        void el.play().catch(() => {});
-      }
-    };
+  if (src && isVideoCoverSource(src)) {
     return (
-      <video
-        ref={attachVideo}
+      <VideoCover
         src={src}
-        data-testid="page-cover-video"
-        className="osionos-page-cover-img"
         style={style}
-        muted
-        loop
-        playsInline
-        autoPlay
-        preload="auto"
-        onLoadedData={(event) => { void event.currentTarget.play().catch(() => {}); }}
-        {...handlers}
+        mayPlay={animatedMediaMayPlay(animatedImages, reducedMotion)}
+        attachMedia={attachMedia}
+        handlers={handlers}
       />
     );
   }

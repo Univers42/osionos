@@ -22,7 +22,6 @@ export const resume: SeedPage = {
   workspaceId: 'mock-ws-private-0',
   ownerId: 'mock-user-0',
   isTemplate: true,
-  templateSurface: 'resume',
   content: [
     layoutGrid(1, [
       cell({ colStart: 1, colSpan: 5, rowStart: 1, rowSpan: 1 }, 'Sidebar', [

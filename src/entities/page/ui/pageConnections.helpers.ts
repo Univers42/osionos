@@ -54,3 +54,19 @@ export function mergeRefs(primary: readonly PageRef[], extra: readonly PageRef[]
   for (const ref of extra) if (!byId.has(ref.id)) byId.set(ref.id, ref);
   return [...byId.values()];
 }
+
+/**
+ * The mention of a page, as the editor writes it: `[[page:<id>]]`.
+ *
+ * The link store reads it back (the page-links migration), so the mention is
+ * the one shape the editor and the store agree on.
+ */
+export function pageMention(pageId: string): string {
+  return `[[page:${pageId}]]`;
+}
+
+/** The text of a block with the mention of a page appended to it. */
+export function withPageMention(content: string, pageId: string): string {
+  const trimmed = (content ?? "").trimEnd();
+  return `${trimmed}${trimmed.length > 0 ? " " : ""}${pageMention(pageId)} `;
+}

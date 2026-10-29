@@ -88,7 +88,18 @@ describe('creating a page under a parent', () => {
 });
 
 describe('moving a page with PATCH parentPageId', () => {
-	for (const [name, parentPageId] of Object.entries({ ...BAD_PARENTS, ...OWN_SUBTREE })) {
+	for (const [name, parentPageId] of Object.entries(BAD_PARENTS)) {
+		it(`answers the missing-parent 404 for a move under ${name} and writes nothing`, async () => {
+			const mock = createPostgrestMock(parentWorld());
+			await withBridge(config, mock.fetchImpl, async (base) => {
+				const moved = await send(base, `/api/pages/${IDS.pageB}`, asB, patch({ parentPageId, content: CONTENT }));
+				assert.equal(moved.status, 404, moved.text);
+				assert.equal(moved.body.message, 'Parent page not found.');
+				assert.equal(mock.page(IDS.pageB).parent_page_id, null);
+			});
+		});
+	}
+	for (const [name, parentPageId] of Object.entries(OWN_SUBTREE)) {
 		it(`drops a move under ${name} and writes the rest of the edit`, async () => {
 			const mock = createPostgrestMock(parentWorld());
 			await withBridge(config, mock.fetchImpl, async (base) => {

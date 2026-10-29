@@ -22,6 +22,7 @@ import {
 	createUserSession,
 	validateBridgePayload,
 } from '../../scripts/bridge-api.mjs';
+import { pngFixture } from './support/image-fixtures.mjs';
 
 const subject = '3f6d2a70-5b3f-4c92-8f06-8f4644fd1209';
 const payload = {
@@ -105,7 +106,8 @@ describe('bridge media uploads', () => {
 	it('stores bytes owner-scoped and serves them back via the capability URL', async () => {
 		base ??= await listen(server);
 		const token = appSessionToken(config);
-		const bytes = Buffer.from('fake-image-bytes');
+		// A real PNG: the writer checks the bytes against the declared type (P0-6).
+		const bytes = pngFixture({ width: 2, height: 2 });
 
 		const upload = await fetch(`${base}/api/media/uploads?name=photo.png`, {
 			method: 'POST',

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-// Caveat: slashMenuCatalog.tsx holds JSX, which node's type stripping cannot load, so this
-// reads the file as text. A catalog entry rebuilt by a helper or spread from another file
+// Caveat: slashMenuCatalog.tsx holds JSX, so this reads the file as text. A
+// catalog entry rebuilt by a helper or spread from another file
 // would not be seen (the scan would then fail loudly on a missing entry, never pass
 // silently). `/draw` and `/white` matching are asserted in the browser by
 // tests/e2e/functional/whiteboardBlock.spec.mjs.

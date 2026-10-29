@@ -78,9 +78,10 @@ export function encodeFrame(payload, opcode = 2) {
 /**
  * Stateful decoder: feed it socket chunks, get back complete messages. Returns
  * an array of { opcode, data } per feed (usually 0 or 1). Throws on an oversized
- * message (a hostile client) so the caller can close the socket.
+ * message (a hostile client) so the caller can close the socket. `maxMessage` lowers
+ * (or raises) the cap per decoder; the default stays 1 MiB for the browser routes.
  */
-export function createFrameDecoder() {
+export function createFrameDecoder({ maxMessage = MAX_MESSAGE } = {}) {
   let buffer = Buffer.alloc(0);
   let fragments = [];
   let fragmentOpcode = 0;
@@ -97,7 +98,7 @@ export function createFrameDecoder() {
       let offset = 2;
       if (len === 126) { if (buffer.length < 4) break; len = buffer.readUInt16BE(2); offset = 4; }
       else if (len === 127) { if (buffer.length < 10) break; len = Number(buffer.readBigUInt64BE(2)); offset = 10; }
-      if (len > MAX_MESSAGE) throw new Error("ws message too large");
+      if (len > maxMessage) throw new Error("ws message too large");
       const need = offset + (masked ? 4 : 0) + len;
       if (buffer.length < need) break;
 
@@ -113,7 +114,7 @@ export function createFrameDecoder() {
 
       if (opcode === 0) {
         fragments.push(payload);
-        if (fragments.reduce((n, f) => n + f.length, 0) > MAX_MESSAGE) throw new Error("ws message too large");
+        if (fragments.reduce((n, f) => n + f.length, 0) > maxMessage) throw new Error("ws message too large");
         if (fin) { messages.push({ opcode: fragmentOpcode, data: Buffer.concat(fragments) }); fragments = []; }
       } else if (opcode === 1 || opcode === 2) {
         if (fin) messages.push({ opcode, data: payload });

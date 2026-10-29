@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 // A BaaS for the sign-in tests: the identity upsert (it rewrites email_hash, as the SQL does),
-// the is_admin read/promotion on osionos_bridge_identities, the members upsert keyed on
+// the is_admin read/promotion on osionos_bridge_identities (filtered by provider, subject and an optional email_hash), the members upsert keyed on
 // (workspace_id, user_id), and osionos_bridge_list_workspaces as the plain JOIN the migration
 // defines (members of p_user_id, restricted to p_workspace_ids, newest updated_at first).
 // Everything else (member reads, embeds) goes to the strict harness stub, so a sign-in query
@@ -23,6 +23,8 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { configFromEnv, consumeHandoffToken, createBridgeHandoff, validateBridgePayload, verifyAppSessionToken } from '../../../scripts/bridge-api.mjs';
 import { createPostgrestMock } from './bridge-harness.mjs';
+import { kvStub } from './kv-stub.mjs';
+import { noFactorPg } from './no-factor-pg.mjs';
 
 export const BAAS_URL = 'http://baas.local';
 export const SUBJECT = '3f6d2a70-5b3f-4c92-8f06-8f4644fd1209';
@@ -95,8 +97,8 @@ export function createSigninStub(seed = {}, options = {}) {
 	}
 
 	function identities_(entry) {
-		const hash = entry.params.get('email_hash')?.replace(/^eq\./, '');
-		const hit = identityRows.filter((row) => row.email_hash === hash);
+		const wanted = Object.fromEntries(['provider', 'subject', 'email_hash'].map((key) => [key, entry.params.get(key)?.replace(/^eq\./, '')]));
+		const hit = identityRows.filter((row) => Object.entries(wanted).every(([key, value]) => value === undefined || row[key] === value));
 		if (entry.method === 'PATCH') {
 			for (const row of hit.filter((candidate) => candidate.is_admin === false)) Object.assign(row, entry.body);
 			return new Response(null, { status: 204 });
@@ -147,9 +149,9 @@ export function createSigninStub(seed = {}, options = {}) {
 /** Sign in and return the decoded token claims, the session and the stub's request log. */
 export async function signIn(stub, { email = 'owner@example.com', emailVerified = true, config = signinConfig(), subject = SUBJECT } = {}) {
 	const payload = validateBridgePayload({ provider: 'prismatica', subject, email, emailVerified, name: 'Owner', jti: randomUUID() });
-	const handoffStore = new Map();
-	await createBridgeHandoff({ payload, config, handoffStore, now: NOW, fetchImpl: stub.fetchImpl });
-	const [token] = handoffStore.keys();
-	const { session } = consumeHandoffToken(token, handoffStore, NOW + 1000);
+	const kv = kvStub();
+	const minted = await createBridgeHandoff({ payload, config, kv, pg: noFactorPg(), now: NOW, fetchImpl: stub.fetchImpl });
+	const token = new URL(minted.redirectUrl).hash.replace('#bridge_token=', '');
+	const { session } = await consumeHandoffToken(decodeURIComponent(token), kv, NOW + 1000, config.appSessionSecret);
 	return { session, claims: verifyAppSessionToken(session.accessToken, config, NOW + 1000) };
 }

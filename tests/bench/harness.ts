@@ -22,10 +22,26 @@
  * a 4096-call batch moves the mean by ~0.1 %) — p99 here is of batch means, not of single calls.
  */
 
-export interface BenchCase {
+/**
+ * A timed case: gated on its p95 per operation, or marked `reference: true` (a platform call on a
+ * fixed input: its time is the runner's, not the code's, so it is reported and never gates). The
+ * marker is explicit so a case that loses its budget is a type error, not a silent reference row.
+ */
+export type BenchCase = GatedCase | ReferenceCase;
+
+interface GatedCase {
   name: string;
   /** p95 budget per operation, in nanoseconds. */
   budgetNs: number;
+  reference?: never;
+  /** Builds inputs OUTSIDE the timed region and returns the operation to time. */
+  setup: () => () => unknown;
+}
+
+interface ReferenceCase {
+  name: string;
+  reference: true;
+  budgetNs?: never;
   /** Builds inputs OUTSIDE the timed region and returns the operation to time. */
   setup: () => () => unknown;
 }
@@ -66,7 +82,7 @@ export interface BenchResult {
   p95Ns: number;
   p99Ns: number;
   minNs: number;
-  budgetNs: number;
+  budgetNs?: number;
   batch: number;
   samples: number;
   /** Burst cases only: the slowest run's sum of event times, and its budget. */
@@ -86,7 +102,15 @@ const BURST_RUNS = 5;
 /** Read by nothing; written by every call so the JIT cannot drop the operation. */
 export const blackhole: { sink: unknown } = { sink: undefined };
 
+/**
+ * The suite, refused when a timed case has neither a budget nor `reference: true`: the bench files
+ * are not type-checked (tsconfig.json includes src and packages only), so the check runs here.
+ */
 export function defineBench(suite: string, cases: readonly (BenchCase | BurstCase)[]): BenchSuite {
+  for (const entry of cases) {
+    if (isBurst(entry) || entry.reference === true || Number.isFinite(entry.budgetNs)) continue;
+    throw new Error(`${suite}: "${entry.name}" has no budgetNs; mark it reference: true if its time is the platform's`);
+  }
   return { suite, cases };
 }
 
@@ -138,10 +162,10 @@ export function measure(entry: BenchCase): BenchResult {
     p95Ns,
     p99Ns: percentile(perOp, 0.99),
     minNs: perOp[0] ?? Number.NaN,
-    budgetNs: entry.budgetNs,
+    ...(entry.reference ? {} : { budgetNs: entry.budgetNs }),
     batch,
     samples: perOp.length,
-    ok: p95Ns <= entry.budgetNs,
+    ok: entry.reference === true || p95Ns <= entry.budgetNs,
   };
 }
 

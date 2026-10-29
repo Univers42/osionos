@@ -16,6 +16,7 @@ import { PaneContent } from "@/widgets/page-renderer/ui/PaneContent";
 import { useWorkspaceLayout } from "../model/workspaceLayout";
 import type { PaneNode } from "../model/layoutTree";
 import { normalizePaneZoom } from "../model/paneZoom";
+import { keepRecentTabs } from "../model/keptTabs";
 import { TabStrip } from "./TabStrip";
 import { EmptyWorkspace } from "./EmptyWorkspace";
 import { PaneDropOverlay } from "./PaneDropOverlay";
@@ -60,12 +61,35 @@ function useDeferredMount(immediate: boolean): boolean {
   return ready || immediate;
 }
 
+/**
+ * Tabs a pane keeps mounted. Switching tabs used to unmount the old page and
+ * mount the new one: 60–150 ms long tasks per switch on live (2026-10-26).
+ * A kept tab stays mounted under `content-visibility: hidden`, which keeps its
+ * layout and skips its paint, so switching back is a style flip. <Activity>
+ * was measured worse (~200 ms): it hides with display:none, so a reveal
+ * re-lays the page out and re-runs every effect, the database reload included.
+ * Caveat: a kept tab holds its DOM and its store subscriptions, so a store
+ * change still re-renders a hidden tab that selected it; a page open in two
+ * tabs of one pane puts its block ids in the document twice (as two panes do).
+ */
+const KEPT_TABS_PER_PANE = 4;
+const HIDDEN_TAB_STYLE: React.CSSProperties = { contentVisibility: "hidden", pointerEvents: "none" };
+
+function useKeptTabs(activeId: string | null, openIds: readonly string[]): readonly string[] {
+  const [kept, setKept] = React.useState<readonly string[]>([]);
+  const next = keepRecentTabs(kept, activeId, openIds, KEPT_TABS_PER_PANE);
+  // Adjusting state while rendering: React re-renders before committing.
+  if (next !== kept) setKept(next);
+  return next;
+}
+
 /** A single tab-group leaf: tab bar + the active tab's content + drop zones. */
 const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
   const isActive = useWorkspaceLayout((s) => s.activePaneId === pane.id);
   const { dragActive, dropZone, dropHandlers } = usePaneDnd(pane.id);
   const activeTab = pane.tabs.find((t) => t.tabId === pane.activeTabId) ?? pane.tabs[0] ?? null;
   const mounted = useDeferredMount(isActive);
+  const keptTabIds = useKeptTabs(activeTab?.tabId ?? null, pane.tabs.map((t) => t.tabId));
   const zoom = isPaneZoomEnabled() ? normalizePaneZoom(pane.zoom) : 1;
   // A lone pane has nothing to be told apart from.
   const isOneOfMany = useWorkspaceLayout((s) => s.root.type === "split");
@@ -100,7 +124,16 @@ const PaneViewImpl: React.FC<{ pane: PaneNode }> = ({ pane }) => {
       >
         {activeTab ? (
           mounted ? (
-            <PaneContent tab={activeTab} paneId={pane.id} chrome="none" />
+            // Tab-strip order, never recency order: a reordered keyed child is a
+            // DOM move, and a moved subtree is laid out from scratch (~100 ms).
+            pane.tabs.filter((tab) => keptTabIds.includes(tab.tabId)).map((tab) => {
+              const hidden = tab !== activeTab;
+              return (
+                <div key={tab.tabId} className="absolute inset-0" inert={hidden} style={hidden ? HIDDEN_TAB_STYLE : undefined}>
+                  <PaneContent tab={tab} paneId={pane.id} chrome="none" />
+                </div>
+              );
+            })
           ) : (
             // Deferred (inactive pane): cheap placeholder until the idle mount.
             <div className="h-full bg-[var(--osio-bg-page)]" aria-busy="true" />

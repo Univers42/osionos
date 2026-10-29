@@ -58,7 +58,6 @@ describe('handoff and token keep one user-id form', () => {
 			payload: { provider: 'prismatica', subject: UPPER, email: 'member@example.com', name: 'Member', jti: normalized.jti },
 			secret: SECRET,
 			now: NOW,
-			replayStore: new Map(),
 		});
 		assert.equal(result.subject, LOWER);
 	});

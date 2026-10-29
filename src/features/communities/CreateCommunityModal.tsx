@@ -21,6 +21,7 @@
 import React, { useState } from 'react';
 
 import type { Community } from '@/shared/social/communityApi';
+import { ModerationWarningNotice } from '@/shared/moderation/ModerationWarningNotice';
 import { Button, IconPicker, IconValueView, Input } from '@/shared/ui';
 import { Modal } from '@osionos/ui/primitives/Modal';
 import { useCreateCommunity } from './useCommunity';
@@ -55,20 +56,28 @@ const AvatarTrigger: React.FC<{ avatar?: string; onChange: (value?: string) => v
 const CreateCommunityForm: React.FC<{ onCreated: (community: Community) => void }> = ({
   onCreated,
 }) => {
-  const { busy, error, create } = useCreateCommunity();
+  const { busy, error, warning, dismissWarning, create } = useCreateCommunity();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [avatar, setAvatar] = useState<string | undefined>();
 
+  // `acknowledgeWarning` is the author answering L0: create it anyway.
+  const submitCreate = async (acknowledgeWarning = false) => {
+    if (!name.trim()) return;
+    const community = await create(
+      {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        avatar,
+      },
+      { acknowledgeWarning },
+    );
+    if (community) onCreated(community);
+  };
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!name.trim()) return;
-    const community = await create({
-      name: name.trim(),
-      description: description.trim() || undefined,
-      avatar,
-    });
-    if (community) onCreated(community);
+    await submitCreate();
   };
 
   return (
@@ -92,7 +101,18 @@ const CreateCommunityForm: React.FC<{ onCreated: (community: Community) => void 
           placeholder="What this community is about"
         />
       </div>
-      {error ? <p className="text-sm text-[var(--osio-danger)]">{error}</p> : null}
+      {/* The warning is announced, not shouted: the author hears it once. */}
+      <div aria-live="polite">
+        {warning && (
+          <ModerationWarningNotice
+            warning={warning}
+            onEdit={dismissWarning}
+            onConfirm={() => void submitCreate(true)}
+            confirmLabel="Create anyway"
+          />
+        )}
+        {error ? <p className="text-sm text-[var(--osio-danger)]">{error}</p> : null}
+      </div>
       <div className="flex justify-end gap-2">
         <Button type="submit" tone="primary" disabled={busy || !name.trim()}>
           {busy ? 'Creating…' : 'Create community'}

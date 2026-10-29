@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,7 +26,17 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Block } from "@/entities/block";
 import { MEDIA_BLOCK_LABELS, isMediaBlockType } from "@/entities/block";
-import { MediaBlockPreview, resolveMediaBlockAsset } from "@/entities/block/ui/MediaBlockPreview";
+import {
+  ImageBlockPicture,
+  ImagePlayButton,
+  MediaBlockPreview,
+  mediaWidthStyle,
+  resolveMediaBlockAsset,
+  useImageAnimation,
+} from "@/entities/block/ui/MediaBlockPreview";
+import { useAiImageStore } from "@/features/ai/model/aiImageStore";
+import { AiImageJobView } from "@/features/ai/ui/AiImageJobView";
+import type { EmbedSnapshot } from "@/shared/lib/embed/embedInfo";
 import { usePageStore } from "@/store/usePageStore";
 import { getBlockSurfaceStyle, getBlockTextStyle } from "../model/blockColors";
 import { MediaEmbedDialog } from "./MediaEmbedDialog";
@@ -35,6 +45,8 @@ import { MediaCaption } from "./media/MediaCaption";
 import { ImageHoverToolbar } from "./media/ImageHoverToolbar";
 import { ImageFullscreen } from "./media/ImageFullscreen";
 import { AltTextDialog } from "./media/AltTextDialog";
+import { ImageDescriptionPanel } from "./media/ImageDescriptionPanel";
+import { useDescribeImage } from "./media/useDescribeImage";
 
 interface MediaBlockEditorProps {
   pageId: string;
@@ -44,6 +56,36 @@ interface MediaBlockEditorProps {
   onPaste?: (e: React.ClipboardEvent) => void;
 }
 
+/**
+ * An image block's picture and its play control. The control is a SIBLING of
+ * the edit button, never a descendant: a button inside a button is invalid
+ * HTML (axe `nested-interactive`) and a keyboard cannot reach the inner one.
+ */
+const ImageBlockEditor: React.FC<{ block: Block; label: string; onEdit: () => void }> = ({ block, label, onEdit }) => {
+  const animation = useImageAnimation(block);
+  // The width preset lands here: the editor renders the picture without the
+  // preview's <figure>, which is where the read-only path puts it.
+  return (
+    <div className="relative" style={mediaWidthStyle(block)}>
+      <button
+        type="button"
+        className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/30"
+        aria-label={`Edit ${label.toLowerCase()}`}
+        onClick={onEdit}
+      >
+        <ImageBlockPicture block={block} animation={animation} />
+      </button>
+      {animation.frozen ? (
+        <ImagePlayButton
+          running={!animation.still}
+          onToggle={() => animation.setRunning(animation.still)}
+          className="absolute bottom-2 right-2"
+        />
+      ) : null}
+    </div>
+  );
+};
+
 export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   pageId,
   block,
@@ -52,6 +94,10 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   onPaste,
 }) => {
   const updateBlock = usePageStore((state) => state.updateBlock);
+  // The image job of this block, when one is running (the state is in memory:
+  // a job that died with the tab leaves the plain placeholder).
+  const imageJob = useAiImageStore((state) => state.jobs[block.id]);
+  const describe = useDescribeImage(pageId, block);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showEmbed, setShowEmbed] = useState(false);
@@ -73,8 +119,10 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
   const textStyle = getBlockTextStyle(block);
 
   const handleSelect = useCallback(
-    (value: string) => {
-      updateBlock(pageId, block.id, { asset: value });
+    (value: string, embed?: EmbedSnapshot) => {
+      // A user who replaces the image with their own file loses the
+      // "AI-generated" label: the block is theirs now.
+      updateBlock(pageId, block.id, { asset: value, aiGenerated: undefined, embed });
       setShowSettings(false);
     },
     [updateBlock, pageId, block.id],
@@ -138,33 +186,32 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
       ref={editorRef}
       data-testid="media-block-editor"
       className={[
-        "group/media relative my-3 rounded-lg transition-colors",
+        "group/media relative rounded-lg transition-colors",
         shouldShowSettings ? "border border-[var(--osio-border-default)]" : "border border-transparent",
       ].join(" ")}
       style={surfaceStyle}
       onFocusCapture={() => { if (hasAsset) setShowSettings(true); }}
     >
       {!hasAsset ? (
-        // Empty: the Notion-style void row opens the embed dialog on click.
-        <button
-          type="button"
-          className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40"
-          aria-label={`Add ${label.toLowerCase()}`}
-          onClick={() => setShowEmbed(true)}
-        >
-          <MediaBlockPreview block={block} />
-        </button>
+        imageJob ? (
+          // An image is being made: the job speaks instead of the placeholder.
+          <AiImageJobView blockId={block.id} job={imageJob} />
+        ) : (
+          // Empty: the Notion-style void row opens the embed dialog on click.
+          <button
+            type="button"
+            className="block w-full rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/40"
+            aria-label={`Add ${label.toLowerCase()}`}
+            data-handle-anchor
+            onClick={() => setShowEmbed(true)}
+          >
+            <MediaBlockPreview block={block} />
+          </button>
+        )
       ) : isImage ? (
-        <button
-          type="button"
-          className="block w-full rounded-lg p-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-accent)]/30"
-          aria-label={`Edit ${label.toLowerCase()}`}
-          onClick={() => setShowSettings(true)}
-        >
-          <MediaBlockPreview block={block} />
-        </button>
+        <ImageBlockEditor block={block} label={label} onEdit={() => setShowSettings(true)} />
       ) : (
-        <div className="rounded-lg p-2" onPointerDown={() => setShowSettings(true)}>
+        <div className="rounded-lg" onPointerDown={() => setShowSettings(true)}>
           <MediaBlockPreview block={block} />
         </div>
       )}
@@ -174,12 +221,15 @@ export const MediaBlockEditor: React.FC<MediaBlockEditorProps> = ({
           blockId={block.id}
           url={imageUrl}
           altText={altText}
+          asset={block.asset}
           onCaption={() => setCaptionOpen(true)}
           onFullScreen={() => setFullscreen(true)}
           onReplace={() => setShowEmbed(true)}
           onAltText={() => setAltOpen(true)}
+          describe={describe}
         />
       ) : null}
+      {isImage && hasAsset ? <ImageDescriptionPanel pageId={pageId} block={block} describe={describe} /> : null}
 
       {shouldShowSettings ? (
         <MediaSettingsBar

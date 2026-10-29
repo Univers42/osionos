@@ -102,6 +102,34 @@ class FakeSocket implements LiveWebSocketLike {
   close(): void { this.onclose?.(); }
 }
 
+
+/**
+ * In-memory stand-in for the bridge's directed summon delivery: `publish` routes
+ * an envelope to the target's `user:<id>` topic (the one mintedTopicSocket
+ * subscribes), and `subscribe` is the injected user-topic seam.
+ */
+class FakeUserTopics {
+  readonly published: Array<{ event: string; payload: { cid?: string; target?: string; to?: string; req?: unknown; res?: unknown } }> = [];
+  private readonly listeners = new Map<string, Set<(frame: { event_type: string; payload: unknown }) => void>>();
+
+  subscribe = (userId: string, onFrame: (frame: { event_type: string; payload: unknown }) => void): (() => void) => {
+    const set = this.listeners.get(userId) ?? new Set();
+    set.add(onFrame);
+    this.listeners.set(userId, set);
+    return () => { set.delete(onFrame); };
+  };
+
+  publish = async (_workspaceId: string, event: string, payload: unknown): Promise<void> => {
+    const body = payload as { cid?: string; target?: string; to?: string };
+    this.published.push({ event, payload: body });
+    const recipient = event === 'collab.req' ? body.target : body.to;
+    if (!recipient) return;
+    for (const listener of this.listeners.get(recipient) ?? []) {
+      queueMicrotask(() => listener({ event_type: event, payload }));
+    }
+  };
+}
+
 function gatewayCtor(gateway: FakeGateway) {
   return class extends FakeSocket { constructor(_url: string) { super(gateway); } } as unknown as new (url: string) => LiveWebSocketLike;
 }
@@ -205,9 +233,45 @@ test("the top-level PRESENCE frame path still delivers member meta", async () =>
   chA.leave(); chB.leave();
 });
 
+test("another member's presence meta cannot make readers fetch a URL", async () => {
+  const { chA, chB } = await joinTwo();
+  const snapshots: unknown[][] = [];
+  chA.onPresence((members) => snapshots.push(members));
+  chB.setPresence({
+    displayName: "B".repeat(500),
+    color: "url(https://evil.example/beacon)",
+    avatarRef: "http://evil.example/a.png",
+    lastSeen: 0,
+  });
+  await flush();
+  const member = snapshots.at(-1)?.[0] as { color: string; displayName: string; avatarRef?: string };
+  assert.match(member.color, /^var\(--collab-[1-8]\)$/, "a non-palette colour falls back to the palette");
+  assert.equal(member.displayName.length, 80);
+  assert.equal(member.avatarRef, undefined, "a non-https avatar is dropped");
+  chB.setPresence({ color: "var(--collab-3)", avatarRef: "https://cdn.example/a.png", displayName: "B" });
+  await flush();
+  const kept = snapshots.at(-1)?.[0] as { color: string; avatarRef?: string };
+  assert.equal(kept.color, "var(--collab-3)");
+  assert.equal(kept.avatarRef, "https://cdn.example/a.png");
+  chA.leave(); chB.leave();
+});
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 test("two clients exchange exactly one validated CollabEvent over the adapter", async () => {
-  const { chA, chB } = await joinTwo();
+  // Page events now travel on `collabpage:<pageId>`, never on the workspace
+  // topic (C501); a workspace channel refuses them outbound and inbound.
+  const gateway = new FakeGateway();
+  const ctor = gatewayCtor(gateway);
+  const a = new GrobaseRealtimeTransport({
+    url: "ws://test", selfId: "A", workspaceId: "demo",
+    topic: "collabpage:page-1", pageId: "page-1", scope: "page", webSocketCtor: ctor,
+  });
+  const b = new GrobaseRealtimeTransport({
+    url: "ws://test", selfId: "B", workspaceId: "demo",
+    topic: "collabpage:page-1", pageId: "page-1", scope: "page", webSocketCtor: ctor,
+  });
+  const chA = await a.join("demo", "token-A");
+  const chB = await b.join("demo", "token-B");
   const received: CollabEvent[] = [];
   chB.onEvent((event) => received.push(event));
 
@@ -216,13 +280,25 @@ test("two clients exchange exactly one validated CollabEvent over the adapter", 
   await flush();
 
   assert.equal(received.length, 1, "B receives exactly one event");
-  assert.deepEqual(received[0], caret, "the CollabEvent round-trips intact");
+  assert.deepEqual(received[0], { ...caret, pageId: "page-1" }, "the page-stamped CollabEvent round-trips intact");
   assert.ok(validateCollabEvent(received[0]), "the delivered event passes boundary validation");
   chA.leave(); chB.leave();
 });
 
-test("synthesized request/reply: an accepted summon resolves to { accepted: true }", async () => {
-  const { chA, chB } = await joinTwo();
+test("directed summon: request goes to the target's user topic, reply carries `to`", async () => {
+  const gateway = new FakeGateway();
+  const ctor = gatewayCtor(gateway);
+  const topics = new FakeUserTopics();
+  const a = new GrobaseRealtimeTransport({
+    url: "ws://test", selfId: "A", webSocketCtor: ctor,
+    publish: topics.publish, subscribeUserTopic: (onFrame) => topics.subscribe("A", onFrame),
+  });
+  const b = new GrobaseRealtimeTransport({
+    url: "ws://test", selfId: "B", webSocketCtor: ctor,
+    publish: topics.publish, subscribeUserTopic: (onFrame) => topics.subscribe("B", onFrame),
+  });
+  const chA = await a.join("demo", "token-A");
+  const chB = await b.join("demo", "token-B");
   chB.onRequest(async (from, req) => {
     assert.equal(from, "A");
     assert.equal(req.kind, "summon");
@@ -232,11 +308,29 @@ test("synthesized request/reply: an accepted summon resolves to { accepted: true
 
   const result = await chA.request("B", { kind: "summon", route: "/page/x", message: "come here" });
   assert.deepEqual(result, { accepted: true });
+  const request = topics.published.find((frame) => frame.event === "collab.req");
+  assert.equal(request?.payload.target, "B", "the request names its target");
+  assert.equal((request?.payload.req as { route?: string })?.route, "/page/x");
+  const reply = topics.published.find((frame) => frame.event === "collab.res");
+  assert.equal(reply?.payload.to, "A", "the reply is addressed back to the requester");
+  assert.deepEqual(reply?.payload.res, { accepted: true });
   chA.leave(); chB.leave();
 });
 
 test("a request to a non-targeted member is ignored and times out declined (directed, not all)", async () => {
-  const { chA, chB } = await joinTwo(30); // short timeout so the unanswered branch resolves fast
+  const gateway = new FakeGateway();
+  const ctor = gatewayCtor(gateway);
+  const topics = new FakeUserTopics();
+  const a = new GrobaseRealtimeTransport({
+    url: "ws://test", selfId: "A", webSocketCtor: ctor, requestTimeoutMs: 30,
+    publish: topics.publish, subscribeUserTopic: (onFrame) => topics.subscribe("A", onFrame),
+  });
+  const b = new GrobaseRealtimeTransport({
+    url: "ws://test", selfId: "B", webSocketCtor: ctor,
+    publish: topics.publish, subscribeUserTopic: (onFrame) => topics.subscribe("B", onFrame),
+  });
+  const chA = await a.join("demo", "token-A");
+  const chB = await b.join("demo", "token-B");
   let handled = false;
   chB.onRequest(async () => { handled = true; return { accepted: true }; });
   // Address a member that is not B; B must not handle it, and A times out → declined.

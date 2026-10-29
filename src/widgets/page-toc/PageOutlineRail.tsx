@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { prefersReducedMotion } from "@/entities/page/ui/coverMedia";
 import { usePageStore } from "@/store/usePageStore";
 import { VIRTUAL_BLOCK_FOCUS_EVENT } from "@/features/block-editor/model/blockDomFocus";
 import { activeHeadingIndex, fillUnrenderedTops, headingsFromKey, outlineKey, type Heading } from "./outline";
@@ -28,8 +29,6 @@ const FLASH_ATTR = "data-osio-toc-flash";
 
 const blockEl = (scroller: Element, id: string) =>
   scroller.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(id)}"]`);
-
-const reducedMotion = () => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 function flash(el: HTMLElement) {
   el.removeAttribute(FLASH_ATTR);
@@ -57,7 +56,7 @@ function unfoldTowards(scroller: Element, ancestors: readonly string[]) {
 
 function scrollToBlock(scroller: HTMLElement, el: HTMLElement) {
   const top = el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-  scroller.scrollTo({ top: Math.max(0, top - JUMP_GAP_PX), behavior: reducedMotion() ? "auto" : "smooth" });
+  scroller.scrollTo({ top: Math.max(0, top - JUMP_GAP_PX), behavior: prefersReducedMotion() ? "auto" : "smooth" });
   flash(el);
 }
 

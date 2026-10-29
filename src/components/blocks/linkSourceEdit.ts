@@ -59,7 +59,7 @@ export function replaceLink(
   if (!link) return source;
   return (
     source.slice(0, link.start) +
-    toLinkSource(next.text || next.href, next.href, next.title) +
+    toLinkSource(next.text || next.href, next.href, next.title ?? link.title) +
     source.slice(link.end)
   );
 }

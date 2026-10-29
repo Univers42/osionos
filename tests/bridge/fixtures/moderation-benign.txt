@@ -1,0 +1,206 @@
+# Benign sentences that CONTAIN a blocklist term as a SUBSTRING of a longer word.
+# Every line must stay clean: no blocklist reason, verdict allow.
+# The en/fr/es sections are counted by the test; each section header names its language.
+# en
+The analysis of the canal project took two weeks.
+A massive class of grass covered the field after the rain.
+I will pass the assignment to the assistant.
+The document you need is in the cumulative report.
+We had to accumulate all the receipts before the audit.
+They found a way to circumvent the new parking rule.
+The cucumber plants need more water in July.
+They consume too much coffee during the night shift.
+The title of the chapter changed after the review.
+We ordered a large quantity of rice for the event.
+The constitution of the club was rewritten last year.
+Their institution offers a course on public speaking.
+The competition starts at the end of the month.
+She sent a petition to the city council.
+The repetition of the term changed in the new edition.
+The assessment of the harvest was surprisingly good.
+The glass case in the museum holds old medals.
+The Titanic museum opens early on Sundays.
+We added grape juice to the punch.
+He bought a basket of grapefruit at the market.
+I had to scrape the old paint off the door.
+The children learned the trapeze act at the circus.
+The curtain was draped in blue fabric.
+Leaves scattered across the path after the wind.
+The scatter plot shows how the values spread.
+She added spice to the rice and cooked it slowly.
+The kitchen is full of spices from the market.
+We spread butter on the warm bread.
+A butterfly landed on the fence this morning.
+Press the button twice to open the gate.
+The old buttress still holds the wall in place.
+The butternut squash soup was the best part.
+The cockpit door was locked during the flight.
+We drank cocktails on the terrace at sunset.
+A peacock walked across the garden path.
+The cockerel woke the whole village at dawn.
+You can denude the wall before painting it.
+A raccoon raided the trash bin last night.
+The calf will suckle from its mother for weeks.
+Ducklings suckle under the warm lamp.
+We read Dickens aloud to the children.
+The Dickensian mood of the old house is real.
+The shop sells unisex shirts in three sizes.
+A brass sextet plays on the square each summer.
+The county spans the border with Essex.
+My grandmother loved the novels of Mr Dickens.
+The team is called the Cockney Sparrows.
+The woodcock flew away when we approached the tree.
+The shuttlecock landed in the far court.
+The passage was narrow and dark.
+The embassy issued a statement on Tuesday.
+We must assign a reviewer to every draft.
+The brass band marched down the avenue.
+The bass guitar needs a new cable.
+The compass pointed north all afternoon.
+I need to reassign the tickets to another row.
+He assumed the role without a word.
+The assistive technology made the class easier.
+She asserted her right to a fair trial.
+They assessed the damage after the storm.
+The pussycat slept on the warm windowsill.
+The massage lasted a full hour.
+The password of the archive is in the drawer.
+The passenger list closed at midnight.
+The document was filed in the cupboard.
+The partition between the rooms is thin.
+The sextant gave the sailors their position.
+# fr
+Le contrat d'assurance arrive à échéance demain.
+Je ne connais pas cette nouvelle procédure.
+On sert de la confiture avec le pain chaud.
+Le contact avec le client a été difficile.
+Le conseil municipal a validé le budget.
+Les conditions de remboursement sont claires.
+La construction du pont a pris deux ans.
+La conclusion du rapport est encourageante.
+Un constat d'accident a été déposé.
+Le confort de la maison est incomparable.
+Le contexte de la réunion compte beaucoup.
+La conduite sur la route verglaçée est difficile.
+La conférence de presse a duré deux heures.
+J'ai confiance en tes capacités.
+La conception du projet a été revue.
+La consigne du maritime respecte les anciens usages.
+Le concours de chant aura lieu en mars.
+La conservation des documents dure dix ans.
+La connexion internet est instable ce soir.
+La conjugaison des verbes est plus simple qu'on croit.
+La conjecture économique s'est confirmée.
+La confrontation entre les deux clubs fut courte.
+La concession de la plage expire en juin.
+Le concept de base est simple à expliquer.
+La concentration des élèves baisse en été.
+Le contenu du fichier est protégé par un mot de passe.
+Les continents sont séparés par les océans.
+Le contraire de ce qu'il dit est vrai.
+Le contemporain de l'artiste vit à Lyon.
+La convention de nommage est claire.
+La convocation est arrivée ce matin.
+Une contradiction dans le rapport a été signalée.
+Le contingent de pièces est arrivé.
+Le contrôle qualité est fait chaque semaine.
+La conséquence serait grave si l'erreur passe.
+Il faut se concentrer sur la partie importante.
+La connaissance de l'anglais lui a ouvert des portes.
+La contestation de l'amende a été rejetée.
+La consultation du médecin dure dix minutes.
+La constitution du conseil a changé cette année.
+La culture du village est très ancienne.
+Un projet particulier demande une attention spéciale.
+Le texte circulaire a été envoyé aux membres.
+Ce mouvement articule bien les hanches.
+Le cumul des heures reste acceptable.
+La circulation du métro est fluide le matin.
+J'aime pédaler dans le parc le dimanche.
+Il faut répéter la leçon avant l'examen.
+Les joueurs doivent compéter pour la finale.
+La répétition de la scène a pris du temps.
+Le match est très compétitif cette saison.
+Une dispute a éclaté à la récréation.
+Les joueurs se disputent la balle.
+Cette connexion est trop lente pour ce travail.
+On va imputer la faute au premier arrivé.
+La métrique de qualité progresse chaque trimestre.
+Le tracé géométrique du plan est très précis.
+Le serveur va débiter les plats rapidement.
+Un paquet de cacahuètes pour le goûter.
+Le gerbera du salon a fané.
+Un groupe d'amis a débandé après le concert.
+Le couvercle est étanche, la pluie ne rentre pas.
+Les deux angles connexes du triangle sont égaux.
+La conductrice du bus était à l'heure.
+Le conteneur a été livré lundi.
+La conjoncture économique reste fragile.
+La continuité du service est assurée.
+# es
+La disputa entre los dos equipos terminó en empate.
+Hubo una disputa por la última mesa del restaurante.
+El jefe resolvió la disputa en cinco minutos.
+La disputa por el parking terminó en un acuerdo.
+La disputa familiar se resolvió sin ruido.
+Mi computadora se quedó sin batería a media clase.
+La computadora del laboratorio no arranca desde marzo.
+Compramos una computadora nueva para la oficina.
+La computadora portátil se quedó sin pila.
+El sensor de la computadora mide la temperatura.
+La reputación del sitio mejoró tras la actualización.
+La máquina computa el total en un segundo.
+La comisión imputa el fallo al departamento.
+El surgeon amputa la punta del dedo.
+La reputación del taller mejoró gracias al servicio.
+Cuidar la reputación online lleva años.
+El piso del salón está recién encerado.
+Vive en un piso tercero sin ascensor.
+El piso del pasillo hace eco al hablar.
+Pisa el freno antes de la curva.
+Pisamos la acera mojada sin querer.
+El pisotón del defensa dejó la pelota lejos.
+Dejó una pisada en el barro del camino.
+La pista de atletismo se arregló este verano.
+La pista del parque estaba mojada.
+Nos tomamos un pisco sour en la terraza.
+El pisco sour es mi favorito.
+El atrio de la iglesia estaba vacío.
+El atrio del museo tiene una fuente.
+El artículo de la revista llegó esta semana.
+El artículo sobre el clima es interesante.
+El precio del artículo subió en enero.
+El cálculo de la superficie dio un resultado claro.
+El cálculo de las distancias se hizo aparte.
+El espectáculo de magia fue increíble.
+El médico le dijo que orinar a menudo era normal.
+La clínica tiene un sexólogo disponible los lunes.
+El sexólogo charla a los estudiantes sobre la salud.
+El idioma conserva muchos idiotismos del siglo pasado.
+El artículo del contrato está en la carpeta.
+El movimiento antirracista trabaja en los colegios.
+La campaña antirracista se repetirá en junio.
+El programa antidrogas trabaja en los colegios.
+La ley antidrogas cambió el año pasado.
+Una superheroína salvó a los niños del parque.
+El dibujo de la superheroína ocupa media página.
+Maricarmen trajo el informe completo.
+Maricarmen llega temprano todos los días.
+El conchado de la bahía se sirve frío.
+Hay que conchar las ostras antes de servirlas.
+El círculo de amigos se reúne los viernes.
+El vínculo familiar es más fuerte de lo que parece.
+El semental de la granja es tranquilo.
+El semental cubrió a las yeguas en primavera.
+Mi compinche llega mañana por la mañana.
+Mi compinche me prestó su coche.
+Comí cacahuetes durante la película.
+El cacahuete se planta en primavera.
+El piso de la oficina es de madera.
+La computadora del taller está en reparación.
+El artículo de la ley pide más plazos.
+La computadora de la escuela ya no enciende.
+La reputación del restaurante mejoró en un mes.
+La disputa del club y la ciudad se zanjó.
+El atrio del banco es muy tranquilo.
+Una superheroína protege la ciudad cada verano.

@@ -1,0 +1,156 @@
+{
+  "images": 299,
+  "warmup_answers": 1,
+  "valid_json": {
+    "rate": 1.0,
+    "count": 300,
+    "total": 300
+  },
+  "precision_at_5": {
+    "macro": 0.29632107023411375,
+    "ci": [
+      0.27958193979933177,
+      0.31505016722408125
+    ]
+  },
+  "recall": {
+    "macro": 0.6493001702867923,
+    "ci": [
+      0.612132352040379,
+      0.6846478008706269
+    ]
+  },
+  "precision_at_5_tags_only": {
+    "macro": 0.2842809364548495
+  },
+  "recall_tags_only": {
+    "macro": 0.6007151432736717
+  },
+  "latency_s": {
+    "p50": 12.188799999999999,
+    "p95": 20.6079,
+    "min": 5.472300000000001,
+    "max": 42.1427,
+    "mean": 13.144049163879599
+  },
+  "tokens": {
+    "prompt_p50": 639.0,
+    "prompt_max": 823,
+    "completion_p50": 79.0,
+    "completion_max": 187
+  },
+  "safety": {
+    "distribution": {
+      "safe": 297,
+      "suggestive": 1,
+      "unknown": 1
+    },
+    "flagged": 2,
+    "false_flag_rate": 0.006688963210702341
+  },
+  "ocr_answered": 33,
+  "unmapped_tags": 1199,
+  "predicted_tags": 1750,
+  "ocr_sample": [
+    {
+      "id": 212072,
+      "caption": "A stop sign in front of some buildings.",
+      "ocr": ""
+    },
+    {
+      "id": 322829,
+      "caption": "A white meta bench next to a patch of grass.",
+      "ocr": ""
+    },
+    {
+      "id": 349678,
+      "caption": "A large tower with a clock on it advertising transportation via train.",
+      "ocr": ""
+    },
+    {
+      "id": 249643,
+      "caption": "A train traveling down train tracks near a train station.",
+      "ocr": "425 613-7 DB"
+    },
+    {
+      "id": 148999,
+      "caption": "A biilboard with a railcar in front of it.",
+      "ocr": ""
+    },
+    {
+      "id": 573008,
+      "caption": "A large Colgate clock is by the water.",
+      "ocr": "Colgate"
+    },
+    {
+      "id": 516708,
+      "caption": "A street sign that reads Sparta sitting next to a tall building.",
+      "ocr": ""
+    },
+    {
+      "id": 293245,
+      "caption": "A Yamaha motorcycle parked outside of a building.",
+      "ocr": ""
+    },
+    {
+      "id": 252332,
+      "caption": "A stop sign is shown among foliage and grass.",
+      "ocr": ""
+    },
+    {
+      "id": 189698,
+      "caption": "A picture of a road sign labeled bodacious drive.",
+      "ocr": "BODACIOUS DR"
+    },
+    {
+      "id": 323571,
+      "caption": "A street sign on the street near a building.",
+      "ocr": ""
+    },
+    {
+      "id": 63602,
+      "caption": "A laptop computer sitting on top of a white desk.",
+      "ocr": ""
+    },
+    {
+      "id": 314914,
+      "caption": "A two sign sitting on the side of a road.",
+      "ocr": "TOW AWAY SAN DIEGO BUSINESS CTR. UNAUTHORIZED VEHICLES WILL BE TOWED AWAY AT OWNERS EXPENSE. CITY CODE 262500. SDPD 531-2000. AUTHORIZED VEHICLES NOT DISPLAYING DISTINGUISHING PLACARDS OR LICENSE PLATES ISSUED FOR DISABLED PERSONS WILL BE TOWED AWAY AT OWNERS EXPENSE. TOWED VEHICLES MAY BE RECLAIMED"
+    },
+    {
+      "id": 94751,
+      "caption": "A parking lot is on the side of the ocean.",
+      "ocr": "Vibe"
+    },
+    {
+      "id": 161128,
+      "caption": "A curse word written on a traffic sign.",
+      "ocr": ""
+    },
+    {
+      "id": 460683,
+      "caption": "A man wearing a blue tie with the ten commandments on it.",
+      "ocr": "Thou shalt not murder. Thou shalt not steal. Thou shalt not lie."
+    },
+    {
+      "id": 202001,
+      "caption": "An emo girl holding a smart phone with a shaved head.",
+      "ocr": "someday, you will know the meaning of my devotion."
+    },
+    {
+      "id": 284762,
+      "caption": "A traffic light sitting next to a street sign.",
+      "ocr": "Ramstrasse"
+    },
+    {
+      "id": 232646,
+      "caption": "A stop sign at the end of the road.",
+      "ocr": ""
+    },
+    {
+      "id": 571943,
+      "caption": "a pole with a street light and signs next to a bare tree",
+      "ocr": ""
+    }
+  ]
+}

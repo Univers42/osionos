@@ -113,7 +113,8 @@ test("a missing or malformed stored appearance is the default", () => {
 
 test("a valid stored appearance round-trips", () => {
   const value = { accent: "custom", hue: 140, density: "compact", radius: "round", uiScale: "large" };
-  assert.deepEqual(stored(value), value);
+  // The parsed appearance carries the accessibility axes too, at their defaults.
+  assert.deepEqual(stored(value), { ...DEFAULT_APPEARANCE, ...value });
   assert.equal(stored({ accent: "teal" }).accent, "teal");
 });
 

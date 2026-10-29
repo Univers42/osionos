@@ -28,10 +28,13 @@ import {
   LazyEmbedAppView,
   LazyMessagesView,
   LazyAdminSpaceView,
+  LazyAiHubView,
   LazyChatShell,
   LazyCodeFileView,
   LazyOsionosPage,
   LazyProfilePageView,
+  LazySettingsView,
+  LazyThemeJsonView,
   LazyTrashView,
   LazyWorkspaceDatabaseBlock,
 } from "./lazyViews";
@@ -146,11 +149,45 @@ const PaneContentImpl: React.FC<PaneContentProps> = ({ tab, paneId, chrome }) =>
     );
   }
 
+  if (tab.kind === "settings") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
+            <LazySettingsView />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "theme-json") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]">
+            <LazyThemeJsonView pageId={tab.pageId} />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
   if (tab.kind === "chat") {
     return (
       <ErrorBoundary>
         <Suspense fallback={<LoadingPane />}>
           <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]"><LazyChatShell /></div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (tab.kind === "ai-hub") {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<LoadingPane />}>
+          <div className="h-full overflow-hidden bg-[var(--osio-bg-page)]"><LazyAiHubView /></div>
         </Suspense>
       </ErrorBoundary>
     );

@@ -6,87 +6,63 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:22 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:22 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/23 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
-import { defaultDevice } from './defaults';
-import { errorMessage, nowIso, pushSettingsError, trySettingsDelete, trySettingsGet } from './settingsStoreUtils';
-import type { DeviceRecord } from './types';
+import { reportRevokedSession } from '@/shared/api/client';
+import { errorMessage, pushSettingsError, settingsJwt, trySettingsDelete, trySettingsGet } from './settingsStoreUtils';
+import type { SessionRow } from './types';
+
+export type SessionsStatus = 'loading' | 'ready' | 'unavailable' | 'error';
 
 interface AccountDevicesStore {
-  data: DeviceRecord[];
-  loading: boolean;
+  data: SessionRow[];
+  status: SessionsStatus;
   error: string | null;
+  userId: string | null;
   hydrate: (userId: string) => Promise<void>;
-  revoke: (deviceId: string) => Promise<void>;
-  revokeAll: (userId: string) => Promise<void>;
-  revokeAllExceptCurrent: (userId: string) => Promise<void>;
-  reset: (userId: string) => void;
+  revoke: (sessionId: string) => Promise<void>;
 }
 
-const STORE_NAME = 'osionos:settings:account-devices';
-
-export const useAccountDevicesStore = create<AccountDevicesStore>()(
-  persist(
-    (set, get) => ({
-      data: [],
-      loading: false,
-      error: null,
-      hydrate: async (userId) => {
-        if (!userId) return;
-        set({ loading: true, error: null });
-        try {
-          const remote = await trySettingsGet<DeviceRecord[]>('/api/account/devices');
-          set({ data: remote ?? (get().data.length ? get().data : [defaultDevice(userId)]), loading: false, error: null });
-        } catch (error) {
-          set({ data: get().data.length ? get().data : [defaultDevice(userId)], loading: false, error: errorMessage(error) });
-          pushSettingsError('Devices unavailable', error);
-        }
-      },
-      revoke: async (deviceId) => {
-        const previous = get().data;
-        const timestamp = nowIso();
-        set({ data: previous.map((device) => device._id === deviceId ? { ...device, revokedAt: timestamp, updatedAt: timestamp } : device), error: null });
-        try {
-          await trySettingsDelete<void>(`/api/account/devices/${encodeURIComponent(deviceId)}`);
-        } catch (error) {
-          set({ data: previous, error: errorMessage(error) });
-          pushSettingsError('Could not revoke device', error);
-        }
-      },
-      revokeAll: async (userId) => {
-        const previous = get().data;
-        const timestamp = nowIso();
-        set({ data: previous.map((device) => ({ ...device, revokedAt: timestamp, updatedAt: timestamp })), error: null });
-        try {
-          await trySettingsDelete<void>('/api/account/devices');
-        } catch (error) {
-          set({ data: previous, error: errorMessage(error) });
-          pushSettingsError('Could not revoke devices', error);
-        }
-        if (!previous.length) set({ data: [defaultDevice(userId)] });
-      },
-      revokeAllExceptCurrent: async (userId) => {
-        const previous = get().data.length ? get().data : [defaultDevice(userId)];
-        const current = previous.find((device) => device._id === 'current-device') ?? previous[0];
-        const timestamp = nowIso();
-        set({ data: previous.map((device) => device._id === current._id ? { ...device, revokedAt: null, updatedAt: timestamp } : { ...device, revokedAt: timestamp, updatedAt: timestamp }), error: null });
-        try {
-          await trySettingsDelete<void>('/api/account/devices');
-        } catch (error) {
-          set({ data: previous, error: errorMessage(error) });
-          pushSettingsError('Could not revoke devices', error);
-        }
-      },
-      reset: (userId) => set({ data: [defaultDevice(userId || 'anonymous')], error: null }),
-    }),
-    {
-      name: STORE_NAME,
-      partialize: (state) => ({ data: state.data }),
-    },
-  ),
-);
+/**
+ * The signed-in sessions of this account, as the bridge lists them. Server state only: it is
+ * never persisted (a row carries a user agent and a network), and nothing is invented when the
+ * server cannot answer. "Revoke all" is the bridge logout, owned by the auth feature.
+ *
+ * Caveat: the list is capped at 50 families by the bridge; a person with more sees the newest.
+ */
+export const useAccountDevicesStore = create<AccountDevicesStore>()((set, get) => ({
+  data: [],
+  status: 'loading',
+  error: null,
+  userId: null,
+  hydrate: async (userId) => {
+    if (!userId) return;
+    set({ status: 'loading', error: null, userId });
+    try {
+      const remote = await trySettingsGet<{ sessions?: SessionRow[] }>('/api/account/sessions');
+      if (remote === null) set({ data: [], status: 'unavailable' });
+      else set({ data: Array.isArray(remote.sessions) ? remote.sessions : [], status: 'ready' });
+    } catch (error) {
+      set({ data: [], status: 'error', error: errorMessage(error) });
+    }
+  },
+  revoke: async (sessionId) => {
+    const previous = get().data;
+    const revoked = previous.find((row) => row.id === sessionId);
+    const token = settingsJwt();
+    set({ data: previous.filter((row) => row.id !== sessionId), error: null });
+    try {
+      await trySettingsDelete<void>(`/api/account/sessions/${encodeURIComponent(sessionId)}`);
+    } catch (error) {
+      set({ data: previous, error: errorMessage(error) });
+      pushSettingsError('Could not revoke session', error);
+      return;
+    }
+    // Otherwise this tab stays signed in until the bridge's next poll refuses its token.
+    if (revoked?.current && token) reportRevokedSession(token);
+  },
+}));

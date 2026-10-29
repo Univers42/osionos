@@ -1,0 +1,2705 @@
+{
+ "model": "deepdml/faster-whisper-large-v3-turbo-ct2",
+ "clips": [
+  {
+   "lang": "en_us",
+   "id": "10622204403793540766",
+   "duration_s": 11.4,
+   "latency_s": 6.834989335002319,
+   "rtf": 0.5995604679826596,
+   "ref": "for example each year students from bennet school in north carolina design a website about their trip to the state capital each year the website gets remodeled but old versions are kept online to serve as a scrapbook",
+   "hyp": "For example, each year students from Bennett School in North Carolina design a website about their trip to the state capitol, each year the website gets remodeled, but older versions are kept online to serve as a scrapbook."
+  },
+  {
+   "lang": "en_us",
+   "id": "11200231708585274851",
+   "duration_s": 10.18,
+   "latency_s": 6.229761380003765,
+   "rtf": 0.6119608428294465,
+   "ref": "as knowledge of greek declined the west found itself cut off from its greek philosophical and scientific roots",
+   "hyp": "As knowledge of Greek decline, the West found itself cut off from its Greek philosophical and scientific roots."
+  },
+  {
+   "lang": "en_us",
+   "id": "11265842188315045636",
+   "duration_s": 10.74,
+   "latency_s": 6.769232709004427,
+   "rtf": 0.630282375140077,
+   "ref": "vatican city's population is around 800 it is the smallest independent country in the world and the country with the lowest population",
+   "hyp": "The American city population is around 800. It is the smallest independent country in the world and the population."
+  },
+  {
+   "lang": "en_us",
+   "id": "11426556553252626005",
+   "duration_s": 12.78,
+   "latency_s": 7.060964811003942,
+   "rtf": 0.5525011589204962,
+   "ref": "the harbor was the site of an infamous naval standoff in 1889 when seven ships from germany the us and britain refused to leave the harbor",
+   "hyp": "The harbor was the site of an infamous naval standoff in 1889 when seven ships from Germany, the US, and Britain refused to leave the harbor."
+  },
+  {
+   "lang": "en_us",
+   "id": "1146643745158029931",
+   "duration_s": 8.88,
+   "latency_s": 6.378441349996137,
+   "rtf": 0.7182929448193848,
+   "ref": "a civilization is a singular culture shared by a significant large group of people who live and work co-operatively a society",
+   "hyp": "A civilization is a singular culture shared by a significant large group of people who live and work cooperatively, a society."
+  },
+  {
+   "lang": "en_us",
+   "id": "11665346626937246597",
+   "duration_s": 5.04,
+   "latency_s": 6.334929638003814,
+   "rtf": 1.2569304837309154,
+   "ref": "television reports show white smoke coming from the plant",
+   "hyp": "Television reports show white smoke coming from the plant."
+  },
+  {
+   "lang": "en_us",
+   "id": "11670188897888947692",
+   "duration_s": 9.48,
+   "latency_s": 6.4809436130017275,
+   "rtf": 0.6836438410339375,
+   "ref": "nothing can be seen other than the clear beautiful sky above and the many surrounding mountains very little of this world can be seen or heard from inside the cave",
+   "hyp": "Nothing can be seen other than the clear, beautiful sky above and the many surrounding mountains. Very little of this world can be seen or heard from inside the cave."
+  },
+  {
+   "lang": "en_us",
+   "id": "12018418318980824126",
+   "duration_s": 5.88,
+   "latency_s": 6.06073990099685,
+   "rtf": 1.0307380784008249,
+   "ref": "this is called a chemical's ph you can make an indicator using red cabbage juice",
+   "hyp": "This is called a chemical's pH. You can make an indicator using red cabbage juice."
+  },
+  {
+   "lang": "en_us",
+   "id": "12381237049043414166",
+   "duration_s": 11.28,
+   "latency_s": 6.420769718999509,
+   "rtf": 0.5692171736701692,
+   "ref": "muhammad was deeply interested in matters beyond this mundane life. he used to frequent a cave that became known as  hira‘” on the mountain of  noor” light for contemplation",
+   "hyp": "Muhammad was deeply interested in matters beyond this mundane life. He used to frequent a cave that became known as Hira on the mountain of Noor, light for contemplation."
+  },
+  {
+   "lang": "en_us",
+   "id": "12462354014280856258",
+   "duration_s": 13.68,
+   "latency_s": 6.782302667001204,
+   "rtf": 0.49578235869891846,
+   "ref": "the age where the events took place is commonly referred as the high middle ages the period of european history in the 11th 12th and 13th centuries ad 1000–1300",
+   "hyp": "The age where the events took place is commonly referred as the High Middle Ages, the period of European history in the 11th, 12th, and 13th centuries, AD 1000-1300."
+  },
+  {
+   "lang": "en_us",
+   "id": "125194026787628519",
+   "duration_s": 9.3,
+   "latency_s": 6.3428801680056495,
+   "rtf": 0.6820301255920053,
+   "ref": "cuomo 53 began his governorship earlier this year and signed a bill last month legalizing same-sex marriage",
+   "hyp": "Cuomo, 53, began his governorship earlier this year and signed a bill last month legalizing same-sex marriage."
+  },
+  {
+   "lang": "en_us",
+   "id": "12682843461389402977",
+   "duration_s": 7.02,
+   "latency_s": 6.321310300001642,
+   "rtf": 0.9004715527067866,
+   "ref": "plants make oxygen which humans breathe and they take in carbon-dioxide which humans exhale that is breathe out",
+   "hyp": "Plants make oxygen, which humans breathe, and they take in carbon dioxide, which humans exhale. That is, breathe out."
+  },
+  {
+   "lang": "en_us",
+   "id": "12700569942235742079",
+   "duration_s": 9.66,
+   "latency_s": 6.260561114002485,
+   "rtf": 0.6480912126296569,
+   "ref": "other subjects on the agenda in bali include saving the world's remaining forests and sharing technologies to help developing nations grow in less-polluting ways",
+   "hyp": "Other subjects on the agenda in Bali include saving the world's remaining forests and sharing technologies to help developing nations grow in less polluting ways."
+  },
+  {
+   "lang": "en_us",
+   "id": "12782801286775256949",
+   "duration_s": 9.24,
+   "latency_s": 6.295360869997239,
+   "rtf": 0.6813161114715627,
+   "ref": "if you want to be close to the action you're going to have to get in early to get a camping site close to the music",
+   "hyp": "If you want to be close to the action, you're going to have to get in early to get a camping site close to the music."
+  },
+  {
+   "lang": "en_us",
+   "id": "12906384443438076827",
+   "duration_s": 10.22,
+   "latency_s": 6.136380811003619,
+   "rtf": 0.6004286507831329,
+   "ref": "in a carriage they traveled back to paris surrounded by a mob of people screaming and shouting threats against the king and queen",
+   "hyp": "In a carriage, they traveled back to Paris surrounded by a mob of people screaming and shouting frets against the king and queen."
+  },
+  {
+   "lang": "en_us",
+   "id": "12921155570472263117",
+   "duration_s": 9.84,
+   "latency_s": 6.376863249002781,
+   "rtf": 0.6480552082319899,
+   "ref": "while goma is reasonably safe any visits outside of goma should be researched to understand the state of the fighting that persists in the north kivu province",
+   "hyp": "While Goma is reasonably safe, any visits outside of Goma should be researched to understand the state of the fighting that persists in the North Kivu province."
+  },
+  {
+   "lang": "en_us",
+   "id": "12970636128542220038",
+   "duration_s": 9.48,
+   "latency_s": 6.372508069995092,
+   "rtf": 0.672205492615516,
+   "ref": "mass car ownership also leads to a higher incidence of accidents on the roads which leads to the invention of new techniques in healthcare for repairing damaged bodies",
+   "hyp": "Mass car ownership also leads to a higher incidence of accidents on the road, which leads to the invention of new techniques in healthcare for repairing damaged bodies."
+  },
+  {
+   "lang": "en_us",
+   "id": "13049690085129854387",
+   "duration_s": 10.26,
+   "latency_s": 6.198597382994194,
+   "rtf": 0.6041517917148337,
+   "ref": "several large television screens were installed in various places in rome to let the people watch the ceremony",
+   "hyp": "Several large television screens were installed in various places in Rome to let the people watch the ceremony."
+  },
+  {
+   "lang": "en_us",
+   "id": "13070914954918539330",
+   "duration_s": 11.88,
+   "latency_s": 6.329074483001023,
+   "rtf": 0.5327503773569884,
+   "ref": "the composition of these crystals matches those found in the urine of affected pets when compared by infrared spectroscopy ftir",
+   "hyp": "The composition of these crystals matches those found in urine of affected pets when compared by infrared spectroscopy, FTIR."
+  },
+  {
+   "lang": "en_us",
+   "id": "13345242347208844836",
+   "duration_s": 6.64,
+   "latency_s": 5.993607276999683,
+   "rtf": 0.9026516983433257,
+   "ref": "one bomb exploded outside the governor general's office",
+   "hyp": "One bomb exploded outside the Governor General's office."
+  },
+  {
+   "lang": "en_us",
+   "id": "13875708868701082683",
+   "duration_s": 8.34,
+   "latency_s": 6.208348008003668,
+   "rtf": 0.7444062359716629,
+   "ref": "you may also wish to consult the advice of governments other than your own but their advice is designed for their citizens",
+   "hyp": "You may also wish to consult the advice of governments other than your own, but their advice is designed for their citizens."
+  },
+  {
+   "lang": "en_us",
+   "id": "14291047344508554279",
+   "duration_s": 10.8,
+   "latency_s": 6.3366298059991095,
+   "rtf": 0.5867249820369546,
+   "ref": "severe weather is the generic term for any dangerous weather phenomenon with the potential to cause damage serious social disruption or loss of human life",
+   "hyp": "Severe weather is the generic term for any dangerous weather phenomenon with the potential to cause damage, serious social disruption, or loss of human life."
+  },
+  {
+   "lang": "en_us",
+   "id": "14805661830607478688",
+   "duration_s": 12.22,
+   "latency_s": 20.251262386002054,
+   "rtf": 1.657222781178564,
+   "ref": "he added that they should not however be asked to take on obligations that go beyond their development stage responsibility and capabilities",
+   "hyp": "He added they should not, however, be asked to take on obligations that go beyond their development stage, responsibility, and capabilities."
+  },
+  {
+   "lang": "en_us",
+   "id": "14868402834603110105",
+   "duration_s": 5.46,
+   "latency_s": 6.654119803999492,
+   "rtf": 1.218703260805768,
+   "ref": "soon after the outbreak of hostilities britain initiated a naval blockade of germany",
+   "hyp": "Soon after the outbreak of hostilities, Britain initiated a naval blockade of Germany."
+  },
+  {
+   "lang": "en_us",
+   "id": "1497068838470674354",
+   "duration_s": 13.1,
+   "latency_s": 6.562544822001655,
+   "rtf": 0.5009576200001263,
+   "ref": "the parade of buildings that make the hong kong skyline has been likened to a glittering bar chart that is made apparent by the presence of the waters of victoria harbour",
+   "hyp": "The parade of buildings that make the Hong Kong skyline has been likened to a glittering bar chart that is made apparent by the presence of the warriors of Victoria Harbor."
+  },
+  {
+   "lang": "en_us",
+   "id": "14982964006464846866",
+   "duration_s": 10.56,
+   "latency_s": 6.568527583993273,
+   "rtf": 0.6220196575751205,
+   "ref": "as a result the performers smoke cannabis joints on stage and the theatre itself is encouraging the audience to join in",
+   "hyp": "As a result, the performers smoke cannabis joints on stage, and the theater itself is encouraging the audience to join in."
+  },
+  {
+   "lang": "en_us",
+   "id": "15257026998252037010",
+   "duration_s": 6.54,
+   "latency_s": 6.621353011003521,
+   "rtf": 1.0124392983185813,
+   "ref": "feral children may have experienced severe child abuse or trauma before being abandoned or running away",
+   "hyp": "Feral children may have experienced severe child abuse or trauma before being abandoned or running away."
+  },
+  {
+   "lang": "en_us",
+   "id": "15820671163473629623",
+   "duration_s": 12.12,
+   "latency_s": 6.732804131999728,
+   "rtf": 0.5555118920791855,
+   "ref": "buses depart the inter-district bus station across the river throughout the day though most especially those heading to the east and jakar/bumthang leave between 06:30 and 07:30",
+   "hyp": "Buses depart the inter-district bus station across the river throughout the day, though most, especially those heading to the east in Jakar-Buthang, leave between 6.30 and 7.30."
+  },
+  {
+   "lang": "en_us",
+   "id": "16010170383637871536",
+   "duration_s": 10.8,
+   "latency_s": 7.316681489995972,
+   "rtf": 0.6774705083329603,
+   "ref": "people have known about basic chemical elements such as gold silver and copper from antiquity as these can all be discovered in nature in native form and are relatively simple to mine with primitive tools",
+   "hyp": "basic chemical elements such as gold, silver, and copper from antiquity as these can all be discovered in nature in native form and are relatively simple to mine with primitive tools."
+  },
+  {
+   "lang": "en_us",
+   "id": "163369145011818208",
+   "duration_s": 6.9,
+   "latency_s": 7.489773082997999,
+   "rtf": 1.0854743598547825,
+   "ref": "goats seem to have been first domesticated roughly 10,000 years ago in the zagros mountains of iran",
+   "hyp": "Goats seem to have been first domesticated roughly 10,000 years ago in the Zagros Mountains of Iran."
+  },
+  {
+   "lang": "en_us",
+   "id": "16528325964292062857",
+   "duration_s": 11.22,
+   "latency_s": 7.211461220998899,
+   "rtf": 0.6427327291442869,
+   "ref": "this sediment was necessary for creating sandbars and beaches which served as wildlife habitats",
+   "hyp": "This sediment was necessary for creating sidebars and beaches which served as wildlife habitats."
+  },
+  {
+   "lang": "en_us",
+   "id": "16631812927540811343",
+   "duration_s": 9.66,
+   "latency_s": 7.203038432999165,
+   "rtf": 0.7456561524843855,
+   "ref": "the number of people present was so large that it was not possible for everybody to gain access to the funeral in st peter's square",
+   "hyp": "The number of people present was so large that it was not possible for everybody to gain access to the funeral in St. Peter's Square."
+  },
+  {
+   "lang": "en_us",
+   "id": "16685618834972658685",
+   "duration_s": 10.58,
+   "latency_s": 7.9990779790023225,
+   "rtf": 0.7560565197544729,
+   "ref": "however due to the slow communication channels styles in the west could lag behind by 25 to 30 year",
+   "hyp": "However, due to the slow communication channels, styles in the West could lag behind by 25 to 30 years."
+  },
+  {
+   "lang": "en_us",
+   "id": "16702780028313283623",
+   "duration_s": 7.52,
+   "latency_s": 7.951543169001525,
+   "rtf": 1.0573860597076497,
+   "ref": "everything in the universe is made of matter all matter is made of tiny particles called atoms",
+   "hyp": "Everything in the universe is made of matter. All matter is made of tiny particles called atoms."
+  },
+  {
+   "lang": "en_us",
+   "id": "16757205419144758552",
+   "duration_s": 7.02,
+   "latency_s": 8.331822662003106,
+   "rtf": 1.1868693250716675,
+   "ref": "soon after the outbreak of hostilities britain initiated a naval blockade of germany",
+   "hyp": "Soon after the outbreak of hostilities, Britain initiated a naval blockade of Germany."
+  },
+  {
+   "lang": "en_us",
+   "id": "16890607023935231060",
+   "duration_s": 7.54,
+   "latency_s": 7.814151316997595,
+   "rtf": 1.0363595911137393,
+   "ref": "parisians have a reputation for being egocentric rude and arrogant",
+   "hyp": "Parisians have a reputation for being egocentric, rude, and arrogant."
+  },
+  {
+   "lang": "en_us",
+   "id": "16989675193715509568",
+   "duration_s": 7.86,
+   "latency_s": 8.506069481998566,
+   "rtf": 1.0821971351143214,
+   "ref": "their disciplined defence ball handling skills and excellent team work made them stand out and it was clear that this was the team to beat",
+   "hyp": "Their disciplined defense, ball handling skills, and excellent teamwork made them stand out and it was clear that this was the team to beat."
+  },
+  {
+   "lang": "en_us",
+   "id": "17107523751051309601",
+   "duration_s": 8.04,
+   "latency_s": 6.968930128998181,
+   "rtf": 0.8667823543530078,
+   "ref": "liberal criticism of the reconstruction effort has focused on the awarding of reconstruction contracts to perceived washington insiders",
+   "hyp": "Liberal criticism of the Reconstruction effort has focused on the awarding of Reconstruction contracts to perceived Washington insiders."
+  },
+  {
+   "lang": "en_us",
+   "id": "17390731724222522492",
+   "duration_s": 4.02,
+   "latency_s": 6.077914462999615,
+   "rtf": 1.5119190206466706,
+   "ref": "for the springboks it ended a five-match losing streak",
+   "hyp": "For the spring box, it ended a 5 match losing streak."
+  },
+  {
+   "lang": "en_us",
+   "id": "17737260257548671107",
+   "duration_s": 6.24,
+   "latency_s": 6.254306736998842,
+   "rtf": 1.002292746313917,
+   "ref": "duvall who is married with two adult children did not leave a big impression on miller to whom the story was related",
+   "hyp": "Duval, who is married with two adult children, did not leave a big impression on Miller, to whom the story was related."
+  },
+  {
+   "lang": "en_us",
+   "id": "17824557748066874904",
+   "duration_s": 11.9,
+   "latency_s": 6.64425779600424,
+   "rtf": 0.5583409912608605,
+   "ref": "remember that even though music on the main stages may have finished there may be sections of the festival that will keep playing music until late into the night",
+   "hyp": "Remember that even though music on the main stages may have finished, there may be sections of the festival that will keep playing music until late into the night."
+  },
+  {
+   "lang": "en_us",
+   "id": "17837018222808398366",
+   "duration_s": 16.44,
+   "latency_s": 6.700755136000225,
+   "rtf": 0.4075885119221548,
+   "ref": "most interpretations of technological determinism share two general ideas that the development of technology itself follows a path largely beyond cultural or political influence and that technology in turn has effects on societies that are inherent rather than socially conditioned",
+   "hyp": "Most interpretations of technological determinism share two general ideas, that the development of technology itself follows a path largely beyond cultural or political influence, and that technology in turn has effects on society that are inherent rather than socially conditioned."
+  },
+  {
+   "lang": "en_us",
+   "id": "17867641190456170710",
+   "duration_s": 5.72,
+   "latency_s": 6.462819956999738,
+   "rtf": 1.1298636288461081,
+   "ref": "fire rescue crews eventually doused the fire by 11:35 pm",
+   "hyp": "Fire rescue crews eventually douse the fire by 11.35 p.m."
+  },
+  {
+   "lang": "en_us",
+   "id": "17993676999513479371",
+   "duration_s": 9.94,
+   "latency_s": 6.566343539998343,
+   "rtf": 0.6605979416497327,
+   "ref": "the tenth named storm of the atlantic hurricane season subtropical storm jerry formed in the atlantic ocean today",
+   "hyp": "The 10th named storm of the Atlantic hurricane season, Subtropic Storm Jerry, formed in the Atlantic Ocean today."
+  },
+  {
+   "lang": "en_us",
+   "id": "18045112717362407063",
+   "duration_s": 9.72,
+   "latency_s": 6.586211611996987,
+   "rtf": 0.6775937872424883,
+   "ref": "virtual scaffolds are internalized in the software and are meant to question prompt and explain procedures that may have been to challenging for the student to handle alone",
+   "hyp": "Virtual scaffolds are internalized in the software and are meant to question, prompt, and explain procedures that may have been too challenging for the student to handle alone."
+  },
+  {
+   "lang": "en_us",
+   "id": "18320871674783850842",
+   "duration_s": 7.02,
+   "latency_s": 6.900013245001901,
+   "rtf": 0.9829078696583905,
+   "ref": "hong kong island gives the territory of hong kong its name and is the place that many tourists regard as the main focus",
+   "hyp": "Hong Kong Island gives the territory of Hong Kong its name and is a place that many tourists regard as the main focus."
+  },
+  {
+   "lang": "en_us",
+   "id": "18401388433019060091",
+   "duration_s": 18.96,
+   "latency_s": 7.437505005997082,
+   "rtf": 0.3922734707804368,
+   "ref": "entertainment news website tmz understands the photographer stopped his vehicle on the other side of sepulveda boulevard and attempted to take pictures of the police stop before crossing the road and continuing prompting the california highway patrol police officer conducting the traffic stop to order him back across twice",
+   "hyp": "Entertainment news website TNZ understands the photographer stopped his vehicle on the other side of St. Pulvita Boulevard and attempted to take pictures of the police stop before crossing the road and continuing, prompting the California Highway Patrol police officer conducting the traffic stop to order him back across twice."
+  },
+  {
+   "lang": "en_us",
+   "id": "2467414061703477879",
+   "duration_s": 13.8,
+   "latency_s": 6.659291613999812,
+   "rtf": 0.4825573633333197,
+   "ref": "perry stated that he would return to texas to assess the results of tonight's caucus determine whether there is a path forward for myself in this race but later said that he would remain in the race and compete in the january 21 south carolina primary",
+   "hyp": "Perry stated that he would return to Texas to assess the results of tonight's caucus to determine whether there is a path forward for myself in this race. The letter said that he would remain in the race and compete in the January 21 South Carolina primary."
+  },
+  {
+   "lang": "en_us",
+   "id": "2634994688992335656",
+   "duration_s": 13.54,
+   "latency_s": 6.458128703001421,
+   "rtf": 0.47696666935017884,
+   "ref": "other subjects on the agenda in bali include saving the world's remaining forests and sharing technologies to help developing nations grow in less-polluting ways",
+   "hyp": "Other subjects on the agenda in Bali include saving the world's remaining forests and sharing technologies to help developing nations growing in less polluting ways."
+  },
+  {
+   "lang": "en_us",
+   "id": "2880067776280655708",
+   "duration_s": 23.64,
+   "latency_s": 13.199671685004432,
+   "rtf": 0.5583617464045868,
+   "ref": "dr malar balasubramanian 29 was found in blue ash ohio a suburb approximately 15 miles north of cincinnati lying on the ground beside the road in a t-shirt and underwear in an apparently heavily medicated state",
+   "hyp": "Dr. Mala Balasubramanian, 29, was found in Blue Ash, Ohio, a suburb approximately 15 miles north of Cincinnati, lying on the ground beside the road in a t-shirt and underwear in an apparently heavily medicated state."
+  },
+  {
+   "lang": "en_us",
+   "id": "3005219570158977238",
+   "duration_s": 12.96,
+   "latency_s": 6.694029965998197,
+   "rtf": 0.5165146578702312,
+   "ref": "the satellite was sent into space by a rocket scientists use telescopes in space because the earth's atmosphere distorts some of our light and view",
+   "hyp": "The satellite was sent into space by a rocket. Scientists use telescopes in space because the Earth's atmosphere distorts some of our light and view."
+  },
+  {
+   "lang": "en_us",
+   "id": "3111983050474671345",
+   "duration_s": 8.58,
+   "latency_s": 6.2257407949946355,
+   "rtf": 0.72561081526744,
+   "ref": "saint petersburg cruises include time in town. cruise passengers are exempted from visa requirements check the terms",
+   "hyp": "St. Petersburg cruises include time in town. Cruise passengers are exempted from visa requirements. Check the terms."
+  },
+  {
+   "lang": "en_us",
+   "id": "3337787499768294195",
+   "duration_s": 10.16,
+   "latency_s": 6.479928820997884,
+   "rtf": 0.6377882697832563,
+   "ref": "be careful not to allow fabric to become too hot which can cause shrinkage or in extreme cases scorch",
+   "hyp": "Be careful not to allow fabric to become too hot, which can cause shrinkage or, in extreme cases, scorch."
+  },
+  {
+   "lang": "en_us",
+   "id": "3401231636665586110",
+   "duration_s": 7.98,
+   "latency_s": 6.412385432995507,
+   "rtf": 0.8035570718039482,
+   "ref": "since the foundation of asunción in 1537 paraguay has managed to keep a lot of its indigenous character and identity",
+   "hyp": "Since the foundation of Ansunción in 1537, Paraguay has managed to keep a lot of its indigenous character and identity."
+  },
+  {
+   "lang": "en_us",
+   "id": "3491234462595391279",
+   "duration_s": 8.34,
+   "latency_s": 6.531541725002171,
+   "rtf": 0.7831584802160877,
+   "ref": "we don't know for sure but it may have had a forked tongue its diet included turtles large fish other mosasaurs and it may even have been a cannibal",
+   "hyp": "don't know for sure but it may have had a fourth tongue. The side include turtles, large fish, other mosasaurus, and it may even have been a cannibal."
+  },
+  {
+   "lang": "en_us",
+   "id": "3529855487992513201",
+   "duration_s": 5.64,
+   "latency_s": 6.442927841002529,
+   "rtf": 1.142363092376335,
+   "ref": "this seems sensible because the earth doesn't feel as if it's moving does it",
+   "hyp": "This seems sensible, because the Earth doesn't feel as if it's moving, does it?"
+  },
+  {
+   "lang": "en_us",
+   "id": "3702958695101050591",
+   "duration_s": 8.34,
+   "latency_s": 6.322216020002088,
+   "rtf": 0.7580594748203943,
+   "ref": "accepted were aristotle's views on all matters of science including psychology",
+   "hyp": "Accepted were Aristotle's views on all matters of science, including psychology."
+  },
+  {
+   "lang": "en_us",
+   "id": "3866409166763965048",
+   "duration_s": 8.52,
+   "latency_s": 6.323351058003027,
+   "rtf": 0.7421773542257074,
+   "ref": "the ruling party south west africa people's organisation swapo also retained a majority in the parliamentary elections",
+   "hyp": "The ruling party, Southwest Africa People's Organization, SWAPO, also retained a majority in the parliamentary elections."
+  },
+  {
+   "lang": "en_us",
+   "id": "3922043533653727350",
+   "duration_s": 7.92,
+   "latency_s": 6.352233281002555,
+   "rtf": 0.8020496566922417,
+   "ref": "in fact it is not easy to find at all even if one knew it existed once inside the cave it is a total isolation",
+   "hyp": "In fact, it is not easy to find at all, even if one knew it existed, once inside the cave, it is a total isolation."
+  },
+  {
+   "lang": "en_us",
+   "id": "3926276660303924456",
+   "duration_s": 8.68,
+   "latency_s": 6.594686651995289,
+   "rtf": 0.7597565267275679,
+   "ref": "be firm in turning down men and don't be afraid to stand your ground cultural differences or not it doesn't make it ok!",
+   "hyp": "Be firm in turning down men and don't be afraid to stand your ground, cultural differences or not, it doesn't make it okay."
+  },
+  {
+   "lang": "en_us",
+   "id": "4496786334735634498",
+   "duration_s": 10.96,
+   "latency_s": 6.666620126001362,
+   "rtf": 0.6082682596716571,
+   "ref": "apia is the capital of samoa the town is on the island of upolu and has a population of just under 40,000",
+   "hyp": "Apia is the capital of Samoa. The town is on the island of Upolu and has a population of just under 40,000."
+  },
+  {
+   "lang": "en_us",
+   "id": "4911753908854223816",
+   "duration_s": 19.46,
+   "latency_s": 6.787735933998192,
+   "rtf": 0.34880451870494306,
+   "ref": "since 1966 the sundarbans have been a wildlife sanctuary and it is estimated that there are now 400 royal bengal tigers and about 30,000 spotted deer in the area",
+   "hyp": "since nineteen sixty six the sun d'arbonnes have been a wild life sanctuary and it is estimated that there are now four hundred royal bengal tigers and about thirty thousand spotted deer in the area"
+  },
+  {
+   "lang": "en_us",
+   "id": "4960341437383881404",
+   "duration_s": 10.94,
+   "latency_s": 6.397235665994231,
+   "rtf": 0.5847564594144635,
+   "ref": "the fission bomb works on the principle that it takes energy to put together a nucleus with many protons and neutrons",
+   "hyp": "The fission bomb works on the principle that it takes energy to put together a nucleus with many protons and neutrons."
+  },
+  {
+   "lang": "en_us",
+   "id": "559615000143317446",
+   "duration_s": 4.68,
+   "latency_s": 6.331318185002601,
+   "rtf": 1.352845766026197,
+   "ref": "first most riders wear riding boots with a heel and a smooth quite narrow sole",
+   "hyp": "First, most writers were writing boots with a heel and a smooth, quiet, narrow sole."
+  },
+  {
+   "lang": "en_us",
+   "id": "5866078581108668966",
+   "duration_s": 5.62,
+   "latency_s": 6.332422552994103,
+   "rtf": 1.1267655788245734,
+   "ref": "so it is likely that the notation was added simply as a label",
+   "hyp": "So it is likely that the notation was added simply as a label."
+  },
+  {
+   "lang": "en_us",
+   "id": "5966925948005244453",
+   "duration_s": 8.16,
+   "latency_s": 6.5514149899972836,
+   "rtf": 0.8028694840682945,
+   "ref": "the photographers later took the place of an aged lady as she needed the lavatory mendoza was gunned down",
+   "hyp": "The photographers later took the place of an aged lady as she needed the lavatory. Mendoza was gunned down."
+  },
+  {
+   "lang": "en_us",
+   "id": "6075416811919407935",
+   "duration_s": 7.8,
+   "latency_s": 6.314746948002721,
+   "rtf": 0.809582942051631,
+   "ref": "due to the underwater topology the return flow is concentrated at a few deeper sections and a fast current to deep water may form there",
+   "hyp": "Due to the underwater topology, the return flow is concentrated at a few deeper sections, and a frass current to deep water may form there."
+  },
+  {
+   "lang": "en_us",
+   "id": "7205372698028731729",
+   "duration_s": 7.26,
+   "latency_s": 6.0935778679995565,
+   "rtf": 0.839335794490297,
+   "ref": "parisians have a reputation for being egocentric rude and arrogant",
+   "hyp": "Parisians have a reputation for being egocentric, rude, and arrogant."
+  },
+  {
+   "lang": "en_us",
+   "id": "7886295100481437768",
+   "duration_s": 10.12,
+   "latency_s": 6.510438158999023,
+   "rtf": 0.6433239287548441,
+   "ref": "a full 20% of the water that pours out of the planet's rivers into the oceans comes from the amazon",
+   "hyp": "A full 20% of the water that pours out of the planet's rivers into the oceans comes from the Amazon."
+  },
+  {
+   "lang": "en_us",
+   "id": "7963255664903240942",
+   "duration_s": 11.76,
+   "latency_s": 6.8398829189973185,
+   "rtf": 0.5816226971936496,
+   "ref": "also between each dynasty was an unstable age of divided provinces the best-known of these periods was the three kingdoms epoch taking place for 60 years between the han and the jin dynasty",
+   "hyp": "Also, between each dynasty was an unstable age of dividend provinces. The best known of these periods was the Three Kingdoms Epoch, taking place for 60 years between the Han and the Jin Dynasty."
+  },
+  {
+   "lang": "en_us",
+   "id": "8260950316138046112",
+   "duration_s": 10.32,
+   "latency_s": 6.381535853994137,
+   "rtf": 0.6183658773250132,
+   "ref": "this is the place the british colonisers took as their own and so if you are looking for evidence of the territory's colonial past this is a good place to start",
+   "hyp": "This is the place the British colonizers took as their own, and so if you are looking for evidence of the territory's colonial past, this is a good place to start."
+  },
+  {
+   "lang": "en_us",
+   "id": "8395660467583137383",
+   "duration_s": 7.58,
+   "latency_s": 6.188187542997184,
+   "rtf": 0.8163835808703409,
+   "ref": "regional and seasonal severe weather phenomena include blizzards snowstorms ice storms and dust storms",
+   "hyp": "Regional and seasonal severe weather phenomenon include blizzards, storms, ice storms, and dust storms."
+  },
+  {
+   "lang": "en_us",
+   "id": "851494165324091609",
+   "duration_s": 5.04,
+   "latency_s": 6.258495602000039,
+   "rtf": 1.2417650003968332,
+   "ref": "the surface of the moon is made of rocks and dust the outer layer of the moon is called the crust",
+   "hyp": "The surface of the moon is made of rocks and dust. The outer layer of the moon is called the crust."
+  },
+  {
+   "lang": "en_us",
+   "id": "8601075939905194476",
+   "duration_s": 7.12,
+   "latency_s": 6.182843107999361,
+   "rtf": 0.8683768410111461,
+   "ref": "fire rescue crews eventually doused the fire by 11:35 pm",
+   "hyp": "Fire rescue crews eventually doused the fire by 11.35 p.m."
+  },
+  {
+   "lang": "en_us",
+   "id": "911543279759253336",
+   "duration_s": 10.32,
+   "latency_s": 6.269230680998589,
+   "rtf": 0.6074835931200183,
+   "ref": "the moroccan sultan rebuilt the city as daru l-badya and it was given the name casablanca by spanish traders who established trading bases there",
+   "hyp": "The Moroccan Sultan rebuilt the city as Daru y Badia, and it was given the name Casablanca by Spanish traders to establishing trading bases there."
+  },
+  {
+   "lang": "en_us",
+   "id": "9490718340956113423",
+   "duration_s": 18.18,
+   "latency_s": 6.589274213001772,
+   "rtf": 0.3624463263477323,
+   "ref": "since 1988 ballot boxes must be transparent so that voters and observers can witness that no envelopes are present at the start of the vote and that no envelopes are added except those of the duly counted and authorized voters",
+   "hyp": "Since 1988, ballot boxes must be transparent so that voters and observers can witness that no envelopes are present at the start of the vote and that no envelopes are added except those of the duly counted and authorized voters."
+  },
+  {
+   "lang": "en_us",
+   "id": "9492244844910613453",
+   "duration_s": 6.84,
+   "latency_s": 6.185245589003898,
+   "rtf": 0.9042756709070027,
+   "ref": "the work done was mostly theoretical but the program was written to simulate observations made of the sagittarius galaxy",
+   "hyp": "The work done was mostly theoretical, but the program was written to simulate observations made of the Sagittarius galaxy."
+  },
+  {
+   "lang": "en_us",
+   "id": "9833173223298420094",
+   "duration_s": 15.3,
+   "latency_s": 12.369207377996645,
+   "rtf": 0.8084449266664473,
+   "ref": "scaffolding is not a method of learning but rather an aid that provides support to individuals whom are undergoing a new learning experience such as using a new computer program or beginning a new project",
+   "hyp": "Scaffolding is not a method of learning, but rather an aid that provides support to individuals whom are undergoing a new learning experience, such as using a new computer program or beginning a new project."
+  },
+  {
+   "lang": "en_us",
+   "id": "9864990645729015969",
+   "duration_s": 9.72,
+   "latency_s": 6.199596086000383,
+   "rtf": 0.6378185273662945,
+   "ref": "the vertical clearance under the bridge is 15 meters construction was completed in august 2011 it didn't open to traffic until march 2017",
+   "hyp": "The vertical clearance under the bridge is 15 meters. Construction was completed in August 2011. It didn't open to traffic until March 2017."
+  },
+  {
+   "lang": "en_us",
+   "id": "997218759918036906",
+   "duration_s": 10.26,
+   "latency_s": 6.286457481997786,
+   "rtf": 0.6127151541908173,
+   "ref": "barcelona's official languages are catalan and spanish about a half prefer to speak catalan a vast majority understands it and virtually everyone knows spanish",
+   "hyp": "Barcelona's official languages are Catalan and Spanish. About a half prefer to speak Catalan, a vast majority understands it, and virtually everyone knows Spanish."
+  },
+  {
+   "lang": "en_us",
+   "id": "1003119935936341070",
+   "duration_s": 10.56,
+   "latency_s": 6.091433924004377,
+   "rtf": 0.5768403337125357,
+   "ref": "however due to the slow communication channels styles in the west could lag behind by 25 to 30 year",
+   "hyp": "However, due to the slow communication channels, styles in the West could lag behind by 25 to 30 years."
+  },
+  {
+   "lang": "en_us",
+   "id": "10052240106321793346",
+   "duration_s": 8.76,
+   "latency_s": 6.15555791099905,
+   "rtf": 0.702689259246467,
+   "ref": "all nouns alongside the word sie for you always begin with a capital letter even in the middle of a sentence",
+   "hyp": "All nouns alongside the world say for you always begin with a capital letter, even in the middle of a sentence."
+  },
+  {
+   "lang": "en_us",
+   "id": "10167324587744183095",
+   "duration_s": 11.46,
+   "latency_s": 6.4630410140016465,
+   "rtf": 0.5639651844678574,
+   "ref": "to the north and within easy reach is the romantic and fascinating town of sintra and which was made famous to foreigners after a glowing account of its splendours recorded by lord byron",
+   "hyp": "To the north and within easy reach is the romantic and fascinating town of Cintra and which was made famous to foreigners after a glowing account of its splendorous recorded by Lord Byron."
+  },
+  {
+   "lang": "en_us",
+   "id": "10197164397713068203",
+   "duration_s": 5.76,
+   "latency_s": 6.665814567997586,
+   "rtf": 1.157259473610692,
+   "ref": "the cabbage juice changes color depending on how acidic or basic alkaline the chemical is",
+   "hyp": "The cabbage juice changes color depending on how acidic, basic, alkaline the chemical is."
+  },
+  {
+   "lang": "en_us",
+   "id": "10233995782544396174",
+   "duration_s": 4.32,
+   "latency_s": 6.259880862002319,
+   "rtf": 1.44904649583387,
+   "ref": "many people don't think about them as dinosaurs because they have feathers and can fly",
+   "hyp": "Many people don't think about them as dinosaurs because they have feathers and can fly."
+  },
+  {
+   "lang": "en_us",
+   "id": "10235738076911595987",
+   "duration_s": 11.42,
+   "latency_s": 6.352670075000788,
+   "rtf": 0.5562758384413999,
+   "ref": "the hospital has followed protocol for infection control including separating the patient from others to prevent possible infection of others",
+   "hyp": "The hospital has followed protocol for infection control, including separating the patient from others to prevent possible infection of others."
+  },
+  {
+   "lang": "en_us",
+   "id": "10323357556845456822",
+   "duration_s": 10.8,
+   "latency_s": 6.395072389001143,
+   "rtf": 0.5921363323149206,
+   "ref": "the northern marianas emergency management office said that there were no damages reported in the nation",
+   "hyp": "The Northern Mariana's Emergency Management Office said that there were no damages reported in the nation."
+  },
+  {
+   "lang": "en_us",
+   "id": "10335587906469246566",
+   "duration_s": 6.96,
+   "latency_s": 6.340344374999404,
+   "rtf": 0.9109690193964661,
+   "ref": "twentieth century research has shown that there are two pools of genetic variation hidden and expressed",
+   "hyp": "20th century research has shown that there are two pools of genetic variation hidden and expressed."
+  },
+  {
+   "lang": "en_us",
+   "id": "10344335557154974057",
+   "duration_s": 11.04,
+   "latency_s": 6.374073687999044,
+   "rtf": 0.5773617471013627,
+   "ref": "the aspect ratio of this format dividing by twelve to obtain the simplest whole-number ratio is therefore said to be 3:2",
+   "hyp": "The aspect ratio of this format, dividing by 12 to obtain the simplest whole number ratio, is therefore said to be 3 to 2."
+  },
+  {
+   "lang": "en_us",
+   "id": "1036771894648013441",
+   "duration_s": 9.9,
+   "latency_s": 6.308277598996938,
+   "rtf": 0.6371997574744381,
+   "ref": "as light pollution in their heyday was not the kind of problem it is today they are usually located in cities or at campuses easier to reach than those built in modern times",
+   "hyp": "As light pollution in their heyday was not the kind of problem it is today, they are usually located in cities or at campuses easier to reach than those built in modern times."
+  },
+  {
+   "lang": "en_us",
+   "id": "1038214857203833067",
+   "duration_s": 4.8,
+   "latency_s": 6.1996526590010035,
+   "rtf": 1.2915943039585425,
+   "ref": "through the night between 150 and 200 copies were made now known as dunlap broadsides",
+   "hyp": "For the night, between 150 and 200 copies were made, now known as Dunlap broadsides."
+  },
+  {
+   "lang": "en_us",
+   "id": "10383288285905292158",
+   "duration_s": 11.28,
+   "latency_s": 6.748461527000472,
+   "rtf": 0.5982678658688363,
+   "ref": "for example each year students from bennet school in north carolina design a website about their trip to the state capital each year the website gets remodeled but old versions are kept online to serve as a scrapbook",
+   "hyp": "For example, each year students from Bennett School in North Carolina design a website about their trip to the state capitol. Each year the website gets remodeled, but old versions are kept online to serve as a scrapbook."
+  },
+  {
+   "lang": "en_us",
+   "id": "10405958125670257178",
+   "duration_s": 10.92,
+   "latency_s": 6.410077276996162,
+   "rtf": 0.5870034136443372,
+   "ref": "lion prides act much like packs of wolves or dogs animals surprisingly similar to lions but not other big cats in behavior and also very deadly to their prey",
+   "hyp": "Lion pride acts much like packs of wolves or dogs, animals surprisingly similar to lions, but not other big cats in behavior, and also very deadly to their prey."
+  },
+  {
+   "lang": "en_us",
+   "id": "10411016628242228511",
+   "duration_s": 11.28,
+   "latency_s": 6.235331638999924,
+   "rtf": 0.5527776275709152,
+   "ref": "the city is also the base to climb the nyiragongo volcano along with some of the cheapest mountain gorilla tracking in africa",
+   "hyp": "The city is also the base to climb the Nairaigango volcano along with some of the cheapest mountain guerrilla trafficking in Africa."
+  },
+  {
+   "lang": "en_us",
+   "id": "1042003289011443756",
+   "duration_s": 5.72,
+   "latency_s": 6.065585201999056,
+   "rtf": 1.0604169933564784,
+   "ref": "the internet combines elements of both mass and interpersonal communication",
+   "hyp": "The internet combines elements of both mass and interpersonal communication."
+  },
+  {
+   "lang": "en_us",
+   "id": "1043394666292127188",
+   "duration_s": 15.56,
+   "latency_s": 6.455839448004554,
+   "rtf": 0.41489970745530547,
+   "ref": "these theories look at what it is about certain people that make them want the things that they do and what things in their environment will make them do or not do certain things",
+   "hyp": "These movies look at what it is about certain people that make them want the things that they do and what things in their environment will make them do or not do certain things."
+  },
+  {
+   "lang": "en_us",
+   "id": "1045619486290403122",
+   "duration_s": 13.92,
+   "latency_s": 6.294285402997048,
+   "rtf": 0.45217567550266147,
+   "ref": "for example the most common still image photography format in the world is 35mm which was the dominant film size at the close of the analog film era",
+   "hyp": "For example, the most common still image photography format in the world is 35mm, which was the dominant film size at the close of the analog film era."
+  },
+  {
+   "lang": "en_us",
+   "id": "1046653381869710616",
+   "duration_s": 8.64,
+   "latency_s": 12.023723498998152,
+   "rtf": 1.391634664235897,
+   "ref": "the term safari in popular use refers to overland travel to view the stunning african wildlife particularly on savanna",
+   "hyp": "the term safari and popular loose refers to overland travel to view the stunning african wildlife particularly on savannah"
+  },
+  {
+   "lang": "en_us",
+   "id": "10471564175308895403",
+   "duration_s": 5.36,
+   "latency_s": 6.0900037809988135,
+   "rtf": 1.1361947352609727,
+   "ref": "but there are a lot of things about birds that still look like a dinosaur",
+   "hyp": "But there are a lot of things about birds that still look like a dinosaur."
+  },
+  {
+   "lang": "en_us",
+   "id": "10481451226514948764",
+   "duration_s": 10.14,
+   "latency_s": 6.129541433998384,
+   "rtf": 0.604491265680314,
+   "ref": "women it is recommended that any women travellers say that they are married regardless of actual marital status",
+   "hyp": "Women. It is recommended that any women travelers say that they are married regardless of actual marital status."
+  },
+  {
+   "lang": "es_419",
+   "id": "10492774437691150637",
+   "duration_s": 14.4,
+   "latency_s": 6.306460109997715,
+   "rtf": 0.4379486187498413,
+   "ref": "duvall que está casado y tiene dos hijos adultos no causó una buena impresión a miller que fue a quien le relató la historia",
+   "hyp": "Duval, que está casado y tiene dos hijos adultos, no causó una buena impresión a Miller, que fue a quien le relató la historia."
+  },
+  {
+   "lang": "es_419",
+   "id": "10730081657308612914",
+   "duration_s": 11.88,
+   "latency_s": 6.377495846005331,
+   "rtf": 0.5368262496637484,
+   "ref": "la mayor parte de los telescopios de investigación actuales consisten en inmensas estructuras instaladas en áreas alejadas con condiciones atmosféricas propicias",
+   "hyp": "La mayor parte de los telescopios de investigación actuales consisten en inmensas estructuras instaladas en áreas alejadas con condiciones atmosféricas propicias."
+  },
+  {
+   "lang": "es_419",
+   "id": "10764228514996022810",
+   "duration_s": 24.96,
+   "latency_s": 7.140709371997218,
+   "rtf": 0.28608611266014494,
+   "ref": "por ejemplo todos los años los alumnos de la escuela bennet en carolina del norte diseñan una página web acerca de su viaje a la capital del estado y cada año la página se actualiza pero se conservan en línea las versiones previas que en la forma de álbum de recuerdos",
+   "hyp": "Por ejemplo, todos los años, los alumnos de la Escuela Bennett en Carolina del Norte diseñan una página web acerca de su viaje a la capital del estado. Y cada año la página se actualiza, pero se conservan en línea las versiones previas en la forma de álbum de recuerdos."
+  },
+  {
+   "lang": "es_419",
+   "id": "10800534950017924150",
+   "duration_s": 9.84,
+   "latency_s": 6.385438933000842,
+   "rtf": 0.6489267208334188,
+   "ref": "el anuncio se hizo tras la conversación telefónica que trump mantuvo con con el presidente de turquía recep tayyip erdoğan",
+   "hyp": "El anuncio se hizo tras la conversación telefónica que Trump mantuvo con el presidente de Turquía, Recep Tayyip Erdogan."
+  },
+  {
+   "lang": "es_419",
+   "id": "10854190301744279509",
+   "duration_s": 10.86,
+   "latency_s": 6.270289498999773,
+   "rtf": 0.5773747236648041,
+   "ref": "las manadas están formadas por uno a tres machos adultos del mismo grupo familiar unidos con hasta treinta hembras y sus crías",
+   "hyp": "Las manadas están formadas por una a tres machos adultos del mismo grupo familiar, unidos con hasta 30 hembras y sus crías."
+  },
+  {
+   "lang": "es_419",
+   "id": "11025828704961531289",
+   "duration_s": 7.32,
+   "latency_s": 6.2233920880025835,
+   "rtf": 0.850190175956637,
+   "ref": "la región limita con el sahel al norte y con el océano atlántico al sur y al oeste",
+   "hyp": "La región limita con el Yael al norte y con el Océano Atlántico al sur y al oeste."
+  },
+  {
+   "lang": "es_419",
+   "id": "11055750169191416348",
+   "duration_s": 17.28,
+   "latency_s": 6.709864429001755,
+   "rtf": 0.3883023396413052,
+   "ref": "asus eee pc que anteriormente fue lanzada a nivel global por sus ventajas de ahorro de costos y funcionalidad se volvió sujeto de candentes debates en el mes de la tecnología de la información de taipei 2007",
+   "hyp": "ASUS EEE PC, que anteriormente fue lanzada a nivel global por sus ventajas de ahorro de costos y funcionalidad, se volvió sujeto de candentes debates en el mes de la tecnología de la información de Taipei 2007."
+  },
+  {
+   "lang": "es_419",
+   "id": "11440454609460760458",
+   "duration_s": 13.26,
+   "latency_s": 6.683728493000672,
+   "rtf": 0.5040519225490703,
+   "ref": "la calidad y el nivel de detalle de su labor son tan reconocidos que se ha vuelto uno de los pocos «nombres familiares» entre los filatelistas. hay personas que se especializan en recopilar su obra",
+   "hyp": "La calidad y el nivel de detalle de su labor son tan reconocidos que se ha vuelto uno de los pocos nombres familiares entre los filasteístas. Hay personas que se especializan en recopilar su obra."
+  },
+  {
+   "lang": "es_419",
+   "id": "11477814659003509400",
+   "duration_s": 16.98,
+   "latency_s": 6.720358993006812,
+   "rtf": 0.3957808594232516,
+   "ref": "para ejemplificar el formato de fotografía de imagen fija más habitual a nivel global es el de 35 mm que fue el tamaño de película más utilizado hacia el final de la era de las películas analógicas",
+   "hyp": "para ejemplificar el formato de fotografía de imagen fija más habitual a nivel global es el de 35 milímetros que fue el tamaño de película más utilizado hacia el final de la era de las películas analógicas"
+  },
+  {
+   "lang": "es_419",
+   "id": "11484103914747539627",
+   "duration_s": 10.62,
+   "latency_s": 6.245202092999534,
+   "rtf": 0.5880604607344194,
+   "ref": "los mismos estándares de excelencia que manejan los equipos convencionales aplican para los virtuales aunque existen pequeñas diferencias",
+   "hyp": "Los mismos estándares de excelencia que manejan los equipos convencionales aplican para los virtuales, aunque existen pequeñas diferencias."
+  },
+  {
+   "lang": "es_419",
+   "id": "11603681517704231177",
+   "duration_s": 10.8,
+   "latency_s": 6.5494937340045,
+   "rtf": 0.6064346050004166,
+   "ref": "cuanto más baja sea la tensión más positiva es la fuerza de la vida con la que contemos cada uno de nosotros tiene el potencial de hallar paz y dicha absolutas",
+   "hyp": "Cuanto más baja sea la tensión, más positiva es la fuerza de la vida con la que contemos. Cada uno de nosotros tiene el potencial de ayer paz y dichas absolutas."
+  },
+  {
+   "lang": "es_419",
+   "id": "11665155111644513093",
+   "duration_s": 13.08,
+   "latency_s": 6.700481913998374,
+   "rtf": 0.512269259479998,
+   "ref": "el valle de cochamó es el destino para escalar más popular de chile y es conocido como el yosemite de sudamérica con variedad de extensos muros y riscos de granito",
+   "hyp": "El Valle de Cochamó es el destino para escalar más popular de Chile y es conocido como el Yosemite de Sudamérica, con variedad de extensos muros y riscos de granito."
+  },
+  {
+   "lang": "es_419",
+   "id": "11668087873692458086",
+   "duration_s": 11.4,
+   "latency_s": 6.356787037999311,
+   "rtf": 0.5576128980701149,
+   "ref": "no obstante debido a la lentitud de los canales de comunicación los estilos occidentales podrían llevar un retraso de unos 25 a 30 años",
+   "hyp": "No obstante, debido a la lentitud de los canales de comunicación, los estilos occidentales podrían llevar un retraso de unos 25 a 30 años."
+  },
+  {
+   "lang": "es_419",
+   "id": "11707656531205978540",
+   "duration_s": 15.78,
+   "latency_s": 6.637948734998645,
+   "rtf": 0.4206558133712703,
+   "ref": "nada puede verse más que el maravilloso cielo despejado y las numerosas montañas de los alrededores desde el interior de esta cueva se puede ver u oír muy poco de este mundo",
+   "hyp": "Nada puede verse más que el maravilloso cielo despejado y las numerosas montañas de los alrededores. Desde el interior de esta cueva se puede ver u oír muy poco de este mundo."
+  },
+  {
+   "lang": "es_419",
+   "id": "11817195717634017393",
+   "duration_s": 11.88,
+   "latency_s": 6.570600257997285,
+   "rtf": 0.5530808297977512,
+   "ref": "lamentablemente no es tarea sencilla estudiar el flujo del tráfico ya que es no es posible hacer predicciones exactas sobre el comportamiento de los conductores",
+   "hyp": "lamentablemente no es tarea sencilla estudiar el flujo del tráfico ya que no es posible hacer predicciones exactas sobre el comportamiento de los conductores"
+  },
+  {
+   "lang": "es_419",
+   "id": "12095024367747195456",
+   "duration_s": 12.66,
+   "latency_s": 6.655547125999874,
+   "rtf": 0.5257146229067831,
+   "ref": "los viajes de estudio constituyen una parte importante de todo salón de clases es muy frecuente que una docente desee llevar a sus estudiantes a sitios a los que no es posible llegar en autobús",
+   "hyp": "Los viajes de estudio constituyen una parte importante de todo salón de clases. Es muy frecuente que una docente desee llevar a sus estudiantes a sitios a los que no es posible llegar en autobús."
+  },
+  {
+   "lang": "es_419",
+   "id": "12341766406149298576",
+   "duration_s": 12.84,
+   "latency_s": 6.603848377999384,
+   "rtf": 0.5143184095015096,
+   "ref": "únicamente las mutaciones en células germinales se pueden transmitir a los niños mientras que las que ocurren en otras partes pueden causar la muerte celular o cáncer",
+   "hyp": "Únicamente las mutaciones en células germinales se pueden transmitir a los niños, mientras que las que ocurren en otras partes pueden causar la muerte celular o cáncer."
+  },
+  {
+   "lang": "es_419",
+   "id": "12594589707201677924",
+   "duration_s": 12.3,
+   "latency_s": 6.466548931995931,
+   "rtf": 0.5257356855281244,
+   "ref": "el informe es sumamente crítico con prácticamente cada aspecto de la política vigente del poder ejecutivo en irak y apela a un cambio inmediato de dirección",
+   "hyp": "El informe es sumamente crítico con prácticamente cada aspecto de la política vigente del poder ejecutivo en Irak, y apela a un cambio inmediato de dirección."
+  },
+  {
+   "lang": "es_419",
+   "id": "12840434204685877227",
+   "duration_s": 11.4,
+   "latency_s": 6.688184120997903,
+   "rtf": 0.586682817631395,
+   "ref": "por otra parte en muchos países las condiciones de hielo y nieve son normales y el tránsito fluye casi sin ninguna interrupción durante todo el año",
+   "hyp": "Por otra parte, en muchos países las condiciones de hierro y nieve son normales y el tránsito fluye casi sin ninguna interrupción durante todo el año."
+  },
+  {
+   "lang": "es_419",
+   "id": "12881597511710041831",
+   "duration_s": 18.48,
+   "latency_s": 6.923050012999738,
+   "rtf": 0.37462391845236676,
+   "ref": "las manadas de leones tienen el mismo comportamiento que las de los lobos o los perros con quienes guardan una sorprendente similitud a diferencia de los otros grandes felinos tanto en su conducta como en que son altamente letales para sus presas",
+   "hyp": "Las manadas de leones tienen el mismo comportamiento que las de los lobos o los perros, con quienes guardan una sorprendente similitud, a diferencia de los otros grandes felinos, tanto en su conducta como en que son altamente letales para sus presas."
+  },
+  {
+   "lang": "es_419",
+   "id": "13494077062583220068",
+   "duration_s": 9.0,
+   "latency_s": 6.274614618996566,
+   "rtf": 0.6971794021107295,
+   "ref": "con aproximadamente 800 habitantes la ciudad del vaticano es el país independiente más pequeño del mundo y el de menor población",
+   "hyp": "Con aproximadamente 800 habitantes, la ciudad del Vaticano es el país independiente más pequeño del mundo y el de menor población."
+  },
+  {
+   "lang": "es_419",
+   "id": "13682343737929219690",
+   "duration_s": 13.2,
+   "latency_s": 6.704244393004046,
+   "rtf": 0.5078973025003065,
+   "ref": "la cúpula central de la iglesia había permanecido en roma por más de un milenio y esta concentración de poder y dinero hizo que muchos se preguntaran si este principio se estaba respetando",
+   "hyp": "La cúpula central de la iglesia había permanecido en Roma por más de un milenio y esta concentración de poder y dinero hizo que muchos se preguntaran si este principio se estaba respetando."
+  },
+  {
+   "lang": "es_419",
+   "id": "14062980995131313303",
+   "duration_s": 11.88,
+   "latency_s": 6.786112620997301,
+   "rtf": 0.5712216010940488,
+   "ref": "en kundalini yoga la energía kundalini iluminación se activa con posiciones de yoga prácticas de respiración mantras o visualizaciones",
+   "hyp": "En Kundalini Yoga, la energía Kundalini se activa con posiciones de yoga, prácticas de respiración, mantras o visualizaciones."
+  },
+  {
+   "lang": "es_419",
+   "id": "14077339232424241115",
+   "duration_s": 9.96,
+   "latency_s": 6.867432591003308,
+   "rtf": 0.6895012641569586,
+   "ref": "el número de iones de hidrógeno la h en ph presentes en el producto químico analizado determina su nivel de ph",
+   "hyp": "El número de iones de hidrógeno, la H en pH, presentes en el producto químico analizado determina su nivel de pH."
+  },
+  {
+   "lang": "es_419",
+   "id": "14103721996991673701",
+   "duration_s": 9.0,
+   "latency_s": 6.529933224999695,
+   "rtf": 0.7255481361110773,
+   "ref": "el color del jugo de repollo se verá alterado en función de cuán ácida o básica alcalina sea la sustancia química",
+   "hyp": "El color del jugo de repollo se verá alterado en función de cuán ácida o básica alcalina sea la sustancia química."
+  },
+  {
+   "lang": "es_419",
+   "id": "14252622026176581463",
+   "duration_s": 7.56,
+   "latency_s": 6.46698022900091,
+   "rtf": 0.8554206652117606,
+   "ref": "en las coberturas televisivas puede verse humo blanco emanando de la planta",
+   "hyp": "En las coberturas televisivas puede verse humo blanco emanado de la planta."
+  },
+  {
+   "lang": "es_419",
+   "id": "14329896602786738088",
+   "duration_s": 6.96,
+   "latency_s": 6.3522710600009304,
+   "rtf": 0.9126826235633521,
+   "ref": "los parisinos tienen reputación de egocéntricos descorteses y engreídos",
+   "hyp": "Los parisinos tienen reputación de egocéntricos, descorteses y engreídos."
+  },
+  {
+   "lang": "es_419",
+   "id": "1438490127695944113",
+   "duration_s": 10.08,
+   "latency_s": 7.143725599999016,
+   "rtf": 0.7087029365078389,
+   "ref": "los entomólogos emplean el término insecto parásito en un sentido formal para referirse a este grupo de artrópodos",
+   "hyp": "Los entomólogos emplean el término insecto parásito en un sentido formal para referirse a este grupo de artrópodos."
+  },
+  {
+   "lang": "es_419",
+   "id": "14512480937388196893",
+   "duration_s": 16.14,
+   "latency_s": 7.928390140004922,
+   "rtf": 0.49122615489497656,
+   "ref": "dado que en su auge la contaminación lumínica no era un problema de gran magnitud como lo es hoy es frecuente encontrarlos en ciudades o en campus siendo de más fácil acceso que aquellos que se construyen en los tiempos modernos",
+   "hyp": "Dado que en su auge la contaminación lumínica no era un problema de gran magnitud como lo es hoy, es frecuente encontrarlos en ciudades o en campus, siendo de más fácil acceso que aquellos que se construyen en los tiempos modernos."
+  },
+  {
+   "lang": "es_419",
+   "id": "14847639419466125817",
+   "duration_s": 10.38,
+   "latency_s": 6.52102740600094,
+   "rtf": 0.6282300005781252,
+   "ref": "los mismos estándares de excelencia que manejan los equipos convencionales aplican para los virtuales aunque existen pequeñas diferencias",
+   "hyp": "Los mismos estándares de excelencia que manejan los equipos convencionales aplican para los virtuales, aunque existen pequeñas diferencias."
+  },
+  {
+   "lang": "es_419",
+   "id": "15157489772208688760",
+   "duration_s": 8.82,
+   "latency_s": 6.173156948003452,
+   "rtf": 0.6999044158734072,
+   "ref": "liggins comenzó sus investigaciones sobre el parto prematuro en su tiempo libre mientras trabajaba en el hospital",
+   "hyp": "Lee Gings comenzó sus investigaciones sobre el parto prematuro en su tiempo libre mientras trabajaba en el hospital."
+  },
+  {
+   "lang": "es_419",
+   "id": "15210905717406596665",
+   "duration_s": 12.12,
+   "latency_s": 6.700844741993933,
+   "rtf": 0.5528749787123708,
+   "ref": "la lengua que hablan a diario la mayoría de quienes trabajan dentro del estado es también el italiano y el uso del latín queda generalmente reservado para las ceremonias religiosas",
+   "hyp": "La lengua que hablan a diario la mayoría de quienes trabajan dentro del estado es también el italiano y el uso del latín queda generalmente reservado para las ceremonias religiosas."
+  },
+  {
+   "lang": "es_419",
+   "id": "15405643826733793853",
+   "duration_s": 10.2,
+   "latency_s": 7.052554233006958,
+   "rtf": 0.6914268855889175,
+   "ref": "el día de ayer martelly juró en un nuevo consejo electoral provisional cep por sus siglas en inglés de nueve miembros",
+   "hyp": "El día de ayer Martegi juró en un nuevo Consejo Electoral Provisional, CEP, por sus siglas en inglés, de nueve miembros."
+  },
+  {
+   "lang": "es_419",
+   "id": "15489156033817115017",
+   "duration_s": 10.62,
+   "latency_s": 6.515105390004464,
+   "rtf": 0.6134750838045635,
+   "ref": "según danielle lantagne especialista en la enfermedad que trabaja para la onu es probable que el brote haya sido provocado por las fuerzas de paz",
+   "hyp": "Según Daniel Lantagne, especialista en la enfermedad que trabaja para la ONU, es probable que el brote haya sido provocado por las fuerzas de paz."
+  },
+  {
+   "lang": "es_419",
+   "id": "16376191831780128974",
+   "duration_s": 10.5,
+   "latency_s": 6.544056808001187,
+   "rtf": 0.6232435055239226,
+   "ref": "los leones son los felinos que más socializan y su vida transcurre dentro de grupos de gran tamaño denominados manadas",
+   "hyp": "Los leones son los felinos que más socializan y su vida transcurre dentro de grupos de gran tamaño denominados manadas."
+  },
+  {
+   "lang": "es_419",
+   "id": "16446183822893392228",
+   "duration_s": 13.32,
+   "latency_s": 6.749242550002236,
+   "rtf": 0.506699891141309,
+   "ref": "en 1889 el puerto fue el escenario de un nefasto enfrentamiento naval cuando siete barcos alemanes americanos y e ingleses se negaron a salir del puerto",
+   "hyp": "En 1889 el puerto fue el escenario de un nefasto enfrentamiento naval cuando siete barcos alemanes, americanos e ingleses se negaron a salir del puerto."
+  },
+  {
+   "lang": "es_419",
+   "id": "16537935358962997137",
+   "duration_s": 12.6,
+   "latency_s": 6.92997102499794,
+   "rtf": 0.549997700396662,
+   "ref": "un observador describió a bishkek como si se hundiera en un estado de «anarquía» mientras grupos de personas vagaban por las calles y saqueaban las tiendas de venta de bienes de consumo",
+   "hyp": "Un observador describió a Bishkek como si se hundiera en un estado de anarquía mientras grupos de personas vagaban por las calles y saqueaban las tiendas de venta de bienes de consumo."
+  },
+  {
+   "lang": "es_419",
+   "id": "16806388072233720792",
+   "duration_s": 10.56,
+   "latency_s": 6.399720269000682,
+   "rtf": 0.6060341163826403,
+   "ref": "fue tanta la cantidad de gente que se concentró que no todos pudieron acceder al funeral en la plaza de san pedro",
+   "hyp": "Fue tanta la gente que se concentró que no todos pudieron acceder al funeral en la Plaza San Pedro."
+  },
+  {
+   "lang": "es_419",
+   "id": "16839469893156514513",
+   "duration_s": 22.74,
+   "latency_s": 7.03819725500216,
+   "rtf": 0.3095073551012384,
+   "ref": "las iglesias más tradicionales suelen ofrecer una vigilia pascual el día sábado en la noche durante el fin de semana de la pascua y por lo general las congregaciones dan inicio a las celebraciones por la resurrección de cristo apenas llega la medianoche",
+   "hyp": "Las iglesias más tradicionales suelen ofrecer una vigilia pascual el día sábado en la noche durante el fin de semana de la Pascua y por lo general las congregaciones dan inicio a las celebraciones por la resurrección de Cristo apenas llega la medianoche."
+  },
+  {
+   "lang": "es_419",
+   "id": "17220252462738156619",
+   "duration_s": 10.02,
+   "latency_s": 6.675122825996368,
+   "rtf": 0.6661799227541286,
+   "ref": "el día de ayer martelly juró en un nuevo consejo electoral provisional cep por sus siglas en inglés de nueve miembros",
+   "hyp": "El día de ayer, Martelli juró en un nuevo Consejo Electoral Provisional, CEP por sus siglas en inglés, de nueve miembros."
+  },
+  {
+   "lang": "es_419",
+   "id": "17256313041595654808",
+   "duration_s": 10.44,
+   "latency_s": 6.58788263599854,
+   "rtf": 0.6310232409960287,
+   "ref": "en scotturb el autobús 403 se dirige con regularidad a sintra y para en cabo da roca",
+   "hyp": "En Scoturb, el autobús 403 se dirige con regularidad a Sintra y para en Cabo de Roca."
+  },
+  {
+   "lang": "es_419",
+   "id": "17968919964712762398",
+   "duration_s": 13.44,
+   "latency_s": 7.05939467499411,
+   "rtf": 0.5252525799846808,
+   "ref": "estas teorías analizan qué es lo que provoca que ciertas personas quieran las cosas que hacen y qué factores de su entorno los obligan a hacer o no determinadas cosas",
+   "hyp": "Estas teorías analizan qué es lo que provoca que ciertas personas quieran las cosas que hacen y qué factores de su entorno los obligan a hacer o no determinadas cosas."
+  },
+  {
+   "lang": "es_419",
+   "id": "18030390066725106951",
+   "duration_s": 11.64,
+   "latency_s": 6.940527687002032,
+   "rtf": 0.59626526520636,
+   "ref": "suelen ofrecer promociones especiales de comida bebida y entretenimiento con el fin de mantener a los huéspedes de buen ánimo y dentro de las instalaciones",
+   "hyp": "Suelen ofrecer promociones especiales de comida, bebida y entretenimiento con el fin de mantener a los huéspedes de buen ánimo y dentro de las instalaciones."
+  },
+  {
+   "lang": "es_419",
+   "id": "1928554298730648653",
+   "duration_s": 10.74,
+   "latency_s": 10.006853093000245,
+   "rtf": 0.931736787057751,
+   "ref": "agite ambos polvos secos juntos y después de hacerlo con las manos higienizadas y húmedas exprímalos para formar una bola",
+   "hyp": "Agite ambos polvos secos juntos y después de hacerlo con las manos higienizadas y húmedas exprimalos para formar una bola."
+  },
+  {
+   "lang": "es_419",
+   "id": "2113107551288229577",
+   "duration_s": 16.62,
+   "latency_s": 14.075781313993502,
+   "rtf": 0.8469182499394405,
+   "ref": "esto hará posible su compatibilidad con versiones anteriores de 802.11a 802.11b y 802.11g ello en la medida en que la estación base tenga radios duales",
+   "hyp": "Esto hará posible su compatibilidad con versiones anteriores de 802.11a, 802.11b y 802.11g, ello en la medida en que la estación base tenga radios duales."
+  },
+  {
+   "lang": "es_419",
+   "id": "3194799675121193734",
+   "duration_s": 8.4,
+   "latency_s": 24.305546941999637,
+   "rtf": 2.8935174930951946,
+   "ref": "es probable que al buscar «curso sobre zonas hostiles» en internet se encuentre la dirección de una compañía local",
+   "hyp": "Es probable que al buscar cursos sobre zonas hostiles en internet se encuentre la dirección de una compañía local."
+  },
+  {
+   "lang": "es_419",
+   "id": "3610963932156795474",
+   "duration_s": 19.8,
+   "latency_s": 7.865801811996789,
+   "rtf": 0.3972627177776156,
+   "ref": "el teatro argentino fue el lugar donde la señora kirchner anunció su intención de candidatearse como presidenta este es el mismo sitio donde inició su campaña para el senado en el año 2005 en representación de la provincia de buenos aires",
+   "hyp": "El Teatro Argentino fue el lugar donde la señora Kirchner anunció su intención de candidatearse como presidenta. Este es el mismo sitio donde inició su campaña para el Senado en el año 2005, en representación de la provincia de Buenos Aires."
+  },
+  {
+   "lang": "es_419",
+   "id": "3777472212583941115",
+   "duration_s": 12.54,
+   "latency_s": 10.66968188899773,
+   "rtf": 0.8508518252789259,
+   "ref": "había quienes compartían su teoría pero muchos otros creían lo opuesto que el sistema solar orbitaba a la tierra incluso el sol y otras estrellas",
+   "hyp": "Había quienes compartían su teoría, pero muchos otros creían lo opuesto, que el sistema solar orbitaba la Tierra, incluso el Sol y otras estrellas."
+  },
+  {
+   "lang": "es_419",
+   "id": "390658848617539020",
+   "duration_s": 4.92,
+   "latency_s": 6.323597335001978,
+   "rtf": 1.2852840111792638,
+   "ref": "calificó de «habladuría política y boberías» a los rumores",
+   "hyp": "Calificó de habladoría política y boberías a los rumores."
+  },
+  {
+   "lang": "es_419",
+   "id": "4070026472312472246",
+   "duration_s": 11.94,
+   "latency_s": 6.746175386993855,
+   "rtf": 0.5650063138185808,
+   "ref": "durante los cruceros por san petersburgo también se pasa tiempo en la ciudad. se exime a quienes desembarcan de los requerimientos de visado consulte términos",
+   "hyp": "Durante los cruceros por San Petersburgo también se pasa tiempo en la ciudad. Se exime a quienes desembarcan de los requerimientos de visado. Consulte términos."
+  },
+  {
+   "lang": "es_419",
+   "id": "4527239571678132860",
+   "duration_s": 11.64,
+   "latency_s": 6.946131905999209,
+   "rtf": 0.5967467273195197,
+   "ref": "por otra parte en muchos países las condiciones de hielo y nieve son normales y el tránsito fluye casi sin ninguna interrupción durante todo el año",
+   "hyp": "Por otra parte, en muchos países las condiciones de hielo y nieve son normales y el tránsito fluye casi sin ninguna interrupción durante todo el año."
+  },
+  {
+   "lang": "es_419",
+   "id": "474599746249748314",
+   "duration_s": 13.26,
+   "latency_s": 6.945429520004836,
+   "rtf": 0.5237880482658248,
+   "ref": "la existencia de un real «equipo invisible» larson y lafasto 1989 p. 109 constituye también un elemento exclusivo de los equipos virtuales",
+   "hyp": "La existencia de un real equipo invisible, Larson y Lafasto 1989-P109 constituye también un elemento exclusivo de los equipos virtuales."
+  },
+  {
+   "lang": "es_419",
+   "id": "4751494800967889112",
+   "duration_s": 10.98,
+   "latency_s": 8.930699479002215,
+   "rtf": 0.8133606082879976,
+   "ref": "utilizar buques para transportar bienes es un modo mucho más eficaz para trasladar grandes números de personas y bienes por los océanos",
+   "hyp": "Utilizar buques para transportar bienes es un modo mucho más eficaz para trasladar grandes números de personas y bienes por los océanos."
+  },
+  {
+   "lang": "es_419",
+   "id": "4958404299087648193",
+   "duration_s": 21.78,
+   "latency_s": 9.4262609360012,
+   "rtf": 0.43279434967865926,
+   "ref": "dado que el plumaje de los dinosaurios no tiene un eje bien desarrollado denominado raquis pero sí presenta otros rasgos de las plumas cerdas y bárbulas los investigadores llegaron a la conclusión de que es probable que el raquis sea el resultado de un desarrollo evolutivo posterior de estas otras características",
+   "hyp": "Dado que el plumaje de los dinosaurios no tiene un eje bien desarrollado, denominado raquis, pero sí presenta otros rasgos de las plumas, cerdas y bárbulas, los investigadores llegaron a la conclusión de que es probable que el raquis sea el resultado de un desarrollo evolutivo posterior de estas otras características."
+  },
+  {
+   "lang": "es_419",
+   "id": "5034420564558675778",
+   "duration_s": 9.6,
+   "latency_s": 7.307273168000393,
+   "rtf": 0.7611742883333743,
+   "ref": "esto permitirá a los jugadores controlar las acciones y los movimientos en los videojuegos a través del movimiento del dispositivo por el aire",
+   "hyp": "Esto permitirá a los jugadores controlar las acciones y los movimientos en los videojuegos a través de movimientos del dispositivo por el aire."
+  },
+  {
+   "lang": "es_419",
+   "id": "5381181891707754856",
+   "duration_s": 8.58,
+   "latency_s": 6.597754668997368,
+   "rtf": 0.7689690756407188,
+   "ref": "madagascar es por mucho la más grande y un continente en sí mismo si hablamos de vida silvestre",
+   "hyp": "Madagascar es, por mucho, la más grande y un continente en sí mismo si hablamos de vida silvestre."
+  },
+  {
+   "lang": "es_419",
+   "id": "5609627843104855024",
+   "duration_s": 9.78,
+   "latency_s": 6.700508698995691,
+   "rtf": 0.6851235888543652,
+   "ref": "giancarlo fisichella no logró mantener el control del vehículo y abandonó la carrera poco después de inciarse",
+   "hyp": "Giancarlo Fisichella no logró mantener el control del vehículo y abandonó la carrera poco después de iniciarse."
+  },
+  {
+   "lang": "es_419",
+   "id": "5740978159715084423",
+   "duration_s": 14.4,
+   "latency_s": 6.677189310001268,
+   "rtf": 0.46369370208342137,
+   "ref": "a través de los trabajos de investigación del siglo xx se ha demostrado que existen dos grupos de variación genética la oculta y la manifiesta",
+   "hyp": "A través de los trabajos de investigación del siglo XX, se ha demostrado que existen dos grupos de variación genética, la oculta y la manifiesta."
+  },
+  {
+   "lang": "es_419",
+   "id": "5976712425457562576",
+   "duration_s": 11.16,
+   "latency_s": 6.5639682300025015,
+   "rtf": 0.5881691962367833,
+   "ref": "viajaron de vuelta hacia parís en un carruaje rodeados por una muchedumbre que gritaban y lanzaban amenazas contra el rey y la reina",
+   "hyp": "Viajaron de vuelta hacia París en un carruaje rodeados por una muchedumbre que gritaban y lanzaban amenazas contra el rey y la reina."
+  },
+  {
+   "lang": "es_419",
+   "id": "6171743170016952961",
+   "duration_s": 12.36,
+   "latency_s": 6.448716913997487,
+   "rtf": 0.5217408506470459,
+   "ref": "la antigua china tenía una forma única de delimitar los diferentes períodos de tiempo cada etapa o cada familia en el poder constituía una dinastía distinta",
+   "hyp": "La antigua China tenía una forma única de limitar los diferentes periodos de tiempo. Cada etapa o cada familia en el poder constituía una dinastía distinta."
+  },
+  {
+   "lang": "es_419",
+   "id": "6340250924583511252",
+   "duration_s": 9.72,
+   "latency_s": 6.422086794998904,
+   "rtf": 0.6607085180040024,
+   "ref": "el chocolate caliente está a la altura de los estándares belgas los jugos frutales son costosos pero deliciosos",
+   "hyp": "El chocolate caliente está a la altura de los estándares belgas. Los jugos frutales son costosos pero deliciosos."
+  },
+  {
+   "lang": "es_419",
+   "id": "6847406695027849601",
+   "duration_s": 11.34,
+   "latency_s": 6.5689567389999866,
+   "rtf": 0.5792730810405632,
+   "ref": "el valor de la libra de las malvinas fkp moneda oficial de las islas malvinas se fija en equivalencia con la británica gbp",
+   "hyp": "El valor de la libra de las Malvinas, FKP, moneda oficial de las Hildas Malvinas, se fica en equivalencia con la británica, GBP."
+  },
+  {
+   "lang": "es_419",
+   "id": "6875195738294889186",
+   "duration_s": 8.4,
+   "latency_s": 6.261806214999524,
+   "rtf": 0.7454531208332766,
+   "ref": "además lakkha singh interpretó el chhappan bhog bhajan junto al cantante raju khandekwak",
+   "hyp": "Además, Laka Singh interpretó el chapán Bok Bajan junto al cantante Rahu Kandewahak."
+  },
+  {
+   "lang": "es_419",
+   "id": "6902370161333835248",
+   "duration_s": 17.88,
+   "latency_s": 6.6994141199975275,
+   "rtf": 0.37468759060388857,
+   "ref": "los sundarbans han sido desde 1966 un templo de la vida silvestre y se calcula que en la actualidad existen en el área 400 tigres reales de bengala y unos 30 000 ciervos moteados",
+   "hyp": "Los Sundarbans han sido desde 1966 un templo de la vida silvestre y se calcula que en la actualidad existen en el área 400 tigres reales de Bengala y unos 30.000 ciervos moteados."
+  },
+  {
+   "lang": "es_419",
+   "id": "7146333384431214176",
+   "duration_s": 16.08,
+   "latency_s": 6.689618292999512,
+   "rtf": 0.41602103812186025,
+   "ref": "no ha un criterio universal que determine cuándo un bien manufacturado puede ser considerado una antigüedad algunas agencias impositivas tienen establecido que los objetos de más de 100 años son antigüedades",
+   "hyp": "No a un criterio universal que determine cuánto un bien manufacturado puede ser considerado una antigüedad. Algunas agencias impositivas tienen establecido que los objetos de más de 100 años son antigüedades."
+  },
+  {
+   "lang": "es_419",
+   "id": "7488282182587039571",
+   "duration_s": 14.64,
+   "latency_s": 6.615308002998063,
+   "rtf": 0.45186530075123377,
+   "ref": "en definitiva no debería causarnos sorpresa si nuestros propios predecesores resolvían sus «problemas proteicos» del mismo modo que los chimpancés de la sabana en la actualidad",
+   "hyp": "En definitiva, no debería causarnos sorpresa si nuestros propios predecesores resolvían sus problemas proteicos del mismo modo que los chimpancés de la sabana en la actualidad."
+  },
+  {
+   "lang": "es_419",
+   "id": "766604074917145576",
+   "duration_s": 13.98,
+   "latency_s": 6.66110376999859,
+   "rtf": 0.476473803290314,
+   "ref": "durante la guerra de la revolución los trece estados formaron en un principio un gobierno central endeble bajo los artículos de la confederación en el que el congreso era su único componente",
+   "hyp": "Durante la Guerra de la Revolución, los tres estados formaron en un principio un gobierno central endeble bajo los artículos de la Confederación, en el que el Congreso era su único componente."
+  },
+  {
+   "lang": "es_419",
+   "id": "774828516090275533",
+   "duration_s": 11.4,
+   "latency_s": 7.02999883099983,
+   "rtf": 0.6166665641227921,
+   "ref": "tanto los seis rehenes entre los que había niños y ancianos como los fotógrafos filipinos fueron puestos en libertad temprano",
+   "hyp": "Tanto los seis rehenes, entre los que había niños y ancianos, como los fotógrafos filipinos, fueron puestos en libertad temprano."
+  },
+  {
+   "lang": "es_419",
+   "id": "7760523833445968838",
+   "duration_s": 10.32,
+   "latency_s": 6.482236170995748,
+   "rtf": 0.6281236599802081,
+   "ref": "no mencionó una cifra para los recortes y manifestó que se harán en base a la producción económica de china",
+   "hyp": "No mencionó una cifra para los recortes y manifestó que se harán en base a la producción económica de China."
+  },
+  {
+   "lang": "es_419",
+   "id": "8127662055241826578",
+   "duration_s": 9.36,
+   "latency_s": 6.493059180997079,
+   "rtf": 0.6937029039526794,
+   "ref": "como consecuencia los artistas fuman cigarros de cannabis en el escenario y el espectáculo incentiva al público a hacer lo propio",
+   "hyp": "Como consecuencia, los artistas fuman cigarros de cannabis en el escenario y el espectáculo incentiva al público a hacer lo propio."
+  },
+  {
+   "lang": "es_419",
+   "id": "8158361799433662262",
+   "duration_s": 12.3,
+   "latency_s": 6.869662905999576,
+   "rtf": 0.558509179349559,
+   "ref": "cuanto más baja sea la tensión más positiva es la fuerza de la vida con la que contemos cada uno de nosotros tiene el potencial de hallar paz y dicha absolutas",
+   "hyp": "Cuanto más baja sea la tensión, más positiva es la fuerza de la vida con la que contemos. Cada uno de nosotros tiene el potencial de hallar paz y dicha absolutas."
+  },
+  {
+   "lang": "es_419",
+   "id": "8326437371264983390",
+   "duration_s": 14.04,
+   "latency_s": 6.846326273996965,
+   "rtf": 0.4876300764955104,
+   "ref": "según manifestara el superintendente de la policía chandra shekhar solanki los acusados se presentaron ante el tribunal con sus rostros cubiertos",
+   "hyp": "según manifestará el superintendente de la policía chandra checar solanqui los acusados se presentaron ante el tribunal con sus rostros cubiertos"
+  },
+  {
+   "lang": "es_419",
+   "id": "8819646103903238245",
+   "duration_s": 7.2,
+   "latency_s": 6.252507539000362,
+   "rtf": 0.8684038248611614,
+   "ref": "muchas personas no se los representan como dinosaurios ya que tienen plumas y pueden volar",
+   "hyp": "Muchas personas no se los representan como dinosaurios, ya que tienen plumas y pueden volar."
+  },
+  {
+   "lang": "es_419",
+   "id": "8837839114502556571",
+   "duration_s": 13.62,
+   "latency_s": 7.380444780996186,
+   "rtf": 0.5418828767251238,
+   "ref": "a lo largo de la década de 1920 la actitud adoptada por la mayor parte de los ciudadanos y de las naciones fue la del pacifismo y el aislamiento",
+   "hyp": "A lo largo de la década de 1920, la actitud adoptada por la mayor parte de los ciudadanos y de las naciones fue la del pacifismo y el aislamiento."
+  },
+  {
+   "lang": "es_419",
+   "id": "8839578123229730960",
+   "duration_s": 8.46,
+   "latency_s": 6.453813273998094,
+   "rtf": 0.7628620891250701,
+   "ref": "rolando mendoza abrió fuego con su m16 contra los visitantes extranjeros",
+   "hyp": "Rolando Mendoza abrió fuego con su M16 contra los visitantes extranjeros."
+  },
+  {
+   "lang": "es_419",
+   "id": "9225202353110344344",
+   "duration_s": 9.0,
+   "latency_s": 6.5443518289976055,
+   "rtf": 0.7271502032219561,
+   "ref": "liggins comenzó sus investigaciones sobre el parto prematuro en su tiempo libre mientras trabajaba en el hospital",
+   "hyp": "Liggins comenzó sus investigaciones sobre el parto prematuro en su tiempo libre mientras trabajaba en el hospital."
+  },
+  {
+   "lang": "es_419",
+   "id": "9516751341938527564",
+   "duration_s": 13.74,
+   "latency_s": 6.618732622999232,
+   "rtf": 0.4817127090974696,
+   "ref": "el del tigre no es un rugido plenamente sonoro como el del león sino antes bien como una oración de palabras dichas a gruñidos y a los gritos",
+   "hyp": "El del tigre no es un rugido plenamente sonoro como el del león, sino, antes bien, como una oración de palabras dichas en gruñidos y a los gritos."
+  },
+  {
+   "lang": "es_419",
+   "id": "9639243328889038995",
+   "duration_s": 12.06,
+   "latency_s": 6.670518530998379,
+   "rtf": 0.5531109893033481,
+   "ref": "cualquier persona que se proponga conducir en latitudes altas o en pasos de montañas debe prever la posibilidad de que haya nieve hielo o bajas temperaturas",
+   "hyp": "Cualquier persona que se ponga a conducir en latitudes altas o pasos de montañas debe prever la posibilidad de que haya nieve, hielo o bajas temperaturas."
+  },
+  {
+   "lang": "es_419",
+   "id": "985432162423317950",
+   "duration_s": 10.2,
+   "latency_s": 6.4538293090008665,
+   "rtf": 0.6327283636275359,
+   "ref": "el alimento de las plantas se genera con la energía solar gracias a la fotosíntesis además ellas nos ofrecen sombra",
+   "hyp": "El alimento de las plantas se genera con la energía solar gracias a la fotosíntesis. Además, ellas nos ofrecen sombra."
+  },
+  {
+   "lang": "es_419",
+   "id": "9996065938297907172",
+   "duration_s": 12.36,
+   "latency_s": 12.877570857002866,
+   "rtf": 1.041874664806057,
+   "ref": "en kundalini yoga la energía kundalini iluminación se activa con posiciones de yoga prácticas de respiración mantras o visualizaciones",
+   "hyp": "en kundalini yoga la energía kundalini iluminación se activa con posiciones de yoga prácticas de respiración mantras o visualizaciones"
+  },
+  {
+   "lang": "es_419",
+   "id": "1001146817223348054",
+   "duration_s": 12.84,
+   "latency_s": 6.665773543994874,
+   "rtf": 0.5191412417441491,
+   "ref": "se recomienda enfáticamente a los viajeros que se informen sobre cualquier riesgo de clima extremo en el área que visitan dado que ello puede afectar sus planes de viaje",
+   "hyp": "Se recomienda enfáticamente a los viajeros que se informen sobre cualquier riesgo del clima extremo en el área que visitan, dado que ello puede afectar sus planes de viaje."
+  },
+  {
+   "lang": "es_419",
+   "id": "10050510856477907332",
+   "duration_s": 21.36,
+   "latency_s": 7.132092892003129,
+   "rtf": 0.3338994799626933,
+   "ref": "el uso adecuado de los blogs «puede empoderar a los alumnos para que sean más analíticos y críticos a través de la respuesta activa a los contenidos de internet pueden definir sus posturas en el contexto de los escritos de otros además de establecer sus perspectivas sobre temas específicos» oravec 2002",
+   "hyp": "El uso adecuado de los blogs puede empoderar a los alumnos para que sean más analíticos y críticos a través de la respuesta activa a los contenidos de Internet. Pueden definir sus posturas en el contexto de los escritos de otros, además de establecer sus perspectivas sobre temas específicos. Horavec 2002"
+  },
+  {
+   "lang": "es_419",
+   "id": "1008205615316519958",
+   "duration_s": 9.72,
+   "latency_s": 6.355065007999656,
+   "rtf": 0.6538132724279481,
+   "ref": "fue tanta la cantidad de gente que se concentró que no todos pudieron acceder al funeral en la plaza de san pedro",
+   "hyp": "Fue tanta la cantidad de gente que se concentró que no todos pudieron acceder al funeral en la plaza de San Pedro."
+  },
+  {
+   "lang": "es_419",
+   "id": "10084850086754329587",
+   "duration_s": 8.58,
+   "latency_s": 6.327154905004136,
+   "rtf": 0.7374306416088736,
+   "ref": "esto parece tener sentido ya que en la tierra no se percibe su movimiento ¿cierto?",
+   "hyp": "Esto parece tener sentido, ya que en la tierra no se percibe su movimiento, ¿cierto?"
+  },
+  {
+   "lang": "es_419",
+   "id": "10107325335956726764",
+   "duration_s": 10.62,
+   "latency_s": 6.273888720003015,
+   "rtf": 0.5907616497177981,
+   "ref": "carpanedo participó en dos carreras individuales del campeonato aparte de la competencia del miércoles",
+   "hyp": "Carpaneo participó en dos carreras individuales del campeonato aparte de la competencia del miércoles."
+  },
+  {
+   "lang": "es_419",
+   "id": "1013662909103347734",
+   "duration_s": 9.78,
+   "latency_s": 6.568761174006795,
+   "rtf": 0.6716524717798359,
+   "ref": "hoy en día las personas escriben mensajes en las pantallas de sus computadoras no tienen la necesidad de siquiera aproximarse a un sacapuntas",
+   "hyp": "Hoy en día las personas escriben mensajes en las pantallas de sus computadoras, no tienen la necesidad de siquiera aproximarse a un sacapuntas."
+  },
+  {
+   "lang": "es_419",
+   "id": "10149016836336603986",
+   "duration_s": 5.64,
+   "latency_s": 6.094215324999823,
+   "rtf": 1.0805346320921672,
+   "ref": "los luchadores compañeros de luna también le rindieron homenaje",
+   "hyp": "Los luchadores compañeros de Luna también le rindieron homenaje."
+  },
+  {
+   "lang": "es_419",
+   "id": "10150624747569080019",
+   "duration_s": 10.26,
+   "latency_s": 6.676919621997513,
+   "rtf": 0.6507718929822137,
+   "ref": "duvall que está casado y tiene dos hijos adultos no causó una buena impresión a miller que fue a quien le relató la historia",
+   "hyp": "Duval, que está casado y tiene dos hijos adultos, no causó una buena impresión a Miller, que fue a quien le relató la historia."
+  },
+  {
+   "lang": "es_419",
+   "id": "10155332265364188477",
+   "duration_s": 10.68,
+   "latency_s": 6.507105279000825,
+   "rtf": 0.6092795205056952,
+   "ref": "entre los fenómenos climáticos regionales y estacionales extremos encontramos los ventarrones las tormentas de nieve hielo o polvo",
+   "hyp": "Entre los fenómenos climáticos regionales y estacionales extremos encontramos los ventarrones, las tormentas de nieve, hielo o polvo."
+  },
+  {
+   "lang": "es_419",
+   "id": "10192388533260519980",
+   "duration_s": 12.12,
+   "latency_s": 6.926887538997107,
+   "rtf": 0.5715253745047119,
+   "ref": "se puede definir a una civilización como una cultura específica de la que forma parte un extenso grupo de personas que viven y trabajan en conjunto es decir una sociedad",
+   "hyp": "se puede definir a una civilización como una cultura específica de que forma parte un extenso grupo de personas que viven y trabajan en conjunto es decir una sociedad"
+  },
+  {
+   "lang": "es_419",
+   "id": "10206659851013694932",
+   "duration_s": 12.18,
+   "latency_s": 6.734563732003153,
+   "rtf": 0.5529198466340848,
+   "ref": "las playas son casi todas de arena con lugares seguros para nadar y en su mayoría tienen árboles pohutukawa que ofrecen lugares de sombra",
+   "hyp": "Las playas son casi todas de arena con lugares seguros para nadar y en su mayoría tienen árboles Poutukawa que ofrecen lugares de sombra."
+  },
+  {
+   "lang": "es_419",
+   "id": "10234623649795772963",
+   "duration_s": 13.26,
+   "latency_s": 7.324286164002842,
+   "rtf": 0.5523594392159006,
+   "ref": "no se ha emitido ni se emitirá ninguna alerta de tsunami ya que según la agencia geofísica de yakarta el terremoto no alcanzó la magnitud de 6,5 exigida a tal fin",
+   "hyp": "No se ha emitido ni se emitirá ninguna alerta de tsunami, ya que según la Agencia Geofísica de Jakarta, el terremoto no alcanzó la magnitud de 6,5 exigida a tal fin."
+  },
+  {
+   "lang": "es_419",
+   "id": "10236991702517253859",
+   "duration_s": 7.68,
+   "latency_s": 6.969685664000281,
+   "rtf": 0.9075111541667032,
+   "ref": "no ha podido tomarse medicamentos para aliviar el dolor porque está prohibido su uso en los juegos",
+   "hyp": "No ha podido tomarse medicamentos para aliviar el dolor porque está prohibido su uso en los juegos."
+  },
+  {
+   "lang": "es_419",
+   "id": "10259154172012782402",
+   "duration_s": 12.54,
+   "latency_s": 6.751312609005254,
+   "rtf": 0.5383821857260969,
+   "ref": "agregó: «aun así no es correcto exigirles que asuman obligaciones que sobrepasan su fase de desarrollo su nivel de responsabilidad y sus capacidades»",
+   "hyp": "Agregó, aún así no es correcto exigirles que asuman obligaciones que sobrepasan su fase de desarrollo, su nivel de responsabilidad y sus capacidades."
+  },
+  {
+   "lang": "es_419",
+   "id": "10286137499198568147",
+   "duration_s": 12.0,
+   "latency_s": 7.422627783002099,
+   "rtf": 0.618552315250175,
+   "ref": "las 25 fotografías de dunlap que se sabe que aún existen son las copias más antiguas conservadas del documento el manuscrito original se ha perdido",
+   "hyp": "las 25 fotografías de dunla que se sabe que aún existen son las copias más antiguas conservadas del documento el manuscrito original se ha perdido"
+  },
+  {
+   "lang": "es_419",
+   "id": "10292824205703786391",
+   "duration_s": 7.92,
+   "latency_s": 6.777316082996549,
+   "rtf": 0.8557217276510795,
+   "ref": "la superficie de la luna se compone de rocas y polvo y su capa exterior se denomina corteza",
+   "hyp": "La superficie de la luna se compone de rocas y polvo y su capa exterior se denomina corteza."
+  },
+  {
+   "lang": "es_419",
+   "id": "10312331453126623791",
+   "duration_s": 10.32,
+   "latency_s": 6.981290857002023,
+   "rtf": 0.6764816721901185,
+   "ref": "el color del jugo de repollo se verá alterado en función de cuán ácida o básica alcalina sea la sustancia química",
+   "hyp": "El color del jugo de repollo se verá alterado en función de cuan ácida o básica alcalina sea la sustancia química."
+  },
+  {
+   "lang": "es_419",
+   "id": "10315904723874737458",
+   "duration_s": 11.34,
+   "latency_s": 6.667894943006104,
+   "rtf": 0.5879977903885453,
+   "ref": "este sedimento era necesario para la formación de bancos de arena y playas las que a su vez funcionaban como hábitats para la vida silvestre",
+   "hyp": "Este sedimento era necesario para la formación de bancos de arena y playas las que a su vez funcionaban como hábitats para la vida silvestre."
+  },
+  {
+   "lang": "es_419",
+   "id": "10326364514449199568",
+   "duration_s": 14.4,
+   "latency_s": 6.649606564998976,
+   "rtf": 0.46177823368048443,
+   "ref": "las críticas de los liberales en relación a los trabajos de restauración tienen su foco en el hecho de que se han adjudicado contratos de reconstrucción a personas que al parecer son funcionarios de washington",
+   "hyp": "Las críticas de los liberales en relación a los trabajos de restauración tienen su foco en el hecho de que se han adjudicado contratos de reconstrucción a personas que, al parecer, son funcionarios de Washington."
+  },
+  {
+   "lang": "es_419",
+   "id": "10333693975325005728",
+   "duration_s": 14.88,
+   "latency_s": 6.5475786500028335,
+   "rtf": 0.44002544690879253,
+   "ref": "el 15 de agosto de 1940 se desplegó la denominada «operación dragón» a través de la cual los aliados invadieron el sur de francia",
+   "hyp": "El 15 de agosto de 1940 se desplegó la denominada Operación Dragón, a través de la cual los aliados invadieron el sur de Francia."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10926529561499706520",
+   "duration_s": 12.24,
+   "latency_s": 6.472384918000898,
+   "rtf": 0.5287896174837335,
+   "ref": "les plantes revêtent leur plus belle apparence lorsqu'elles se trouvent dans un environnement naturel alors résistez à la tentation d'en retirer ne serait-ce qu'« une seule »",
+   "hyp": "Les plantes revêtent leurs plus belles apparences lorsqu'elles se trouvent dans un environnement naturel, alors résister à la tentation d'en retirer ne serait-ce qu'une seule."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "11459739058484338122",
+   "duration_s": 4.2,
+   "latency_s": 6.15979547000461,
+   "rtf": 1.4666179690487167,
+   "ref": "rolando mendoza tira avec son fusil m16 sur les touristes",
+   "hyp": "Rolando Mendoza tire avec son fusil M16 sur les touristes."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "11535401847300751607",
+   "duration_s": 8.22,
+   "latency_s": 6.469747499999357,
+   "rtf": 0.7870739051094108,
+   "ref": "si vous voulez participer de près à l'événement musical vous allez devoir arriver tôt pour trouver un aire de camping bien placée",
+   "hyp": "Si vous voulez participer de près à l'événement musical, vous allez devoir arriver tôt pour trouver une aire de camping bien placée."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "11578776386501968433",
+   "duration_s": 11.04,
+   "latency_s": 6.358242388996587,
+   "rtf": 0.5759277526265024,
+   "ref": "si vous voulez participer de près à l'événement musical vous allez devoir arriver tôt pour trouver un aire de camping bien placée",
+   "hyp": "Si vous voulez participer de près à l'événement musical, vous allez devoir arriver tôt pour trouver un air de camping bien placé."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "11608262059921773552",
+   "duration_s": 14.58,
+   "latency_s": 6.64503923299344,
+   "rtf": 0.455764007749893,
+   "ref": "ils ont des pattes recouvertes d'écailles et pourvues de griffes ils pondent des œufs et marchent sur leurs deux pattes arrière comme des t-rex",
+   "hyp": "Ils ont des pattes recouvertes d'écailles et pourvues de griffes. Ils pondent des œufs et marchent sur leurs deux pattes arrière comme des T-rex."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "11910542683193923576",
+   "duration_s": 11.52,
+   "latency_s": 6.2859793759998865,
+   "rtf": 0.5456579319444346,
+   "ref": "en 1990 il a été ajouté à la liste des sites du patrimoine mondial en danger en raison de la menace des sables du désert",
+   "hyp": "En 1990, il a été ajouté à la liste des sites du patrimoine mondial en danger en raison de la menace des sables du désert."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "11926538826833635593",
+   "duration_s": 6.36,
+   "latency_s": 6.470226656994782,
+   "rtf": 1.017331235376538,
+   "ref": "il semble que les chèvres aient été domestiquées pour la première fois il y a environ 10 000 ans dans les monts zagros en iran",
+   "hyp": "Il semble que les chèvres aient été domestiquées pour la première fois il y a environ 10 millions dans les monts Zagros en Iran."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "12140928166693713243",
+   "duration_s": 13.2,
+   "latency_s": 6.840459971004748,
+   "rtf": 0.5182166644700567,
+   "ref": "selon certaines sources il aurait une vingtaine d'années. dans une déclaration bieber a déclaré : « bien que je n'aie pas été présent ni directement impliqué dans ce tragique accident mes pensées et prières vont à la famille de la victime. »",
+   "hyp": "Selon certaines sources, il aurait une vingtaine d'années dans la déclaration. Bieber a déclaré, bien que je n'ai pas été présent ni directement appliqué dans ce tragique accident, mes pensées et prières vont à la famille de la victime."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "12405478354284816354",
+   "duration_s": 14.88,
+   "latency_s": 6.755168566000066,
+   "rtf": 0.4539763821236603,
+   "ref": "de manière générale deux comportements peuvent émerger lorsqu'un manager devient le chef d'anciens collègues. d'une des extrémités du spectre étant d'essayer de rester « le bon copain » ou la bonne copine",
+   "hyp": "De manière générale, deux comportements peuvent émerger lorsqu'un manager devient le chef d'ancien collègue, d'une des extrémités du spectre étant d'essayer de rester le bon copain ou la bonne copine."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "12463754265383123135",
+   "duration_s": 11.88,
+   "latency_s": 6.437979651003843,
+   "rtf": 0.5419174790407275,
+   "ref": "sundarbans est une réserve naturelle depuis 1966 vous pourrez y trouver environ 400 tigres du bengale royal et 30 000 cerfs tachetés",
+   "hyp": "Sundarban est une réserve naturelle depuis 1966. Vous pourrez y trouver environ 4 centigres du Mengal royal et 30 000 serres d'acheter."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "12633304872623476128",
+   "duration_s": 9.9,
+   "latency_s": 6.418038303992944,
+   "rtf": 0.6482866973730246,
+   "ref": "ils proposent généralement des offres spéciales de plats de boissons et de divertissements afin de maintenir la bonne humeur des invités et de les garder sur place",
+   "hyp": "Il propose généralement des offres spéciales de plats, de boissons et de divertissement afin de maintenir la bonne humeur des invités et de les garder sur place."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "12665665908349525355",
+   "duration_s": 11.88,
+   "latency_s": 6.604477872999269,
+   "rtf": 0.5559324808921943,
+   "ref": "il a ajouté qu’« on ne devrait cependant pas leur demander d’assumer des obligations qui dépassent leur stade de développement leur responsabilité et leurs capacités. »",
+   "hyp": "Il a ajouté qu'on ne devrait cependant pas leur demander d'assumer les obligations qui dépassent leur stade de développement, leurs responsabilités et leurs capacités."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "12890960815994116340",
+   "duration_s": 7.8,
+   "latency_s": 6.395645354998123,
+   "rtf": 0.8199545326920671,
+   "ref": "mélangez les deux poudres sèches ensemble puis avec les mains propres et humides pressez-les en une boule",
+   "hyp": "Mélangez les deux poudres sèches ensemble, puis avec les mains propres et humides, pressez-les en boule."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "12967038529338577015",
+   "duration_s": 6.78,
+   "latency_s": 6.401518850994762,
+   "rtf": 0.9441768216806433,
+   "ref": "c'est une bonne occasion d'admirer les aurores boréales car le ciel sera sombre pratiquement toute la journée",
+   "hyp": "C'est une bonne occasion d'admirer les aurores montréales, car le ciel sera sombre pratiquement toute la journée."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "12973911616708848830",
+   "duration_s": 11.16,
+   "latency_s": 6.9405513610036,
+   "rtf": 0.6219132043910035,
+   "ref": "le temps violent est le terme générique pour tout phénomène météorologique dangereux susceptible de causer des dommages de graves bouleversements sociaux ou la perte de vies humaines",
+   "hyp": "L'étang violent est le terme générique pour tout phénomène météorologique dangereux susceptible de causer des dommages, de graves bouleversements sociaux ou la perte de vie humaine."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "13095390120646560022",
+   "duration_s": 12.66,
+   "latency_s": 7.383585067997046,
+   "rtf": 0.5832215693520574,
+   "ref": "ses longues mâchoires étaient dotées de plus de 70 dents acérées comme des lames de rasoir ainsi que d'une série supplémentaire de dents dans le palais de sorte que tout ce qui croisait son chemin ne pouvait pas s'échapper",
+   "hyp": "Ces longues mâchoires étaient dotées de plus de 70 dents acérées comme des lames de rasoir, ainsi que d'une série supplémentaire de dents dans le palais, de sorte que tous ceux qui croisaient son chemin ne pouvaient pas s'échapper."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "13180411801339872252",
+   "duration_s": 4.32,
+   "latency_s": 6.379891968994343,
+   "rtf": 1.4768268446746164,
+   "ref": "de grandes zones plus au nord sont assez peu peuplées et certaines sont presque inhabitées à l'état sauvage",
+   "hyp": "Les grandes zones plus au nord sont assez peuplées et certaines sont presque inhabitées à l'état sauvage."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "13197448347303456627",
+   "duration_s": 8.88,
+   "latency_s": 6.701444369995443,
+   "rtf": 0.7546671587832705,
+   "ref": "la monnaie officielle des îles malouines est la livre des îles malouines fkp dont la valeur est équivalente à une livre sterling gbp",
+   "hyp": "La monnaie officielle des îles Van Wynne est la livre des îles Van Wynne, FKP, dont la valeur est équivalente à un livre sterling, GBP."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "1342051868789643204",
+   "duration_s": 11.76,
+   "latency_s": 6.707910562996403,
+   "rtf": 0.5704005580779254,
+   "ref": "en réalité ce n'est pas facile du tout à trouver même si on sait que ça existe quand on est entré dans la grotte on est complètement isolé",
+   "hyp": "ce n'est pas facile du tout à trouver, même si on sait que ça existe. Quand on est entré dans la grotte, on est complètement isolé."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "13896536575165455334",
+   "duration_s": 9.96,
+   "latency_s": 6.1809079949962324,
+   "rtf": 0.6205730918670915,
+   "ref": "les scènes sont affichées sur les pyramides et les différentes pyramides sont éclairées",
+   "hyp": "Les scènes sont affichées sur des pyramides et les différentes pyramides sont éclairées."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "14133596223444314003",
+   "duration_s": 9.9,
+   "latency_s": 6.877046982001048,
+   "rtf": 0.6946512103031361,
+   "ref": "l'autorité centrale de l'église était à rome depuis plus de 1000 ans et cette concentration de pouvoir et d'argent a conduit beaucoup de gens à se demander si cette doctrine était respectée",
+   "hyp": "L'autorité centrale de l'église était à Rome depuis plus de mille ans, et cette concentration de pouvoir et d'argent a conduit beaucoup de gens à se demander si cette doctrine était respectée."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "14540129547604519203",
+   "duration_s": 11.52,
+   "latency_s": 6.981188457000826,
+   "rtf": 0.6060059424479884,
+   "ref": "le sultan marocain a reconstruit la ville sous le nom de daru l-badya et elle a été rebaptisée casablanca par les commerçants espagnols qui y ont établi des comptoirs de négoce",
+   "hyp": "Le sultan marocain a reconstruit la ville sous le nom de Dal Baida. Elle a été rebaptisée Casablanca par les commerçants espagnols qui sont établis des comptoirs de négoces."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "14618981846381401339",
+   "duration_s": 4.56,
+   "latency_s": 6.125815776998934,
+   "rtf": 1.3433806528506436,
+   "ref": "rolando mendoza tira avec son fusil m16 sur les touristes",
+   "hyp": "Roland en Mendoza tira avec son fusil MCL sur les touristes."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "14633128401110149114",
+   "duration_s": 9.42,
+   "latency_s": 6.879737030998513,
+   "rtf": 0.7303330181527083,
+   "ref": "il existe bien évidemment des explications théologiques chrétiennes pour cette tradition mais il se pourrait bien qu'il s'agisse d'un rituel préchrétien de printemps et de fertilité",
+   "hyp": "Il existe bien évidemment des explications théologiques chrétiennes pour ces traditions, mais il se pourrait bien qu'il s'agisse d'un rituel pré-chrétien de printemps et de fertilité."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "14659207784102135463",
+   "duration_s": 9.72,
+   "latency_s": 6.335175144005916,
+   "rtf": 0.6517669901240654,
+   "ref": "les plantes produisent leur nourriture à l'aide du soleil par photosynthèse elles fournissent également de l'ombre",
+   "hyp": "Les plantes produisent leur nourriture à l'aide du soleil par photosynthèse. Elles fournissent également de l'ombre."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "14878083544049672174",
+   "duration_s": 14.34,
+   "latency_s": 6.580451264002477,
+   "rtf": 0.4588878147839942,
+   "ref": "la monnaie officielle des îles malouines est la livre des îles malouines fkp dont la valeur est équivalente à une livre sterling gbp",
+   "hyp": "La journée officielle des îles Malouines est la livre des îles Malouines, FKP, dont la valeur est équivalente à une livre sterling, GBP."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "15406143425379165453",
+   "duration_s": 15.96,
+   "latency_s": 7.146307741997589,
+   "rtf": 0.44776364298230503,
+   "ref": "les trois royaumes ont été l'une des époques les plus sanguinaires de l'histoire de l'antiquité chinoise des milliers de personnes sont mort au combat pour s'asseoir sur le trône du grand palais de xi'an",
+   "hyp": "Les trois royaumes ont été l'une des époques les plus sanguinaires de l'histoire de l'antiquité chinoise. Des milliers de personnes sont morts au combat pour s'asseoir sur le trône du grand palais de Xi'an."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "15515639463532216702",
+   "duration_s": 10.38,
+   "latency_s": 6.526335663002101,
+   "rtf": 0.6287413933528035,
+   "ref": "deux ans après la fin de la guerre les anciens alliés sont devenus des ennemis et la guerre froide a commencé",
+   "hyp": "Deux ans après la fin de la guerre, les anciens alliés sont devenus des ennemis, et la guerre froide a commencé."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "15829686047046406376",
+   "duration_s": 10.68,
+   "latency_s": 6.4025244590011425,
+   "rtf": 0.599487308895238,
+   "ref": "la ville contraste fortement avec les cités du reste du pays car elle possède un style davantage arabe qu'africain",
+   "hyp": "La ville contraste fortement avec les cités du reste du pays car elle possède un style davantage arabe qu'africain."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "15942080413960253441",
+   "duration_s": 8.46,
+   "latency_s": 6.710917801996402,
+   "rtf": 0.7932526952714423,
+   "ref": "tout le monde fait partie de la société et utilise les systèmes de transport quasiment tout le monde se plaint des systèmes de transport",
+   "hyp": "Tout le monde fait partie de la société et utilise des systèmes de transport. Quasiment tout le monde se plaint des systèmes de transport."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "159570134205138238",
+   "duration_s": 10.5,
+   "latency_s": 7.040094903000863,
+   "rtf": 0.6704852288572251,
+   "ref": "dans le langage courant, le terme « safari » désigne une excursion sur la terre africaine, et en particulier dans la savane, ayant pour but d'assister au spectacle saisissant des animaux sauvages dans leur milieu",
+   "hyp": "Dans le langage courant, le terme safari désigne une excursion sur la terre africaine, en particulier dans la savane, ayant pour but d'assister au spectacle saisissant des animaux sauvages dans leur milieu."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "15965663042773849844",
+   "duration_s": 12.3,
+   "latency_s": 6.966249898003298,
+   "rtf": 0.5663617803254714,
+   "ref": "il s'agit du lieu que les colons britannique ont investit ainsi cela me semble être un bon point de départ si vous recherchez des preuves du passé colonial de cette région",
+   "hyp": "Il s'agit du lieu que les colons britanniques ont investi. Ainsi, cela me semble être un bon point de départ si vous recherchez des preuves du passé colonial de cette région."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "15966981972274576354",
+   "duration_s": 11.4,
+   "latency_s": 6.6868050069970195,
+   "rtf": 0.5865618427190368,
+   "ref": "en raison de la topologie sous-marine le flux de retour est concentré sur quelques sections plus profondes et un courant rapide vers les eaux profondes peut s'y former",
+   "hyp": "En raison de la topologie sous-marine, le flux de retour est concentré sur quelques sections plus profondes et un courant rapide vers les eaux profondes peut s'y former."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "16025007967772953193",
+   "duration_s": 13.32,
+   "latency_s": 6.522817098993983,
+   "rtf": 0.48970098340795665,
+   "ref": "par exemple le format de photographie le plus courant au monde est le 35 mm c'était le format de pellicule le plus répandu à la fin de l'ère des films analogiques",
+   "hyp": "Par exemple, le format de photographie le plus courant au monde est le 35 mm. C'était le format de véhicule le plus répandu à la fin de l'ère des films analogiques."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "16105464976014698311",
+   "duration_s": 11.46,
+   "latency_s": 6.63024926000071,
+   "rtf": 0.5785557818499747,
+   "ref": "en à peine deux semaines les américains et les forces de la france libre avaient libéré le sud de la france et se dirigeaient vers l'allemagne",
+   "hyp": "En à peine deux semaines, les Américains et les forces de la France libre avaient libéré le sud de la France et se dirigeaient vers l'Allemagne."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "16167619111508898566",
+   "duration_s": 9.84,
+   "latency_s": 6.775528676997055,
+   "rtf": 0.6885699874997008,
+   "ref": "les excursions font partie intégrante de n'importe quelle classe d'école bien souvent un enseignant aimerait emmener ses élèves dans des endroits où un voyage en bus n'est pas envisageable",
+   "hyp": "Les excursions font partie intégrante de n'importe quelle classe d'école. Bien souvent, un enseignant aimerait emmener ses élèves dans des endroits où un voyage en bus n'est pas envisageable."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "16596041856027581235",
+   "duration_s": 5.22,
+   "latency_s": 6.2994152560058865,
+   "rtf": 1.206784531801894,
+   "ref": "ne défigurez pas le site en marquant ou en grattant des graffitis sur les structures",
+   "hyp": "Ne défigurez pas le site en marquant ou en grattant les graffitis sur les structures."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "1699438851015035180",
+   "duration_s": 7.32,
+   "latency_s": 6.5927322849966,
+   "rtf": 0.9006464870213935,
+   "ref": "le mosasaure était le superprédateur de l'époque il ne craignait rien sauf les autres mosasaures",
+   "hyp": "Le mosasaur était le super prédateur de l'époque. Il ne craignait rien, sauf les autres mosasaur."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "17062694768095524607",
+   "duration_s": 9.66,
+   "latency_s": 6.874617685003614,
+   "rtf": 0.7116581454455086,
+   "ref": "la rangée d'immeubles qui dessine l'horizon de hong kong a été comparée à un graphique à barres scintillant qui se révèle par réflexion dans les eaux du port de victoria",
+   "hyp": "La rangée d'immeubles qui dessine l'horizon de Hong Kong a été comparée à un graphique à barre scintillant qui se révèle par réflexion dans les eaux du port de Victorien."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "17096997444655055340",
+   "duration_s": 7.92,
+   "latency_s": 6.065906543000892,
+   "rtf": 0.765897290782941,
+   "ref": "les autres lutteurs ont également rendu hommage à luna",
+   "hyp": "Les autres lutteurs ont également rendu hommage à Luna."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "17290753542296190049",
+   "duration_s": 11.64,
+   "latency_s": 6.445859846993699,
+   "rtf": 0.5537680280922421,
+   "ref": "vous pouvez également avoir recours aux conseils d'autres gouvernements que le vôtre mais leurs conseils sont adaptés à leurs citoyens",
+   "hyp": "Vous pouvez également avoir recours aux conseils d'autres gouvernements que le vôtre, mais leurs conseils sont adaptés à leurs citoyens."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "17338748029224301554",
+   "duration_s": 7.26,
+   "latency_s": 6.218504846998258,
+   "rtf": 0.8565433673551319,
+   "ref": "les opinions d'aristote sur toutes les questions scientifiques y compris la psychologie ont été acceptées",
+   "hyp": "Les opinions d'Aristote sur toutes les questions scientifiques, y compris la psychologie, ont été acceptées."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "17485305272918540300",
+   "duration_s": 5.76,
+   "latency_s": 6.19257363199722,
+   "rtf": 1.0750995888884063,
+   "ref": "il s'agit d'un excellent moyen de faire la distinction entre certains verbes et objets",
+   "hyp": "Il s'agit d'un excellent moyen de faire la distinction entre certains verbes et objets."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "17562643601014102283",
+   "duration_s": 9.6,
+   "latency_s": 6.696415778998926,
+   "rtf": 0.6975433103123881,
+   "ref": "chandra shekhar solanki commissaire de police a déclaré que les personnes accusées avaient le visage dissimulé lorsqu'elles ont comparu devant le tribunal",
+   "hyp": "Chandra Shekhar Solanki, commissaire de police, a déclaré que les personnes accusées avaient le visage dissimulé lorsqu'elles ont comparu devant le tribunal."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "18268464756755448881",
+   "duration_s": 9.78,
+   "latency_s": 7.229873588003102,
+   "rtf": 0.7392508781189266,
+   "ref": "son travail est d'une telle qualité et d'un tel niveau de détail qu'il est l'un des rares philatélistes bien connus du « grand public ». certains collectionneurs consacrent leur attention uniquement à ses œuvres",
+   "hyp": "Son travail est d'une telle qualité et d'un tel niveau de détail qu'il est l'un des rares philatélistes bien connus du grand public. Certains collectionneurs consacrent leur attention uniquement à ses œuvres."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "2129669181503498344",
+   "duration_s": 9.66,
+   "latency_s": 7.812842744999216,
+   "rtf": 0.8087828928570617,
+   "ref": "les scientifiques espèrent comprendre comment les planètes se forment et plus particulièrement comment la terre s'est formée puisque des comètes sont entrées en collision avec elle il y a longtemps",
+   "hyp": "Les scientifiques espèrent comprendre comment les planètes se forment, et plus particulièrement comment la Terre s'est formée, puisque des comètes sont entrées en collision avec elles il y a longtemps."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "2193266994982809183",
+   "duration_s": 11.16,
+   "latency_s": 7.309500085000764,
+   "rtf": 0.6549731258961258,
+   "ref": "même si un vaccin expérimental semble jusqu'ici capable de réduire le taux de mortalité d'ebola aucun remède n'a encore été suffisamment efficace pour traiter l'infection existante",
+   "hyp": "Même si un vaccin expérimental semble jusqu'ici capable de réduire le taux de mortalité d'Ebola, aucun remède n'a encore été suffisamment efficace pour traiter l'infection existante."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "2262832907340477841",
+   "duration_s": 12.48,
+   "latency_s": 7.015883804000623,
+   "rtf": 0.562170176602614,
+   "ref": "tout bien considéré nous ne devrions pas être surpris si nos propres ancêtres ont résolu leur « problème de protéines » un peu de la même manière que les chimpanzés de la savane le font aujourd'hui",
+   "hyp": "Tout bien considéré, nous ne devrions pas être surpris si nos propres ancêtres ont résolu leur problème de protéines un peu de la même manière que les chimpanzés de la savane le font aujourd'hui."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "2489052484783752",
+   "duration_s": 9.54,
+   "latency_s": 6.550210205001349,
+   "rtf": 0.6866048432915461,
+   "ref": "l'accident a eu lieu en terrain montagneux et il semblerait que cela ait été causé par un incendie malveillant",
+   "hyp": "L'accident a eu lieu en terrain montagneux, et il semblerait que cela ait été causé par un incendie malveillant."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "2582399872168648378",
+   "duration_s": 8.46,
+   "latency_s": 6.5499945459960145,
+   "rtf": 0.7742310338056754,
+   "ref": "en ce qui concerne les inversions magnétiques plus le nombre de rossby est petit moins l’étoile est active ",
+   "hyp": "En ce qui concerne les inversions magnétiques, plus le nombre de Rossby est petit, moins l'étoile est active."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "2614194409847247403",
+   "duration_s": 10.44,
+   "latency_s": 6.839184927994211,
+   "rtf": 0.6550943417618976,
+   "ref": "la sclérose en plaques est une maladie qui affecte le système nerveux central composé du cerveau de la moelle épinière et du nerf optique",
+   "hyp": "La sclérose en plaques est une maladie qui affecte le système nerveux central, composé du cerveau, de la moelle épinière et du nerf optique."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "2635745390982738628",
+   "duration_s": 10.8,
+   "latency_s": 6.564723456998763,
+   "rtf": 0.6078447645369225,
+   "ref": "apia est la capitale des samoa la ville se trouve sur l'île d'upolu et compte un peu moins de 40 000 habitants",
+   "hyp": "C'est la capitale des Samoa. La ville se trouve sur l'île du Pollu et compte un peu moins de 40 000 habitants."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "2761421994358578930",
+   "duration_s": 10.44,
+   "latency_s": 6.570265588001348,
+   "rtf": 0.6293357842913169,
+   "ref": "les gens écrivent maintenant des messages sur des écrans d'ordinateur sans jamais avoir à s'approcher d'un taille-crayon",
+   "hyp": "Les gens écrivent maintenant des messages sur des écrans d'ordinateur sans jamais avoir s'approché d'un taille crayon."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "301362794354255835",
+   "duration_s": 11.4,
+   "latency_s": 6.687339518000954,
+   "rtf": 0.5866087296492064,
+   "ref": "la bombe à fission fonctionne selon le principe suivant elle transforme l'énergie en assemblant un noyau d'une myriade de protons et neutrons",
+   "hyp": "La bombe à fission fonctionne selon le principe suivant. Elle transforme l'énergie en assemblant un noyau d'une myriane de protons et neutrons."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "306765481508614838",
+   "duration_s": 9.54,
+   "latency_s": 6.4359446600064985,
+   "rtf": 0.6746273228518342,
+   "ref": "internet allie des éléments de communication de masse et de communication interpersonnelle",
+   "hyp": "Internet allie des éléments de communication de masse et de communication interpersonnelle."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "3172268488349984843",
+   "duration_s": 10.98,
+   "latency_s": 6.8525854219988105,
+   "rtf": 0.6240970329689263,
+   "ref": "parmi les autres sujets à l'ordre du jour à bali figurent la sauvegarde des dernières forêts du monde et le partage des technologies pour aider les pays en développement à poursuivre leur croissance de manière moins polluante",
+   "hyp": "Parmi les autres sujets à l'ordre du jour, à Belgique, on a la sauvegarde des dernières forêts du monde et le partage des technologies pour aider les pays en développement à poursuivre leur croissance de manière moins polluante."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "4250135177909683858",
+   "duration_s": 14.4,
+   "latency_s": 6.82608226499724,
+   "rtf": 0.4740334906248083,
+   "ref": "avec le kundalini yoga l’énergie kundalini énergie d’illumination est éveillée par des postures de yoga des exercices de respiration des mantras et des visualisations",
+   "hyp": "Avec le Kundalini Yoga, l'énergie Kundalini, énergie d'illumination, est éveillée par des postures de yoga, des exercices de respiration, des mantras et des visualisations."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "4287078376450508512",
+   "duration_s": 10.08,
+   "latency_s": 7.09515700799966,
+   "rtf": 0.70388462380949,
+   "ref": "de même en ayant un visa schengen vous n'avez pas besoin de demander séparément un visa pour chacun des pays membres de l'espace ce qui permet d'économiser du temps de l'argent et des formalités administratives",
+   "hyp": "De même en ayant un visa Schengen, vous n'avez pas besoin de demander séparément un visa pour chacun des pays membres de l'espace, ce qui permet d'économiser du temps, de l'argent et des formalités administratives."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "5006611904539449806",
+   "duration_s": 9.6,
+   "latency_s": 6.934596769999189,
+   "rtf": 0.7223538302082488,
+   "ref": "elle était gouvernée par les français de vichy des français qui ont fait la paix avec les allemands en 1940 et ont collaboré avec l'occupant au lieu de l'affronter",
+   "hyp": "Elle était gouvernée par des Français de Vichy, des Français qui ont fait la paix avec les Allemands en 1940 et ont collaboré avec l'occupante au lieu de l'affronter."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "5161983009398441910",
+   "duration_s": 28.68,
+   "latency_s": 8.0533158909966,
+   "rtf": 0.28079901990922596,
+   "ref": "« leur comportement thermique n’est pas aussi stable que celui des grandes grottes de la planète qui maintiennent une température constante mais ils se ressemblent en ce qu’ils sont des trous profonds dans la terre » selon glen cushing membre de l’équipage de l'usgs centre américain d’études géologiques et du personnel de l’université d’arizona du nord situé à flagstaff en arizona",
+   "hyp": "Leur comportement thermique n'est pas aussi stable que celui des grandes grottes de la planète qui maintiennent une température constante, mais ils se ressemblent en ce qu'ils sont des trous profonds dans la Terre, selon Glenn Cushing, membre de l'équipage de l'USGS, Centre américain des études géologiques, et du personnel de l'Université d'Arizona du Nord situé à Flasgdaf en Arizona."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "5361698088925897487",
+   "duration_s": 9.54,
+   "latency_s": 6.393517382995924,
+   "rtf": 0.6701800191819628,
+   "ref": "on ne peut que se demander ce que le clavier deviendra quand la prochaine nouveauté arrivera",
+   "hyp": "On ne peut que se demander ce que le clavier deviendra quand la prochaine nouveauté arrivera."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "5451505813889356389",
+   "duration_s": 13.38,
+   "latency_s": 7.00782200100366,
+   "rtf": 0.5237535127805426,
+   "ref": "vallée de cochamó – la destination d'excellence pour l'escalade au chili connue comme le yosemite d'amérique du sud avec de nombreuses grandes parois et falaises granitiques différentes",
+   "hyp": "Vallée de Cochamo, la destination d'excellence pour l'escalade au Chili, connue comme le Yosemite d'Amérique du Sud, avec de nombreuses grandes parois et falaises granitiques différentes."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "6683860269372642470",
+   "duration_s": 9.18,
+   "latency_s": 7.143112651996489,
+   "rtf": 0.7781168466227113,
+   "ref": "certains pensaient qu’il avait raison mais beaucoup croyaient le contraire : que le système solaire se déplaçait autour de la terre y compris le soleil et même les autres étoiles",
+   "hyp": "Certains pensaient qu'il avait raison, mais beaucoup croyaient le contraire, que le système solaire se déplaçait autour de la Terre, y compris le Soleil et même les autres étoiles."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "7247907611588271766",
+   "duration_s": 10.62,
+   "latency_s": 6.692541202006396,
+   "rtf": 0.6301827873828999,
+   "ref": "la ville contraste fortement avec les cités du reste du pays car elle possède un style davantage arabe qu'africain",
+   "hyp": "La ville contraste fortement avec les cités du reste du pays car elle possède un style davantage arabe qu'africain."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "7357846053934988621",
+   "duration_s": 11.46,
+   "latency_s": 7.098521267995238,
+   "rtf": 0.6194172136121499,
+   "ref": "un dîner simple et populaire surtout en été est le pa amb oli du pain avec de l'huile d'olive de la tomate et tous les condiments disponibles tels que le fromage le thon etc",
+   "hyp": "Un dîner simple et populaire, surtout en été, est le pain au lit, du pain avec de l'huile d'olive, de la tomate et tous les condiments disponibles, tels que le fromage, le thon, etc."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "7659681453419536049",
+   "duration_s": 14.28,
+   "latency_s": 6.725525544003176,
+   "rtf": 0.47097517815148293,
+   "ref": "ces théories examinent ce qui pousse certaines personnes à vouloir les choses qu'elles font et ce qui dans leur environnement les pousse à faire ou à ne pas faire certaines choses",
+   "hyp": "Ces théories examinent ce qui pousse certaines personnes à vouloir les choses qu'elles font et ce qui, dans leur environnement, les pousse à faire ou à ne pas faire certaines choses."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "7788332643772392637",
+   "duration_s": 14.52,
+   "latency_s": 6.7889309500023955,
+   "rtf": 0.4675572279615975,
+   "ref": "une voiture piégée a explosé au siège de la police à gaziantep en turquie hier matin tuant deux officiers de police et blessant plus de vingt autres personnes",
+   "hyp": "Une voiture piégée a explosé au siège de la police à Gaziantep en Turquie hier matin, tuant deux officiers de police et baissant plus de 20 autres personnes."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "7989253100718399733",
+   "duration_s": 7.56,
+   "latency_s": 6.473141704002046,
+   "rtf": 0.8562356751325458,
+   "ref": "la surface de la lune est constituée de pierres et de poussière sa couche extérieure est appelée la croûte",
+   "hyp": "La surface de la Lune est constituée de pierres et de poussières. Sa couche extérieure est appelée la croûte."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "8091203245803134029",
+   "duration_s": 9.96,
+   "latency_s": 6.633377180995012,
+   "rtf": 0.6660017249994992,
+   "ref": "en 2002 goma a été détruite par la lave du volcan nyiragongo qui a enseveli la plupart des rues de la ville en particulier le centre-ville",
+   "hyp": "En 2002, Goma a été détruite par la lave du volcan Niragongo qui a enseveli la plupart des rues de la ville, en particulier le centre-ville."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "8484567143453075015",
+   "duration_s": 21.72,
+   "latency_s": 7.42982433099678,
+   "rtf": 0.34207294341605804,
+   "ref": "cinq minutes après le début de l'exposition un vent se met à souffler pour atteindre environ une minute plus tard la vitesse de 70km/h... puis la pluie arrive mais si forte et si grosse qu'elle frappe votre peau comme une aiguille puis la grêle tombe du ciel les gens paniquent crient et se roulent dessus",
+   "hyp": "Cinq minutes après le début de l'exposition, un vent se met à souffler pour atteindre, environ une minute plus tard, la vitesse de 70 km heure. Puis la pluie arrive, mais si forte et si grosse qu'elle frappe votre peau comme une aiguille. Puis la grêle tombe du ciel, les gens paniquent, crient et se roulent dessus."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "8777944623865547430",
+   "duration_s": 6.66,
+   "latency_s": 6.842215363001742,
+   "rtf": 1.0273596641143756,
+   "ref": "plusieurs grands écrans de télévision ont été installés à différents endroits à rome pour permettre aux gens de regarder la cérémonie",
+   "hyp": "Plusieurs grands écrans de télévision ont été installés à différents endroits à Rome pour permettre aux gens de regarder la cérémonie."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "8781467055035677912",
+   "duration_s": 7.2,
+   "latency_s": 6.455730264999147,
+   "rtf": 0.8966292034721037,
+   "ref": "le bureau de gestion des urgences des îles mariannes du nord a déclaré qu'aucun dégât n'avait été signalé dans ce pays",
+   "hyp": "Le bureau de gestion des urgences des îles Marianne du Nord a déclaré qu'aucun dégât n'avait été signalé dans ce pays."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "9118106854415790987",
+   "duration_s": 7.5,
+   "latency_s": 6.949892554999678,
+   "rtf": 0.9266523406666238,
+   "ref": "il s'agit de l'un des parcs d'attraction les plus connus en afrique du sud et considéré comme le fleuron des parcs nationaux sud-africains sanparks",
+   "hyp": "Il s'agit de l'un des parcs d'attraction les plus connus en Afrique du Sud et considéré comme le fleuron des parcs nationaux sud-africains."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "9182067139125495353",
+   "duration_s": 6.42,
+   "latency_s": 6.691006417997414,
+   "rtf": 1.0422128376943014,
+   "ref": "les alliages sont essentiellement un mélange de deux métaux ou plus n'oubliez pas que le tableau périodique comporte de nombreux éléments",
+   "hyp": "Les alliages sont essentiellement un mélange de deux métaux au plus. N'oubliez pas que le tableau périodique comporte de nombreux éléments."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "9248626926448529668",
+   "duration_s": 6.72,
+   "latency_s": 6.453392964998784,
+   "rtf": 0.9603263340772,
+   "ref": "il a ensuite été transféré au centre hospitalier addenbrooke's hospital de cambridge",
+   "hyp": "Il a ensuite été transféré au centre hospitalier à Danbrook Hospital de Cambridge."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "9532081055208767446",
+   "duration_s": 14.28,
+   "latency_s": 7.316184534000058,
+   "rtf": 0.5123378525210125,
+   "ref": "le débat a été déclenché par la controverse sur les dépenses liées aux secours et à la reconstruction à la suite de l'ouragan katrina ; ce que certains conservateurs en matière budgétaire ont appelé avec humour « l'accord bush pour la nouvelle-orléans »",
+   "hyp": "Le débat a été déclenché par la controverse sur les dépenses liées au secours et à la reconstruction à la suite de l'ouragan Katrina, ce que certains conservateurs en matière budgétaire ont appelé avec humour l'accord Bush pour la nouvelle ornée."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "976188642074609837",
+   "duration_s": 4.98,
+   "latency_s": 6.420189821001259,
+   "rtf": 1.2891947431729434,
+   "ref": "les scènes sont affichées sur les pyramides et les différentes pyramides sont éclairées",
+   "hyp": "Les scènes sont affichées sur les pyramides et les différentes pyramides sont éclairées."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "9893255812314318916",
+   "duration_s": 7.08,
+   "latency_s": 6.587775808002334,
+   "rtf": 0.9304768090398777,
+   "ref": "tout dans l'univers est fait de matière toute la matière est faite de minuscules particules appelées atomes",
+   "hyp": "Tout dans l'univers est fait de matière, toute la matière est faite de minuscules particules appelées atomes."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "9946857661334947968",
+   "duration_s": 8.82,
+   "latency_s": 6.516287806000037,
+   "rtf": 0.7388081412698454,
+   "ref": "initialement l'émission était uniquement diffusée sur le vénérable site de radio internet toginet radio un site consacré à la radio parlée",
+   "hyp": "Initialement, l'émission était uniquement diffusée sur le vénérable site de radio internet Tojinet Radio, un site consacré à la radio parlée."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "9984922725503397568",
+   "duration_s": 11.28,
+   "latency_s": 6.967781942003057,
+   "rtf": 0.6177111650711931,
+   "ref": "le spectacle son et lumière à la pyramide constitue l'une des attractions les plus intéressantes de la région pour les enfants",
+   "hyp": "Le spectacle Son et Lumière à la pyramide constitue l'une des attractions les plus intéressantes de la région pour les enfants."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10043298898524273336",
+   "duration_s": 10.2,
+   "latency_s": 6.401989169004082,
+   "rtf": 0.6276459969611846,
+   "ref": "l'accident a eu lieu en terrain montagneux et il semblerait que cela ait été causé par un incendie malveillant",
+   "hyp": "L'accident a eu lieu en terrain montagneux et il semblerait que cela ait été causé par un incendie malveillant."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10097171356371990207",
+   "duration_s": 23.4,
+   "latency_s": 8.320173020998482,
+   "rtf": 0.35556294961531976,
+   "ref": "nous sommes d'accord avec la déclaration de l'usoc comité olympique des états-unis selon laquelle les intérêts de nos athlètes et de nos clubs ainsi que de leur sport pourraient être mieux servis. cela peut être fait en allant de l'avant et en procédant plutôt à des changements significatifs au sein de notre organisation qu'à la révocation d'accréditation",
+   "hyp": "Nous sommes d'accord avec la déclaration de l'USOC, Comité Olympique des Etats-Unis, selon laquelle les intérêts de nos athlètes et de nos clubs, ainsi que de leur sport, pourraient être mieux servis. Cela peut être fait en allant de l'avant et en procédant plutôt à des changements significatifs au sein de notre organisation qu'à la révocation d'accréditation."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10138021779681596478",
+   "duration_s": 8.28,
+   "latency_s": 6.767631545000768,
+   "rtf": 0.8173468049517836,
+   "ref": "il a ajouté qu’« on ne devrait cependant pas leur demander d’assumer des obligations qui dépassent leur stade de développement leur responsabilité et leurs capacités. »",
+   "hyp": "Il a ajouté qu'on ne devrait cependant pas leur demander d'assumer des obligations qui dépassent leur stade de développement, leurs responsabilités et leurs capacités."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10143749263702132703",
+   "duration_s": 10.2,
+   "latency_s": 6.472883504997299,
+   "rtf": 0.6345964220585587,
+   "ref": "le rugissement du tigre ne ressemble pas au rugissement ample du lion mais plutôt à une phrase dont les mots seraient des cris et des grondements",
+   "hyp": "L'eurgissement du tigre ne ressemble pas au jugement en plus du liant, mais plutôt à une phrase dans les mots sur les écrits et des grondements."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10166091086920486572",
+   "duration_s": 8.34,
+   "latency_s": 6.558456013000978,
+   "rtf": 0.7863856130696616,
+   "ref": "le même mois un autre avion de ligne a fait une sortie de piste à mashhad et a heurté un mur tuant ainsi dix-sept personnes",
+   "hyp": "Le même mois, un autre avion de ligne a fait une sortie de piste à Machad et heurté un mur, tuant ainsi 17 personnes."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10174413140250646001",
+   "duration_s": 7.2,
+   "latency_s": 6.581218146005995,
+   "rtf": 0.9140580758341659,
+   "ref": "giancarlo fisichella a perdu le contrôle de sa voiture et a terminé la course peu après le démarrage",
+   "hyp": "Jean-Carlo Ficciela a perdu le contrôle de sa voiture et a terminé la course peu après le démarrage."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10221277978969763776",
+   "duration_s": 8.4,
+   "latency_s": 7.018910140999651,
+   "rtf": 0.8355845405951965,
+   "ref": "malgré le net avantage de del potro pendant le deuxième set il a fallu passer par un tie-break une fois que le score a atteint 6-6",
+   "hyp": "Malgré le net avantage de Del Potro pendant le deuxième set, il a fallu passer par un tie break une fois que le score atteint 6-6."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10334413597118469552",
+   "duration_s": 11.64,
+   "latency_s": 6.9802462340012426,
+   "rtf": 0.5996775115121342,
+   "ref": "malheureusement il est difficile d'étudier le flux de circulation car le comportement des conducteurs ne peut être prédit avec cent pour cent de certitude",
+   "hyp": "Malheureusement, il est difficile d'étudier le flux de circulation car les comportements des conducteurs ne peuvent être prédits avec 100% de certitude."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10385751433252343757",
+   "duration_s": 7.68,
+   "latency_s": 7.537381408001238,
+   "rtf": 0.9814298708334945,
+   "ref": "les deux composés réagissent l'un avec l'autre pour former des cristaux qui peuvent bloquer la fonction rénale ont déclaré des chercheurs de l'université",
+   "hyp": "Les deux composés réagissent l'un avec l'autre pour former des cristaux qui peuvent bloquer la fonction rénale, ont déclaré des chercheurs de l'université."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10399459061919571703",
+   "duration_s": 14.82,
+   "latency_s": 7.443331741997099,
+   "rtf": 0.5022491053979149,
+   "ref": "par exemple des étudiants de l'école bennet en caroline du nord conçoivent chaque année un site web consacré à leur visite de la capitale de l'état chaque année le site est remis à jour mais les anciennes versions sont conservées en ligne pour servir d'album",
+   "hyp": "Par exemple, des étudiants de l'école Béné en Caroline du Nord conçoivent chaque année un site web consacré à leur visite de la capitale de l'État. Chaque année, le site est remis à jour et les anciennes versions sont conservées en ligne pour servir d'album."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10451502537136425109",
+   "duration_s": 8.1,
+   "latency_s": 6.814644458994735,
+   "rtf": 0.8413141307400908,
+   "ref": "par exemple le format de photographie le plus courant au monde est le 35 mm c'était le format de pellicule le plus répandu à la fin de l'ère des films analogiques",
+   "hyp": "Par exemple, le format de photographie le plus courant du monde est le 35 mm. C'était le format de pellicule le plus répandu à la fin de l'ère des films analogiques."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10473501692975174389",
+   "duration_s": 14.4,
+   "latency_s": 7.200983932001691,
+   "rtf": 0.5000683286112285,
+   "ref": "tout bien considéré nous ne devrions pas être surpris si nos propres ancêtres ont résolu leur « problème de protéines » un peu de la même manière que les chimpanzés de la savane le font aujourd'hui",
+   "hyp": "Tout bien considéré, nous ne devrions pas être surpris si nos propres ancêtres ont résolu leur problème de protéines un peu de la même manière que les chimpanzés de la savane le font aujourd'hui."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10481242713503018126",
+   "duration_s": 10.2,
+   "latency_s": 6.463189879999845,
+   "rtf": 0.6336460666666516,
+   "ref": "le bus 403 de scotturb se rend régulièrement à sintra avec un arrêt à cabo da roca",
+   "hyp": "Le bus 403 de Scotterb se rend régulièrement à Sintra avec un arrêt à Cabo d'Aroca."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10496509281839367149",
+   "duration_s": 11.64,
+   "latency_s": 6.865570971000125,
+   "rtf": 0.5898256847938251,
+   "ref": "les troupes de lions agissent comme des meutes de loups ou de chiens des animaux étonnamment semblables aux lions mais pas aux autres grands félins dans leur comportement et aussi très mortels pour leurs proies",
+   "hyp": "Les troupes de lions agissent comme des meutes de loups ou de chiens, des animaux étonnamment semblables aux lions, mais pas aux autres grands félins, dont leur comportement est aussi très mortel pour leur proie."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10550408276028637262",
+   "duration_s": 10.74,
+   "latency_s": 6.539474580997194,
+   "rtf": 0.6088896257911726,
+   "ref": "sa réputation en tant qu'épicentre du luxe a débuté aux environs de l'an 400 et duré jusqu'à 1100 environ",
+   "hyp": "Sa réputation en tant qu'épicentre du luxe a débuté aux environs de l'an 400 et a duré jusqu'à 1100 environ."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10551999992203614767",
+   "duration_s": 13.68,
+   "latency_s": 7.009091513995372,
+   "rtf": 0.5123604907891354,
+   "ref": "la professeur pamela ferguson de l’université de dundee note que « les journalistes semblent suivre une ligne dangereuse s’ils publient des photos etc. de suspects »",
+   "hyp": "La professeure Pamela Ferguson de l'université de Dundee note que les journalistes semblent suivre une ligne dangereuse s'ils publient des photos, etc. de suspects."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "1057422269812878594",
+   "duration_s": 27.6,
+   "latency_s": 8.563657744998636,
+   "rtf": 0.31027745452893607,
+   "ref": "mais ces plans sont devenus obsolètes presque du jour au lendemain quand plus de 800 000 soldats de l’armée rouge de l’union soviétique sont arrivés et ont créé le front biélorusse et ukrainien après avoir envahi les régions est de la pologne violant ainsi le traité de paix de riga le pacte de non-agression soviéto-polonais ainsi que d’autres traités internationaux qu’ils soient bilatéraux ou multilatéraux",
+   "hyp": "Mais ces plans sont devenus obsolètes presque du jour au lendemain, quand plus de 800 000 soldats de l'armée rouge de l'Union soviétique sont arrivés et ont créé le front biélorusse et ukrainien après avoir envahi les régions est de la Pologne, violant ainsi le traité de la paix de Riga, le pacte de non-agression sovieto-polonais, ainsi que d'autres traités internationaux, qu'ils soient bilatéraux ou multilatéraux."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10583265778505453148",
+   "duration_s": 7.8,
+   "latency_s": 6.678115743001399,
+   "rtf": 0.8561686850001794,
+   "ref": "la plupart des petites îles sont des nations indépendantes ou associées à la france et sont connues pour être des stations balnéaires de luxe",
+   "hyp": "La plupart des petites îles sont des nations indépendantes ou associées à la France et sont connues pour être des stations bannières de luxe."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "10603531439273760949",
+   "duration_s": 14.28,
+   "latency_s": 7.168331643995771,
+   "rtf": 0.5019840086831773,
+   "ref": "les scientifiques espèrent comprendre comment les planètes se forment et plus particulièrement comment la terre s'est formée puisque des comètes sont entrées en collision avec elle il y a longtemps",
+   "hyp": "Les scientifiques espèrent comprendre comment les planètes se forment et plus particulièrement comment la Terre s'est formée, puisque les comètes sont entrées en collision avec elles il y a longtemps."
+  },
+  {
+   "lang": "fr_fr",
+   "id": "1063626966878784571",
+   "duration_s": 10.08,
+   "latency_s": 6.818326139000419,
+   "rtf": 0.6764212439484543,
+   "ref": "l'île de hong kong donne son nom au territoire de hong kong et représente le principal centre d'intérêt pour de nombreux touristes",
+   "hyp": "L'île de Hong Kong donne son nom au territoire de Hong Kong et représente le principal centre d'intérêt pour de nombreux touristes."
+  }
+ ]
+}

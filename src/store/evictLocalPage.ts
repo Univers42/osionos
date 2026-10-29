@@ -44,3 +44,32 @@ export function evictPageFromState(
     activePage: state.activePage?.id === pageId ? null : state.activePage,
   };
 }
+
+/** A content fetch's 404, applied: the evicted slice, and the toast to show when the page was open. */
+export interface MissingPageSettlement {
+  state: EvictedPageState;
+  toast: { kind: "warning"; title: string; description: string } | null;
+}
+
+/**
+ * What a content fetch's 404 does to the local copy, or null to keep it. A page holding an
+ * unpublished edit stays: the outbox publishes it and settles a refusal through the refused-edit
+ * recovery, which tells the viewer. Evicting it here dropped that edit without a word once the
+ * bridge answered 404 for a page the viewer lost access to (devil C132). A clean copy goes; the
+ * open page says why, a background fetch (search, export) evicts quietly. O(p) over the bucket.
+ */
+export function settleMissingPage(
+  state: EvictablePageState,
+  workspaceId: string,
+  pageId: string,
+  isClean: boolean,
+): MissingPageSettlement | null {
+  if (!isClean) return null;
+  const title = state.pages[workspaceId]?.find((page) => page._id === pageId)?.title || "Untitled";
+  return {
+    state: evictPageFromState(state, workspaceId, pageId),
+    toast: state.activePage?.id === pageId
+      ? { kind: "warning", title: `“${title}” is no longer available`, description: "It was deleted or is no longer shared with you." }
+      : null,
+  };
+}

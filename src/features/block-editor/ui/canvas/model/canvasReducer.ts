@@ -18,13 +18,14 @@ import {
   updateLayoutConfigHandler,
 } from "./canvasReducer.handlers";
 import { pushCanvasHistory, snapshotCanvas } from "./history";
+import { normalizeMeasuredHeight } from "./migration";
 import { getNextZ } from "./selectors";
 import type { CanvasAction, CanvasState } from "./types";
 
 const PERSISTABLE_ACTIONS = new Set<CanvasAction["type"]>([
   "addCell", "setCells", "updateCellFrame", "updateCellFrames", "updateCell", "removeCell", "removeCells",
   "duplicateCell", "setCellZ", "setCellsZ", "setSnapToGrid", "setNoOverlap", "updateLayoutConfig",
-  "undo", "redo",
+  "undo", "redo", "setCellMeasuredHeight",
 ]);
 
 export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasState {
@@ -62,6 +63,19 @@ export function canvasReducer(state: CanvasState, action: CanvasAction): CanvasS
       return updateCellFramesHandler(state, action.frames, action.resolveCollisions ?? false, withHistory);
     case "updateCell":
       return updateCellHandler(state, action.id, (cell) => ({ ...cell, ...action.patch }), withHistory);
+    case "setCellMeasuredHeight": {
+      const height = normalizeMeasuredHeight(action.height);
+      const target = state.cells.find((cell) => cell.id === action.id);
+      // Only a hug cell is measured, so only a hug cell can be pinned: the
+      // authored height of a fixed cell is never rewritten by a measurement.
+      if (height === undefined || !target || target.sizing.height !== "hug") return state;
+      const cells = state.cells.map((cell) => cell.id === action.id
+        ? { ...cell, measuredHeight: height, frame: { ...cell.frame, height }, sizing: { ...cell.sizing, height: "fixed" as const } }
+        : cell);
+      // No withHistory: a measurement is not an authoring act. The pin is
+      // released by the inspector's "Auto height" control, not by the undo stack.
+      return { ...state, cells };
+    }
     case "removeCell":
       return canvasReducer(state, { type: "removeCells", ids: [action.id] });
     case "removeCells": {

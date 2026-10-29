@@ -48,11 +48,13 @@ const bannedClassWord = (pattern, message) => [
   { selector: `TemplateElement[value.raw=/${pattern}/]`, message },
 ];
 
+const PX_RULE = bannedText(PX_FONT_SIZE, "Literal px font size in a class. Use text-3xs (10), text-2xs (11), text-xs (12), text-sm (14) or text-display.");
+const RAMP_RULE = bannedText(RAMP_TOKEN, "Ramp token in a component. Use a semantic token (--osio-bg-*, --osio-fg-*, --osio-accent-*); ramps are for src/app/styles only.");
 const CLASS_RULES = [
-  ...bannedText(PX_FONT_SIZE, "Literal px font size in a class. Use text-3xs (10), text-2xs (11), text-xs (12), text-sm (14) or text-display."),
+  ...PX_RULE,
   ...bannedClassWord(STOCK_SHADOW, "Stock Tailwind shadow. Use shadow-osio-e1 .. shadow-osio-e5 (sm/bare = e1, md = e2, lg = e3, xl = e4, 2xl = e5)."),
   ...bannedClassWord(BARE_ROUNDED, "Bare rounded class. Use rounded-xs/sm/md/lg (radius tokens), osio-chip for tags, or osio-surface-overlay for panels."),
-  ...bannedText(RAMP_TOKEN, "Ramp token in a component. Use a semantic token (--osio-bg-*, --osio-fg-*, --osio-accent-*); ramps are for src/app/styles only."),
+  ...RAMP_RULE,
 ];
 const HEX_RULE = bannedText(HEX_COLOR, "Raw hex colour. Use a semantic --osio-* token, or add the file to HEX_ALLOWLIST with its reason.");
 
@@ -72,6 +74,7 @@ const HEX_ALLOWLIST = [
   "src/data/seedUserPages.ts", // seed page content that quotes CSS as text
   "src/entities/block/ui/CodeBlockReadOnly.tsx", // macOS window-control dots: fixed by the platform, not themed
   "src/features/block-editor/model/blockColors.ts", // contrast maths needs concrete text colours
+  "src/features/whiteboard/model/jsonCanvasCommon.ts", // the JSON Canvas preset colours are data, not styling
   "src/features/block-editor/model/inlineIconInsert.ts", // an SVG data URI cannot read page tokens
   "src/features/block-editor/ui/ColorProfilePanel.tsx", // <input type=color> accepts only #rrggbb
   "src/features/block-editor/ui/canvas/layout.constants.ts", // canvas card tint catalog
@@ -83,6 +86,11 @@ const HEX_ALLOWLIST = [
   "src/shared/lib/color/resolveCssColor.ts", // canvas probe: needs concrete sentinel colours
   "src/features/ide/ui/IdeTerminal.tsx", // xterm's theme object takes a concrete colour
 ];
+
+// The theme token catalog: its strings are `--osio-*` token names without the
+// prefix and what each paints, never a class list ("shadow-sm" is the name of
+// --osio-shadow-sm there). It drops only the two class-word rules.
+const TOKEN_CATALOGS = ["src/shared/config/themeTokens.ts"];
 
 export default [
   {
@@ -162,6 +170,38 @@ export default [
     },
   },
   {
+    // The bridge's server-side modules are node tooling too: they run under plain
+    // node, in the container of the bridge, never in the browser bundle. The
+    // repo's lint command does not reach the root scripts/ folder, so a gate
+    // that lints one of these files on its own needs node's globals declared.
+    files: ["scripts/bridge-*.mjs"],
+    languageOptions: {
+      globals: {
+        AbortController: "readonly",
+        AbortSignal: "readonly",
+        Buffer: "readonly",
+        Headers: "readonly",
+        Request: "readonly",
+        Response: "readonly",
+        TextDecoder: "readonly",
+        TextEncoder: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        clearInterval: "readonly",
+        clearTimeout: "readonly",
+        console: "readonly",
+        crypto: "readonly",
+        fetch: "readonly",
+        performance: "readonly",
+        process: "readonly",
+        queueMicrotask: "readonly",
+        setInterval: "readonly",
+        setTimeout: "readonly",
+        structuredClone: "readonly",
+      },
+    },
+  },
+  {
     // Import firewall: @osionos/ui is a standalone repo consumed by alias. An
     // "@/..." import resolves fine HERE and breaks the moment the package is
     // built on its own, so it must fail in this repo, where it is introduced.
@@ -210,8 +250,12 @@ export default [
   {
     // Style-literal guards for component code. Allowlisted files drop only the hex rule.
     files: ["src/**/*.{ts,tsx}", "packages/osionos-ui/src/**/*.{ts,tsx}"],
-    ignores: HEX_ALLOWLIST,
+    ignores: [...HEX_ALLOWLIST, ...TOKEN_CATALOGS],
     rules: { "no-restricted-syntax": ["error", ...CLASS_RULES, ...HEX_RULE] },
+  },
+  {
+    files: TOKEN_CATALOGS,
+    rules: { "no-restricted-syntax": ["error", ...PX_RULE, ...RAMP_RULE, ...HEX_RULE] },
   },
   {
     files: HEX_ALLOWLIST,

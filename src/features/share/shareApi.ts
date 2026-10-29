@@ -10,15 +10,39 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-/** Bridge calls for the Share dialog: roster + page AccessRules (normal pages).
- *  All paths are bridge-relative under /api/perms/* (scripts/bridge-perms.mjs). */
+/** Bridge calls for page collaborators, visibility and enforced access rules.
+ *  Page sharing uses the workspace members; live policies use the engine roster. */
 
 import { api, getActivePageJwt } from '@/shared/api/client';
+import type { PageEntry } from '@/entities/page';
+import { usePageStore } from '@/store/usePageStore';
+import { assertSharingApplied, membersToPeople, sharingPatch, type PageSharing, type WorkspaceMember } from './pageShareModel';
 import { permsPathFor } from './permsPath';
-import type { ShareAccessRule, SharePerson } from './types';
+import type { ShareAccessRule, SharePerson, ShareTeam } from './types';
 
+interface MembersResponse { members?: WorkspaceMember[] }
 interface PeopleResponse { people: SharePerson[] }
-interface RulesResponse { rules: Array<ShareAccessRule & { _id: string }> }
+/** One overlap between a page and a rule on a strict ancestor the caller may read. */
+export interface InheritedRuleRead {
+  rule: ShareAccessRule & { _id: string };
+  fromPageId: string;
+  /** Structural: true = this rule can affect the page (see the bridge's `reaches`). */
+  reaches: boolean;
+}
+interface RulesResponse {
+  rules: Array<ShareAccessRule & { _id: string }>;
+  teamRules?: boolean;
+  /** Absent on an old bridge (which ignores `inherited=1`). */
+  inherited?: InheritedRuleRead[];
+  hiddenInherited?: boolean;
+}
+export interface ShareRulesRead {
+  rules: Array<ShareAccessRule & { _id: string }>;
+  teamRules: boolean;
+  inherited: InheritedRuleRead[];
+  hiddenInherited: boolean;
+}
+interface TeamsResponse { teams?: Array<{ id?: unknown; name?: unknown; memberCount?: unknown }> }
 interface RuleResponse { rule: ShareAccessRule & { _id: string } }
 
 /** The app-session bearer every /api/perms route requires (the bridge answers 401 without it). */
@@ -32,11 +56,37 @@ export async function fetchPeople(workspaceId: string): Promise<SharePerson[]> {
   return body.people ?? [];
 }
 
-/** Stored AccessRules for one resource. */
-export async function fetchRules(workspaceId: string, resourceId: string): Promise<Array<ShareAccessRule & { _id: string }>> {
-  const query = `workspaceId=${encodeURIComponent(workspaceId)}&resourceId=${encodeURIComponent(resourceId)}`;
-  const body = await api.get<RulesResponse>(`/api/perms/rules?${query}`, permsBearer());
-  return body.rules ?? [];
+async function fetchRulesRead(workspaceId: string, resourceId: string): Promise<RulesResponse> {
+  const query = `workspaceId=${encodeURIComponent(workspaceId)}&resourceId=${encodeURIComponent(resourceId)}&inherited=1`;
+  return api.get<RulesResponse>(`/api/perms/rules?${query}`, permsBearer());
+}
+
+/**
+ * The workspace's teams for the picker: the first page of the route every member may read.
+ * Caveat: a workspace with more than 50 teams offers the first 50 (the picker also shows only a
+ * few matches); narrowing the search does not reach the rest.
+ */
+export async function fetchTeams(workspaceId: string): Promise<ShareTeam[]> {
+  const body = await api.get<TeamsResponse>(`/api/workspaces/${encodeURIComponent(workspaceId)}/teams?limit=50`, permsBearer());
+  return (body.teams ?? []).flatMap((team) => (typeof team.id === 'string' && typeof team.name === 'string'
+    ? [{ id: team.id, name: team.name, memberCount: typeof team.memberCount === 'number' ? team.memberCount : 0 }]
+    : []));
+}
+
+/**
+ * Stored AccessRules for one resource only — the Share dialog's own view — plus the
+ * inherited rows the bridge derives from its strict ancestors and whether the server
+ * says it enforces team rules. `inherited`/`hiddenInherited` default to "none" when
+ * an OLD bridge ignores `inherited=1` (both fields absent). One read per dialog open.
+ */
+export async function fetchRules(workspaceId: string, resourceId: string): Promise<ShareRulesRead> {
+  const read = await fetchRulesRead(workspaceId, resourceId);
+  return {
+    rules: (read.rules ?? []).filter((rule) => rule.resourceId?.toLowerCase() === resourceId.toLowerCase()),
+    teamRules: read.teamRules === true,
+    inherited: read.inherited ?? [],
+    hiddenInherited: read.hiddenInherited === true,
+  };
 }
 
 /** Upsert one AccessRule (same workspace/resource/target replaces). */
@@ -48,4 +98,28 @@ export async function saveRule(rule: ShareAccessRule): Promise<ShareAccessRule &
 /** Delete a stored AccessRule by id. */
 export async function deleteRule(ruleId: string): Promise<void> {
   await api.delete<{ deleted: boolean }>(`/api/perms/rules/${encodeURIComponent(ruleId)}`, permsBearer());
+}
+
+export async function fetchWorkspacePeople(workspaceId: string): Promise<SharePerson[]> {
+  const body = await api.get<MembersResponse>(`/api/workspaces/${encodeURIComponent(workspaceId)}/members`, permsBearer());
+  return membersToPeople(body.members ?? []);
+}
+
+export async function fetchPageSharing(pageId: string): Promise<PageSharing> {
+  const page = await api.get<Pick<PageEntry, 'visibility' | 'collaborators' | 'contentVersion'>>(`/api/pages/${encodeURIComponent(pageId)}`, permsBearer());
+  return { visibility: page.visibility ?? 'private', collaborators: page.collaborators ?? [], version: page.contentVersion };
+}
+
+/** Writes what changed, then mirrors it into the page store: the outbox resends the store's
+ *  `visibility` with every edit, so a stale copy there would undo the share. */
+export async function commitPageSharing(pageId: string, before: PageSharing, after: PageSharing): Promise<PageSharing> {
+  const patch = sharingPatch(before, after);
+  if (Object.keys(patch).length === 0) return before;
+  if (!Number.isSafeInteger(before.version) || (before.version ?? -1) < 0) {
+    throw new Error('Sharing requires a page revision. Reload the page and try again.');
+  }
+  const reply = await api.patch<{ version?: number }>(`/api/pages/${encodeURIComponent(pageId)}`, { ...patch, baseVersion: before.version }, permsBearer());
+  assertSharingApplied(reply);
+  usePageStore.getState().patchPage(pageId, patch);
+  return { ...after, version: reply.version };
 }

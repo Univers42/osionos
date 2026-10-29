@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -49,12 +49,16 @@ import {
   fontSampleClass,
   usePageActions,
 } from '@/entities/page';
+import { runPageAction } from '@/entities/page/model/runPageAction';
 import type { PageConfig, PageFont, PageVersion } from '@/shared/config/pageConfigStore';
+import { canEditPage, usePageAccessContext } from '@/shared/lib/auth/pageAccess';
 import { Dropdown, IconButton, useClickOutside, useEscapeKey, useToastStore } from '@/shared/ui';
+import { canTurnIntoDashboard } from '@/services/page-actions';
 import { usePageStore } from '@/store/usePageStore';
 
 import { PageBreadcrumbs } from './PageBreadcrumbs';
 import { PageShareButton } from './PageShareButton';
+import { PageEditToggle } from './PageEditToggle';
 import { PageFavoriteButton } from './PageFavoriteButton';
 import { PageCommentsButton } from '@/features/comments/ui/PageCommentsButton';
 
@@ -82,6 +86,7 @@ const FONT_OPTIONS: Array<{ id: PageFont; label: string; sample: string }> = [
 
 const ACTION_LABELS = [
   'remove header canvas',
+  'turn into dashboard',
   'copy link',
   'copy page contents',
   'duplicate',
@@ -159,14 +164,6 @@ const VersionsPanel: React.FC<{ versions: PageVersion[]; onRestore: (version: Pa
   </div>
 );
 
-function actionErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : 'Page action failed.';
-}
-
-function runPageAction(work: Promise<unknown> | void, onError: (message: string) => void) {
-  Promise.resolve(work).catch((error) => onError(actionErrorMessage(error)));
-}
-
 function openPageActionsHome() {
   usePageStore.setState({ activePage: null, showTrash: false, navigationPath: [] });
 }
@@ -194,6 +191,13 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
     usePageStore.getState().patchPage(pageId, { surface: pageSurface === 'wiki' ? undefined : 'wiki' });
     setConfigOpen(false);
   }, [pageId, pageSurface]);
+  // "Turn into dashboard": an ordinary page, an agent or Home can become one.
+  // A locked page is read-only and a viewer may not edit the body at all — the
+  // store refuses that write too, the item just is not offered.
+  const accessContext = usePageAccessContext();
+  const canDashboard = actions.page
+    ? canTurnIntoDashboard(actions.page, actions.config.locked) && canEditPage(actions.page, accessContext)
+    : false;
   useClickOutside(menuBoundaryRefs, closeConfig, configOpen);
   useEscapeKey(closeConfig, configOpen);
 
@@ -218,6 +222,7 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
           <span className="hidden whitespace-nowrap text-sm text-[var(--osio-fg-subtle)] sm:inline">{actions.editedLabel}</span>
           <PageFavoriteButton pageId={pageId} />
           <PageCommentsButton pageId={pageId} />
+          <PageEditToggle pageId={pageId} />
           <PageShareButton pageId={pageId} workspaceId={workspaceId} />
           <div className="relative">
             <IconButton ref={triggerRef} label="Open page configuration" onClick={() => setConfigOpen((open) => !open)}>
@@ -270,6 +275,13 @@ export const PageHeaderBar: React.FC<PageHeaderBarProps> = ({ pageId, workspaceI
                           icon={<LayoutDashboard size={16} />}
                           label="Remove header canvas"
                           onClick={() => runPageAction(actions.removeHeaderCanvas(), showActionError)}
+                        />
+                      )}
+                      {canDashboard && (
+                        <MenuButton
+                          icon={<LayoutDashboard size={16} />}
+                          label="Turn into dashboard"
+                          onClick={() => { runPageAction(actions.turnIntoDashboard(), showActionError); closeConfig(); }}
                         />
                       )}
                       <div className="flex min-h-[var(--osio-control-h-sm)] items-center gap-2 rounded-[var(--osio-radius-sm)] px-2 py-1 text-sm hover:bg-[var(--osio-menu-item-hover-bg)]">

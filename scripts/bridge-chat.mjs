@@ -27,6 +27,7 @@
  *   POST   /api/chat/messages/:id/reactions        {emoji}
  *   DELETE /api/chat/messages/:id/reactions        {emoji} (or ?emoji=)
  *   POST   /api/chat/dm                            {peerUserId, workspaceId?}
+ *   POST   /api/chat/channels/:id/ai-answers       {runId} (bridge-chat-ai.mjs, flag-gated)
  *
  * Membership model: dm/private channels require an osionos_channel_members
  * row; public text channels accept any osionos_workspace_members row of the
@@ -35,6 +36,13 @@
  *
  * After every persisted message/reaction the module publishes (best-effort)
  * to the Rust realtime gateway on `chat:<workspaceId>:<channelId>`.
+ *
+ * L0 runs BEFORE a message is written (bridge-moderation-gate.mjs): a message
+ * whose words trip the rules is the author's question (409) and NOTHING is
+ * written until they answer it with acknowledgeWarning: true. WARN-ONLY:
+ * osionos_messages has no moderation_state column, so nothing is ever written
+ * held and no audit row is ever written. A DM is NEVER checked: a direct
+ * message is moderated by report only (C94).
  */
 
 import {
@@ -43,8 +51,10 @@ import {
 	emitNotifications,
 	httpError,
 	identitySummaries,
+	moderationWarningBody,
 	parseMentions,
 	publishRealtime,
+	readInChunks,
 	readJsonBody,
 	requireUuid,
 	rest,
@@ -52,6 +62,7 @@ import {
 	sendJson,
 	workspaceMembership,
 } from './bridge-social-core.mjs';
+import { inFilter } from './bridge-paging.mjs';
 import {
 	attachmentEntry,
 	handleGallery,
@@ -61,22 +72,26 @@ import {
 	sanitizeAttachmentMetadata,
 } from './bridge-chat-media.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { publicIconAvatar } from './bridge-avatar.mjs';
 import { searchMessages } from './bridge-chat-search.mjs';
+import { AI_HANDLES, authorSummary, isAiAnswer, postAiAnswer, threadAnswersEnabled } from './bridge-chat-ai.mjs';
 import { getThread } from './bridge-chat-threads.mjs';
+import { askBeforeWrite } from './bridge-moderation-gate.mjs';
+import { assertNotBlocked, requireInteraction } from './bridge-moderation-core.mjs';
 
 const CHANNEL_KINDS = new Set(['text', 'dm', 'voice', 'video', 'group']);
 const DEFAULT_PAGE = 50;
 const MAX_PAGE = 100;
 const MEMBER_ROLES = new Set(['owner', 'admin', 'member']);
 
-function channelEntry(row, memberRole = null) {
+function channelEntry(row, memberRole = null, config = null) {
 	return {
 		id: row.id,
 		workspaceId: row.workspace_id,
 		kind: row.kind,
 		name: row.name,
 		topic: row.topic ?? null,
-		avatar: row.avatar ?? null,
+		avatar: publicIconAvatar(row.avatar ?? null, config),
 		description: row.description ?? null,
 		createdBy: row.created_by ?? null,
 		isPrivate: row.is_private === true,
@@ -103,6 +118,7 @@ function messageEntry(row, identity, reactions = [], attachments = null, replyTo
 		editedAt: row.edited_at ?? null,
 		deletedAt: row.deleted_at ?? null,
 		reactions,
+		...(isAiAnswer(row) ? { isAi: true, aiRequestedBy: row.ai_requested_by ?? null } : {}),
 	};
 }
 
@@ -146,11 +162,29 @@ async function requireChannelAdmin(config, fetchImpl, userId, channelId) {
 	return access;
 }
 
-async function fetchMessageForAuthor(config, fetchImpl, userId, messageId) {
+async function fetchLiveMessage(config, fetchImpl, messageId) {
 	const rows = await rest(config, fetchImpl, `osionos_messages?id=eq.${messageId}&select=*&limit=1`);
 	const row = Array.isArray(rows) ? rows[0] : null;
 	if (!row || row.deleted_at) throw httpError('Message not found.', 404);
+	return row;
+}
+
+async function fetchMessageForAuthor(config, fetchImpl, userId, messageId) {
+	const row = await fetchLiveMessage(config, fetchImpl, messageId);
 	if (row.author_id !== userId) throw httpError('Only the author can modify this message.', 403);
+	return row;
+}
+
+/** The author deletes a message; a posted AI answer, its requester or the channel's owner/admin (C437). */
+async function fetchMessageForDelete(config, fetchImpl, userId, messageId) {
+	const row = await fetchLiveMessage(config, fetchImpl, messageId);
+	if (!isAiAnswer(row)) {
+		if (row.author_id !== userId) throw httpError('Only the author can modify this message.', 403);
+		return row;
+	}
+	// A requester who lost the channel no longer deletes its answers.
+	if (row.ai_requested_by === userId) await requireChannelAccess(config, fetchImpl, userId, row.channel_id);
+	else await requireChannelAdmin(config, fetchImpl, userId, row.channel_id);
 	return row;
 }
 
@@ -165,12 +199,20 @@ async function accessibleChannelIds(deps, config, userId) {
 	const wsRows = await rest(config, deps.fetchImpl, `osionos_workspace_members?user_id=eq.${userId}&select=workspace_id`);
 	const workspaceIds = (Array.isArray(wsRows) ? wsRows : []).map((r) => r.workspace_id).filter((id) => UUID_REGEX.test(String(id)));
 	if (workspaceIds.length > 0) {
-		const publicRows = await rest(config, deps.fetchImpl, `osionos_channels?workspace_id=in.(${workspaceIds.join(',')})&is_private=eq.false&kind=not.in.(dm,group)&select=id`);
-		for (const r of Array.isArray(publicRows) ? publicRows : []) ids.add(r.id);
+		const publicRows = await readInChunks(workspaceIds, async (chunk) => {
+			const rows = await rest(config, deps.fetchImpl, `osionos_channels?${inFilter('workspace_id', chunk)}&is_private=eq.false&kind=not.in.(dm,group)&select=id`);
+			return Array.isArray(rows) ? rows : [];
+		});
+		for (const r of publicRows) ids.add(r.id);
 	}
 	return [...ids];
 }
 
+/**
+ * The channels of the caller: the ones they are a member of, plus the public text channels
+ * of their workspaces. The two lists are read apart (one `in` list per request) and merged,
+ * so neither of them can grow past the chunk size.
+ */
 async function listChannels(deps, session, url, response, config) {
 	const filterWs = safeText(url.searchParams.get('workspaceId'), 80);
 	const memberRows = await rest(config, deps.fetchImpl, `osionos_channel_members?user_id=eq.${session.userId}&select=channel_id,role`);
@@ -178,14 +220,21 @@ async function listChannels(deps, session, url, response, config) {
 	const wsRows = await rest(config, deps.fetchImpl, `osionos_workspace_members?user_id=eq.${session.userId}&select=workspace_id`);
 	const workspaceIds = (Array.isArray(wsRows) ? wsRows : []).map((row) => row.workspace_id).filter((id) => UUID_REGEX.test(String(id)));
 	const channelIds = [...roleByChannel.keys()].filter((id) => UUID_REGEX.test(String(id)));
-	const clauses = [];
-	if (channelIds.length > 0) clauses.push(`id.in.(${channelIds.join(',')})`);
-	if (workspaceIds.length > 0) clauses.push(`and(workspace_id.in.(${workspaceIds.join(',')}),is_private.eq.false,kind.not.in.(dm,group))`);
-	if (clauses.length === 0) return sendJson(response, 200, { ok: true, channels: [] }, config);
-	let path = `osionos_channels?or=(${clauses.join(',')})&select=*&order=created_at.asc`;
-	if (UUID_REGEX.test(filterWs)) path += `&workspace_id=eq.${filterWs}`;
-	const rows = await rest(config, deps.fetchImpl, path);
-	const channels = (Array.isArray(rows) ? rows : []).map((row) => channelEntry(row, roleByChannel.get(row.id) ?? null));
+	const wsFilter = UUID_REGEX.test(filterWs) ? `&workspace_id=eq.${filterWs}` : '';
+	const read = async (column, chunk, extra) => {
+		const rows = await rest(config, deps.fetchImpl, `osionos_channels?${inFilter(column, chunk)}${extra}${wsFilter}&select=*&order=created_at.asc`);
+		return Array.isArray(rows) ? rows : [];
+	};
+	const listed = [];
+	if (channelIds.length > 0) listed.push(...await readInChunks(channelIds, (chunk) => read('id', chunk, '')));
+	if (workspaceIds.length > 0) {
+		listed.push(...await readInChunks(workspaceIds, (chunk) => read('workspace_id', chunk, '&is_private=eq.false&kind=not.in.(dm,group)')));
+	}
+	const byId = new Map();
+	for (const row of listed) if (!byId.has(row.id)) byId.set(row.id, row);
+	const channels = [...byId.values()]
+		.sort((left, right) => String(left.created_at ?? '').localeCompare(String(right.created_at ?? '')))
+		.map((row) => channelEntry(row, roleByChannel.get(row.id) ?? null, config));
 	return sendJson(response, 200, { ok: true, channels }, config);
 }
 
@@ -216,7 +265,7 @@ async function createChannel(deps, session, request, response, config) {
 		body: { channel_id: row.id, user_id: session.userId, role: 'owner' },
 		prefer: 'resolution=ignore-duplicates,return=minimal',
 	});
-	return sendJson(response, 201, { ok: true, channel: channelEntry(row, 'owner') }, config);
+	return sendJson(response, 201, { ok: true, channel: channelEntry(row, 'owner', config) }, config);
 }
 
 async function listMessages(deps, session, url, channelId, response, config) {
@@ -233,24 +282,28 @@ async function listMessages(deps, session, url, channelId, response, config) {
 	let attachmentsByMessage = new Map();
 	let mentionsByMessage = new Map();
 	if (messageIds.length > 0) {
-		const reactionRows = await rest(config, deps.fetchImpl, `osionos_message_reactions?message_id=in.(${messageIds.join(',')})&select=message_id,user_id,emoji`);
-		reactionsByMessage = Map.groupBy(Array.isArray(reactionRows) ? reactionRows : [], (row) => row.message_id);
-		const attachRows = await rest(config, deps.fetchImpl, `osionos_message_attachments?message_id=in.(${messageIds.join(',')})&select=*&order=created_at.asc`);
-		attachmentsByMessage = Map.groupBy(Array.isArray(attachRows) ? attachRows : [], (row) => row.message_id);
-		const mentionRows = await rest(config, deps.fetchImpl, `osionos_message_mentions?message_id=in.(${messageIds.join(',')})&select=message_id,user_id`);
-		mentionsByMessage = Map.groupBy(Array.isArray(mentionRows) ? mentionRows : [], (row) => row.message_id);
+		const byMessage = async (table, select) => readInChunks(messageIds, async (chunk) => {
+			const rows = await rest(config, deps.fetchImpl, `${table}?${inFilter('message_id', chunk)}&${select}`);
+			return Array.isArray(rows) ? rows : [];
+		});
+		reactionsByMessage = Map.groupBy(await byMessage('osionos_message_reactions', 'select=message_id,user_id,emoji'), (row) => row.message_id);
+		attachmentsByMessage = Map.groupBy(await byMessage('osionos_message_attachments', 'select=*&order=created_at.asc'), (row) => row.message_id);
+		mentionsByMessage = Map.groupBy(await byMessage('osionos_message_mentions', 'select=message_id,user_id'), (row) => row.message_id);
 	}
 	const identities = await identitySummaries(config, deps.fetchImpl, ordered.map((row) => row.author_id));
 	const replyIds = [...new Set(ordered.map((row) => row.reply_to_id).filter((id) => id && UUID_REGEX.test(String(id))))];
 	let replyById = new Map();
 	if (replyIds.length > 0) {
-		const replyRows = await rest(config, deps.fetchImpl, `osionos_messages?id=in.(${replyIds.join(',')})&select=id,author_id,content,deleted_at`);
-		const replyIdentities = await identitySummaries(config, deps.fetchImpl, (Array.isArray(replyRows) ? replyRows : []).map((r) => r.author_id));
-		replyById = new Map((Array.isArray(replyRows) ? replyRows : []).map((r) => [r.id, replyExcerpt(r, replyIdentities.get(r.author_id))]));
+		const replyRows = await readInChunks(replyIds, async (chunk) => {
+			const rows = await rest(config, deps.fetchImpl, `osionos_messages?${inFilter('id', chunk)}&select=*`);
+			return Array.isArray(rows) ? rows : [];
+		});
+		const replyIdentities = await identitySummaries(config, deps.fetchImpl, replyRows.map((r) => r.author_id));
+		replyById = new Map(replyRows.map((r) => [r.id, replyExcerpt(r, authorSummary(r, replyIdentities))]));
 	}
 	const messages = ordered.map((row) => messageEntry(
 		row,
-		identities.get(row.author_id),
+		authorSummary(row, identities),
 		(reactionsByMessage.get(row.id) ?? []).map((r) => ({ userId: r.user_id, emoji: r.emoji })),
 		attachmentsByMessage.has(row.id) ? (attachmentsByMessage.get(row.id) ?? []).map(attachmentEntry) : null,
 		row.reply_to_id ? replyById.get(row.reply_to_id) ?? null : null,
@@ -289,8 +342,9 @@ async function fanOutAttachments(deps, config, message, channel, drafts) {
 
 /** Resolve @handles in `content` to channel-member user ids (≤10, excludes self). */
 async function resolveMentions(deps, config, channelId, content, selfId) {
-	const handles = parseMentions(content);
+	const handles = parseMentions(content).filter((handle) => !AI_HANDLES.has(String(handle).toLowerCase()));
 	if (handles.length === 0) return [];
+	// Both id lists are bounded by construction: 20 handles (parseMentions) and 10 candidates.
 	const idents = await rest(config, deps.fetchImpl, `osionos_bridge_identities?username=in.(${handles.map(encodeURIComponent).join(',')})&select=user_id,username`);
 	const candidates = [...new Set((Array.isArray(idents) ? idents : []).map((r) => r.user_id).filter((id) => UUID_REGEX.test(String(id)) && id !== selfId))];
 	if (candidates.length === 0) return [];
@@ -305,18 +359,33 @@ async function postMessage(deps, session, request, channelId, response, config) 
 	const content = safeText(payload.content, 8000);
 	const drafts = Array.isArray(payload.attachments) ? payload.attachments : [];
 	if (!content && drafts.length === 0) throw httpError('Message content or an attachment is required.', 422);
+	// L0 asks BEFORE the message is written — but NOT in a DM: a direct message
+	// is moderated by REPORT only (C94), and its words are the two authors'.
+	if (channel.kind !== 'dm') {
+		const decision = askBeforeWrite({ text: content, surface: 'channel', env: deps.env, payload });
+		if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
+	}
+	// The other member of a DM is read once, before the insert: the limit check needs it
+	// and the fan-out below reuses it.
+	const dmPeers = channel.kind === 'dm'
+		? await rest(config, deps.fetchImpl, `osionos_channel_members?channel_id=eq.${channel.id}&user_id=neq.${session.userId}&select=user_id`)
+		: [];
+	for (const peer of Array.isArray(dmPeers) ? dmPeers : []) {
+		await requireInteraction(config, deps.fetchImpl, { interaction: 'messages', actorId: session.userId, targetId: peer.user_id });
+	}
 	const replyToId = payload.replyTo && UUID_REGEX.test(String(payload.replyTo)) ? String(payload.replyTo) : null;
 	let replyTo = null;
 	let replyAuthorId = null;
 	let threadRootId = null;
 	if (replyToId) {
-		const replyRows = await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${replyToId}&channel_id=eq.${channel.id}&deleted_at=is.null&select=id,author_id,content,deleted_at,thread_root_id&limit=1`);
+		const replyRows = await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${replyToId}&channel_id=eq.${channel.id}&deleted_at=is.null&select=*&limit=1`);
 		const replyRow = Array.isArray(replyRows) ? replyRows[0] : null;
 		if (replyRow) {
-			replyAuthorId = replyRow.author_id;
+			// The bot is no one to notify (C438).
+			replyAuthorId = isAiAnswer(replyRow) ? null : replyRow.author_id;
 			threadRootId = replyRow.thread_root_id ?? replyRow.id;
 			const replyIdent = await identitySummaries(config, deps.fetchImpl, [replyRow.author_id]);
-			replyTo = replyExcerpt(replyRow, replyIdent.get(replyRow.author_id));
+			replyTo = replyExcerpt(replyRow, authorSummary(replyRow, replyIdent));
 		}
 	}
 	const rows = await rest(config, deps.fetchImpl, 'osionos_messages', {
@@ -351,19 +420,34 @@ async function postMessage(deps, session, request, channelId, response, config) 
 		seen.add(uid);
 		notifs.push({ recipientId: uid, type: 'mention', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview });
 	}
+	let replyNotif = null;
 	if (replyAuthorId && !seen.has(replyAuthorId)) {
+		replyNotif = { recipientId: replyAuthorId, type: 'reply', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview };
 		seen.add(replyAuthorId);
-		notifs.push({ recipientId: replyAuthorId, type: 'reply', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview });
+		notifs.push(replyNotif);
 	}
 	if (channel.kind === 'dm') {
-		const others = await rest(config, deps.fetchImpl, `osionos_channel_members?channel_id=eq.${channel.id}&user_id=neq.${session.userId}&select=user_id`);
-		for (const r of Array.isArray(others) ? others : []) {
+		for (const r of Array.isArray(dmPeers) ? dmPeers : []) {
 			if (seen.has(r.user_id)) continue;
 			seen.add(r.user_id);
 			notifs.push({ recipientId: r.user_id, type: 'dm', actorId: session.userId, actorName, channelId: channel.id, messageId: row.id, preview });
 		}
 	}
-	if (notifs.length > 0) void emitNotifications(deps, config, notifs).catch(() => undefined);
+	if (notifs.length > 0) {
+		void (async () => {
+			// The reply is queued only while the quoted author still has channel access: a
+			// removed member (or a workspace leaver) gets no reply notification. The check
+			// rides the fire-and-forget emit, so the POST answer never waits on it.
+			if (replyNotif) {
+				try {
+					await requireChannelAccess(config, deps.fetchImpl, replyAuthorId, channel.id);
+				} catch {
+					notifs.splice(notifs.indexOf(replyNotif), 1);
+				}
+			}
+			if (notifs.length > 0) await emitNotifications(deps, config, notifs);
+		})().catch(() => undefined);
+	}
 	// Mirror the client Attachment shape: width/height/durationMs/waveform live
 	// under `metadata` (the editor reads attachment.metadata.*). Flattening them
 	// here froze voice-message playback progress for anyone rendering this live
@@ -385,13 +469,26 @@ async function patchMessage(deps, session, request, messageId, response, config)
 	const payload = await readJsonBody(request, 64 * 1024);
 	const content = safeText(payload.content, 8000);
 	if (!content) throw httpError('Message content is required.', 422);
+	// The channel is read BEFORE the write: the check must know whether the
+	// message is a DM (moderated by report only, C94). It was read after the
+	// write before; the read is the same one, only earlier.
+	const channel = await fetchChannel(config, deps.fetchImpl, existing.channel_id);
+	if (channel.kind !== 'dm') {
+		const decision = askBeforeWrite({ text: content, surface: 'channel', env: deps.env, payload });
+		if (decision.outcome === 'needs_ack') return sendJson(response, 409, moderationWarningBody(decision), config);
+	}
+	if (channel.kind === 'dm') {
+		const peers = await rest(config, deps.fetchImpl, `osionos_channel_members?channel_id=eq.${channel.id}&user_id=neq.${session.userId}&select=user_id`);
+		for (const peer of Array.isArray(peers) ? peers : []) {
+			await requireInteraction(config, deps.fetchImpl, { interaction: 'messages', actorId: session.userId, targetId: peer.user_id });
+		}
+	}
 	const rows = await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${messageId}`, {
 		method: 'PATCH',
 		body: { content, edited_at: new Date().toISOString() },
 		prefer: 'return=representation',
 	});
 	const row = Array.isArray(rows) ? rows[0] : rows;
-	const channel = await fetchChannel(config, deps.fetchImpl, existing.channel_id);
 	await publishRealtime({
 		topic: chatTopic(channel),
 		eventType: 'message_updated',
@@ -404,7 +501,7 @@ async function patchMessage(deps, session, request, messageId, response, config)
 }
 
 async function deleteMessage(deps, session, messageId, response, config) {
-	const existing = await fetchMessageForAuthor(config, deps.fetchImpl, session.userId, messageId);
+	const existing = await fetchMessageForDelete(config, deps.fetchImpl, session.userId, messageId);
 	await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${messageId}`, {
 		method: 'PATCH',
 		body: { deleted_at: new Date().toISOString() },
@@ -414,7 +511,7 @@ async function deleteMessage(deps, session, messageId, response, config) {
 	await publishRealtime({
 		topic: chatTopic(channel),
 		eventType: 'message_deleted',
-		payload: { messageId, channelId: channel.id, authorId: session.userId },
+		payload: { messageId, channelId: channel.id, authorId: existing.author_id },
 		fetchImpl: deps.fetchImpl,
 		env: deps.env,
 	});
@@ -459,9 +556,10 @@ async function setReaction(deps, session, request, url, messageId, add, response
  */
 export async function ensureDmChannel(deps, session, config, peerUserId, workspaceHint = '') {
 	if (peerUserId === session.userId) throw httpError('Cannot open a DM with yourself.', 422);
-	const blockRows = await rest(config, deps.fetchImpl, `osionos_user_blocks?or=(and(blocker_id.eq.${session.userId},blocked_id.eq.${peerUserId}),and(blocker_id.eq.${peerUserId},blocked_id.eq.${session.userId}))&select=blocker_id&limit=1`);
-	if (Array.isArray(blockRows) && blockRows.length > 0) throw httpError('You cannot message this person.', 403);
+	await assertNotBlocked(config, deps.fetchImpl, session.userId, peerUserId, 'You cannot message this person.');
+	await requireInteraction(config, deps.fetchImpl, { interaction: 'messages', actorId: session.userId, targetId: peerUserId });
 	let workspaceId = UUID_REGEX.test(safeText(workspaceHint, 80)) ? workspaceHint : '';
+	// The id list is bounded by construction: the caller and one peer.
 	const pairRows = await rest(config, deps.fetchImpl, `osionos_workspace_members?user_id=in.(${session.userId},${peerUserId})&select=user_id,workspace_id`);
 	const mine = new Set();
 	const shared = [];
@@ -503,7 +601,7 @@ async function openDm(deps, session, request, response, config) {
 	const payload = await readJsonBody(request);
 	const peerUserId = requireUuid(payload.peerUserId, 'peerUserId');
 	const row = await ensureDmChannel(deps, session, config, peerUserId, safeText(payload.workspaceId, 80));
-	return sendJson(response, 200, { ok: true, channel: channelEntry(row, 'member'), peerUserId }, config);
+	return sendJson(response, 200, { ok: true, channel: channelEntry(row, 'member', config), peerUserId }, config);
 }
 
 /**
@@ -553,7 +651,7 @@ async function createGroup(deps, session, request, response, config) {
 			name,
 			created_by: session.userId,
 			is_private: true,
-			avatar: safeText(payload.avatar, 1024) || null,
+			avatar: publicIconAvatar(safeText(payload.avatar, 1024), config),
 			description: safeText(payload.description, 500) || null,
 		},
 		prefer: 'return=representation',
@@ -567,7 +665,7 @@ async function createGroup(deps, session, request, response, config) {
 		body: memberRows,
 		prefer: 'resolution=ignore-duplicates,return=minimal',
 	});
-	return sendJson(response, 201, { ok: true, channel: channelEntry(row, 'owner') }, config);
+	return sendJson(response, 201, { ok: true, channel: channelEntry(row, 'owner', config) }, config);
 }
 
 /** PATCH /api/chat/channels/:id — owner/admin metadata edit. */
@@ -576,12 +674,12 @@ async function patchChannel(deps, session, request, channelId, response, config)
 	const payload = await readJsonBody(request);
 	const update = { updated_at: new Date().toISOString() };
 	if (Object.hasOwn(payload, 'name')) update.name = safeText(payload.name, 80) || 'Channel';
-	if (Object.hasOwn(payload, 'avatar')) update.avatar = safeText(payload.avatar, 1024) || null;
+	if (Object.hasOwn(payload, 'avatar')) update.avatar = publicIconAvatar(safeText(payload.avatar, 1024), config);
 	if (Object.hasOwn(payload, 'description')) update.description = safeText(payload.description, 500) || null;
 	if (Object.hasOwn(payload, 'topic')) update.topic = safeText(payload.topic, 200) || null;
 	const rows = await rest(config, deps.fetchImpl, `osionos_channels?id=eq.${channelId}`, { method: 'PATCH', body: update, prefer: 'return=representation' });
 	const row = Array.isArray(rows) ? rows[0] : rows;
-	return sendJson(response, 200, { ok: true, channel: channelEntry(row ?? { id: channelId }) }, config);
+	return sendJson(response, 200, { ok: true, channel: channelEntry(row ?? { id: channelId }, null, config) }, config);
 }
 
 /** POST /api/chat/channels/:id/members — owner/admin adds members. */
@@ -748,6 +846,10 @@ export function createChatHandler({ config, verifySession, fetchImpl = fetch, en
 			const channelMessages = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/messages$/i.exec(pathname);
 			if (channelMessages && method === 'GET') return await listMessages(deps, session, url, channelMessages[1], response, requestConfig);
 			if (channelMessages && method === 'POST') return await postMessage(deps, session, request, channelMessages[1], response, requestConfig);
+			const channelAiAnswers = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/ai-answers$/i.exec(pathname);
+			if (channelAiAnswers && method === 'POST' && threadAnswersEnabled(env)) {
+				return await postAiAnswer(deps, session, request, requireUuid(channelAiAnswers[1], 'channelId'), response, requestConfig, { requireChannelAccess, chatTopic, messageEntry });
+			}
 			const channelMembersOne = /^\/api\/chat\/channels\/([0-9a-f-]{36})\/members\/([0-9a-f-]{36})$/i.exec(pathname);
 			if (channelMembersOne && method === 'DELETE') return await removeMember(deps, session, requireUuid(channelMembersOne[1], 'channelId'), requireUuid(channelMembersOne[2], 'userId'), response, requestConfig);
 			if (channelMembersOne && method === 'PATCH') return await setMemberRole(deps, session, request, requireUuid(channelMembersOne[1], 'channelId'), requireUuid(channelMembersOne[2], 'userId'), response, requestConfig);
@@ -771,7 +873,9 @@ export function createChatHandler({ config, verifySession, fetchImpl = fetch, en
 			if (reactions && method === 'DELETE') return await setReaction(deps, session, request, url, reactions[1], false, response, requestConfig);
 			return sendJson(response, 404, { ok: false, message: 'Chat route not found.' }, requestConfig);
 		} catch (error) {
-			return sendJson(response, error?.status ?? 500, { ok: false, message: error instanceof Error ? error.message : 'Chat request failed.' }, requestConfig);
+			const body = { ok: false, message: error instanceof Error ? error.message : 'Chat request failed.' };
+			if (typeof error?.code === 'string') body.code = error.code;
+			return sendJson(response, error?.status ?? 500, body, requestConfig);
 		}
 	};
 }

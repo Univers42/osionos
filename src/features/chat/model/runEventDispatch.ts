@@ -1,0 +1,209 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   runEventDispatch.ts                                :+:      :+:    :+:   */
+/*                                                    +#+#+#+         +#+     */
+/*   By: dlesieur <dlesieur@student.42.fr>          +#+  +#+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/10/21 00:00:00 by dlesieur          #+#    #+#             */
+/*   Updated: 2026/10/21 00:00:00 by dlesieur         ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+/**
+ * The frames of a run, and what they do.
+ *
+ * A run is a stream of frames: `run.started`, `citation`, `tool.called`,
+ * `tool.result`, `permission.asked`, `memory.proposed`, `route`, `text.delta`,
+ * `research.plan`, `research.progress`, `resume.gap`, `done`, `error`. The store
+ * used to read them in one long `if` chain, inside the `send` of the chat, and
+ * the chain grew with every frame the service learned.
+ *
+ * The dispatch is that chain, out of the store: an event and its data go in,
+ * the actions of the store come out. It knows NOTHING of the store — it calls
+ * the actions it is given, and it decides which action a frame reaches.
+ *
+ * A frame the client does not know is ignored: the service may learn a new
+ * one, and the chat must not break.
+ */
+
+import type { ChatMessage, ChatMessagePart } from "./chatTypes";
+import { citationFromEvent } from "./citations";
+import type { Citation } from "./citations";
+import { permissionFromEvent } from "./approvalParts";
+import type { PermissionPart } from "./approvalParts";
+import { memoryProposalFromEvent } from "./memoryParts";
+import type { MemoryProposalPart } from "./memoryParts";
+import { truncatedFromEvent, type TruncatedFrame } from "./summaryNotice";
+import { handoffFromView } from "./agentHandoff";
+import { researchPlanFromEvent, researchProgressFromEvent, type ResearchFrame } from "./researchParts";
+import type { HandoffPart } from "./agentHandoff";
+import { applyViewAction } from "@/features/ai/model/viewActions";
+
+/** What the dispatch needs from the store. */
+export interface RunEventActions {
+  /** Appends a piece of the answer. */
+  appendText(chunk: string): void;
+  /** Keeps a source of the answer. */
+  appendCitation(citation: ChatMessagePart): void;
+  /** A call of a tool: what the assistant is doing. */
+  appendToolCall(data: Record<string, unknown>): void;
+  /** The outcome of a call. */
+  appendToolResult(data: Record<string, unknown>): void;
+  /** The sources a call found. */
+  appendToolSource(data: Record<string, unknown>): void;
+  /** Changes the message of the assistant. */
+  patchAssistant(patch: Partial<ChatMessage>): void;
+  /** The service named the conversation: the default title gives way to it. */
+  applyServerTitle(title: string): void;
+  /** The assistant asks for the right to write: the card of the write. */
+  askPermission(permission: PermissionPart): void;
+  /** The assistant proposes a fact to remember: the chip that asks the user. */
+  proposeMemory(proposal: MemoryProposalPart): void;
+  /** The run dropped older turns from its window. Optional: a turn that shows no notice ignores it. */
+  noteTruncated?(truncated: TruncatedFrame): void;
+  /** A view tool suggests another agent: a chip the user may press, never an action. */
+  suggestAgent(handoff: HandoffPart): void;
+  /** Where a research run stands. Optional: a turn that shows no card ignores it. */
+  noteResearch?(frame: ResearchFrame): void;
+}
+
+const ROUTE_REASONS = ["rate_limited", "upstream_error", "unavailable"] as const;
+
+/** A reason outside the closed set reads as the vaguest one. */
+function routeReasonOf(reason: unknown): NonNullable<ChatMessage["routeReason"]> {
+  return ROUTE_REASONS.find((known) => known === reason) ?? "unavailable";
+}
+
+/** Applied view-action tool call ids, bounded to the last 500. */
+const appliedViewActionIds = new Set<string>();
+
+/**
+ * One frame of a run, and what it does.
+ *
+ * The order of the frames does not matter: each one is read on its own, and
+ * the store keeps what it needs.
+ */
+/** The stored part of a source: what the message keeps, in the shape the service stores. */
+function citationPart(citation: Citation): ChatMessagePart {
+  if (citation.collection === "pack") {
+    return { type: "citation", n: citation.n, collection: "pack", pack: citation.pack, title: citation.title, snippet: citation.snippet };
+  }
+  if (citation.collection === "web") {
+    return {
+      type: "citation",
+      n: citation.n,
+      collection: "web",
+      url: citation.url,
+      domain: citation.domain,
+      title: citation.title,
+      snippet: citation.snippet,
+    };
+  }
+  return {
+    type: "citation",
+    n: citation.n,
+    collection: "page",
+    pageId: citation.pageId,
+    ...(citation.blockId ? { blockId: citation.blockId } : {}),
+    title: citation.title,
+    snippet: citation.snippet,
+  };
+}
+
+export function dispatchRunEvent(
+  event: string,
+  data: Record<string, unknown>,
+  actions: RunEventActions,
+): void {
+  if (event === "text.delta") {
+    if (typeof data.text === "string") actions.appendText(data.text);
+    return;
+  }
+  if (event === "citation") {
+    const citation = citationFromEvent(data);
+    if (!citation) return;
+    actions.appendCitation(citationPart(citation));
+    // The sources a tool found are its result: they arrive between the call
+    // and its outcome.
+    actions.appendToolSource(data);
+    return;
+  }
+  if (event === "tool.called") {
+    actions.appendToolCall(data);
+    return;
+  }
+  if (event === "tool.result") {
+    actions.appendToolResult(data);
+    const toolName = typeof data.toolName === "string" ? data.toolName : "";
+    const ok = data.ok === true;
+    const toolCallId = typeof data.toolCallId === "string" ? data.toolCallId : "";
+    const view = data.view;
+    // A hand-off is only offered: it never goes through applyViewAction.
+    if (ok && toolName === "suggest_agent") {
+      const handoff = handoffFromView(view);
+      if (handoff) actions.suggestAgent(handoff);
+      return;
+    }
+    if (
+      ok &&
+      view !== undefined &&
+      toolCallId !== "" &&
+      (toolName === "open_page" || toolName === "open_panel" || toolName === "open_issue_report")
+    ) {
+      if (!appliedViewActionIds.has(toolCallId)) {
+        appliedViewActionIds.add(toolCallId);
+        if (appliedViewActionIds.size > 500) {
+          const oldest = appliedViewActionIds.values().next().value;
+          if (oldest !== undefined) appliedViewActionIds.delete(oldest);
+        }
+        applyViewAction(view);
+      }
+    }
+    return;
+  }
+  if (event === "permission.asked") {
+    const permission = permissionFromEvent(data);
+    if (permission) actions.askPermission(permission);
+    return;
+  }
+  if (event === "memory.proposed") {
+    const proposal = memoryProposalFromEvent(data);
+    if (proposal) actions.proposeMemory(proposal);
+    return;
+  }
+  if (event === "run.started") {
+    if (typeof data.runId === "string") actions.patchAssistant({ runId: data.runId });
+    if (typeof data.conversationTitle === "string") actions.applyServerTitle(data.conversationTitle);
+    return;
+  }
+  if (event === "route") {
+    // The frame carries model ids and a closed reason, never an upstream body (C260).
+    if (typeof data.to !== "string" || data.to === "") return;
+    actions.patchAssistant({ answeredBy: data.to, routeReason: routeReasonOf(data.reason) });
+    return;
+  }
+  if (event === "context.truncated") {
+    const truncated = truncatedFromEvent(data);
+    if (truncated) actions.noteTruncated?.(truncated);
+    return;
+  }
+  if (event === "research.plan" || event === "research.progress") {
+    const frame = event === "research.plan" ? researchPlanFromEvent(data) : researchProgressFromEvent(data);
+    if (frame) actions.noteResearch?.(frame);
+    return;
+  }
+  if (event === "resume.gap") {
+    actions.patchAssistant({ textGap: true });
+    return;
+  }
+  if (event === "done") {
+    actions.patchAssistant({ status: "done" });
+    return;
+  }
+  if (event === "error") {
+    actions.patchAssistant({
+      status: "error",
+      errorCode: typeof data.code === "string" ? data.code : "internal",
+    });
+  }
+}

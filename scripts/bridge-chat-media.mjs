@@ -22,11 +22,11 @@
  */
 
 import { createHash } from 'node:crypto';
-import { lookup as dnsLookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
 import { httpError, rest, safeText, sendJson } from './bridge-social-core.mjs';
-import { extFromMime, storageGet, storageObjectKey, storagePut, typeFromMime, ensureChatBucket } from './bridge-storage-core.mjs';
+import { extFromMime, servedObjectHeaders, storageGet, storageObjectKey, storagePut, typeFromMime, ensureChatBucket } from './bridge-storage-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
+import { assertPublicHttpUrl } from './bridge-url-guard.mjs';
+import { fetchPublicHtml } from './bridge-url-fetch.mjs';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const LINK_PREVIEW_BYTES = 512 * 1024;
@@ -64,13 +64,14 @@ export function sanitizeAttachmentMetadata(raw) {
 
 /** Read the request stream into a Buffer with a hard byte cap (413 on overflow). */
 export async function readRawBody(request, maxBytes = MAX_UPLOAD_BYTES) {
+	const tooLarge = () => httpError(`Upload exceeds the ${maxBytes >= 1_048_576 ? `${Math.round(maxBytes / 1_048_576)}MB` : `${Math.round(maxBytes / 1024)}KB`} limit.`, 413);
 	// Reject up front when the declared size is over the cap, draining the body so
 	// the socket closes cleanly — a mid-stream throw resets the connection, which
 	// the browser reports as an opaque CORS/ERR_FAILED instead of a readable 413.
 	const declared = Number(request.headers['content-length']);
 	if (Number.isFinite(declared) && declared > maxBytes) {
 		request.resume();
-		throw httpError('Upload exceeds the 50MB limit.', 413);
+		throw tooLarge();
 	}
 	const chunks = [];
 	let size = 0;
@@ -78,7 +79,7 @@ export async function readRawBody(request, maxBytes = MAX_UPLOAD_BYTES) {
 		size += chunk.length;
 		if (size > maxBytes) {
 			request.resume();
-			throw httpError('Upload exceeds the 50MB limit.', 413);
+			throw tooLarge();
 		}
 		chunks.push(chunk);
 	}
@@ -147,7 +148,7 @@ export async function handleServe(deps, session, attachmentId, request, response
 	// Build headers without an `etag: undefined` entry — Node's writeHead throws on
 	// an undefined header value, which surfaced as a 500 when sha256 was missing.
 	const headers = {
-		'content-type': row.content_type || object.contentType || 'application/octet-stream',
+		...servedObjectHeaders(row.content_type || object.contentType),
 		'content-length': String(object.buffer.length),
 		'cache-control': 'private, max-age=86400',
 		'access-control-allow-origin': config.allowedOrigin,
@@ -171,39 +172,6 @@ export async function handleGallery(deps, session, url, channelId, response, con
 	return sendJson(response, 200, { ok: true, media }, config);
 }
 
-/** Reject loopback/private/link-local hosts (SSRF guard) before a server fetch. */
-export async function assertPublicHttpUrl(rawUrl) {
-	let parsed;
-	try {
-		parsed = new URL(rawUrl);
-	} catch {
-		throw httpError('A valid http(s) URL is required.', 422);
-	}
-	if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw httpError('Only http(s) URLs are allowed.', 422);
-	const host = parsed.hostname.toLowerCase();
-	if (host === 'localhost' || host.endsWith('.internal') || host.endsWith('.local')) throw httpError('Host is not allowed.', 422);
-	const candidates = isIP(host) ? [host] : (await dnsLookup(host, { all: true }).catch(() => [])).map((entry) => entry.address);
-	if (candidates.length === 0) throw httpError('Host could not be resolved.', 422);
-	for (const ip of candidates) {
-		if (isPrivateAddress(ip)) throw httpError('Host resolves to a private address.', 422);
-	}
-	return parsed;
-}
-
-function isPrivateAddress(ip) {
-	const v4 = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
-	const p = v4.split('.').map(Number);
-	if (p.length === 4 && p.every((n) => Number.isInteger(n) && n >= 0 && n <= 255)) {
-		return p[0] === 127 || p[0] === 10 || p[0] === 0 || (p[0] === 169 && p[1] === 254)
-			|| (p[0] === 172 && p[1] >= 16 && p[1] <= 31) || (p[0] === 192 && p[1] === 168);
-	}
-	// IPv6: block loopback (::1), link-local (fe80::/10) and unique-local (fc00::/7);
-	// global unicast (2000::/3, e.g. 2606:...) is allowed.
-	const v6 = ip.toLowerCase();
-	return v6 === '::1' || v6 === '::' || v6.startsWith('fe8') || v6.startsWith('fe9')
-		|| v6.startsWith('fea') || v6.startsWith('feb') || v6.startsWith('fc') || v6.startsWith('fd');
-}
-
 function metaTag(html, ...names) {
 	for (const name of names) {
 		const re = new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*content=["']([^"']*)["']`, 'i');
@@ -214,30 +182,34 @@ function metaTag(html, ...names) {
 	return '';
 }
 
-/** POST /api/chat/link-preview {url} — SSRF-guarded OG/title scrape. */
+/**
+ * POST /api/chat/link-preview {url} — SSRF-guarded OG/title scrape.
+ *
+ * The fetch goes through bridge-url-guard (the address blocklist) and
+ * bridge-url-fetch (the socket + the hand-followed redirects): the address is
+ * checked against the blocklist AND against the address the socket really
+ * connects to, and every redirect hop is re-validated.
+ * `deps.linkPreviewTransport` and `deps.resolveHost` are the injection seams
+ * the tests drive.
+ */
 export async function handleLinkPreview(deps, session, payload, response, config) {
 	void session;
-	const parsed = await assertPublicHttpUrl(safeText(payload.url, 2048));
-	const upstream = await deps.fetchImpl(parsed.toString(), {
-		method: 'GET',
-		headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': 'osionos-link-preview/1.0' },
-		redirect: 'follow',
-		signal: AbortSignal.timeout(LINK_PREVIEW_TIMEOUT_MS),
-	}).catch(() => null);
-	if (!upstream || !upstream.ok) throw httpError('Could not fetch the link.', 502);
-	const reader = upstream.body?.getReader?.();
-	let html = '';
-	if (reader) {
-		const decoder = new TextDecoder();
-		for (;;) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			html += decoder.decode(value, { stream: true });
-			if (html.length >= LINK_PREVIEW_BYTES) { await reader.cancel(); break; }
-		}
-	} else {
-		html = (await upstream.text().catch(() => '')).slice(0, LINK_PREVIEW_BYTES);
+	const parsed = await assertPublicHttpUrl(safeText(payload.url, 2048), { resolve: deps.resolveHost });
+	let upstream;
+	try {
+		upstream = await fetchPublicHtml(parsed.toString(), {
+			transport: deps.linkPreviewTransport,
+			resolve: deps.resolveHost,
+			headers: { Accept: 'text/html,application/xhtml+xml', 'User-Agent': 'osionos-link-preview/1.0' },
+			timeoutMs: LINK_PREVIEW_TIMEOUT_MS,
+			maxBytes: LINK_PREVIEW_BYTES,
+		});
+	} catch (error) {
+		if (error?.status) throw error;
+		throw httpError('Could not fetch the link.', 502);
 	}
+	if (!upstream?.ok) throw httpError('Could not fetch the link.', 502);
+	const html = upstream.text().slice(0, LINK_PREVIEW_BYTES);
 	const titleTag = /<title[^>]*>([^<]{0,500})<\/title>/i.exec(html);
 	return sendJson(response, 200, {
 		ok: true,

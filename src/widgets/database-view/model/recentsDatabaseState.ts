@@ -28,25 +28,17 @@ import { useUserStore } from "@/features/auth";
 import type { PageEntry } from "@/entities/page";
 import type { PersistableObjectDatabaseAdapter } from "./knownDatabaseState";
 import { UNKNOWN_TIME, viewStateChanged } from "./readOnlyPersist";
+import { pickRecentEntries, safeCardCover } from "./homeLiveEntries";
 import { RECENTS_DB_ID, RECENTS_GALLERY_VIEW } from "./workspaceDatabaseConstants";
 
 const RECENT_TITLE = "home-recent-title";
 
 /** The active workspace's recently-visited pages, deduped, freshest first. */
-function recentEntries(): PageEntry[] {
+export function recentEntries(): PageEntry[] {
   const store = usePageStore.getState();
   const workspaceId = useUserStore.getState().activeWorkspace()?._id;
   if (!workspaceId) return [];
-  const seen = new Set<string>();
-  const out: PageEntry[] = [];
-  for (const recent of store.recents) {
-    if (recent.kind !== "page" || recent.workspaceId !== workspaceId || seen.has(recent.id)) continue;
-    const entry = store.pageById(recent.id);
-    if (!entry || entry.archivedAt) continue;
-    seen.add(recent.id);
-    out.push(entry);
-  }
-  return out;
+  return pickRecentEntries(store.recents, workspaceId, store.pageById);
 }
 
 /** osionos page → a minimal gallery card record (id === real page id). */
@@ -56,7 +48,7 @@ function entryToCard(entry: PageEntry): Page {
     id: entry._id,
     databaseId: RECENTS_DB_ID,
     icon: entry.icon,
-    cover: entry.cover,
+    cover: safeCardCover(entry.cover),
     properties: { [RECENT_TITLE]: entry.title || "Untitled" },
     content: [],
     createdAt: at,

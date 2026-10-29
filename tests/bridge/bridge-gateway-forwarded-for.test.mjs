@@ -14,6 +14,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { configFromEnv, createBridgeHandoff, createBridgeServer, validateBridgePayload } from '../../scripts/bridge-api.mjs';
+import { kvStub } from './support/kv-stub.mjs';
 
 const GATEWAY = 'http://gateway.local';
 
@@ -23,7 +24,9 @@ function config() {
 		OSIONOS_BRIDGE_SHARED_SECRET: 'test-bridge-secret-that-is-long-enough',
 		OSIONOS_APP_SESSION_SECRET: 'test-app-session-secret-that-is-long-enough',
 		OSIONOS_BRIDGE_PERSISTENCE: 'memory',
+		OSIONOS_BAAS_URL: '',
 		AUTH_GATEWAY_URL: GATEWAY,
+		// The local sign-in has no Turnstile widget; without the bypass the bridge refuses a token-less request.
 	});
 }
 
@@ -32,28 +35,28 @@ function reply(body, status = 200) {
 }
 
 // A gateway stub that records each call, and answers the sign-in flow end to end.
-async function signIn(path, forwardedHeader) {
+async function signIn(path, forwardedHeader, extraBody = {}) {
 	const cfg = config();
-	const handoffStore = new Map();
+	const kv = kvStub();
 	const handoff = await createBridgeHandoff({
 		payload: validateBridgePayload({ provider: 'prismatica', subject: randomUUID(), email: 'a@example.com', name: 'A', jti: randomUUID() }),
-		config: cfg, handoffStore,
+		config: cfg, kv,
 	});
 	const seen = [];
 	const fetchImpl = async (url, init = {}) => {
 		const route = String(url).replace(GATEWAY, '');
-		seen.push({ route, forwardedFor: init.headers?.['x-forwarded-for'] });
+		seen.push({ route, forwardedFor: init.headers?.['x-forwarded-for'], body: init.body ? JSON.parse(init.body) : {} });
 		if (route === '/api/auth/register') return reply({ ok: true });
 		if (route === '/api/auth/login') return reply({ access_token: 'gw-token', refresh_token: 'r', user: { id: randomUUID() } });
 		return reply({ redirectUrl: handoff.redirectUrl });
 	};
-	const server = createBridgeServer({ config: cfg, handoffStore, fetchImpl });
+	const server = createBridgeServer({ config: cfg, kv, fetchImpl });
 	await new Promise((done) => server.listen(0, '127.0.0.1', done));
 	try {
 		const response = await fetch(`http://127.0.0.1:${server.address().port}${path}`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json', ...(forwardedHeader ? { 'x-forwarded-for': forwardedHeader } : {}) },
-			body: JSON.stringify({ email: 'a@example.com', password: 'correct horse battery' }),
+			body: JSON.stringify({ email: 'a@example.com', password: 'correct horse battery', ...extraBody }),
 		});
 		await response.text();
 		return { status: response.status, seen };
@@ -79,5 +82,10 @@ describe('bridge calls to the auth gateway forward the client address', () => {
 		const { seen } = await signIn('/api/auth/register', '198.51.100.4');
 		assert.equal(seen[0].route, '/api/auth/register');
 		for (const call of seen) assert.equal(call.forwardedFor, '198.51.100.4, 127.0.0.1');
+	});
+
+	it('forwards the constant Turnstile token while the bridge check is off, whatever the browser sent', async () => {
+		const { seen } = await signIn('/api/auth/login', undefined, { turnstileToken: 'browser-token' });
+		assert.equal(seen[0].body.turnstileToken, 'localhost-turnstile-token');
 	});
 });

@@ -26,21 +26,8 @@ import {
 } from "lucide-react";
 import { canDuplicatePage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import type { PageEntry } from "@/entities/page";
+import { ancestorChain } from "@/entities/page/model/ancestorChain";
 import type { MenuActionCtx, PageMenuAction } from "../types";
-
-/** Walk parentPageId from `page` up to the workspace root. Returns root→page. */
-function ancestorChain(page: PageEntry, all: PageEntry[]): PageEntry[] {
-  const byId = new Map(all.map((p) => [p._id, p]));
-  const chain: PageEntry[] = [];
-  const seen = new Set<string>();
-  let cur: PageEntry | undefined = page;
-  while (cur && !seen.has(cur._id)) {
-    seen.add(cur._id);
-    chain.unshift(cur);
-    cur = cur.parentPageId ? byId.get(cur.parentPageId) : undefined;
-  }
-  return chain;
-}
 
 const titleOf = (p: PageEntry) => p.title || "Untitled";
 

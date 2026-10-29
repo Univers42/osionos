@@ -10,7 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import React, { useState } from "react";
+import React from "react";
 import {
   Settings,
   LayoutGrid,
@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 
 import { useWorkspaceInvitesStore } from "@/store/settings";
-import { LazySettingsCenter } from "@/features/settings/LazySettingsCenter";
+import { openSettings } from "@/features/settings/model/settingsNav";
 import { SidebarNavItem } from "./SidebarNavItem";
 
 // Parity gate: the BaaS console nav item only exists when a project is
@@ -44,14 +44,11 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
   showInviteCTA,
   onDismissInvite,
 }) => {
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Same pattern as UserSwitcherPanel: open the real SettingsCenter on the
-  // People tab, and let the People panel consume this request to open its
-  // invite modal.
+  // The People section consumes the invite request to open its invite modal.
   const openInviteSettings = () => {
     useWorkspaceInvitesStore.getState().requestInvite();
-    setSettingsOpen(true);
+    openSettings("people");
   };
 
   return (
@@ -136,9 +133,6 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
             </button>
           </div>
         </div>
-      )}
-      {settingsOpen && (
-        <LazySettingsCenter initialTab="people" onClose={() => setSettingsOpen(false)} />
       )}
     </>
   );

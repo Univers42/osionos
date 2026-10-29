@@ -1,0 +1,7 @@
+ 01:32:28 up 1 day,  9:59,  1 user,  load average: 4.49, 4.23, 3.77
+{"phase":"idle","ttft_ms":[267,271,214,206]}
+{"phase":"during-image","round":1,"ttft_ms":296,"image_ms":23110}
+{"phase":"during-image","round":2,"ttft_ms":235,"image_ms":19298}
+{"phase":"during-image","round":3,"ttft_ms":181,"image_ms":19337}
+{"phase":"during-image","round":4,"ttft_ms":229,"image_ms":19332}
+ 01:33:56 up 1 day, 10:01,  1 user,  load average: 5.68, 4.78, 4.01

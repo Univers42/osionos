@@ -32,6 +32,7 @@ import {
 import "@osionos/legacy-graph-engine/styles/graph.css";
 import { pageEntryToTab } from "@/widgets/workspace-grid/model/pageToTab";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { useHovercardsEnabled } from "@/shared/config/useAppearance";
 import { type GraphData, useLegacyGraphModel } from "./useLegacyGraphModel";
 import { loadPageById, pageIdFromNodeId } from "./nodePreview";
 import { isRecordNodeId, openRecordNode } from "./recordOpen";
@@ -47,6 +48,7 @@ export function LegacyGraphEngineExplorer(): ReactElement {
   const [hoveredId, setHoveredId] = useState<NodeId | null>(null);
   const [modHeld, setModHeld] = useState(false);
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
+  const hovercardsEnabled = useHovercardsEnabled();
   const modRef = useRef(false);
   const cursorRef = useRef({ x: 0, y: 0 });
 
@@ -94,7 +96,7 @@ export function LegacyGraphEngineExplorer(): ReactElement {
     setSelectedId(id);
   }, [openNode]);
 
-  // Debounce the Ctrl+hover preview so scrubbing across nodes doesn't fetch each one.
+  // Ctrl+hover content preview so scrubbing across nodes doesn't fetch each one.
   const [debouncedNode, setDebouncedNode] = useState<NodeId | null>(null);
   useEffect(() => {
     if (!modHeld || hoveredId === null) return;
@@ -103,9 +105,14 @@ export function LegacyGraphEngineExplorer(): ReactElement {
     return () => clearTimeout(timer);
   }, [modHeld, hoveredId]);
 
-  const previewPageId = modHeld && hoveredId !== null && hoveredId === debouncedNode
-    ? pageIdFromNodeId(String(hoveredId))
-    : null;
+  // With hovercards off the card waits for a click: the selected node shows it,
+  // not the hovered one, so a card never appears under a pointer that did not
+  // ask for it.
+  const previewPageId = !hovercardsEnabled
+    ? (selectedId ? pageIdFromNodeId(String(selectedId)) : null)
+    : modHeld && hoveredId !== null && hoveredId === debouncedNode
+      ? pageIdFromNodeId(String(hoveredId))
+      : null;
 
   const legend = useMemo(() => deriveLegend(engineModel), [engineModel]);
   const focusIds = useMemo(

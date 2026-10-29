@@ -21,19 +21,35 @@
 import type { NotionState } from "@notion-db/object-database";
 import { api, getActivePageJwt, API_BASE } from "@/shared/api/client";
 import { isObjectDatabaseServerSyncEnabled } from "@/shared/config/featureFlags";
-import { hashSlice, sliceDatabase, userDatabaseIds, withMergedSlice, withServerSlice } from "./objectDatabaseSlice";
-import { startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objectDatabaseRealtime";
+import { emptySlice, hashSlice, sliceAllDatabases, userDatabaseIds } from "./objectDatabaseSlice";
+import { reconcileServerDatabases } from "./objectDatabaseReconcile";
+import { withoutDeletedPages, tombstonesStillNeeded } from "./knownDatabasePersistedState";
+import { OBJECT_DB_WRITER_ID, startObjectDatabaseRealtime, stopObjectDatabaseRealtime } from "./objectDatabaseRealtime";
+import {
+  databaseWorkspace,
+  rememberDatabaseWorkspace,
+  resetObjectDatabaseWorkspaces,
+} from "./objectDatabaseWorkspaces";
+import { createPushBaseline } from "./objectDatabasePushBaseline";
+import { createSessionWait, type SessionWait } from "./sessionWait";
 
-const PUSHED_HASHES_KEY = "osionos.objectDb.pushed.v1";
 const HYDRATION_JWT_RETRY_MS = 1500;
 const HYDRATION_JWT_MAX_ATTEMPTS = 12;
 
-type ServerObjectDatabase = { dbKey: string; title?: string; state?: NotionState };
+type ServerObjectDatabase = { dbKey: string; title?: string; state?: NotionState; workspaceId?: string | null };
 type ServerListResponse = { databases?: ServerObjectDatabase[] };
 
 export type ObjectDatabaseSyncHooks = {
   getSeedIds: () => ReadonlySet<string>;
   getLiveState: () => NotionState;
+  /** Pages the user deleted. Never pulled back from the server (the push that
+   *  removes them may have been aborted by a reload). Optional: tests/no-store. */
+  getDeletedPageIds?: () => ReadonlySet<string>;
+  /** The server no longer holds a deleted row → its tombstone is dead weight.
+   *  Called with the tombstones that are STILL needed; the store drops the
+   *  others and re-persists so the stored snapshot shrinks.
+   *  Optional: tests/no-store. */
+  pruneDeletedPageIds?: (stillNeeded: ReadonlySet<string>) => void;
   applyMerged: (state: NotionState) => void;
   notifyReloaded?: () => void;
   reconcileRegistry?: (userDbKeys: string[]) => void;
@@ -41,7 +57,7 @@ export type ObjectDatabaseSyncHooks = {
 
 let pushInFlight = false;
 let hydrationDone = false; // hydrate() has been launched with a session this account
-let hydrationPolling = false; // a jwt-wait loop is currently running (no concurrent polls)
+let hydrationWait: SessionWait | null = null; // the wait for the session token, one per account
 let hydrationCompleted = false; // hydrate() finished — gates delete propagation
 
 /** Sync is possible only client-side, with the flag on and a bridge URL set
@@ -50,38 +66,58 @@ export function objectDatabaseServerSyncReady(): boolean {
   return globalThis.window !== undefined && Boolean(API_BASE) && isObjectDatabaseServerSyncEnabled();
 }
 
-function loadPushedHashes(): Record<string, string> {
-  try {
-    const parsed = JSON.parse(globalThis.localStorage.getItem(PUSHED_HASHES_KEY) ?? "null");
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, string>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function savePushedHashes(map: Record<string, string>): void {
-  try {
-    globalThis.localStorage.setItem(PUSHED_HASHES_KEY, JSON.stringify(map));
-  } catch {
-    // localStorage can be unavailable or quota-limited — dirtiness just recomputes.
-  }
-}
+const pushBaseline = createPushBaseline(() => globalThis.localStorage);
 
 function databaseTitle(state: NotionState, dbKey: string): string {
   const database = state.databases[dbKey] as { name?: string; title?: string } | undefined;
   return String(database?.name ?? database?.title ?? "Untitled").slice(0, 200) || "Untitled";
 }
 
+/** The server's copy of one database (the bridge answers `{}` for a row it
+ *  never got a state for). */
+function serverStateOf(row: ServerObjectDatabase): NotionState {
+  return row.state ?? ({ databases: {}, pages: {}, views: {} } as NotionState);
+}
+
 // ── bridge I/O (owner scoping is enforced server-side from the session token) ─
 async function fetchServerDatabases(jwt: string): Promise<Map<string, ServerObjectDatabase>> {
   const response = await api.get<ServerListResponse>("/api/object-databases", jwt);
   const map = new Map<string, ServerObjectDatabase>();
-  for (const row of response.databases ?? []) if (row?.dbKey) map.set(row.dbKey, row);
+  for (const row of response.databases ?? []) {
+    if (!row?.dbKey) continue;
+    map.set(row.dbKey, row);
+    // The bridge returns the workspace; remember it before any push can happen.
+    rememberDatabaseWorkspace(row.dbKey, row.workspaceId);
+  }
   return map;
 }
 
+/** `origin` is this tab's id: the bridge echoes it so the tab skips its own nudge. */
+type ObjectDatabasePushBody = { dbKey: string; title: string; state: NotionState; origin: string; workspaceId?: string };
+
+/** The exact body of a push. Exported so the test can prove the workspace
+ *  comes from the database's map, not from the active workspace. */
+export function objectDatabasePushBody(
+  dbKey: string,
+  title: string,
+  slice: NotionState,
+  workspaceId?: string,
+): ObjectDatabasePushBody {
+  return { dbKey, title, state: slice, origin: OBJECT_DB_WRITER_ID, ...(workspaceId ? { workspaceId } : {}) };
+}
+
 async function pushDatabaseSlice(jwt: string, dbKey: string, title: string, slice: NotionState): Promise<void> {
-  await api.post("/api/object-databases", { dbKey, title, state: slice }, jwt);
+  // C138 is per workspace: send the database's own workspace, never an active one.
+  await api.post("/api/object-databases", objectDatabasePushBodyFor(dbKey, title, slice), jwt);
+}
+
+/** The body of a dirty-database push, workspace included from the map. */
+export function objectDatabasePushBodyFor(
+  dbKey: string,
+  title: string,
+  slice: NotionState,
+): ObjectDatabasePushBody {
+  return objectDatabasePushBody(dbKey, title, slice, databaseWorkspace(dbKey));
 }
 
 async function deleteDatabaseRemote(jwt: string, dbKey: string): Promise<void> {
@@ -95,15 +131,23 @@ async function deleteDatabaseRemote(jwt: string, dbKey: string): Promise<void> {
  *  could overwrite real server data before it ever saw it. Once hydration has run
  *  the store is reconciled, so pushing is safe.
  *  Fire-and-forget — a failed item simply stays dirty and retries next flush. */
-export function pushDirtyObjectDatabases(state: NotionState, seedIds: ReadonlySet<string>): void {
+export function pushDirtyObjectDatabases(
+  state: NotionState,
+  seedIds: ReadonlySet<string>,
+  deletedPageIds?: ReadonlySet<string>,
+): void {
   if (!objectDatabaseServerSyncReady() || pushInFlight || !hydrationCompleted) return;
   const jwt = getActivePageJwt();
   if (!jwt) return;
+  // A tombstoned page must not be written back to the server (that would undo
+  // the delete for every other client).
+  if (deletedPageIds?.size) state = withoutDeletedPages(state, deletedPageIds);
 
-  const pushed = loadPushedHashes();
+  const pushed = pushBaseline.load();
   const userIds = new Set(userDatabaseIds(state, seedIds));
+  const slices = sliceAllDatabases(state);
   const dirty = [...userIds]
-    .map((dbKey) => ({ dbKey, title: databaseTitle(state, dbKey), slice: sliceDatabase(state, dbKey) }))
+    .map((dbKey) => ({ dbKey, title: databaseTitle(state, dbKey), slice: slices.get(dbKey) ?? emptySlice() }))
     .map((item) => ({ ...item, hash: hashSlice(item.slice) }))
     .filter((item) => pushed[item.dbKey] !== item.hash);
   const removed = Object.keys(pushed).filter((dbKey) => !userIds.has(dbKey));
@@ -111,7 +155,7 @@ export function pushDirtyObjectDatabases(state: NotionState, seedIds: ReadonlySe
 
   pushInFlight = true;
   void (async () => {
-    const next = loadPushedHashes();
+    const next = pushBaseline.load();
     try {
       for (const item of dirty) {
         try {
@@ -129,7 +173,7 @@ export function pushDirtyObjectDatabases(state: NotionState, seedIds: ReadonlySe
           // leave the hash so the delete retries next flush
         }
       }
-      savePushedHashes(next);
+      pushBaseline.save(next);
     } finally {
       pushInFlight = false;
     }
@@ -150,90 +194,68 @@ async function hydrate(hooks: ObjectDatabaseSyncHooks): Promise<void> {
   const serverMap = await fetchServerDatabases(jwt);
 
   const seedIds = hooks.getSeedIds();
-  const pushed = loadPushedHashes();
-  const nextPushed: Record<string, string> = { ...pushed };
-  let merged = hooks.getLiveState();
-  let changed = false;
-
-  for (const [dbKey, row] of serverMap) {
-    const serverState = row.state ?? ({ databases: {}, pages: {}, views: {} } as NotionState);
-    const localHash = hashSlice(sliceDatabase(merged, dbKey));
-    if (merged.databases[dbKey] && pushed[dbKey] !== localHash) {
-      // Local is dirty/untracked — genuine offline edits OR a fresh placeholder
-      // auto-created before this pull landed. Union with the server so neither
-      // side loses a record (a placeholder can no longer erase real data), then
-      // re-push the union (drop the baseline so it counts as dirty next flush).
-      const unionCandidate = withMergedSlice(merged, dbKey, serverState);
-      delete nextPushed[dbKey];
-      if (hashSlice(sliceDatabase(unionCandidate, dbKey)) !== localHash) {
-        merged = unionCandidate;
-        changed = true;
-      }
-      continue;
-    }
-    const candidate = withServerSlice(merged, dbKey, serverState);
-    const serverHash = hashSlice(sliceDatabase(candidate, dbKey));
-    nextPushed[dbKey] = serverHash; // baseline: local now equals server
-    if (serverHash !== localHash) {
-      merged = candidate;
-      changed = true;
-    }
-  }
+  const deletedPageIds = hooks.getDeletedPageIds?.() ?? new Set<string>();
+  const liveState = hooks.getLiveState();
+  const live = withoutDeletedPages(liveState, deletedPageIds);
+  const server = new Map([...serverMap].map(([dbKey, row]) => [dbKey, serverStateOf(row)] as const));
+  const { merged, changed: reconciled, nextPushed } = reconcileServerDatabases({ live, server, pushed: pushBaseline.load(), deletedPageIds });
+  const changed = reconciled || live !== liveState;
 
   for (const dbKey of userDatabaseIds(merged, seedIds)) {
     if (!serverMap.has(dbKey)) delete nextPushed[dbKey]; // never on server → auto-repair on push
   }
 
-  savePushedHashes(nextPushed);
+  // A tombstone is only needed until the server agrees the row is gone: the
+  // merge above already ran with the full set, so from here on a tombstone no
+  // server slice holds is dead weight — it would pile up in localStorage for
+  // every deletion the user ever made. An empty server map keeps them all (an
+  // empty list can mean "not loaded" — never prune blind).
+  hooks.pruneDeletedPageIds?.(
+    tombstonesStillNeeded(deletedPageIds, [...server.values()]),
+  );
+
+  pushBaseline.save(nextPushed);
   hydrationCompleted = true;
   if (changed) {
     hooks.applyMerged(merged);
     hooks.notifyReloaded?.(); // mounted views reload from the merged store immediately
   }
   hooks.reconcileRegistry?.(userDatabaseIds(merged, seedIds)); // list every synced db in the sidebar
-  pushDirtyObjectDatabases(merged, seedIds); // upload dirty + repaired now, not only on next edit
+  pushDirtyObjectDatabases(merged, seedIds, deletedPageIds); // upload dirty + repaired now, not only on next edit
 }
 
 /** Kick hydration once the session token exists. Waits briefly for it, then
  *  reconciles. If no token appears in time (e.g. the user logs in later) it
- *  stops WITHOUT latching, so a subsequent call retries with the fresh session.
- *  Any failure degrades to local-only (edits still push once the bridge is up). */
+ *  stops WITHOUT latching, so a subsequent call retries with the fresh session;
+ *  a call that finds the token while the wait sleeps starts it now (App calls
+ *  this when a sign-in lands). Any failure degrades to local-only (edits still
+ *  push once the bridge is up). */
 export function ensureObjectDatabaseHydration(hooks: ObjectDatabaseSyncHooks): void {
-  if (hydrationDone || hydrationPolling) return;
+  if (hydrationDone) return;
   if (!objectDatabaseServerSyncReady()) return;
-  hydrationPolling = true;
-
-  let attempts = 0;
-  const attempt = (): void => {
-    if (getActivePageJwt()) {
-      hydrationPolling = false;
+  hydrationWait ??= createSessionWait({
+    hasSession: () => Boolean(getActivePageJwt()),
+    start: () => {
       hydrationDone = true;
       void hydrate(hooks).catch(() => undefined);
       // Live cross-client refresh: re-run the same data-loss-safe hydration whenever
       // another browser/tab of this account writes (idempotent + coalesced).
       startObjectDatabaseRealtime(() => { void hydrate(hooks).catch(() => undefined); });
-      return;
-    }
-    attempts += 1;
-    if (attempts < HYDRATION_JWT_MAX_ATTEMPTS) {
-      globalThis.setTimeout(attempt, HYDRATION_JWT_RETRY_MS);
-    } else {
-      hydrationPolling = false; // gave up; a later call (post-login) retries cleanly
-    }
-  };
-  attempt();
+    },
+    retryMs: HYDRATION_JWT_RETRY_MS,
+    maxAttempts: HYDRATION_JWT_MAX_ATTEMPTS,
+  });
+  hydrationWait.poke();
 }
 
 /** Start clean for a different account (call on account switch): the next
  *  hydration re-runs for the new session and no old push baseline lingers. */
 export function resetObjectDatabaseSync(): void {
   stopObjectDatabaseRealtime();
+  hydrationWait?.cancel();
+  hydrationWait = null;
   hydrationDone = false;
-  hydrationPolling = false;
   hydrationCompleted = false;
-  try {
-    globalThis.localStorage?.removeItem(PUSHED_HASHES_KEY);
-  } catch {
-    // localStorage may be unavailable — the baseline just recomputes.
-  }
+  resetObjectDatabaseWorkspaces();
+  pushBaseline.reset();
 }

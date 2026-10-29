@@ -38,9 +38,11 @@ export const automationShortcutsScenarios = [
       await openShortcutManager(page);
 
       await expect(page.getByRole("heading", { name: "Keyboard shortcuts" }).first()).toBeVisible();
-      // The toolbar (add / export / import / reset).
-      await expect(page.getByRole("button", { name: "Export", exact: true })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Import", exact: true })).toBeVisible();
+      // The toolbar (add / export / import / reset) — inside the shortcuts panel: the
+      // settings nav has an "Import" section of its own.
+      const manager = page.locator('[data-settings-panel="shortcuts"]');
+      await expect(manager.getByRole("button", { name: "Export", exact: true })).toBeVisible();
+      await expect(manager.getByRole("button", { name: "Import", exact: true })).toBeVisible();
       // One on/off toggle per seeded shortcut row → the whole table rendered.
       const rowToggles = page.getByRole("button", { name: /^(Enabled|Disabled)$/ });
       await expect(rowToggles.first()).toBeVisible();

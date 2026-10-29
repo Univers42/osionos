@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { Buffer } from "node:buffer";
 import process from "node:process";
 import { expect } from "@playwright/test";
 
@@ -23,16 +24,18 @@ export async function createNewWorkspacePage(page) {
     .waitFor({ state: "visible", timeout: 5_000 })
     .then(() => true)
     .catch(() => false);
-  if (appeared) {
-    await newPageButton.click();
-  } else {
-    const addPrivatePageButton = page
-      .locator('button[title="Add to Private"], button[title="Add file"]')
-      .first();
-    await addPrivatePageButton.waitFor({ state: "attached" });
-    await addPrivatePageButton.evaluate((node) => node.click());
-  }
+  // A phone-width shell can boot with the Explorer panel closed (CI, 390x844 and
+  // 375x812): the panel header holding "New page" never mounts until the Explorer
+  // rail tab opens it.
+  // Only when it is not mounted at all: the tab toggles, so clicking it on a slow
+  // boot whose panel is already open would close it.
+  const explorerTab = page.getByRole("tab", { name: "Explorer" });
+  const openedExplorer = !appeared && (await newPageButton.count()) === 0;
+  if (openedExplorer) await explorerTab.click();
+  await newPageButton.click();
   await page.getByRole("textbox", { name: "Page title" }).waitFor();
+  // Back to the rail the shell booted with: a 375px page beside the open panel is a sliver.
+  if (openedExplorer) await explorerTab.click();
 }
 
 /** The workbench explorer row of the page titled `title`. The row's text may start with the
@@ -69,8 +72,12 @@ export async function activateFirstEditor(page) {
   return getEditors(page).first();
 }
 
+/** Outside a kept tab: a pane keeps its recent tabs mounted under an inert,
+ *  content-visibility: hidden wrapper, so their editors are still in the DOM. */
+export const LIVE = ":not([inert] *)";
+
 export function getEditors(page) {
-  return page.locator('[role="textbox"][aria-multiline="true"]');
+  return page.locator(`[role="textbox"][aria-multiline="true"]${LIVE}`);
 }
 
 export function getCodeTextareas(page) {
@@ -82,7 +89,7 @@ export function getCodeTextarea(page) {
 }
 
 export function pageTitleEditor(page) {
-  return page.getByRole("textbox", { name: "Page title" });
+  return page.getByRole("textbox", { name: "Page title" }).and(page.locator(LIVE));
 }
 
 export async function editorText(editor) {
@@ -515,11 +522,33 @@ export async function createCodeBlock(page) {
   await getCodeTextarea(page).waitFor();
 }
 
-/** Deterministic, offline-safe fixture URL for embedding a media asset via the
- *  "Link" tab (no network fetch, no upload — see embedMediaViaLink). */
+/** Fixture URL for embedding a media asset via the "Link" tab; stubMediaFixtures
+ *  answers it, so no upload and no real network fetch (see embedMediaViaLink). */
 function mediaFixtureUrl(kind, index = 0) {
   const ext = { image: "png", video: "mp4", audio: "mp3", file: "pdf" }[kind] ?? "bin";
   return `https://example.com/fixtures/${kind}-${index}.${ext}`;
+}
+
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  "base64",
+);
+const stubbedPages = new WeakSet();
+
+/** The browser does fetch an embedded image: without this, CI (which has a network)
+ *  fetched example.com while the local run (no DNS) failed fast, and the image
+ *  picker tests failed only in CI shard 1 (PRs #131 and #132, 2026-10-23). */
+async function stubMediaFixtures(page) {
+  if (stubbedPages.has(page)) return;
+  stubbedPages.add(page);
+  await page.route("https://example.com/fixtures/**", (route) => {
+    const isImage = route.request().url().endsWith(".png");
+    return route.fulfill({
+      status: 200,
+      contentType: isImage ? "image/png" : "application/octet-stream",
+      body: isImage ? ONE_PIXEL_PNG : Buffer.alloc(0),
+    });
+  });
 }
 
 /** Embed a media asset through the current MediaEmbedDialog contract
@@ -528,6 +557,7 @@ function mediaFixtureUrl(kind, index = 0) {
  *  so the Link tab (deterministic, offline) is the only tab that never depends on
  *  network fetches or a real file. */
 export async function embedMediaViaLink(page, kind, url = mediaFixtureUrl(kind)) {
+  await stubMediaFixtures(page);
   await mediaBlockPicker(page).waitFor();
   await page.getByRole("tab", { name: "Link" }).click();
   await page.getByPlaceholder(`Paste the ${kind} link…`).fill(url);
@@ -720,16 +750,25 @@ export async function dragBlockTo(page, fromIndex, toIndex, targetPosition = "ab
   });
 }
 
-export async function startSyntheticBlockDrag(page, fromIndex) {
+// Block drags run on pointer events (the handle is not natively draggable), so a
+// carried block is driven with the real mouse: press, move past the threshold.
+export async function startBlockDrag(page, fromIndex) {
   const handle = page
     .getByRole("button", { name: /Drag to reorder block/i })
     .nth(fromIndex);
-  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
-  await handle.dispatchEvent("dragstart", { dataTransfer });
-  return dataTransfer;
+  await blockLocator(page, fromIndex).hover();
+  const box = await handle.boundingBox();
+
+  if (!box) {
+    throw new Error("Could not resolve drag handle bounding box");
+  }
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 12, box.y + box.height / 2 + 12, { steps: 3 });
 }
 
-export async function dragOverBlock(page, toIndex, dataTransfer, targetPosition = "above") {
+export async function dragOverBlock(page, toIndex, targetPosition = "above") {
   const target = blockLocator(page, toIndex);
   const targetBox = await target.boundingBox();
 
@@ -737,21 +776,17 @@ export async function dragOverBlock(page, toIndex, dataTransfer, targetPosition 
     throw new Error("Could not resolve drag target bounding box");
   }
 
-  await target.dispatchEvent("dragover", {
-    dataTransfer,
-    clientX: targetBox.x + Math.min(24, Math.max(8, targetBox.width / 2)),
-    clientY:
-      targetBox.y +
-      (targetPosition === "above" ? 2 : Math.max(4, targetBox.height - 2)),
-  });
+  await page.mouse.move(
+    targetBox.x + Math.min(24, Math.max(8, targetBox.width / 2)),
+    targetBox.y + (targetPosition === "above" ? 2 : Math.max(4, targetBox.height - 2)),
+    { steps: 3 },
+  );
 }
 
-export async function endSyntheticBlockDrag(page, fromIndex, dataTransfer) {
-  const handle = page
-    .getByRole("button", { name: /Drag to reorder block/i })
-    .nth(fromIndex);
-  await handle.dispatchEvent("dragend", { dataTransfer });
-  await dataTransfer.dispose();
+/** Ends a carried block without dropping it. */
+export async function cancelBlockDrag(page) {
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
 }
 
 export async function blockOpacity(page, index) {

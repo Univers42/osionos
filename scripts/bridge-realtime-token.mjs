@@ -13,16 +13,20 @@
 /**
  * `POST /api/realtime/token` — a subscribe-only realtime token for ONE topic the
  * caller may read, so the public build ships no baked VITE_BAAS_REALTIME_TOKEN.
- * The body names what to follow ({kind:'chat',channelId} | {kind:'user',subject?}),
- * never a topic: the topic is built here from a checked grant, so no client can
- * ask for feed:, presence:, collab:, table:, a wildcard or someone else's inbox.
+ * The body names what to follow, never a topic:
+ *   {kind:'chat', channelId}         → chat:<workspace>:<channel>
+ *   {kind:'user', subject?}           → user:<userId> | user:<notify_token>
+ *   {kind:'table', dbId, table}       → table:<dbId>:<table>   (a mounted live DB)
+ *   {kind:'objectdb'}                 → objectdb:<caller's own user id>
+ * The topic is built here from a checked grant, so no client can ask for feed:,
+ * presence:, collab:, a wildcard or someone else's inbox.
  *
  * Caveat: the realtime gateway checks `exp` only at AUTH, so an open subscription
  * outlives its token and survives the user's removal from the channel until the
  * socket closes. The 900 s TTL bounds how long a stolen token can open new ones.
  */
 
-import { UUID_REGEX, bearerToken, httpError, notifyTokenFor, readJsonBody, sendJson, userTopic } from './bridge-social-core.mjs';
+import { QUERY_ROUTER_TABLE, UUID_REGEX, bearerToken, httpError, notifyTokenFor, readJsonBody, sendJson, userTopic } from './bridge-social-core.mjs';
 import { chatTopic, requireChannelAccess } from './bridge-chat.mjs';
 import { mintRealtimeToken } from './bridge-collab.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
@@ -53,11 +57,32 @@ async function userTopicFor(deps, session, body, config) {
 	return userTopic(ownToken);
 }
 
+// A live database mounted in a workspace: `table:<dbId>:<table>`. The dbId must be a
+// mount of a workspace the caller owns or is a member of — the SAME rule as
+// resolveAccessibleMount in bridge-api.mjs. That check is INJECTED (mountAccess):
+// this module must not import bridge-api.mjs, which imports this one.
+async function tableTopicFor(deps, session, body) {
+	const dbId = String(body.dbId ?? '');
+	const table = String(body.table ?? '');
+	if (!UUID_REGEX.test(dbId) || !QUERY_ROUTER_TABLE.test(table)) throw forbidden();
+	if (typeof deps.mountAccess !== 'function') throw forbidden();
+	if (!await deps.mountAccess(session, dbId)) throw forbidden();
+	return `table:${dbId}:${table}`;
+}
+
+// The caller's OWN object-database stream. Any subject/ownerId in the body is ignored:
+// the topic is always the caller's own id, never another user's.
+function objectDbTopicFor(session) {
+	return `objectdb:${session.userId}`;
+}
+
 async function resolveTopic(deps, session, body, config) {
 	// A JSON `null`, number or array parses fine but has no `kind`; reading it threw a TypeError.
 	if (body === null || typeof body !== 'object' || Array.isArray(body)) throw forbidden();
 	if (body.kind === 'chat') return chatTopicFor(deps, session, body, config);
 	if (body.kind === 'user') return userTopicFor(deps, session, body, config);
+	if (body.kind === 'table') return tableTopicFor(deps, session, body);
+	if (body.kind === 'objectdb') return objectDbTopicFor(session);
 	throw forbidden();
 }
 
@@ -75,9 +100,17 @@ async function issueToken(deps, session, request, response, config) {
 	return sendJson(response, 200, { ok: true, token, expiresAt, topic }, config);
 }
 
-/** Build the dispatcher: `await handler(url, request, response)` → true when handled. */
-export function createRealtimeTokenHandler({ config, verifySession, fetchImpl = fetch, env = process.env }) {
-	const deps = { fetchImpl, env };
+/**
+ * Build the dispatcher: `await handler(url, request, response)` → true when handled.
+ *
+ * `mountAccess(session, dbId)` → true when the dbId is a mount of a workspace the
+ * caller owns or is a member of. It is injected (bridge-api.mjs builds it from the
+ * same functions resolveAccessibleMount uses) because this module must not import
+ * bridge-api.mjs — that module imports this one. Without it the `table` grant is
+ * refused, never guessed.
+ */
+export function createRealtimeTokenHandler({ config, verifySession, fetchImpl = fetch, env = process.env, mountAccess }) {
+	const deps = { fetchImpl, env, mountAccess };
 	return async function handleRealtimeTokenRoute(url, request, response, requestConfig = config) {
 		if (url.pathname !== '/api/realtime/token') return false;
 		try {

@@ -1,0 +1,70 @@
+# the output check on the generated images, the model AdamCodd/vit-base-nsfw-detector, the file model.onnx
+host_uptime 140406.92 2198506.41
+host_loadavg 6.85 6.06 6.44 3/6911 13
+
+model AdamCodd/vit-base-nsfw-detector
+dtype fp32
+sets /mnt/storage/nsfw
+
+label model.onnx
+dtype fp32
+model AdamCodd/vit-base-nsfw-detector
+localModelPath /mnt/storage/nsfw/models
+allowRemoteModels false
+manifest /mnt/storage/nsfw/manifest.tsv
+images 352
+node v22.23.4
+platform linux x64
+uptime_s 140407.7
+load_ms 728.2
+rss_after_load_mb 595
+warmup_images 3
+sequential_ms {"n":352,"min":132.00928600000043,"p50":173.18366849999438,"p95":364.1798938500006,"max":2424.2154940000037,"mean":221.67126788920442}
+decode_ms {"n":352,"min":1.2362149999971734,"p50":5.887308000000303,"p95":12.647110450000032,"max":45.897739,"mean":6.465005301136228}
+infer_ms {"n":352,"min":129.0777989999915,"p50":166.33436149999716,"p95":356.57449965000086,"max":2418.013076000003,"mean":215.20626258806806}
+concurrent_ms {"n":352,"min":136.02437300000747,"p50":516.6116905000017,"p95":798.1561100999977,"max":3785.5195689999964,"mean":496.9939754573861}
+rss_after_run_mb 921.4
+scores 352
+out /results/nsfw-model.onnx/scores.tsv
+== the scores of the safe images, nsfw-model.onnx
+set    images       min       p50       p95       max
+gen        50    0.0032    0.0203    0.0924    0.7745
+a1          2    0.0064    0.0087    0.0107    0.0109
+coco      300    0.0007    0.0143    0.1286    0.5242
+
+== the false positives, nsfw-model.onnx
+set    threshold  flagged  images     rate   wilson 95 %
+gen         0.50        1      50   2.00%   [0.35%, 10.50%]
+gen         0.70        1      50   2.00%   [0.35%, 10.50%]
+gen         0.90        0      50   0.00%   [0.00%, 7.14%]
+a1          0.50        0       2   0.00%   [0.00%, 65.76%]
+a1          0.70        0       2   0.00%   [0.00%, 65.76%]
+a1          0.90        0       2   0.00%   [0.00%, 65.76%]
+coco        0.50        1     300   0.33%   [0.06%, 1.86%]
+coco        0.70        0     300   0.00%   [0.00%, 1.26%]
+coco        0.90        0     300   0.00%   [0.00%, 1.26%]
+
+== the five highest of every set, nsfw-model.onnx
+gen     1  93261             0.7745
+gen     2  508586            0.0966
+gen     3  54654             0.0926
+gen     4  177893            0.0921
+gen     5  65350             0.0887
+a1      1  01.png            0.0109
+a1      2  03.png            0.0064
+coco    1  000000172946      0.5242
+coco    2  000000187243      0.4113
+coco    3  000000079031      0.3643
+coco    4  000000093261      0.2935
+coco    5  000000332570      0.2882
+
+== the time of one image, nsfw-model.onnx
+ images       p50       p95       max
+    352     173.1     364.1    2424.2
+
+# the model file is missing: the check fails closed
+fail_closed_ms 10.2
+fail_closed_error `local_files_only=true` or `env.allowRemoteModels=false` and file was not found locally at "/mnt/storage/nsfw/nothing/AdamCodd/vit-base-nsfw-detector/config.json".
+
+host_uptime 140968.66 2203037.92
+host_loadavg 10.50 11.77 10.11 10/6947 21

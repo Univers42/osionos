@@ -14,10 +14,6 @@ import type { Block, LayoutCell } from "@/entities/block";
 import {
   KNOWN_DATABASE_VIEWS,
   getKnownDatabaseView,
-  EVENTS_DB_ID,
-  LEARN_DB_ID,
-  EVENTS_UPCOMING_VIEW_ID,
-  LEARN_CARDS_VIEW_ID,
 } from "./databaseViewCatalog.meta";
 import {
   RECENTS_DB_ID,
@@ -31,11 +27,10 @@ import {
 // Re-exported here to keep every existing import site working.
 //
 // This module is itself seed-JSON-FREE: it holds the pure layout primitives
-// and the redesigned Home builder (createHomeLayout). The OLD /dashboard
-// showcase builders (createViewShowcaseCells/Layout/LayoutContent), which DO
-// pull the ~458KB seed JSON via getDashboardMetrics, live in
+// and the redesigned Home builder (createHomeLayout). The /dashboard showcase
+// builders (createViewShowcaseCells/Layout/LayoutContent) live in
 // ./databaseViewShowcase — imported only by the lazy editor / slash-command
-// paths, so the JSON never reaches the warm entry or the home-seed chunk.
+// paths.
 export * from "./databaseViewCatalog.meta";
 // The Events + Learn demo seed lives in its own module to avoid a circular
 // import with knownDatabaseState; re-exported so existing call sites resolve.
@@ -158,16 +153,33 @@ interface HomeSection {
   body: (cellId: string) => Block;
 }
 
+/** One column of the Home actions row: a `/button` whose program runs one app action. */
+function homeButton(cellId: string, role: string, label: string, variant: "primary" | "secondary",
+  action: string, args: Record<string, string>): Block {
+  return { id: stableDashboardBlockId(cellId, `column-${role}`), type: "column", content: "", widthRatio: 1 / 3, children: [{
+    id: stableDashboardBlockId(cellId, `button-${role}`), type: "button", content: "", buttonLabel: label, buttonVariant: variant,
+    buttonProgram: { version: 1, steps: [{ op: "action", action: { type: "app_action", name: action, args } }] },
+  }] };
+}
+
 const HOME_SECTIONS: HomeSection[] = [
-  { role: "recents", rowStart: 2, title: "Recently visited",
+  { role: "actions", rowStart: 2,
+    body: (cellId) => ({ id: stableDashboardBlockId(cellId, "buttons"), type: "column_list", content: "", children: [
+      homeButton(cellId, "new-page", "New page", "primary", "page.create", {}),
+      homeButton(cellId, "preferences", "Preferences", "secondary", "settings.open", { section: "preferences" }),
+      homeButton(cellId, "edit-profile", "Edit profile", "secondary", "settings.open", { section: "profile" }),
+    ] }) },
+  { role: "tasks", rowStart: 3, title: "Your tasks",
+    body: (cellId) => databaseInlineBlock("sys:my-tasks", "my-tasks-home-dashboard", stableDashboardBlockId(cellId, "db")) },
+  { role: "pages", rowStart: 4, title: "Your pages",
+    body: (cellId) => databaseInlineBlock("sys:my-pages", "my-pages-home-dashboard", stableDashboardBlockId(cellId, "db")) },
+  { role: "people", rowStart: 5, title: "Your people",
+    body: (cellId) => databaseInlineBlock("sys:my-connections", "my-connections-home-dashboard", stableDashboardBlockId(cellId, "db")) },
+  { role: "workspaces", rowStart: 6, title: "Your workspaces",
+    body: (cellId) => databaseInlineBlock("sys:my-workspaces", "my-workspaces-home-dashboard", stableDashboardBlockId(cellId, "db")) },
+  { role: "recents", rowStart: 7, title: "Recently visited",
     body: (cellId) => databaseInlineBlock(RECENTS_DB_ID, RECENTS_GALLERY_VIEW, stableDashboardBlockId(cellId, "db")) },
-  { role: "learn", rowStart: 3, title: "Learn",
-    body: (cellId) => databaseInlineBlock(LEARN_DB_ID, LEARN_CARDS_VIEW_ID, stableDashboardBlockId(cellId, "db"), true) },
-  { role: "events", rowStart: 4, title: "Upcoming events",
-    body: (cellId) => databaseInlineBlock(EVENTS_DB_ID, EVENTS_UPCOMING_VIEW_ID, stableDashboardBlockId(cellId, "db"), true) },
-  { role: "views", rowStart: 5, title: "Home views",
-    body: (cellId) => ({ id: stableDashboardBlockId(cellId, "launcher"), type: "home_views", content: "", deferMount: true }) },
-  { role: "templates", rowStart: 6, title: "Featured templates",
+  { role: "templates", rowStart: 8, title: "Featured templates",
     body: (cellId) => databaseInlineBlock(TEMPLATES_DB_ID, TEMPLATES_GALLERY_VIEW, stableDashboardBlockId(cellId, "db"), true) },
 ];
 

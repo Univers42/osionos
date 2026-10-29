@@ -37,11 +37,11 @@ function requestTimeoutMs(env) {
 /** One JSON request to the docker API via the socket-proxy. Resolves
  *  { status, body } — the caller decides what a status means (404 is normal
  *  for "container absent"). */
-function dockerRequest({ host, port, timeoutMs }, method, path, body) {
+function dockerRequest({ timeoutMs, ...target }, method, path, body) {
   return new Promise((resolve, reject) => {
     const payload = body === undefined ? null : Buffer.from(JSON.stringify(body));
     const req = http.request(
-      { host, port, method, path, headers: {
+      { ...target, method, path, headers: {
         "content-type": "application/json",
         ...(payload ? { "content-length": payload.length } : {}),
       }, timeout: timeoutMs },
@@ -88,11 +88,32 @@ export function volumeDriverOpts(name, env = process.env) {
   return undefined;
 }
 
+// A unix socket or an absolute path in OSIONOS_IDE_DOCKER_HOST would hand the relay or the
+// ide-server the daemon itself, which is root; only the proxy's TCP port is ever allowed here.
+const isSocketSpelling = (value) => value.startsWith("/") || value.startsWith("unix:") || value.endsWith(".sock");
+
+/** The server-side client: TCP to the socket proxy only, and it refuses a socket path. */
 export function createDockerClient(env = process.env) {
-  const [host, portRaw] = String(env.OSIONOS_IDE_DOCKER_HOST || "").split(":");
-  const port = Number(portRaw || 2375);
+  const configured = String(env.OSIONOS_IDE_DOCKER_HOST || "");
+  if (isSocketSpelling(configured)) {
+    throw new Error("OSIONOS_IDE_DOCKER_HOST must be host:port; a socket path is agent-only");
+  }
+  const [host, portRaw] = configured.split(":");
+  return buildDockerClient({ host, port: Number(portRaw || 2375) }, env);
+}
+
+/** The agent-side client: the user's own Engine socket, an absolute path. Only the osio-agent
+ *  calls this; the exec specs it sends are agent-fixed, never taken from the relay. */
+export function createAgentDockerClient({ socketPath, env = process.env } = {}) {
+  if (typeof socketPath !== "string" || !socketPath.startsWith("/")) {
+    throw new Error("socketPath must be an absolute path");
+  }
+  return buildDockerClient({ socketPath }, env);
+}
+
+function buildDockerClient(target, env) {
   const timeoutMs = requestTimeoutMs(env);
-  const endpoint = { host, port, timeoutMs };
+  const endpoint = { ...target, timeoutMs };
   const call = (method, path, body) => dockerRequest(endpoint, method, path, body);
 
   return {
@@ -196,7 +217,7 @@ export function createDockerClient(env = process.env) {
       return new Promise((resolve, reject) => {
         const body = Buffer.from(JSON.stringify(execSpec));
         const createReq = http.request(
-          { host, port, method: "POST", path: `/containers/${name}/exec`,
+          { ...target, method: "POST", path: `/containers/${name}/exec`,
             headers: { "content-type": "application/json", "content-length": body.length }, timeout: timeoutMs },
           (res) => {
             const chunks = [];
@@ -207,7 +228,7 @@ export function createDockerClient(env = process.env) {
               if (!execId) return reject(new Error("exec create failed"));
               const startBody = Buffer.from(JSON.stringify({ Detach: false, Tty: Boolean(execSpec.Tty) }));
               const startReq = http.request({
-                host, port, method: "POST", path: `/exec/${execId}/start`,
+                ...target, method: "POST", path: `/exec/${execId}/start`,
                 headers: { "content-type": "application/json", "content-length": startBody.length, Connection: "Upgrade", Upgrade: "tcp" },
                 timeout: timeoutMs,
               });

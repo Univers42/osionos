@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:22 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/26 10:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 15:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,6 +19,10 @@
  * Scroll discipline: stick to the bottom only when the reader is already there;
  * a new message while scrolled up surfaces a "N new" jump pill instead of
  * yanking the viewport. Rows are grouped by author + date (model/messageGrouping).
+ *
+ * Writes answer a TYPED outcome: a moderation warning from L0 is the author's
+ * question (the composer answers it), not a connection error — so only a plain
+ * failure is toasted.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -32,12 +36,17 @@ import { initRealtimeMessagesBridge } from "@/services/realtime-messages";
 import { useUnreadStore } from "@/store/chat/useUnreadStore";
 import { useToastStore } from "@osionos/ui/primitives/useToastStore";
 import { postChannelRead } from "@/shared/chat/unreadApi";
-import { useChannelActions } from "../model/useChannelActions";
+import { useChannelActions, type SendOutcome } from "../model/useChannelActions";
 import { useChannelHistory } from "../model/useChannelHistory";
 import { useChannelInfo } from "../model/useChannelInfo";
 import { useChannelLive } from "../model/useChannelLive";
 import { useChannelReceipts } from "../model/useChannelReceipts";
 import { buildMessageRows, firstUnreadId } from "../model/messageGrouping";
+import { mentionsAi } from "../model/aiAnswerDraft";
+import { aiDraftStore, useAiDraft } from "../model/useAiAnswerDraft";
+import { isChannelAiAnswersEnabled } from "@/shared/config/featureFlags";
+import { isAiConfigured } from "@/features/ai/api/aiClient";
+import { AiDraftCard } from "./AiDraftCard";
 import { CallPanel } from "./CallPanel";
 import { ChannelHeader } from "./ChannelHeader";
 import { MessageRow } from "./MessageRow";
@@ -136,8 +145,10 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
   // Destructured because the individual fns are useCallback'd in useChannelActions
   // (stable), while the wrapping `actions` object is rebuilt every render.
   const { edit: editMessage, remove: removeMessage, react: reactMessage } = actions;
+  // The edit answer is passed through, not swallowed: the row's form stays
+  // open until the write really happened.
   const handleEdit = useCallback(
-    (id: string, content: string) => { void editMessage(id, content).catch(() => undefined); },
+    (id: string, content: string, options?: { acknowledgeWarning?: boolean }) => editMessage(id, content, options),
     [editMessage],
   );
   const handleDelete = useCallback(
@@ -148,6 +159,38 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
     (id: string, emoji: string, add: boolean) => { void reactMessage(id, emoji, add).catch(() => undefined); },
     [reactMessage],
   );
+  // The send answer: the reply target is cleared only when the message was
+  // really written, and only a plain failure is toasted — a warning from L0
+  // is the author's question, and the composer answers it.
+  const aiDraft = useAiDraft(channelId);
+  const canAskAi = channel?.kind === "text" && isChannelAiAnswersEnabled() && isAiConfigured();
+  const draftWorkspaceId = liveWorkspaceId || channel?.workspaceId || workspaceId;
+  const handleSendOutcome = useCallback((outcome: SendOutcome): SendOutcome => {
+    if (outcome.ok) {
+      setReplyTarget(null);
+      // "@AI" drafts privately for the sender; the channel sees nothing until they post (C429).
+      if (canAskAi && outcome.message && mentionsAi(outcome.message.content)) {
+        aiDraftStore.getState().ask({
+          channelId,
+          workspaceId: draftWorkspaceId,
+          channelName: title || "messages",
+          triggerId: outcome.message.id,
+          userId: activeUserId,
+        });
+      }
+      return outcome;
+    }
+    if (!("warning" in outcome)) {
+      useToastStore.getState().push({ kind: "error", title: "Couldn't send message", description: "Check your connection and try again." });
+    }
+    return outcome;
+  }, [canAskAi, channelId, draftWorkspaceId, title, activeUserId]);
+  const { setMessages } = history;
+  const postAiDraft = useCallback(async () => {
+    const message = await aiDraftStore.getState().post(channelId);
+    if (message) setMessages((current) => (current.some((m) => m.id === message.id) ? current : [...current, message]));
+  }, [channelId, setMessages]);
+  const canModerate = channel?.memberRole === "owner" || channel?.memberRole === "admin";
 
   const jumpToBottom = () => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -272,7 +315,7 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
                   <MessageRow
                     message={message}
                     grouped={index === 0 && windowStart > 0 ? false : grouped}
-                    isAuthor={message.authorId === activeUserId}
+                    isAuthor={message.isAi ? message.aiRequestedBy === activeUserId || canModerate : message.authorId === activeUserId}
                     canInteract={history.mode === "bridge"}
                     userId={activeUserId}
                     onEdit={handleEdit}
@@ -302,6 +345,17 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
         <TypingIndicator channelId={channelId} names={authorNames} />
       </div>
 
+      {aiDraft && (
+        <div className={compact ? "px-2" : "mx-auto w-full max-w-4xl px-4"}>
+          <AiDraftCard
+            draft={aiDraft}
+            onAccept={() => aiDraftStore.getState().accept(channelId)}
+            onPost={() => { void postAiDraft(); }}
+            onRetry={() => aiDraftStore.getState().retry(channelId)}
+            onDiscard={() => aiDraftStore.getState().discard(channelId)}
+          />
+        </div>
+      )}
       <MessageComposer
         key={channelId}
         channelId={channelId}
@@ -310,15 +364,8 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
         compact={compact}
         replyTo={replyTarget ? { authorName: replyTarget.authorName, content: replyTarget.content } : null}
         onClearReply={() => setReplyTarget(null)}
-        onSend={(text, attachments) =>
-          Promise.resolve(actions.send(text, attachments, replyTarget?.id)).then((ok) => {
-            if (ok) setReplyTarget(null);
-            else useToastStore.getState().push({ kind: "error", title: "Couldn't send message", description: "Check your connection and try again." });
-            return ok;
-          }).catch(() => {
-            useToastStore.getState().push({ kind: "error", title: "Couldn't send message", description: "Check your connection and try again." });
-            return false;
-          })
+        onSend={(text, attachments, options) =>
+          actions.send(text, attachments, replyTarget?.id, options).then(handleSendOutcome)
         }
       />
       </div>
@@ -330,10 +377,10 @@ export const ChannelMessagesView: React.FC<ChannelMessagesViewProps> = ({
           userId={activeUserId}
           canInteract={history.mode === "bridge"}
           onReply={setReplyTarget}
-          onEdit={(id, content) => { void actions.edit(id, content).catch(() => undefined); }}
+          onEdit={(id, content, options) => actions.edit(id, content, options)}
           onDelete={(id) => { void actions.remove(id).catch(() => undefined); }}
           onReact={(id, emoji, add) => { void actions.react(id, emoji, add).catch(() => undefined); }}
-          onSend={(text, attachments) => actions.send(text, attachments, threadRoot.id)}
+          onSend={(text, attachments, options) => actions.send(text, attachments, threadRoot.id, options)}
           onClose={() => setThreadRoot(null)}
         />
       )}

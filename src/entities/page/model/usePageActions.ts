@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/05/18 21:19:16 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/05/18 21:19:16 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/22 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,10 +28,13 @@ import {
   copyPageLink,
   exportPage as exportPageFile,
   importPageFile,
+  loadDashboardCells,
   syncPageActionEvent,
   translatePage,
-  type PageActionName,
+  turnIntoDashboardContent,
+  type PageEventName,
 } from '@/services/page-actions';
+import { saveAutosaveVersion } from './versionAutosave';
 
 const MINUTE_IN_MS = 60_000;
 const HOUR_IN_MS = 3_600_000;
@@ -94,6 +97,28 @@ function wordCountFromPage(page: { content?: Array<{ content?: string; children?
   return (page?.content ?? []).reduce((count, block) => count + textWordCount(block.content) + (block.children ?? []).reduce((total, child) => total + textWordCount(child.content), 0), 0);
 }
 
+export interface ProgramPageActionOutcome {
+  status: 'ok' | 'failed';
+  detail?: string;
+}
+
+const programPageRunners = new Map<string, (name: string) => Promise<ProgramPageActionOutcome>>();
+
+/**
+ * Run a page action by name for a button program, through the same callbacks
+ * the page menu uses (snapshot and logAction included). The runner exists only
+ * while a menu or settings panel is mounted for that page.
+ *
+ * Caveat: translate, import, export, updates_analytics and version_history open
+ * UI or need input, so a program cannot run them; a callback that returns
+ * early (no workspace, no page) is reported ok because the menu has no signal.
+ */
+export async function runProgramPageAction(pageId: string, name: string): Promise<ProgramPageActionOutcome> {
+  const runner = programPageRunners.get(pageId);
+  if (!runner) return { status: 'failed', detail: 'page actions are not available for this page right now' };
+  return runner(name);
+}
+
 export function usePageActions(pageId: string | null, workspaceId?: string) {
   const page = usePageStore((state) => (pageId ? state.pageById(pageId) : undefined));
   const activeUserId = useUserStore((state) => state.activeUserId);
@@ -134,16 +159,10 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     if (lastVersionRevisionRef.current === pageRevision) return undefined;
     if (versionTimerRef.current) globalThis.clearTimeout(versionTimerRef.current);
     versionTimerRef.current = globalThis.setTimeout(() => {
-      const latestPage = usePageStore.getState().pageById(pageId);
-      if (!latestPage) return;
       const latestRevision = usePageStore.getState().pageRevisions[pageId] ?? 0;
       if (lastVersionRevisionRef.current === latestRevision) return;
-      versionCounterRef.current += 1;
-      addVersion(safeUserId, pageId, {
-        title: latestPage.title || 'Untitled',
-        content: latestPage.content ?? [],
-        label: `Autosave ${versionCounterRef.current}`,
-      }).catch(() => undefined);
+      const label = `Autosave ${versionCounterRef.current + 1}`;
+      if (saveAutosaveVersion(pageId, safeUserId, label, addVersion)) versionCounterRef.current += 1;
       lastVersionRevisionRef.current = latestRevision;
     }, VERSION_AUTOSAVE_DELAY_MS);
     return () => {
@@ -161,7 +180,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     usePageStore.setState({ activePage: null, showTrash: false, navigationPath: [] });
   }, []);
 
-  const logAction = useCallback(async (action: PageActionName, message: string, metadata: Record<string, unknown> = {}) => {
+  const logAction = useCallback(async (action: PageEventName, message: string, metadata: Record<string, unknown> = {}) => {
     if (!pageId) return;
     await recordAction(safeUserId, pageId, action, metadata);
     await syncPageActionEvent(pageId, action, jwt ?? undefined, metadata);
@@ -174,7 +193,7 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     await addVersion(safeUserId, pageId, { title: page.title || 'Untitled', content: page.content ?? [], label });
   }, [addVersion, page, pageId, safeUserId]);
 
-  const updatePageSetting = useCallback(async (updates: Partial<PageConfig>, action: PageActionName, message: string) => {
+  const updatePageSetting = useCallback(async (updates: Partial<PageConfig>, action: PageEventName, message: string) => {
     if (!pageId) return;
     await updateConfig(safeUserId, pageId, updates);
     await logAction(action, message, updates);
@@ -190,9 +209,9 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
 
   const copyLink = useCallback(async () => {
     if (!pageId) return;
-    await copyPageLink(pageId);
+    await copyPageLink(pageId, page?.workspaceId);
     await logAction('copy_link', 'Link copied');
-  }, [logAction, pageId]);
+  }, [logAction, pageId, page?.workspaceId]);
 
   const copyContents = useCallback(async () => {
     if (!page) return;
@@ -330,9 +349,58 @@ export function usePageActions(pageId: string | null, workspaceId?: string) {
     await logAction('remove_header', 'Header removed — content restored');
   }, [logAction, page?.cover, pageId, snapshot]);
 
+  // "Turn this page into a dashboard": a full-page layout band in front of the
+  // page's blocks. The snapshot is the undo point — the version history brings
+  // the previous body back. The store refuses the write for anyone who may not
+  // edit the body, so the menu item is only a shortcut.
+  const turnIntoDashboard = useCallback(async () => {
+    if (!page || !pageId) return;
+    await snapshot('Before turning into dashboard');
+    const cells = await loadDashboardCells(pageId);
+    updatePageContent(pageId, turnIntoDashboardContent(page, cells));
+    await logAction('turn_into_dashboard', 'Page turned into a dashboard');
+  }, [logAction, page, pageId, snapshot, updatePageContent]);
+
+  const programActions: Record<string, () => unknown> = {
+    copy_link: copyLink,
+    copy_page_contents: copyContents,
+    duplicate,
+    move_to_trash: moveToTrash,
+    present,
+    small_text: toggleSmallText,
+    full_width: toggleFullWidth,
+    lock_page: toggleLock,
+    notify_me: toggleNotifications,
+    connections: manageConnections,
+    remove_header: removeHeaderCanvas,
+    turn_into_dashboard: turnIntoDashboard,
+  };
+  const programActionsRef = useRef(programActions);
+  useEffect(() => {
+    programActionsRef.current = programActions;
+  });
+  useEffect(() => {
+    if (!pageId) return undefined;
+    const runner = async (name: string): Promise<ProgramPageActionOutcome> => {
+      const action = programActionsRef.current[name];
+      if (!action) return { status: 'failed', detail: `page action "${name}" cannot run from a button` };
+      try {
+        await action();
+        return { status: 'ok' };
+      } catch (error) {
+        return { status: 'failed', detail: error instanceof Error ? error.message : 'page action failed' };
+      }
+    };
+    programPageRunners.set(pageId, runner);
+    return () => {
+      if (programPageRunners.get(pageId) === runner) programPageRunners.delete(pageId);
+    };
+  }, [pageId]);
+
   return {
     hasRemovableHeader,
     removeHeaderCanvas,
+    turnIntoDashboard,
     actionMessage,
     config,
     detailPanel,
