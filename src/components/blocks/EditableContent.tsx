@@ -83,10 +83,16 @@ interface EditableContentProps {
   onBlur?: React.FocusEventHandler<HTMLDivElement>;
   /** Current block type — powers the selection toolbar's "Turn into" dropdown. */
   blockType?: string;
+  /** This block's id — the comments panel anchors a new comment to it. */
+  blockId?: string;
   /** Convert this block to another type (from the "Turn into" dropdown). */
   onTurnInto?: (type: string) => void;
-  /** Open the AI panel on the current selection (the selection toolbar). */
-  onAskAI?: (selectionText: string) => void;
+  /** Open the AI panel on the current selection, optionally running a skill. */
+  onAskAI?: (
+    selectionText: string,
+    command?: string,
+    instruction?: string,
+  ) => void;
 }
 
 type PaletteKind = "text" | "background" | null;
@@ -390,6 +396,7 @@ export const EditableContent: React.FC<EditableContentProps> = ({
   onFocus,
   onBlur,
   blockType,
+  blockId,
   onTurnInto,
   onAskAI,
 }) => {
@@ -1016,6 +1023,45 @@ export const EditableContent: React.FC<EditableContentProps> = ({
     setLinkPicker({ mode: "chooser", query: "" });
   }, [selectionSnapshot]);
 
+  // Stable toolbar callbacks: the memoised bar must not re-render just because
+  // this block did (each new arrow function would defeat React.memo).
+  const handleTogglePalette = useCallback(
+    (palette: Exclude<PaletteKind, null>) => {
+      setOpenPalette((current) => (current === palette ? null : palette));
+    },
+    [],
+  );
+
+  const handleToggleShortcuts = useCallback(() => {
+    setOpenPalette(null);
+    setShowShortcuts((current) => !current);
+  }, []);
+
+  const handleFormatBold = useCallback(
+    () => handleToggleInlineFormat("bold"),
+    [handleToggleInlineFormat],
+  );
+  const handleFormatItalic = useCallback(
+    () => handleToggleInlineFormat("italic"),
+    [handleToggleInlineFormat],
+  );
+  const handleFormatUnderline = useCallback(
+    () => handleToggleInlineFormat("underline"),
+    [handleToggleInlineFormat],
+  );
+  const handleFormatStrike = useCallback(
+    () => handleToggleInlineFormat("strikethrough"),
+    [handleToggleInlineFormat],
+  );
+  const handleFormatTextColor = useCallback(
+    (color: InlineColorOption) => handleApplyColor("text", color),
+    [handleApplyColor],
+  );
+  const handleFormatBackgroundColor = useCallback(
+    (color: InlineColorOption) => handleApplyColor("background", color),
+    [handleApplyColor],
+  );
+
   const handleInlineFormattingShortcut = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (isComposing.current || event.altKey) {
@@ -1311,29 +1357,22 @@ export const EditableContent: React.FC<EditableContentProps> = ({
               colorPresets={inlineColorPresets}
               defaultColor={defaultInlineColor}
               shortcutsOpen={showShortcuts}
-              onTogglePalette={(palette) =>
-                setOpenPalette((current) =>
-                  current === palette ? null : palette,
-                )
-              }
-              onToggleShortcuts={() => {
-                setOpenPalette(null);
-                setShowShortcuts((current) => !current);
-              }}
-              onFormatBold={() => handleToggleInlineFormat("bold")}
-              onFormatItalic={() => handleToggleInlineFormat("italic")}
-              onFormatUnderline={() => handleToggleInlineFormat("underline")}
-              onFormatStrike={() => handleToggleInlineFormat("strikethrough")}
+              onTogglePalette={handleTogglePalette}
+              onToggleShortcuts={handleToggleShortcuts}
+              onFormatBold={handleFormatBold}
+              onFormatItalic={handleFormatItalic}
+              onFormatUnderline={handleFormatUnderline}
+              onFormatStrike={handleFormatStrike}
               onFormatCode={handleToggleCode}
-              onFormatTextColor={(color) => handleApplyColor("text", color)}
-              onFormatBackgroundColor={(color) =>
-                handleApplyColor("background", color)
-              }
+              onFormatTextColor={handleFormatTextColor}
+              onFormatBackgroundColor={handleFormatBackgroundColor}
               onOpenSlashMenu={handleOpenSlashMenu}
               onOpenLinkPicker={handleAddLink}
               onClearFormat={handleClearFormat}
               onToggleMath={handleToggleMath}
               blockType={blockType}
+              blockId={blockId}
+              pageId={pageId}
               onTurnInto={onTurnInto}
               selectionText={selectedText}
               onAskAI={onAskAI}
