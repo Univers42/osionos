@@ -93,17 +93,48 @@ const TURN_INTO_BLOCK_TYPES = new Set<BlockType>([
   "column_list",
 ]);
 
-const EXTRA_SECTION_LABELS: Record<string, string> = {
+export const EXTRA_SECTION_LABELS: Record<string, string> = {
+  suggested: "Suggested",
   "turn-into": "Turn into",
   ai: "AI",
   [EMBEDS_SECTION_ID]: "Embeds",
   "my-data": "My data",
 };
 
+/** Section labels this repo fixes on top of the collection's copy. */
+const SECTION_LABEL_OVERRIDES: Record<string, string> = {
+  basic: "Basic blocks",
+};
+
+/** The section label the editor shows, with this repo's overrides on top of the
+ *  collection's copy. */
+export function slashSectionLabel(section: string): string {
+  return SECTION_LABEL_OVERRIDES[section]
+    ?? COLLECTION_SLASH_SECTION_LABELS[section]
+    ?? EXTRA_SECTION_LABELS[section]
+    ?? section;
+}
+
+/** Only the block types the editor's markdown detector understands get a hint
+ *  (`packages/markdown-engine/shortcutsDetect.ts`). */
+const SHORTCUT_BY_BLOCK_TYPE: Partial<Record<BlockType, string>> = {
+  heading_1: "#",
+  heading_2: "##",
+  heading_3: "###",
+  heading_4: "####",
+  bulleted_list: "-",
+  numbered_list: "1.",
+  to_do: "[]",
+  toggle: ">",
+  quote: "\"",
+  code: "```",
+  divider: "---",
+};
+
 const SECTION_ORDER = [
   "basic",
-  "ai",
   "media",
+  "ai",
   EMBEDS_SECTION_ID,
   "turn-into",
   "database",
@@ -151,6 +182,7 @@ const BASE_SLASH_COMMANDS: SlashCommand[] = COLLECTION_SLASH_ITEMS.filter(
       icon: item.icon,
       description,
       blockType: item.type,
+      shortcut: SHORTCUT_BY_BLOCK_TYPE[item.type],
       calloutIcon: item.calloutIcon,
     };
   },
@@ -347,6 +379,7 @@ export const TURN_INTO_COMMANDS: SlashTurnIntoCommand[] =
         icon: item.icon,
         description: `Transform the current line into ${normalizedLabel.toLowerCase()}`,
         blockType: item.type,
+        shortcut: SHORTCUT_BY_BLOCK_TYPE[item.type],
         calloutIcon: item.calloutIcon,
         placeholderText: normalizedLabel,
       };
@@ -427,8 +460,7 @@ export function groupSlashCommands(
 
   const sections = Array.from(bySection.entries()).map(([id, items]) => ({
     id,
-    label:
-      COLLECTION_SLASH_SECTION_LABELS[id] ?? EXTRA_SECTION_LABELS[id] ?? id,
+    label: slashSectionLabel(id),
     items,
   }));
 
