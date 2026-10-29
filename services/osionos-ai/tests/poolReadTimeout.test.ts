@@ -55,3 +55,19 @@ describe('createPool on a connection that stops answering', () => {
 		}
 	});
 });
+
+describe('createPool on a held client whose connection drops', () => {
+	it('fails that client, not the process', async () => {
+		const pool = createPool(`postgres://u:p@127.0.0.1:${port}/db`, 1, 300);
+		const client = await pool.connect();
+		try {
+			const ended = new Promise<void>((resolve) => client.once('end', () => resolve()));
+			for (const socket of sockets) socket.destroy();
+			await withDeadline(ended, 5_000);
+			await assert.rejects(client.query('select 1'));
+		} finally {
+			client.release();
+			await pool.end().catch(() => undefined);
+		}
+	});
+});
