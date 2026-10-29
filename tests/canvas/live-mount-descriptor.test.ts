@@ -48,6 +48,18 @@ test("an unknown location says how it is reached, or that it is not shown", () =
   assert.deepEqual([odd.engine, odd.tls], ["neo4j", null], "unmapped values pass through or drop, never guess");
 });
 
+// The ten engines grobase accepts for a mount (isAllowedEngine in adapterregistry/models.go).
+const GROBASE_ENGINES = [
+  "postgresql", "cockroachdb", "mysql", "mariadb", "mongodb", "redis", "sqlite", "mssql", "http", "dynamodb",
+];
+
+test("every grobase engine gets a display name, never its raw id", () => {
+  const names = GROBASE_ENGINES.map((engine) => formatMountLocation({ ...base, engine }).engine);
+  assert.deepEqual(names, [
+    "PostgreSQL", "CockroachDB", "MySQL", "MariaDB", "MongoDB", "Redis", "SQLite", "SQL Server", "HTTP API", "DynamoDB",
+  ]);
+});
+
 test("a failed descriptor fetch is not cached, so the next open retries", async () => {
   const first = fetchMountDescriptor("m-fail");
   await assert.rejects(first);
