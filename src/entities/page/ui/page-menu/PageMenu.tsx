@@ -106,7 +106,10 @@ export const PageMenu: React.FC<PageMenuProps> = ({
           }}
           placeholder="Search actions..."
           aria-label="Search actions"
-          className="h-8 w-full rounded-[var(--osio-radius-sm)] bg-[var(--osio-bg-subtle)] pl-7 pr-2 text-sm outline-none placeholder:text-[var(--osio-fg-subtle)]"
+          // Focused on open, so the global ring would sit on it the whole time;
+          // its own border is the focus frame instead.
+          data-writing-surface=""
+          className="h-8 w-full rounded-[var(--osio-radius-xs)] border border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] pl-7 pr-2 text-sm outline-none placeholder:text-[var(--osio-fg-subtle)] focus:border-[var(--osio-border-strong)]"
         />
       </div>
 
