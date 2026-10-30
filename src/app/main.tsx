@@ -67,6 +67,14 @@ function AppearanceMotion({ children }: { children: ReactNode }) {
 setInferencePort(selectInferencePort());
 installLinkFaviconFallback();
 
+// The offline app shell (#176): a reload without a connection opens the app. Not in dev,
+// where a cached shell would fight Vite's module server.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  globalThis.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((error: unknown) => console.warn("[osionos] offline shell unavailable:", error));
+  });
+}
+
 const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
