@@ -20,7 +20,7 @@
  * shown and a member sees the refusal.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   archiveWorkspaceSkill,
@@ -32,15 +32,19 @@ import {
 } from "@/features/ai/api/aiClient";
 import {
   bodyCharsLeft,
+  skillDraftFromMarkdown,
   skillDraftProblem,
   skillFailureMessage,
   SKILL_BODY_MAX,
   type SkillDraft,
 } from "@/features/ai/model/workspaceSkills";
+import { Button, Input } from "@/shared/ui";
 import { FIELD_INPUT, FIELD_LABEL, PRIMARY_BUTTON, SECONDARY_BUTTON, DANGER_BUTTON } from "./aiPanelClasses";
 import type { AccessTokenWorkspace } from "./AccessTokensPanel";
 
 const EMPTY: SkillDraft = { slug: "", name: "", description: "", body: "" };
+// A skill text is capped at 6000 characters, so a bigger file is not a skill file.
+const IMPORT_MAX_BYTES = 64 * 1024;
 
 export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[] }> = ({ workspaces }) => {
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
@@ -48,6 +52,7 @@ export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[]
   const [draft, setDraft] = useState<SkillDraft | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const importInput = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
     if (!workspaceId) return;
@@ -85,6 +90,16 @@ export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[]
     } catch (failure) {
       setError(skillFailureMessage(failure));
     }
+  };
+  const importFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > IMPORT_MAX_BYTES) {
+      setError("This file is too big to be a skill (64 KB at most).");
+      return;
+    }
+    setError("");
+    setEditing(null);
+    setDraft(skillDraftFromMarkdown(await file.text()));
   };
   const archive = async (slug: string) => {
     try {
@@ -138,7 +153,18 @@ export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[]
           </div>
         </form>
       ) : (
-        <button type="button" className={`${SECONDARY_BUTTON} mt-3`} onClick={() => { setEditing(null); setDraft(EMPTY); }}>New skill</button>
+        <div className="mt-3 flex gap-2">
+          <button type="button" className={SECONDARY_BUTTON} onClick={() => { setEditing(null); setDraft(EMPTY); }}>New skill</button>
+          <Button onClick={() => importInput.current?.click()}>Import SKILL.md</Button>
+          <Input
+            ref={importInput}
+            type="file"
+            accept=".md,text/markdown"
+            hidden
+            aria-label="SKILL.md file"
+            onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }}
+          />
+        </div>
       )}
     </section>
   );

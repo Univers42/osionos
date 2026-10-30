@@ -106,11 +106,15 @@ passed.
 Defaults: 2000 users, 3000 items, 20 topics, 60000 events, seed 42 (docstring of
 `osml/evaluate.py:3-4`).
 
-| system (SYNTHETIC) | nDCG@10 | recall@20 |
-|---|---|---|
-| iALS | 0.1154 | 0.1247 |
-| popularity | 0.0775 | 0.0929 |
-| random | 0.0020 | 0.0026 |
+| system (SYNTHETIC) | nDCG@10 | recall@20 | coverage@20 | novelty@10 |
+|---|---|---|---|---|
+| iALS | 0.1154 | 0.1247 | 0.0797 | 6.944 |
+| popularity | 0.0775 | 0.0929 | 0.0068 | 5.482 |
+| random | 0.0020 | 0.0026 | 0.9993 | 13.272 |
+
+Coverage and novelty are read with the gate, not against it. Random covers almost
+the whole catalogue and is the most novel because it ignores the user. iALS reaches
+about 12× the coverage of popularity with more novel items, and it ranks higher too.
 
 iALS minus popularity: **0.0379**, paired bootstrap 95% CI **[0.0322, 0.0433]**
 (1000 resamples over users). The lower bound is above zero.
