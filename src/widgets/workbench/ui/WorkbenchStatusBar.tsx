@@ -22,6 +22,7 @@ import {
 } from "@/features/ide/model/sandboxHealthStore";
 import { useSandboxBranch } from "@/features/ide/model/useSandboxBranch";
 import { useWorkbenchStore } from "@/widgets/workbench/model/workbenchStore";
+import { connectivityStatus, useConnectivityStore } from "@/shared/api/connectivity";
 
 const STATE_LABEL: Record<SandboxHealthState, string> = {
   unknown: "Sandbox: checking",
@@ -96,6 +97,24 @@ const ProblemsChip: React.FC = () => {
   );
 };
 
+/** Shown only while the bridge can't be reached; the toast says the change, this says it lasts (#176). */
+const ConnectivityChip: React.FC = () => {
+  const status = useConnectivityStore(connectivityStatus);
+  if (status === "online") return null;
+  const offline = status === "offline";
+  return (
+    <Tooltip
+      label={`${offline ? "No network" : "The server is not answering"}: your changes are kept on this device and sync when the connection is back.`}
+      side="top"
+    >
+      <span data-testid="connectivity-chip" className={CHIP_BASE}>
+        <span aria-hidden className={`h-2 w-2 rounded-full ${offline ? DOT_CLASS.unavailable : DOT_CLASS.stopped}`} />
+        {offline ? "Offline" : "Connection unstable"}
+      </span>
+    </Tooltip>
+  );
+};
+
 const PanelToggleChip: React.FC = () => {
   const dockOpen = useWorkbenchStore((s) => s.dockOpen);
   const toggleDock = useWorkbenchStore((s) => s.toggleDock);
@@ -114,6 +133,7 @@ export const WorkbenchStatusBar: React.FC = () => (
     className="flex shrink-0 items-center gap-1 bg-transparent pl-[var(--osio-statusbar-px)] pr-[var(--osio-statusbar-end)] text-2xs text-[var(--osio-fg-muted)]"
     style={{ height: "var(--osio-statusbar-h)" }}
   >
+    <ConnectivityChip />
     <BranchChip />
     <SandboxChip />
     <ProblemsChip />
