@@ -36,7 +36,10 @@ test("followPlanProgress hands each read to the card until it is stopped", async
   });
   const seen: (PlanItemProgress[] | undefined)[] = [];
   const stop = followPlanProgress("approval-1", (progress) => seen.push(progress), 5);
-  await new Promise((resolve) => setTimeout(resolve, 60));
+  // Waits for the reads, not for a fixed time: a slow CI runner fit one 5 ms poll into 60 ms.
+  for (let waited = 0; seen.length < reads.length && waited < 2000; waited += 5) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
   stop();
   const after = seen.length;
   await new Promise((resolve) => setTimeout(resolve, 30));
@@ -53,7 +56,9 @@ test("followPlanProgress keeps going past a failed read", async () => {
   });
   const seen: unknown[] = [];
   const stop = followPlanProgress("approval-1", (progress) => seen.push(progress), 5);
-  await new Promise((resolve) => setTimeout(resolve, 40));
+  for (let waited = 0; seen.length === 0 && waited < 2000; waited += 5) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
   stop();
   assert.ok(seen.length > 0, "a 503 does not end the follow");
 });
