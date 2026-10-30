@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/30 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,7 +16,7 @@ import React, { useState } from 'react';
 import { Users } from 'lucide-react';
 
 import { Button } from '@/shared/ui';
-import { PeopleHovercard } from '../people/PeoplePeek';
+import { PeopleHovercard, PresenceBadge } from '../people/PeoplePeek';
 import { RequestsInbox } from '@/features/connections/RequestsInbox';
 import { useContactsStore } from '@/store/social/useContactsStore';
 import type { ContactEdge } from '@/store/social/types';
@@ -45,7 +45,12 @@ export const ContactsPanel: React.FC = () => {
         ) : data.map((edge) => (
           <SettingRow
             key={edge.id}
-            title={<PeopleHovercard person={edge.peer}>{edge.peer.name}</PeopleHovercard>}
+            title={(
+              <span className="inline-flex flex-wrap items-center gap-2">
+                <PeopleHovercard person={edge.peer}>{edge.peer.name}</PeopleHovercard>
+                <PresenceBadge state={edge.peer.online ? 'online' : 'offline'} note={null} />
+              </span>
+            )}
             description={edge.introMessage || undefined}
             action={<Button tone="danger-subtle" onClick={() => setLeaving(edge)}>Remove</Button>}
           />
