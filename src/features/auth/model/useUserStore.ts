@@ -345,6 +345,12 @@ function renamedWorkspaceSession(session: UserSession, workspaceId: string, name
   };
 }
 
+function workspaceIn(sessions: Record<string, UserSession>, workspaceId: string): Workspace | undefined {
+  return Object.values(sessions)
+    .flatMap((session) => [...session.privateWorkspaces, ...session.sharedWorkspaces])
+    .find((workspace) => workspace._id === workspaceId);
+}
+
 function offlineState() {
   const personas = initialPersonas();
   const { sessions, firstUserId } = createOfflineSessions(personas);
@@ -748,21 +754,30 @@ export const useUserStore = create<RefreshingUserStore>((set, get) => ({
     }
   },
 
-  renameWorkspace: (workspaceId, name, icon) => {
-    set((state) => {
+  renameWorkspace: async (workspaceId, name, icon) => {
+    const applyRename = (nextName: string, nextIcon?: string) => set((state) => {
       const sessions = Object.fromEntries(
         Object.entries(state.sessions).map(([userId, session]) => [
           userId,
-          renamedWorkspaceSession(session, workspaceId, name, icon),
+          renamedWorkspaceSession(session, workspaceId, nextName, nextIcon),
         ]),
       );
       savePersistedWorkspaces(sessions);
       return { sessions };
     });
-    // Persist to the BaaS (owner-only PATCH, same app-session check as create); the
-    // optimistic local update stays on failure.
+    const previous = workspaceIn(get().sessions, workspaceId);
+    applyRename(name, icon);
+    // Persist to the BaaS (owner-only PATCH, same app-session check as create).
     const jwt = get().activePageJwt();
-    if (jwt) void api.patch(`/api/workspaces/${workspaceId}`, { name }, jwt).catch(() => undefined);
+    if (!jwt) return;
+    try {
+      await api.patch(`/api/workspaces/${workspaceId}`, { name }, jwt);
+    } catch (failure) {
+      // A refused name is taken back, unless a later rename has replaced it meanwhile (#158).
+      if (previous && workspaceIn(get().sessions, workspaceId)?.name === name) applyRename(previous.name, previous.icon);
+      const message = failure instanceof Error && failure.message.trim() ? failure.message : 'Try again in a moment.';
+      useToastStore.getState().push({ kind: 'error', title: 'The workspace could not be renamed.', description: message });
+    }
   },
 
   deleteWorkspace: async (workspaceId) => {
