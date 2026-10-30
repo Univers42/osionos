@@ -37,7 +37,7 @@ function fitToContent(textarea: HTMLTextAreaElement) {
 
 /**
  * Editable page title matching osionos's styling.
- * Pressing Enter moves focus to the first content block.
+ * Pressing Enter moves focus to the first content block; Shift+Enter adds a line (#162).
  *
  * Typing `:` (start of the title or after a space) opens the shared emoji
  * picker and filters as you keep typing — the same trigger rule block text
@@ -119,7 +119,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
       setEmojiFilter(null);
       return;
     }
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       focusPageEditorStart("start");
     }
@@ -135,21 +135,24 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
 
   return (
     <div className="relative" ref={wrapRef}>
-      <textarea
-        ref={ref}
-        aria-label="Page title"
-        name="page-title"
-        autoComplete="off"
-        spellCheck
-        rows={1}
-        value={title}
-        placeholder="Untitled"
-        className="osionos-page-title osio-display"
-        readOnly={readOnly}
-        aria-readonly={readOnly}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-      />
+      {/* The page's one h1 (RGAA 9.1); the label keeps an untitled page's heading non-empty. */}
+      <h1 aria-label={title || "Untitled"}>
+        <textarea
+          ref={ref}
+          aria-label="Page title"
+          name="page-title"
+          autoComplete="off"
+          spellCheck
+          rows={1}
+          value={title}
+          placeholder="Untitled"
+          className="osionos-page-title osio-display"
+          readOnly={readOnly}
+          aria-readonly={readOnly}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+        />
+      </h1>
       {emojiFilter !== null && !readOnly ? (
         <div className="absolute left-0 top-full z-[var(--osio-z-popover)]" data-testid="title-emoji-picker">
           <EmojiPicker

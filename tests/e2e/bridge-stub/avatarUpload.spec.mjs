@@ -183,3 +183,13 @@ function pickPhoto(region) {
 function pickBanner(region) {
   return region.getByLabel("Banner image").setInputFiles({ name: "banner.png", mimeType: "image/png", buffer: TINY_PNG });
 }
+
+// Fields about the person carry their WCAG input purpose, so a browser or an assistive
+// tool can fill or iconify them (RGAA 11.13, #224).
+test("the profile fields about the person name their input purpose", async ({ page, baseURL }) => {
+  await stubProfile(page, UPLOAD);
+  const panel = await openProfilePanel(page, baseURL);
+  await expect(panel.getByLabel("Display name")).toHaveAttribute("autocomplete", "nickname");
+  await expect(panel.getByLabel("Company")).toHaveAttribute("autocomplete", "organization");
+  await expect(panel.getByLabel("Website")).toHaveAttribute("autocomplete", "url");
+});

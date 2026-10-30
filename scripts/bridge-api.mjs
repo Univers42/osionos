@@ -37,6 +37,7 @@ import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge
 import { resolveTurnstileToken, turnstileBootLine, turnstileSettingsFromEnv } from './bridge-turnstile.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller, writeSessionCutoff } from './bridge-session-cutoff.mjs';
 import { startSessionRevocationPoller } from './bridge-session-revocations.mjs';
+import { startModerationRetractPoller } from './bridge-moderation-retract.mjs';
 import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, deliveredAnswer, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
 import { createAccountHandler } from './bridge-account-mounts.mjs';
 import { mfaBootLine, mfaRequiredFor } from './bridge-account-mfa-state.mjs';
@@ -1581,6 +1582,28 @@ function requirePageWrite(context, permission) {
 		? [{ resource_type: 'page', resource_id: context.row?.id, target: { type: 'user', userId: context.token.userId }, permission: context.ruleLevel }]
 		: [];
 	if (!canWritePageRow(context.row, context.token.userId, context.member, permission, syntheticRules)) throw pageWriteDenied();
+}
+
+/**
+ * The caller's standing on a page for the #228 discussion routes: the read gate first
+ * (the 404 of a missing id), then `canWrite` — the page PATCH's gate, so accept agrees
+ * with it (C8, C9) — and `level`. pageLevelFor alone answers can_view for every member
+ * when no share rule decides the page, which would refuse a member who may edit it, so
+ * the rule's level wins when there is one, else the write gate: can_edit or can_view.
+ */
+export async function pageDiscussionAccess(request, pageId, config, fetchImpl) {
+	const context = await pageWriteContext(request, pageId, config, fetchImpl);
+	if (!context.owner) requireReadablePage(context.row, context.token.userId, context.level);
+	let canWrite = true;
+	try {
+		requirePageWrite(context, 'update');
+	} catch (error) {
+		if (error?.status !== 403) throw error;
+		canWrite = false;
+	}
+	const exempt = context.owner || context.level === null;
+	const level = exempt ? 'full_access' : (context.ruleLevel ?? (canWrite ? 'can_edit' : 'can_view'));
+	return { row: context.row, level, canWrite };
 }
 
 /**
@@ -5416,7 +5439,10 @@ export function createBridgeServer(options = {}) {
 		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
+			comments: createCommentsHandler({
+				config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env,
+				pageAccess: (request, pageId) => pageDiscussionAccess(request, pageId, config, fetchImpl),
+			}),
 			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
 			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv, env, pageAccessFilter }),
@@ -5484,6 +5510,7 @@ export function createBridgeServer(options = {}) {
 	server.on('close', () => transport?.close());
 	let cutoffPoller = null;
 	let revocationPoller = null;
+	let retractPoller = null;
 	const activityConsent = createActivityConsent({ pg, now: options.now });
 	const consentGate = { isTracked: activityConsent.isTracked, awaitTracked: activityConsent.awaitTracked };
 	const activityEmitter = createActivityEmitter({ pg, env, now: options.now, log: (line) => console.warn(`[osionos-bridge] ${line}`), ...consentGate });
@@ -5495,8 +5522,10 @@ export function createBridgeServer(options = {}) {
 		cutoffPoller = startSessionCutoffPoller(sessionCutoffs, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionCutoffPoll);
 		revocationPoller = startSessionRevocationPoller(sessionRevocations, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionRevocationPoll);
 		server.sessionRevocationPoller = revocationPoller;
+		// `moderationRetract: false` keeps the background reads out of tests that count calls.
+		if (options.moderationRetract !== false) retractPoller = startModerationRetractPoller({ config, fetchImpl, env });
 	});
-	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); activityTimer?.stop(); if (!options.kv) kv.close(); });
+	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); retractPoller?.stop(); activityTimer?.stop(); if (!options.kv) kv.close(); });
 	Object.assign(server, { activityEmitter, sessionCutoffs, sessionRevocations, sessionRecords, kv, kvRequired });
 	return server;
 }

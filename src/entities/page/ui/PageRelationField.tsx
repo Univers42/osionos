@@ -41,32 +41,40 @@ export const PageRelationField: React.FC<Props> = ({ workspaceId, excludePageId,
     setPicking(false);
     if (focusInside) triggerRef.current?.focus();
   }, []);
-  const ids = asStringArray(value);
+  // One chip per page: a value written twice (the Files table once merged two relations) listed it twice (#162).
+  const ids = [...new Set(asStringArray(value))];
   const openPage = usePageStore((s) => s.openPage);
   const wsPages = usePageStore((s) => s.pages[workspaceId]);
   const pages = useMemo(
     () => (wsPages ?? []).filter((page) => !page.archivedAt).map((page) => ({ id: page._id, title: page.title })),
     [wsPages],
   );
-  const titleOf = (id: string) => pages.find((page) => page.id === id)?.title || "Untitled";
+  const titles = useMemo(() => new Map(pages.map((page) => [page.id, page.title || "Untitled"])), [pages]);
   const candidates = pages.filter((page) => page.id !== excludePageId && !ids.includes(page.id));
 
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {ids.map((id) => (
-        <span key={id} className="osio-chip">
-          <button type="button" className="max-w-40 min-h-[24px] truncate hover:underline" onClick={() => openPage({ id, workspaceId, kind: "page", title: titleOf(id) })}>
-            {titleOf(id)}
-          </button>
-          {editable ? (
-            <button type="button" title="Remove relation" aria-label={`Remove relation ${titleOf(id)}`}
-              className="inline-flex min-h-[24px] min-w-[24px] items-center justify-center -mr-0.5"
-              onClick={() => onChange(ids.filter((other) => other !== id))}>
-              <X size={11} />
-            </button>
-          ) : null}
-        </span>
-      ))}
+      {ids.map((id) => {
+        // A deleted or archived page is not "Untitled": say it is gone, and keep it removable.
+        const title = titles.get(id);
+        const label = title ?? "Missing page";
+        return (
+          <span key={id} className={title ? "osio-chip" : "osio-chip italic text-[var(--osio-fg-muted)]"} data-missing={title ? undefined : ""}>
+            {title ? (
+              <button type="button" className="max-w-60 min-h-[24px] truncate hover:underline" onClick={() => openPage({ id, workspaceId, kind: "page", title })}>
+                {title}
+              </button>
+            ) : <span className="min-h-[24px] leading-[24px]">{label}</span>}
+            {editable ? (
+              <button type="button" title="Remove relation" aria-label={`Remove relation ${label}`}
+                className="inline-flex min-h-[24px] min-w-[24px] items-center justify-center -mr-0.5"
+                onClick={() => onChange(ids.filter((other) => other !== id))}>
+                <X size={11} />
+              </button>
+            ) : null}
+          </span>
+        );
+      })}
       {editable ? (
         <>
           <button ref={triggerRef} type="button" onClick={() => setPicking((open) => !open)}

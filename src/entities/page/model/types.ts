@@ -24,7 +24,7 @@ export interface PageCollaborator {
   role: PageCollaboratorRole;
 }
 
-export type PagePropertyType = "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation" | "email" | "phone" | "person" | "multi_select" | "status";
+export type PagePropertyType = "text" | "date" | "select" | "url" | "number" | "checkbox" | "relation" | "email" | "phone" | "person" | "files" | "multi_select" | "status";
 
 /** How often a template auto-creates a new page (Notion "Duplicate every…"). */
 export type PageRecurrenceEvery = "none" | "day" | "week" | "month";

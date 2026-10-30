@@ -68,7 +68,7 @@ export const BaasConsolePanel: React.FC = () => {
 
   return (
     <div className="h-full flex bg-[var(--osio-bg-page)]">
-      <nav className="w-48 shrink-0 border-r border-[var(--osio-border-default)] p-3 flex flex-col gap-px">
+      <nav aria-label="Console sections" className="w-48 shrink-0 border-r border-[var(--osio-border-default)] p-3 flex flex-col gap-px">
         <h1 className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">
           BaaS Console
         </h1>
