@@ -88,6 +88,7 @@ docker run --rm --network "$NETWORK" \
 	-e OSIONOS_APP_SESSION_SECRET="test-app-session-secret" \
 	-e OSIONOS_APP_SESSION_TTL_SECONDS=3600 \
 	-e OSIONOS_SESSION_CUTOFFS=off \
+	-e OSIONOS_SESSION_RECORDS=off \
 	-e OSIONOS_BAAS_URL="https://baas.invalid" \
 	-e SERVICE_ROLE_KEY="test-service-role-key" \
 	-e OSIONOS_AI_UPSTREAM_BASE_URL="https://127.0.0.1:1/v1" \
