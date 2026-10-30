@@ -19,10 +19,9 @@ import { useImportHistoryStore, type ImportHistoryEntry } from '@/store/settings
 import { useAssetLibraryStore } from '@/shared/config/assetLibraryStore';
 import { importPageFile } from '@/services/page-actions';
 import { Button, Modal } from '@/shared/ui';
-import { DataTable, EmptyState, FeatureCard, MiniTabs, PanelStatus, Section } from '../ui/settingsKit';
+import { DataTable, EmptyState, FeatureCard, MiniTabs, Section } from '../ui/settingsKit';
 import { assetKindFromFile, formatBytes, readFileAsDataUrl, stringPayload } from '../model/settingsFiles';
 import { runAsync } from '../model/settingsCalls';
-import { useSettingsHydration } from '../model/settingsHydration';
 
 const EMPTY_IMPORT_HISTORY: ImportHistoryEntry[] = [];
 
@@ -42,19 +41,9 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
   const openPage = usePageStore((state) => state.openPage);
   const jwt = useUserStore((state) => state.activePageJwt());
   const history = useImportHistoryStore((state) => state.data[workspaceId] ?? EMPTY_IMPORT_HISTORY);
-  const hydrateHistory = useImportHistoryStore((state) => state.hydrate);
-  const uploadImport = useImportHistoryStore((state) => state.upload);
   const addImportEntry = useImportHistoryStore((state) => state.addEntry);
-  const markRetry = useImportHistoryStore((state) => state.markRetry);
   const files = ['CSV', 'PDF', 'Text & Markdown', 'HTML', 'Word'];
   const apps = ['Asana', 'Confluence', 'Trello', 'Workflowy', 'Evernote', 'Jira', 'Monday.com', 'Quip', 'Google Docs'];
-
-  // The store keeps a failed read in `error` instead of rejecting, so it is turned back into a rejection here.
-  const hydration = useSettingsHydration(async () => {
-    await hydrateHistory(workspaceId);
-    const failure = useImportHistoryStore.getState().error[workspaceId];
-    if (failure) throw new Error(failure);
-  }, [hydrateHistory, workspaceId]);
 
   async function importFiles(imports: File[]) {
     const pageExtensions = new Set(['.md', '.markdown', '.html', '.json', '.txt']);
@@ -68,8 +57,7 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
       }
       const source = await readFileAsDataUrl(file);
       addAsset(activeUserId, { kind: assetKindFromFile(file), name: file.name, source, origin: 'upload', mimeType: file.type, size: file.size });
-      const entry = await uploadImport(workspaceId, file);
-      if (!entry) addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: 'completed', pageIds: [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
+      addImportEntry(workspaceId, { userId: activeUserId || 'anonymous', workspaceId, source: 'file', fileName: file.name, byteSize: file.size, status: 'completed', pageIds: [], error: null, startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), removedAt: null });
     }
   }
 
@@ -90,22 +78,24 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
       entry.fileName ?? entry.source,
       formatBytes(entry.byteSize),
       entry.finishedAt ? new Date(entry.finishedAt).toLocaleString() : entry.status,
-      <div key={`${entry._id}-actions`} className="flex gap-2"><Button onClick={() => { const pageId = entry.pageIds[0]; if (pageId) openPage({ id: pageId, workspaceId, kind: 'page' }); }}>Open</Button><Button tone="ghost" onClick={() => markRetry(workspaceId, entry._id)}>Retry</Button></div>,
+      entry.pageIds[0]
+        ? <Button key={`${entry._id}-open`} onClick={() => openPage({ id: entry.pageIds[0], workspaceId, kind: 'page' })}>Open</Button>
+        : 'In your asset library',
     ]);
 
   if (activeImportTab === 'Completed') {
     return (
-      <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
+      <>
         <MiniTabs active={activeImportTab} onChange={setActiveImportTab} tabs={[{ label: 'Discover' }, { label: 'Completed', count: completedRows.length }]} />
         <Section title="Completed imports">
           <DataTable headers={['Import', 'Size', 'Finished', '']} rows={completedRows} empty={<EmptyState icon={<Inbox size={16} />} title="No completed imports yet" hint="Files you import show up here." />} />
         </Section>
-      </PanelStatus>
+      </>
     );
   }
 
   return (
-    <PanelStatus status={hydration.status} error={hydration.error} onRetry={hydration.retry}>
+    <>
       <MiniTabs active={activeImportTab} onChange={setActiveImportTab} tabs={[{ label: 'Discover' }, { label: 'Completed', count: completedRows.length }]} />
       <Section title="Import your content">
         <button type="button" className="w-full rounded-[var(--osio-radius-panel)] border border-dashed border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-8 text-center" onClick={() => fileInputRef.current?.click()} onDrop={handleDrop} onDragOver={(event) => event.preventDefault()}>
@@ -120,7 +110,7 @@ export const ImportPanel: React.FC<{ workspaceId?: string; activeUserId: string 
       <Section title="File-based imports"><div className="grid gap-3 sm:grid-cols-2">{files.map((file) => <FeatureCard key={file} icon={<FileText size={16} />} title={file} description={`Import ${file.toLowerCase()} content from files`} action={<Button onClick={() => setModal({ name: 'typed-import', payload: { kind: file } })}>Open</Button>} />)}</div></Section>
       <Section title="Third-party imports"><div className="grid gap-3 sm:grid-cols-2">{apps.map((app) => <FeatureCard key={app} icon={<Database size={16} />} title={app} description="Not available yet" action={<Button disabled aria-label={`Import from ${app}`}>Import</Button>} />)}</div></Section>
       {modal?.name === 'typed-import' && <TypedImportModal kind={stringPayload(modal.payload?.kind, 'File')} onChoose={() => fileInputRef.current?.click()} onClose={() => setModal(null)} />}
-    </PanelStatus>
+    </>
   );
 };
 
