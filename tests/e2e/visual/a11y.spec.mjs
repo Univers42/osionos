@@ -30,7 +30,7 @@ test("a11y: empty document surface", async ({ page, baseURL }) => {
   await openFreshPage(page, baseURL);
   const results = await runA11yAudit(page, "empty document surface");
   expect(results).toBeDefined();
-  expect(results.violations).toBeInstanceOf(Array);
+  expect(results.violations).toEqual([]);
 });
 
 test("a11y: block editor surface with blocks", async ({ page, baseURL }) => {
@@ -45,7 +45,7 @@ test("a11y: block editor surface with blocks", async ({ page, baseURL }) => {
   await createBlockViaSlash(page, "code", "Code", 2);
   const results = await runA11yAudit(page, "block editor surface with blocks");
   expect(results).toBeDefined();
-  expect(results.violations).toBeInstanceOf(Array);
+  expect(results.violations).toEqual([]);
 });
 
 test("a11y: slash command menu", async ({ page, baseURL }) => {
@@ -56,7 +56,7 @@ test("a11y: slash command menu", async ({ page, baseURL }) => {
   await slashMenu(page).waitFor({ state: "visible" });
   const results = await runA11yAudit(page, "slash command menu");
   expect(results).toBeDefined();
-  expect(results.violations).toBeInstanceOf(Array);
+  expect(results.violations).toEqual([]);
 });
 
 test("a11y: settings surface", async ({ page, baseURL }) => {
@@ -64,5 +64,5 @@ test("a11y: settings surface", async ({ page, baseURL }) => {
   await openSettings(page);
   const results = await runA11yAudit(page, "settings surface");
   expect(results).toBeDefined();
-  expect(results.violations).toBeInstanceOf(Array);
+  expect(results.violations).toEqual([]);
 });

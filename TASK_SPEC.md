@@ -1,78 +1,92 @@
-# TASK SPEC: Scaffold Automated WCAG 2.2 AA Playwright Suite & Axe Helper
+# TASK SPEC: Remediate WCAG 2.2 AA Violations Across Core Osionos Surfaces
 
 ## 1. Goal
-Vendor standalone `axe.min.js`, implement reusable accessibility audit helper `tests/e2e/support/a11yAudit.mjs`, and establish `tests/e2e/visual/a11y.spec.mjs` to audit core Osionos surfaces (empty page, block editor, slash menu, settings).
+Remediate all baseline accessibility violations discovered during Step 4:
+1. `SidebarFooter.tsx`: Fix `nested-interactive`, `label-content-name-mismatch`, and `target-size` (< 24px).
+2. `SlashCommandMenu.tsx`: Fix `aria-input-field-name` on `#slash-command-list`.
+3. `SettingsSectionsNav.tsx`: Fix `target-size` on navigation rows.
+4. `a11y.spec.mjs`: Assert zero violations across all 4 audited surfaces.
 
 ---
 
 ## 2. Exact Filepaths
 
-1. `tests/e2e/support/vendor/axe.min.js` (copy from `/home/sergio/prismatica/node_modules/.pnpm/axe-core@4.14.0/node_modules/axe-core/axe.min.js`)
-2. `tests/e2e/support/a11yAudit.mjs` (new reusable helper)
-3. `tests/e2e/visual/a11y.spec.mjs` (new Playwright audit test suite)
+1. `src/widgets/activity-rail/ui/SidebarFooter.tsx`
+2. `src/features/slash-commands/ui/SlashCommandMenu.tsx`
+3. `src/features/settings/ui/SettingsSectionsNav.tsx`
+4. `tests/e2e/support/a11yAudit.mjs`
+5. `tests/e2e/visual/a11y.spec.mjs`
 
 ---
 
-## 3. Technical Specifications & Interfaces
+## 3. Technical Requirements & Implementation Details
 
-### A. Helper: `tests/e2e/support/a11yAudit.mjs`
-- Export function `injectAxe(page)`:
-  - Resolves path to `tests/e2e/support/vendor/axe.min.js`.
-  - Injects via `await page.addScriptTag({ path: axePath })`.
-- Export function `runA11yAudit(page, contextName, options = {})`:
-  - Default tags: `['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']`.
-  - Runs `window.axe.run(document, { runOnly: { type: 'tag', values: tags } })`.
-  - Formats diagnostic output: logs context name, violation count, rule ID, description, impact, and target selector.
-  - Returns result object `{ violations, passes, incomplete }`.
+### A. `src/widgets/activity-rail/ui/SidebarFooter.tsx`
+- **Issue**:
+  - `<div role="button" tabIndex={0} aria-label="Invite members" ...>` wraps a `<button type="button" aria-label="Dismiss invitation" ...>` (`nested-interactive`).
+  - Child text is "Invite members Collaborate with your team." while `aria-label="Invite members"` (`label-content-name-mismatch`).
+  - Dismiss button has `w-5 h-5` (20x20px < 24x24px, `target-size`).
+- **Fix**:
+  - Remove `role="button"`, `tabIndex`, and `aria-label="Invite members"` from the outer card container `div`.
+  - Wrap the content (icon + title + subtitle) in an inner `<button type="button" onClick={openInviteSettings} className="w-full text-left flex items-start gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] cursor-pointer pr-7">`. The visible text serves as its accessible name.
+  - Position the dismiss button as a sibling inside the card container with `w-6 h-6 min-w-[24px] min-h-[24px] flex items-center justify-center rounded-md text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]`.
 
-### B. Test Suite: `tests/e2e/visual/a11y.spec.mjs`
-- Target: standard offline test server (`:3004`).
-- Uses `openFreshPage`, `activateFirstEditor`, `createBlockViaSlash` from `../../browser/core/app.mjs`.
-- Uses `openSettings` from `../support/settingsHelpers.mjs`.
-- Scenarios:
-  1. **Empty Document / Canvas**:
-     - `await openFreshPage(page, baseURL);`
-     - Run audit.
-  2. **Block Editor (Headings, Paragraphs, Code, Callout)**:
-     - `await openFreshPage(page, baseURL);`
-     - Add paragraph, heading, code block.
-     - Run audit.
-  3. **Slash Command Menu Active State**:
-     - `await openFreshPage(page, baseURL);`
-     - Type `/` to open slash menu.
-     - Wait for slash menu dropdown.
-     - Run audit.
-  4. **Settings Dialog**:
-     - `await openFreshPage(page, baseURL);`
-     - Open Settings modal via `openSettings(page)`.
-     - Run audit.
+### B. `src/features/slash-commands/ui/SlashCommandMenu.tsx`
+- **Issue**:
+  - `#slash-command-list` has `role="listbox"` with no accessible name (`aria-input-field-name`).
+- **Fix**:
+  - Add `aria-label="Commands"` to `<div ref={listRef} id="slash-command-list" role="listbox" ...>`.
+
+### C. `src/features/settings/ui/SettingsSectionsNav.tsx`
+- **Issue**:
+  - `button[data-settings-section="library"]` flagged under `target-size` (SC 2.5.8 minimum 24px target size and spacing).
+- **Fix**:
+  - Ensure `SectionRow` button has `min-h-[32px]` and adequate spacing/padding so it strictly complies with 24x24px target size and does not intersect adjacent targets.
+
+### D. `tests/e2e/support/a11yAudit.mjs`
+- Improve diagnostic logging: for each violation node, log `node.failureSummary` and `node.html` to clearly display why axe flagged the node if any violations remain.
+
+### E. `tests/e2e/visual/a11y.spec.mjs`
+- Update all 4 test cases:
+  - `expect(results.violations).toEqual([]);`
+  - All tests must pass with 0 violations.
 
 ---
 
 ## 4. Verification Protocol (Docker-First)
 
-- Quality Gate:
-  ```bash
-  npm run test:quality
-  ```
-- Playwright A11y Suite Run:
-  ```bash
-  npm run test:e2e -- tests/e2e/visual/a11y.spec.mjs
-  ```
+Execute in Docker:
+1. Primary Quality Gate:
+   ```bash
+   npm run test:quality
+   ```
+2. Playwright E2E Accessibility Suite:
+   ```bash
+   npm run test:e2e -- tests/e2e/visual/a11y.spec.mjs
+   ```
 
 ---
 
-## 5. Commit Plan (Atomic & Signed)
+## 5. Commit Plan (Atomic Micro-Commits)
 
-- Commit Message: `test(e2e): scaffold automated axe-core wcag 2.2 audit suite in playwright`
-- Author: `DJSurgeon <djsurgeon83@gmail.com>`
-- Flag: `-s` (`Signed-off-by: DJSurgeon <djsurgeon83@gmail.com>`)
+1. `fix(a11y): resolve nested button, label mismatch, and target size in SidebarFooter`
+   - Files: `src/widgets/activity-rail/ui/SidebarFooter.tsx`
+2. `fix(a11y): add accessible name to slash command listbox`
+   - Files: `src/features/slash-commands/ui/SlashCommandMenu.tsx`
+3. `fix(a11y): ensure 24px target size compliance in settings nav`
+   - Files: `src/features/settings/ui/SettingsSectionsNav.tsx`
+4. `test(a11y): assert zero wcag violations in automated playwright suite`
+   - Files: `tests/e2e/support/a11yAudit.mjs`, `tests/e2e/visual/a11y.spec.mjs`, `TASK_SPEC.md`
+
+All commits MUST be signed:
+`git commit -s --author="DJSurgeon <djsurgeon83@gmail.com>"`
 
 ---
 
 ## 6. Done-When
-- [x] `tests/e2e/support/vendor/axe.min.js` copied and valid.
-- [x] `tests/e2e/support/a11yAudit.mjs` implemented and exported.
-- [x] `tests/e2e/visual/a11y.spec.mjs` runs through Docker Playwright runner.
+- [x] `SidebarFooter.tsx` remediated (no nested-interactive, no label mismatch, >= 24px dismiss button).
+- [x] `SlashCommandMenu.tsx` listbox has accessible name (`aria-label="Commands"`).
+- [x] `SettingsSectionsNav.tsx` target size verified.
+- [x] `npm run test:e2e -- tests/e2e/visual/a11y.spec.mjs` reports 0 violations across all 4 surfaces.
 - [x] `npm run test:quality` passes with 0 errors.
-- [x] Commit signed with `-s` by `DJSurgeon`.
+- [x] Commits made atomically with Conventional Commits format and `-s` by `DJSurgeon`.

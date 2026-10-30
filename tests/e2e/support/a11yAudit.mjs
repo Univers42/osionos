@@ -66,6 +66,18 @@ export async function runA11yAudit(page, contextName, options = {}) {
       if (violation.helpUrl) {
         console.log(`     Help: ${violation.helpUrl}`);
       }
+      if (violation.nodes && violation.nodes.length > 0) {
+        for (const [nodeIndex, node] of violation.nodes.entries()) {
+          const nodeTarget = Array.isArray(node.target) ? node.target.join(" ") : String(node.target);
+          console.log(`     Node ${nodeIndex + 1} [${nodeTarget}]:`);
+          if (node.html) {
+            console.log(`       HTML: ${node.html}`);
+          }
+          if (node.failureSummary) {
+            console.log(`       Failure: ${node.failureSummary.replace(/\n/g, "\n       ")}`);
+          }
+        }
+      }
     }
     console.log(`--------------------------------------------------\n`);
   }
