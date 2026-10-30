@@ -52,9 +52,11 @@ interface TextFieldProps extends Omit<FieldFrameProps, 'children' | 'id'> {
   onChange: (value: string) => void;
   multiline?: boolean;
   max?: number;
+  /** The WCAG input purpose when the field is about the person (RGAA 11.13). */
+  autoComplete?: string;
 }
 
-export const TextField: React.FC<TextFieldProps> = ({ name, value, onChange, multiline, max, ...frame }) => (
+export const TextField: React.FC<TextFieldProps> = ({ name, value, onChange, multiline, max, autoComplete, ...frame }) => (
   <FieldFrame
     id={`profile-${name}`}
     {...frame}
@@ -62,7 +64,7 @@ export const TextField: React.FC<TextFieldProps> = ({ name, value, onChange, mul
   >
     {(aria) => multiline
       ? <textarea {...aria} rows={5} className={`${CONTROL_CLASS} resize-y`} value={value} onChange={(event) => onChange(event.target.value)} />
-      : <Input {...aria} value={value} onChange={(event) => onChange(event.target.value)} />}
+      : <Input {...aria} autoComplete={autoComplete} value={value} onChange={(event) => onChange(event.target.value)} />}
   </FieldFrame>
 );
 
