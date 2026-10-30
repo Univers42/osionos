@@ -1,0 +1,20 @@
+/* The IDE page's frame around VS Code's parts, in the app's own tokens so both origins read as
+   one product. Phase 8 restyles it; it must stay token-only (scripts/check-style-tokens.sh). */
+@import "../app/styles/tokens.generated.css";
+
+:root { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+html, body { height: 100%; margin: 0; }
+/* A display rule below would otherwise beat the hidden attribute. */
+[hidden] { display: none !important; }
+body { display: flex; flex-direction: column; background: var(--osio-bg-canvas); color: var(--osio-fg-default); }
+.bar { display: flex; flex: 0 0 36px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; border-bottom: 1px solid var(--osio-border); }
+.status { color: var(--osio-fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: currentColor; vertical-align: 1px; }
+.status[data-state="connected"]::before { background: var(--osio-success); }
+.status[data-state="error"] { color: var(--osio-danger); }
+.actions { display: flex; gap: 6px; }
+.actions button { font: inherit; color: inherit; background: transparent; border: 1px solid var(--osio-border); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.actions button:hover { background: var(--osio-accent-subtle); }
+.actions button:focus-visible { outline: 2px solid var(--osio-accent); outline-offset: 1px; }
+.editor { flex: 1 1 auto; min-height: 0; }
+.terminal { flex: 0 0 38vh; border-top: 1px solid var(--osio-border); }
