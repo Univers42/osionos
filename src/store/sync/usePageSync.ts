@@ -37,7 +37,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { derivePageState, flushScheduledPagesCachePersist } from "@/store/pageStore.helpers";
 import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
 import { useUserStore } from "@/features/auth";
-import { API_BASE } from "@/shared/api/client";
+import { API_BASE, getActivePageJwt } from "@/shared/api/client";
 import { canEditPage, getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { flushAllBlockDrafts } from "@/features/block-editor/model/blockDraftStore";
 import { buildDesiredPages, PAGE_OUTBOX_KEY, saveOutboxLedger } from "./pageStamp";
@@ -45,7 +45,7 @@ import { publishPage, publishPageKeepalive } from "./pageOutbox";
 import { publishOutboxPage, settleRecoveringMarks, type FlushDeps } from "./pageFlush";
 import { pruneBases } from "./pageBase";
 import { createPendingKeeper, createUnloadGuard } from "./pendingPages";
-import { hydratePagesFromBaas } from "./hydratePages";
+import { hydratePagesFromBaas, hydrateWorkspace } from "./hydratePages";
 import { refusedEditDeps } from "./refusedEditDeps";
 import { MAX_RECOVERIES_PER_FLUSH } from "./outboxRecovery";
 import { computeSyncActions, loadLedger } from "@osionos/outbox-ledger";
@@ -124,6 +124,7 @@ export function usePageSync(): void {
   // The outbox must not publish before HYDRATE seeds the ledger, otherwise every page just
   // pulled from the server looks "unsynced" and gets re-PATCHed — a needless write storm.
   const hydratedRef = useRef(false);
+  const hydratedUserRef = useRef("");
   const prevUserRef = useRef("");
 
   // HYDRATE from the BaaS (source of truth) once the signed-in user is known. Reactive on
@@ -142,7 +143,15 @@ export function usePageSync(): void {
     // Per (user, workspace): a user OR workspace switch loads that identity's own slot.
     useWorkspaceLayout.getState().restoreForScope(activeUserId, activeWorkspaceId);
     if (!API_BASE) { hydratedRef.current = true; return; }
-    hydratePagesFromBaas().catch(() => undefined).finally(() => { hydratedRef.current = true; });
+    // Every workspace was read when this account loaded; a workspace switch refreshes
+    // only the one now on screen.
+    const jwt = getActivePageJwt();
+    if (!switched && hydratedUserRef.current === activeUserId && activeWorkspaceId && jwt) {
+      hydrateWorkspace(activeWorkspaceId, jwt).catch(() => undefined);
+      return;
+    }
+    hydratedUserRef.current = activeUserId;
+    hydratePagesFromBaas(activeWorkspaceId).catch(() => undefined).finally(() => { hydratedRef.current = true; });
   }, [activeUserId, activeWorkspaceId]);
 
   useEffect(() => {

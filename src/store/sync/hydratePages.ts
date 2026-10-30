@@ -28,6 +28,7 @@ import { usePageStore } from "@/store/usePageStore";
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { getCurrentPageAccessContext } from "@/shared/lib/auth/pageAccess";
 import { applyServerPages } from "./applyServerPages";
+import { hydrateActiveFirst } from "./hydrationSchedule";
 import type { PageEntry } from "@/entities/page";
 
 /**
@@ -41,21 +42,11 @@ export async function hydrateWorkspace(workspaceId: string, jwt: string): Promis
   return Array.isArray(rows) ? applyServerPages(usePageStore.setState, workspaceId, rows, false) : 0;
 }
 
-/** Restore the viewer's pages from the BaaS for every accessible workspace (LWW). */
-export async function hydratePagesFromBaas(): Promise<number> {
+/** Restore the viewer's pages from the BaaS for every accessible workspace (LWW), the
+ *  one on screen first. */
+export async function hydratePagesFromBaas(activeWorkspaceId = ""): Promise<number> {
   const jwt = getActivePageJwt();
   const context = getCurrentPageAccessContext();
   if (!jwt || !context) return 0;
-  // Hydrate every workspace in parallel; the api client's 6-slot limiter (shared/api/client)
-  // bounds real concurrency, so N workspaces drain in ~ceil(N/6) waves instead of serially.
-  // allSettled: one workspace's offline/transient failure must not abort the others — a
-  // skipped workspace is reconciled by the outbox + the next hydrate; never block load.
-  const results = await Promise.allSettled(
-    context.workspaceIds.map((workspaceId) => hydrateWorkspace(workspaceId, jwt)),
-  );
-  let changed = 0;
-  for (const result of results) {
-    if (result.status === "fulfilled") changed += result.value;
-  }
-  return changed;
+  return hydrateActiveFirst(context.workspaceIds, activeWorkspaceId, (workspaceId) => hydrateWorkspace(workspaceId, jwt));
 }
