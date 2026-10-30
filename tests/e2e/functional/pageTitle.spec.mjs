@@ -94,6 +94,7 @@ test.describe("page title", () => {
     await expect(title).toHaveValue("First line\nsecond line");
     await expect(title).toBeFocused();
     expect(await clipped(title)).toBe(0);
+    await title.screenshot({ path: test.info().outputPath("title-two-lines.png"), animations: "disabled" });
 
     await page.keyboard.press("Enter");
     await expect(title).not.toBeFocused();
