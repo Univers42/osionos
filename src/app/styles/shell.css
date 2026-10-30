@@ -157,3 +157,22 @@ body[data-pane-resizing] [data-osio-pane] {
 [data-osio-terminal] .xterm .xterm-viewport {
   background-color: transparent;
 }
+
+/* Electron draws no title bar: the app's top bar (and the strip on screens without it) is the
+   window's drag handle, and everything you can click inside it opts out of the drag.
+   Caveat: a clickable element that is none of these (a bare div with onClick and no role)
+   inside the bar starts a window drag instead of taking the click; give it a role or make it
+   a button. */
+[data-osio-drag] {
+  -webkit-app-region: drag;
+}
+
+[data-osio-drag] :is(button, a, input, textarea, select, [tabindex], [role="button"], [role="combobox"], [role="menubar"], [role="menuitem"], [role="search"]) {
+  -webkit-app-region: no-drag;
+}
+
+/* A drag region ignores stacking: a menu or dialog drawn over the bar must opt out too, or
+   clicks on it there would move the window. */
+:is([role="dialog"], [aria-modal="true"], [role="menu"], [role="listbox"], [data-radix-popper-content-wrapper]) {
+  -webkit-app-region: no-drag;
+}

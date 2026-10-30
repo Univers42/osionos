@@ -51,7 +51,7 @@ import { IssueReportHost } from "@/features/issues/ui/IssueReportHost";
 import { ExportHost } from "@/features/page-export/ui/ExportHost";
 import { ActionGuardHost } from "@/features/app-actions/ui/ActionGuardHost";
 import { AiInlinePanel } from "@/features/ai/ui/AiInlinePanel";
-import { TopBar } from "@/widgets/top-bar";
+import { DesktopWindowChrome, TopBar } from "@/widgets/top-bar";
 import { ContactDock } from "@/widgets/contact-dock/ui/ContactDock";
 import { BindingSourcesProvider } from "@/features/bindings/ui/BindingSourcesProvider";
 
@@ -296,9 +296,11 @@ const App: React.FC = () => {
     return <LazyStyleGuideRoute />;
   }
 
+  // Screens without the top bar still need the desktop window's drag handle and controls.
   if (!ready) {
     return (
       <div className="flex items-center justify-center h-screen w-screen bg-[var(--osio-bg-page)]">
+        <DesktopWindowChrome />
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin w-8 h-8 border-2 border-[var(--osio-accent)] border-t-transparent rounded-full" />
           <p className="text-sm text-[var(--osio-fg-muted)]">Signing in...</p>
@@ -308,12 +310,18 @@ const App: React.FC = () => {
   }
 
   if (isPortalMode() && !activeUserId) {
-    return <Portal />;
+    return (
+      <>
+        <DesktopWindowChrome />
+        <Portal />
+      </>
+    );
   }
 
   if (error === "bridge-session-required" || !activeUserId) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-[var(--osio-bg-page)] px-6 text-[var(--osio-fg-default)]">
+        <DesktopWindowChrome />
         <section className="w-full max-w-md rounded-md border border-[var(--osio-border)] bg-[var(--osio-bg-panel)] p-6 shadow-osio-e1">
           <p className="text-xs font-semibold uppercase tracking-wide text-[var(--osio-fg-muted)]">Private workspace</p>
           <h1 className="mt-3 text-2xl font-semibold">Open osionos from Prismatica</h1>
@@ -341,6 +349,8 @@ const App: React.FC = () => {
       >
         {/* Global VSCode-style top bar: logo · menus · command/search · update · window controls */}
         <TopBar onOpenSettings={openSettings} />
+        {/* Zen hides the top bar; the desktop window keeps its drag handle and controls. */}
+        {zen && <DesktopWindowChrome />}
 
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           {/* Left sidebar */}

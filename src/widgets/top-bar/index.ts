@@ -11,3 +11,4 @@
 /* ************************************************************************** */
 
 export { TopBar } from "./ui/TopBar";
+export { DesktopWindowChrome } from "./ui/DesktopWindowChrome";
