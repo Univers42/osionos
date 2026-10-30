@@ -40,8 +40,10 @@ export const SettingsSectionsNav: React.FC<SettingsSectionsNavProps> = ({ sectio
   // sight; scroll the active row back into view when the list overflows.
   useEffect(() => {
     const list = listRef.current;
-    if (!list || list.scrollWidth <= list.clientWidth) return;
-    list.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (!list) return;
+    if (list.scrollWidth > list.clientWidth || list.scrollHeight > list.clientHeight) {
+      list.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
   }, [active]);
 
   function exploreAi() {
@@ -52,10 +54,10 @@ export const SettingsSectionsNav: React.FC<SettingsSectionsNavProps> = ({ sectio
   return (
     <nav
       aria-label="Settings sections"
-      className="shrink-0 border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] @max-[719px]:border-b @min-[720px]:w-[240px] @min-[720px]:overflow-y-auto @min-[720px]:border-r"
+      className="shrink-0 border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] @max-[719px]:border-b @min-[720px]:w-[240px] @min-[720px]:flex @min-[720px]:flex-col @min-[720px]:h-full @min-[720px]:border-r"
     >
-      <div className="@min-[720px]:flex @min-[720px]:min-h-full @min-[720px]:flex-col @min-[720px]:justify-between">
-        <div ref={listRef} className="flex gap-1 overflow-x-auto p-2 @min-[720px]:block @min-[720px]:space-y-4 @min-[720px]:overflow-visible">
+      <div className="@min-[720px]:flex @min-[720px]:flex-1 @min-[720px]:min-h-0 @min-[720px]:flex-col @min-[720px]:justify-between">
+        <div ref={listRef} className="flex gap-1 overflow-x-auto p-2 @min-[720px]:block @min-[720px]:space-y-4 @min-[720px]:flex-1 @min-[720px]:overflow-y-auto">
           {SETTINGS_GROUPS.map((group) => (
             <div key={group.id} className="flex gap-1 @min-[720px]:block">
               <p className="@min-[720px]:block hidden px-2 py-1.5 text-xs font-medium text-[var(--osio-fg-subtle)]">{group.label}</p>
@@ -73,7 +75,7 @@ export const SettingsSectionsNav: React.FC<SettingsSectionsNavProps> = ({ sectio
             </div>
           ))}
         </div>
-        <div className="hidden border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4 @min-[720px]:sticky @min-[720px]:bottom-0 @min-[720px]:block">
+        <div className="hidden border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4 @min-[720px]:block shrink-0">
           <Button className="w-full" onClick={exploreAi}>
             <Sparkles size={16} /> Get osionos AI
           </Button>
@@ -95,7 +97,7 @@ const SectionRow: React.FC<{
     data-settings-section={section.id}
     onClick={() => onSelect(section.id)}
     className={[
-      "flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm @min-[720px]:w-full",
+      "flex h-8 min-h-[32px] min-w-[24px] shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-2 text-left text-sm @min-[720px]:w-full",
       "pointer-coarse:h-11",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]",
       active
