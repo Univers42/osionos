@@ -352,4 +352,33 @@ describe('builder execute', () => {
 		assert.equal((decided.body as { status: string }).status, 'failed');
 		assert.equal(bridge.count, 0, 'no bridge writes when revalidation fails');
 	});
+
+	it('#79 the card reads the state of each item while the plan is being built', async () => {
+		const events = await ask(goodPlan());
+		const data = asked(events)[0].data as { approvalId: string };
+		const token = tokenFor(USER_A, WORKSPACE_A);
+		type Progress = { key: string; kind: string; status: string }[] | undefined;
+		const progressOf = async () =>
+			((await call(`/api/ai/approvals/${data.approvalId}`, { token })).body as { progress?: Progress }).progress;
+		assert.equal(await progressOf(), undefined, 'nothing to report before the decision');
+		bridge.reset();
+		bridge.delayMs = 100;
+		const decision = decide(data.approvalId, 'approve', token);
+		let midBuild: Progress;
+		for (let i = 0; i < 200 && !midBuild; i++) {
+			const progress = await progressOf();
+			const states = new Set(progress?.map((item) => item.status));
+			if (states.has('done') && states.has('pending')) midBuild = progress;
+			else await new Promise((resolve) => setTimeout(resolve, 10));
+		}
+		assert.equal((await decision).status, 200);
+		bridge.delayMs = 0;
+		assert.ok(midBuild, 'a poll during the build saw some items done and some still pending');
+		assert.equal(midBuild![0]!.status, 'done', 'parents first: the home page is done before the rest');
+		assert.deepEqual(await progressOf(), [
+			{ key: 'home', kind: 'page', status: 'done' },
+			{ key: 'notes', kind: 'page', status: 'done' },
+			{ key: 'deals', kind: 'database', status: 'done' },
+		]);
+	});
 });

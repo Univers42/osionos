@@ -49,7 +49,8 @@ import {
   stateWords,
   type ApprovalOutcome,
 } from "../model/approvalCard";
-import { fetchApproval, type ApprovalChoice, type ApprovalDescription } from "../model/approvals";
+import { fetchApproval, type ApprovalChoice, type ApprovalDescription, type PlanItemProgress } from "../model/approvals";
+import { followPlanProgress, planItemStateWords, planProgressWords } from "../model/planProgress";
 import { reloadWrittenPage } from "../model/reloadWrittenPage";
 import { decisionItems, keptKeys, planTree, type PlanNode } from "../model/planTree";
 
@@ -124,6 +125,12 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     }
     setError(outcome.error);
     setApproval((current) => (current ? { ...current, status: outcome.status, summary: outcome.summary } : current));
+    // The last poll may predate the last item: one more read gives the tree its final states.
+    if (approval?.tool === "build_plan") {
+      void fetchApproval(approvalId)
+        .then((found) => setApproval(withProgress(found.progress)))
+        .catch(() => undefined); // the state line already says how the build ended
+    }
     const writtenPageId = approval?.target.pageId;
     if (outcome.status === "executed" && approval && writtenPageId) reloadWrittenPage(approval.tool, writtenPageId);
     if (outcome.continuationRunId) onContinuation?.(outcome.continuationRunId);
@@ -153,6 +160,12 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
   const keptCount = tree ? keptKeys(tree, off).length : 0;
   const totalCount = tree ? tree.length : 0;
 
+  // The decision request builds the plan (#79): while it runs, the card follows each item.
+  useEffect(() => {
+    if (!busy || !isPlanCard) return undefined;
+    return followPlanProgress(approvalId, (progress) => setApproval(withProgress(progress)));
+  }, [busy, isPlanCard, approvalId]);
+
   return React.createElement(
     "div",
     { className: CARD, "data-testid": "chat-approval-card", "data-status": state },
@@ -161,7 +174,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
     noteLine(askedByWords(approval?.agent)),
     target ? targetLine(target.title, target.workspaceName || target.workspaceId) : null,
     isPlanCard && tree
-      ? planTreeBlock(tree, off, toggle, state !== "pending" || busy)
+      ? planTreeBlock(tree, off, toggle, state !== "pending" || busy, approval?.progress)
       : (approval ? argsBlock(approvalArgs(approval.args)) : null),
     isPlanCard && tree
       ? React.createElement("p", { className: "mb-1 text-[var(--osio-fg-muted)]" }, `${keptCount} of ${totalCount} will be created`)
@@ -174,7 +187,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
       : null,
     approval ? noteLine(expiryWords(approval.expiresAt)) : null,
     busy
-      ? stateLine("Writing…", true)
+      ? stateLine((isPlanCard && planProgressWords(approval?.progress)) || "Writing…", true)
       : stateWords(state, error, approval?.summary)
         ? stateLine(stateWords(state, error, approval?.summary))
         : null,
@@ -204,6 +217,12 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = (props) => {
       : null,
   );
 };
+
+/** The card with the plan items' recorded states. */
+function withProgress(progress: PlanItemProgress[] | undefined) {
+  return (current: ApprovalDescription | null): ApprovalDescription | null =>
+    current ? { ...current, progress } : current;
+}
 
 /** The heading of the card: the tool, in the words of the service. */
 function heading(approval: ApprovalDescription | null): React.ReactElement {
@@ -278,13 +297,22 @@ function planTreeBlock(
   off: Set<string>,
   onToggle: (key: string, currentlyOn: boolean) => void,
   frozen: boolean,
+  progress?: readonly PlanItemProgress[],
 ): React.ReactElement {
   const kept = new Set(keptKeys(nodes, off));
+  const stateOf = new Map(progress?.map((item) => [item.key, item.status]));
   const items = nodes.map((node) => {
     const checked = kept.has(node.key);
+    const itemState = stateOf.get(node.key);
+    const itemWords = planItemStateWords(itemState);
     return React.createElement(
       "li",
-      { key: node.key, style: { paddingLeft: `${(node.depth - 1) * 16}px` } },
+      {
+        key: node.key,
+        style: { paddingLeft: `${(node.depth - 1) * 16}px` },
+        "data-plan-item": node.key,
+        "data-item-state": itemState,
+      },
       React.createElement(
         "label",
         null,
@@ -298,6 +326,13 @@ function planTreeBlock(
         node.title,
         " ",
         React.createElement("span", { className: "text-[var(--osio-fg-subtle)]" }, node.kind),
+        itemWords
+          ? React.createElement(
+              "span",
+              { className: itemState === "done" ? "ml-1 text-[var(--osio-fg-muted)]" : "ml-1 text-[var(--osio-danger)]" },
+              ` · ${itemWords}`,
+            )
+          : null,
       ),
     );
   });

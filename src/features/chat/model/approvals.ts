@@ -98,7 +98,15 @@ export interface ApprovalDescription {
   /** The agent that asked, or null when no agent did. */
   agent?: ApprovalAgent | null;
   /** What the write came to, in the service's words — "… (page version N)" — once it happened. */
-  summary?: string | null;
+  summary?: string | null;  /** A build plan's items, parents first, as the service recorded them; absent before the decision. */
+  progress?: PlanItemProgress[];
+}
+
+/** One item of a build plan, and its state: `pending`, `done`, `failed` or `skipped`. */
+export interface PlanItemProgress {
+  key: string;
+  kind: string;
+  status: string;
 }
 
 /**
