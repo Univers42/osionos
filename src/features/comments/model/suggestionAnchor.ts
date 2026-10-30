@@ -121,25 +121,48 @@ export function visibleText(source: string): string | null {
   return serializeInlineNodes(nodes) === source ? offsetMap(nodes, source).plain : null;
 }
 
-const codePoints = (text: string): number => [...text].length;
+/** The UTF-16 index `count` code points after `index`, clamped to the end. */
+function stepForward(text: string, index: number, count: number): number {
+  let at = index;
+  for (let left = count; left > 0 && at < text.length; left -= 1) at += text.codePointAt(at)! > 0xffff ? 2 : 1;
+  return at;
+}
+
+/** The UTF-16 index `count` code points before `index`, clamped to 0. */
+function stepBack(text: string, index: number, count: number): number {
+  let at = index;
+  for (let left = count; left > 0 && at > 0; left -= 1) {
+    at -= at >= 2 && text.codePointAt(at - 2)! > 0xffff ? 2 : 1;
+  }
+  return at;
+}
+
+function codePointsBetween(text: string, from: number, to: number): number {
+  let count = 0;
+  for (let at = from; at < to; at += text.codePointAt(at)! > 0xffff ? 2 : 1) count += 1;
+  return count;
+}
+
+const codePoints = (text: string): number => codePointsBetween(text, 0, text.length);
 
 const splitsSurrogatePair = (text: string, at: number): boolean =>
   at > 0 && at < text.length && /[\uD800-\uDBFF]/.test(text[at - 1]) && /[\uDC00-\uDFFF]/.test(text[at]);
 
+// Walked over the UTF-16 string, never spread into an array: rebasing 200 open
+// proposals spread the block 4 times each: 3.44 ms p95, 0.58 ms walked
+// (tests/bench/discussions.bench.ts, Docker, 2026-10-30).
 function utf16At(source: string, codePoint: number): number {
-  return [...source].slice(0, codePoint).join("").length;
+  return stepForward(source, 0, codePoint);
 }
 
 function anchorAt(source: string, start: number, end: number): SuggestionAnchor {
-  const chars = [...source];
-  const from = codePoints(source.slice(0, start));
-  const to = codePoints(source.slice(0, end));
+  const from = codePointsBetween(source, 0, start);
   return {
     start: from,
-    end: to,
-    quote: chars.slice(from, to).join(""),
-    prefix: chars.slice(Math.max(0, from - CONTEXT_CODE_POINTS), from).join(""),
-    suffix: chars.slice(to, to + CONTEXT_CODE_POINTS).join(""),
+    end: from + codePointsBetween(source, start, end),
+    quote: source.slice(start, end),
+    prefix: source.slice(stepBack(source, start, CONTEXT_CODE_POINTS), start),
+    suffix: source.slice(end, stepForward(source, end, CONTEXT_CODE_POINTS)),
   };
 }
 
