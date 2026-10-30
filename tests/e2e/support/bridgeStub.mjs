@@ -6,7 +6,7 @@
 export const BRIDGE_STUB_ORIGIN = "https://bridge.invalid";
 
 export async function stubBridge(page, respond) {
-  await page.route(`${BRIDGE_STUB_ORIGIN}/**`, (route) => {
+  await page.route(`${BRIDGE_STUB_ORIGIN}/**`, async (route) => {
     const request = route.request();
     const headers = {
       "access-control-allow-origin": request.headers().origin ?? "*",
@@ -15,7 +15,8 @@ export async function stubBridge(page, respond) {
       "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     };
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers });
-    const answer = respond(new URL(request.url()), request) ?? { status: 503, json: {} };
+    // A promise holds the request open until it settles (an upload still in flight).
+    const answer = (await respond(new URL(request.url()), request)) ?? { status: 503, json: {} };
     return route.fulfill({ status: answer.status ?? 200, headers, json: answer.json ?? {} });
   });
 }
