@@ -25,8 +25,14 @@ import { compressImage, validateFile, type PreparedImage } from '@/shared/chat/m
 import type { Attachment } from '@/shared/chat/messageApi';
 import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 
+/** The file being uploaded and the fraction of it sent; null when none is. */
+export interface UploadProgress {
+  name: string;
+  fraction: number;
+}
+
 export function useAttachmentUpload(channelId: string) {
-  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
   const objectUrls = useRef<string[]>([]);
 
   useEffect(
@@ -44,14 +50,14 @@ export function useAttachmentUpload(channelId: string) {
         useToastStore.getState().push({ kind: 'error', title: 'Can’t attach file', description: check.error });
         return null;
       }
-      setUploading(true);
+      setProgress({ name: file.name, fraction: 0 });
       // Smart-compress images first so a 25MB+ 4K PNG becomes ~1MB and never trips
       // the bridge cap; other kinds upload as-is (already size-validated above).
       const prepared: PreparedImage = check.kind === 'image' ? await compressImage(file) : { file };
       const previewUrl = URL.createObjectURL(prepared.file);
       objectUrls.current.push(previewUrl);
       try {
-        const descriptor = await uploadAttachment(channelId, prepared.file);
+        const descriptor = await uploadAttachment(channelId, prepared.file, (fraction) => setProgress({ name: file.name, fraction }));
         const metadata = { ...descriptor.metadata };
         if (prepared.width) metadata.width = prepared.width;
         if (prepared.height) metadata.height = prepared.height;
@@ -62,11 +68,11 @@ export function useAttachmentUpload(channelId: string) {
         useToastStore.getState().push({ kind: 'error', title: 'Upload failed', description: file.name });
         return null;
       } finally {
-        setUploading(false);
+        setProgress(null);
       }
     },
     [channelId],
   );
 
-  return { upload, uploading };
+  return { upload, uploading: progress !== null, progress };
 }

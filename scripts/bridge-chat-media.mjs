@@ -23,7 +23,7 @@
 
 import { createHash } from 'node:crypto';
 import { httpError, rest, safeText, sendJson } from './bridge-social-core.mjs';
-import { extFromMime, servedObjectHeaders, storageGet, storageObjectKey, storagePut, typeFromMime, ensureChatBucket } from './bridge-storage-core.mjs';
+import { extFromMime, servedObjectHeaders, storageDelete, storageGet, storageObjectKey, storagePut, typeFromMime, ensureChatBucket } from './bridge-storage-core.mjs';
 import { takeToken } from './bridge-ratelimit.mjs';
 import { assertPublicHttpUrl } from './bridge-url-guard.mjs';
 import { fetchPublicHtml } from './bridge-url-fetch.mjs';
@@ -159,6 +159,26 @@ export async function handleServe(deps, session, attachmentId, request, response
 	response.writeHead(200, headers);
 	response.end(object.buffer);
 	return true;
+}
+
+/**
+ * A deleted message takes its files with it: the rows go first, which already
+ * stops the gallery and the serve route; then each stored object that no other
+ * attachment of the same owner still points at (uploads are deduplicated by
+ * content hash, so two messages can share one object).
+ * Caveat: a draft uploaded before the delete with the same bytes reused that
+ * object without a row of its own, so sending it afterwards serves a 404.
+ * A refused storage delete leaves unreachable bytes behind and is only logged.
+ */
+export async function deleteMessageAttachments(deps, config, messageId) {
+	const removed = await rest(config, deps.fetchImpl, `osionos_message_attachments?message_id=eq.${messageId}`, { method: 'DELETE', prefer: 'return=representation' });
+	for (const row of Array.isArray(removed) ? removed : []) {
+		if (!row.object_key) continue;
+		const shared = await rest(config, deps.fetchImpl, `osionos_message_attachments?owner_id=eq.${row.owner_id}&object_key=eq.${row.object_key}&select=id&limit=1`);
+		if (Array.isArray(shared) && shared.length > 0) continue;
+		await storageDelete(row.owner_id, row.object_key, deps.fetchImpl, deps.env, row.bucket || undefined)
+			.catch((error) => console.warn(`[osionos-bridge] attachment object left after message delete: ${error?.status ?? 'error'}`));
+	}
 }
 
 /** GET /api/chat/channels/:id/media?type= — per-channel gallery (≤200, desc). */
