@@ -37,6 +37,7 @@ import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge
 import { resolveTurnstileToken, turnstileBootLine, turnstileSettingsFromEnv } from './bridge-turnstile.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller, writeSessionCutoff } from './bridge-session-cutoff.mjs';
 import { startSessionRevocationPoller } from './bridge-session-revocations.mjs';
+import { startModerationRetractPoller } from './bridge-moderation-retract.mjs';
 import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, deliveredAnswer, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
 import { createAccountHandler } from './bridge-account-mounts.mjs';
 import { mfaBootLine, mfaRequiredFor } from './bridge-account-mfa-state.mjs';
@@ -5484,6 +5485,7 @@ export function createBridgeServer(options = {}) {
 	server.on('close', () => transport?.close());
 	let cutoffPoller = null;
 	let revocationPoller = null;
+	let retractPoller = null;
 	const activityConsent = createActivityConsent({ pg, now: options.now });
 	const consentGate = { isTracked: activityConsent.isTracked, awaitTracked: activityConsent.awaitTracked };
 	const activityEmitter = createActivityEmitter({ pg, env, now: options.now, log: (line) => console.warn(`[osionos-bridge] ${line}`), ...consentGate });
@@ -5495,8 +5497,10 @@ export function createBridgeServer(options = {}) {
 		cutoffPoller = startSessionCutoffPoller(sessionCutoffs, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionCutoffPoll);
 		revocationPoller = startSessionRevocationPoller(sessionRevocations, { fetchImpl, baasUrl: config.baasUrl, serviceKey: config.serviceKey }, options.sessionRevocationPoll);
 		server.sessionRevocationPoller = revocationPoller;
+		// `moderationRetract: false` keeps the background reads out of tests that count calls.
+		if (options.moderationRetract !== false) retractPoller = startModerationRetractPoller({ config, fetchImpl, env });
 	});
-	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); activityTimer?.stop(); if (!options.kv) kv.close(); });
+	server.on('close', () => { cutoffPoller?.stop(); revocationPoller?.stop(); retractPoller?.stop(); activityTimer?.stop(); if (!options.kv) kv.close(); });
 	Object.assign(server, { activityEmitter, sessionCutoffs, sessionRevocations, sessionRecords, kv, kvRequired });
 	return server;
 }
