@@ -1,13 +1,18 @@
-# Remote MCP endpoint (read only)
+# Remote MCP endpoint
 
-`POST /api/ai/mcp` lets an outside agent search and read osionos pages with a
-personal access token (PAT). It is off unless the service runs with
+`POST /api/ai/mcp` lets an outside agent search and read osionos pages, and
+propose changes to them, with a personal access token (PAT). It is off unless the service runs with
 `OSIONOS_AI_PAT=on`; the public stack keeps it off.
 
 ## What it does
 
 - Tools: the read tools of the assistant, from one registry (`search_workspace`,
-  `read_page`, `graph_neighbors`). There is no write tool.
+  `read_page`, `graph_neighbors`), with the `read` scope. With the
+  `write_approval` scope, also `create_page`, `rename_page`, `archive_page` and
+  `add_blocks`. A write never runs from the agent: it files an approval that
+  you accept or refuse in osionos, and only then does it reach the page.
+  Content is only ever added (`add_blocks`, through the bridge's atomic
+  append); existing text is never rewritten. There is no `build_plan`.
 - Rights: the token owner's own, inside the workspaces the token names, checked
   against live membership on every call. A removed member loses access on the
   next call; a revoked or expired token gets 401 on the next call (no cache).
@@ -24,7 +29,8 @@ personal access token (PAT). It is off unless the service runs with
 
 ## Configure an agent
 
-Create a token in Settings, scope `read`, then export it. Never paste the token
+Create a token in Settings, scope `read` (add `write_approval` to let the agent
+propose changes), then export it. Never paste the token
 into a config file.
 
 ```sh
@@ -75,7 +81,8 @@ page. Give it only the tools you accept that risk for.
 
 ## Not built
 
-- Writes (C117) are a later slice.
+- A rewrite of existing text (C227): an agent can add blocks, never change them.
+- Two-way file sync: pages are not mirrored to files on disk.
 - A PAT reads only workspaces with a live members row; the private workspace of
   an app session is not reachable.
 - `authoredBy` is the page owner, not the last editor. `graph_neighbors` results

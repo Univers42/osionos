@@ -213,8 +213,9 @@ export function isChannelAiAnswersEnabled(): boolean {
 }
 
 /** The "Delete my account" row and its grace-period banner in Profile. Default OFF:
- *  the bridge route exists, but the purge that follows the grace period belongs to a
- *  later package, so a request would schedule a deletion nothing executes yet. Enable
+ *  the purge that follows the grace period (`scripts/bridge-account-erasure.mjs`) runs
+ *  only with `OSIONOS_ACCOUNT_DELETION_EXECUTOR=1` on the bridge, which stays unset until
+ *  the P5-6-flip conditions hold; until then a request schedules a deletion nothing executes. Enable
  *  via `?osio.account.delete=1`, the `osio.account.delete` localStorage key, or
  *  `VITE_OSIO_ACCOUNT_DELETE=1`. */
 export function isAccountDeleteEnabled(): boolean {

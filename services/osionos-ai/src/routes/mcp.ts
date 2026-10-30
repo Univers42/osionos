@@ -9,7 +9,8 @@ import { checkMcpRateLimit } from '../rateLimit.ts';
 import type { RouteContext } from './types.ts';
 
 /**
- * POST /api/ai/mcp: the remote MCP endpoint (G4b-1, read only).
+ * POST /api/ai/mcp: the remote MCP endpoint (G4b-1). Reads with the `read`
+ * scope; writes with `write_approval`, each only a proposal the user approves.
  *
  * The order of the refusals is the order of the rules:
  *   1. host and origin (C118), before anything reads the token;
