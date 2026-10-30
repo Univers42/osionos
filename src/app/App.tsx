@@ -43,6 +43,7 @@ import { ThemeSafeModeBanner } from "@/features/theme/ui/ThemeSafeModeBanner";
 import { openSettings } from "@/features/settings/model/settingsNav";
 import { readOAuthReturn } from "@/features/ai/model/aiOAuthReturn";
 import { useAutomationDispatcher } from "@/features/automations/model/useAutomationDispatcher";
+import { useConnectivityNotices } from "@/features/connectivity/model/useConnectivityNotices";
 import { useVariablesSync } from "@/features/variables/model/useVariablesSync";
 import { useDatabaseAutomationBridge } from "@/widgets/database-view/model/useDatabaseAutomationBridge";
 import { ToastViewport } from "@osionos/ui/primitives";
@@ -187,6 +188,7 @@ const App: React.FC = () => {
   useLayoutPagePrune(); // close tab-bar tabs when their page is archived/deleted
   useUnreadSync(); // seed per-channel unread badges (mount + 60s + focus)
   useNotifyLive(); // seed + live in-app notifications (toasts + store)
+  useConnectivityNotices(); // offline / unstable / back online: a toast and the status-bar chip
 
   // Hydrate the per-user favorites set (bridge is source of truth) when the session changes.
   useEffect(() => {
