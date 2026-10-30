@@ -5262,7 +5262,7 @@ export function createBridgeServer(options = {}) {
 		runner: createRunnerHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		perms: createPermsHandler({ verifySession: verifyAppSessionToken, requireWorkspaceAccess, fetchImpl, createPageAccessLoader, pageLevelFor }),
 		accessRequests: createPageAccessRequestsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, createPageAccessLoader, pageLevelFor }),
-		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess }),
+		ideToken: createIdeTokenHandler({ config, verifySession: verifyAppSessionToken, env: process.env, fetchImpl, requireWorkspaceAccess, kv }),
 		connector: createConnectorHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		oauth: createOAuthHandler({ config, verifySession: verifyAppSessionToken }),
 		rtc: createRtcTokenHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
