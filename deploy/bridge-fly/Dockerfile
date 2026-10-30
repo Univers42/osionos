@@ -41,7 +41,7 @@ COPY scripts/bridge-api.mjs scripts/bridge-page-read.mjs scripts/bridge-page-acc
 # marketplace gates read a page's words with.
 # The module reads its blocklists at boot, so the LISTS are runtime
 # files: without them the image starts and then dies on the first import.
-COPY scripts/bridge-moderation.mjs scripts/bridge-moderation-gate.mjs scripts/bridge-moderation-console.mjs scripts/bridge-admin-check.mjs scripts/bridge-recs-health.mjs scripts/bridge-page-text.mjs ./scripts/
+COPY scripts/bridge-moderation.mjs scripts/bridge-moderation-gate.mjs scripts/bridge-moderation-console.mjs scripts/bridge-moderation-retract.mjs scripts/bridge-admin-check.mjs scripts/bridge-recs-health.mjs scripts/bridge-page-text.mjs ./scripts/
 COPY scripts/bridge-issues.mjs scripts/bridge-issue-redact.mjs ./scripts/
 COPY scripts/moderation-lists/ ./scripts/moderation-lists/
 
