@@ -26,6 +26,8 @@ function firstFocusable(panel: HTMLElement | null): HTMLElement | null {
  * scrolling menu would clip it) and fixed next to the row: it flips left when
  * that would leave the viewport — and a nested panel keeps its parent's side so
  * it never lands on the menu — and slides up when it is taller than the room.
+ * Out of its menu's layer, it stacks at the top tier: at the popover tier a menu
+ * opened inside a modal (a database record page) had its panel drawn under it (#162).
  */
 export const MenuSubmenu: React.FC<MenuSubmenuProps> = ({ label, icon, hint, open, onOpenChange, children, testId }) => {
   const rowRef = useRef<HTMLButtonElement>(null);
@@ -88,7 +90,7 @@ export const MenuSubmenu: React.FC<MenuSubmenuProps> = ({ label, icon, hint, ope
       data-testid={testId ? `${testId}-panel` : undefined}
       onMouseEnter={cancelClose}
       onMouseLeave={closeSoon}
-      className="osio-surface-overlay fixed z-[var(--osio-z-popover)] max-h-[70vh] w-[220px] overflow-y-auto p-1"
+      className="osio-surface-overlay fixed z-[var(--osio-z-max)] max-h-[70vh] w-[220px] overflow-y-auto p-1"
       style={{ left: 0, top: 0 }}
     >
       {children}
