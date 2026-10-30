@@ -1,0 +1,11 @@
+{
+  "name": "osionos",
+  "short_name": "osionos",
+  "description": "Pages, chat and databases in one workspace.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F2F0EC",
+  "theme_color": "#F2F0EC",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
