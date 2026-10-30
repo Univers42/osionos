@@ -33,17 +33,16 @@ export function readTags(entry: PageEntry): string[] {
 }
 
 /**
- * Linked file ids for the Files table's "Related" column (#162). Only relations that
- * hold page ids count: a record relation holds the related rows' NAMES, which read as
- * page ids became "Untitled" chips. Once the table wrote its own column it is the only
- * one read, or the relation it was built from would list every id a second time.
+ * Linked file ids for the Files table's "Related" column (#162). Only ids of live files
+ * count: a record relation holds the related rows' NAMES, and those, like a deleted
+ * page's id, became "Untitled" chips. Once the table wrote its own column it is the
+ * only one read, or the relation it was built from would list every id a second time.
  */
 export function readRelated(entry: PageEntry, isLiveFile: (id: string) => boolean): string[] {
   const props: PagePropertyEntry[] = Array.isArray(entry.properties) ? entry.properties : [];
-  const pageRelations = props.filter((prop) =>
-    prop?.type === "relation" && (prop.relationTarget ?? "page") === "page" && Array.isArray(prop.value));
-  const own = pageRelations.find((prop) => prop.key === FILE.related);
-  const ids = (own ? [own] : pageRelations).flatMap((prop) => prop.value as unknown[]);
+  const relations = props.filter((prop) => prop?.type === "relation" && Array.isArray(prop.value));
+  const own = relations.find((prop) => prop.key === FILE.related);
+  const ids = (own ? [own] : relations).flatMap((prop) => prop.value as unknown[]);
   return [...new Set(ids.filter((id): id is string => typeof id === "string" && isLiveFile(id)))];
 }
 
