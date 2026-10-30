@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const { isDesktop, isElectronShell } = await import("../../src/widgets/top-bar/model/desktop.ts");
+const { isDesktop, isElectronShell, windowControls } = await import("../../src/widgets/top-bar/model/desktop.ts");
 
 const globals = globalThis as unknown as Record<string, unknown>;
 
@@ -39,6 +39,21 @@ test("Tauri is a desktop shell but keeps its own chrome", () => {
     assert.equal(isDesktop(), true);
     assert.equal(isElectronShell(), false);
   });
+});
+
+// Electron's contextBridge clones call arguments; a React click event holds DOM nodes and makes the
+// call throw before the IPC send, so a button wired straight to the bridge never moves the window.
+test("window controls reach the Electron bridge with no arguments", () => {
+  const calls: unknown[][] = [];
+  const record = (...args: unknown[]) => { calls.push(args); };
+  withGlobal("osionosDesktop", { minimize: record, toggleMaximize: record, close: record }, () => {
+    const controls = windowControls()!;
+    const clickEvent = { target: {}, nativeEvent: {} };
+    (controls.minimize as (event: unknown) => void)(clickEvent);
+    (controls.toggleMaximize as (event: unknown) => void)(clickEvent);
+    (controls.close as (event: unknown) => void)(clickEvent);
+  });
+  assert.deepEqual(calls, [[], [], []]);
 });
 
 test("the web is neither", () => {
