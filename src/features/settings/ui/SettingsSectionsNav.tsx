@@ -52,10 +52,10 @@ export const SettingsSectionsNav: React.FC<SettingsSectionsNavProps> = ({ sectio
   return (
     <nav
       aria-label="Settings sections"
-      className="shrink-0 border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] @max-[719px]:border-b @min-[720px]:w-[240px] @min-[720px]:overflow-y-auto @min-[720px]:border-r"
+      className="shrink-0 border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] @max-[719px]:border-b @min-[720px]:flex @min-[720px]:w-[240px] @min-[720px]:flex-col @min-[720px]:border-r"
     >
-      <div className="@min-[720px]:flex @min-[720px]:min-h-full @min-[720px]:flex-col @min-[720px]:justify-between">
-        <div ref={listRef} className="flex gap-1 overflow-x-auto p-2 @min-[720px]:block @min-[720px]:space-y-4 @min-[720px]:overflow-visible">
+      <div className="@min-[720px]:flex @min-[720px]:min-h-0 @min-[720px]:flex-1 @min-[720px]:flex-col">
+        <div ref={listRef} className="flex gap-1 overflow-x-auto p-2 @min-[720px]:block @min-[720px]:min-h-0 @min-[720px]:flex-1 @min-[720px]:space-y-4 @min-[720px]:overflow-y-auto">
           {SETTINGS_GROUPS.map((group) => (
             <div key={group.id} className="flex gap-1 @min-[720px]:block">
               <p className="@min-[720px]:block hidden px-2 py-1.5 text-xs font-medium text-[var(--osio-fg-subtle)]">{group.label}</p>
@@ -73,7 +73,8 @@ export const SettingsSectionsNav: React.FC<SettingsSectionsNavProps> = ({ sectio
             </div>
           ))}
         </div>
-        <div className="hidden border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4 @min-[720px]:sticky @min-[720px]:bottom-0 @min-[720px]:block">
+        {/* Below the list, never over it: a sticky footer covered the row under it (#224). */}
+        <div className="hidden border-t border-[var(--osio-border-default)] bg-[var(--osio-bg-subtle)] p-4 @min-[720px]:block @min-[720px]:shrink-0">
           <Button className="w-full" onClick={exploreAi}>
             <Sparkles size={16} /> Get osionos AI
           </Button>

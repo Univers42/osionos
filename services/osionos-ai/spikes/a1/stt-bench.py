@@ -12,7 +12,7 @@ Two modes, stdlib only:
   summarize  stt-bench.py summarize --raw <raw-dir> --out <summary-stt.json>
              Corpus WER with a 95% bootstrap CI (1000 resamples, seed 42),
              the paired bootstrap CI of WER(turbo) - WER(small), p50/p95 of
-             latency and RTF.
+             latency and RTF, and the cut-off words (edge_drops).
 
 Caveat: the wer() normaliser below is NOT Whisper's own normaliser, so the
 numbers are not comparable with published ones. Latency is client-side wall
@@ -60,7 +60,45 @@ def edits(ref, hyp):
     return prev[-1]
 
 
+def edge_drops(ref, hyp):
+    """Reference words lost at the start and at the end of a clip: the leading and
+    trailing runs of deletions in a minimum-edit alignment (the cut-off words).
+
+    Caveat: on a tie the backtrace prefers a match or substitution, so a dropped
+    edge word that repeats its neighbour counts as a middle deletion
+    (under-reports); a wrong last word ("capital" -> "capitol") is an error, not
+    a cut-off; an elision the normaliser glues ("la rangée" -> "larranger")
+    counts as a drop (over-reports). An empty transcript counts every word as
+    cut at the end.
+    """
+    n, m = len(ref), len(hyp)
+    d = [[i + j if i == 0 or j == 0 else 0 for j in range(m + 1)] for i in range(n + 1)]
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (ref[i - 1] != hyp[j - 1]))
+    ops, i, j = [], n, m
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and d[i][j] == d[i - 1][j - 1] + (ref[i - 1] != hyp[j - 1]):
+            ops.append("S"); i -= 1; j -= 1
+        elif i > 0 and d[i][j] == d[i - 1][j] + 1:
+            ops.append("D"); i -= 1
+        else:
+            j -= 1
+    ops.reverse()
+    if all(op == "D" for op in ops):
+        return 0, len(ops)
+    lead = len(ops) - len("".join(ops).lstrip("D"))
+    trail = len(ops) - len("".join(ops).rstrip("D"))
+    return lead, trail
+
+
 def _self_check():
+    assert edge_drops("a b c".split(), "a b".split()) == (0, 1)
+    assert edge_drops("a b c".split(), "b c".split()) == (1, 0)
+    assert edge_drops("a b c d".split(), "a d".split()) == (0, 0)  # middle, not an edge
+    assert edge_drops("a b c".split(), "a x c z".split()) == (0, 0)  # errors, not cut-offs
+    assert edge_drops("a b".split(), []) == (0, 2)
+    assert edge_drops([], []) == (0, 0)
     assert edits("a b c".split(), "a b c".split()) == 0
     assert edits("a b c".split(), "a x c d".split()) == 2  # 1 sub + 1 ins
     assert edits("a b c".split(), []) == 3
@@ -174,10 +212,11 @@ def cmd_summarize(args):
         summary["models"][model] = {}
         for lang in LANGS:
             sel = [c for c in clips if c["lang"] == lang]
-            items = []
+            items, cuts = [], []
             for c in sel:
                 ref, hyp = normalise(c["ref"]).split(), normalise(c["hyp"]).split()
                 items.append((edits(ref, hyp), len(ref)))
+                cuts.append(edge_drops(ref, hyp))
             per[(model, lang)] = (sel, items)
             rng = random.Random(42)
             boots = [corpus_wer(items, [rng.randrange(len(items)) for _ in items]) for _ in range(1000)]
@@ -188,7 +227,11 @@ def cmd_summarize(args):
                 "clips": len(sel), "ref_words": sum(i[1] for i in items),
                 "wer": corpus_wer(items, range(len(items))), "wer_ci95": [lo, hi],
                 "latency_p50": percentile(lat, 50), "latency_p95": percentile(lat, 95),
-                "rtf_p50": percentile(rtf, 50), "rtf_p95": percentile(rtf, 95)}
+                "rtf_p50": percentile(rtf, 50), "rtf_p95": percentile(rtf, 95),
+                "cut_words": sum(a + b for a, b in cuts),
+                "cut_word_rate": sum(a + b for a, b in cuts) / sum(i[1] for i in items),
+                "clips_cut_start": sum(a > 0 for a, _ in cuts),
+                "clips_cut_end": sum(b > 0 for _, b in cuts)}
     if SMALL in raw and TURBO in raw:
         for lang in LANGS:
             a, b = per[(SMALL, lang)][1], per[(TURBO, lang)][1]
