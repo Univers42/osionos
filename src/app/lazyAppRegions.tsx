@@ -24,6 +24,12 @@ const CanvasDebugRouteImpl = lazy(() =>
   })),
 );
 
+const MachineViewImpl = lazy(() =>
+  import("@/features/ide/vscode/ui/MachineView").then((module) => ({
+    default: module.MachineView,
+  })),
+);
+
 const StyleGuideRouteImpl = lazy(() =>
   import("@/app/__styleguide__/StyleGuideRoute").then((module) => ({
     default: module.StyleGuideRoute,
@@ -105,6 +111,10 @@ export function LazyCanvasDebugRoute() {
 
 export function LazyStyleGuideRoute() {
   return <Suspense fallback={contentFallback}>{<StyleGuideRouteImpl />}</Suspense>;
+}
+
+export function LazyMachineView() {
+  return <Suspense fallback={contentFallback}>{<MachineViewImpl />}</Suspense>;
 }
 
 export function LazyWorkbench() {

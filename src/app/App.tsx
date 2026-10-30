@@ -33,7 +33,7 @@ import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayo
 import { useLayoutPagePrune } from "@/widgets/workspace-grid/model/useLayoutPagePrune";
 import { trashTab, consoleTab } from "@/widgets/workspace-grid/model/layoutPersist";
 import { SidebarEdgePeek } from "@/widgets/activity-rail/ui/SidebarEdgePeek";
-import { LazyCanvasDebugRoute, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
+import { LazyCanvasDebugRoute, LazyMachineView, LazyStyleGuideRoute, LazyWorkbench } from "./lazyAppRegions";
 import { applyStoredAppearance, watchSystemTheme } from "@/shared/config/theme";
 import { applyStoredTheme } from "@/shared/config/themeApply";
 import { useResponsiveSidebar } from "@/shared/config/useResponsiveSidebar";
@@ -328,6 +328,9 @@ const App: React.FC = () => {
       </div>
     );
   }
+
+  // A connected machine's folder (ADR-006): signed in, and nothing of the workbench around it.
+  if (globalThis.location?.pathname === "/machine") return <LazyMachineView />;
 
   return (
     <BindingSourcesProvider>
