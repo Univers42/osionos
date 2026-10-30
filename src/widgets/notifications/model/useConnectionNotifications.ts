@@ -110,6 +110,10 @@ export function useConnectionNotifications(): void {
         return;
       }
       void useContactsStore.getState().hydrate();
+    }, () => {
+      // A reconnect: what changed meanwhile was never delivered (#172).
+      void useContactsStore.getState().hydrate();
+      void refreshWorkspaceLists(activeUserId);
     });
   }, [activeUserId]);
 }
