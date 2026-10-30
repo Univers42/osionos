@@ -20,7 +20,7 @@
  * shown and a member sees the refusal.
  */
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   archiveWorkspaceSkill,
@@ -38,6 +38,7 @@ import {
   SKILL_BODY_MAX,
   type SkillDraft,
 } from "@/features/ai/model/workspaceSkills";
+import { Button, Input } from "@/shared/ui";
 import { FIELD_INPUT, FIELD_LABEL, PRIMARY_BUTTON, SECONDARY_BUTTON, DANGER_BUTTON } from "./aiPanelClasses";
 import type { AccessTokenWorkspace } from "./AccessTokensPanel";
 
@@ -51,6 +52,7 @@ export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[]
   const [draft, setDraft] = useState<SkillDraft | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const importInput = useRef<HTMLInputElement>(null);
 
   const reload = useCallback(async () => {
     if (!workspaceId) return;
@@ -153,15 +155,15 @@ export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[]
       ) : (
         <div className="mt-3 flex gap-2">
           <button type="button" className={SECONDARY_BUTTON} onClick={() => { setEditing(null); setDraft(EMPTY); }}>New skill</button>
-          <label className={SECONDARY_BUTTON}>
-            Import SKILL.md
-            <input
-              type="file"
-              accept=".md,text/markdown"
-              className="sr-only"
-              onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }}
-            />
-          </label>
+          <Button onClick={() => importInput.current?.click()}>Import SKILL.md</Button>
+          <Input
+            ref={importInput}
+            type="file"
+            accept=".md,text/markdown"
+            hidden
+            aria-label="SKILL.md file"
+            onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }}
+          />
         </div>
       )}
     </section>

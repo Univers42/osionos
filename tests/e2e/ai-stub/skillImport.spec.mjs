@@ -54,11 +54,9 @@ test("an opencode SKILL.md fills the skill form, and only Create sends it", asyn
   const panel = page.locator("section", { has: page.getByRole("heading", { name: "Workspace skills" }) });
   await expect(panel).toBeVisible();
 
-  await panel.getByLabel("Import SKILL.md").setInputFiles({
-    name: "SKILL.md",
-    mimeType: "text/markdown",
-    buffer: Buffer.from(SKILL_MD),
-  });
+  const chooser = page.waitForEvent("filechooser");
+  await panel.getByRole("button", { name: "Import SKILL.md" }).click();
+  await (await chooser).setFiles({ name: "SKILL.md", mimeType: "text/markdown", buffer: Buffer.from(SKILL_MD) });
   await expect(panel.getByLabel("Id")).toHaveValue("git-release");
   await expect(panel.getByLabel("Description (one line, shown to the assistant)")).toHaveValue("Create consistent releases and changelogs");
   await expect(panel.getByLabel("Text")).toHaveValue("## What I do\n- Draft release notes from merged PRs");
