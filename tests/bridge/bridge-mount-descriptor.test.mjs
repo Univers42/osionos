@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/29 21:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/29 21:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/30 06:30:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -26,6 +26,12 @@ const VIEWER = 'f0000000-3333-4333-8333-f000000000f0';
 const NOROAD = 'f0000000-4444-4444-8444-f000000000f0';
 const OUTSIDER = 'f0000000-5555-4555-8555-f000000000f0';
 const MOUNTS_URL = 'http://tenant-control.local/v1/tenants/me/mounts';
+const CAPABILITIES_URL = 'http://query-router.local/capabilities';
+const PG_CAPS = {
+	read: true, write: true, upsert: true, batch: true, aggregate: true, introspect: true,
+	schema_ddl: true, stream: true, ddl: true, transactions: true, latency_class: 'low',
+};
+const capabilitiesOk = () => Response.json({ router: 'rust', engines: [{ engine: 'postgresql', phase: 'pool_v2_active', capabilities: PG_CAPS }] });
 
 const config = configFromEnv({
 	OSIONOS_SESSION_CUTOFFS: 'off',
@@ -46,7 +52,7 @@ const DESCRIPTOR = {
 	created_at: '2026-10-29T00:00:00Z', last_healthy_at: null,
 };
 
-function world(upstream = () => Response.json({ ...DESCRIPTOR, future_field: 'unreviewed' })) {
+function world(upstream = () => Response.json({ ...DESCRIPTOR, future_field: 'unreviewed' }), capabilities = capabilitiesOk) {
 	const mock = createPostgrestMock({
 		osionos_workspace_members: [
 			{ workspace_id: WS, user_id: VIEWER, role: 'viewer', permissions: ['read'] },
@@ -60,24 +66,52 @@ function world(upstream = () => Response.json({ ...DESCRIPTOR, future_field: 'un
 			calls.push({ url: String(url), authorization: init.headers?.Authorization });
 			return upstream();
 		}
+		if (String(url) === CAPABILITIES_URL) {
+			calls.push({ url: String(url) });
+			return capabilities();
+		}
 		return mock.fetchImpl(url, init);
 	};
 	return { fetchImpl, calls };
 }
 
-async function describeAs(userId, { workspaces = [WS], path = `/api/databases/${DB}/descriptor`, upstream } = {}) {
-	const made = world(upstream);
-	const headers = sessionHeaders(config, userId, `a1000000-1111-4111-8111-a1000000${userId.slice(-4)}`, workspaces);
-	const answer = await withBridge(config, made.fetchImpl, async (base) => send(base, path, headers));
+// Each call gets its own config: the bridge caches the capability payload per config.
+async function describeAs(userId, { workspaces = [WS], path = `/api/databases/${DB}/descriptor`, upstream, capabilities } = {}) {
+	const made = world(upstream, capabilities);
+	const fresh = { ...config };
+	const headers = sessionHeaders(fresh, userId, `a1000000-1111-4111-8111-a1000000${userId.slice(-4)}`, workspaces);
+	const answer = await withBridge(fresh, made.fetchImpl, async (base) => send(base, path, headers));
 	return { answer, calls: made.calls };
 }
 
 describe('GET /api/databases/:dbId/descriptor', () => {
-	it('relays the known keys for a member who may read, with the tenant key', async () => {
+	const PG_FLAGS = { read: true, write: true, upsert: true, batch: true, aggregate: true, introspect: true, schema_ddl: true, transactions: true };
+
+	it('relays the known keys and the engine\'s closed flag set for a member who may read', async () => {
 		const { answer, calls } = await describeAs(VIEWER);
 		assert.equal(answer.status, 200, answer.text);
+		assert.deepEqual(answer.body, { dbId: DB, descriptor: { ...DESCRIPTOR, capabilities: PG_FLAGS } });
+		assert.deepEqual(calls, [
+			{ url: `${MOUNTS_URL}/${DB}/descriptor`, authorization: 'Bearer tenant-test-key' },
+			{ url: CAPABILITIES_URL },
+		]);
+	});
+
+	it('drops a flag that is not a boolean and omits capabilities for an engine the data plane does not list', async () => {
+		const odd = () => Response.json({ engines: [{ engine: 'postgresql', capabilities: { ...PG_CAPS, write: 'yes' } }] });
+		const { answer } = await describeAs(VIEWER, { capabilities: odd });
+		const { write: _write, ...rest } = PG_FLAGS;
+		assert.deepEqual(answer.body.descriptor.capabilities, rest);
+		const missing = () => Response.json({ engines: [{ engine: 'mongodb', capabilities: PG_CAPS }] });
+		const other = await describeAs(VIEWER, { capabilities: missing });
+		assert.equal(other.answer.status, 200, other.answer.text);
+		assert.equal('capabilities' in other.answer.body.descriptor, false);
+	});
+
+	it('still answers the descriptor when the query-router cannot list capabilities', async () => {
+		const { answer } = await describeAs(VIEWER, { capabilities: () => new Response('down', { status: 502 }) });
+		assert.equal(answer.status, 200, answer.text);
 		assert.deepEqual(answer.body, { dbId: DB, descriptor: DESCRIPTOR });
-		assert.deepEqual(calls, [{ url: `${MOUNTS_URL}/${DB}/descriptor`, authorization: 'Bearer tenant-test-key' }]);
 	});
 
 	it('refuses a member who may not read, before grobase', async () => {
