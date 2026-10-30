@@ -408,6 +408,10 @@ const DatabaseObjectPage: React.FC<DatabaseObjectPageProps> = ({ pageId, state, 
         databasePage,
         property.id,
       ),
+      title: (rowId) => {
+        const row = state.pages[rowId];
+        return row ? String(state.getPageTitle(row) || 'Untitled') : null;
+      },
     };
     const nextEntry: PageEntry = {
       _id: recordPageId,
