@@ -174,7 +174,7 @@ export default [
     // node, in the container of the bridge, never in the browser bundle. The
     // repo's lint command does not reach the root scripts/ folder, so a gate
     // that lints one of these files on its own needs node's globals declared.
-    files: ["scripts/bridge-*.mjs"],
+    files: ["scripts/bridge-*.mjs", "packages/osionos-node/**/*.mjs"],
     languageOptions: {
       globals: {
         AbortController: "readonly",
