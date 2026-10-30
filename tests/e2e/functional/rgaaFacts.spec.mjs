@@ -17,7 +17,8 @@
 // Caveat: a fact is not a verdict. "Focus visible" compares the focused element's
 // outline/box-shadow/background with its unfocused style, so a focus shown only by a
 // sibling or a parent reads as invisible (over-reports); a clip is only detected when
-// the element itself hides overflow (under-reports clipping by an ancestor).
+// the element itself hides overflow (under-reports clipping by an ancestor), and a 1 px
+// box is taken for visually-hidden text (an sr-only node is clipped on purpose).
 
 import { test } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
@@ -132,7 +133,7 @@ async function textSpacingFacts(page) {
   await page.addStyleTag({ content: "* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; } p { margin-bottom: 2em !important; }" });
   await page.waitForTimeout(200);
   return page.evaluate(() => [...document.querySelectorAll("body *")]
-    .filter((el) => el.children.length === 0 && el.textContent.trim() && el.getClientRects().length > 0)
+    .filter((el) => el.children.length === 0 && el.textContent.trim() && el.getClientRects().length > 0 && el.clientWidth > 1)
     .filter((el) => {
       const style = getComputedStyle(el);
       const clips = style.overflow === "hidden" || style.overflowY === "hidden" || style.overflowX === "hidden";
