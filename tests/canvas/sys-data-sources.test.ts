@@ -62,7 +62,7 @@ const stub = (body: unknown, fail = false) => ({
   },
 });
 
-test("the catalog has the seven sources, ids match the bridge fixture", () => {
+test("the catalog has the eight sources, ids match the bridge fixture", () => {
   assert.deepEqual(catalog.SYS_SOURCES.map((s: { source: string }) => s.source).sort(), fixture.map((f) => f.id).sort());
   for (const s of catalog.SYS_SOURCES) {
     const cols = fixture.find((f) => f.id === s.source)!.columns;
@@ -99,7 +99,10 @@ test("loadSysSourceState builds schema, records and the default view from an ans
   assert.equal(result.state.pages.p2.properties.mystery, "[1]");
   const view = result.state.views["my-pages-default"];
   assert.equal(view.type, "table");
-  assert.ok(!view.visibleProperties.includes("id") && !view.visibleProperties.includes("title"));
+  // The table draws exactly visibleProperties: a title left out is a table with no names.
+  assert.equal(view.visibleProperties[0], "title", "the title column comes first");
+  assert.equal(view.visibleProperties.filter((id: string) => id === "title").length, 1);
+  assert.ok(!view.visibleProperties.includes("id"));
   assert.ok(view.visibleProperties.includes("surface"));
 });
 
@@ -128,6 +131,19 @@ test("my-connections shows one row per person, the newest first", async () => {
   ];
   const result = await state.loadSysSourceState("sys:my-connections", stub(answer("my-connections", ["id", "peer", "created_at"], rows)));
   assert.deepEqual(Object.keys(result.state.pages), ["b", "c"]);
+});
+
+test("my-followers names each row by the follower, one row per follower", async () => {
+  const rows = [
+    { follower_id: "u9", created_at: "2026-03-01T00:00:00Z", follower: { userId: "u9", name: "Zed", username: "zed" } },
+    { follower_id: "u2", created_at: "2026-02-01T00:00:00Z", follower: { userId: "u2", name: "Amy" } },
+  ];
+  const result = await state.loadSysSourceState("sys:my-followers", stub(answer("my-followers", ["follower_id", "created_at", "follower"], rows)));
+  assert.deepEqual(Object.keys(result.state.pages), ["u9", "u2"], "a follower is its own record, keyed by who they are");
+  assert.equal(result.state.databases["sys:my-followers"].properties.follower.type, "title");
+  assert.equal(result.state.pages.u2.properties.follower, "Amy", "the title is the follower's name, not their card");
+  const visible = result.state.views["my-followers-default"].visibleProperties;
+  assert.deepEqual(visible, ["follower", "created_at"], "the follower first, the raw id hidden");
 });
 
 test("the adapter is read-only: every write leaves the state as loaded", async () => {
@@ -168,10 +184,10 @@ test("a session change drops the cached rows and asks for a reload", async () =>
   off();
 });
 
-test("the My data slash group lists the seven sources first, as database views", () => {
+test("the My data slash group lists the eight sources first, as database views", () => {
   const commands = slash.buildSysSlashCommands();
-  assert.equal(commands.length, 9);
-  for (const c of commands.slice(0, 7)) {
+  assert.equal(commands.length, 10);
+  for (const c of commands.slice(0, 8)) {
     assert.equal(c.kind, "database-view");
     assert.equal(c.section, "my-data");
     assert.equal(c.viewType, "table");

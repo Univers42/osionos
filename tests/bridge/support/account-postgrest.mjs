@@ -43,6 +43,7 @@ const PAGES = 'osionos_pages';
 const TASKS = 'osionos_tasks';
 const PUBLISHED = 'osionos_published_pages';
 const CONNECTIONS = 'osionos_connections';
+const FOLLOWS = 'osionos_follows';
 const WORKSPACES = 'osionos_workspaces';
 const MEMBERS = 'osionos_workspace_members';
 const SESSIONS = 'osionos_sessions';
@@ -53,7 +54,7 @@ const SHARE_RULES = 'osionos_share_rules';
 
 // The self-source tables answer the WHOLE row, not the projection: a route that spreads
 // a row must leak here, so the test sees the leak instead of trusting the select.
-const WHOLE_ROW_TABLES = new Set([PAGES, TASKS, PUBLISHED, CONNECTIONS, WORKSPACES, MEMBERS, SESSIONS, DIRECTORY, ACTIVITY]);
+const WHOLE_ROW_TABLES = new Set([PAGES, TASKS, PUBLISHED, CONNECTIONS, FOLLOWS, WORKSPACES, MEMBERS, SESSIONS, DIRECTORY, ACTIVITY]);
 
 // The column that holds the owner of a row: the account role reads its own rows only,
 // and the two account-plane tables name their owner differently.
@@ -203,7 +204,7 @@ function stripNulls(value) {
 	return out;
 }
 
-export function createAccountStore({ profiles = [], settings = [], blocks = [], history = [], notifications = [], identities = [], deletions = [], audit = [], pages = [], tasks = [], published = [], connections = [], workspaces = [], members = [], sessions = [], directory = [], activity = [], shareRules = [], fail = null } = {}) {
+export function createAccountStore({ profiles = [], settings = [], blocks = [], history = [], notifications = [], identities = [], deletions = [], audit = [], pages = [], tasks = [], published = [], connections = [], follows = [], workspaces = [], members = [], sessions = [], directory = [], activity = [], shareRules = [], fail = null } = {}) {
 	const calls = [];
 	const tables = new Map([
 		[PROFILES, profiles.map((row) => ({ ...row }))],
@@ -219,6 +220,7 @@ export function createAccountStore({ profiles = [], settings = [], blocks = [], 
 		[TASKS, tasks.map((row) => ({ ...row }))],
 		[PUBLISHED, published.map((row) => ({ ...row }))],
 		[CONNECTIONS, connections.map((row) => ({ ...row }))],
+		[FOLLOWS, follows.map((row) => ({ ...row }))],
 		[WORKSPACES, workspaces.map((row) => ({ ...row }))],
 		[MEMBERS, members.map((row) => ({ ...row }))],
 		[SESSIONS, sessions.map((row) => ({ ...row }))],

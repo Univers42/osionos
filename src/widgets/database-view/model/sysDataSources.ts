@@ -112,6 +112,12 @@ export const SYS_SOURCES: SysSource[] = [
     builtInViews: SYS_HOME_DASHBOARDS["my-connections"],
   }),
   source({
+    source: "my-followers", label: "Followers", icon: "👥",
+    description: "The people who follow you.",
+    titleColumn: "follower", hiddenColumns: ["follower_id"],
+    columnTypes: { created_at: "created_time" },
+  }),
+  source({
     source: "my-workspaces", label: "My workspaces", icon: "🗂️",
     description: "The workspaces you belong to, with your role in each.",
     titleColumn: "name", hiddenColumns: ["workspace_id", "id"],

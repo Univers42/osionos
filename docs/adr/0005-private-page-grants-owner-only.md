@@ -65,8 +65,10 @@ any rule. "Private" therefore meant "private until an admin says otherwise".
     own rule. The fix is a `created_by` column with legacy NULL read as foreign.
   - When the owner grants a team, the team's membership stays admin-governed.
   - An editor can re-parent a private page within the same owner's private subtree.
-  - `GET /api/perms/rules` still lists rules about private pages to any member
-    (ids and targets, no content) — Univers42/osionos#225.
+  - ~~`GET /api/perms/rules` lists rules about private pages to any member~~ —
+    fixed in `70657a4e9` (Univers42/osionos#225): the list shows a page rule only
+    to a caller who can read the page, so a private page's rules go to its owner
+    alone. Admins get no exemption here (C605); they revoke by rule id (C611).
   - Content already cached in a removed reader's browser, notifications or
     comments is not recalled; live page subscriptions need a re-authorisation
     at cutover (X1-C8).
