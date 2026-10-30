@@ -81,7 +81,7 @@ export const WorkspaceSwitcher: React.FC<Props> = ({ onNewPage }) => {
 
   function commitRename(value: string) {
     const name = value.trim();
-    if (name && activeWorkspace && name !== activeWorkspace.name) renameWorkspace(activeWorkspace._id, name);
+    if (name && activeWorkspace && name !== activeWorkspace.name) void renameWorkspace(activeWorkspace._id, name);
     setRenaming(false);
   }
 

@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { Redis } from 'ioredis';
 import type { Pool } from 'pg';
-import { cutoffPoller } from './auth.ts';
+import { cutoffPoller, revocationPoller } from './auth.ts';
 import { config } from './config.ts';
 import { createPool, isPoolTimeout } from './db.ts';
 import { sendError, sendPreflight } from './http.ts';
@@ -210,6 +210,7 @@ export function createAiServer(options: AiServerOptions = {}): AiServer {
 		async close(): Promise<void> {
 			clearInterval(sweep);
 			cutoffPoller.stop();
+			revocationPoller.stop();
 			await new Promise<void>((resolve) => {
 				server.close(() => resolve());
 				server.closeIdleConnections();

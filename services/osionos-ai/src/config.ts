@@ -35,6 +35,7 @@ const envSchema = z.object({
 	OSIONOS_APP_SESSION_SECRET: z.string().min(1),
 	OSIONOS_APP_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 	OSIONOS_SESSION_CUTOFFS: z.string().optional(),
+	OSIONOS_SESSION_RECORDS: z.string().optional(),
 	OSIONOS_BAAS_URL: z.string().min(1).default('http://localhost:8000'),
 	SERVICE_ROLE_KEY: z.string().default(''),
 	OSIONOS_AI_UPSTREAM_BASE_URL: z.string().min(1),
@@ -210,6 +211,7 @@ const rawEnv = {
 	OSIONOS_APP_SESSION_SECRET: process.env.OSIONOS_APP_SESSION_SECRET,
 	OSIONOS_APP_SESSION_TTL_SECONDS: process.env.OSIONOS_APP_SESSION_TTL_SECONDS,
 	OSIONOS_SESSION_CUTOFFS: process.env.OSIONOS_SESSION_CUTOFFS,
+	OSIONOS_SESSION_RECORDS: process.env.OSIONOS_SESSION_RECORDS,
 	OSIONOS_BAAS_URL: firstEnv('OSIONOS_BAAS_URL', 'PUBLIC_BAAS_URL'),
 	SERVICE_ROLE_KEY: firstEnv('SERVICE_ROLE_KEY', 'KONG_SERVICE_API_KEY', 'BAAS_SERVICE_ROLE_KEY'),
 	OSIONOS_AI_UPSTREAM_BASE_URL: process.env.OSIONOS_AI_UPSTREAM_BASE_URL,
@@ -382,6 +384,7 @@ export interface AiServiceConfig {
 	appSessionSecret: string;
 	sessionTtlSeconds: number;
 	sessionCutoffsMode: 'on' | 'off';
+	sessionRecordsMode: 'on' | 'off';
 	baasUrl: string;
 	serviceKey: string;
 	upstreamBaseUrl: string;
@@ -508,6 +511,8 @@ export const config: AiServiceConfig = Object.freeze({
 	sessionTtlSeconds: parsed.data.OSIONOS_APP_SESSION_TTL_SECONDS,
 	// The bridge's rule: anything but an explicit "off" keeps the check on.
 	sessionCutoffsMode: parsed.data.OSIONOS_SESSION_CUTOFFS?.trim().toLowerCase() === 'off' ? 'off' : 'on',
+	// The switch the bridge reads for the per-session revocation set (bridge-api.mjs).
+	sessionRecordsMode: parsed.data.OSIONOS_SESSION_RECORDS?.trim().toLowerCase() === 'off' ? 'off' : 'on',
 	baasUrl: parsed.data.OSIONOS_BAAS_URL,
 	serviceKey: parsed.data.SERVICE_ROLE_KEY,
 	upstreamBaseUrl: parsed.data.OSIONOS_AI_UPSTREAM_BASE_URL,

@@ -67,7 +67,6 @@ export const PageRelationField: React.FC<Props> = ({ workspaceId, excludePageId,
           ) : null}
         </span>
       ))}
-      {ids.length === 0 && !editable ? <span className="text-sm text-[var(--osio-fg-subtle)]">No relations</span> : null}
       {editable ? (
         <>
           <button ref={triggerRef} type="button" onClick={() => setPicking((open) => !open)}

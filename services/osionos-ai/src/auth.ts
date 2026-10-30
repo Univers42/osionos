@@ -4,6 +4,7 @@ import type { VerifiedAppSessionToken } from '../../../scripts/bridge-session-to
 import { privateWorkspaceOf } from '../../../scripts/bridge-live-workspaces.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller } from '../../../scripts/bridge-session-cutoff.mjs';
 import type { SessionCutoffTracker } from '../../../scripts/bridge-session-cutoff.mjs';
+import { sessionRevocationsFromConfig, startSessionRevocationPoller } from '../../../scripts/bridge-session-revocations.mjs';
 import { config } from './config.ts';
 
 export interface AuthUser {
@@ -34,20 +35,22 @@ export interface AuthUser {
  * The cut-off tracker of this process: the bridge keeps one per server and hangs it
  * off its config (scripts/bridge-api.mjs:4126-4131). The same object goes into the
  * token config, so a token issued before its user's sign-out is refused.
+ *
+ * The revocation set is the per-session half (#57): without it `assertSessionNotRevoked`
+ * is a no-op, and a session revoked in the account plane kept working here until it expired.
  */
 const sessionCutoffs: SessionCutoffTracker = sessionCutoffsFromConfig(config);
-const tokenConfig = { ...config, sessionCutoffs };
+const sessionRevocations = sessionRevocationsFromConfig(config);
+const tokenConfig = { ...config, sessionCutoffs, sessionRevocations };
 
 /**
- * The poller starts once, at boot, exactly like the bridge starts it on its
- * 'listening' event (scripts/bridge-api.mjs:4183-4185). It is the only thing this
+ * The pollers start once, at boot, exactly like the bridge starts them on its
+ * 'listening' event (scripts/bridge-api.mjs). They are the only things this
  * service asks of the BaaS.
  */
-export const cutoffPoller = startSessionCutoffPoller(sessionCutoffs, {
-	fetchImpl: fetch,
-	baasUrl: config.baasUrl,
-	serviceKey: config.serviceKey,
-});
+const baasSource = { fetchImpl: fetch, baasUrl: config.baasUrl, serviceKey: config.serviceKey };
+export const cutoffPoller = startSessionCutoffPoller(sessionCutoffs, baasSource);
+export const revocationPoller = startSessionRevocationPoller(sessionRevocations, baasSource);
 
 /** The bearer token of a request, or null when there is none (the bridge: :406-411). */
 export function bearerToken(request: IncomingMessage): string | null {
