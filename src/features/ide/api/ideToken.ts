@@ -190,3 +190,11 @@ export async function mintNodeToken(deps: Pick<IdeTokenDeps, "fetch" | "app">, w
   if (minted === "not-allowed") return { kind: "unavailable", reason: "not-allowed" };
   return minted ? { kind: "ok", token: minted.token } : { kind: "unavailable", reason: "error" };
 }
+
+export async function getNodeToken(workspaceId: string): Promise<NodeMintResult> {
+  const { sudoRequiredAwareFetch } = await import("@/shared/api/sudoRequired");
+  const client = await import("@/shared/api/client");
+  // The sudo-aware fetch raises the app's confirm-it-is-you prompt on a step-up refusal.
+  const fetchWithSudo = sudoRequiredAwareFetch((url, init) => fetch(url, init));
+  return mintNodeToken({ fetch: fetchWithSudo, app: async () => ({ apiBase: client.API_BASE, token: client.getActivePageJwt() }) }, workspaceId);
+}

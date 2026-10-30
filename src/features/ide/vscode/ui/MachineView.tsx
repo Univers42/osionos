@@ -17,10 +17,9 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { SudoPrompt } from "@/features/settings/ui/sudo/SudoPrompt";
 import { useSudoPromptStore } from "@/features/settings/ui/sudo/sudoPromptModel";
-import { sudoRequiredAwareFetch } from "@/shared/api/sudoRequired";
 import { useUserStore } from "@/features/auth";
 
-import { mintNodeToken } from "../../api/ideToken";
+import { getNodeToken } from "../../api/ideToken";
 import { linkMachineFrame, type MachineViewState } from "../machineLink";
 import { readMachineTarget } from "../machineSession";
 
@@ -32,8 +31,6 @@ const MESSAGE: Partial<Record<MachineViewState, string>> = {
   error: "The machine is not reachable. Check that osionos-node is running on it.",
 };
 
-const nodeFetch = sudoRequiredAwareFetch((url, init) => fetch(url, init));
-
 export function MachineView() {
   const target = readMachineTarget(globalThis.location.search);
   const workspaceId = useUserStore((state) => state.activeWorkspace()?._id ?? "");
@@ -41,8 +38,7 @@ export function MachineView() {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const linkRef = useRef<ReturnType<typeof linkMachineFrame> | null>(null);
   const [state, setState] = useState<MachineViewState>("connecting");
-  const stateRef = useRef(state);
-  stateRef.current = state;
+  const stateRef = useRef<MachineViewState>("connecting");
   const node = target?.node ?? "";
   const folder = target?.folder ?? "";
 
@@ -56,11 +52,11 @@ export function MachineView() {
         globalThis.addEventListener("message", onMessage);
         return () => globalThis.removeEventListener("message", onMessage);
       },
-      mint: async () => {
-        const client = await import("@/shared/api/client");
-        return mintNodeToken({ fetch: nodeFetch, app: async () => ({ apiBase: client.API_BASE, token: client.getActivePageJwt() }) }, workspaceId);
+      mint: () => getNodeToken(workspaceId),
+      onState: (next) => {
+        stateRef.current = next;
+        setState(next);
       },
-      onState: setState,
     });
     linkRef.current = link;
     return link.stop;
