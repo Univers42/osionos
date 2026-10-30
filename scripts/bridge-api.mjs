@@ -5364,7 +5364,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.memberAttributes(url, request, response, context.config)) return;
 	if (await context.social.realtimeToken(url, request, response, context.config)) return;
 	// The account plane: one seam, and the modules behind it decide what is theirs.
-	if (await context.social.account(url, request, response)) return;
+	if (await context.social.account(url, request, response, context.config)) return;
 	if (request.method === 'POST' && url.pathname === '/api/agent/claude/stream') {
 		await handleClaudeAgentStream(request, response, context.config, context.spawnImpl);
 		return;
