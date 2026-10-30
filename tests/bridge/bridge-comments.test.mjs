@@ -32,7 +32,7 @@ const verifySession = () => ({ userId: 'user-1' });
 function fetchFor(commentAuthor) {
 	return async (url) => ({
 		ok: true, status: 200,
-		text: async () => (String(url).includes('select=author_id') ? JSON.stringify([{ author_id: commentAuthor }]) : ''),
+		text: async () => (String(url).includes('osionos_page_comments?id=eq.') ? JSON.stringify([{ author_id: commentAuthor }]) : ''),
 	});
 }
 
