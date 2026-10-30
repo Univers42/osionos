@@ -142,13 +142,13 @@ export const PublicProfileSection: React.FC = () => {
           <form className="space-y-1" noValidate onSubmit={(event) => { event.preventDefault(); if (dirty && !saving && Object.keys(errors).length === 0) void submit(); }}>
             <PhotoRow avatarUrl={profile.avatarUrl} name={draft.displayName} onChanged={() => void hydrate()} />
             <BannerUpload bannerUrl={profile.bannerUrl} onChanged={() => void hydrate()} />
-            <TextField name="displayName" label="Display name" hint="1 to 100 characters, on one line." value={draft.displayName} error={shown('displayName')} onChange={(v) => edit('displayName', v)} />
+            <TextField name="displayName" autoComplete="nickname" label="Display name" hint="1 to 100 characters, on one line." value={draft.displayName} error={shown('displayName')} onChange={(v) => edit('displayName', v)} />
             <TextField name="pronouns" label="Pronouns" hint="Up to 40 characters." value={draft.pronouns} error={shown('pronouns')} onChange={(v) => edit('pronouns', v)} />
             <TextField name="headline" label="Headline" hint="Up to 200 characters." value={draft.headline} error={shown('headline')} onChange={(v) => edit('headline', v)} />
             <TextField name="bio" label="Bio" hint="Up to 2000 characters. Line breaks are kept." multiline max={2000} value={draft.bio} error={shown('bio')} onChange={(v) => edit('bio', v)} />
             <TextField name="location" label="Location" hint="Up to 120 characters." value={draft.location} error={shown('location')} onChange={(v) => edit('location', v)} />
-            <TextField name="company" label="Company" hint="Up to 100 characters." value={draft.company} error={shown('company')} onChange={(v) => edit('company', v)} />
-            <TextField name="website" label="Website" hint="Starts with http:// or https://." value={draft.website} error={shown('website')} onChange={(v) => edit('website', v)} />
+            <TextField name="company" autoComplete="organization" label="Company" hint="Up to 100 characters." value={draft.company} error={shown('company')} onChange={(v) => edit('company', v)} />
+            <TextField name="website" autoComplete="url" label="Website" hint="Starts with http:// or https://." value={draft.website} error={shown('website')} onChange={(v) => edit('website', v)} />
             <LinksField value={draft.links} error={shown('links')} onChange={(v) => edit('links', v)} />
             <TimezoneField value={draft.timezone} error={shown('timezone')} onChange={(v) => edit('timezone', v)} />
             <TextField name="orcid" label="ORCID" hint="Sixteen digits like 0000-0002-1825-0097; the last may be X." value={draft.orcid} error={shown('orcid')} onChange={(v) => edit('orcid', v.toUpperCase())} />
