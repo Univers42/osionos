@@ -11,18 +11,20 @@
 /* ************************************************************************** */
 
 /**
- * Notifications panel — the activity-rail "Notifications" destination. v1 surfaces
- * incoming connection invitations with inline Accept/Decline (the actionable
- * items, LinkedIn-style). Page-activity ("someone changed work you share") plugs
- * in here as a second source once the bridge exposes an events feed.
+ * Notifications panel — the activity-rail "Notifications" destination: incoming
+ * connection invitations with inline Accept/Decline, then the stored notification
+ * inbox (mentions, replies, comments, due tasks, access requests).
  */
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Check, UserPlus, X } from 'lucide-react';
 
 import { Button } from '@osionos/ui/atoms/Button';
 import { useContactsStore } from '@/store/social/useContactsStore';
 import type { ContactEdge } from '@/store/social/types';
+import { useNotificationsStore } from '@/store/chat/useNotificationsStore';
+import { reloadNotificationInbox } from '../model/notificationInbox';
+import { InboxList } from './InboxList';
 import { PushToggleRow } from './PushToggleRow';
 
 const InviteRow: React.FC<{ edge: ContactEdge; onAccept: () => void; onDecline: () => void }> = ({
@@ -59,9 +61,15 @@ const InviteRow: React.FC<{ edge: ContactEdge; onAccept: () => void; onDecline: 
 
 export const NotificationsPanel: React.FC = () => {
   const { requests, loading, hydrate, accept, decline } = useContactsStore();
+  const items = useNotificationsStore((state) => state.items);
+  const unread = useNotificationsStore((state) => state.unread);
+  const [inboxLoaded, setInboxLoaded] = useState(false);
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+  useEffect(() => {
+    void reloadNotificationInbox().catch(() => undefined).finally(() => setInboxLoaded(true));
+  }, []);
   // Guard `edge?.peer` so a malformed edge can never crash the panel.
   const invites = useMemo(
     () => requests.filter((edge) => edge?.peer && edge.direction === 'incoming'),
@@ -83,11 +91,12 @@ export const NotificationsPanel: React.FC = () => {
           ))}
         </ul>
       ) : null}
-      {!loading && invites.length === 0 ? (
+      <InboxList items={items} unread={unread} />
+      {!loading && inboxLoaded && invites.length === 0 && items.length === 0 ? (
         <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
           <UserPlus size={22} className="text-[var(--osio-fg-subtle)]" />
           <p className="text-sm text-[var(--osio-fg-muted)]">You&apos;re all caught up.</p>
-          <p className="text-xs text-[var(--osio-fg-subtle)]">Connection invitations show up here.</p>
+          <p className="text-xs text-[var(--osio-fg-subtle)]">Mentions, replies, comments and invitations show up here.</p>
         </div>
       ) : null}
     </div>
