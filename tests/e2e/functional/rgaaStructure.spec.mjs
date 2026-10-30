@@ -12,7 +12,7 @@
 
 // The RGAA criteria the manual pass found failing and axe cannot see (#224): a skip link
 // (12.7), a window title that names the open document (8.6), a page heading (9.1) and one
-// main landmark (12.6 / 9.2).
+// main landmark with named, distinct navigation landmarks (12.6 / 9.2).
 
 import { expect, test } from "@playwright/test";
 
@@ -51,5 +51,14 @@ test.describe("RGAA structure", () => {
 
     await expect(page.getByRole("heading", { level: 1, name: "Reading list" })).toHaveCount(1);
     await expect(page.getByRole("main")).toHaveCount(1);
+  });
+
+  test("every navigation landmark has its own name", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    const names = await page.getByRole("navigation").evaluateAll((navs) =>
+      navs.filter((nav) => nav.getClientRects().length > 0).map((nav) => nav.getAttribute("aria-label") ?? ""));
+    expect(names.length).toBeGreaterThan(1);
+    expect(names.filter((name) => !name)).toEqual([]);
+    expect(new Set(names).size).toBe(names.length);
   });
 });

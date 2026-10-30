@@ -48,7 +48,7 @@ export const FolderRail: React.FC = () => {
   }, [pages]);
 
   return (
-    <nav className="flex flex-col gap-0.5">
+    <nav aria-label="Folders" className="flex flex-col gap-0.5">
       <div className="flex items-center justify-between px-2 pb-1">
         <span className="text-xs font-medium text-[var(--osio-fg-muted)]">Folders</span>
         <button
