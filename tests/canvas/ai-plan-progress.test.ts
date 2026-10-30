@@ -12,6 +12,13 @@ import { ApprovalCard } from "@/features/chat/ui/ApprovalCard";
 
 const item = (key: string, kind: string, status: string): PlanItemProgress => ({ key, kind, status });
 
+// A fixed sleep counted reads, and a loaded CI runner served one read in 60 ms where the test
+// wanted two (osionos CI run 41065516281). Wait for the reads instead; 2 s is only the give-up.
+async function until(ready: () => boolean): Promise<void> {
+  const deadline = Date.now() + 2000;
+  while (!ready() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 5));
+}
+
 test("planProgressWords counts what is created, and says what failed", () => {
   assert.equal(planProgressWords(undefined), "");
   assert.equal(planProgressWords([item("a", "page", "pending"), item("b", "page", "pending")]), "Building: 0 of 2 created");
@@ -36,7 +43,7 @@ test("followPlanProgress hands each read to the card until it is stopped", async
   });
   const seen: (PlanItemProgress[] | undefined)[] = [];
   const stop = followPlanProgress("approval-1", (progress) => seen.push(progress), 5);
-  await new Promise((resolve) => setTimeout(resolve, 60));
+  await until(() => seen.length >= reads.length);
   stop();
   const after = seen.length;
   await new Promise((resolve) => setTimeout(resolve, 30));
@@ -53,7 +60,7 @@ test("followPlanProgress keeps going past a failed read", async () => {
   });
   const seen: unknown[] = [];
   const stop = followPlanProgress("approval-1", (progress) => seen.push(progress), 5);
-  await new Promise((resolve) => setTimeout(resolve, 40));
+  await until(() => seen.length > 0);
   stop();
   assert.ok(seen.length > 0, "a 503 does not end the follow");
 });
