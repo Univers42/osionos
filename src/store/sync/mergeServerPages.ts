@@ -20,7 +20,8 @@
 // Ponytail: updatedAt mixes clocks — client edits carry the browser's (the bridge clamps it at
 // +5 min), server-side writes (archive, publish, record notes) the server's. Within that skew
 // last-write-wins can keep the local copy over a newer server-side write; a clean page still
-// takes the server body on its next content fetch (resolveFetchedPage).
+// takes the server body on its next content fetch (resolveFetchedPage). A content write is
+// immune once both copies carry a contentVersion (#82); a metadata-only write is not.
 
 import type { SyncLedger } from "@osionos/outbox-ledger";
 import type { PageEntry } from "@/entities/page";
@@ -33,7 +34,13 @@ export function isPageClean(page: PageEntry, ledger: SyncLedger, canPublish: boo
   return !canPublish || ledger[page._id] === pageStamp(page);
 }
 
-const isNewer = (server: PageEntry, local: PageEntry) => (server.updatedAt ?? "") > (local.updatedAt ?? "");
+// A greater content version is newer whatever the clocks say (#82): the server bumps it only
+// when the content changed, so it is immune to the skew the updatedAt comparison has.
+const isNewerVersion = (server: PageEntry, local: PageEntry) =>
+  typeof server.contentVersion === "number" && typeof local.contentVersion === "number"
+  && server.contentVersion > local.contentVersion;
+const isNewer = (server: PageEntry, local: PageEntry) =>
+  (server.updatedAt ?? "") > (local.updatedAt ?? "") || isNewerVersion(server, local);
 
 /**
  * The page to keep for one server row, or null to keep the local copy. Last-write-wins on

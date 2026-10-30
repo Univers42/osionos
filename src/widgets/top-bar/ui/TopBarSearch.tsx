@@ -142,6 +142,7 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
         role="combobox"
         aria-expanded={showResults}
         aria-controls="osio-topbar-results"
+        aria-activedescendant={showResults && results[active] ? `osio-topbar-option-${active}` : undefined}
         aria-label="Search pages or run a command"
         placeholder="Search pages  —  type  >  for commands"
         value={query}
@@ -164,27 +165,30 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
           {results.map((result, index) => {
             const peerId = personId(result);
             return (
+            // The option itself is the click target: a button inside an option is a nested
+            // control assistive tech cannot reach; focus stays on the combobox (#224).
             <li
               key={result.id}
+              id={`osio-topbar-option-${index}`}
               role="option"
               aria-selected={index === active}
               onPointerEnter={() => setActive(index)}
+              onClick={(event) => {
+                if ((event.target as Element).closest("button")) return;
+                activate(result);
+              }}
               className={cx(
-                "flex w-full items-center gap-2 rounded-[var(--osio-radius-sm)] pr-2",
+                "flex w-full cursor-pointer items-center gap-2 rounded-[var(--osio-radius-sm)] pr-2",
                 index === active ? "bg-[var(--osio-menu-item-hover-bg)]" : "hover:bg-[var(--osio-menu-item-hover-bg)]",
               )}
             >
-              <button
-                type="button"
-                onClick={() => activate(result)}
-                className="flex h-[var(--osio-control-h-sm)] min-w-0 flex-1 items-center justify-between gap-4 px-2 text-left text-sm text-[var(--osio-fg-default)]"
-              >
+              <span className="flex h-[var(--osio-control-h-sm)] min-w-0 flex-1 items-center justify-between gap-4 px-2 text-left text-sm text-[var(--osio-fg-default)]">
                 <span className="flex min-w-0 flex-1 items-baseline gap-2">
                   <span className="max-w-[60%] shrink-0 truncate">{result.title}</span>
                   {result.subtitle && <span className="min-w-0 flex-1 truncate text-xs text-[var(--osio-fg-subtle)]">{result.subtitle}</span>}
                 </span>
                 {result.accelerator && <span className="shrink-0 font-mono text-xs text-[var(--osio-fg-subtle)]">{result.accelerator}</span>}
-              </button>
+              </span>
               {peerId && <ConnectButton userId={peerId} name={result.title} size="sm" />}
             </li>
             );

@@ -27,7 +27,7 @@ const TABLE_COLUMNS = {
 	osionos_pages: [
 		'id', 'title', 'icon', 'cover', 'cover_position', 'updated_at', 'created_at', 'workspace_id', 'owner_id',
 		'visibility', 'collaborators', 'parent_page_id', 'sort_order', 'database_id', 'archived_at', 'properties',
-		'surface', 'is_template', 'is_default_template', 'template_surface', 'recurrence', 'content',
+		'surface', 'is_template', 'is_default_template', 'template_surface', 'recurrence', 'content', 'version',
 	],
 };
 
