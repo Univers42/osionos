@@ -113,7 +113,7 @@ export const SYS_SOURCES: SysSource[] = [
   }),
   source({
     source: "my-followers", label: "Followers", icon: "👥",
-    description: "The people who follow you, the newest first.",
+    description: "The people who follow you.",
     titleColumn: "follower", hiddenColumns: ["follower_id"],
     columnTypes: { created_at: "created_time" },
   }),
