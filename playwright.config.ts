@@ -75,6 +75,11 @@ const coeditRun = process.env.PLAYWRIGHT_COEDIT === "1";
 // answer every request to the stub host themselves; nothing leaves the machine.
 const bridgeStub = process.env.PLAYWRIGHT_BRIDGE_STUB === "1";
 const BRIDGE_STUB_URL = "https://bridge.invalid";
+// Opt-in (PLAYWRIGHT_AI_STUB=1): the same idea for the AI service. `VITE_AI_URL` is its only
+// switch (src/features/ai/api/aiClient.ts), empty in every other run, so the AI actions never
+// render there. The specs under tests/e2e/ai-stub answer the stub host themselves.
+const aiStub = process.env.PLAYWRIGHT_AI_STUB === "1";
+const AI_STUB_URL = "https://ai.invalid";
 const LEGACY_ON_SPECS = [
   "legacy-second-brain-gate.spec.mjs",
   "legacy-graph-engine-audit.spec.mjs",
@@ -90,9 +95,10 @@ const chromiumExecutablePath = process.env.PW_CHROMIUM_PATH || undefined;
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: bridgeStub ? ["**/bridge-stub/**/*.spec.mjs"] : undefined,
+  testMatch: aiStub ? ["**/ai-stub/**/*.spec.mjs"] : bridgeStub ? ["**/bridge-stub/**/*.spec.mjs"] : undefined,
   testIgnore: [
     ...(bridgeStub ? [] : ["**/bridge-stub/**"]),
+    ...(aiStub ? [] : ["**/ai-stub/**"]),
     ...(legacySecondBrainOn ? ["**/graph-studio-off/**"] : LEGACY_ON_SPECS.map((spec) => `**/${spec}`)),
     ...(perfRun ? [] : ["**/perf/**"]),
     ...(coeditRun ? [] : ["**/latency/**"]),
@@ -139,6 +145,7 @@ export default defineConfig({
       // origin (it stubs every /api call), so it runs only when PLAYWRIGHT_API_URL is set to the
       // baseURL; the bridge-stub mode builds against its own stub origin.
       VITE_API_URL: bridgeStub ? BRIDGE_STUB_URL : (process.env.PLAYWRIGHT_API_URL ?? ""),
+      VITE_AI_URL: aiStub ? AI_STUB_URL : "",
       VITE_ALLOW_OFFLINE_MODE: "true",
       VITE_REQUIRE_BRIDGE_SESSION: "false",
     },

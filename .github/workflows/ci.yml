@@ -457,6 +457,15 @@ jobs:
           docker compose -f docker-compose.base.yml -f docker-compose.dev.yml run --rm --no-deps \
             browser-tests pnpm exec playwright test
 
+      # Same idea for the AI service: a build with a stub VITE_AI_URL, running only tests/e2e/ai-stub.
+      - name: Run the stub-AI specs
+        env:
+          PLAYWRIGHT_BRIDGE_STUB: ""
+          PLAYWRIGHT_AI_STUB: "1"
+        run: |
+          docker compose -f docker-compose.base.yml -f docker-compose.dev.yml run --rm --no-deps \
+            browser-tests pnpm exec playwright test
+
       - name: Upload test report
         if: failure()
         uses: actions/upload-artifact@v4
