@@ -17,8 +17,8 @@
 
 import { expect, test } from "@playwright/test";
 
-import { BOB_PUBLIC, OTHER, profileBody } from "../support/profilePageMocks.mjs";
-import { stubBridge } from "../support/bridgeStub.mjs";
+import { OTHER, answerProfileReads, heading, openProfileFromPalette } from "../support/profilePageMocks.mjs";
+import { openSignedIn, stubBridge } from "../support/bridgeStub.mjs";
 import { openSettings, region } from "../support/settingsHelpers.mjs";
 
 const peer = (id, name) => ({ id, name, avatar: null, headline: null, online: false });
@@ -39,9 +39,8 @@ async function stubFriends(page) {
   await stubBridge(page, (url, request) => {
     const method = request.method();
     const [, edgeId] = url.pathname.match(/^\/api\/connections\/([^/]+)$/) ?? [];
-    if (url.pathname === `/api/profile/${OTHER.id}`) return { json: profileBody(OTHER.id, OTHER.username, "Bob Jones") };
-    if (url.pathname === `/api/users/${OTHER.username}`) return { json: BOB_PUBLIC };
-    if (url.pathname === "/api/directory/search") return { json: { people: [{ ...peer(OTHER.id, "Bob Jones"), username: OTHER.username }] } };
+    const profile = answerProfileReads(url);
+    if (profile) return profile;
     if (url.pathname === "/api/social/blocks") return { json: { blocks: [] } };
     if (url.pathname === "/api/connections" && method === "GET") return { json: { connections: state.edges } };
     if (url.pathname === "/api/connections" && method === "POST") {
@@ -68,18 +67,11 @@ async function stubFriends(page) {
   return state;
 }
 
-async function signIn(page, baseURL) {
-  await page.goto(baseURL, { waitUntil: "domcontentloaded" });
-  // Seed once the boot sign-in has written its session, or it overwrites the token.
-  await page.getByRole("button", { name: "Settings", exact: true }).first().waitFor();
-  await page.evaluate(() => globalThis.__playgroundUserStore.setState({ activePageJwt: () => "e2e-page-jwt" }));
-}
-
 const connections = (page) => region(page).locator('[data-settings-anchor="connections"]');
 const removeButtons = (page) => connections(page).getByRole("button", { name: "Remove", exact: true });
 
 async function openContacts(page, baseURL) {
-  await signIn(page, baseURL);
+  await openSignedIn(page, baseURL);
   await openSettings(page, "Contacts");
   await expect(connections(page).getByText(ADA.name, { exact: true })).toBeVisible();
 }
@@ -118,12 +110,9 @@ test.describe("friends (bridge stub)", () => {
 
   test("Connect on someone's profile sends a friend request with a note", async ({ page, baseURL }) => {
     const bridge = await stubFriends(page);
-    await signIn(page, baseURL);
-    const box = page.getByRole("combobox", { name: "Search pages or run a command" });
-    await box.click();
-    await box.fill("user:Bob");
-    await page.getByRole("option").filter({ hasText: "Bob Jones" }).first().click();
-    await expect(page.getByRole("heading", { name: "Bob Jones", exact: true })).toBeVisible();
+    await openSignedIn(page, baseURL);
+    await openProfileFromPalette(page, "Bob");
+    await expect(heading(page, "Bob Jones")).toBeVisible();
 
     await page.getByRole("button", { name: "Connect", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Connect with Bob Jones" });
