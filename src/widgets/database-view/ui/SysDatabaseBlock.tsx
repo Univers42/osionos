@@ -15,6 +15,7 @@ import React from "react";
 import type { ObjectDatabaseAdapter, ObjectDatabaseProps } from "@notion-db/object-database";
 
 import { API_BASE } from "@/shared/api/client";
+import { useHasBeenNearViewport } from "@/shared/lib/dom/useHasBeenNearViewport";
 import { withRecordLimit } from "../model/recordLimitAdapter";
 import { sysSourceById } from "../model/sysDataSources";
 import { getSysDatabaseAdapter, type SysStatus } from "../model/sysDatabaseState";
@@ -37,13 +38,16 @@ const OK_STATUS: SysStatus = { truncated: false, error: null };
 
 /** A `sys:` database: your own data from the bridge, read-only. A failed read shows an
  *  error with Retry; it never falls back to demo rows. A build with no server never
- *  tries the read: it asks you to connect. */
+ *  tries the read: it asks you to connect. Nothing is read until the block nears the
+ *  viewport: a background pane or a block below the fold costs no request at sign-in. */
 export const SysDatabaseBlock: React.FC<SysDatabaseBlockProps> = ({ databaseId, initialViewId, mode = "inline", recordLimit, renderDatabase }) => {
   const source = sysSourceById(databaseId);
   const adapter = React.useMemo(() => getSysDatabaseAdapter(databaseId, sysTransport), [databaseId]);
   const limited = React.useMemo(() => withRecordLimit(adapter, recordLimit), [adapter, recordLimit]);
   const [status, setStatus] = React.useState<SysStatus>(OK_STATUS);
   const [attempt, setAttempt] = React.useState(0);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const isNear = useHasBeenNearViewport(rootRef);
   React.useEffect(() => adapter.watchStatus(setStatus), [adapter]);
 
   const view = initialViewId && source && initialViewId.startsWith(`${source.source}-`) ? initialViewId : source?.defaultViewId;
@@ -56,6 +60,7 @@ export const SysDatabaseBlock: React.FC<SysDatabaseBlockProps> = ({ databaseId, 
 
   return (
     <div
+      ref={rootRef}
       className={databaseShellClass(mode)}
       data-database-id={databaseId}
       data-database-view-id={view}
@@ -69,7 +74,7 @@ export const SysDatabaseBlock: React.FC<SysDatabaseBlockProps> = ({ databaseId, 
             </button>
           ) : null}
         </div>
-      ) : (
+      ) : !isNear ? null : (
         renderDatabase({
           adapter: limited,
           initialView: view,
