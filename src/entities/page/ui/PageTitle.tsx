@@ -37,7 +37,7 @@ function fitToContent(textarea: HTMLTextAreaElement) {
 
 /**
  * Editable page title matching osionos's styling.
- * Pressing Enter moves focus to the first content block.
+ * Pressing Enter moves focus to the first content block; Shift+Enter adds a line (#162).
  *
  * Typing `:` (start of the title or after a space) opens the shared emoji
  * picker and filters as you keep typing — the same trigger rule block text
@@ -119,7 +119,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({ title, onChangeTitle, read
       setEmojiFilter(null);
       return;
     }
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       focusPageEditorStart("start");
     }
