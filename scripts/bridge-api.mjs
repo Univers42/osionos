@@ -2671,6 +2671,22 @@ function requestOriginConfig(config, request) {
 	return config;
 }
 
+// The account plane and perms are built once and write the boot origin; once requestOriginConfig
+// has admitted this request's origin, every head that already carries an allow-origin carries it.
+// Caveat: only the object form of writeHead is rewritten — a raw header array, or the header set
+// through setHeader, keeps the boot origin (no bridge module writes it either way today).
+function echoAdmittedOrigin(response, origin) {
+	const writeHead = response.writeHead.bind(response);
+	response.writeHead = (status, ...rest) => {
+		const headers = rest.at(-1);
+		const key = headers && typeof headers === 'object' && !Array.isArray(headers)
+			? Object.keys(headers).find((name) => name.toLowerCase() === 'access-control-allow-origin')
+			: undefined;
+		if (key) rest[rest.length - 1] = { ...headers, [key]: origin };
+		return writeHead(status, ...rest);
+	};
+}
+
 function sse(response, event, data) {
 	response.write(`event: ${event}\n`);
 	response.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -5408,6 +5424,7 @@ export function createBridgeServer(options = {}) {
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);
+			if (responseConfig !== config) echoAdmittedOrigin(response, responseConfig.allowedOrigin);
 			try {
 				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env, patGate, whiteboard });
 			} catch (error) {
