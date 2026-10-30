@@ -51,10 +51,20 @@ export function isElectronShell(): boolean {
   return electronBridge() !== null;
 }
 
-/** Window min/max/close callbacks for the active shell, or null on the web. */
+/**
+ * Window min/max/close callbacks for the active shell, or null on the web. They take no
+ * arguments on purpose: buttons pass them as onClick, and Electron's contextBridge would try
+ * to clone the click event (DOM nodes) and throw before the window ever moved.
+ */
 export function windowControls(): WindowControlBridge | null {
   const electron = electronBridge();
-  if (electron) return electron;
+  if (electron) {
+    return {
+      minimize: () => electron.minimize(),
+      toggleMaximize: () => electron.toggleMaximize(),
+      close: () => electron.close(),
+    };
+  }
   const tauri = tauriGlobal();
   if (tauri?.window) {
     const current = () => tauri.window!.getCurrentWindow();
