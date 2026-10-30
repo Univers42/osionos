@@ -32,6 +32,7 @@ import {
 } from "@/features/ai/api/aiClient";
 import {
   bodyCharsLeft,
+  skillDraftFromMarkdown,
   skillDraftProblem,
   skillFailureMessage,
   SKILL_BODY_MAX,
@@ -41,6 +42,8 @@ import { FIELD_INPUT, FIELD_LABEL, PRIMARY_BUTTON, SECONDARY_BUTTON, DANGER_BUTT
 import type { AccessTokenWorkspace } from "./AccessTokensPanel";
 
 const EMPTY: SkillDraft = { slug: "", name: "", description: "", body: "" };
+// A skill text is capped at 6000 characters, so a bigger file is not a skill file.
+const IMPORT_MAX_BYTES = 64 * 1024;
 
 export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[] }> = ({ workspaces }) => {
   const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? "");
@@ -85,6 +88,16 @@ export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[]
     } catch (failure) {
       setError(skillFailureMessage(failure));
     }
+  };
+  const importFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > IMPORT_MAX_BYTES) {
+      setError("This file is too big to be a skill (64 KB at most).");
+      return;
+    }
+    setError("");
+    setEditing(null);
+    setDraft(skillDraftFromMarkdown(await file.text()));
   };
   const archive = async (slug: string) => {
     try {
@@ -138,7 +151,18 @@ export const WorkspaceSkillsPanel: React.FC<{ workspaces: AccessTokenWorkspace[]
           </div>
         </form>
       ) : (
-        <button type="button" className={`${SECONDARY_BUTTON} mt-3`} onClick={() => { setEditing(null); setDraft(EMPTY); }}>New skill</button>
+        <div className="mt-3 flex gap-2">
+          <button type="button" className={SECONDARY_BUTTON} onClick={() => { setEditing(null); setDraft(EMPTY); }}>New skill</button>
+          <label className={SECONDARY_BUTTON}>
+            Import SKILL.md
+            <input
+              type="file"
+              accept=".md,text/markdown"
+              className="sr-only"
+              onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }}
+            />
+          </label>
+        </div>
       )}
     </section>
   );
