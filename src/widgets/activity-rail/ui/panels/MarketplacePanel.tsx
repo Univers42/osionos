@@ -96,7 +96,7 @@ export const MarketplacePanel: React.FC = () => {
           <Plus size={16} />
         </button>
       </div>
-      <nav className="flex-1 overflow-y-auto px-2 pb-5">
+      <nav aria-label="Marketplace" className="flex-1 overflow-y-auto px-2 pb-5">
         {!loading && (error || apps.length === 0) ? (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
             <Store size={24} strokeWidth={1.5} className="text-[var(--osio-fg-subtle)]" />
