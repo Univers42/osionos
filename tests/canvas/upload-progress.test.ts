@@ -15,8 +15,29 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { registerHooks } from "node:module";
 
 import { postWithProgress } from "../../src/shared/lib/media/postWithProgress.ts";
+
+const CLIENT = new URL("../../src/shared/api/client.ts", import.meta.url).href;
+const UI_STUB = `export const useToastStore = { getState: () => ({ push() {} }) };`;
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === "@/shared/ui") return { url: `data:text/javascript,${encodeURIComponent(UI_STUB)}`, shortCircuit: true };
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    const result = nextLoad(url, context);
+    if (typeof result === "object" && result && "source" in result && url === CLIENT) {
+      const source = typeof result.source === "string" ? result.source : new TextDecoder().decode(result.source);
+      return { ...result, source: `import.meta.env ??= { VITE_API_URL: "https://bridge.test" };\n${source}` };
+    }
+    return result;
+  },
+});
+
+const { uploadAttachment } = await import("../../src/shared/chat/attachmentApi.ts");
 
 type Listener = ((event: { lengthComputable: boolean; loaded: number; total: number }) => void) | null;
 
@@ -77,4 +98,23 @@ test("a request that never completes rejects", async () => {
   const pending = postWithProgress("https://bridge.test/u", file, {});
   FakeXhr.last.onerror?.();
   await assert.rejects(pending, /did not complete/);
+});
+
+test("a chat attachment upload reports its progress to the composer and returns the bridge's descriptor", async () => {
+  const fractions: number[] = [];
+  const chosen = new File(["0123456789"], "plan.pdf", { type: "application/pdf" });
+  const pending = uploadAttachment("chan-1", chosen, (f) => fractions.push(f));
+  const xhr = FakeXhr.last;
+  assert.equal(xhr.url, "https://bridge.test/api/chat/uploads?channelId=chan-1&name=plan.pdf&type=file");
+  assert.equal(xhr.headers["Content-Type"], "application/pdf");
+  xhr.sent(5, 10);
+  xhr.answer(201, JSON.stringify({ ok: true, attachment: { objectKey: "k.pdf", type: "file" } }));
+  assert.deepEqual(await pending, { objectKey: "k.pdf", type: "file" });
+  assert.deepEqual(fractions, [0.5]);
+});
+
+test("a refused chat upload throws with the bridge's status and message", async () => {
+  const pending = uploadAttachment("chan-1", new File(["x"], "big.mov", { type: "video/quicktime" }));
+  FakeXhr.last.answer(413, '{"message":"too large"}');
+  await assert.rejects(pending, /big\.mov → 413 \{"message":"too large"\}/);
 });
