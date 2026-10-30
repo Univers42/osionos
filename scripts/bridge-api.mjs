@@ -734,8 +734,7 @@ export function pageRowToEntry(row) {
 	// that feeds this mapper and carries content reads '*' (fetchPageRow, the search, the
 	// create's representation), so the column comes for free where it exists and is
 	// simply missing where it does not. The only select that names its columns is
-	// PAGE_LIST_SELECT — the metadata-only bulk hydrate, which carries no content and so
-	// has no version to give (a base without content cannot merge).
+	// PAGE_LIST_SELECT — the metadata-only bulk hydrate, which names `version` too (#82).
 	const contentVersion = pageVersionOf(row);
 	return {
 		_id: row.id,
@@ -1672,8 +1671,10 @@ async function requirePageScopeAccess(request, pageId, payload, permission, conf
 // Every field pageRowToEntry reads EXCEPT the heavy `content` JSONB (and the
 // generated search_doc tsvector `select:'*'` also pulls). Used for the bulk
 // /api/pages/all hydrate so a workspace boot ships metadata, not ~1MB of blocks;
-// content then loads lazily per page on open (fetchPageContent).
-const PAGE_LIST_SELECT = 'id,title,icon,cover,cover_position,updated_at,created_at,workspace_id,owner_id,visibility,collaborators,parent_page_id,sort_order,database_id,archived_at,properties,surface,is_template,is_default_template,template_surface,recurrence';
+// content then loads lazily per page on open (fetchPageContent). `version` rides along
+// (#82) so a hydrate learns another device's write without a clock comparison; it names
+// the column, so the list needs groot's osionos-page-version-migration.sql applied.
+const PAGE_LIST_SELECT = 'id,title,icon,cover,cover_position,updated_at,created_at,workspace_id,owner_id,visibility,collaborators,parent_page_id,sort_order,database_id,archived_at,properties,surface,is_template,is_default_template,template_surface,recurrence,version';
 
 // One chunk of the workspace-wide scan: small enough that no single response is the whole
 // workspace, large enough that an ordinary one is answered in a couple of requests.
