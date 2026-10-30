@@ -23,7 +23,7 @@ import { execFileSync } from 'node:child_process';
 
 import { SERVER_PIN, assertPinsAgree } from '../../packages/osionos-node/pin.mjs';
 import { sha256File, verifyArtifact } from '../../packages/osionos-node/artifact.mjs';
-import { packSlimServer } from '../../packages/osionos-node/slim-pack.mjs';
+import { hasGnuTar, packSlimServer } from '../../packages/osionos-node/slim-pack.mjs';
 
 test('the pinned client and server are the same VS Code release and commit shape', () => {
 	assert.doesNotThrow(() => assertPinsAgree(SERVER_PIN));
@@ -64,7 +64,7 @@ function fakeServerTree(root) {
 	writeFileSync(join(root, 'node'), 'node binary');
 }
 
-test('the slim server is reproducible, drops the unwanted built-ins and keeps the needed ones', () => {
+test('the slim server is reproducible, drops the unwanted built-ins and keeps the needed ones', { skip: hasGnuTar() ? false : 'GNU tar is not installed here (the pack runs on the build host)' }, () => {
 	const dir = mkdtempSync(join(tmpdir(), 'osio-slim-'));
 	try {
 		fakeServerTree(join(dir, 'lib'));
