@@ -1,0 +1,75 @@
+{
+  "_comment": "Shared by tests/canvas/suggestion-anchor.test.ts and the SQL decide test (#228): offsets are code points.",
+  "reanchor": [
+    {
+      "name": "the quote still reads at its offsets",
+      "source": "a 😀 quick fox",
+      "anchor": { "start": 4, "end": 9, "quote": "quick", "prefix": "a 😀 ", "suffix": " fox" },
+      "expected": { "start": 4, "end": 9, "quote": "quick", "prefix": "a 😀 ", "suffix": " fox" }
+    },
+    {
+      "name": "text was added before: the unique context moves the anchor",
+      "source": "new 😀 text a 😀 quick fox",
+      "anchor": { "start": 4, "end": 9, "quote": "quick", "prefix": "a 😀 ", "suffix": " fox" },
+      "expected": { "start": 15, "end": 20, "quote": "quick", "prefix": "a 😀 ", "suffix": " fox" }
+    },
+    {
+      "name": "the quote was edited: stale",
+      "source": "a 😀 quack fox",
+      "anchor": { "start": 4, "end": 9, "quote": "quick", "prefix": "a 😀 ", "suffix": " fox" },
+      "expected": null
+    },
+    {
+      "name": "the context reads twice and not at the offsets: stale",
+      "source": "a 😀 quick fox a 😀 quick fox",
+      "anchor": { "start": 1, "end": 6, "quote": "quick", "prefix": "a 😀 ", "suffix": " fox" },
+      "expected": null
+    },
+    {
+      "name": "an insertion without context is never placed",
+      "source": "",
+      "anchor": { "start": 0, "end": 0, "quote": "", "prefix": "", "suffix": "" },
+      "expected": null
+    },
+    {
+      "name": "an insertion follows its context",
+      "source": "😀xabcd",
+      "anchor": { "start": 2, "end": 2, "quote": "", "prefix": "ab", "suffix": "cd" },
+      "expected": { "start": 4, "end": 4, "quote": "", "prefix": "ab", "suffix": "cd" }
+    }
+  ],
+  "rebase": [
+    {
+      "name": "a suggestion after the accepted one shifts by the length change",
+      "source": "a bc",
+      "accepted": { "anchor": { "start": 0, "end": 1, "quote": "a", "prefix": "", "suffix": " bc" }, "insert": "😀😀" },
+      "nextSource": "😀😀 bc",
+      "other": { "start": 2, "end": 4, "quote": "bc", "prefix": "a ", "suffix": "" },
+      "expected": { "start": 3, "end": 5, "quote": "bc", "prefix": "😀😀 ", "suffix": "" }
+    },
+    {
+      "name": "a suggestion before the accepted one keeps its offsets, with fresh context",
+      "source": "a bc",
+      "accepted": { "anchor": { "start": 2, "end": 4, "quote": "bc", "prefix": "a ", "suffix": "" }, "insert": "X" },
+      "nextSource": "a X",
+      "other": { "start": 0, "end": 1, "quote": "a", "prefix": "", "suffix": " bc" },
+      "expected": { "start": 0, "end": 1, "quote": "a", "prefix": "", "suffix": " X" }
+    },
+    {
+      "name": "overlapping ranges: superseded",
+      "source": "a quick fox",
+      "accepted": { "anchor": { "start": 2, "end": 7, "quote": "quick", "prefix": "a ", "suffix": " fox" }, "insert": "slow" },
+      "nextSource": "a slow fox",
+      "other": { "start": 6, "end": 11, "quote": "k fox", "prefix": "a quic", "suffix": "" },
+      "expected": null
+    },
+    {
+      "name": "an insertion on the edge of the accepted range: superseded",
+      "source": "a quick fox",
+      "accepted": { "anchor": { "start": 2, "end": 7, "quote": "quick", "prefix": "a ", "suffix": " fox" }, "insert": "slow" },
+      "nextSource": "a slow fox",
+      "other": { "start": 7, "end": 7, "quote": "", "prefix": "a quick", "suffix": " fox" },
+      "expected": null
+    }
+  ]
+}

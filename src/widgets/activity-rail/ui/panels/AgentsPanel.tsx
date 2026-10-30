@@ -32,7 +32,7 @@ export const AgentsPanel: React.FC = () => {
   );
 
   return (
-    <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-2 pb-5">
+    <nav aria-label="Agents" className="flex-1 overflow-y-auto overflow-x-hidden px-2 pt-2 pb-5">
       {agents.length === 0 ? (
         <p className="px-2 py-3 text-xs text-[var(--osio-fg-subtle)]">No agents yet.</p>
       ) : (

@@ -363,8 +363,10 @@ export function sessionHeaders(config, userId, homeWorkspaceId, memberWorkspaceI
 	return { authorization: `Bearer ${session.session.accessToken}`, 'content-type': 'application/json' };
 }
 
+// The moderation retraction poller (#72) reads the audit table on listen; the request tests
+// here count database calls, so it stays off unless a test asks for it.
 export async function withBridge(config, fetchImpl, run, serverOptions = {}) {
-	const server = createBridgeServer({ config, fetchImpl, ...serverOptions });
+	const server = createBridgeServer({ config, fetchImpl, moderationRetract: false, ...serverOptions });
 	await new Promise((done) => server.listen(0, '127.0.0.1', done));
 	try {
 		return await run(`http://127.0.0.1:${server.address().port}`);

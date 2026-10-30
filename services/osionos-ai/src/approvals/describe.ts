@@ -10,6 +10,7 @@ import { config } from '../config.ts';
 import { cardOf, readStoredCall } from '../mcpClient/card.ts';
 import { getToolNow } from '../mcpClient/repo.ts';
 import { influencedBy } from '../mcpClient/taint.ts';
+import { allItems } from '../builders/items.ts';
 
 /**
  * The description of an approval: what the card shows, rebuilt from the row.
@@ -44,6 +45,8 @@ export interface ApprovalDescription {
 	influencedBy?: string[];
 	/** The agent of the run, from its pin (C304); null for the general assistant. */
 	agent: CardAgent | null;
+	/** A build plan's items, parents first, as execution records them (#79); absent before the decision. */
+	progress?: { key: string; kind: string; status: string }[];
 }
 
 /** The tool of an approval, by name. */
@@ -91,8 +94,20 @@ export async function describeApproval(
 		createdAt: new Date(row.created_at).toISOString(),
 		summary: summaryOf(row.result),
 		...(await taint(db, row)),
+		...(await progress(db, row)),
 		agent: await cardAgentOfRun(db, row.run_id ? await getRun(db, row.run_id) : null),
 	};
+}
+
+/**
+ * The items of a build plan: the decision request writes each one's state as it goes
+ * (C157), so a card that reads this while the request runs sees the build advance.
+ */
+async function progress(db: Pool, row: ApprovalRow): Promise<Pick<ApprovalDescription, 'progress'>> {
+	if (row.tool !== 'build_plan') return {};
+	const items = await allItems(db, row.id);
+	if (items.length === 0) return {};
+	return { progress: items.map((item) => ({ key: item.item_key, kind: item.kind, status: item.status })) };
 }
 
 async function taint(db: Pool, row: ApprovalRow): Promise<{ influencedBy?: string[] }> {
