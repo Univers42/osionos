@@ -1585,6 +1585,28 @@ function requirePageWrite(context, permission) {
 }
 
 /**
+ * The caller's standing on a page for the #228 discussion routes: the read gate first
+ * (the 404 of a missing id), then `canWrite` — the page PATCH's gate, so accept agrees
+ * with it (C8, C9) — and `level`. pageLevelFor alone answers can_view for every member
+ * when no share rule decides the page, which would refuse a member who may edit it, so
+ * the rule's level wins when there is one, else the write gate: can_edit or can_view.
+ */
+export async function pageDiscussionAccess(request, pageId, config, fetchImpl) {
+	const context = await pageWriteContext(request, pageId, config, fetchImpl);
+	if (!context.owner) requireReadablePage(context.row, context.token.userId, context.level);
+	let canWrite = true;
+	try {
+		requirePageWrite(context, 'update');
+	} catch (error) {
+		if (error?.status !== 403) throw error;
+		canWrite = false;
+	}
+	const exempt = context.owner || context.level === null;
+	const level = exempt ? 'full_access' : (context.ruleLevel ?? (canWrite ? 'can_edit' : 'can_view'));
+	return { row: context.row, level, canWrite };
+}
+
+/**
  * The reads one collaboration event shares between its page-level check and its blocks
  * authorisation: the page row, the caller's membership and the share-rule map, each read
  * once. `scope` is created per request by the collab handler and dropped with it; nothing
@@ -5417,7 +5439,10 @@ export function createBridgeServer(options = {}) {
 		media: createMediaHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
 		embed: createEmbedHandler({ config, verifySession: verifyAppSessionToken }),
 			tasks: createTasksHandler({ config, verifySession: verifyAppSessionToken, fetchImpl }),
-			comments: createCommentsHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
+			comments: createCommentsHandler({
+				config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env,
+				pageAccess: (request, pageId) => pageDiscussionAccess(request, pageId, config, fetchImpl),
+			}),
 			publicPages: createPublicHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, verifyPageAccess, env }),
 			community: createCommunityHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, env }),
 		profile: createProfileHandler({ config, verifySession: verifyAppSessionToken, fetchImpl, kv, env, pageAccessFilter }),
