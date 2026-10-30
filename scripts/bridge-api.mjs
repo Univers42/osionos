@@ -3836,6 +3836,30 @@ async function handleDatabaseProbe(match, request, response, config, fetchImpl) 
 // The keys grobase's mount descriptor may carry (tenant-control GET .../mounts/{id}/descriptor).
 // The bridge re-picks them so a future upstream field never reaches the browser unreviewed.
 const DESCRIPTOR_KEYS = ['id', 'name', 'engine', 'isolation', 'credential_mode', 'location', 'host', 'port', 'file', 'database', 'tls', 'created_at', 'last_healthy_at'];
+// The data plane's per-engine flags the UI may show (grobase data-plane-core capability.rs).
+const CAPABILITY_FLAGS = ['read', 'write', 'upsert', 'batch', 'aggregate', 'introspect', 'schema_ddl', 'transactions'];
+// Caveat: 5 min — a data plane redeployed with new engine features shows the old flags until
+// then. A failed fetch is not cached, so an outage costs one query-router call per descriptor.
+const CAPABILITIES_TTL_MS = 5 * 60 * 1000;
+const capabilitiesCache = new WeakMap();
+
+/** The closed boolean flag set the data plane advertises for `engine`, or null when it
+ *  advertises nothing for it. Throws when the query-router cannot answer. */
+async function engineCapabilities(config, fetchImpl, engine) {
+	const now = Date.now();
+	let cached = capabilitiesCache.get(config);
+	if (!cached || cached.expiresAt <= now) {
+		const payload = await baasQueryGet(config, fetchImpl, '/capabilities');
+		const byEngine = new Map((Array.isArray(payload?.engines) ? payload.engines : [])
+			.filter((entry) => typeof entry?.engine === 'string')
+			.map((entry) => [entry.engine, entry.capabilities]));
+		cached = { byEngine, expiresAt: now + CAPABILITIES_TTL_MS };
+		capabilitiesCache.set(config, cached);
+	}
+	const caps = cached.byEngine.get(engine);
+	if (!caps || typeof caps !== 'object') return null;
+	return Object.fromEntries(CAPABILITY_FLAGS.filter((flag) => typeof caps[flag] === 'boolean').map((flag) => [flag, caps[flag]]));
+}
 
 /** GET /api/databases/:dbId/descriptor — where the mount's data lives (engine, host or
  *  file, database, requested TLS), credential-free. Gated like the schema: a READ. */
@@ -3847,6 +3871,14 @@ async function handleDatabaseDescriptor(match, request, response, config, fetchI
 		? await baasTenantDescriptorGet(config, fetchImpl, dbId)
 		: await baasRegistryGet(config, fetchImpl, `/databases/${dbId}/descriptor`, config.baasTenantId);
 	const descriptor = Object.fromEntries(DESCRIPTOR_KEYS.filter((key) => raw && key in raw).map((key) => [key, raw[key]]));
+	if (typeof descriptor.engine === 'string') {
+		try {
+			const capabilities = await engineCapabilities(config, fetchImpl, descriptor.engine);
+			if (capabilities) descriptor.capabilities = capabilities;
+		} catch (error) {
+			console.warn(`[osionos-bridge] engine capabilities unavailable: ${error?.status ?? 'network'}`);
+		}
+	}
 	json(response, 200, { dbId, descriptor }, config);
 	return true;
 }
