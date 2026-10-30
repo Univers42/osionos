@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/29 21:50:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/29 21:50:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/30 05:40:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,7 +15,9 @@ import test from "node:test";
 
 import {
   fetchMountDescriptor,
+  fetchMountProbe,
   formatMountLocation,
+  formatMountProbe,
   type MountDescriptor,
 } from "../../src/shared/notion-database-sys/src/store/live/liveMountDescriptor.ts";
 
@@ -64,6 +66,37 @@ test("a failed descriptor fetch is not cached, so the next open retries", async 
   const first = fetchMountDescriptor("m-fail");
   await assert.rejects(first);
   const second = fetchMountDescriptor("m-fail");
+  assert.notEqual(second, first);
+  await assert.rejects(second);
+});
+
+test("a disabled or missing probe stays silent", () => {
+  const silent = { server: null, connection: null };
+  assert.deepEqual(formatMountProbe(null), silent);
+  assert.deepEqual(formatMountProbe({ available: false }), silent);
+  assert.deepEqual(formatMountProbe({ available: true, server_version: "unknown", tls: "unknown" }), silent);
+});
+
+test("the probe names the server version, and hides a platform mount's", () => {
+  assert.equal(formatMountProbe({ available: true, server_version: "16.4" }).server, "16.4");
+  assert.equal(formatMountProbe({ available: true, server_version: "platform" }).server, "Managed (version hidden)");
+  assert.equal(formatMountProbe({ available: true, server_version: "16.4 <b>" }).server, null, "only digits and dots");
+});
+
+test("the pool's connection posture maps onto the badge's TLS tones", () => {
+  const conn = (tls: string, tls_version?: string) => formatMountProbe({ available: true, tls, tls_version }).connection;
+  assert.deepEqual(conn("verified", "TLSv1.3"), { label: "TLS 1.3, certificate verified", tone: "secure" });
+  assert.deepEqual(conn("verified"), { label: "TLS, certificate verified", tone: "secure" });
+  assert.deepEqual(conn("encrypted", "TLSv1.2"), { label: "TLS 1.2, certificate not verified", tone: "warning" });
+  assert.deepEqual(conn("encrypted", "SSLv3"), { label: "TLS, certificate not verified", tone: "warning" });
+  assert.deepEqual(conn("plaintext"), { label: "No TLS", tone: "plain" });
+  assert.deepEqual(conn("not_applicable"), { label: "Not applicable (local file)", tone: "neutral" });
+});
+
+test("a failed probe fetch is not cached either", async () => {
+  const first = fetchMountProbe("m-probe-fail");
+  await assert.rejects(first);
+  const second = fetchMountProbe("m-probe-fail");
   assert.notEqual(second, first);
   await assert.rejects(second);
 });
