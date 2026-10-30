@@ -12,6 +12,7 @@
 
 import { api, getActivePageJwt } from "@/shared/api/client";
 import { warningFrom, type ModerationWarning } from "@/shared/moderation/moderationWarning";
+import { shownForPublish } from "./publishedView";
 
 /** The typed answer of a publish: published, warned about, or failed. */
 export type PublishPageResult =
@@ -25,16 +26,18 @@ export type PublishPageResult =
  * `acknowledgeWarning` is the author saying "publish it anyway": without it the
  * bridge answers 409 (L0 asked first) and NOTHING is published. The answer is a
  * typed result, so the caller shows the warning instead of an unhandled
- * rejection.
+ * rejection. The body also names the gated blocks and cells the owner's view
+ * shows (`shown`), the only gated content the snapshot copies (#61).
  */
 export async function publishPage(
   pageId: string,
   { acknowledgeWarning }: { acknowledgeWarning?: boolean } = {},
 ): Promise<PublishPageResult> {
   try {
+    const shown = await shownForPublish(pageId);
     const res = await api.post<{ token?: string }>(
       `/api/pages/${pageId}/publish`,
-      acknowledgeWarning ? { acknowledgeWarning: true } : {},
+      acknowledgeWarning ? { shown, acknowledgeWarning: true } : { shown },
       getActivePageJwt() ?? undefined,
     );
     return { ok: true, token: res.token ?? null };
