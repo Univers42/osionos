@@ -3738,6 +3738,7 @@ async function handleRecordsPost(url, request, response, config, fetchImpl) {
 // tenant api-key. Gated by a valid app session.
 
 const DB_SCHEMA_PATH = /^\/api\/databases\/([^/]+)\/schema$/;
+const DB_PROBE_PATH = /^\/api\/databases\/([^/]+)\/probe$/;
 const DB_ROWS_PATH = /^\/api\/databases\/([^/]+)\/tables\/([^/]+)$/;
 const DB_DDL_PATH = /^\/api\/databases\/([^/]+)\/schema\/ddl$/;
 const DB_SQLRO_PATH = /^\/api\/databases\/([^/]+)\/sql-ro$/;
@@ -3802,6 +3803,33 @@ async function handleDatabaseSchema(match, request, response, config, fetchImpl)
 	}
 	const base = schema && typeof schema === 'object' ? schema : { tables: [], engine: 'unknown' };
 	json(response, 200, { dbId, ...base }, config);
+	return true;
+}
+
+/** GET /api/databases/:dbId/probe — live engine version + TLS posture via the query-router. */
+async function handleDatabaseProbe(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	if (!canReadDatabase(member)) throw databasePermissionError('read');
+	let probe;
+	try {
+		probe = await baasQueryGet(config, fetchImpl, `/${dbId}/probe`);
+	} catch (error) {
+		if (error?.status === 404) {
+			json(response, 200, { dbId, available: false }, config);
+			return true;
+		}
+		if (error?.status === 429) {
+			json(response, 200, { dbId, available: false, retryAfter: 1 }, config);
+			return true;
+		}
+		throw error;
+	}
+	const body = { dbId, available: true };
+	for (const key of ['engine', 'server_version', 'tls', 'tls_version']) {
+		if (typeof probe?.[key] === 'string') body[key] = probe[key];
+	}
+	json(response, 200, body, config);
 	return true;
 }
 
@@ -3928,6 +3956,8 @@ async function handleDatabasesGet(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/databases') return handleDatabaseList(url, request, response, config, fetchImpl);
 	const schemaMatch = DB_SCHEMA_PATH.exec(url.pathname);
 	if (schemaMatch) return handleDatabaseSchema(schemaMatch, request, response, config, fetchImpl);
+	const probeMatch = DB_PROBE_PATH.exec(url.pathname);
+	if (probeMatch) return handleDatabaseProbe(probeMatch, request, response, config, fetchImpl);
 	const descriptorMatch = DB_DESCRIPTOR_PATH.exec(url.pathname);
 	if (descriptorMatch) return handleDatabaseDescriptor(descriptorMatch, request, response, config, fetchImpl);
 	const automationsMatch = DB_AUTOMATIONS_PATH.exec(url.pathname);

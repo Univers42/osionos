@@ -40,6 +40,7 @@ import { derivePageState } from '@/store/pageStore.helpers';
 import { getKnownDatabaseView, KNOWN_DATABASE_VIEWS } from '../model/databaseViewCatalog';
 import { getKnownDatabaseAdapter } from '../model/knownDatabaseState';
 import { getLiveDatabaseAdapter, isLiveDatabaseId } from '../model/liveDatabaseAdapter';
+import { parseLiveDatabaseId } from '@/shared/notion-database-sys/src/store/live/liveTypes';
 import { toRecordPageId } from '../model/recordPageId';
 import {
   projectRecordProperties,
@@ -76,6 +77,7 @@ import { LIBRARY_DB_ID } from '../model/libraryDatabaseModel';
 import { isSysDatabaseId } from '../model/sysDataSources';
 import './databaseBlockEmbed.css';
 import { databaseShellClass } from '../model/databaseShellClass';
+import { LiveSourceBadge } from './LiveSourceBadge';
 
 // Async boundary: the full osionos page (and its editor tree) loads only when
 // a database row is opened — keeping the database view chunk free of the
@@ -159,6 +161,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
     const live = isLiveDatabaseId(resolvedDatabaseId) ? getLiveDatabaseAdapter(resolvedDatabaseId) : null;
     return live ? withRecordLimit(live, recordLimit) : null;
   }, [resolvedDatabaseId, recordLimit]);
+  const ref = React.useMemo(() => parseLiveDatabaseId(resolvedDatabaseId), [resolvedDatabaseId]);
   const renderPage = React.useCallback<NonNullable<ObjectDatabaseProps['renderPage']>>(
     (pageId, state, onClose, openIn) => (
       <DatabaseObjectPage pageId={pageId} state={state} onClose={onClose} openIn={openIn} />
@@ -203,6 +206,7 @@ export const DatabaseBlock: React.FC<DatabaseBlockProps> = ({
         data-database-id={resolvedDatabaseId}
         data-database-view-id={resolvedInitialView}
       >
+        {ref && <LiveSourceBadge dbId={ref.dbId} table={ref.table} />}
         <HostedObjectDatabase
           adapter={liveDatabaseAdapter}
           databaseId={resolvedDatabaseId}
