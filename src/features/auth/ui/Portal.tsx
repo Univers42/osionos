@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { ConnectionLine } from "./ConnectionLine";
 import { PortalForm } from "./PortalForm";
 import "./portal.css";
 
@@ -28,6 +29,7 @@ export function Portal() {
           <span>osionos</span>
         </div>
         <PortalForm />
+        <ConnectionLine />
       </main>
       <figure className="osio-portal-scene">
         <Suspense fallback={null}>

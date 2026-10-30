@@ -71,6 +71,7 @@ const HEX_ALLOWLIST = [
   "src/shared/config/*.generated.ts", // emitted by scripts/build-tokens.mjs
   "packages/osionos-ui/src/molecules/IconPicker/ColorSwatches.tsx", // the swatches ARE the user-selectable colours
   "src/features/auth/ui/Portal.tsx", // the product logo's brand blue
+  "src/features/auth/ui/providerMarks.tsx", // Google's four-colour G: fixed by Google's brand rules, never themed
   "src/data/seedUserPages.ts", // seed page content that quotes CSS as text
   "src/entities/block/ui/CodeBlockReadOnly.tsx", // macOS window-control dots: fixed by the platform, not themed
   "src/features/block-editor/model/blockColors.ts", // contrast maths needs concrete text colours

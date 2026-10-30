@@ -41,6 +41,8 @@ export const AUTH_MODE = ((import.meta.env as Record<string, string>)['VITE_AUTH
 /** Portal mode: the app shows its own login/sign-up portal (no mock, no website redirect). */
 export function isPortalMode(): boolean { return AUTH_MODE === 'portal'; }
 export const BRIDGE_APP_TOKEN_PREFIX = 'osionos_v1.';
+/** The one sign-in failure that says nothing about the email or password typed. */
+export const UNREACHABLE_MESSAGE = 'Could not reach the server. Check your connection.';
 
 export type BridgeSessionImport = {
   ok: boolean;
@@ -195,7 +197,7 @@ export async function loginPersona(persona: StaticPersona) {
     return { ok: true as const, userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
   } catch (error) {
     console.error(`[osionos] sign-in could not reach ${API_BASE}/api/auth/login:`, error);
-    return { ok: false as const, message: 'Could not reach the server. Check your connection.' };
+    return { ok: false as const, message: UNREACHABLE_MESSAGE };
   }
 }
 
@@ -222,7 +224,7 @@ export async function signupPersona(persona: StaticPersona) {
     if (!res.ok) return { ok: false as const, message: (data.message as string) || 'Could not create the account.' };
     return { ok: true as const, userId: data.user.id as string, accessToken: data.accessToken as string, refreshToken: data.refreshToken as string };
   } catch {
-    return { ok: false as const, message: 'Could not reach the server. Check your connection.' };
+    return { ok: false as const, message: UNREACHABLE_MESSAGE };
   }
 }
 
