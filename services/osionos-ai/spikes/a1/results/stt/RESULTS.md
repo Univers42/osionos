@@ -71,6 +71,29 @@ Branch base commit: `ef99fd7389eb9317b08b2b9339e40a1bed39645c`
 | deepdml/faster-whisper-large-v3-turbo-ct2 | fr_fr | 6.69 | 7.45 | 0.650 | 1.082 |
 | deepdml/faster-whisper-large-v3-turbo-ct2 | es_419 | 6.67 | 9.46 | 0.588 | 0.914 |
 
+## Cut-off words
+
+A cut-off word is a reference word the transcript loses at the start or the end
+of a clip: the leading and trailing deletions of the same alignment the WER
+counts (`edge_drops` in `stt-bench.py`, with its self-check). Added on
+2026-10-30 by re-running `summarize` on the same `raw/` files, offline: every
+key above came out identical, only the four `cut*`/`clips_cut_*` keys are new.
+
+| Model | Language | Cut-off words | Rate (of ref words) | Clips cut at start | Clips cut at end |
+|---|---|---|---|---|---|
+| Systran/faster-whisper-small | en_us | 8 | 0.004 | 4 | 0 |
+| Systran/faster-whisper-small | fr_fr | 15 | 0.006 | 6 | 2 |
+| Systran/faster-whisper-small | es_419 | 0 | 0.000 | 0 | 0 |
+| deepdml/faster-whisper-large-v3-turbo-ct2 | en_us | 5 | 0.002 | 2 | 0 |
+| deepdml/faster-whisper-large-v3-turbo-ct2 | fr_fr | 6 | 0.002 | 4 | 1 |
+| deepdml/faster-whisper-large-v3-turbo-ct2 | es_419 | 0 | 0.000 | 0 | 0 |
+
+The losses sit at the **start** of a clip (10 of the 12 small clips): "we
+don't know for sure" comes back as "don't know for sure". One of the 12 is an
+artefact of the normaliser, not a drop: "la rangée" glued into "larranger".
+FLEURS clips are whole sentences, so this measures the model; the app's own
+recorder (when the user stops talking or presses stop) is not in it.
+
 ## Memory
 
 Peak of each `rss-*.log` (`sort -h … | tail -1`) against the 6 GiB cap:
