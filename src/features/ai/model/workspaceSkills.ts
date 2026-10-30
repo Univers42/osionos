@@ -48,6 +48,39 @@ export function skillDraftProblem(draft: SkillDraft, isNew: boolean): string | n
   return null;
 }
 
+const FRONT_MATTER = /^---\n([\s\S]*?)\n---(?:\n|$)/;
+
+/** One top-level `key: value` line of front matter, without its quotes. */
+function frontMatterValue(front: string, key: string): string {
+  const line = front.split("\n").find((entry) => entry.startsWith(`${key}:`));
+  const value = line ? line.slice(key.length + 1).trim() : "";
+  // A block scalar's marker (`>`, `|-`, ...) is not the value: its lines are not read.
+  if (/^[>|][-+]?$/.test(value)) return "";
+  return value.replace(/^(["'])(.*)\1$/, "$2");
+}
+
+/**
+ * A draft from a skill file in opencode's format (`SKILL.md`: front matter with
+ * `name` and `description`, then the instructions). It only fills the form: the
+ * person reads it and saves it like a typed skill, through the same checks.
+ *
+ * Caveat: the front matter is read line by line, not as YAML. A folded or block
+ * value (`description: >` then indented lines) comes back empty, so the form says
+ * the field is missing and the person types it before saving.
+ */
+export function skillDraftFromMarkdown(text: string): SkillDraft {
+  const normalized = text.replace(/\r\n?/g, "\n");
+  const match = FRONT_MATTER.exec(normalized);
+  const front = match ? match[1] : "";
+  const name = frontMatterValue(front, "name");
+  return {
+    slug: name,
+    name,
+    description: frontMatterValue(front, "description"),
+    body: (match ? normalized.slice(match[0].length) : normalized).trim(),
+  };
+}
+
 /** The characters left in the body; negative when over the cap. */
 export const bodyCharsLeft = (body: string): number => SKILL_BODY_MAX - body.length;
 
