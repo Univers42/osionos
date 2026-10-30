@@ -63,6 +63,12 @@ async function closeSidebar(page) {
 	}
 }
 
+const drawer = (page) => page.locator("[data-osio-sidebar-card]");
+
+async function openExplorer(page) {
+	await page.locator('[role="tablist"][aria-label="Activity bar"] [role="tab"][aria-label="Explorer"]').click();
+}
+
 function overflowDetector() {
 	const vw = window.innerWidth;
 	const all = document.querySelectorAll("body *");
@@ -252,6 +258,39 @@ test.describe("responsive — mobile (375×812)", () => {
 
 		const overflowingElements = await page.evaluate(overflowDetector);
 		expect(overflowingElements).toEqual([]);
+	});
+
+	// #157: the explorer used to push in beside the page and leave it 67px wide, so the
+	// page you chose wrapped one letter per line. On a phone it is a drawer over the page.
+	test("the explorer opens over the page instead of squeezing it", async ({ page }) => {
+		await page.goto("/");
+		await waitForAppShell(page);
+		const main = page.locator("main").first();
+		const before = (await main.boundingBox()).width;
+		await openExplorer(page);
+		await expect(drawer(page)).toBeVisible();
+		expect((await main.boundingBox()).width).toBe(before);
+		const box = await drawer(page).boundingBox();
+		expect(box.x + box.width).toBeLessThanOrEqual(VIEWPORTS.mobile.width);
+	});
+
+	test("choosing a page in the explorer folds it, so the page gets the width", async ({ page }) => {
+		await page.goto("/");
+		await waitForAppShell(page);
+		await openExplorer(page);
+		await drawer(page).getByText("Meeting Notes", { exact: true }).last().click();
+		await expect(drawer(page)).toBeHidden();
+		const title = page.locator("main").getByLabel("Page title").filter({ hasText: "Meeting Notes" });
+		await expect(title).toBeVisible();
+		expect((await title.boundingBox()).width).toBeGreaterThan(200);
+	});
+
+	test("tapping the page beside the open explorer folds it", async ({ page }) => {
+		await page.goto("/");
+		await waitForAppShell(page);
+		await openExplorer(page);
+		await page.mouse.click(VIEWPORTS.mobile.width - 12, 400);
+		await expect(drawer(page)).toBeHidden();
 	});
 
 	test("mobile screenshot for visual reference", async ({ page }) => {
