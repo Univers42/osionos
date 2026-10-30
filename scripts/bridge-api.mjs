@@ -85,6 +85,7 @@ import { createModerationConsoleHandler } from './bridge-moderation-console.mjs'
 import { runWsCanary } from './bridge-realtime-ws-lane.mjs';
 import { createRecsHealthHandler } from './bridge-recs-health.mjs';
 import { createPermsHandler } from './bridge-perms.mjs';
+import { answerWithOrigin } from './bridge-cors-origin.mjs';
 import { createPageAccessRequestsHandler } from './bridge-page-access-requests.mjs';
 import { createProfileHandler } from './bridge-profile.mjs';
 import { createRtcTokenHandler } from './bridge-rtc.mjs';
@@ -5364,7 +5365,7 @@ async function handleBridgeRequest(request, response, context) {
 	if (await context.social.memberAttributes(url, request, response, context.config)) return;
 	if (await context.social.realtimeToken(url, request, response, context.config)) return;
 	// The account plane: one seam, and the modules behind it decide what is theirs.
-	if (await context.social.account(url, request, response, context.config)) return;
+	if (await context.social.account(url, request, response)) return;
 	if (request.method === 'POST' && url.pathname === '/api/agent/claude/stream') {
 		await handleClaudeAgentStream(request, response, context.config, context.spawnImpl);
 		return;
@@ -5497,6 +5498,7 @@ export function createBridgeServer(options = {}) {
 	const server = createServer(async (request, response) => {
 		await meter.track(request, response, async () => {
 			let responseConfig = requestOriginConfig(config, request);
+			if (responseConfig.allowedOrigin !== config.allowedOrigin) answerWithOrigin(response, responseConfig.allowedOrigin);
 			try {
 				await handleBridgeRequest(request, response, { config: responseConfig, kv, pg, fetchImpl, spawnImpl, social, env, patGate, whiteboard });
 			} catch (error) {

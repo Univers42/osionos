@@ -1,7 +1,7 @@
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   bridge-account-cors.test.mjs                       :+:      :+:    :+:   */
+/*   bridge-cors-origin.test.mjs                          :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
@@ -11,17 +11,17 @@
 /* ************************************************************************** */
 
 /**
- * The account plane answers each caller with its own allowed origin. The desktop app
- * (app://osionos) could not read Settings: the account modules wrote the bridge's default
+ * Every bridge route answers each caller with its own allowed origin. The desktop app
+ * (app://osionos) could not read Settings: modules built with the static config wrote the bridge's default
  * origin on every reply, so the browser discarded them (2026-10-30, live bridge).
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { send, sessionToken, startBridgeWorld, USER_A } from './support/account-world.mjs';
 
-const ROUTES = ['/api/account/profile', '/api/account/settings', '/api/account/sessions'];
+const ROUTES = ['/api/account/profile', '/api/account/settings', '/api/account/sessions', '/api/ai/connections', '/api/perms/me'];
 
-describe('account routes and the caller origin', () => {
+describe('bridge routes and the caller origin', () => {
 	for (const origin of ['app://osionos', 'http://127.0.0.1:5173']) {
 		for (const path of ROUTES) {
 			it(`${path} answers ${origin} with its own origin`, async (t) => {
