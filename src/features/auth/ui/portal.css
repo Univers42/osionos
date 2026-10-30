@@ -16,8 +16,10 @@
 .osio-portal-main {
   display: grid;
   grid-template-rows: auto 1fr;
-  padding: clamp(28px, 5vw, 64px);
+  padding: clamp(24px, 4vw, 56px);
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--osio-border-strong) transparent;
 }
 
 .osio-portal-brand {
@@ -34,7 +36,7 @@
   align-self: center;
   width: 100%;
   max-width: 380px;
-  padding-block: 48px 24px;
+  padding-block: 32px 16px;
 }
 
 .osio-portal-form h1 {
