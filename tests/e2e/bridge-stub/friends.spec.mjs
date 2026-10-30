@@ -14,6 +14,7 @@
 // The bridge's own rules (who may accept, a request twice, a blocked peer) are proven by
 // tests/bridge/bridge-social-connections*.test.mjs; this drives the screens that call it:
 // Connect on a profile, Accept in the request inbox, the list and Remove in Settings → Contacts.
+// #178: each friend in that list shows whether they are online, not only on hover.
 
 import { expect, test } from "@playwright/test";
 
@@ -26,7 +27,8 @@ const edge = (id, who, status, direction, introMessage = "") => ({
   id, peer: who, status, direction, introMessage, source: "direct", createdAt: "2026-10-30T09:00:00.000Z",
 });
 
-const ADA = peer("user-ada", "Ada Lovelace");
+const ADA = { ...peer("user-ada", "Ada Lovelace"), online: true };
+const ALAN = peer("user-alan", "Alan Turing");
 const GRACE = peer("user-grace", "Grace Hopper");
 
 /** The bridge's connection table, the writes it took, and Bob's profile for the Connect flow. */
@@ -68,6 +70,9 @@ async function stubFriends(page) {
 }
 
 const connections = (page) => region(page).locator('[data-settings-anchor="connections"]');
+/** The presence badge in the innermost block holding both the friend's name and a badge: their own row. */
+const presenceOf = (page, name) => connections(page).locator("div").filter({ hasText: name })
+  .filter({ has: page.locator("[data-presence]") }).last().locator("[data-presence]");
 const removeButtons = (page) => connections(page).getByRole("button", { name: "Remove", exact: true });
 
 async function openContacts(page, baseURL) {
@@ -82,6 +87,14 @@ test.describe("friends (bridge stub)", () => {
     await openContacts(page, baseURL);
     await expect(connections(page).getByText("Met at the analytical engine meetup")).toBeVisible();
     await expect(removeButtons(page)).toHaveCount(1);
+  });
+
+  test("each friend in the list shows whether they are online", async ({ page, baseURL }) => {
+    const bridge = await stubFriends(page);
+    bridge.edges.push(edge("edge-alan", ALAN, "accepted", "incoming"));
+    await openContacts(page, baseURL);
+    await expect(presenceOf(page, ADA.name)).toHaveText("Online");
+    await expect(presenceOf(page, ALAN.name)).toHaveText("Offline");
   });
 
   test("Remove asks first, then drops the friend at the bridge", async ({ page, baseURL }) => {
