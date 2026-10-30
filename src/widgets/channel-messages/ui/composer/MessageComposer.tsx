@@ -36,6 +36,7 @@ import { useComposerDraft } from '../../model/useComposerDraft';
 import { ChatComposerMenu, type ChatCommandId } from './ChatComposerMenu';
 import { ComposerToolbar } from './ComposerToolbar';
 import { DraftAttachmentBar } from './DraftAttachmentBar';
+import { UploadProgressBar } from './UploadProgressBar';
 import { VoiceRecorder } from './VoiceRecorder';
 import { MentionAutocomplete, mentionQuery } from './MentionAutocomplete';
 import { useComposerActions } from './composerActions';
@@ -61,7 +62,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   onSend,
 }) => {
   const draft = useComposerDraft(`osionos:chat:draft:${channelId}`);
-  const { upload, uploading } = useAttachmentUpload(channelId);
+  const { upload, uploading, progress } = useAttachmentUpload(channelId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slashFileRef = useRef<HTMLInputElement>(null);
   const [recording, setRecording] = React.useState(false);
@@ -140,6 +141,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
           </div>
         )}
         <DraftAttachmentBar attachments={draft.attachments} onRemove={draft.removeAttachment} />
+        {progress && <UploadProgressBar progress={progress} />}
 
         {/* The warning is announced, not shouted: the author hears it once. */}
         {asked.warning && (
