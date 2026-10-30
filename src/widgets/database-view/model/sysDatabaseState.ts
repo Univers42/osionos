@@ -61,7 +61,7 @@ function cellValue(type: SysColumnType, value: unknown): unknown {
 
 function recordId(source: SysSource, row: Row, index: number): string {
   if (source.source === "my-tasks") return `${String(row.page_id)}:${String(row.block_id)}`;
-  const id = row.id ?? row.token ?? row.workspace_id;
+  const id = row.id ?? row.token ?? row.workspace_id ?? row.follower_id;
   return typeof id === "string" && id ? id : `row-${index}`;
 }
 
@@ -143,7 +143,8 @@ export async function loadSysSourceState(sourceId: string, transport: SysTranspo
       views: { ...builtInViews(source, sourceId), [source.defaultViewId]: {
         id: source.defaultViewId, databaseId: sourceId, name: source.label, type: SYS_VIEW_TYPE,
         filters: [], filterConjunction: "and", sorts: [],
-        visibleProperties: body.columns.filter((column) => !hidden.has(column)),
+        // The table draws exactly these: the title leads, or the rows have no names.
+        visibleProperties: [source.titleColumn, ...body.columns.filter((column) => !hidden.has(column))],
         settings: { showRowNumbers: true, openPagesIn: "side_peek" },
       } },
     },

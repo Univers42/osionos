@@ -23,7 +23,6 @@
 
 import {
 	bearerToken,
-	fetchWorkspace,
 	httpError,
 	readJsonBody,
 	requireUuid,

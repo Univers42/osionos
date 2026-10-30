@@ -99,3 +99,110 @@ describe('publishSnapshot', () => {
 		assert.equal(depth, 32);
 	});
 });
+
+// #61: a formula-gated cell always hid on /p/:token — the public page has no
+// properties to evaluate it with. The owner's view decides at publish time:
+// the snapshot carries what it showed, and no formula at all.
+describe('publishSnapshot: layouts and formula-gated content', () => {
+	const cell = (id, extra = {}) => ({ id, colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 1, blocks: [], ...extra });
+	const layout = (cells, extra = {}) => ({ id: 'L', type: 'layout', content: '', layoutCells: cells, ...extra });
+
+	it('keeps a layout: its grid, its cells, and their blocks sanitised like any other', () => {
+		const content = [layout([cell('c1', {
+			label: 'About',
+			content: 'side note',
+			tint: 'var(--osio-bg-surface)',
+			textColor: 'var(--osio-fg-default)',
+			offset: { x: 4, y: -2 },
+			sizing: 'auto-height',
+			padding: 'compact',
+			fontSize: 'large',
+			wrap: false,
+			section: 'about',
+			measuredHeight: 300,
+			blocks: [
+				{ id: 'p', type: 'paragraph', content: `hello [[page:${SECRET_ID}]]` },
+				{ id: 'e', type: 'embed', content: 'https://example.com' },
+			],
+		})], { layoutConfig: { columns: 12, rowHeight: 96, gap: 16, columnGap: 8, rowGap: 12, rows: 4, preview: true } })];
+
+		assert.deepEqual(publishSnapshot(content), [{
+			id: 'L',
+			type: 'layout',
+			content: '',
+			layoutConfig: { columns: 12, rowHeight: 96, gap: 16, columnGap: 8, rowGap: 12, rows: 4 },
+			layoutCells: [{
+				id: 'c1', colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 1,
+				label: 'About',
+				content: 'side note',
+				tint: 'var(--osio-bg-surface)',
+				textColor: 'var(--osio-fg-default)',
+				offset: { x: 4, y: -2 },
+				sizing: 'auto-height',
+				padding: 'compact',
+				fontSize: 'large',
+				wrap: false,
+				blocks: [{ id: 'p', type: 'paragraph', content: 'hello ' }],
+			}],
+		}]);
+	});
+
+	it('publishes a gated cell only when the owner\'s view showed it, and never its formula', () => {
+		const content = [layout([
+			cell('shown', { visibilityFormula: 'prop("Status") == "Done"', content: 'visible to the owner' }),
+			cell('hidden', { visibilityFormula: 'prop("Status") == "Draft"', content: 'hidden from the owner' }),
+			cell('plain', { content: 'never gated' }),
+		])];
+		const snapshot = publishSnapshot(content, { shown: new Set(['shown']) });
+
+		assert.deepEqual(snapshot[0].layoutCells.map((kept) => kept.id), ['shown', 'plain']);
+		assert.equal(JSON.stringify(snapshot).includes('prop('), false);
+	});
+
+	it('publishes a gated block only when the owner\'s view showed it, at any depth, and never its formula', () => {
+		const content = [
+			{ id: 'b1', type: 'paragraph', content: 'shown', visibleWhen: 'prop("Public")' },
+			{ id: 'b2', type: 'paragraph', content: 'hidden', visibleWhen: 'prop("Draft")' },
+			{ id: 't', type: 'toggle', content: 'outer', children: [
+				{ id: 'b3', type: 'paragraph', content: 'nested hidden', visibleWhen: 'false' },
+				{ id: 'b4', type: 'paragraph', content: 'nested plain' },
+			] },
+			layout([cell('c', { blocks: [{ id: 'b5', type: 'paragraph', content: 'in a cell', visibleWhen: 'prop("Draft")' }] })]),
+		];
+		const snapshot = publishSnapshot(content, { shown: new Set(['b1']) });
+
+		assert.deepEqual(snapshot.map((block) => block.id), ['b1', 't', 'L']);
+		assert.deepEqual(snapshot[1].children.map((block) => block.id), ['b4']);
+		assert.deepEqual(snapshot[2].layoutCells[0].blocks, []);
+		assert.equal(JSON.stringify(snapshot).includes('prop('), false);
+	});
+
+	it('publishes no gated content when the publish carried no decision', () => {
+		const content = [
+			{ id: 'b', type: 'paragraph', content: 'gated', visibleWhen: 'true' },
+			layout([cell('c', { visibilityFormula: 'true' }), cell('d')]),
+		];
+		const snapshot = publishSnapshot(content);
+
+		assert.deepEqual(snapshot.map((block) => block.id), ['L']);
+		assert.deepEqual(snapshot[0].layoutCells.map((kept) => kept.id), ['d']);
+	});
+
+	it('drops a cell colour that could load something, and keeps one that cannot', () => {
+		const mixed = 'color-mix(in srgb, #2563eb 8%, var(--osio-bg-surface))';
+		const [kept] = publishSnapshot([layout([cell('c', {
+			backgroundColor: 'url(https://tracker.example/p.png)',
+			tint: 'image-set("https://tracker.example/p.png" 1x)',
+			textColor: mixed,
+		})])])[0].layoutCells;
+
+		assert.equal(kept.textColor, mixed);
+		assert.equal('backgroundColor' in kept, false);
+		assert.equal('tint' in kept, false);
+	});
+
+	it('drops a layout cell without a usable grid position', () => {
+		const snapshot = publishSnapshot([layout([cell('ok'), { id: 'bad', colStart: 'x', blocks: [] }, null])]);
+		assert.deepEqual(snapshot[0].layoutCells.map((kept) => kept.id), ['ok']);
+	});
+});

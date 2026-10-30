@@ -41,20 +41,22 @@ export const PagePropertyValueField: React.FC<Props> = ({ property, editable, on
     return <MultiSelectField property={property} editable={editable} onChange={onChange} />;
   }
 
-  if (!editable) {
-    return <span className="text-sm text-[var(--osio-fg-muted)]">{stringValue(property.value) || "Empty"}</span>;
-  }
-
   if (property.type === "checkbox") {
     return (
       <input
         type="checkbox"
         aria-label={property.label}
         checked={Boolean(property.value)}
+        disabled={!editable}
         onChange={(event) => onChange(event.target.checked)}
         className="h-4 w-4 accent-[var(--osio-accent)]"
       />
     );
+  }
+
+  // A blank value prints nothing: the row and its name stay, an "Empty" here was noise (#162).
+  if (!editable) {
+    return <span className="text-sm text-[var(--osio-fg-muted)]">{stringValue(property.value)}</span>;
   }
 
   if ((property.type === "select" || property.type === "status") && property.options?.length) {
@@ -140,7 +142,6 @@ const MultiSelectField: React.FC<Props> = ({ property, editable, onChange }) => 
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-1">
-      {chosen.length === 0 && !editable ? <span className="text-sm text-[var(--osio-fg-muted)]">Empty</span> : null}
       {chosen.map((tag) => (
         <span key={tag} className="osio-chip">
           {tag}

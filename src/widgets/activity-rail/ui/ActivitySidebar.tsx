@@ -6,12 +6,15 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/06/25 12:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/06/25 12:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/30 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useUIStore, PANEL_MAX_WIDTH } from "@/shared/config/uiStore";
+import { PHONE_QUERY } from "@/shared/config/useResponsiveSidebar";
+import { useWorkspaceLayout } from "@/widgets/workspace-grid/model/workspaceLayout";
+import { activeTabOf } from "@/widgets/workspace-grid/model/layoutTree";
 import { ActivityRail } from "./ActivityRail";
 import { SidebarPanel } from "./SidebarPanel";
 import { useSidebarResize } from "../model/useSidebarResize";
@@ -36,6 +39,10 @@ interface Props {
  * folds it to the rail; the rail's edge drags the panel back out, or, pulled
  * far left, hides the sidebar. Widths are written to the DOM during a drag and
  * committed to the store on release.
+ *
+ * On a phone the panel is a drawer over the page (the stylesheet), and it folds
+ * once something opens or the page beside it is tapped: pushed in beside the
+ * rail it left the page 67px wide.
  */
 export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, onOpenConsole, peek = false }) => {
   const sidebarMode = useUIStore((s) => s.sidebarMode);
@@ -48,6 +55,7 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
   const draggingRef = useRef(false);
   // The peek shows the panel whatever mode the docked sidebar was last in.
   const showPanel = peek || sidebarMode === "panel";
+  useFoldOnPhoneWhenATabOpens(peek);
 
   // Mount the panel once and keep it mounted (a folded panel costs no renders).
   const [panelMounted, setPanelMounted] = useState(showPanel);
@@ -122,6 +130,7 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
           </div>
         ) : null}
       </div>
+      {showPanel && !peek ? <div className={styles.scrim} aria-hidden onClick={collapseToRail} /> : null}
       {peek ? null : (
         <div
           role="separator"
@@ -139,3 +148,18 @@ export const ActivitySidebar: React.FC<Props> = ({ onOpenSettings, onOpenTrash, 
     </aside>
   );
 };
+
+/** On a phone, fold the drawer when the open tab or its page changes: what was picked gets the width. */
+function useFoldOnPhoneWhenATabOpens(peek: boolean): void {
+  const opened = useWorkspaceLayout((state) => {
+    const tab = activeTabOf(state.root, state.activePaneId);
+    return tab ? `${tab.tabId}:${tab.pageId}` : "";
+  });
+  const seen = useRef(opened);
+  useEffect(() => {
+    if (opened === seen.current) return;
+    seen.current = opened;
+    if (peek || useUIStore.getState().sidebarMode !== "panel") return;
+    if (typeof window.matchMedia === "function" && window.matchMedia(PHONE_QUERY).matches) useUIStore.getState().collapseToRail();
+  }, [opened, peek]);
+}

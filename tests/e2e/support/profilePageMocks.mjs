@@ -62,14 +62,26 @@ export async function mockApi(page, { id, username, name, publicBody, profileExt
     route.fulfill({ json: { people: [{ id, name, username, avatar: null, headline: null, online: false }] } }));
 }
 
-export async function openProfile(page, baseURL, name) {
-  await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);
-  await openFreshPage(page, baseURL);
-  const mine = await seedSession(page);
+// Bob's profile reads, for a `stubBridge` responder; undefined for anything else.
+export function answerProfileReads(url) {
+  if (url.pathname === `/api/profile/${OTHER.id}`) return { json: profileBody(OTHER.id, OTHER.username, "Bob Jones") };
+  if (url.pathname === `/api/users/${OTHER.username}`) return { json: BOB_PUBLIC };
+  if (url.pathname !== "/api/directory/search") return undefined;
+  return { json: { people: [{ id: OTHER.id, name: "Bob Jones", username: OTHER.username, avatar: null, headline: null, online: false }] } };
+}
+
+export async function openProfileFromPalette(page, name) {
   const box = page.getByRole("combobox", { name: "Search pages or run a command" });
   await box.click();
   await box.fill(`user:${name}`);
   await page.getByRole("option").filter({ hasText: name }).first().click();
+}
+
+export async function openProfile(page, baseURL, name) {
+  await giveTheAppABridgeOrigin(page, new URL(baseURL).origin);
+  await openFreshPage(page, baseURL);
+  const mine = await seedSession(page);
+  await openProfileFromPalette(page, name);
   return mine;
 }
 

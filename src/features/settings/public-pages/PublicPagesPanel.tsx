@@ -28,6 +28,8 @@ function publishedOn(value: string): string {
   return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+const FLAGGED = "Not republished: the moderation check flagged this page. Edit it, or publish it from its Share menu.";
+
 /** A row's own failure: the bridge's message, shown on the row that failed. */
 interface RowFailure {
   pageId: string;
@@ -60,8 +62,9 @@ export const PublicPagesPanel = () => {
     setFailure(null);
     try {
       if (action === "republish") {
-        const token = await publishPage(page.pageId);
-        if (!token) throw new Error("The page was not published.");
+        // The panel has no "publish anyway"; a flagged page goes through the Share menu's.
+        const result = await publishPage(page.pageId);
+        if (!result.ok) throw new Error("warning" in result ? FLAGGED : result.message);
       } else {
         await unpublishPage(page.pageId);
       }

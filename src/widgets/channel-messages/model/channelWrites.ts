@@ -35,6 +35,8 @@ import {
   type WriteOptions,
 } from '@/shared/chat/messageApi';
 
+import { PENDING_MESSAGE_PREFIX } from './historyCatchUp';
+
 /** The typed answer of a channel write: written, warned about, or failed. */
 export type SendOutcome =
   | { ok: true; message?: ChatMessage }
@@ -52,7 +54,7 @@ export interface ChannelWriteTarget {
 /** The row the sender sees before the bridge answers. */
 function optimisticRow(target: ChannelWriteTarget, content: string, attachments?: Attachment[]): ChatMessage {
   return {
-    id: `temp-${Date.now()}-${crypto.randomUUID()}`,
+    id: `${PENDING_MESSAGE_PREFIX}${Date.now()}-${crypto.randomUUID()}`,
     channelId: target.channelId,
     authorId: target.userId,
     authorName: target.userName,

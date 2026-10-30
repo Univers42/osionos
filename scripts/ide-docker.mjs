@@ -29,7 +29,7 @@ const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
  *  Caveat: this is socket inactivity, not total time: a daemon that trickles bytes is not cut. */
 export const DOCKER_REQUEST_TIMEOUT_MS = 20_000;
 
-function requestTimeoutMs(env) {
+export function requestTimeoutMs(env) {
   const asked = Number(env.OSIONOS_IDE_DOCKER_TIMEOUT_MS);
   return Number.isInteger(asked) && asked >= 50 ? Math.min(asked, DOCKER_REQUEST_TIMEOUT_MS) : DOCKER_REQUEST_TIMEOUT_MS;
 }

@@ -13,7 +13,7 @@
 /**
  * Live notifications: seed the inbox + subscribe the per-user realtime topic
  * (keyed by the unguessable notify_token). Each `notification_created` frame
- * raises a toast and prepends to the notifications store. Mount ONCE near the
+ * raises a toast and prepends to the notifications store; a reconnect re-seeds. Mount ONCE near the
  * app root. Best-effort — no bridge/session just leaves it inert.
  */
 
@@ -23,7 +23,7 @@ import { subscribeTopic } from '@/services/realtime-messages/wsTransport';
 import { userTopic } from '@/services/realtime-messages/wsTopics';
 import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { fetchInbox, fetchNotifications, notificationSentence, type NotificationType } from '@/shared/chat/notifyApi';
-import { useNotificationsStore } from './useNotificationsStore';
+import { liveNotificationItem, useNotificationsStore, type LiveNotificationPayload } from './useNotificationsStore';
 import { usePageStore } from '@/store/usePageStore';
 import { useShareTarget } from '@/features/share/useShareTarget';
 import { openOrDenyPage } from '@/features/page-link/openOrDenyPage';
@@ -47,26 +47,25 @@ export function useNotifyLive(): void {
   useEffect(() => {
     let alive = true;
     let dispose: (() => void) | undefined;
-    void Promise.all([fetchInbox(), fetchNotifications()])
-      .then(([inbox, items]) => {
-        if (!alive) return;
-        useNotificationsStore.getState().setItems(items);
-        useNotificationsStore.getState().setUnread(inbox.unread);
-        if (!inbox.notifyToken) return;
+    const seed = () => Promise.all([fetchInbox(), fetchNotifications()]).then(([inbox, items]) => {
+      if (!alive) return null;
+      useNotificationsStore.getState().setItems(items);
+      useNotificationsStore.getState().setUnread(inbox.unread);
+      return inbox;
+    });
+    // After a reconnect the inbox is read again: the gateway does not replay the gap (#172).
+    const catchUp = () => {
+      seed().catch((error: unknown) => console.warn('[notifications] catching up after a reconnect failed:', error));
+    };
+    void seed()
+      .then((inbox) => {
+        if (!inbox?.notifyToken) return;
         dispose = subscribeTopic(userTopic(inbox.notifyToken), (frame) => {
           if (frame.event_type !== 'notification_created') return;
-          const payload = (frame.payload ?? {}) as { type?: NotificationType; actorName?: string; channelId?: string; messageId?: string; preview?: string };
-          const type = payload.type ?? 'system';
-          useNotificationsStore.getState().prepend({
-            id: `live-${Date.now()}-${Math.round(performance.now())}`,
-            type,
-            actorId: null,
-            channelId: payload.channelId ?? null,
-            messageId: payload.messageId ?? null,
-            preview: payload.preview ?? null,
-            readAt: null,
-            createdAt: new Date().toISOString(),
-          });
+          const payload = (frame.payload ?? {}) as LiveNotificationPayload & { actorName?: string };
+          const item = liveNotificationItem(payload);
+          const type = item.type;
+          useNotificationsStore.getState().prepend(item);
           const open = () => {
             if (type === 'page_access_request') {
               const pageId = payload.channelId ?? null;
@@ -107,7 +106,7 @@ export function useNotifyLive(): void {
               description: payload.preview ?? '',
             });
           }
-        });
+        }, catchUp);
       })
       .catch(() => undefined);
     return () => { alive = false; if (dispose) dispose(); };

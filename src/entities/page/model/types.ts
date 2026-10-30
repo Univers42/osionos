@@ -45,6 +45,8 @@ export interface PagePropertyEntry {
   value: string | string[] | number | boolean | null;
   options?: string[];
   relationTarget?: "page" | "database" | "block" | "mixed";
+  /** The connected table owns this value (a computed column, a related row): shown, never edited here. */
+  readOnly?: boolean;
 }
 
 /** Entry representing a page in the workspace tree. */

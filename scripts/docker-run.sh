@@ -20,6 +20,13 @@ shift || true
 
 cd "${ROOT_DIR}"
 
+# A test-file argument replaces the suite glob (test:canvas/test:bridge -- <file>); flags alone keep it.
+has_test_file() {
+  local arg
+  for arg in "$@"; do [[ -f ${arg} ]] && return 0; done
+  return 1
+}
+
 run_inside_container() {
   case "${COMMAND}" in
     # Monaco's ESM tree (~2.5k modules) pushed `vite build` past Node's default ~2 G
@@ -30,17 +37,21 @@ run_inside_container() {
     build-offline) exec sh -c 'VITE_API_URL= VITE_REQUIRE_BRIDGE_SESSION=false VITE_ALLOW_OFFLINE_MODE=true VITE_BAAS_URL= VITE_BAAS_API_KEY= VITE_BAAS_LIVE_MOUNTS= NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build' ;;
     preview) exec pnpm exec vite preview --host 0.0.0.0 "$@" ;;
     typecheck) exec sh -c 'pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit' ;;
-    lint) exec pnpm exec eslint src/ packages/ --max-warnings=0 "$@" ;;
-    lint-fix) exec pnpm exec eslint src/ packages/ --fix "$@" ;;
+    lint) exec pnpm exec eslint src/ packages/ scripts/ --max-warnings=0 "$@" ;;
+    lint-fix) exec pnpm exec eslint src/ packages/ scripts/ --fix "$@" ;;
     test-e2e) exec pnpm exec playwright test "$@" ;;
     test-e2e-serial) exec pnpm exec playwright test --workers=1 "$@" ;;
     test-e2e-smoke) exec pnpm exec playwright test tests/e2e/smoke "$@" ;;
     tokens) exec node scripts/build-tokens.mjs "$@" ;;
     test-e2e-perf) PLAYWRIGHT_PERF=1 exec pnpm exec playwright test tests/e2e/perf --workers=1 "$@" ;;
     test-e2e-coedit) PLAYWRIGHT_COEDIT=1 exec pnpm exec playwright test tests/e2e/latency --workers=1 "$@" ;;
-    test-canvas) exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test tests/canvas/*.test.ts "$@" ;;
+    test-canvas)
+      has_test_file "$@" || set -- tests/canvas/*.test.ts "$@"
+      exec node --experimental-strip-types --experimental-loader ./tests/canvas/ts-extension-loader.mjs --test "$@" ;;
     test-doctor) exec node tests/test-env-doctor.mjs "$@" ;;
-    test-bridge) exec node --test tests/bridge/*.test.mjs "$@" ;;
+    test-bridge)
+      has_test_file "$@" || set -- tests/bridge/*.test.mjs "$@"
+      exec node --test "$@" ;;
     bridge-api) exec node scripts/bridge-api.mjs "$@" ;;
     mcp-claude) exec node scripts/osionos-mcp-server.mjs "$@" ;;
     lighthouse) exec node scripts/lighthouse.mjs "$@" ;;
@@ -49,7 +60,7 @@ run_inside_container() {
     test-bench)
       [ $# -gt 0 ] || set -- tests/bench/*.bench.ts
       exec node --experimental-strip-types --expose-gc --experimental-loader ./tests/canvas/ts-extension-loader.mjs tests/bench/run.ts "$@" ;;
-    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && node scripts/check-token-refs.mjs && node scripts/build-tokens.mjs --check && bash scripts/check-built-with-blocks.sh && exec bash scripts/check-style-tokens.sh ;;
+    quality) pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && pnpm exec eslint src/ packages/ scripts/ --max-warnings=0 "$@" && bash scripts/check-markdown-engine-boundary.sh && bash scripts/check-ui-token-contract.sh && node scripts/check-token-refs.mjs && node scripts/build-tokens.mjs --check && bash scripts/check-built-with-blocks.sh && exec bash scripts/check-style-tokens.sh ;;
     *) echo "Unknown docker-run command: ${COMMAND}" >&2; exit 2 ;;
   esac
 }

@@ -79,7 +79,7 @@ export const GeneralPanel: React.FC<{ userId: string; workspaceName?: string; wo
     const timer = globalThis.setTimeout(() => {
       const trimmedName = workspaceNameDraft.trim();
       update(resolvedUserId, workspaceId, { name: trimmedName });
-      if (isOwner) renameWorkspace(workspaceId, trimmedName);
+      if (isOwner) void renameWorkspace(workspaceId, trimmedName);
     }, 300);
     return () => globalThis.clearTimeout(timer);
   }, [resolvedUserId, settings.name, update, workspaceId, workspaceNameDraft, renameWorkspace, isOwner]);

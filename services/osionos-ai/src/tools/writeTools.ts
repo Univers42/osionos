@@ -4,7 +4,7 @@ import { sameId } from '../../../../scripts/bridge-page-read.mjs';
 import { liveMemberWorkspaces } from '../retrieval/acl.ts';
 import { canReadPageWithRules } from '../retrieval/shareRules.ts';
 import { canAccessWorkspace } from '../workspaceAccess.ts';
-import { BLOCK_TYPES, TEXT_BLOCK_TYPES } from './blockTypes.ts';
+import { BLOCK_TYPES, CODE_LANGUAGE, TEXT_BLOCK_TYPES } from './blockTypes.ts';
 import type { ApprovalTarget } from '../approvals/types.ts';
 import type { AnyWriteTool, WriteTool, WriteToolContext } from './types.ts';
 
@@ -73,7 +73,17 @@ export const ADD_MAX_BYTES = 200_000;
 const addBlocksArgs = z.object({
 	pageId: z.string().regex(UUID),
 	blocks: z
-		.array(z.object({ type: z.enum(TEXT_BLOCK_TYPES), content: z.string().min(1).max(10_000) }))
+		.array(
+			z
+				.object({
+					type: z.enum(TEXT_BLOCK_TYPES),
+					content: z.string().min(1).max(10_000),
+					language: z.string().regex(CODE_LANGUAGE).optional(),
+				})
+				.refine((block) => block.language === undefined || block.type === 'code', {
+					message: 'only a code block names a language',
+				}),
+		)
 		.min(1)
 		.max(ADD_MAX_BLOCKS),
 	after: z.string().min(1).max(500).optional(),
@@ -356,7 +366,7 @@ export function anchorOf(
 export const addBlocks: WriteTool<z.infer<typeof addBlocksArgs>> = {
 	name: 'add_blocks',
 	description:
-		'Ask the user to add text blocks to one of their existing pages: at the end, or right after a top-level block whose text starts with `after` (quote it as read_page shows it). Use it to write into a page; it never changes or removes what is already there.',
+		'Ask the user to add text blocks to one of their existing pages: at the end, or right after a top-level block whose text starts with `after` (quote it as read_page shows it). Use it to write into a page; it never changes or removes what is already there. A diagram is a `code` block with `language: "mermaid"` and the mermaid source as its content.',
 	kind: 'write',
 	verb: 'Add to a page',
 	input: addBlocksArgs,
@@ -392,7 +402,11 @@ export const addBlocks: WriteTool<z.infer<typeof addBlocksArgs>> = {
 				// card shows that block's text, and execution addresses its id.
 				args: {
 					pageId: args.pageId,
-					blocks: args.blocks.map((block) => ({ type: block.type, content: block.content })),
+					blocks: args.blocks.map((block) => ({
+						type: block.type,
+						content: block.content,
+						...(block.language === undefined ? {} : { language: block.language }),
+					})),
 					...(anchor ?? {}),
 				},
 				target,

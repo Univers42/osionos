@@ -27,6 +27,7 @@ import {
   evalFormula,
   type PropertyMap,
 } from "@/shared/notion-database-sys/src/lib/engine/bridge";
+import type { Block } from "./types";
 import type { VisibilityScope } from "./visibilityScope";
 
 /** The evaluator the helper talks to — the engine bridge by default. */
@@ -99,6 +100,30 @@ export function filterVisibleCells<T extends { visibilityFormula?: string }>(cel
 /** The complement of {@link filterVisibleCells}: cells the editor must still let the author reach. */
 export function filterHiddenCells<T extends { visibilityFormula?: string }>(cells: readonly T[], props: PropertyMap): T[] {
   return cells.filter((cell) => !evaluateCellVisibility(cell.visibilityFormula, props));
+}
+
+/**
+ * The ids of the formula-gated blocks (`visibleWhen`) and layout cells
+ * (`visibilityFormula`) this view shows — what a publish copies (#61). Ungated
+ * items are not listed, and nothing inside a hidden item is visited.
+ */
+export function shownGatedIds(blocks: readonly Block[], props: PropertyMap, evaluate: CellVisibilityEvaluator = evalFormula): string[] {
+  const shown: string[] = [];
+  const visit = (formula: string | undefined, id: string): boolean => {
+    if (!formula?.trim()) return true;
+    const visible = evaluateCellVisibility(formula, props, evaluate);
+    if (visible) shown.push(id);
+    return visible;
+  };
+  const walk = (list: readonly Block[] | undefined): void => {
+    for (const block of list ?? []) {
+      if (!visit(block.visibleWhen, block.id)) continue;
+      walk(block.children);
+      for (const cell of block.layoutCells ?? []) if (visit(cell.visibilityFormula, cell.id)) walk(cell.blocks);
+    }
+  };
+  walk(blocks);
+  return shown;
 }
 
 const visibleForSnapshotMemo = new WeakMap<VisibilityScope, Map<string, { snapshot: PropertyMap; visible: boolean }>>();

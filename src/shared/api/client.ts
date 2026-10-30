@@ -25,6 +25,7 @@
  */
 
 import { ApiError, createHttpClient } from '@osionos/http-gate';
+import { connectivityAwareFetch, useConnectivityStore } from './connectivity';
 import { refreshAwareFetch } from './sessionRefreshAware';
 import { revocationAwareFetch } from './sessionRevocation';
 import { sudoRequiredAwareFetch } from './sudoRequired';
@@ -92,8 +93,10 @@ async function refreshOwnerOf(token: string): Promise<string | null> {
   return userStore((state) => (state.sessions as Record<string, { accessToken: string }>)[owner]?.accessToken ?? null);
 }
 
+const reportBridge = (reachable: boolean) => useConnectivityStore.getState().reportBridge(reachable);
+
 const guardedFetch = sudoRequiredAwareFetch(refreshAwareFetch(
-  revocationAwareFetch((input, init) => fetch(input, init), reportRevokedSession),
+  revocationAwareFetch(connectivityAwareFetch((input, init) => fetch(input, init), reportBridge), reportRevokedSession),
   refreshOwnerOf,
 ));
 
