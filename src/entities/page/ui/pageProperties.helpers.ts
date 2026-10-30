@@ -16,6 +16,7 @@ import type { PagePropertyEntry, PagePropertyType } from "../model/types";
 export function notionIconType(type: PagePropertyType | undefined): string {
   if (!type) return "text";
   if (type === "person") return "person";
+  if (type === "files") return "files_media";
   return type; // number/date/select/multi_select/status/checkbox/url/email/phone/relation map 1:1
 }
 
