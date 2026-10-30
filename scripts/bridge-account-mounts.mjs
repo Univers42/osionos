@@ -86,29 +86,10 @@ export function createAccountHandler(deps) {
 	];
 	// Off unless OSIONOS_ACCOUNT_DELETION_EXECUTOR=1 (and, in production, a dry run or a verdict).
 	createAccountErasureRunner({ config: deps.config, pg: deps.pg, kv: deps.kv, fetchImpl: deps.erasureFetch ?? deps.mfaFetch ?? fetch, env: deps.erasureEnv ?? deps.mfaEnv ?? process.env }).start();
-	return async function handleAccountRequest(url, request, response, requestConfig = deps.config) {
-		if (requestConfig.allowedOrigin !== deps.config.allowedOrigin) answerWithOrigin(response, requestConfig.allowedOrigin);
+	return async function handleAccountRequest(url, request, response) {
 		for (const module of modules) {
 			if (await module(url, request, response)) return true;
 		}
 		return false;
-	};
-}
-
-// The modules above are built once with the bridge's static config, so every reply they
-// write names its default origin; a desktop (app://osionos) or localhost caller then has
-// its Settings reads discarded by the browser (2026-10-30). This makes their CORS origin
-// header the one the bridge allowed for this request, wherever a module sets it.
-function answerWithOrigin(response, origin) {
-	const isOriginHeader = (name) => String(name).toLowerCase() === 'access-control-allow-origin';
-	const setHeader = response.setHeader.bind(response);
-	response.setHeader = (name, value) => setHeader(name, isOriginHeader(name) ? origin : value);
-	const writeHead = response.writeHead.bind(response);
-	response.writeHead = (status, ...rest) => {
-		for (const headers of rest) {
-			if (!headers || typeof headers !== 'object' || Array.isArray(headers)) continue;
-			for (const name of Object.keys(headers)) if (isOriginHeader(name)) headers[name] = origin;
-		}
-		return writeHead(status, ...rest);
 	};
 }

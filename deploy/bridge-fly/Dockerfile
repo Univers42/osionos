@@ -24,7 +24,7 @@ WORKDIR /app
 # helpers).
 COPY scripts/bridge-api.mjs scripts/bridge-page-read.mjs scripts/bridge-page-access.mjs scripts/bridge-page-access-requests.mjs scripts/bridge-page-access-request-store.mjs scripts/bridge-page-access-request-decisions.mjs scripts/bridge-live-workspaces.mjs scripts/bridge-graph.mjs scripts/bridge-graph-data.mjs scripts/bridge-graph-edges.mjs scripts/bridge-records.mjs scripts/bridge-agent.mjs scripts/bridge-runner.mjs \
 	scripts/bridge-connector.mjs scripts/bridge-oauth.mjs \
-	scripts/bridge-rtc.mjs scripts/bridge-perms.mjs scripts/bridge-perms-rules.mjs scripts/bridge-perms-rule-owners.mjs scripts/bridge-share-rules.mjs scripts/bridge-chat.mjs \
+	scripts/bridge-rtc.mjs scripts/bridge-perms.mjs scripts/bridge-cors-origin.mjs scripts/bridge-perms-rules.mjs scripts/bridge-perms-rule-owners.mjs scripts/bridge-share-rules.mjs scripts/bridge-chat.mjs \
 	scripts/bridge-chat-media.mjs scripts/bridge-url-guard.mjs scripts/bridge-url-fetch.mjs scripts/bridge-automations-webhook.mjs scripts/bridge-storage-core.mjs scripts/bridge-ratelimit.mjs scripts/bridge-server-timing.mjs scripts/bridge-chat-search.mjs scripts/bridge-chat-threads.mjs scripts/bridge-chat-ai.mjs \
 	scripts/bridge-communities.mjs scripts/bridge-auth-exchange.mjs scripts/bridge-turnstile.mjs \
 	scripts/bridge-profile.mjs scripts/bridge-feed.mjs scripts/bridge-social.mjs scripts/bridge-notify.mjs scripts/bridge-push.mjs scripts/bridge-media.mjs scripts/bridge-tasks.mjs scripts/bridge-comments.mjs scripts/bridge-discussions.mjs scripts/bridge-discussions-input.mjs scripts/bridge-public.mjs scripts/bridge-publish-snapshot.mjs scripts/bridge-social-follows.mjs scripts/bridge-status.mjs scripts/bridge-account-status.mjs \
