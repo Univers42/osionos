@@ -23,9 +23,10 @@
  * browser and without a service.
  */
 
-import { getInferencePort } from "@/features/chat/model/useChatStore";
+import { getInferencePort, useChatStore } from "@/features/chat/model/useChatStore";
 import type { InferencePort } from "@/features/chat/model/inferencePort";
 import type { RunContext } from "@/features/ai/model/aiContext";
+import { citationFromEvent, type Citation } from "@/features/chat/model/citations";
 
 /** The tab shows only when the app can answer: the AI service is configured. */
 export function aiDockTabVisible(configured: boolean): boolean {
@@ -51,12 +52,16 @@ export interface AiDockTurn {
   model?: string;
   /** The server-side conversation, when the local one already has one. */
   serverConversationId?: string;
+  /** The workspace the conversation is made in, and listed with. */
+  workspaceId?: string;
   /** What the answer is read from: pages of the workspace, or all of it. */
   context?: RunContext;
   /** Called once the server-side conversation exists. */
   onServerConversationId?: (id: string) => void;
   /** The answer, as it arrives. */
   onDelta: (text: string) => void;
+  /** A source the answer cites as `[n]`; frames arrive before the text, in any order. */
+  onCitation?: (citation: Citation) => void;
   /** The turn ended. */
   onDone?: () => void;
   /** The turn failed. */
@@ -86,18 +91,28 @@ export async function runAiDockTurn(turn: AiDockTurn): Promise<void> {
     return;
   }
 
+  let created = false;
   await port.stream(
     {
       conversationId: turn.conversationId,
       text: turn.text,
       ...shared,
       ...(turn.serverConversationId ? { serverConversationId: turn.serverConversationId } : {}),
+      ...(turn.workspaceId ? { workspaceId: turn.workspaceId } : {}),
       ...(turn.context ? { context: turn.context } : {}),
-      ...(turn.onServerConversationId ? { onServerConversationId: turn.onServerConversationId } : {}),
+      onServerConversationId: (id) => {
+        created = true;
+        turn.onServerConversationId?.(id);
+      },
     },
     (event, data) => {
       if (event === "text.delta" && typeof data.text === "string") {
         turn.onDelta(data.text);
+        return;
+      }
+      if (event === "citation") {
+        const citation = citationFromEvent(data);
+        if (citation) turn.onCitation?.(citation);
         return;
       }
       if (event === "done") {
@@ -110,4 +125,7 @@ export async function runAiDockTurn(turn: AiDockTurn): Promise<void> {
     },
     turn.signal,
   );
+  // The dock keeps its turns to itself; the account's list is where the conversation lives on,
+  // under the title the service set at run.started (#84). Off the turn's path: a read failure only warns.
+  if (created && turn.workspaceId) void useChatStore.getState().syncServerConversations(turn.workspaceId);
 }
