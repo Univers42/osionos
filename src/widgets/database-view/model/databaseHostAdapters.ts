@@ -32,8 +32,9 @@ export function useDatabaseHostAdapters(): HostAdapters {
       },
       // A module-level component: the useMemo deps do not change.
       MermaidDiagram,
-      // Read-only AI labels for an AI-filled select. The kit never writes them.
-      autofill: { read: readAutofillLabels },
+      // Read-only AI labels for an AI-filled select. The kit never writes them. Without an AI
+      // service the kit offers no "AI sentiment" type: its column would stay "—" for good.
+      autofill: isAiConfigured() ? { read: readAutofillLabels } : undefined,
       onAskAI: dashboardAskAI(isAiConfigured()),
     }),
     [personas],

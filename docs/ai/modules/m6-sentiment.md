@@ -73,6 +73,7 @@ bash scripts/docker-run.sh lint
 | **C142** | A stale score never counts | the score joins on the sha256 of the current content — "C142 a stale score" |
 | **C143–C148** | Erase, no moderation use, locked storage, off on public, pinned model | migration and handler slices (PR #99, groot PR #118) |
 | **C149** | The gaps are stated | the Caveat below |
+| **C155** | The "AI sentiment" database property reads labels through the kit's `autofill` host adapter, read-only | `tests/canvas/ai-sentiment-rows.test.ts`; in a browser, labels for an opted-in workspace and "—" with no row read otherwise — `tests/e2e/ai-stub/aiSentimentProperty.spec.mjs` (`PLAYWRIGHT_AI_STUB=1`) |
 
 ---
 
@@ -120,5 +121,6 @@ p50 17.5 ms, batch of 32 p50 612.7 ms, RSS 2.32 GiB — measured with host load 
 - **No audio, no transcripts, no images, no video** (C139). Text comments of pages only.
 - **No per-person view** (C140): no route, column or chart is keyed by author.
 - **No moderation, ranking or decision about a person** (C144): the score is display-only.
-- No database "AI sentiment" property in the app, and no feed comments: out of this slice.
+- No feed comments: out of this slice. The database "AI sentiment" property only **shows** labels the
+  service already has; it never writes `page.properties`, and a build without an AI service does not offer it.
 - No public rollout (C147, C149).
