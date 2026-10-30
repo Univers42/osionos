@@ -24,7 +24,7 @@ export const UploadProgressBar: React.FC<{ progress: UploadProgress }> = ({ prog
         aria-label={`Uploading ${progress.name}`}
         value={percent}
         max={100}
-        className="h-1.5 flex-1 accent-[var(--osio-accent)]"
+        className="h-1.5 flex-1 appearance-none overflow-hidden rounded-full bg-[var(--osio-bg-muted)] [&::-moz-progress-bar]:bg-[var(--osio-accent)] [&::-webkit-progress-bar]:bg-[var(--osio-bg-muted)] [&::-webkit-progress-value]:bg-[var(--osio-accent)]"
       />
       <span className="tabular-nums">{percent}%</span>
     </div>
