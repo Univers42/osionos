@@ -1,0 +1,294 @@
+/* The sign-in screen: a quiet form column on the page paper, and beside it the one bold
+   element, a turning globe of a workspace drawn in the palette's own inks. Tokens only,
+   so every palette and both themes restyle it. Below 960px the globe becomes a top band. */
+
+/* Pinned to the viewport: a tall sign-up form scrolls inside its column, the globe stays put. */
+.osio-portal {
+  display: grid;
+  grid-template-columns: minmax(380px, 540px) 1fr;
+  height: 100dvh;
+  background: var(--osio-bg-page);
+  color: var(--osio-fg-default);
+  /* Sign-in fields are taller than in-app ones: the first thing touched, often on a laptop pad. */
+  --osio-field-h: var(--osio-control-h-lg);
+}
+
+.osio-portal-main {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  padding: clamp(28px, 5vw, 64px);
+  overflow-y: auto;
+}
+
+.osio-portal-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--osio-font-heading);
+  font-size: 21px;
+  font-weight: 500;
+  color: var(--osio-fg-strong);
+}
+
+.osio-portal-form {
+  align-self: center;
+  width: 100%;
+  max-width: 380px;
+  padding-block: 48px 24px;
+}
+
+.osio-portal-form h1 {
+  margin: 0;
+  font-family: var(--osio-font-heading);
+  font-size: clamp(32px, 3.4vw, 42px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.012em;
+  color: var(--osio-fg-strong);
+  text-wrap: balance;
+}
+
+.osio-portal-lede {
+  margin: 12px 0 0;
+  max-width: 34ch;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--osio-fg-muted);
+}
+
+.osio-portal-form form {
+  display: grid;
+  gap: 18px;
+  margin-top: 36px;
+}
+
+.osio-portal-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--osio-fg-default);
+}
+
+.osio-portal-field input {
+  padding-inline: 12px;
+  font-size: 15px;
+}
+
+.osio-portal-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--osio-fg-muted);
+}
+
+.osio-portal-password {
+  position: relative;
+}
+
+.osio-portal-password input {
+  padding-right: 64px;
+}
+
+.osio-portal-reveal {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  translate: 0 -50%;
+  padding: 4px 8px;
+  border-radius: var(--osio-radius-chip);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--osio-fg-muted);
+  transition: background-color var(--osio-motion-fast), color var(--osio-motion-fast);
+}
+
+.osio-portal-reveal:hover {
+  background: var(--osio-bg-hover);
+  color: var(--osio-fg-default);
+}
+
+.osio-portal-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--osio-fg-muted);
+  cursor: pointer;
+}
+
+.osio-portal-remember input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--osio-accent);
+}
+
+.osio-portal-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--osio-radius-control);
+  background: var(--osio-bg-subtle);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--osio-danger);
+}
+
+.osio-portal-form .osio-portal-submit {
+  width: 100%;
+  height: 44px;
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+.osio-portal-switch {
+  margin: 22px 0 0;
+  font-size: 14px;
+  color: var(--osio-fg-muted);
+}
+
+.osio-portal-switch button {
+  font-weight: 500;
+  color: var(--osio-accent-text);
+  text-underline-offset: 3px;
+}
+
+.osio-portal-switch button:hover { text-decoration: underline; }
+
+.osio-portal-reveal:focus-visible,
+.osio-portal-switch button:focus-visible {
+  outline: 2px solid var(--osio-focus-ring-color);
+  outline-offset: 2px;
+  border-radius: var(--osio-radius-chip);
+}
+
+.osio-portal-connection {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 44px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--osio-border-default);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--osio-fg-muted);
+}
+
+.osio-portal-connection svg {
+  flex: none;
+  margin-top: 1px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.osio-portal-connection[data-kind="secure"] svg { color: var(--osio-success); }
+.osio-portal-connection[data-kind="plain"] svg { color: var(--osio-warning); }
+
+.osio-portal-scene {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--osio-border-default);
+  background: var(--osio-bg-canvas);
+}
+
+.osio-portal-globe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: pan-y;
+  animation: osio-portal-globe-in 900ms var(--osio-ease-decelerate) both;
+}
+
+.osio-portal-globe:active { cursor: grabbing; }
+
+.osio-portal-scene figcaption {
+  position: absolute;
+  right: clamp(24px, 4vw, 48px);
+  bottom: clamp(20px, 4vh, 40px);
+  left: clamp(24px, 4vw, 48px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+  font-size: 13px;
+  color: var(--osio-fg-muted);
+  pointer-events: none;
+}
+
+.osio-portal-scene figcaption p {
+  margin: 0;
+  font-family: var(--osio-font-heading);
+  font-size: 15px;
+  font-style: italic;
+}
+
+.osio-portal-legend {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.osio-portal-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.osio-portal-legend li::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: var(--osio-radius-full);
+  background: var(--osio-fg-strong);
+}
+
+.osio-portal-legend li[data-kind="database"]::before { background: var(--osio-accent); }
+.osio-portal-legend li[data-kind="conversation"]::before { background: var(--osio-success); }
+
+@keyframes osio-portal-globe-in { from { opacity: 0; } }
+
+@media (max-width: 960px) {
+  .osio-portal {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .osio-portal-main {
+    overflow-y: visible;
+  }
+
+  .osio-portal-scene {
+    order: -1;
+    height: clamp(240px, 36vh, 360px);
+    border-left: 0;
+    border-bottom: 1px solid var(--osio-border-default);
+  }
+
+  .osio-portal-scene figcaption p {
+    display: none;
+  }
+
+  .osio-portal-form {
+    justify-self: center;
+    padding-top: 32px;
+  }
+}
+
+@media (max-width: 560px) {
+  .osio-portal-scene figcaption {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .osio-portal-globe { animation: none; }
+}
