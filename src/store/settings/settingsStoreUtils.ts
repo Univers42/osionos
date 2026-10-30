@@ -54,7 +54,8 @@ export function settingsJwt(): string | null {
 /**
  * What a failed settings call means:
  * - `unavailable`: this server does not serve the route yet (a 404 with no
- *   code or the client's default `API_ERROR`, a 501, or a 503 whose code names
+ *   code, the client's default `API_ERROR`, or a `_disabled` code such as
+ *   `passkeys_disabled`, a 501, or a 503 whose code names
  *   the feature unavailable or off) — the store keeps working locally, with no
  *   error toast. A 404 that carries any other code (`team_not_found`) is the
  *   route answering, so it is `failed` and the caller shows its message.
@@ -69,7 +70,7 @@ export function settingsJwt(): string | null {
  * answered that way is silently kept local; the fix is to give it a code.
  */
 export function classifySettingsError(status: number, code?: string | null): 'unavailable' | 'sudo_required' | 'failed' {
-  if (status === 404 && (!code || code === 'API_ERROR')) return 'unavailable';
+  if (status === 404 && (!code || code === 'API_ERROR' || code.endsWith('_disabled'))) return 'unavailable';
   if (status === 501) return 'unavailable';
   if (status === 503 && code && (code.endsWith('_unavailable') || code.endsWith('_off'))) return 'unavailable';
   if (status === 403 && code === 'sudo_required') return 'sudo_required';
@@ -147,33 +148,6 @@ export async function trySettingsPatch<T>(path: string, body: unknown, jwt = set
 export async function trySettingsDelete<T>(path: string, jwt = settingsJwt()): Promise<T | null> {
   if (!API_BASE || !jwt) return null;
   return withSettingsFallback(path, () => api.delete<T>(path, jwt));
-}
-
-export async function trySettingsUpload<T>(path: string, formData: FormData): Promise<T | null> {
-  const jwt = settingsJwt();
-  if (!API_BASE || !jwt) return null;
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${jwt}` },
-    body: formData,
-  });
-  if (!response.ok) {
-    // The body carries the server's stable error code, so the same
-    // "not offered here" classification applies to an upload.
-    const body = (await response.clone().json().catch(() => null)) as { code?: unknown; error?: string; message?: string } | null;
-    const code = typeof body?.code === 'string' ? body.code : 'API_ERROR';
-    const error = new ApiError(
-      body?.error ?? body?.message ?? `POST ${path} -> ${response.status} ${response.statusText}`,
-      response.status,
-      code,
-    );
-    if (isSettingsEndpointUnavailable(error)) {
-      logUnavailableOnce(path);
-      return null;
-    }
-    throw error;
-  }
-  return response.json() as Promise<T>;
 }
 
 export function scheduleSettingsWrite(key: string, write: () => Promise<void>) {

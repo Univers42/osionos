@@ -96,6 +96,12 @@ test("classifySettingsError: 404 by code (missing and API_ERROR are a missing ro
   assert.equal(classifySettingsError(404, "workspace_not_found"), "failed");
 });
 
+test("classifySettingsError: a 404 naming a switched-off feature is unavailable, not a failure", () => {
+  assert.equal(classifySettingsError(404, "passkeys_disabled"), "unavailable");
+  assert.equal(classifySettingsError(404, "publish_disabled"), "unavailable");
+  assert.equal(classifySettingsError(404, "passkey_not_found"), "failed");
+});
+
 test("classifySettingsError: 501 -> unavailable", () => {
   assert.equal(classifySettingsError(501), "unavailable");
 });
