@@ -16,7 +16,10 @@ import { readFileSync } from 'node:fs';
 
 export const SERVER_PIN = JSON.parse(readFileSync(new URL('./server-pin.json', import.meta.url), 'utf8'));
 
-const CLIENT_PACKAGES = /^(@codingame\/monaco-vscode-|monaco-editor$|vscode$)/;
+// `monaco-editor` and `vscode` count only as aliases of the library; the app's upstream
+// monaco-editor (code pages, until Phase 2) is another editor and is not pinned here.
+const isClientPackage = ([name, spec]) => name.startsWith('@codingame/monaco-vscode-')
+	|| ((name === 'monaco-editor' || name === 'vscode') && String(spec).startsWith('npm:@codingame/'));
 
 export function assertPinsAgree(pin) {
 	if (pin.client.vscode !== pin.server.vscode) {
@@ -30,7 +33,7 @@ export function assertPinsAgree(pin) {
 export function clientPinViolations(deps, pin) {
 	const exact = pin.client.version;
 	return Object.entries(deps)
-		.filter(([name]) => CLIENT_PACKAGES.test(name))
+		.filter(isClientPackage)
 		.filter(([, spec]) => spec !== exact && !spec.endsWith(`@${exact}`))
 		.map(([name, spec]) => `${name}@${spec}`);
 }

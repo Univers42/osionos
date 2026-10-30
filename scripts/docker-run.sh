@@ -33,6 +33,8 @@ run_inside_container() {
     # heap ("Ineffective mark-compacts near heap limit", measured 2026-09-19); 3 G
     # is enough with room, and stays under this VM's 7.5 G with the stack running.
     build) exec sh -c 'pnpm exec tsc -p packages/legacy-graph-engine/tsconfig.json --noEmit && pnpm exec tsc -p tsconfig.markdown-engine.json --noEmit && pnpm exec tsc --noEmit && NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build' ;;
+    # The IDE page osionos-node serves on the IDE origin (ADR-006), built apart from the app.
+    build-ide) exec sh -c 'NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build --config vite.ide.config.ts' ;;
     # Offline-mode prod bundle for the perf benches (same env as the Playwright webServer).
     build-offline) exec sh -c 'VITE_API_URL= VITE_REQUIRE_BRIDGE_SESSION=false VITE_ALLOW_OFFLINE_MODE=true VITE_BAAS_URL= VITE_BAAS_API_KEY= VITE_BAAS_LIVE_MOUNTS= NODE_OPTIONS=--max-old-space-size=3072 pnpm exec vite build' ;;
     preview) exec pnpm exec vite preview --host 0.0.0.0 "$@" ;;
@@ -80,6 +82,9 @@ playground_mongo_port="${PLAYGROUND_MONGO_PORT:-27018}"
 case "${COMMAND}" in
   build)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh build "$@"
+    ;;
+  build-ide)
+    MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh build-ide "$@"
     ;;
   build-offline)
     MONGO_PORT="${playground_mongo_port}" "${compose[@]}" run --rm --no-deps playground bash scripts/docker-run.sh build-offline "$@"
