@@ -65,6 +65,7 @@ import {
 import { inFilter } from './bridge-paging.mjs';
 import {
 	attachmentEntry,
+	deleteMessageAttachments,
 	handleGallery,
 	handleLinkPreview,
 	handleServe,
@@ -504,9 +505,10 @@ async function deleteMessage(deps, session, messageId, response, config) {
 	const existing = await fetchMessageForDelete(config, deps.fetchImpl, session.userId, messageId);
 	await rest(config, deps.fetchImpl, `osionos_messages?id=eq.${messageId}`, {
 		method: 'PATCH',
-		body: { deleted_at: new Date().toISOString() },
+		body: { deleted_at: new Date().toISOString(), attachments: [] },
 		prefer: 'return=minimal',
 	});
+	await deleteMessageAttachments(deps, config, messageId);
 	const channel = await fetchChannel(config, deps.fetchImpl, existing.channel_id);
 	await publishRealtime({
 		topic: chatTopic(channel),

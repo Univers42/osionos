@@ -15,6 +15,7 @@
 // from the server is shown, and what this user types is posted to that channel.
 // Live delivery to the other client is the realtime path (#172), which this build
 // has off; tests/bridge/bridge-realtime-*.test.mjs prove the server publishes.
+// #177: a file attached in the DM shows its upload progress until the bridge answers.
 
 import { expect, test } from "@playwright/test";
 
@@ -31,9 +32,16 @@ const fromBob = {
   content: "Are we still on for the review at three?", createdAt: "2026-10-30T09:05:00.000Z", reactions: [],
 };
 
+const draftOf = (url) => ({
+  type: "file", bucket: "chat", objectKey: `${"b".repeat(64)}.pdf`, sha256: "b".repeat(64),
+  name: url.searchParams.get("name"), mimeType: "application/pdf", size: 200_000, metadata: {},
+});
+
 /** The DM channel's messages, who the client opened a DM with, and every message it posted. */
 async function stubDm(page) {
-  const state = { messages: [fromBob], openedWith: [], posted: [] };
+  let releaseUpload;
+  const uploadAnswered = new Promise((resolve) => { releaseUpload = resolve; });
+  const state = { messages: [fromBob], openedWith: [], posted: [], releaseUpload };
   await stubBridge(page, (url, request) => {
     const method = request.method();
     const profile = answerProfileReads(url);
@@ -43,6 +51,7 @@ async function stubDm(page) {
       return { json: { channel: DM } };
     }
     if (url.pathname === "/api/chat/channels" && method === "GET") return { json: { channels: [DM] } };
+    if (url.pathname === "/api/chat/uploads" && method === "POST") return uploadAnswered.then(() => ({ status: 201, json: { ok: true, attachment: draftOf(url) } }));
     if (url.pathname !== `/api/chat/channels/${DM.id}/messages`) return undefined;
     if (method === "GET") return { json: { channelId: DM.id, workspaceId: DM.workspaceId, messages: state.messages } };
     if (method !== "POST") return undefined;
@@ -78,5 +87,24 @@ test.describe("direct messages (bridge stub)", () => {
     await expect(page.getByText("Yes, see you at three.")).toBeVisible();
     await expect(composer).toHaveValue("");
     expect(bridge.posted).toEqual(["Yes, see you at three."]);
+  });
+
+  test("an attached file shows its upload progress until the bridge answers", async ({ page, baseURL }) => {
+    const bridge = await stubDm(page);
+    await openSignedIn(page, baseURL);
+    await openProfileFromPalette(page, "Bob");
+    await page.getByRole("button", { name: "Message", exact: true }).click();
+    await expect(page.getByText(fromBob.content)).toBeVisible();
+
+    const chooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Attach file" }).click();
+    await (await chooser).setFiles({ name: "plan.pdf", mimeType: "application/pdf", buffer: Buffer.alloc(200_000, 1) });
+
+    const bar = page.getByRole("progressbar", { name: "Uploading plan.pdf" });
+    await expect(bar).toBeVisible();
+    await expect(page.getByRole("button", { name: "Remove attachment" })).toHaveCount(0);
+    bridge.releaseUpload();
+    await expect(bar).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Remove attachment" })).toBeVisible();
   });
 });
