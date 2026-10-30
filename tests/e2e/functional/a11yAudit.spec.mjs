@@ -136,6 +136,7 @@ for (const theme of ["light", "dark"]) {
       await expect(person).toBeVisible();
       expect(await violations(page)).toEqual([]);
       await expect(person.getByRole("button")).toHaveCount(0);
+      await page.screenshot({ path: test.info().outputPath("people-results.png"), animations: "disabled" });
 
       await search.press("Enter");
       await expect(page.getByRole("region", { name: "Title bar: Ada Lovelace" })).toBeVisible();
