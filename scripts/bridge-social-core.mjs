@@ -29,6 +29,7 @@
  * over it first and falls back to the URL only when nothing was sent).
  */
 
+import { randomUUID } from 'node:crypto';
 import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { keepAliveFetch } from './bridge-keepalive-post.mjs';
 import { socketPublishRoute } from './bridge-publish-socket.mjs';
@@ -380,12 +381,15 @@ export function userTopic(notifyToken) {
  * messageId?, preview? }]. One batch insert + one token lookup + N publishes.
  */
 export async function emitNotifications(deps, config, notifs) {
-	const valid = (Array.isArray(notifs) ? notifs : []).filter((n) => n && UUID_REGEX.test(String(n.recipientId)));
+	// The id is chosen here, not by the table, so the live event names the row the app may mark read or delete.
+	const valid = (Array.isArray(notifs) ? notifs : [])
+		.filter((n) => n && UUID_REGEX.test(String(n.recipientId)))
+		.map((n) => ({ ...n, id: randomUUID() }));
 	if (valid.length === 0) return;
 	await rest(config, deps.fetchImpl, 'osionos_notifications', {
 		method: 'POST',
 		body: valid.map((n) => ({
-			user_id: n.recipientId, type: n.type, actor_id: n.actorId ?? null,
+			id: n.id, user_id: n.recipientId, type: n.type, actor_id: n.actorId ?? null,
 			channel_id: n.channelId ?? null, message_id: n.messageId ?? null,
 			preview: typeof n.preview === 'string' ? n.preview.slice(0, 280) : null,
 		})),
@@ -410,7 +414,7 @@ export async function emitNotifications(deps, config, notifs) {
 		await publishRealtime({
 			topic: userTopic(token),
 			eventType: 'notification_created',
-			payload: { type: n.type, actorName: n.actorName ?? null, channelId: n.channelId ?? null, messageId: n.messageId ?? null, preview: n.preview ?? null },
+			payload: { id: n.id, type: n.type, actorName: n.actorName ?? null, channelId: n.channelId ?? null, messageId: n.messageId ?? null, preview: n.preview ?? null },
 			fetchImpl: deps.fetchImpl,
 			env: deps.env,
 		});
