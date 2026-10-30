@@ -94,6 +94,9 @@ cd services/osionos-ai/spikes/a1 && sh encoders.sh sentiment2     # run 2026-10-
 | TF-IDF + LR baseline (macro-F1) | 0.503 | 0.542 | 0.502 |
 | Paired difference, CI 95% | +0.209 [+0.170, +0.252] | +0.181 [+0.136, +0.224] | +0.195 [+0.158, +0.238] |
 
+The confusion matrices of the model and of the baseline, per language, are in the same RESULTS.md (rebuilt
+by `services/osionos-ai/spikes/a1/encoders/sentiment-matrices.py`, which asserts the macro-F1 above).
+
 The pinned model: revision `82107f4ccba672c9ab1eee538e727e462cad21de`, served by TEI `/predict`. Single text
 p50 17.5 ms, batch of 32 p50 612.7 ms, RSS 2.32 GiB — measured with host load 12–17, so latencies are upper bounds.
 
