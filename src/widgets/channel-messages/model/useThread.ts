@@ -11,9 +11,10 @@
 /* ************************************************************************** */
 
 /**
- * One thread's messages (root + replies), fetched once then kept live off the
- * channel realtime topic — only `message_created` frames whose threadRootId
- * matches this root are appended (replies also appear inline in the timeline).
+ * One thread's messages (root + replies), fetched on open and again after a
+ * reconnect, then kept live off the channel realtime topic — only `message_created`
+ * frames whose threadRootId matches this root are appended (replies also appear
+ * inline in the timeline).
  */
 
 import { useEffect, useState } from 'react';
@@ -42,11 +43,15 @@ export function useThread(rootId: string, channelId: string, workspaceId: string
     let alive = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset loading before the refetch triggered by a thread (rootId/channel/workspace) change
     setLoading(true);
-    fetchThread(rootId)
-      .then((found) => { if (alive) setMessages(found); })
+    const read = () => fetchThread(rootId).then((found) => { if (alive) setMessages(found); });
+    read()
       .catch(() => undefined)
       .finally(() => { if (alive) setLoading(false); });
     if (!workspaceId) return () => { alive = false; };
+    // After a reconnect the thread is read again: the gateway does not replay the gap (#172).
+    const catchUp = () => {
+      read().catch((error: unknown) => console.warn('[chat] catching up a thread after a reconnect failed:', error));
+    };
     const dispose = subscribeTopic(chatTopic(workspaceId, channelId), (frame) => {
       if (frame.event_type !== 'message_created') return;
       const payload = (frame.payload ?? {}) as ThreadFrame;
@@ -65,7 +70,7 @@ export function useThread(rootId: string, channelId: string, workspaceId: string
         threadRootId: rootId,
         replyTo: null,
       }]);
-    });
+    }, catchUp);
     return () => { alive = false; dispose(); };
   }, [rootId, channelId, workspaceId]);
 

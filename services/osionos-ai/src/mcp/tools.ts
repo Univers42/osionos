@@ -60,8 +60,9 @@ export type McpTool = AnyReadTool | AnyWriteTool;
 
 /**
  * The tools this token sees: the reads with `read`, the writes with
- * `write_approval`. Never `build_plan`, and never a content write (C23 is not
- * met): only the three page tools of WRITE_TOOLS.
+ * `write_approval`. Never `build_plan`. Content is only ever added, through the
+ * bridge's atomic append (`add_blocks`, C226); a rewrite of existing text stays
+ * out until C227.
  */
 export function toolsFor(principal: PatPrincipal): readonly McpTool[] {
 	const tools: McpTool[] = [];

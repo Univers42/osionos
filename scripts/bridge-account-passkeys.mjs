@@ -35,7 +35,6 @@ const TABLE = 'webauthn_credentials';
 const COLUMNS = 'id,user_id,name,transports,created_at,last_used_at';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NICKNAME_MAX = 64;
-// eslint-disable-next-line no-control-regex -- rejecting control characters is the point.
 const CONTROL = /[\u0000-\u001f\u007f]/;
 const PATH = /^\/api\/account\/passkeys(?:\/([^/]+))?$/;
 

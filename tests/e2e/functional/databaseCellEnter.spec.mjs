@@ -180,7 +180,9 @@ test.describe("database-cell-enter", () => {
     }
   });
 
-  test("a two-line Name keeps its line break on the record page, where Shift+Enter adds another", async ({ page }) => {
+  // #162: the record page also listed Name as a property row, a second editor for
+  // the title whose edits never reached the table. The page title is the one editor.
+  test("a two-line Name keeps its line break in the record page title, and a title edit reaches the table", async ({ page }) => {
     const block = await freshTable(page);
     const headers = await block.locator("thead th").allTextContents();
     const name = cellIn(block, headers, "Name");
@@ -194,17 +196,46 @@ test.describe("database-cell-enter", () => {
     await name.hover();
     await name.getByText("OPEN").click();
 
-    // The record page lists Name as an editable property; a one-line <input>
-    // drops the "\n" from its value, and an edit there saved the merged text.
-    const field = page.getByRole("textbox", { name: "Name", exact: true });
-    await expect(field).toHaveValue("first\nsecond");
-    await field.click();
-    await field.press("End");
-    await field.press("Shift+Enter");
-    await field.pressSequentially("third");
-    await expect(field).toHaveValue("first\nsecond\nthird");
-    await field.press("Enter");
-    await expect(field).not.toBeFocused();
-    await expect(field).toHaveValue("first\nsecond\nthird");
+    const record = page.locator("aside[data-open-in]");
+    const title = record.getByRole("textbox", { name: "Page title" });
+    await expect(title).toHaveValue("first\nsecond");
+    await expect(record.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
+    await title.click();
+    await title.press("ControlOrMeta+End");
+    await title.pressSequentially(" third");
+    await expect(title).toHaveValue("first\nsecond third");
+    await record.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(name).toContainText("second third");
+  });
+
+  // #162: the record page's metadata rows are shown by default and hidden from its own
+  // page menu, without touching the values.
+  test("a record page shows its properties by default and its page menu hides them", async ({ page }) => {
+    const block = await freshTable(page);
+    await addPropertyOfType(block, page, "Number", "Score");
+    const headers = await block.locator("thead th").allTextContents();
+    const score = cellIn(block, headers, "Score");
+    await selectCell(block, score);
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("42");
+    await page.keyboard.press("Enter");
+    const name = cellIn(block, headers, "Name");
+    await name.hover();
+    await name.getByText("OPEN").click();
+
+    const record = page.locator("aside[data-open-in]");
+    const properties = record.getByRole("group", { name: "Page properties" });
+    await expect(properties).toBeVisible();
+    await expect(properties).toContainText("Score");
+
+    await record.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByTestId("page-menu-appearance").click();
+    const toggle = page.getByTestId("page-menu-appearance-panel").getByRole("button", { name: "Page properties", exact: true });
+    await toggle.click();
+    await expect(properties).toBeHidden();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await toggle.click();
+    await expect(properties).toBeVisible();
+    await expect(properties.getByLabel("Score", { exact: true })).toHaveValue("42");
   });
 });

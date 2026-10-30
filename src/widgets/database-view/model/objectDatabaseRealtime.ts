@@ -27,6 +27,7 @@ import { LiveRealtimeSocket, type LiveRealtimeEventFrame } from '@/shared/notion
 import { resolveLiveRealtimeToken, liveRealtimeUrl } from '@/shared/notion-database-sys/src/store/live/liveRealtime';
 import { getActivePageJwt } from '@/shared/api/client';
 import { chatWsEnabled, subscribeTopic } from '@/services/realtime-messages/wsTransport';
+import { resumeSignal } from '@/services/realtime-messages/topicFanOut';
 
 const COALESCE_MS = 300; // collapse a burst of remote edits into one re-hydrate
 
@@ -73,7 +74,8 @@ export function objectDbNudgeHandler(rehydrate: () => void): (frame: LiveRealtim
 }
 
 /** Subscribe once to this owner's object-DB change stream; each nudge from another
- *  tab or browser runs `rehydrate` (coalesced). Idempotent — safe to call on every
+ *  tab or browser runs `rehydrate` (coalesced), and so does a reconnect, whose gap the
+ *  gateway never replays (#172). Idempotent — safe to call on every
  *  hydration attempt. */
 export function startObjectDatabaseRealtime(rehydrate: () => void): void {
   if (unsubscribe) return; // already live — one socket per owner
@@ -85,7 +87,7 @@ export function startObjectDatabaseRealtime(rehydrate: () => void): void {
   const token = resolveLiveRealtimeToken();
   if (token) {
     // A credential the gateway accepts (a baked token): open the socket directly.
-    const socket = new LiveRealtimeSocket({ url, token, topic, onEvent });
+    const socket = new LiveRealtimeSocket({ url, token, topic, onEvent, ...resumeSignal(rehydrate) });
     socket.start();
     unsubscribe = () => socket.stop();
     return;
@@ -93,7 +95,7 @@ export function startObjectDatabaseRealtime(rehydrate: () => void): void {
   // No usable token (the bridge session JWT answers AUTH_FAILED): ask the bridge
   // for a subscribe-only token on this topic through the shared transport.
   if (!chatWsEnabled()) return;
-  unsubscribe = subscribeTopic(topic, onEvent);
+  unsubscribe = subscribeTopic(topic, onEvent, rehydrate);
 }
 
 /** Tear down on account switch so the next account resubscribes on its own topic. */

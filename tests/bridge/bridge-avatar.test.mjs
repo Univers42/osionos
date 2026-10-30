@@ -107,6 +107,20 @@ describe('POST /api/profile/avatar', () => {
 		});
 	});
 
+	// #171: three variants at their caps are ~539KB of base64, past the old 512KB body limit,
+	// so a set the route accepts variant by variant was refused whole with a 413.
+	it('takes a set whose every variant sits at its cap', async () => {
+		await avatarBridge(async ({ base }) => {
+			const caps = { 64: 24 * 1024, 160: 80 * 1024, 460: 300 * 1024 };
+			const body = { variants: Object.fromEntries(SIZES.map((size) => {
+				const image = webpFixture({ width: size, height: size });
+				return [String(size), base64(Buffer.concat([image, Buffer.alloc(caps[size] - image.length, 7)]))];
+			})) };
+			const result = await send(base, '/api/profile/avatar', asA, { method: 'POST', body: JSON.stringify(body) });
+			assert.equal(result.status, 201, result.text);
+		});
+	});
+
 	it('refuses SVG and HTML bytes, writing nothing', async () => {
 		await avatarBridge(async ({ base, storage, mock }) => {
 			for (const bytes of [Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), htmlFixture()]) {

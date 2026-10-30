@@ -62,6 +62,11 @@ test("the blocks read as one `[type] text` line each, every character kept (C232
   assert.equal(blocks?.value, "[heading_2] Release\n[paragraph] Released in 2011.");
 });
 
+test("a code block's language is on its line, so a diagram reads as one (#34)", () => {
+  const args = approvalArgs({ blocks: [{ type: "code", language: "mermaid", content: "flowchart TD\n  A --> B" }] });
+  assert.equal(args[0].value, "[code mermaid] flowchart TD\n  A --> B");
+});
+
 test("a list that is more than type and text stays its JSON: nothing is hidden", () => {
   const args = approvalArgs({ content: [{ id: "b1", type: "paragraph", content: "x" }] });
   assert.equal(args[0].value, '[{"id":"b1","type":"paragraph","content":"x"}]');

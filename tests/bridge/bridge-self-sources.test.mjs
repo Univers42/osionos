@@ -35,7 +35,7 @@ process.env.OSIONOS_ACTIVITY = '1';
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-// The columns of the tables the seven sources read, as the root migrations create them.
+// The columns of the tables the eight sources read, as the root migrations create them.
 const TABLE_COLUMNS = {
 	osionos_pages: [
 		'id', 'workspace_id', 'parent_page_id', 'owner_id', 'title', 'icon', 'cover', 'database_id',
@@ -48,6 +48,7 @@ const TABLE_COLUMNS = {
 		'id', 'requester_id', 'addressee_id', 'status', 'intro_message', 'source', 'pair_key',
 		'created_at', 'responded_at',
 	],
+	osionos_follows: ['follower_id', 'followee_id', 'created_at'],
 	osionos_workspace_members: ['workspace_id', 'user_id', 'role', 'permissions', 'created_at', 'updated_at'],
 	osionos_workspaces: ['id', 'owner_id', 'name', 'slug', 'source', 'settings', 'created_at', 'updated_at'],
 	osionos_sessions: [
@@ -114,9 +115,9 @@ function grantFromSql(dir) {
 }
 
 describe('the self source registry', () => {
-	it('holds exactly the seven shipped sources, and nothing else', () => {
+	it('holds exactly the eight shipped sources, and nothing else', () => {
 		assert.deepEqual(SELF_SOURCES.map((source) => source.id), [
-			'my-pages', 'my-tasks', 'my-published', 'my-connections', 'my-workspaces', 'my-sessions', 'my-activity',
+			'my-pages', 'my-tasks', 'my-published', 'my-connections', 'my-followers', 'my-workspaces', 'my-sessions', 'my-activity',
 		]);
 		for (const source of SELF_SOURCES) {
 			assert.equal(selfSourceById(source.id), source, `${source.id} is found by its id`);

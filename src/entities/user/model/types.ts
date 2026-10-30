@@ -87,7 +87,7 @@ export interface UserStore {
   handleSessionRevoked: (token: string) => void;
   refreshWorkspaces: (userId: string) => Promise<void>;
   createWorkspace: (name: string, slug: string) => Promise<Workspace | null>;
-  renameWorkspace: (workspaceId: string, name: string, icon?: string) => void;
+  renameWorkspace: (workspaceId: string, name: string, icon?: string) => Promise<void>;
   deleteWorkspace: (workspaceId: string) => Promise<DeleteWorkspaceOutcome>;
   importBridgeSession: (session: UserSession, persona: StaticPersona, expiresAt?: string) => void;
 

@@ -170,11 +170,19 @@ export default [
     },
   },
   {
-    // The bridge's server-side modules are node tooling too: they run under plain
-    // node, in the container of the bridge, never in the browser bundle. The
-    // repo's lint command does not reach the root scripts/ folder, so a gate
-    // that lints one of these files on its own needs node's globals declared.
-    files: ["scripts/bridge-*.mjs"],
+    // The root scripts/ (the bridge's ~180 modules, the IDE helpers, the seeders)
+    // run under plain node, never in the browser bundle. `lint` and `quality`
+    // reach them since #59: two release bugs were calls to removed functions
+    // that a fail-closed catch turned into empty results.
+    files: ["scripts/**/*.{mjs,js,cjs}"],
+    rules: {
+      // Input guards reject C0 control characters on purpose (`/[\x00-\x1f]/`).
+      "no-control-regex": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true },
+      ],
+    },
     languageOptions: {
       globals: {
         AbortController: "readonly",
@@ -187,6 +195,7 @@ export default [
         TextEncoder: "readonly",
         URL: "readonly",
         URLSearchParams: "readonly",
+        clearImmediate: "readonly",
         clearInterval: "readonly",
         clearTimeout: "readonly",
         console: "readonly",
@@ -195,9 +204,31 @@ export default [
         performance: "readonly",
         process: "readonly",
         queueMicrotask: "readonly",
+        setImmediate: "readonly",
         setInterval: "readonly",
         setTimeout: "readonly",
         structuredClone: "readonly",
+      },
+    },
+  },
+  {
+    // The Playwright drivers and benches hand callbacks to page.evaluate(); those
+    // bodies run in the page. The bridge and IDE modules stay node-only.
+    // Caveat: a browser global used outside an evaluate callback in a driver lints
+    // clean and throws at run time; only the bridge-*/ide-* modules are protected.
+    files: ["scripts/**/*.{mjs,js,cjs}"],
+    ignores: ["scripts/bridge-*.mjs", "scripts/ide-*.mjs"],
+    languageOptions: {
+      globals: {
+        PerformanceObserver: "readonly",
+        PointerEvent: "readonly",
+        WebSocket: "readonly",
+        document: "readonly",
+        getComputedStyle: "readonly",
+        localStorage: "readonly",
+        navigator: "readonly",
+        requestAnimationFrame: "readonly",
+        window: "readonly",
       },
     },
   },

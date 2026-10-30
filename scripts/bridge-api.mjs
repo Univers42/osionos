@@ -20,7 +20,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pagesToGraph } from './bridge-graph.mjs';
 import { writeJsonResponse } from './bridge-json-response.mjs';
-import { LINK_EDGES_RPC, PAGE_ROWS_RPC, readLinkEdges } from './bridge-graph-edges.mjs';
+import { readLinkEdges } from './bridge-graph-edges.mjs';
 import { overviewRequest, mergeGraphs } from './bridge-graph-data.mjs';
 import { pkColumnForEngine, recordNoteId, recordNotePageBody, recordNoteRefresh, recordSubitemNoteBody } from './bridge-records.mjs';
 import { MARKETPLACE_WORKSPACE_ID, canChangePageSharing, canReadAsNonMember, canReadPageRow, canReadPageRowAsMember, ownerHoldsPage, pageVisibility, sameId, withoutForeignSharingChanges } from './bridge-page-read.mjs';
@@ -36,7 +36,7 @@ import { BAAS_FETCH_TIMEOUT_MS, readBaasJson } from './bridge-baas-body.mjs';
 import { clientIpBootWarning, handleAuthExchange, EXCHANGE_PATH } from './bridge-auth-exchange.mjs';
 import { resolveTurnstileToken, turnstileBootLine, turnstileSettingsFromEnv } from './bridge-turnstile.mjs';
 import { sessionCutoffsFromConfig, startSessionCutoffPoller, writeSessionCutoff } from './bridge-session-cutoff.mjs';
-import { sessionRevocationsFromConfig, startSessionRevocationPoller } from './bridge-session-revocations.mjs';
+import { startSessionRevocationPoller } from './bridge-session-revocations.mjs';
 import { bridgeBootIsDegraded, bridgeBootLine, bridgeHealthState, deliveredAnswer, recordDeliveredSession, sessionClock, sessionStateFromConfig } from './bridge-sessions.mjs';
 import { createAccountHandler } from './bridge-account-mounts.mjs';
 import { mfaBootLine, mfaRequiredFor } from './bridge-account-mfa-state.mjs';
@@ -492,6 +492,16 @@ function assertPageWriteFitsEdge(path, method, payload) {
 	if (payload === undefined || (method !== 'POST' && method !== 'PATCH') || !/^osionos_pages(?:\?|$)/.test(path)) return;
 	if (Buffer.byteLength(payload) <= EDGE_PAGE_BODY_LIMIT_BYTES) return;
 	throw Object.assign(new Error('This page is too large to save (over 128 KB). Move pictures or long pasted text into files, then edit again.'), { status: 413, code: 'page_too_large' });
+}
+
+/**
+ * A failure that is the BaaS's, not the bridge's: an answered error (any `status`), our
+ * timeout, or a refused connection. A fail-closed catch swallows only these (#59).
+ * Caveat: fetch reports a refused connection as a TypeError, so a bridge TypeError
+ * ("x is not a function") inside the guarded call is swallowed too; keep the try narrow.
+ */
+function isBaasFailure(error) {
+	return Number.isInteger(error?.status) || error?.name === 'AbortError' || error instanceof TypeError;
 }
 
 async function baasRest(config, fetchImpl, path, { method = 'GET', body, prefer } = {}) {
@@ -1372,16 +1382,6 @@ async function ownerOrWorkspaceAccess(request, row, permission, config, fetchImp
 	}
 	if (!member) throw pageNotFound();
 	return workspaceAccessContext(token, workspaceId, member, permission);
-}
-
-/** The caller's own membership context in `workspaceId` holding `permission`, or null when they lack it. */
-async function memberAccessOrNull(request, workspaceId, permission, config, fetchImpl) {
-	try {
-		return await requireWorkspaceAccess(request, workspaceId, permission, config, fetchImpl);
-	} catch (error) {
-		if (error?.status === 403) return null;
-		throw error;
-	}
 }
 
 /**
@@ -3738,6 +3738,7 @@ async function handleRecordsPost(url, request, response, config, fetchImpl) {
 // tenant api-key. Gated by a valid app session.
 
 const DB_SCHEMA_PATH = /^\/api\/databases\/([^/]+)\/schema$/;
+const DB_PROBE_PATH = /^\/api\/databases\/([^/]+)\/probe$/;
 const DB_ROWS_PATH = /^\/api\/databases\/([^/]+)\/tables\/([^/]+)$/;
 const DB_DDL_PATH = /^\/api\/databases\/([^/]+)\/schema\/ddl$/;
 const DB_SQLRO_PATH = /^\/api\/databases\/([^/]+)\/sql-ro$/;
@@ -3805,9 +3806,60 @@ async function handleDatabaseSchema(match, request, response, config, fetchImpl)
 	return true;
 }
 
+/** GET /api/databases/:dbId/probe — live engine version + TLS posture via the query-router. */
+async function handleDatabaseProbe(match, request, response, config, fetchImpl) {
+	const dbId = requireUuid(decodeURIComponent(match[1]), 'dbId');
+	const { member } = await resolveAccessibleMount(request, dbId, config, fetchImpl);
+	if (!canReadDatabase(member)) throw databasePermissionError('read');
+	let probe;
+	try {
+		probe = await baasQueryGet(config, fetchImpl, `/${dbId}/probe`);
+	} catch (error) {
+		if (error?.status === 404) {
+			json(response, 200, { dbId, available: false }, config);
+			return true;
+		}
+		if (error?.status === 429) {
+			json(response, 200, { dbId, available: false, retryAfter: 1 }, config);
+			return true;
+		}
+		throw error;
+	}
+	const body = { dbId, available: true };
+	for (const key of ['engine', 'server_version', 'tls', 'tls_version']) {
+		if (typeof probe?.[key] === 'string') body[key] = probe[key];
+	}
+	json(response, 200, body, config);
+	return true;
+}
+
 // The keys grobase's mount descriptor may carry (tenant-control GET .../mounts/{id}/descriptor).
 // The bridge re-picks them so a future upstream field never reaches the browser unreviewed.
 const DESCRIPTOR_KEYS = ['id', 'name', 'engine', 'isolation', 'credential_mode', 'location', 'host', 'port', 'file', 'database', 'tls', 'created_at', 'last_healthy_at'];
+// The data plane's per-engine flags the UI may show (grobase data-plane-core capability.rs).
+const CAPABILITY_FLAGS = ['read', 'write', 'upsert', 'batch', 'aggregate', 'introspect', 'schema_ddl', 'transactions'];
+// Caveat: 5 min — a data plane redeployed with new engine features shows the old flags until
+// then. A failed fetch is not cached, so an outage costs one query-router call per descriptor.
+const CAPABILITIES_TTL_MS = 5 * 60 * 1000;
+const capabilitiesCache = new WeakMap();
+
+/** The closed boolean flag set the data plane advertises for `engine`, or null when it
+ *  advertises nothing for it. Throws when the query-router cannot answer. */
+async function engineCapabilities(config, fetchImpl, engine) {
+	const now = Date.now();
+	let cached = capabilitiesCache.get(config);
+	if (!cached || cached.expiresAt <= now) {
+		const payload = await baasQueryGet(config, fetchImpl, '/capabilities');
+		const byEngine = new Map((Array.isArray(payload?.engines) ? payload.engines : [])
+			.filter((entry) => typeof entry?.engine === 'string')
+			.map((entry) => [entry.engine, entry.capabilities]));
+		cached = { byEngine, expiresAt: now + CAPABILITIES_TTL_MS };
+		capabilitiesCache.set(config, cached);
+	}
+	const caps = cached.byEngine.get(engine);
+	if (!caps || typeof caps !== 'object') return null;
+	return Object.fromEntries(CAPABILITY_FLAGS.filter((flag) => typeof caps[flag] === 'boolean').map((flag) => [flag, caps[flag]]));
+}
 
 /** GET /api/databases/:dbId/descriptor — where the mount's data lives (engine, host or
  *  file, database, requested TLS), credential-free. Gated like the schema: a READ. */
@@ -3819,6 +3871,14 @@ async function handleDatabaseDescriptor(match, request, response, config, fetchI
 		? await baasTenantDescriptorGet(config, fetchImpl, dbId)
 		: await baasRegistryGet(config, fetchImpl, `/databases/${dbId}/descriptor`, config.baasTenantId);
 	const descriptor = Object.fromEntries(DESCRIPTOR_KEYS.filter((key) => raw && key in raw).map((key) => [key, raw[key]]));
+	if (typeof descriptor.engine === 'string') {
+		try {
+			const capabilities = await engineCapabilities(config, fetchImpl, descriptor.engine);
+			if (capabilities) descriptor.capabilities = capabilities;
+		} catch (error) {
+			console.warn(`[osionos-bridge] engine capabilities unavailable: ${error?.status ?? 'network'}`);
+		}
+	}
 	json(response, 200, { dbId, descriptor }, config);
 	return true;
 }
@@ -3928,6 +3988,8 @@ async function handleDatabasesGet(url, request, response, config, fetchImpl) {
 	if (url.pathname === '/api/databases') return handleDatabaseList(url, request, response, config, fetchImpl);
 	const schemaMatch = DB_SCHEMA_PATH.exec(url.pathname);
 	if (schemaMatch) return handleDatabaseSchema(schemaMatch, request, response, config, fetchImpl);
+	const probeMatch = DB_PROBE_PATH.exec(url.pathname);
+	if (probeMatch) return handleDatabaseProbe(probeMatch, request, response, config, fetchImpl);
 	const descriptorMatch = DB_DESCRIPTOR_PATH.exec(url.pathname);
 	if (descriptorMatch) return handleDatabaseDescriptor(descriptorMatch, request, response, config, fetchImpl);
 	const automationsMatch = DB_AUTOMATIONS_PATH.exec(url.pathname);
@@ -3981,10 +4043,15 @@ async function favoriteAuthRows(favoriteIds, config, fetchImpl) {
 	}
 	const byId = new Map();
 	for (const chunk of idChunks([...new Set(ids)])) {
+		const path = `osionos_pages?${inFilter('id', chunk)}&select=${PAGE_AUTH_SELECT}`;
+		let rows;
 		try {
-			const rows = await baasRest(config, fetchImpl, `osionos_pages?${inFilter('id', chunk)}&select=${PAGE_AUTH_SELECT}`);
-			for (const row of Array.isArray(rows) ? rows : []) byId.set(String(row.id).toLowerCase(), row);
-		} catch { /* fail closed: this chunk's pages stay absent */ }
+			rows = await baasRest(config, fetchImpl, path);
+		} catch (error) {
+			if (!isBaasFailure(error)) throw error;
+			continue; // fail closed: this chunk's pages stay absent
+		}
+		for (const row of Array.isArray(rows) ? rows : []) byId.set(String(row.id).toLowerCase(), row);
 	}
 	return byId;
 }
@@ -4805,7 +4872,7 @@ function oauthRedirect(response, config, returnTo, { error, connected } = {}) {
 	response.end();
 }
 
-async function handleAppConnectionsOAuthStart(url, request, response, config, fetchImpl) {
+async function handleAppConnectionsOAuthStart(url, request, response, config) {
 	const match = /^\/api\/app-connections\/oauth\/([^/]+)\/start$/.exec(url.pathname);
 	if (!match) return false;
 	const app = GOOGLE_OAUTH_APPS[match[1]];
@@ -4985,7 +5052,7 @@ async function handlePagesPost(url, request, response, config, fetchImpl, env = 
 	if (await handleMarketplacePost(url, request, response, config, fetchImpl, env)) return true;
 	if (await handleObjectDatabasesUpsert(url, request, response, config, fetchImpl)) return true;
 	if (await handleAppConnectionsUpsert(url, request, response, config, fetchImpl)) return true;
-	if (await handleAppConnectionsOAuthStart(url, request, response, config, fetchImpl)) return true;
+	if (await handleAppConnectionsOAuthStart(url, request, response, config)) return true;
 	if (await handleDatabasesPost(url, request, response, config, fetchImpl)) return true;
 	if (await handleRecordsPost(url, request, response, config, fetchImpl)) return true;
 	if (url.pathname === '/api/favorites') return handleFavoriteAdd(request, response, config, fetchImpl);
