@@ -14,18 +14,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { cx } from "@osionos/ui/shared/classNames";
 import { isUnifiedSearchEnabled } from "@/shared/config/featureFlags";
-import { ConnectButton } from "@/features/connections/ConnectButton";
 import { useUserStore } from "@/features/auth";
 import type { PaletteCommand } from "../model/commands";
 import { matchCommands, searchMessagesPalette, searchPages, searchPagesRemote, type PaletteResult, withoutArchived } from "../model/search";
 import { searchPeoplePalette } from "../model/searchPeople";
 import { isCommandMode, usePalette } from "../model/usePalette";
 import { usePageStore } from "@/store/usePageStore";
-
-/** Pull the peer id back out of a `person:<id>` palette result id. */
-function personId(result: PaletteResult): string | null {
-  return result.kind === "person" ? result.id.slice("person:".length) : null;
-}
 
 interface TopBarSearchProps {
   commands: PaletteCommand[];
@@ -162,37 +156,31 @@ export const TopBarSearch: React.FC<TopBarSearchProps> = ({ commands }) => {
               {searching ? "Searching…" : `No ${command ? "commands" : "pages"} found`}
             </li>
           )}
-          {results.map((result, index) => {
-            const peerId = personId(result);
-            return (
+          {results.map((result, index) => (
             // The option itself is the click target: a button inside an option is a nested
-            // control assistive tech cannot reach; focus stays on the combobox (#224).
+            // control assistive tech cannot reach; focus stays on the combobox (#224). So a
+            // person's Connect button lives on the profile the option opens, not here.
             <li
               key={result.id}
               id={`osio-topbar-option-${index}`}
               role="option"
               aria-selected={index === active}
               onPointerEnter={() => setActive(index)}
-              onClick={(event) => {
-                if ((event.target as Element).closest("button")) return;
-                activate(result);
-              }}
+              onClick={() => activate(result)}
               className={cx(
-                "flex w-full cursor-pointer items-center gap-2 rounded-[var(--osio-radius-sm)] pr-2",
+                "group flex w-full cursor-pointer items-center gap-2 rounded-[var(--osio-radius-sm)] pr-2",
                 index === active ? "bg-[var(--osio-menu-item-hover-bg)]" : "hover:bg-[var(--osio-menu-item-hover-bg)]",
               )}
             >
               <span className="flex h-[var(--osio-control-h-sm)] min-w-0 flex-1 items-center justify-between gap-4 px-2 text-left text-sm text-[var(--osio-fg-default)]">
                 <span className="flex min-w-0 flex-1 items-baseline gap-2">
                   <span className="max-w-[60%] shrink-0 truncate">{result.title}</span>
-                  {result.subtitle && <span className="min-w-0 flex-1 truncate text-xs text-[var(--osio-fg-subtle)]">{result.subtitle}</span>}
+                  {result.subtitle && <span className="min-w-0 flex-1 truncate text-xs text-[var(--osio-fg-muted)] group-hover:text-[var(--osio-fg-default)] group-aria-selected:text-[var(--osio-fg-default)]">{result.subtitle}</span>}
                 </span>
-                {result.accelerator && <span className="shrink-0 font-mono text-xs text-[var(--osio-fg-subtle)]">{result.accelerator}</span>}
+                {result.accelerator && <span className="shrink-0 font-mono text-xs text-[var(--osio-fg-muted)] group-hover:text-[var(--osio-fg-default)] group-aria-selected:text-[var(--osio-fg-default)]">{result.accelerator}</span>}
               </span>
-              {peerId && <ConnectButton userId={peerId} name={result.title} size="sm" />}
             </li>
-            );
-          })}
+          ))}
         </ul>
       )}
     </div>
