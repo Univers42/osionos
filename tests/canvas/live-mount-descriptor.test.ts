@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/10/29 21:50:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/10/30 05:40:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/30 06:30:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,6 +16,7 @@ import test from "node:test";
 import {
   fetchMountDescriptor,
   fetchMountProbe,
+  formatCapabilities,
   formatMountLocation,
   formatMountProbe,
   type MountDescriptor,
@@ -99,4 +100,14 @@ test("a failed probe fetch is not cached either", async () => {
   const second = fetchMountProbe("m-probe-fail");
   assert.notEqual(second, first);
   await assert.rejects(second);
+});
+
+test("capabilities read as the supported flags in words, silent when none are named", () => {
+  assert.equal(formatCapabilities(undefined), null);
+  assert.equal(formatCapabilities({ read: false, write: false }), null);
+  assert.equal(formatCapabilities({ read: true, write: false, transactions: true, stream: true }), "Read, transactions");
+  assert.equal(
+    formatCapabilities({ read: true, write: true, upsert: true, batch: true, aggregate: true, introspect: true, schema_ddl: true, transactions: true }),
+    "Read, write, upsert, batch writes, aggregates, schema read, schema changes, transactions",
+  );
 });
