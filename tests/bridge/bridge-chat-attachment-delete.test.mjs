@@ -13,6 +13,8 @@
 // #177: deleting a chat message deletes the files uploaded with it. Before, the
 // message was soft-deleted but its attachment rows stayed, so the file was still
 // in the channel's media gallery and still served to every member.
+// The second block pins the access control the issue asks for: only the members
+// of a private channel upload to it or read what was sent there.
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -34,15 +36,18 @@ const attachment = (id, messageId) => ({
 });
 const message = (id) => ({ id, channel_id: CHANNEL, author_id: AUTHOR, content: 'see attached', deleted_at: null, attachments: [] });
 
-/** PostgREST with eq filters and DELETE, plus the storage router; records every storage DELETE. */
+/** PostgREST with eq filters and DELETE, plus the storage router; records every storage object call. */
 function fakeBaas(tables, { storageStatus = 200 } = {}) {
-	const storageDeletes = [];
-	const answer = (data, status = 200) => ({ ok: status < 400, status, text: async () => JSON.stringify(data) });
+	const storageCalls = [];
+	const answer = (data, status = 200) => ({
+		ok: status < 400, status, text: async () => JSON.stringify(data),
+		arrayBuffer: async () => new TextEncoder().encode('stored bytes').buffer, headers: new Headers({ 'content-type': 'image/png' }),
+	});
 	const fetchImpl = async (url, init = {}) => {
 		const parsed = new URL(String(url));
 		const method = init.method ?? 'GET';
 		if (parsed.pathname.startsWith('/storage/v1/object/')) {
-			storageDeletes.push({ method, path: parsed.pathname, owner: init.headers?.['x-user-id'] });
+			storageCalls.push({ method, path: parsed.pathname, owner: init.headers?.['x-user-id'] });
 			return answer({}, storageStatus);
 		}
 		if (!parsed.pathname.startsWith('/rest/v1/')) return answer({});
@@ -54,15 +59,16 @@ function fakeBaas(tables, { storageStatus = 200 } = {}) {
 		if (method === 'DELETE') for (const row of found) rows.splice(rows.indexOf(row), 1);
 		return answer(found);
 	};
-	return { fetchImpl, storageDeletes, tables };
+	return { fetchImpl, storageCalls, tables };
 }
 
-function world(options) {
+function world(options, { isPrivate = false } = {}) {
 	const baas = fakeBaas({
-		osionos_channels: [{ id: CHANNEL, workspace_id: CHANNEL, kind: 'text', name: 'room', is_private: false, created_by: AUTHOR }],
+		osionos_channels: [{ id: CHANNEL, workspace_id: CHANNEL, kind: 'text', name: 'room', is_private: isPrivate, created_by: AUTHOR }],
+		osionos_channel_members: [{ channel_id: CHANNEL, user_id: AUTHOR, role: 'member' }],
 		osionos_messages: [message(MESSAGE), message(KEPT_MESSAGE)],
 		osionos_message_attachments: [attachment(ATTACHMENT, MESSAGE)],
-	}, options);
+	}, options ?? {});
 	const handler = createChatHandler({
 		config: CONFIG,
 		verifySession: (token) => ({ userId: token }),
@@ -72,9 +78,13 @@ function world(options) {
 	return { baas, handler };
 }
 
-async function call(handler, path, { method, as }) {
+async function call(handler, path, { method, as, raw = false }) {
 	const captured = {};
-	const response = { writeHead: (status) => { captured.status = status; }, setHeader() {}, end: (text) => { captured.body = text ? JSON.parse(text) : null; } };
+	const response = {
+		writeHead: (status, headers) => { captured.status = status; captured.headers = headers; },
+		setHeader() {},
+		end: (text) => { captured.body = text && !raw ? JSON.parse(text) : text ?? null; },
+	};
 	const request = { method, headers: { authorization: `Bearer ${as}` }, async *[Symbol.asyncIterator]() {} };
 	await handler(new URL(`http://bridge.test${path}`), request, response, CONFIG);
 	return captured;
@@ -88,7 +98,7 @@ describe('deleting a message deletes its uploaded files', () => {
 		const w = world();
 		assert.equal((await deleteMessage(w)).status, 200);
 		assert.deepEqual(attachmentRows(w), []);
-		assert.deepEqual(w.baas.storageDeletes, [{ method: 'DELETE', path: `/storage/v1/object/chat/${KEY}`, owner: AUTHOR }]);
+		assert.deepEqual(w.baas.storageCalls, [{ method: 'DELETE', path: `/storage/v1/object/chat/${KEY}`, owner: AUTHOR }]);
 		const served = await call(w.handler, `/api/chat/uploads/${ATTACHMENT}`, { method: 'GET', as: AUTHOR });
 		assert.equal(served.status, 404);
 	});
@@ -98,7 +108,7 @@ describe('deleting a message deletes its uploaded files', () => {
 		attachmentRows(w).push(attachment('88888888-8888-4888-8888-888888888888', KEPT_MESSAGE));
 		assert.equal((await deleteMessage(w)).status, 200);
 		assert.deepEqual(attachmentRows(w).map((row) => row.message_id), [KEPT_MESSAGE]);
-		assert.deepEqual(w.baas.storageDeletes, []);
+		assert.deepEqual(w.baas.storageCalls, []);
 	});
 
 	it('clears the attachments the deleted message row carried', async () => {
@@ -119,6 +129,28 @@ describe('deleting a message deletes its uploaded files', () => {
 		const w = world();
 		assert.equal((await deleteMessage(w, OTHER)).status, 403);
 		assert.equal(attachmentRows(w).length, 1);
-		assert.deepEqual(w.baas.storageDeletes, []);
+		assert.deepEqual(w.baas.storageCalls, []);
+	});
+});
+
+describe('only the members of a private channel reach its files', () => {
+	const privateWorld = () => world(undefined, { isPrivate: true });
+	const upload = (w, as) => call(w.handler, `/api/chat/uploads?channelId=${CHANNEL}&name=plan.png&type=image`, { method: 'POST', as });
+
+	it('a non-member cannot upload to it, and nothing reaches storage', async () => {
+		const w = privateWorld();
+		assert.equal((await upload(w, OTHER)).status, 403);
+		assert.deepEqual(w.baas.storageCalls, []);
+		assert.equal(attachmentRows(w).length, 1);
+	});
+
+	it('a non-member cannot read a file sent there; a member gets it with the no-sniff headers', async () => {
+		const w = privateWorld();
+		const path = `/api/chat/uploads/${ATTACHMENT}`;
+		assert.equal((await call(w.handler, path, { method: 'GET', as: OTHER })).status, 403);
+		const served = await call(w.handler, path, { method: 'GET', as: AUTHOR, raw: true });
+		assert.equal(served.status, 200);
+		assert.equal(served.headers['x-content-type-options'], 'nosniff');
+		assert.match(served.headers['content-security-policy'], /sandbox/);
 	});
 });
