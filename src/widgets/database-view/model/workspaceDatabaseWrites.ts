@@ -46,6 +46,15 @@ function recordProperties(page: Page): PagePropertyEntry[] {
   return props;
 }
 
+/** The table's facets laid over the page's own properties: an edit in the table must
+ * not drop a property the table does not show (#162). */
+function withFacets(own: readonly PagePropertyEntry[] | undefined, facets: PagePropertyEntry[]): PagePropertyEntry[] {
+  const byKey = new Map(facets.map((facet) => [facet.key, facet]));
+  const kept = (own ?? []).map((property) => byKey.get(property.key) ?? property);
+  const keptKeys = new Set(kept.map((property) => property.key));
+  return [...kept, ...facets.filter((facet) => !keptKeys.has(facet.key))];
+}
+
 function visibilityOf(page: Page): "private" | "shared" | null {
   const key = page.databaseId === WS_FOLDERS_DB_ID ? FOLD.visibility : FILE.visibility;
   const value = page.properties[key];
@@ -82,7 +91,7 @@ export function applyWorkspacePersist(next: NotionState, previous?: NotionState)
     const visibility = visibilityOf(page);
     if (visibility && visibility !== visibilityOf(before)) patch.visibility = visibility;
     if (JSON.stringify(recordProperties(page)) !== JSON.stringify(recordProperties(before))) {
-      patch.properties = recordProperties(page);
+      patch.properties = withFacets(store.pageById(page.id)?.properties, recordProperties(page));
     }
     if (Object.keys(patch).length > 0) { store.patchPage(page.id, patch); mutated = true; }
     if (page.databaseId === WS_FILES_DB_ID && folderRelationOf(page) !== folderRelationOf(before)) {

@@ -84,6 +84,23 @@ test.describe("page title", () => {
     }
   });
 
+  // #162: a long title wanted a second line, and every Enter left the title.
+  test("Shift+Enter adds a line to the title, and Enter still moves to the page", async ({ page, baseURL }) => {
+    await openFreshPage(page, baseURL);
+    await clearAndTypePageTitle(page, "First line");
+    const title = pageTitleEditor(page);
+    await page.keyboard.press("Shift+Enter");
+    await page.keyboard.type("second line");
+    await expect(title).toHaveValue("First line\nsecond line");
+    await expect(title).toBeFocused();
+    expect(await clipped(title)).toBe(0);
+    await title.screenshot({ path: test.info().outputPath("title-two-lines.png"), animations: "disabled" });
+
+    await page.keyboard.press("Enter");
+    await expect(title).not.toBeFocused();
+    await expect(title).toHaveValue("First line\nsecond line");
+  });
+
   test("clicking into the title paints no focus box, and a regular input keeps its ring", async ({ page, baseURL }) => {
     await openFreshPage(page, baseURL);
     const title = pageTitleEditor(page);
