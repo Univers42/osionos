@@ -23,7 +23,7 @@ import { subscribeTopic } from '@/services/realtime-messages/wsTransport';
 import { userTopic } from '@/services/realtime-messages/wsTopics';
 import { useToastStore } from '@osionos/ui/primitives/useToastStore';
 import { fetchInbox, fetchNotifications, notificationSentence, type NotificationType } from '@/shared/chat/notifyApi';
-import { useNotificationsStore } from './useNotificationsStore';
+import { liveNotificationItem, useNotificationsStore, type LiveNotificationPayload } from './useNotificationsStore';
 import { usePageStore } from '@/store/usePageStore';
 import { useShareTarget } from '@/features/share/useShareTarget';
 import { openOrDenyPage } from '@/features/page-link/openOrDenyPage';
@@ -55,18 +55,10 @@ export function useNotifyLive(): void {
         if (!inbox.notifyToken) return;
         dispose = subscribeTopic(userTopic(inbox.notifyToken), (frame) => {
           if (frame.event_type !== 'notification_created') return;
-          const payload = (frame.payload ?? {}) as { type?: NotificationType; actorName?: string; channelId?: string; messageId?: string; preview?: string };
-          const type = payload.type ?? 'system';
-          useNotificationsStore.getState().prepend({
-            id: `live-${Date.now()}-${Math.round(performance.now())}`,
-            type,
-            actorId: null,
-            channelId: payload.channelId ?? null,
-            messageId: payload.messageId ?? null,
-            preview: payload.preview ?? null,
-            readAt: null,
-            createdAt: new Date().toISOString(),
-          });
+          const payload = (frame.payload ?? {}) as LiveNotificationPayload & { actorName?: string };
+          const item = liveNotificationItem(payload);
+          const type = item.type;
+          useNotificationsStore.getState().prepend(item);
           const open = () => {
             if (type === 'page_access_request') {
               const pageId = payload.channelId ?? null;
