@@ -43,7 +43,8 @@ const BANNER_BODY_LIMIT = 640 * 1024;
 // The sizes the bridge stores, their caps and the canvas cap: the caps keep
 // the three objects small enough to serve.
 const MAX_EDGE = 4096;
-const BODY_LIMIT = 512 * 1024;
+// Base64 is 4/3 of the bytes: a fixed 512KB refused three variants at their caps (#171).
+const BODY_LIMIT = Math.ceil(Object.values(VARIANT_CAPS).reduce((sum, cap) => sum + cap, 0) * 4 / 3) + 4 * 1024;
 const LEGACY_MAX_BYTES = 200 * 1024;
 const UPLOAD_LIMIT = 10;
 const UPLOAD_WINDOW_MS = 3_600_000;
