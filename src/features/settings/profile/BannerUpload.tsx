@@ -24,6 +24,7 @@ import { Button, useToastStore } from '@/shared/ui';
 import { ConfirmModal } from '../ui/ConfirmModals';
 import { type EncodedAvatar } from './avatarVariants';
 import { BANNER_HEIGHT, BANNER_WIDTH, bannerCropRect, buildBannerPayload } from './bannerVariant';
+import { SIGN_IN_TO_UPLOAD, uploadFailureMessage } from './uploadFailure';
 
 interface BannerUploadProps {
   bannerUrl: string | null;
@@ -51,9 +52,14 @@ export const BannerUpload: React.FC<BannerUploadProps> = ({ bannerUrl, onChanged
   const [asking, setAsking] = useState(false);
   const source = safeSource(bannerUrl);
 
+  const fail = (reason: string) => {
+    toast({ kind: 'error', title: 'The banner could not be uploaded.', description: reason });
+  };
+
   const upload = async (file: File | undefined) => {
+    if (!file) return;
     const jwt = getActivePageJwt();
-    if (!file || !jwt) return;
+    if (!jwt) return fail(SIGN_IN_TO_UPLOAD);
     setBusy(true);
     try {
       const bitmap = await createImageBitmap(file);
@@ -65,8 +71,8 @@ export const BannerUpload: React.FC<BannerUploadProps> = ({ bannerUrl, onChanged
       } finally {
         bitmap.close();
       }
-    } catch {
-      toast({ kind: 'error', title: 'The banner could not be uploaded. Try a smaller image.' });
+    } catch (error) {
+      fail(uploadFailureMessage(error));
     } finally {
       setBusy(false);
     }
