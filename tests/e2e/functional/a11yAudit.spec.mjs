@@ -117,6 +117,31 @@ for (const theme of ["light", "dark"]) {
       expect(await violations(page)).toEqual([]);
     });
 
+    // The Connect button sat inside each person option: a control in a control, out of
+    // keyboard reach, since focus stays on the combobox. The option opens the profile tab,
+    // which carries the reachable Connect button (#224).
+    test("people results have no AA violation, and Enter opens the person's profile", async ({ page, baseURL }) => {
+      await page.route("**/src/shared/api/client.ts", async (route) => {
+        const response = await route.fetch();
+        const body = (await response.text()).replace(/("VITE_API_URL":\s*)""/, `$1"${new URL(baseURL).origin}"`);
+        await route.fulfill({ response, body });
+      });
+      await page.route("**/api/directory/search**", (route) => route.fulfill({ json: { people: [
+        { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: "Ada Lovelace", username: "ada", avatar: null, headline: "Mathematician", online: false },
+      ] } }));
+      await openFreshPage(page, baseURL);
+      const search = page.getByRole("combobox", { name: "Search pages or run a command" });
+      await search.fill("user:ada");
+      const person = page.getByRole("option", { name: /Ada Lovelace/ });
+      await expect(person).toBeVisible();
+      expect(await violations(page)).toEqual([]);
+      await expect(person.getByRole("button")).toHaveCount(0);
+      await page.screenshot({ path: test.info().outputPath("people-results.png"), animations: "disabled" });
+
+      await search.press("Enter");
+      await expect(page.getByRole("region", { name: "Title bar: Ada Lovelace" })).toBeVisible();
+    });
+
     test("the marketplace has no AA violation", async ({ page, baseURL }) => {
       await openFreshPage(page, baseURL);
       await page.getByRole("button", { name: "Marketplace", exact: true }).first().click();
