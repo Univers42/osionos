@@ -32,12 +32,14 @@ export const RecentPageRow: React.FC<RecentPageRowProps> = ({ recent, activePage
 
   if (!page || !canReadPage(page, accessContext)) return null;
 
+  // The recent is a visit-time snapshot (a rename never re-saves it); the loaded page is current (#84).
+  const current: ActivePage = { ...recent, title: page.title, icon: page.icon };
   return (
     <SidebarNavItem
-      icon={<IconValueView value={recent.icon || "icon:page"} size={14} />}
-      label={recent.title ?? "Untitled"}
+      icon={<IconValueView value={current.icon || "icon:page"} size={14} />}
+      label={current.title || "Untitled"}
       active={activePageId === recent.id}
-      onClick={() => onOpenPage(recent)}
+      onClick={() => onOpenPage(current)}
     />
   );
 };

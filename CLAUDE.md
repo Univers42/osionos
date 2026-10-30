@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```sh
 npm run dev           # docker-dev.sh: notion-database-sys contract server, then Vite HMR on :3001
 npm run build         # graph-engine tsc → markdown-engine tsc → root tsc → vite build → ./build
-npm run test:quality  # THE gate: the 3 tsc passes → eslint src/ packages/ --max-warnings=0 →
+npm run test:quality  # THE gate: the 3 tsc passes → eslint src/ packages/ scripts/ --max-warnings=0 →
                       #   check-markdown-engine-boundary.sh → check-ui-token-contract.sh →
                       #   check-token-refs.mjs → build-tokens.mjs --check → check-style-tokens.sh
 npm run typecheck     # the 3 tsc passes only          npm run lint[:fix]   # eslint only
