@@ -40,7 +40,7 @@
 import { rateLimit } from './bridge-guard.mjs';
 import { idChunks, inFilter } from './bridge-paging.mjs';
 import { bearerToken, blockedViewerBy, sendJson } from './bridge-social-core.mjs';
-import { connectionPeerId, peerCard, selfSourceById, dedupeEdgesByPeer } from './bridge-self-sources.mjs';
+import { peerCard, selfSourceById, dedupeEdgesByPeer } from './bridge-self-sources.mjs';
 import { serviceFetch } from './bridge-account-profile.mjs';
 
 const SELF_DATA_PREFIX = '/api/account/self-data/';
@@ -123,11 +123,11 @@ async function readFlatRows({ pg, session, now }, source) {
 	return rows;
 }
 
-/** The peers of the edges: the other party of each edge, once each. */
-function peerIds(rows, userId) {
+/** The people the rows name: the peer of each row, once each. */
+function peerIds(rows, source, userId) {
 	const ids = [];
 	for (const row of rows) {
-		const peer = String(connectionPeerId(row, userId) ?? '').toLowerCase();
+		const peer = String(source.peerId(row, userId) ?? '').toLowerCase();
 		if (peer !== '' && !ids.includes(peer)) ids.push(peer);
 	}
 	return ids;
@@ -147,11 +147,11 @@ async function readDirectory(pg, source, ids) {
 	return rows;
 }
 
-/** The edges of the caller, each with the public card of its peer. */
-async function readEdgeRows({ pg, config, session, now }, source) {
-	const edges = await readFlatRows({ pg, session, now }, source);
-	const deduped = dedupeEdgesByPeer(edges, session.userId);
-	const ids = peerIds(deduped, session.userId);
+/** The rows of a source that names a person, each with that person's public card. */
+async function readPeerRows({ pg, config, session, now }, source) {
+	const read = await readFlatRows({ pg, session, now }, source);
+	const rows = source.scope.kind === 'edge' ? dedupeEdgesByPeer(read, session.userId) : read;
+	const ids = peerIds(rows, source, session.userId);
 	const directory = await readDirectory(pg, source, ids);
 	// The block set is the one thing that hides a person from a viewer: the helper owns
 	// the rule (a block in either direction), so it is used and never copied.
@@ -159,9 +159,9 @@ async function readEdgeRows({ pg, config, session, now }, source) {
 	const cards = new Map(ids.map((id) => [id, peerCard(id, directory.get(id), hidden)]));
 	const context = {
 		userId: session.userId,
-		peerOf: (row) => cards.get(String(connectionPeerId(row, session.userId) ?? '').toLowerCase()) ?? null,
+		peerOf: (row) => cards.get(String(source.peerId(row, session.userId) ?? '').toLowerCase()) ?? null,
 	};
-	return deduped.map((row) => sourceRow(source, row, context));
+	return rows.map((row) => sourceRow(source, row, context));
 }
 
 /**
@@ -220,7 +220,7 @@ async function visiblePages({ pageAccessFilter, session, config }, rows) {
 /** The rows of a source, read the way its scope says, and whether the cap cut them. */
 async function readSourceRows(context, source) {
 	if (source.scope.kind === 'membership') return capRows(await readMembershipRows(context, source));
-	if (source.scope.kind === 'edge') return capRows(await readEdgeRows(context, source));
+	if (source.peerId) return capRows(await readPeerRows(context, source));
 	const { rows, truncated } = capRows(await readFlatRows(context, source));
 	const kept = source.pageAccess ? await visiblePages(context, rows) : rows;
 	const projected = kept.map((row) => sourceRow(source, row, {
