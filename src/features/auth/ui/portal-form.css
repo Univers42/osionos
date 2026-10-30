@@ -1,0 +1,181 @@
+/* The sign-in form column. Four type sizes (the 42px heading, 20 the brand, 15 body, 13 small)
+   and a 4px spacing scale. Unlayered, so it beats the layered utilities of the Button and Input
+   atoms, among them their disabled:opacity-60. */
+
+/* Anchored at the top, never centred: an error or the sign-up fields only grow it downward,
+   so nothing moves under the pointer. */
+.osio-portal-form {
+  align-self: start;
+  width: 100%;
+  max-width: 380px;
+  margin-top: clamp(16px, 4vh, 48px);
+}
+
+.osio-portal-form h1 {
+  margin: 0;
+  font-family: var(--osio-font-heading);
+  font-size: clamp(32px, 3.4vw, 42px);
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.012em;
+  color: var(--osio-fg-strong);
+  text-wrap: balance;
+}
+
+.osio-portal-lede {
+  margin: 12px 0 0;
+  max-width: 34ch;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--osio-fg-muted);
+}
+
+.osio-portal-form form {
+  display: grid;
+  gap: 16px;
+  margin-top: 28px;
+}
+
+/* Locks the fields together while signing in, without greying them out. */
+.osio-portal-fields {
+  display: grid;
+  gap: 16px;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.osio-portal-fields:disabled input {
+  opacity: 1;
+  cursor: progress;
+}
+
+.osio-portal-field label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--osio-fg-default);
+}
+
+.osio-portal-field input {
+  padding-inline: 12px;
+  font-size: 15px;
+}
+
+.osio-portal-field input:hover:not(:focus-visible) { border-color: var(--osio-fg-muted); }
+.osio-portal-field input[aria-invalid="true"]:not(:focus-visible) { border-color: var(--osio-danger); }
+
+.osio-portal-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--osio-fg-muted);
+}
+
+.osio-portal-password {
+  position: relative;
+}
+
+.osio-portal-password input {
+  padding-right: 64px;
+}
+
+.osio-portal-reveal {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  translate: 0 -50%;
+  padding: 4px 8px;
+  border-radius: var(--osio-radius-chip);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--osio-fg-muted);
+  transition: background-color var(--osio-motion-fast), color var(--osio-motion-fast);
+}
+
+.osio-portal-reveal:hover:not(:disabled) {
+  background: var(--osio-bg-hover);
+  color: var(--osio-fg-default);
+}
+
+.osio-portal-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--osio-fg-muted);
+  cursor: pointer;
+}
+
+.osio-portal-remember input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--osio-accent);
+}
+
+/* A danger-tinted surface that holds in both themes; the text stays fg-default to be read,
+   the danger hue is on the icon, the border and the fields at fault. */
+.osio-portal-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--osio-danger) 35%, transparent);
+  border-radius: var(--osio-radius-control);
+  background: color-mix(in srgb, var(--osio-danger) 7%, var(--osio-bg-page));
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--osio-fg-default);
+  transition: opacity var(--osio-motion-fast);
+}
+
+.osio-portal-error .osio-portal-icon { color: var(--osio-danger); }
+
+/* The last refusal fades while the retry is under way. */
+.osio-portal-form form[aria-busy="true"] .osio-portal-error { opacity: 0.5; }
+
+.osio-portal-form .osio-portal-submit {
+  width: 100%;
+  height: var(--osio-field-h);
+  margin-top: 4px;
+  font-size: 15px;
+}
+
+/* Working, not unavailable: full colour while signing in. */
+.osio-portal-form .osio-portal-submit[aria-busy="true"] {
+  opacity: 1;
+  cursor: progress;
+}
+
+.osio-portal-switch {
+  margin: 20px 0 0;
+  font-size: 15px;
+  color: var(--osio-fg-muted);
+}
+
+.osio-portal-switch button {
+  border-radius: var(--osio-radius-chip);
+  font-weight: 500;
+  color: var(--osio-accent-text);
+  text-underline-offset: 3px;
+}
+
+.osio-portal-switch button:hover:not(:disabled) { text-decoration: underline; }
+.osio-portal-switch button:disabled { cursor: progress; }
+
+@media (max-width: 959px) {
+  .osio-portal-form {
+    justify-self: center;
+    margin-top: 24px;
+  }
+}
+
+/* A laptop-height two-column window (the desktop app opens at 1280x832 with a 36px titlebar
+   inside it): the heading takes one line, so providers, an error and the footer still fit. */
+@media (min-width: 960px) and (max-height: 860px) {
+  .osio-portal-form h1 { font-size: clamp(28px, 4.2vh, 34px); }
+  .osio-portal-lede { margin-top: 8px; }
+}

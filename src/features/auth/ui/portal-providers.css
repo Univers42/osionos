@@ -1,0 +1,76 @@
+/* "Continue with Google / GitHub" and the "or" divider, between the lede and the email form.
+   Token-styled, so in the warm palette they sit close to Google's own light and dark buttons.
+   Caveat: Google's spec asks for fixed fills (white, near-black), a fixed grey stroke and Roboto;
+   these follow the palette (cream in solarized, blue-grey in nord) and use Inter. If Google's
+   brand review objects, override [data-provider="google"] with brand tokens defined in
+   src/app/styles/**; the G itself never changes. */
+
+.osio-portal-providers {
+  display: grid;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.osio-portal-form .osio-portal-provider {
+  position: relative;
+  width: 100%;
+  height: var(--osio-field-h);
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--osio-fg-strong);
+  background: var(--osio-bg-surface);
+  border-color: var(--osio-control-border);
+}
+
+.osio-portal-form .osio-portal-provider:hover:not(:disabled) {
+  background: var(--osio-control-bg-hover);
+  border-color: var(--osio-fg-muted);
+}
+
+.osio-portal-provider-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* Working: full strength, the spinner off to the side so the label never shifts. */
+.osio-portal-form .osio-portal-provider[aria-busy="true"] {
+  opacity: 1;
+  cursor: progress;
+}
+
+.osio-portal-form .osio-portal-provider:disabled:not([aria-busy="true"]) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.osio-portal-provider .osio-portal-spinner {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  margin-top: -7px;
+}
+
+/* A plain paragraph, so a screen reader says "or" between the two ways in. */
+.osio-portal-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0 0;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--osio-fg-muted);
+}
+
+.osio-portal-divider::before,
+.osio-portal-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--osio-border-default);
+}
+
+.osio-portal-form .osio-portal-divider + form { margin-top: 20px; }

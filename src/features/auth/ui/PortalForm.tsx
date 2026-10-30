@@ -1,9 +1,10 @@
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode, type Ref } from "react";
 import { Button } from "@osionos/ui/atoms/Button";
 import { Input } from "@osionos/ui/atoms/Input";
-import { describeConnection, type ConnectionState } from "@/features/auth/model/portalConnection";
 import { useUserStore } from "@/features/auth/model/useUserStore";
-import { API_BASE } from "@/features/auth/model/userStore.helpers";
+import { UNREACHABLE_MESSAGE } from "@/features/auth/model/userStore.helpers";
+import { PortalProviders } from "./PortalProviders";
+import "./portal-form.css";
 
 type Mode = "login" | "signup";
 
@@ -26,6 +27,9 @@ const COPY: Record<Mode, { title: string; lede: string; submit: string; busy: st
   },
 };
 
+/** What a field shown with an error carries: the message as its description, and whether it is at fault. */
+type ErrorLink = { "aria-describedby"?: string; "aria-invalid"?: true };
+
 function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: (id: string) => ReactNode }) {
   const id = useId();
   return (
@@ -37,13 +41,15 @@ function Field({ label, hint, children }: { label: string; hint?: ReactNode; chi
   );
 }
 
-function PasswordInput({ id, mode, value, onChange }: { id: string; mode: Mode; value: string; onChange: (v: string) => void }) {
+interface PasswordInputProps { id: string; mode: Mode; value: string; onChange: (v: string) => void; inputRef: Ref<HTMLInputElement>; errorLink: ErrorLink }
+
+function PasswordInput({ id, mode, value, onChange, inputRef, errorLink }: PasswordInputProps) {
   const [shown, setShown] = useState(false);
   return (
     <div className="osio-portal-password">
       <Input
-        id={id} type={shown ? "text" : "password"} required value={value} onChange={(e) => onChange(e.target.value)}
-        autoComplete={mode === "login" ? "current-password" : "new-password"}
+        ref={inputRef} id={id} type={shown ? "text" : "password"} required value={value} onChange={(e) => onChange(e.target.value)}
+        autoComplete={mode === "login" ? "current-password" : "new-password"} {...errorLink}
       />
       <button type="button" className="osio-portal-reveal" aria-pressed={shown} onClick={() => setShown((s) => !s)}>
         {shown ? "Hide" : "Show"}
@@ -53,26 +59,19 @@ function PasswordInput({ id, mode, value, onChange }: { id: string; mode: Mode; 
   );
 }
 
-const CONNECTION_TEXT: Record<ConnectionState["kind"], (host: string) => string> = {
-  secure: (host) => `Encrypted connection to ${host}`,
-  plain: (host) => `Unencrypted connection to ${host}. Sign in only on a network you trust.`,
-  offline: () => "No server configured: this copy of osionos keeps your work on this device.",
-};
-
-function ConnectionLine() {
-  const state = describeConnection(API_BASE);
+function FormError({ id, message }: { id: string; message: string }) {
   return (
-    <p className="osio-portal-connection" data-kind={state.kind}>
-      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-        <rect x="3" y="7" width="10" height="7" rx="1.6" />
-        <path d={state.kind === "secure" ? "M5.5 7V5a2.5 2.5 0 0 1 5 0v2" : "M5.5 7V5a2.5 2.5 0 0 1 4.9-.7"} />
+    <p role="alert" id={id} className="osio-portal-error">
+      <svg className="osio-portal-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.25" />
+        <path d="M8 4.75v3.75M8 11.1v.05" />
       </svg>
-      {CONNECTION_TEXT[state.kind](state.host)}
+      <span>{message}</span>
     </p>
   );
 }
 
-/** The sign-in / sign-up form: one column, the server it talks to named under it. */
+/** The sign-in / sign-up form: one column, the provider buttons above the email fields. */
 export function PortalForm() {
   const loginWithCredentials = useUserStore((s) => s.loginWithCredentials);
   const error = useUserStore((s) => s.error);
@@ -82,7 +81,18 @@ export function PortalForm() {
   const [name, setName] = useState("");
   const [remember, setRemember] = useState(false);
   const [busy, setBusy] = useState(false);
+  const errorId = useId();
+  const passwordRef = useRef<HTMLInputElement>(null);
   const copy = COPY[mode];
+  const shownError = error && error !== "portal-required" ? error : null;
+  // Caveat: every refusal the server sends marks both fields invalid, including a 502 from a
+  // sign-in service that never checked them; only an unreachable server leaves them unmarked.
+  const errorLink: ErrorLink = shownError ? { "aria-describedby": errorId, ...(shownError !== UNREACHABLE_MESSAGE && { "aria-invalid": true }) } : {};
+
+  // The fieldset is disabled while signing in, which drops the focus; a refusal hands it to the password.
+  useEffect(() => {
+    if (!busy && shownError) passwordRef.current?.focus();
+  }, [busy, shownError]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -99,34 +109,37 @@ export function PortalForm() {
     <div className="osio-portal-form">
       <h1>{copy.title}</h1>
       <p className="osio-portal-lede">{copy.lede}</p>
+      <PortalProviders disabled={busy} />
       <form onSubmit={submit} aria-busy={busy}>
-        {mode === "signup" && (
-          <Field label="Display name">
-            {(id) => <Input id={id} type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" />}
-          </Field>
-        )}
-        <Field label="Email">
-          {(id) => (
-            <Input id={id} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" />
+        <fieldset className="osio-portal-fields" disabled={busy}>
+          {mode === "signup" && (
+            <Field label="Display name">
+              {(id) => <Input id={id} type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="nickname" />}
+            </Field>
           )}
-        </Field>
-        <Field label="Password" hint={mode === "signup" ? "8 or more characters, with an uppercase and a lowercase letter, a number and a symbol." : undefined}>
-          {(id) => <PasswordInput id={id} mode={mode} value={password} onChange={setPassword} />}
-        </Field>
-        <label className="osio-portal-remember">
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          Keep me signed in on this device
-        </label>
-        {error && error !== "portal-required" ? <p role="alert" className="osio-portal-error">{error}</p> : null}
-        <Button type="submit" tone="primary" size="lg" disabled={busy} className="osio-portal-submit">
+          <Field label="Email">
+            {(id) => (
+              <Input id={id} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" {...errorLink} />
+            )}
+          </Field>
+          <Field label="Password" hint={mode === "signup" ? "8 or more characters, with an uppercase and a lowercase letter, a number and a symbol." : undefined}>
+            {(id) => <PasswordInput id={id} mode={mode} value={password} onChange={setPassword} inputRef={passwordRef} errorLink={errorLink} />}
+          </Field>
+          <label className="osio-portal-remember">
+            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+            Keep me signed in on this device
+          </label>
+        </fieldset>
+        {shownError ? <FormError id={errorId} message={shownError} /> : null}
+        <Button type="submit" tone="primary" size="lg" disabled={busy} aria-busy={busy || undefined} className="osio-portal-submit">
+          {busy ? <span className="osio-portal-spinner" aria-hidden="true" /> : null}
           {busy ? copy.busy : copy.submit}
         </Button>
       </form>
       <p className="osio-portal-switch">
         {copy.switchAsk}{" "}
-        <button type="button" onClick={() => setMode(mode === "login" ? "signup" : "login")}>{copy.switchTo}</button>
+        <button type="button" disabled={busy} onClick={() => setMode(mode === "login" ? "signup" : "login")}>{copy.switchTo}</button>
       </p>
-      <ConnectionLine />
     </div>
   );
 }
