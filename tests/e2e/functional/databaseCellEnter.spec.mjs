@@ -180,7 +180,9 @@ test.describe("database-cell-enter", () => {
     }
   });
 
-  test("a two-line Name keeps its line break on the record page, where Shift+Enter adds another", async ({ page }) => {
+  // #162: the record page also listed Name as a property row, a second editor for
+  // the title whose edits never reached the table. The page title is the one editor.
+  test("a two-line Name keeps its line break in the record page title, and a title edit reaches the table", async ({ page }) => {
     const block = await freshTable(page);
     const headers = await block.locator("thead th").allTextContents();
     const name = cellIn(block, headers, "Name");
@@ -194,17 +196,15 @@ test.describe("database-cell-enter", () => {
     await name.hover();
     await name.getByText("OPEN").click();
 
-    // The record page lists Name as an editable property; a one-line <input>
-    // drops the "\n" from its value, and an edit there saved the merged text.
-    const field = page.getByRole("textbox", { name: "Name", exact: true });
-    await expect(field).toHaveValue("first\nsecond");
-    await field.click();
-    await field.press("End");
-    await field.press("Shift+Enter");
-    await field.pressSequentially("third");
-    await expect(field).toHaveValue("first\nsecond\nthird");
-    await field.press("Enter");
-    await expect(field).not.toBeFocused();
-    await expect(field).toHaveValue("first\nsecond\nthird");
+    const record = page.locator("aside[data-open-in]");
+    const title = record.getByRole("textbox", { name: "Page title" });
+    await expect(title).toHaveValue("first\nsecond");
+    await expect(record.getByRole("textbox", { name: "Name", exact: true })).toHaveCount(0);
+    await title.click();
+    await title.press("ControlOrMeta+End");
+    await title.pressSequentially(" third");
+    await expect(title).toHaveValue("first\nsecond third");
+    await record.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(name).toContainText("second third");
   });
 });
