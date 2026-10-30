@@ -82,6 +82,17 @@ describe('S6, S10: posting a suggestion', () => {
 		const handler = handlerFor(backend(discussionWorld(open)));
 		assert.equal((await call(handler, 'POST', '/api/comments', proposal())).status, 429);
 	});
+
+	it('decided, deleted and other blocks\' suggestions do not count toward the 20', async () => {
+		const closed = [
+			...Array.from({ length: 10 }, () => suggestionRow({ status: 'accepted' })),
+			...Array.from({ length: 5 }, () => suggestionRow({ deleted_at: '2026-10-30T00:00:00.000Z' })),
+			...Array.from({ length: 5 }, () => suggestionRow({ block_id: CODE_BLOCK })),
+			...Array.from({ length: 19 }, () => suggestionRow()),
+		];
+		const handler = handlerFor(backend(discussionWorld(closed)));
+		assert.equal((await call(handler, 'POST', '/api/comments', proposal())).status, 200);
+	});
 });
 
 describe('replies', () => {
@@ -178,11 +189,14 @@ describe('reactions (S9)', () => {
 		assert.equal(be.rows('osionos_page_comment_reactions').length, 1);
 	});
 
-	it('a viewer may not react and an emoji with a space is a 400', async () => {
+	it('a viewer may not react, a deleted row takes none, an emoji with a space is a 400', async () => {
 		const root = commentRow();
-		const be = backend(discussionWorld([root]));
+		const blanked = commentRow({ deleted_at: '2026-10-30T00:00:00.000Z', content: '' });
+		const be = backend(discussionWorld([root, blanked]));
 		assert.equal((await call(handlerFor(be, { access: { level: 'can_view', canWrite: false } }), 'PUT', `/api/comments/${root.id}/reactions/x`)).status, 403);
+		assert.equal((await call(handlerFor(be), 'PUT', `/api/comments/${blanked.id}/reactions/x`)).status, 404);
 		assert.equal((await call(handlerFor(be), 'PUT', `/api/comments/${root.id}/reactions/a%20b`)).status, 400);
+		assert.equal(be.rows('osionos_page_comment_reactions').length, 0);
 	});
 });
 
