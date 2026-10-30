@@ -1,0 +1,21 @@
+{
+  "client": {
+    "package": "@codingame/monaco-vscode-api",
+    "version": "37.6.1",
+    "vscode": "1.138.0"
+  },
+  "server": {
+    "source": "code-server",
+    "version": "4.138.0",
+    "vscode": "1.138.0",
+    "commit": "59c988c744a240b05b039f57b856a5312f19d5b1",
+    "upstream": {
+      "linux-x64": { "asset": "code-server-4.138.0-linux-amd64.tar.gz", "sha256": "5d63f26c5dabc2acd29610b9b27f413b016aa67019e2cfcdf54031625e18f535" },
+      "linux-arm64": { "asset": "code-server-4.138.0-linux-arm64.tar.gz", "sha256": "fbebf4b18e97a5a48b7b105be0161d411e54ccfb53a1ffb1673c16518024fa30" },
+      "darwin-x64": { "asset": "code-server-4.138.0-macos-amd64.tar.gz", "sha256": "bd1a54d03e03d3b0ec75705f48c39c5f6b309a36a2c7ee878f746a6e5f9aa2ae" },
+      "darwin-arm64": { "asset": "code-server-4.138.0-macos-arm64.tar.gz", "sha256": "1ecf699868e64bb9094a7d3ffcac50bb903354a32137dfc4017cb9479ef6b456" }
+    },
+    "removeBuiltins": ["copilot", "mermaid-markdown-features"],
+    "requireBuiltins": ["git", "git-base", "ms-vscode.js-debug", "typescript-language-features"]
+  }
+}
