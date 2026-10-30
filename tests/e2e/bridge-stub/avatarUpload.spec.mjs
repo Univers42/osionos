@@ -58,13 +58,25 @@ const PROFILE = {
   version: 1, createdAt: null, updatedAt: null,
 };
 
-/** Serves the profile read that makes the editor render, and answers the avatar POST with `upload`. */
-async function stubProfile(page, upload) {
+/** Serves the profile read that makes the editor render, and answers the POST to `path` with `upload`. */
+async function stubProfile(page, upload, path = "/api/profile/avatar") {
   await stubBridge(page, (url, request) => {
     if (url.pathname === "/api/account/profile" && request.method() === "GET") return { json: PROFILE };
-    if (url.pathname === "/api/profile/avatar" && request.method() === "POST") return upload;
+    if (url.pathname === path && request.method() === "POST") return upload;
     return undefined;
   });
+}
+
+/** Opens the panel, then ends the session the way an expiry does; returns the region and the uploads sent. */
+async function openWithEndedSession(page, baseURL) {
+  const posted = [];
+  page.on("request", (request) => { if (request.method() === "POST" && request.url().includes("/api/profile/")) posted.push(request.url()); });
+  await stubProfile(page, UPLOAD);
+  const region = await openProfilePanel(page, baseURL);
+  // Ended only once the editor is drawn: before the profile read lands, the panel would show its offline notice.
+  await expect(region.getByRole("button", { name: "Upload photo" })).toBeVisible();
+  await page.evaluate(() => globalThis.__playgroundUserStore.setState({ activePageJwt: () => null, activeJwt: () => null }));
+  return { region, posted };
 }
 
 async function openProfilePanel(page, baseURL) {
@@ -86,11 +98,7 @@ test.describe("the avatar uploader", () => {
     await stubProfile(page, UPLOAD);
     const region = await openProfilePanel(page, baseURL);
 
-    await region.locator('input[type="file"]:not([aria-label="Banner image"])').setInputFiles({
-      name: "avatar.png",
-      mimeType: "image/png",
-      buffer: TINY_PNG,
-    });
+    await pickPhoto(region);
 
     await expect.poll(async () => (await renders(page)).length, { timeout: 20_000 }).toBe(3);
     const drawn = await renders(page);
@@ -108,13 +116,70 @@ test.describe("the avatar uploader", () => {
     await stubProfile(page, { status: 500, json: { ok: false, message: "boom" } });
     const region = await openProfilePanel(page, baseURL);
 
-    await region.locator('input[type="file"]:not([aria-label="Banner image"])').setInputFiles({
-      name: "avatar.png",
-      mimeType: "image/png",
-      buffer: TINY_PNG,
-    });
+    await pickPhoto(region);
 
-    // The bridge refuses the upload, and the panel says so.
-    await expect(region.getByText("Upload failed")).toBeVisible({ timeout: 20_000 });
+    // The bridge refuses the upload, and the panel says so — without the server's internals.
+    const failure = uploadAlert(region);
+    await expect(failure).toContainText("Try again", { timeout: 20_000 });
+    await expect(failure).not.toContainText("boom");
+  });
+
+  // #171: the panel said only "Upload failed", whatever the bridge refused.
+  test("says why the bridge refused the photo", async ({ page, baseURL }) => {
+    await page.addInitScript(instrumentCanvas);
+    const reason = "The 460px variant is over its 300KB cap.";
+    await stubProfile(page, { status: 422, json: { ok: false, code: "avatar_variant_too_large", message: reason } });
+    const region = await openProfilePanel(page, baseURL);
+
+    await pickPhoto(region);
+
+    await expect(uploadAlert(region)).toHaveText(`Upload failed: ${reason}`, { timeout: 20_000 });
+  });
+
+  // #171: with no session the pick did nothing at all — no request, no word.
+  test("says to sign in again when the session has ended", async ({ page, baseURL }) => {
+    const { region, posted } = await openWithEndedSession(page, baseURL);
+
+    await pickPhoto(region);
+
+    await expect(uploadAlert(region)).toContainText("Sign in again", { timeout: 20_000 });
+    expect(posted, "no upload is sent without a session").toEqual([]);
   });
 });
+
+test.describe("the banner uploader", () => {
+  // #171: a refused banner said "Try a smaller image" whatever the bridge refused.
+  test("says why the bridge refused the banner", async ({ page, baseURL }) => {
+    const reason = "The banner is 1500x400, not 1500x500.";
+    await stubProfile(page, { status: 422, json: { ok: false, code: "banner_wrong_size", message: reason } }, "/api/profile/banner");
+    const region = await openProfilePanel(page, baseURL);
+
+    await pickBanner(region);
+
+    await expect(page.getByText(reason)).toBeVisible({ timeout: 20_000 });
+  });
+
+  test("says to sign in again when the session has ended", async ({ page, baseURL }) => {
+    const { region, posted } = await openWithEndedSession(page, baseURL);
+
+    await pickBanner(region);
+
+    await expect(page.getByText("Sign in again")).toBeVisible({ timeout: 20_000 });
+    expect(posted, "no upload is sent without a session").toEqual([]);
+  });
+});
+
+// Other sections of the panel raise their own alerts on the stub's 503s.
+const uploadAlert = (region) => region.getByRole("alert").filter({ hasText: "Upload failed" });
+
+function pickPhoto(region) {
+  return region.locator('input[type="file"]:not([aria-label="Banner image"])').setInputFiles({
+    name: "avatar.png",
+    mimeType: "image/png",
+    buffer: TINY_PNG,
+  });
+}
+
+function pickBanner(region) {
+  return region.getByLabel("Banner image").setInputFiles({ name: "banner.png", mimeType: "image/png", buffer: TINY_PNG });
+}
