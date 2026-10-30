@@ -6,7 +6,7 @@
 /*   By: dlesieur <dlesieur@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/07 00:00:00 by dlesieur          #+#    #+#             */
-/*   Updated: 2026/07/07 00:00:00 by dlesieur         ###   ########.fr       */
+/*   Updated: 2026/10/30 00:00:00 by dlesieur         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -17,6 +17,8 @@ import { useUIStore } from "./uiStore";
 /** Below this width the 260px pushing panel squeezes content to a sliver, so we
  *  fall back to the icon rail. Matches Tailwind's `md` breakpoint. */
 const MOBILE_MAX = 767;
+/** The phone breakpoint, shared with the sidebar's drawer (ActivitySidebar.module.scss). */
+export const PHONE_QUERY = `(max-width: ${MOBILE_MAX}px)`;
 
 /**
  * Keep the pushing sidebar usable on narrow viewports. When the viewport crosses
@@ -30,7 +32,7 @@ export function useResponsiveSidebar(): void {
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    const mql = window.matchMedia(`(max-width: ${MOBILE_MAX}px)`);
+    const mql = window.matchMedia(PHONE_QUERY);
 
     const apply = (mobile: boolean) => {
       const { sidebarMode, collapseToRail, expandToPanel } = useUIStore.getState();
