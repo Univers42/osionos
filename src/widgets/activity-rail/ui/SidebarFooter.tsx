@@ -89,49 +89,39 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({
       </div>
 
       {showInviteCTA && (
+        // The dismiss button sits beside the card, not inside it: a button nested in a
+        // button is unreachable to assistive tech (WCAG 4.1.2, #224).
         <div className="mx-2 mb-2 mt-1.5 relative">
-          <div
-            role="button"
-            tabIndex={0}
-            aria-label="Invite members"
+          <button
+            type="button"
             onClick={openInviteSettings}
-            onKeyDown={(event) => {
-              if (event.target !== event.currentTarget) return;
-              if (event.key !== "Enter" && event.key !== " ") return;
-              event.preventDefault();
-              openInviteSettings();
-            }}
-            className="relative p-2 rounded-lg overflow-hidden cursor-pointer hover:bg-[var(--osio-bg-hover)] transition-colors duration-(--osio-dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+            className="block w-full p-2 pr-8 text-left rounded-lg overflow-hidden cursor-pointer hover:bg-[var(--osio-bg-hover)] transition-colors duration-(--osio-dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
             style={{ boxShadow: "var(--osio-border-default) 0 0 0 1px" }}
           >
-            <div className="flex items-start gap-2">
+            <span className="flex items-start gap-2">
               <UserPlus
                 size={20}
+                aria-hidden
                 className="shrink-0 text-[var(--osio-fg-default)] mt-0.5"
               />
-              <div className="flex-1 min-w-0 pt-1">
-                <p className="text-xs font-semibold text-[var(--osio-fg-default)] leading-4">
+              <span className="flex-1 min-w-0 pt-1">
+                <span className="block text-xs font-semibold text-[var(--osio-fg-default)] leading-4">
                   Invite members
-                </p>
-                <p className="text-xs text-[var(--osio-fg-muted)] leading-4">
+                </span>
+                <span className="block text-xs text-[var(--osio-fg-muted)] leading-4">
                   Collaborate with your team.
-                </p>
-              </div>
-            </div>
-            {/* Dismiss button */}
-            <button
-              type="button"
-              aria-label="Dismiss invitation"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDismissInvite();
-              }}
-              onKeyDown={(e) => e.stopPropagation()}
-              className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-md text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)]"
-            >
-              <X size={14} />
-            </button>
-          </div>
+                </span>
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss invitation"
+            onClick={onDismissInvite}
+            className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center rounded-md text-[var(--osio-fg-muted)] transition-colors duration-(--osio-dur-fast) hover:bg-[var(--osio-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+          >
+            <X size={14} aria-hidden />
+          </button>
         </div>
       )}
     </>

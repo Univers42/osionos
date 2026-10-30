@@ -93,6 +93,22 @@ test("mergeServerPage: a newer metadata-only row never touches a page with an un
   assert.equal(mergeServerPage(local, page({ title: "Plan v2", updatedAt: T2 }), never), null);
 });
 
+// #82: updatedAt mixes the browser's and the server's clocks; the content version does not.
+test("mergeServerPage: a greater content version is newer even under an older updatedAt", () => {
+  const local = page({ content: body("C1"), updatedAt: T2, contentVersion: 3 });
+  const merged = mergeServerPage(local, page({ updatedAt: T1, contentVersion: 4 }), always);
+  assert.ok(merged);
+  assert.equal(merged.content, undefined, "the stale body unloads, so the next edit is made on the new one");
+  assert.equal(merged.contentVersion, 4);
+  assert.equal(mergeServerPage(local, page({ updatedAt: T1, contentVersion: 4 }), never), null);
+});
+
+test("mergeServerPage: an equal or lower content version under an older updatedAt keeps the local copy", () => {
+  const local = page({ content: body("C1"), updatedAt: T2, contentVersion: 3 });
+  assert.equal(mergeServerPage(local, page({ updatedAt: T1, contentVersion: 3 }), always), null);
+  assert.equal(mergeServerPage(local, page({ updatedAt: T1, contentVersion: 2 }), always), null);
+});
+
 test("mergeServerPages additive: local order kept, new pages appended, server-won pages listed", () => {
   const kept = page({ _id: Q, title: "Kept", content: body("q"), updatedAt: T3 });
   const stale = page({ content: body("C1") });

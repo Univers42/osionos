@@ -705,16 +705,24 @@ server.registerTool('osionos_update_page', {
     cover: z.string().optional(),
     text: z.string().optional().describe('Markdown/slash-like replacement content.'),
     content: z.array(z.unknown()).optional().describe('Explicit replacement osionos block array for rich notes.'),
+    baseVersion: z.number().int().min(0).optional().describe('The contentVersion osionos_read_page returned. A page changed since then refuses the replacement instead of losing that change.'),
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-}, async ({ pageId, title, icon, cover, text, content }) => {
+}, async ({ pageId, title, icon, cover, text, content, baseVersion }) => {
+  const path = `/api/pages/${encodeURIComponent(pageId)}`;
   const patch = {};
   if (title !== undefined) patch.title = title;
   if (icon !== undefined) patch.icon = icon;
   if (cover !== undefined) patch.cover = cover;
   if (Array.isArray(content)) patch.content = normalizeExplicitBlocks(content);
   else if (text !== undefined) patch.content = textToBlocks(text);
-  const page = await apiRequest(`/api/pages/${encodeURIComponent(pageId)}`, { method: 'PATCH', body: patch });
+  // Strict mode (#82) refuses an unversioned content PATCH. Without the agent's version,
+  // the one read here narrows the lost-update window to this read→write gap.
+  if (patch.content) {
+    const version = baseVersion ?? (await apiRequest(path))?.contentVersion;
+    if (Number.isSafeInteger(version)) patch.baseVersion = version;
+  }
+  const page = await apiRequest(path, { method: 'PATCH', body: patch });
   return textResult({ updated: compactPage(page), page });
 });
 
