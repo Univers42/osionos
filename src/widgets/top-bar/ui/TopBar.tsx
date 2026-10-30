@@ -14,6 +14,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { SettingsSectionId } from "@/features/settings/model/sections";
 import { buildCommands, type PaletteCommand } from "../model/commands";
 import { buildMenus } from "../model/menus";
+import { isElectronShell } from "../model/desktop";
 import { usePalette, useTopBarHotkeys } from "../model/usePalette";
 import { SharedSpacePresenceBar } from "@/features/collab/ui/SharedSpacePresenceBar";
 import { TopBarMenu } from "./TopBarMenu";
@@ -52,6 +53,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onOpenSettings }) => {
   return (
     <header
       data-testid="app-topbar"
+      data-osio-drag={isElectronShell() ? "" : undefined}
       className="flex h-[var(--osio-topbar-h)] shrink-0 items-center gap-1.5 bg-transparent px-2"
     >
       <div className="hidden md:block">

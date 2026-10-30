@@ -46,6 +46,11 @@ export function isDesktop(): boolean {
   return electronBridge() !== null || tauriGlobal()?.window != null;
 }
 
+/** True under Electron only: it draws no title bar, so the app's own bar is the window's chrome. */
+export function isElectronShell(): boolean {
+  return electronBridge() !== null;
+}
+
 /** Window min/max/close callbacks for the active shell, or null on the web. */
 export function windowControls(): WindowControlBridge | null {
   const electron = electronBridge();
