@@ -139,6 +139,8 @@ Tree tags used in every citation:
 
 ### D4. What the agent runs by default
 
+> **Amended 2026-10-30** (devil verdict `../vscode-backend/devil-verdict-2026-10-30.md`, C20): a `tunnel+` machine runs VS Code's server with **full access as the owner on that host**. It is an owner-only opt-in kind with its own consent text. The container default below still applies to every other use.
+
 **Context.**
 - A stolen browser session or a compromised relay can open a shell on the agent.
 - Whatever that shell can reach is the blast radius.
@@ -567,6 +569,8 @@ Stop: Ctrl-C or `osio-agent stop`. Revoke: `osio-agent unpair`.
 - **Unpair:** `osio-agent unpair` sends UNPAIR when connected, then deletes `key` and `agent.json` locally. Offline, it deletes them locally and prints *"revoke <id> in the app too"*.
 
 ### 7.4 Closed action set: what the agent ever does
+
+> **Amended 2026-10-30** (C20): the `tunnel+` kind adds one action, relaying channel `reh` to its own local VS Code server socket. The relay never chooses the host or port.
 
 1. Create and start its one container (§7.1) on the first OPEN.
 2. Exec the fixed shell for a new session.
