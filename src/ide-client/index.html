@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="osionos-app-origin" content="%OSIONOS_APP_ORIGIN%" />
+    <title>osionos machine</title>
+  </head>
+  <body>
+    <header class="bar">
+      <span id="status" class="status" data-state="connecting" role="status" aria-live="polite">Connecting…</span>
+      <span class="actions">
+        <button id="quick-open" type="button" title="Go to file (Ctrl+P)">Go to file</button>
+        <button id="new-terminal" type="button" title="New terminal">Terminal</button>
+      </span>
+    </header>
+    <main id="editor" class="editor"></main>
+    <section id="terminal" class="terminal" aria-label="Terminal" hidden></section>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

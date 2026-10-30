@@ -163,3 +163,38 @@ export function getIdeToken(workspaceId: string): Promise<IdeTokenResult> {
 export function invalidateIdeToken(workspaceId: string): void {
   defaultSource.invalidate(workspaceId);
 }
+
+// A node-scoped token opens a machine's shell, so the bridge mints it only after a fresh step-up
+// (devil verdict 2026-10-30, C10). Never cached: each is asked for when the IDE page needs it.
+export type NodeMintResult = { kind: "ok"; token: string } | { kind: "step-up" } | { kind: "unavailable"; reason: IdeUnavailableReason };
+
+export async function mintNodeToken(deps: Pick<IdeTokenDeps, "fetch" | "app">, workspaceId: string): Promise<NodeMintResult> {
+  const { apiBase, token } = await deps.app();
+  if (token === null) return { kind: "unavailable", reason: "signed-out" };
+  let response: Response;
+  try {
+    response = await deps.fetch(`${apiBase}/api/ide/token`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ workspaceId, scope: "node" }),
+    });
+  } catch {
+    return { kind: "unavailable", reason: "error" };
+  }
+  if (response.status === 403) {
+    const body = (await response.clone().json().catch(() => null)) as { code?: unknown } | null;
+    if (body?.code === "sudo_required") return { kind: "step-up" };
+  }
+  if (response.status !== 200) return { kind: "unavailable", reason: REASON_BY_STATUS[response.status] ?? "error" };
+  const minted = await parseMint(response);
+  if (minted === "not-allowed") return { kind: "unavailable", reason: "not-allowed" };
+  return minted ? { kind: "ok", token: minted.token } : { kind: "unavailable", reason: "error" };
+}
+
+export async function getNodeToken(workspaceId: string): Promise<NodeMintResult> {
+  const { sudoRequiredAwareFetch } = await import("@/shared/api/sudoRequired");
+  const client = await import("@/shared/api/client");
+  // The sudo-aware fetch raises the app's confirm-it-is-you prompt on a step-up refusal.
+  const fetchWithSudo = sudoRequiredAwareFetch((url, init) => fetch(url, init));
+  return mintNodeToken({ fetch: fetchWithSudo, app: async () => ({ apiBase: client.API_BASE, token: client.getActivePageJwt() }) }, workspaceId);
+}

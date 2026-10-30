@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { answerWithOrigin } from './corsOrigin.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { Redis } from 'ioredis';
@@ -200,6 +201,7 @@ export function createAiServer(options: AiServerOptions = {}): AiServer {
 		console.warn(JSON.stringify({ event: 'approval_sweep_failed', code: error.name }));
 	});
 	const server = createServer((request, response) => {
+		answerWithOrigin(request, response);
 		void handleRequest(request, response, deps);
 	});
 	return {
