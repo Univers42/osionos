@@ -63,15 +63,21 @@ export const api = {
   delete: (path) => send("DELETE", path, undefined),
 };
 `;
+// The owner's view of gated content is publishedView's (publish-owner-view.test.ts);
+// here it is whatever the test says, so the body can be checked for it.
+const OWNER_VIEW_STUB = `export async function shownForPublish(pageId) { return globalThis.__ownerView(pageId); }`;
 const url = (code: string): string => `data:text/javascript,${encodeURIComponent(code)}`;
 registerHooks({
   resolve(specifier, context, nextResolve) {
     if (specifier === "@/shared/api/client") return { url: url(CLIENT_STUB), shortCircuit: true };
     const resolved = nextResolve(specifier, context);
     if (resolved.url.endsWith("/src/shared/api/client.ts")) return { url: url(CLIENT_STUB), shortCircuit: true };
+    if (resolved.url.endsWith("/src/features/share/publishedView.ts")) return { url: url(OWNER_VIEW_STUB), shortCircuit: true };
     return resolved;
   },
 });
+let ownerView: (pageId: string) => string[] = () => [];
+Reflect.set(globalThis, "__ownerView", async (pageId: string) => ownerView(pageId));
 
 const { publishPage } = await import("@/features/share/publishApi");
 const { publishApp } = await import("@/features/marketplace/model/useMarketplaceApps");
@@ -107,19 +113,28 @@ Reflect.set(globalThis, "__publishFetch", async (path: string, init: { method: s
 
 const last = (): Recorded => recorded[recorded.length - 1];
 
-test("publishPage asks without the answer: the body is empty", async () => {
+test("publishPage asks without the answer: the body carries no acknowledgement", async () => {
   respond = () => json({ ok: true, token: "token-1" }, 200);
   const result = await publishPage("page-1");
   assert.equal(result.ok, true);
   assert.equal(last().path, "/api/pages/page-1/publish");
-  assert.deepEqual(last().body, {});
+  assert.deepEqual(last().body, { shown: [] });
 });
 
 test("publishPage carries the answer when the author says publish anyway", async () => {
   respond = () => json({ ok: true, token: "token-1" }, 200);
   const result = await publishPage("page-1", { acknowledgeWarning: true });
   assert.equal(result.ok, true);
-  assert.deepEqual(last().body, { acknowledgeWarning: true });
+  assert.deepEqual(last().body, { shown: [], acknowledgeWarning: true });
+});
+
+// #61: the bridge publishes a gated block or cell only when the publish names it.
+test("publishPage sends the gated ids the owner's view of that page shows", async () => {
+  respond = () => json({ ok: true, token: "token-1" }, 200);
+  ownerView = (pageId) => (pageId === "page-1" ? ["cell-shown", "block-shown"] : []);
+  await publishPage("page-1");
+  ownerView = () => [];
+  assert.deepEqual(last().body, { shown: ["cell-shown", "block-shown"] });
 });
 
 test("publishPage answers a 409 with the warning, not with an error", async () => {
@@ -128,7 +143,7 @@ test("publishPage answers a 409 with the warning, not with an error", async () =
   assert.equal(result.ok, false);
   assert.ok(!result.ok && "warning" in result, "the answer is not a warning");
   assert.equal(!result.ok && "warning" in result ? result.warning.terms[0] : "", "foul");
-  assert.deepEqual(last().body, {});
+  assert.deepEqual(last().body, { shown: [] });
 });
 
 test("publishApp maps a 409 warning to the warning", async () => {
