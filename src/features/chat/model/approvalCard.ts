@@ -105,12 +105,15 @@ export function approvalArgs(args: Record<string, unknown> | undefined): Approva
  * or the JSON of everything else.
  *
  * A list of blocks that are ONLY a type and a text — what add_blocks writes —
- * reads as `[type] text` lines: every character of it is still there, and
- * the reader sees the text instead of its escaped JSON.
+ * reads as `[type] text` lines, `[code mermaid] text` for a code block that
+ * names its language: every character of it is still there, and the reader
+ * sees the text instead of its escaped JSON.
  */
 function argumentText(value: unknown): string {
   if (typeof value === "string") return value;
-  if (isTextBlockList(value)) return value.map((block) => `[${block.type}] ${block.content}`).join("\n");
+  if (isTextBlockList(value)) {
+    return value.map((block) => `[${[block.type, block.language].filter(Boolean).join(" ")}] ${block.content}`).join("\n");
+  }
   if (value === undefined) return "";
   try {
     return JSON.stringify(value) ?? "";
@@ -119,14 +122,15 @@ function argumentText(value: unknown): string {
   }
 }
 
-/** A non-empty list whose every item is exactly `{ type, content }`, both strings. */
-function isTextBlockList(value: unknown): value is { type: string; content: string }[] {
+/** A non-empty list whose every item is exactly `{ type, content }`, or those and a `language`; all strings. */
+function isTextBlockList(value: unknown): value is { type: string; content: string; language?: string }[] {
   if (!Array.isArray(value) || value.length === 0) return false;
   return value.every((item) => {
     if (typeof item !== "object" || item === null) return false;
     const keys = Object.keys(item);
-    const { type, content } = item as { type?: unknown; content?: unknown };
-    return keys.length === 2 && typeof type === "string" && typeof content === "string";
+    const { type, content, language } = item as { type?: unknown; content?: unknown; language?: unknown };
+    const expectedKeys = typeof language === "string" ? 3 : 2;
+    return keys.length === expectedKeys && typeof type === "string" && typeof content === "string";
   });
 }
 

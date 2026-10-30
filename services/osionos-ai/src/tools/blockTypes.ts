@@ -36,6 +36,12 @@ export const BLOCK_TYPES = [
 ] as const;
 
 /**
+ * The language a code block may name. Lowercase, because the editor matches it
+ * exactly (`RENDERABLE_LANGUAGES.has(language)`): `mermaid` draws a diagram.
+ */
+export const CODE_LANGUAGE = /^[a-z0-9][a-z0-9+#._-]{0,31}$/;
+
+/**
  * The block types the assistant may add to a page that already exists: text only.
  *
  * An image, a video, a file or an embedded database carries a URL, and a block
