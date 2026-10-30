@@ -24,7 +24,9 @@ import {
   subscribeTopic,
   type LiveRealtimeEventFrame,
 } from '@/services/realtime-messages/wsTransport';
-import type { Attachment, ChatMessage, ReplyQuote } from '@/shared/chat/messageApi';
+import { fetchMessages, type Attachment, type ChatMessage, type ReplyQuote } from '@/shared/chat/messageApi';
+
+import { catchUpHistory } from './historyCatchUp';
 
 type Patch = (updater: (messages: ChatMessage[]) => ChatMessage[]) => void;
 
@@ -99,12 +101,21 @@ export function applyChatEvent(messages: ChatMessage[], frame: LiveRealtimeEvent
   return messages;
 }
 
-/** Subscribe while mounted; inert when the transport is disabled. */
+/** Subscribe while mounted; inert when the transport is disabled. After a reconnect the
+ *  history is read again: the gateway does not replay what it sent meanwhile (#172). */
 export function useChannelLive(workspaceId: string, channelId: string, patch: Patch): void {
   useEffect(() => {
     if (!workspaceId || !channelId) return undefined;
-    return subscribeTopic(chatTopic(workspaceId, channelId), (frame) => {
+    let alive = true;
+    const catchUp = () => {
+      fetchMessages(channelId).then(
+        (history) => { if (alive) patch((messages) => catchUpHistory(history.messages, messages)); },
+        (error: unknown) => console.warn('[chat] catching up after a reconnect failed:', error),
+      );
+    };
+    const dispose = subscribeTopic(chatTopic(workspaceId, channelId), (frame) => {
       patch((messages) => applyChatEvent(messages, frame));
-    });
+    }, catchUp);
+    return () => { alive = false; dispose(); };
   }, [workspaceId, channelId, patch]);
 }
