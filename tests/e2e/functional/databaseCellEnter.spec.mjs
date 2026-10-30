@@ -207,4 +207,35 @@ test.describe("database-cell-enter", () => {
     await record.getByRole("button", { name: "Close", exact: true }).click();
     await expect(name).toContainText("second third");
   });
+
+  // #162: the record page's metadata rows are shown by default and hidden from its own
+  // page menu, without touching the values.
+  test("a record page shows its properties by default and its page menu hides them", async ({ page }) => {
+    const block = await freshTable(page);
+    await addPropertyOfType(block, page, "Number", "Score");
+    const headers = await block.locator("thead th").allTextContents();
+    const score = cellIn(block, headers, "Score");
+    await selectCell(block, score);
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("42");
+    await page.keyboard.press("Enter");
+    const name = cellIn(block, headers, "Name");
+    await name.hover();
+    await name.getByText("OPEN").click();
+
+    const record = page.locator("aside[data-open-in]");
+    const properties = record.getByRole("group", { name: "Page properties" });
+    await expect(properties).toBeVisible();
+    await expect(properties).toContainText("Score");
+
+    await record.getByRole("button", { name: "Open page configuration" }).click();
+    await page.getByTestId("page-menu-appearance").click();
+    const toggle = page.getByTestId("page-menu-appearance-panel").getByRole("button", { name: "Page properties", exact: true });
+    await toggle.click();
+    await expect(properties).toBeHidden();
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+    await toggle.click();
+    await expect(properties).toBeVisible();
+    await expect(properties.getByLabel("Score", { exact: true })).toHaveValue("42");
+  });
 });

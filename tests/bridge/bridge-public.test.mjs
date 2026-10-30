@@ -12,6 +12,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { Readable } from 'node:stream';
 import { createPublicHandler } from '../../scripts/bridge-public.mjs';
 
 const config = { baasUrl: 'http://baas', serviceKey: 'k', allowedOrigin: 'http://app' };
@@ -181,5 +182,50 @@ describe('publish writes a sanitised snapshot', () => {
 		assert.equal(response.statusCode, 403);
 		assert.equal(response.body.message, refusal.message);
 		assert.equal(writes, 0);
+	});
+});
+
+// #61: the owner's client sends which gated cells and blocks its view showed; the
+// stored copy follows it, and anything the publish did not name stays private.
+describe('publish carries the owner\'s view of gated content', () => {
+	const content = [
+		{ id: 'b1', type: 'paragraph', content: 'shown block', visibleWhen: 'prop("Public")' },
+		{ id: 'L', type: 'layout', content: '', layoutCells: [
+			{ id: 'c1', colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 1, blocks: [], content: 'shown cell', visibilityFormula: 'prop("Done")' },
+			{ id: 'c2', colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 1, blocks: [], content: 'hidden cell', visibilityFormula: 'prop("Draft")' },
+		] },
+	];
+	const postWith = (body) => Object.assign(Readable.from([JSON.stringify(body)]), {
+		method: 'POST', headers: { authorization: 'Bearer t' }, socket: { remoteAddress: '1.2.3.4' },
+	});
+	async function publishWith(body) {
+		const stored = [];
+		const fetchImpl = async (url, init) => {
+			if (init?.method === 'POST') stored.push(JSON.parse(init.body));
+			return { ok: true, status: 200, text: async () => JSON.stringify([{ token: TOKEN }]) };
+		};
+		const handler = createPublicHandler({
+			config, verifySession, fetchImpl, env: ON,
+			verifyPageAccess: async () => ({ row: { owner_id: 'user-1', title: 'T', content } }),
+		});
+		const res = mockResponse();
+		await handler(new URL(`http://app/api/pages/${PAGE_ID}/publish`), postWith(body), res, config);
+		return { status: res.statusCode, stored: stored[0]?.content };
+	}
+
+	it('stores the gated cells and blocks the owner\'s view showed, and only those', async () => {
+		const { status, stored } = await publishWith({ shown: ['b1', 'c1'] });
+		assert.equal(status, 200);
+		assert.deepEqual(stored.map((block) => block.id), ['b1', 'L']);
+		assert.deepEqual(stored[1].layoutCells.map((cell) => cell.id), ['c1']);
+	});
+
+	it('treats a malformed decision as no decision: nothing gated goes public', async () => {
+		for (const shown of ['b1', [42, { id: 'c1' }], null]) {
+			const { status, stored } = await publishWith({ shown });
+			assert.equal(status, 200);
+			assert.deepEqual(stored.map((block) => block.id), ['L']);
+			assert.deepEqual(stored[0].layoutCells, []);
+		}
 	});
 });

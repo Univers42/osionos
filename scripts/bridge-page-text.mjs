@@ -23,11 +23,21 @@
 /** Flatten a page's JSONB block tree to plain text (snippet source). */
 export function pageContentText(content) {
 	const parts = [];
+	const push = (text) => {
+		if (typeof text === 'string' && text !== '') parts.push(text);
+	};
 	const walk = (blocks) => {
 		if (!Array.isArray(blocks)) return;
 		for (const block of blocks) {
-			if (block && typeof block.content === 'string') parts.push(block.content);
-			if (block && Array.isArray(block.children)) walk(block.children);
+			if (!block) continue;
+			push(block.content);
+			if (Array.isArray(block.children)) walk(block.children);
+			// A layout's words live in its cells: the label, the cell's own text, its blocks.
+			for (const cell of Array.isArray(block.layoutCells) ? block.layoutCells : []) {
+				push(cell?.label);
+				push(cell?.content);
+				walk(cell?.blocks);
+			}
 		}
 	};
 	walk(content);
