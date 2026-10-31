@@ -76,7 +76,17 @@ export function linkToApp(node: string, appOrigins: readonly string[]): AppLink 
   const host = appWindow();
   if (!host || appOrigins.length === 0) return null;
   let pinned: readonly string[] = appOrigins;
-  const send = (message: IdeMessage) => { for (const origin of pinned) host.postMessage(message, origin); };
+  // A browser refuses a scheme it cannot address (app:// outside the desktop app) by throwing;
+  // that origin cannot be the opener there, so it is skipped and the rest still hear the message.
+  const send = (message: IdeMessage) => {
+    for (const origin of pinned) {
+      try {
+        host.postMessage(message, origin);
+      } catch {
+        /* not an origin this browser can post to */
+      }
+    }
+  };
   const openListeners: Array<(path: string) => void> = [];
   let refresh: ReturnType<typeof setTimeout> | undefined;
   let settleFirst: { resolve: () => void; reject: (error: Error) => void } | undefined;
