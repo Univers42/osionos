@@ -16,7 +16,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isSafeRelativePath, readAppMessage, readIdeMessage } from "../../src/features/ide/vscode/ideFrameProtocol.ts";
+import { isSafeRelativePath, newNonce, readAppMessage, readIdeMessage } from "../../src/features/ide/vscode/ideFrameProtocol.ts";
 
 const APP = "https://app.example:3001";
 const IDE = "https://ide.example:4100";
@@ -74,4 +74,47 @@ test("an app message is read from any listed app origin and from no other", () =
     assert.equal(readAppMessage({ type: "osionos-ide/session", token: TOKEN }, origin, apps), null, origin);
   }
   assert.equal(readAppMessage({ type: "osionos-ide/session", token: TOKEN }, APP, []), null, "no listed origin");
+});
+
+// Own machines (devil verdict 2026-10-31, condition 5): before any token, the app sends a nonce and
+// the page answers with its machine id and a signature the bridge checks against the paired key.
+const MACHINE = "m-abcdefghijklmnop";
+const NONCE = "AAAAAAAAAAAAAAAAAAAAAA";
+const SIG = "s".repeat(86);
+
+test("hello carries one base64url nonce of at least 16 bytes, and nothing else", () => {
+  assert.deepEqual(readAppMessage({ type: "osionos-ide/hello", nonce: NONCE }, APP, [APP]), { type: "osionos-ide/hello", nonce: NONCE });
+  for (const nonce of ["short", "A".repeat(21), "A".repeat(129), `${"A".repeat(22)}=`, `${"A".repeat(22)}/`, 7]) {
+    assert.equal(readAppMessage({ type: "osionos-ide/hello", nonce }, APP, [APP]), null, String(nonce));
+  }
+  assert.equal(readAppMessage({ type: "osionos-ide/hello", nonce: NONCE, extra: 1 }, APP, [APP]), null);
+  assert.equal(readAppMessage({ type: "osionos-ide/hello", nonce: NONCE }, "https://evil.example", [APP]), null);
+});
+
+test("identity is one machine id and one Ed25519 signature, from the exact IDE origin", () => {
+  const identity = { type: "osionos-ide/identity", machineId: MACHINE, sig: SIG };
+  assert.deepEqual(readIdeMessage(identity, IDE, IDE), identity);
+  assert.equal(readIdeMessage(identity, APP, IDE), null);
+  assert.equal(readIdeMessage({ ...identity, machineId: "laptop" }, IDE, IDE), null);
+  assert.equal(readIdeMessage({ ...identity, sig: "s".repeat(85) }, IDE, IDE), null);
+  assert.equal(readIdeMessage({ ...identity, sig: `${"s".repeat(85)}+` }, IDE, IDE), null);
+  assert.equal(readIdeMessage({ ...identity, extra: 1 }, IDE, IDE), null);
+});
+
+test("a session may carry a bridge-signed machine token", () => {
+  const token = "osionos_mc1.abcdefgh.eyJzdWIiOiJ4In0.c2ln";
+  assert.deepEqual(readAppMessage({ type: "osionos-ide/session", token }, APP, [APP]), { type: "osionos-ide/session", token });
+  assert.equal(readAppMessage({ type: "osionos-ide/session", token: "osionos_mc1.ABCDEFGH.eyJ4.c2ln" }, APP, [APP]), null);
+  assert.equal(readAppMessage({ type: "osionos-ide/session", token: "osionos_mc1.eyJ4.c2ln" }, APP, [APP]), null);
+});
+
+test("a nonce is 16 random bytes in base64url and never repeats", () => {
+  const seen = new Set<string>();
+  for (let index = 0; index < 64; index += 1) {
+    const nonce = newNonce();
+    assert.match(nonce, /^[A-Za-z0-9_-]{22}$/);
+    assert.deepEqual(readAppMessage({ type: "osionos-ide/hello", nonce }, APP, [APP]), { type: "osionos-ide/hello", nonce });
+    seen.add(nonce);
+  }
+  assert.equal(seen.size, 64);
 });

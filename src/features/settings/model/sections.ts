@@ -25,6 +25,7 @@ import {
   Import,
   Keyboard,
   KeyRound,
+  Laptop,
   LayoutGrid,
   Mail,
   Palette,
@@ -196,6 +197,11 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
       { id: "authorized-apps", label: "Authorized apps", keywords: ["authorized", "apps", "mcp", "claude", "token", "access", "revoke"] },
       { id: "ssh-gpg-keys", label: "SSH and GPG keys", keywords: ["ssh", "gpg", "key", "fingerprint", "git", "signing", "deploy"] },
     ],
+  },
+  {
+    id: "machines", group: "features", label: "Machines", title: "Machines",
+    subtitle: "Your own computers, opened from osionos", icon: Laptop,
+    anchors: [{ id: "machines", label: "Machines", keywords: ["machine", "computer", "laptop", "pair", "terminal", "vs code", "ide", "node"] }],
   },
   {
     id: "public_pages", group: "features", label: "Published pages", title: "Published pages",
