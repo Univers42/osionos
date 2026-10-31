@@ -51,10 +51,10 @@ export function startNode({ serverLib, home, idePort, appOrigin }) {
 }
 
 /** A paired node: `home` holds .osionos/machine.json; no --node and no shared secret. */
-export function startPairedNode({ serverLib, home, idePort, appOrigin, machineId }) {
+export function startPairedNode({ serverLib, home, idePort, appOrigin, extraAppOrigins = [], machineId }) {
 	const env = { ...process.env, HOME: home };
 	delete env.OSIONOS_IDE_TOKEN_SECRET;
-	return spawnNode({ args: [], env, replaceEnv: true, serverLib, idePort, appOrigin, name: machineId });
+	return spawnNode({ args: extraAppOrigins.flatMap((origin) => ['--app-origin', origin]), env, replaceEnv: true, serverLib, idePort, appOrigin, name: machineId });
 }
 
 async function spawnNode({ args, env, replaceEnv = false, serverLib, idePort, appOrigin, name }) {
