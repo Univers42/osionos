@@ -41,4 +41,4 @@ Fix WCAG 2.2 SC 2.5.3 (Label in Name / `label-content-name-mismatch`) on `TurnIn
 - [x] `npm run test:quality` passes (0 errors).
 - [x] `tests/e2e/functional/selectionPanel.spec.mjs` passes (3/3).
 - [x] Commit signed with `-s` by `DJSurgeon`.
-- [ ] Documented in `docs/CHANGELOG.md`.
+- [x] Documented in `docs/CHANGELOG.md`.
