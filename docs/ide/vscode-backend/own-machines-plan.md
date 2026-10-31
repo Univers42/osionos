@@ -169,3 +169,72 @@ that the node on its loopback is the machine the list names.
     `OSIONOS_IDE_TOKEN_SECRET`.
 
 Record: groot ADR 0037.
+
+## API contract (binding for the node, the bridge, the app and the migration)
+
+Shared code: `scripts/machine-protocol.mjs`. It holds the token, the messages, `isLoopbackIdeOrigin` and
+`newMachineId`. Ed25519 helpers come from `scripts/ide-agent-frames.mjs` (`signMessage`,
+`verifyMessage`, `fingerprint`, `generateAgentKeyPair`, `rawPublicKey`). `origin` in every signed
+message is the bridge's public origin (`config.publicOrigin`, e.g. `https://baas.tail10f2ea.ts.net:10000`).
+
+**Bridge config.**
+- `OSIONOS_MACHINE_SIGNING_KEY` is the current 32-byte seed. Optional
+  `OSIONOS_MACHINE_SIGNING_KEY_NEXT` is the next one (rotation).
+- No current key means the routes answer 503 `machines_unavailable`; there is no partial boot.
+
+**Routes.** All bodies are JSON and every error is `{ ok:false, code, message }`. `S` = app session
+(`osionos_v1`); `S+sudo` = session plus a live step-up grant (`requireSudo`, scripts/bridge-guard.mjs).
+
+| Route | Auth | Body | Success | Errors |
+|---|---|---|---|---|
+| `POST /api/machines/pair/start` | none (sig) | `{pubkey,name,platform,version,ts,sig}`; sig = `pairStartMessage` | 200 `{pairId, code:"BCDF-GHJK", expiresIn:300, interval:5}` | 400 `bad_request`, 401 `bad_signature`, 429 `rate_limited` |
+| `POST /api/machines/pair/claim` | S+sudo | `{code}` | 200 `{pairId,name,platform,fingerprint,startIp,yourIp}`. The code is consumed on the first claim. | 404 `not_found` (unknown, used or expired: same body), 429 |
+| `POST /api/machines/pair/approve` | S+sudo, the claimer | `{pairId}` | 201 `{id}`. `is_default` = false. | 404, 409 `machine_cap` (5) |
+| `POST /api/machines/pair/decline` | S, the claimer | `{pairId}` | 204 | 404 |
+| `POST /api/machines/pair/poll` | none (sig) | `{pairId,ts,sig}`; sig = `pairPollMessage` with the start key | 202 `{status:"pending"}`, or 200 once `{machineId, ownerId, accountEmail, bridgeKeys:[{kid,publicKey}]}`, then the entry is gone | 401, 404 `not_found`, 410 `declined` |
+| `POST /api/machines/heartbeat` | none (sig) | `{machineId,ideOrigin,ts,sig}`; sig = `heartbeatMessage`; \|ts−now\| ≤ 60 s and ts > last ts | 200 `{bridgeKeys:[{kid,publicKey,sig?}]}`. A next key carries `sig` = current key over `nextKeyMessage`. | 400 `stale`, 401, 410 `gone` (unknown and revoked look the same) |
+| `GET /api/machines` | S | — | 200 `{machines:[{id,name,platform,fingerprint,isDefault,online,ideOrigin,lastSeenAt}]}`. `ideOrigin` is null when offline. | 401 |
+| `PUT /api/machines/:id/default` | S | — | 204 | 404 |
+| `DELETE /api/machines/:id` | S+sudo | — | 204 (sets `revoked_at`, drops presence) | 404 |
+| `POST /api/machines/:id/identity` | S | `{nonce,sig}`; sig = `whoamiMessage` with the row's pubkey and the presence `ideOrigin` | 200 `{ok:true}` | 404, 409 `offline`, 422 `identity_mismatch` |
+| `POST /api/machines/:id/token` | S+sudo | — | 200 `{token, exp}`. aud = presence `ideOrigin`. `revoked_at` is read from Postgres. | 404, 409 `offline`, 403 `not_allowed` |
+
+- **Presence** lives in kv `machine-presence:<id>` = `{ideOrigin, ts, lastSeenAt}`, with a 90 s TTL.
+- **Pending pairings** live in memory and expire after 300 s.
+- **Rate limits** use `createSlidingLimiter`:
+  - start: per IP and global;
+  - claim failures: per user and global.
+
+**Table** (groot `models/osionos-machines-migration.sql`): `public.osionos_machines`.
+
+| Column | Definition |
+|---|---|
+| `id` | `text` primary key, `^m-[a-z2-7]{16}$` |
+| `user_id` | `uuid` not null, references `auth.users` on delete cascade |
+| `name` | `text` 1–64 chars |
+| `platform` | `text` |
+| `pubkey` | `text`, 43 base64url chars |
+| `fingerprint` | `text` |
+| `is_default` | `boolean` default false; at most one true per user (partial unique index) |
+| `created_at` | `timestamptz` |
+| `revoked_at` | `timestamptz` null |
+
+- `service_role` has every right.
+- `osionos_account_user` may SELECT `id, name, platform, fingerprint, is_default, created_at, revoked_at`
+  on its own rows (RLS `user_id = auth.uid()`). It has no `pubkey` and no write.
+- Erasure deletes the rows.
+
+**Node** (`packages/osionos-node`):
+- `cli.mjs pair --bridge <url> --name <n> [--accept-account <email>]`:
+  - writes `~/.osionos/machine.json` (0600): `{machineId, ownerId, accountEmail, bridgeUrl,
+    bridgeKeys:{kid:publicKey}, privateKey (pkcs8 b64url)}`;
+  - writes it only after a typed `y`, or when `--accept-account` equals the returned email.
+- `serve` with `machine.json` present:
+  - node id = `machineId`; owner = `ownerId`;
+  - accepts `osionos_mc1` at `POST /api/node/session` (aud = its ideOrigin, jti single-use);
+  - refuses to start if `OSIONOS_IDE_TOKEN_SECRET` is also set (condition 10);
+  - heartbeats every 30 s;
+  - on a 410 it closes every socket, removes `machine.json` and stops.
+- **`POST /api/machine/whoami {nonce}`**: same-origin only. It answers `{machineId, sig}` signed over
+  `whoamiMessage`.
+- **`GET /api/machine/home`**: needs the node cookie. It answers `{folder: os.homedir()}`.
