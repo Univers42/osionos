@@ -85,7 +85,9 @@ test('a paired machine opens its home folder after the identity check, with a br
 		machineId: MACHINE, ownerId: OWNER, accountEmail: 'owner@example.com', bridgeUrl: BRIDGE,
 		bridgeKeys: { [KEY.kid]: KEY.publicKey }, privateKey: privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url'),
 	});
-	const node = await startPairedNode({ serverLib: SERVER_LIB, home: root, idePort: IDE_PORT, appOrigin: APP_ORIGIN, machineId: MACHINE });
+	// Like the live node: the web app and the desktop app. A browser cannot post to app://, and the
+	// window must still reach the web app that opened it.
+	const node = await startPairedNode({ serverLib: SERVER_LIB, home: root, idePort: IDE_PORT, appOrigin: APP_ORIGIN, extraAppOrigins: ['app://osionos'], machineId: MACHINE });
 	const app = await startApp(`${IDE_ORIGIN}/?node=${MACHINE}`, publicKeyRaw);
 	const browser = await chromium.launch({ executablePath: process.env.OSIONOS_E2E_CHROME || undefined, args: ['--no-proxy-server'] });
 	t.after(async () => { await browser.close(); await app.close(); await node.stop(); rmSync(root, { recursive: true, force: true }); });
