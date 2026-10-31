@@ -177,6 +177,22 @@ scripts, Playwright for the browser. Each is green in CI before the phase is cal
 - **C6. The browser credential is a node capability in a cookie.**
   - It is minted by a `POST` carrying a valid `osionos_ide1` bearer and the exact Origin.
   - Cookie attributes: `__Host-` prefix, `HttpOnly`, `Secure`, `SameSite=Strict`.
+  - **Amended 2026-10-31 (devil, PROCEED-WITH-CONDITIONS).** Electron 32.2.7 (Chromium 128) stores no
+    `__Host-` cookie on `http://127.0.0.1`. Measured in the C23 run: 0 cookies after a 204 mint,
+    then 401 on every request. A `document.cookie` probe stored `Secure`, `SameSite=Strict` and plain
+    cookies, but not the `__Host-` one.
+    - When the configured IDE origin is plain http on a 127.0.0.0/8 literal, the name drops the
+      prefix (`osio-node-<id>`). Every other attribute stays.
+    - Every other origin keeps `__Host-`: `localhost`, RFC 1918, tailnet and https.
+    - The mode comes from the configured origin only. Each origin reads only its own name.
+    - Every value under that name is verified, so a second cookie set from another local port
+      cannot shadow the real one.
+    - Why it loses nothing: an IP literal has no subdomains, and cookies ignore ports, so the
+      prefix never isolated anything there. The MAC is what protects the value.
+    - A non-loopback http node in the desktop app stays unsupported until it is ruled on.
+  - **TEST:** `cookiePrefixFor` per origin kind, both `Set-Cookie` strings exactly, the other
+    mode's name gets 401, and a forged duplicate never shadows the real cookie
+    (`tests/bridge/osionos-node-origin.test.mjs`).
   - The value is MAC'd with a key derived from the IDE secret under a new label, and binds `sub`, `node_id` and `exp ≤ 900 s`.
   - **TEST:** the capability, `osionos_ide1` and `pc1` do not verify as one another, in all 6 directions.
   - **TEST:** an expired capability gets 401.
