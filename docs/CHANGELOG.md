@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Accessibility Remediation across Core Surfaces**:
+  - `TodoDueDate`: Upgraded floating "Add date" affordance and active due date button to 24px minimum touch targets with token-driven focus outline rings (WCAG 2.2 SC 2.5.8, SC 2.4.11).
   - `TableParts`: Upgraded table row drag handle to 24x24px minimum touch target with focus ring and margin offset (WCAG 2.2 SC 2.5.8, SC 2.4.11).
   - `BlockCollapseToggle` & `ToggleBlockEditor`: Upgraded block collapse/expand chevrons to 24x24px minimum touch targets with token-driven `:focus-visible` outline rings, preserving text baseline alignment via negative margins (WCAG 2.2 SC 2.5.8, SC 2.4.11).
   - `SidebarFooter`: Refactored invite CTA card container to eliminate nested interactive button structure (`nested-interactive`), match accessible name with visible text (`label-content-name-mismatch`), and enforce 24x24px minimum touch target size on dismiss button (`target-size`, WCAG 2.2 SC 2.5.8).

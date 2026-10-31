@@ -45,4 +45,4 @@ Upgrade `TodoDueDate.tsx` buttons (both floating "Add date" affordance and activ
 - [x] `npm run test:quality` passes (0 errors).
 - [x] `npm run test:e2e -- tests/e2e/visual/a11y.spec.mjs` passes (0 violations).
 - [x] Commit signed with `-s` by `DJSurgeon`.
-- [ ] Documented in `docs/CHANGELOG.md`.
+- [x] Documented in `docs/CHANGELOG.md`.
