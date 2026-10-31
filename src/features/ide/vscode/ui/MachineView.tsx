@@ -25,7 +25,10 @@ import { getNodeToken } from "../../api/ideToken";
 import { linkMachineFrame, type MachineViewState } from "../machineLink";
 import { readMachineTarget } from "../machineSession";
 
-const MACHINE_BASE = (((import.meta.env as Record<string, string | undefined>)["VITE_OSIONOS_MACHINE_URL"] ?? "").trim()).replace(/\/+$/, "");
+// osionos-node's own default listen address; VITE_OSIONOS_MACHINE_URL overrides it when a machine's
+// IDE origin lives elsewhere (another port, a tailnet name behind a proxy).
+const DEFAULT_MACHINE_URL = "http://127.0.0.1:4100";
+const MACHINE_BASE = (((import.meta.env as Record<string, string | undefined>)["VITE_OSIONOS_MACHINE_URL"] || DEFAULT_MACHINE_URL).trim()).replace(/\/+$/, "");
 
 const MESSAGE: Partial<Record<MachineViewState, string>> = {
   "step-up": "Confirm it is you to open this machine.",
@@ -52,7 +55,7 @@ export function MachineView() {
   const folder = target?.folder ?? "";
 
   useEffect(() => {
-    if (!node || !MACHINE_BASE || !workspaceId) return undefined;
+    if (!node || !workspaceId) return undefined;
     const link = linkMachineFrame({
       frame: () => windowRef.current,
       ideOrigin: new URL(MACHINE_BASE).origin,
@@ -77,7 +80,6 @@ export function MachineView() {
   }, [grants]);
 
   if (!target) return <p className="p-6 text-sm text-[var(--osio-fg-muted)]">This address names no machine folder.</p>;
-  if (!MACHINE_BASE) return <p className="p-6 text-sm text-[var(--osio-fg-muted)]">No machine is connected to this osionos.</p>;
   const src = `${MACHINE_BASE}/?${new URLSearchParams({ node: target.node, folder: target.folder })}`;
   // A popup needs the click itself; the window keeps its opener so the token can reach it.
   const open = () => {
