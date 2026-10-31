@@ -21,6 +21,9 @@
 // Caveat: without a configured client-IP header the start limiter keys on the socket peer, which
 // behind Funnel or a proxy is one address for everyone: one caller can then stall pairing for all
 // users (condition 9). That is the safe direction; nobody pairs more, everybody pairs later.
+// Caveat: the global failed-claim cap (500 per 10 min) is a lockout lever: a few hundred accounts
+// failing on purpose stop every user from claiming for 10 minutes. It is sized so that needs many
+// accounts, not one; brute force across the 20^8 code space stays out of reach either way.
 // Caveat: an approved entry still expires 300 s after its start. A node that stops polling in
 // that window leaves a row it never learns about; the owner removes it from the list.
 import { randomBytes, randomInt } from 'node:crypto';
@@ -33,7 +36,8 @@ import { pairPollMessage, pairStartMessage } from './machine-protocol.mjs';
 const CODE_ALPHABET = 'BCDFGHJKLMNPQRSTVWXZ';
 const CODE_RE = /^[BCDFGHJKLMNPQRSTVWXZ]{8}$/;
 const NAME_RE = /^[A-Za-z0-9._-]{1,64}$/;
-const PLATFORM_RE = /^[a-z0-9._-]{1,32}$/;
+// The machines table CHECK, here so a start the row would refuse is a 400 and not a 500 at approve.
+const PLATFORM_RE = /^(linux|darwin|win32)-(x64|arm64)$/;
 const VERSION_RE = /^\d{1,4}\.\d{1,4}\.\d{1,4}(-[A-Za-z0-9.]{1,16})?$/;
 const LIFE_MS = 300_000;
 const POLL_INTERVAL_S = 5;
@@ -64,7 +68,7 @@ export function createMachinePairing({ now = Date.now } = {}) {
 	const startsPerClient = createSlidingLimiter({ limit: 5, windowMs: WINDOW_MS, now });
 	const startsGlobal = createSlidingLimiter({ limit: 20, windowMs: WINDOW_MS, now });
 	const failuresPerUser = createSlidingLimiter({ limit: 5, windowMs: WINDOW_MS, now });
-	const failuresGlobal = createSlidingLimiter({ limit: 50, windowMs: WINDOW_MS, now });
+	const failuresGlobal = createSlidingLimiter({ limit: 500, windowMs: WINDOW_MS, now });
 	const isLive = (entry) => entry !== undefined && now() - entry.startedAt <= LIFE_MS;
 
 	function drop(entry) {
@@ -125,8 +129,12 @@ export function createMachinePairing({ now = Date.now } = {}) {
 	}
 	const release = (entry) => { entry.reserved = false; };
 	const markApproved = (entry, approved) => { entry.approved = approved; };
+	// An entry whose row is being written is no longer the claimer's to decline: the row would land
+	// while the node reads 410 and forgets its key.
 	function decline(userId, pairId) {
-		claimedBy(userId, pairId).declined = true;
+		const entry = claimedBy(userId, pairId);
+		if (entry.reserved) throw notFound();
+		entry.declined = true;
 	}
 
 	function poll({ pairId, ts, sig } = {}, { origin }) {

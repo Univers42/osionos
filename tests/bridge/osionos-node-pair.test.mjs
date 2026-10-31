@@ -10,7 +10,7 @@ import { join } from 'node:path';
 
 import { pairMachine } from '../../packages/osionos-node/pair.mjs';
 import { createHeartbeat } from '../../packages/osionos-node/heartbeat.mjs';
-import { saveMachine } from '../../packages/osionos-node/machine-identity.mjs';
+import { loadMachine, saveMachine } from '../../packages/osionos-node/machine-identity.mjs';
 import { bridgeKeyFromSeed, heartbeatMessage, nextKeyMessage, pairPollMessage, pairStartMessage } from '../../scripts/machine-protocol.mjs';
 import { b64url, fromB64url, generateAgentKeyPair, verifyMessage } from '../../scripts/ide-agent-frames.mjs';
 
@@ -98,6 +98,30 @@ test('the heartbeat signs machine, origin and time; a signed next key is pinned,
 	const later = sent.length;
 	await beat.once();
 	assert.ok(sent[later].ts > ts, 'each beat carries a later time');
+});
+
+test('rotation: a pinned next key is written to machine.json, and a key the bridge no longer lists is dropped', async (t) => {
+	const { file } = pairedFile(t);
+	const keys = { [KEY.kid]: KEY.publicKey };
+	const nextSig = b64url(sign(null, nextKeyMessage({ origin: BRIDGE, kid: NEXT.kid, publicKey: NEXT.publicKey }), KEY.privateKey));
+	let offered = [{ kid: KEY.kid, publicKey: KEY.publicKey }, { kid: NEXT.kid, publicKey: NEXT.publicKey, sig: nextSig }];
+	const beat = createHeartbeat({ file, keys, ideOrigin: 'http://127.0.0.1:4100', fetchImpl: async () => reply(200, { bridgeKeys: offered }), onGone: () => assert.fail('not gone') });
+	await beat.once();
+	assert.deepEqual(Object.keys(loadMachine(file).bridgeKeys).sort(), [KEY.kid, NEXT.kid].sort(), 'survives a restart');
+	offered = [{ kid: NEXT.kid, publicKey: NEXT.publicKey }];
+	await beat.once();
+	assert.deepEqual(Object.keys(keys), [NEXT.kid]);
+	assert.deepEqual(Object.keys(loadMachine(file).bridgeKeys), [NEXT.kid]);
+});
+
+test('a reply that lists none of the pinned keys changes nothing', async (t) => {
+	const { file } = pairedFile(t);
+	const keys = { [KEY.kid]: KEY.publicKey };
+	const stranger = bridgeKeyFromSeed(randomBytes(32).toString('base64url'));
+	const beat = createHeartbeat({ file, keys, ideOrigin: 'http://127.0.0.1:4100', fetchImpl: async () => reply(200, { bridgeKeys: [{ kid: stranger.kid, publicKey: stranger.publicKey }] }), onGone: () => assert.fail('not gone') });
+	await beat.once();
+	assert.deepEqual(keys, { [KEY.kid]: KEY.publicKey });
+	assert.deepEqual(loadMachine(file).bridgeKeys, { [KEY.kid]: KEY.publicKey });
 });
 
 test('a 410 removes machine.json and calls onGone', async (t) => {

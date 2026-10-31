@@ -15,7 +15,8 @@
 // it holds no secret that could mint one; its cookie cap is keyed by a secret that never leaves
 // this process.
 import { createPrivateKey, randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 import { isNodeId } from '../../scripts/ide-token.mjs';
 import { signMessage } from '../../scripts/ide-agent-frames.mjs';
@@ -31,19 +32,36 @@ function isMachine(value) {
 		&& value.bridgeKeys !== null && typeof value.bridgeKeys === 'object' && Object.keys(value.bridgeKeys).length > 0;
 }
 
+// The key in this file opens the owner's files and terminal to whoever holds it, and whoever can
+// write its folder can swap the file for one naming their own account. Windows has no uid: skipped.
+function assertPrivate(path, forbiddenBits, problem) {
+	const stat = statSync(path);
+	const uid = process.getuid?.();
+	if (uid !== undefined && stat.uid !== uid) throw new Error(`${path} belongs to another user; refusing it`);
+	if (stat.mode & forbiddenBits) throw new Error(`${path} is ${problem}`);
+}
+const assertPrivateFolder = (folder) => assertPrivate(folder, 0o022, 'writable by others; chmod 700 it');
+const assertPrivateFile = (file) => assertPrivate(file, 0o077, 'readable or writable by others; chmod 600 it or pair again');
+
 export function loadMachine(file) {
 	if (!existsSync(file)) return null;
+	assertPrivateFolder(dirname(file));
+	assertPrivateFile(file);
 	const value = JSON.parse(readFileSync(file, 'utf8'));
 	if (!isMachine(value)) throw new Error(`${file} is not a machine identity; pair again (osionos-node pair)`);
 	return value;
 }
 
-/** Written to a 0600 temp file and renamed, so no reader ever sees it partial or world-readable. */
+/**
+ * Written to a fresh 0600 temp file (`wx`: never through a name someone planted) and renamed, so
+ * no reader ever sees it partial or world-readable.
+ */
 export function saveMachine(file, machine) {
 	if (!isMachine(machine)) throw new Error('refusing to save an incomplete machine identity');
-	const temp = `${file}.${process.pid}.tmp`;
-	writeFileSync(temp, `${JSON.stringify(machine, null, 2)}\n`, { mode: 0o600 });
-	chmodSync(temp, 0o600);
+	mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+	assertPrivateFolder(dirname(file));
+	const temp = `${file}.${randomBytes(8).toString('hex')}.tmp`;
+	writeFileSync(temp, `${JSON.stringify(machine, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
 	renameSync(temp, file);
 }
 
