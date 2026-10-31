@@ -17,16 +17,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { boundedCommand, machineOptions, readMachineTarget } from "../../src/features/ide/vscode/machineSession.ts";
+import { boundedCommand, machineOptions, readHomeFolder, readMachineTarget } from "../../src/features/ide/vscode/machineSession.ts";
 
 const COMMIT = "59c988c744a240b05b039f57b856a5312f19d5b1";
 
-test("the page URL names one node and one absolute folder", () => {
+test("the legacy page URL names one node and one absolute folder", () => {
   assert.deepEqual(readMachineTarget("?node=laptop&folder=%2Fhome%2Fme%2Fproj"), { node: "laptop", folder: "/home/me/proj" });
   for (const search of ["?node=Laptop&folder=/x", "?node=laptop", "?node=laptop&folder=relative", "?node=laptop&folder=/a/../b", "?node=laptop&folder=/a%00b", "?node=a&node=b&folder=/x", "?folder=/x"]) {
     assert.equal(readMachineTarget(search), null, search);
   }
   assert.deepEqual(readMachineTarget("?node=vm&folder=/"), { node: "vm", folder: "/" });
+});
+
+// Own machines: the app sends no path, the node names its home after the session (plan §6).
+test("a paired machine id may leave the folder out; a folder it names is still checked", () => {
+  const node = "m-abcdefghijklmnop";
+  assert.deepEqual(readMachineTarget(`?node=${node}`), { node, folder: null });
+  assert.deepEqual(readMachineTarget(`?node=${node}&folder=%2Fsrv`), { node, folder: "/srv" });
+  for (const search of [`?node=${node}&folder=rel`, `?node=${node}&folder=/a&folder=/b`, `?node=${node}&folder=/a/../b`]) {
+    assert.equal(readMachineTarget(search), null, search);
+  }
+});
+
+test("the home the node answers must be an absolute, normal folder", () => {
+  assert.equal(readHomeFolder({ folder: "/home/me" }), "/home/me");
+  for (const body of [{ folder: "home/me" }, { folder: "/a/../b" }, { folder: 7 }, {}, null, "/"]) {
+    assert.equal(readHomeFolder(body), null, JSON.stringify(body));
+  }
 });
 
 test("the client connects through the node prefix with no connection token", () => {
