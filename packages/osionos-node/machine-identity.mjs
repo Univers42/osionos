@@ -15,7 +15,7 @@
 // it holds no secret that could mint one; its cookie cap is keyed by a secret that never leaves
 // this process.
 import { createPrivateKey, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import { isNodeId } from '../../scripts/ide-token.mjs';
@@ -58,8 +58,11 @@ export function loadMachine(file) {
  */
 export function saveMachine(file, machine) {
 	if (!isMachine(machine)) throw new Error('refusing to save an incomplete machine identity');
-	mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
-	assertPrivateFolder(dirname(file));
+	const folder = dirname(file);
+	mkdirSync(folder, { recursive: true, mode: 0o700 });
+	// An existing ~/.osionos of ours made by an older install (0775) is tightened, never trusted as is.
+	if (statSync(folder).uid === process.getuid?.()) chmodSync(folder, 0o700);
+	assertPrivateFolder(folder);
 	const temp = `${file}.${randomBytes(8).toString('hex')}.tmp`;
 	writeFileSync(temp, `${JSON.stringify(machine, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
 	renameSync(temp, file);
