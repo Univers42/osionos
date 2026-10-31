@@ -1,67 +1,44 @@
-# TASK SPEC: Batch 1, Component 4 — Remediate FormatGrid Color Controls & Target Size
+# TASK SPEC: Selection Toolbar Chrome, Component 5 — Remediate TurnIntoMenu Accessible Name
 
 ## 1. Goal
-Remediate `FormatGrid.tsx` color controls to satisfy WCAG 2.2 SC 2.5.8 (Target Size Minimum >= 24x24 px), eliminate target overlap between text and background color buttons, and provide token-driven `:focus-visible` rings, while preserving all existing selection toolbar functionality and test compatibility.
+Fix WCAG 2.2 SC 2.5.3 (Label in Name / `label-content-name-mismatch`) on `TurnIntoMenu.tsx` trigger button by ensuring its accessible name includes the visible block type label (`turnIntoRowLabel(blockType)`), while preserving `title="Turn into"` for test compatibility and tooltips.
 
 ---
 
 ## 2. Exact Filepaths
-1. `src/components/blocks/selection-toolbar/FormatGrid.tsx`
-2. `tests/e2e/visual/a11y.spec.mjs`
+1. `src/components/blocks/selection-toolbar/TurnIntoMenu.tsx`
 
 ---
 
 ## 3. Technical Requirements
 
-### `src/components/blocks/selection-toolbar/FormatGrid.tsx`
-1. **Separate Background Color into Dedicated Toolbar Button**:
-   - Replace the 16x16 px absolute button (`h-4 w-4`) inside the text color cell with a standalone `ToolbarIconButton`:
-     ```tsx
-     <ToolbarIconButton
-       label="Background color"
-       active={palette === "background"}
-       onClick={() => onTogglePalette("background")}
-     >
-       <Highlighter className={TOOLBAR_ICON} strokeWidth={2.25} aria-hidden />
-     </ToolbarIconButton>
-     ```
-   - Standard 36x36 px touch target (`h-9 w-9`), with full focus styling and zero target overlap.
-
-2. **Update Grid Layout**:
-   - Switch container grid from `grid-cols-5` to `grid-cols-6`:
-     ```tsx
-     <div className="grid grid-cols-6 justify-items-center gap-y-1">
-     ```
-   - Row 1: Text color, Background color, Bold, Italic, Underline, Clear formatting
-   - Row 2: Add link, Strikethrough, Inline code, Equation, MoreMenu
-
-### `tests/e2e/visual/a11y.spec.mjs`
-- Add scenario `"a11y: inline text selection toolbar surface"`:
-  - Create paragraph, select text to trigger `[data-testid="inline-selection-toolbar"]`.
-  - Run `runA11yAudit(page, "inline text selection toolbar surface")`.
-  - Assert `expect(results.violations).toEqual([]);`.
+### `src/components/blocks/selection-toolbar/TurnIntoMenu.tsx`
+- On the trigger button (line 126-138):
+  Update:
+  ```tsx
+  aria-label={`Turn into: ${turnIntoRowLabel(blockType)}`}
+  ```
+  Ensures accessible name contains the visible label (e.g., "Normal Text", "Heading 1") satisfying WCAG 2.2 SC 2.5.3.
 
 ---
 
 ## 4. Verification Protocol (Docker-First)
 1. `npm run test:quality` -> 0 errors.
 2. `npm run test:e2e -- tests/e2e/functional/selectionPanel.spec.mjs` -> 3/3 passed.
-3. `npm run test:e2e -- tests/e2e/visual/a11y.spec.mjs` -> 5/5 passed (0 violations).
+3. `npm run test:e2e -- tests/e2e/functional/inlineToolbar.spec.mjs` -> passed.
 
 ---
 
 ## 5. Commit Plan
-- Message: `fix(a11y): separate selection toolbar background color into 36px touch target`
+- Message: `fix(a11y): align turn into menu button accessible name with visible label`
 - Author: `DJSurgeon <djsurgeon83@gmail.com>`
 - Flag: `-s`
 
 ---
 
 ## 6. Done-When
-- [x] `FormatGrid.tsx` updated with standalone `ToolbarIconButton` for background color in `grid-cols-6`.
-- [x] `tests/e2e/visual/a11y.spec.mjs` tests inline selection toolbar with 0 violations.
+- [x] `TurnIntoMenu.tsx` updated with accessible name containing visible label text.
 - [x] `npm run test:quality` passes (0 errors).
-- [x] `tests/e2e/functional/selectionPanel.spec.mjs` passes.
-- [x] `tests/e2e/visual/a11y.spec.mjs` passes.
+- [x] `tests/e2e/functional/selectionPanel.spec.mjs` passes (3/3).
 - [x] Commit signed with `-s` by `DJSurgeon`.
-- [x] Documented in `docs/CHANGELOG.md`.
+- [ ] Documented in `docs/CHANGELOG.md`.

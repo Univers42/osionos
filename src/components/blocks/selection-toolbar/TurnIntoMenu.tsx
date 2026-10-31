@@ -127,7 +127,7 @@ export const TurnIntoMenu: React.FC<TurnIntoMenuProps> = ({
         ref={triggerRef}
         type="button"
         title="Turn into"
-        aria-label="Turn into"
+        aria-label={`Turn into: ${turnIntoRowLabel(blockType)}`}
         aria-haspopup="menu"
         aria-expanded={open}
         data-selection-panel-control
