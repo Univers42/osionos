@@ -19,7 +19,7 @@ import test from "node:test";
 
 import type { Machine } from "../../src/features/machines/api/machinesApi.ts";
 import {
-  chooseMachine, normalizePairCode, pairCommand, pairWarning, readMachineRoute, serveCommand, shellWord, terminalOpensMachine,
+  chooseMachine, normalizePairCode, pairCommand, pairWarning, readMachineRoute, serveCommand, shellWord, terminalOffer, terminalOpensMachine,
 } from "../../src/features/machines/model/machineChoice.ts";
 
 const machine = (id: string, online: boolean, isDefault = false): Machine => ({
@@ -87,4 +87,11 @@ test("the Terminal action opens the machine window once the list is known, even 
   assert.equal(terminalOpensMachine([C]), true);
   assert.equal(terminalOpensMachine([]), true, "no machine yet: /machine shows how to pair one");
   assert.equal(terminalOpensMachine(null), false, "not loaded yet: the dock keeps its terminal");
+});
+
+test("the terminal panel offers the person's own machine: open, start it, pair one, or wait for the list", () => {
+  assert.deepEqual(terminalOffer(null), { kind: "loading" });
+  assert.deepEqual(terminalOffer([]), { kind: "pair" });
+  assert.deepEqual(terminalOffer([machine("m-cccccccccccccccc", false, true)]), { kind: "start", name: "cccc" });
+  assert.deepEqual(terminalOffer([A, B]), { kind: "open", name: "bbbb" }, "the default online machine");
 });
