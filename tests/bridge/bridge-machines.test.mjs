@@ -16,7 +16,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { bridgeKeyFromSeed, nextKeyMessage, verifyMachineToken } from '../../scripts/machine-protocol.mjs';
+import { bridgeKeyFromSeed, nextKeyMessage, verifyMachineToken } from '../../scripts/ide-machine-protocol.mjs';
 import { fromB64url, verifyMessage } from '../../scripts/ide-agent-frames.mjs';
 import { createBridgeServer } from '../../scripts/bridge-api.mjs';
 import { createPg } from '../../scripts/bridge-pg.mjs';

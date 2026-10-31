@@ -23,7 +23,7 @@ import { clientAddress, clientMeta, requireSudo, writeAudit } from './bridge-gua
 import { writeJsonResponse } from './bridge-json-response.mjs';
 import { sendJson } from './bridge-social-core.mjs';
 import { fromB64url, verifyMessage } from './ide-agent-frames.mjs';
-import { heartbeatMessage, isLoopbackIdeOrigin, newMachineId, signMachineToken, whoamiMessage } from './machine-protocol.mjs';
+import { heartbeatMessage, isLoopbackIdeOrigin, newMachineId, signMachineToken, whoamiMessage } from './ide-machine-protocol.mjs';
 import { createMachinePairing } from './bridge-machines-pairing.mjs';
 import { createSlidingLimiter } from './ide-relay-limits.mjs';
 import { acceptHeartbeatTs, bridgeKeysOf, dropPresence, machineSetup, readPresence, writePresence } from './bridge-machines-presence.mjs';

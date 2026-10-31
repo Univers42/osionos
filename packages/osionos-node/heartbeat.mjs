@@ -17,7 +17,7 @@ import { createPrivateKey } from 'node:crypto';
 import { rmSync } from 'node:fs';
 
 import { fromB64url, signMessage, verifyMessage } from '../../scripts/ide-agent-frames.mjs';
-import { heartbeatMessage, nextKeyMessage } from '../../scripts/machine-protocol.mjs';
+import { heartbeatMessage, nextKeyMessage } from '../../scripts/ide-machine-protocol.mjs';
 import { loadMachine, saveMachine } from './machine-identity.mjs';
 
 const INTERVAL_MS = 30_000;

@@ -15,7 +15,7 @@
 // ts). No path or file name ever reaches this file: presence is an origin and two times.
 import { accountError } from './bridge-account-sudo.mjs';
 import { signMessage } from './ide-agent-frames.mjs';
-import { bridgeKeyFromSeed, nextKeyMessage } from './machine-protocol.mjs';
+import { bridgeKeyFromSeed, nextKeyMessage } from './ide-machine-protocol.mjs';
 
 // A machine's window, not a person's (bridge-presence.mjs owns that one): the contract's 90 s,
 // three of the node's 30 s beats.
