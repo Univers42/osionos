@@ -181,6 +181,12 @@ message is the bridge's public origin (`config.publicOrigin`, e.g. `https://baas
 - `OSIONOS_MACHINE_SIGNING_KEY` is the current 32-byte seed. Optional
   `OSIONOS_MACHINE_SIGNING_KEY_NEXT` is the next one (rotation).
 - No current key means the routes answer 503 `machines_unavailable`; there is no partial boot.
+- Rotation, in order: set `_NEXT` and deploy; wait at least 1800 s, so every online node has beaten
+  and pinned the next key (it writes it to `machine.json`); move `_NEXT` into the current key, drop
+  the old one, deploy. On its next beat a node drops the kid the bridge no longer lists. A node that
+  was offline for the whole overlap only holds the old kid, cannot verify new tokens, and re-pairs.
+- A reply that lists none of the node's pinned kids changes nothing on the node, so a wrong or
+  impostor bridge cannot empty the pinned set.
 
 **Routes.** All bodies are JSON and every error is `{ ok:false, code, message }`. `S` = app session
 (`osionos_v1`); `S+sudo` = session plus a live step-up grant (`requireSudo`, scripts/bridge-guard.mjs).
@@ -192,12 +198,12 @@ message is the bridge's public origin (`config.publicOrigin`, e.g. `https://baas
 | `POST /api/machines/pair/approve` | S+sudo, the claimer | `{pairId}` | 201 `{id}`. `is_default` = false. | 404, 409 `machine_cap` (5) |
 | `POST /api/machines/pair/decline` | S, the claimer | `{pairId}` | 204 | 404 |
 | `POST /api/machines/pair/poll` | none (sig) | `{pairId,ts,sig}`; sig = `pairPollMessage` with the start key | 202 `{status:"pending"}`, or 200 once `{machineId, ownerId, accountEmail, bridgeKeys:[{kid,publicKey}]}`, then the entry is gone | 401, 404 `not_found`, 410 `declined` |
-| `POST /api/machines/heartbeat` | none (sig) | `{machineId,ideOrigin,ts,sig}`; sig = `heartbeatMessage`; \|ts−now\| ≤ 60 s and ts > last ts | 200 `{bridgeKeys:[{kid,publicKey,sig?}]}`. A next key carries `sig` = current key over `nextKeyMessage`. | 400 `stale`, 401, 410 `gone` (unknown and revoked look the same) |
+| `POST /api/machines/heartbeat` | none (sig) | `{machineId,ideOrigin,ts,sig}`; sig = `heartbeatMessage`; \|ts−now\| ≤ 60 s and ts > last ts | 200 `{bridgeKeys:[{kid,publicKey,sig?}]}`. A next key carries `sig` = current key over `nextKeyMessage`. | 400 `stale`, 401, 410 `gone` (unknown and revoked look the same), 429 `rate_limited` (20 a minute per client address, before any query) |
 | `GET /api/machines` | S | — | 200 `{machines:[{id,name,platform,fingerprint,isDefault,online,ideOrigin,lastSeenAt}]}`. `ideOrigin` is null when offline. | 401 |
 | `PUT /api/machines/:id/default` | S | — | 204 | 404 |
 | `DELETE /api/machines/:id` | S+sudo | — | 204 (sets `revoked_at`, drops presence) | 404 |
 | `POST /api/machines/:id/identity` | S | `{nonce,sig}`; sig = `whoamiMessage` with the row's pubkey and the presence `ideOrigin` | 200 `{ok:true}` | 404, 409 `offline`, 422 `identity_mismatch` |
-| `POST /api/machines/:id/token` | S+sudo | — | 200 `{token, exp}`. aud = presence `ideOrigin`. `revoked_at` is read from Postgres. | 404, 409 `offline`, 403 `not_allowed` |
+| `POST /api/machines/:id/token` | S+sudo | — | 200 `{token, exp}`. aud = presence `ideOrigin`. `revoked_at` is read from Postgres. Needs a successful `identity` call for the same origin in the last 60 s; one check buys one mint. | 404, 409 `offline`, 403 `not_allowed`, 428 `identity_required` |
 
 - **Presence** lives in kv `machine-presence:<id>` = `{ideOrigin, ts, lastSeenAt}`, with a 90 s TTL.
 - **Pending pairings** live in memory and expire after 300 s.

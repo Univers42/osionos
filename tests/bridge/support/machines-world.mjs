@@ -55,7 +55,7 @@ const RESERVED = new Set(['select', 'order', 'limit']);
 const project = (row, select) => (select ? Object.fromEntries(select.split(',').map((key) => [key, row[key]])) : { ...row });
 
 /** The table, its policy and its index. `fail` answers a call with an error status. */
-export function createMachineStore({ rows = [], fail = null } = {}) {
+export function createMachineStore({ rows = [], fail = null, latencyMs = 0 } = {}) {
 	const tables = new Map([[MACHINES, rows.map((row) => ({ ...row }))], [AUDIT, []]]);
 	const calls = [];
 	const visible = (table, claims) => {
@@ -79,7 +79,9 @@ export function createMachineStore({ rows = [], fail = null } = {}) {
 		hits.forEach((row, index) => Object.assign(row, before[index]));
 		return json({ code: '23505', message: 'osionos_machines_one_default' }, 409);
 	}
-	function fetchImpl(url, init = {}) {
+	// A latency lets two requests overlap across their awaits, as they do against a real PostgREST.
+	async function fetchImpl(url, init = {}) {
+		if (latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, latencyMs));
 		const parsed = new URL(String(url));
 		const table = parsed.pathname.replace('/rest/v1/', '');
 		const method = init.method ?? 'GET';
@@ -111,11 +113,11 @@ export const routedFetch = (store) => (url, init) => (String(url).includes('/aut
 export const machineEnv = (over = {}) => ({ JWT_SECRET: ACCOUNT_JWT_SECRET, OSIONOS_MACHINE_SIGNING_KEY: SEED, OSIONOS_BRIDGE_PUBLIC_ORIGIN: ORIGIN, ...over });
 
 /** The machine routes alone on a server, with a clock the test moves. */
-export async function startMachineWorld(t, { rows = [], env = machineEnv(), fail = null, config = accountConfig() } = {}) {
+export async function startMachineWorld(t, { rows = [], env = machineEnv(), fail = null, config = accountConfig(), latencyMs = 0 } = {}) {
 	const clock = { at: Date.UTC(2026, 9, 31, 12) };
 	const now = () => clock.at;
 	const kv = createTtlKv({ now });
-	const store = createMachineStore({ rows, fail });
+	const store = createMachineStore({ rows, fail, latencyMs });
 	const fetchImpl = routedFetch(store);
 	const pg = createPg({ config, env, fetchImpl, now: () => Date.now() });
 	const routes = createMachineRoutes({ config, pg, kv, verifySession: verifyAppSessionToken, env, fetchImpl, now });

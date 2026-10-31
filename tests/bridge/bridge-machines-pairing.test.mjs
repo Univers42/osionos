@@ -17,6 +17,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { accountConfig } from './support/account-world.mjs';
+import { createMachinePairing } from '../../scripts/bridge-machines-pairing.mjs';
 import { bridgeKeyFromSeed, nextKeyMessage } from '../../scripts/machine-protocol.mjs';
 import { fromB64url, verifyMessage } from '../../scripts/ide-agent-frames.mjs';
 import { EMAILS, ORIGIN, SEED, USER_A, USER_B, call, fakeMachine, machineEnv, pairThrough, startMachineWorld } from './support/machines-world.mjs';
@@ -44,7 +45,7 @@ describe('POST /api/machines/pair/start', () => {
 	it('refuses a malformed body with 400 bad_request', async (t) => {
 		const world = await startMachineWorld(t);
 		const machine = fakeMachine();
-		for (const over of [{ pubkey: 'short' }, { name: '' }, { name: 'x'.repeat(65) }, { platform: 'linux x64; rm' }, { ts: 'now' }, { sig: 7 }]) {
+		for (const over of [{ pubkey: 'short' }, { name: '' }, { name: 'x'.repeat(65) }, { platform: 'linux x64; rm' }, { platform: 'linux' }, { platform: 'freebsd-x64' }, { ts: 'now' }, { sig: 7 }]) {
 			const answer = await call(world.base, '/api/machines/pair/start', { body: machine.startBody(world.clock.at, over) });
 			assert.equal(answer.status, 400, JSON.stringify(over));
 			assert.equal(answer.body.code, 'bad_request');
@@ -144,8 +145,8 @@ describe('POST /api/machines/pair/claim', () => {
 
 	it('caps the failed claims globally, so many accounts cannot brute-force together (condition 4)', async (t) => {
 		const world = await startMachineWorld(t);
-		const users = Array.from({ length: 11 }, (_, index) => `cccccccc-3333-4333-8333-${String(index).padStart(12, '0')}`);
-		for (const user of users.slice(0, 10)) {
+		const users = Array.from({ length: 101 }, (_, index) => `cccccccc-3333-4333-8333-${String(index).padStart(12, '0')}`);
+		for (const user of users.slice(0, 100)) {
 			const token = await world.sudo(user);
 			for (let attempt = 0; attempt < 5; attempt += 1) await call(world.base, '/api/machines/pair/claim', { token, body: { code: 'BCDF-GHJK' } });
 		}
@@ -193,6 +194,21 @@ describe('POST /api/machines/pair/approve', () => {
 		assert.equal(sixth.approved.body.code, 'machine_cap');
 		assert.equal(world.store.rows().length, 5);
 	});
+
+	it('holds the cap when two approves of one user race: one 201, one 409', async (t) => {
+		const world = await startMachineWorld(t, { latencyMs: 5 });
+		for (let index = 0; index < 4; index += 1) assert.equal((await pairThrough(world)).approved.status, 201);
+		world.clock.at += 600_001;
+		const token = await world.sudo();
+		const claimed = [];
+		for (let index = 0; index < 2; index += 1) {
+			const started = await call(world.base, '/api/machines/pair/start', { body: fakeMachine().startBody(world.clock.at) });
+			claimed.push((await call(world.base, '/api/machines/pair/claim', { token, body: { code: started.body.code } })).body.pairId);
+		}
+		const answers = await Promise.all(claimed.map((pairId) => call(world.base, '/api/machines/pair/approve', { token, body: { pairId } })));
+		assert.deepEqual(answers.map((answer) => answer.status).sort(), [201, 409]);
+		assert.equal(world.store.rows().length, 5);
+	});
 });
 
 describe('POST /api/machines/pair/decline and /poll', () => {
@@ -238,6 +254,15 @@ describe('POST /api/machines/pair/decline and /poll', () => {
 		const polled = await call(world.base, '/api/machines/pair/poll', { body: machine.pollBody(started.body.pairId, world.clock.at) });
 		assert.equal(polled.status, 410);
 		assert.equal(polled.body.code, 'declined');
+	});
+
+	it('refuses to decline an entry whose approve is in flight', async (t) => {
+		const pairing = createMachinePairing({ now: () => Date.UTC(2026, 9, 31, 12) });
+		const machine = fakeMachine();
+		const { code, pairId } = pairing.start(machine.startBody(Date.UTC(2026, 9, 31, 12)), { origin: ORIGIN, clientKey: 'c', startIp: '10.0.0.0/24' });
+		pairing.claim(USER_A, code);
+		pairing.reserve(USER_A, pairId);
+		assert.throws(() => pairing.decline(USER_A, pairId), { status: 404 });
 	});
 
 	it('hands the next key at pairing too, signed by the current one', async (t) => {
