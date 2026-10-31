@@ -80,7 +80,7 @@ test('saveMachine makes a missing folder 0700 and leaves no temp file behind', (
 	} finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('machine.json is refused when others can read it or write its folder', () => {
+test('machine.json is refused when others can read it or write its folder; saving tightens our folder', () => {
 	const dir = mkdtempSync(join(tmpdir(), 'mj-'));
 	try {
 		const file = join(dir, 'machine.json');
@@ -89,9 +89,11 @@ test('machine.json is refused when others can read it or write its folder', () =
 		chmodSync(file, 0o644);
 		assert.throws(() => loadMachine(file), /readable or writable by others/);
 		chmodSync(file, 0o600);
-		chmodSync(dir, 0o777);
-		assert.throws(() => saveMachine(file, stored), /writable by others/);
+		chmodSync(dir, 0o775);
 		assert.throws(() => loadMachine(file), /writable by others/);
+		saveMachine(file, stored);
+		assert.equal(statSync(dir).mode & 0o777, 0o700, 'our own folder is tightened on save');
+		assert.equal(loadMachine(file).machineId, MACHINE);
 	} finally { chmodSync(dir, 0o700); rmSync(dir, { recursive: true, force: true }); }
 });
 
