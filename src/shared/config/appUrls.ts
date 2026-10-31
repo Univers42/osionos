@@ -3,6 +3,8 @@
 // `import.meta.env.DEV`, which Vite folds to `false` in a production build so no
 // loopback literal ships to an internet visitor (it would open THEIR machine).
 
+import { safeHttpUrl } from "@/shared/lib/embed/embedUrlGuard";
+
 type ViteMeta = { env?: Record<string, string | boolean | undefined> };
 const VITE_ENV = (import.meta as ViteMeta).env ?? {};
 // Written as one static `import.meta.env?.DEV` chain on purpose: Vite folds exactly that
@@ -23,20 +25,15 @@ function isLoopbackHost(hostname: string): boolean {
   return LOOPBACK_HOSTS.has(hostname.toLowerCase());
 }
 
-/** True when `url` can load for a visitor on `pageHostname`: non-empty, and not a
- *  loopback target viewed from a non-loopback page. Relative URLs are same-origin.
+/** True when `url` can load for a visitor on `pageHostname`: an absolute http(s) URL (C4 of the
+ *  desktop local terminal verdict: `javascript:`, `data:`, relative and unparsable URLs are not
+ *  launch or embed targets), and not a loopback target viewed from a non-loopback page.
  *  Caveat: only literal loopback names are recognised; a LAN or private-range
  *  address (192.168.x.x) on a public page is not flagged. */
 export function isReachableUrl(url: string, pageHostname: string): boolean {
-  const target = url.trim();
-  if (target === "") return false;
-  let host: string;
-  try {
-    host = new URL(target).hostname;
-  } catch {
-    return true;
-  }
-  return !isLoopbackHost(host) || pageHostname === "" || isLoopbackHost(pageHostname);
+  const href = safeHttpUrl(url);
+  if (href === "") return false;
+  return !isLoopbackHost(new URL(href).hostname) || pageHostname === "" || isLoopbackHost(pageHostname);
 }
 
 /** An unset page hostname (node tests, SSR) never hides anything on loopback grounds. */
