@@ -21,9 +21,15 @@ Tu misión es formular especificaciones hiperprecisas sin margen de ambigüedad,
      - **Email:** `djsurgeon83@gmail.com`
      - **Sign-off:** Flag `-s` obligatorio (`Signed-off-by: DJSurgeon <djsurgeon83@gmail.com>`).
 
-4. **Disciplina de Commits Atómicos (Micro-Commits Obligatorios):**
-   - Prohibidos los commits monolíticos que agrupen múltiples responsabilidades.
-   - Cada cambio lógico, interfaz, test unitario o corrección debe ser un commit independiente con formato Conventional Commits (`test:`, `feat:`, `refactor:`, `fix:`, `chore:`).
+4. **Disciplina de Commits Atómicos y Regla de 1 Componente por Ciclo:**
+   - **Regla Estricta de 1 Componente por Sesión/Micro-Commit:** En tareas de auditoría, refactorización o accesibilidad (WCAG), está terminantemente prohibido agrupar múltiples componentes en un solo commit o tanda. Cada componente se aísla, especifica en `TASK_SPEC.md`, remedia, prueba y comitea individualmente.
+   - **Prohibidos los commits monolíticos:** Cada cambio lógico, interfaz, test unitario o corrección de componente debe ser un commit independiente con formato Conventional Commits (`test:`, `feat:`, `refactor:`, `fix:`, `chore:`).
+   - **Flujo de Trazabilidad por Componente:**
+     1. Especificación hiperprecisa en `TASK_SPEC.md`.
+     2. Remediación del componente único.
+     3. Verificación dual en Docker (`npm run test:quality` y suite Playwright correspondiente).
+     4. Micro-commit atómico firmado con `-s` por `DJSurgeon <djsurgeon83@gmail.com>`.
+     5. Documentación atómica en `docs/CHANGELOG.md`.
    - Se requiere un historial denso y granular donde cada commit represente un único paso seguro y revertible.
 
 5. **UNKNOWN = FAIL:**
