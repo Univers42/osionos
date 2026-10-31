@@ -28,6 +28,7 @@ const READY = SERVER_LIB && existsSync(join(SERVER_LIB, 'vscode', 'out', 'server
 const IDE_PORT = 43100 + Math.floor(Math.random() * 400);
 const APP_PORT = IDE_PORT + 500;
 const IDE_ORIGIN = `http://127.0.0.1:${IDE_PORT}`;
+const APP_ORIGIN = `http://localhost:${APP_PORT}`;
 
 // Caveat: every wait below is a wall-clock bound sized for this laptop; a loaded machine can
 // fail one, and the failure names what it waited for.
@@ -41,12 +42,14 @@ async function until(probe, ms, what) {
 	throw new Error(`timed out after ${ms} ms waiting for ${what}`);
 }
 
-test('the framed IDE edits, saves and runs a terminal on this machine', { skip: READY ? false : 'OSIONOS_SERVER_LIB or dist-ide missing', timeout: 240_000 }, async (t) => {
+test('the IDE window edits, saves and runs a terminal on this machine, across sites', { skip: READY ? false : 'OSIONOS_SERVER_LIB or dist-ide missing', timeout: 240_000 }, async (t) => {
 	const { chromium } = await import('playwright');
 	const root = tempRoot();
 	const folder = makeFolder(root);
-	const node = await startNode({ serverLib: SERVER_LIB, home: root, idePort: IDE_PORT, appOrigin: `http://127.0.0.1:${APP_PORT}` });
-	const app = await startApp({ appPort: APP_PORT, ideUrl: `${IDE_ORIGIN}/?node=laptop&folder=${encodeURIComponent(folder)}`, ideOrigin: IDE_ORIGIN });
+	// The app on `localhost` and the IDE on `127.0.0.1` are two sites, as the live app and a
+	// machine are: the IDE must work as its own window there (C0-F1).
+	const node = await startNode({ serverLib: SERVER_LIB, home: root, idePort: IDE_PORT, appOrigin: APP_ORIGIN });
+	const app = await startApp({ appPort: APP_PORT, ideUrl: `${IDE_ORIGIN}/?node=laptop&folder=${encodeURIComponent(folder)}`, ideOrigin: IDE_ORIGIN, mode: 'window' });
 	const browser = await chromium.launch({ executablePath: process.env.OSIONOS_E2E_CHROME || undefined, args: ['--no-proxy-server'] });
 	const har = join(root, 'session.har');
 	const context = await browser.newContext({ viewport: { width: 1320, height: 860 }, recordHar: { path: har, content: 'omit' } });
@@ -56,8 +59,9 @@ test('the framed IDE edits, saves and runs a terminal on this machine', { skip: 
 	const errors = [];
 	page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
 	page.on('response', (response) => { if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`); });
-	await page.goto(`http://127.0.0.1:${APP_PORT}/`);
-	const frame = await until(() => page.frames().find((f) => f.url().startsWith(IDE_ORIGIN)), 10_000, 'the IDE frame');
+	await page.goto(`${APP_ORIGIN}/`);
+	const [frame] = await Promise.all([context.waitForEvent('page'), page.click('#open')]);
+	frame.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
 	await until(() => page.evaluate(() => window.__ide.states.includes('connected')), 90_000, 'the machine to connect');
 	await frame.locator('#status[data-state="connected"]').waitFor({ timeout: 5_000 });
 
@@ -67,9 +71,9 @@ test('the framed IDE edits, saves and runs a terminal on this machine', { skip: 
 
 	// Edit and save land on this machine's disk.
 	await frame.locator('.monaco-editor .view-lines').click();
-	await page.keyboard.press('Control+End');
-	await page.keyboard.type('\n# saved-through-osionos\n');
-	await page.keyboard.press('Control+S');
+	await frame.keyboard.press('Control+End');
+	await frame.keyboard.type('\n# saved-through-osionos\n');
+	await frame.keyboard.press('Control+S');
 	await until(() => readFileSync(join(folder, 'app.py'), 'utf8').includes('# saved-through-osionos'), 20_000, 'the save on disk');
 
 	// C11: the folder is not trusted yet, so its folder-open task has not run.
@@ -80,7 +84,7 @@ test('the framed IDE edits, saves and runs a terminal on this machine', { skip: 
 	await frame.locator('#new-terminal').click();
 	const trust = frame.locator('.monaco-dialog-box .monaco-button').filter({ hasText: /trust/i }).filter({ hasNotText: /don.t|not/i }).first();
 	await trust.waitFor({ timeout: 30_000 }).catch(async (error) => {
-		await page.screenshot({ path: '/tmp/ide-machine-fail.png' });
+		await frame.screenshot({ path: '/tmp/ide-machine-fail.png' });
 		throw new Error(`${error.message}\nstatus: ${await frame.locator('#status').textContent()}\nconsole errors:\n${errors.slice(-8).join('\n')}`);
 	});
 	await trust.click();
@@ -92,9 +96,9 @@ test('the framed IDE edits, saves and runs a terminal on this machine', { skip: 
 	// Caveat: the terminal paints to a canvas, so readiness is a fixed 3 s pause, not the prompt.
 	await new Promise((resolve) => setTimeout(resolve, 3000));
 	await frame.locator('#terminal .xterm').click();
-	await page.keyboard.type('pwd > terminal-probe\n');
+	await frame.keyboard.type('pwd > terminal-probe\n');
 	await until(() => existsSync(join(folder, 'terminal-probe')), 30_000, 'the terminal to write its probe').catch(async (error) => {
-		await page.screenshot({ path: '/tmp/ide-machine-fail.png' });
+		await frame.screenshot({ path: '/tmp/ide-machine-fail.png' });
 		throw error;
 	});
 	assert.equal(readFileSync(join(folder, 'terminal-probe'), 'utf8').trim(), folder);
@@ -114,4 +118,20 @@ test('the framed IDE edits, saves and runs a terminal on this machine', { skip: 
 	const leaks = [...recorded.matchAll(/.{0,80}([?&]tkn=[^&"\s]|connectionToken|vscode-tkn).{0,80}/g)].map((match) => match[0]);
 	assert.deepEqual(leaks, [], 'a connection token in the recorded session');
 	assert.deepEqual(errors.filter((text) => /Content Security Policy|Refused to/.test(text)), [], 'CSP violations');
+});
+
+test('a frame across sites never gets its cookie, so the app opens a window instead (C0-F1)', { skip: READY ? false : 'OSIONOS_SERVER_LIB or dist-ide missing', timeout: 120_000 }, async (t) => {
+	const { chromium } = await import('playwright');
+	const root = tempRoot();
+	const folder = makeFolder(root);
+	const node = await startNode({ serverLib: SERVER_LIB, home: root, idePort: IDE_PORT + 1, appOrigin: APP_ORIGIN });
+	const ideOrigin = `http://127.0.0.1:${IDE_PORT + 1}`;
+	const app = await startApp({ appPort: APP_PORT, ideUrl: `${ideOrigin}/?node=laptop&folder=${encodeURIComponent(folder)}`, ideOrigin, mode: 'frame' });
+	const browser = await chromium.launch({ executablePath: process.env.OSIONOS_E2E_CHROME || undefined, args: ['--no-proxy-server'] });
+	t.after(async () => { await browser.close(); await app.close(); await node.stop(); rmSync(root, { recursive: true, force: true }); });
+	const page = await browser.newPage();
+	await page.goto(`${APP_ORIGIN}/`);
+	await until(() => page.evaluate(() => window.__ide.sessions > 0), 30_000, 'the frame to ask for a session');
+	await new Promise((resolve) => setTimeout(resolve, 8000));
+	assert.equal(await page.evaluate(() => window.__ide.states.includes('connected')), false, 'a cross-site frame connected');
 });

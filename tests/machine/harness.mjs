@@ -58,27 +58,31 @@ export async function startNode({ serverLib, home, idePort, appOrigin }) {
 	return { child, log: () => log, stop: () => new Promise((resolve) => { child.once('exit', resolve); child.kill('SIGTERM'); }) };
 }
 
-const APP_PAGE = (ideUrl, ideOrigin) => `<!doctype html><title>app</title>
-<iframe id="ide" src="${ideUrl}" style="width:1300px;height:820px;border:0"></iframe>
+// `frame` embeds the IDE page; `window` opens it as its own top-level window with a button, the
+// way /machine does, since a cookie in a cross-site frame is never sent (C0-F1).
+const APP_PAGE = (ideUrl, ideOrigin, mode) => `<!doctype html><title>app</title>
+${mode === 'frame' ? `<iframe id="ide" src="${ideUrl}" style="width:1300px;height:820px;border:0"></iframe>` : '<button id="open">Open</button>'}
 <script type="module">
-  const frame = document.getElementById('ide');
+  const ideOrigin = ${JSON.stringify(ideOrigin)};
+  let target = ${mode === 'frame' ? "document.getElementById('ide').contentWindow" : 'null'};
+  document.getElementById('open')?.addEventListener('click', () => { target = window.open(${JSON.stringify(ideUrl)}, 'osionos-machine'); });
   window.__ide = { states: [], sessions: 0 };
   async function sendSession() {
     const { token } = await (await fetch('/token')).json();
     window.__ide.sessions++;
-    frame.contentWindow.postMessage({ type: 'osionos-ide/session', token }, ${JSON.stringify(ideOrigin)});
+    target.postMessage({ type: 'osionos-ide/session', token }, ideOrigin);
   }
-  window.__ideOpen = (path) => frame.contentWindow.postMessage({ type: 'osionos-ide/open', path }, ${JSON.stringify(ideOrigin)});
-  window.__ideSend = (message) => frame.contentWindow.postMessage(message, ${JSON.stringify(ideOrigin)});
+  window.__ideOpen = (path) => target.postMessage({ type: 'osionos-ide/open', path }, ideOrigin);
+  window.__ideSend = (message) => target.postMessage(message, ideOrigin);
   addEventListener('message', (event) => {
-    if (event.origin !== ${JSON.stringify(ideOrigin)}) return;
+    if (event.origin !== ideOrigin || event.source !== target) return;
     const { type, state } = event.data ?? {};
     if (type === 'osionos-ide/ready' || type === 'osionos-ide/need-session') sendSession();
     if (type === 'osionos-ide/state') window.__ide.states.push(state);
   });
 </script>`;
 
-export async function startApp({ appPort, ideUrl, ideOrigin }) {
+export async function startApp({ appPort, ideUrl, ideOrigin, mode = 'window' }) {
 	const server = http.createServer((req, res) => {
 		if (req.url === '/token') {
 			const { token } = signIdeToken({ userId: OWNER, workspaceId: WORKSPACE, secret: SECRET, scope: 'node' });
@@ -86,8 +90,9 @@ export async function startApp({ appPort, ideUrl, ideOrigin }) {
 			return res.end(JSON.stringify({ token }));
 		}
 		res.writeHead(200, { 'content-type': 'text/html' });
-		res.end(APP_PAGE(ideUrl, ideOrigin));
+		res.end(APP_PAGE(ideUrl, ideOrigin, mode));
 	});
+	// Bound on loopback; the test reaches it as `localhost`, another site than the IDE's 127.0.0.1.
 	await new Promise((resolve) => server.listen(appPort, '127.0.0.1', resolve));
 	return { close: () => new Promise((resolve) => server.close(resolve)) };
 }
