@@ -23,36 +23,36 @@ const IDE = "https://ide.example:4100";
 const TOKEN = "osionos_ide1.eyJzdWIiOiJ4In0.c2ln";
 
 test("the IDE page accepts a session token and an open request from the exact app origin", () => {
-  assert.deepEqual(readAppMessage({ type: "osionos-ide/session", token: TOKEN }, APP, APP), { type: "osionos-ide/session", token: TOKEN });
-  assert.deepEqual(readAppMessage({ type: "osionos-ide/open", path: "src/app.py" }, APP, APP), { type: "osionos-ide/open", path: "src/app.py" });
+  assert.deepEqual(readAppMessage({ type: "osionos-ide/session", token: TOKEN }, APP, [APP]), { type: "osionos-ide/session", token: TOKEN });
+  assert.deepEqual(readAppMessage({ type: "osionos-ide/open", path: "src/app.py" }, APP, [APP]), { type: "osionos-ide/open", path: "src/app.py" });
 });
 
 test("a message from any other origin is ignored", () => {
   for (const origin of ["https://evil.example", "https://app.example:3002", "http://app.example:3001", "null", ""]) {
-    assert.equal(readAppMessage({ type: "osionos-ide/session", token: TOKEN }, origin, APP), null, origin);
+    assert.equal(readAppMessage({ type: "osionos-ide/session", token: TOKEN }, origin, [APP]), null, origin);
   }
 });
 
 test("nothing that runs code is accepted: terminal input, tasks, debug, extensions, settings", () => {
   for (const type of ["osionos-ide/terminal", "osionos-ide/sendText", "osionos-ide/task", "osionos-ide/debug", "osionos-ide/install", "osionos-ide/settings", "osionos-ide/command", "osionos-ide/write"]) {
-    assert.equal(readAppMessage({ type, text: "rm -rf ~\n" }, APP, APP), null, type);
+    assert.equal(readAppMessage({ type, text: "rm -rf ~\n" }, APP, [APP]), null, type);
   }
 });
 
 test("open refuses a path into .git, a dotfile, a parent or an absolute path", () => {
   for (const path of [".git/hooks/post-checkout", "a/.git/config", ".env", "../x", "a/../../x", "/etc/passwd", "a\\b", "a//b", "", "a/./b", "a\u0000b"]) {
-    assert.equal(readAppMessage({ type: "osionos-ide/open", path }, APP, APP), null, JSON.stringify(path));
+    assert.equal(readAppMessage({ type: "osionos-ide/open", path }, APP, [APP]), null, JSON.stringify(path));
     assert.equal(isSafeRelativePath(path), false, JSON.stringify(path));
   }
   assert.equal(isSafeRelativePath("notes/today.omd"), true);
 });
 
 test("a malformed token, an extra field or a non-object is refused", () => {
-  assert.equal(readAppMessage({ type: "osionos-ide/session", token: "Bearer x" }, APP, APP), null);
-  assert.equal(readAppMessage({ type: "osionos-ide/session", token: `${TOKEN}.extra` }, APP, APP), null);
-  assert.equal(readAppMessage({ type: "osionos-ide/session", token: TOKEN, run: "x" }, APP, APP), null);
-  assert.equal(readAppMessage("osionos-ide/session", APP, APP), null);
-  assert.equal(readAppMessage(null, APP, APP), null);
+  assert.equal(readAppMessage({ type: "osionos-ide/session", token: "Bearer x" }, APP, [APP]), null);
+  assert.equal(readAppMessage({ type: "osionos-ide/session", token: `${TOKEN}.extra` }, APP, [APP]), null);
+  assert.equal(readAppMessage({ type: "osionos-ide/session", token: TOKEN, run: "x" }, APP, [APP]), null);
+  assert.equal(readAppMessage("osionos-ide/session", APP, [APP]), null);
+  assert.equal(readAppMessage(null, APP, [APP]), null);
 });
 
 test("the app accepts only state reports from the exact IDE origin", () => {
@@ -62,4 +62,16 @@ test("the app accepts only state reports from the exact IDE origin", () => {
   assert.equal(readIdeMessage({ type: "osionos-ide/state", state: "pwned" }, IDE, IDE), null);
   assert.equal(readIdeMessage({ type: "osionos-ide/ready", node: "Laptop/../x" }, IDE, IDE), null);
   assert.equal(readIdeMessage({ type: "osionos-ide/ready", node: "laptop" }, APP, IDE), null);
+});
+
+// The desktop app (app://osionos) and the web app share one node; each is accepted, nothing else.
+test("an app message is read from any listed app origin and from no other", () => {
+  const apps = [APP, "app://osionos"];
+  for (const origin of apps) {
+    assert.deepEqual(readAppMessage({ type: "osionos-ide/session", token: TOKEN }, origin, apps), { type: "osionos-ide/session", token: TOKEN }, origin);
+  }
+  for (const origin of ["app://other", "null", IDE, ""]) {
+    assert.equal(readAppMessage({ type: "osionos-ide/session", token: TOKEN }, origin, apps), null, origin);
+  }
+  assert.equal(readAppMessage({ type: "osionos-ide/session", token: TOKEN }, APP, []), null, "no listed origin");
 });

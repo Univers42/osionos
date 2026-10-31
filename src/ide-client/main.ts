@@ -74,10 +74,10 @@ async function openTerminal(cwd: monaco.Uri) {
 
 async function main() {
   const target = readMachineTarget(location.search);
-  const appOrigin = document.querySelector<HTMLMetaElement>('meta[name="osionos-app-origin"]')?.content ?? "";
+  const appOrigins = (document.querySelector<HTMLMetaElement>('meta[name="osionos-app-origin"]')?.content ?? "").split(" ").filter(Boolean);
   if (!target) return report(null, "error", "this address names no machine folder");
   document.title = `${target.folder.split("/").pop() || target.folder} · ${target.node}`;
-  const link = linkToApp(target.node, appOrigin);
+  const link = linkToApp(target.node, appOrigins);
   if (!link) return report(null, "error", "open this machine from osionos");
   report(link, "connecting");
   await link.firstSession;
