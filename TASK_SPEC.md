@@ -1,51 +1,27 @@
-# TASK SPEC: Batch 1, Component 1 — Remediate Block Collapse Toggles
+# TASK SPEC: Batch 1, Component 2 — Remediate Table Row Drag Handle
 
 ## 1. Goal
-Ensure collapse/expand chevrons in `BlockCollapseToggle.tsx` and `ToggleBlockEditor.tsx` meet WCAG 2.2 SC 2.5.8 (Target Size Minimum >= 24x24 px) and SC 2.4.11 / 2.4.12 (Focus Visible), preserving exact text baseline and margin alignment.
+Upgrade `RowDragHandle` in `TableParts.tsx` to meet WCAG 2.2 SC 2.5.8 (Target Size >= 24x24 px) and SC 2.4.11 / 2.4.12 (Focus Visible), positioning it to avoid cell text occlusion.
 
 ---
 
 ## 2. Exact Filepaths
-1. `src/features/block-editor/ui/BlockCollapseToggle.tsx`
-2. `src/features/block-editor/ui/ToggleBlockEditor.tsx`
-3. `tests/e2e/visual/a11y.spec.mjs`
+1. `src/features/block-editor/ui/table/TableParts.tsx`
 
 ---
 
 ## 3. Technical Requirements
 
-### A. `src/features/block-editor/ui/BlockCollapseToggle.tsx`
-- Replace line 25:
+### `src/features/block-editor/ui/table/TableParts.tsx`
+- In `RowDragHandle` (around line 80):
+  Replace:
   ```tsx
-  className="mt-0.5 -ml-0.5 flex h-6 w-6 min-h-[24px] min-w-[24px] shrink-0 items-center justify-center rounded-xs text-[var(--osio-fg-muted)] hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]"
+  className="absolute left-0 top-1/2 z-[var(--osio-z-raised)] flex h-5 w-4 -translate-y-1/2 cursor-grab touch-none items-center justify-center rounded-md bg-[var(--osio-bg-surface)]/90 text-[var(--osio-fg-muted)] opacity-0 shadow-[var(--osio-shadow-sm)] transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:opacity-100 group-hover/table:opacity-50 group-hover/row:opacity-100 active:cursor-grabbing"
   ```
-- Keep icon `<ChevronRight size={14} ... />` centered.
-
-### B. `src/features/block-editor/ui/ToggleBlockEditor.tsx`
-- In lines 135-142:
+  With:
   ```tsx
-  <div className="flex items-start gap-0.5">
-    <button
-      type="button"
-      onClick={handleToggle}
-      aria-label={expanded ? "Collapse toggle" : "Expand toggle"}
-      aria-expanded={expanded}
-      className={`osio-line-marker ${getToggleHeadingClass(block.headingLevel)} -ml-0.5 shrink-0 w-6 h-6 min-w-[24px] min-h-[24px] rounded-xs hover:bg-[var(--osio-bg-hover)] flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)]`}
-    >
-      <ChevronRight
-        size={14}
-        className={[
-          "text-[var(--osio-fg-muted)] transition-transform duration-(--osio-dur-fast)",
-          expanded ? "rotate-90" : "",
-        ].join(" ")}
-      />
-    </button>
+  className="absolute left-0 top-1/2 z-[var(--osio-z-raised)] flex h-6 w-6 min-h-[24px] min-w-[24px] -translate-y-1/2 -translate-x-1 cursor-grab touch-none items-center justify-center rounded-md bg-[var(--osio-bg-surface)]/90 text-[var(--osio-fg-muted)] opacity-0 shadow-[var(--osio-shadow-sm)] transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] group-hover/table:opacity-50 group-hover/row:opacity-100 active:cursor-grabbing"
   ```
-
-### C. `tests/e2e/visual/a11y.spec.mjs`
-- In scenario `"a11y: block editor surface with blocks"`:
-  - Add a toggle block via slash command `await createBlockViaSlash(page, "toggle", "Toggle", 2);`
-  - Run audit and assert `expect(results.violations).toEqual([]);`.
 
 ---
 
@@ -56,15 +32,15 @@ Ensure collapse/expand chevrons in `BlockCollapseToggle.tsx` and `ToggleBlockEdi
 ---
 
 ## 5. Commit Plan
-- Message: `fix(a11y): upgrade block collapse chevrons to 24px target size with focus rings`
+- Message: `fix(a11y): upgrade table row drag handle to 24px target size with focus ring`
 - Author: `DJSurgeon <djsurgeon83@gmail.com>`
 - Flag: `-s`
 
 ---
 
 ## 6. Done-When
-- [x] `BlockCollapseToggle.tsx` updated with 24x24 px button and `:focus-visible` ring.
-- [x] `ToggleBlockEditor.tsx` updated with 24x24 px button and `:focus-visible` ring.
-- [x] `a11y.spec.mjs` tests toggle block with 0 violations.
+- [x] `TableParts.tsx` `RowDragHandle` upgraded to `h-6 w-6 min-h-[24px] min-w-[24px]` with focus ring.
 - [x] `npm run test:quality` passes (0 errors).
+- [x] `npm run test:e2e -- tests/e2e/visual/a11y.spec.mjs` passes (0 violations).
 - [x] Commit signed with `-s` by `DJSurgeon`.
+- [x] Documented in `docs/CHANGELOG.md`.

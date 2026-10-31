@@ -77,7 +77,7 @@ function RowDragHandle({ rowIndex, onPointerDown, onMenuKey }: Readonly<{ rowInd
       aria-label={`Row ${rowIndex + 1} options — drag to reorder`}
       onPointerDown={(event) => onPointerDown(event, rowIndex)}
       onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); const rect = event.currentTarget.getBoundingClientRect(); onMenuKey(rowIndex, rect.right + 4, rect.top); } }}
-      className="absolute left-0 top-1/2 z-[var(--osio-z-raised)] flex h-5 w-4 -translate-y-1/2 cursor-grab touch-none items-center justify-center rounded-md bg-[var(--osio-bg-surface)]/90 text-[var(--osio-fg-muted)] opacity-0 shadow-[var(--osio-shadow-sm)] transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:opacity-100 group-hover/table:opacity-50 group-hover/row:opacity-100 active:cursor-grabbing"
+      className="absolute left-0 top-1/2 z-[var(--osio-z-raised)] flex h-6 w-6 min-h-[24px] min-w-[24px] -translate-y-1/2 -translate-x-1 cursor-grab touch-none items-center justify-center rounded-md bg-[var(--osio-bg-surface)]/90 text-[var(--osio-fg-muted)] opacity-0 shadow-[var(--osio-shadow-sm)] transition-opacity hover:bg-[var(--osio-bg-hover)] hover:text-[var(--osio-fg-default)] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--osio-focus-ring-color)] group-hover/table:opacity-50 group-hover/row:opacity-100 active:cursor-grabbing"
     >
       <GripVertical size={14} />
     </button>
