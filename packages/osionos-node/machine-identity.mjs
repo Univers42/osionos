@@ -20,7 +20,7 @@ import { dirname } from 'node:path';
 
 import { isNodeId } from '../../scripts/ide-token.mjs';
 import { signMessage } from '../../scripts/ide-agent-frames.mjs';
-import { verifyMachineToken, whoamiMessage } from '../../scripts/machine-protocol.mjs';
+import { verifyMachineToken, whoamiMessage } from '../../scripts/ide-machine-protocol.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const NONCE = /^[A-Za-z0-9_-]{16,128}$/;

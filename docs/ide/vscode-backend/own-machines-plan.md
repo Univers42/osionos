@@ -172,7 +172,7 @@ Record: groot ADR 0037.
 
 ## API contract (binding for the node, the bridge, the app and the migration)
 
-Shared code: `scripts/machine-protocol.mjs`. It holds the token, the messages, `isLoopbackIdeOrigin` and
+Shared code: `scripts/ide-machine-protocol.mjs`. It holds the token, the messages, `isLoopbackIdeOrigin` and
 `newMachineId`. Ed25519 helpers come from `scripts/ide-agent-frames.mjs` (`signMessage`,
 `verifyMessage`, `fingerprint`, `generateAgentKeyPair`, `rawPublicKey`). `origin` in every signed
 message is the bridge's public origin (`config.publicOrigin`, e.g. `https://baas.tail10f2ea.ts.net:10000`).

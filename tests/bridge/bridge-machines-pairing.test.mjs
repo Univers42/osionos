@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 
 import { accountConfig } from './support/account-world.mjs';
 import { createMachinePairing } from '../../scripts/bridge-machines-pairing.mjs';
-import { bridgeKeyFromSeed, nextKeyMessage } from '../../scripts/machine-protocol.mjs';
+import { bridgeKeyFromSeed, nextKeyMessage } from '../../scripts/ide-machine-protocol.mjs';
 import { fromB64url, verifyMessage } from '../../scripts/ide-agent-frames.mjs';
 import { EMAILS, ORIGIN, SEED, USER_A, USER_B, call, fakeMachine, machineEnv, pairThrough, startMachineWorld } from './support/machines-world.mjs';
 

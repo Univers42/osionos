@@ -15,7 +15,7 @@
 // accepts the account that approved it, so a code someone tricked a user into approving cannot
 // silently bind this machine to the wrong account.
 import { fingerprint, generateAgentKeyPair, signMessage, b64url } from '../../scripts/ide-agent-frames.mjs';
-import { pairPollMessage, pairStartMessage } from '../../scripts/machine-protocol.mjs';
+import { pairPollMessage, pairStartMessage } from '../../scripts/ide-machine-protocol.mjs';
 import { saveMachine } from './machine-identity.mjs';
 
 const VERSION = '1.0.0';
