@@ -19,8 +19,9 @@ node packages/osionos-node/cli.mjs serve \
   --listen 127.0.0.1:4100                       # loopback, RFC 1918 or tailnet only
 ```
 
-The app needs `VITE_OSIONOS_MACHINE_URL` set to the IDE origin (`--ide-origin` when a reverse
-proxy fronts it). The server bundle is the one pinned in `packages/osionos-node/server-pin.json`;
+The app looks for the IDE origin at `http://127.0.0.1:4100`, osionos-node's default; set
+`VITE_OSIONOS_MACHINE_URL` at build time for another address (`--ide-origin` when a reverse proxy
+fronts it). The server bundle is the one pinned in `packages/osionos-node/server-pin.json`;
 check its sha256 against that file before unpacking.
 
 ## What is verified
