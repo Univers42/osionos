@@ -19,6 +19,7 @@ import "@codingame/monaco-vscode-theme-defaults-default-extension";
 import pin from "../../packages/osionos-node/server-pin.json";
 import { boundedCommand, machineOptions, readMachineTarget } from "../features/ide/vscode/machineSession.ts";
 import type { IdeState } from "../features/ide/vscode/ideFrameProtocol.ts";
+import { mountExplorer } from "./explorer.ts";
 import { linkToApp, type AppLink } from "./appSession.ts";
 import { editorModeServices } from "./services.ts";
 import "./ide.css";
@@ -97,10 +98,13 @@ async function main() {
   document.getElementById("new-terminal")?.addEventListener("click", () => {
     boundedCommand(() => openTerminal(folderUri), "the terminal", COMMAND_BOUND_MS).catch((error: Error) => report(link, "connected", error.message));
   });
-  link.onOpen(async (path) => {
-    const ref = await monaco.editor.createModelReference(monaco.Uri.joinPath(folderUri, path));
+  const openFile = async (resource: monaco.Uri) => {
+    const ref = await monaco.editor.createModelReference(resource);
     showEditor().setModel(ref.object.textEditorModel);
-  });
+  };
+  link.onOpen((path) => void openFile(monaco.Uri.joinPath(folderUri, path)));
+  const explorer = document.getElementById("explorer");
+  if (explorer) await mountExplorer(explorer, folderUri, (resource) => void openFile(resource));
 }
 
 main().catch((error: Error) => report(null, "error", error.message));
